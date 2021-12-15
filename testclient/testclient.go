@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -33,7 +31,6 @@ import (
 
 	// local modules
 	ci "cmcinterface"
-	cl "connectorlibrary"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -43,58 +40,13 @@ type Mode int
 const (
 	Generate = 0
 	Verify   = 1
-	TLSConn  = 2
 )
-
-func TestTLSConn(connectoraddress, rootCACertFile string) {
-	var timeout = 10 * time.Second
-	// get server cert
-	servercert, err := ioutil.ReadFile(rootCACertFile)
-	if err != nil {
-		log.Error("[Testclient] Could find root CA cert file.")
-		return
-	}
-	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(servercert)
-	if !success {
-		log.Error("[Testclient] Could not add servercert to root CAs.")
-		return
-	}
-	// Create TLS config with server as root CA
-	conf := &tls.Config{
-		//InsecureSkipVerify: true,
-		RootCAs: roots,
-	}
-	conn, err := cl.Dial("tcp", connectoraddress, conf)
-	if err != nil {
-		log.Error("[Testclient] failed to dial server. \n", err)
-		return
-	}
-	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	// write sth
-	_, err = conn.Write([]byte("hello\n"))
-	if err != nil {
-		log.Error("[Testclient] failed to write. \n", err)
-		return
-	}
-	// read sth
-	buf := make([]byte, 100)
-	n, err := conn.Read(buf)
-	if err != nil {
-		log.Error("[Testclient] failed to read. \n", err)
-		return
-	}
-	log.Info("[Testclient] received: " + string(buf[:n]))
-}
 
 func main() {
 	log.SetLevel(log.TraceLevel)
 
-	parsedMode := flag.String("mode", "generate", "[generate | verify | tlsconn]")
+	parsedMode := flag.String("mode", "generate", "[generate | verify]")
 	port := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
-	connectoraddress := flag.String("connector", "localhost:4443", "ip:port to connect to the test connector")
-	rootCACertFile := flag.String("rootcacertfile", "../../pki_and_signing/examples/demo_setup/pki/ca/ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
 	flag.Parse()
 
 	var mode Mode
@@ -102,8 +54,6 @@ func main() {
 		mode = Generate
 	} else if strings.ToLower(*parsedMode) == strings.ToLower("verify") {
 		mode = Verify
-	} else if strings.ToLower(*parsedMode) == strings.ToLower("tlsconn") {
-		mode = TLSConn
 	} else {
 		log.Fatal("Wrong mode. Possible [Generate | Verify | TLSConn]")
 	}
@@ -183,8 +133,6 @@ func main() {
 		fileName = "attestation-result.json"
 		ioutil.WriteFile(fileName, out.Bytes(), 0644)
 		fmt.Println("Wrote file ", fileName)
-	} else if mode == TLSConn {
-		TestTLSConn(*connectoraddress, *rootCACertFile)
 	} else {
 		log.Println("Unknown mode")
 	}
