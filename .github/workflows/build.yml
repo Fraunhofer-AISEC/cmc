@@ -26,8 +26,13 @@ jobs:
           pushd testclient
           make
           popd
-      - name: "Upload Artifact"
+      - name: "Upload cmcd"
         uses: actions/upload-artifact@v2
         with:
-          name: sign_artefact
+          name: cmcd
           path: cmcd/cmcd
+      - name: "Upload testclient"
+        uses: actions/upload-artifact@v2
+        with:
+          name: testclient
+          path: testclient/testclient
