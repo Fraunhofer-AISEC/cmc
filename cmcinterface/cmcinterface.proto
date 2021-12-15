@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package cmcinterface;
+option go_package = "./;cmcinterface";
+
+enum Status {
+  OK = 0;
+  FAIL = 1;
+  NOT_IMPLEMENTED = 2;
+}
+
+enum HashFunction {
+	  SHA1        = 0;
+	  SHA224      = 1;
+	  SHA256      = 2;
+	  SHA384      = 3;
+	  SHA512      = 4;
+	  MD4         = 5;
+	  MD5         = 6;
+	  MD5SHA1     = 7;
+	  RIPEMD160   = 8;
+	  SHA3_224    = 9;
+	  SHA3_256    = 10;
+	  SHA3_384    = 11;
+	  SHA3_512    = 12;
+	  SHA512_224  = 13;
+	  SHA512_256  = 14;
+	  BLAKE2s_256 = 15;
+	  BLAKE2b_256 = 16;
+	  BLAKE2b_384 = 17;
+	  BLAKE2b_512 = 18;
+}
+
+service CMCService {
+    // Signs content of request with key that belongs to ID of requester
+    rpc TLSSign(TLSSignRequest) returns (TLSSignResponse) {}
+    rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
+    rpc Attest(AttestationRequest) returns (AttestationResponse) {}
+    rpc Verify(VerificationRequest) returns (VerificationResponse) {}
+}
+
+message PSSOptions {
+  int32 salt_length = 1;
+}
+
+message TLSSignRequest {
+  string id = 1;
+  bytes content = 2;
+  HashFunction hashtype = 3;
+  PSSOptions pssOpts = 4;
+}
+
+message TLSSignResponse {
+  Status status = 1;
+  bytes signed_content = 2;
+}
+
+message TLSCertRequest {
+  string id = 1;
+}
+
+message TLSCertResponse {
+  Status status = 1;
+  repeated bytes certificate = 2; // PEM encoded, separated by line
+}
+
+message AttestationRequest {
+  string id = 1;
+  bytes nonce = 2;
+}
+
+message AttestationResponse {
+  Status status = 1;
+  bytes attestation_report = 2;
+}
+
+message VerificationRequest {
+  bytes nonce = 1;
+  bytes attestation_report = 2;
+}
+
+message VerificationResponse {
+  Status status = 1;
+  bytes verification_result = 2;
+}
