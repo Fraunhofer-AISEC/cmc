@@ -1,0 +1,14 @@
+*.o
+.vscode/
+
+cmcd/cmcd
+testclient/testclient
+testclient/nonce
+testclient/attestation-report.json
+testclient/attestation-result.json
+testconnector/testconnector
+dummycmc/dummycmc
+tpm/test_encrypted_ak.json
+example-setup/data-connector/
+example-setup/copy.sh
+tpmdriver/test_encrypted_ak.json
