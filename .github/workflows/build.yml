@@ -1,0 +1,33 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+
+      - name: Build
+        run: |
+          pushd cmcd
+          make
+          popd
+          pushd testclient
+          make
+          popd
+      - name: "Upload Artifact"
+        uses: actions/upload-artifact@v2
+        with:
+          name: sign_artefact
+          path: cmcd/cmcd
