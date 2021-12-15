@@ -1,0 +1,8 @@
+{
+"provServerAddr": "http://127.0.0.1:9000/",
+"serverPath": "data-connector0/",
+"localPath": "data-connector/",
+"useIma": false,
+"imaPcr": 10
+}
+

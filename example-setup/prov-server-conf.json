@@ -1,0 +1,9 @@
+{
+    "port": 9000,
+    "deviceSubCaKey": "ca/device_sub_ca-key.pem",
+    "deviceSubCaCert": "ca/device_sub_ca.pem",
+    "caCert": "ca/ca.pem",
+    "httpFolder": "data-server",
+    "verifyEkCert": false,
+    "tpmEkCertDb": "tpm-ek-certs.db"
+}
