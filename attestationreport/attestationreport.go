@@ -1020,6 +1020,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map
 
 	if len(tpmM.HashChain) != len(verifications) {
 		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Length of measured PCRs does not match with verifications: %v", len(verifications)))
+		return
 	}
 
 	log.Trace("Length of measured PCRs matches with verifications: ", len(verifications))
@@ -1029,8 +1030,8 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map
 
 		verPcr, ok := verifications[int(tpmM.HashChain[i].Pcr)]
 		if !ok {
-			msg := fmt.Sprintf("VERIFICATION ERROR: Cannot find verification for measured PCR%v", tpmM.HashChain[i].Pcr)
-			result.update(false, msg)
+			result.update(false, fmt.Sprintf("VERIFICATION ERROR: Cannot find verification for measured PCR%v", tpmM.HashChain[i].Pcr))
+			continue
 		}
 
 		// The measurements can contain the PCR value directly or the list that was
@@ -1048,27 +1049,30 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map
 		}
 
 		if bytes.Compare(measPcr, verPcr) == 0 {
-			msg := fmt.Sprintf("VERIFICATION SUCCESS - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr))
-			result.update(true, msg)
+			result.update(true, fmt.Sprintf("VERIFICATION SUCCESS - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr)))
 		} else {
-			msg := fmt.Sprintf("VERIFICATION ERROR - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr))
-			result.update(false, msg)
+			result.update(false, fmt.Sprintf("VERIFICATION ERROR - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr)))
 		}
-
 	}
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	quote, err := hex.DecodeString(tpmM.Message)
 	if err != nil {
 		result.update(false, "VERIFICATION ERROR: Failed to decode TPM quote")
+		return
 	}
 
 	sig, err := hex.DecodeString(tpmM.Signature)
 	if err != nil {
 		result.update(false, "VERIFICATION ERROR: Failed to decode TPM signature")
+		return
 	}
 
 	tpmsAttest, err := tpm2.DecodeAttestationData(quote)
+	if err != nil {
+		result.update(false, "VERIFCATION ERROR: Failed to Decode TPM Attestation Data")
+		return
+	}
 
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Compare(nonce, tpmsAttest.ExtraData) == 0 {
