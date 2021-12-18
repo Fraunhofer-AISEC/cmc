@@ -515,13 +515,13 @@ func VerifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 
 	var intermediates []byte
 	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND FwMajor=?", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor).Scan(&intermediates)
-	if err == sql.ErrNoRows {
+	if err != nil {
 		return err
 	}
 
 	var roots []byte
-	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE CA=1").Scan(&roots)
-	if err == sql.ErrNoRows {
+	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND CA=1", tpmInfo.Manufacturer.String()).Scan(&roots)
+	if err != nil {
 		return err
 	}
 
