@@ -513,30 +513,35 @@ func VerifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 	}
 	defer db.Close()
 
+	// Add TPM EK intermediate certs from database to certificate pool
 	var intermediates []byte
-	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND FwMajor=?", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor).Scan(&intermediates)
-	if err != nil {
+	var intermediatesPool *x509.CertPool = nil
+	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND FwMajor=? AND CA=0", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor).Scan(&intermediates)
+	if err == sql.ErrNoRows {
+		log.Debug("TPM EK cert chain does not contain intermediate certificates")
+	} else if err != nil {
 		return err
+	} else {
+		log.Trace("Found Intermediate Certs in DB: ", string(intermediates))
+
+		intermediatesPool = x509.NewCertPool()
+		ok := intermediatesPool.AppendCertsFromPEM(intermediates)
+		if !ok {
+			return fmt.Errorf("Failed to append intermediate certificates from database")
+		}
+		log.Debugf("Added %v certificates to intermediates certificate pool", len(intermediatesPool.Subjects()))
 	}
 
+	// Add TPM EK CA cert from database to certificate pool
 	var roots []byte
 	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND CA=1", tpmInfo.Manufacturer.String()).Scan(&roots)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to retrieve CA certificate for TPM from %v (Major: %v, Minor: %v): %v", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor, err)
 	}
-
-	log.Trace("Found Intermediate Certs in DB: ", string(intermediates))
 	log.Trace("Found Root Certs in DB: ", string(roots))
 
-	intermediatesPool := x509.NewCertPool()
-	ok := intermediatesPool.AppendCertsFromPEM(intermediates)
-	if !ok {
-		return fmt.Errorf("Failed to append intermediate certificates from database")
-	}
-	log.Debugf("Added %v certificates to intermediates certificate pool", len(intermediatesPool.Subjects()))
-
 	rootsPool := x509.NewCertPool()
-	ok = rootsPool.AppendCertsFromPEM(roots)
+	ok := rootsPool.AppendCertsFromPEM(roots)
 	if !ok {
 		return fmt.Errorf("Failed to append root certificate from database")
 	}
@@ -556,7 +561,12 @@ func VerifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 		return err
 	}
 
-	expectedLen := len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
+	var expectedLen int
+	if intermediatesPool == nil {
+		expectedLen = len(rootsPool.Subjects()) + 1
+	} else {
+		expectedLen = len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
+	}
 
 	if len(chain[0]) != expectedLen {
 		return fmt.Errorf("Error: Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
