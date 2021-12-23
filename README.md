@@ -1,4 +1,8 @@
-# README
+# Connector Measurement Component
+
+[![build](https://github.com/Fraunhofer-AISEC/cmc/actions/workflows/build.yml/badge.svg)](https://github.com/Fraunhofer-AISEC/cmc/actions/workflows/build.yml)
+[![](https://godoc.org/github.com/Fraunhofer-AISEC/cmc?status.svg)](https://pkg.go.dev/github.com/Fraunhofer-AISEC/clouditor)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Fraunhofer-AISEC/cmc)](https://goreportcard.com/report/github.com/Fraunhofer-AISEC/cmc)
 
 The Connector Measurement Component (CMC) repository provides tools and software to
 enable remote attestation of computing platforms in the International Data Spaces (IDS).
