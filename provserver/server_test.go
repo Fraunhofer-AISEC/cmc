@@ -109,7 +109,7 @@ func TestVerifyEkCert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyEkCert(tt.args.dbpath, tt.args.ek, tt.args.tpmInfo)
+			err := verifyEkCert(tt.args.dbpath, tt.args.ek, tt.args.tpmInfo)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("VerifyEkCert() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -120,7 +120,7 @@ func TestVerifyEkCert(t *testing.T) {
 
 func Test_getIntelEkCert(t *testing.T) {
 	type args struct {
-		certificateUrl string
+		certificateURL string
 	}
 	tests := []struct {
 		name    string
@@ -135,7 +135,7 @@ func Test_getIntelEkCert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := getIntelEkCert(tt.args.certificateUrl)
+			got, err := getIntelEkCert(tt.args.certificateURL)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getIntelEkCert() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -53,20 +53,20 @@ import (
 	"gopkg.in/square/go-jose.v2"
 )
 
-type Config struct {
+type config struct {
 	Port               int    `json:"port"`
 	DeviceSubCaKeyFile string `json:"deviceSubCaKey"`
 	DeviceSubCaFile    string `json:"deviceSubCaCert"`
 	CaFile             string `json:"caCert"`
-	HttpFolder         string `json:"httpFolder"`
+	HTTPFolder         string `json:"httpFolder"`
 	VerifyEkCert       bool   `json:"verifyEkCert"`
 	TpmEkCertDb        string `json:"tpmEkCertDb"`
 }
 
-type DataStore struct {
+type datastore struct {
 	Secret             map[[32]byte][]byte
 	AkParams           map[[32]byte]attest.AttestationParameters
-	TlsKeyParams       map[[32]byte]attest.CertificationParameters
+	TLSKeyParams       map[[32]byte]attest.CertificationParameters
 	DeviceSubCaPriv    *ecdsa.PrivateKey
 	DeviceSubCaCert    *x509.Certificate
 	DeviceSubCaCertPem []byte
@@ -80,26 +80,26 @@ const (
 	intelEKCertServiceURL = "https://ekop.intel.com/ekcertservice/"
 )
 
-var dataStore DataStore
+var dataStore datastore
 
-func printConfig(c *Config, configFile string) {
+func printConfig(c *config, configFile string) {
 	log.Infof("Using the configuration loaded from %v:", configFile)
 	log.Info("\tPort                   : ", c.Port)
 	log.Info("\tDevice Sub CA Key File : ", getFilePath(c.DeviceSubCaKeyFile, filepath.Dir(configFile)))
 	log.Info("\tDevice Sub CA Cert File: ", getFilePath(c.DeviceSubCaFile, filepath.Dir(configFile)))
 	log.Info("\tCA Cert File           : ", getFilePath(c.CaFile, filepath.Dir(configFile)))
-	log.Info("\tFolders to be served   : ", getFilePath(c.HttpFolder, filepath.Dir(configFile)))
+	log.Info("\tFolders to be served   : ", getFilePath(c.HTTPFolder, filepath.Dir(configFile)))
 	log.Info("\tVerify EK Cert         : ", c.VerifyEkCert)
 	log.Info("\tTPM EK DB              : ", getFilePath(c.TpmEkCertDb, filepath.Dir(configFile)))
 }
 
-func readConfig(configFile string) (*Config, error) {
+func readConfig(configFile string) (*config, error) {
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		log.Error("Failed to read config file '", configFile, "'")
 		return nil, err
 	}
-	config := new(Config)
+	config := new(config)
 	err = json.Unmarshal(data, config)
 	if err != nil {
 		log.Error("Failed to parse config")
@@ -203,11 +203,11 @@ func parseCertParams(certParams [][]byte) (akCertParams, tlsCertParams *ar.CertP
 	return akCertParams, tlsCertParams, nil
 }
 
-func getIntelEkCert(certificateUrl string) (*x509.Certificate, error) {
+func getIntelEkCert(certificateURL string) (*x509.Certificate, error) {
 	return nil, fmt.Errorf("Retrieval of Intel EK Certificates not implemented yet")
 }
 
-// Handle Activate Credential Request (Step 1)
+// HandleAcRequest handles an Activate Credential Request (Step 1)
 func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	var acRequest tpmdriver.AcRequest
@@ -239,7 +239,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	}
 
 	if dataStore.VerifyEkCert {
-		err := VerifyEkCert(dataStore.DbPath, ekCert, &acRequest.TpmInfo)
+		err := verifyEkCert(dataStore.DbPath, ekCert, &acRequest.TpmInfo)
 		if err != nil {
 			return nil, fmt.Errorf("Verify EK certificate chain: error = %v", err)
 		}
@@ -279,12 +279,12 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	dataStore.Secret[acRequest.AkQualifiedName] = secret
 	dataStore.AkParams[acRequest.AkQualifiedName] = acRequest.AkParams
-	dataStore.TlsKeyParams[acRequest.AkQualifiedName] = acRequest.TlsKeyParams
+	dataStore.TLSKeyParams[acRequest.AkQualifiedName] = acRequest.TlsKeyParams
 
 	return &retBuf, nil
 }
 
-// Handle AK Cert Request (Step 2)
+// HandleAkCertRequest handles an AK Cert Request (Step 2)
 func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	var akCertRequest tpmdriver.AkCertRequest
@@ -364,14 +364,14 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		Public: akPubVerify,
 		Hash:   hash,
 	}
-	p := dataStore.TlsKeyParams[akCertRequest.AkQualifiedName]
+	p := dataStore.TLSKeyParams[akCertRequest.AkQualifiedName]
 	err = p.Verify(opts)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to verify TLS Key with AK: %v", err)
 	}
 	log.Debug("Successfully verified TLS key with AK")
 
-	tlsPub, err := attest.ParseAKPublic(attest.TPMVersion20, dataStore.TlsKeyParams[akCertRequest.AkQualifiedName].Public)
+	tlsPub, err := attest.ParseAKPublic(attest.TPMVersion20, dataStore.TLSKeyParams[akCertRequest.AkQualifiedName].Public)
 	if err != nil {
 		return nil, fmt.Errorf("Activate Credential Failed - Parse TLS Key returned %v", err)
 	}
@@ -529,7 +529,7 @@ func handleActivateCredential(writer http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func VerifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) error {
+func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) error {
 	// Load the TPM EK Certificate database for validating sent EK certificates
 	db, err := sql.Open("sqlite3", dbpath)
 	if err != nil {
@@ -596,8 +596,8 @@ func VerifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 		return fmt.Errorf("Error: Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
 
-	log.Debugf("Sucessfully verified chain of %v elements", len(chain[0]))
-	for i, _ := range chain[0] {
+	log.Debugf("Successfully verified chain of %v elements", len(chain[0]))
+	for i := range chain[0] {
 		log.Tracef("\tCertificate CN='%v', Issuer CN='%v'", chain[0][i].Subject.CommonName, chain[0][i].Issuer.CommonName)
 	}
 
@@ -609,10 +609,9 @@ func VerifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 func getFilePath(p, base string) string {
 	if path.IsAbs(p) {
 		return p
-	} else {
-		ret, _ := filepath.Abs(filepath.Join(base, p))
-		return ret
 	}
+	ret, _ := filepath.Abs(filepath.Join(base, p))
+	return ret
 }
 
 func main() {
@@ -669,13 +668,13 @@ func main() {
 
 	dataStore.AkParams = make(map[[32]byte]attest.AttestationParameters)
 	dataStore.Secret = make(map[[32]byte][]byte)
-	dataStore.TlsKeyParams = make(map[[32]byte]attest.CertificationParameters)
+	dataStore.TLSKeyParams = make(map[[32]byte]attest.CertificationParameters)
 
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
 	log.Info(fmt.Sprintf("Serving Directories: "))
 
-	httpFolder := getFilePath(config.HttpFolder, filepath.Dir(*configFile))
+	httpFolder := getFilePath(config.HTTPFolder, filepath.Dir(*configFile))
 
 	connectorDirs, err := ioutil.ReadDir(httpFolder)
 	if err != nil {

@@ -45,7 +45,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 )
 
-type Config struct {
+type config struct {
 	ServerAddr string `json:"provServerAddr"`
 	ServerPath string `json:"serverPath"`
 	LocalPath  string `json:"localPath"`
@@ -61,27 +61,28 @@ type Config struct {
 	caPath          string
 }
 
+// Certs contains the certificates required for the Connector
 type Certs struct {
 	Ak          []byte
-	TlsCert     []byte
+	TLSCert     []byte
 	DeviceSubCa []byte
 	Ca          []byte
 }
 
 type server struct {
 	ci.UnimplementedCMCServiceServer
-	config   Config
+	config   config
 	certs    Certs
 	metadata [][]byte
 	pcrs     []int
 }
 
-func loadConfig(configFile string) (*Config, error) {
+func loadConfig(configFile string) (*config, error) {
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read cmcd config file %v: %v", configFile, err)
 	}
-	c := new(Config)
+	c := new(config)
 	err = json.Unmarshal(data, c)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse cmcd config: %v", err)
@@ -145,7 +146,7 @@ func loadMetadata(dir string) (metadata [][]byte, certParams [][]byte, pcrs []in
 		payload := jws.UnsafePayloadWithoutVerification()
 
 		// Unmarshal the Type field of the JSON file to determine the type
-		t := new(ar.JsonType)
+		t := new(ar.JSONType)
 		err = json.Unmarshal(payload, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)
@@ -171,7 +172,7 @@ func loadMetadata(dir string) (metadata [][]byte, certParams [][]byte, pcrs []in
 	return metadata, certParams, pcrs, nil
 }
 
-func loadCerts(c *Config) (Certs, error) {
+func loadCerts(c *config) (Certs, error) {
 	var certs Certs
 	var cert []byte
 	var err error
@@ -184,7 +185,7 @@ func loadCerts(c *Config) (Certs, error) {
 	if cert, err = ioutil.ReadFile(c.tlsCertPath); err != nil {
 		return certs, fmt.Errorf("Failed to load TLS cert from %v: %v", c.tlsCertPath, err)
 	}
-	certs.TlsCert = cert
+	certs.TLSCert = cert
 	//SubCA
 	if cert, err = ioutil.ReadFile(c.deviceSubCaPath); err != nil {
 		return certs, fmt.Errorf("Failed to load Device Sub CA cert from %v: %v", c.deviceSubCaPath, err)
@@ -199,7 +200,7 @@ func loadCerts(c *Config) (Certs, error) {
 	return certs, nil
 }
 
-func printConfig(c *Config) {
+func printConfig(c *config) {
 	log.Info("Using the following configuration:")
 	log.Info("\tConfiguration Server URL : ", c.ServerAddr)
 	log.Info("\tConfiguration Server Path: ", c.ServerPath)
@@ -382,7 +383,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 	}
 
 	var status ci.Status
-	certsPem := [][]byte{s.certs.TlsCert, s.certs.DeviceSubCa, s.certs.Ca}
+	certsPem := [][]byte{s.certs.TLSCert, s.certs.DeviceSubCa, s.certs.Ca}
 	ok, data := ar.SignAttestationReport(a, tlsKeyPriv, tlsKeyPub, certsPem)
 	if !ok {
 		log.Error("Prover: Failed to sign Attestion Report ")
@@ -446,7 +447,7 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 	tlsKeyPriv, _, err = tpmdriver.GetTlsKey()
 	if err != nil {
 		log.Error("[Prover]. Failed to get TLS key. ", err.Error())
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to get TLS key.")
+		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to get TLS key")
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
@@ -468,12 +469,12 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 // Loads public key for tls certificate
 func (s *server) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCertResponse, error) {
 	var resp *ci.TLSCertResponse = &ci.TLSCertResponse{}
-	if s.certs.TlsCert == nil {
+	if s.certs.TLSCert == nil {
 		log.Error("Prover: TLS Certificate not found - was the connector initialized correctly?")
-		return &ci.TLSCertResponse{Status: ci.Status_FAIL}, errors.New("No TLS Certificate obtained.")
+		return &ci.TLSCertResponse{Status: ci.Status_FAIL}, errors.New("No TLS Certificate obtained")
 	}
 	// provide TLS certificate chain
-	resp.Certificate = [][]byte{s.certs.TlsCert, s.certs.DeviceSubCa}
+	resp.Certificate = [][]byte{s.certs.TLSCert, s.certs.DeviceSubCa}
 	resp.Status = ci.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil
@@ -485,7 +486,7 @@ func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions, len int) (cry
 	switch hashtype {
 	case ci.HashFunction_SHA256:
 		if pssOpts != nil {
-			log.Warning("Signature Options: RSA with PSS is used. Certain TPMs might not be able to compute the correct result.")
+			log.Warning("Signature Options: RSA with PSS is used. Certain TPMs might not be able to compute the correct result")
 			saltlen := int(pssOpts.SaltLength)
 			// our Key with Signer interface does not allow -1 as definition for length of hash - difference between TLS / FIPS and TPM definition ?
 			// see https://cs.opensource.google/go/go/+/refs/tags/go1.17.3:src/crypto/rsa/pss.go;drc=refs%2Ftags%2Fgo1.17.3;l=231
@@ -498,7 +499,7 @@ func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions, len int) (cry
 		return crypto.SHA256, nil
 	default:
 	}
-	return crypto.SHA512, errors.New("[DummyCMC] Hash function not implemented.")
+	return crypto.SHA512, errors.New("[DummyCMC] Hash function not implemented")
 }
 
 // Returns either the unmodified absolute path or the absolute path
@@ -506,10 +507,9 @@ func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions, len int) (cry
 func getFilePath(p, base string) string {
 	if path.IsAbs(p) {
 		return p
-	} else {
-		ret, _ := filepath.Abs(filepath.Join(base, p))
-		return ret
 	}
+	ret, _ := filepath.Abs(filepath.Join(base, p))
+	return ret
 }
 
 func getPcrs(rtmManifest, osManifest []byte) []int {

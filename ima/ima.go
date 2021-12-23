@@ -26,26 +26,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Constants for digests and TCG Events
 const (
 	SHA1_DIGEST_LEN   = 20
 	SHA256_DIGEST_LEN = 32
 	MAX_TCG_EVENT_LEN = 255
 )
 
-type Header struct {
+type header struct {
 	Pcr     int32
 	Digest  [SHA1_DIGEST_LEN]byte
 	NameLen uint32
 }
 
-type ImaTemplate struct {
-	Header  Header
+type imaTemplate struct {
+	header  header
 	Name    [MAX_TCG_EVENT_LEN + 1]byte
 	Ptr     uint32
 	DataLen uint32
 	Data    []byte
 }
 
+// GetImaRuntimeDigests returns all hashes extended by the IMA into the TPM
+// IMA PCR as read from the sysfs
 func GetImaRuntimeDigests() ([][SHA256_DIGEST_LEN]byte, error) {
 	data, err := ioutil.ReadFile("/sys/kernel/security/ima/binary_runtime_measurements")
 	if err != nil {
@@ -68,7 +71,7 @@ func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
 	digests := make([][SHA256_DIGEST_LEN]byte, 0)
 
 	for buf.Len() > 0 {
-		header := Header{}
+		header := header{}
 		err := binary.Read(buf, binary.LittleEndian, &header)
 		if err != nil {
 			log.Error("Error Reading binary data: ", err)
@@ -78,8 +81,8 @@ func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
 		name := make([]byte, header.NameLen)
 		err = binary.Read(buf, binary.LittleEndian, name)
 
-		var template ImaTemplate
-		template.Header = header
+		var template imaTemplate
+		template.header = header
 		copy(template.Name[:], name)
 
 		log.Trace("PCR: ", header.Pcr)

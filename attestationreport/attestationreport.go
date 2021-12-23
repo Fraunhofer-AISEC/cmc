@@ -36,10 +36,10 @@ import (
 	"github.com/google/go-tpm/tpm2"
 )
 
-// Generic interface for a Measurement, such as a TpmMeasurement
+// Measurement is a generic interface for a Measurement, such as a TpmMeasurement
 type Measurement interface{}
 
-// Interface implementing the Measure method for each type of measurement
+// Measurer is an interface implementing the Measure method for each type of measurement
 // Each type of interface that is capable of providing measurements (such
 // as the tpmw module) is expected to implement this method. The
 // attestationreport module will call this method to retrieve the measurements
@@ -48,21 +48,21 @@ type Measurer interface {
 	Measure(mp MeasurementParams) (Measurement, error)
 }
 
-// Generic interface for measurement parameters
+// MeasurementParams is a generic interface for measurement parameters
 type MeasurementParams interface{}
 
-// Helper struct for just extracting the JSON 'Type'
-type JsonType struct {
+// JSONType is a helper struct for just extracting the JSON 'Type'
+type JSONType struct {
 	Type string `json:"type"`
 }
 
-// Helper struct for JSON 'Validity'
+// Validity is a helper struct for JSON 'Validity'
 type Validity struct {
 	NotBefore string `json:"notBefore"`
 	NotAfter  string `json:"notAfter"`
 }
 
-// HashChainElemen represents the JSON attestation report
+// HashChainElem represents the JSON attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
 type HashChainElem struct {
 	Type   string   `json:"type"`
@@ -70,7 +70,7 @@ type HashChainElem struct {
 	Sha256 []string `json:sha256"`
 }
 
-// Helper struct for the AK certificate chain
+// TpmCerts is a helper struct for the AK certificate chain
 type TpmCerts struct {
 	AkCert        string   `json:"akCert"`
 	Intermediates []string `json:"akIntermediates"`
@@ -131,7 +131,7 @@ type InternalConnection struct {
 	EndpointAppB string `json:"endpointAppB"` // Links to Type 'App Manifest'->'Endpoint'
 }
 
-// ExternalInterfaces represents the JSON attestation report
+// ExternalInterface represents the JSON attestation report
 // element of type 'External Interfaces' signed by the operator
 type ExternalInterface struct {
 	Type        string `json:"type"`
@@ -214,7 +214,7 @@ type CertParams struct {
 	SANs    []string `json:"sans,omitempty"`
 }
 
-// PKIX Name for CertParams
+// Name is the PKIX Name for CertParams
 type Name struct {
 	CommonName         string        `json:"commonName,omitempty"`
 	Country            string        `json:"country,omitempty"`
@@ -227,9 +227,9 @@ type Name struct {
 	Names              []interface{} `json:"names,omitempty"`
 }
 
-// AttestationReport represents the following JSON attestation report
-// element of type 'Attestation Report' signed by the device
-type AttestationReportPlain struct {
+// ArPlain represents the attestation report with
+// its plain elements
+type ArPlain struct {
 	Type                 string               `json:"type"`
 	TpmM                 TpmMeasurement       `json:"tpmMeasurement,omitempty"`
 	SWM                  []SwMeasurement      `json:"swMeasurements,omitempty"`
@@ -241,8 +241,9 @@ type AttestationReportPlain struct {
 	Nonce                string               `json:"nonce"`
 }
 
-// The Attestation Report with its contents already in signed JWs format
-type AttestationReportJws struct {
+// ArJws represents the attestation report in JWS format with its
+// contents already in signed JWs format
+type ArJws struct {
 	Type                 string          `json:"type"`
 	TpmM                 TpmMeasurement  `json:"tpmMeasurement,omitempty"`
 	SWM                  []SwMeasurement `json:"swMeasurements,omitempty"`
@@ -255,8 +256,7 @@ type AttestationReportJws struct {
 }
 
 // VerificationResult represents the following JSON attestation report
-// element of type 'Verification Result'. The CMC sends this result back to the
-// client after receiving an AttestationReportRequest
+// element of type 'Verification Result'.
 type VerificationResult struct {
 	Type      string   `json:"type"`
 	Success   bool     `json:"raSuccessful"`
@@ -264,11 +264,11 @@ type VerificationResult struct {
 	Log       []string `json:"log"`
 }
 
-// Parameters for retrieving TPM measurements: The nonce is embedded
-// into the quote. Pcrs must be set to the PCRs that should be
-// embedded into the quote. Certs represent the AK certificate
-// chain including EK and CA. UseIma species if the kernel's
-// Integrity Measurement Architecture (IMA) should be used
+// TpmParams are Parameters for retrieving TPM measurements: The
+// nonce is embedded into the quote. Pcrs must be set to the PCRs
+// that should be embedded into the quote. Certs represent the AK
+// certificate chain including EK and CA. UseIma species if the
+// kernel's Integrity Measurement Architecture (IMA) should be used
 // and ImaPcr specifies the PCR used by the IMA (kernel config)
 type TpmParams struct {
 	Nonce  []byte
@@ -278,7 +278,7 @@ type TpmParams struct {
 	ImaPcr int32
 }
 
-// Parameters for retrieving SW measurements. Currently none required
+// SwParams are parameters for retrieving SW measurements. Currently none required
 type SwParams struct{}
 
 // The different certificates used for signing meta-data must have
@@ -291,19 +291,19 @@ var (
 	connDesSignerRole     = string("operator")
 )
 
-// Generates an attestation report with the provided nonce 'nonce' and
-// manifests and descriptions 'metadata'. The manifests and descriptions
-// must be raw JWS tokens in the JWS JSON full serialization format.
-// Takes a list of 'measurements' and accompanying 'measurementParams',
+// GenAttestationReport generates an attestation report with the provided
+// nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
+// descriptions must be raw JWS tokens in the JWS JSON full serialization
+// format. Takes a list of 'measurements' and accompanying 'measurementParams',
 // which must be arrays of the same length. The 'measurements' must
 // implement the attestation report 'Measurer' interface providing
 // a method for collecting the measurements from a hardware or software
 // interface
-func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measurement, measurementParams []MeasurementParams) AttestationReportJws {
+func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measurement, measurementParams []MeasurementParams) ArJws {
 
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
-	ar := AttestationReportJws{
+	ar := ArJws{
 		Type: "Attestation Report",
 	}
 
@@ -331,7 +331,7 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 
 		// Unmarshal the Type field of the JSON file to determine the type for
 		// later processing
-		t := new(JsonType)
+		t := new(JSONType)
 		err = json.Unmarshal(data, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)
@@ -404,11 +404,11 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 	return ar
 }
 
-// Signs the attestation report with private key 'priv' and appends the
-// pem encoded certificate chain 'certsPem' to the JWS structure. The certificates
-// must be handed over in the order they should be appended
+// SignAttestationReport signs the attestation report with private key 'priv' and
+// appends the pem encoded certificate chain 'certsPem' to the JWS structure. The
+// certificates must be handed over in the order they should be appended
 // (Signing Certificate -> Intermediate Certificates -> Root CA Certificate)
-func SignAttestationReport(ar AttestationReportJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
+func SignAttestationReport(ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
 
 	certsb64 := make([]string, 0)
 	for i, certPem := range certsPem {
@@ -453,10 +453,10 @@ func SignAttestationReport(ar AttestationReportJws, priv crypto.PrivateKey, pub 
 	return true, []byte(msg)
 }
 
-// Verifies an attestation report in full serialized JWS format against the
-// supplied nonce and CA certificate. Verifies the certificate chains of
-// all attestation report elements as well as the measurements against the
-// verifications and the compatibility of software artefacts.
+// VerifyAttestationReport verifies an attestation report in full serialized JWS
+// format against the supplied nonce and CA certificate. Verifies the certificate
+// chains of all attestation report elements as well as the measurements against
+// the verifications and the compatibility of software artefacts.
 func VerifyAttestationReport(arRaw string, nonce, caCertPem []byte) VerificationResult {
 	result := VerificationResult{
 		Type:      "Verification Result",
@@ -739,9 +739,8 @@ func verifyJwsMulti(data string, roots *x509.CertPool, roles []string, result *V
 	if len(roles) != len(jwsData.Signatures) {
 		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures)))
 		return false, nil
-	} else {
-		result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Number of signatures matches expected number (%v)", len(roles)))
 	}
+	result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Number of signatures matches expected number (%v)", len(roles)))
 
 	index := make([]int, len(jwsData.Signatures))
 	payloads := make([][]byte, len(jwsData.Signatures))
@@ -838,8 +837,8 @@ func verifyJws(data string, roots *x509.CertPool, role string, result *Verificat
 	return success, payload
 }
 
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte) (AttestationReportPlain, error) {
-	ar := AttestationReportPlain{}
+func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte) (ArPlain, error) {
+	ar := ArPlain{}
 
 	roots := x509.NewCertPool()
 	ok := roots.AppendCertsFromPEM(caCertPem)
@@ -861,14 +860,14 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		return ar, fmt.Errorf("Verification of Attestation Report Signatures failed")
 	}
 
-	var arJws AttestationReportJws
+	var arJws ArJws
 	err := json.Unmarshal(payload, &arJws)
 	if err != nil {
 		result.update(false, "PROCESSING ERROR: Parsing of Attestation Report content failed")
 		return ar, err
 	}
 
-	ar.Type = "AttestationReportPlain"
+	ar.Type = "ArPlain"
 	ar.TpmM = arJws.TpmM
 	ar.SWM = arJws.SWM
 	ar.Nonce = arJws.Nonce
@@ -1150,8 +1149,8 @@ func verifyTpmCertChain(certs *TpmCerts) error {
 		return fmt.Errorf("INTERNAL ERROR: Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
 
-	log.Debugf("Sucessfully verified chain of %v elements", len(chain[0]))
-	for i, _ := range chain[0] {
+	log.Debugf("Successfully verified chain of %v elements", len(chain[0]))
+	for i := range chain[0] {
 		log.Tracef("\tCertificate CN='%v', Issuer CN='%v'", chain[0][i].Subject.CommonName, chain[0][i].Issuer.CommonName)
 	}
 

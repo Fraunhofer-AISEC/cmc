@@ -35,11 +35,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Mode defines the mode the testclient should run
 type Mode int
 
 const (
+	// Generate an attestation report (Mode)
 	Generate = 0
-	Verify   = 1
+	// Verify an attestatoin report (Mode)
+	Verify = 1
 )
 
 func main() {

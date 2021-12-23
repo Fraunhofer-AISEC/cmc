@@ -17,7 +17,6 @@ package provclient
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,17 +27,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Pre is a struct for parsing HTML content
 type Pre struct {
 	XMLName xml.Name  `xml:"pre"`
 	Content []Content `xml:"a"`
 }
 
+// Content is a struct for parsing HTML content
 type Content struct {
 	XMLName xml.Name `xml:"a"`
 	Type    string   `xml:"href,attr"`
 	Name    string   `xml:",chardata"`
 }
 
+// FetchConnectorData fetches the metadata (manifests and descriptions as
+// well as config) from a remote server
 func FetchConnectorData(serverAddr, serverPath, localPath string) error {
 
 	// Create local path
@@ -102,7 +105,7 @@ func fetchDataRecursively(pre Pre, serverAddr, serverPath, localPath string) err
 		log.Debug("Response Status: ", resp.Status)
 		if resp.StatusCode != 200 {
 			log.Warn("Request returned error - ", resp.Status)
-			return errors.New(fmt.Sprintf("Request returned error - %v", resp.Status))
+			return fmt.Errorf("Request returned error - %v", resp.Status)
 		}
 
 		log.Debug("Found: ", pre.Content[i].Name, " Type:", resp.Header.Values("Content-Type")[0])

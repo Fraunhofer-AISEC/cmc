@@ -40,8 +40,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 )
 
+// Tpm is a structure required for implementing the Measure method
+// of the attestation report Measurer interface
 type Tpm struct{}
 
+// AcRequest holds the data for an activate credential request
+// for verifying that the AK and TLS Key were created on a genuine
+// TPM with a valid EK
 type AcRequest struct {
 	AkQualifiedName [32]byte
 	TpmInfo         attest.TPMInfo
@@ -50,17 +55,24 @@ type AcRequest struct {
 	TlsKeyParams    attest.CertificationParameters
 }
 
+// AcResponse holds the activate credential challenge
 type AcResponse struct {
 	AkQualifiedName [32]byte
 	Ec              attest.EncryptedCredential
 }
 
+// AkCertRequest holds the secret from the activate
+// credential challenge as well as certificate parameters
+// of the to be generated certificates (as the AK can only sign
+// objects form within the TPM, a CSR is not possible)
 type AkCertRequest struct {
 	AkQualifiedName [32]byte
 	Secret          []byte
 	CertParams      [][]byte
 }
 
+// AkCertResponse holds the issued certificates including the
+// certificate chain up to a Root CA
 type AkCertResponse struct {
 	AkQualifiedName [32]byte
 	AkCert          []byte
@@ -69,9 +81,8 @@ type AkCertResponse struct {
 	CaCert          []byte
 }
 
-// During TPM provisioning, store the encrypted TPM key blobs
-// and the certificate chain in the locations specified by
-// this structure
+// Paths specifies the paths to store the encrypted TPM key blobs
+// and the certificates
 type Paths struct {
 	Ak          string
 	TlsKey      string
@@ -88,11 +99,11 @@ var (
 	ek     []attest.EK
 )
 
-// Checks if the Storage Root Key (SRK) is persisted at 0x810000001
-// and the encrypted AK blob is present, which is used as an
-// indicator that the TPM is provisioned and the AK can directly
-// be loaded. This function uses the low-level go-tpm library
-// directly as go-attestation does not provide such a functionality.
+// IsTpmProvisioningRequired checks if the Storage Root Key (SRK) is persisted
+// at 0x810000001 and the encrypted AK blob is present, which is used as an
+// indicator that the TPM is provisioned and the AK can directly be loaded.
+// This function uses the low-level go-tpm library directly as go-attestation
+// does not provide such a functionality.
 func IsTpmProvisioningRequired(ak string) (bool, error) {
 
 	if _, err := os.Stat(ak); err != nil {
@@ -117,7 +128,7 @@ func IsTpmProvisioningRequired(ak string) (bool, error) {
 	return true, nil
 }
 
-// Opens the TPM and stores the handle internally
+// OpenTpm opens the TPM and stores the handle internally
 func OpenTpm() error {
 	log.Debug("Opening TPM")
 
@@ -136,7 +147,7 @@ func OpenTpm() error {
 	return nil
 }
 
-// Closes the TPM
+// CloseTpm closes the TPM
 func CloseTpm() error {
 	if tpm == nil {
 		return fmt.Errorf("Failed to close TPM - TPM is not openend")
@@ -146,7 +157,7 @@ func CloseTpm() error {
 	return nil
 }
 
-// Retrieve general TPM infos
+// GetTpmInfo retrieves general TPM infos
 func GetTpmInfo() (*attest.TPMInfo, error) {
 
 	if tpm == nil {
@@ -167,9 +178,9 @@ func GetTpmInfo() (*attest.TPMInfo, error) {
 	return tpmInfo, nil
 }
 
-// Gets the Attestation Key Qualified Name which is the hash of the public area
-// of the key concatenated with the qualified names of all parent keys. This
-// name acts as the unique identifier for the AK
+// GetAkQualifiedName gets the Attestation Key Qualified Name which is the
+// hash of the public area of the key concatenated with the qualified names
+// of all parent keys. This name acts as the unique identifier for the AK
 // TODO check calculation again
 func GetAkQualifiedName() ([32]byte, error) {
 
@@ -224,9 +235,10 @@ func GetAkQualifiedName() ([32]byte, error) {
 	return qualifiedName, nil
 }
 
-// Create EK, AK, and TLS key. Perform credential activation via the server
-// and retrieve the resulting AK and TLS Key cert from the server
-// Stores the encrypted blobs and the certificates on disk.
+// ProvisionTpm creates EK, AK, and TLS key. Then, it performs the credential
+// activation via a remote CA server and retrieves the resulting AK and TLS Key
+// certificates from the server and stores the encrypted blobs and the
+// certificates on disk.
 func ProvisionTpm(provServerUrl string, paths *Paths, certParams [][]byte) error {
 
 	log.Info("Provisioning TPM (might take a while)..")
@@ -295,7 +307,7 @@ func ProvisionTpm(provServerUrl string, paths *Paths, certParams [][]byte) error
 	return nil
 }
 
-// Load the attestation key and the TLS key
+// LoadTpmKeys loads the attestation key and the TLS key
 func LoadTpmKeys(akFile, tlsKeyFile string) error {
 
 	if tpm == nil {
@@ -329,7 +341,7 @@ func LoadTpmKeys(akFile, tlsKeyFile string) error {
 	return nil
 }
 
-// Implements the attestation reports generic Measure interface to be called
+// Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
 func (t Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
 
@@ -391,7 +403,7 @@ func (t Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
 	return tm, nil
 }
 
-// Retrieves the specified PCRs as well as a Quote over the PCRs
+// GetTpmMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
 // and returnes it as an attestationreport TPM Measurement object
 func GetTpmMeasurement(nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
 
@@ -415,6 +427,22 @@ func GetTpmMeasurement(nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, e
 	}
 
 	return pcrValues, quote, nil
+}
+
+// GetTlsKey returnes the TLS private and public key as a generic
+// crypto interface
+func GetTlsKey() (crypto.PrivateKey, crypto.PublicKey, error) {
+
+	if tlsKey == nil {
+		return nil, nil, fmt.Errorf("Failed to get TLS Key Signer: not initialized")
+	}
+
+	priv, err := tlsKey.Private(tlsKey.Public())
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to get TLS Key Private")
+	}
+
+	return priv, tlsKey.Public(), nil
 }
 
 func createKeys(tpm *attest.TPM) ([]attest.EK, *attest.AK, *attest.Key, error) {
@@ -570,18 +598,4 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	d.Decode(&akCertResponse)
 
 	return akCertResponse, nil
-}
-
-func GetTlsKey() (crypto.PrivateKey, crypto.PublicKey, error) {
-
-	if tlsKey == nil {
-		return nil, nil, fmt.Errorf("Failed to get TLS Key Signer: not initialized")
-	}
-
-	priv, err := tlsKey.Private(tlsKey.Public())
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get TLS Key Private")
-	}
-
-	return priv, tlsKey.Public(), nil
 }
