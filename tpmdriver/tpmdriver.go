@@ -36,8 +36,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	// local modules
-	ar "attestationreport"
-	"ima"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/ima"
 )
 
 type Tpm struct{}

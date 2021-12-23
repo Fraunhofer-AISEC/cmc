@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 
 	// local modules
-	ci "cmcinterface"
+	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 
 	log "github.com/sirupsen/logrus"
 )

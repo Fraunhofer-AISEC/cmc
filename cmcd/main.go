@@ -39,10 +39,10 @@ import (
 	"gopkg.in/square/go-jose.v2"
 
 	// local modules
-	ar "attestationreport"
-	ci "cmcinterface"
-	pc "provclient"
-	"tpmdriver"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	pc "github.com/Fraunhofer-AISEC/cmc/provclient"
+	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 )
 
 type Config struct {

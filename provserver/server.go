@@ -39,8 +39,8 @@ import (
 	"strings"
 	"time"
 
-	ar "attestationreport"
-	"tpmdriver"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 
