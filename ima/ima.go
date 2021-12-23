@@ -80,6 +80,10 @@ func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
 
 		name := make([]byte, header.NameLen)
 		err = binary.Read(buf, binary.LittleEndian, name)
+		if err != nil {
+			log.Error("Error Reading binary data: ", err)
+			return nil, err
+		}
 
 		var template imaTemplate
 		template.header = header
