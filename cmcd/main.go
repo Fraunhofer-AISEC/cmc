@@ -294,9 +294,9 @@ func main() {
 	if provisioningRequired {
 		paths := &tpmdriver.Paths{
 			Ak:          c.akPath,
-			TlsKey:      c.tlsKeyPath,
+			TLSKey:      c.tlsKeyPath,
 			AkCert:      c.akCertPath,
-			TlsCert:     c.tlsCertPath,
+			TLSCert:     c.tlsCertPath,
 			DeviceSubCa: c.deviceSubCaPath,
 			Ca:          c.caPath,
 		}
@@ -376,7 +376,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 	a := ar.GenAttestationReport(in.Nonce, s.metadata, []ar.Measurement{tpmdriver.Tpm{}}, []ar.MeasurementParams{tpmParams})
 
 	log.Info("Prover: Signing Attestation Report")
-	tlsKeyPriv, tlsKeyPub, err := tpmdriver.GetTlsKey()
+	tlsKeyPriv, tlsKeyPub, err := tpmdriver.GetTLSKey()
 	if err != nil {
 		log.Error("Prover: Failed to get TLS Key")
 		return &ci.AttestationResponse{Status: ci.Status_FAIL}, nil
@@ -414,7 +414,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
 	if err != nil {
-		log.Error("Verifier: Failed to marshal Attestation Result: %v", err)
+		log.Errorf("Verifier: Failed to marshal Attestation Result: %v", err)
 		status = ci.Status_FAIL
 	} else {
 		status = ci.Status_OK
@@ -444,7 +444,7 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to find appropriate hash function")
 	}
 	// get key
-	tlsKeyPriv, _, err = tpmdriver.GetTlsKey()
+	tlsKeyPriv, _, err = tpmdriver.GetTLSKey()
 	if err != nil {
 		log.Error("[Prover]. Failed to get TLS key. ", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to get TLS key")

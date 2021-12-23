@@ -279,7 +279,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	dataStore.Secret[acRequest.AkQualifiedName] = secret
 	dataStore.AkParams[acRequest.AkQualifiedName] = acRequest.AkParams
-	dataStore.TLSKeyParams[acRequest.AkQualifiedName] = acRequest.TlsKeyParams
+	dataStore.TLSKeyParams[acRequest.AkQualifiedName] = acRequest.TLSKeyParams
 
 	return &retBuf, nil
 }
@@ -419,7 +419,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	akCertResponse := tpmdriver.AkCertResponse{
 		AkCert:          akPem.Bytes(),
-		TlsCert:         tlsKeyPem.Bytes(),
+		TLSCert:         tlsKeyPem.Bytes(),
 		DeviceSubCaCert: dataStore.DeviceSubCaCertPem,
 		CaCert:          dataStore.CaCertPem,
 	}

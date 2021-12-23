@@ -52,7 +52,7 @@ type AcRequest struct {
 	TpmInfo         attest.TPMInfo
 	Ek              attest.EK
 	AkParams        attest.AttestationParameters
-	TlsKeyParams    attest.CertificationParameters
+	TLSKeyParams    attest.CertificationParameters
 }
 
 // AcResponse holds the activate credential challenge
@@ -76,7 +76,7 @@ type AkCertRequest struct {
 type AkCertResponse struct {
 	AkQualifiedName [32]byte
 	AkCert          []byte
-	TlsCert         []byte
+	TLSCert         []byte
 	DeviceSubCaCert []byte
 	CaCert          []byte
 }
@@ -85,9 +85,9 @@ type AkCertResponse struct {
 // and the certificates
 type Paths struct {
 	Ak          string
-	TlsKey      string
+	TLSKey      string
 	AkCert      string
-	TlsCert     string
+	TLSCert     string
 	DeviceSubCa string
 	Ca          string
 }
@@ -239,7 +239,7 @@ func GetAkQualifiedName() ([32]byte, error) {
 // activation via a remote CA server and retrieves the resulting AK and TLS Key
 // certificates from the server and stores the encrypted blobs and the
 // certificates on disk.
-func ProvisionTpm(provServerUrl string, paths *Paths, certParams [][]byte) error {
+func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte) error {
 
 	log.Info("Provisioning TPM (might take a while)..")
 
@@ -257,27 +257,27 @@ func ProvisionTpm(provServerUrl string, paths *Paths, certParams [][]byte) error
 		return fmt.Errorf("Activate Credential failed: createKeys returned %v", err)
 	}
 
-	secret, err := activateCredential(tpm, *ak, ek[0], tpmInfo, provServerUrl)
+	secret, err := activateCredential(tpm, *ak, ek[0], tpmInfo, provServerURL)
 	if err != nil {
 		return fmt.Errorf("Activate Credential failed: activateCredential returned %v", err)
 	}
 
 	// Return challenge to server
-	certs, err := requestTpmCerts(provServerUrl, secret, certParams)
+	certs, err := requestTpmCerts(provServerURL, secret, certParams)
 	if err != nil {
 		return fmt.Errorf("Activate Credential failed: requestAkCert returned %v", err)
 	}
 
 	// Store the certificates on disk
 	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(certs.AkCert))
-	log.Tracef("New TLS Key Cert %v: %v", paths.TlsCert, string(certs.TlsCert))
+	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(certs.TLSCert))
 	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(certs.DeviceSubCaCert))
 	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(certs.CaCert))
 	if err := ioutil.WriteFile(paths.AkCert, certs.AkCert, 0644); err != nil {
 		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.AkCert, err)
 	}
-	if err := ioutil.WriteFile(paths.TlsCert, certs.TlsCert, 0644); err != nil {
-		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.TlsCert, err)
+	if err := ioutil.WriteFile(paths.TLSCert, certs.TLSCert, 0644); err != nil {
+		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
 	if err := ioutil.WriteFile(paths.DeviceSubCa, certs.DeviceSubCaCert, 0644); err != nil {
 		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
@@ -300,8 +300,8 @@ func ProvisionTpm(provServerUrl string, paths *Paths, certParams [][]byte) error
 	if err != nil {
 		return fmt.Errorf("Activate Credential failed: Marshal TLS Key returned %v", err)
 	}
-	if err := ioutil.WriteFile(paths.TlsKey, tlsKeyBytes, 0644); err != nil {
-		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.TlsKey, err)
+	if err := ioutil.WriteFile(paths.TLSKey, tlsKeyBytes, 0644); err != nil {
+		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.TLSKey, err)
 	}
 
 	return nil
@@ -429,9 +429,9 @@ func GetTpmMeasurement(nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, e
 	return pcrValues, quote, nil
 }
 
-// GetTlsKey returnes the TLS private and public key as a generic
+// GetTLSKey returnes the TLS private and public key as a generic
 // crypto interface
-func GetTlsKey() (crypto.PrivateKey, crypto.PublicKey, error) {
+func GetTLSKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 
 	if tlsKey == nil {
 		return nil, nil, fmt.Errorf("Failed to get TLS Key Signer: not initialized")
@@ -497,7 +497,7 @@ func activateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *at
 		TpmInfo:         *tpmInfo,
 		Ek:              ek,
 		AkParams:        attestParams,
-		TlsKeyParams:    tlsKey.CertificationParameters(),
+		TLSKeyParams:    tlsKey.CertificationParameters(),
 	}
 
 	// send EK and Attestation Parameters including AK to the server

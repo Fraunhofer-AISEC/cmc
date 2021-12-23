@@ -67,7 +67,7 @@ type Validity struct {
 type HashChainElem struct {
 	Type   string   `json:"type"`
 	Pcr    int32    `json:"pcr"`
-	Sha256 []string `json:sha256"`
+	Sha256 []string `json:"sha256"`
 }
 
 // TpmCerts is a helper struct for the AK certificate chain
@@ -387,7 +387,7 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 		// in the respective module (e.g. tpm module)
 		data, err := measurer.Measure(measurementParams[i])
 		if err != nil {
-			log.Warn("Failed to retrieve measurements: %v", err)
+			log.Warnf("Failed to retrieve measurements: %v", err)
 			return ar
 		}
 
@@ -414,7 +414,7 @@ func SignAttestationReport(ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKe
 	for i, certPem := range certsPem {
 		cert := loadCert(certPem)
 		if cert == nil {
-			log.Error("Failed to load cert[%v]", i)
+			log.Errorf("Failed to load cert[%v]", i)
 		}
 
 		certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
@@ -912,7 +912,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	//Validate and unpack App Manifests
 	for i, amSigned := range arJws.AppManifests {
-		log.Debug("Starting Verification of App Manifest %d Signatures", i)
+		log.Debugf("Starting Verification of App Manifest %d Signatures", i)
 		ok, payload = verifyJwsMulti(amSigned, roots, manifestSignerRoles, result)
 		if ok == true {
 			log.WithFields(log.Fields{
