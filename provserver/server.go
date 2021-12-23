@@ -75,6 +75,11 @@ type DataStore struct {
 	DbPath             string
 }
 
+const (
+	manufacturerIntel     = "Intel"
+	intelEKCertServiceURL = "https://ekop.intel.com/ekcertservice/"
+)
+
 var dataStore DataStore
 
 func printConfig(c *Config, configFile string) {
@@ -198,6 +203,10 @@ func parseCertParams(certParams [][]byte) (akCertParams, tlsCertParams *ar.CertP
 	return akCertParams, tlsCertParams, nil
 }
 
+func getIntelEkCert(certificateUrl string) (*x509.Certificate, error) {
+	return nil, fmt.Errorf("Retrieval of Intel EK Certificates not implemented yet")
+}
+
 // Handle Activate Credential Request (Step 1)
 func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
@@ -207,15 +216,30 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	d := gob.NewDecoder(buf)
 	d.Decode(&acRequest)
 
-	if acRequest.Ek.Certificate == nil {
-		return nil, fmt.Errorf("Certificate not present")
-	}
 	if acRequest.Ek.Public == nil {
-		return nil, fmt.Errorf("EK Pub not present")
+		return nil, fmt.Errorf("EK Public Key from connector not present")
+	}
+
+	var ekCert *x509.Certificate
+	var err error
+	if acRequest.Ek.Certificate == nil {
+		if acRequest.Ek.CertificateURL == "" {
+			return nil, fmt.Errorf("Neither EK Certificate nor Certificate URL present")
+		}
+		// Intel TPMs do not provide their EK certificate but instead a certificate URL from where the certificate can be retrieved via its public key
+		if acRequest.TpmInfo.Manufacturer.String() != manufacturerIntel {
+			return nil, fmt.Errorf("EK Certificate not present and Certificate URL not supported for manufacturer %v", acRequest.TpmInfo.Manufacturer)
+		}
+		ekCert, err = getIntelEkCert(acRequest.Ek.CertificateURL)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to retrieve Intel TPM EK certificate from Intel server: %v", err)
+		}
+	} else {
+		ekCert = acRequest.Ek.Certificate
 	}
 
 	if dataStore.VerifyEkCert {
-		err := VerifyEkCert(dataStore.DbPath, acRequest.Ek.Certificate, &acRequest.TpmInfo)
+		err := VerifyEkCert(dataStore.DbPath, ekCert, &acRequest.TpmInfo)
 		if err != nil {
 			return nil, fmt.Errorf("Verify EK certificate chain: error = %v", err)
 		}

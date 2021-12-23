@@ -17,11 +17,11 @@ package main
 
 import (
 	"encoding/pem"
+	"reflect"
 	"testing"
 
-	"go-attestation/attest"
-
-	"github.com/google/certificate-transparency-go/x509"
+	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	x509 "github.com/google/certificate-transparency-go/x509"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 )
@@ -113,6 +113,35 @@ func TestVerifyEkCert(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("VerifyEkCert() error = %v, wantErr %v", err, tt.wantErr)
 				return
+			}
+		})
+	}
+}
+
+func Test_getIntelEkCert(t *testing.T) {
+	type args struct {
+		certificateUrl string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *x509.Certificate
+		wantErr bool
+	}{
+		{"Test getIntelEkCert", args{"https://ekop.intel.com/ekcertservice/Dw8OvJJ0Pb4z7jBnicWOA1cWhICnD4TSmSJl6kmfSzE="}, nil, false},
+	}
+
+	log.SetLevel(log.TraceLevel)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := getIntelEkCert(tt.args.certificateUrl)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getIntelEkCert() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("getIntelEkCert() = %v, want %v", got, tt.want)
 			}
 		})
 	}
