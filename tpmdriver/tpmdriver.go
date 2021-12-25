@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 
@@ -42,7 +43,9 @@ import (
 
 // Tpm is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
-type Tpm struct{}
+type Tpm struct {
+	Mu sync.Mutex
+}
 
 // AcRequest holds the data for an activate credential request
 // for verifying that the AK and TLS Key were created on a genuine
@@ -158,7 +161,7 @@ func CloseTpm() error {
 }
 
 // GetTpmInfo retrieves general TPM infos
-func GetTpmInfo() (*attest.TPMInfo, error) {
+func getTpmInfo() (*attest.TPMInfo, error) {
 
 	if tpm == nil {
 		return nil, fmt.Errorf("Failed to Get TPM info - TPM is not openend")
@@ -247,7 +250,7 @@ func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte) error
 		return fmt.Errorf("Failed to provision TPM - TPM is not openend")
 	}
 
-	tpmInfo, err := GetTpmInfo()
+	tpmInfo, err := getTpmInfo()
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve TPM Info - %v", err)
 	}
@@ -343,14 +346,14 @@ func LoadTpmKeys(akFile, tlsKeyFile string) error {
 
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
-func (t Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
+func (t *Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
 
 	tpmParams, ok := mp.(ar.TpmParams)
 	if !ok {
-		return ar.TpmMeasurement{}, fmt.Errorf("Failed to retrieve TPM params - invalid type")
+		return ar.TpmMeasurement{}, fmt.Errorf("Failed to get TPM params - invalid type")
 	}
 
-	pcrValues, quote, err := GetTpmMeasurement(tpmParams.Nonce, tpmParams.Pcrs)
+	pcrValues, quote, err := GetTpmMeasurement(t, tpmParams.Nonce, tpmParams.Pcrs)
 	if err != nil {
 		return ar.TpmMeasurement{}, fmt.Errorf("Failed to get TPM Measurement: %v", err)
 	}
@@ -397,34 +400,46 @@ func (t Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
 	for i, elem := range tm.HashChain {
 		log.Debug(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, elem.Sha256))
 	}
-	log.Debug(tm.Message)
-	log.Debug(tm.Signature)
+	log.Debug("Quote: ", tm.Message)
+	log.Debug("Signature: ", tm.Signature)
 
 	return tm, nil
 }
 
 // GetTpmMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
 // and returnes it as an attestationreport TPM Measurement object
-func GetTpmMeasurement(nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
+func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
 
 	if tpm == nil {
-		return nil, nil, fmt.Errorf("Failed to retrieve quote - TPM is not opened")
+		return nil, nil, fmt.Errorf("TPM is not opened")
 	}
 	if ak == nil {
-		return nil, nil, fmt.Errorf("Failed to retrieve quote - AK does not exist")
+		return nil, nil, fmt.Errorf("AK does not exist")
 	}
 
-	// Read and Store PCRs into TPM Measurement structure
+	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
+	// one instance can have write access at the same time
+	log.Trace("Trying to get lock on TPM for measurements")
+	t.Mu.Lock()
+	log.Trace("Got lock on TPM for measurements")
+	defer func() {
+		log.Trace("Releasing TPM Lock for measurements")
+		t.Mu.Unlock()
+		log.Trace("Released TPM Lock for measurements")
+	}()
+
 	pcrValues, err := tpm.PCRs(attest.HashSHA256)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to retrieve TPM PCRs")
+		return nil, nil, fmt.Errorf("Failed to get TPM PCRs: %v", err)
 	}
+	log.Trace("Finished reading PCRs from TPM")
 
 	// Retrieve quote and store quote data and signature in TPM measurement object
 	quote, err := ak.QuotePCRs(tpm, nonce, attest.HashSHA256, pcrs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to retrieve quote - %v", err)
+		return nil, nil, fmt.Errorf("Failed to get TPM quote - %v", err)
 	}
+	log.Trace("Finished getting Quote from TPM")
 
 	return pcrValues, quote, nil
 }

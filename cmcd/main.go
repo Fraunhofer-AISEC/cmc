@@ -69,12 +69,19 @@ type Certs struct {
 	Ca          []byte
 }
 
+// server is the gRPC server structure
 type server struct {
 	ci.UnimplementedCMCServiceServer
-	config   config
-	certs    Certs
+	// General config
+	config config
+	// IDS certificate chain including connector certificates
+	certs Certs
+	// metadata (manifests and descriptions of the connector)
 	metadata [][]byte
-	pcrs     []int
+	// PCRs to be included in the quote (calculated from manifests)
+	pcrs []int
+	// TPM Driver struct (further drivers must also be registered here)
+	tpm *tpmdriver.Tpm
 }
 
 func loadConfig(configFile string) (*config, error) {
@@ -219,8 +226,9 @@ func printConfig(c *config) {
 func main() {
 
 	log.SetFormatter(&log.TextFormatter{
-		DisableColors: false,
-		FullTimestamp: true,
+		DisableColors:   false,
+		FullTimestamp:   true,
+		TimestampFormat: "2006-01-02T15:04:05.000",
 	})
 
 	log.SetLevel(log.TraceLevel)
@@ -326,6 +334,7 @@ func main() {
 		metadata: metadata,
 		certs:    certs,
 		pcrs:     pcrs,
+		tpm:      &tpmdriver.Tpm{},
 	}
 
 	// Run CMC<-> Container iface server
@@ -373,7 +382,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 		ImaPcr: s.config.ImaPcr,
 	}
 
-	a := ar.GenAttestationReport(in.Nonce, s.metadata, []ar.Measurement{tpmdriver.Tpm{}}, []ar.MeasurementParams{tpmParams})
+	a := ar.GenAttestationReport(in.Nonce, s.metadata, []ar.Measurement{s.tpm}, []ar.MeasurementParams{tpmParams})
 
 	log.Info("Prover: Signing Attestation Report")
 	tlsKeyPriv, tlsKeyPub, err := tpmdriver.GetTLSKey()
@@ -384,7 +393,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 
 	var status ci.Status
 	certsPem := [][]byte{s.certs.TLSCert, s.certs.DeviceSubCa, s.certs.Ca}
-	ok, data := ar.SignAttestationReport(a, tlsKeyPriv, tlsKeyPub, certsPem)
+	ok, data := ar.SignAttestationReport(&s.tpm.Mu, a, tlsKeyPriv, tlsKeyPub, certsPem)
 	if !ok {
 		log.Error("Prover: Failed to sign Attestion Report ")
 		status = ci.Status_FAIL

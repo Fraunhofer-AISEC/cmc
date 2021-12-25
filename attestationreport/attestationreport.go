@@ -28,6 +28,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -385,9 +386,10 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 
 		// This actually collects the measurements. The methods are implemented
 		// in the respective module (e.g. tpm module)
+		log.Trace("Getting measurements from measurement interface..")
 		data, err := measurer.Measure(measurementParams[i])
 		if err != nil {
-			log.Warnf("Failed to retrieve measurements: %v", err)
+			log.Warnf("Failed to get measurements: %v", err)
 			return ar
 		}
 
@@ -397,9 +399,11 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 		} else if SwData, ok := data.(SwMeasurement); ok {
 			ar.SWM = append(ar.SWM, SwData)
 		} else {
-			fmt.Println("Internal error: Unsupported Measurement Type")
+			log.Error("Error: Unsupported measurement interface type")
 		}
 	}
+
+	log.Trace("Finished attestation report generation")
 
 	return ar
 }
@@ -408,7 +412,11 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 // appends the pem encoded certificate chain 'certsPem' to the JWS structure. The
 // certificates must be handed over in the order they should be appended
 // (Signing Certificate -> Intermediate Certificates -> Root CA Certificate)
-func SignAttestationReport(ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
+// Parameter 'mu' is an optional mutex, in case the private key requires exclusive
+// access (e.g. because it is located in a hardware module)
+func SignAttestationReport(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
+
+	log.Trace("Signing attestation report")
 
 	certsb64 := make([]string, 0)
 	for i, certPem := range certsPem {
@@ -441,11 +449,25 @@ func SignAttestationReport(ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKe
 		return false, nil
 	}
 
+	// If a mutex is present, lock it to ensure exclusive access to the signing key
+	if mu != nil {
+		log.Trace("Trying to get lock on TPM for signing")
+		mu.Lock()
+		log.Trace("Got lock on TPM for signing")
+		defer func() {
+			log.Trace("Releasing TPM Lock for signing")
+			mu.Unlock()
+			log.Trace("Released TPM Lock for signing")
+		}()
+	}
+
+	log.Trace("Signing attestation report")
 	obj, err := signer.Sign(data)
 	if err != nil {
 		log.Error("Failed to sign the Attestation Report: ", err)
 		return false, nil
 	}
+	log.Trace("Signed attestation report")
 
 	var msg string
 	msg = obj.FullSerialize()
