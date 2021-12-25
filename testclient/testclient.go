@@ -50,6 +50,9 @@ func main() {
 
 	parsedMode := flag.String("mode", "generate", "[generate | verify]")
 	port := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
+	reportFile := flag.String("report", "attestation-report.json", "Output file for the attestation report")
+	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
+	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
 	flag.Parse()
 
 	var mode Mode
@@ -70,7 +73,7 @@ func main() {
 
 	client := ci.NewCMCServiceClient(conn)
 
-	timeoutSec := 10
+	timeoutSec := 20
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 	defer cancel()
 
@@ -95,23 +98,21 @@ func main() {
 		}
 
 		// Save the Attestation Report for the verifier
-		fileName := "attestation-report.json"
-		ioutil.WriteFile(fileName, response.GetAttestationReport(), 0644)
+		ioutil.WriteFile(*reportFile, response.GetAttestationReport(), 0644)
 		// Save the nonce for the verifier
-		ioutil.WriteFile("nonce", nonce, 0644)
+		ioutil.WriteFile(*nonceFile, nonce, 0644)
 
-		fmt.Println("Wrote file ", fileName)
+		fmt.Println("Wrote file ", *reportFile)
 
 	} else if mode == Verify {
 		// Read the attestation report and the nonce previously stored
-		fileName := "attestation-report.json"
-		data, err := ioutil.ReadFile(fileName)
+		data, err := ioutil.ReadFile(*reportFile)
 		if err != nil {
-			log.Fatalf("Failed to read file %v: %v", fileName, err)
+			log.Fatalf("Failed to read file %v: %v", *reportFile, err)
 		}
 
 		var nonce []byte
-		nonce, err = ioutil.ReadFile("nonce")
+		nonce, err = ioutil.ReadFile(*nonceFile)
 		if err != nil {
 			log.Fatalf("Failed to read nonce: %v", err)
 		}
@@ -133,9 +134,8 @@ func main() {
 		json.Indent(&out, response.GetVerificationResult(), "", "    ")
 
 		// Save the Attestation Result
-		fileName = "attestation-result.json"
-		ioutil.WriteFile(fileName, out.Bytes(), 0644)
-		fmt.Println("Wrote file ", fileName)
+		ioutil.WriteFile(*resultFile, out.Bytes(), 0644)
+		fmt.Println("Wrote file ", *resultFile)
 	} else {
 		log.Println("Unknown mode")
 	}
