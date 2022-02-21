@@ -3,6 +3,7 @@ module github.com/Fraunhofer-AISEC/cmc
 go 1.17
 
 require (
+	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20220221170844-cc89a83ce70c
 	github.com/google/certificate-transparency-go v1.1.1
 	github.com/google/go-tpm v0.3.3
 	github.com/mattn/go-sqlite3 v1.14.9
@@ -13,10 +14,8 @@ require (
 )
 
 require (
-	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20220221170844-cc89a83ce70c // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-tspi v0.2.1-0.20190423175329-115dea689aad // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
 	golang.org/x/net v0.0.0-20211216030914-fe4d6282115f // indirect
 	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 // indirect
