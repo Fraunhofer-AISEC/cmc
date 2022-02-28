@@ -133,7 +133,7 @@ type InternalConnection struct {
 }
 
 // ExternalInterface represents the JSON attestation report
-// element of type 'External Interfaces' signed by the operator
+// element of type 'External Interface' signed by the operator
 type ExternalInterface struct {
 	Type        string `json:"type"`
 	AppEndpoint string `json:"appEndpoint"` // Links to Type 'App Manifest'->'Endpoint'
@@ -292,7 +292,7 @@ var (
 	connDesSignerRole     = string("operator")
 )
 
-// GenAttestationReport generates an attestation report with the provided
+// Generate generates an attestation report with the provided
 // nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
 // descriptions must be raw JWS tokens in the JWS JSON full serialization
 // format. Takes a list of 'measurements' and accompanying 'measurementParams',
@@ -300,7 +300,7 @@ var (
 // implement the attestation report 'Measurer' interface providing
 // a method for collecting the measurements from a hardware or software
 // interface
-func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measurement, measurementParams []MeasurementParams) ArJws {
+func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measurementParams []MeasurementParams) ArJws {
 
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
@@ -408,13 +408,13 @@ func GenAttestationReport(nonce []byte, metadata [][]byte, measurements []Measur
 	return ar
 }
 
-// SignAttestationReport signs the attestation report with private key 'priv' and
-// appends the pem encoded certificate chain 'certsPem' to the JWS structure. The
+// Sign signs the attestation report with private key 'priv' and appends the
+// pem encoded certificate chain 'certsPem' to the JWS structure. The
 // certificates must be handed over in the order they should be appended
 // (Signing Certificate -> Intermediate Certificates -> Root CA Certificate)
 // Parameter 'mu' is an optional mutex, in case the private key requires exclusive
 // access (e.g. because it is located in a hardware module)
-func SignAttestationReport(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
+func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
 
 	log.Trace("Signing attestation report")
 
@@ -475,11 +475,11 @@ func SignAttestationReport(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub
 	return true, []byte(msg)
 }
 
-// VerifyAttestationReport verifies an attestation report in full serialized JWS
+// Verify verifies an attestation report in full serialized JWS
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the verifications and the compatibility of software artefacts.
-func VerifyAttestationReport(arRaw string, nonce, caCertPem []byte) VerificationResult {
+func Verify(arRaw string, nonce, caCertPem []byte) VerificationResult {
 	result := VerificationResult{
 		Type:      "Verification Result",
 		Success:   true,
