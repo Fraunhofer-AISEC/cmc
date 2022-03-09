@@ -3,6 +3,7 @@
 
 cmcd/cmcd
 testclient/testclient
+testconnector/testconnector
 testclient/nonce
 testclient/attestation-report.json
 testclient/attestation-result.json
