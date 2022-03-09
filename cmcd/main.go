@@ -52,6 +52,8 @@ type config struct {
 	LocalPath  string `json:"localPath"`
 	UseIma     bool   `json:"useIma"`
 	ImaPcr     int32  `json:"imaPcr"`
+	// Key config: RSA2048 RSA4096 EC256 EC384 EC521
+	KeyConfig  string `json:"keyConfig,omitempty"` // Default defined below during parsing
 
 	internalPath    string
 	akPath          string
@@ -92,7 +94,11 @@ func loadConfig(configFile string) (*config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read cmcd config file %v: %v", configFile, err)
 	}
-	c := new(config)
+	// Default configuration
+	c := &config {
+		KeyConfig: "EC256",
+	}
+	// Obtain custom configuration
 	err = json.Unmarshal(data, c)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse cmcd config: %v", err)
@@ -339,7 +345,7 @@ func main() {
 			DeviceSubCa: c.deviceSubCaPath,
 			Ca:          c.caPath,
 		}
-		err = tpmdriver.ProvisionTpm(c.ServerAddr+"activate-credential/", paths, certParams)
+		err = tpmdriver.ProvisionTpm(c.ServerAddr+"activate-credential/", paths, certParams, c.KeyConfig)
 		if err != nil {
 			log.Error("Failed to provision TPM - ", err)
 			os.Remove(c.akPath)
@@ -503,7 +509,7 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 	var tlsKeyPriv crypto.PrivateKey
 
 	// get sign opts
-	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts(), len(in.GetContent()))
+	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
 		log.Error("[Prover] Failed to choose requested hash function.", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to find appropriate hash function")
@@ -511,14 +517,15 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 	// get key
 	tlsKeyPriv, _, err = tpmdriver.GetTLSKey()
 	if err != nil {
-		log.Error("[Prover]. Failed to get TLS key. ", err.Error())
+		log.Error("[Prover] Failed to get TLS key. ", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to get TLS key")
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
+	log.Trace("[Prover] TLSSign using opts: ", opts )
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
 	if err != nil {
-		log.Error("[Prover].", err.Error())
+		log.Error("[Prover] ", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to perform Signing operation")
 	}
 	// Create response
@@ -546,25 +553,32 @@ func (s *server) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCer
 }
 
 // Converts Protobuf hashtype to crypto.SignerOpts
-// For now: only supports SHA256 with/without PSSOptions
-func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions, len int) (crypto.SignerOpts, error) {
+func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.SignerOpts, error) {
+	var hash crypto.Hash
+	var len int
 	switch hashtype {
 	case ci.HashFunction_SHA256:
-		if pssOpts != nil {
-			log.Warning("Signature Options: RSA with PSS is used. Certain TPMs might not be able to compute the correct result")
-			saltlen := int(pssOpts.SaltLength)
-			// our Key with Signer interface does not allow -1 as definition for length of hash - difference between TLS / FIPS and TPM definition ?
-			// see https://cs.opensource.google/go/go/+/refs/tags/go1.17.3:src/crypto/rsa/pss.go;drc=refs%2Ftags%2Fgo1.17.3;l=231
-			if saltlen < 0 {
-				log.Warning("Signature Options: Adapted RSA PSS Salt length to length of hash: ", len)
-				saltlen = len
-			}
-			return &rsa.PSSOptions{SaltLength: saltlen, Hash: crypto.SHA256}, nil
-		}
-		return crypto.SHA256, nil
+		hash = crypto.SHA256
+		len = 32
+	case ci.HashFunction_SHA384:
+		hash = crypto.SHA384
+		len = 48
+	case ci.HashFunction_SHA512:
+		len = 64
+		hash = crypto.SHA512
 	default:
+		return  crypto.SHA512, fmt.Errorf("[cmcd] Hash function not implemented: %v", hashtype)
 	}
-	return crypto.SHA512, errors.New("[DummyCMC] Hash function not implemented")
+	if pssOpts != nil {
+		saltlen := int(pssOpts.SaltLength)
+		// go-attestation / go-tpm does not allow -1 as definition for length of hash
+		if saltlen < 0 {
+			log.Warning("Signature Options: Adapted RSA PSS Salt length to length of hash: ", len)
+			saltlen = len
+		}
+		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
+	}
+	return hash, nil
 }
 
 // Returns either the unmodified absolute path or the absolute path

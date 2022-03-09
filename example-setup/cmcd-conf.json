@@ -3,6 +3,6 @@
 "serverPath": "drtm-example/",
 "localPath": "metadata/",
 "useIma": false,
-"imaPcr": 10
+"imaPcr": 10,
+"keyConfig": "EC256"
 }
-
