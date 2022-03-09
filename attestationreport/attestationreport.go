@@ -18,10 +18,13 @@ package attestationreport
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -29,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"math/big"
 
 	log "github.com/sirupsen/logrus"
 
@@ -417,34 +421,53 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 // Parameter 'mu' is an optional mutex, in case the private key requires exclusive
 // access (e.g. because it is located in a hardware module)
 func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
+	var err error
 
 	log.Trace("Signing attestation report")
 
+	// certificate chain in base64 encoding
 	certsb64 := make([]string, 0)
 	for i, certPem := range certsPem {
 		cert := loadCert(certPem)
 		if cert == nil {
 			log.Errorf("Failed to load cert[%v]", i)
+			return false, nil
 		}
 
 		certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
 	}
 
-	hws := &hwSigner{
-		pk:     &jose.JSONWebKey{Key: pub},
-		signer: priv.(crypto.Signer),
-		algs:   []jose.SignatureAlgorithm{jose.RS256},
+	// Get jose.SignatureAlgorithm
+	// Saltlength and further algorithms are set to the recommended default by x509
+	// we assume these defaults are correct
+	var alg jose.SignatureAlgorithm
+	alg, err = algFromKeyType(pub)
+	if err != nil {
+		log.Error(err)
+		return false, nil
 	}
+	log.Trace("Chosen signature algorithm: ", alg)
+	// create jose.OpaqueSigner with hwSigner wrapper (tpm key)
+	var hws *hwSigner
+	var opaqueSigner jose.OpaqueSigner
+	hws = &hwSigner{
+		pk:      &jose.JSONWebKey{Key: pub},
+		signer:  priv,
+		alg:    alg,
+	}
+	opaqueSigner = jose.OpaqueSigner(hws)
 
-	opaqueSigner := jose.OpaqueSigner(hws)
-	alg := hws.algs[0]
+	// Create jose.Signer with OpaqueSigner
+	// x5c: adds Certificate Chain in later result
 	var opt jose.SignerOptions
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
+	var signer jose.Signer
+	signer, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
 	if err != nil {
 		log.Error("Failed to setup signer for the Attestation Report: ", err)
 		return false, nil
 	}
 
+	// Marshal data to bytes
 	data, err := json.Marshal(ar)
 	if err != nil {
 		log.Error("Failed to marshal the Attestation Report: ", err)
@@ -463,7 +486,8 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 		}()
 	}
 
-	log.Trace("Signing attestation report")
+	// sign
+	log.Trace("Performing Sign operation")
 	obj, err := signer.Sign(data)
 	if err != nil {
 		log.Error("Failed to sign the Attestation Report: ", err)
@@ -471,6 +495,7 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 	}
 	log.Trace("Signed attestation report")
 
+	// return signature in bytes
 	var msg string
 	msg = obj.FullSerialize()
 
@@ -685,8 +710,37 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 			result.update(false, msg)
 		}
 	}
-
 	return result
+}
+
+// Deduces jose signature algoritm from provided key type
+func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
+	switch key := pub.(type) {
+	case *rsa.PublicKey:
+		switch key.Size() {
+		case 256:
+			// FUTURE: use RSA PSS: PS256
+			return jose.RS256, nil
+		case 512:
+			// FUTURE: use RSA PSS: PS512
+			return jose.RS512, nil
+		default:
+			return jose.RS256, fmt.Errorf("Failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
+		}
+	case *ecdsa.PublicKey:
+		switch key.Curve {
+		case elliptic.P224(), elliptic.P256():
+			return jose.ES256, nil
+		case elliptic.P384():
+			return jose.ES384, nil
+		case elliptic.P521():
+			return jose.ES512, nil
+		default:
+			return jose.RS256, errors.New("Failed to determine algorithm from key type: unknown elliptic curve")
+		}
+	default:
+		return jose.RS256, errors.New("Failed to determine algorithm from key type: unknown key type")
+	}
 }
 
 func (result *VerificationResult) update(success bool, msg string) {
@@ -1191,8 +1245,8 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) error {
 // the attestation report with hardware-based keys (such as TPM-based keys)
 type hwSigner struct {
 	pk     *jose.JSONWebKey
-	signer crypto.Signer
-	algs   []jose.SignatureAlgorithm
+	signer crypto.PrivateKey
+	alg   jose.SignatureAlgorithm
 }
 
 // Implements the JOSE Opaque Signer Interface. This enables signing
@@ -1204,21 +1258,72 @@ func (hws *hwSigner) Public() *jose.JSONWebKey {
 // Implements the JOSE Opaque Signer Interface. This enables signing
 // the attestation report with hardware-based keys (such as TPM-based keys)
 func (hws *hwSigner) Algs() []jose.SignatureAlgorithm {
-	return hws.algs
+	return []jose.SignatureAlgorithm{hws.alg}
 }
 
 // Implements the JOSE Opaque Signer Interface. This enables signing
 // the attestation report with hardware-based keys (such as TPM-based keys)
 func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([]byte, error) {
+	// EC-specific: key size in byte for later padding
+	var keySize int
+	// Determine hash / SignerOpts from algorithm
+	var opts crypto.SignerOpts
+	switch alg {
+		case jose.RS256, jose.ES256: // RSA, ECDSA with SHA256
+		keySize = 32 // 256 bit
+		opts = crypto.SHA256
+	case jose.PS256: // RSA PSS with SHA256
+		// we force default saltLengths, same as x509 and TPM2.0
+		opts = &rsa.PSSOptions{SaltLength: 32, Hash: crypto.SHA256}
+	case jose.RS384, jose.ES384: // RSA, ECDSA with SHA384
+		keySize = 48
+		opts = crypto.SHA384
+	case jose.PS384: // RSA PSS with SHA384
+		opts = &rsa.PSSOptions{SaltLength: 48, Hash: crypto.SHA384}
+	case jose.RS512, jose.ES512: // RSA, ECDSA with SHA512
+		keySize = 66 // 521 bit + padding
+		opts = crypto.SHA512
+	case jose.PS512: // RSA PSS with SHA512
+		opts = &rsa.PSSOptions{SaltLength: 64, Hash: crypto.SHA512}
+	default:
+		return nil, errors.New("Signing failed: Could not determine appropriate hash type")
+	}
 
-	hash := crypto.SHA256
-	hasher := hash.New()
-
+	// Hash payload
+	hasher := opts.HashFunc().New()
 	// According to documentation, Write() on hash never fails
 	_, _ = hasher.Write(payload)
 	hashed := hasher.Sum(nil)
 
-	return hws.signer.Sign(rand.Reader, hashed, hash)
+	// sign payload
+	switch alg {
+	case jose.ES256, jose.ES384, jose.ES512:
+		// Obtain signature
+		asn1Sig, err := hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
+		if err != nil {
+			return nil, err
+		}
+		// Convert from asn1 format (as specified in crypto) to concatenated and padded format for go-jose
+		type ecdsasig struct {
+			R *big.Int
+			S *big.Int
+		}
+		var esig ecdsasig
+		ret := make([]byte, 2 * keySize)
+		_, err = asn1.Unmarshal(asn1Sig, &esig)
+		if err != nil {
+			return nil, errors.New("ECDSA Signature was not in expected format.")
+		}
+		// Fill return buffer with padded keys
+		rBytes := esig.R.Bytes()
+		sBytes := esig.S.Bytes()
+		copy(ret[keySize - len(rBytes) : keySize], rBytes)
+		copy(ret[2 * keySize - len(sBytes) : 2 * keySize], sBytes)
+		return ret, nil
+	default:
+		// The return format of all other signatures does not need to be adapted for go-jose
+		return hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
+	}
 }
 
 func contains(elem string, list []string) bool {
