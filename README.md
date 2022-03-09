@@ -50,6 +50,15 @@ make
 
 # Run the testclient to verify the attestation report (result also stored in cmc/testclient)
 ./testclient --mode verify
+
+# To test the attested TLS connection
+cd cmc/testconnector
+make
+./testconnector
+
+# Run the testclient to test the attested TLS connection with the connector
+./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem
+
 ```
 
 **Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed for both modules
