@@ -242,8 +242,7 @@ func GetAkQualifiedName() ([32]byte, error) {
 // activation via a remote CA server and retrieves the resulting AK and TLS Key
 // certificates from the server and stores the encrypted blobs and the
 // certificates on disk.
-func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte) error {
-
+func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte, keyConfig string) error {
 	log.Info("Provisioning TPM (might take a while)..")
 
 	if tpm == nil {
@@ -255,7 +254,7 @@ func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte) error
 		return fmt.Errorf("Failed to retrieve TPM Info - %v", err)
 	}
 
-	ek, ak, tlsKey, err = createKeys(tpm)
+	ek, ak, tlsKey, err = createKeys(tpm, keyConfig)
 	if err != nil {
 		return fmt.Errorf("Activate Credential failed: createKeys returned %v", err)
 	}
@@ -451,7 +450,6 @@ func GetTLSKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 	if tlsKey == nil {
 		return nil, nil, fmt.Errorf("Failed to get TLS Key Signer: not initialized")
 	}
-
 	priv, err := tlsKey.Private(tlsKey.Public())
 	if err != nil {
 		return nil, nil, fmt.Errorf("Failed to get TLS Key Private")
@@ -460,7 +458,7 @@ func GetTLSKey() (crypto.PrivateKey, crypto.PublicKey, error) {
 	return priv, tlsKey.Public(), nil
 }
 
-func createKeys(tpm *attest.TPM) ([]attest.EK, *attest.AK, *attest.Key, error) {
+func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *attest.Key, error) {
 
 	log.Debug("Loading EKs")
 
@@ -486,10 +484,28 @@ func createKeys(tpm *attest.TPM) ([]attest.EK, *attest.AK, *attest.Key, error) {
 
 	log.Debug("Creating new TLS Key")
 
-	tlsKeyConfig := &attest.KeyConfig{
-		Algorithm: attest.RSA,
-		Size:      2048,
+	// Create key as specified in the config file
+	tlsKeyConfig := &attest.KeyConfig{}
+	switch(keyConfig) {
+	case "EC256":
+		tlsKeyConfig.Algorithm = attest.ECDSA
+		tlsKeyConfig.Size = 256
+	case "EC384":
+		tlsKeyConfig.Algorithm = attest.ECDSA
+		tlsKeyConfig.Size = 384
+	case "EC521":
+		tlsKeyConfig.Algorithm = attest.ECDSA
+		tlsKeyConfig.Size = 521
+	case "RSA2048":
+		tlsKeyConfig.Algorithm = attest.RSA
+		tlsKeyConfig.Size = 2048
+	case "RSA4096":
+		tlsKeyConfig.Algorithm = attest.RSA
+		tlsKeyConfig.Size = 4096
+	default:
+		return nil, nil, nil, fmt.Errorf("Failed to create new TLS Key, unknown key configuration: %v", keyConfig)
 	}
+
 	tlsKey, err := tpm.NewKey(ak, tlsKeyConfig)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Failed to create new TLS key - %v", err)
