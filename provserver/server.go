@@ -410,7 +410,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	der, err = x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, tlsPub.Public, dataStore.DeviceSubCaPriv)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create AK certificate: %v", err)
+		return nil, fmt.Errorf("Failed to create TLS certificate: %v", err)
 	}
 
 	tlsKeyPem := &bytes.Buffer{}
