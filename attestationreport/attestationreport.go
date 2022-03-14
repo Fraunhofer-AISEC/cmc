@@ -31,14 +31,15 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"sync"
 	"math/big"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 
 	"gopkg.in/square/go-jose.v2"
 
 	"github.com/google/go-tpm/tpm2"
+	"time"
 )
 
 // Measurement is a generic interface for a Measurement, such as a TpmMeasurement
@@ -66,6 +67,8 @@ type Validity struct {
 	NotBefore string `json:"notBefore"`
 	NotAfter  string `json:"notAfter"`
 }
+
+const timeLayout = "20060102150405"
 
 // HashChainElem represents the JSON attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
@@ -260,15 +263,6 @@ type ArJws struct {
 	Nonce              string          `json:"nonce"`
 }
 
-// VerificationResult represents the following JSON attestation report
-// element of type 'Verification Result'.
-type VerificationResult struct {
-	Type      string   `json:"type"`
-	Success   bool     `json:"raSuccessful"`
-	CertLevel int      `json:"certificationLevel"`
-	Log       []string `json:"log"`
-}
-
 // TpmParams are Parameters for retrieving TPM measurements: The
 // nonce is embedded into the quote. Pcrs must be set to the PCRs
 // that should be embedded into the quote. Certs represent the AK
@@ -395,7 +389,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 		log.Trace("Getting measurements from measurement interface..")
 		data, err := measurer.Measure(measurementParams[i])
 		if err != nil {
-			log.Warnf("Failed to get measurements: %v", err)
+			log.Warnf("Failed to get measurements: %v\n", err)
 			return ar
 		}
 
@@ -451,8 +445,8 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 	var hws *hwSigner
 	var opaqueSigner jose.OpaqueSigner
 	hws = &hwSigner{
-		pk:      &jose.JSONWebKey{Key: pub},
-		signer:  priv,
+		pk:     &jose.JSONWebKey{Key: pub},
+		signer: priv,
 		alg:    alg,
 	}
 	opaqueSigner = jose.OpaqueSigner(hws)
@@ -508,14 +502,17 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 // the verifications and the compatibility of software artefacts.
 func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) VerificationResult {
 	result := VerificationResult{
-		Type:      "Verification Result",
-		Success:   true,
-		CertLevel: 0}
+		Type:        "Verification Result",
+		Success:     true,
+		SwCertLevel: 0}
 
 	// Verify ALL signatures and unpack plain AttestationReport
-	ar, err := verifyAndUnpackAttestationReport(arRaw, &result, caCertPem, roles)
-	if err != nil {
-		log.Warn("Failed to verify and unpack attestation report: ", err)
+	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, caCertPem, roles)
+	if ar == nil {
+		result.InternalError = true
+	}
+	if !ok {
+		result.Success = false
 		return result
 	}
 
@@ -523,41 +520,52 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	arnonce, aerr := hex.DecodeString(ar.Nonce)
 	vrNonceStr := hex.EncodeToString(nonce)
 	if aerr != nil {
-		msg := fmt.Sprintf("VERIFICATION ERROR: Nonces mismatch (%v vs. %v)", ar.Nonce, vrNonceStr)
-		result.update(false, msg)
+		result.Success = false
+		result.FreshnessCheck.Success = false
+		msg := fmt.Sprintf("Failed to decode nonce in Attestation Report: %v", aerr)
+		result.FreshnessCheck.Details = msg
+		log.Trace(msg)
 	}
 	if res := bytes.Compare(arnonce, nonce); res != 0 {
-		msg := fmt.Sprintf("VERIFICATION ERROR: Nonces mismatch (%v vs. %v)", ar.Nonce, vrNonceStr)
-		result.update(false, msg)
+		result.Success = false
+		result.FreshnessCheck.Success = false
+		msg := fmt.Sprintf("Nonces mismatch (%v vs. %v)", ar.Nonce, vrNonceStr)
+		result.FreshnessCheck.Details = msg
+		log.Trace(msg)
 	} else {
-		msg := fmt.Sprintf("VERIFICATION SUCCESS: Nonces match (%v)", ar.Nonce)
-		result.update(true, msg)
+		result.FreshnessCheck.Success = true
 	}
 
 	// Verify TPM measurements if present: Extend the verifications to re-calculate the PCR value
 	// and evaluate it against the measured PCR value. In case of a measurement list, also extend
 	// the measured values to re-calculate the measured PCR value
 	verifications := make(map[int][]byte)
+	result.MeasResult.TpmMeasResult.Summary.Success = true
+
 	numExtends := 0
 	for _, hce := range ar.TpmM.HashChain {
+		pcrRes := PcrResult{}
+		pcrRes.Pcr = int(hce.Pcr)
+
 		if len(hce.Sha256) == 1 {
 			// This means, that the value from the PCR was directly taken for the measurement
-			msg := fmt.Sprintf("MEASUREMENT (single) PCR%v: %v", hce.Pcr, hce.Sha256[0])
-			result.update(true, msg)
 			measurement, _ := hex.DecodeString(hce.Sha256[0])
 
 			// Calculate the expected PCR value from the verifications
-			ver, n := extendVerifications(int(hce.Pcr), ar.RtmManifest.Verifications, ar.OsManifest.Verifications, &result)
+			ver, n := extendVerifications(int(hce.Pcr), ar.RtmManifest.Verifications, ar.OsManifest.Verifications)
 			verifications[int(hce.Pcr)] = ver
 			numExtends += n
 
 			// Compare the expected PCR value with the measured PCR value
 			if bytes.Compare(measurement, verifications[int(hce.Pcr)]) == 0 {
-				msg = fmt.Sprintf("VERIFICATION SUCCESS: PCR%v: %v", hce.Pcr, hce.Sha256[0])
-				result.update(true, msg)
+				pcrRes.Success = true
 			} else {
-				msg = fmt.Sprintf("VERIFICATION ERROR: PCR%v: %v", hce.Pcr, hce.Sha256[0])
-				result.update(false, msg)
+				pcrRes.Success = false
+				result.MeasResult.TpmMeasResult.Summary.Success = false
+				result.Success = false
+				msg := fmt.Sprintf("PCR value did not match expectation: %v vs. %v", hce.Sha256[0], hex.EncodeToString(verifications[int(hce.Pcr)]))
+				pcrRes.Details = append(pcrRes.Details, msg)
+				log.Warn(fmt.Sprintf("VERIFICATION ERROR: PCR%v: %v", hce.Pcr, msg))
 			}
 		} else {
 			// This means, that the values of the individual software artefacts were stored
@@ -565,81 +573,104 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 			// PCR value
 			hash := make([]byte, 32)
 			for _, sha256 := range hce.Sha256 {
-
-				msg := fmt.Sprintf("MEASUREMENT (multip): PCR%v: %v", hce.Pcr, sha256)
-				result.update(true, msg)
-
 				h, _ := hex.DecodeString(sha256)
 				hash = extendHash(hash, h)
 
 				// Check, if a verification exists for the measured value
 				v := getVerification(h, ar.RtmManifest.Verifications, ar.OsManifest.Verifications)
 				if v != nil {
-					msg = fmt.Sprintf("VERIFICATION SUCCESS: PCR%v: %v %v", hce.Pcr, v.Sha256, v.Name)
-					result.update(true, msg)
+					pcrRes.Success = true
 					verifications[int(hce.Pcr)] = hash
 					numExtends++
 				} else {
-					msg = fmt.Sprintf("VERIFICATION ERROR: PCR%v: %v", hce.Pcr, hex.EncodeToString(h))
-					result.update(false, msg)
+					pcrRes.Success = false
+					result.MeasResult.TpmMeasResult.Summary.Success = false
+					result.Success = false
+					msg := fmt.Sprintf("No verification found for measurement: %v", sha256)
+					pcrRes.Details = append(pcrRes.Details, msg)
+					log.Warn(fmt.Sprintf("VERIFICATION ERROR: PCR%v: %v", hce.Pcr, msg))
 				}
 			}
 		}
+		result.MeasResult.TpmMeasResult.PcrRecalculation = append(result.MeasResult.TpmMeasResult.PcrRecalculation, pcrRes)
 	}
 
 	// Check that every verification was extended
 	if numExtends != (len(ar.OsManifest.Verifications) + len(ar.RtmManifest.Verifications)) {
-		msg := fmt.Sprintf("VERIFICATION ERROR: Could not find every expected artefact (Total: %v, Expected: %v)", numExtends, len(ar.OsManifest.Verifications)+len(ar.RtmManifest.Verifications))
-		result.update(false, msg)
+		result.MeasResult.TpmMeasResult.Summary.Success = false
+		result.Success = false
+		msg := fmt.Sprintf("Could not find each expected artefact in measurements (Total: %v, Expected: %v)", numExtends, len(ar.OsManifest.Verifications)+len(ar.RtmManifest.Verifications))
+		result.MeasResult.TpmMeasResult.Summary.Details = msg
+		log.Trace(msg)
 	}
 
 	// Verify TPM measurements if present: Verify quote, signature and aggregated PCR value
 	// As the TPM is currently the only implemented trust anchor, we always implement this check
 	// TODO if other trust anchors are supported, evaluate which is present here
-	verifyTpmMeasurements(&ar.TpmM, nonce, verifications, &result)
+	tpmQuoteRes := verifyTpmMeasurements(&ar.TpmM, nonce, verifications)
+	if tpmQuoteRes.Summary.Success == false {
+		result.MeasResult.TpmMeasResult.Summary.Success = false
+		result.Success = false
+	}
+	result.MeasResult.TpmMeasResult.AggPcrQuoteMatch = tpmQuoteRes.AggPcrQuoteMatch
+	result.MeasResult.TpmMeasResult.QuoteFreshness = tpmQuoteRes.QuoteFreshness
+	result.MeasResult.TpmMeasResult.QuoteSignature = tpmQuoteRes.QuoteSignature
 
-	// Verify software measurements against app manifests and vice versa, if present
+	// Verify software measurements against app manifests
 	for _, swM := range ar.SWM {
-		success := false
+		swRes := SwMeasurementResult{}
+		swRes.Success = false
+		swRes.MeasName = swM.Name
+
 		for _, app := range ar.AppManifests {
 			for _, swV := range app.Verifications {
 				verificationHash, errv := hex.DecodeString(swM.Sha256)
 				measurementHash, errm := hex.DecodeString(swV.Sha256)
 				if (errm == nil) && (errv == nil) && bytes.Compare(verificationHash, measurementHash) == 0 {
-					msg := fmt.Sprintf("VERIFICATION SUCCESS: Type: %v, Name: %v, Sha256: %v", swM.Type, swM.Name, swM.Sha256)
-					result.update(true, msg)
-					success = true
+					swRes.AppName = app.Name
+					swRes.VerName = swV.Name
+					swRes.Success = true
 					break
 				}
 			}
 		}
-		if success == false {
+
+		if swRes.Success == false {
+			swRes.Details = "No verification found for available measurement"
 			msg := fmt.Sprintf("VERIFICATION ERROR: Type: %v, Name: %v, Sha256: %v", swM.Type, swM.Name, swM.Sha256)
-			result.update(false, msg)
+			log.Warn(msg)
 		}
+
+		result.MeasResult.SwMeasResult = append(result.MeasResult.SwMeasResult, swRes)
 	}
+
+	// Check whether measurements were found for each delivered app manifest
 	for _, app := range ar.AppManifests {
 		for _, swV := range app.Verifications {
-			success := false
-			for _, swM := range ar.SWM {
-				verificationHash, errv := hex.DecodeString(swM.Sha256)
-				measurementHash, errm := hex.DecodeString(swV.Sha256)
-				if (errm == nil) && (errv == nil) && bytes.Compare(verificationHash, measurementHash) == 0 {
-					msg := fmt.Sprintf("VERIFICATION SUCCESS: Type: %v, Name: %v, Sha256: %v", swV.Type, swV.Name, swV.Sha256)
-					result.update(true, msg)
-					success = true
+
+			found := false
+			for _, smr := range result.MeasResult.SwMeasResult {
+				if smr.AppName == app.Name && smr.VerName == swV.Name {
+					found = true
 					break
 				}
 			}
-			if success == false {
+
+			if found == false {
+				swRes := SwMeasurementResult{}
+				swRes.Success = false
+				swRes.AppName = app.Name
+				swRes.VerName = swV.Name
+				swRes.Details = "No measurement found for available verification"
+				result.MeasResult.SwMeasResult = append(result.MeasResult.SwMeasResult, swRes)
 				msg := fmt.Sprintf("VERIFICATION ERROR: Type: %v, Name: %v, Sha256: %v", swV.Type, swV.Name, swV.Sha256)
-				result.update(false, msg)
+				log.Warn(msg)
 			}
 		}
 	}
 
 	// The lowest certification level of all components determines the certification
-	// level for the device
+	// level for the device's software stack
 	levels := make([]int, 0)
 	levels = append(levels, ar.CompanyDescription.CertificationLevel)
 	levels = append(levels, ar.RtmManifest.CertificationLevel)
@@ -649,13 +680,11 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	}
 	aggCertLevel := levels[0]
 	for _, l := range levels {
-		log.Trace("Certification Level of object: ", l)
 		if l < aggCertLevel {
 			aggCertLevel = l
 		}
 	}
-	result.CertLevel = aggCertLevel
-	log.Debug("Final certification level: ", result.CertLevel)
+	result.SwCertLevel = aggCertLevel
 
 	// Verify the compatibility of the attestation report through verifying the
 	// compatibility of all components
@@ -666,48 +695,61 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 
 	// Check that the OS and RTM Manifest are specified in the Device Description
 	if ar.DeviceDescription.RtmManifest == ar.RtmManifest.Name {
-		result.update(true, "COMPATIBILITY SUCCESS: Found RTM Manifest "+ar.RtmManifest.Name+" in Device Description")
+		result.DevDescResult.CorrectRtm.Success = true
 	} else {
-		msg := "COMPATIBILITY ERROR: Failed to find RTM Manifest " + ar.RtmManifest.Name + " in Device Description"
-		log.Warn(msg)
-		result.update(false, msg)
+		result.DevDescResult.CorrectRtm.Success = false
+		msg := fmt.Sprintf("Device Description listed wrong RTM Manifest: %v vs. %v\n", ar.DeviceDescription.RtmManifest, ar.RtmManifest.Name)
+		result.DevDescResult.CorrectRtm.Details = msg
+		result.DevDescResult.Summary.Success = false
+		result.Success = false
+		log.Trace(msg)
 	}
 	if ar.DeviceDescription.OsManifest == ar.OsManifest.Name {
-		result.update(true, "COMPATIBILITY SUCCESS: Found OS Manifest "+ar.OsManifest.Name+" in Device Description")
+		result.DevDescResult.CorrectOs.Success = true
 	} else {
-		msg := "COMPATIBILITY ERROR: Failed to find OS Manifest " + ar.OsManifest.Name + " in Device Description"
-		log.Warn(msg)
-		result.update(false, msg)
+		result.DevDescResult.CorrectOs.Success = false
+		msg := fmt.Sprintf("Device Description listed wrong OS Manifest: %v vs. %v\n", ar.DeviceDescription.OsManifest, ar.OsManifest.Name)
+		result.DevDescResult.CorrectOs.Details = msg
+		result.DevDescResult.Summary.Success = false
+		result.Success = false
+		log.Trace(msg)
 	}
 
 	// Check that every AppManifest has a corresponding AppDescription
+	result.DevDescResult.CorrectApps.Success = true
 	for _, a := range ar.AppManifests {
-		if contains(a.Name, appDescriptions) {
-			result.update(true, "COMPATIBILITY SUCCESS: Found App Manifest "+a.Name+" in App Description")
-		} else {
-			msg := "COMPATIBILITY ERROR: Failed to find App Manifest " + a.Name + " in App Description"
-			log.Warn(msg)
-			result.update(false, msg)
+		if contains(a.Name, appDescriptions) == false {
+			result.DevDescResult.CorrectApps.Success = false
+			msg := fmt.Sprintf("Device Description does not list the following App Manifest: %v\n", a.Name)
+			result.DevDescResult.CorrectApps.Details = result.DevDescResult.CorrectApps.Details + msg
+			result.DevDescResult.Summary.Success = false
+			result.Success = false
+			log.Trace(msg)
 		}
 	}
 
 	// Check that the Rtm Manifest is compatible with the OS Manifest
 	if contains(ar.RtmManifest.Name, ar.OsManifest.Rtms) {
-		result.update(true, "COMPATIBILITY SUCCESS: RTM Manifest "+ar.RtmManifest.Name+" is compatible with OS Manifest "+ar.OsManifest.Name)
+		result.DevDescResult.RtmOsCompatibility.Success = true
 	} else {
-		msg := "COMPATIBILITY ERROR: RTM Manifest " + ar.RtmManifest.Name + " not compatible with OS Manifest " + ar.OsManifest.Name
-		log.Warn(msg)
-		result.update(false, msg)
+		result.DevDescResult.RtmOsCompatibility.Success = false
+		msg := fmt.Sprintf("RTM Manifest %v is not compatible with OS Manifest %v", ar.RtmManifest.Name, ar.OsManifest.Name)
+		result.DevDescResult.RtmOsCompatibility.Details = msg
+		result.DevDescResult.Summary.Success = false
+		result.Success = false
+		log.Trace(msg)
 	}
 
 	// Check that the OS Manifest is compatible with all App Manifests
+	result.DevDescResult.OsAppsCompatibility.Success = true
 	for _, a := range ar.AppManifests {
-		if contains(ar.OsManifest.Name, a.Oss) {
-			result.update(true, "COMPATIBILITY SUCCESS: OS Manifest "+ar.OsManifest.Name+" is compatible with App Manifest "+a.Name)
-		} else {
-			msg := "COMPATIBILITY ERROR: OS Manifest " + ar.OsManifest.Name + " not compatible with App Manifest " + a.Name
-			log.Warn(msg)
-			result.update(false, msg)
+		if contains(ar.OsManifest.Name, a.Oss) == false {
+			result.DevDescResult.OsAppsCompatibility.Success = false
+			msg := fmt.Sprintf("OS Manifest %v is not compatible with App Manifest %v\n", ar.OsManifest.Name, a.Name)
+			result.DevDescResult.OsAppsCompatibility.Details = result.DevDescResult.OsAppsCompatibility.Details + msg
+			result.DevDescResult.Summary.Success = false
+			result.Success = false
+			log.Trace(msg)
 		}
 	}
 	return result
@@ -741,16 +783,6 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 	default:
 		return jose.RS256, errors.New("Failed to determine algorithm from key type: unknown key type")
 	}
-}
-
-func (result *VerificationResult) update(success bool, msg string) {
-	if !success {
-		log.Warn(msg)
-		result.Success = false
-	} else {
-		log.Debug(msg)
-	}
-	result.Log = append(result.Log, msg)
 }
 
 func extendHash(hash []byte, extend []byte) []byte {
@@ -800,55 +832,79 @@ func loadPrivateKey(data []byte) interface{} {
 // e.g. manifests or company descriptions
 // Currently uses the 'OU' field of the certificate to check if the certificate
 // was signed by a valid role.
-func verifyJws(data string, roots *x509.CertPool, roles []string, result *VerificationResult) (ok bool, payload []byte) {
+func verifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []byte) {
 	//Extract certificates and validate certificate chains in the process
 	opts := x509.VerifyOptions{
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		Roots:     roots,
 	}
-	success := true
+
+	result := JwsResult{}
+	result.Summary.Success = true
 
 	jwsData, err := jose.ParseSigned(data)
 	if err != nil {
-		result.update(false, fmt.Sprintf("PROCESSING ERROR: Data could not be parsed - %v", err))
-		return false, nil
+		result.Summary.Success = false
+		msg := fmt.Sprintf("Data could not be parsed - %v\n", err)
+		result.Summary.Details = msg
+		log.Trace(msg)
+		return result, nil
 	}
 
 	if len(jwsData.Signatures) == 0 {
-		result.update(false, "VERIFICATION ERROR: JWS does not contain signatures")
-		return false, nil
+		result.Summary.Success = false
+		msg := fmt.Sprintf("JWS does not contain signatures\n")
+		result.Summary.Details = msg
+		log.Trace(msg)
+		return result, nil
 	}
 
 	index := make([]int, len(jwsData.Signatures))
 	payloads := make([][]byte, len(jwsData.Signatures))
 	for i, sig := range jwsData.Signatures {
+		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
 		certs, err := sig.Protected.Certificates(opts)
 		if err == nil {
-			result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Certificate chain for %v: %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName))
+			result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
+			result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
+			result.SignatureCheck[i].CertCheck.Success = true
 		} else {
-			result.update(false, fmt.Sprintf("VERIFICATION ERROR: Certificate chain: %v", err))
-			success = false
+			if certs != nil {
+				result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
+				result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
+			}
+			result.SignatureCheck[i].CertCheck.Success = false
+			msg := fmt.Sprintf("Validation of certificate chain failed: %v\n", err)
+			result.SignatureCheck[i].CertCheck.Details = msg
+			result.Summary.Success = false
+			log.Trace(msg)
 			continue
 		}
 
 		index[i], _, payloads[i], err = jwsData.VerifyMulti(certs[0][0].PublicKey)
 		if err == nil {
-			result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Signature from %v: %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName))
+			result.SignatureCheck[i].Signature.Success = true
 		} else {
-			result.update(false, fmt.Sprintf("VERIFICATION ERROR: Signature from %v: %v - %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName, err))
-			success = false
+			result.SignatureCheck[i].Signature.Success = false
+			result.SignatureCheck[i].Signature.Details = fmt.Sprintf("Signature verification failed: %v\n", err)
+			result.Summary.Success = false
+			log.Warn(fmt.Sprintf("VERIFICATION ERROR: Signature from %v: %v - %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName, err))
 		}
 
 		if index[i] != i {
-			result.update(false, fmt.Sprintf("VERIFICATION ERROR: Order of signatures incorrect"))
-			success = false
+			result.Summary.Success = false
+			msg := fmt.Sprintf("Order of signatures incorrect\n")
+			result.Summary.Details = result.Summary.Details + msg
+			log.Trace(msg)
 		}
 
 		if i > 0 {
 			if bytes.Compare(payloads[i], payloads[i-1]) != 0 {
-				result.update(false, "VERIFICATION ERROR: Payloads differ for jws with multiple signatures")
-				success = false
+				result.Summary.Success = false
+				msg := fmt.Sprintf("Payloads differ for jws with multiple signatures")
+				result.Summary.Details = result.Summary.Details + msg
+				log.Trace(msg)
 			}
 		}
 
@@ -856,31 +912,50 @@ func verifyJws(data string, roots *x509.CertPool, roles []string, result *Verifi
 		// role which is set in the 'OU' field of the certificate
 		if roles != nil {
 			if len(roles) != len(jwsData.Signatures) {
-				result.update(false, fmt.Sprintf("VERIFICATION ERROR: Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures)))
-				return false, nil
+				result.Summary.Success = false
+				msg := fmt.Sprintf("Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures))
+				result.Summary.Details = result.Summary.Details + msg
+				log.Trace(msg)
+				return result, nil
 			}
 			r := certs[0][0].Subject.OrganizationalUnit[0]
 			if r == roles[i] {
-				result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Role matches expected role %v", r))
+				rc := Result{
+					Success: true}
+				result.SignatureCheck[i].RoleCheck = &rc
 			} else {
-				result.update(false, fmt.Sprintf("VERIFICATION ERROR: Role %v does not match expected role %v", r, roles[i]))
+				rc := Result{
+					Success: false,
+					Details: fmt.Sprintf("Role %v does not match expected role %v", r, roles[i])}
+				result.SignatureCheck[i].RoleCheck = &rc
+				result.Summary.Success = false
+				log.Warn(fmt.Sprintf("VERIFICATION ERROR: Role %v does not match expected role %v", r, roles[i]))
 			}
 		}
 	}
 
-	payload = payloads[0]
+	payload := payloads[0]
 
-	return success, payload
+	return result, payload
 }
 
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte, roles *SignerRoles) (ArPlain, error) {
+func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte, roles *SignerRoles) (bool, *ArPlain) {
+	if result == nil {
+		log.Warn("Provided Validation Result was nil")
+		return false, nil
+	}
+
 	ar := ArPlain{}
 
 	roots := x509.NewCertPool()
 	ok := roots.AppendCertsFromPEM(caCertPem)
 	if !ok {
-		result.update(false, "PROCESSING ERROR: Failed to setup trusted cert pool")
-		return ar, errors.New("Failed to setup trusted cert pool")
+		result.Success = false
+		msg := "Failed to setup trusted cert pool\n"
+		result.ProcessingError = result.ProcessingError + msg
+		log.Warn(msg)
+		result.InternalError = true
+		return false, &ar
 	}
 
 	// Roles are optional, only use them if provided
@@ -890,23 +965,22 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	//Validate Attestation Report signature
-	log.Printf("Starting Verification of Attestation Report Signature\n")
-	ok, payload := verifyJws(attestationReport, roots, r.ArSigners, result)
-	if ok == true {
-		log.WithFields(log.Fields{
-			"payload": string(payload),
-		}).Trace("Signature successfully verified")
-		result.update(true, "VERIFICATION SUCCESS: Verification of Attestation Report Signatures successful")
+	jwsValRes, payload := verifyJws(attestationReport, roots, r.ArSigners)
+	if jwsValRes.Summary.Success == true {
+		result.ReportSignature = jwsValRes.SignatureCheck
 	} else {
-		result.update(false, "VERIFICATION ERROR: Verification of Attestation Report Signatures failed")
-		return ar, fmt.Errorf("Verification of Attestation Report Signatures failed")
+		result.ReportSignature = jwsValRes.SignatureCheck
+		log.Trace("Verification of Attestation Report Signatures failed")
 	}
 
 	var arJws ArJws
 	err := json.Unmarshal(payload, &arJws)
 	if err != nil {
-		result.update(false, "PROCESSING ERROR: Parsing of Attestation Report content failed")
-		return ar, err
+		result.Success = false
+		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v\n", err)
+		result.ProcessingError = result.ProcessingError + msg
+		log.Trace(msg)
+		return false, &ar
 	}
 
 	ar.Type = "ArPlain"
@@ -915,104 +989,212 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar.Nonce = arJws.Nonce
 
 	//Validate and unpack Rtm Manifest
-	log.Debug("Starting Verification of RTM Manifest Signatures\n")
-	ok, payload = verifyJws(arJws.RtmManifest, roots, r.ManifestSigners, result)
-	if ok == true {
-		log.WithFields(log.Fields{
-			"type":    "RTM Manifest",
-			"payload": string(payload),
-		}).Trace("Signature successfully verified")
-		result.update(true, "VERIFICATION SUCCESS: Verification of RTM Manifest Signatures successful")
+	jwsValRes, payload = verifyJws(arJws.RtmManifest, roots, r.ManifestSigners)
+	if jwsValRes.Summary.Success == true {
+		result.RtmResult.Summary = jwsValRes.Summary
+		result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
 	} else {
-		log.Error("Signature Verification for RTM Manifest failed\n")
-		result.update(false, "VERIFICATION ERROR: Verification of RTM Manifest Signatures failed")
+		result.Success = false
+		result.RtmResult.Summary = jwsValRes.Summary
+		result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
+		log.Trace("Verification of RTM Manifest Signatures failed")
 	}
 
 	err = json.Unmarshal(payload, &ar.RtmManifest)
 	if err != nil {
-		log.Error("Failed to unpack RTM Manifest. Json.Unmarshal returned ", err)
-		result.update(false, "PROCESSING ERROR: Unpacking of RTM Manifest failed")
+		result.Success = false
+		msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v\n", err)
+		result.ProcessingError = result.ProcessingError + msg
+		log.Trace(msg)
 	}
+	result.RtmResult.Name = ar.RtmManifest.Name
+
+	valRes := checkValidity(ar.RtmManifest.Validity)
+	if valRes.Success == false {
+		result.Success = false
+		log.Trace("RTM Manifest invalid")
+	}
+	result.RtmResult.ValidityCheck = valRes
 
 	//Validate and unpack OS Manifest
-	log.Debug("Starting Verification of OS Manifest Signatures\n")
-	ok, payload = verifyJws(arJws.OsManifest, roots, r.ManifestSigners, result)
-	if ok == true {
-		log.WithFields(log.Fields{
-			"type":    "OS Manifest",
-			"payload": string(payload),
-		}).Trace("Signature successfully verified")
-		result.update(true, "VERIFICATION SUCCESS: Verification of OS Manifest Signatures successful")
+	jwsValRes, payload = verifyJws(arJws.OsManifest, roots, r.ManifestSigners)
+	if jwsValRes.Summary.Success == true {
+		result.OsResult.Summary = jwsValRes.Summary
+		result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
 	} else {
-		result.update(false, "VERIFICATION ERROR: Verification of OS Manifest Signatures failed")
+		result.Success = false
+		result.OsResult.Summary = jwsValRes.Summary
+		result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
+		log.Trace("Verification of OS Manifest Signatures failed")
 	}
 
 	err = json.Unmarshal(payload, &ar.OsManifest)
 	if err != nil {
-		result.update(false, "PROCESSING ERROR: Unpacking of OS Manifest failed")
+		result.Success = false
+		msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v\n", err)
+		result.ProcessingError = result.ProcessingError + msg
+		log.Trace(msg)
 	}
+	result.OsResult.Name = ar.OsManifest.Name
+
+	valRes = checkValidity(ar.OsManifest.Validity)
+	if valRes.Success == false {
+		result.Success = false
+		log.Trace("OS Manifest invalid")
+	}
+	result.OsResult.ValidityCheck = valRes
 
 	//Validate and unpack App Manifests
 	for i, amSigned := range arJws.AppManifests {
-		log.Debugf("Starting Verification of App Manifest %d Signatures", i)
-		ok, payload = verifyJws(amSigned, roots, r.ManifestSigners, result)
-		if ok == true {
-			log.WithFields(log.Fields{
-				"type":    "App Manifest",
-				"payload": string(payload),
-			}).Trace("Signature successfully verified")
-			result.update(true, "VERIFICATION SUCCESS: Verification of App Manifest Signatures successful")
+		result.AppResults = append(result.AppResults, ManifestResult{})
+		jwsValRes, payload = verifyJws(amSigned, roots, r.ManifestSigners)
+		if jwsValRes.Summary.Success == true {
+			result.AppResults[i].Summary = jwsValRes.Summary
+			result.AppResults[i].SignatureCheck = jwsValRes.SignatureCheck
 		} else {
-			result.update(false, "VERIFICATION ERROR: Verification of App Manifest Signatures failed")
+			result.Success = false
+			result.AppResults[i].Summary = jwsValRes.Summary
+			result.AppResults[i].SignatureCheck = jwsValRes.SignatureCheck
+			log.Trace("Verification of App Manifest Signatures failed")
 		}
 
 		var am AppManifest
 		err = json.Unmarshal(payload, &am)
 		if err != nil {
-			result.update(false, "PROCESSING ERROR: Unpacking of App Manifest failed")
+			result.Success = false
+			msg := fmt.Sprintf("Unpacking of App Manifest failed: %v\n", err)
+			result.ProcessingError = result.ProcessingError + msg
+			log.Trace(msg)
 		}
 		ar.AppManifests = append(ar.AppManifests, am)
+		result.AppResults[i].Name = am.Name
+
+		valRes = checkValidity(am.Validity)
+		if valRes.Success == false {
+			result.Success = false
+			log.Trace("App Manifest invalid - " + am.Name)
+		}
+		result.AppResults[i].ValidityCheck = valRes
 	}
 
 	// Validate and unpack Company Description
-	log.Debug("Starting Verification of Company Description Signatures\n")
-	ok, payload = verifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners, result)
-	if ok == true {
-		log.WithFields(log.Fields{
-			"payload": string(payload),
-		}).Trace("Signature successfully verified")
-		result.update(true, "VERIFICATION SUCCESS: Verification of Company Description Signatures successful")
-	} else {
-		result.update(false, "VERIFICATION ERROR: Verification of Company Description Signatures failed")
+	jwsValRes, payload = verifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners)
+	result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
+	if jwsValRes.Summary.Success == false {
+		result.Success = false
+		log.Trace("Verification of Company Description Signatures failed")
 	}
 
 	err = json.Unmarshal(payload, &ar.CompanyDescription)
 	if err != nil {
-		result.update(false, "PROCESSING ERROR: Unpacking of Company Description failed")
+		result.Success = false
+		msg := fmt.Sprintf("Unpacking of Company Description failed: %v\n", err)
+		result.ProcessingError = result.ProcessingError + msg
+		log.Trace(msg)
+	}
+	result.CompDescResult.Name = ar.CompanyDescription.DN
+
+	result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
+
+	// Compare the name of the company in the Company Description with the organization in the device identity certificate
+	if contains(result.CompDescResult.Name, result.ReportSignature[0].Organization) {
+		result.CompDescResult.DevAffCheck.Success = true
+	} else {
+		result.CompDescResult.DevAffCheck.Success = false
+		msg := fmt.Sprintf("Company Name does not match Organization in device certificate: %v vs %v", result.CompDescResult.Name, result.ReportSignature[0].Organization)
+		result.CompDescResult.DevAffCheck.Details = msg
+		result.Success = false
+		log.Trace(msg)
 	}
 
+	valRes = checkValidity(ar.CompanyDescription.Validity)
+	if valRes.Success == false {
+		result.Success = false
+		log.Trace("Company Description invalid")
+	}
+	result.CompDescResult.ValidityCheck = valRes
+
 	//Validate and unpack Device Description
-	log.Debug("Starting Verification of Device Description Signatures\n")
-	ok, payload = verifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners, result)
-	if ok == true {
-		log.WithFields(log.Fields{
-			"type":    "Device Description",
-			"payload": string(payload),
-		}).Trace("Signature successfully verified")
-		result.update(true, "VERIFICATION SUCCESS: Verification of Device Description Signatures successful")
-	} else {
-		result.update(false, "VERIFICATION ERROR: Verification of Device Description Signatures failed")
+	jwsValRes, payload = verifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners)
+	result.DevDescResult.Summary = jwsValRes.Summary
+	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
+	if jwsValRes.Summary.Success == false {
+		result.Success = false
+		log.Trace("Verification of Device Description Signatures failed")
 	}
 
 	err = json.Unmarshal(payload, &ar.DeviceDescription)
 	if err != nil {
-		log.Error("Failed to unpack Device Description. Json.Unmarshal returned ", err)
-		result.update(false, "PROCESSING ERROR: Unpacking of Device Description failed")
+		result.Success = false
+		msg := fmt.Sprintf("Unpacking of Device Description failed: %v\n", err)
+		result.ProcessingError = result.ProcessingError + msg
+		log.Trace(msg)
 	}
 
-	return ar, nil
+	// Compare the name of the company in the Company Description with the organization in the operator identity certificate
+	if contains(result.CompDescResult.Name, result.DevDescResult.SignatureCheck[0].Organization) {
+		result.CompDescResult.OpAffCheck.Success = true
+	} else {
+		result.CompDescResult.OpAffCheck.Success = false
+		msg := fmt.Sprintf("Company Name does not match Organization in operator certificate: %v vs %v", result.CompDescResult.Name, result.DevDescResult.SignatureCheck[0].Organization)
+		result.CompDescResult.OpAffCheck.Details = msg
+		result.Success = false
+		log.Trace(msg)
+	}
+
+	// Compare the device and the operator affiliation (based on "organization" field in the identity certificates)
+	found := false
+	for _, o := range result.DevDescResult.SignatureCheck[0].Organization {
+		if contains(o, result.ReportSignature[0].Organization) {
+			result.DevDescResult.OpAffiliation.Success = true
+			found = true
+			break
+		}
+	}
+	if found == false {
+		result.DevDescResult.OpAffiliation.Success = false
+		msg := fmt.Sprintf("No match for affiliations of operator and device certificate: %v vs %v", result.DevDescResult.SignatureCheck[0].Organization, result.ReportSignature[0].Organization)
+		result.DevDescResult.OpAffiliation.Details = msg
+		result.Success = false
+		log.Trace(msg)
+	}
+
+	result.PlainAttReport = ar
+	return true, &ar
 }
 
+func checkValidity(val Validity) Result {
+	result := Result{}
+	result.Success = true
+
+	notBefore, err := time.Parse(timeLayout, val.NotBefore)
+	if err != nil {
+		result.Success = false
+		result.Details = fmt.Sprintf("Failed to parse NotBefore time. Time.Parse returned %v", err)
+		return result
+	}
+	notAfter, err := time.Parse(timeLayout, val.NotAfter)
+	if err != nil {
+		result.Success = false
+		result.Details = fmt.Sprintf("Failed to parse NotAfter time. Time.Parse returned %v", err)
+		return result
+	}
+	currentTime := time.Now()
+
+	if notBefore.After(currentTime) {
+		result.Success = false
+		result.Details = fmt.Sprintf("Validity check failed: Artifact is not valid yet")
+	}
+
+	if currentTime.After(notAfter) {
+		result.Success = false
+		result.Details = fmt.Sprintf("Validity check failed: Artifact validity has expired")
+	}
+
+	return result
+}
+
+// Searches for a specific hash value in the verifications for RTM and OS
 func getVerification(hash []byte, rtmVer, osVer []TpmVerification) *TpmVerification {
 	for _, ver := range rtmVer {
 		h, _ := hex.DecodeString(ver.Sha256)
@@ -1030,7 +1212,9 @@ func getVerification(hash []byte, rtmVer, osVer []TpmVerification) *TpmVerificat
 	return nil
 }
 
-func extendVerifications(pcr int, rtmVer, osVer []TpmVerification, result *VerificationResult) ([]byte, int) {
+// Computes the expected value for the specified PCR based on the verifications in the RTM and OS Manifests and
+// counts the expected number of extension operations
+func extendVerifications(pcr int, rtmVer, osVer []TpmVerification) ([]byte, int) {
 	extend := make([]byte, 32)
 	n := 0
 	for _, ver := range rtmVer {
@@ -1038,8 +1222,6 @@ func extendVerifications(pcr int, rtmVer, osVer []TpmVerification, result *Verif
 			continue
 		}
 		h, _ := hex.DecodeString(ver.Sha256)
-		msg := fmt.Sprintf("PROCESSING verification PCR%v: %v, name = %v", ver.Pcr, ver.Sha256, ver.Name)
-		result.update(true, msg)
 		extend = extendHash(extend, h)
 		n++
 	}
@@ -1049,29 +1231,34 @@ func extendVerifications(pcr int, rtmVer, osVer []TpmVerification, result *Verif
 			continue
 		}
 		h, _ := hex.DecodeString(ver.Sha256)
-		msg := fmt.Sprintf("PROCESSING verification PCR%v: %v, name = %v", ver.Pcr, ver.Sha256, ver.Name)
-		result.update(true, msg)
 		extend = extendHash(extend, h)
 		n++
 	}
 	return extend, n
 }
 
-func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map[int][]byte, result *VerificationResult) {
+func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map[int][]byte) TpmMeasurementResult {
+	result := TpmMeasurementResult{}
+	result.Summary.Success = true
 
 	if len(tpmM.HashChain) != len(verifications) {
-		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Length of measured PCRs does not match with verifications: %v", len(verifications)))
-		return
+		result.Summary.Success = false
+		msg := fmt.Sprintf("Number of measured PCRs does not match with verifications: %v vs %v", len(tpmM.HashChain), len(verifications))
+		result.Summary.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
-	log.Trace("Length of measured PCRs matches with verifications: ", len(verifications))
-
 	// Iterate through verifications and compare PCR values to measurement PCR values
+	// TODO: can be removed since the recalculation of PCRs and comparison to verifications is covered in Verify()
 	for i := range tpmM.HashChain {
 
 		verPcr, ok := verifications[int(tpmM.HashChain[i].Pcr)]
 		if !ok {
-			result.update(false, fmt.Sprintf("VERIFICATION ERROR: Cannot find verification for measured PCR%v", tpmM.HashChain[i].Pcr))
+			result.Summary.Success = false
+			msg := fmt.Sprintf("Cannot find verification for measured PCR%v", tpmM.HashChain[i].Pcr)
+			result.Summary.Details = msg
+			log.Trace(msg)
 			continue
 		}
 
@@ -1090,155 +1277,212 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map
 		}
 
 		if bytes.Compare(measPcr, verPcr) == 0 {
-			result.update(true, fmt.Sprintf("VERIFICATION SUCCESS - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr)))
+			result.Summary.Success = true
 		} else {
-			result.update(false, fmt.Sprintf("VERIFICATION ERROR - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr)))
+			result.Summary.Success = false
+			result.Summary.Details = fmt.Sprintf("Validation failed for the measured PCR value: %v", hex.EncodeToString(measPcr))
+			log.Warn(fmt.Sprintf("VERIFICATION ERROR - PCR%v: %v", tpmM.HashChain[i].Pcr, hex.EncodeToString(measPcr)))
 		}
 	}
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	quote, err := hex.DecodeString(tpmM.Message)
 	if err != nil {
-		result.update(false, "VERIFICATION ERROR: Failed to decode TPM quote")
-		return
+		result.Summary.Success = false
+		msg := fmt.Sprintf("Failed to decode TPM quote: %v", err)
+		result.Summary.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
 	sig, err := hex.DecodeString(tpmM.Signature)
 	if err != nil {
-		result.update(false, "VERIFICATION ERROR: Failed to decode TPM signature")
-		return
+		result.Summary.Success = false
+		msg := fmt.Sprintf("Failed to decode TPM signature: %v", err)
+		result.Summary.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
 	tpmsAttest, err := tpm2.DecodeAttestationData(quote)
 	if err != nil {
-		result.update(false, "VERIFCATION ERROR: Failed to Decode TPM Attestation Data")
-		return
+		result.Summary.Success = false
+		msg := fmt.Sprintf("Failed to decode TPM attestation data: %v", err)
+		result.Summary.Details = msg
+		log.Warn("VERIFCATION ERROR: ", msg)
+		return result
 	}
 
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Compare(nonce, tpmsAttest.ExtraData) == 0 {
-		msg := fmt.Sprintf("VERIFICATION SUCCESS: Nonces match (%v)", hex.EncodeToString(nonce))
-		result.update(true, msg)
+		result.QuoteFreshness.Success = true
 	} else {
-		msg := fmt.Sprintf("VERIFICATION ERROR: Nonces do not match (%v vs. %v)", hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
-		result.update(false, msg)
+		result.QuoteFreshness.Success = false
+		msg := fmt.Sprintf("Nonces mismatch (%v vs. %v)", hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
+		result.QuoteFreshness.Details = msg
+		result.Summary.Success = false
+		log.Trace(msg)
 	}
 
 	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all verifications together then compare
 	sum := make([]byte, 0)
 	for i := range tpmM.HashChain {
-		log.Trace(fmt.Sprintf("%v: Aggregating PCR[%v] = %v", i, tpmM.HashChain[i].Pcr, verifications[int(tpmM.HashChain[i].Pcr)]))
 		sum = append(sum, verifications[int(tpmM.HashChain[i].Pcr)]...)
 	}
 	verPcr := sha256.Sum256(sum)
 	if bytes.Compare(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) == 0 {
-		msg := fmt.Sprintf("VERIFICATION SUCCESS: Aggregated PCR matches Quote PCR - %v", hex.EncodeToString(verPcr[:]))
-		result.update(true, msg)
+		result.AggPcrQuoteMatch.Success = true
 	} else {
-		msg := fmt.Sprintf("VERIFICATION ERROR: Aggregated PCR does not match Quote PCR - %v", hex.EncodeToString(verPcr[:]))
-		result.update(false, msg)
+		result.AggPcrQuoteMatch.Success = false
+		msg := fmt.Sprintf("Aggregated PCR does not match Quote PCR: %v vs. %v", hex.EncodeToString(verPcr[:]), hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
+		result.AggPcrQuoteMatch.Details = msg
+		result.Summary.Success = false
+		log.Trace(msg)
 	}
 
-	err = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.AkCert)
-	if err != nil {
-		result.update(false, err.Error())
-	} else {
-		result.update(true, "VERIFICATION SUCCESS: Verify TPM quote signature")
+	result.QuoteSignature.Signature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.AkCert)
+	if result.QuoteSignature.Signature.Success == false {
+		result.Summary.Success = false
 	}
 
-	err = verifyTpmCertChain(&tpmM.Certs)
-	if err != nil {
-		result.update(false, err.Error())
-	} else {
-		result.update(true, "VERIFICATION SUCCESS: Verify TPM certificate chain")
+	result.QuoteSignature.CertCheck = verifyTpmCertChain(&tpmM.Certs)
+	if result.QuoteSignature.CertCheck.Success == false {
+		result.Summary.Success = false
 	}
+	return result
 }
 
-func verifyTpmCertChain(certs *TpmCerts) error {
+func verifyTpmCertChain(certs *TpmCerts) Result {
+	result := Result{}
+	result.Success = true
 
 	intermediatesPool := x509.NewCertPool()
 	for _, intermediate := range certs.Intermediates {
 		ok := intermediatesPool.AppendCertsFromPEM([]byte(intermediate))
 		if !ok {
-			return fmt.Errorf("VERIFICATION ERROR: Failed to append certificate from PEM")
+			result.Success = false
+			msg := fmt.Sprintf("Failed to append certificate from PEM")
+			result.Details = msg
+			log.Trace(msg)
+			return result
 		}
 	}
-	log.Debugf("Added %v certificates to AK intermediates certificate pool", len(intermediatesPool.Subjects()))
-
 	rootsPool := x509.NewCertPool()
 	ok := rootsPool.AppendCertsFromPEM([]byte(certs.CaCert))
 	if !ok {
-		return fmt.Errorf("VERIFICATION ERROR: Failed to append certificate from PEM")
+		result.Success = false
+		msg := fmt.Sprintf("Failed to append certificate from PEM")
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
-	log.Debugf("Added %v certificate to root certificate pool", len(rootsPool.Subjects()))
 
 	block, _ := pem.Decode([]byte(certs.AkCert))
 	if block == nil || block.Type != "CERTIFICATE" {
-		return errors.New("VERIFICATION ERROR: Failed to parse AK certificate")
+		result.Success = false
+		msg := fmt.Sprintf("Failed to parse AK certificate")
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 	akCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return fmt.Errorf("VERIFICATION ERROR: Failed to parse AK certificate - %v", err)
+		result.Success = false
+		msg := fmt.Sprintf("Failed to parse AK: %v", err)
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
 	chain, err := akCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
-		return fmt.Errorf("VERIFICATION ERROR: Failed to verify AK cert chain - %v", err)
+		result.Success = false
+		msg := fmt.Sprintf("Failed to validate AK cert chain: %v", err)
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
 	expectedLen := len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
 	if len(chain[0]) != expectedLen {
-		return fmt.Errorf("INTERNAL ERROR: Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
+		result.Success = false
+		msg := fmt.Sprintf("Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
-	log.Debugf("Successfully verified chain of %v elements", len(chain[0]))
-	for i := range chain[0] {
-		log.Tracef("\tCertificate CN='%v', Issuer CN='%v'", chain[0][i].Subject.CommonName, chain[0][i].Issuer.CommonName)
-	}
-
-	return nil
+	return result
 }
 
-func verifyTpmQuoteSignature(quote, sig []byte, cert string) error {
+func verifyTpmQuoteSignature(quote, sig []byte, cert string) Result {
+	result := Result{}
+	result.Success = true
 
 	buf := new(bytes.Buffer)
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
-		return errors.New("VERIFICATION ERROR: Failed to decode TPM signature")
+		result.Success = false
+		msg := fmt.Sprintf("Failed to decode TPM signature: %v", err)
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
-		return fmt.Errorf("INTERNAL ERROR: Hash algorithm %v not supported", tpmtSig.Alg)
+		result.Success = false
+		msg := fmt.Sprintf("Hash algorithm %v not supported", tpmtSig.Alg)
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
-
-	log.Trace("Certificate: ", cert)
 
 	// Extract public key from x509 certificate
 	p, _ := pem.Decode([]byte(cert))
 	if p == nil {
-		return errors.New("VERIFICATION ERROR: Failed to decode certificate")
+		result.Success = false
+		msg := fmt.Sprintf("Failed to decode TPM certificate")
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 	x509Cert, err := x509.ParseCertificate(p.Bytes)
 	if err != nil {
-		return errors.New("VERIFICATION ERROR: Failed to parse certificate")
+		result.Success = false
+		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 	pubKey, ok := x509Cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		return errors.New("VERIFICATION ERROR: Failed to extract public key from certificate")
+		result.Success = false
+		msg := fmt.Sprintf("Failed to extract public key from certificate")
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		return errors.New("INTERNAL ERROR: Hash algorithm not supported")
+		result.Success = false
+		msg := fmt.Sprintf("Hash algorithm not supported")
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
-		return fmt.Errorf("VERIFICATION ERROR: Failed to verify TPM quote signature: %v", err)
+		result.Success = false
+		msg := fmt.Sprintf("Failed to verify TPM quote signature: %v\n", err)
+		result.Details = msg
+		log.Trace(msg)
+		return result
 	}
-	return nil
+	return result
 }
 
 // Used for the JOSE Opaque Signer Interface. This enables signing
@@ -1246,7 +1490,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) error {
 type hwSigner struct {
 	pk     *jose.JSONWebKey
 	signer crypto.PrivateKey
-	alg   jose.SignatureAlgorithm
+	alg    jose.SignatureAlgorithm
 }
 
 // Implements the JOSE Opaque Signer Interface. This enables signing
@@ -1269,7 +1513,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 	// Determine hash / SignerOpts from algorithm
 	var opts crypto.SignerOpts
 	switch alg {
-		case jose.RS256, jose.ES256: // RSA, ECDSA with SHA256
+	case jose.RS256, jose.ES256: // RSA, ECDSA with SHA256
 		keySize = 32 // 256 bit
 		opts = crypto.SHA256
 	case jose.PS256: // RSA PSS with SHA256
@@ -1309,7 +1553,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 			S *big.Int
 		}
 		var esig ecdsasig
-		ret := make([]byte, 2 * keySize)
+		ret := make([]byte, 2*keySize)
 		_, err = asn1.Unmarshal(asn1Sig, &esig)
 		if err != nil {
 			return nil, errors.New("ECDSA Signature was not in expected format.")
@@ -1317,8 +1561,8 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		// Fill return buffer with padded keys
 		rBytes := esig.R.Bytes()
 		sBytes := esig.S.Bytes()
-		copy(ret[keySize - len(rBytes) : keySize], rBytes)
-		copy(ret[2 * keySize - len(sBytes) : 2 * keySize], sBytes)
+		copy(ret[keySize-len(rBytes):keySize], rBytes)
+		copy(ret[2*keySize-len(sBytes):2*keySize], sBytes)
 		return ret, nil
 	default:
 		// The return format of all other signatures does not need to be adapted for go-jose
