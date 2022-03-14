@@ -80,6 +80,8 @@ type server struct {
 	metadata [][]byte
 	// PCRs to be included in the quote (calculated from manifests)
 	pcrs []int
+	// Certificate Signer roles to avoid impersonation attacks on certificates
+	roles *ar.SignerRoles
 	// TPM Driver struct (further drivers must also be registered here)
 	tpm *tpmdriver.Tpm
 }
@@ -329,11 +331,21 @@ func main() {
 		return
 	}
 
+	// The verification requires different roles for different certificate chains
+	// to avoid impersonation
+	roles := &ar.SignerRoles{
+		ManifestSigners:    []string{"developer", "evaluator", "certifier"},
+		CompanyDescSigners: []string{"operator", "evaluator", "certifier"},
+		ArSigners:          []string{"device"},
+		ConnDescSigners:    []string{"operator"},
+	}
+
 	server := &server{
 		config:   *c,
 		metadata: metadata,
 		certs:    certs,
 		pcrs:     pcrs,
+		roles:    roles,
 		tpm:      &tpmdriver.Tpm{},
 	}
 
@@ -418,7 +430,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.certs.Ca)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.certs.Ca, s.roles)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

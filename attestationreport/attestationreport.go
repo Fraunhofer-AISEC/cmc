@@ -79,7 +79,7 @@ type TpmCerts struct {
 }
 
 // TpmMeasurement represents the JSON attestation report
-// element of type 'TPM Measurement' signed by the device
+// element of type 'TPM Measurement'
 type TpmMeasurement struct {
 	Type      string           `json:"type"`
 	Message   string           `json:"message"`
@@ -89,7 +89,7 @@ type TpmMeasurement struct {
 }
 
 // SwMeasurement represents the JSON attestation report
-// element of type 'Software Measurement' signed by the device
+// element of type 'Software Measurement'
 type SwMeasurement struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
@@ -97,7 +97,7 @@ type SwMeasurement struct {
 }
 
 // TpmVerification represents the JSON attestation report
-// element of type 'TPM Verification' signed by the device
+// element of type 'TPM Verification'
 type TpmVerification struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
@@ -106,7 +106,7 @@ type TpmVerification struct {
 }
 
 // SwVerification represents the JSON attestation report
-// element of type 'Software Verification' signed by the device
+// element of type 'Software Verification'
 type SwVerification struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
@@ -114,7 +114,7 @@ type SwVerification struct {
 }
 
 // AppDescription represents the JSON attestation report
-// element of type 'App Description' signed by the operator
+// element of type 'App Description'
 type AppDescription struct {
 	Type        string              `json:"type"`
 	Name        string              `json:"name"`
@@ -123,7 +123,7 @@ type AppDescription struct {
 }
 
 // InternalConnection represents the JSON attestation report
-// element of type 'Internal Connection' signed by the operator
+// element of type 'Internal Connection'
 type InternalConnection struct {
 	Type         string `json:"type"`
 	NameAppA     string `json:"nameAppA"`     // Links to Type 'App Description'->'Name'
@@ -133,7 +133,7 @@ type InternalConnection struct {
 }
 
 // ExternalInterface represents the JSON attestation report
-// element of type 'External Interface' signed by the operator
+// element of type 'External Interface'
 type ExternalInterface struct {
 	Type        string `json:"type"`
 	AppEndpoint string `json:"appEndpoint"` // Links to Type 'App Manifest'->'Endpoint'
@@ -142,7 +142,7 @@ type ExternalInterface struct {
 }
 
 // AppManifest represents the JSON attestation report
-// element of type 'App Manifest' signed by developer, evaluator, certifier
+// element of type 'App Manifest'
 type AppManifest struct {
 	Type               string           `json:"type"`
 	Name               string           `json:"name"`
@@ -156,7 +156,7 @@ type AppManifest struct {
 }
 
 // OsManifest represents the JSON attestation report
-// element of type 'OsManifest' signed by developer, evaluator, certifier
+// element of type 'OsManifest'
 type OsManifest struct {
 	Type               string            `json:"type"`
 	Name               string            `json:"name"`
@@ -170,7 +170,7 @@ type OsManifest struct {
 }
 
 // RtmManifest represents the JSON attestation report
-// element of type 'RTM Manifest' signed by developer, evaluator, certifier
+// element of type 'RTM Manifest'
 type RtmManifest struct {
 	Type               string            `json:"type"`
 	Name               string            `json:"name"`
@@ -183,7 +183,7 @@ type RtmManifest struct {
 }
 
 // DeviceDescription represents the JSON attestation report
-// element of type 'Device Description' signed by the operator
+// element of type 'Device Description'
 type DeviceDescription struct {
 	Type            string               `json:"type"`
 	Fqdn            string               `json:"fqdn"`
@@ -197,7 +197,7 @@ type DeviceDescription struct {
 }
 
 // CompanyDescription represents the JSON attestation report
-// element of type 'Company Description' signed by company representative, evaluator, certifier
+// element of type 'Company Description'
 type CompanyDescription struct {
 	Type               string   `json:"type"`
 	DN                 string   `json:"dn"`
@@ -282,15 +282,17 @@ type TpmParams struct {
 // SwParams are parameters for retrieving SW measurements. Currently none required
 type SwParams struct{}
 
-// The different certificates used for signing meta-data must have
-// appropriate roles which is currently set in the OrganizationalUnit (OU)
-// field in the x.509 certificates
-var (
-	manifestSignerRoles   = []string{"developer", "evaluator", "certifier"}
-	companyDesSignerRoles = []string{"operator", "evaluator", "certifier"}
-	arSignerRole          = string("device")
-	connDesSignerRole     = string("operator")
-)
+// In IDS contexts, the different certificates used for signing meta-data
+// must have appropriate roles so that e.g. an operator cannot impersonate
+// an evaluator. This is an optional feature. If used, the corresponding
+// roles must be set in the  OrganizationalUnit (OU) field in the
+// x.509 certificates
+type SignerRoles struct {
+	ManifestSigners    []string
+	CompanyDescSigners []string
+	ArSigners          []string
+	ConnDescSigners    []string
+}
 
 // Generate generates an attestation report with the provided
 // nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
@@ -479,14 +481,14 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the verifications and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, caCertPem []byte) VerificationResult {
+func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) VerificationResult {
 	result := VerificationResult{
 		Type:      "Verification Result",
 		Success:   true,
 		CertLevel: 0}
 
 	// Verify ALL signatures and unpack plain AttestationReport
-	ar, err := verifyAndUnpackAttestationReport(arRaw, &result, caCertPem)
+	ar, err := verifyAndUnpackAttestationReport(arRaw, &result, caCertPem, roles)
 	if err != nil {
 		log.Warn("Failed to verify and unpack attestation report: ", err)
 		return result
@@ -744,7 +746,7 @@ func loadPrivateKey(data []byte) interface{} {
 // e.g. manifests or company descriptions
 // Currently uses the 'OU' field of the certificate to check if the certificate
 // was signed by a valid role.
-func verifyJwsMulti(data string, roots *x509.CertPool, roles []string, result *VerificationResult) (ok bool, payload []byte) {
+func verifyJws(data string, roots *x509.CertPool, roles []string, result *VerificationResult) (ok bool, payload []byte) {
 	//Extract certificates and validate certificate chains in the process
 	opts := x509.VerifyOptions{
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
@@ -758,11 +760,10 @@ func verifyJwsMulti(data string, roots *x509.CertPool, roles []string, result *V
 		return false, nil
 	}
 
-	if len(roles) != len(jwsData.Signatures) {
-		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures)))
+	if len(jwsData.Signatures) == 0 {
+		result.update(false, "VERIFICATION ERROR: JWS does not contain signatures")
 		return false, nil
 	}
-	result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Number of signatures matches expected number (%v)", len(roles)))
 
 	index := make([]int, len(jwsData.Signatures))
 	payloads := make([][]byte, len(jwsData.Signatures))
@@ -797,13 +798,19 @@ func verifyJwsMulti(data string, roots *x509.CertPool, roles []string, result *V
 			}
 		}
 
-		// Validate that the JWS token was signed with a certificate with the correct
+		// Optionally validate that the JWS token was signed with a certificate with the correct
 		// role which is set in the 'OU' field of the certificate
-		r := certs[0][0].Subject.OrganizationalUnit[0]
-		if r == roles[i] {
-			result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Role matches expected role %v", r))
-		} else {
-			result.update(false, fmt.Sprintf("VERIFICATION ERROR: Role %v does not match expected role %v", r, roles[i]))
+		if roles != nil {
+			if len(roles) != len(jwsData.Signatures) {
+				result.update(false, fmt.Sprintf("VERIFICATION ERROR: Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures)))
+				return false, nil
+			}
+			r := certs[0][0].Subject.OrganizationalUnit[0]
+			if r == roles[i] {
+				result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Role matches expected role %v", r))
+			} else {
+				result.update(false, fmt.Sprintf("VERIFICATION ERROR: Role %v does not match expected role %v", r, roles[i]))
+			}
 		}
 	}
 
@@ -812,54 +819,7 @@ func verifyJwsMulti(data string, roots *x509.CertPool, roles []string, result *V
 	return success, payload
 }
 
-// Verifies signature and certificate chain for JWS tokens with single signature,
-// e.g. attestation reports or device descriptions
-// Currently uses the 'OU' field of the certificate to check if the certificate
-// was signed by a valid role.
-func verifyJws(data string, roots *x509.CertPool, role string, result *VerificationResult) (bool, []byte) {
-	// Extract certificates and validate certificate chains in the process
-	opts := x509.VerifyOptions{
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-		Roots:     roots,
-	}
-	success := true
-
-	jwsData, err := jose.ParseSigned(data)
-	if err != nil {
-		result.update(false, fmt.Sprintf("verifyJws: Data could not be parsed - %v", err))
-		return false, nil
-	}
-
-	certs, err := jwsData.Signatures[0].Protected.Certificates(opts)
-	if err == nil {
-		result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Certificate chain for %v: %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName))
-	} else {
-		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Certificate chain: %v", err))
-		return false, nil
-	}
-
-	payload, err := jwsData.Verify(certs[0][0].PublicKey)
-	if err == nil {
-		result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Signature from %v: %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName))
-	} else {
-		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Signature from %v: %v - %v", certs[0][0].Subject.OrganizationalUnit[0], certs[0][0].Subject.CommonName, err))
-		success = false
-	}
-
-	// Validate that the JWS token was signed with a certificate with the correct
-	// role which is set in the 'OU' field of the certificate
-	r := certs[0][0].Subject.OrganizationalUnit[0]
-	if r == role {
-		result.update(true, fmt.Sprintf("VERIFICATION SUCCESS: Role matches expected role %v", r))
-	} else {
-		result.update(false, fmt.Sprintf("VERIFICATION ERROR: Role %v does not match expected role %v", r, role))
-		success = false
-	}
-
-	return success, payload
-}
-
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte) (ArPlain, error) {
+func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte, roles *SignerRoles) (ArPlain, error) {
 	ar := ArPlain{}
 
 	roots := x509.NewCertPool()
@@ -869,9 +829,15 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		return ar, errors.New("Failed to setup trusted cert pool")
 	}
 
+	// Roles are optional, only use them if provided
+	r := SignerRoles{}
+	if roles != nil {
+		r = *roles
+	}
+
 	//Validate Attestation Report signature
 	log.Printf("Starting Verification of Attestation Report Signature\n")
-	ok, payload := verifyJws(attestationReport, roots, arSignerRole, result)
+	ok, payload := verifyJws(attestationReport, roots, r.ArSigners, result)
 	if ok == true {
 		log.WithFields(log.Fields{
 			"payload": string(payload),
@@ -896,7 +862,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	//Validate and unpack Rtm Manifest
 	log.Debug("Starting Verification of RTM Manifest Signatures\n")
-	ok, payload = verifyJwsMulti(arJws.RtmManifest, roots, manifestSignerRoles, result)
+	ok, payload = verifyJws(arJws.RtmManifest, roots, r.ManifestSigners, result)
 	if ok == true {
 		log.WithFields(log.Fields{
 			"type":    "RTM Manifest",
@@ -916,7 +882,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	//Validate and unpack OS Manifest
 	log.Debug("Starting Verification of OS Manifest Signatures\n")
-	ok, payload = verifyJwsMulti(arJws.OsManifest, roots, manifestSignerRoles, result)
+	ok, payload = verifyJws(arJws.OsManifest, roots, r.ManifestSigners, result)
 	if ok == true {
 		log.WithFields(log.Fields{
 			"type":    "OS Manifest",
@@ -935,7 +901,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	//Validate and unpack App Manifests
 	for i, amSigned := range arJws.AppManifests {
 		log.Debugf("Starting Verification of App Manifest %d Signatures", i)
-		ok, payload = verifyJwsMulti(amSigned, roots, manifestSignerRoles, result)
+		ok, payload = verifyJws(amSigned, roots, r.ManifestSigners, result)
 		if ok == true {
 			log.WithFields(log.Fields{
 				"type":    "App Manifest",
@@ -956,7 +922,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	// Validate and unpack Company Description
 	log.Debug("Starting Verification of Company Description Signatures\n")
-	ok, payload = verifyJwsMulti(arJws.CompanyDescription, roots, companyDesSignerRoles, result)
+	ok, payload = verifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners, result)
 	if ok == true {
 		log.WithFields(log.Fields{
 			"payload": string(payload),
@@ -973,7 +939,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	//Validate and unpack Device Description
 	log.Debug("Starting Verification of Device Description Signatures\n")
-	ok, payload = verifyJws(arJws.DeviceDescription, roots, connDesSignerRole, result)
+	ok, payload = verifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners, result)
 	if ok == true {
 		log.WithFields(log.Fields{
 			"type":    "Device Description",
