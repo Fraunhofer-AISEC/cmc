@@ -182,9 +182,9 @@ type RtmManifest struct {
 	Verifications      []TpmVerification `json:"verifications"`
 }
 
-// ConnectorDescription represents the JSON attestation report
-// element of type 'Connector Description' signed by the operator
-type ConnectorDescription struct {
+// DeviceDescription represents the JSON attestation report
+// element of type 'Device Description' signed by the operator
+type DeviceDescription struct {
 	Type            string               `json:"type"`
 	Fqdn            string               `json:"fqdn"`
 	Description     string               `json:"description"`
@@ -231,29 +231,29 @@ type Name struct {
 // ArPlain represents the attestation report with
 // its plain elements
 type ArPlain struct {
-	Type                 string               `json:"type"`
-	TpmM                 TpmMeasurement       `json:"tpmMeasurement,omitempty"`
-	SWM                  []SwMeasurement      `json:"swMeasurements,omitempty"`
-	RtmManifest          RtmManifest          `json:"rtmManifest"`
-	OsManifest           OsManifest           `json:"osManifest"`
-	AppManifests         []AppManifest        `json:"appManifests"`
-	CompanyDescription   CompanyDescription   `json:"companyDescription"`
-	ConnectorDescription ConnectorDescription `json:"connectorDescription"`
-	Nonce                string               `json:"nonce"`
+	Type               string             `json:"type"`
+	TpmM               TpmMeasurement     `json:"tpmMeasurement,omitempty"`
+	SWM                []SwMeasurement    `json:"swMeasurements,omitempty"`
+	RtmManifest        RtmManifest        `json:"rtmManifest"`
+	OsManifest         OsManifest         `json:"osManifest"`
+	AppManifests       []AppManifest      `json:"appManifests"`
+	CompanyDescription CompanyDescription `json:"companyDescription"`
+	DeviceDescription  DeviceDescription  `json:"deviceDescription"`
+	Nonce              string             `json:"nonce"`
 }
 
 // ArJws represents the attestation report in JWS format with its
 // contents already in signed JWs format
 type ArJws struct {
-	Type                 string          `json:"type"`
-	TpmM                 TpmMeasurement  `json:"tpmMeasurement,omitempty"`
-	SWM                  []SwMeasurement `json:"swMeasurements,omitempty"`
-	RtmManifest          string          `json:"rtmManifests"`
-	OsManifest           string          `json:"osManifest"`
-	AppManifests         []string        `json:"appManifests"`
-	CompanyDescription   string          `json:"companyDescription"`
-	ConnectorDescription string          `json:"connectorDescription"`
-	Nonce                string          `json:"nonce"`
+	Type               string          `json:"type"`
+	TpmM               TpmMeasurement  `json:"tpmMeasurement,omitempty"`
+	SWM                []SwMeasurement `json:"swMeasurements,omitempty"`
+	RtmManifest        string          `json:"rtmManifests"`
+	OsManifest         string          `json:"osManifest"`
+	AppManifests       []string        `json:"appManifests"`
+	CompanyDescription string          `json:"companyDescription"`
+	DeviceDescription  string          `json:"deviceDescription"`
+	Nonce              string          `json:"nonce"`
 }
 
 // VerificationResult represents the following JSON attestation report
@@ -352,9 +352,9 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 			log.Debug("Adding RTM Manifest")
 			ar.RtmManifest = jws.FullSerialize()
 			numManifests++
-		case "Connector Description":
-			log.Debug("Adding Connector Description")
-			ar.ConnectorDescription = jws.FullSerialize()
+		case "Device Description":
+			log.Debug("Adding Device Description")
+			ar.DeviceDescription = jws.FullSerialize()
 		case "Company Description":
 			log.Debug("Adding Company Description")
 			ar.CompanyDescription = jws.FullSerialize()
@@ -612,7 +612,7 @@ func Verify(arRaw string, nonce, caCertPem []byte) VerificationResult {
 	}
 
 	// The lowest certification level of all components determines the certification
-	// level for the connector
+	// level for the device
 	levels := make([]int, 0)
 	levels = append(levels, ar.CompanyDescription.CertificationLevel)
 	levels = append(levels, ar.RtmManifest.CertificationLevel)
@@ -633,22 +633,22 @@ func Verify(arRaw string, nonce, caCertPem []byte) VerificationResult {
 	// Verify the compatibility of the attestation report through verifying the
 	// compatibility of all components
 	appDescriptions := make([]string, 0)
-	for _, a := range ar.ConnectorDescription.AppDescriptions {
+	for _, a := range ar.DeviceDescription.AppDescriptions {
 		appDescriptions = append(appDescriptions, a.AppManifest)
 	}
 
-	// Check that the OS and RTM Manifest are specified in the Connector Description
-	if ar.ConnectorDescription.RtmManifest == ar.RtmManifest.Name {
-		result.update(true, "COMPATIBILITY SUCCESS: Found RTM Manifest "+ar.RtmManifest.Name+" in Connector Description")
+	// Check that the OS and RTM Manifest are specified in the Device Description
+	if ar.DeviceDescription.RtmManifest == ar.RtmManifest.Name {
+		result.update(true, "COMPATIBILITY SUCCESS: Found RTM Manifest "+ar.RtmManifest.Name+" in Device Description")
 	} else {
-		msg := "COMPATIBILITY ERROR: Failed to find RTM Manifest " + ar.RtmManifest.Name + " in Connector Description"
+		msg := "COMPATIBILITY ERROR: Failed to find RTM Manifest " + ar.RtmManifest.Name + " in Device Description"
 		log.Warn(msg)
 		result.update(false, msg)
 	}
-	if ar.ConnectorDescription.OsManifest == ar.OsManifest.Name {
-		result.update(true, "COMPATIBILITY SUCCESS: Found OS Manifest "+ar.OsManifest.Name+" in Connector Description")
+	if ar.DeviceDescription.OsManifest == ar.OsManifest.Name {
+		result.update(true, "COMPATIBILITY SUCCESS: Found OS Manifest "+ar.OsManifest.Name+" in Device Description")
 	} else {
-		msg := "COMPATIBILITY ERROR: Failed to find OS Manifest " + ar.OsManifest.Name + " in Connector Description"
+		msg := "COMPATIBILITY ERROR: Failed to find OS Manifest " + ar.OsManifest.Name + " in Device Description"
 		log.Warn(msg)
 		result.update(false, msg)
 	}
@@ -813,7 +813,7 @@ func verifyJwsMulti(data string, roots *x509.CertPool, roles []string, result *V
 }
 
 // Verifies signature and certificate chain for JWS tokens with single signature,
-// e.g. attestation reports or connector descriptions
+// e.g. attestation reports or device descriptions
 // Currently uses the 'OU' field of the certificate to check if the certificate
 // was signed by a valid role.
 func verifyJws(data string, roots *x509.CertPool, role string, result *VerificationResult) (bool, []byte) {
@@ -971,23 +971,23 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.update(false, "PROCESSING ERROR: Unpacking of Company Description failed")
 	}
 
-	//Validate and unpack Connector Description
-	log.Debug("Starting Verification of Connector Description Signatures\n")
-	ok, payload = verifyJws(arJws.ConnectorDescription, roots, connDesSignerRole, result)
+	//Validate and unpack Device Description
+	log.Debug("Starting Verification of Device Description Signatures\n")
+	ok, payload = verifyJws(arJws.DeviceDescription, roots, connDesSignerRole, result)
 	if ok == true {
 		log.WithFields(log.Fields{
-			"type":    "Connector Description",
+			"type":    "Device Description",
 			"payload": string(payload),
 		}).Trace("Signature successfully verified")
-		result.update(true, "VERIFICATION SUCCESS: Verification of Connector Description Signatures successful")
+		result.update(true, "VERIFICATION SUCCESS: Verification of Device Description Signatures successful")
 	} else {
-		result.update(false, "VERIFICATION ERROR: Verification of Connector Description Signatures failed")
+		result.update(false, "VERIFICATION ERROR: Verification of Device Description Signatures failed")
 	}
 
-	err = json.Unmarshal(payload, &ar.ConnectorDescription)
+	err = json.Unmarshal(payload, &ar.DeviceDescription)
 	if err != nil {
-		log.Error("Failed to unpack Connector Description. Json.Unmarshal returned ", err)
-		result.update(false, "PROCESSING ERROR: Unpacking of Connector Description failed")
+		log.Error("Failed to unpack Device Description. Json.Unmarshal returned ", err)
+		result.update(false, "PROCESSING ERROR: Unpacking of Device Description failed")
 	}
 
 	return ar, nil
