@@ -1,5 +1,5 @@
 {
-    "port": 9000,
+    "port": 9001,
     "deviceSubCaKey": "ca/device_sub_ca-key.pem",
     "deviceSubCaCert": "ca/device_sub_ca.pem",
     "caCert": "ca/ca.pem",
