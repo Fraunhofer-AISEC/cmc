@@ -382,7 +382,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 		ImaPcr: s.config.ImaPcr,
 	}
 
-	a := ar.GenAttestationReport(in.Nonce, s.metadata, []ar.Measurement{s.tpm}, []ar.MeasurementParams{tpmParams})
+	a := ar.Generate(in.Nonce, s.metadata, []ar.Measurement{s.tpm}, []ar.MeasurementParams{tpmParams})
 
 	log.Info("Prover: Signing Attestation Report")
 	tlsKeyPriv, tlsKeyPub, err := tpmdriver.GetTLSKey()
@@ -393,7 +393,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 
 	var status ci.Status
 	certsPem := [][]byte{s.certs.TLSCert, s.certs.DeviceSubCa, s.certs.Ca}
-	ok, data := ar.SignAttestationReport(&s.tpm.Mu, a, tlsKeyPriv, tlsKeyPub, certsPem)
+	ok, data := ar.Sign(&s.tpm.Mu, a, tlsKeyPriv, tlsKeyPub, certsPem)
 	if !ok {
 		log.Error("Prover: Failed to sign Attestion Report ")
 		status = ci.Status_FAIL
@@ -418,7 +418,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.VerifyAttestationReport(string(in.AttestationReport), in.Nonce, s.certs.Ca)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.certs.Ca)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
