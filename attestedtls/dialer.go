@@ -6,8 +6,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/golang/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
@@ -19,13 +19,13 @@ var noncelen = 32
 
 /* Checks Attestation report by calling the CMC to Verify and checking its status response
  */
-func verifyAR(nonce, report []byte) (error) {
+func verifyAR(nonce, report []byte) error {
 	var req ci.VerificationRequest
 	var resp *ci.VerificationResponse
 	var result ar.VerificationResult
 	var err error
 	// Get backend connection
-	cmcClient, conn, cancel := getCMCServiceConn();
+	cmcClient, conn, cancel := getCMCServiceConn()
 	if cmcClient == nil {
 		return errors.New("[Dialer] Connection failed. No result obtained.")
 	}
@@ -34,8 +34,8 @@ func verifyAR(nonce, report []byte) (error) {
 	log.Trace("[Dialer] Contacting backend for AR verification.")
 	// Create Verification request
 	req = ci.VerificationRequest{
-		Nonce : nonce,
-		AttestationReport : report,
+		Nonce:             nonce,
+		AttestationReport: report,
 	}
 	// Perform Verify request
 	resp, err = cmcClient.Verify(context.Background(), &req)
@@ -56,12 +56,11 @@ func verifyAR(nonce, report []byte) (error) {
 	}
 	// check results
 	if !result.Success {
-		log.Error(result.Log)
+		log.Error("Verification failed")
 		return errors.New("[Dialer] Verification failed.")
 	}
 	return nil
 }
-
 
 /***********************************************************
  * tls.Dial Wrapper -> attestedtls.Dial
@@ -91,7 +90,7 @@ func Dial(network, addr string, config *tls.Config) (*tls.Conn, error) {
 
 	// Create AR request with nonce
 	req := &ci.AttestationRequest{
-		Nonce : nonce,
+		Nonce: nonce,
 	}
 	data, err := proto.Marshal(req)
 	if err != nil {
