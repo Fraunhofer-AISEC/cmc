@@ -40,9 +40,9 @@ type Content struct {
 	Name    string   `xml:",chardata"`
 }
 
-// FetchConnectorData fetches the metadata (manifests and descriptions as
+// FetchMetadata fetches the metadata (manifests and descriptions as
 // well as config) from a remote server
-func FetchConnectorData(serverAddr, serverPath, localPath string) error {
+func FetchMetadata(serverAddr, serverPath, localPath string) error {
 
 	// Create local path
 	if _, err := os.Stat(localPath); err != nil {

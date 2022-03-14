@@ -61,7 +61,7 @@ type config struct {
 	caPath          string
 }
 
-// Certs contains the certificates required for the Connector
+// Certs contains the entire certificate chain for the device
 type Certs struct {
 	Ak          []byte
 	TLSCert     []byte
@@ -74,9 +74,9 @@ type server struct {
 	ci.UnimplementedCMCServiceServer
 	// General config
 	config config
-	// IDS certificate chain including connector certificates
+	// Certificate chain for the device
 	certs Certs
-	// metadata (manifests and descriptions of the connector)
+	// metadata (manifests and descriptions of the device)
 	metadata [][]byte
 	// PCRs to be included in the quote (calculated from manifests)
 	pcrs []int
@@ -233,7 +233,7 @@ func main() {
 
 	log.SetLevel(log.TraceLevel)
 
-	log.Info("Starting Connector Measuring Component (CMC)")
+	log.Info("Starting CMC")
 
 	cmcPort := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
 	configFile := flag.String("config", "", "configuration file")
@@ -269,11 +269,11 @@ func main() {
 		return
 	}
 
-	// Step 2: Fetch connector config from provisioning server and store it on disk, then load it
+	// Step 2: Fetch device metadata from provisioning server and store it on disk, then load it
 	if *fetchMetadata {
-		err = pc.FetchConnectorData(c.ServerAddr, c.ServerPath, c.LocalPath)
+		err = pc.FetchMetadata(c.ServerAddr, c.ServerPath, c.LocalPath)
 		if err != nil {
-			log.Error("Failed to fetch connector configuration from configuration server")
+			log.Error("Failed to fetch device metadata from provisioning server")
 			return
 		}
 	}
@@ -479,7 +479,7 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 func (s *server) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCertResponse, error) {
 	var resp *ci.TLSCertResponse = &ci.TLSCertResponse{}
 	if s.certs.TLSCert == nil {
-		log.Error("Prover: TLS Certificate not found - was the connector initialized correctly?")
+		log.Error("Prover: TLS Certificate not found - was the device provisioned correctly?")
 		return &ci.TLSCertResponse{Status: ci.Status_FAIL}, errors.New("No TLS Certificate obtained")
 	}
 	// provide TLS certificate chain

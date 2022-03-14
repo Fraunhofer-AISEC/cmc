@@ -1,11 +1,13 @@
-# Connector Measurement Component
+# CMC
 
 [![build](https://github.com/Fraunhofer-AISEC/cmc/actions/workflows/build.yml/badge.svg)](https://github.com/Fraunhofer-AISEC/cmc/actions/workflows/build.yml)
 [![](https://godoc.org/github.com/Fraunhofer-AISEC/cmc?status.svg)](https://pkg.go.dev/github.com/Fraunhofer-AISEC/cmc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Fraunhofer-AISEC/cmc)](https://goreportcard.com/report/github.com/Fraunhofer-AISEC/cmc)
 
-The Connector Measurement Component (CMC) repository provides tools and software to
-enable remote attestation of computing platforms in the International Data Spaces (IDS).
+The CMC (originally Connector Measurement Component) repository provides tools and software to
+enable remote attestation of computing platforms. It was initially designed as a proposal for
+remote attestation within the International Data Spaces (IDS), but can be used for
+universal attestation of computing platforms.
 
 ## Prerequistes
 
@@ -15,10 +17,9 @@ enable remote attestation of computing platforms in the International Data Space
 configuration data and meta-data about the expected platform state (see
 [Manifests and Descriptions](#manifests-and-descriptions))
 
-**Note**: The *cmcd* accesses the TPM and creates keys within the TPM. It is intended to run on
-a Virtual Machine or a machine/server intended to be used as a connector. You should not run it
+**Note**: The *cmcd* accesses the TPM and creates keys within the TPM. You should not run it
 on your normal work laptop, as it might require the TPM and its key storage for secure boot,
-disk encryption or other purposes.
+disk encryption or other purposes. Instead, run it on a dedicated Virtual Machine (VM) or server.
 
 ## Quick Start
 
@@ -109,11 +110,12 @@ open source:
 git clone https://github.com/Fraunhofer-AISEC/ids-pcp
 ```
 
-The repository contains example setups for a TPM based attestation of an SRTM connector
-(```ids-pcp/examples/demo-setup/input/srtm-connector```) as well as a DRTM connector
-(```ids-pcp/examples/demo-setup/input/drtm-connector```). The values must be adjusted in the
-*manifest* files to the values of the platform. For testing, the values can be retrieved e.g.
-via the tools ```fwupdtpmevlog``` or ```tpm2_eventlog```.
+The repository contains example setups for a TPM based attestation of a device using
+Static Root of Trust for Measurements (SRTM) in folder
+`ids-pcp/examples/demo-setup/input/srtm-connector` as well a device using Dynamic Root of Trust for
+Measurements (DRTM) in folder `ids-pcp/examples/demo-setup/input/drtm-connector`. The values must
+be adjusted in the *manifest* files to the values of the platform. For testing, the values can be
+retrieved e.g. via the tools ```fwupdtpmevlog``` or ```tpm2_eventlog```.
 
 After the values are adjusted, the manifests and descriptions can be signed by the demo
 *ids-pcp* tool and provided to the *cmcd*:
@@ -137,12 +139,12 @@ required configuration files is provided in the ```examples/``` folder of this r
 The *cmcd* requires a JSON configuration file with the following information:
 - **provServerAddr**: The URL of the provisioning server (e.g. http://127.0.0.1.9000/). The server
 serves two purposes: 1) It verifies that the TPM keys were generated on a genuine TPM via EK
-certificates 2) it optionally provides the meta-data (manifests and descriptions) for the connector
+certificates 2) it optionally provides the meta-data (manifests and descriptions) for the device
 (*cmcd* command line argument *--fetch-metadata*)
-- **serverPath**: The HTTP server path for the individual connector (e.g. **data-connector0** if
-the full path is "http://127.0.0.1:9000/data-connector0"). This configuration is optional and only
+- **serverPath**: The HTTP server path for the individual device (e.g. `drtm-example` if
+the full path is `http://127.0.0.1:9000/drtm-example`). This configuration is optional and only
 required if the meta-data files shall be retrieved via the config server (*cmcd* command line
-argument *--fetch-metadata*)
+argument `--fetch-metadata`)
 - **localPath**: the local path to store the meta-data and internal files. In a local setup, all
 manifests and descriptions must be placed in this folder. If the provisioning server is used for
 the meta-data (*cmcd* command line argument *--fetch-metadata*), the *cmcd* will store those files
@@ -155,8 +157,8 @@ configuration). The linux kernel default is 10
 ```json
 {
 "configServerAddr": "http://127.0.0.1:9000/",
-"serverPath": "data-connector0/",
-"localPath": "connector-data/",
+"serverPath": "drtm-example/",
+"localPath": "metadata/",
 "useIma": true,
 "imaPcr": 10
 }
@@ -174,8 +176,8 @@ demo, the *Device Sub CA* certificate from the *ids-pcp* tool located in
 located in ```ids-pcp/examples/demo_setup/pki/ca/ca.pem``` can be used
 - **httpFolder**: The root folder containing metadata (manifests and descriptions) that is served
 by the provisioning server. This root folder must contain folders that match the **serverPath**
-from the *cmcd* config of the individual connectors. Inside the folders, the metadata
-(manifests and descriptions) for the connector must be stored. The files can be generated with
+from the *cmcd* config of the individual devices. Inside the folders, the metadata
+(manifests and descriptions) for the device must be stored. The files can be generated with
 the *ids-pcp* tool.
 - **verifyEkCert**: Boolean, specifies if the EK certificate chain should be validated via the
 **tpmEkCertDb**

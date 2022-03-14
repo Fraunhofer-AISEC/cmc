@@ -217,7 +217,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	d.Decode(&acRequest)
 
 	if acRequest.Ek.Public == nil {
-		return nil, fmt.Errorf("EK Public Key from connector not present")
+		return nil, fmt.Errorf("EK Public Key from device not present")
 	}
 
 	var ekCert *x509.Certificate
@@ -616,7 +616,7 @@ func getFilePath(p, base string) string {
 
 func main() {
 
-	log.Info("Connector Provisioning Demo Server")
+	log.Info("CMC Provisioning Demo Server")
 
 	log.SetLevel(log.TraceLevel)
 
@@ -676,13 +676,13 @@ func main() {
 
 	httpFolder := getFilePath(config.HTTPFolder, filepath.Dir(*configFile))
 
-	connectorDirs, err := ioutil.ReadDir(httpFolder)
+	dirs, err := ioutil.ReadDir(httpFolder)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to open connector data folders '%v' - %v", httpFolder, err))
+		log.Error(fmt.Sprintf("Failed to open metaddata folders '%v' - %v", httpFolder, err))
 		return
 	}
 
-	for _, dir := range connectorDirs {
+	for _, dir := range dirs {
 		d := dir.Name()
 		log.Info("\t", d)
 		path := path.Join(httpFolder, d)
