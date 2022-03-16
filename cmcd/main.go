@@ -43,6 +43,7 @@ import (
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 	pc "github.com/Fraunhofer-AISEC/cmc/provclient"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
+	"github.com/fsnotify/fsnotify"
 )
 
 type config struct {
@@ -209,6 +210,32 @@ func loadCerts(c *config) (Certs, error) {
 	return certs, nil
 }
 
+func watchFileChanges(watcher *fsnotify.Watcher, s *server) {
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			log.Tracef("file system event: %v", event)
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				log.Tracef("modified file: %v", event.Name)
+				metadata, _, pcrs, err := loadMetadata(s.config.LocalPath)
+				if err != nil {
+					return
+				}
+				s.metadata = metadata
+				s.pcrs = pcrs
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Println("error:", err)
+		}
+	}
+}
+
 func printConfig(c *config) {
 	log.Info("Using the following configuration:")
 	log.Info("\tConfiguration Server URL : ", c.ServerAddr)
@@ -358,6 +385,21 @@ func main() {
 }
 
 func run(port *string, server *server) error {
+
+	// Watch file system for metadata file changes
+	log.Tracef("Registering watcher for file changes in %v", server.config.LocalPath)
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("Failed to create watcher for file changes: %v", err)
+	}
+	defer watcher.Close()
+	go watchFileChanges(watcher, server)
+	err = watcher.Add(server.config.LocalPath)
+	if err != nil {
+		return fmt.Errorf("Failed to add watcher for file changes in %v", server.config.LocalPath)
+	}
+
+	// Create TCP server
 	log.Info("Starting CMC Server..")
 	addr := "127.0.0.1:" + *port
 	listener, err := net.Listen("tcp", addr)
@@ -365,11 +407,11 @@ func run(port *string, server *server) error {
 		return fmt.Errorf("Failed to start server on %v: %v", addr, err)
 	}
 
+	// Start gRPC server
 	s := grpc.NewServer()
 	ci.RegisterCMCServiceServer(s, server)
 
 	log.Infof("Waiting for requests on %v", listener.Addr())
-
 	err = s.Serve(listener)
 	if err != nil {
 		return fmt.Errorf("Failed to serve: %v", err)
