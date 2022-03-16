@@ -40,8 +40,7 @@ type Content struct {
 	Name    string   `xml:",chardata"`
 }
 
-// FetchMetadata fetches the metadata (manifests and descriptions as
-// well as config) from a remote server
+// FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
 func FetchMetadata(serverAddr, serverPath, localPath string) error {
 
 	// Create local path
