@@ -163,18 +163,20 @@ func loadMetadata(dir string) (metadata [][]byte, certParams [][]byte, pcrs []in
 			continue
 		}
 
-		if t.Type == "AK Cert Params" || t.Type == "TLS Key Cert Params" {
+		if t.Type == "AK Cert Params" {
+			certParams = append(certParams, data)
+		} else if t.Type == "TLS Key Cert Params" {
 			certParams = append(certParams, data)
 		} else if t.Type == "RTM Manifest" {
 			metadata = append(metadata, data)
-			osManifest = data
+			rtmManifest = data
 		} else if t.Type == "OS Manifest" {
 			metadata = append(metadata, data)
-			rtmManifest = data
+			osManifest = data
 		} else {
 			metadata = append(metadata, data)
 		}
-
+		log.Tracef("Found %v", t.Type)
 	}
 
 	pcrs = getPcrs(rtmManifest, osManifest)
