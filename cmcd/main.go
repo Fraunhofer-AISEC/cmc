@@ -29,6 +29,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"encoding/hex"
 	"encoding/json"
@@ -47,13 +48,15 @@ import (
 )
 
 type config struct {
-	ServerAddr string `json:"provServerAddr"`
-	ServerPath string `json:"serverPath"`
-	LocalPath  string `json:"localPath"`
-	UseIma     bool   `json:"useIma"`
-	ImaPcr     int32  `json:"imaPcr"`
+	Port          int    `json:"port"`
+	ServerAddr    string `json:"provServerAddr"`
+	ServerPath    string `json:"serverPath"`
+	LocalPath     string `json:"localPath"`
+	FetchMetadata bool   `json:"fetchMetadata"`
+	UseIma        bool   `json:"useIma"`
+	ImaPcr        int32  `json:"imaPcr"`
 	// Key config: RSA2048 RSA4096 EC256 EC384 EC521
-	KeyConfig  string `json:"keyConfig,omitempty"` // Default defined below during parsing
+	KeyConfig string `json:"keyConfig,omitempty"` // Default defined below during parsing
 
 	internalPath    string
 	akPath          string
@@ -95,7 +98,7 @@ func loadConfig(configFile string) (*config, error) {
 		return nil, fmt.Errorf("Failed to read cmcd config file %v: %v", configFile, err)
 	}
 	// Default configuration
-	c := &config {
+	c := &config{
 		KeyConfig: "EC256",
 	}
 	// Obtain custom configuration
@@ -246,9 +249,11 @@ func watchFileChanges(watcher *fsnotify.Watcher, s *server) {
 
 func printConfig(c *config) {
 	log.Info("Using the following configuration:")
+	log.Info("CMC Port                   : ", c.Port)
 	log.Info("\tConfiguration Server URL : ", c.ServerAddr)
 	log.Info("\tConfiguration Server Path: ", c.ServerPath)
 	log.Info("\tLocal Config Path        : ", c.LocalPath)
+	log.Info("\tFetch Metadata           : ", c.FetchMetadata)
 	log.Info("\tUse IMA                  : ", c.UseIma)
 	log.Info("\tIMA PCR                  : ", c.ImaPcr)
 	log.Info("\tInternal Data Path       : ", c.internalPath)
@@ -272,9 +277,7 @@ func main() {
 
 	log.Info("Starting CMC")
 
-	cmcPort := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
 	configFile := flag.String("config", "", "configuration file")
-	fetchMetadata := flag.Bool("fetch-metadata", false, "Request metadata from provisioning server")
 	flag.Parse()
 
 	if *configFile == "" {
@@ -285,44 +288,32 @@ func main() {
 		log.Error("Config file '", *configFile, "' does not exist. Abort")
 		return
 	}
-
 	log.Info("Using Config File ", *configFile)
-	log.Info("Using CMC Port: ", *cmcPort)
 
-	// Loading the configuration is a three step process:
-	// 1. Load local initial cmcd configuration from config file. The config file contains
-	// 		a provisioning server URL.
-	// 2. Request the metadata from the provioning server. Store the
-	//		metadata on disk. This step is optional and can be omitted if the metadata is available
-	//      in 'localPath' as specified in the configuration file.
-	// 3. Check if the TPM is provisioned. If not, create a new AK and TLS Key, contact the
-	//      provisiong server and present EK, AK and TLS Key in order to get a new
-	//      certificates. The certificates are stored on disk.
-
-	// Step 1: Load the cmcd configuration from file
+	// Load the cmcd configuration from the cmdline specified configuration file
 	c, err := loadConfig(*configFile)
 	if err != nil {
 		log.Errorf("Failed to load config: %v", err)
 		return
 	}
 
-	// Step 2: Fetch device metadata from provisioning server and store it on disk, then load it
-	if *fetchMetadata {
+	// If configured, fetch device metadata from provisioning server and store it
+	// on the local path specified in the cmcd configuration, afterwards load it
+	if c.FetchMetadata {
 		err = pc.FetchMetadata(c.ServerAddr, c.ServerPath, c.LocalPath)
 		if err != nil {
 			log.Error("Failed to fetch device metadata from provisioning server")
 			return
 		}
 	}
-
 	metadata, certParams, pcrs, err := loadMetadata(c.LocalPath)
 	if err != nil {
 		log.Errorf("Failed to load metadata: %v", err)
 		return
 	}
 
-	// Step 3: Check if the TPM is provisioned. If provisioned, load the AK.
-	// Otherwise perform credential activation with CA server and then load the AK
+	// Check if the TPM is provisioned. If provisioned, load the AK and TLS key.
+	// Otherwise perform credential activation with provisioning server and then load the keys
 	provisioningRequired, err := tpmdriver.IsTpmProvisioningRequired(c.akPath)
 	if err != nil {
 		log.Error("Failed to check if TPM is provisioned - ", err)
@@ -385,14 +376,14 @@ func main() {
 	}
 
 	// Run CMC<-> Container iface server
-	err = run(cmcPort, server)
+	err = run(c.Port, server)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 }
 
-func run(port *string, server *server) error {
+func run(port int, server *server) error {
 
 	// Watch file system for metadata file changes
 	log.Tracef("Registering watcher for file changes in %v", server.config.LocalPath)
@@ -408,8 +399,8 @@ func run(port *string, server *server) error {
 	}
 
 	// Create TCP server
-	log.Info("Starting CMC Server..")
-	addr := "127.0.0.1:" + *port
+	addr := "127.0.0.1:" + strconv.Itoa(port)
+	log.Infof("Starting CMC Server on %v", addr)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("Failed to start server on %v: %v", addr, err)
@@ -567,7 +558,7 @@ func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.Signe
 		len = 64
 		hash = crypto.SHA512
 	default:
-		return  crypto.SHA512, fmt.Errorf("[cmcd] Hash function not implemented: %v", hashtype)
+		return crypto.SHA512, fmt.Errorf("[cmcd] Hash function not implemented: %v", hashtype)
 	}
 	if pssOpts != nil {
 		saltlen := int(pssOpts.SaltLength)
