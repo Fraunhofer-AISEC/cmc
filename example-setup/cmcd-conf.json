@@ -1,8 +1,10 @@
 {
-"provServerAddr": "http://127.0.0.1:9001/",
-"serverPath": "drtm-example/",
-"localPath": "metadata/",
-"useIma": false,
-"imaPcr": 10,
-"keyConfig": "EC256"
+    "port": 9955,
+    "provServerAddr": "http://127.0.0.1:9001/",
+    "serverPath": "drtm-example/",
+    "localPath": "metadata/",
+    "fetchMetadata": true,
+    "useIma": false,
+    "imaPcr": 10,
+    "keyConfig": "EC256"
 }
