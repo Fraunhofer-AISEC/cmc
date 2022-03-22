@@ -38,9 +38,11 @@ type VerificationResult struct {
 // Company Description and its mapping to the used device certificate
 type CompDescResult struct {
 	Name           string            `json:"name"`
-	CompCertLevel  int               `json:"compCertLevel"`       // Overall certification level for the company operating the device
-	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
-	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
+	CompCertLevel  int               `json:"compCertLevel"`            // Overall certification level for the company operating the device
+	DevAffCheck    Result            `json:developerAffiliationCheck`  // Result for comparison of the name in the Company Description and the "organization" in the device identity certificate
+	OpAffCheck     Result            `json:"operatorAffiliationCheck"` // Result for comparison of the name in the Company Description and the "organization" in the certificate of the operator that signed the Device Description
+	SignatureCheck []SignatureResult `json:"signatureValidation"`      // Results for validation of the Description Signatures and the used certificates
+	ValidityCheck  Result            `json:"validityCheck"`            // Result from checking the validity of the manifest
 }
 
 // ManifestResult represents the results of the validation of a

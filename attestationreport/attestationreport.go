@@ -1095,6 +1095,17 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.CompDescResult.Name = ar.CompanyDescription.DN
 	result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
 
+	// Compare the name of the company in the Company Description with the organization in the device identity certificate
+	if contains(result.CompDescResult.Name, result.ReportSignature[0].Organization) {
+		result.CompDescResult.DevAffCheck.Success = true
+	} else {
+		result.CompDescResult.DevAffCheck.Success = false
+		msg := fmt.Sprintf("Company Name does not match Organization in device certificate: %v vs %v", result.CompDescResult.Name, result.ReportSignature[0].Organization)
+		result.CompDescResult.DevAffCheck.Details = msg
+		result.Success = false
+		log.Trace(msg)
+	}
+
 	valRes = checkValidity(ar.CompanyDescription.Validity)
 	if valRes.Success == false {
 		result.Success = false
@@ -1116,6 +1127,17 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.Success = false
 		msg := fmt.Sprintf("Unpacking of Device Description failed: %v\n", err)
 		result.ProcessingError = result.ProcessingError + msg
+		log.Trace(msg)
+	}
+
+	// Compare the name of the company in the Company Description with the organization in the operator identity certificate
+	if contains(result.CompDescResult.Name, result.DevDescResult.SignatureCheck[0].Organization) {
+		result.CompDescResult.OpAffCheck.Success = true
+	} else {
+		result.CompDescResult.OpAffCheck.Success = false
+		msg := fmt.Sprintf("Company Name does not match Organization in operator certificate: %v vs %v", result.CompDescResult.Name, result.DevDescResult.SignatureCheck[0].Organization)
+		result.CompDescResult.OpAffCheck.Details = msg
+		result.Success = false
 		log.Trace(msg)
 	}
 
