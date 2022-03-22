@@ -21,11 +21,14 @@ import (
 	"crypto"
 	"crypto/rand"
 	"errors"
+	"fmt"
+	"net"
 
 	"encoding/hex"
 	"encoding/json"
 
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -33,23 +36,75 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 )
 
+type ServerConfig struct {
+	// Certificate chain for the device
+	Certs Certs
+	// metadata (manifests and descriptions of the device)
+	Metadata [][]byte
+	// PCRs to be included in the quote (calculated from manifests)
+	Pcrs []int
+	// Certificate Signer roles to avoid impersonation attacks on certificates
+	Roles *ar.SignerRoles
+	// TPM Driver struct (further drivers must also be registered here)
+	Tpm    *tpmdriver.Tpm
+	UseIma bool
+	ImaPcr int32
+}
+
+// server is the gRPC server structure
+type server struct {
+	ci.UnimplementedCMCServiceServer
+	// TODO implement this with generic interface?
+	config *ServerConfig
+}
+
+func NewServer(config *ServerConfig) ci.CMCServiceServer {
+	server := &server{
+		config: config,
+	}
+
+	return server
+}
+
+func Serve(addr string, server *ci.CMCServiceServer) error {
+
+	// Create TCP server
+	log.Infof("Starting CMC Server on %v", addr)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("Failed to start server on %v: %v", addr, err)
+	}
+
+	// Start gRPC server
+	s := grpc.NewServer()
+	ci.RegisterCMCServiceServer(s, *server)
+
+	log.Infof("Waiting for requests on %v", listener.Addr())
+	err = s.Serve(listener)
+	if err != nil {
+		return fmt.Errorf("Failed to serve: %v", err)
+	}
+
+	return nil
+}
+
 func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.AttestationResponse, error) {
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
 	tpmParams := ar.TpmParams{
 		Nonce: in.Nonce,
-		Pcrs:  s.pcrs,
+		Pcrs:  s.config.Pcrs,
 		Certs: ar.TpmCerts{
-			AkCert:        string(s.certs.Ak),
-			Intermediates: []string{string(s.certs.DeviceSubCa)},
-			CaCert:        string(s.certs.Ca),
+			AkCert:        string(s.config.Certs.Ak),
+			Intermediates: []string{string(s.config.Certs.DeviceSubCa)},
+			CaCert:        string(s.config.Certs.Ca),
 		},
 		UseIma: s.config.UseIma,
 		ImaPcr: s.config.ImaPcr,
 	}
 
-	a := ar.Generate(in.Nonce, s.metadata, []ar.Measurement{s.tpm}, []ar.MeasurementParams{tpmParams})
+	a := ar.Generate(in.Nonce, s.config.Metadata, []ar.Measurement{s.config.Tpm}, []ar.MeasurementParams{tpmParams})
 
 	log.Info("Prover: Signing Attestation Report")
 	tlsKeyPriv, tlsKeyPub, err := tpmdriver.GetTLSKey()
@@ -59,8 +114,8 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 	}
 
 	var status ci.Status
-	certsPem := [][]byte{s.certs.TLSCert, s.certs.DeviceSubCa, s.certs.Ca}
-	ok, data := ar.Sign(&s.tpm.Mu, a, tlsKeyPriv, tlsKeyPub, certsPem)
+	certsPem := [][]byte{s.config.Certs.TLSCert, s.config.Certs.DeviceSubCa, s.config.Certs.Ca}
+	ok, data := ar.Sign(&s.config.Tpm.Mu, a, tlsKeyPriv, tlsKeyPub, certsPem)
 	if !ok {
 		log.Error("Prover: Failed to sign Attestion Report ")
 		status = ci.Status_FAIL
@@ -85,7 +140,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.certs.Ca, s.roles)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.config.Certs.Ca, s.config.Roles)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
@@ -146,12 +201,12 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 // Loads public key for tls certificate
 func (s *server) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCertResponse, error) {
 	var resp *ci.TLSCertResponse = &ci.TLSCertResponse{}
-	if s.certs.TLSCert == nil {
+	if s.config.Certs.TLSCert == nil {
 		log.Error("Prover: TLS Certificate not found - was the device provisioned correctly?")
 		return &ci.TLSCertResponse{Status: ci.Status_FAIL}, errors.New("No TLS Certificate obtained")
 	}
 	// provide TLS certificate chain
-	resp.Certificate = [][]byte{s.certs.TLSCert, s.certs.DeviceSubCa}
+	resp.Certificate = [][]byte{s.config.Certs.TLSCert, s.config.Certs.DeviceSubCa}
 	resp.Status = ci.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil

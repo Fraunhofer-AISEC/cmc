@@ -17,27 +17,21 @@ package main
 
 // Install github packages with "go get [url]"
 import (
-	"crypto"
-	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 
 	"encoding/json"
 	"flag"
 
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	"gopkg.in/square/go-jose.v2"
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 	pc "github.com/Fraunhofer-AISEC/cmc/provclient"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 	"github.com/fsnotify/fsnotify"
@@ -69,23 +63,6 @@ type Certs struct {
 	TLSCert     []byte
 	DeviceSubCa []byte
 	Ca          []byte
-}
-
-// server is the gRPC server structure
-type server struct {
-	ci.UnimplementedCMCServiceServer
-	// General config
-	config config
-	// Certificate chain for the device
-	certs Certs
-	// metadata (manifests and descriptions of the device)
-	metadata [][]byte
-	// PCRs to be included in the quote (calculated from manifests)
-	pcrs []int
-	// Certificate Signer roles to avoid impersonation attacks on certificates
-	roles *ar.SignerRoles
-	// TPM Driver struct (further drivers must also be registered here)
-	tpm *tpmdriver.Tpm
 }
 
 func loadConfig(configFile string) (*config, error) {
@@ -217,7 +194,7 @@ func loadCerts(c *config) (Certs, error) {
 	return certs, nil
 }
 
-func watchFileChanges(watcher *fsnotify.Watcher, s *server) {
+func watchFileChanges(watcher *fsnotify.Watcher, config *ServerConfig, path string) {
 	for {
 		select {
 		case event, ok := <-watcher.Events:
@@ -227,12 +204,12 @@ func watchFileChanges(watcher *fsnotify.Watcher, s *server) {
 			log.Tracef("file system event: %v", event)
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				log.Tracef("modified file: %v", event.Name)
-				metadata, _, pcrs, err := loadMetadata(s.config.LocalPath)
+				metadata, _, pcrs, err := loadMetadata(path)
 				if err != nil {
 					return
 				}
-				s.metadata = metadata
-				s.pcrs = pcrs
+				config.Metadata = metadata
+				config.Pcrs = pcrs
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -241,24 +218,6 @@ func watchFileChanges(watcher *fsnotify.Watcher, s *server) {
 			log.Println("error:", err)
 		}
 	}
-}
-
-func printConfig(c *config) {
-	log.Info("Using the following configuration:")
-	log.Info("CMC Port                   : ", c.Port)
-	log.Info("\tConfiguration Server URL : ", c.ServerAddr)
-	log.Info("\tConfiguration Server Path: ", c.ServerPath)
-	log.Info("\tLocal Config Path        : ", c.LocalPath)
-	log.Info("\tFetch Metadata           : ", c.FetchMetadata)
-	log.Info("\tUse IMA                  : ", c.UseIma)
-	log.Info("\tIMA PCR                  : ", c.ImaPcr)
-	log.Info("\tInternal Data Path       : ", c.internalPath)
-	log.Info("\tAK Encrypted Key Path    : ", c.akPath)
-	log.Info("\tAK Certificate Path      : ", c.akCertPath)
-	log.Info("\tTLS Key Encrypted Path   : ", c.tlsKeyPath)
-	log.Info("\tTLS Key Certificate Path : ", c.tlsCertPath)
-	log.Info("\tDevice Sub CA Cert Path  : ", c.deviceSubCaPath)
-	log.Info("\tCA Certificate Path      : ", c.caPath)
 }
 
 func main() {
@@ -362,151 +321,35 @@ func main() {
 		ConnDescSigners:    []string{"operator"},
 	}
 
-	server := &server{
-		config:   *c,
-		metadata: metadata,
-		certs:    certs,
-		pcrs:     pcrs,
-		roles:    roles,
-		tpm:      &tpmdriver.Tpm{},
+	serverConfig := &ServerConfig{
+		Metadata: metadata,
+		Certs:    certs,
+		Pcrs:     pcrs,
+		Roles:    roles,
+		Tpm:      &tpmdriver.Tpm{},
 	}
 
-	// Run CMC<-> Container iface server
-	err = run(c.Port, server)
+	// Watch file system for metadata file changes
+	log.Tracef("Registering watcher for file changes in %v", c.LocalPath)
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Errorf("Failed to create watcher for file changes: %v", err)
+		return
+	}
+	defer watcher.Close()
+	go watchFileChanges(watcher, serverConfig, c.LocalPath)
+	err = watcher.Add(c.LocalPath)
+	if err != nil {
+		log.Errorf("Failed to add watcher for file changes in %v", c.LocalPath)
+		return
+	}
+
+	server := NewServer(serverConfig)
+
+	addr := "127.0.0.1:" + strconv.Itoa(c.Port)
+	err = Serve(addr, &server)
 	if err != nil {
 		log.Error(err)
 		return
 	}
-}
-
-func run(port int, server *server) error {
-
-	// Watch file system for metadata file changes
-	log.Tracef("Registering watcher for file changes in %v", server.config.LocalPath)
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return fmt.Errorf("Failed to create watcher for file changes: %v", err)
-	}
-	defer watcher.Close()
-	go watchFileChanges(watcher, server)
-	err = watcher.Add(server.config.LocalPath)
-	if err != nil {
-		return fmt.Errorf("Failed to add watcher for file changes in %v", server.config.LocalPath)
-	}
-
-	// Create TCP server
-	addr := "127.0.0.1:" + strconv.Itoa(port)
-	log.Infof("Starting CMC Server on %v", addr)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("Failed to start server on %v: %v", addr, err)
-	}
-
-	// Start gRPC server
-	s := grpc.NewServer()
-	ci.RegisterCMCServiceServer(s, server)
-
-	log.Infof("Waiting for requests on %v", listener.Addr())
-	err = s.Serve(listener)
-	if err != nil {
-		return fmt.Errorf("Failed to serve: %v", err)
-	}
-
-	return nil
-}
-
-// Converts Protobuf hashtype to crypto.SignerOpts
-func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.SignerOpts, error) {
-	var hash crypto.Hash
-	var len int
-	switch hashtype {
-	case ci.HashFunction_SHA256:
-		hash = crypto.SHA256
-		len = 32
-	case ci.HashFunction_SHA384:
-		hash = crypto.SHA384
-		len = 48
-	case ci.HashFunction_SHA512:
-		len = 64
-		hash = crypto.SHA512
-	default:
-		return crypto.SHA512, fmt.Errorf("[cmcd] Hash function not implemented: %v", hashtype)
-	}
-	if pssOpts != nil {
-		saltlen := int(pssOpts.SaltLength)
-		// go-attestation / go-tpm does not allow -1 as definition for length of hash
-		if saltlen < 0 {
-			log.Warning("Signature Options: Adapted RSA PSS Salt length to length of hash: ", len)
-			saltlen = len
-		}
-		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
-	}
-	return hash, nil
-}
-
-// Returns either the unmodified absolute path or the absolute path
-// retrieved from a path relative to a base path
-func getFilePath(p, base string) string {
-	if path.IsAbs(p) {
-		return p
-	}
-	ret, _ := filepath.Abs(filepath.Join(base, p))
-	return ret
-}
-
-func getPcrs(rtmManifest, osManifest []byte) []int {
-
-	// Unpack the signed RTM Manifest
-	var rtmMan ar.RtmManifest
-	jws, err := jose.ParseSigned(string(rtmManifest))
-	if err != nil {
-		log.Warn("Failed to parse RTM Manifest - ", err)
-	} else {
-		data := jws.UnsafePayloadWithoutVerification()
-		err = json.Unmarshal(data, &rtmMan)
-		if err != nil {
-			log.Warn("Failed to unmarshal data from RTM Manifest - ", err)
-		}
-	}
-
-	// Unpack the signed OS Manifest
-	var osMan ar.OsManifest
-	jws, err = jose.ParseSigned(string(osManifest))
-	if err != nil {
-		log.Warn("Failed to parse OS Manifest - ", err)
-	} else {
-		data := jws.UnsafePayloadWithoutVerification()
-		err = json.Unmarshal(data, &osMan)
-		if err != nil {
-			log.Warn("Failed to unmarshal data from OS Manifst - ", err)
-		}
-	}
-
-	// Generate the list of PCRs to be included in the quote
-	pcrs := make([]int, 0)
-	log.Debug("Parsing ", len(rtmMan.Verifications), " RTM verifications")
-	for _, ver := range rtmMan.Verifications {
-		if !exists(ver.Pcr, pcrs) {
-			pcrs = append(pcrs, ver.Pcr)
-		}
-	}
-	log.Debug("Parsing ", len(osMan.Verifications), " OS verifications")
-	for _, ver := range osMan.Verifications {
-		if !exists(ver.Pcr, pcrs) {
-			pcrs = append(pcrs, ver.Pcr)
-		}
-	}
-
-	sort.Ints(pcrs)
-
-	return pcrs
-}
-
-func exists(i int, arr []int) bool {
-	for _, elem := range arr {
-		if elem == i {
-			return true
-		}
-	}
-	return false
 }
