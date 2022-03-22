@@ -1093,19 +1093,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		log.Trace(msg)
 	}
 	result.CompDescResult.Name = ar.CompanyDescription.DN
-
 	result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
-
-	// Compare the name of the company in the Company Description with the organization in the device identity certificate
-	if contains(result.CompDescResult.Name, result.ReportSignature[0].Organization) {
-		result.CompDescResult.DevAffCheck.Success = true
-	} else {
-		result.CompDescResult.DevAffCheck.Success = false
-		msg := fmt.Sprintf("Company Name does not match Organization in device certificate: %v vs %v", result.CompDescResult.Name, result.ReportSignature[0].Organization)
-		result.CompDescResult.DevAffCheck.Details = msg
-		result.Success = false
-		log.Trace(msg)
-	}
 
 	valRes = checkValidity(ar.CompanyDescription.Validity)
 	if valRes.Success == false {
@@ -1128,17 +1116,6 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.Success = false
 		msg := fmt.Sprintf("Unpacking of Device Description failed: %v\n", err)
 		result.ProcessingError = result.ProcessingError + msg
-		log.Trace(msg)
-	}
-
-	// Compare the name of the company in the Company Description with the organization in the operator identity certificate
-	if contains(result.CompDescResult.Name, result.DevDescResult.SignatureCheck[0].Organization) {
-		result.CompDescResult.OpAffCheck.Success = true
-	} else {
-		result.CompDescResult.OpAffCheck.Success = false
-		msg := fmt.Sprintf("Company Name does not match Organization in operator certificate: %v vs %v", result.CompDescResult.Name, result.DevDescResult.SignatureCheck[0].Organization)
-		result.CompDescResult.OpAffCheck.Details = msg
-		result.Success = false
 		log.Trace(msg)
 	}
 
@@ -1340,7 +1317,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map
 		log.Trace(msg)
 	}
 
-	result.QuoteSignature.Signature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.AkCert)
+	result.QuoteSignature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.AkCert)
 	if result.QuoteSignature.Signature.Success == false {
 		result.Summary.Success = false
 	}
@@ -1415,25 +1392,25 @@ func verifyTpmCertChain(certs *TpmCerts) Result {
 	return result
 }
 
-func verifyTpmQuoteSignature(quote, sig []byte, cert string) Result {
-	result := Result{}
-	result.Success = true
+func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
+	result := SignatureResult{}
+	result.Signature.Success = true
 
 	buf := new(bytes.Buffer)
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Failed to decode TPM signature: %v", err)
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Hash algorithm %v not supported", tpmtSig.Alg)
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
@@ -1441,44 +1418,48 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) Result {
 	// Extract public key from x509 certificate
 	p, _ := pem.Decode([]byte(cert))
 	if p == nil {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Failed to decode TPM certificate")
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
 	x509Cert, err := x509.ParseCertificate(p.Bytes)
 	if err != nil {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
 	pubKey, ok := x509Cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Failed to extract public key from certificate")
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Hash algorithm not supported")
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
+
+	// Store Name and Organization of AK Cert for the report
+	result.Name = x509Cert.Subject.CommonName
+	result.Organization = x509Cert.Subject.Organization
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
-		result.Success = false
+		result.Signature.Success = false
 		msg := fmt.Sprintf("Failed to verify TPM quote signature: %v\n", err)
-		result.Details = msg
+		result.Signature.Details = msg
 		log.Trace(msg)
 		return result
 	}
