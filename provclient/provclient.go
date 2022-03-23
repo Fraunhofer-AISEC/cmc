@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -43,10 +44,28 @@ type Content struct {
 // FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
 func FetchMetadata(serverAddr, serverPath, localPath string) error {
 
-	// Create local path
 	if _, err := os.Stat(localPath); err != nil {
 		if err := os.Mkdir(localPath, 0755); err != nil {
 			return fmt.Errorf("Failed to create directory for local data '%v': %v", localPath, err)
+		}
+	} else {
+		log.Tracef("Removing old metadata in %v before fetching new metadata from provisioning server", localPath)
+		dir, err := ioutil.ReadDir(localPath)
+		if err != nil {
+			return fmt.Errorf("Failed to read local storage directory %v: %v", localPath, err)
+		}
+		for _, d := range dir {
+			file := path.Join(localPath, d.Name())
+			if fileInfo, err := os.Stat(file); err == nil {
+				if fileInfo.IsDir() {
+					log.Tracef("\tSkipping directory %v", d.Name())
+					continue
+				}
+				log.Tracef("\tRemoving file %v", d.Name())
+				if err := os.Remove(file); err != nil {
+					log.Warn("\tFailed to remove file %v: %v", d.Name(), err)
+				}
+			}
 		}
 	}
 
