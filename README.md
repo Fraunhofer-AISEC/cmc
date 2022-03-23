@@ -38,8 +38,7 @@ make
 # Build and run the cmcd
 cd cmc/cmcd
 make
-# Note: on subsequent runs, --fetch-metadata is not required until the configuration changes
-./cmcd --config ../example-setup/cmcd-conf.json --fetch-metadata
+./cmcd --config ../example-setup/cmcd-conf.json
 
 # Build the testclient
 cd cmc/testclient
@@ -61,8 +60,8 @@ make
 
 ```
 
-**Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed for both modules
-using the ```--port <port-number>``` command line argument.
+**Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed in the *cmcd*
+configuration and using the ```--port <port-number>``` command line argument for the testclient.
 
 **Note**: The *cmcd* TPM provisioning process includes the verification of the TPM's EK certificate
 chain. In the example setup, this verification is turned off, as the database might not contain
@@ -146,6 +145,7 @@ The *cmcd* and *provserver* require JSON configuration files. An example setup w
 required configuration files is provided in the ```examples/``` folder of this repository.
 
 The *cmcd* requires a JSON configuration file with the following information:
+- **port**: The port the *cmcd* should listen on
 - **provServerAddr**: The URL of the provisioning server (e.g. http://127.0.0.1.9000/). The server
 serves two purposes: 1) It verifies that the TPM keys were generated on a genuine TPM via EK
 certificates 2) it optionally provides the meta-data (manifests and descriptions) for the device
@@ -159,17 +159,25 @@ manifests and descriptions must be placed in this folder. If the provisioning se
 the meta-data (*cmcd* command line argument *--fetch-metadata*), the *cmcd* will store those files
 in this folder. In this case, it is not required that the folder already exists, the *cmcd* will
 handle everything automatically
+- **fetchMetadata**: Boolean to specify whether the *cmcd* should load/update its metadata from
+the provisioning server. If set to false, the *cmcd* expects all files to be present in the
+*localPath*
 - **useIma**: Bool that indicates whether the Integrity Measurement Architecture (IMA) shall be used
 - **imaPcr**: TPM PCR where the IMA measurements are recorded (must match the kernel
 configuration). The linux kernel default is 10
+- **keyConfig**: The algorithm to be used for the *cmcd* keys. Possible values are:  RSA2048,
+RSA4096, EC256, EC384, EC521
 
 ```json
 {
-"configServerAddr": "http://127.0.0.1:9000/",
-"serverPath": "drtm-example/",
-"localPath": "metadata/",
-"useIma": true,
-"imaPcr": 10
+    "port": 9955,
+    "provServerAddr": "http://127.0.0.1:9001/",
+    "serverPath": "drtm-example/",
+    "localPath": "metadata/",
+    "fetchMetadata": true,
+    "useIma": false,
+    "imaPcr": 10,
+    "keyConfig": "EC256"
 }
 ```
 
