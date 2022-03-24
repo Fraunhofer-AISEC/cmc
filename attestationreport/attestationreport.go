@@ -38,8 +38,9 @@ import (
 
 	"gopkg.in/square/go-jose.v2"
 
-	"github.com/google/go-tpm/tpm2"
 	"time"
+
+	"github.com/google/go-tpm/tpm2"
 )
 
 // Measurement is a generic interface for a Measurement, such as a TpmMeasurement
@@ -529,7 +530,7 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	if res := bytes.Compare(arnonce, nonce); res != 0 {
 		result.Success = false
 		result.FreshnessCheck.Success = false
-		msg := fmt.Sprintf("Nonces mismatch (%v vs. %v)", ar.Nonce, vrNonceStr)
+		msg := fmt.Sprintf("Nonces mismatch: SuppliedNonce = %v, AttestationReport Nonce = %v", vrNonceStr, ar.Nonce)
 		result.FreshnessCheck.Details = msg
 		log.Trace(msg)
 	} else {
@@ -1295,7 +1296,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications map
 		result.QuoteFreshness.Success = true
 	} else {
 		result.QuoteFreshness.Success = false
-		msg := fmt.Sprintf("Nonces mismatch (%v vs. %v)", hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
+		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
 		result.QuoteFreshness.Details = msg
 		result.Summary.Success = false
 		log.Trace(msg)
