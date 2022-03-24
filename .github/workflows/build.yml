@@ -26,6 +26,9 @@ jobs:
           pushd testclient
           make
           popd
+          pushd testconnector
+          make
+          popd
       - name: "Upload cmcd"
         uses: actions/upload-artifact@v2
         with:
@@ -36,3 +39,8 @@ jobs:
         with:
           name: testclient
           path: testclient/testclient
+      - name: "Upload testconnector"
+        uses: actions/upload-artifact@v2
+        with:
+          name: testconnector
+          path: testconnector/testconnector
