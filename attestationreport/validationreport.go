@@ -29,7 +29,7 @@ type VerificationResult struct {
 	AppResults      []ManifestResult  `json:"appValidation,omitempty"`
 	MeasResult      MeasurementResult `json:"measurementValidation"`
 	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
-	ProcessingError string            `json:"processingError,omitempty"`  // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
+	ProcessingError []string          `json:"processingError,omitempty"`  // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
 	InternalError   bool              `json:"internalError,omitempty"`    // used to document if internal errors (independent from provided Attestation Report) occured which hindered a complete validation
 	PlainAttReport  ArPlain           `json:"validatedAttestationReport"` // The unpacked and validated attestation report content for further processing
 }
@@ -38,7 +38,8 @@ type VerificationResult struct {
 // Company Description and its mapping to the used device certificate
 type CompDescResult struct {
 	Name           string            `json:"name"`
-	CompCertLevel  int               `json:"compCertLevel"`       // Overall certification level for the company operating the device
+	CompCertLevel  int               `json:"compCertLevel"` // Overall certification level for the company operating the device
+	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
 	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
 }
@@ -47,7 +48,7 @@ type CompDescResult struct {
 // manifest provided in the Attestation Report
 type ManifestResult struct {
 	Name           string            `json:"name"`
-	Summary        Result            `json:"resultSummary"`
+	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Manifest Signatures and the used certificates
 	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
 }
@@ -63,12 +64,12 @@ type MeasurementResult struct {
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report
 type DevDescResult struct {
-	Summary             Result            `json:"resultSummary"`
+	Summary             ResultMulti       `json:"resultSummary"`
 	CorrectRtm          Result            `json:"correctRtm"`               // Result for comparison of RTM in the Device Description and the provided RTM Manifest
 	CorrectOs           Result            `json:"correctOs"`                // Result for comparison of OS in the Device Description and the provided OS Manifest
-	CorrectApps         Result            `json:"correctApps"`              // Result for comparison of App List in the Device Description and the provided App Manifest
+	CorrectApps         ResultMulti       `json:"correctApps"`              // Result for comparison of App List in the Device Description and the provided App Manifest
 	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`       // Result for consistency check for mapping from OS Manifest to RTM Manifest
-	OsAppsCompatibility Result            `json:"osAppCompatibility"`       // Result for consistency check for mapping from App Manifests to OS Manifest
+	OsAppsCompatibility ResultMulti       `json:"osAppCompatibility"`       // Result for consistency check for mapping from App Manifests to OS Manifest
 	SignatureCheck      []SignatureResult `json:"signatureValidation"`      // Results for validation of the Device Description Signature(s) and the used certificates
 	OpAffiliation       Result            `json:"operatorAffiliationCheck"` // Result for comparison of the device and the operator affiliation (based on "organization" field in the identity certificates)
 }
@@ -85,19 +86,17 @@ type TpmMeasurementResult struct {
 
 // PcrResult represents the results for the recalculation of a specific PCR
 type PcrResult struct {
-	Pcr     int      `json:"pcr"` // Number for the PCR which was validated
-	Success bool     `json:"success"`
-	Details []string `json:"details,omitempty"`
+	Pcr        int         `json:"pcr"` // Number for the PCR which was validated
+	Validation ResultMulti `json:"validation"`
 }
 
 // SwMeasurementResult represents the results for the verification of
 // a software measurement (currently only used for app verifications)
 type SwMeasurementResult struct {
-	MeasName string `json:"measurementName"`  // Name associated with the measurement used for validation
-	AppName  string `json:"appName"`          // Name of the App manifest used for validation
-	VerName  string `json:"verificationName"` // Name of the verification information used for validation
-	Success  bool   `json:"success"`
-	Details  string `json:"details,omitempty"`
+	MeasName   string      `json:"measurementName"`  // Name associated with the measurement used for validation
+	AppName    string      `json:"appName"`          // Name of the App manifest used for validation
+	VerName    string      `json:"verificationName"` // Name of the verification information used for validation
+	Validation ResultMulti `json:"validation"`
 }
 
 // SignatureResults represents the results for validation of
@@ -111,14 +110,21 @@ type SignatureResult struct {
 }
 
 // Result is a generic type for storing a boolean result value
-// and some details on the validation
+// and details on the validation (used in case of errors)
 type Result struct {
 	Success bool   `json:"success"`
 	Details string `json:"details,omitempty"` // Details on the issue which was detected during validation, remains empty if validation was successful
 }
 
+// ResultMulti is a generic type for storing a boolean result value
+// and possibly multiple details on the validation (used in case of errors)
+type ResultMulti struct {
+	Success bool     `json:"success"`
+	Details []string `json:"details,omitempty"` // Details on the issue which was detected during validation, remains empty if validation was successful
+}
+
 // JwsResult is a helper struct for the validation of JWS focussing on the validation of the provided signatures
 type JwsResult struct {
-	Summary        Result            `json:"resultSummary"`
+	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 }
