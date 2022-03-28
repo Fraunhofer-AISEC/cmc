@@ -63,7 +63,7 @@ func FetchMetadata(serverAddr, serverPath, localPath string) error {
 				}
 				log.Tracef("\tRemoving file %v", d.Name())
 				if err := os.Remove(file); err != nil {
-					log.Warn("\tFailed to remove file %v: %v", d.Name(), err)
+					log.Warnf("\tFailed to remove file %v: %v", d.Name(), err)
 				}
 			}
 		}
