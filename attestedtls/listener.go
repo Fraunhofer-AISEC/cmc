@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/golang/protobuf/proto"
 	"net"
 	"time"
-	"github.com/golang/protobuf/proto"
 	// local modules
-	log "github.com/sirupsen/logrus"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	log "github.com/sirupsen/logrus"
 	// debug
 	"encoding/hex"
 )
@@ -19,9 +19,9 @@ var timeout = 10 * time.Second
 
 /* Checks Attestation report by calling the CMC to Verify and checking its status response
  */
- func obtainAR(req *ci.AttestationRequest) (resp *ci.AttestationResponse, err error) {
+func obtainAR(req *ci.AttestationRequest) (resp *ci.AttestationResponse, err error) {
 	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn();
+	cmcClient, cmcconn, cancel := getCMCServiceConn()
 	if cmcClient == nil {
 		return nil, errors.New("[Listener] Connection failed. No result obtained")
 	}
@@ -44,7 +44,7 @@ var timeout = 10 * time.Second
 
 /***********************************************************
 * net.Listener Wrapper -> attestedtls.Listener
-*/
+ */
 
 /* Struct to implement Listener interface
  * holds net.Listener and adds additional functionality to its functions */
@@ -76,7 +76,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 		conn.Close()
 		return nil, errors.New("[Listener] Did not receive (right sized) nonce")
 	}
-	log.Trace("[Listener] Received: ",  hex.EncodeToString(data))
+	log.Trace("[Listener] Received: ", hex.EncodeToString(data))
 
 	// Parse request msg
 	req := &ci.AttestationRequest{}
@@ -110,7 +110,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 	// Send response
 	log.Info("[Listener] Sending AR to client")
-	err = Write(data,conn)
+	err = Write(data, conn)
 	if err != nil {
 		log.Error(err)
 		conn.Close()
@@ -129,25 +129,25 @@ func (ln Listener) Accept() (net.Conn, error) {
 /* Implementation of Close in net.Listener iface
  * Only calls original Close(), since no new functionality required
  */
- func (ln Listener) Close() error {
+func (ln Listener) Close() error {
 	return ln.Ln.Close()
 }
 
 /* Implementation of Addr in net.Listener iface
  * Only calls original Addr(), since no new functionality required
  */
- func (ln Listener) Addr() net.Addr {
+func (ln Listener) Addr() net.Addr {
 	return ln.Ln.Addr()
 }
 
 /***********************************************************
 * Public function
-*/
+ */
 
 /* Wrapper for tls.Listen
  * Returns custom Listener that will perform steps to send the AR right after connection establishment
  */
-func Listen(network, laddr string, config *tls.Config) (net.Listener, error){
+func Listen(network, laddr string, config *tls.Config) (net.Listener, error) {
 	var listener Listener
 	ln, err := tls.Listen(network, laddr, config)
 	if err != nil {
@@ -155,5 +155,5 @@ func Listen(network, laddr string, config *tls.Config) (net.Listener, error){
 		return listener, errors.New("[Listener] Failed")
 	}
 	listener = Listener{ln}
-	return net.Listener(listener) , nil
+	return net.Listener(listener), nil
 }
