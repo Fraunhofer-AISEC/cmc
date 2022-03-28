@@ -2,14 +2,16 @@ package attestedtls
 
 import (
 	"context"
-	"crypto/x509"
-	"crypto/tls"
-	"crypto/rsa"
 	"crypto"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"io"
+
 	log "github.com/sirupsen/logrus"
+
 	// local modules
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 	// debug
@@ -61,23 +63,22 @@ func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 	return ci.HashFunction_SHA512, errors.New("[PrivateKey] Could not determine correct Hash function")
 }
 
-
 /***********************************************************
 * PrivateKey Wrapper Implementing crypto.Signer interface
 * Contacts cmcd for signing operations */
- type PrivateKey struct {
-	 pubKey crypto.PublicKey
+type PrivateKey struct {
+	pubKey crypto.PublicKey
 }
 
 /* Implementation of Sign() in crypto.Signer iface
  * Contacts cmcd for sign operation */
- func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	var req ci.TLSSignRequest
 	var resp *ci.TLSSignResponse
 	var hash ci.HashFunction
 	var err error
 	// Get backend connection
-	cmcClient, conn, cancel := getCMCServiceConn();
+	cmcClient, conn, cancel := getCMCServiceConn()
 	if cmcClient == nil {
 		return nil, errors.New("[PrivateKey] Connection failed. No signing performed")
 	}
@@ -91,13 +92,13 @@ func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 		return nil, errors.New("[Private Key] Sign request creation failed")
 	}
 	req = ci.TLSSignRequest{
-		Id : id,
-		Content : digest,
-		Hashtype : hash,
+		Id:       id,
+		Content:  digest,
+		Hashtype: hash,
 	}
 	// parse additional signing options - not implemented fields assume recommend defaults
 	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		req.PssOpts = &ci.PSSOptions{SaltLength : int32(pssOpts.SaltLength),}
+		req.PssOpts = &ci.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
 	}
 	// Send Sign request
 	resp, err = cmcClient.TLSSign(context.Background(), &req)
@@ -114,13 +115,13 @@ func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 	return resp.GetSignedContent(), nil
 }
 
-func (priv PrivateKey) Public() (crypto.PublicKey) {
+func (priv PrivateKey) Public() crypto.PublicKey {
 	return priv.pubKey
 }
 
 /***********************************************************
 * Public function
-*/
+ */
 
 func GetCert() (tls.Certificate, error) {
 	var err error
@@ -130,7 +131,7 @@ func GetCert() (tls.Certificate, error) {
 	// return
 	var tlsCert tls.Certificate
 	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn();
+	cmcClient, cmcconn, cancel := getCMCServiceConn()
 	if cmcClient == nil {
 		return tls.Certificate{}, errors.New("[Listener] Connection failed. No Cert obtained")
 	}
@@ -138,17 +139,17 @@ func GetCert() (tls.Certificate, error) {
 	defer cancel()
 	// Create TLSCert request
 	req = ci.TLSCertRequest{
-		Id : id,
+		Id: id,
 	}
 	// Call TLSCert request
 	resp, err = cmcClient.TLSCert(context.Background(), &req)
 	if err != nil {
-		log.Error(err.Error)
+		log.Error(err)
 		return tls.Certificate{}, errors.New("[Listener] Failed to request TLS certificate")
 	}
 	// Check TLSCert response
-	if resp.GetStatus() != ci.Status_OK || len(resp.GetCertificate()) == 0{
-		return  tls.Certificate{}, errors.New("[Listener] Could not receive TLS certificate")
+	if resp.GetStatus() != ci.Status_OK || len(resp.GetCertificate()) == 0 {
+		return tls.Certificate{}, errors.New("[Listener] Could not receive TLS certificate")
 	}
 	// Convert each certificate (assuming it has superfluous "---------[]BEGIN CERTIFICATE[]-----" still there)
 	for _, cert := range resp.GetCertificate() {
@@ -163,7 +164,7 @@ func GetCert() (tls.Certificate, error) {
 		}
 		if currentBlock.Type == "CERTIFICATE" {
 			tlsCert.Certificate = append(tlsCert.Certificate, currentBlock.Bytes)
-			} else {
+		} else {
 			return tls.Certificate{}, errors.New("[Listener] Certificate inside the certificate chain not of correct type")
 		}
 	}
