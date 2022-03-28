@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 	"net"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+
 	// local modules
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
@@ -51,7 +53,7 @@ func Write(msg []byte, c net.Conn) error {
 func Read(c net.Conn) ([]byte, error) {
 
 	lenbuf := make([]byte, 4)
-	n, err := c.Read(lenbuf)
+	_, err := c.Read(lenbuf)
 
 	if err != nil {
 		log.Error(err)
@@ -72,7 +74,7 @@ func Read(c net.Conn) ([]byte, error) {
 	rcvlen := uint32(0)
 
 	for {
-		n, err = c.Read(tmpbuf)
+		n, err := c.Read(tmpbuf)
 		rcvlen += uint32(n)
 		if err != nil {
 			log.Error(err)
