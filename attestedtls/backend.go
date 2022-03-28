@@ -2,12 +2,12 @@ package attestedtls
 
 import (
 	"context"
-	"net"
 	"encoding/binary"
 	"errors"
-	"google.golang.org/grpc"
-	"time"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"net"
+	"time"
 	// local modules
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
@@ -17,11 +17,11 @@ var cmcport = "9955"
 
 /***********************************************************
 * Backend to CMC
-*/
+ */
 
 func getCMCServiceConn() (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5* time.Second)
-	conn, err := grpc.DialContext(ctx, cmcaddr + ":" + cmcport, grpc.WithInsecure(), grpc.WithBlock())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	conn, err := grpc.DialContext(ctx, cmcaddr+":"+cmcport, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Error("[Backend] ERROR: did not connect:", err)
 		cancel()
@@ -32,10 +32,9 @@ func getCMCServiceConn() (ci.CMCServiceClient, *grpc.ClientConn, context.CancelF
 	return ci.NewCMCServiceClient(conn), conn, cancel
 }
 
-
 /***********************************************************
 * Backend between two connectors / client and connector
-*/
+ */
 
 func Write(msg []byte, c net.Conn) error {
 

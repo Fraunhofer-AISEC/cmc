@@ -3,15 +3,15 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
-	"net"
 	log "github.com/sirupsen/logrus"
+	"net"
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 )
 
 var (
 	serveraddress = "localhost"
-	serverport = "4443"
+	serverport    = "4443"
 )
 
 func main() {
@@ -24,8 +24,8 @@ func main() {
 	// Load certificate
 	cert, err = atls.GetCert()
 	if err != nil {
-			log.Error("[Testserver] failed to get TLS Certificate. \n", err)
-			return
+		log.Error("[Testserver] failed to get TLS Certificate. \n", err)
+		return
 	}
 	config = &tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -33,7 +33,7 @@ func main() {
 	}
 
 	// Listen: Tls connection
-	ln, err := atls.Listen("tcp", serveraddress + ":" + serverport, config)
+	ln, err := atls.Listen("tcp", serveraddress+":"+serverport, config)
 	if err != nil {
 		log.Error("[Testserver] Failed to listen for connections. \n", err)
 		return
@@ -66,7 +66,7 @@ func handleConnection(conn net.Conn) {
 	println(msg)
 
 	// write
-	_, err = conn.Write([]byte("answer to : " +  msg + "\n"))
+	_, err = conn.Write([]byte("answer to : " + msg + "\n"))
 	if err != nil {
 		log.Error("[Testserver] Failed to write. \n", err)
 		return

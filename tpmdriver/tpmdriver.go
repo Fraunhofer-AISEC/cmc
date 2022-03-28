@@ -486,7 +486,7 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 
 	// Create key as specified in the config file
 	tlsKeyConfig := &attest.KeyConfig{}
-	switch(keyConfig) {
+	switch keyConfig {
 	case "EC256":
 		tlsKeyConfig.Algorithm = attest.ECDSA
 		tlsKeyConfig.Size = 256

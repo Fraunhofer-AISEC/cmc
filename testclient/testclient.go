@@ -29,12 +29,12 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 
 	// local modules
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
 
 // Mode defines the mode the testclient should run
@@ -46,7 +46,7 @@ const (
 	// Verify an attestatoin report (Mode)
 	Verify = 1
 	// Create a TLS connection with an exemplary connector = server (Mode)
-	TLSConn  = 2
+	TLSConn = 2
 )
 
 /* Creates TLS connection between this client and a server and performs a remote
@@ -93,7 +93,6 @@ func TestTLSConn(connectoraddress, rootCACertFile string) {
 	}
 	log.Info("[Testclient] received: " + string(buf[:n]))
 }
-
 
 func main() {
 	log.SetLevel(log.TraceLevel)
