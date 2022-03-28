@@ -924,6 +924,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	if jwsValRes.Summary.Success == false {
 		log.Trace("Verification of Attestation Report Signatures failed")
 		result.Success = false
+		return false, &ar
 	}
 
 	var arJws ArJws
