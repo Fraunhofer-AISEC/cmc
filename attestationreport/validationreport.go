@@ -30,7 +30,7 @@ type VerificationResult struct {
 	MeasResult      MeasurementResult `json:"measurementValidation"`
 	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
 	ProcessingError []string          `json:"processingError,omitempty"`  // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
-	InternalError   bool              `json:"internalError,omitempty"`    // used to document if internal errors (independent from provided Attestation Report) occured which hindered a complete validation
+	InternalError   bool              `json:"internalError,omitempty"`    // used to document if internal errors (independent from provided Attestation Report) occurred which hindered a complete validation
 	PlainAttReport  ArPlain           `json:"validatedAttestationReport"` // The unpacked and validated attestation report content for further processing
 }
 

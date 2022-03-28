@@ -725,7 +725,7 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	return result
 }
 
-// Deduces jose signature algoritm from provided key type
+// Deduces jose signature algorithm from provided key type
 func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 	switch key := pub.(type) {
 	case *rsa.PublicKey:
