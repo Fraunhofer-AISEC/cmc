@@ -942,7 +942,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar.SWM = arJws.SWM
 	ar.Nonce = arJws.Nonce
 
-	//Validate and unpack Rtm Manifest
+	// Validate and unpack Rtm Manifest
 	jwsValRes, payload = verifyJws(arJws.RtmManifest, roots, r.ManifestSigners)
 	result.RtmResult.Summary = jwsValRes.Summary
 	result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
@@ -950,23 +950,21 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		log.Trace("Verification of RTM Manifest Signatures failed")
 		result.Success = false
 	}
-
 	err = json.Unmarshal(payload, &ar.RtmManifest)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v", err)
 		result.RtmResult.Summary.setFalseMulti(&msg)
 		result.Success = false
+	} else {
+		result.RtmResult.Name = ar.RtmManifest.Name
+		result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
+		if result.RtmResult.ValidityCheck.Success == false {
+			result.RtmResult.Summary.Success = false
+			result.Success = false
+		}
 	}
-	result.RtmResult.Name = ar.RtmManifest.Name
 
-	result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
-	if result.RtmResult.ValidityCheck.Success == false {
-		log.Trace("RTM Manifest invalid")
-		result.RtmResult.Summary.Success = false
-		result.Success = false
-	}
-
-	//Validate and unpack OS Manifest
+	// Validate and unpack OS Manifest
 	jwsValRes, payload = verifyJws(arJws.OsManifest, roots, r.ManifestSigners)
 	result.OsResult.Summary = jwsValRes.Summary
 	result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
@@ -974,23 +972,21 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		log.Trace("Verification of OS Manifest Signatures failed")
 		result.Success = false
 	}
-
 	err = json.Unmarshal(payload, &ar.OsManifest)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v", err)
 		result.OsResult.Summary.setFalseMulti(&msg)
 		result.Success = false
+	} else {
+		result.OsResult.Name = ar.OsManifest.Name
+		result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
+		if result.OsResult.ValidityCheck.Success == false {
+			result.OsResult.Summary.Success = false
+			result.Success = false
+		}
 	}
-	result.OsResult.Name = ar.OsManifest.Name
 
-	result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
-	if result.OsResult.ValidityCheck.Success == false {
-		log.Trace("OS Manifest invalid")
-		result.OsResult.Summary.Success = false
-		result.Success = false
-	}
-
-	//Validate and unpack App Manifests
+	// Validate and unpack App Manifests
 	for i, amSigned := range arJws.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
@@ -1008,16 +1004,16 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			msg := fmt.Sprintf("Unpacking of App Manifest failed: %v", err)
 			result.AppResults[i].Summary.setFalseMulti(&msg)
 			result.Success = false
-		}
-		ar.AppManifests = append(ar.AppManifests, am)
-		result.AppResults[i].Name = am.Name
+		} else {
+			ar.AppManifests = append(ar.AppManifests, am)
+			result.AppResults[i].Name = am.Name
+			result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
+			if result.AppResults[i].ValidityCheck.Success == false {
+				log.Trace("App Manifest invalid - " + am.Name)
+				result.AppResults[i].Summary.Success = false
+				result.Success = false
 
-		result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
-		if result.AppResults[i].ValidityCheck.Success == false {
-			log.Trace("App Manifest invalid - " + am.Name)
-			result.AppResults[i].Summary.Success = false
-			result.Success = false
-
+			}
 		}
 	}
 
@@ -1030,25 +1026,24 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.CompDescResult.Summary.Success = false
 		result.Success = false
 	}
-
 	err = json.Unmarshal(payload, &ar.CompanyDescription)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
 		result.CompDescResult.Summary.setFalseMulti(&msg)
 		result.Success = false
-		log.Trace(msg)
-	}
-	result.CompDescResult.Name = ar.CompanyDescription.DN
-	result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
+	} else {
+		result.CompDescResult.Name = ar.CompanyDescription.DN
+		result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
 
-	result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
-	if result.CompDescResult.ValidityCheck.Success == false {
-		log.Trace("Company Description invalid")
-		result.CompDescResult.Summary.Success = false
-		result.Success = false
+		result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
+		if result.CompDescResult.ValidityCheck.Success == false {
+			log.Trace("Company Description invalid")
+			result.CompDescResult.Summary.Success = false
+			result.Success = false
+		}
 	}
 
-	//Validate and unpack Device Description
+	// Validate and unpack Device Description
 	jwsValRes, payload = verifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners)
 	result.DevDescResult.Summary = jwsValRes.Summary
 	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
