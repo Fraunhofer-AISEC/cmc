@@ -1438,7 +1438,7 @@ func contains(elem string, list []string) bool {
 	return false
 }
 
-func (r Result) setFalse(msg *string) {
+func (r *Result) setFalse(msg *string) {
 	r.Success = false
 	if msg != nil {
 		r.Details = *msg
@@ -1446,7 +1446,7 @@ func (r Result) setFalse(msg *string) {
 	log.Trace(*msg)
 }
 
-func (r ResultMulti) setFalseMulti(msg *string) {
+func (r *ResultMulti) setFalseMulti(msg *string) {
 	r.Success = false
 	if msg != nil {
 		r.Details = append(r.Details, *msg)
