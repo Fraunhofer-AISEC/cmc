@@ -1051,27 +1051,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		log.Trace("Verification of Device Description Signatures failed")
 		result.Success = false
 	}
-
 	err = json.Unmarshal(payload, &ar.DeviceDescription)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
 		result.DevDescResult.Summary.setFalseMulti(&msg)
-	}
-
-	// Compare the device and the operator affiliation (based on "organization" field in the identity certificates)
-	found := false
-	for _, o := range result.DevDescResult.SignatureCheck[0].Organization {
-		if contains(o, result.ReportSignature[0].Organization) {
-			result.DevDescResult.OpAffiliation.Success = true
-			found = true
-			break
-		}
-	}
-	if found == false {
-		msg := fmt.Sprintf("No match for affiliations of operator and device certificate: %v vs %v", result.DevDescResult.SignatureCheck[0].Organization, result.ReportSignature[0].Organization)
-		result.DevDescResult.OpAffiliation.setFalse(&msg)
-		result.DevDescResult.Summary.Success = false
-		result.Success = false
 	}
 
 	result.PlainAttReport = ar
