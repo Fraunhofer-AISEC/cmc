@@ -1,0 +1,39 @@
+#!/bin/bash
+
+set -e
+
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+
+PCP="$DIR/../../ids-pcp/pcp.sh"
+PKI_DIR="$DIR/pki"
+INPUT_DIR="$DIR/metadata-raw"
+OUTPUT_DIR="$DIR/metadata-signed"
+
+if [ ! -d "$PKI_DIR" ]; then
+  echo "PKI Directory does not exist. Did you run 'generate-pki'? Abort.."
+  exit
+fi
+
+echo "PCP Binary:       $PCP"
+echo "Target Directory: $TARGET_DIR"
+echo "PKI Directory:    $PKI_DIR"
+
+eva () {
+  "$PCP" "$PKI_DIR" "$INPUT_DIR" "$OUTPUT_DIR" eva "$@"
+}
+
+sig () {
+  "$PCP" "$PKI_DIR" "$INPUT_DIR" "$OUTPUT_DIR" sig "$@"
+}
+
+# Clean start
+rm -rf $OUTPUT_DIR
+mkdir -p $OUTPUT_DIR
+
+eva rtm.manifest.json			            developer_B evaluator_B certifier_A
+eva os.manifest.json					        developer_B evaluator_B certifier_A
+eva company.description.json				  operator_A  evaluator_C certifier_B
+
+sig operator device.description.json  operator_A
+sig operator ak.certparams.json		    operator_A
+sig operator tlskey.certparams.json	  operator_A

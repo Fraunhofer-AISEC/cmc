@@ -9,6 +9,5 @@ testclient/attestation-report.json
 testclient/attestation-result.json
 dummycmc/dummycmc
 tpm/test_encrypted_ak.json
-example-setup/metadata/
-example-setup/copy.sh
+example-setup/data-cmc/
 tpmdriver/test_encrypted_ak.json

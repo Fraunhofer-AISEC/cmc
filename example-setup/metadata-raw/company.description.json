@@ -1,0 +1,11 @@
+{
+    "type" : "Company Description",
+    "dn" : "company0.test.aisec.fraunhofer.de",
+    "certificationLevel" : 3,
+    "description" : "Fraunhofer AISEC Test Company 0",
+    "version" : "20210717200000",
+	"validity" : {
+		"notBefore": "20210717200000",
+		"notAfter": "20240717200000"
+	}
+}

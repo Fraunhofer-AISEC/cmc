@@ -32,17 +32,17 @@ capable network protocol.
 ```sh
 # Build and run the provisioning server that supplies the certificates and data for the cmcd
 cd cmc/provserver
-make
+go build
 ./provserver --config ../example-setup/prov-server-conf.json
 
 # Build and run the cmcd
 cd cmc/cmcd
-make
+go build
 ./cmcd --config ../example-setup/cmcd-conf.json
 
 # Build the testclient
 cd cmc/testclient
-make
+go build
 
 # Run the testclient to retrieve an attestation report (stored in cmc/testclient)
 ./testclient --mode generate
@@ -52,12 +52,11 @@ make
 
 # To test the attested TLS connection
 cd cmc/testconnector
-make
+go build
 ./testconnector
 
 # Run the testclient to test the attested TLS connection with the connector
 ./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem
-
 ```
 
 **Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed in the *cmcd*
@@ -129,11 +128,11 @@ After the values are adjusted, the manifests and descriptions can be signed by t
 *ids-pcp* tool and provided to the *cmcd*:
 
 ```sh
-cd ids-pcp/examples
-./example_pcp_demo_setup
-# <serverPath> must be set to the "serverPath" config of the cmcd (see Config Files)
-cp -r demo_setup/pki/ca <cmc-path>/example-setup/data-server/<serverPath>
-cp demo_setup/signed/<drtm/srtm connector>/* <cmc-path>/example-setup/data-server/<serverPath>
+cd cmc/example-setup
+# If desired, generate a new PKI
+./generate-pki
+# Sign the metadata files
+./sign-metadata
 ```
 
 **Note:** We aim to provide a VM and tools for automatically generating the manifest files

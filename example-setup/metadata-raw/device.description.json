@@ -1,0 +1,10 @@
+{
+	"type" : "Device Description",
+	"fqdn" : "provider-connector.test.aisec.fraunhofer.de",
+	"description" : "Fraunhofer AISEC Test Connector 0",
+	"location" : "Munich, Germany",
+	"rtmManifest" : "de.fhg.aisec.ids.rtm.drtm",
+	"osManifest" : "de.fhg.aisec.ids.os.drtm",
+	"appDescriptions": [
+	]
+}
