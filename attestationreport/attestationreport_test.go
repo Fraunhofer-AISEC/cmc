@@ -146,3 +146,29 @@ func TestVerify(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyJws(t *testing.T) {
+	type args struct {
+		data  string
+		roots *x509.CertPool
+		roles []string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"VerifyJws Empty", args{"", nil, nil}, false},
+	}
+
+	log.SetLevel(log.TraceLevel)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, got := VerifyJws(tt.args.data, tt.args.roots, tt.args.roles)
+			if got != tt.want {
+				t.Errorf("VerifyJws() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

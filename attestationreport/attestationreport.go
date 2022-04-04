@@ -798,31 +798,29 @@ func loadPrivateKey(data []byte) interface{} {
 	return priv
 }
 
-// Verifies signature and certificate chain for JWS tokens with multiple signatures,
-// e.g. manifests or company descriptions
-// Currently uses the 'OU' field of the certificate to check if the certificate
+// Verifies signatures and certificate chains for JWS tokens
+// Optionally uses the 'OU' field of the certificate to check if the certificate
 // was signed by a valid role.
-func verifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []byte) {
-	//Extract certificates and validate certificate chains in the process
+func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []byte, bool) {
 	opts := x509.VerifyOptions{
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		Roots:     roots,
 	}
 
 	result := JwsResult{}
-	result.Summary.Success = true
+	ok := true
 
 	jwsData, err := jose.ParseSigned(data)
 	if err != nil {
 		msg := fmt.Sprintf("Data could not be parsed - %v", err)
 		result.Summary.setFalseMulti(&msg)
-		return result, nil
+		return result, nil, false
 	}
 
 	if len(jwsData.Signatures) == 0 {
 		msg := fmt.Sprintf("JWS does not contain signatures")
 		result.Summary.setFalseMulti(&msg)
-		return result, nil
+		return result, nil, false
 	}
 
 	index := make([]int, len(jwsData.Signatures))
@@ -842,7 +840,7 @@ func verifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 			}
 			msg := fmt.Sprintf("Validation of certificate chain failed: %v", err)
 			result.SignatureCheck[i].CertCheck.setFalse(&msg)
-			result.Summary.Success = false
+			ok = false
 			continue
 		}
 
@@ -852,7 +850,7 @@ func verifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 		} else {
 			msg := fmt.Sprintf("Signature verification failed: %v", err)
 			result.SignatureCheck[i].Signature.setFalse(&msg)
-			result.Summary.Success = false
+			ok = false
 		}
 
 		if index[i] != i {
@@ -873,7 +871,7 @@ func verifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 			if len(roles) != len(jwsData.Signatures) {
 				msg := fmt.Sprintf("Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures))
 				result.Summary.setFalseMulti(&msg)
-				return result, nil
+				return result, nil, false
 			}
 			r := certs[0][0].Subject.OrganizationalUnit[0]
 			if r == roles[i] {
@@ -885,14 +883,15 @@ func verifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 				result.SignatureCheck[i].RoleCheck = &rc
 				msg := fmt.Sprintf("Role %v does not match expected role %v", r, roles[i])
 				result.SignatureCheck[i].RoleCheck.setFalse(&msg)
-				result.Summary.Success = false
+				ok = false
 			}
 		}
 	}
 
 	payload := payloads[0]
+	result.Summary.Success = ok
 
-	return result, payload
+	return result, payload, ok
 }
 
 func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte, roles *SignerRoles) (bool, *ArPlain) {
@@ -919,9 +918,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	//Validate Attestation Report signature
-	jwsValRes, payload := verifyJws(attestationReport, roots, r.ArSigners)
+	jwsValRes, payload, ok := VerifyJws(attestationReport, roots, r.ArSigners)
 	result.ReportSignature = jwsValRes.SignatureCheck
-	if jwsValRes.Summary.Success == false {
+	if !ok {
 		log.Trace("Verification of Attestation Report Signatures failed")
 		result.Success = false
 		return false, &ar
@@ -943,10 +942,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar.Nonce = arJws.Nonce
 
 	// Validate and unpack Rtm Manifest
-	jwsValRes, payload = verifyJws(arJws.RtmManifest, roots, r.ManifestSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.RtmManifest, roots, r.ManifestSigners)
 	result.RtmResult.Summary = jwsValRes.Summary
 	result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
-	if jwsValRes.Summary.Success == false {
+	if !ok {
 		log.Trace("Verification of RTM Manifest Signatures failed")
 		result.Success = false
 	}
@@ -965,10 +964,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack OS Manifest
-	jwsValRes, payload = verifyJws(arJws.OsManifest, roots, r.ManifestSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.OsManifest, roots, r.ManifestSigners)
 	result.OsResult.Summary = jwsValRes.Summary
 	result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
-	if jwsValRes.Summary.Success == false {
+	if !ok {
 		log.Trace("Verification of OS Manifest Signatures failed")
 		result.Success = false
 	}
@@ -990,10 +989,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	for i, amSigned := range arJws.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
-		jwsValRes, payload = verifyJws(amSigned, roots, r.ManifestSigners)
+		jwsValRes, payload, ok = VerifyJws(amSigned, roots, r.ManifestSigners)
 		result.AppResults[i].Summary = jwsValRes.Summary
 		result.AppResults[i].SignatureCheck = jwsValRes.SignatureCheck
-		if jwsValRes.Summary.Success == false {
+		if !ok {
 			log.Trace("Verification of App Manifest Signatures failed")
 			result.Success = false
 		}
@@ -1018,10 +1017,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Company Description
-	jwsValRes, payload = verifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners)
 	result.CompDescResult.Summary = jwsValRes.Summary
 	result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
-	if jwsValRes.Summary.Success == false {
+	if !ok {
 		log.Trace("Verification of Company Description Signatures failed")
 		result.CompDescResult.Summary.Success = false
 		result.Success = false
@@ -1044,10 +1043,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Device Description
-	jwsValRes, payload = verifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners)
 	result.DevDescResult.Summary = jwsValRes.Summary
 	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
-	if jwsValRes.Summary.Success == false {
+	if !ok {
 		log.Trace("Verification of Device Description Signatures failed")
 		result.Success = false
 	}
