@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -e
+
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+
+PCP="$DIR/../../ids-pcp/pcp.sh"
+
+TARGET_DIR="$DIR/pki"
+
+printf "Using PCP=%s and DIR=%s\n" "$PCP" "$DIR"
+
+ca  () {
+  "$PCP" "$TARGET_DIR" ca  "$@"
+}
+
+gen () {
+  "$PCP" "$TARGET_DIR" gen "$@"
+}
+
+
+# Remove the previous PKI and signed files to ensure a clean start
+if [ -d $TARGET_DIR ]; then
+  rm -rf $TARGET_DIR
+fi
+
+# Setup PKI with root CA and two SubCAs (one for users, one for devices)
+ca
+
+# Generate user certificates as required
+gen developer developer_A
+gen developer developer_B
+gen developer developer_C
+
+gen operator operator_A
+
+gen evaluator evaluator_A
+gen evaluator evaluator_B
+gen evaluator evaluator_C
+
+gen certifier certifier_A
+gen certifier certifier_B

@@ -1,0 +1,11 @@
+{
+  "CN": "certifier_B",
+  "names": [
+  {
+    "C": "DE",
+    "L": "Garching",
+    "O": "Fraunhofer AISEC",
+    "OU": "certifier"
+  }
+  ]
+}

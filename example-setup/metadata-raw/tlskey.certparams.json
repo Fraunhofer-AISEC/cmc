@@ -1,0 +1,14 @@
+{
+    "type": "TLS Key Cert Params",
+    "subject": {
+      "commonName": "de.fhg.aisec.ids.tlskey.connector0",
+      "country": "DE",
+      "organization": "Fraunhofer AISEC",
+      "organizationalUnit": "device",
+      "locality": "Munich",
+      "province": "BY",
+      "streetAddress": "Lichtenbergstrasse 11",
+      "postalCode": "85748"
+    },
+    "sans": [ "127.0.0.1:9000", "test.connector.de" , "localhost"]
+  }

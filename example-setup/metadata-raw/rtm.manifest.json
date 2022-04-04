@@ -1,0 +1,128 @@
+{
+    "type": "RTM Manifest",
+    "name": "de.fhg.aisec.ids.rtm.drtm",
+    "developerCommonName": "AISEC",
+    "version" : "20210717200000",
+	"validity" : {
+		"notBefore": "20210717200000",
+		"notAfter": "20240717200000"
+	},
+    "description": "AISEC PoC Demonstrator DRTM RTM Manifest",
+    "certificationLevel" : 3,
+    "verifications": [
+        {
+            "type": "TPM Verification",
+            "name": "SINIT ACM Digest",
+            "pcr": 17,
+            "sha256": "0310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0",
+            "description": "Event type 0x402: EVtype_HASH_START, sha256(sha256(SINIT ACM) | EDX Value), This is the Digest of the Intel SINIT ACM code module"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "BIOS ACM Registration Data",
+            "pcr": 17,
+            "sha256": "b1a7fdf8c2bc04902c73104dbd362cbe45fe41d7110d0ef209bbbb94bef2f243",
+            "description": "Event type 0x40a: EVtype_BIOSAC_REG_DATA, 32 bytes of data stored in AUX index, identifying BIOS ACM"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "SRTM Status",
+            "pcr": 17,
+            "sha256": "67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450",
+            "description": "Event type 0x40b: EVtype_CPU_SCRTM_STAT (0 = SCRTM established by BIOS, 1 = SCRTM established by CPU)"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "Launch Control Policy Control Digest",
+            "pcr": 17,
+            "sha256": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02",
+            "description": "Event type 0x40c: EVtype_LCP_CONTROL_HASH: EVtype_LCP_CONTROL_HASH: PO Policy Control Field. Bit 1 must be unset (Forbid non-production SINIT ACM), Appendix D1.1"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "LCP Details Digest",
+            "pcr": 17,
+            "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+            "description": "Event type 0x412: EVtype_LCP_DETAILS_HASH: Digest of matching elements used by the policy (SINIT, MLE, PCONF Policies), HASH(00) if ANY"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "STM Digest",
+            "pcr": 17,
+            "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+            "description": "Event type 0x40e: EVtype_STM_HASH: Digest of the SMI Transfer Mode (STM), HASH(00) if STM is not enabled"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "OS SINIT Data Capabilities Field Digest",
+            "pcr": 17,
+            "sha256": "5a3e80a37915b1601c363acd1601df7ef257d5d32c664004a2ec0484a4f60628",
+            "description": "Event type 0x40f: EVtype_OSSINITDATA_CAP_HASH: Bit vector of OS SINIT Data Table (Table 22) capabilities field (Table 4). Capabilities SINIT requested to use"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "MLE Hash",
+            "pcr": 17,
+            "sha256": "e21a507b6e8831ddef5db74a130d6b2e943cae55e0c9a5471d15d41976e0418f",
+            "description": "Event type 0x404: EVtype_MLE_HASH: Hash of the MLE (tboot), 0 as described in MLE Dev Manual"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "TPM NV Index Digest",
+            "pcr": 17,
+            "sha256": "a2b69438999767b0c3479a9fcc28ce2442b8d0357d95dca3ad1f74a887622497",
+            "description": "Event type 0x414: EVtype_NV_INFO_HASH: Digest of TPM NV index public structures"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "SINIT Public Key Hash",
+            "pcr": 18,
+            "sha256": "3b5f9781c4347f5d3af1daf7019654dc05d1af857a598c18f3bc77e7b042b37f",
+            "description": "Event type 0x410: EVtype_SINIT_PUBKEY_HASH: Digest of the SINIT ACM public key used by CPU to verify SINIT ACM"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "SRTM Status",
+            "pcr": 18,
+            "sha256": "67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450",
+            "description": "Event type 0x40b: EVtype_CPU_SCRTM_STAT (0 = SCRTM established by BIOS, 1 = SCRTM established by CPU)"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "OS SINIT Data Capabilities Field Digest",
+            "pcr": 18,
+            "sha256": "5a3e80a37915b1601c363acd1601df7ef257d5d32c664004a2ec0484a4f60628",
+            "description": "Event type 0x40f: EVtype_OSSINITDATA_CAP_HASH: Bit vector of OS SINIT Data Table (Table 22) capabilities field (Table 4). Capabilities SINIT requested to use"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "Launch Control Policy Control Digest",
+            "pcr": 18,
+            "sha256": "fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02",
+            "description": "Event type 0x40c: EVtype_LCP_CONTROL_HASH: EVtype_LCP_CONTROL_HASH: PO Policy Control Field. Bit 1 must be unset (Forbid non-production SINIT ACM), Appendix D1.1"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "LCP Authorities Digest",
+            "pcr": 18,
+            "sha256": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d",
+            "description": "Event type 0x413: EVtype_LCP_AUTHORITIES_HASH: Launch Control Policies Authorities (Signer) digest"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "TPM NV Index Digest",
+            "pcr": 18,
+            "sha256": "a2b69438999767b0c3479a9fcc28ce2442b8d0357d95dca3ad1f74a887622497",
+            "description": "Event type 0x414: EVtype_NV_INFO_HASH: Digest of TPM NV index public structures"
+        },
+        {
+            "type": "TPM Verification",
+            "name": "TBOOT Unknown",
+            "pcr": 18,
+            "sha256": "71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91",
+            "description": "Event type 0x501: tboot"
+        }
+
+    ]
+
+}

@@ -1,8 +1,8 @@
 {
     "port": 9955,
     "provServerAddr": "http://127.0.0.1:9001/",
-    "serverPath": "drtm-example/",
-    "localPath": "metadata/",
+    "serverPath": "metadata-signed/",
+    "localPath": "data-cmc/",
     "fetchMetadata": true,
     "useIma": false,
     "imaPcr": 10,
