@@ -17,7 +17,7 @@
             "type": "TPM Verification",
             "name": "TBOOT",
             "pcr": 17,
-            "sha256": "71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f92",
+            "sha256": "71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91",
             "description": "Event type 0x501: tboot"
         },
         {
