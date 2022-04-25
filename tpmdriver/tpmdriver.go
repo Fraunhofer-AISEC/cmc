@@ -406,7 +406,7 @@ func (t *Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
 }
 
 // GetTpmMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
-// and returnes it as an attestationreport TPM Measurement object
+// and returns the TPM quote as well as the single PCR values
 func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
 
 	if tpm == nil {
@@ -466,14 +466,7 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Failed to load EKs - %v", err)
 	}
-
 	log.Tracef("Found %v EKs", len(eks))
-	for _, ek := range eks {
-		if ek.Certificate != nil {
-			log.Tracef("EK Certificate: %v", string(ek.Certificate.Raw))
-		}
-		log.Tracef("EK Certificate URL %v", ek.CertificateURL)
-	}
 
 	log.Debug("Creating new AK")
 	akConfig := &attest.AKConfig{}
