@@ -95,10 +95,10 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 	tpmParams := ar.TpmParams{
 		Nonce: in.Nonce,
 		Pcrs:  s.config.Pcrs,
-		Certs: ar.TpmCerts{
-			AkCert:        string(s.config.Certs.Ak),
+		Certs: ar.CertChain{
+			Leaf:          string(s.config.Certs.Ak),
 			Intermediates: []string{string(s.config.Certs.DeviceSubCa)},
-			CaCert:        string(s.config.Certs.Ca),
+			Ca:            string(s.config.Certs.Ca),
 		},
 		UseIma: s.config.UseIma,
 		ImaPcr: s.config.ImaPcr,
