@@ -79,11 +79,13 @@ type HashChainElem struct {
 	Sha256 []string `json:"sha256"`
 }
 
-// TpmCerts is a helper struct for the AK certificate chain
-type TpmCerts struct {
-	AkCert        string   `json:"akCert"`
-	Intermediates []string `json:"akIntermediates"`
-	CaCert        string   `json:"caCertificate"`
+// CertChain is a helper struct for certificate chains,
+// consisting of a leaf certificate, an arbitrary number
+// of intermediate (sub-CA) certificates and a CA certificate
+type CertChain struct {
+	Leaf          string   `json:"leaf"`
+	Intermediates []string `json:"intermediates"`
+	Ca            string   `json:"ca"`
 }
 
 // TpmMeasurement represents the JSON attestation report
@@ -92,7 +94,7 @@ type TpmMeasurement struct {
 	Type      string           `json:"type"`
 	Message   string           `json:"message"`
 	Signature string           `json:"signature"`
-	Certs     TpmCerts         `json:"certs"`
+	Certs     CertChain        `json:"certs"`
 	HashChain []*HashChainElem `json:"hashChain"`
 }
 
@@ -273,7 +275,7 @@ type ArJws struct {
 type TpmParams struct {
 	Nonce  []byte
 	Pcrs   []int
-	Certs  TpmCerts
+	Certs  CertChain
 	UseIma bool
 	ImaPcr int32
 }
@@ -423,9 +425,9 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 	// certificate chain in base64 encoding
 	certsb64 := make([]string, 0)
 	for i, certPem := range certsPem {
-		cert := loadCert(certPem)
-		if cert == nil {
-			log.Errorf("Failed to load cert[%v]", i)
+		cert, err := loadCert(certPem)
+		if err != nil {
+			log.Errorf("Failed to load cert[%v]: %v", i, err)
 			return false, nil
 		}
 
@@ -662,7 +664,7 @@ func extendHash(hash []byte, data []byte) []byte {
 }
 
 // loadCert loads a certificate from PEM encoded data
-func loadCert(data []byte) *x509.Certificate {
+func loadCert(data []byte) (*x509.Certificate, error) {
 	input := data
 
 	block, _ := pem.Decode(data)
@@ -672,10 +674,9 @@ func loadCert(data []byte) *x509.Certificate {
 
 	cert, err := x509.ParseCertificate(input)
 	if err != nil {
-		log.Error("Failed to parse x509 Certificate ", err)
-		return nil
+		return nil, fmt.Errorf("Failed to parse x509 Certificate: %v", err)
 	}
-	return cert
+	return cert, nil
 }
 
 // loadPrivateKey loads a private key from PEM encoded data
@@ -1142,12 +1143,12 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, rtmVerifications,
 		ok = false
 	}
 
-	result.QuoteSignature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.AkCert)
+	result.QuoteSignature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.Leaf)
 	if result.QuoteSignature.Signature.Success == false {
 		ok = false
 	}
 
-	result.QuoteSignature.CertCheck = verifyTpmCertChain(&tpmM.Certs)
+	result.QuoteSignature.CertCheck = verifyCertChain(&tpmM.Certs)
 	if result.QuoteSignature.CertCheck.Success == false {
 		ok = false
 	}
@@ -1215,7 +1216,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, appManifests []AppMani
 	return swMeasurementResults, ok
 }
 
-func verifyTpmCertChain(certs *TpmCerts) Result {
+func verifyCertChain(certs *CertChain) Result {
 	result := Result{}
 	result.Success = true
 
@@ -1229,14 +1230,14 @@ func verifyTpmCertChain(certs *TpmCerts) Result {
 		}
 	}
 	rootsPool := x509.NewCertPool()
-	ok := rootsPool.AppendCertsFromPEM([]byte(certs.CaCert))
+	ok := rootsPool.AppendCertsFromPEM([]byte(certs.Ca))
 	if !ok {
 		msg := fmt.Sprintf("Failed to append certificate from PEM")
 		result.setFalse(&msg)
 		return result
 	}
 
-	block, _ := pem.Decode([]byte(certs.AkCert))
+	block, _ := pem.Decode([]byte(certs.Leaf))
 	if block == nil || block.Type != "CERTIFICATE" {
 		msg := fmt.Sprintf("Failed to parse AK certificate")
 		result.setFalse(&msg)
@@ -1286,13 +1287,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
 	}
 
 	// Extract public key from x509 certificate
-	p, _ := pem.Decode([]byte(cert))
-	if p == nil {
-		msg := fmt.Sprintf("Failed to decode TPM certificate")
-		result.Signature.setFalse(&msg)
-		return result
-	}
-	x509Cert, err := x509.ParseCertificate(p.Bytes)
+	x509Cert, err := loadCert([]byte(cert))
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
 		result.Signature.setFalse(&msg)
