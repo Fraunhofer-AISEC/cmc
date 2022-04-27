@@ -23,9 +23,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -98,6 +100,14 @@ type TpmMeasurement struct {
 	HashChain []*HashChainElem `json:"hashChain"`
 }
 
+// SnpMeasurement represents the JSON attestation report
+// element of type 'SNP Measurement' signed by the device
+type SnpMeasurement struct {
+	Type   string    `json:"type"`
+	Report []byte    `json:"blob"`
+	Certs  CertChain `json:"certs"`
+}
+
 // SwMeasurement represents the JSON attestation report
 // element of type 'Software Measurement'
 type SwMeasurement struct {
@@ -113,6 +123,25 @@ type TpmVerification struct {
 	Name   string `json:"name"`
 	Pcr    int    `json:"pcr"`
 	Sha256 string `json:"sha256"`
+}
+
+type SnpPolicy struct {
+	Type         string `json:"type"`
+	SingleSocket bool   `json:"singleSocket"`
+	Debug        bool   `json:"debug"`
+	Migration    bool   `json:"migration"`
+	Smt          bool   `json:"smt"`
+	AbiMajor     uint8  `json:"abiMajor"`
+	AbiMinor     uint8  `json:"abiMinor"`
+}
+
+// SnpVerification represents the JSON attestation report
+// element of type 'SNP Verification'
+type SnpVerification struct {
+	Type    string    `json:"type"`
+	Sha256  string    `json:"sha256"`
+	Version uint32    `json:"version"`
+	Policy  SnpPolicy `json:"policy"`
 }
 
 // SwVerification represents the JSON attestation report
@@ -280,6 +309,13 @@ type TpmParams struct {
 	ImaPcr int32
 }
 
+// SnpParams are parameters for retrieving AMD SEV-SNP measurements:
+// Currently, this is only the nonce, which is embedded into the
+// signed measurement
+type SnpParams struct {
+	Nonce []byte
+}
+
 // SwParams are parameters for retrieving SW measurements. Currently none required
 type SwParams struct{}
 
@@ -294,6 +330,60 @@ type SignerRoles struct {
 	ArSigners          []string
 	ConnDescSigners    []string
 }
+
+type snpreport struct {
+	// Table 24 @ https://www.amd.com/system/files/TechDocs/56860.pdf
+	Status     uint32
+	ReportSize uint32
+	Reserved0  [24]byte
+	// Table 21 @ https://www.amd.com/system/files/TechDocs/56860.pdf
+	Version         uint32
+	GuestSvn        uint32
+	Policy          uint64
+	FamilyId        [16]byte
+	ImageId         [16]byte
+	Vmpl            uint32
+	SignatureAlgo   uint32
+	Currentcb       uint64 // platform_version
+	PlatformInfo    uint64
+	AuthorKeyEn     uint32
+	Reserved1       uint32
+	ReportData      [64]byte
+	Measurement     [48]byte
+	HostData        [32]byte
+	IdKeyDigest     [48]byte
+	AuthorKeyDigest [48]byte
+	ReportId        [32]byte
+	ReportIdMa      [32]byte
+	ReportedTcb     uint64
+	Reserved2       [24]byte
+	ChipId          [64]byte
+	//Reserved3 [192]byte
+	CommittedTcb   uint64
+	CurrentBuild   uint8
+	CurrentMinor   uint8
+	CurrentMajor   uint8
+	Reserved3a     uint8
+	CommittedBuild uint8
+	CommittedMinor uint8
+	CommittedMajor uint8
+	Reserved3b     uint8
+	LaunchTcb      uint64
+	Reserved3c     [168]byte
+	// Table 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf
+	SignatureR [72]byte
+	SignatureS [72]byte
+	Reserved4  [368]byte
+}
+
+const (
+	ecdsa384_with_sha384 = 1
+)
+
+const (
+	header_offset    = 0x20
+	signature_offset = 0x2A0
+)
 
 // Generate generates an attestation report with the provided
 // nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
@@ -1148,10 +1238,11 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, rtmVerifications,
 		ok = false
 	}
 
-	result.QuoteSignature.CertCheck = verifyCertChain(&tpmM.Certs)
-	if result.QuoteSignature.CertCheck.Success == false {
+	certCheck, certChainOk := verifyCertChain(&tpmM.Certs)
+	if !certChainOk {
 		ok = false
 	}
+	result.QuoteSignature.CertCheck = certCheck
 
 	result.Summary.Success = ok
 
@@ -1216,7 +1307,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, appManifests []AppMani
 	return swMeasurementResults, ok
 }
 
-func verifyCertChain(certs *CertChain) Result {
+func verifyCertChain(certs *CertChain) (Result, bool) {
 	result := Result{}
 	result.Success = true
 
@@ -1226,7 +1317,7 @@ func verifyCertChain(certs *CertChain) Result {
 		if !ok {
 			msg := fmt.Sprintf("Failed to append certificate from PEM")
 			result.setFalse(&msg)
-			return result
+			return result, false
 		}
 	}
 	rootsPool := x509.NewCertPool()
@@ -1234,37 +1325,37 @@ func verifyCertChain(certs *CertChain) Result {
 	if !ok {
 		msg := fmt.Sprintf("Failed to append certificate from PEM")
 		result.setFalse(&msg)
-		return result
+		return result, false
 	}
 
 	block, _ := pem.Decode([]byte(certs.Leaf))
 	if block == nil || block.Type != "CERTIFICATE" {
-		msg := fmt.Sprintf("Failed to parse AK certificate")
+		msg := fmt.Sprintf("Failed to parse leaf certificate")
 		result.setFalse(&msg)
-		return result
+		return result, false
 	}
-	akCert, err := x509.ParseCertificate(block.Bytes)
+	leafCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse AK: %v", err)
+		msg := fmt.Sprintf("Failed to parse leaf certificate public key: %v", err)
 		result.setFalse(&msg)
-		return result
+		return result, false
 	}
 
-	chain, err := akCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
+	chain, err := leafCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
-		msg := fmt.Sprintf("Failed to validate AK cert chain: %v", err)
+		msg := fmt.Sprintf("Failed to validate certificate chain: %v", err)
 		result.setFalse(&msg)
-		return result
+		return result, false
 	}
 
 	expectedLen := len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
 	if len(chain[0]) != expectedLen {
 		msg := fmt.Sprintf("Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 		result.setFalse(&msg)
-		return result
+		return result, false
 	}
 
-	return result
+	return result, true
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
@@ -1319,6 +1410,262 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
 		return result
 	}
 	return result
+}
+
+func verifySnpMeasurements(snpM *SnpMeasurement, v *SnpVerification, nonce []byte) (SnpMeasurementResult, bool) {
+	result := SnpMeasurementResult{}
+	ok := true
+
+	var s snpreport
+	b := bytes.NewBuffer(snpM.Report)
+
+	err := binary.Read(b, binary.LittleEndian, &s)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to decode SNP attestation data: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
+	if cmp := bytes.Compare(s.ReportData[:], nonce); cmp != 0 {
+		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
+		result.Freshness.setFalse(&msg)
+		ok = false
+	}
+
+	// Verify Signature, created with SNP VCEK private key
+	sig, ret := verifySnpSignature(snpM.Report, s, []byte(snpM.Certs.Leaf))
+	if !ret {
+		ok = false
+	}
+	result.Signature = sig
+
+	// Verify the SNP certificate chain
+	certCheck, certChainOk := verifyCertChain(&snpM.Certs)
+	if !certChainOk {
+		ok = false
+	}
+	result.Signature.CertCheck = certCheck
+
+	// Compare Measurements
+	m, err := hex.DecodeString(v.Sha256)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to decode SNP Measurement: %v", err)
+		result.Summary.setFalse(&msg)
+		ok = false
+	}
+	if cmp := bytes.Compare(s.Measurement[:], m); cmp != 0 {
+		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v", v.Sha256, hex.EncodeToString(s.Measurement[:]))
+		result.MeasurementMatch.setFalse(&msg)
+		ok = false
+	}
+
+	// Compare SNP parameters
+	result.ParamsMatch, ret = verifySnpParams(&s, v)
+	if !ret {
+		ok = false
+	}
+
+	result.Summary.Success = ok
+
+	return result, ok
+}
+
+func verifySnpParams(s *snpreport, v *SnpVerification) (Result, bool) {
+	result := Result{
+		Success: true,
+	}
+
+	if s.Version != v.Version {
+		msg := fmt.Sprintf("SNP report version mismatch: Report = %v, supplied = %v", s.Version, v.Version)
+		result.setFalse(&msg)
+	}
+
+	abiMajor := uint8(s.Policy & 0xFF)
+	abiMinor := uint8((s.Policy >> 8) & 0xFF)
+	smt := (s.Policy & (1 << 16)) != 0
+	migration := (s.Policy & (1 << 18)) != 0
+	debug := (s.Policy & (1 << 19)) != 0
+	singleSocket := (s.Policy & (1 << 20)) != 0
+
+	if abiMajor != v.Policy.AbiMajor {
+		msg := fmt.Sprintf("SNP report AbiMinor mismatch: Report = %v, supplied = %v", abiMajor, v.Policy.AbiMajor)
+		result.setFalse(&msg)
+	}
+	if abiMinor != v.Policy.AbiMinor {
+		msg := fmt.Sprintf("SNP report AbiMinor mismatch: Report = %v, supplied = %v", abiMinor, v.Policy.AbiMinor)
+		result.setFalse(&msg)
+	}
+	if smt != v.Policy.Smt {
+		msg := fmt.Sprintf("SNP report SMT mismatch: Report = %v, supplied = %v", smt, v.Policy.Smt)
+		result.setFalse(&msg)
+	}
+	if migration != v.Policy.Migration {
+		msg := fmt.Sprintf("SNP report Migration Agent mismatch: Report = %v, supplied = %v", migration, v.Policy.Migration)
+		result.setFalse(&msg)
+	}
+	if debug != v.Policy.Debug {
+		msg := fmt.Sprintf("SNP report Debug Support mismatch: Report = %v, supplied = %v", debug, v.Policy.Debug)
+		result.setFalse(&msg)
+	}
+	if singleSocket != v.Policy.SingleSocket {
+		msg := fmt.Sprintf("SNP report SingleSocket mismatch: Report = %v, supplied = %v", singleSocket, v.Policy.SingleSocket)
+		result.setFalse(&msg)
+	}
+
+	return result, result.Success
+}
+
+func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error {
+
+	for _, ext := range cert.Extensions {
+
+		if ext.Id.String() == oid {
+			if len(ext.Value) != 3 {
+				return fmt.Errorf("Extension %v value unexpected length %v (expected 3)", oid, len(ext.Value))
+			}
+			if ext.Value[0] != 0x2 {
+				return fmt.Errorf("Extension %v value[0] = %v does not match expected value 2", oid, ext.Value[0])
+			}
+			if ext.Value[1] != 0x1 {
+				return fmt.Errorf("Extension %v value[1] = %v does not match expected value 1", oid, ext.Value[0])
+			}
+			if ext.Value[2] != value {
+				return fmt.Errorf("Extension %v value[2] = %v does not match expected value %v", oid, ext.Value[0], value)
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Extension %v not present in certificate", oid)
+}
+
+func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) error {
+
+	for _, ext := range cert.Extensions {
+
+		if ext.Id.String() == oid {
+			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
+				return fmt.Errorf("Extension %v value %v does not match expected value %v", oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("Extension %v not present in certificate", oid)
+}
+
+func checkExtensions(cert *x509.Certificate, report *snpreport) (ResultMulti, bool) {
+	result := ResultMulti{}
+	ok := true
+	tcb := report.ReportedTcb
+
+	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.1", uint8(tcb)); err != nil {
+		msg := fmt.Sprintf("SEV BL Extension Check failed: %v", err)
+		result.setFalseMulti(&msg)
+		ok = false
+	}
+
+	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.2", uint8(tcb>>8)); err != nil {
+		msg := fmt.Sprintf("SEV TEE Extension Check failed: %v", err)
+		result.setFalseMulti(&msg)
+		ok = false
+	}
+
+	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.3", uint8(tcb>>48)); err != nil {
+		msg := fmt.Sprintf("SEV SNP Extension Check failed: %v", err)
+		result.setFalseMulti(&msg)
+		ok = false
+	}
+
+	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.8", uint8(tcb>>56)); err != nil {
+		msg := fmt.Sprintf("SEV UCODE Extension Check failed: %v", err)
+		result.setFalseMulti(&msg)
+		ok = false
+	}
+
+	if err := checkExtensionBuf(cert, "1.3.6.1.4.1.3704.1.4", report.ChipId[:]); err != nil {
+		msg := fmt.Sprintf("Chip ID Extension Check failed: %v", err)
+		result.setFalseMulti(&msg)
+		ok = false
+	}
+
+	result.Success = ok
+
+	return result, ok
+}
+
+func verifySnpSignature(reportRaw []byte, report snpreport, cert []byte) (SignatureResult, bool) {
+	result := SignatureResult{}
+
+	if len(reportRaw) < (header_offset + signature_offset) {
+		msg := fmt.Sprintf("Internal Error: Report buffer too small")
+		result.Signature.setFalse(&msg)
+		return result, false
+	}
+
+	// Strip the header and the signature from the report and hash for signature verification
+	// Table 21, 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf
+	digest := sha512.Sum384(reportRaw[0x20 : 0x20+0x2A0])
+
+	// Golang SetBytes expects BigEndian byte array, but SNP values are little endian
+	rRaw := report.SignatureR[:]
+	for i := 0; i < len(rRaw)/2; i++ {
+		rRaw[i], rRaw[len(rRaw)-i-1] = rRaw[len(rRaw)-i-1], rRaw[i]
+	}
+	sRaw := report.SignatureS[:]
+	for i := 0; i < len(sRaw)/2; i++ {
+		sRaw[i], sRaw[len(sRaw)-i-1] = sRaw[len(sRaw)-i-1], sRaw[i]
+	}
+
+	// Convert r, s to Big Int
+	r := new(big.Int)
+	r.SetBytes(rRaw)
+	s := new(big.Int)
+	s.SetBytes(sRaw)
+
+	// Load the VCEK certificate
+	c, err := loadCert(cert)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to load certificate: %v", err)
+		result.Signature.setFalse(&msg)
+		return result, false
+	}
+	result.Name = c.Subject.CommonName
+	result.Organization = c.Subject.Organization
+
+	// Examine SNP x509 extensions
+	extensionResult, ok := checkExtensions(c, &report)
+	result.ExtensionsCheck = &extensionResult
+	if !ok {
+		return result, false
+	}
+
+	// Check that the algorithm is supported
+	if report.SignatureAlgo != ecdsa384_with_sha384 {
+		msg := fmt.Sprintf("Siganture Algorithm %v not supported", report.SignatureAlgo)
+		result.Signature.setFalse(&msg)
+		return result, false
+	}
+
+	// Extract the public key from the certificate
+	pub, ok := c.PublicKey.(*ecdsa.PublicKey)
+	if !ok {
+		msg := fmt.Sprintf("Failed to extract ECDSA public key from certificate")
+		result.Signature.setFalse(&msg)
+		return result, false
+	}
+
+	// Verify ECDSA Signature represented by r and s
+	ok = ecdsa.Verify(pub, digest[:], r, s)
+	if !ok {
+		msg := fmt.Sprintf("Failed to verify SNP report signature")
+		result.Signature.setFalse(&msg)
+		return result, false
+	}
+	log.Trace("Successfully verified SNP report signature")
+
+	return result, true
 }
 
 // Used for the JOSE Opaque Signer Interface. This enables signing

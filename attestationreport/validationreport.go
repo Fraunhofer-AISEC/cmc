@@ -99,14 +99,23 @@ type SwMeasurementResult struct {
 	Validation ResultMulti `json:"validation"`
 }
 
+type SnpMeasurementResult struct {
+	Summary          Result          `json:"resultSummary"`
+	Freshness        Result          `json:"freshness"`
+	Signature        SignatureResult `json:"signature"`
+	MeasurementMatch Result          `json:"measurementMatch"`
+	ParamsMatch      Result          `json:"paramsMatch"`
+}
+
 // SignatureResults represents the results for validation of
 // a provided signature and the used certificates
 type SignatureResult struct {
-	Name         string   `json:"commonName"`            // Name of the certificate used for calculating the signature
-	Organization []string `json:"organization"`          // Name of the organization the signer belongs to
-	Signature    Result   `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
-	CertCheck    Result   `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
-	RoleCheck    *Result  `json:"roleCheck,omitempty"`   // Result for checking the role in the certificate (optional)
+	Name            string       `json:"commonName"`            // Name of the certificate used for calculating the signature
+	Organization    []string     `json:"organization"`          // Name of the organization the signer belongs to
+	Signature       Result       `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
+	CertCheck       Result       `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
+	RoleCheck       *Result      `json:"roleCheck,omitempty"`   // Result for checking the role in the certificate (optional)
+	ExtensionsCheck *ResultMulti `json:"extensionsCheck,omitempty"`
 }
 
 // Result is a generic type for storing a boolean result value
