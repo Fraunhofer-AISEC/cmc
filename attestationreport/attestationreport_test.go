@@ -172,3 +172,168 @@ func TestVerifyJws(t *testing.T) {
 		})
 	}
 }
+
+func Test_verifySnpMeasurements(t *testing.T) {
+	type args struct {
+		snpM  *SnpMeasurement
+		snpV  *SnpVerification
+		nonce []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Valid Attestation Report",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: true,
+		},
+		{
+			name: "Invalid Signature",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: invalidReportSignature,
+					Certs:  validCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Certificate Chain",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  invalidCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid VCEK Certificate",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  invalidLeafCert,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Report",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: invalidReportData,
+					Certs:  validCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Measurement",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  invalidMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Policy Parameter Debug",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  invalidSnpPolicy,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Nonce",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: &SnpVerification{
+					Type:    "SNP Verification",
+					Sha256:  validMeasurement,
+					Version: 2,
+					Policy:  validSnpPolicy,
+				},
+				nonce: invalidNonce,
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, got := verifySnpMeasurements(tt.args.snpM, tt.args.snpV, tt.args.nonce); got != tt.want {
+				t.Errorf("verifySnpMeasurements() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
