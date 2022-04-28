@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	serveraddress = "localhost"
-	serverport    = "4443"
+	serveraddress = "0.0.0.0"
+	serverport    = "443"
 )
 
 func main() {
