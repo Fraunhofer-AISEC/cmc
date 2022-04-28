@@ -102,7 +102,7 @@ func main() {
 	reportFile := flag.String("report", "attestation-report.json", "Output file for the attestation report")
 	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
 	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
-	connectoraddress := flag.String("connector", "localhost:4443", "ip:port to connect to the test connector")
+	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port to connect to the test connector")
 	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
 	flag.Parse()
 
