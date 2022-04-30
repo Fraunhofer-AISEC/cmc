@@ -25,68 +25,33 @@ import (
 	"github.com/google/go-tpm/tpm2"
 )
 
-func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, rtmVerifications, osVerifications []TpmVerification) (TpmMeasurementResult, bool) {
-	result := TpmMeasurementResult{}
+func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []Verification) (*TpmMeasurementResult, bool) {
+	result := &TpmMeasurementResult{}
 	ok := true
+
+	// If the attestationreport does contain neither TPM measurements, nor TPM verifications
+	// there is nothing to to
+	if tpmM == nil && len(verifications) == 0 {
+		return nil, true
+	}
+
+	// If the attestationreport contains TPM verifications, but no TPM measurement, the
+	// attestation must fail
+	if tpmM == nil {
+		for _, v := range verifications {
+			msg := fmt.Sprintf("TPM Measurement not present. Cannot verify TPM verification %v (hash: %v)", v.Name, v.Sha256)
+			result.VerificationsCheck.setFalseMulti(&msg)
+		}
+		result.Summary.Success = false
+		return result, false
+	}
 
 	// Extend the verifications to re-calculate the PCR value and evaluate it against the measured
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
-	verifications := make(map[int][]byte)
-
-	numExtends := 0
-	for _, hce := range tpmM.HashChain {
-		pcrRes := PcrResult{}
-		pcrRes.Pcr = int(hce.Pcr)
-
-		if len(hce.Sha256) == 1 {
-			// This means, that the value from the PCR was directly taken for the measurement
-			measurement, _ := hex.DecodeString(hce.Sha256[0])
-
-			// Calculate the expected PCR value from the verifications
-			ver, n := extendVerifications(int(hce.Pcr), rtmVerifications, osVerifications)
-			verifications[int(hce.Pcr)] = ver
-			numExtends += n
-
-			// Compare the expected PCR value with the measured PCR value
-			if bytes.Compare(measurement, verifications[int(hce.Pcr)]) == 0 {
-				pcrRes.Validation.Success = true
-			} else {
-				msg := fmt.Sprintf("PCR value did not match expectation: %v vs. %v", hce.Sha256[0], hex.EncodeToString(verifications[int(hce.Pcr)]))
-				pcrRes.Validation.setFalseMulti(&msg)
-				ok = false
-			}
-		} else {
-			// This means, that the values of the individual software artefacts were stored
-			// In this case, we must extend those values in order to re-calculate the final
-			// PCR value
-			hash := make([]byte, 32)
-			for _, sha256 := range hce.Sha256 {
-				h, _ := hex.DecodeString(sha256)
-				hash = extendHash(hash, h)
-
-				// Check, if a verification exists for the measured value
-				v := getVerification(h, rtmVerifications, osVerifications)
-				if v != nil {
-					pcrRes.Validation.Success = true
-					verifications[int(hce.Pcr)] = hash
-					numExtends++
-				} else {
-					msg := fmt.Sprintf("No verification found for measurement: %v", sha256)
-					pcrRes.Validation.setFalseMulti(&msg)
-					ok = false
-				}
-			}
-		}
-		result.PcrRecalculation = append(result.PcrRecalculation, pcrRes)
-	}
-
-	// Check that every verification was extended
-	if numExtends != (len(rtmVerifications) + len(osVerifications)) {
-		msg := fmt.Sprintf("Could not find each expected artefact in measurements (Total: %v, Expected: %v)", numExtends, len(rtmVerifications)+len(osVerifications))
-		result.Summary.setFalse(&msg)
-		ok = false
-	}
+	calculatedPcrs, pcrResult, verificationsCheck, ok := recalculatePcrs(tpmM, verifications)
+	result.PcrRecalculation = pcrResult
+	result.VerificationsCheck = verificationsCheck
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	quote, err := hex.DecodeString(tpmM.Message)
@@ -120,11 +85,11 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, rtmVerifications,
 	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all verifications together then compare
 	sum := make([]byte, 0)
 	for i := range tpmM.HashChain {
-		_, ok := verifications[int(tpmM.HashChain[i].Pcr)]
+		_, ok := calculatedPcrs[int(tpmM.HashChain[i].Pcr)]
 		if !ok {
 			continue
 		}
-		sum = append(sum, verifications[int(tpmM.HashChain[i].Pcr)]...)
+		sum = append(sum, calculatedPcrs[int(tpmM.HashChain[i].Pcr)]...)
 	}
 	verPcr := sha256.Sum256(sum)
 	if bytes.Compare(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) == 0 {
@@ -140,15 +105,134 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, rtmVerifications,
 		ok = false
 	}
 
-	certCheck, certChainOk := verifyCertChain(&tpmM.Certs)
-	if !certChainOk {
+	err = verifyCertChain(&tpmM.Certs)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
+		result.QuoteSignature.CertCheck.setFalse(&msg)
 		ok = false
+	} else {
+		result.QuoteSignature.CertCheck.Success = true
 	}
-	result.QuoteSignature.CertCheck = certCheck
 
 	result.Summary.Success = ok
 
 	return result, ok
+}
+
+func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[int][]byte, []PcrResult, ResultMulti, bool) {
+	ok := true
+	pcrResult := make([]PcrResult, 0)
+	verificationsCheck := ResultMulti{
+		Success: true,
+	}
+	calculatedPcrs := make(map[int][]byte)
+	for _, v := range verifications {
+		verificationHash, _ := hex.DecodeString(v.Sha256)
+
+		if v.Pcr == nil {
+			msg := fmt.Sprintf("No PCR set in TPM Verification %v (hash: %v)", v.Name, v.Sha256)
+			verificationsCheck.setFalseMulti(&msg)
+			ok = false
+			continue
+		}
+
+		// Initialize calculated PCR if not yet initialized, afterwards extend
+		// verification
+		if _, ok := calculatedPcrs[*v.Pcr]; !ok {
+			calculatedPcrs[*v.Pcr] = make([]byte, 32)
+		}
+		calculatedPcrs[*v.Pcr] = extendHash(calculatedPcrs[*v.Pcr], verificationHash)
+
+		// Only if the measurement contains the hashes of the individual software artifacts, (e.g.
+		// provided through BIOS or IMA  measurement lists), we can check the verification directly
+		for _, hce := range tpmM.HashChain {
+			if hce.Pcr == int32(*v.Pcr) && len(hce.Sha256) > 1 {
+				found := false
+				for _, sha256 := range hce.Sha256 {
+					if sha256 == v.Sha256 {
+						found = true
+						break
+					}
+				}
+				if !found {
+					msg := fmt.Sprintf("No TPM Measurement found for TPM verification %v (hash: %v)", v.Name, v.Sha256)
+					verificationsCheck.setFalseMulti(&msg)
+					ok = false
+				}
+			}
+		}
+	}
+
+	// Compare the calculated pcr values from the verifications with the measurement list
+	// pcr values to provide a detailed report
+	for pcrNum, calculatedHash := range calculatedPcrs {
+		pcrRes := PcrResult{}
+		pcrRes.Pcr = int(pcrNum)
+		// Find PCR in measurements
+		found := false
+		for _, hce := range tpmM.HashChain {
+			if hce.Pcr == int32(pcrNum) {
+				found = true
+
+				var measurement []byte
+				if len(hce.Sha256) == 1 {
+					// Measurement contains only final PCR value, so we can simply compare
+					measurement, _ = hex.DecodeString(hce.Sha256[0])
+				} else {
+					// Measurement contains individual values which must be extended to result in
+					// the final PCR value for comparison
+					measurement = make([]byte, 32)
+					for _, sha256 := range hce.Sha256 {
+						h, _ := hex.DecodeString(sha256)
+						measurement = extendHash(measurement, h)
+
+						// Check, if a verification exists for the measured value
+						v := getVerification(h, verifications)
+						if v == nil {
+							msg := fmt.Sprintf("No TPM verification found for TPM measurement: %v", sha256)
+							pcrRes.Validation.setFalseMulti(&msg)
+							ok = false
+						}
+					}
+				}
+
+				if cmp := bytes.Compare(calculatedHash, measurement); cmp == 0 {
+					pcrRes.Validation.Success = true
+				} else {
+					msg := fmt.Sprintf("PCR value did not match expectation: %v vs. %v", hce.Sha256[0], hex.EncodeToString(calculatedHash))
+					pcrRes.Validation.setFalseMulti(&msg)
+					ok = false
+				}
+				pcrResult = append(pcrResult, pcrRes)
+			}
+		}
+		if !found {
+			msg := fmt.Sprintf("No TPM Measurement found for TPM Verifications of PCR %v", pcrNum)
+			verificationsCheck.setFalseMulti(&msg)
+			ok = false
+		}
+	}
+
+	// Finally, iterate over measurements to also include measured PCRs, that do not
+	// contain matching verifications in the report
+	for _, hce := range tpmM.HashChain {
+		found := false
+		for pcrNum := range calculatedPcrs {
+			if hce.Pcr == int32(pcrNum) {
+				found = true
+			}
+		}
+		if !found {
+			pcrRes := PcrResult{}
+			pcrRes.Pcr = int(hce.Pcr)
+			msg := fmt.Sprintf("No TPM verifications found for TPM measurement PCR: %v", hce.Pcr)
+			pcrRes.Validation.setFalseMulti(&msg)
+			pcrResult = append(pcrResult, pcrRes)
+			ok = false
+		}
+	}
+
+	return calculatedPcrs, pcrResult, verificationsCheck, ok
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {

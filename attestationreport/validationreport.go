@@ -57,7 +57,8 @@ type ManifestResult struct {
 // verifications and measurements. The used attributes depend on
 // the technologies used for calculating the measurements
 type MeasurementResult struct {
-	TpmMeasResult TpmMeasurementResult  `json:"tpm,omitempty"`
+	TpmMeasResult *TpmMeasurementResult `json:"tpm,omitempty"`
+	SnpMeasResult *SnpMeasurementResult `json:"snp,omitempty"`
 	SwMeasResult  []SwMeasurementResult `json:"sw,omitempty"`
 }
 
@@ -77,11 +78,12 @@ type DevDescResult struct {
 // TpmMeasurementResults represents the results of the validation
 // of the provided TPM Quote and its comparison to the verifications in the manifests
 type TpmMeasurementResult struct {
-	Summary          Result          `json:"resultSummary"`
-	PcrRecalculation []PcrResult     `json:"pcrRecalculation"` // Result for validation whether the measured PCR values match the provided verifications
-	AggPcrQuoteMatch Result          `json:"aggPcrQuoteMatch"` // Result for comparing the aggregated PCR values with the value in the TPM Quote
-	QuoteFreshness   Result          `json:"quoteFreshness"`   // Result for comparison of the expected nonce to the one provided in the TPM Quote
-	QuoteSignature   SignatureResult `json:"quoteSignature"`   // Results for validation of the TPM Quote Signature and the used certificates
+	Summary            Result          `json:"resultSummary"`
+	PcrRecalculation   []PcrResult     `json:"pcrRecalculation"`   // Result for validation whether the measured PCR values match the provided verifications
+	AggPcrQuoteMatch   Result          `json:"aggPcrQuoteMatch"`   // Result for comparing the aggregated PCR values with the value in the TPM Quote
+	QuoteFreshness     Result          `json:"quoteFreshness"`     // Result for comparison of the expected nonce to the one provided in the TPM Quote
+	QuoteSignature     SignatureResult `json:"quoteSignature"`     // Results for validation of the TPM Quote Signature and the used certificates
+	VerificationsCheck ResultMulti     `json:"verificationsCheck"` // Checks that every TPM verification was part of the measurements
 }
 
 // PcrResult represents the results for the recalculation of a specific PCR
@@ -94,17 +96,19 @@ type PcrResult struct {
 // a software measurement (currently only used for app verifications)
 type SwMeasurementResult struct {
 	MeasName   string      `json:"measurementName"`  // Name associated with the measurement used for validation
-	AppName    string      `json:"appName"`          // Name of the App manifest used for validation
 	VerName    string      `json:"verificationName"` // Name of the verification information used for validation
 	Validation ResultMulti `json:"validation"`
 }
 
+// SnpMeasurementResult represents the results for the verification
+// of AMD SEV SNP measurements
 type SnpMeasurementResult struct {
-	Summary          Result          `json:"resultSummary"`
-	Freshness        Result          `json:"freshness"`
-	Signature        SignatureResult `json:"signature"`
-	MeasurementMatch Result          `json:"measurementMatch"`
-	ParamsMatch      Result          `json:"paramsMatch"`
+	Summary            Result          `json:"resultSummary"`
+	Freshness          Result          `json:"freshness"`
+	Signature          SignatureResult `json:"signature"`
+	MeasurementMatch   Result          `json:"measurementMatch"`
+	ParamsMatch        Result          `json:"paramsMatch"`
+	VerificationsCheck ResultMulti     `json:"verificationsCheck"` // Checks that every SNP verification was part of the measurements
 }
 
 // SignatureResults represents the results for validation of

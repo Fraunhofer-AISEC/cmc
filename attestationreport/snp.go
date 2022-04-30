@@ -82,23 +82,65 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnpMeasurements(snpM *SnpMeasurement, v *SnpVerification, nonce []byte) (SnpMeasurementResult, bool) {
-	result := SnpMeasurementResult{}
+func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []Verification) (*SnpMeasurementResult, bool) {
+	result := &SnpMeasurementResult{}
 	ok := true
 
-	var s snpreport
-	b := bytes.NewBuffer(snpM.Report)
+	// If the attestationreport does contain neither SNP measurements, nor SNP verifications
+	// there is nothing to to
+	if snpM == nil && len(verifications) == 0 {
+		return nil, true
+	}
 
-	err := binary.Read(b, binary.LittleEndian, &s)
+	// If the attestationreport contains SNP verifications, but no SNP measurement, the
+	// attestation must fail
+	if snpM == nil {
+		for _, v := range verifications {
+			msg := fmt.Sprintf("SNP Measurement not present. Cannot verify SNP verification (hash: %v)", v.Sha384)
+			result.VerificationsCheck.setFalseMulti(&msg)
+		}
+		result.Summary.Success = false
+		return result, false
+	}
+
+	if len(verifications) == 0 {
+		msg := fmt.Sprintf("Could not find SNP verification")
+		result.Summary.setFalse(&msg)
+		return result, false
+	} else if len(verifications) > 1 {
+		msg := fmt.Sprintf("Report contains %v verifications. Currently, only 1 SNP verification is supported", len(verifications))
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+	snpVerification := verifications[0]
+
+	if snpVerification.Type != "SNP Verification" {
+		msg := fmt.Sprintf("SNP Verification invalid type %v", snpVerification.Type)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+	if snpVerification.Policy == nil {
+		msg := fmt.Sprintf("SNP Verification does not contain policy")
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+	if snpVerification.Version == nil {
+		msg := fmt.Sprintf("SNP Verification does not contain version")
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// Extract the SNP attestation report data structure
+	s, err := decodeSnpReport(snpM.Report)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode SNP attestation data: %v", err)
+		msg := fmt.Sprintf("Failed to decode SNP report: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
 	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
 	if cmp := bytes.Compare(s.ReportData[:], nonce); cmp != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
+		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)", hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
 		result.Freshness.setFalse(&msg)
 		ok = false
 	}
@@ -111,27 +153,30 @@ func verifySnpMeasurements(snpM *SnpMeasurement, v *SnpVerification, nonce []byt
 	result.Signature = sig
 
 	// Verify the SNP certificate chain
-	certCheck, certChainOk := verifyCertChain(&snpM.Certs)
-	if !certChainOk {
+	err = verifyCertChain(&snpM.Certs)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
+		result.Signature.CertCheck.setFalse(&msg)
 		ok = false
+	} else {
+		result.Signature.CertCheck.Success = true
 	}
-	result.Signature.CertCheck = certCheck
 
 	// Compare Measurements
-	m, err := hex.DecodeString(v.Sha256)
+	m, err := hex.DecodeString(snpVerification.Sha384)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode SNP Measurement: %v", err)
+		msg := fmt.Sprintf("Failed to decode SNP Verification: %v", err)
 		result.Summary.setFalse(&msg)
 		ok = false
 	}
 	if cmp := bytes.Compare(s.Measurement[:], m); cmp != 0 {
-		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v", v.Sha256, hex.EncodeToString(s.Measurement[:]))
+		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v", snpVerification.Sha384, hex.EncodeToString(s.Measurement[:]))
 		result.MeasurementMatch.setFalse(&msg)
 		ok = false
 	}
 
 	// Compare SNP parameters
-	result.ParamsMatch, ret = verifySnpParams(&s, v)
+	result.ParamsMatch, ret = verifySnpParams(&s, &snpVerification)
 	if !ret {
 		ok = false
 	}
@@ -141,13 +186,23 @@ func verifySnpMeasurements(snpM *SnpMeasurement, v *SnpVerification, nonce []byt
 	return result, ok
 }
 
-func verifySnpParams(s *snpreport, v *SnpVerification) (Result, bool) {
+func decodeSnpReport(report []byte) (snpreport, error) {
+	var s snpreport
+	b := bytes.NewBuffer(report)
+	err := binary.Read(b, binary.LittleEndian, &s)
+	if err != nil {
+		return snpreport{}, fmt.Errorf("Failed to decode SNP report: %w", err)
+	}
+	return s, nil
+}
+
+func verifySnpParams(s *snpreport, v *Verification) (Result, bool) {
 	result := Result{
 		Success: true,
 	}
 
-	if s.Version != v.Version {
-		msg := fmt.Sprintf("SNP report version mismatch: Report = %v, supplied = %v", s.Version, v.Version)
+	if s.Version != *v.Version {
+		msg := fmt.Sprintf("SNP report version mismatch: Report = %v, supplied = %v", s.Version, *v.Version)
 		result.setFalse(&msg)
 	}
 

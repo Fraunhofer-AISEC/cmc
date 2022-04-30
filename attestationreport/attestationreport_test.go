@@ -25,6 +25,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -168,6 +169,77 @@ func TestVerifyJws(t *testing.T) {
 			_, _, got := VerifyJws(tt.args.data, tt.args.roots, tt.args.roles)
 			if got != tt.want {
 				t.Errorf("VerifyJws() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+var (
+	vers = []Verification{
+		{Type: "TPM Verification", Name: "TPM1"},
+		{Type: "TPM Verification", Name: "TPM2"},
+		{Type: "SNP Verification", Name: "SNP1"},
+		{Type: "SW Verification", Name: "SW1"},
+		{Type: "SW Verification", Name: "SW2"},
+	}
+
+	verMap = map[string][]Verification{
+		"TPM Verification": vers[:2],
+		"SNP Verification": {vers[2]},
+		"SW Verification":  vers[3:],
+	}
+
+	rtmManifest = RtmManifest{
+		Verifications: []Verification{
+			vers[0],
+			vers[2],
+		},
+	}
+
+	osManifest = OsManifest{
+		Verifications: []Verification{
+			vers[1],
+		},
+	}
+
+	appManifests = []AppManifest{
+		{Verifications: []Verification{vers[3]}},
+		{Verifications: []Verification{vers[4]}},
+	}
+)
+
+func Test_collectVerifications(t *testing.T) {
+	type args struct {
+		ar *ArPlain
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    map[string][]Verification
+		wantErr bool
+	}{
+		{
+			name: "Success",
+			args: args{
+				ar: &ArPlain{
+					RtmManifest:  rtmManifest,
+					OsManifest:   osManifest,
+					AppManifests: appManifests,
+				},
+			},
+			want:    verMap,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := collectVerifications(tt.args.ar)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("collectVerifications() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("collectVerifications() = %v, want %v", got, tt.want)
 			}
 		})
 	}

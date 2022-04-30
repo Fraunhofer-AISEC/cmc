@@ -105,14 +105,20 @@ func getPcrs(rtmManifest, osManifest []byte) []int {
 	pcrs := make([]int, 0)
 	log.Debug("Parsing ", len(rtmMan.Verifications), " RTM verifications")
 	for _, ver := range rtmMan.Verifications {
-		if !exists(ver.Pcr, pcrs) {
-			pcrs = append(pcrs, ver.Pcr)
+		if ver.Type != "TPM Verification" || ver.Pcr == nil {
+			continue
+		}
+		if !exists(*ver.Pcr, pcrs) {
+			pcrs = append(pcrs, *ver.Pcr)
 		}
 	}
 	log.Debug("Parsing ", len(osMan.Verifications), " OS verifications")
 	for _, ver := range osMan.Verifications {
-		if !exists(ver.Pcr, pcrs) {
-			pcrs = append(pcrs, ver.Pcr)
+		if ver.Type != "TPM Verification" || ver.Pcr == nil {
+			continue
+		}
+		if !exists(*ver.Pcr, pcrs) {
+			pcrs = append(pcrs, *ver.Pcr)
 		}
 	}
 
