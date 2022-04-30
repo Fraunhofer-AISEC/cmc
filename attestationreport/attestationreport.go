@@ -112,15 +112,6 @@ type SwMeasurement struct {
 	Sha256 string `json:"sha256"`
 }
 
-// TpmVerification represents the JSON attestation report
-// element of type 'TPM Verification'
-type TpmVerification struct {
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Pcr    int    `json:"pcr"`
-	Sha256 string `json:"sha256"`
-}
-
 type SnpPolicy struct {
 	Type         string `json:"type"`
 	SingleSocket bool   `json:"singleSocket"`
@@ -131,21 +122,17 @@ type SnpPolicy struct {
 	AbiMinor     uint8  `json:"abiMinor"`
 }
 
-// SnpVerification represents the JSON attestation report
-// element of type 'SNP Verification'
-type SnpVerification struct {
-	Type    string    `json:"type"`
-	Sha256  string    `json:"sha256"`
-	Version uint32    `json:"version"`
-	Policy  SnpPolicy `json:"policy"`
-}
-
-// SwVerification represents the JSON attestation report
-// element of type 'Software Verification'
-type SwVerification struct {
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Sha256 string `json:"sha256"`
+// Verification represents the JSON attestation report
+// element of types 'SNP Verification', 'TPM Verification'
+// and 'SW Verification'
+type Verification struct {
+	Type    string     `json:"type"`
+	Sha256  string     `json:"sha256,omitempty"`
+	Sha384  string     `json:"sha384,omitempty"`
+	Name    string     `json:"name,omitempty"`
+	Pcr     *int       `json:"pcr,omitempty"`
+	Version *uint32    `json:"version,omitempty"`
+	Policy  *SnpPolicy `json:"policy,omitempty"`
 }
 
 // AppDescription represents the JSON attestation report
@@ -179,42 +166,42 @@ type ExternalInterface struct {
 // AppManifest represents the JSON attestation report
 // element of type 'App Manifest'
 type AppManifest struct {
-	Type               string           `json:"type"`
-	Name               string           `json:"name"`
-	DevCommonName      string           `json:"developerCommonName"`
-	Version            string           `json:"version"`
-	Oss                []string         `json:"oss"` // Links to Type 'OsManifest'->'Name'
-	Description        string           `json:"description"`
-	CertificationLevel int              `json:"certificationLevel"`
-	Validity           Validity         `json:"validity"`
-	Verifications      []SwVerification `json:"verifications"`
+	Type               string         `json:"type"`
+	Name               string         `json:"name"`
+	DevCommonName      string         `json:"developerCommonName"`
+	Version            string         `json:"version"`
+	Oss                []string       `json:"oss"` // Links to Type 'OsManifest'->'Name'
+	Description        string         `json:"description"`
+	CertificationLevel int            `json:"certificationLevel"`
+	Validity           Validity       `json:"validity"`
+	Verifications      []Verification `json:"verifications"`
 }
 
 // OsManifest represents the JSON attestation report
 // element of type 'OsManifest'
 type OsManifest struct {
-	Type               string            `json:"type"`
-	Name               string            `json:"name"`
-	DevCommonName      string            `json:"developerCommonName"`
-	Version            string            `json:"version"`
-	Rtms               []string          `json:"rtms"` // Links to Type 'RTM Manifest'->'Name'
-	Description        string            `json:"description"`
-	CertificationLevel int               `json:"certificationLevel"`
-	Validity           Validity          `json:"validity"`
-	Verifications      []TpmVerification `json:"verifications"`
+	Type               string         `json:"type"`
+	Name               string         `json:"name"`
+	DevCommonName      string         `json:"developerCommonName"`
+	Version            string         `json:"version"`
+	Rtms               []string       `json:"rtms"` // Links to Type 'RTM Manifest'->'Name'
+	Description        string         `json:"description"`
+	CertificationLevel int            `json:"certificationLevel"`
+	Validity           Validity       `json:"validity"`
+	Verifications      []Verification `json:"verifications"`
 }
 
 // RtmManifest represents the JSON attestation report
 // element of type 'RTM Manifest'
 type RtmManifest struct {
-	Type               string            `json:"type"`
-	Name               string            `json:"name"`
-	DevCommonName      string            `json:"developerCommonName"`
-	Version            string            `json:"version"`
-	Description        string            `json:"description"`
-	CertificationLevel int               `json:"certificationLevel"`
-	Validity           Validity          `json:"validity"`
-	Verifications      []TpmVerification `json:"verifications"`
+	Type               string         `json:"type"`
+	Name               string         `json:"name"`
+	DevCommonName      string         `json:"developerCommonName"`
+	Version            string         `json:"version"`
+	Description        string         `json:"description"`
+	CertificationLevel int            `json:"certificationLevel"`
+	Validity           Validity       `json:"validity"`
+	Verifications      []Verification `json:"verifications"`
 }
 
 // DeviceDescription represents the JSON attestation report
@@ -267,7 +254,8 @@ type Name struct {
 // its plain elements
 type ArPlain struct {
 	Type               string             `json:"type"`
-	TpmM               TpmMeasurement     `json:"tpmMeasurement,omitempty"`
+	TpmM               *TpmMeasurement    `json:"tpmMeasurement,omitempty"`
+	SnpM               *SnpMeasurement    `json:"snpMeasurement,omitempty"`
 	SWM                []SwMeasurement    `json:"swMeasurements,omitempty"`
 	RtmManifest        RtmManifest        `json:"rtmManifest"`
 	OsManifest         OsManifest         `json:"osManifest"`
@@ -281,7 +269,8 @@ type ArPlain struct {
 // contents already in signed JWs format
 type ArJws struct {
 	Type               string          `json:"type"`
-	TpmM               TpmMeasurement  `json:"tpmMeasurement,omitempty"`
+	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty"`
+	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty"`
 	SWM                []SwMeasurement `json:"swMeasurements,omitempty"`
 	RtmManifest        string          `json:"rtmManifests"`
 	OsManifest         string          `json:"osManifest"`
@@ -412,6 +401,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 		return ar
 	}
 
+	log.Tracef("Retrieving measurements from %v measurement interfaces", len(measurements))
 	for i, m := range measurements {
 		measurer, ok := m.(Measurer)
 		if !ok {
@@ -430,7 +420,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 
 		// Check the type of the measurements and add it to the attestation report
 		if tpmData, ok := data.(TpmMeasurement); ok {
-			ar.TpmM = tpmData
+			ar.TpmM = &tpmData
 		} else if SwData, ok := data.(SwMeasurement); ok {
 			ar.SWM = append(ar.SWM, SwData)
 		} else {
@@ -567,16 +557,29 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 		result.FreshnessCheck.Success = true
 	}
 
-	// Verify TPM measurements if present: Verify quote, signature and aggregated PCR value
-	// As the TPM is currently the only implemented trust anchor, we always implement this check
-	// TODO if other trust anchors are supported, evaluate which is present here
-	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(&ar.TpmM, nonce, ar.RtmManifest.Verifications, ar.OsManifest.Verifications)
+	verifications, err := collectVerifications(ar)
+	if err != nil {
+		result.ProcessingError = append(result.ProcessingError, err.Error())
+		result.Success = false
+	}
+
+	// If present, verify TPM measurements against RTM and OS Manifest verifications
+	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(ar.TpmM, nonce,
+		verifications["TPM Verification"])
 	if !ok {
 		result.Success = false
 	}
 
-	// Verify software measurements against app manifests
-	result.MeasResult.SwMeasResult, ok = verifySwMeasurements(ar.SWM, ar.AppManifests)
+	// If present, verify AMD SEV SNP measurements against RTM Manifest verifications
+	result.MeasResult.SnpMeasResult, ok = verifySnpMeasurements(ar.SnpM, nonce,
+		verifications["SNP Verification"])
+	if !ok {
+		result.Success = false
+	}
+
+	// If present, verify software measurements against app manifest verifications
+	result.MeasResult.SwMeasResult, ok = verifySwMeasurements(ar.SWM,
+		verifications["SW Verification"])
 	if !ok {
 		result.Success = false
 	}
@@ -595,6 +598,14 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 		if l < aggCertLevel {
 			aggCertLevel = l
 		}
+	}
+	// If no hardware trust anchor is present, the maximum certification level is 1
+	// If there are verifications with a higher trust level present, the remote attestation
+	// must fail
+	if result.MeasResult.TpmMeasResult == nil && result.MeasResult.SnpMeasResult == nil && aggCertLevel > 1 {
+		msg := fmt.Sprintf("No hardware trust anchor measurements present but demanded certification level is %v, which requires a hardware trust anchor", aggCertLevel)
+		result.ProcessingError = append(result.ProcessingError, msg)
+		result.Success = false
 	}
 	result.SwCertLevel = aggCertLevel
 
@@ -1023,15 +1034,8 @@ func checkValidity(val Validity) Result {
 }
 
 // Searches for a specific hash value in the verifications for RTM and OS
-func getVerification(hash []byte, rtmVer, osVer []TpmVerification) *TpmVerification {
-	for _, ver := range rtmVer {
-		h, _ := hex.DecodeString(ver.Sha256)
-		if bytes.Compare(h, hash) == 0 {
-			return &ver
-		}
-	}
-
-	for _, ver := range osVer {
+func getVerification(hash []byte, verifications []Verification) *Verification {
+	for _, ver := range verifications {
 		h, _ := hex.DecodeString(ver.Sha256)
 		if bytes.Compare(h, hash) == 0 {
 			return &ver
@@ -1040,138 +1044,109 @@ func getVerification(hash []byte, rtmVer, osVer []TpmVerification) *TpmVerificat
 	return nil
 }
 
-// Computes the expected value for the specified PCR based on the verifications in the RTM and OS Manifests and
-// counts the expected number of extension operations
-func extendVerifications(pcr int, rtmVer, osVer []TpmVerification) ([]byte, int) {
-	result := make([]byte, 32)
-	n := 0
-	for _, ver := range rtmVer {
-		if !(pcr == ver.Pcr) {
-			continue
-		}
-		h, _ := hex.DecodeString(ver.Sha256)
-		result = extendHash(result, h)
-		n++
-	}
+func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verification) ([]SwMeasurementResult, bool) {
 
-	for _, ver := range osVer {
-		if !(pcr == ver.Pcr) {
-			continue
-		}
-		h, _ := hex.DecodeString(ver.Sha256)
-		result = extendHash(result, h)
-		n++
-	}
-	return result, n
-}
-
-func verifySwMeasurements(swMeasurements []SwMeasurement, appManifests []AppManifest) ([]SwMeasurementResult, bool) {
 	swMeasurementResults := make([]SwMeasurementResult, 0)
 	ok := true
 
-	for _, swM := range swMeasurements {
+	// Check that every verification is reflected by a measurement
+	for _, v := range verifications {
 		swRes := SwMeasurementResult{}
 		swRes.Validation.Success = false
-		swRes.MeasName = swM.Name
-
-		for _, app := range appManifests {
-			for _, swV := range app.Verifications {
-				verificationHash, errv := hex.DecodeString(swM.Sha256)
-				measurementHash, errm := hex.DecodeString(swV.Sha256)
-				if (errm == nil) && (errv == nil) && bytes.Compare(verificationHash, measurementHash) == 0 {
-					swRes.AppName = app.Name
-					swRes.VerName = swV.Name
-					swRes.Validation.Success = true
-					break
-				}
+		swRes.VerName = v.Name
+		found := false
+		for _, swm := range swMeasurements {
+			if swm.Sha256 == v.Sha256 {
+				swRes.MeasName = swm.Name
+				swRes.Validation.Success = true
+				found = true
+				break
 			}
 		}
-
-		if !swRes.Validation.Success {
-			msg := fmt.Sprintf("No verification found for measurement: %v", swM.Sha256)
+		if !found {
+			msg := fmt.Sprintf("No SW Measurement found for SW Verification %v (hash: %v)", v.Name, v.Sha256)
 			swRes.Validation.setFalseMulti(&msg)
 			ok = false
 		}
-
 		swMeasurementResults = append(swMeasurementResults, swRes)
 	}
 
-	// Check whether measurements were found for each delivered app manifest
-	for _, app := range appManifests {
-		for _, swV := range app.Verifications {
-
-			found := false
-			for _, smr := range swMeasurementResults {
-				if smr.AppName == app.Name && smr.VerName == swV.Name {
-					found = true
-					break
-				}
+	// Check that every measurement is reflected by a verification
+	for _, swM := range swMeasurements {
+		found := false
+		for _, swV := range verifications {
+			if swM.Sha256 == swV.Sha256 {
+				found = true
+				break
 			}
-
-			if !found {
-				swRes := SwMeasurementResult{
-					AppName: app.Name,
-					VerName: swV.Name}
-				msg := fmt.Sprintf("No measurement found for available verification: %v", swV.Sha256)
-				swRes.Validation.setFalseMulti(&msg)
-				ok = false
-				swMeasurementResults = append(swMeasurementResults, swRes)
-			}
+		}
+		if !found {
+			swRes := SwMeasurementResult{}
+			swRes.MeasName = swM.Name
+			msg := fmt.Sprintf("No SW Verification found for SW Measurement: %v", swM.Sha256)
+			swRes.Validation.setFalseMulti(&msg)
+			swMeasurementResults = append(swMeasurementResults, swRes)
+			ok = false
 		}
 	}
 
 	return swMeasurementResults, ok
 }
 
-func verifyCertChain(certs *CertChain) (Result, bool) {
-	result := Result{}
-	result.Success = true
+func collectVerifications(ar *ArPlain) (map[string][]Verification, error) {
+	// Gather a list of all verifications independent of the type
+	verList := append(ar.RtmManifest.Verifications, ar.OsManifest.Verifications...)
+	for _, appManifest := range ar.AppManifests {
+		verList = append(verList, appManifest.Verifications...)
+	}
+
+	verMap := make(map[string][]Verification)
+
+	// Iterate through the verifications and sort them into the different types
+	for _, v := range verList {
+		if v.Type != "SNP Verification" && v.Type != "SW Verification" && v.Type != "TPM Verification" {
+			return nil, fmt.Errorf("Verification of type %v is not supported", v.Type)
+		}
+		verMap[v.Type] = append(verMap[v.Type], v)
+	}
+	return verMap, nil
+}
+
+func verifyCertChain(certs *CertChain) error {
 
 	intermediatesPool := x509.NewCertPool()
 	for _, intermediate := range certs.Intermediates {
 		ok := intermediatesPool.AppendCertsFromPEM([]byte(intermediate))
 		if !ok {
-			msg := fmt.Sprintf("Failed to append certificate from PEM")
-			result.setFalse(&msg)
-			return result, false
+			return errors.New("Failed to append certificate to certificate pool")
 		}
 	}
 	rootsPool := x509.NewCertPool()
 	ok := rootsPool.AppendCertsFromPEM([]byte(certs.Ca))
 	if !ok {
-		msg := fmt.Sprintf("Failed to append certificate from PEM")
-		result.setFalse(&msg)
-		return result, false
+		return errors.New("Failed to append certificate to certificate pool")
 	}
 
 	block, _ := pem.Decode([]byte(certs.Leaf))
 	if block == nil || block.Type != "CERTIFICATE" {
-		msg := fmt.Sprintf("Failed to parse leaf certificate")
-		result.setFalse(&msg)
-		return result, false
+		return errors.New("Failed to parse leaf certificate")
 	}
 	leafCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse leaf certificate public key: %v", err)
-		result.setFalse(&msg)
-		return result, false
+		return fmt.Errorf("Failed to parse leaf certificate public key: %v", err)
 	}
 
 	chain, err := leafCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
-		msg := fmt.Sprintf("Failed to validate certificate chain: %v", err)
-		result.setFalse(&msg)
-		return result, false
+		return fmt.Errorf("Failed to validate certificate chain: %v", err)
 	}
 
 	expectedLen := len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
 	if len(chain[0]) != expectedLen {
-		msg := fmt.Sprintf("Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
-		result.setFalse(&msg)
-		return result, false
+		return fmt.Errorf("Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
 
-	return result, true
+	return nil
 }
 
 func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error {
@@ -1311,14 +1286,14 @@ func (r *Result) setFalse(msg *string) {
 	r.Success = false
 	if msg != nil {
 		r.Details = *msg
+		log.Trace(*msg)
 	}
-	log.Trace(*msg)
 }
 
 func (r *ResultMulti) setFalseMulti(msg *string) {
 	r.Success = false
 	if msg != nil {
 		r.Details = append(r.Details, *msg)
+		log.Trace(*msg)
 	}
-	log.Trace(*msg)
 }

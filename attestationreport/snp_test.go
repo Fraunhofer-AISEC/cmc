@@ -48,6 +48,8 @@ var (
 		AbiMinor:     0,
 	}
 
+	validVersion = uint32(2)
+
 	validReport = []byte{
 		0x00, 0x00, 0x00, 0x00, 0xa0, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -592,7 +594,7 @@ var (
 		0x54, 0x49, 0x46, 0x49, 0x43, 0x41, 0x54, 0x45, 0x2d, 0x2d, 0x2d, 0x2d,
 		0x2d, 0x0a}
 
-	// Intermediate Certificaet
+	// Intermediate Certificate
 	ask_milan = []byte{
 		0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x42, 0x45, 0x47, 0x49, 0x4e, 0x20, 0x43,
 		0x45, 0x52, 0x54, 0x49, 0x46, 0x49, 0x43, 0x41, 0x54, 0x45, 0x2d, 0x2d,
@@ -1004,7 +1006,7 @@ var (
 func Test_verifySnpMeasurements(t *testing.T) {
 	type args struct {
 		snpM  *SnpMeasurement
-		snpV  *SnpVerification
+		snpV  []Verification
 		nonce []byte
 	}
 	tests := []struct {
@@ -1020,11 +1022,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1038,11 +1042,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: invalidReportSignature,
 					Certs:  validCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1056,11 +1062,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  invalidCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1074,11 +1082,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  invalidLeafCert,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1092,11 +1102,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: invalidReportData,
 					Certs:  validCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1110,11 +1122,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  invalidMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  invalidMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1128,11 +1142,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  invalidSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &invalidSnpPolicy,
+					},
 				},
 				nonce: validNonce,
 			},
@@ -1146,20 +1162,67 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: &SnpVerification{
-					Type:    "SNP Verification",
-					Sha256:  validMeasurement,
-					Version: 2,
-					Policy:  validSnpPolicy,
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
 				},
 				nonce: invalidNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Verification Type",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: []Verification{
+					{
+						Type:   "TPM Verification",
+						Sha256: validMeasurement,
+					},
+				},
+				nonce: invalidNonce,
+			},
+			want: false,
+		},
+		{
+			name: "No Verifications Present",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "No Measurement Present",
+			args: args{
+				snpV: []Verification{
+					{
+						Type:    "SNP Verification",
+						Sha384:  validMeasurement,
+						Version: &validVersion,
+						Policy:  &validSnpPolicy,
+					},
+				},
+				nonce: validNonce,
 			},
 			want: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, got := verifySnpMeasurements(tt.args.snpM, tt.args.snpV, tt.args.nonce); got != tt.want {
+			if _, got := verifySnpMeasurements(tt.args.snpM, tt.args.nonce, tt.args.snpV); got != tt.want {
 				t.Errorf("verifySnpMeasurements() = %v, want %v", got, tt.want)
 			}
 		})
