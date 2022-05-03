@@ -23,7 +23,7 @@ type VerificationResult struct {
 	SwCertLevel     int               `json:"swCertLevel"`          // Overall certification level for the entire software stack (the minimum of all CertificationLevels in the used manifests)
 	FreshnessCheck  Result            `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
 	ReportSignature []SignatureResult `json:"reportSignatureCheck"` // Result for validation of the overall report signature
-	CompDescResult  CompDescResult    `json:"companyValidation,omitempty"`
+	CompDescResult  *CompDescResult   `json:"companyValidation,omitempty"`
 	RtmResult       ManifestResult    `json:"rtmValidation"`
 	OsResult        ManifestResult    `json:"osValidation"`
 	AppResults      []ManifestResult  `json:"appValidation,omitempty"`

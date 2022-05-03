@@ -253,16 +253,16 @@ type Name struct {
 // ArPlain represents the attestation report with
 // its plain elements
 type ArPlain struct {
-	Type               string             `json:"type"`
-	TpmM               *TpmMeasurement    `json:"tpmMeasurement,omitempty"`
-	SnpM               *SnpMeasurement    `json:"snpMeasurement,omitempty"`
-	SWM                []SwMeasurement    `json:"swMeasurements,omitempty"`
-	RtmManifest        RtmManifest        `json:"rtmManifest"`
-	OsManifest         OsManifest         `json:"osManifest"`
-	AppManifests       []AppManifest      `json:"appManifests"`
-	CompanyDescription CompanyDescription `json:"companyDescription"`
-	DeviceDescription  DeviceDescription  `json:"deviceDescription"`
-	Nonce              string             `json:"nonce"`
+	Type               string              `json:"type"`
+	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty"`
+	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty"`
+	SWM                []SwMeasurement     `json:"swMeasurements,omitempty"`
+	RtmManifest        RtmManifest         `json:"rtmManifest"`
+	OsManifest         OsManifest          `json:"osManifest"`
+	AppManifests       []AppManifest       `json:"appManifests,omitempty"`
+	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty"`
+	DeviceDescription  DeviceDescription   `json:"deviceDescription"`
+	Nonce              string              `json:"nonce"`
 }
 
 // ArJws represents the attestation report in JWS format with its
@@ -274,8 +274,8 @@ type ArJws struct {
 	SWM                []SwMeasurement `json:"swMeasurements,omitempty"`
 	RtmManifest        string          `json:"rtmManifests"`
 	OsManifest         string          `json:"osManifest"`
-	AppManifests       []string        `json:"appManifests"`
-	CompanyDescription string          `json:"companyDescription"`
+	AppManifests       []string        `json:"appManifests,omitempty"`
+	CompanyDescription string          `json:"companyDescription,omitempty"`
 	DeviceDescription  string          `json:"deviceDescription"`
 	Nonce              string          `json:"nonce"`
 }
@@ -587,11 +587,13 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	// The lowest certification level of all components determines the certification
 	// level for the device's software stack
 	levels := make([]int, 0)
-	levels = append(levels, ar.CompanyDescription.CertificationLevel)
 	levels = append(levels, ar.RtmManifest.CertificationLevel)
 	levels = append(levels, ar.OsManifest.CertificationLevel)
 	for _, app := range ar.AppManifests {
 		levels = append(levels, app.CertificationLevel)
+	}
+	if ar.CompanyDescription != nil {
+		levels = append(levels, ar.CompanyDescription.CertificationLevel)
 	}
 	aggCertLevel := levels[0]
 	for _, l := range levels {
@@ -958,29 +960,32 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		}
 	}
 
-	// Validate and unpack Company Description
-	jwsValRes, payload, ok = VerifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners)
-	result.CompDescResult.Summary = jwsValRes.Summary
-	result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
-	if !ok {
-		log.Trace("Verification of Company Description Signatures failed")
-		result.CompDescResult.Summary.Success = false
-		result.Success = false
-	}
-	err = json.Unmarshal(payload, &ar.CompanyDescription)
-	if err != nil {
-		msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
-		result.CompDescResult.Summary.setFalseMulti(&msg)
-		result.Success = false
-	} else {
-		result.CompDescResult.Name = ar.CompanyDescription.DN
-		result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
-
-		result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
-		if result.CompDescResult.ValidityCheck.Success == false {
-			log.Trace("Company Description invalid")
+	// Validate and unpack Company Description if present
+	if arJws.CompanyDescription != "" {
+		jwsValRes, payload, ok = VerifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners)
+		result.CompDescResult = &CompDescResult{}
+		result.CompDescResult.Summary = jwsValRes.Summary
+		result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
+		if !ok {
+			log.Trace("Verification of Company Description Signatures failed")
 			result.CompDescResult.Summary.Success = false
 			result.Success = false
+		}
+		err = json.Unmarshal(payload, &ar.CompanyDescription)
+		if err != nil {
+			msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
+			result.CompDescResult.Summary.setFalseMulti(&msg)
+			result.Success = false
+		} else {
+			result.CompDescResult.Name = ar.CompanyDescription.DN
+			result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
+
+			result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
+			if result.CompDescResult.ValidityCheck.Success == false {
+				log.Trace("Company Description invalid")
+				result.CompDescResult.Summary.Success = false
+				result.Success = false
+			}
 		}
 	}
 
