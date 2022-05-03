@@ -95,9 +95,9 @@ type PcrResult struct {
 // SwMeasurementResult represents the results for the verification of
 // a software measurement (currently only used for app verifications)
 type SwMeasurementResult struct {
-	MeasName   string      `json:"measurementName"`  // Name associated with the measurement used for validation
-	VerName    string      `json:"verificationName"` // Name of the verification information used for validation
-	Validation ResultMulti `json:"validation"`
+	MeasName   string `json:"measurementName"`  // Name associated with the measurement used for validation
+	VerName    string `json:"verificationName"` // Name of the verification information used for validation
+	Validation Result `json:"validation"`
 }
 
 // SnpMeasurementResult represents the results for the verification

@@ -1065,7 +1065,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 		}
 		if !found {
 			msg := fmt.Sprintf("No SW Measurement found for SW Verification %v (hash: %v)", v.Name, v.Sha256)
-			swRes.Validation.setFalseMulti(&msg)
+			swRes.Validation.setFalse(&msg)
 			ok = false
 		}
 		swMeasurementResults = append(swMeasurementResults, swRes)
@@ -1084,7 +1084,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 			swRes := SwMeasurementResult{}
 			swRes.MeasName = swM.Name
 			msg := fmt.Sprintf("No SW Verification found for SW Measurement: %v", swM.Sha256)
-			swRes.Validation.setFalseMulti(&msg)
+			swRes.Validation.setFalse(&msg)
 			swMeasurementResults = append(swMeasurementResults, swRes)
 			ok = false
 		}
