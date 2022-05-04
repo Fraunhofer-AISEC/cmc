@@ -11,15 +11,18 @@ universal attestation of computing platforms.
 
 ## Prerequistes
 
-- Running the *cmcd* currently requires a Linux platform with access to ```/dev/tpm0```.
+- Running the *cmcd* currently requires a Linux platform. If the *cmcd* is configured to use a TPM
+for measurements or signing, the *cmcd* must be able to access ```/dev/tpm0```. If AMD SEV-SNP is
+used for measurements, the *cmcd* must be run on an AMD server within an SNP Virtual Machine.
 - Building the *cmcd* requires *go* (https://golang.org/doc/install)
 - Performing a successful remote attestation further requires a correctly configured platform,
 configuration data and meta-data about the expected platform state (see
 [Manifests and Descriptions](#manifests-and-descriptions))
 
-**Note**: The *cmcd* accesses the TPM and creates keys within the TPM. You should not run it
-on your normal work laptop, as it might require the TPM and its key storage for secure boot,
-disk encryption or other purposes. Instead, run it on a dedicated Virtual Machine (VM) or server.
+**Note**: If configured to be used with a TPM, The *cmcd* accesses the TPM and creates keys within
+the TPM. You should not run it on your normal work laptop, as it might require the TPM and its key
+storage for secure boot, disk encryption or other purposes. Instead, run it on a dedicated
+Virtual Machine (VM) or server.
 
 ## Quick Start
 
@@ -79,29 +82,37 @@ the *ids-pcp*-tool to update the manifests and descriptions (see
 The CMC daemon (*cmcd*) is the main component running on the platform. On request, the cmcd either
 generates or verifies an attestation-report, i.e. the state of the platform. The cmcd provides
 a gRPC interface to access its services (*cmcinterface*). For the generation and verification
-of attestation reports, the *cmcd* relies on the *attestationreport* module.
+of attestation reports, the *cmcd* relies on the *attestationreport* package.
 
-The *attestationreport* module provides a generic JSON-based serialization format to summarize
+The *attestationreport* package provides a generic JSON-based serialization format to summarize
 the meta-data describing the software running on the computer platform. Enabling trust in this
 meta-data requires a hardware-based Root-of-Trust (RoT) that provides the possibility to store keys
 and measurements of the software running on the platform. The *attestationreport* therefore
-implements a generic *Measurement* interface, as well as the generic go *crypto.PrivateKey* and
-*crypto.PublicKey* interfaces. These interfaces must be implemented by *drivers* that provide
-access to a hardware based RoT.
+implements a generic *Measurement* interface, as well as a generic *Signer* interface.
+These interfaces must be implemented by *drivers* that provide access to a hardware based RoT.
+Currently, this repository contains a *tpmdriver*, an *snpdriver* and an *swdriver*.
 
-Currently, this repository contains the *tpmdriver* module to interface with a Trusted Platform
-Module (TPM) as the RoT. The TPM is used to store cryptographic keys, store the software
-measurements (hashes) in its Platform Configuration Registers (PCRs) during the *Measured Boot*
-and to generate and sign *Quotes* which can be used to verify the platform state. Furthermore, the
-*tpmdriver* can use the *ima* module interfacing with the kernel's Integrity Measurement
-Architecture (IMA) for obtaining detailed measurement lists of the kernel modules, firmware and
-optionally further components running on the platform.
+The *tpmdriver* package interfaces with a Trusted Platform Module (TPM) as the RoT.
+The TPM is used to store cryptographic keys, store the software measurements (hashes) in its
+Platform Configuration Registers (PCRs) during the *Measured Boot* and to generate and sign *Quotes*
+which can be used to verify the platform state. Furthermore, the *tpmdriver* can use the *ima*
+package interfacing with the kernel's Integrity Measurement Architecture (IMA) for obtaining
+detailed measurement lists of the kernel modules, firmware and optionally further components
+running on the platform. The *tpmdriver* can therefore act as *Measurement* as well as as
+*Signer* interface.
 
-During TPM provisioning, the cmcd requires interaction with a provisioning server (*provserver*)
-to acquire certificates for its TPM-based keys. Optionally, the provisioning server can
-also provide the metadata (manifests and configurations) for the *cmcd* (*cmcd* command line
-argument *--fetch-metadata*, see below). This is just for demonstration. In production, the
-functionality usually will be splitted in an IDS and operator server.
+The *snpdriver* interfaces with the AMD SEV-SNP SP. It retrieves SNP measurements in the form of
+an SNP attestation report as well as the certificate chain for this attestation report from the
+respective AMD servers. Currently, it can only act as *Measurement* interface.
+
+The *swdriver* simply creates keys in software for testing purposes and can be used as *Signer*
+interface. **Note**: This should mainly be used for testing purposes.
+
+During provisioning, the cmcd requires interaction with a provisioning server (*provserver*). The
+server can provide certificates for software signing, perform the TPM *Credential Activiation* and
+provision TPM certificates, and can provide the metadata (manifests and configurations) for the
+*cmcd*. The server is mainly for demonstration purposes. In productive setups, its functionality
+might be split onto different servers (e.g. a CA server and an internal metadata server).
 
 ## Manifests and Descriptions
 
@@ -161,6 +172,13 @@ handle everything automatically
 - **fetchMetadata**: Boolean to specify whether the *cmcd* should load/update its metadata from
 the provisioning server. If set to false, the *cmcd* expects all files to be present in the
 *localPath*
+- **measurementInterfaces**: Tells the *cmcd* prover which measurement interfaces to use, currently
+supported are "TPM" and "SNP".
+- **signingInterface**: Tells the *cmcd* prover with which interface to sign the overall generated
+attestation report. Currently supported are "TPM", "SNP", and "SW". **Note**: This is only for the
+overall report. The hardware-based measurements are signed by the respective hardware-based keys
+of the measurement interface itself. E.g. if the TPM is selected as measurement interface, the
+TPM quote will always be signed with the TPM's AK.
 - **useIma**: Bool that indicates whether the Integrity Measurement Architecture (IMA) shall be used
 - **imaPcr**: TPM PCR where the IMA measurements are recorded (must match the kernel
 configuration). The linux kernel default is 10
@@ -174,6 +192,8 @@ RSA4096, EC256, EC384, EC521
     "serverPath": "drtm-example/",
     "localPath": "metadata/",
     "fetchMetadata": true,
+    "measurementInterfaces": [ "TPM", "SNP" ],
+    "signingInterface": "TPM",
     "useIma": false,
     "imaPcr": 10,
     "keyConfig": "EC256"

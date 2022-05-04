@@ -23,14 +23,17 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sort"
 	"sync"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"gopkg.in/square/go-jose.v2"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -41,10 +44,36 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 )
 
-// Tpm is a structure required for implementing the Measure method
+// Tpm is a structure that implements the Measure method
 // of the attestation report Measurer interface
 type Tpm struct {
-	Mu sync.Mutex
+	Mu             sync.Mutex
+	Pcrs           []int
+	SigningCerts   ar.CertChain
+	MeasuringCerts ar.CertChain
+	UseIma         bool
+	ImaPcr         int32
+}
+
+// Config is the structure for handing over the configuration
+// for a Tpm object
+type Config struct {
+	Paths      Paths
+	ServerAddr string
+	KeyConfig  string
+	Metadata   [][]byte
+	UseIma     bool
+	ImaPcr     int32
+}
+
+// Certs contains the TPM certificate chain for the AK and TLS key.
+// This is not the TPM EK certificate chain but the certificate
+// chain that was created during TPM credential activation
+type Certs struct {
+	Ak          []byte
+	TLSCert     []byte
+	DeviceSubCa []byte
+	Ca          []byte
 }
 
 // AcRequest holds the data for an activate credential request
@@ -78,10 +107,7 @@ type AkCertRequest struct {
 // certificate chain up to a Root CA
 type AkCertResponse struct {
 	AkQualifiedName [32]byte
-	AkCert          []byte
-	TLSCert         []byte
-	DeviceSubCaCert []byte
-	CaCert          []byte
+	Certs           Certs
 }
 
 // Paths specifies the paths to store the encrypted TPM key blobs
@@ -96,11 +122,177 @@ type Paths struct {
 }
 
 var (
-	tpm    *attest.TPM = nil
+	TPM    *attest.TPM = nil
 	ak     *attest.AK  = nil
 	tlsKey *attest.Key = nil
 	ek     []attest.EK
 )
+
+// NewTpm creates a new TPM object, opens and initializes the TPM object,
+// checks if provosioning is required and if so, provisions the TPM
+func NewTpm(c *Config) (*Tpm, error) {
+
+	// Load relevant parameters from the metadata files
+	certParams, err := getTpmCertParams(c.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load TPM cert params: %v", err)
+	}
+	pcrs, err := getTpmPcrs(c.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("Failed retrieve TPM PCRs: %v", err)
+	}
+
+	// Check if the TPM is provisioned. If provisioned, load the AK and TLS key.
+	// Otherwise perform credential activation with provisioning server and then load the keys
+	provisioningRequired, err := IsTpmProvisioningRequired(c.Paths.Ak)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to check if TPM is provisioned: %v", err)
+	}
+
+	err = OpenTpm()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to open the TPM. Check if you have privileges to open /dev/tpm0: %v", err)
+	}
+
+	var certs Certs
+	if provisioningRequired {
+
+		log.Info("Provisioning TPM (might take a while)..")
+		ek, ak, tlsKey, err = createKeys(TPM, c.KeyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("Activate Credential failed: createKeys returned %v", err)
+		}
+
+		certs, err = provisionTpm(c.ServerAddr+"activate-credential/", certParams)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to provision TPM: %v", err)
+		}
+
+		err = saveTpmData(&c.Paths, &certs)
+		if err != nil {
+			os.Remove(c.Paths.Ak)
+			os.Remove(c.Paths.TLSKey)
+			return nil, fmt.Errorf("Failed to save TPM data: %v", err)
+		}
+
+	} else {
+		err = loadTpmKeys(c.Paths.Ak, c.Paths.TLSKey)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to load TPM keys: %v", err)
+		}
+		certs, err = loadTpmCerts(&c.Paths)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to load TPM certificates: %v", err)
+		}
+
+	}
+
+	tpm := &Tpm{
+		Pcrs:   pcrs,
+		UseIma: c.UseIma,
+		ImaPcr: c.ImaPcr,
+		SigningCerts: ar.CertChain{
+			Leaf:          certs.TLSCert,
+			Intermediates: [][]byte{certs.DeviceSubCa},
+			Ca:            certs.Ca,
+		},
+		MeasuringCerts: ar.CertChain{
+			Leaf:          certs.Ak,
+			Intermediates: [][]byte{certs.DeviceSubCa},
+			Ca:            certs.Ca,
+		},
+	}
+
+	return tpm, nil
+}
+
+// Measure implements the attestation reports generic Measure interface to be called
+// as a plugin during attestation report generation
+func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
+
+	pcrValues, quote, err := GetTpmMeasurement(t, nonce, t.Pcrs)
+	if err != nil {
+		return ar.TpmMeasurement{}, fmt.Errorf("Failed to get TPM Measurement: %v", err)
+	}
+
+	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
+	for i, num := range t.Pcrs {
+
+		hashChain[i] = &ar.HashChainElem{
+			Type:   "Hash Chain",
+			Pcr:    int32(num),
+			Sha256: []string{hex.EncodeToString(pcrValues[num].Digest)}}
+	}
+
+	if t.UseIma {
+		// If the IMA is used, not the final PCR value is sent but instead
+		// a list of the kernel modules which are extended during verification
+		// to result in the final value
+		imaDigests, err := ima.GetImaRuntimeDigests()
+		if err != nil {
+			log.Error("Failed to get IMA runtime digests. Ignoring..")
+		}
+
+		imaDigestsHex := make([]string, 0)
+		for _, elem := range imaDigests {
+			imaDigestsHex = append(imaDigestsHex, hex.EncodeToString(elem[:]))
+		}
+
+		// Find the IMA PCR in the TPM Measurement
+		for _, elem := range hashChain {
+			if elem.Pcr == t.ImaPcr {
+				elem.Sha256 = imaDigestsHex
+			}
+		}
+	}
+
+	tm := ar.TpmMeasurement{
+		Type:      "TPM Measurement",
+		HashChain: hashChain,
+		Message:   hex.EncodeToString(quote.Quote),
+		Signature: hex.EncodeToString(quote.Signature),
+		Certs:     t.MeasuringCerts,
+	}
+
+	for i, elem := range tm.HashChain {
+		log.Debug(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, elem.Sha256))
+	}
+	log.Debug("Quote: ", tm.Message)
+	log.Debug("Signature: ", tm.Signature)
+
+	return tm, nil
+}
+
+func (t *Tpm) Lock() {
+	log.Trace("Trying to get lock for TPM")
+	t.Mu.Lock()
+	log.Trace("Got lock for TPM")
+}
+
+func (t *Tpm) Unlock() {
+	log.Trace("Releasing TPM Lock")
+	t.Mu.Unlock()
+	log.Trace("Released TPM Lock")
+}
+
+// GetSigningKeys returns the TLS private and public key as a generic
+// crypto interface
+func (t *Tpm) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+
+	if tlsKey == nil {
+		return nil, nil, fmt.Errorf("Failed to get TLS Key Signer: not initialized")
+	}
+	priv, err := tlsKey.Private(tlsKey.Public())
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to get TLS Key Private")
+	}
+
+	return priv, tlsKey.Public(), nil
+}
+
+func (t *Tpm) GetCertChain() ar.CertChain {
+	return t.SigningCerts
+}
 
 // IsTpmProvisioningRequired checks if the Storage Root Key (SRK) is persisted
 // at 0x810000001 and the encrypted AK blob is present, which is used as an
@@ -135,15 +327,15 @@ func IsTpmProvisioningRequired(ak string) (bool, error) {
 func OpenTpm() error {
 	log.Debug("Opening TPM")
 
-	if tpm != nil {
+	if TPM != nil {
 		return fmt.Errorf("Failed to open TPM - already open")
 	}
 
 	var err error
 	config := &attest.OpenConfig{}
-	tpm, err = attest.OpenTPM(config)
+	TPM, err = attest.OpenTPM(config)
 	if err != nil {
-		tpm = nil
+		TPM = nil
 		return fmt.Errorf("Activate Credential failed: OpenTPM returned %v", err)
 	}
 
@@ -152,22 +344,22 @@ func OpenTpm() error {
 
 // CloseTpm closes the TPM
 func CloseTpm() error {
-	if tpm == nil {
+	if TPM == nil {
 		return fmt.Errorf("Failed to close TPM - TPM is not openend")
 	}
-	tpm.Close()
-	tpm = nil
+	TPM.Close()
+	TPM = nil
 	return nil
 }
 
 // GetTpmInfo retrieves general TPM infos
-func getTpmInfo() (*attest.TPMInfo, error) {
+func GetTpmInfo() (*attest.TPMInfo, error) {
 
-	if tpm == nil {
+	if TPM == nil {
 		return nil, fmt.Errorf("Failed to Get TPM info - TPM is not openend")
 	}
 
-	tpmInfo, err := tpm.Info()
+	tpmInfo, err := TPM.Info()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get TPM info - %v", err)
 	}
@@ -189,7 +381,7 @@ func GetAkQualifiedName() ([32]byte, error) {
 
 	var qualifiedName [32]byte
 
-	if tpm == nil {
+	if TPM == nil {
 		return qualifiedName, fmt.Errorf("Failed to get AK Qualified Name - TPM is not opened")
 	}
 	if ak == nil {
@@ -238,53 +430,83 @@ func GetAkQualifiedName() ([32]byte, error) {
 	return qualifiedName, nil
 }
 
-// ProvisionTpm creates EK, AK, and TLS key. Then, it performs the credential
-// activation via a remote CA server and retrieves the resulting AK and TLS Key
-// certificates from the server and stores the encrypted blobs and the
-// certificates on disk.
-func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte, keyConfig string) error {
-	log.Info("Provisioning TPM (might take a while)..")
+// GetTpmMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
+// and returns the TPM quote as well as the single PCR values
+func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
 
-	if tpm == nil {
-		return fmt.Errorf("Failed to provision TPM - TPM is not openend")
+	if TPM == nil {
+		return nil, nil, fmt.Errorf("TPM is not opened")
+	}
+	if ak == nil {
+		return nil, nil, fmt.Errorf("AK does not exist")
 	}
 
-	tpmInfo, err := getTpmInfo()
+	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
+	// one instance can have write access at the same time
+	t.Lock()
+	defer t.Unlock()
+
+	pcrValues, err := TPM.PCRs(attest.HashSHA256)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve TPM Info - %v", err)
+		return nil, nil, fmt.Errorf("Failed to get TPM PCRs: %v", err)
+	}
+	log.Trace("Finished reading PCRs from TPM")
+
+	// Retrieve quote and store quote data and signature in TPM measurement object
+	quote, err := ak.QuotePCRs(TPM, nonce, attest.HashSHA256, pcrs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("Failed to get TPM quote - %v", err)
+	}
+	log.Trace("Finished getting Quote from TPM")
+
+	return pcrValues, quote, nil
+}
+
+func provisionTpm(provServerURL string, certParams [][]byte) (Certs, error) {
+	log.Debug("Performing TPM credential activation..")
+
+	if TPM == nil {
+		return Certs{}, fmt.Errorf("Failed to provision TPM - TPM is not openend")
+	}
+	if ek == nil || ak == nil || tlsKey == nil {
+		return Certs{}, fmt.Errorf("Failed to provision TPM - keys not created")
 	}
 
-	ek, ak, tlsKey, err = createKeys(tpm, keyConfig)
+	tpmInfo, err := GetTpmInfo()
 	if err != nil {
-		return fmt.Errorf("Activate Credential failed: createKeys returned %v", err)
+		return Certs{}, fmt.Errorf("Failed to retrieve TPM Info - %v", err)
 	}
 
-	secret, err := activateCredential(tpm, *ak, ek[0], tpmInfo, provServerURL)
+	secret, err := activateCredential(TPM, *ak, ek[0], tpmInfo, provServerURL)
 	if err != nil {
-		return fmt.Errorf("Activate Credential failed: activateCredential returned %v", err)
+		return Certs{}, fmt.Errorf("Activate Credential failed: activateCredential returned %v", err)
 	}
 
 	// Return challenge to server
-	certs, err := requestTpmCerts(provServerURL, secret, certParams)
+	resp, err := requestTpmCerts(provServerURL, secret, certParams)
 	if err != nil {
-		return fmt.Errorf("Activate Credential failed: requestAkCert returned %v", err)
+		return Certs{}, fmt.Errorf("Activate Credential failed: requestAkCert returned %v", err)
 	}
 
+	return resp.Certs, nil
+}
+
+func saveTpmData(paths *Paths, certs *Certs) error {
 	// Store the certificates on disk
-	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(certs.AkCert))
+	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(certs.Ak))
 	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(certs.TLSCert))
-	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(certs.DeviceSubCaCert))
-	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(certs.CaCert))
-	if err := ioutil.WriteFile(paths.AkCert, certs.AkCert, 0644); err != nil {
+	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(certs.DeviceSubCa))
+	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(certs.Ca))
+	if err := ioutil.WriteFile(paths.AkCert, certs.Ak, 0644); err != nil {
 		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.AkCert, err)
 	}
 	if err := ioutil.WriteFile(paths.TLSCert, certs.TLSCert, 0644); err != nil {
 		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
-	if err := ioutil.WriteFile(paths.DeviceSubCa, certs.DeviceSubCaCert, 0644); err != nil {
+	if err := ioutil.WriteFile(paths.DeviceSubCa, certs.DeviceSubCa, 0644); err != nil {
 		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
 	}
-	if err := ioutil.WriteFile(paths.Ca, certs.CaCert, 0644); err != nil {
+	if err := ioutil.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
 		return fmt.Errorf("Activate Credential failed: WriteFile %v returned %v", paths.Ca, err)
 	}
 
@@ -309,10 +531,9 @@ func ProvisionTpm(provServerURL string, paths *Paths, certParams [][]byte, keyCo
 	return nil
 }
 
-// LoadTpmKeys loads the attestation key and the TLS key
-func LoadTpmKeys(akFile, tlsKeyFile string) error {
+func loadTpmKeys(akFile, tlsKeyFile string) error {
 
-	if tpm == nil {
+	if TPM == nil {
 		return fmt.Errorf("Failed to load keys - TPM is not opened")
 	}
 
@@ -322,7 +543,7 @@ func LoadTpmKeys(akFile, tlsKeyFile string) error {
 	if err != nil {
 		return fmt.Errorf("Load Keys failed: ReadFile %v returned %v", akFile, err)
 	}
-	ak, err = tpm.LoadAK(akBytes)
+	ak, err = TPM.LoadAK(akBytes)
 	if err != nil {
 		return fmt.Errorf("LoadAK failed: %v", err)
 	}
@@ -333,7 +554,7 @@ func LoadTpmKeys(akFile, tlsKeyFile string) error {
 	if err != nil {
 		return fmt.Errorf("Load Key failed: ReadFile %v returned %v", tlsKeyFile, err)
 	}
-	tlsKey, err = tpm.LoadKey(tlsKeyBytes)
+	tlsKey, err = TPM.LoadKey(tlsKeyBytes)
 	if err != nil {
 		return fmt.Errorf("LoadKey failed: %v", err)
 	}
@@ -343,119 +564,32 @@ func LoadTpmKeys(akFile, tlsKeyFile string) error {
 	return nil
 }
 
-// Measure implements the attestation reports generic Measure interface to be called
-// as a plugin during attestation report generation
-func (t *Tpm) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
-
-	tpmParams, ok := mp.(ar.TpmParams)
-	if !ok {
-		return ar.TpmMeasurement{}, fmt.Errorf("Failed to get TPM params - invalid type")
+func loadTpmCerts(paths *Paths) (Certs, error) {
+	var certs Certs
+	var cert []byte
+	var err error
+	// AK
+	if cert, err = ioutil.ReadFile(paths.AkCert); err != nil {
+		return certs, fmt.Errorf("Failed to load AK cert from %v: %v", paths.AkCert, err)
 	}
-
-	pcrValues, quote, err := GetTpmMeasurement(t, tpmParams.Nonce, tpmParams.Pcrs)
-	if err != nil {
-		return ar.TpmMeasurement{}, fmt.Errorf("Failed to get TPM Measurement: %v", err)
+	certs.Ak = cert
+	// TLS
+	if cert, err = ioutil.ReadFile(paths.TLSCert); err != nil {
+		return certs, fmt.Errorf("Failed to load TLS cert from %v: %v", paths.TLSCert, err)
 	}
-
-	hashChain := make([]*ar.HashChainElem, len(tpmParams.Pcrs))
-	for i, num := range tpmParams.Pcrs {
-
-		hashChain[i] = &ar.HashChainElem{
-			Type:   "Hash Chain",
-			Pcr:    int32(num),
-			Sha256: []string{hex.EncodeToString(pcrValues[num].Digest)}}
+	certs.TLSCert = cert
+	//SubCA
+	if cert, err = ioutil.ReadFile(paths.DeviceSubCa); err != nil {
+		return certs, fmt.Errorf("Failed to load Device Sub CA cert from %v: %v", paths.DeviceSubCa, err)
 	}
-
-	if tpmParams.UseIma {
-		// If the IMA is used, not the final PCR value is sent but instead
-		// a list of the kernel modules which are extended during verification
-		// to result in the final value
-		imaDigests, err := ima.GetImaRuntimeDigests()
-		if err != nil {
-			log.Error("Failed to get IMA runtime digests. Ignoring..")
-		}
-
-		imaDigestsHex := make([]string, 0)
-		for _, elem := range imaDigests {
-			imaDigestsHex = append(imaDigestsHex, hex.EncodeToString(elem[:]))
-		}
-
-		// Find the IMA PCR in the TPM Measurement
-		for _, elem := range hashChain {
-			if elem.Pcr == tpmParams.ImaPcr {
-				elem.Sha256 = imaDigestsHex
-			}
-		}
+	certs.DeviceSubCa = cert
+	//CA
+	if cert, err = ioutil.ReadFile(paths.Ca); err != nil {
+		return certs, fmt.Errorf("Failed to load CA cert from %v: %v", paths.Ca, err)
 	}
+	certs.Ca = cert
 
-	tm := ar.TpmMeasurement{
-		Type:      "TPM Measurement",
-		HashChain: hashChain,
-		Message:   hex.EncodeToString(quote.Quote),
-		Signature: hex.EncodeToString(quote.Signature),
-		Certs:     tpmParams.Certs,
-	}
-
-	for i, elem := range tm.HashChain {
-		log.Debug(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, elem.Sha256))
-	}
-	log.Debug("Quote: ", tm.Message)
-	log.Debug("Signature: ", tm.Signature)
-
-	return tm, nil
-}
-
-// GetTpmMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
-// and returns the TPM quote as well as the single PCR values
-func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
-
-	if tpm == nil {
-		return nil, nil, fmt.Errorf("TPM is not opened")
-	}
-	if ak == nil {
-		return nil, nil, fmt.Errorf("AK does not exist")
-	}
-
-	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
-	// one instance can have write access at the same time
-	log.Trace("Trying to get lock on TPM for measurements")
-	t.Mu.Lock()
-	log.Trace("Got lock on TPM for measurements")
-	defer func() {
-		log.Trace("Releasing TPM Lock for measurements")
-		t.Mu.Unlock()
-		log.Trace("Released TPM Lock for measurements")
-	}()
-
-	pcrValues, err := tpm.PCRs(attest.HashSHA256)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get TPM PCRs: %v", err)
-	}
-	log.Trace("Finished reading PCRs from TPM")
-
-	// Retrieve quote and store quote data and signature in TPM measurement object
-	quote, err := ak.QuotePCRs(tpm, nonce, attest.HashSHA256, pcrs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get TPM quote - %v", err)
-	}
-	log.Trace("Finished getting Quote from TPM")
-
-	return pcrValues, quote, nil
-}
-
-// GetTLSKey returnes the TLS private and public key as a generic
-// crypto interface
-func GetTLSKey() (crypto.PrivateKey, crypto.PublicKey, error) {
-
-	if tlsKey == nil {
-		return nil, nil, fmt.Errorf("Failed to get TLS Key Signer: not initialized")
-	}
-	priv, err := tlsKey.Private(tlsKey.Public())
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get TLS Key Private")
-	}
-
-	return priv, tlsKey.Public(), nil
+	return certs, nil
 }
 
 func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *attest.Key, error) {
@@ -466,7 +600,7 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Failed to load EKs - %v", err)
 	}
-	log.Tracef("Found %v EKs", len(eks))
+	log.Tracef("Found %v EK(s)", len(eks))
 
 	log.Debug("Creating new AK")
 	akConfig := &attest.AKConfig{}
@@ -622,4 +756,123 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	d.Decode(&akCertResponse)
 
 	return akCertResponse, nil
+}
+
+func getTpmPcrs(metadata [][]byte) ([]int, error) {
+
+	var osMan ar.OsManifest
+	var rtmMan ar.RtmManifest
+
+	for _, m := range metadata {
+
+		jws, err := jose.ParseSigned(string(m))
+		if err != nil {
+			log.Warnf("Failed to parse Manifest: %v", err)
+			continue
+		}
+
+		payload := jws.UnsafePayloadWithoutVerification()
+
+		// Unmarshal the Type field of the JSON file to determine the type
+		t := new(ar.JSONType)
+		err = json.Unmarshal(payload, t)
+		if err != nil {
+			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
+			continue
+		}
+
+		if t.Type == "RTM Manifest" {
+			jws, err = jose.ParseSigned(string(m))
+			if err != nil {
+				log.Warn("Failed to parse RTM Manifest - ", err)
+			} else {
+				data := jws.UnsafePayloadWithoutVerification()
+				err = json.Unmarshal(data, &rtmMan)
+				if err != nil {
+					return nil, fmt.Errorf("Failed to unmarshal data from RTM Manifest: %v", err)
+				}
+			}
+		} else if t.Type == "OS Manifest" {
+			jws, err = jose.ParseSigned(string(m))
+			if err != nil {
+				return nil, fmt.Errorf("Failed to parse OS Manifest: %v", err)
+			} else {
+				data := jws.UnsafePayloadWithoutVerification()
+				err = json.Unmarshal(data, &osMan)
+				if err != nil {
+					return nil, fmt.Errorf("Failed to unmarshal data from OS Manifest: %v", err)
+				}
+			}
+		}
+	}
+
+	// Check if manifests were found
+	if osMan.Type != "OS Manifest" || rtmMan.Type != "RTM Manifest" {
+		return nil, errors.New("Failed to find all manifests")
+	}
+
+	// Generate the list of PCRs to be included in the quote
+	pcrs := make([]int, 0)
+	log.Debug("Parsing ", len(rtmMan.Verifications), " RTM verifications")
+	for _, ver := range rtmMan.Verifications {
+		if ver.Type != "TPM Verification" || ver.Pcr == nil {
+			continue
+		}
+		if !exists(*ver.Pcr, pcrs) {
+			pcrs = append(pcrs, *ver.Pcr)
+		}
+	}
+	log.Debug("Parsing ", len(osMan.Verifications), " OS verifications")
+	for _, ver := range osMan.Verifications {
+		if ver.Type != "TPM Verification" || ver.Pcr == nil {
+			continue
+		}
+		if !exists(*ver.Pcr, pcrs) {
+			pcrs = append(pcrs, *ver.Pcr)
+		}
+	}
+
+	sort.Ints(pcrs)
+
+	return pcrs, nil
+}
+
+func getTpmCertParams(metadata [][]byte) ([][]byte, error) {
+
+	certParams := make([][]byte, 0)
+	for _, m := range metadata {
+
+		jws, err := jose.ParseSigned(string(m))
+		if err != nil {
+			log.Warnf("Failed to parse Manifest: %v", err)
+			continue
+		}
+
+		payload := jws.UnsafePayloadWithoutVerification()
+
+		// Unmarshal the Type field of the JSON file to determine the type
+		t := new(ar.JSONType)
+		err = json.Unmarshal(payload, t)
+		if err != nil {
+			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
+			continue
+		}
+
+		if t.Type == "AK Cert Params" {
+			certParams = append(certParams, m)
+		} else if t.Type == "TLS Key Cert Params" {
+			certParams = append(certParams, m)
+		}
+	}
+
+	return certParams, nil
+}
+
+func exists(i int, arr []int) bool {
+	for _, elem := range arr {
+		if elem == i {
+			return true
+		}
+	}
+	return false
 }

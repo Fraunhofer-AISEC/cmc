@@ -235,7 +235,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 	return calculatedPcrs, pcrResult, verificationsCheck, ok
 }
 
-func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
+func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
 	result := SignatureResult{}
 	result.Signature.Success = true
 
@@ -255,7 +255,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
 	}
 
 	// Extract public key from x509 certificate
-	x509Cert, err := loadCert([]byte(cert))
+	x509Cert, err := loadCert(cert)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
 		result.Signature.setFalse(&msg)

@@ -28,24 +28,26 @@ import (
 	"flag"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/square/go-jose.v2"
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	pc "github.com/Fraunhofer-AISEC/cmc/provclient"
+	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
+	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 )
 
 type config struct {
-	Port          int    `json:"port"`
-	ServerAddr    string `json:"provServerAddr"`
-	ServerPath    string `json:"serverPath"`
-	LocalPath     string `json:"localPath"`
-	FetchMetadata bool   `json:"fetchMetadata"`
-	UseIma        bool   `json:"useIma"`
-	ImaPcr        int32  `json:"imaPcr"`
-	// Key config: RSA2048 RSA4096 EC256 EC384 EC521
-	KeyConfig string `json:"keyConfig,omitempty"` // Default defined below during parsing
+	Port                  int      `json:"port"`
+	ServerAddr            string   `json:"provServerAddr"`
+	ServerPath            string   `json:"serverPath"`
+	LocalPath             string   `json:"localPath"`
+	FetchMetadata         bool     `json:"fetchMetadata"`
+	MeasurementInterfaces []string `json:"measurementInterfaces"` // TPM, SNP
+	SigningInterface      string   `json:"signingInterface"`      // TPM, SW
+	UseIma                bool     `json:"useIma"`
+	ImaPcr                int32    `json:"imaPcr"`
+	KeyConfig             string   `json:"keyConfig,omitempty"` // RSA2048 RSA4096 EC256 EC384 EC521
 
 	internalPath    string
 	akPath          string
@@ -54,14 +56,6 @@ type config struct {
 	tlsCertPath     string
 	deviceSubCaPath string
 	caPath          string
-}
-
-// Certs contains the entire certificate chain for the device
-type Certs struct {
-	Ak          []byte
-	TLSCert     []byte
-	DeviceSubCa []byte
-	Ca          []byte
 }
 
 func loadConfig(configFile string) (*config, error) {
@@ -98,22 +92,30 @@ func loadConfig(configFile string) (*config, error) {
 		}
 	}
 
+	// Check measurement and signing interface
+	for _, m := range c.MeasurementInterfaces {
+		if m != "TPM" && m != "SNP" {
+			return nil, fmt.Errorf("Measurement interface of type %v not supported", m)
+		}
+	}
+	if c.SigningInterface != "TPM" && c.SigningInterface != "SW" && c.SigningInterface != "" {
+		return nil, fmt.Errorf("Signing Interface of type %v not supported", c.SigningInterface)
+	}
+
 	printConfig(c)
 
 	return c, nil
 }
 
-func loadMetadata(dir string) (metadata [][]byte, certParams [][]byte, pcrs []int, err error) {
+func loadMetadata(dir string) (metadata [][]byte, err error) {
 	// Read number of files
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Failed to read metadata folder: %v", err)
+		return nil, fmt.Errorf("Failed to read metadata folder: %v", err)
 	}
 
 	// Retrieve the metadata files
 	metadata = make([][]byte, 0)
-	var rtmManifest []byte
-	var osManifest []byte
 	log.Tracef("Parsing %v metadata files in %v", len(files), dir)
 	for i := 0; i < len(files); i++ {
 		file := path.Join(dir, files[i].Name())
@@ -126,71 +128,11 @@ func loadMetadata(dir string) (metadata [][]byte, certParams [][]byte, pcrs []in
 		log.Tracef("Reading file %v", file)
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("Failed to read file %v: %v", file, err)
+			return nil, fmt.Errorf("Failed to read file %v: %v", file, err)
 		}
-
-		jws, err := jose.ParseSigned(string(data))
-		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
-			continue
-		}
-		payload := jws.UnsafePayloadWithoutVerification()
-
-		// Unmarshal the Type field of the JSON file to determine the type
-		t := new(ar.JSONType)
-		err = json.Unmarshal(payload, t)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)
-			continue
-		}
-
-		if t.Type == "AK Cert Params" {
-			certParams = append(certParams, data)
-		} else if t.Type == "TLS Key Cert Params" {
-			certParams = append(certParams, data)
-		} else if t.Type == "RTM Manifest" {
-			metadata = append(metadata, data)
-			rtmManifest = data
-		} else if t.Type == "OS Manifest" {
-			metadata = append(metadata, data)
-			osManifest = data
-		} else {
-			metadata = append(metadata, data)
-		}
-		log.Tracef("Found %v", t.Type)
+		metadata = append(metadata, data)
 	}
-
-	pcrs = getPcrs(rtmManifest, osManifest)
-
-	return metadata, certParams, pcrs, nil
-}
-
-func loadCerts(c *config) (Certs, error) {
-	var certs Certs
-	var cert []byte
-	var err error
-	// AK
-	if cert, err = ioutil.ReadFile(c.akCertPath); err != nil {
-		return certs, fmt.Errorf("Failed to load AK cert from %v: %v", c.akCertPath, err)
-	}
-	certs.Ak = cert
-	// TLS
-	if cert, err = ioutil.ReadFile(c.tlsCertPath); err != nil {
-		return certs, fmt.Errorf("Failed to load TLS cert from %v: %v", c.tlsCertPath, err)
-	}
-	certs.TLSCert = cert
-	//SubCA
-	if cert, err = ioutil.ReadFile(c.deviceSubCaPath); err != nil {
-		return certs, fmt.Errorf("Failed to load Device Sub CA cert from %v: %v", c.deviceSubCaPath, err)
-	}
-	certs.DeviceSubCa = cert
-	//CA
-	if cert, err = ioutil.ReadFile(c.caPath); err != nil {
-		return certs, fmt.Errorf("Failed to load CA cert from %v: %v", c.caPath, err)
-	}
-	certs.Ca = cert
-
-	return certs, nil
+	return metadata, nil
 }
 
 func main() {
@@ -234,72 +176,100 @@ func main() {
 			return
 		}
 	}
-	metadata, certParams, pcrs, err := loadMetadata(c.LocalPath)
+	metadata, err := loadMetadata(c.LocalPath)
 	if err != nil {
 		log.Errorf("Failed to load metadata: %v", err)
 		return
 	}
 
-	// Check if the TPM is provisioned. If provisioned, load the AK and TLS key.
-	// Otherwise perform credential activation with provisioning server and then load the keys
-	provisioningRequired, err := tpmdriver.IsTpmProvisioningRequired(c.akPath)
-	if err != nil {
-		log.Error("Failed to check if TPM is provisioned - ", err)
-		return
-	}
+	verifyingCerts := make([]byte, 0)
+	var tpm *tpmdriver.Tpm
+	var snp *snpdriver.Snp
+	var sw *swdriver.Sw
 
-	err = tpmdriver.OpenTpm()
-	if err != nil {
-		log.Error("Failed to open the TPM. Check if you have privileges to open /dev/tpm0 - ", err)
-		return
-	}
-	defer tpmdriver.CloseTpm()
+	measurements := make([]ar.Measurement, 0)
+	var signer ar.Signer
 
-	if provisioningRequired {
-		paths := &tpmdriver.Paths{
-			Ak:          c.akPath,
-			TLSKey:      c.tlsKeyPath,
-			AkCert:      c.akCertPath,
-			TLSCert:     c.tlsCertPath,
-			DeviceSubCa: c.deviceSubCaPath,
-			Ca:          c.caPath,
+	if c.SigningInterface == "TPM" || contains("TPM", c.MeasurementInterfaces) {
+		tpmConfig := &tpmdriver.Config{
+			Paths: tpmdriver.Paths{
+				Ak:          c.akPath,
+				TLSKey:      c.tlsKeyPath,
+				AkCert:      c.akCertPath,
+				TLSCert:     c.tlsCertPath,
+				DeviceSubCa: c.deviceSubCaPath,
+				Ca:          c.caPath,
+			},
+			ServerAddr: c.ServerAddr,
+			KeyConfig:  c.KeyConfig,
+			Metadata:   metadata,
+			UseIma:     c.UseIma,
+			ImaPcr:     c.ImaPcr,
 		}
-		err = tpmdriver.ProvisionTpm(c.ServerAddr+"activate-credential/", paths, certParams, c.KeyConfig)
+
+		tpm, err = tpmdriver.NewTpm(tpmConfig)
 		if err != nil {
-			log.Error("Failed to provision TPM - ", err)
-			os.Remove(c.akPath)
-			os.Remove(c.tlsKeyPath)
+			log.Errorf("Failed to create new TPM driver: %v", err)
 			return
 		}
-	} else {
-		err = tpmdriver.LoadTpmKeys(c.akPath, c.tlsKeyPath)
-		if err != nil {
-			log.Error("Failed to load TPM keys - ", err)
-			return
-		}
+		defer tpmdriver.CloseTpm()
 	}
 
-	certs, err := loadCerts(c)
-	if err != nil {
-		log.Errorf("Failed to load certificates: %v", err)
-		return
+	if contains("TPM", c.MeasurementInterfaces) {
+		log.Info("Using TPM as Measurement Interface")
+		measurements = append(measurements, tpm)
+	}
+
+	if c.SigningInterface == "TPM" {
+		log.Info("Using TPM as Signing Interface")
+		verifyingCerts = append(verifyingCerts, tpm.GetCertChain().Ca...)
+		signer = tpm
+	}
+
+	if contains("SNP", c.MeasurementInterfaces) {
+		log.Info("Using SNP as Measurement Interface")
+		snp, err = snpdriver.NewSnpDriver()
+		if err != nil {
+			log.Errorf("Failed to create new SNP driver: %v", err)
+			return
+		}
+
+		measurements = append(measurements, snp)
+	}
+
+	if c.SigningInterface == "SW" {
+		log.Info("Using SW as Signing Interface")
+		sw, err = swdriver.NewSwDriver()
+		if err != nil {
+			log.Errorf("Failed to create new SW driver: %v", err)
+			return
+		}
+
+		verifyingCerts = append(verifyingCerts, sw.GetCertChain().Ca...)
+
+		// TODO short hack, remove
+		ca := "-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"
+		verifyingCerts = append(verifyingCerts, []byte(ca)...)
+
+		signer = sw
 	}
 
 	// The verification requires different roles for different certificate chains
 	// to avoid impersonation
-	roles := &ar.SignerRoles{
-		ManifestSigners:    []string{"developer", "evaluator", "certifier"},
-		CompanyDescSigners: []string{"operator", "evaluator", "certifier"},
-		ArSigners:          []string{"device"},
-		ConnDescSigners:    []string{"operator"},
-	}
+	// roles := &ar.SignerRoles{
+	// 	ManifestSigners:    []string{"developer", "evaluator", "certifier"},
+	// 	CompanyDescSigners: []string{"operator", "evaluator", "certifier"},
+	// 	ArSigners:          []string{"device"},
+	// 	ConnDescSigners:    []string{"operator"},
+	// }
 
 	serverConfig := &ServerConfig{
 		Metadata: metadata,
-		Certs:    certs,
-		Pcrs:     pcrs,
-		Roles:    roles,
-		Tpm:      &tpmdriver.Tpm{},
+		//Roles:    roles,
+		// TODO handle more then 1 CA, put this in gRPC verify call
+		VerifyingCas:          verifyingCerts,
+		MeasurementInterfaces: measurements,
+		Signer:                signer,
 	}
 
 	server := NewServer(serverConfig)

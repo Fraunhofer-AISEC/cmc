@@ -22,15 +22,11 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"sort"
-
-	"encoding/json"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/square/go-jose.v2"
 
 	// local modules
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
 
@@ -73,69 +69,6 @@ func getFilePath(p, base string) string {
 	return ret
 }
 
-func getPcrs(rtmManifest, osManifest []byte) []int {
-
-	// Unpack the signed RTM Manifest
-	var rtmMan ar.RtmManifest
-	jws, err := jose.ParseSigned(string(rtmManifest))
-	if err != nil {
-		log.Warn("Failed to parse RTM Manifest - ", err)
-	} else {
-		data := jws.UnsafePayloadWithoutVerification()
-		err = json.Unmarshal(data, &rtmMan)
-		if err != nil {
-			log.Warn("Failed to unmarshal data from RTM Manifest - ", err)
-		}
-	}
-
-	// Unpack the signed OS Manifest
-	var osMan ar.OsManifest
-	jws, err = jose.ParseSigned(string(osManifest))
-	if err != nil {
-		log.Warn("Failed to parse OS Manifest - ", err)
-	} else {
-		data := jws.UnsafePayloadWithoutVerification()
-		err = json.Unmarshal(data, &osMan)
-		if err != nil {
-			log.Warn("Failed to unmarshal data from OS Manifst - ", err)
-		}
-	}
-
-	// Generate the list of PCRs to be included in the quote
-	pcrs := make([]int, 0)
-	log.Debug("Parsing ", len(rtmMan.Verifications), " RTM verifications")
-	for _, ver := range rtmMan.Verifications {
-		if ver.Type != "TPM Verification" || ver.Pcr == nil {
-			continue
-		}
-		if !exists(*ver.Pcr, pcrs) {
-			pcrs = append(pcrs, *ver.Pcr)
-		}
-	}
-	log.Debug("Parsing ", len(osMan.Verifications), " OS verifications")
-	for _, ver := range osMan.Verifications {
-		if ver.Type != "TPM Verification" || ver.Pcr == nil {
-			continue
-		}
-		if !exists(*ver.Pcr, pcrs) {
-			pcrs = append(pcrs, *ver.Pcr)
-		}
-	}
-
-	sort.Ints(pcrs)
-
-	return pcrs
-}
-
-func exists(i int, arr []int) bool {
-	for _, elem := range arr {
-		if elem == i {
-			return true
-		}
-	}
-	return false
-}
-
 func printConfig(c *config) {
 	log.Info("Using the following configuration:")
 	log.Info("CMC Port                   : ", c.Port)
@@ -152,4 +85,13 @@ func printConfig(c *config) {
 	log.Info("\tTLS Key Certificate Path : ", c.tlsCertPath)
 	log.Info("\tDevice Sub CA Cert Path  : ", c.deviceSubCaPath)
 	log.Info("\tCA Certificate Path      : ", c.caPath)
+}
+
+func contains(elem string, list []string) bool {
+	for _, s := range list {
+		if s == elem {
+			return true
+		}
+	}
+	return false
 }
