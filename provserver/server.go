@@ -418,10 +418,13 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	log.Trace("Generated new TLS Key Certificate: ", tlsKeyPem.String())
 
 	akCertResponse := tpmdriver.AkCertResponse{
-		AkCert:          akPem.Bytes(),
-		TLSCert:         tlsKeyPem.Bytes(),
-		DeviceSubCaCert: dataStore.DeviceSubCaCertPem,
-		CaCert:          dataStore.CaCertPem,
+		AkQualifiedName: akCertRequest.AkQualifiedName,
+		Certs: tpmdriver.Certs{
+			Ak:          akPem.Bytes(),
+			TLSCert:     tlsKeyPem.Bytes(),
+			DeviceSubCa: dataStore.DeviceSubCaCertPem,
+			Ca:          dataStore.CaCertPem,
+		},
 	}
 
 	var retBuf bytes.Buffer

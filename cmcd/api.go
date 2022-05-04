@@ -33,28 +33,21 @@ import (
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
-	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 )
 
 type ServerConfig struct {
-	// Certificate chain for the device
-	Certs Certs
+	VerifyingCas []byte
 	// metadata (manifests and descriptions of the device)
 	Metadata [][]byte
-	// PCRs to be included in the quote (calculated from manifests)
-	Pcrs []int
-	// Certificate Signer roles to avoid impersonation attacks on certificates
-	Roles *ar.SignerRoles
-	// TPM Driver struct (further drivers must also be registered here)
-	Tpm    *tpmdriver.Tpm
-	UseIma bool
-	ImaPcr int32
+	// TODO remove Certificate Signer roles to avoid impersonation attacks on certificates
+	Roles                 *ar.SignerRoles
+	MeasurementInterfaces []ar.Measurement
+	Signer                ar.Signer
 }
 
 // server is the gRPC server structure
 type server struct {
 	ci.UnimplementedCMCServiceServer
-	// TODO implement this with generic interface?
 	config *ServerConfig
 }
 
@@ -92,30 +85,19 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
-	tpmParams := ar.TpmParams{
-		Nonce: in.Nonce,
-		Pcrs:  s.config.Pcrs,
-		Certs: ar.CertChain{
-			Leaf:          string(s.config.Certs.Ak),
-			Intermediates: []string{string(s.config.Certs.DeviceSubCa)},
-			Ca:            string(s.config.Certs.Ca),
-		},
-		UseIma: s.config.UseIma,
-		ImaPcr: s.config.ImaPcr,
-	}
+	a := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces)
 
-	a := ar.Generate(in.Nonce, s.config.Metadata, []ar.Measurement{s.config.Tpm}, []ar.MeasurementParams{tpmParams})
+	if s.config.Signer == nil {
+		log.Error("No valid signer specified in config. Cannot sign attestation report")
+		log.Info("Prover: Finished")
+		return &ci.AttestationResponse{
+			Status: ci.Status_FAIL,
+		}, nil
+	}
 
 	log.Info("Prover: Signing Attestation Report")
-	tlsKeyPriv, tlsKeyPub, err := tpmdriver.GetTLSKey()
-	if err != nil {
-		log.Error("Prover: Failed to get TLS Key")
-		return &ci.AttestationResponse{Status: ci.Status_FAIL}, nil
-	}
-
 	var status ci.Status
-	certsPem := [][]byte{s.config.Certs.TLSCert, s.config.Certs.DeviceSubCa, s.config.Certs.Ca}
-	ok, data := ar.Sign(&s.config.Tpm.Mu, a, tlsKeyPriv, tlsKeyPub, certsPem)
+	ok, data := ar.Sign(a, s.config.Signer)
 	if !ok {
 		log.Error("Prover: Failed to sign Attestion Report ")
 		status = ci.Status_FAIL
@@ -140,7 +122,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.config.Certs.Ca, s.config.Roles)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.config.VerifyingCas, s.config.Roles)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
@@ -175,7 +157,7 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to find appropriate hash function")
 	}
 	// get key
-	tlsKeyPriv, _, err = tpmdriver.GetTLSKey()
+	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
 		log.Error("[Prover] Failed to get TLS key. ", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to get TLS key")
@@ -201,12 +183,11 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 // Loads public key for tls certificate
 func (s *server) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCertResponse, error) {
 	var resp *ci.TLSCertResponse = &ci.TLSCertResponse{}
-	if s.config.Certs.TLSCert == nil {
-		log.Error("Prover: TLS Certificate not found - was the device provisioned correctly?")
-		return &ci.TLSCertResponse{Status: ci.Status_FAIL}, errors.New("No TLS Certificate obtained")
-	}
+
 	// provide TLS certificate chain
-	resp.Certificate = [][]byte{s.config.Certs.TLSCert, s.config.Certs.DeviceSubCa}
+	resp.Certificate = make([][]byte, 0)
+	resp.Certificate = append(resp.Certificate, s.config.Signer.GetCertChain().Leaf)
+	resp.Certificate = append(resp.Certificate, s.config.Signer.GetCertChain().Intermediates...)
 	resp.Status = ci.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil

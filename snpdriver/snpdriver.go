@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tpmdriver
+package snpdriver
 
 /*
 #include <stdint.h>
@@ -56,8 +56,8 @@ type Snp struct {
 	certChain ar.CertChain
 }
 
-func NewSnpDriver( /* TODO Config */ ) Snp {
-	snp := Snp{} // TODO config
+func NewSnpDriver() (*Snp, error) {
+	snp := &Snp{}
 
 	ca, err := getCerts(milanUrl, PEM)
 	if err != nil {
@@ -73,25 +73,18 @@ func NewSnpDriver( /* TODO Config */ ) Snp {
 		Ca:            encodeCertPem(ca[1]),
 	}
 
-	return snp
+	return snp, nil
 }
 
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
-func (snp Snp) Measure(mp ar.MeasurementParams) (ar.Measurement, error) {
+func (snp Snp) Measure(nonce []byte) (ar.Measurement, error) {
 
-	snpParams, ok := mp.(ar.SnpParams)
-	if !ok {
-		return ar.SnpMeasurement{}, fmt.Errorf("Failed to retrieve SNP params - invalid type")
-	}
-
-	data, err := GetSnpMeasurement(snpParams.Nonce)
+	data, err := GetSnpMeasurement(nonce)
 	if err != nil {
 		return ar.SnpMeasurement{}, fmt.Errorf("Failed to get SNP Measurement: %v", err)
 	}
 
-	// TODO see if it is possible to do this in NewSnpDriver to avoid network interaction
-	// on every attestation or only do it once
 	s, err := ar.DecodeSnpReport(data)
 	if err != nil {
 		return ar.SnpMeasurement{}, fmt.Errorf("Failed to decode SNP report: %v", err)

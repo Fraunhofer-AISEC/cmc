@@ -32,7 +32,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 
@@ -50,11 +49,19 @@ type Measurement interface{}
 // attestationreport module will call this method to retrieve the measurements
 // of the platform during attestation report generation.
 type Measurer interface {
-	Measure(mp MeasurementParams) (Measurement, error)
+	Measure(nonce []byte) (Measurement, error)
 }
 
-// MeasurementParams is a generic interface for measurement parameters
-type MeasurementParams interface{}
+// Signer is a generic interface for an entity capable of signing an attestation report,
+// such as a TPM or other hardware interface
+type Signing interface{}
+
+type Signer interface {
+	Lock()
+	Unlock()
+	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error)
+	GetCertChain() CertChain
+}
 
 // JSONType is a helper struct for just extracting the JSON 'Type'
 type JSONType struct {
@@ -81,9 +88,9 @@ type HashChainElem struct {
 // consisting of a leaf certificate, an arbitrary number
 // of intermediate (sub-CA) certificates and a CA certificate
 type CertChain struct {
-	Leaf          string   `json:"leaf"`
-	Intermediates []string `json:"intermediates"`
-	Ca            string   `json:"ca"`
+	Leaf          []byte   `json:"leaf"`
+	Intermediates [][]byte `json:"intermediates"`
+	Ca            []byte   `json:"ca"`
 }
 
 // TpmMeasurement represents the JSON attestation report
@@ -122,17 +129,36 @@ type SnpPolicy struct {
 	AbiMinor     uint8  `json:"abiMinor"`
 }
 
+type SnpFw struct {
+	Build uint8 `json:"build"`
+	Major uint8 `json:"major"`
+	Minor uint8 `json:"minor"`
+}
+
+type SnpTcb struct {
+	Bl    uint8 `json:"bl"`
+	Tee   uint8 `json:"tee"`
+	Snp   uint8 `json:"snp"`
+	Ucode uint8 `json:"ucode"`
+}
+
+type SnpDetails struct {
+	Version uint32    `json:"version"`
+	Policy  SnpPolicy `json:"policy"`
+	Fw      SnpFw     `json:"fw"`
+	Tcb     SnpTcb    `json:"tcb"`
+}
+
 // Verification represents the JSON attestation report
 // element of types 'SNP Verification', 'TPM Verification'
 // and 'SW Verification'
 type Verification struct {
-	Type    string     `json:"type"`
-	Sha256  string     `json:"sha256,omitempty"`
-	Sha384  string     `json:"sha384,omitempty"`
-	Name    string     `json:"name,omitempty"`
-	Pcr     *int       `json:"pcr,omitempty"`
-	Version *uint32    `json:"version,omitempty"`
-	Policy  *SnpPolicy `json:"policy,omitempty"`
+	Type   string      `json:"type"`
+	Sha256 string      `json:"sha256,omitempty"`
+	Sha384 string      `json:"sha384,omitempty"`
+	Name   string      `json:"name,omitempty"`
+	Pcr    *int        `json:"pcr,omitempty"`
+	Snp    *SnpDetails `json:"snp,omitempty"`
 }
 
 // AppDescription represents the JSON attestation report
@@ -280,30 +306,6 @@ type ArJws struct {
 	Nonce              string          `json:"nonce"`
 }
 
-// TpmParams are Parameters for retrieving TPM measurements: The
-// nonce is embedded into the quote. Pcrs must be set to the PCRs
-// that should be embedded into the quote. Certs represent the AK
-// certificate chain including EK and CA. UseIma species if the
-// kernel's Integrity Measurement Architecture (IMA) should be used
-// and ImaPcr specifies the PCR used by the IMA (kernel config)
-type TpmParams struct {
-	Nonce  []byte
-	Pcrs   []int
-	Certs  CertChain
-	UseIma bool
-	ImaPcr int32
-}
-
-// SnpParams are parameters for retrieving AMD SEV-SNP measurements:
-// Currently, this is only the nonce, which is embedded into the
-// signed measurement
-type SnpParams struct {
-	Nonce []byte
-}
-
-// SwParams are parameters for retrieving SW measurements. Currently none required
-type SwParams struct{}
-
 // In IDS contexts, the different certificates used for signing meta-data
 // must have appropriate roles so that e.g. an operator cannot impersonate
 // an evaluator. This is an optional feature. If used, the corresponding
@@ -324,7 +326,7 @@ type SignerRoles struct {
 // implement the attestation report 'Measurer' interface providing
 // a method for collecting the measurements from a hardware or software
 // interface
-func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measurementParams []MeasurementParams) ArJws {
+func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws {
 
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
@@ -382,8 +384,6 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 		case "Company Description":
 			log.Debug("Adding Company Description")
 			ar.CompanyDescription = jws.FullSerialize()
-		default:
-			log.Warn("Unknown manifest type ", t.Type)
 		}
 	}
 
@@ -393,16 +393,8 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 		log.Debug("Added ", numManifests, " manifests to attestation report")
 	}
 
-	// Add the measurements of the platform to the attestation report.
-	// The methods for retrieving the data are implemented in the wrappers
-	// for the specific hardware or software module, such as the TPM module
-	if len(measurements) != len(measurementParams) {
-		log.Warn("Internal Error: length of measurements does not match length of measuremt params. Will not add measurements to attestation report")
-		return ar
-	}
-
 	log.Tracef("Retrieving measurements from %v measurement interfaces", len(measurements))
-	for i, m := range measurements {
+	for _, m := range measurements {
 		measurer, ok := m.(Measurer)
 		if !ok {
 			log.Warn("Internal Error: Measurement does not implement Measurer. Will not add measurement to attestation report")
@@ -412,7 +404,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 		// This actually collects the measurements. The methods are implemented
 		// in the respective module (e.g. tpm module)
 		log.Trace("Getting measurements from measurement interface..")
-		data, err := measurer.Measure(measurementParams[i])
+		data, err := measurer.Measure(nonce)
 		if err != nil {
 			log.Warnf("Failed to get measurements: %v", err)
 			return ar
@@ -420,9 +412,14 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 
 		// Check the type of the measurements and add it to the attestation report
 		if tpmData, ok := data.(TpmMeasurement); ok {
+			log.Tracef("Added %v to attestation report", tpmData.Type)
 			ar.TpmM = &tpmData
-		} else if SwData, ok := data.(SwMeasurement); ok {
-			ar.SWM = append(ar.SWM, SwData)
+		} else if swData, ok := data.(SwMeasurement); ok {
+			log.Tracef("Added %v to attestation report", swData.Type)
+			ar.SWM = append(ar.SWM, swData)
+		} else if snpData, ok := data.(SnpMeasurement); ok {
+			log.Tracef("Added %v to attestation report", snpData.Type)
+			ar.SnpM = &snpData
 		} else {
 			log.Error("Error: Unsupported measurement interface type")
 		}
@@ -439,21 +436,34 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, measu
 // (Signing Certificate -> Intermediate Certificates -> Root CA Certificate)
 // Parameter 'mu' is an optional mutex, in case the private key requires exclusive
 // access (e.g. because it is located in a hardware module)
-func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey, certsPem [][]byte) (bool, []byte) {
+func Sign(ar ArJws, signer Signer) (bool, []byte) {
 	var err error
 
 	log.Trace("Signing attestation report")
+
+	// create list of all certificates in the correct order
+	certChain := signer.GetCertChain()
+	certsPem := make([][]byte, 0)
+	certsPem = append(certsPem, certChain.Leaf)
+	certsPem = append(certsPem, certChain.Intermediates...)
+	certsPem = append(certsPem, certChain.Ca)
 
 	// certificate chain in base64 encoding
 	certsb64 := make([]string, 0)
 	for i, certPem := range certsPem {
 		cert, err := loadCert(certPem)
 		if err != nil {
-			log.Errorf("Failed to load cert[%v]: %v", i, err)
+			log.Errorf("Failed to load cert[%v]: %v. PEM: %v", i, err, string(certPem))
 			return false, nil
 		}
 
 		certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
+	}
+
+	priv, pub, err := signer.GetSigningKeys()
+	if err != nil {
+		log.Errorf("Failed to get signing keys: %v", err)
+		return false, nil
 	}
 
 	// Get jose.SignatureAlgorithm
@@ -466,6 +476,7 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 		return false, nil
 	}
 	log.Trace("Chosen signature algorithm: ", alg)
+
 	// create jose.OpaqueSigner with hwSigner wrapper (tpm key)
 	var hws *hwSigner
 	var opaqueSigner jose.OpaqueSigner
@@ -479,8 +490,8 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 	// Create jose.Signer with OpaqueSigner
 	// x5c: adds Certificate Chain in later result
 	var opt jose.SignerOptions
-	var signer jose.Signer
-	signer, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
+	var joseSigner jose.Signer
+	joseSigner, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
 	if err != nil {
 		log.Error("Failed to setup signer for the Attestation Report: ", err)
 		return false, nil
@@ -493,21 +504,13 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 		return false, nil
 	}
 
-	// If a mutex is present, lock it to ensure exclusive access to the signing key
-	if mu != nil {
-		log.Trace("Trying to get lock on TPM for signing")
-		mu.Lock()
-		log.Trace("Got lock on TPM for signing")
-		defer func() {
-			log.Trace("Releasing TPM Lock for signing")
-			mu.Unlock()
-			log.Trace("Released TPM Lock for signing")
-		}()
-	}
+	// This allows the signer to ensure mutual access for signing, if required
+	signer.Lock()
+	defer signer.Unlock()
 
 	// sign
 	log.Trace("Performing Sign operation")
-	obj, err := signer.Sign(data)
+	obj, err := joseSigner.Sign(data)
 	if err != nil {
 		log.Error("Failed to sign the Attestation Report: ", err)
 		return false, nil
@@ -525,14 +528,14 @@ func Sign(mu *sync.Mutex, ar ArJws, priv crypto.PrivateKey, pub crypto.PublicKey
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the verifications and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) VerificationResult {
+func Verify(arRaw string, nonce, casPem []byte, roles *SignerRoles) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
 		SwCertLevel: 0}
 
 	// Verify ALL signatures and unpack plain AttestationReport
-	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, caCertPem, roles)
+	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem, roles)
 	if ar == nil {
 		result.InternalError = true
 	}
@@ -601,7 +604,7 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	// If no hardware trust anchor is present, the maximum certification level is 1
 	// If there are verifications with a higher trust level present, the remote attestation
 	// must fail
-	if result.MeasResult.TpmMeasResult == nil && result.MeasResult.SnpMeasResult == nil && aggCertLevel > 1 {
+	if ar.TpmM == nil && ar.SnpM == nil && aggCertLevel > 1 {
 		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ProcessingError = append(result.ProcessingError, msg)
 		result.Success = false
@@ -770,6 +773,12 @@ func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
 		certs, err := sig.Protected.Certificates(opts)
+		if len(certs) == 0 {
+			msg := fmt.Sprintf("Failed to verify: No certificates present for provided CA(s)")
+			result.SignatureCheck[i].CertCheck.setFalse(&msg)
+			ok = false
+			continue
+		}
 		if err == nil {
 			result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
 			result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
@@ -818,6 +827,14 @@ func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 				result.Summary.setFalseMulti(&msg)
 				return result, nil, false
 			}
+			if len(certs[0][0].Subject.OrganizationalUnit) == 0 {
+				rc := Result{}
+				result.SignatureCheck[i].RoleCheck = &rc
+				msg := fmt.Sprintf("Failed to check roles: Cert does not contain OU field")
+				result.SignatureCheck[i].RoleCheck.setFalse(&msg)
+				ok = false
+				continue
+			}
 			r := certs[0][0].Subject.OrganizationalUnit[0]
 			if r == roles[i] {
 				rc := Result{
@@ -839,7 +856,7 @@ func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 	return result, payload, ok
 }
 
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, caCertPem []byte, roles *SignerRoles) (bool, *ArPlain) {
+func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte, roles *SignerRoles) (bool, *ArPlain) {
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
 		return false, nil
@@ -848,9 +865,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar := ArPlain{}
 
 	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM(caCertPem)
+	ok := roots.AppendCertsFromPEM(casPem)
 	if !ok {
-		log.Warn("Failed to setup trusted cert pool")
+		log.Warnf("Failed to setup trusted cert pool with CAs: '%v'", string(casPem))
 		result.InternalError = true
 		result.Success = true
 		return false, &ar
@@ -883,6 +900,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	ar.Type = "ArPlain"
 	ar.TpmM = arJws.TpmM
+	ar.SnpM = arJws.SnpM
 	ar.SWM = arJws.SWM
 	ar.Nonce = arJws.Nonce
 
@@ -1121,18 +1139,18 @@ func verifyCertChain(certs *CertChain) error {
 
 	intermediatesPool := x509.NewCertPool()
 	for _, intermediate := range certs.Intermediates {
-		ok := intermediatesPool.AppendCertsFromPEM([]byte(intermediate))
+		ok := intermediatesPool.AppendCertsFromPEM(intermediate)
 		if !ok {
 			return errors.New("Failed to append certificate to certificate pool")
 		}
 	}
 	rootsPool := x509.NewCertPool()
-	ok := rootsPool.AppendCertsFromPEM([]byte(certs.Ca))
+	ok := rootsPool.AppendCertsFromPEM(certs.Ca)
 	if !ok {
 		return errors.New("Failed to append certificate to certificate pool")
 	}
 
-	block, _ := pem.Decode([]byte(certs.Leaf))
+	block, _ := pem.Decode(certs.Leaf)
 	if block == nil || block.Type != "CERTIFICATE" {
 		return errors.New("Failed to parse leaf certificate")
 	}

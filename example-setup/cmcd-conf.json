@@ -4,6 +4,8 @@
     "serverPath": "metadata-signed/",
     "localPath": "data-cmc/",
     "fetchMetadata": true,
+    "measurementInterfaces": [ "TPM" ],
+    "signingInterface": "SW",
     "useIma": false,
     "imaPcr": 10,
     "keyConfig": "EC256"

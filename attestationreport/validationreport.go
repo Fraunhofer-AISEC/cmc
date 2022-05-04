@@ -100,6 +100,35 @@ type SwMeasurementResult struct {
 	Validation Result `json:"validation"`
 }
 
+type VersionCheck struct {
+	Success  bool  `json:"success"`
+	Claimed  []int `json:"claimed"`
+	Measured []int `json:"measured"`
+}
+
+type BooleanMatch struct {
+	Success  bool `json:"success"`
+	Claimed  bool `json:"claimed"`
+	Measured bool `json:"measured"`
+}
+
+type TcbCheck struct {
+	Summary Result       `json:"resultSummary"`
+	Bl      VersionCheck `json:"bl"`
+	Tee     VersionCheck `json:"tee"`
+	Snp     VersionCheck `json:"Snp"`
+	Ucode   VersionCheck `json:"ucode"`
+}
+
+type PolicyCheck struct {
+	Summary      Result       `json:"resultSummary"`
+	Abi          VersionCheck `json:"abi"`
+	Smt          BooleanMatch `json:"smt"`
+	Migration    BooleanMatch `json:"migration"`
+	Debug        BooleanMatch `json:"debug"`
+	SingleSocket BooleanMatch `json:"singleSocket"`
+}
+
 // SnpMeasurementResult represents the results for the verification
 // of AMD SEV SNP measurements
 type SnpMeasurementResult struct {
@@ -107,7 +136,10 @@ type SnpMeasurementResult struct {
 	Freshness          Result          `json:"freshness"`
 	Signature          SignatureResult `json:"signature"`
 	MeasurementMatch   Result          `json:"measurementMatch"`
-	ParamsMatch        Result          `json:"paramsMatch"`
+	VersionMatch       Result          `json:"reportVersionMatch"`
+	FwCheck            VersionCheck    `json:"fwCheck"`
+	TcbCheck           TcbCheck        `json:"tcbCheck"`
+	PolicyCheck        PolicyCheck     `json:"policyCheck"`
 	VerificationsCheck ResultMulti     `json:"verificationsCheck"` // Checks that every SNP verification was part of the measurements
 }
 

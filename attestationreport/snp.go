@@ -41,7 +41,7 @@ type snpreport struct {
 	ImageId         [16]byte
 	Vmpl            uint32
 	SignatureAlgo   uint32
-	Currentcb       uint64 // platform_version
+	CurrentTcb      uint64 // platform_version
 	PlatformInfo    uint64
 	AuthorKeyEn     uint32
 	Reserved1       uint32
@@ -119,19 +119,14 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	if snpVerification.Policy == nil {
+	if snpVerification.Snp == nil {
 		msg := fmt.Sprintf("SNP Verification does not contain policy")
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-	if snpVerification.Version == nil {
-		msg := fmt.Sprintf("SNP Verification does not contain version")
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
 	// Extract the SNP attestation report data structure
-	s, err := decodeSnpReport(snpM.Report)
+	s, err := DecodeSnpReport(snpM.Report)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode SNP report: %v", err)
 		result.Summary.setFalse(&msg)
@@ -139,44 +134,55 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 	}
 
 	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
-	if cmp := bytes.Compare(s.ReportData[:], nonce); cmp != 0 {
+	nonce64 := make([]byte, 64)
+	copy(nonce64, nonce)
+	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {
 		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)", hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
 		result.Freshness.setFalse(&msg)
 		ok = false
+	} else {
+		result.Freshness.Success = true
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Report, s, []byte(snpM.Certs.Leaf))
+	sig, ret := verifySnpSignature(snpM.Report, s, snpM.Certs)
 	if !ret {
 		ok = false
 	}
 	result.Signature = sig
 
-	// Verify the SNP certificate chain
-	err = verifyCertChain(&snpM.Certs)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.Signature.CertCheck.setFalse(&msg)
-		ok = false
-	} else {
-		result.Signature.CertCheck.Success = true
-	}
-
 	// Compare Measurements
-	m, err := hex.DecodeString(snpVerification.Sha384)
+	v, err := hex.DecodeString(snpVerification.Sha384)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode SNP Verification: %v", err)
 		result.Summary.setFalse(&msg)
 		ok = false
 	}
-	if cmp := bytes.Compare(s.Measurement[:], m); cmp != 0 {
+	if cmp := bytes.Compare(s.Measurement[:], v); cmp != 0 {
 		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v", snpVerification.Sha384, hex.EncodeToString(s.Measurement[:]))
 		result.MeasurementMatch.setFalse(&msg)
 		ok = false
+	} else {
+		result.MeasurementMatch.Success = true
+		// As we previously checked, that the attestation report contains exactly one
+		// SNP verification, we can set this here:
+		result.VerificationsCheck.Success = true
 	}
 
 	// Compare SNP parameters
-	result.ParamsMatch, ret = verifySnpParams(&s, &snpVerification)
+	result.VersionMatch, ret = verifySnpVersion(s, snpVerification.Snp.Version)
+	if !ret {
+		ok = false
+	}
+	result.PolicyCheck, ret = verifySnpPolicy(s, snpVerification.Snp.Policy)
+	if !ret {
+		ok = false
+	}
+	result.FwCheck, ret = verifySnpFw(s, snpVerification.Snp.Fw)
+	if !ret {
+		ok = false
+	}
+	result.TcbCheck, ret = verifySnpTcb(s, snpVerification.Snp.Tcb)
 	if !ret {
 		ok = false
 	}
@@ -186,7 +192,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 	return result, ok
 }
 
-func decodeSnpReport(report []byte) (snpreport, error) {
+func DecodeSnpReport(report []byte) (snpreport, error) {
 	var s snpreport
 	b := bytes.NewBuffer(report)
 	err := binary.Read(b, binary.LittleEndian, &s)
@@ -196,15 +202,19 @@ func decodeSnpReport(report []byte) (snpreport, error) {
 	return s, nil
 }
 
-func verifySnpParams(s *snpreport, v *Verification) (Result, bool) {
-	result := Result{
-		Success: true,
+func verifySnpVersion(s snpreport, version uint32) (Result, bool) {
+	r := Result{}
+	ok := s.Version == version
+	if !ok {
+		msg := fmt.Sprintf("SNP report version mismatch: Report = %v, supplied = %v", s.Version, version)
+		r.setFalse(&msg)
+	} else {
+		r.Success = true
 	}
+	return r, ok
+}
 
-	if s.Version != *v.Version {
-		msg := fmt.Sprintf("SNP report version mismatch: Report = %v, supplied = %v", s.Version, *v.Version)
-		result.setFalse(&msg)
-	}
+func verifySnpPolicy(s snpreport, v SnpPolicy) (PolicyCheck, bool) {
 
 	abiMajor := uint8(s.Policy & 0xFF)
 	abiMinor := uint8((s.Policy >> 8) & 0xFF)
@@ -213,35 +223,115 @@ func verifySnpParams(s *snpreport, v *Verification) (Result, bool) {
 	debug := (s.Policy & (1 << 19)) != 0
 	singleSocket := (s.Policy & (1 << 20)) != 0
 
-	if abiMajor != v.Policy.AbiMajor {
-		msg := fmt.Sprintf("SNP report AbiMinor mismatch: Report = %v, supplied = %v", abiMajor, v.Policy.AbiMajor)
-		result.setFalse(&msg)
+	// Convert to int, as json.Marshal otherwise interprets the values as strings
+	r := PolicyCheck{
+		Abi: VersionCheck{
+			Success:  checkMinVersion([]uint8{abiMajor, abiMinor}, []uint8{v.AbiMajor, v.AbiMinor}),
+			Claimed:  []int{int(v.AbiMajor), int(v.AbiMinor)},
+			Measured: []int{int(abiMajor), int(abiMinor)},
+		},
+		Smt: BooleanMatch{
+			Success:  smt == v.Smt,
+			Claimed:  v.Smt,
+			Measured: smt,
+		},
+		Migration: BooleanMatch{
+			Success:  migration == v.Migration,
+			Claimed:  v.Migration,
+			Measured: migration,
+		},
+		Debug: BooleanMatch{
+			Success:  debug == v.Debug,
+			Claimed:  v.Debug,
+			Measured: debug,
+		},
+		SingleSocket: BooleanMatch{
+			Success:  singleSocket == v.SingleSocket,
+			Claimed:  v.SingleSocket,
+			Measured: singleSocket,
+		},
 	}
-	if abiMinor != v.Policy.AbiMinor {
-		msg := fmt.Sprintf("SNP report AbiMinor mismatch: Report = %v, supplied = %v", abiMinor, v.Policy.AbiMinor)
-		result.setFalse(&msg)
-	}
-	if smt != v.Policy.Smt {
-		msg := fmt.Sprintf("SNP report SMT mismatch: Report = %v, supplied = %v", smt, v.Policy.Smt)
-		result.setFalse(&msg)
-	}
-	if migration != v.Policy.Migration {
-		msg := fmt.Sprintf("SNP report Migration Agent mismatch: Report = %v, supplied = %v", migration, v.Policy.Migration)
-		result.setFalse(&msg)
-	}
-	if debug != v.Policy.Debug {
-		msg := fmt.Sprintf("SNP report Debug Support mismatch: Report = %v, supplied = %v", debug, v.Policy.Debug)
-		result.setFalse(&msg)
-	}
-	if singleSocket != v.Policy.SingleSocket {
-		msg := fmt.Sprintf("SNP report SingleSocket mismatch: Report = %v, supplied = %v", singleSocket, v.Policy.SingleSocket)
-		result.setFalse(&msg)
-	}
+	ok := r.Abi.Success &&
+		r.Smt.Success &&
+		r.Migration.Success &&
+		r.Debug.Success &&
+		r.SingleSocket.Success
+	r.Summary.Success = ok
 
-	return result, result.Success
+	return r, ok
 }
 
-func verifySnpSignature(reportRaw []byte, report snpreport, cert []byte) (SignatureResult, bool) {
+func verifySnpFw(s snpreport, v SnpFw) (VersionCheck, bool) {
+
+	build := min([]uint8{s.CurrentBuild, s.CommittedBuild})
+	major := min([]uint8{s.CurrentMajor, s.CommittedMajor})
+	minor := min([]uint8{s.CurrentMinor, s.CommittedMinor})
+
+	ok := checkMinVersion([]uint8{major, minor, build}, []uint8{v.Major, v.Minor, v.Build})
+
+	// Convert to int, as json.Marshal otherwise interprets the values as strings
+	r := VersionCheck{
+		Success:  ok,
+		Claimed:  []int{int(v.Major), int(v.Minor), int(v.Build)},
+		Measured: []int{int(major), int(minor), int(build)},
+	}
+	return r, ok
+}
+
+func verifySnpTcb(s snpreport, v SnpTcb) (TcbCheck, bool) {
+
+	currBl := uint8(s.CurrentTcb & 0xFF)
+	commBl := uint8(s.CommittedTcb & 0xFF)
+	launBl := uint8(s.LaunchTcb & 0xFF)
+	repoBl := uint8(s.ReportedTcb & 0xFF)
+	currTee := uint8((s.CurrentTcb >> 8) & 0xFF)
+	commTee := uint8((s.CommittedTcb >> 8) & 0xFF)
+	launTee := uint8((s.LaunchTcb >> 8) & 0xFF)
+	repoTee := uint8((s.ReportedTcb >> 8) & 0xFF)
+	currSnp := uint8((s.CurrentTcb >> 48) & 0xFF)
+	commSnp := uint8((s.CommittedTcb >> 48) & 0xFF)
+	launSnp := uint8((s.LaunchTcb >> 48) & 0xFF)
+	repoSnp := uint8((s.ReportedTcb >> 48) & 0xFF)
+	currUcode := uint8((s.CurrentTcb >> 56) & 0xFF)
+	commUcode := uint8((s.CommittedTcb >> 56) & 0xFF)
+	launUcode := uint8((s.LaunchTcb >> 56) & 0xFF)
+	repoUcode := uint8((s.ReportedTcb >> 56) & 0xFF)
+
+	bl := min([]uint8{currBl, commBl, launBl, repoBl})
+	tee := min([]uint8{currTee, commTee, launTee, repoTee})
+	snp := min([]uint8{currSnp, commSnp, launSnp, repoSnp})
+	ucode := min([]uint8{currUcode, commUcode, launUcode, repoUcode})
+
+	// Convert to int, as json.Marshal otherwise interprets the values as strings
+	r := TcbCheck{
+		Bl: VersionCheck{
+			Success:  bl >= v.Bl,
+			Claimed:  []int{int(v.Bl)},
+			Measured: []int{int(bl)},
+		},
+		Tee: VersionCheck{
+			Success:  tee >= v.Tee,
+			Claimed:  []int{int(v.Tee)},
+			Measured: []int{int(tee)},
+		},
+		Snp: VersionCheck{
+			Success:  snp >= v.Snp,
+			Claimed:  []int{int(v.Snp)},
+			Measured: []int{int(snp)},
+		},
+		Ucode: VersionCheck{
+			Success:  ucode >= v.Ucode,
+			Claimed:  []int{int(v.Ucode)},
+			Measured: []int{int(ucode)},
+		},
+	}
+	ok := r.Bl.Success && r.Tee.Success && r.Snp.Success && r.Ucode.Success
+	r.Summary.Success = ok
+
+	return r, ok
+}
+
+func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain) (SignatureResult, bool) {
 	result := SignatureResult{}
 
 	if len(reportRaw) < (header_offset + signature_offset) {
@@ -271,7 +361,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, cert []byte) (Signat
 	s.SetBytes(sRaw)
 
 	// Load the VCEK certificate
-	c, err := loadCert(cert)
+	c, err := loadCert(certs.Leaf)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load certificate: %v", err)
 		result.Signature.setFalse(&msg)
@@ -312,6 +402,18 @@ func verifySnpSignature(reportRaw []byte, report snpreport, cert []byte) (Signat
 		return result, false
 	}
 	log.Trace("Successfully verified SNP report signature")
+
+	// Verify the SNP certificate chain
+	err = verifyCertChain(&certs)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
+		result.CertCheck.setFalse(&msg)
+		return result, false
+	} else {
+		result.CertCheck.Success = true
+	}
+
+	result.Signature.Success = true
 
 	return result, true
 }
@@ -354,4 +456,32 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) (ResultMulti
 	result.Success = ok
 
 	return result, ok
+}
+
+func min(v []uint8) uint8 {
+	if len(v) == 0 {
+		return 0
+	}
+	min := v[0]
+	for _, v := range v {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func checkMinVersion(version []uint8, ref []uint8) bool {
+	if len(version) != len(ref) {
+		log.Warn("Internal Error: Version arrays differ in length")
+		return false
+	}
+	for i := range version {
+		if version[i] > ref[i] {
+			return true
+		} else if version[i] < ref[i] {
+			return false
+		}
+	}
+	return true
 }

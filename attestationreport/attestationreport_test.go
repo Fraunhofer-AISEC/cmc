@@ -17,6 +17,7 @@ package attestationreport
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -38,6 +39,23 @@ var (
 	testKey  *ecdsa.PrivateKey
 	nonce    []byte
 )
+
+type SwSigner struct {
+	certChain CertChain
+	priv      crypto.PrivateKey
+}
+
+func (s *SwSigner) Lock() {}
+
+func (s *SwSigner) Unlock() {}
+
+func (s *SwSigner) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
+}
+
+func (s *SwSigner) GetCertChain() CertChain {
+	return s.certChain
+}
 
 func createCertsAndKeys() error {
 
@@ -128,10 +146,17 @@ func TestVerify(t *testing.T) {
 
 	// Generate and sign attestation report to test Verify() function
 	var metadata [][]byte
-	a := Generate(nonce, metadata, []Measurement{}, []MeasurementParams{})
+	a := Generate(nonce, metadata, []Measurement{})
 
-	certsPem := [][]byte{testCert, testCA}
-	ok, ar := Sign(nil, a, testKey, &testKey.PublicKey, certsPem)
+	swSigner := &SwSigner{
+		priv: testKey,
+		certChain: CertChain{
+			Leaf: testCert,
+			Ca:   testCA,
+		},
+	}
+
+	ok, ar := Sign(a, swSigner)
 	if !ok {
 		t.Error("Internal Error: Failed to sign Attestion Report")
 		return

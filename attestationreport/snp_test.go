@@ -20,36 +20,6 @@ import (
 )
 
 var (
-	validNonce = []byte{0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23}
-
-	invalidNonce = []byte{0xAA, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23}
-
-	validMeasurement = "5131eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c"
-
-	invalidMeasurement = "ab31eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c"
-
-	validSnpPolicy = SnpPolicy{
-		Type:         "SNP Policy",
-		SingleSocket: false,
-		Debug:        false,
-		Migration:    false,
-		Smt:          true,
-		AbiMajor:     0,
-		AbiMinor:     0,
-	}
-
-	invalidSnpPolicy = SnpPolicy{
-		Type:         "SNP Policy",
-		SingleSocket: false,
-		Debug:        true,
-		Migration:    false,
-		Smt:          true,
-		AbiMajor:     0,
-		AbiMinor:     0,
-	}
-
-	validVersion = uint32(2)
-
 	validReport = []byte{
 		0x00, 0x00, 0x00, 0x00, 0xa0, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -984,22 +954,78 @@ var (
 		0x41, 0x54, 0x45, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x0a,
 	}
 
+	validNonce = []byte{0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23}
+
+	invalidNonce = []byte{0xAA, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23}
+
+	validMeasurement = "5131eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c"
+
+	invalidMeasurement = "ab31eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c"
+
 	validCertChain = CertChain{
-		Leaf:          string(validVcek),
-		Intermediates: []string{string(ask_milan)},
-		Ca:            string(ark_milan),
+		Leaf:          validVcek,
+		Intermediates: [][]byte{ask_milan},
+		Ca:            ark_milan,
 	}
 
 	invalidCertChain = CertChain{
-		Leaf:          string(validVcek),
+		Leaf:          validVcek,
 		Intermediates: nil,
-		Ca:            string(ark_milan),
+		Ca:            ark_milan,
 	}
 
 	invalidLeafCert = CertChain{
-		Leaf:          string(invalidVcek),
-		Intermediates: []string{string(ask_milan)},
-		Ca:            string(ark_milan),
+		Leaf:          invalidVcek,
+		Intermediates: [][]byte{ask_milan},
+		Ca:            ark_milan,
+	}
+
+	validSnpPolicy = SnpPolicy{
+		Type:         "SNP Policy",
+		SingleSocket: false,
+		Debug:        false,
+		Migration:    false,
+		Smt:          true,
+		AbiMajor:     0,
+		AbiMinor:     0,
+	}
+
+	invalidSnpPolicy = SnpPolicy{
+		Type:         "SNP Policy",
+		SingleSocket: false,
+		Debug:        true,
+		Migration:    false,
+		Smt:          true,
+		AbiMajor:     0,
+		AbiMinor:     0,
+	}
+
+	validVersion = uint32(2)
+
+	validFw = SnpFw{
+		Build: 3,
+		Major: 1,
+		Minor: 51,
+	}
+
+	invalidFw = SnpFw{
+		Build: 4,
+		Major: 1,
+		Minor: 51,
+	}
+
+	validTcb = SnpTcb{
+		Bl:    2,
+		Tee:   0,
+		Snp:   6,
+		Ucode: 67,
+	}
+
+	invalidTcb = SnpTcb{
+		Bl:    2,
+		Tee:   0,
+		Snp:   6,
+		Ucode: 68,
 	}
 )
 
@@ -1024,10 +1050,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1044,10 +1074,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1064,10 +1098,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1084,10 +1122,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1104,10 +1146,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1124,10 +1170,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  invalidMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: invalidMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1144,10 +1194,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &invalidSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  invalidSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1164,10 +1218,14 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
 					},
 				},
 				nonce: invalidNonce,
@@ -1209,10 +1267,62 @@ func Test_verifySnpMeasurements(t *testing.T) {
 			args: args{
 				snpV: []Verification{
 					{
-						Type:    "SNP Verification",
-						Sha384:  validMeasurement,
-						Version: &validVersion,
-						Policy:  &validSnpPolicy,
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
+						},
+					},
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Firmware",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: []Verification{
+					{
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      invalidFw,
+							Tcb:     validTcb,
+						},
+					},
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid TCB",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: []Verification{
+					{
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     invalidTcb,
+						},
 					},
 				},
 				nonce: validNonce,
@@ -1224,6 +1334,34 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, got := verifySnpMeasurements(tt.args.snpM, tt.args.nonce, tt.args.snpV); got != tt.want {
 				t.Errorf("verifySnpMeasurements() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_checkMinVersion(t *testing.T) {
+	type args struct {
+		version []uint8
+		ref     []uint8
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"Valid: Same Version", args{[]uint8{1, 2, 3}, []uint8{1, 2, 3}}, true},
+		{"Valid: Higher Major", args{[]uint8{3, 2, 3}, []uint8{1, 2, 3}}, true},
+		{"Valid: Higher Minor", args{[]uint8{1, 5, 3}, []uint8{1, 2, 3}}, true},
+		{"Valid: Higher Build", args{[]uint8{1, 2, 9}, []uint8{1, 2, 3}}, true},
+		{"Invalid: Lower Major", args{[]uint8{1, 2, 3}, []uint8{2, 2, 3}}, false},
+		{"Invalid: Lower Minor", args{[]uint8{1, 2, 3}, []uint8{1, 3, 3}}, false},
+		{"Invalid: Lower Build", args{[]uint8{1, 2, 3}, []uint8{1, 2, 4}}, false},
+		{"Invalid: Different Length", args{[]uint8{1, 2, 3}, []uint8{2, 3}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := checkMinVersion(tt.args.version, tt.args.ref); got != tt.want {
+				t.Errorf("checkMinVersion() = %v, want %v", got, tt.want)
 			}
 		})
 	}
