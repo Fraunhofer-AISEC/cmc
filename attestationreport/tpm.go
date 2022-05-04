@@ -277,6 +277,8 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert string) SignatureResult {
 	// Store Name and Organization of AK Cert for the report
 	result.Name = x509Cert.Subject.CommonName
 	result.Organization = x509Cert.Subject.Organization
+	result.SubjectKeyId = hex.EncodeToString(x509Cert.SubjectKeyId)
+	result.AuthorityKeyId = hex.EncodeToString(x509Cert.AuthorityKeyId)
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)

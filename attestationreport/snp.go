@@ -279,6 +279,8 @@ func verifySnpSignature(reportRaw []byte, report snpreport, cert []byte) (Signat
 	}
 	result.Name = c.Subject.CommonName
 	result.Organization = c.Subject.Organization
+	result.SubjectKeyId = hex.EncodeToString(c.SubjectKeyId)
+	result.AuthorityKeyId = hex.EncodeToString(c.AuthorityKeyId)
 
 	// Examine SNP x509 extensions
 	extensionResult, ok := verifySnpExtensions(c, &report)

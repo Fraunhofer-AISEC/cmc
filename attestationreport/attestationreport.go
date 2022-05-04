@@ -776,11 +776,15 @@ func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 		if err == nil {
 			result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
 			result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
+			result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
+			result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
 			result.SignatureCheck[i].CertCheck.Success = true
 		} else {
 			if certs != nil {
 				result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
 				result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
+				result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
+				result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
 			}
 			msg := fmt.Sprintf("Validation of certificate chain failed: %v", err)
 			result.SignatureCheck[i].CertCheck.setFalse(&msg)
