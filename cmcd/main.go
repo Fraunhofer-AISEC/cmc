@@ -34,7 +34,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	pc "github.com/Fraunhofer-AISEC/cmc/provclient"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
-	"github.com/fsnotify/fsnotify"
 )
 
 type config struct {
@@ -194,32 +193,6 @@ func loadCerts(c *config) (Certs, error) {
 	return certs, nil
 }
 
-func watchFileChanges(watcher *fsnotify.Watcher, config *ServerConfig, path string) {
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			log.Tracef("file system event: %v", event)
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				log.Tracef("modified file: %v", event.Name)
-				metadata, _, pcrs, err := loadMetadata(path)
-				if err != nil {
-					return
-				}
-				config.Metadata = metadata
-				config.Pcrs = pcrs
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Println("error:", err)
-		}
-	}
-}
-
 func main() {
 
 	log.SetFormatter(&log.TextFormatter{
@@ -327,21 +300,6 @@ func main() {
 		Pcrs:     pcrs,
 		Roles:    roles,
 		Tpm:      &tpmdriver.Tpm{},
-	}
-
-	// Watch file system for metadata file changes
-	log.Tracef("Registering watcher for file changes in %v", c.LocalPath)
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Errorf("Failed to create watcher for file changes: %v", err)
-		return
-	}
-	defer watcher.Close()
-	go watchFileChanges(watcher, serverConfig, c.LocalPath)
-	err = watcher.Add(c.LocalPath)
-	if err != nil {
-		log.Errorf("Failed to add watcher for file changes in %v", c.LocalPath)
-		return
 	}
 
 	server := NewServer(serverConfig)
