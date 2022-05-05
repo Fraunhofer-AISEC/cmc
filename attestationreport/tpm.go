@@ -30,7 +30,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	ok := true
 
 	// If the attestationreport does contain neither TPM measurements, nor TPM verifications
-	// there is nothing to to
+	// there is nothing to do
 	if tpmM == nil && len(verifications) == 0 {
 		return nil, true
 	}
