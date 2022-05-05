@@ -563,21 +563,21 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 		result.Success = false
 	}
 
-	// If present, verify TPM measurements against RTM and OS Manifest verifications
+	// If present, verify TPM measurements against provided TPM verifications
 	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(ar.TpmM, nonce,
 		verifications["TPM Verification"])
 	if !ok {
 		result.Success = false
 	}
 
-	// If present, verify AMD SEV SNP measurements against RTM Manifest verifications
+	// If present, verify AMD SEV SNP measurements against provided SNP verifications
 	result.MeasResult.SnpMeasResult, ok = verifySnpMeasurements(ar.SnpM, nonce,
 		verifications["SNP Verification"])
 	if !ok {
 		result.Success = false
 	}
 
-	// If present, verify software measurements against app manifest verifications
+	// If present, verify software measurements against provided software verifications
 	result.MeasResult.SwMeasResult, ok = verifySwMeasurements(ar.SWM,
 		verifications["SW Verification"])
 	if !ok {
@@ -592,9 +592,6 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	for _, app := range ar.AppManifests {
 		levels = append(levels, app.CertificationLevel)
 	}
-	if ar.CompanyDescription != nil {
-		levels = append(levels, ar.CompanyDescription.CertificationLevel)
-	}
 	aggCertLevel := levels[0]
 	for _, l := range levels {
 		if l < aggCertLevel {
@@ -605,7 +602,7 @@ func Verify(arRaw string, nonce, caCertPem []byte, roles *SignerRoles) Verificat
 	// If there are verifications with a higher trust level present, the remote attestation
 	// must fail
 	if result.MeasResult.TpmMeasResult == nil && result.MeasResult.SnpMeasResult == nil && aggCertLevel > 1 {
-		msg := fmt.Sprintf("No hardware trust anchor measurements present but demanded certification level is %v, which requires a hardware trust anchor", aggCertLevel)
+		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ProcessingError = append(result.ProcessingError, msg)
 		result.Success = false
 	}
@@ -972,7 +969,6 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
 		if !ok {
 			log.Trace("Verification of Company Description Signatures failed")
-			result.CompDescResult.Summary.Success = false
 			result.Success = false
 		}
 		err = json.Unmarshal(payload, &ar.CompanyDescription)
