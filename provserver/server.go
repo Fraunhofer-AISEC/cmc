@@ -40,6 +40,7 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
@@ -437,6 +438,68 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	return &retBuf, nil
 }
 
+// HandleSwCertRequest handles a software CSR request
+func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
+
+	var req swdriver.SwCertRequest
+	decoder := gob.NewDecoder(buf)
+	decoder.Decode(&req)
+
+	block, _ := pem.Decode(req.Csr)
+	if block == nil {
+		return nil, fmt.Errorf("PEM Decoding failed")
+	}
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("Parsing CSR failed: %v", err)
+	}
+	if err = csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("PEM Check Signature failed: %v", err)
+	}
+
+	tmpl := x509.Certificate{
+		Signature:          csr.Signature,
+		SignatureAlgorithm: csr.SignatureAlgorithm,
+
+		PublicKeyAlgorithm: csr.PublicKeyAlgorithm,
+		PublicKey:          csr.PublicKey,
+
+		SerialNumber: big.NewInt(1),
+		Issuer:       dataStore.DeviceSubCaCert.Subject,
+		Subject:      csr.Subject,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+
+	cert, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, csr.PublicKey, dataStore.DeviceSubCaPriv)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create certificate: %v", err)
+	}
+
+	tmp := &bytes.Buffer{}
+	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
+	log.Trace("Generated new SW Signing Certificate: ", tmp.String())
+
+	certResponse := swdriver.SwCertResponse{
+		Certs: ar.CertChain{
+			Leaf:          tmp.Bytes(),
+			Intermediates: [][]byte{dataStore.DeviceSubCaCertPem},
+			Ca:            dataStore.CaCertPem,
+		},
+	}
+
+	var retBuf bytes.Buffer
+	e := gob.NewEncoder(&retBuf)
+	err = e.Encode(certResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error Generating AK Cert - Encode returned %v", err)
+	}
+
+	return &retBuf, nil
+}
+
 // HTTP handler for TPM Credential activation and Issuing of AK Certificates
 func handleActivateCredential(writer http.ResponseWriter, req *http.Request) {
 
@@ -523,6 +586,59 @@ func handleActivateCredential(writer http.ResponseWriter, req *http.Request) {
 			log.Warn(msg)
 			http.Error(writer, msg, http.StatusBadRequest)
 			return
+		}
+	} else {
+		msg := fmt.Sprintf("Unsupported HTTP Method %v", req.Method)
+		log.Warn(msg)
+		http.Error(writer, msg, http.StatusBadRequest)
+		return
+	}
+}
+
+func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
+
+	log.Debug("Received ", req.Method)
+
+	if strings.Compare(req.Method, "POST") == 0 {
+
+		ctype := req.Header.Get("Content-Type")
+		log.Debug("Content-Type: ", ctype)
+
+		if strings.Compare(ctype, "signing/csr") == 0 {
+			log.Debug("Received signing/csr")
+
+			b, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				msg := fmt.Sprintf("Error Signing CSR - %v", err)
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+			buf := bytes.NewBuffer(b)
+
+			// Handle the certificate request
+			retBuf, err := HandleSwCertRequest(buf)
+			if err != nil {
+				msg := fmt.Sprintf("Error Signing CSR - %v", err)
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+
+			// Send back response
+			n, err := writer.Write(retBuf.Bytes())
+			if err != nil {
+				msg := fmt.Sprintf("Error Signing CSR - %v", err)
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+			if n != len(retBuf.Bytes()) {
+				msg := fmt.Sprintf("Error Signing CSR - not all bytes sent")
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
 		}
 	} else {
 		msg := fmt.Sprintf("Unsupported HTTP Method %v", req.Method)
@@ -700,6 +816,9 @@ func main() {
 
 	// TPM Credential Activation and AK Cert Generation
 	http.HandleFunc("/activate-credential/", handleActivateCredential)
+
+	// Software Signing of CSRs
+	http.HandleFunc("/sw-signing/", handleSwSigning)
 
 	port := fmt.Sprintf(":%v", config.Port)
 	err = http.ListenAndServe(port, nil)
