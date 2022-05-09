@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20220221170844-cc89a83ce70c
-	github.com/fsnotify/fsnotify v1.5.1
 	github.com/golang/protobuf v1.5.2
 	github.com/google/certificate-transparency-go v1.1.1
 	github.com/google/go-tpm v0.3.3
