@@ -306,18 +306,6 @@ type ArJws struct {
 	Nonce              string          `json:"nonce"`
 }
 
-// In IDS contexts, the different certificates used for signing meta-data
-// must have appropriate roles so that e.g. an operator cannot impersonate
-// an evaluator. This is an optional feature. If used, the corresponding
-// roles must be set in the  OrganizationalUnit (OU) field in the
-// x.509 certificates
-type SignerRoles struct {
-	ManifestSigners    []string
-	CompanyDescSigners []string
-	ArSigners          []string
-	ConnDescSigners    []string
-}
-
 // Generate generates an attestation report with the provided
 // nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
 // descriptions must be raw JWS tokens in the JWS JSON full serialization
@@ -528,14 +516,14 @@ func Sign(ar ArJws, signer Signer) (bool, []byte) {
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the verifications and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, casPem []byte, roles *SignerRoles) VerificationResult {
+func Verify(arRaw string, nonce, casPem []byte) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
 		SwCertLevel: 0}
 
 	// Verify ALL signatures and unpack plain AttestationReport
-	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem, roles)
+	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem)
 	if ar == nil {
 		result.InternalError = true
 	}
@@ -745,7 +733,7 @@ func loadPrivateKey(data []byte) interface{} {
 // Verifies signatures and certificate chains for JWS tokens
 // Optionally uses the 'OU' field of the certificate to check if the certificate
 // was signed by a valid role.
-func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []byte, bool) {
+func VerifyJws(data string, roots *x509.CertPool) (JwsResult, []byte, bool) {
 	opts := x509.VerifyOptions{
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 		Roots:     roots,
@@ -818,36 +806,6 @@ func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 				result.Summary.setFalseMulti(&msg)
 			}
 		}
-
-		// Optionally validate that the JWS token was signed with a certificate with the correct
-		// role which is set in the 'OU' field of the certificate
-		if roles != nil {
-			if len(roles) != len(jwsData.Signatures) {
-				msg := fmt.Sprintf("Expected %v signatures for JWS (got %v)", len(roles), len(jwsData.Signatures))
-				result.Summary.setFalseMulti(&msg)
-				return result, nil, false
-			}
-			if len(certs[0][0].Subject.OrganizationalUnit) == 0 {
-				rc := Result{}
-				result.SignatureCheck[i].RoleCheck = &rc
-				msg := fmt.Sprintf("Failed to check roles: Cert does not contain OU field")
-				result.SignatureCheck[i].RoleCheck.setFalse(&msg)
-				ok = false
-				continue
-			}
-			r := certs[0][0].Subject.OrganizationalUnit[0]
-			if r == roles[i] {
-				rc := Result{
-					Success: true}
-				result.SignatureCheck[i].RoleCheck = &rc
-			} else {
-				rc := Result{}
-				result.SignatureCheck[i].RoleCheck = &rc
-				msg := fmt.Sprintf("Role %v does not match expected role %v", r, roles[i])
-				result.SignatureCheck[i].RoleCheck.setFalse(&msg)
-				ok = false
-			}
-		}
 	}
 
 	payload := payloads[0]
@@ -856,7 +814,7 @@ func VerifyJws(data string, roots *x509.CertPool, roles []string) (JwsResult, []
 	return result, payload, ok
 }
 
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte, roles *SignerRoles) (bool, *ArPlain) {
+func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte) (bool, *ArPlain) {
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
 		return false, nil
@@ -873,14 +831,8 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		return false, &ar
 	}
 
-	// Roles are optional, only use them if provided
-	r := SignerRoles{}
-	if roles != nil {
-		r = *roles
-	}
-
 	//Validate Attestation Report signature
-	jwsValRes, payload, ok := VerifyJws(attestationReport, roots, r.ArSigners)
+	jwsValRes, payload, ok := VerifyJws(attestationReport, roots)
 	result.ReportSignature = jwsValRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of Attestation Report Signatures failed")
@@ -905,7 +857,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar.Nonce = arJws.Nonce
 
 	// Validate and unpack Rtm Manifest
-	jwsValRes, payload, ok = VerifyJws(arJws.RtmManifest, roots, r.ManifestSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.RtmManifest, roots)
 	result.RtmResult.Summary = jwsValRes.Summary
 	result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
@@ -927,7 +879,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack OS Manifest
-	jwsValRes, payload, ok = VerifyJws(arJws.OsManifest, roots, r.ManifestSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.OsManifest, roots)
 	result.OsResult.Summary = jwsValRes.Summary
 	result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
@@ -952,7 +904,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	for i, amSigned := range arJws.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
-		jwsValRes, payload, ok = VerifyJws(amSigned, roots, r.ManifestSigners)
+		jwsValRes, payload, ok = VerifyJws(amSigned, roots)
 		result.AppResults[i].Summary = jwsValRes.Summary
 		result.AppResults[i].SignatureCheck = jwsValRes.SignatureCheck
 		if !ok {
@@ -981,7 +933,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	// Validate and unpack Company Description if present
 	if arJws.CompanyDescription != "" {
-		jwsValRes, payload, ok = VerifyJws(arJws.CompanyDescription, roots, r.CompanyDescSigners)
+		jwsValRes, payload, ok = VerifyJws(arJws.CompanyDescription, roots)
 		result.CompDescResult = &CompDescResult{}
 		result.CompDescResult.Summary = jwsValRes.Summary
 		result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
@@ -1008,7 +960,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Device Description
-	jwsValRes, payload, ok = VerifyJws(arJws.DeviceDescription, roots, r.ConnDescSigners)
+	jwsValRes, payload, ok = VerifyJws(arJws.DeviceDescription, roots)
 	result.DevDescResult.Summary = jwsValRes.Summary
 	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
