@@ -250,19 +250,8 @@ func main() {
 		signer = sw
 	}
 
-	// The verification requires different roles for different certificate chains
-	// to avoid impersonation
-	// roles := &ar.SignerRoles{
-	// 	ManifestSigners:    []string{"developer", "evaluator", "certifier"},
-	// 	CompanyDescSigners: []string{"operator", "evaluator", "certifier"},
-	// 	ArSigners:          []string{"device"},
-	// 	ConnDescSigners:    []string{"operator"},
-	// }
-
 	serverConfig := &ServerConfig{
-		Metadata: metadata,
-		//Roles:    roles,
-		// TODO handle more then 1 CA, put this in gRPC verify call
+		Metadata:              metadata,
 		VerifyingCas:          verifyingCerts,
 		MeasurementInterfaces: measurements,
 		Signer:                signer,

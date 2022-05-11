@@ -38,9 +38,7 @@ import (
 type ServerConfig struct {
 	VerifyingCas []byte
 	// metadata (manifests and descriptions of the device)
-	Metadata [][]byte
-	// TODO remove Certificate Signer roles to avoid impersonation attacks on certificates
-	Roles                 *ar.SignerRoles
+	Metadata              [][]byte
 	MeasurementInterfaces []ar.Measurement
 	Signer                ar.Signer
 }
@@ -122,7 +120,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.config.VerifyingCas, s.config.Roles)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.config.VerifyingCas)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

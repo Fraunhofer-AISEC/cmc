@@ -124,14 +124,13 @@ func TestVerify(t *testing.T) {
 	type args struct {
 		nonce     *[]byte
 		caCertPem *[]byte
-		roles     *SignerRoles
 	}
 	tests := []struct {
 		name string
 		args args
 		want VerificationResult
 	}{
-		{name: "Empty Attestation Report", args: args{nonce: &nonce, caCertPem: &testCA, roles: nil}, want: VerificationResult{Success: false}},
+		{name: "Empty Attestation Report", args: args{nonce: &nonce, caCertPem: &testCA}, want: VerificationResult{Success: false}},
 	}
 
 	// Setup logger
@@ -165,7 +164,7 @@ func TestVerify(t *testing.T) {
 	// Perform unit tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, tt.args.roles)
+			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem)
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}
@@ -191,7 +190,7 @@ func TestVerifyJws(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, got := VerifyJws(tt.args.data, tt.args.roots, tt.args.roles)
+			_, _, got := VerifyJws(tt.args.data, tt.args.roots)
 			if got != tt.want {
 				t.Errorf("VerifyJws() got = %v, want %v", got, tt.want)
 			}
