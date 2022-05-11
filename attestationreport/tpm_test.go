@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -437,14 +438,13 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got1 := verifyTpmMeasurements(tt.args.tpmM, tt.args.nonce, tt.args.verifications)
+			got, got1 := verifyTpmMeasurements(tt.args.tpmM, tt.args.nonce, tt.args.verifications)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
-			// TODO
-			// if !reflect.DeepEqual(got, tt.want) {
-			// 	t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n--WANT = %v", got, tt.want)
-			// }
+			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n--WANT = %v", got, tt.want)
+			}
 		})
 	}
 }
