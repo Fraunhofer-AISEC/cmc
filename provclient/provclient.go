@@ -42,7 +42,7 @@ type Content struct {
 }
 
 // FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
-func FetchMetadata(serverAddr, serverPath, localPath string) error {
+func FetchMetadata(addr, localPath string) error {
 
 	if _, err := os.Stat(localPath); err != nil {
 		if err := os.Mkdir(localPath, 0755); err != nil {
@@ -70,8 +70,8 @@ func FetchMetadata(serverAddr, serverPath, localPath string) error {
 	}
 
 	// Read file root directory
-	log.Info("Requesting data for ", serverPath)
-	resp, err := http.Get(serverAddr + serverPath)
+	log.Info("Requesting data for ", addr)
+	resp, err := http.Get(addr)
 	if err != nil {
 		log.Error("HTTP request failed: ", err)
 		return err
@@ -99,7 +99,7 @@ func FetchMetadata(serverAddr, serverPath, localPath string) error {
 	}
 
 	// Parse subdirectories recursively and save files
-	err = fetchDataRecursively(pre, serverAddr, serverPath, localPath)
+	err = fetchDataRecursively(pre, addr, localPath)
 	if err != nil {
 		log.Error("Error saving data - ", err)
 		return err
@@ -108,13 +108,18 @@ func FetchMetadata(serverAddr, serverPath, localPath string) error {
 	return nil
 }
 
-func fetchDataRecursively(pre Pre, serverAddr, serverPath, localPath string) error {
+func fetchDataRecursively(pre Pre, addr, localPath string) error {
 	for i := 0; i < len(pre.Content); i++ {
 
 		// Read content
-		subpath := filepath.Join(serverPath, pre.Content[i].Name)
+		var subpath string
+		if addr[len(addr)-1:] == "/" {
+			subpath = addr + pre.Content[i].Name
+		} else {
+			subpath = addr + "/" + pre.Content[i].Name
+		}
 		log.Debug("Requesting ", subpath)
-		resp, err := http.Get(serverAddr + subpath)
+		resp, err := http.Get(subpath)
 		if err != nil {
 			log.Error("HTTP request failed: ", err)
 			return err
@@ -143,7 +148,7 @@ func fetchDataRecursively(pre Pre, serverAddr, serverPath, localPath string) err
 				log.Error("Error Unmarshalling - ", err)
 				return err
 			}
-			err = fetchDataRecursively(pre, serverAddr, subpath, localPath)
+			err = fetchDataRecursively(pre, subpath, localPath)
 			if err != nil {
 				log.Error("Error saving data - ", err)
 				return err
@@ -156,14 +161,10 @@ func fetchDataRecursively(pre Pre, serverAddr, serverPath, localPath string) err
 				log.Error("Failed to read response - ", err)
 				return err
 			}
+
 			log.Trace("Content:\n", string(content))
 
-			lp := filepath.Join(localPath, serverPath[len(serverPath):])
-			log.Debug("Creating path ", lp)
-			if err = os.MkdirAll(lp, 0755); err != nil {
-				log.Error("Failed to create path - ", err)
-			}
-			file := filepath.Join(lp, pre.Content[i].Name)
+			file := filepath.Join(localPath, pre.Content[i].Name)
 			log.Debug("Writing file: ", file)
 			err = os.WriteFile(file, content, 0644)
 			if err != nil {
