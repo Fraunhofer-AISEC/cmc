@@ -1,11 +1,10 @@
 {
     "port": 9955,
     "provServerAddr": "http://127.0.0.1:9001/",
-    "serverPath": "metadata-signed/",
     "localPath": "data-cmc/",
     "fetchMetadata": true,
     "measurementInterfaces": [ "TPM" ],
-    "signingInterface": "SW",
+    "signingInterface": "TPM",
     "useIma": false,
     "imaPcr": 10,
     "keyConfig": "EC256"

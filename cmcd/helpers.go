@@ -71,9 +71,8 @@ func getFilePath(p, base string) string {
 
 func printConfig(c *config) {
 	log.Info("Using the following configuration:")
-	log.Info("CMC Port                   : ", c.Port)
-	log.Info("\tConfiguration Server URL : ", c.ServerAddr)
-	log.Info("\tConfiguration Server Path: ", c.ServerPath)
+	log.Info("\tCMC Port                 : ", c.Port)
+	log.Info("\tProvisioning Server URL  : ", c.ProvServerAddr)
 	log.Info("\tLocal Config Path        : ", c.LocalPath)
 	log.Info("\tFetch Metadata           : ", c.FetchMetadata)
 	log.Info("\tUse IMA                  : ", c.UseIma)

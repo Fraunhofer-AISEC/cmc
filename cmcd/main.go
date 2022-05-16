@@ -39,8 +39,7 @@ import (
 
 type config struct {
 	Port                  int      `json:"port"`
-	ServerAddr            string   `json:"provServerAddr"`
-	ServerPath            string   `json:"serverPath"`
+	ProvServerAddr        string   `json:"provServerAddr"`
 	LocalPath             string   `json:"localPath"`
 	FetchMetadata         bool     `json:"fetchMetadata"`
 	MeasurementInterfaces []string `json:"measurementInterfaces"` // TPM, SNP
@@ -145,13 +144,19 @@ func main() {
 
 	log.SetLevel(log.TraceLevel)
 
-	log.Info("Starting CMC")
+	log.Info("Starting cmcd")
 
 	configFile := flag.String("config", "", "configuration file")
+	metadataAddr := flag.String("addr", "", "metadata server address")
 	flag.Parse()
 
+	if *metadataAddr == "" {
+		log.Error("Metadata server address not specified with -addr. Abort")
+		return
+	}
+
 	if *configFile == "" {
-		log.Error("Config file not specified. Please specify a config file")
+		log.Error("Config file not specified with -config. Abort")
 		return
 	}
 	if _, err := os.Stat(*configFile); err != nil {
@@ -170,7 +175,7 @@ func main() {
 	// If configured, fetch device metadata from provisioning server and store it
 	// on the local path specified in the cmcd configuration, afterwards load it
 	if c.FetchMetadata {
-		err = pc.FetchMetadata(c.ServerAddr, c.ServerPath, c.LocalPath)
+		err = pc.FetchMetadata(*metadataAddr, c.LocalPath)
 		if err != nil {
 			log.Error("Failed to fetch device metadata from provisioning server")
 			return
@@ -200,7 +205,7 @@ func main() {
 				DeviceSubCa: c.deviceSubCaPath,
 				Ca:          c.caPath,
 			},
-			ServerAddr: c.ServerAddr,
+			ServerAddr: c.ProvServerAddr,
 			KeyConfig:  c.KeyConfig,
 			Metadata:   metadata,
 			UseIma:     c.UseIma,
@@ -239,7 +244,7 @@ func main() {
 
 	if c.SigningInterface == "SW" {
 		log.Info("Using SW as Signing Interface")
-		sw, err = swdriver.NewSwDriver(c.ServerAddr)
+		sw, err = swdriver.NewSwDriver(c.ProvServerAddr)
 		if err != nil {
 			log.Errorf("Failed to create new SW driver: %v", err)
 			return

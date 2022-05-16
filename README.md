@@ -28,9 +28,7 @@ Virtual Machine (VM) or server.
 
 The CMC repository contains a complete local example setup including a demo CA and all required
 configurations and metadata. This setup is for demonstrating purposes only. Furthermore,
-it contains a *testclient* that can be run on the same machine to test the generation and
-verification of an attestation report without requiring a second machine and remote attestation
-capable network protocol.
+it provdes testing tools for local and remote attestation.
 
 ```sh
 # Build and run the provisioning server that supplies the certificates and data for the cmcd
@@ -41,7 +39,7 @@ go build
 # Build and run the cmcd
 cd cmc/cmcd
 go build
-./cmcd --config ../example-setup/cmcd-conf.json
+./cmcd --config ../example-setup/cmcd-conf.json --addr http://127.0.0.1:9001/metadata-signed
 
 # Build the testclient
 cd cmc/testclient
@@ -156,14 +154,8 @@ required configuration files is provided in the ```examples/``` folder of this r
 
 The *cmcd* requires a JSON configuration file with the following information:
 - **port**: The port the *cmcd* should listen on
-- **provServerAddr**: The URL of the provisioning server (e.g. http://127.0.0.1.9000/). The server
-serves two purposes: 1) It verifies that the TPM keys were generated on a genuine TPM via EK
-certificates 2) it optionally provides the meta-data (manifests and descriptions) for the device
-(*cmcd* command line argument *--fetch-metadata*)
-- **serverPath**: The HTTP server path for the individual device (e.g. `drtm-example` if
-the full path is `http://127.0.0.1:9000/drtm-example`). This configuration is optional and only
-required if the meta-data files shall be retrieved via the config server (*cmcd* command line
-argument `--fetch-metadata`)
+- **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
+TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
 - **localPath**: the local path to store the meta-data and internal files. In a local setup, all
 manifests and descriptions must be placed in this folder. If the provisioning server is used for
 the meta-data (*cmcd* command line argument *--fetch-metadata*), the *cmcd* will store those files
