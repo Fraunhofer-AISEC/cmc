@@ -31,6 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
@@ -52,44 +53,59 @@ const (
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
-func TestTLSConn(connectoraddress, rootCACertFile string) {
+func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool) {
 	var timeout = 10 * time.Second
-	// get server cert
-	servercert, err := ioutil.ReadFile(rootCACertFile)
+	var conf *tls.Config
+
+	// get root CA cert
+	rootCA, err := ioutil.ReadFile(rootCACertFile)
 	if err != nil {
-		log.Error("[Testclient] Could find root CA cert file.")
-		return
+		log.Error(err)
+		log.Fatal("[Testclient] Could find root CA cert file")
 	}
+
+	// Add root CA
 	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(servercert)
+	success := roots.AppendCertsFromPEM(rootCA)
 	if !success {
-		log.Error("[Testclient] Could not add servercert to root CAs.")
-		return
+		log.Fatal("[Testclient] Could not add cert to root CAs")
 	}
-	// Create TLS config with server as root CA
-	conf := &tls.Config{
-		//InsecureSkipVerify: true,
-		RootCAs: roots,
+
+	if mTLS {
+		// Load own certificate
+		var cert tls.Certificate
+		cert, err = atls.GetCert()
+		if err != nil {
+			log.Fatalf("[Testclient] failed to get TLS Certificate: %v", err)
+		}
+		// Create TLS config with root CA and own certificate
+		conf = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			RootCAs: roots,
+		}
+	} else {
+		// Create TLS config with root CA only
+		conf = &tls.Config{
+			RootCAs: roots,
+		}
 	}
+
 	conn, err := atls.Dial("tcp", connectoraddress, conf)
 	if err != nil {
-		log.Error("[Testclient] failed to dial server. \n", err)
-		return
+		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
 	// write sth
 	_, err = conn.Write([]byte("hello\n"))
 	if err != nil {
-		log.Error("[Testclient] failed to write. \n", err)
-		return
+		log.Fatalf("[Testclient] failed to write: %v", err)
 	}
 	// read sth
 	buf := make([]byte, 100)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Error("[Testclient] failed to read. \n", err)
-		return
+		log.Fatalf("[Testclient] failed to read. %v", err)
 	}
 	log.Info("[Testclient] received: " + string(buf[:n]))
 }
@@ -104,21 +120,22 @@ func main() {
 	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
 	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port to connect to the test connector")
 	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
+	mTLS := flag.Bool("mTLS", false, "Performs mutual TLS with remote attestation on both sides. Only in mode tlsconn")
 	flag.Parse()
 
 	var mode Mode
-	if strings.ToLower(*parsedMode) == strings.ToLower("generate") {
+	if strings.EqualFold(*parsedMode, "generate") {
 		mode = Generate
-	} else if strings.ToLower(*parsedMode) == strings.ToLower("verify") {
+	} else if strings.EqualFold(*parsedMode, "verify") {
 		mode = Verify
-	} else if strings.ToLower(*parsedMode) == strings.ToLower("tlsconn") {
+	} else if strings.EqualFold(*parsedMode, "tlsconn") {
 		mode = TLSConn
 	} else {
 		log.Fatal("Wrong mode. Possible [Generate | Verify | TLSConn]")
 	}
 
 	addr := fmt.Sprintf("localhost:%v", *port)
-	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -190,7 +207,7 @@ func main() {
 		ioutil.WriteFile(*resultFile, out.Bytes(), 0644)
 		fmt.Println("Wrote file ", *resultFile)
 	} else if mode == TLSConn {
-		TestTLSConn(*connectoraddress, *rootCACertFile)
+		TestTLSConn(*connectoraddress, *rootCACertFile, *mTLS)
 	} else {
 		log.Println("Unknown mode")
 	}

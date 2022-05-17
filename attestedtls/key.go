@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 )
 
+// Converts Hash Types from crypto.SignerOpts to the types specified in the CMC interface
 func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 	switch opts.HashFunc() {
 	case crypto.MD4:
@@ -63,20 +64,15 @@ func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 	return ci.HashFunction_SHA512, errors.New("[PrivateKey] Could not determine correct Hash function")
 }
 
-/***********************************************************
-* PrivateKey Wrapper Implementing crypto.Signer interface
-* Contacts cmcd for signing operations */
+// PrivateKey Wrapper Implementing crypto.Signer interface
+// Contacts cmcd for signing operations
 type PrivateKey struct {
 	pubKey crypto.PublicKey
 }
 
-/* Implementation of Sign() in crypto.Signer iface
- * Contacts cmcd for sign operation */
+// Implementation of Sign() in crypto.Signer iface
+// Contacts cmcd for sign operation and returns received signature
 func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-	var req ci.TLSSignRequest
-	var resp *ci.TLSSignResponse
-	var hash ci.HashFunction
-	var err error
 	// Get backend connection
 	cmcClient, conn, cancel := getCMCServiceConn()
 	if cmcClient == nil {
@@ -84,33 +80,36 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 	}
 	defer conn.Close()
 	defer cancel()
-	log.Trace("[PrivateKey] Contacting backend for Sign Operation")
+	log.Info("[PrivateKey] Contacting backend for Sign Operation")
+
 	// Create Sign request
-	hash, err = convertHash(opts)
+	hash, err := convertHash(opts)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New("[Private Key] Sign request creation failed")
 	}
-	req = ci.TLSSignRequest{
+	req := ci.TLSSignRequest{
 		Id:       id,
 		Content:  digest,
 		Hashtype: hash,
 	}
+
 	// parse additional signing options - not implemented fields assume recommend defaults
 	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
 		req.PssOpts = &ci.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
 	}
+
 	// Send Sign request
-	resp, err = cmcClient.TLSSign(context.Background(), &req)
+	resp, err := cmcClient.TLSSign(context.Background(), &req)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New("[PrivateKey] Sign request failed")
 	}
+
 	// Check Sign response
 	if resp.GetStatus() != ci.Status_OK {
 		return nil, errors.New("[PrivateKey] Signature creation failed")
 	}
-	log.Info("[PrivateKey] returning signed content of size ", len(resp.GetSignedContent()))
 	log.Trace("[PrivateKey] signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
 	return resp.GetSignedContent(), nil
 }
@@ -119,17 +118,10 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 	return priv.pubKey
 }
 
-/***********************************************************
-* Public function
- */
-
+// Obtains Certificate for the used TLS key from cmcd
 func GetCert() (tls.Certificate, error) {
-	var err error
-	var req ci.TLSCertRequest
-	var resp *ci.TLSCertResponse
-	var x509Cert *x509.Certificate
-	// return
 	var tlsCert tls.Certificate
+
 	// Get backend connection
 	cmcClient, cmcconn, cancel := getCMCServiceConn()
 	if cmcClient == nil {
@@ -137,20 +129,24 @@ func GetCert() (tls.Certificate, error) {
 	}
 	defer cmcconn.Close()
 	defer cancel()
+
 	// Create TLSCert request
-	req = ci.TLSCertRequest{
+	req := ci.TLSCertRequest{
 		Id: id,
 	}
+
 	// Call TLSCert request
-	resp, err = cmcClient.TLSCert(context.Background(), &req)
+	resp, err := cmcClient.TLSCert(context.Background(), &req)
 	if err != nil {
 		log.Error(err)
 		return tls.Certificate{}, errors.New("[Listener] Failed to request TLS certificate")
 	}
+
 	// Check TLSCert response
 	if resp.GetStatus() != ci.Status_OK || len(resp.GetCertificate()) == 0 {
 		return tls.Certificate{}, errors.New("[Listener] Could not receive TLS certificate")
 	}
+
 	// Convert each certificate (assuming it has superfluous "---------[]BEGIN CERTIFICATE[]-----" still there)
 	for _, cert := range resp.GetCertificate() {
 		var currentBlock *pem.Block
@@ -171,12 +167,14 @@ func GetCert() (tls.Certificate, error) {
 	if len(tlsCert.Certificate) == 0 {
 		return tls.Certificate{}, errors.New("[Listener] Could not parse any certificate")
 	}
+
 	// Convert TLS cert (first cert) only to obtain its crypto.PublicKey
-	x509Cert, err = x509.ParseCertificate(tlsCert.Certificate[0])
+	x509Cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
 	if err != nil {
 		log.Error(err)
 		return tls.Certificate{}, errors.New("[Listener] Could not parse certificate")
 	}
+
 	// Create TLS Cert
 	tlsCert.PrivateKey = PrivateKey{pubKey: x509Cert.PublicKey}
 	// return cert

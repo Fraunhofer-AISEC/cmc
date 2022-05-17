@@ -404,7 +404,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(time.Hour * 24 * 180),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment, // encipherment is RSA specific requirement
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		DNSNames:              tlsCertParams.SANs,
 	}
