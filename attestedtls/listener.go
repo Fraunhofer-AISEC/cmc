@@ -1,152 +1,82 @@
 package attestedtls
 
 import (
-	"context"
 	"crypto/tls"
 	"errors"
-	"github.com/golang/protobuf/proto"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"time"
-	// local modules
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
-	log "github.com/sirupsen/logrus"
-	// debug
-	"encoding/hex"
 )
 
-var id = "0000"
 var timeout = 10 * time.Second
 
-/* Checks Attestation report by calling the CMC to Verify and checking its status response
- */
-func obtainAR(req *ci.AttestationRequest) (resp *ci.AttestationResponse, err error) {
-	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn()
-	if cmcClient == nil {
-		return nil, errors.New("[Listener] Connection failed. No result obtained")
-	}
-	defer cmcconn.Close()
-	defer cancel()
-
-	// Extend Attest request with id
-	req.Id = id
-
-	// Call Attest request
-	resp, err = cmcClient.Attest(context.Background(), req)
-	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[Listener] Could not obtain attestation report")
-	}
-
-	// Return response
-	return resp, nil
-}
-
-/***********************************************************
-* net.Listener Wrapper -> attestedtls.Listener
- */
-
 /* Struct to implement Listener interface
- * holds net.Listener and adds additional functionality to its functions */
+ * holds net.Listener and adds additional functionality to it */
 type Listener struct {
-	Ln net.Listener
+	Ln     net.Listener
+	Config *tls.Config
 }
 
-/* Implementation of Accept() in net.Listener iface
- * Additionally creates AR with obtained nonce and returns it
- */
+// Implementation of Accept() in net.Listener iface
+// Calls Accept of the net.Listnener and additionally performs remote attestation
+// after connection establishment before returning the connection
 func (ln Listener) Accept() (net.Conn, error) {
-	var err error
-	var conn net.Conn
-	var data []byte
-	var resp *ci.AttestationResponse
-
 	// Accept TLS connection
-	conn, err = ln.Ln.Accept()
+	conn, err := ln.Ln.Accept()
 	if err != nil {
 		return nil, err
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	log.Trace("TLS established. Providing attestation report....")
+	log.Trace("[Listener] TLS established. Providing attestation report....")
+	tlsConn := conn.(*tls.Conn)
 
-	// Obtain request msg
-	data, err = Read(conn)
+	// Perform remote attestation
+	// include components of tls.Conn to link both protocols: use own cert
+	err = attest(tlsConn, ln.Config.Certificates[0].Certificate[0])
 	if err != nil {
 		log.Error(err)
-		conn.Close()
-		return nil, errors.New("[Listener] Did not receive (right sized) nonce")
-	}
-	log.Trace("[Listener] Received: ", hex.EncodeToString(data))
-
-	// Parse request msg
-	req := &ci.AttestationRequest{}
-	err = proto.Unmarshal(data, req)
-	if err != nil {
-		log.Error(err)
-		conn.Close()
-		return nil, errors.New("[Dialer] Failed to parse attestation request.")
+		return nil, errors.New("[Listener] Failed to attest listener")
 	}
 
-	// Check nonce length
-	if len(req.Nonce) != noncelen {
-		conn.Close()
-		return nil, errors.New("[Dialer] Nonce does not have expected size")
+	// if client provides its cert: mTLS
+	// IMPORTANT: This info can only be obtained, once connection is established
+	// Connection will only be established when used (read/write operations)
+	mTLS := len(tlsConn.ConnectionState().PeerCertificates) != 0
+
+	if mTLS {
+		log.Info("[Listener] Performing mTLS: verifying dialer...")
+		// include components of tls.Conn to link both protocols: use dialer cert
+		// FUTURE: certificate can be obtained differently as well
+		//         (function GetClientCertificate, func GetCertificate or func GetConfigForClient)
+		err = verify(tlsConn, tlsConn.ConnectionState().PeerCertificates[0].Raw[:])
+		if err != nil {
+			log.Error(err)
+			return nil, errors.New("[Listener] Failed to verify dialer")
+		}
+	} else {
+		log.Info("[Listener] No mTLS performed")
 	}
 
-	// Obtain response
-	log.Info("[Listener] Contacting backend for AR verification")
-	resp, err = obtainAR(req)
-	if err != nil {
-		log.Error(err)
-		conn.Close()
-		return nil, errors.New("[Listener] Could not obtain response")
-	}
-	data, err = proto.Marshal(resp)
-	if err != nil {
-		log.Error(err)
-		conn.Close()
-		return nil, errors.New("[Dialer] Failed to marshal response.")
-	}
-
-	// Send response
-	log.Info("[Listener] Sending AR to client")
-	err = Write(data, conn)
-	if err != nil {
-		log.Error(err)
-		conn.Close()
-		return nil, errors.New("[Listener] Failed to write AR")
-	}
-	log.Info("[Listener] Sent AR")
-
-	// FUTURE: Receive some sort of Ack (or send if mTLS)
-	// FUTURE: check for mTLS here: if enabled, create and send nonce to connector, receive and verify its AR
-
-	log.Info("[Listener] Server-side connection complete")
+	log.Info("[Listener] Server-side aTLS connection complete")
 	// finished
 	return conn, nil
 }
 
-/* Implementation of Close in net.Listener iface
- * Only calls original Close(), since no new functionality required
- */
+// Implementation of Close in net.Listener iface
+// Only calls original Close(), since no new functionality required
 func (ln Listener) Close() error {
 	return ln.Ln.Close()
 }
 
-/* Implementation of Addr in net.Listener iface
- * Only calls original Addr(), since no new functionality required
- */
+// Implementation of Addr in net.Listener iface
+// Only calls original Addr(), since no new functionality required
 func (ln Listener) Addr() net.Addr {
 	return ln.Ln.Addr()
 }
 
-/***********************************************************
-* Public function
- */
-
-/* Wrapper for tls.Listen
- * Returns custom Listener that will perform steps to send the AR right after connection establishment
- */
+// Wrapper for tls.Listen
+// Returns custom Listener that will perform additional remote attestation
+// operations right after successful TLS connection establishment
 func Listen(network, laddr string, config *tls.Config) (net.Listener, error) {
 	var listener Listener
 	ln, err := tls.Listen(network, laddr, config)
@@ -154,6 +84,6 @@ func Listen(network, laddr string, config *tls.Config) (net.Listener, error) {
 		log.Error(err)
 		return listener, errors.New("[Listener] Failed")
 	}
-	listener = Listener{ln}
+	listener = Listener{ln, config}
 	return net.Listener(listener), nil
 }

@@ -9,6 +9,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	// local modules
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
@@ -18,12 +19,12 @@ var cmcaddr = "localhost"
 var cmcport = "9955"
 
 /***********************************************************
-* Backend to CMC
- */
+* Backend to CMC */
 
+// Creates connection with cmcd deamon at specified address
 func getCMCServiceConn() (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	conn, err := grpc.DialContext(ctx, cmcaddr+":"+cmcport, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, cmcaddr+":"+cmcport, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Error("[Backend] ERROR: did not connect:", err)
 		cancel()
@@ -35,11 +36,10 @@ func getCMCServiceConn() (ci.CMCServiceClient, *grpc.ClientConn, context.CancelF
 }
 
 /***********************************************************
-* Backend between two connectors / client and connector
- */
+* Backend between two connectors / client and connector */
 
+// Writes byte array to provided channel by first sending length information, then data
 func Write(msg []byte, c net.Conn) error {
-
 	lenbuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenbuf, uint32(len(msg)))
 
@@ -50,14 +50,14 @@ func Write(msg []byte, c net.Conn) error {
 	return err
 }
 
+// Receives byte array from provided channel by first receiving length information, then data
 func Read(c net.Conn) ([]byte, error) {
-
 	lenbuf := make([]byte, 4)
 	_, err := c.Read(lenbuf)
 
 	if err != nil {
 		log.Error(err)
-		return nil, errors.New("[Backend] Failed to receive message: no length.")
+		return nil, errors.New("[Backend] Failed to receive message: no length")
 	}
 
 	len := binary.BigEndian.Uint32(lenbuf) // Max size of 4GB
