@@ -61,7 +61,7 @@ func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool) {
 	rootCA, err := ioutil.ReadFile(rootCACertFile)
 	if err != nil {
 		log.Error(err)
-		log.Fatal("[Testclient] Could find root CA cert file")
+		log.Fatal("[Testclient] Could not find root CA cert file")
 	}
 
 	// Add root CA
@@ -81,7 +81,7 @@ func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool) {
 		// Create TLS config with root CA and own certificate
 		conf = &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			RootCAs: roots,
+			RootCAs:      roots,
 		}
 	} else {
 		// Create TLS config with root CA only
