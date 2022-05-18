@@ -25,10 +25,10 @@ func main() {
 
 	log.SetLevel(log.TraceLevel)
 
-	// get root CA cert
+	// Get root CA cert
 	rootCA, err := ioutil.ReadFile(*rootCACertFile)
 	if err != nil {
-		log.Error("[Testclient] Could find root CA cert file.")
+		log.Error("[Testconnector] Could not find root CA cert file.")
 		return
 	}
 
@@ -36,7 +36,7 @@ func main() {
 	roots := x509.NewCertPool()
 	success := roots.AppendCertsFromPEM(rootCA)
 	if !success {
-		log.Error("[Testclient] Could not add cert to root CAs.")
+		log.Error("[Testconnector] Could not add cert to root CAs.")
 		return
 	}
 
