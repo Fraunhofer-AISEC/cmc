@@ -183,9 +183,10 @@ func (s *server) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCer
 	var resp *ci.TLSCertResponse = &ci.TLSCertResponse{}
 
 	// provide TLS certificate chain
+	certChain := s.config.Signer.GetCertChain()
 	resp.Certificate = make([][]byte, 0)
-	resp.Certificate = append(resp.Certificate, s.config.Signer.GetCertChain().Leaf)
-	resp.Certificate = append(resp.Certificate, s.config.Signer.GetCertChain().Intermediates...)
+	resp.Certificate = append(resp.Certificate, certChain.Leaf)
+	resp.Certificate = append(resp.Certificate, certChain.Intermediates...)
 	resp.Status = ci.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil

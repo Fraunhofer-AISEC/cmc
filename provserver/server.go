@@ -114,14 +114,14 @@ func loadCaPriv(caPrivFile string) (*ecdsa.PrivateKey, error) {
 	// Read private pem-encoded key and convert it to a private key
 	privBytes, err := ioutil.ReadFile(caPrivFile)
 	if err != nil {
-		return nil, fmt.Errorf("Error loading CA - Read private key returned '%v'", err)
+		return nil, fmt.Errorf("error loading CA - Read private key returned '%w'", err)
 	}
 
 	privPem, _ := pem.Decode(privBytes)
 
 	priv, err := x509.ParseECPrivateKey(privPem.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("Error loading CA - ParsePKCS1PrivateKey returned '%v'", err)
+		return nil, fmt.Errorf("error loading CA - ParsePKCS1PrivateKey returned '%w'", err)
 	}
 
 	return priv, nil
@@ -131,81 +131,57 @@ func loadCert(certFile string) (*x509.Certificate, []byte, error) {
 
 	caCertPem, err := ioutil.ReadFile(certFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error loading certificate: Read file %v returned %v", certFile, err)
+		return nil, nil, fmt.Errorf("error loading certificate: Read file %v returned %w", certFile, err)
 	}
 
 	block, _ := pem.Decode(caCertPem)
 
 	caCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error loading certificate - Parse Certificate returned %v", err)
+		return nil, nil, fmt.Errorf("error loading certificate - Parse Certificate returned %w", err)
 	}
 
 	return caCert, caCertPem, nil
 }
 
-func parseCertParams(certParams [][]byte) (akCertParams, tlsCertParams *ar.CertParams, err error) {
-
-	akCertParams = nil
-	tlsCertParams = nil
+func parseCertParams(certParams []byte) (*ar.CertParams, error) {
 
 	roots := cryptoX509.NewCertPool()
 	ok := roots.AppendCertsFromPEM(dataStore.CaCertPem)
-	akCertParams = nil
-	tlsCertParams = nil
 	if !ok {
-		return nil, nil, errors.New("Failed to create cert pool")
+		return nil, errors.New("failed to create cert pool")
 	}
 	opts := cryptoX509.VerifyOptions{
 		KeyUsages: []cryptoX509.ExtKeyUsage{cryptoX509.ExtKeyUsageAny},
 		Roots:     roots,
 	}
 
-	for _, data := range certParams {
-
-		jwsData, err := jose.ParseSigned(string(data))
-		if err != nil {
-			return nil, nil, fmt.Errorf("verifyJws: Data could not be parsed - %v", err)
-		}
-
-		certs, err := jwsData.Signatures[0].Protected.Certificates(opts)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Certificate chain for Cert Params: %v", err)
-		}
-
-		payload, err := jwsData.Verify(certs[0][0].PublicKey)
-		if err != nil {
-			return nil, nil, fmt.Errorf("Signature of Cert Params: %v", err)
-		}
-
-		// Unmarshal the certificate parameters
-		cp := new(ar.CertParams)
-		if err := json.Unmarshal(payload, cp); err != nil {
-			return nil, nil, fmt.Errorf("Failed to unmarshal cert params: %v ", err)
-		}
-		if cp.Type == "AK Cert Params" {
-			log.Debug("Added AK Certificate Parameters")
-			akCertParams = cp
-		} else if cp.Type == "TLS Key Cert Params" {
-			log.Debug("Added TLS Key Certificate Parameters")
-			tlsCertParams = cp
-		} else {
-			return nil, nil, fmt.Errorf("Unknown Cert Params Type: %v", cp.Type)
-		}
+	jwsData, err := jose.ParseSigned(string(certParams))
+	if err != nil {
+		return nil, fmt.Errorf("verifyJws: Data could not be parsed - %w", err)
 	}
 
-	if akCertParams == nil {
-		return nil, nil, fmt.Errorf("Did not find AK certificate parameters")
-	}
-	if tlsCertParams == nil {
-		return nil, nil, fmt.Errorf("Did not find TLS key certificate parameters")
+	certs, err := jwsData.Signatures[0].Protected.Certificates(opts)
+	if err != nil {
+		return nil, fmt.Errorf("certificate chain for Cert Params: %w", err)
 	}
 
-	return akCertParams, tlsCertParams, nil
+	payload, err := jwsData.Verify(certs[0][0].PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("signature of Cert Params: %w", err)
+	}
+
+	// Unmarshal the certificate parameters
+	cp := new(ar.CertParams)
+	if err := json.Unmarshal(payload, cp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal cert params: %w", err)
+	}
+
+	return cp, nil
 }
 
 func getIntelEkCert(certificateURL string) (*x509.Certificate, error) {
-	return nil, fmt.Errorf("Retrieval of Intel EK Certificates not implemented yet")
+	return nil, fmt.Errorf("retrieval of Intel EK Certificates not implemented yet")
 }
 
 // HandleAcRequest handles an Activate Credential Request (Step 1)
@@ -218,22 +194,22 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	d.Decode(&acRequest)
 
 	if acRequest.Ek.Public == nil {
-		return nil, fmt.Errorf("EK Public Key from device not present")
+		return nil, fmt.Errorf("ek public key from device not present")
 	}
 
 	var ekCert *x509.Certificate
 	var err error
 	if acRequest.Ek.Certificate == nil {
 		if acRequest.Ek.CertificateURL == "" {
-			return nil, fmt.Errorf("Neither EK Certificate nor Certificate URL present")
+			return nil, fmt.Errorf("neither EK Certificate nor Certificate URL present")
 		}
 		// Intel TPMs do not provide their EK certificate but instead a certificate URL from where the certificate can be retrieved via its public key
 		if acRequest.TpmInfo.Manufacturer.String() != manufacturerIntel {
-			return nil, fmt.Errorf("EK Certificate not present and Certificate URL not supported for manufacturer %v", acRequest.TpmInfo.Manufacturer)
+			return nil, fmt.Errorf("ek certificate not present and Certificate URL not supported for manufacturer %v", acRequest.TpmInfo.Manufacturer)
 		}
 		ekCert, err = getIntelEkCert(acRequest.Ek.CertificateURL)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to retrieve Intel TPM EK certificate from Intel server: %v", err)
+			return nil, fmt.Errorf("failed to retrieve Intel TPM EK certificate from Intel server: %w", err)
 		}
 	} else {
 		ekCert = acRequest.Ek.Certificate
@@ -242,17 +218,17 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	if dataStore.VerifyEkCert {
 		err := verifyEkCert(dataStore.DbPath, ekCert, &acRequest.TpmInfo)
 		if err != nil {
-			return nil, fmt.Errorf("Verify EK certificate chain: error = %v", err)
+			return nil, fmt.Errorf("verify EK certificate chain: error = %w", err)
 		}
-		log.Debug("Verification of EK certificate chain successful")
+		log.Debug("verification of EK certificate chain successful")
 	} else {
-		log.Warn("Skipping EK certificate chain validation (turned off via config)")
+		log.Warn("skipping EK certificate chain validation (turned off via config)")
 	}
 
 	var ekPub rsa.PublicKey
 	ekPub, ok := acRequest.Ek.Public.(rsa.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("RSA Public Key required for credential activation")
+		return nil, fmt.Errorf("rsa public key required for credential activation")
 	}
 
 	params := attest.ActivationParameters{
@@ -263,7 +239,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	secret, encryptedCredentials, err := params.Generate()
 	if err != nil {
-		return nil, fmt.Errorf("Error Generating Credentials - '%v'", err)
+		return nil, fmt.Errorf("error Generating Credentials - '%w'", err)
 	}
 
 	// Return encrypted credentials to client
@@ -275,7 +251,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	e := gob.NewEncoder(&retBuf)
 	err = e.Encode(acResponse)
 	if err != nil {
-		return nil, fmt.Errorf("Error Activating Credential - '%v'", err)
+		return nil, fmt.Errorf("error Activating Credential - '%w'", err)
 	}
 
 	dataStore.Secret[acRequest.AkQualifiedName] = secret
@@ -294,33 +270,42 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	// Compare the client returned decrypted secret with the
 	// server generated secret
-	if bytes.Compare(akCertRequest.Secret, dataStore.Secret[akCertRequest.AkQualifiedName]) == 0 {
-		log.Debug(fmt.Sprintf("Activate Credential Successful - Secrets match"))
+	if bytes.Equal(akCertRequest.Secret, dataStore.Secret[akCertRequest.AkQualifiedName]) {
+		log.Debug("Activate Credential Successful - Secrets match")
 	} else {
-		return nil, fmt.Errorf("Activate Credential Failed - Secrets do no match")
+		return nil, errors.New("activate credential failed - cecrets do no match")
 	}
 
 	// Parse certificate parameters
-	akCertParams, tlsCertParams, err := parseCertParams(akCertRequest.CertParams)
-	if err != nil {
-		return nil, fmt.Errorf("Activate Credential Failed - Failed to parse certificate parameters: %v", err)
+	akCertParams := ar.CertParams{}
+	tlsCertParams := ar.CertParams{}
+	for _, c := range akCertRequest.CertParams {
+		cp, err := parseCertParams(c)
+		if err != nil {
+			return nil, fmt.Errorf("activate credential Failed - Failed to parse certificate parameters: %w", err)
+		}
+		if cp.Type == "AK Cert Params" {
+			log.Debug("Added AK Certificate Parameters")
+			akCertParams = *cp
+		} else if cp.Type == "TLS Key Cert Params" {
+			log.Debug("Added TLS Key Certificate Parameters")
+			tlsCertParams = *cp
+		} else {
+			return nil, fmt.Errorf("unknown cert params type: %v", cp.Type)
+		}
 	}
 
 	// Generate AK certificate
 	akPub, err := attest.ParseAKPublic(attest.TPMVersion20, dataStore.AkParams[akCertRequest.AkQualifiedName].Public)
 	if err != nil {
-		return nil, fmt.Errorf("Activate Credential Failed - ParseAKPublic returned %v", err)
+		return nil, fmt.Errorf("activate credential failed - ParseAKPublic returned %w", err)
 	}
 
 	encodedpub, err := x509.MarshalPKIXPublicKey(akPub.Public)
 	if err != nil {
-		return nil, fmt.Errorf("Activate Credential Failed - Marshal Public key returned %v", err)
+		return nil, fmt.Errorf("activate credential failed - marshal public key returned %w", err)
 	}
 	ski := sha1.Sum(encodedpub)
-
-	if akCertParams.Subject.OrganizationalUnit != "device" {
-		return nil, fmt.Errorf("Activate Credential Failed - Invalid role ('OU' field) for AK certificate: Must be 'device'")
-	}
 
 	// Create AK Certificate
 	tmpl := x509.Certificate{
@@ -344,7 +329,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	der, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, akPub.Public, dataStore.DeviceSubCaPriv)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create AK certificate: %v", err)
+		return nil, fmt.Errorf("failed to create AK certificate: %w", err)
 	}
 
 	akPem := &bytes.Buffer{}
@@ -354,12 +339,12 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	// Verify that TLS Key is a TPM key signed by the AK
 	pub, err := tpm2.DecodePublic(dataStore.AkParams[akCertRequest.AkQualifiedName].Public)
 	if err != nil {
-		return nil, fmt.Errorf("DecodePublic() failed: %v", err)
+		return nil, fmt.Errorf("decode public failed: %w", err)
 	}
 	akPubVerify := &rsa.PublicKey{E: int(pub.RSAParameters.Exponent()), N: pub.RSAParameters.Modulus()}
 	hash, err := pub.RSAParameters.Sign.Hash.Hash()
 	if err != nil {
-		return nil, fmt.Errorf("cannot access AK's hash function: %v", err)
+		return nil, fmt.Errorf("cannot access AK's hash function: %w", err)
 	}
 	opts := attest.VerifyOpts{
 		Public: akPubVerify,
@@ -368,24 +353,20 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	p := dataStore.TLSKeyParams[akCertRequest.AkQualifiedName]
 	err = p.Verify(opts)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to verify TLS Key with AK: %v", err)
+		return nil, fmt.Errorf("failed to verify TLS Key with AK: %w", err)
 	}
 	log.Debug("Successfully verified TLS key with AK")
 
 	tlsPub, err := attest.ParseAKPublic(attest.TPMVersion20, dataStore.TLSKeyParams[akCertRequest.AkQualifiedName].Public)
 	if err != nil {
-		return nil, fmt.Errorf("Activate Credential Failed - Parse TLS Key returned %v", err)
+		return nil, fmt.Errorf("activate credential Failed - parse TLS key returned %w", err)
 	}
 
 	encodedpub, err = x509.MarshalPKIXPublicKey(tlsPub.Public)
 	if err != nil {
-		return nil, fmt.Errorf("Activate Credential Failed - Marshal Public key returned %v", err)
+		return nil, fmt.Errorf("activate credential failed - marshal public key returned %w", err)
 	}
 	ski = sha1.Sum(encodedpub)
-
-	if tlsCertParams.Subject.OrganizationalUnit != "device" {
-		return nil, fmt.Errorf("Activate Credential Failed - Invalid role ('OU' field) for TLS certificate: Must be 'device'")
-	}
 
 	// Create TLS key certificate
 	tmpl = x509.Certificate{
@@ -403,7 +384,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		SubjectKeyId:          ski[:],
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(time.Hour * 24 * 180),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment, // encipherment is RSA specific requirement
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		DNSNames:              tlsCertParams.SANs,
@@ -411,7 +392,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	der, err = x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, tlsPub.Public, dataStore.DeviceSubCaPriv)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create TLS certificate: %v", err)
+		return nil, fmt.Errorf("failed to create TLS certificate: %w", err)
 	}
 
 	tlsKeyPem := &bytes.Buffer{}
@@ -432,7 +413,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	e := gob.NewEncoder(&retBuf)
 	err = e.Encode(akCertResponse)
 	if err != nil {
-		return nil, fmt.Errorf("Error Generating AK Cert - Encode returned %v", err)
+		return nil, fmt.Errorf("failed to encode: %w", err)
 	}
 
 	return &retBuf, nil
@@ -445,42 +426,50 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&req)
 
-	block, _ := pem.Decode(req.Csr)
-	if block == nil {
-		return nil, fmt.Errorf("PEM Decoding failed")
-	}
-	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	certParams, err := parseCertParams(req.CertParams)
 	if err != nil {
-		return nil, fmt.Errorf("Parsing CSR failed: %v", err)
+		return nil, fmt.Errorf("failed to parse certificate parameters: %w", err)
 	}
-	if err = csr.CheckSignature(); err != nil {
-		return nil, fmt.Errorf("PEM Check Signature failed: %v", err)
+	if certParams.Type != "TLS Key Cert Params" {
+		return nil, fmt.Errorf("unknown cert params type: %v", certParams.Type)
 	}
+
+	pubKey, err := cryptoX509.ParsePKIXPublicKey(req.PubKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	ski := sha1.Sum(req.PubKey)
 
 	tmpl := x509.Certificate{
-		Signature:          csr.Signature,
-		SignatureAlgorithm: csr.SignatureAlgorithm,
-
-		PublicKeyAlgorithm: csr.PublicKeyAlgorithm,
-		PublicKey:          csr.PublicKey,
-
 		SerialNumber: big.NewInt(1),
-		Issuer:       dataStore.DeviceSubCaCert.Subject,
-		Subject:      csr.Subject,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		Subject: pkix.Name{
+			CommonName:         certParams.Subject.CommonName,
+			Country:            []string{certParams.Subject.Country},
+			Province:           []string{certParams.Subject.Province},
+			Locality:           []string{certParams.Subject.Locality},
+			Organization:       []string{certParams.Subject.Organization},
+			OrganizationalUnit: []string{certParams.Subject.OrganizationalUnit},
+			StreetAddress:      []string{certParams.Subject.StreetAddress},
+			PostalCode:         []string{certParams.Subject.PostalCode},
+		},
+		SubjectKeyId:          ski[:],
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour * 24 * 180),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              certParams.SANs,
 	}
 
-	cert, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, csr.PublicKey, dataStore.DeviceSubCaPriv)
+	cert, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, pubKey, dataStore.DeviceSubCaPriv)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create certificate: %v", err)
+		return nil, fmt.Errorf("failed to create TLS certificate: %w", err)
 	}
 
 	tmp := &bytes.Buffer{}
 	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
-	log.Trace("Generated new SW Signing Certificate: ", tmp.String())
+	log.Trace("Generated new SW TLS Certificate: ", tmp.String())
 
 	certResponse := swdriver.SwCertResponse{
 		Certs: ar.CertChain{
@@ -494,7 +483,7 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	e := gob.NewEncoder(&retBuf)
 	err = e.Encode(certResponse)
 	if err != nil {
-		return nil, fmt.Errorf("Error Generating AK Cert - Encode returned %v", err)
+		return nil, fmt.Errorf("failed to generate cert - encode returned %w", err)
 	}
 
 	return &retBuf, nil
@@ -541,7 +530,7 @@ func handleActivateCredential(writer http.ResponseWriter, req *http.Request) {
 				return
 			}
 			if n != len(retBuf.Bytes()) {
-				msg := fmt.Sprintf("Error Activating Credential - not all bytes sent")
+				msg := "Error Activating Credential - not all bytes sent"
 				log.Warn(msg)
 				http.Error(writer, msg, http.StatusBadRequest)
 				return
@@ -609,7 +598,7 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 
 			b, err := ioutil.ReadAll(req.Body)
 			if err != nil {
-				msg := fmt.Sprintf("Error Signing CSR - %v", err)
+				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)
 				log.Warn(msg)
 				http.Error(writer, msg, http.StatusBadRequest)
 				return
@@ -619,7 +608,7 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 			// Handle the certificate request
 			retBuf, err := HandleSwCertRequest(buf)
 			if err != nil {
-				msg := fmt.Sprintf("Error Signing CSR - %v", err)
+				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)
 				log.Warn(msg)
 				http.Error(writer, msg, http.StatusBadRequest)
 				return
@@ -628,13 +617,13 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 			// Send back response
 			n, err := writer.Write(retBuf.Bytes())
 			if err != nil {
-				msg := fmt.Sprintf("Error Signing CSR - %v", err)
+				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)
 				log.Warn(msg)
 				http.Error(writer, msg, http.StatusBadRequest)
 				return
 			}
 			if n != len(retBuf.Bytes()) {
-				msg := fmt.Sprintf("Error Signing CSR - not all bytes sent")
+				msg := "Failed to handle sw-sign request: not all bytes sent"
 				log.Warn(msg)
 				http.Error(writer, msg, http.StatusBadRequest)
 				return
@@ -670,7 +659,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 		intermediatesPool = x509.NewCertPool()
 		ok := intermediatesPool.AppendCertsFromPEM(intermediates)
 		if !ok {
-			return fmt.Errorf("Failed to append intermediate certificates from database")
+			return errors.New("failed to append intermediate certificates from database")
 		}
 		log.Debugf("Added %v certificates to intermediates certificate pool", len(intermediatesPool.Subjects()))
 	}
@@ -679,14 +668,14 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 	var roots []byte
 	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND CA=1", tpmInfo.Manufacturer.String()).Scan(&roots)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve CA certificate for TPM from %v (Major: %v, Minor: %v): %v", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor, err)
+		return fmt.Errorf("failed to retrieve CA certificate for TPM from %v (Major: %v, Minor: %v): %w", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor, err)
 	}
 	log.Trace("Found Root Certs in DB: ", string(roots))
 
 	rootsPool := x509.NewCertPool()
 	ok := rootsPool.AppendCertsFromPEM(roots)
 	if !ok {
-		return fmt.Errorf("Failed to append root certificate from database")
+		return errors.New("failed to append root certificate from database")
 	}
 	log.Debugf("Added %v certificate to root certificate pool", len(rootsPool.Subjects()))
 
@@ -712,7 +701,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 	}
 
 	if len(chain[0]) != expectedLen {
-		return fmt.Errorf("Error: Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
+		return fmt.Errorf("expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
 
 	log.Debugf("Successfully verified chain of %v elements", len(chain[0]))
@@ -791,13 +780,13 @@ func main() {
 
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
-	log.Info(fmt.Sprintf("Serving Directories: "))
+	log.Info("Serving Directories: ")
 
 	httpFolder := getFilePath(config.HTTPFolder, filepath.Dir(*configFile))
 
 	dirs, err := ioutil.ReadDir(httpFolder)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to open metaddata folders '%v' - %v", httpFolder, err))
+		log.Errorf("Failed to open metaddata folders '%v' - %v", httpFolder, err)
 		return
 	}
 
