@@ -244,7 +244,15 @@ func main() {
 
 	if c.SigningInterface == "SW" {
 		log.Info("Using SW as Signing Interface")
-		sw, err = swdriver.NewSwDriver(c.ProvServerAddr)
+		swConfig := swdriver.Config{
+			Url: c.ProvServerAddr,
+			Paths: swdriver.Paths{
+				Leaf:        c.tlsCertPath,
+				DeviceSubCa: c.deviceSubCaPath,
+				Ca:          c.caPath,
+			},
+		}
+		sw, err = swdriver.NewSwDriver(swConfig)
 		if err != nil {
 			log.Errorf("Failed to create new SW driver: %v", err)
 			return
