@@ -54,14 +54,17 @@ go build
 # To test the attested TLS connection
 cd cmc/testconnector
 go build
-./testconnector
+./testconnector --rootcacertfile ../example-setup/ca/ca.pem
 
 # Run the testclient to test the attested TLS connection with the connector
-./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem
+./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem -connector 127.0.0.1:443 -mTLS true
 ```
 
 **Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed in the *cmcd*
 configuration and using the ```--port <port-number>``` command line argument for the testclient.
+
+**Note**: The *cmcd* --addr parameter is the server address where metadata can be found and must
+correspond to the address in the *provserver* config
 
 **Note**: The *cmcd* TPM provisioning process includes the verification of the TPM's EK certificate
 chain. In the example setup, this verification is turned off, as the database might not contain
@@ -246,7 +249,7 @@ All binaries can be built with the *go*-compiler:
 
 ```sh
 cd provserver
-make
+go build
 sudo ./provserver --config <config-file>
 ```
 
@@ -254,21 +257,24 @@ sudo ./provserver --config <config-file>
 
 ```sh
 cd cmcd
-make
-sudo ./cmcd --config <config-file> [--fetch-metadata] [--port <port-number>]
-
+go build
+sudo ./cmcd --config <config-file> --addr <server-metadata-address>
 ```
 
 ### Build and Run the Test Client
 
 ```sh
-# Terminal 1:
-sudo ./cmcd --config <config-file> [--port <port-number>]
-
-# Terminal 2:
 cd testclient
-make
-./testclient --mode [ generate | verify ] [--port <port-number>]
+go build
+./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS <true | false>] [--rootcacertfile <file>]
+```
+
+### Build and Run the Testconnector
+
+```sh
+cd testconnector
+go build
+./testconnector [--rootcacertfile <file>] [--connector <listen-addr>]
 ```
 
 ### Regenerate Protobuf gRPC Interface

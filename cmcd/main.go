@@ -251,6 +251,7 @@ func main() {
 				DeviceSubCa: c.deviceSubCaPath,
 				Ca:          c.caPath,
 			},
+			Metadata: metadata,
 		}
 		sw, err = swdriver.NewSwDriver(swConfig)
 		if err != nil {

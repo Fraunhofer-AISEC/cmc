@@ -22,19 +22,21 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/gob"
-	"encoding/pem"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/square/go-jose.v2"
 )
 
 type SwCertRequest struct {
-	Csr []byte
+	CertParams []byte
+	PubKey     []byte
 }
 
 type SwCertResponse struct {
@@ -49,8 +51,9 @@ type Paths struct {
 }
 
 type Config struct {
-	Url   string
-	Paths Paths
+	Url      string
+	Paths    Paths
+	Metadata [][]byte
 }
 
 // Sw is a struct required for implementing the signer and measurer interfaces
@@ -64,13 +67,24 @@ type Sw struct {
 func NewSwDriver(c Config) (*Sw, error) {
 	sw := &Sw{}
 
-	priv, csr, err := createCsrAndKey()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate CSR and keys: %w", err)
+		return nil, fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	certParams, err := getCertParams(c.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cert params: %w", err)
+	}
+
+	pub, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("marshal public key returned %w", err)
 	}
 
 	certRequest := SwCertRequest{
-		Csr: csr,
+		CertParams: certParams,
+		PubKey:     pub,
 	}
 
 	certResponse, err := getCerts(c.Url+"sw-signing/", certRequest)
@@ -113,7 +127,7 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 	var buf bytes.Buffer
 	e := gob.NewEncoder(&buf)
 	if err := e.Encode(req); err != nil {
-		return SwCertResponse{}, fmt.Errorf("failed to send akCertRequest to server: %v", err)
+		return SwCertResponse{}, fmt.Errorf("failed to send request to server: %v", err)
 	}
 
 	log.Debugf("Sending CSR HTTP POST Request to %v", url)
@@ -144,35 +158,6 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 	return response, nil
 }
 
-func createCsrAndKey() (crypto.PrivateKey, []byte, error) {
-
-	// Generate private key and certificate for test prover, signed by test CA
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate private key: %v", err)
-	}
-
-	tmpl := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   "Unsafe CMC Signing Test Key",
-			Country:      []string{"DE"},
-			Province:     []string{"BY"},
-			Locality:     []string{"Munich"},
-			Organization: []string{"Test Company"},
-		},
-		SignatureAlgorithm: x509.ECDSAWithSHA256,
-	}
-
-	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create certificate request: %v", err)
-	}
-	tmp := &bytes.Buffer{}
-	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: der})
-
-	return priv, tmp.Bytes(), nil
-}
-
 func saveCerts(paths Paths, certs ar.CertChain) error {
 
 	log.Tracef("New Leaf Cert %v: %v", paths.Leaf, string(certs.Leaf))
@@ -194,4 +179,32 @@ func saveCerts(paths Paths, certs ar.CertChain) error {
 	}
 
 	return nil
+}
+
+func getCertParams(metadata [][]byte) ([]byte, error) {
+
+	for _, m := range metadata {
+
+		jws, err := jose.ParseSigned(string(m))
+		if err != nil {
+			log.Warnf("Failed to parse Manifest: %v", err)
+			continue
+		}
+
+		payload := jws.UnsafePayloadWithoutVerification()
+
+		// Unmarshal the Type field of the JSON file to determine the type
+		t := new(ar.JSONType)
+		err = json.Unmarshal(payload, t)
+		if err != nil {
+			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
+			continue
+		}
+
+		if t.Type == "TLS Key Cert Params" {
+			return m, nil
+		}
+	}
+
+	return nil, errors.New("failed to find cert params")
 }
