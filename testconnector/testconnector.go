@@ -20,6 +20,7 @@ func main() {
 	var config *tls.Config
 
 	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
+	port := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
 	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port on which to listen")
 	flag.Parse()
 
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	// Load certificate
-	cert, err = atls.GetCert()
+	cert, err = atls.GetCert(atls.WithCmcPort(*port))
 	if err != nil {
 		log.Error("[Testconnector] failed to get TLS Certificate. ", err)
 		return
@@ -55,7 +56,7 @@ func main() {
 	}
 
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", *connectoraddress, config)
+	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port))
 	if err != nil {
 		log.Error(err)
 		log.Error("[Testconnector] Failed to listen for connections")

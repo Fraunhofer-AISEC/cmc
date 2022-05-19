@@ -53,7 +53,7 @@ const (
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
-func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool) {
+func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string) {
 	var timeout = 10 * time.Second
 	var conf *tls.Config
 
@@ -74,7 +74,7 @@ func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool) {
 	if mTLS {
 		// Load own certificate
 		var cert tls.Certificate
-		cert, err = atls.GetCert()
+		cert, err = atls.GetCert(atls.WithCmcPort(port))
 		if err != nil {
 			log.Fatalf("[Testclient] failed to get TLS Certificate: %v", err)
 		}
@@ -90,7 +90,7 @@ func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool) {
 		}
 	}
 
-	conn, err := atls.Dial("tcp", connectoraddress, conf)
+	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcPort(port))
 	if err != nil {
 		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}
@@ -207,7 +207,7 @@ func main() {
 		ioutil.WriteFile(*resultFile, out.Bytes(), 0644)
 		fmt.Println("Wrote file ", *resultFile)
 	} else if mode == TLSConn {
-		TestTLSConn(*connectoraddress, *rootCACertFile, *mTLS)
+		TestTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port)
 	} else {
 		log.Println("Unknown mode")
 	}

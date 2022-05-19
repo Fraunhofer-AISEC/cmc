@@ -20,9 +20,9 @@ var id = "0000"
 var noncelen = 32
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
-func obtainAR(req *ci.AttestationRequest) (resp *ci.AttestationResponse, err error) {
+func obtainAR(req *ci.AttestationRequest, cc cmcConfig) (resp *ci.AttestationResponse, err error) {
 	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn()
+	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("[attestedTLS] Connection failed. No result obtained")
 	}
@@ -45,9 +45,9 @@ func obtainAR(req *ci.AttestationRequest) (resp *ci.AttestationResponse, err err
 }
 
 //Checks Attestation report by calling the CMC to Verify and checking its status response
-func verifyAR(nonce, report []byte) error {
+func verifyAR(nonce, report []byte, cc cmcConfig) error {
 	// Get backend connection
-	cmcClient, conn, cancel := getCMCServiceConn()
+	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return errors.New("[attestedTLS] Connection failed. No result obtained")
 	}
@@ -87,7 +87,7 @@ func verifyAR(nonce, report []byte) error {
 }
 
 // Attests itself by receiving a nonce, creating an AR and returning it
-func attest(conn *tls.Conn, cert []byte) error {
+func attest(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 	log.Info("[attestedTLS] Attesting to peer in connection...")
 
 	// Obtain request msg
@@ -114,7 +114,7 @@ func attest(conn *tls.Conn, cert []byte) error {
 	req.Nonce = combinedNonce[:]
 
 	// Obtain response (AR)
-	resp, err := obtainAR(req)
+	resp, err := obtainAR(req, cc)
 	if err != nil {
 		log.Error(err)
 		return errors.New("[attestedTLS] Could not obtain response")
@@ -144,7 +144,7 @@ func attest(conn *tls.Conn, cert []byte) error {
 }
 
 // Verifies remote party by sending nonce, receiving an AR and verfying it
-func verify(conn *tls.Conn, cert []byte) error {
+func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 	log.Info("[attestedTLS] Verifying peer in connection...")
 
 	// Create nonce
@@ -204,7 +204,7 @@ func verify(conn *tls.Conn, cert []byte) error {
 
 	// Verify AR
 	log.Trace("[attestedTLS] Verifying attestation report...")
-	err = verifyAR(combinedNonce[:], resp.AttestationReport)
+	err = verifyAR(combinedNonce[:], resp.AttestationReport, cc)
 	if err != nil {
 		log.Error(err)
 		_ = sendAck(false, conn)
