@@ -41,6 +41,18 @@ type SwCertResponse struct {
 	Certs ar.CertChain
 }
 
+// Paths specifies the paths to store the certificates
+type Paths struct {
+	Leaf        string
+	DeviceSubCa string
+	Ca          string
+}
+
+type Config struct {
+	Url   string
+	Paths Paths
+}
+
 // Sw is a struct required for implementing the signer and measurer interfaces
 // of the attestation report to perform software measurements and signing
 type Sw struct {
@@ -49,21 +61,26 @@ type Sw struct {
 }
 
 // NewSwDriver returns a new object for software-based measurements and signing
-func NewSwDriver(url string) (*Sw, error) {
+func NewSwDriver(c Config) (*Sw, error) {
 	sw := &Sw{}
 
 	priv, csr, err := createCsrAndKey()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to generate CSR and keys: %v", err)
+		return nil, fmt.Errorf("failed to generate CSR and keys: %w", err)
 	}
 
 	certRequest := SwCertRequest{
 		Csr: csr,
 	}
 
-	certResponse, err := getCerts(url+"sw-signing/", certRequest)
+	certResponse, err := getCerts(c.Url+"sw-signing/", certRequest)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve certificates from server")
+		return nil, fmt.Errorf("failed to retrieve certificates from server: %w", err)
+	}
+
+	err = saveCerts(c.Paths, certResponse.Certs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to save certificates: %w", err)
 	}
 
 	sw.certChain = certResponse.Certs
@@ -96,28 +113,28 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 	var buf bytes.Buffer
 	e := gob.NewEncoder(&buf)
 	if err := e.Encode(req); err != nil {
-		return SwCertResponse{}, fmt.Errorf("Failed to send akCertRequest to server: %v", err)
+		return SwCertResponse{}, fmt.Errorf("failed to send akCertRequest to server: %v", err)
 	}
 
 	log.Debugf("Sending CSR HTTP POST Request to %v", url)
 
 	resp, err := http.Post(url, "signing/csr", &buf)
 	if err != nil {
-		return SwCertResponse{}, fmt.Errorf("Error sending params - %v", err)
+		return SwCertResponse{}, fmt.Errorf("error sending params - %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := ioutil.ReadAll(resp.Body)
 		log.Warn("Request failed: body: ", string(b))
-		return SwCertResponse{}, fmt.Errorf("Request Failed: HTTP Server responded '%v'", resp.Status)
+		return SwCertResponse{}, fmt.Errorf("request Failed: HTTP Server responded '%v'", resp.Status)
 	}
 
 	log.Debug("HTTP Response OK")
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return SwCertResponse{}, fmt.Errorf("Error sending params - %v", err)
+		return SwCertResponse{}, fmt.Errorf("error sending params - %v", err)
 	}
 
 	var response SwCertResponse
@@ -132,7 +149,7 @@ func createCsrAndKey() (crypto.PrivateKey, []byte, error) {
 	// Generate private key and certificate for test prover, signed by test CA
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to generate private key: %v", err)
+		return nil, nil, fmt.Errorf("failed to generate private key: %v", err)
 	}
 
 	tmpl := x509.CertificateRequest{
@@ -148,10 +165,33 @@ func createCsrAndKey() (crypto.PrivateKey, []byte, error) {
 
 	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to create certificate request: %v", err)
+		return nil, nil, fmt.Errorf("failed to create certificate request: %v", err)
 	}
 	tmp := &bytes.Buffer{}
 	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: der})
 
 	return priv, tmp.Bytes(), nil
+}
+
+func saveCerts(paths Paths, certs ar.CertChain) error {
+
+	log.Tracef("New Leaf Cert %v: %v", paths.Leaf, string(certs.Leaf))
+	if err := ioutil.WriteFile(paths.Leaf, certs.Leaf, 0644); err != nil {
+		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Leaf, err)
+	}
+
+	if len(certs.Intermediates) != 1 {
+		return fmt.Errorf("SwSigner allows exactly one intermediate (%v provided)", len(certs.Intermediates))
+	}
+	log.Tracef("New Intermediate Cert %v: %v", paths.DeviceSubCa, string(certs.Intermediates[0]))
+	if err := ioutil.WriteFile(paths.DeviceSubCa, certs.Intermediates[0], 0644); err != nil {
+		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
+	}
+
+	log.Tracef("New CA Cert %v: %v", paths.Ca, string(certs.Ca))
+	if err := ioutil.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
+		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
+	}
+
+	return nil
 }
