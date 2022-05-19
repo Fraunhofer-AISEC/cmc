@@ -15,16 +15,24 @@ import (
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
 
-var cmcaddr = "localhost"
-var cmcport = "9955"
+/***********************************************************/
+/* Backend to CMC */
 
-/***********************************************************
-* Backend to CMC */
+var cmcAddressDefault = "localhost"
+var cmcPortDefault = "9955"
+
+// Struct that holds information on cmc address and port
+// to be used by Listener and DialConfig
+type cmcConfig struct {
+	cmcPort    string
+	cmcAddress string
+}
 
 // Creates connection with cmcd deamon at specified address
-func getCMCServiceConn() (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
+func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
+	log.Trace("[Backend] Contacting cmcd on: " + cc.cmcAddress + ":" + cc.cmcPort)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	conn, err := grpc.DialContext(ctx, cmcaddr+":"+cmcport, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Error("[Backend] ERROR: did not connect:", err)
 		cancel()
@@ -35,8 +43,8 @@ func getCMCServiceConn() (ci.CMCServiceClient, *grpc.ClientConn, context.CancelF
 	return ci.NewCMCServiceClient(conn), conn, cancel
 }
 
-/***********************************************************
-* Backend between two connectors / client and connector */
+/***********************************************************/
+/* Backend between two connectors / client and connector */
 
 // Writes byte array to provided channel by first sending length information, then data
 func Write(msg []byte, c net.Conn) error {

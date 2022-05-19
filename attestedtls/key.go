@@ -65,16 +65,17 @@ func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 }
 
 // PrivateKey Wrapper Implementing crypto.Signer interface
-// Contacts cmcd for signing operations
+// Used to contact cmcd for signing operations
 type PrivateKey struct {
-	pubKey crypto.PublicKey
+	cmcConfig // embedded struct
+	pubKey    crypto.PublicKey
 }
 
 // Implementation of Sign() in crypto.Signer iface
 // Contacts cmcd for sign operation and returns received signature
 func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// Get backend connection
-	cmcClient, conn, cancel := getCMCServiceConn()
+	cmcClient, conn, cancel := getCMCServiceConn(priv.cmcConfig)
 	if cmcClient == nil {
 		return nil, errors.New("[PrivateKey] Connection failed. No signing performed")
 	}
@@ -119,11 +120,20 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 }
 
 // Obtains Certificate for the used TLS key from cmcd
-func GetCert() (tls.Certificate, error) {
+func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 
+	// get cmc Config: start with defaults
+	cc := cmcConfig{
+		cmcAddress: cmcAddressDefault,
+		cmcPort:    cmcPortDefault,
+	}
+	for _, c := range moreConfigs {
+		c(&cc)
+	}
+
 	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn()
+	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return tls.Certificate{}, errors.New("[Listener] Connection failed. No Cert obtained")
 	}
@@ -176,7 +186,13 @@ func GetCert() (tls.Certificate, error) {
 	}
 
 	// Create TLS Cert
-	tlsCert.PrivateKey = PrivateKey{pubKey: x509Cert.PublicKey}
+	tlsCert.PrivateKey = PrivateKey{
+		pubKey: x509Cert.PublicKey,
+		cmcConfig: cmcConfig{
+			cmcAddress: cc.cmcAddress,
+			cmcPort:    cc.cmcPort,
+		},
+	}
 	// return cert
 	return tlsCert, nil
 }

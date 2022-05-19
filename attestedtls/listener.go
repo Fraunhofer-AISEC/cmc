@@ -3,9 +3,10 @@ package attestedtls
 import (
 	"crypto/tls"
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var timeout = 10 * time.Second
@@ -13,8 +14,27 @@ var timeout = 10 * time.Second
 /* Struct to implement Listener interface
  * holds net.Listener and adds additional functionality to it */
 type Listener struct {
-	Ln     net.Listener
-	Config *tls.Config
+	net.Listener // embedded interface
+	cmcConfig    // embedded struct
+	*tls.Config  // embedded struct
+}
+
+type ConnectionOption[T any] func(*T)
+
+// Sets the port on which to contact the CMC.
+// If not specified, default is "9955"
+func WithCmcPort(port string) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.cmcPort = port
+	}
+}
+
+// Sets the address with which to contact the CMC.
+// If not specified, default is "localhost"
+func WithCmcAddress(address string) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.cmcAddress = address
+	}
 }
 
 // Implementation of Accept() in net.Listener iface
@@ -22,7 +42,7 @@ type Listener struct {
 // after connection establishment before returning the connection
 func (ln Listener) Accept() (net.Conn, error) {
 	// Accept TLS connection
-	conn, err := ln.Ln.Accept()
+	conn, err := ln.Listener.Accept()
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +52,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 	// Perform remote attestation
 	// include components of tls.Conn to link both protocols: use own cert
-	err = attest(tlsConn, ln.Config.Certificates[0].Certificate[0])
+	err = attest(tlsConn, ln.Certificates[0].Certificate[0], ln.cmcConfig)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New("[Listener] Failed to attest listener")
@@ -48,7 +68,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 		// include components of tls.Conn to link both protocols: use dialer cert
 		// FUTURE: certificate can be obtained differently as well
 		//         (function GetClientCertificate, func GetCertificate or func GetConfigForClient)
-		err = verify(tlsConn, tlsConn.ConnectionState().PeerCertificates[0].Raw[:])
+		err = verify(tlsConn, tlsConn.ConnectionState().PeerCertificates[0].Raw[:], ln.cmcConfig)
 		if err != nil {
 			log.Error(err)
 			return nil, errors.New("[Listener] Failed to verify dialer")
@@ -65,25 +85,37 @@ func (ln Listener) Accept() (net.Conn, error) {
 // Implementation of Close in net.Listener iface
 // Only calls original Close(), since no new functionality required
 func (ln Listener) Close() error {
-	return ln.Ln.Close()
+	return ln.Listener.Close()
 }
 
 // Implementation of Addr in net.Listener iface
 // Only calls original Addr(), since no new functionality required
 func (ln Listener) Addr() net.Addr {
-	return ln.Ln.Addr()
+	return ln.Listener.Addr()
 }
 
 // Wrapper for tls.Listen
 // Returns custom Listener that will perform additional remote attestation
 // operations right after successful TLS connection establishment
-func Listen(network, laddr string, config *tls.Config) (net.Listener, error) {
-	var listener Listener
+func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[cmcConfig]) (net.Listener, error) {
+	// Default listener
+	listener := Listener{
+		cmcConfig: cmcConfig{
+			cmcAddress: cmcAddressDefault,
+			cmcPort:    cmcPortDefault,
+		},
+	}
+	// Listen
 	ln, err := tls.Listen(network, laddr, config)
 	if err != nil {
 		log.Error(err)
 		return listener, errors.New("[Listener] Failed")
 	}
-	listener = Listener{ln, config}
+	// Apply all additional (CMC) configs
+	listener.Listener = ln
+	listener.Config = config
+	for _, c := range moreConfigs {
+		c(&listener.cmcConfig)
+	}
 	return net.Listener(listener), nil
 }
