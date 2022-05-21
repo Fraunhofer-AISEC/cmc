@@ -233,7 +233,10 @@ func main() {
 
 	if contains("SNP", c.MeasurementInterfaces) {
 		log.Info("Using SNP as Measurement Interface")
-		snp, err = snpdriver.NewSnpDriver()
+		snpConfig := snpdriver.Config{
+			Url: c.ProvServerAddr,
+		}
+		snp, err = snpdriver.NewSnpDriver(snpConfig)
 		if err != nil {
 			log.Errorf("Failed to create new SNP driver: %v", err)
 			return

@@ -25,8 +25,10 @@ import "C"
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/gob"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
 
@@ -56,19 +58,53 @@ type Snp struct {
 	certChain ar.CertChain
 }
 
-func NewSnpDriver() (*Snp, error) {
+type Config struct {
+	Url string
+}
+
+type VcekRequest struct {
+	ChipId [64]byte
+	Tcb    uint64
+}
+
+type VcekResponse struct {
+	Vcek []byte
+}
+
+func NewSnpDriver(c Config) (*Snp, error) {
 	snp := &Snp{}
 
-	ca, err := getCerts(milanUrl, PEM)
+	ca, _, err := getCerts(milanUrl, PEM)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get SNP certificate chain: %v", err)
+		return nil, fmt.Errorf("failed to get SNP certificate chain: %w", err)
 	}
 	if len(ca) != 2 {
-		return nil, fmt.Errorf("Failed to get SNP certificate chain. Expected 2 certificates, got %v", len(ca))
+		return nil, fmt.Errorf("failed to get SNP certificate chain. Expected 2 certificates, got %v", len(ca))
 	}
 
-	// The leaf certificate (VCEK) will be fetched with the attestation report
+	// Fetch the VCEK. TODO as a workaround, we get the parameters through
+	// fetching an initial attestation report and request the VCEK from the
+	// Provisioning server. As soon as we can reliably get the correct TCB,
+	// the host should provide the VCEK
+	arRaw, err := GetSnpMeasurement(make([]byte, 64))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SNP report: %w", err)
+	}
+	s, err := ar.DecodeSnpReport(arRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
+	}
+	req := VcekRequest{
+		ChipId: s.ChipId,
+		Tcb:    s.CurrentTcb,
+	}
+	resp, err := fetchVcek(c.Url+"vcek-retrieval/", req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VCEK: %w", err)
+	}
+
 	snp.certChain = ar.CertChain{
+		Leaf:          resp.Vcek,
 		Intermediates: [][]byte{encodeCertPem(ca[0])},
 		Ca:            encodeCertPem(ca[1]),
 	}
@@ -82,27 +118,8 @@ func (snp Snp) Measure(nonce []byte) (ar.Measurement, error) {
 
 	data, err := GetSnpMeasurement(nonce)
 	if err != nil {
-		return ar.SnpMeasurement{}, fmt.Errorf("Failed to get SNP Measurement: %v", err)
+		return ar.SnpMeasurement{}, fmt.Errorf("failed to get SNP Measurement: %w", err)
 	}
-
-	s, err := ar.DecodeSnpReport(data)
-	if err != nil {
-		return ar.SnpMeasurement{}, fmt.Errorf("Failed to decode SNP report: %v", err)
-	}
-	ChipId := hex.EncodeToString(s.ChipId[:])
-	tcbInfo := fmt.Sprintf("?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
-		s.CurrentTcb&0xFF,
-		(s.CurrentTcb>>8)&0xFF,
-		(s.CurrentTcb>>48)&0xFF,
-		(s.CurrentTcb>>56)&0xFF)
-	vcek, err := getCerts(vcekUrlPrefix+ChipId+tcbInfo, DER)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to get VCEK certificate: %v", err)
-	}
-	if len(vcek) != 1 {
-		return nil, fmt.Errorf("Failed to get VCEK certificate. Expected 1 certificate, got %v", len(vcek))
-	}
-	snp.certChain.Leaf = encodeCertPem(vcek[0])
 
 	measurement := ar.SnpMeasurement{
 		Type:   "SNP Measurement",
@@ -118,7 +135,7 @@ func (snp Snp) Measure(nonce []byte) (ar.Measurement, error) {
 func GetSnpMeasurement(nonce []byte) ([]byte, error) {
 
 	if len(nonce) > 64 {
-		return nil, fmt.Errorf("User Data must be at most 64 bytes")
+		return nil, errors.New("user Data must be at most 64 bytes")
 	}
 
 	log.Tracef("Generating SNP attestation report with nonce: %v", hex.EncodeToString(nonce))
@@ -131,12 +148,12 @@ func GetSnpMeasurement(nonce []byte) ([]byte, error) {
 
 	cRes, err := C.snp_dump_ar(cBuf, cLen, cUserData, cUserDataLen)
 	if err != nil {
-		return nil, fmt.Errorf("Error calling C.snp_dump_ar: %v", err)
+		return nil, fmt.Errorf("failed to retrieve SNP AR: %w", err)
 	}
 
 	res := int(cRes)
 	if res != 0 {
-		return nil, fmt.Errorf("C.snp_dump_ar returned: %v", err)
+		return nil, fmt.Errorf("failed to retrieve SNP AR. C.snp_dump_ar returned %v", res)
 	}
 
 	log.Tracef("Generated SNP attestation report: %v", hex.EncodeToString(buf))
@@ -150,23 +167,22 @@ func encodeCertPem(cert *x509.Certificate) []byte {
 	return tmp.Bytes()
 }
 
-func getCerts(url string, format certFormat) ([]*x509.Certificate, error) {
+func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 
 	log.Tracef("Requesting Cert from %v", url)
 
 	resp, err := http.Get(url)
-
 	if err != nil {
-		return nil, fmt.Errorf("Error HTTP GET: %v", err)
+		return nil, 0, fmt.Errorf("error HTTP GET: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("HTTP Response Status: %v (%v)", resp.StatusCode, resp.Status)
+		return nil, resp.StatusCode, fmt.Errorf("HTTP Response Status: %v (%v)", resp.StatusCode, resp.Status)
 	}
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read HTTP body: %v", err)
+		return nil, resp.StatusCode, fmt.Errorf("failed to read HTTP body: %w", err)
 	}
 
 	var data []byte
@@ -184,12 +200,47 @@ func getCerts(url string, format certFormat) ([]*x509.Certificate, error) {
 	} else if format == DER {
 		data = content
 	} else {
-		return nil, fmt.Errorf("Internal error: Unknown certificate format %v", format)
+		return nil, resp.StatusCode, fmt.Errorf("internal error: Unknown certificate format %v", format)
 	}
 
 	certs, err := x509.ParseCertificates(data)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse x509 Certificate: %v", err)
+		return nil, resp.StatusCode, fmt.Errorf("failed to parse x509 Certificate: %w", err)
 	}
-	return certs, nil
+	return certs, resp.StatusCode, nil
+}
+
+func fetchVcek(url string, req VcekRequest) (VcekResponse, error) {
+	var buf bytes.Buffer
+	e := gob.NewEncoder(&buf)
+	if err := e.Encode(req); err != nil {
+		return VcekResponse{}, fmt.Errorf("failed to send request to server: %v", err)
+	}
+
+	log.Debugf("Sending CSR HTTP POST Request to %v", url)
+
+	resp, err := http.Post(url, "retrieval/vcek", &buf)
+	if err != nil {
+		return VcekResponse{}, fmt.Errorf("error sending params - %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		log.Warn("Request failed: body: ", string(b))
+		return VcekResponse{}, fmt.Errorf("request Failed: HTTP Server responded '%v'", resp.Status)
+	}
+
+	log.Debug("HTTP Response OK")
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return VcekResponse{}, fmt.Errorf("error sending params - %v", err)
+	}
+
+	var response VcekResponse
+	d := gob.NewDecoder((bytes.NewBuffer(b)))
+	d.Decode(&response)
+
+	return response, nil
 }
