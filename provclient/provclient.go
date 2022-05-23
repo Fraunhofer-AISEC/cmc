@@ -46,13 +46,13 @@ func FetchMetadata(addr, localPath string) error {
 
 	if _, err := os.Stat(localPath); err != nil {
 		if err := os.Mkdir(localPath, 0755); err != nil {
-			return fmt.Errorf("Failed to create directory for local data '%v': %v", localPath, err)
+			return fmt.Errorf("failed to create directory for local data '%v': %v", localPath, err)
 		}
 	} else {
 		log.Tracef("Removing old metadata in %v before fetching new metadata from provisioning server", localPath)
 		dir, err := ioutil.ReadDir(localPath)
 		if err != nil {
-			return fmt.Errorf("Failed to read local storage directory %v: %v", localPath, err)
+			return fmt.Errorf("failed to read local storage directory %v: %v", localPath, err)
 		}
 		for _, d := range dir {
 			file := path.Join(localPath, d.Name())
@@ -85,7 +85,7 @@ func FetchMetadata(addr, localPath string) error {
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Error("Failed to read response")
+		log.Error("failed to read response")
 		return err
 	}
 	log.Trace("Content:\n", string(content))
@@ -128,7 +128,7 @@ func fetchDataRecursively(pre Pre, addr, localPath string) error {
 		log.Debug("Response Status: ", resp.Status)
 		if resp.StatusCode != 200 {
 			log.Warn("Request returned error - ", resp.Status)
-			return fmt.Errorf("Request returned error - %v", resp.Status)
+			return fmt.Errorf("request returned error - %v", resp.Status)
 		}
 
 		log.Debug("Found: ", pre.Content[i].Name, " Type:", resp.Header.Values("Content-Type")[0])
@@ -166,7 +166,7 @@ func fetchDataRecursively(pre Pre, addr, localPath string) error {
 
 			file := filepath.Join(localPath, pre.Content[i].Name)
 			log.Debug("Writing file: ", file)
-			err = os.WriteFile(file, content, 0644)
+			err = ioutil.WriteFile(file, content, 0644)
 			if err != nil {
 				log.Error("Error saving file - ", err)
 			}
