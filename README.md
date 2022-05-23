@@ -49,7 +49,7 @@ go build
 ./testclient --mode generate
 
 # Run the testclient to verify the attestation report (result also stored in cmc/testclient)
-./testclient --mode verify
+./testclient --mode verify --rootcacertfile ../example-setup/ca/ca.pem
 
 # To test the attested TLS connection
 cd cmc/testconnector
@@ -250,7 +250,7 @@ All binaries can be built with the *go*-compiler:
 ```sh
 cd provserver
 go build
-sudo ./provserver --config <config-file>
+./provserver --config <config-file>
 ```
 
 ### Build and Run the CMC Daemon
@@ -258,7 +258,7 @@ sudo ./provserver --config <config-file>
 ```sh
 cd cmcd
 go build
-sudo ./cmcd --config <config-file> --addr <server-metadata-address>
+./cmcd --config <config-file> --addr <server-metadata-address>
 ```
 
 ### Build and Run the Test Client
@@ -266,7 +266,7 @@ sudo ./cmcd --config <config-file> --addr <server-metadata-address>
 ```sh
 cd testclient
 go build
-./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS <true | false>] [--rootcacertfile <file>]
+./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS <true | false>] [--rootcacertfile <file>] [--policies <file>]
 ```
 
 ### Build and Run the Testconnector

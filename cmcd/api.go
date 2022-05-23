@@ -31,12 +31,12 @@ import (
 	"google.golang.org/grpc"
 
 	// local modules
+	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
 
 type ServerConfig struct {
-	VerifyingCas []byte
 	// metadata (manifests and descriptions of the device)
 	Metadata              [][]byte
 	MeasurementInterfaces []ar.Measurement
@@ -119,8 +119,23 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 
 	log.Info("Received Connection Request Type 'Verification Request'")
 
+	// The verifying party can optionally specify custom policies that should be verified
+	// If present, create a policy validator to be handed over to Verify()
+	var policies []ar.Policies
+	if in.Policies != nil {
+		log.Trace("Policies specified. Creating policy validator for remote attestation")
+		var p ip.Policies
+		err := json.Unmarshal(in.Policies, &p)
+		if err != nil {
+			log.Warnf("Failed to unmarshal data from metadata object %v", err)
+		}
+		policies = append(policies, ip.NewPolicyValidator(p))
+	} else {
+		log.Trace("No policies specified. Performing default remote attestation")
+	}
+
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, s.config.VerifyingCas)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, policies)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

@@ -187,7 +187,6 @@ func main() {
 		return
 	}
 
-	verifyingCerts := make([]byte, 0)
 	var tpm *tpmdriver.Tpm
 	var snp *snpdriver.Snp
 	var sw *swdriver.Sw
@@ -211,8 +210,6 @@ func main() {
 			log.Errorf("failed to create new SW driver: %v", err)
 			return
 		}
-
-		verifyingCerts = append(verifyingCerts, sw.GetCertChain().Ca...)
 
 		signer = sw
 	}
@@ -249,7 +246,6 @@ func main() {
 
 	if c.SigningInterface == "TPM" {
 		log.Info("Using TPM as Signing Interface")
-		verifyingCerts = append(verifyingCerts, tpm.GetCertChain().Ca...)
 		signer = tpm
 	}
 
@@ -269,7 +265,6 @@ func main() {
 
 	serverConfig := &ServerConfig{
 		Metadata:              metadata,
-		VerifyingCas:          verifyingCerts,
 		MeasurementInterfaces: measurements,
 		Signer:                signer,
 	}
