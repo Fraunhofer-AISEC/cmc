@@ -60,7 +60,7 @@ type config struct {
 func loadConfig(configFile string) (*config, error) {
 	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read cmcd config file %v: %v", configFile, err)
+		return nil, fmt.Errorf("failed to read cmcd config file %v: %v", configFile, err)
 	}
 	// Default configuration
 	c := &config{
@@ -69,7 +69,7 @@ func loadConfig(configFile string) (*config, error) {
 	// Obtain custom configuration
 	err = json.Unmarshal(data, c)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse cmcd config: %v", err)
+		return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
 	}
 
 	// Convert path to absolute paths (might already be absolute or relative to config file)
@@ -87,18 +87,18 @@ func loadConfig(configFile string) (*config, error) {
 	// Create 'internal' folder if not existing for storage of internal data
 	if _, err := os.Stat(c.internalPath); err != nil {
 		if err := os.MkdirAll(c.internalPath, 0755); err != nil {
-			return nil, fmt.Errorf("Failed to create directory for internal data '%v': %v", c.internalPath, err)
+			return nil, fmt.Errorf("failed to create directory for internal data '%v': %v", c.internalPath, err)
 		}
 	}
 
 	// Check measurement and signing interface
 	for _, m := range c.MeasurementInterfaces {
 		if m != "TPM" && m != "SNP" {
-			return nil, fmt.Errorf("Measurement interface of type %v not supported", m)
+			return nil, fmt.Errorf("measurement interface of type %v not supported", m)
 		}
 	}
 	if c.SigningInterface != "TPM" && c.SigningInterface != "SW" && c.SigningInterface != "" {
-		return nil, fmt.Errorf("Signing Interface of type %v not supported", c.SigningInterface)
+		return nil, fmt.Errorf("signing Interface of type %v not supported", c.SigningInterface)
 	}
 
 	printConfig(c)
@@ -110,7 +110,7 @@ func loadMetadata(dir string) (metadata [][]byte, err error) {
 	// Read number of files
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read metadata folder: %v", err)
+		return nil, fmt.Errorf("failed to read metadata folder: %v", err)
 	}
 
 	// Retrieve the metadata files
@@ -127,7 +127,7 @@ func loadMetadata(dir string) (metadata [][]byte, err error) {
 		log.Tracef("Reading file %v", file)
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read file %v: %v", file, err)
+			return nil, fmt.Errorf("failed to read file %v: %v", file, err)
 		}
 		metadata = append(metadata, data)
 	}
@@ -168,7 +168,7 @@ func main() {
 	// Load the cmcd configuration from the cmdline specified configuration file
 	c, err := loadConfig(*configFile)
 	if err != nil {
-		log.Errorf("Failed to load config: %v", err)
+		log.Errorf("failed to load config: %v", err)
 		return
 	}
 
@@ -177,13 +177,13 @@ func main() {
 	if c.FetchMetadata {
 		err = pc.FetchMetadata(*metadataAddr, c.LocalPath)
 		if err != nil {
-			log.Error("Failed to fetch device metadata from provisioning server")
+			log.Error("failed to fetch device metadata from provisioning server")
 			return
 		}
 	}
 	metadata, err := loadMetadata(c.LocalPath)
 	if err != nil {
-		log.Errorf("Failed to load metadata: %v", err)
+		log.Errorf("failed to load metadata: %v", err)
 		return
 	}
 
@@ -194,6 +194,28 @@ func main() {
 
 	measurements := make([]ar.Measurement, 0)
 	var signer ar.Signer
+
+	if c.SigningInterface == "SW" {
+		log.Info("Using SW as Signing Interface")
+		swConfig := swdriver.Config{
+			Url: c.ProvServerAddr,
+			Paths: swdriver.Paths{
+				Leaf:        c.tlsCertPath,
+				DeviceSubCa: c.deviceSubCaPath,
+				Ca:          c.caPath,
+			},
+			Metadata: metadata,
+		}
+		sw, err = swdriver.NewSwDriver(swConfig)
+		if err != nil {
+			log.Errorf("failed to create new SW driver: %v", err)
+			return
+		}
+
+		verifyingCerts = append(verifyingCerts, sw.GetCertChain().Ca...)
+
+		signer = sw
+	}
 
 	if c.SigningInterface == "TPM" || contains("TPM", c.MeasurementInterfaces) {
 		tpmConfig := &tpmdriver.Config{
@@ -238,33 +260,11 @@ func main() {
 		}
 		snp, err = snpdriver.NewSnpDriver(snpConfig)
 		if err != nil {
-			log.Errorf("Failed to create new SNP driver: %v", err)
+			log.Errorf("failed to create new SNP driver: %v", err)
 			return
 		}
 
 		measurements = append(measurements, snp)
-	}
-
-	if c.SigningInterface == "SW" {
-		log.Info("Using SW as Signing Interface")
-		swConfig := swdriver.Config{
-			Url: c.ProvServerAddr,
-			Paths: swdriver.Paths{
-				Leaf:        c.tlsCertPath,
-				DeviceSubCa: c.deviceSubCaPath,
-				Ca:          c.caPath,
-			},
-			Metadata: metadata,
-		}
-		sw, err = swdriver.NewSwDriver(swConfig)
-		if err != nil {
-			log.Errorf("Failed to create new SW driver: %v", err)
-			return
-		}
-
-		verifyingCerts = append(verifyingCerts, sw.GetCertChain().Ca...)
-
-		signer = sw
 	}
 
 	serverConfig := &ServerConfig{
