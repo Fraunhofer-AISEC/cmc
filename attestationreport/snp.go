@@ -104,7 +104,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 	}
 
 	if len(verifications) == 0 {
-		msg := fmt.Sprintf("Could not find SNP verification")
+		msg := "Could not find SNP verification"
 		result.Summary.setFalse(&msg)
 		return result, false
 	} else if len(verifications) > 1 {
@@ -120,7 +120,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 		return result, false
 	}
 	if snpVerification.Snp == nil {
-		msg := fmt.Sprintf("SNP Verification does not contain policy")
+		msg := "SNP Verification does not contain policy"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
@@ -197,7 +197,7 @@ func DecodeSnpReport(report []byte) (snpreport, error) {
 	b := bytes.NewBuffer(report)
 	err := binary.Read(b, binary.LittleEndian, &s)
 	if err != nil {
-		return snpreport{}, fmt.Errorf("Failed to decode SNP report: %w", err)
+		return snpreport{}, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 	return s, nil
 }
@@ -335,7 +335,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain) (Si
 	result := SignatureResult{}
 
 	if len(reportRaw) < (header_offset + signature_offset) {
-		msg := fmt.Sprintf("Internal Error: Report buffer too small")
+		msg := "Internal Error: Report buffer too small"
 		result.Signature.setFalse(&msg)
 		return result, false
 	}
@@ -389,7 +389,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain) (Si
 	// Extract the public key from the certificate
 	pub, ok := c.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		msg := fmt.Sprintf("Failed to extract ECDSA public key from certificate")
+		msg := "Failed to extract ECDSA public key from certificate"
 		result.Signature.setFalse(&msg)
 		return result, false
 	}
@@ -397,7 +397,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain) (Si
 	// Verify ECDSA Signature represented by r and s
 	ok = ecdsa.Verify(pub, digest[:], r, s)
 	if !ok {
-		msg := fmt.Sprintf("Failed to verify SNP report signature")
+		msg := "Failed to verify SNP report signature"
 		result.Signature.setFalse(&msg)
 		return result, false
 	}
