@@ -63,7 +63,7 @@ func Serve(addr string, server *ci.CMCServiceServer) error {
 	log.Infof("Starting CMC Server on %v", addr)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("Failed to start server on %v: %v", addr, err)
+		return fmt.Errorf("failed to start server on %v: %v", addr, err)
 	}
 
 	// Start gRPC server
@@ -73,7 +73,7 @@ func Serve(addr string, server *ci.CMCServiceServer) error {
 	log.Infof("Waiting for requests on %v", listener.Addr())
 	err = s.Serve(listener)
 	if err != nil {
-		return fmt.Errorf("Failed to serve: %v", err)
+		return fmt.Errorf("failed to serve: %v", err)
 	}
 
 	return nil
@@ -97,7 +97,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 	var status ci.Status
 	ok, data := ar.Sign(a, s.config.Signer)
 	if !ok {
-		log.Error("Prover: Failed to sign Attestion Report ")
+		log.Error("Prover: failed to sign Attestion Report ")
 		status = ci.Status_FAIL
 	} else {
 		status = ci.Status_OK
@@ -125,7 +125,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
 	if err != nil {
-		log.Errorf("Verifier: Failed to marshal Attestation Result: %v", err)
+		log.Errorf("Verifier: failed to marshal Attestation Result: %v", err)
 		status = ci.Status_FAIL
 	} else {
 		status = ci.Status_OK
@@ -151,14 +151,14 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 	// get sign opts
 	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
-		log.Error("[Prover] Failed to choose requested hash function.", err.Error())
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to find appropriate hash function")
+		log.Error("[Prover] failed to choose requested hash function.", err.Error())
+		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to find appropriate hash function")
 	}
 	// get key
 	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
-		log.Error("[Prover] Failed to get TLS key. ", err.Error())
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to get TLS key")
+		log.Error("[Prover] failed to get TLS key. ", err.Error())
+		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to get TLS key")
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
@@ -166,7 +166,7 @@ func (s *server) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSig
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
 	if err != nil {
 		log.Error("[Prover] ", err.Error())
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("Prover: Failed to perform Signing operation")
+		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
 	}
 	// Create response
 	sr = &ci.TLSSignResponse{
