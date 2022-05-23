@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
+	"sync"
 
 	cryptoX509 "crypto/x509"
 	"database/sql"
@@ -76,6 +77,8 @@ type datastore struct {
 	CaCertPem          []byte
 	VerifyEkCert       bool
 	DbPath             string
+	VcekMutex          sync.Mutex
+	Vceks              map[snpdriver.VcekRequest][]byte
 }
 
 const (
@@ -786,7 +789,7 @@ func handleVcekRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&req)
 
-	vcek, err := getVcek(req.ChipId, req.Tcb)
+	vcek, err := getVcek(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VCEK: %w", err)
 	}
@@ -805,22 +808,51 @@ func handleVcekRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	return &retBuf, nil
 }
 
+func lockDatastore() {
+	log.Trace("Trying to get lock")
+	dataStore.VcekMutex.Lock()
+	log.Trace("Got lock")
+}
+
+func unlockDatastore() {
+	log.Trace("Releasing Lock")
+	dataStore.VcekMutex.Unlock()
+	log.Trace("Released Lock")
+}
+
 // Get Vcek takes the TCB and chip ID, calculates the VCEK URL and gets the certificate
 // from the cache or downloads it from the AMD server if not present
-func getVcek(chipId [64]byte, tcb uint64) ([]byte, error) {
-	ChipId := hex.EncodeToString(chipId[:])
+func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
+
+	// Allow only one download and caching of the VCEK certificate in parallel
+	// as the AMD KDF server allows only one request in 10s
+	lockDatastore()
+	defer unlockDatastore()
+
+	if pem, ok := dataStore.Vceks[req]; ok {
+		log.Trace("Using cached VCEK")
+		return pem, nil
+	}
+	log.Trace("Could not find VCEK in cache")
+
+	ChipId := hex.EncodeToString(req.ChipId[:])
 	tcbInfo := fmt.Sprintf("?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
-		tcb&0xFF,
-		(tcb>>8)&0xFF,
-		(tcb>>48)&0xFF,
-		(tcb>>56)&0xFF)
+		req.Tcb&0xFF,
+		(req.Tcb>>8)&0xFF,
+		(req.Tcb>>48)&0xFF,
+		(req.Tcb>>56)&0xFF)
 
 	url := snpVcekUrlPrefix + ChipId + tcbInfo
-	log.Tracef("Requesting SNP VCEK certificate from %v", url)
 	for i := 0; i < snpMaxRetries; i++ {
+		log.Tracef("Requesting SNP VCEK certificate from: %v", url)
 		vcek, statusCode, err := downloadCert(url)
 		if err == nil {
-			return encodeCertPem(vcek), nil
+			log.Tracef("Successfully downloaded VCEK certificate")
+			pem := encodeCertPem(vcek)
+			log.Tracef("Caching VCEK certificate")
+
+			dataStore.Vceks[req] = pem
+			return pem, nil
 		}
 		// If the status code is not 429 (too many requests), return
 		if statusCode != 429 {
@@ -828,8 +860,8 @@ func getVcek(chipId [64]byte, tcb uint64) ([]byte, error) {
 		}
 		// The AMD KDS server accepts requests only every 10 seconds, try again
 		log.Warnf("AMD server blocked VCEK request for ChipID %v TCB %x (HTTP 429 - Too many requests). Trying again in 11s",
-			hex.EncodeToString(chipId[:]), tcb)
-		time.Sleep(11 * time.Second)
+			hex.EncodeToString(req.ChipId[:]), req.Tcb)
+		time.Sleep(time.Duration(11) * time.Second)
 	}
 
 	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
@@ -919,6 +951,7 @@ func main() {
 	dataStore.AkParams = make(map[[32]byte]attest.AttestationParameters)
 	dataStore.Secret = make(map[[32]byte][]byte)
 	dataStore.TLSKeyParams = make(map[[32]byte]attest.CertificationParameters)
+	dataStore.Vceks = make(map[snpdriver.VcekRequest][]byte)
 
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
