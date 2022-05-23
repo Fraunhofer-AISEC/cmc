@@ -74,7 +74,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	}
 
 	// Verify nonce with nonce from TPM Quote
-	if bytes.Compare(nonce, tpmsAttest.ExtraData) == 0 {
+	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
 		result.QuoteFreshness.Success = true
 	} else {
 		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
@@ -92,7 +92,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 		sum = append(sum, calculatedPcrs[int(tpmM.HashChain[i].Pcr)]...)
 	}
 	verPcr := sha256.Sum256(sum)
-	if bytes.Compare(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) == 0 {
+	if bytes.Equal(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) {
 		result.AggPcrQuoteMatch.Success = true
 	} else {
 		msg := fmt.Sprintf("Aggregated PCR does not match Quote PCR: %v vs. %v", hex.EncodeToString(verPcr[:]), hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
@@ -101,7 +101,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	}
 
 	result.QuoteSignature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.Leaf)
-	if result.QuoteSignature.Signature.Success == false {
+	if !result.QuoteSignature.Signature.Success {
 		ok = false
 	}
 
@@ -263,13 +263,13 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
 	}
 	pubKey, ok := x509Cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		msg := fmt.Sprintf("Failed to extract public key from certificate")
+		msg := "Failed to extract public key from certificate"
 		result.Signature.setFalse(&msg)
 		return result
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		msg := fmt.Sprintf("Hash algorithm not supported")
+		msg := "Hash algorithm not supported"
 		result.Signature.setFalse(&msg)
 		return result
 	}

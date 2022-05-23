@@ -506,8 +506,7 @@ func Sign(ar ArJws, signer Signer) (bool, []byte) {
 	log.Trace("Signed attestation report")
 
 	// return signature in bytes
-	var msg string
-	msg = obj.FullSerialize()
+	msg := obj.FullSerialize()
 
 	return true, []byte(msg)
 }
@@ -627,7 +626,7 @@ func Verify(arRaw string, nonce, casPem []byte) VerificationResult {
 	// Check that every AppManifest has a corresponding AppDescription
 	result.DevDescResult.CorrectApps.Success = true
 	for _, a := range ar.AppManifests {
-		if contains(a.Name, appDescriptions) == false {
+		if !contains(a.Name, appDescriptions) {
 			msg := fmt.Sprintf("Device Description does not list the following App Manifest: %v", a.Name)
 			result.DevDescResult.CorrectApps.setFalseMulti(&msg)
 			result.DevDescResult.Summary.Success = false
@@ -648,7 +647,7 @@ func Verify(arRaw string, nonce, casPem []byte) VerificationResult {
 	// Check that the OS Manifest is compatible with all App Manifests
 	result.DevDescResult.OsAppsCompatibility.Success = true
 	for _, a := range ar.AppManifests {
-		if contains(ar.OsManifest.Name, a.Oss) == false {
+		if !contains(ar.OsManifest.Name, a.Oss) {
 			msg := fmt.Sprintf("OS Manifest %v is not compatible with App Manifest %v", ar.OsManifest.Name, a.Name)
 			result.DevDescResult.OsAppsCompatibility.setFalseMulti(&msg)
 			result.DevDescResult.Summary.Success = false
@@ -670,7 +669,7 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 			// FUTURE: use RSA PSS: PS512
 			return jose.RS512, nil
 		default:
-			return jose.RS256, fmt.Errorf("Failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
+			return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
 		}
 	case *ecdsa.PublicKey:
 		switch key.Curve {
@@ -681,10 +680,10 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 		case elliptic.P521():
 			return jose.ES512, nil
 		default:
-			return jose.RS256, errors.New("Failed to determine algorithm from key type: unknown elliptic curve")
+			return jose.RS256, errors.New("failed to determine algorithm from key type: unknown elliptic curve")
 		}
 	default:
-		return jose.RS256, errors.New("Failed to determine algorithm from key type: unknown key type")
+		return jose.RS256, errors.New("failed to determine algorithm from key type: unknown key type")
 	}
 }
 
@@ -707,27 +706,9 @@ func loadCert(data []byte) (*x509.Certificate, error) {
 
 	cert, err := x509.ParseCertificate(input)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to parse x509 Certificate: %v", err)
+		return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
 	}
 	return cert, nil
-}
-
-// loadPrivateKey loads a private key from PEM encoded data
-func loadPrivateKey(data []byte) interface{} {
-	input := data
-
-	block, _ := pem.Decode(data)
-	if block != nil {
-		input = block.Bytes
-	}
-
-	var priv interface{}
-	priv, err := x509.ParseECPrivateKey(input)
-	if err != nil {
-		log.Error("Failed to parse x509 Certificate ", err)
-		return nil
-	}
-	return priv
 }
 
 // Verifies signatures and certificate chains for JWS tokens
@@ -750,7 +731,7 @@ func VerifyJws(data string, roots *x509.CertPool) (JwsResult, []byte, bool) {
 	}
 
 	if len(jwsData.Signatures) == 0 {
-		msg := fmt.Sprintf("JWS does not contain signatures")
+		msg := "JWS does not contain signatures"
 		result.Summary.setFalseMulti(&msg)
 		return result, nil, false
 	}
@@ -762,7 +743,7 @@ func VerifyJws(data string, roots *x509.CertPool) (JwsResult, []byte, bool) {
 
 		certs, err := sig.Protected.Certificates(opts)
 		if len(certs) == 0 {
-			msg := fmt.Sprintf("Failed to verify: No certificates present for provided CA(s)")
+			msg := "Failed to verify: No certificates present for provided CA(s)"
 			result.SignatureCheck[i].CertCheck.setFalse(&msg)
 			ok = false
 			continue
@@ -796,13 +777,13 @@ func VerifyJws(data string, roots *x509.CertPool) (JwsResult, []byte, bool) {
 		}
 
 		if index[i] != i {
-			msg := fmt.Sprintf("Order of signatures incorrect")
+			msg := "order of signatures incorrect"
 			result.Summary.setFalseMulti(&msg)
 		}
 
 		if i > 0 {
-			if bytes.Compare(payloads[i], payloads[i-1]) != 0 {
-				msg := fmt.Sprintf("Payloads differ for jws with multiple signatures")
+			if !bytes.Equal(payloads[i], payloads[i-1]) {
+				msg := "payloads differ for jws with multiple signatures"
 				result.Summary.setFalseMulti(&msg)
 			}
 		}
@@ -872,7 +853,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	} else {
 		result.RtmResult.Name = ar.RtmManifest.Name
 		result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
-		if result.RtmResult.ValidityCheck.Success == false {
+		if !result.RtmResult.ValidityCheck.Success {
 			result.RtmResult.Summary.Success = false
 			result.Success = false
 		}
@@ -894,7 +875,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	} else {
 		result.OsResult.Name = ar.OsManifest.Name
 		result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
-		if result.OsResult.ValidityCheck.Success == false {
+		if !result.OsResult.ValidityCheck.Success {
 			result.OsResult.Summary.Success = false
 			result.Success = false
 		}
@@ -922,7 +903,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			ar.AppManifests = append(ar.AppManifests, am)
 			result.AppResults[i].Name = am.Name
 			result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
-			if result.AppResults[i].ValidityCheck.Success == false {
+			if !result.AppResults[i].ValidityCheck.Success {
 				log.Trace("App Manifest invalid - " + am.Name)
 				result.AppResults[i].Summary.Success = false
 				result.Success = false
@@ -951,7 +932,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
 
 			result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
-			if result.CompDescResult.ValidityCheck.Success == false {
+			if !result.CompDescResult.ValidityCheck.Success {
 				log.Trace("Company Description invalid")
 				result.CompDescResult.Summary.Success = false
 				result.Success = false
@@ -996,12 +977,12 @@ func checkValidity(val Validity) Result {
 	currentTime := time.Now()
 
 	if notBefore.After(currentTime) {
-		msg := fmt.Sprintf("Validity check failed: Artifact is not valid yet")
+		msg := "Validity check failed: Artifact is not valid yet"
 		result.setFalse(&msg)
 	}
 
 	if currentTime.After(notAfter) {
-		msg := fmt.Sprintf("Validity check failed: Artifact validity has expired")
+		msg := "Validity check failed: Artifact validity has expired"
 		result.setFalse(&msg)
 	}
 
@@ -1012,7 +993,7 @@ func checkValidity(val Validity) Result {
 func getVerification(hash []byte, verifications []Verification) *Verification {
 	for _, ver := range verifications {
 		h, _ := hex.DecodeString(ver.Sha256)
-		if bytes.Compare(h, hash) == 0 {
+		if bytes.Equal(h, hash) {
 			return &ver
 		}
 	}
@@ -1039,7 +1020,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 			}
 		}
 		if !found {
-			msg := fmt.Sprintf("No SW Measurement found for SW Verification %v (hash: %v)", v.Name, v.Sha256)
+			msg := fmt.Sprintf("no SW Measurement found for SW Verification %v (hash: %v)", v.Name, v.Sha256)
 			swRes.Validation.setFalse(&msg)
 			ok = false
 		}
@@ -1058,7 +1039,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 		if !found {
 			swRes := SwMeasurementResult{}
 			swRes.MeasName = swM.Name
-			msg := fmt.Sprintf("No SW Verification found for SW Measurement: %v", swM.Sha256)
+			msg := fmt.Sprintf("no SW Verification found for SW Measurement: %v", swM.Sha256)
 			swRes.Validation.setFalse(&msg)
 			swMeasurementResults = append(swMeasurementResults, swRes)
 			ok = false
@@ -1080,7 +1061,7 @@ func collectVerifications(ar *ArPlain) (map[string][]Verification, error) {
 	// Iterate through the verifications and sort them into the different types
 	for _, v := range verList {
 		if v.Type != "SNP Verification" && v.Type != "SW Verification" && v.Type != "TPM Verification" {
-			return nil, fmt.Errorf("Verification of type %v is not supported", v.Type)
+			return nil, fmt.Errorf("verification of type %v is not supported", v.Type)
 		}
 		verMap[v.Type] = append(verMap[v.Type], v)
 	}
@@ -1093,32 +1074,32 @@ func verifyCertChain(certs *CertChain) error {
 	for _, intermediate := range certs.Intermediates {
 		ok := intermediatesPool.AppendCertsFromPEM(intermediate)
 		if !ok {
-			return errors.New("Failed to append certificate to certificate pool")
+			return errors.New("failed to append certificate to certificate pool")
 		}
 	}
 	rootsPool := x509.NewCertPool()
 	ok := rootsPool.AppendCertsFromPEM(certs.Ca)
 	if !ok {
-		return errors.New("Failed to append certificate to certificate pool")
+		return errors.New("failed to append certificate to certificate pool")
 	}
 
 	block, _ := pem.Decode(certs.Leaf)
 	if block == nil || block.Type != "CERTIFICATE" {
-		return errors.New("Failed to parse leaf certificate")
+		return errors.New("failed to parse leaf certificate")
 	}
 	leafCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return fmt.Errorf("Failed to parse leaf certificate public key: %v", err)
+		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
 	}
 
 	chain, err := leafCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
-		return fmt.Errorf("Failed to validate certificate chain: %v", err)
+		return fmt.Errorf("failed to validate certificate chain: %v", err)
 	}
 
 	expectedLen := len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
 	if len(chain[0]) != expectedLen {
-		return fmt.Errorf("Expected chain of length %v (got %v)", expectedLen, len(chain[0]))
+		return fmt.Errorf("expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
 
 	return nil
@@ -1130,22 +1111,22 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error 
 
 		if ext.Id.String() == oid {
 			if len(ext.Value) != 3 {
-				return fmt.Errorf("Extension %v value unexpected length %v (expected 3)", oid, len(ext.Value))
+				return fmt.Errorf("extension %v value unexpected length %v (expected 3)", oid, len(ext.Value))
 			}
 			if ext.Value[0] != 0x2 {
-				return fmt.Errorf("Extension %v value[0] = %v does not match expected value 2", oid, ext.Value[0])
+				return fmt.Errorf("extension %v value[0] = %v does not match expected value 2", oid, ext.Value[0])
 			}
 			if ext.Value[1] != 0x1 {
-				return fmt.Errorf("Extension %v value[1] = %v does not match expected value 1", oid, ext.Value[0])
+				return fmt.Errorf("extension %v value[1] = %v does not match expected value 1", oid, ext.Value[0])
 			}
 			if ext.Value[2] != value {
-				return fmt.Errorf("Extension %v value[2] = %v does not match expected value %v", oid, ext.Value[0], value)
+				return fmt.Errorf("extension %v value[2] = %v does not match expected value %v", oid, ext.Value[0], value)
 			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("Extension %v not present in certificate", oid)
+	return fmt.Errorf("extension %v not present in certificate", oid)
 }
 
 func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) error {
@@ -1154,13 +1135,13 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) error {
 
 		if ext.Id.String() == oid {
 			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
-				return fmt.Errorf("Extension %v value %v does not match expected value %v", oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
+				return fmt.Errorf("extension %v value %v does not match expected value %v", oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
 			}
 			return nil
 		}
 	}
 
-	return fmt.Errorf("Extension %v not present in certificate", oid)
+	return fmt.Errorf("extension %v not present in certificate", oid)
 }
 
 // Used for the JOSE Opaque Signer Interface. This enables signing
@@ -1234,7 +1215,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		ret := make([]byte, 2*keySize)
 		_, err = asn1.Unmarshal(asn1Sig, &esig)
 		if err != nil {
-			return nil, errors.New("ECDSA Signature was not in expected format.")
+			return nil, errors.New("ecdsa signature was not in expected format")
 		}
 		// Fill return buffer with padded keys
 		rBytes := esig.R.Bytes()
