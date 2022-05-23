@@ -1,0 +1,6 @@
+{
+    "type": "Integrity Policy",
+    "expectCertificationLevel": 1,
+    "expectTpmMeasurement": false,
+    "expectSnpMeasurement": false
+}
