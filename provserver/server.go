@@ -25,6 +25,7 @@ import (
 	cryptoX509 "crypto/x509"
 	"database/sql"
 	"encoding/gob"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -40,6 +41,7 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 
@@ -79,6 +81,9 @@ type datastore struct {
 const (
 	manufacturerIntel     = "Intel"
 	intelEKCertServiceURL = "https://ekop.intel.com/ekcertservice/"
+	snpVcekUrlPrefix      = "https://kdsintf.amd.com/vcek/v1/Milan/"
+	snpMilanUrl           = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
+	snpMaxRetries         = 3
 )
 
 var dataStore datastore
@@ -722,6 +727,143 @@ func getFilePath(p, base string) string {
 	return ret
 }
 
+func handleVcekRetrieval(writer http.ResponseWriter, req *http.Request) {
+
+	log.Debug("Received ", req.Method)
+
+	if strings.Compare(req.Method, "POST") == 0 {
+
+		ctype := req.Header.Get("Content-Type")
+		log.Debug("Content-Type: ", ctype)
+
+		if strings.Compare(ctype, "retrieval/vcek") == 0 {
+			log.Debug("Received retrieval/vcek")
+
+			b, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				msg := fmt.Sprintf("Failed to handle vcek request: %v", err)
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+			buf := bytes.NewBuffer(b)
+
+			// Handle the certificate request
+			retBuf, err := handleVcekRequest(buf)
+			if err != nil {
+				msg := fmt.Sprintf("Failed to handle VCEK retrieval request: %v", err)
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+
+			// Send back response
+			n, err := writer.Write(retBuf.Bytes())
+			if err != nil {
+				msg := fmt.Sprintf("Failed to handle VCEK retrieval request: %v", err)
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+			if n != len(retBuf.Bytes()) {
+				msg := "Failed to handle VCEK retrieval request: not all bytes sent"
+				log.Warn(msg)
+				http.Error(writer, msg, http.StatusBadRequest)
+				return
+			}
+		}
+	} else {
+		msg := fmt.Sprintf("Unsupported HTTP Method %v", req.Method)
+		log.Warn(msg)
+		http.Error(writer, msg, http.StatusBadRequest)
+		return
+	}
+}
+
+func handleVcekRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
+
+	var req snpdriver.VcekRequest
+	decoder := gob.NewDecoder(buf)
+	decoder.Decode(&req)
+
+	vcek, err := getVcek(req.ChipId, req.Tcb)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VCEK: %w", err)
+	}
+
+	resp := snpdriver.VcekResponse{
+		Vcek: vcek,
+	}
+
+	var retBuf bytes.Buffer
+	e := gob.NewEncoder(&retBuf)
+	err = e.Encode(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate cert - encode returned %w", err)
+	}
+
+	return &retBuf, nil
+}
+
+// Get Vcek takes the TCB and chip ID, calculates the VCEK URL and gets the certificate
+// from the cache or downloads it from the AMD server if not present
+func getVcek(chipId [64]byte, tcb uint64) ([]byte, error) {
+	ChipId := hex.EncodeToString(chipId[:])
+	tcbInfo := fmt.Sprintf("?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
+		tcb&0xFF,
+		(tcb>>8)&0xFF,
+		(tcb>>48)&0xFF,
+		(tcb>>56)&0xFF)
+
+	url := snpVcekUrlPrefix + ChipId + tcbInfo
+	log.Tracef("Requesting SNP VCEK certificate from %v", url)
+	for i := 0; i < snpMaxRetries; i++ {
+		vcek, statusCode, err := downloadCert(url)
+		if err == nil {
+			return encodeCertPem(vcek), nil
+		}
+		// If the status code is not 429 (too many requests), return
+		if statusCode != 429 {
+			return nil, fmt.Errorf("failed to get VCEK certificate: %w", err)
+		}
+		// The AMD KDS server accepts requests only every 10 seconds, try again
+		log.Warnf("AMD server blocked VCEK request for ChipID %v TCB %x (HTTP 429 - Too many requests). Trying again in 11s",
+			hex.EncodeToString(chipId[:]), tcb)
+		time.Sleep(11 * time.Second)
+	}
+
+	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
+}
+
+func downloadCert(url string) (*x509.Certificate, int, error) {
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error HTTP GET: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, resp.StatusCode, fmt.Errorf("HTTP Response Status: %v (%v)", resp.StatusCode, resp.Status)
+	}
+
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read HTTP body: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(content)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to parse x509 Certificate: %w", err)
+	}
+	return cert, resp.StatusCode, nil
+}
+
+func encodeCertPem(cert *x509.Certificate) []byte {
+	tmp := &bytes.Buffer{}
+	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	return tmp.Bytes()
+}
+
 func main() {
 
 	log.Info("CMC Provisioning Demo Server")
@@ -808,6 +950,9 @@ func main() {
 
 	// Software Signing of CSRs
 	http.HandleFunc("/sw-signing/", handleSwSigning)
+
+	// VCEK retrieval
+	http.HandleFunc("/vcek-retrieval/", handleVcekRetrieval)
 
 	port := fmt.Sprintf(":%v", config.Port)
 	err = http.ListenAndServe(port, nil)
