@@ -164,7 +164,7 @@ func TestVerify(t *testing.T) {
 	// Perform unit tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem)
+			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil)
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}

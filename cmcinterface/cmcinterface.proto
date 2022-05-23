@@ -92,6 +92,9 @@ message AttestationResponse {
 message VerificationRequest {
   bytes nonce = 1;
   bytes attestation_report = 2;
+  bytes ca = 3;
+  bytes policies = 4;
+
 }
 
 message VerificationResponse {

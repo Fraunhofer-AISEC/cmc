@@ -63,6 +63,12 @@ type Signer interface {
 	GetCertChain() CertChain
 }
 
+type Policies interface{}
+
+type PolicyValidator interface {
+	Validate(result VerificationResult) error
+}
+
 // JSONType is a helper struct for just extracting the JSON 'Type'
 type JSONType struct {
 	Type string `json:"type"`
@@ -515,7 +521,7 @@ func Sign(ar ArJws, signer Signer) (bool, []byte) {
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the verifications and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, casPem []byte) VerificationResult {
+func Verify(arRaw string, nonce, casPem []byte, policies []Policies) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
@@ -654,6 +660,27 @@ func Verify(arRaw string, nonce, casPem []byte) VerificationResult {
 			result.Success = false
 		}
 	}
+
+	// Validate every specified policy
+	for _, policy := range policies {
+		pv, ok := policy.(PolicyValidator)
+		if !ok {
+			msg := "Internal Error: policy does not implement PolicyValidator"
+			log.Warn(msg)
+			result.Success = false
+			result.ProcessingError = append(result.ProcessingError, msg)
+			continue
+		}
+
+		err := pv.Validate(result)
+		if err != nil {
+			result.Success = false
+			// TODO should be two different types, result without success and policy validation
+			// which are merged together here
+			log.Warnf("policy validation failed: %v", err)
+		}
+	}
+
 	return result
 }
 
@@ -1216,7 +1243,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		ret := make([]byte, 2*keySize)
 		_, err = asn1.Unmarshal(asn1Sig, &esig)
 		if err != nil {
-			return nil, errors.New("ecdsa signature was not in expected format")
+			return nil, errors.New("ECDSA signature was not in expected format")
 		}
 		// Fill return buffer with padded keys
 		rBytes := esig.R.Bytes()

@@ -53,7 +53,7 @@ const (
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
-func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string) {
+func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string) {
 	var timeout = 10 * time.Second
 	var conf *tls.Config
 
@@ -110,6 +110,84 @@ func TestTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 	log.Info("[Testclient] received: " + string(buf[:n]))
 }
 
+func generate(client ci.CMCServiceClient, ctx context.Context, reportFile, nonceFile string) {
+	// Generate random nonce
+	nonce := make([]byte, 8)
+	_, err := rand.Read(nonce)
+	if err != nil {
+		log.Fatalf("Failed to read random bytes: %v", err)
+	}
+
+	request := ci.AttestationRequest{
+		Nonce: nonce,
+	}
+	response, err := client.Attest(ctx, &request)
+	if err != nil {
+		log.Fatalf("GRPC Attest Call failed: %v", err)
+	}
+	if response.GetStatus() != ci.Status_OK {
+		log.Fatalf("Failed to generate attestation report. Status %v", response.GetStatus())
+	}
+
+	// Save the Attestation Report for the verifier
+	ioutil.WriteFile(reportFile, response.GetAttestationReport(), 0644)
+	// Save the nonce for the verifier
+	ioutil.WriteFile(nonceFile, nonce, 0644)
+
+	fmt.Println("Wrote file ", reportFile)
+}
+
+func verify(client ci.CMCServiceClient, ctx context.Context, reportFile, resultFile, nonceFile, policiesFile, caFile string) {
+	// Read the attestation report, CA and the nonce previously stored
+	data, err := ioutil.ReadFile(reportFile)
+	if err != nil {
+		log.Fatalf("Failed to read file %v: %v", reportFile, err)
+	}
+
+	ca, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		log.Fatalf("Failed to read file %v: %v", caFile, err)
+	}
+
+	nonce, err := ioutil.ReadFile(nonceFile)
+	if err != nil {
+		log.Fatalf("Failed to read nonce: %v", err)
+	}
+
+	request := ci.VerificationRequest{
+		Nonce:             nonce,
+		AttestationReport: data,
+		Ca:                ca,
+	}
+
+	// Add optional policies if present
+	if policiesFile != "" {
+		log.Debug("Policies specified. Adding them to verification request")
+		policies, err := ioutil.ReadFile(policiesFile)
+		if err != nil {
+			log.Fatalf("Failed to read file: %v", err)
+		}
+		request.Policies = policies
+	} else {
+		log.Debug("No policies specified. Verifying with default parameters")
+	}
+
+	response, err := client.Verify(ctx, &request)
+	if err != nil {
+		log.Fatalf("GRPC Verify Call failed: %v", err)
+	}
+	if response.GetStatus() != ci.Status_OK {
+		log.Warnf("Failed to verify attestation report. Status %v", response.GetStatus())
+	}
+
+	var out bytes.Buffer
+	json.Indent(&out, response.GetVerificationResult(), "", "    ")
+
+	// Save the Attestation Result
+	ioutil.WriteFile(resultFile, out.Bytes(), 0644)
+	fmt.Println("Wrote file ", resultFile)
+}
+
 func main() {
 	log.SetLevel(log.TraceLevel)
 
@@ -121,6 +199,7 @@ func main() {
 	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port to connect to the test connector")
 	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
 	mTLS := flag.Bool("mTLS", false, "Performs mutual TLS with remote attestation on both sides. Only in mode tlsconn")
+	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
 	flag.Parse()
 
 	var mode Mode
@@ -148,66 +227,11 @@ func main() {
 	defer cancel()
 
 	if mode == Generate {
-
-		// Generate random nonce
-		nonce := make([]byte, 8)
-		_, err = rand.Read(nonce)
-		if err != nil {
-			log.Fatalf("Failed to read random bytes: %v", err)
-		}
-
-		request := ci.AttestationRequest{
-			Nonce: nonce,
-		}
-		response, err := client.Attest(ctx, &request)
-		if err != nil {
-			log.Fatalf("GRPC Attest Call failed: %v", err)
-		}
-		if response.GetStatus() != ci.Status_OK {
-			log.Fatalf("Failed to generate attestation report. Status %v", response.GetStatus())
-		}
-
-		// Save the Attestation Report for the verifier
-		ioutil.WriteFile(*reportFile, response.GetAttestationReport(), 0644)
-		// Save the nonce for the verifier
-		ioutil.WriteFile(*nonceFile, nonce, 0644)
-
-		fmt.Println("Wrote file ", *reportFile)
-
+		generate(client, ctx, *reportFile, *nonceFile)
 	} else if mode == Verify {
-		// Read the attestation report and the nonce previously stored
-		data, err := ioutil.ReadFile(*reportFile)
-		if err != nil {
-			log.Fatalf("Failed to read file %v: %v", *reportFile, err)
-		}
-
-		var nonce []byte
-		nonce, err = ioutil.ReadFile(*nonceFile)
-		if err != nil {
-			log.Fatalf("Failed to read nonce: %v", err)
-		}
-
-		request := ci.VerificationRequest{
-			Nonce:             nonce,
-			AttestationReport: data,
-		}
-
-		response, err := client.Verify(ctx, &request)
-		if err != nil {
-			log.Fatalf("GRPC Verify Call failed: %v", err)
-		}
-		if response.GetStatus() != ci.Status_OK {
-			log.Warnf("Failed to verify attestation report. Status %v", response.GetStatus())
-		}
-
-		var out bytes.Buffer
-		json.Indent(&out, response.GetVerificationResult(), "", "    ")
-
-		// Save the Attestation Result
-		ioutil.WriteFile(*resultFile, out.Bytes(), 0644)
-		fmt.Println("Wrote file ", *resultFile)
+		verify(client, ctx, *reportFile, *resultFile, *nonceFile, *policiesFile, *rootCACertFile)
 	} else if mode == TLSConn {
-		TestTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port)
+		testTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port)
 	} else {
 		log.Println("Unknown mode")
 	}
