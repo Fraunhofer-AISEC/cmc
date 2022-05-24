@@ -1097,7 +1097,8 @@ func verifyCertChain(certs *CertChain) error {
 		return fmt.Errorf("failed to validate certificate chain: %v", err)
 	}
 
-	expectedLen := len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
+	// Expected length is Leaf + Num(Intermediates) + CA
+	expectedLen := len(certs.Intermediates) + 2
 	if len(chain[0]) != expectedLen {
 		return fmt.Errorf("expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
