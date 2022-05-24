@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"sort"
 
 	"github.com/google/go-tpm/tpm2"
 )
@@ -212,6 +213,11 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 			ok = false
 		}
 	}
+
+	// Sort the PCRs in ascending order
+	sort.Slice(pcrResult, func(i, j int) bool {
+		return pcrResult[i].Pcr < pcrResult[j].Pcr
+	})
 
 	// Finally, iterate over measurements to also include measured PCRs, that do not
 	// contain matching verifications in the report
