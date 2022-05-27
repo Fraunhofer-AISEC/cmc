@@ -421,7 +421,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain) (Si
 func verifySnpExtensions(cert *x509.Certificate, report *snpreport) (ResultMulti, bool) {
 	result := ResultMulti{}
 	ok := true
-	tcb := report.ReportedTcb
+	tcb := report.CurrentTcb
 
 	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.1", uint8(tcb)); err != nil {
 		msg := fmt.Sprintf("SEV BL Extension Check failed: %v", err)

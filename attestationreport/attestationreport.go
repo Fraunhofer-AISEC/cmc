@@ -1118,10 +1118,10 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error 
 				return fmt.Errorf("extension %v value[0] = %v does not match expected value 2", oid, ext.Value[0])
 			}
 			if ext.Value[1] != 0x1 {
-				return fmt.Errorf("extension %v value[1] = %v does not match expected value 1", oid, ext.Value[0])
+				return fmt.Errorf("extension %v value[1] = %v does not match expected value 1", oid, ext.Value[1])
 			}
 			if ext.Value[2] != value {
-				return fmt.Errorf("extension %v value[2] = %v does not match expected value %v", oid, ext.Value[0], value)
+				return fmt.Errorf("extension %v value[2] = %v does not match expected value %v", oid, ext.Value[2], value)
 			}
 			return nil
 		}
