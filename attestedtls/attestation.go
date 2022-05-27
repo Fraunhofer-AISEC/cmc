@@ -96,6 +96,7 @@ func verifyAR(nonce, report []byte, cc cmcConfig) error {
 
 	// check results
 	if !result.Success {
+		log.Tracef("Attestation result: %v", string(resp.GetVerificationResult()))
 		return errors.New("[attestedTLS] Verification failed")
 	}
 	return nil
