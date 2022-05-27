@@ -256,6 +256,10 @@ func verifySnpPolicy(s snpreport, v SnpPolicy) (PolicyCheck, bool) {
 		r.Migration.Success &&
 		r.Debug.Success &&
 		r.SingleSocket.Success
+	if !ok {
+		log.Tracef("SNP policies do not match: Abi: %v, Smt: %v, Migration: %v, Debug: %v, SingleSocket: %v",
+			r.Abi.Success, r.Smt.Success, r.Migration.Success, r.Debug.Success, r.SingleSocket.Success)
+	}
 	r.Summary.Success = ok
 
 	return r, ok
@@ -268,6 +272,10 @@ func verifySnpFw(s snpreport, v SnpFw) (VersionCheck, bool) {
 	minor := min([]uint8{s.CurrentMinor, s.CommittedMinor})
 
 	ok := checkMinVersion([]uint8{major, minor, build}, []uint8{v.Major, v.Minor, v.Build})
+	if !ok {
+		log.Tracef("SNP FW version check failed. Expected: %v.%v.%v, got %v.%v.%v",
+			v.Major, v.Minor, v.Build, major, minor, build)
+	}
 
 	// Convert to int, as json.Marshal otherwise interprets the values as strings
 	r := VersionCheck{
@@ -326,6 +334,10 @@ func verifySnpTcb(s snpreport, v SnpTcb) (TcbCheck, bool) {
 		},
 	}
 	ok := r.Bl.Success && r.Tee.Success && r.Snp.Success && r.Ucode.Success
+	if !ok {
+		log.Tracef("SNP TCB check failed: BL: %v, TEE: %v, SNP: %v, UCODE: %v",
+			r.Bl.Success, r.Tee.Success, r.Snp.Success, r.Ucode.Success)
+	}
 	r.Summary.Success = ok
 
 	return r, ok
