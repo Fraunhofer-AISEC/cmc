@@ -64,7 +64,9 @@ type config struct {
 	CaFile             string `json:"caCert"`
 	HTTPFolder         string `json:"httpFolder"`
 	VerifyEkCert       bool   `json:"verifyEkCert"`
-	TpmEkCertDb        string `json:"tpmEkCertDb"`
+	TpmEkCertDb        string `json:"tpmEkCertDb,omitempty"`
+	VcekOfflineCaching bool   `json:"vcekOfflineCaching,omitempty"`
+	VcekCacheFolder    string `json:"vcekCacheFolder,omitempty"`
 }
 
 type datastore struct {
@@ -78,6 +80,8 @@ type datastore struct {
 	VerifyEkCert       bool
 	DbPath             string
 	VcekMutex          sync.Mutex
+	VcekOfflineCaching bool
+	VcekCacheFolder    string
 	Vceks              map[snpdriver.VcekRequest][]byte
 }
 
@@ -100,6 +104,8 @@ func printConfig(c *config, configFile string) {
 	log.Info("\tFolders to be served   : ", getFilePath(c.HTTPFolder, filepath.Dir(configFile)))
 	log.Info("\tVerify EK Cert         : ", c.VerifyEkCert)
 	log.Info("\tTPM EK DB              : ", getFilePath(c.TpmEkCertDb, filepath.Dir(configFile)))
+	log.Info("\tVCEK Offline Caching   : ", c.VcekOfflineCaching)
+	log.Info("\tVCEK Cache Folder      : ", getFilePath(c.VcekCacheFolder, filepath.Dir(configFile)))
 }
 
 func readConfig(configFile string) (*config, error) {
@@ -820,6 +826,44 @@ func unlockDatastore() {
 	log.Trace("Released Lock")
 }
 
+func tryGetCachedVcek(req snpdriver.VcekRequest) ([]byte, bool) {
+	if dataStore.VcekOfflineCaching {
+		filePath := path.Join(dataStore.VcekCacheFolder,
+			fmt.Sprintf("%v_%x.der", hex.EncodeToString(req.ChipId[:]), req.Tcb))
+		f, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			log.Tracef("VCEK not present at %v, will be downloaded", filePath)
+			return nil, false
+		}
+		log.Tracef("Using offlince cached VCEK %v", filePath)
+		return f, true
+	} else {
+		if pem, ok := dataStore.Vceks[req]; ok {
+			log.Trace("Using cached VCEK")
+			return pem, true
+		}
+		log.Trace("Could not find VCEK in cache")
+	}
+	return nil, false
+}
+
+func cacheVcek(vcek []byte, req snpdriver.VcekRequest) error {
+	if dataStore.VcekOfflineCaching {
+		filePath := path.Join(dataStore.VcekCacheFolder,
+			fmt.Sprintf("%v_%x.der", hex.EncodeToString(req.ChipId[:]), req.Tcb))
+		err := ioutil.WriteFile(filePath, vcek, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write file %v: %w", filePath, err)
+		}
+		log.Tracef("Cached VCEK at %v", filePath)
+		return nil
+	} else {
+		dataStore.Vceks[req] = vcek
+		log.Trace("Cached VCEK")
+		return nil
+	}
+}
+
 // Get Vcek takes the TCB and chip ID, calculates the VCEK URL and gets the certificate
 // from the cache or downloads it from the AMD server if not present
 func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
@@ -829,11 +873,10 @@ func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
 	lockDatastore()
 	defer unlockDatastore()
 
-	if pem, ok := dataStore.Vceks[req]; ok {
-		log.Trace("Using cached VCEK")
+	pem, ok := tryGetCachedVcek(req)
+	if ok {
 		return pem, nil
 	}
-	log.Trace("Could not find VCEK in cache")
 
 	ChipId := hex.EncodeToString(req.ChipId[:])
 	tcbInfo := fmt.Sprintf("?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
@@ -849,9 +892,9 @@ func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
 		if err == nil {
 			log.Tracef("Successfully downloaded VCEK certificate")
 			pem := encodeCertPem(vcek)
-			log.Tracef("Caching VCEK certificate")
-
-			dataStore.Vceks[req] = pem
+			if err := cacheVcek(pem, req); err != nil {
+				log.Warnf("Failed to cache VCEK: %v", err)
+			}
 			return pem, nil
 		}
 		// If the status code is not 429 (too many requests), return
@@ -947,6 +990,9 @@ func main() {
 		return
 	}
 	dataStore.CaCertPem = caCertPem
+
+	dataStore.VcekCacheFolder = getFilePath(config.VcekCacheFolder, filepath.Dir(*configFile))
+	dataStore.VcekOfflineCaching = config.VcekOfflineCaching
 
 	dataStore.AkParams = make(map[[32]byte]attest.AttestationParameters)
 	dataStore.Secret = make(map[[32]byte][]byte)
