@@ -801,7 +801,7 @@ func handleVcekRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	}
 
 	resp := snpdriver.VcekResponse{
-		Vcek: vcek,
+		Vcek: encodeCertPem(vcek),
 	}
 
 	var retBuf bytes.Buffer
@@ -826,6 +826,7 @@ func unlockDatastore() {
 	log.Trace("Released Lock")
 }
 
+// tryGetCachedVcek returns cached VCEKs in DER format if available
 func tryGetCachedVcek(req snpdriver.VcekRequest) ([]byte, bool) {
 	if dataStore.VcekOfflineCaching {
 		filePath := path.Join(dataStore.VcekCacheFolder,
@@ -838,15 +839,16 @@ func tryGetCachedVcek(req snpdriver.VcekRequest) ([]byte, bool) {
 		log.Tracef("Using offlince cached VCEK %v", filePath)
 		return f, true
 	} else {
-		if pem, ok := dataStore.Vceks[req]; ok {
+		if der, ok := dataStore.Vceks[req]; ok {
 			log.Trace("Using cached VCEK")
-			return pem, true
+			return der, true
 		}
 		log.Trace("Could not find VCEK in cache")
 	}
 	return nil, false
 }
 
+// cacheVcek caches VCEKs in DER format
 func cacheVcek(vcek []byte, req snpdriver.VcekRequest) error {
 	if dataStore.VcekOfflineCaching {
 		filePath := path.Join(dataStore.VcekCacheFolder,
@@ -865,7 +867,7 @@ func cacheVcek(vcek []byte, req snpdriver.VcekRequest) error {
 }
 
 // Get Vcek takes the TCB and chip ID, calculates the VCEK URL and gets the certificate
-// from the cache or downloads it from the AMD server if not present
+// in DER format from the cache or downloads it from the AMD server if not present
 func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
 
 	// Allow only one download and caching of the VCEK certificate in parallel
@@ -873,9 +875,9 @@ func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
 	lockDatastore()
 	defer unlockDatastore()
 
-	pem, ok := tryGetCachedVcek(req)
+	der, ok := tryGetCachedVcek(req)
 	if ok {
-		return pem, nil
+		return der, nil
 	}
 
 	ChipId := hex.EncodeToString(req.ChipId[:])
@@ -891,11 +893,10 @@ func getVcek(req snpdriver.VcekRequest) ([]byte, error) {
 		vcek, statusCode, err := downloadCert(url)
 		if err == nil {
 			log.Tracef("Successfully downloaded VCEK certificate")
-			pem := encodeCertPem(vcek)
-			if err := cacheVcek(pem, req); err != nil {
+			if err := cacheVcek(vcek.Raw, req); err != nil {
 				log.Warnf("Failed to cache VCEK: %v", err)
 			}
-			return pem, nil
+			return vcek.Raw, nil
 		}
 		// If the status code is not 429 (too many requests), return
 		if statusCode != 429 {
@@ -933,9 +934,9 @@ func downloadCert(url string) (*x509.Certificate, int, error) {
 	return cert, resp.StatusCode, nil
 }
 
-func encodeCertPem(cert *x509.Certificate) []byte {
+func encodeCertPem(der []byte) []byte {
 	tmp := &bytes.Buffer{}
-	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: der})
 	return tmp.Bytes()
 }
 
