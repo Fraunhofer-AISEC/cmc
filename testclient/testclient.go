@@ -50,11 +50,14 @@ const (
 	TLSConn = 2
 )
 
+const (
+	timeoutSec = 10
+)
+
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
 func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string, policies []byte) {
-	var timeout = 10 * time.Second
 	var conf *tls.Config
 
 	// get root CA cert
@@ -95,7 +98,7 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
+	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
 	// write sth
 	_, err = conn.Write([]byte("hello\n"))
 	if err != nil {
@@ -110,10 +113,23 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 	log.Info("[Testclient] received: " + string(buf[:n]))
 }
 
-func generate(client ci.CMCServiceClient, ctx context.Context, reportFile, nonceFile string) {
+func generate(port, reportFile, nonceFile string) {
+
+	// Establish connection
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+
+	addr := fmt.Sprintf("localhost:%v", port)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("Failed to connect to cmcd: %v", err)
+	}
+	defer conn.Close()
+	client := ci.NewCMCServiceClient(conn)
+
 	// Generate random nonce
 	nonce := make([]byte, 8)
-	_, err := rand.Read(nonce)
+	_, err = rand.Read(nonce)
 	if err != nil {
 		log.Fatalf("Failed to read random bytes: %v", err)
 	}
@@ -137,7 +153,20 @@ func generate(client ci.CMCServiceClient, ctx context.Context, reportFile, nonce
 	fmt.Println("Wrote file ", reportFile)
 }
 
-func verify(client ci.CMCServiceClient, ctx context.Context, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
+func verify(port, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
+
+	// Establish connection
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+
+	addr := fmt.Sprintf("localhost:%v", port)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("Failed to connect to cmcd: %v", err)
+	}
+	defer conn.Close()
+	client := ci.NewCMCServiceClient(conn)
+
 	// Read the attestation report, CA and the nonce previously stored
 	data, err := ioutil.ReadFile(reportFile)
 	if err != nil {
@@ -215,23 +244,10 @@ func main() {
 		log.Debug("No policies specified. Verifying with default parameters")
 	}
 
-	addr := fmt.Sprintf("localhost:%v", *port)
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-	if err != nil {
-		log.Fatalf("Failed to connect to cmcd: %v", err)
-	}
-	defer conn.Close()
-
-	client := ci.NewCMCServiceClient(conn)
-
-	timeoutSec := 20
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
-	defer cancel()
-
 	if mode == Generate {
-		generate(client, ctx, *reportFile, *nonceFile)
+		generate(*port, *reportFile, *nonceFile)
 	} else if mode == Verify {
-		verify(client, ctx, *reportFile, *resultFile, *nonceFile, *rootCACertFile, policies)
+		verify(*port, *reportFile, *resultFile, *nonceFile, *rootCACertFile, policies)
 	} else if mode == TLSConn {
 		testTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port, policies)
 	} else {
