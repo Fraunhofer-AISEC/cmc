@@ -53,7 +53,7 @@ const (
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
-func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string) {
+func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string, policies []byte) {
 	var timeout = 10 * time.Second
 	var conf *tls.Config
 
@@ -90,7 +90,7 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 		}
 	}
 
-	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcPort(port), atls.WithCmcCa(rootCA))
+	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcPort(port), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
 	if err != nil {
 		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}
@@ -137,7 +137,7 @@ func generate(client ci.CMCServiceClient, ctx context.Context, reportFile, nonce
 	fmt.Println("Wrote file ", reportFile)
 }
 
-func verify(client ci.CMCServiceClient, ctx context.Context, reportFile, resultFile, nonceFile, policiesFile, caFile string) {
+func verify(client ci.CMCServiceClient, ctx context.Context, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
 	// Read the attestation report, CA and the nonce previously stored
 	data, err := ioutil.ReadFile(reportFile)
 	if err != nil {
@@ -158,18 +158,7 @@ func verify(client ci.CMCServiceClient, ctx context.Context, reportFile, resultF
 		Nonce:             nonce,
 		AttestationReport: data,
 		Ca:                ca,
-	}
-
-	// Add optional policies if present
-	if policiesFile != "" {
-		log.Debug("Policies specified. Adding them to verification request")
-		policies, err := ioutil.ReadFile(policiesFile)
-		if err != nil {
-			log.Fatalf("Failed to read file: %v", err)
-		}
-		request.Policies = policies
-	} else {
-		log.Debug("No policies specified. Verifying with default parameters")
+		Policies:          policies,
 	}
 
 	response, err := client.Verify(ctx, &request)
@@ -213,6 +202,19 @@ func main() {
 		log.Fatal("Wrong mode. Possible [Generate | Verify | TLSConn]")
 	}
 
+	// Add optional policies if present
+	var policies []byte = nil
+	var err error
+	if *policiesFile != "" {
+		log.Debug("Policies specified. Adding them to verification request")
+		policies, err = ioutil.ReadFile(*policiesFile)
+		if err != nil {
+			log.Fatalf("Failed to read policies file: %v", err)
+		}
+	} else {
+		log.Debug("No policies specified. Verifying with default parameters")
+	}
+
 	addr := fmt.Sprintf("localhost:%v", *port)
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
@@ -229,9 +231,9 @@ func main() {
 	if mode == Generate {
 		generate(client, ctx, *reportFile, *nonceFile)
 	} else if mode == Verify {
-		verify(client, ctx, *reportFile, *resultFile, *nonceFile, *policiesFile, *rootCACertFile)
+		verify(client, ctx, *reportFile, *resultFile, *nonceFile, *rootCACertFile, policies)
 	} else if mode == TLSConn {
-		testTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port)
+		testTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port, policies)
 	} else {
 		log.Println("Unknown mode")
 	}

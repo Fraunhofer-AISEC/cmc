@@ -37,6 +37,7 @@ func main() {
 	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
 	port := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
 	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port on which to listen")
+	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
 	flag.Parse()
 
 	log.SetLevel(log.TraceLevel)
@@ -63,6 +64,18 @@ func main() {
 		return
 	}
 
+	// Add optional policies if present
+	var policies []byte = nil
+	if *policiesFile != "" {
+		log.Debug("Policies specified. Adding them to verification request")
+		policies, err = ioutil.ReadFile(*policiesFile)
+		if err != nil {
+			log.Fatalf("Failed to read policies file: %v", err)
+		}
+	} else {
+		log.Debug("No policies specified. Verifying with default parameters")
+	}
+
 	// Create TLS config
 	config = &tls.Config{
 		Certificates: []tls.Certificate{cert},
@@ -71,7 +84,7 @@ func main() {
 	}
 
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port), atls.WithCmcCa(rootCA))
+	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
 	if err != nil {
 		log.Error(err)
 		log.Error("[Testconnector] Failed to listen for connections")
