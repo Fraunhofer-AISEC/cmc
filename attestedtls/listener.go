@@ -36,7 +36,7 @@ type Listener struct {
 
 type ConnectionOption[T any] func(*T)
 
-// Sets the port on which to contact the CMC.
+// WithCmcPort sets the port on which to contact the CMC.
 // If not specified, default is "9955"
 func WithCmcPort(port string) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
@@ -44,11 +44,19 @@ func WithCmcPort(port string) ConnectionOption[cmcConfig] {
 	}
 }
 
-// Sets the address with which to contact the CMC.
+// WithCmcAddress sets the address with which to contact the CMC.
 // If not specified, default is "localhost"
 func WithCmcAddress(address string) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.cmcAddress = address
+	}
+}
+
+// WithCmcCa specifies the CA the attestation report should be verified agains
+// in PEM format
+func WithCmcCa(pem []byte) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.ca = pem
 	}
 }
 
