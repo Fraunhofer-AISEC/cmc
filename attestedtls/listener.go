@@ -52,11 +52,19 @@ func WithCmcAddress(address string) ConnectionOption[cmcConfig] {
 	}
 }
 
-// WithCmcCa specifies the CA the attestation report should be verified agains
+// WithCmcCa specifies the CA the attestation report should be verified against
 // in PEM format
 func WithCmcCa(pem []byte) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.ca = pem
+	}
+}
+
+// WithCmcPolicies specified optional custom policies the attestation report should
+// be verified against
+func WithCmcPolicies(policies []byte) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.policies = policies
 	}
 }
 

@@ -1,5 +1,5 @@
 {
-    "type": "Integrity Policy",
+    "type": "Attestation Policy",
     "expectCertificationLevel": 1,
     "expectTpmMeasurement": false,
     "expectSnpMeasurement": false

@@ -42,6 +42,7 @@ type cmcConfig struct {
 	cmcPort    string
 	cmcAddress string
 	ca         []byte
+	policies   []byte
 }
 
 // Creates connection with cmcd deamon at specified address

@@ -75,6 +75,7 @@ func verifyAR(nonce, report []byte, cc cmcConfig) error {
 		Nonce:             nonce,
 		AttestationReport: report,
 		Ca:                cc.ca,
+		Policies:          cc.policies,
 	}
 	// Perform Verify request
 	resp, err := cmcClient.Verify(context.Background(), &req)
