@@ -24,7 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var timeout = 10 * time.Second
+const timeout = 10 * time.Second
 
 /* Struct to implement Listener interface
  * holds net.Listener and adds additional functionality to it */

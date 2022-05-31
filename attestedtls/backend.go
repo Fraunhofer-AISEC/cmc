@@ -33,8 +33,11 @@ import (
 /***********************************************************/
 /* Backend to CMC */
 
-var cmcAddressDefault = "localhost"
-var cmcPortDefault = "9955"
+const (
+	cmcAddressDefault = "localhost"
+	cmcPortDefault    = "9955"
+	timeoutSec        = 10
+)
 
 // Struct that holds information on cmc address and port
 // to be used by Listener and DialConfig
@@ -48,7 +51,7 @@ type cmcConfig struct {
 // Creates connection with cmcd deamon at specified address
 func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
 	log.Trace("[Backend] Contacting cmcd on: " + cc.cmcAddress + ":" + cc.cmcPort)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Error("[Backend] ERROR: did not connect:", err)
