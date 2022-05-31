@@ -90,7 +90,7 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 		}
 	}
 
-	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcPort(port))
+	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcPort(port), atls.WithCmcCa(rootCA))
 	if err != nil {
 		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}

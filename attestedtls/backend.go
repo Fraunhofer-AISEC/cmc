@@ -41,6 +41,7 @@ var cmcPortDefault = "9955"
 type cmcConfig struct {
 	cmcPort    string
 	cmcAddress string
+	ca         []byte
 }
 
 // Creates connection with cmcd deamon at specified address

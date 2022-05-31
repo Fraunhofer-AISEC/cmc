@@ -71,7 +71,7 @@ func main() {
 	}
 
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port))
+	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port), atls.WithCmcCa(rootCA))
 	if err != nil {
 		log.Error(err)
 		log.Error("[Testconnector] Failed to listen for connections")
