@@ -57,7 +57,7 @@ go build
 ./testconnector --rootcacertfile ../example-setup/ca/ca.pem
 
 # Run the testclient to test the attested TLS connection with the connector
-./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem -connector 127.0.0.1:443 -mTLS true
+./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem -connector 127.0.0.1:443 -mTLS
 ```
 
 **Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed in the *cmcd*
@@ -217,6 +217,9 @@ manufacturers. The provisioning server uses these certificates to verify the TPM
 Endorsement Key (EK) certificate. The repository contains an example database with the
 certificates of some TPM manufacturers which can be used. For different manufacturers,
 certificates might need to be added.
+- **vcekOfflineCaching**: Boolean, specifies whether AMD SEV-SNP VCEK certificates downloaded from the AMD KDS server should be stored locally for later offline retrieval
+- **vcekCacheFolder**: The folder the downloaded VCEK certificates should locally be stored (only
+relevant if vcekOfflineCaching is set to true)
 
 ```json
 {
@@ -226,7 +229,9 @@ certificates might need to be added.
     "caCert": "ca/ca.pem",
     "httpFolder": "data-server",
     "verifyEkCert": false,
-    "tpmEkCertDb": "tpm-ek-certs.db"
+    "tpmEkCertDb": "tpm-ek-certs.db",
+    "vcekOfflineCaching": true,
+    "vcekCacheFolder": "ca/vceks"
 }
 ```
 
@@ -243,7 +248,8 @@ Further information about the platform configuration can be found
 
 ## Build
 
-All binaries can be built with the *go*-compiler:
+All binaries can be built with the *go*-compiler. For an explanation of the various flags run
+<binary> --help
 
 ### Build and Run the Provisioning Server
 
@@ -266,7 +272,7 @@ go build
 ```sh
 cd testclient
 go build
-./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS <true | false>] [--rootcacertfile <file>] [--policies <file>]
+./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS] [--rootcacertfile <file>] [--policies <file>]
 ```
 
 ### Build and Run the Testconnector
@@ -274,7 +280,7 @@ go build
 ```sh
 cd testconnector
 go build
-./testconnector [--rootcacertfile <file>] [--connector <listen-addr>]
+./testconnector [--rootcacertfile <file>] [--connector <listen-addr>] [--policies <file>]
 ```
 
 ### Regenerate Protobuf gRPC Interface
