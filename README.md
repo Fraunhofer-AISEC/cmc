@@ -9,6 +9,18 @@ enable remote attestation of computing platforms. It was initially designed as a
 remote attestation within the International Data Spaces (IDS), but can be used for
 universal attestation of computing platforms.
 
+## Architecture Overview
+
+![CMC, attestation drivers and exemplary test-connector and client as well as interface descriptions](./doc/overview.svg)
+
+The figure shows how the core components interact with each other. The main software components are:
+- The cmcd collects and provides information and attestation reports from the provided trusted hardware
+- The test connector and client are exemplary applications that make use of the daemon to create an attested tls connection
+- Trusted hardware provides the attestation reports and, if available, key storage and signing functionalities
+
+
+Refer to the [Architecture](doc/Architecture.md) Readme for more information.
+
 ## Prerequistes
 
 - Running the *cmcd* currently requires a Linux platform. If the *cmcd* is configured to use a TPM
@@ -28,7 +40,7 @@ Virtual Machine (VM) or server.
 
 The CMC repository contains a complete local example setup including a demo CA and all required
 configurations and metadata. This setup is for demonstrating purposes only. Furthermore,
-it provdes testing tools for local and remote attestation.
+it provides testing tools for local and remote attestation.
 
 ```sh
 # Build and run the provisioning server that supplies the certificates and data for the cmcd
@@ -60,8 +72,8 @@ go build
 ./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem -connector 127.0.0.1:443 -mTLS
 ```
 
-**Note**: *cmcd* and *testclient* use port 9955 as default. This can be changed in the *cmcd*
-configuration and using the ```--port <port-number>``` command line argument for the testclient.
+**Note**: by default, *cmcd* and *testclient* use localhost port 9955 to communicate. This can be changed in the *cmcd*
+configuration and using the ```--addr <host:port>``` command line argument for the testclient.
 
 **Note**: The *cmcd* --addr parameter is the server address where metadata can be found and must
 correspond to the address in the *provserver* config
@@ -73,47 +85,11 @@ warning is printed. The intermediate and root CA for this chain can be downloade
 vendor. The certificates can then be added in to the ```cmc/example-setup/tpm-ek-certs.db```
 database. The ```verifyEkCert``` parameter in the *provserver* config can then be set to true.
 
-**Note**: The verification of the attestation report will most likely fail. This is, because the
-software on your machine is different compared to the software defined in the example-setup. Use
+**Note**: The verification of the attestation report will most likely fail. This is due to the
+software on your machine differing from the software defined in the example-setup. Use
 the *ids-pcp*-tool to update the manifests and descriptions (see
 [Manifests and Descriptions](#manifests-and-descriptions))
 
-## Repository Description
-
-The CMC daemon (*cmcd*) is the main component running on the platform. On request, the cmcd either
-generates or verifies an attestation-report, i.e. the state of the platform. The cmcd provides
-a gRPC interface to access its services (*cmcinterface*). For the generation and verification
-of attestation reports, the *cmcd* relies on the *attestationreport* package.
-
-The *attestationreport* package provides a generic JSON-based serialization format to summarize
-the meta-data describing the software running on the computer platform. Enabling trust in this
-meta-data requires a hardware-based Root-of-Trust (RoT) that provides the possibility to store keys
-and measurements of the software running on the platform. The *attestationreport* therefore
-implements a generic *Measurement* interface, as well as a generic *Signer* interface.
-These interfaces must be implemented by *drivers* that provide access to a hardware based RoT.
-Currently, this repository contains a *tpmdriver*, an *snpdriver* and an *swdriver*.
-
-The *tpmdriver* package interfaces with a Trusted Platform Module (TPM) as the RoT.
-The TPM is used to store cryptographic keys, store the software measurements (hashes) in its
-Platform Configuration Registers (PCRs) during the *Measured Boot* and to generate and sign *Quotes*
-which can be used to verify the platform state. Furthermore, the *tpmdriver* can use the *ima*
-package interfacing with the kernel's Integrity Measurement Architecture (IMA) for obtaining
-detailed measurement lists of the kernel modules, firmware and optionally further components
-running on the platform. The *tpmdriver* can therefore act as *Measurement* as well as as
-*Signer* interface.
-
-The *snpdriver* interfaces with the AMD SEV-SNP SP. It retrieves SNP measurements in the form of
-an SNP attestation report as well as the certificate chain for this attestation report from the
-respective AMD servers. Currently, it can only act as *Measurement* interface.
-
-The *swdriver* simply creates keys in software for testing purposes and can be used as *Signer*
-interface. **Note**: This should mainly be used for testing purposes.
-
-During provisioning, the cmcd requires interaction with a provisioning server (*provserver*). The
-server can provide certificates for software signing, perform the TPM *Credential Activiation* and
-provision TPM certificates, and can provide the metadata (manifests and configurations) for the
-*cmcd*. The server is mainly for demonstration purposes. In productive setups, its functionality
-might be split onto different servers (e.g. a CA server and an internal metadata server).
 
 ## Manifests and Descriptions
 
@@ -241,7 +217,7 @@ The *cmcd* does not provide platform security itself, it only allows to make ver
 about the software running on a platform. Thus, a secure base plaftorm is essential for the
 overall security of the platform. This includes the kernel configuration, OS configuration,
 file systems and software running on the host. Some configurations are mandatory for the *cmcd*
-to work (e.g. TPM-support must be enabled in the kernel configuration).
+to work (e.g., if used, TPM-support must be enabled in the kernel configuration).
 
 Further information about the platform configuration can be found
 [here](doc/platform-configuration.md)
