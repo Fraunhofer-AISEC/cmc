@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 
 	"encoding/json"
 	"flag"
@@ -38,7 +37,7 @@ import (
 )
 
 type config struct {
-	Port                  int      `json:"port"`
+	Addr                  string   `json:"addr"`
 	ProvServerAddr        string   `json:"provServerAddr"`
 	LocalPath             string   `json:"localPath"`
 	FetchMetadata         bool     `json:"fetchMetadata"`
@@ -271,8 +270,7 @@ func main() {
 
 	server := NewServer(serverConfig)
 
-	addr := "127.0.0.1:" + strconv.Itoa(c.Port)
-	err = Serve(addr, &server)
+	err = Serve(c.Addr, &server)
 	if err != nil {
 		log.Error(err)
 		return

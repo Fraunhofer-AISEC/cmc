@@ -1,5 +1,5 @@
 {
-    "port": 9955,
+    "addr": "127.0.0.1:9955",
     "provServerAddr": "http://127.0.0.1:9001/",
     "localPath": "data-cmc/",
     "fetchMetadata": true,

@@ -156,7 +156,7 @@ The *cmcd* and *provserver* require JSON configuration files. An example setup w
 required configuration files is provided in the ```examples/``` folder of this repository.
 
 The *cmcd* requires a JSON configuration file with the following information:
-- **port**: The port the *cmcd* should listen on
+- **addr**: The address the *cmcd* should listen on, e.g. 127.0.0.1:9955
 - **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
 TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
 - **localPath**: the local path to store the meta-data and internal files. In a local setup, all
@@ -182,7 +182,7 @@ RSA4096, EC256, EC384, EC521
 
 ```json
 {
-    "port": 9955,
+    "addr": "127.0.0.1:9955",
     "provServerAddr": "http://127.0.0.1:9001/",
     "serverPath": "drtm-example/",
     "localPath": "metadata/",
