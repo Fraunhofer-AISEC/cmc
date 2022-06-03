@@ -18,6 +18,7 @@ package attestedtls
 import (
 	"crypto/tls"
 	"errors"
+	"net"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -30,7 +31,9 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	mTLS := (config.Certificates != nil)
 
 	// Create TLS connection
-	conn, err := tls.Dial(network, addr, config)
+	var dialer net.Dialer
+	dialer.Timeout = timeout
+	conn, err := tls.DialWithDialer(&dialer, network, addr, config)
 	if err != nil {
 		log.Error(err)
 		return nil, errors.New("[Dialer] TLS establishment failed")
