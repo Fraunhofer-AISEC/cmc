@@ -57,7 +57,7 @@ const (
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
-func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string, policies []byte) {
+func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, addr string, policies []byte) {
 	var conf *tls.Config
 
 	// get root CA cert
@@ -74,10 +74,15 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 		log.Fatal("[Testclient] Could not add cert to root CAs")
 	}
 
+	addrParts := strings.Split(addr, ":")
+	if len(addrParts) != 2 {
+		log.Fatal("[Testclient] Invalid Address, must be <address>:<port>")
+	}
+
 	if mTLS {
 		// Load own certificate
 		var cert tls.Certificate
-		cert, err = atls.GetCert(atls.WithCmcPort(port))
+		cert, err = atls.GetCert(atls.WithCmcAddress(addrParts[0]), atls.WithCmcPort(addrParts[1]))
 		if err != nil {
 			log.Fatalf("[Testclient] failed to get TLS Certificate: %v", err)
 		}
@@ -93,7 +98,7 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 		}
 	}
 
-	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcPort(port), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
+	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcAddress(addrParts[0]), atls.WithCmcPort(addrParts[1]), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
 	if err != nil {
 		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}
@@ -113,13 +118,12 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, port string
 	log.Info("[Testclient] received: " + string(buf[:n]))
 }
 
-func generate(port, reportFile, nonceFile string) {
+func generate(addr, reportFile, nonceFile string) {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	addr := fmt.Sprintf("localhost:%v", port)
 	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
@@ -153,13 +157,12 @@ func generate(port, reportFile, nonceFile string) {
 	fmt.Println("Wrote file ", reportFile)
 }
 
-func verify(port, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
+func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	addr := fmt.Sprintf("localhost:%v", port)
 	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
@@ -210,7 +213,7 @@ func main() {
 	log.SetLevel(log.TraceLevel)
 
 	parsedMode := flag.String("mode", "generate", "[generate | verify | tlsconn ]")
-	port := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
+	addr := flag.String("addr", "127.0.0.1:9955", "TCP address to connect to the CMC daemon gRPC interface")
 	reportFile := flag.String("report", "attestation-report.json", "Output file for the attestation report")
 	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
 	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
@@ -245,11 +248,11 @@ func main() {
 	}
 
 	if mode == Generate {
-		generate(*port, *reportFile, *nonceFile)
+		generate(*addr, *reportFile, *nonceFile)
 	} else if mode == Verify {
-		verify(*port, *reportFile, *resultFile, *nonceFile, *rootCACertFile, policies)
+		verify(*addr, *reportFile, *resultFile, *nonceFile, *rootCACertFile, policies)
 	} else if mode == TLSConn {
-		testTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *port, policies)
+		testTLSConn(*connectoraddress, *rootCACertFile, *mTLS, *addr, policies)
 	} else {
 		log.Println("Unknown mode")
 	}
