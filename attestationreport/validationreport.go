@@ -149,7 +149,7 @@ type SignatureResult struct {
 	Name            string       `json:"commonName"`             // Name of the certificate used for calculating the signature
 	Organization    []string     `json:"organization"`           // Name of the organization the signer belongs to
 	SubjectKeyId    string       `json:"subjectKeyIdentifier"`   // Hex-encoded certificate Subject Key Identifier
-	AuthorityKeyId  string       `json:"authoritykeyidentifier"` // Hex-encoded certificate autority key identifier
+	AuthorityKeyId  string       `json:"authoritykeyidentifier"` // Hex-encoded certificate autorithy key identifier
 	Signature       Result       `json:"signatureVerification"`  // Result from checking the signature has been calculated with this certificate
 	CertCheck       Result       `json:"certChainValidation"`    // Result from validatint the certification chain back to a shared root of trust
 	RoleCheck       *Result      `json:"roleCheck,omitempty"`    // Result for checking the role in the certificate (optional)

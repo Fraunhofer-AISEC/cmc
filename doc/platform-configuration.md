@@ -5,7 +5,7 @@ platform must be capable of running a *Measured Boot* where each boot component 
 component into the respective TPM PCRs. Two approaches can be used, the Static Root of Trust for
 Measurements (SRTM) and the Dynamic Root of Trust for Measurements (DRTM). Most platforms are
 capable of performing an SRTM Measured Boot without further modifications, while a DRTM
-measured boot requires hardware support and addtional software (such as
+measured boot requires hardware support and additional software (such as
 [Intel TXT](https://www.intel.com/content/www/us/en/developer/articles/tool/intel-trusted-execution-technology.html?wapkw=txt),
 [Intel SINIT ACM](https://software.intel.com/content/www/us/en/develop/articles/intel-trusted-execution-technology.html),
 and [tboot](https://sourceforge.net/projects/tboot/)).

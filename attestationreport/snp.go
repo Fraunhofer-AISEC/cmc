@@ -393,7 +393,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain) (Si
 
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
-		msg := fmt.Sprintf("Siganture Algorithm %v not supported", report.SignatureAlgo)
+		msg := fmt.Sprintf("Signature Algorithm %v not supported", report.SignatureAlgo)
 		result.Signature.setFalse(&msg)
 		return result, false
 	}

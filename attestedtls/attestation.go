@@ -157,7 +157,7 @@ func attest(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 		log.Error(err)
 		return errors.New("[attestedTLS] Other side failed to verify AR")
 	}
-	log.Info("[attestedTLS] Attestation to peer succesful")
+	log.Info("[attestedTLS] Attestation to peer successful")
 	return nil
 }
 
