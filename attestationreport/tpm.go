@@ -28,7 +28,6 @@ import (
 
 func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []Verification) (*TpmMeasurementResult, bool) {
 	result := &TpmMeasurementResult{}
-	ok := true
 
 	// If the attestationreport does contain neither TPM measurements, nor TPM verifications
 	// there is nothing to do
