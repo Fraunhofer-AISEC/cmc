@@ -38,6 +38,14 @@ jobs:
         with:
           version: "2022.1"
           install-go: false
+      - name: Misspell Check
+        run: |
+          go install github.com/client9/misspell/cmd/misspell@latest
+          misspell .
+      - name: Ineffectual Assignments Check
+        run: |
+          go install github.com/gordonklaus/ineffassign
+          ineffassign ./...
       - name: Test
         run: go test ./...
       - name: "Upload cmcd"
