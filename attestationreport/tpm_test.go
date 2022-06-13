@@ -348,6 +348,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		tpmM          *TpmMeasurement
 		nonce         []byte
 		verifications []Verification
+		casPem        []byte
 	}
 	tests := []struct {
 		name  string
@@ -367,6 +368,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				},
 				nonce:         validTpmNonce,
 				verifications: validVerifications,
+				casPem:        []byte(validCa),
 			},
 			want:  &validTpmMeasurementResult,
 			want1: true,
@@ -383,6 +385,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				},
 				nonce:         invalidTpmNonce,
 				verifications: validVerifications,
+				casPem:        []byte(validCa),
 			},
 			want:  nil,
 			want1: false,
@@ -399,6 +402,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				},
 				nonce:         validTpmNonce,
 				verifications: validVerifications,
+				casPem:        []byte(validCa),
 			},
 			want:  nil,
 			want1: false,
@@ -415,6 +419,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				},
 				nonce:         validTpmNonce,
 				verifications: validVerifications,
+				casPem:        []byte(validCa),
 			},
 			want:  nil,
 			want1: false,
@@ -431,14 +436,33 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				},
 				nonce:         validTpmNonce,
 				verifications: invalidVerifications,
+				casPem:        []byte(validCa),
+			},
+			want:  nil,
+			want1: false,
+		},
+		{
+			name: "Invalid CA SubjectKeyId",
+			args: args{
+				tpmM: &TpmMeasurement{
+					Type:      "TPM Measurement",
+					Message:   validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					HashChain: validHashChain,
+				},
+				nonce:         validTpmNonce,
+				verifications: validVerifications,
+				casPem:        []byte(validIntermediate),
 			},
 			want:  nil,
 			want1: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpmMeasurements(tt.args.tpmM, tt.args.nonce, tt.args.verifications)
+			got, got1 := verifyTpmMeasurements(tt.args.tpmM, tt.args.nonce, tt.args.verifications, tt.args.casPem)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
