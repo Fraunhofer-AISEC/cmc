@@ -1027,6 +1027,10 @@ var (
 		Snp:   6,
 		Ucode: 68,
 	}
+
+	validKeyId = "85AC1AD143F7C8AC55D4C51D4148ABD5784AD453"
+
+	invalidKeyId = "99AC1AD143F7C8AC55D4C51D4148ABD5784AD453"
 )
 
 func Test_verifySnpMeasurements(t *testing.T) {
@@ -1054,6 +1058,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1078,6 +1083,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1102,6 +1108,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1126,6 +1133,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1150,6 +1158,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1174,6 +1183,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: invalidMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1198,6 +1208,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  invalidSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1222,6 +1233,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1271,6 +1283,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1295,6 +1308,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      invalidFw,
 							Tcb:     validTcb,
@@ -1319,9 +1333,35 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     invalidTcb,
+						},
+					},
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid CA KeyID",
+			args: args{
+				snpM: &SnpMeasurement{
+					Type:   "SNP Measurement",
+					Report: validReport,
+					Certs:  validCertChain,
+				},
+				snpV: []Verification{
+					{
+						Type:   "SNP Verification",
+						Sha384: validMeasurement,
+						Snp: &SnpDetails{
+							Version: validVersion,
+							KeyId:   invalidKeyId,
+							Policy:  validSnpPolicy,
+							Fw:      validFw,
+							Tcb:     validTcb,
 						},
 					},
 				},
