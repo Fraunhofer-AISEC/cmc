@@ -26,7 +26,7 @@ import (
 	"github.com/google/go-tpm/tpm2"
 )
 
-func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []Verification) (*TpmMeasurementResult, bool) {
+func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []Verification, casPem []byte) (*TpmMeasurementResult, bool) {
 	result := &TpmMeasurementResult{}
 
 	// If the attestationreport does contain neither TPM measurements, nor TPM verifications
@@ -105,7 +105,18 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 		ok = false
 	}
 
-	err = verifyCertChain(&tpmM.Certs)
+	// Verify certificate chain
+	cas, err := loadCerts(casPem)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
+		result.QuoteSignature.CertCheck.setFalse(&msg)
+		ok = false
+	}
+	keyIds := make([][]byte, 0)
+	for _, ca := range cas {
+		keyIds = append(keyIds, ca.SubjectKeyId)
+	}
+	err = verifyCertChain(&tpmM.Certs, keyIds)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.QuoteSignature.CertCheck.setFalse(&msg)

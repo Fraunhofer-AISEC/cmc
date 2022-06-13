@@ -562,7 +562,7 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies) Verificatio
 
 	// If present, verify TPM measurements against provided TPM verifications
 	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(ar.TpmM, nonce,
-		verifications["TPM Verification"])
+		verifications["TPM Verification"], casPem)
 	if !ok {
 		result.Success = false
 	}
@@ -737,6 +737,22 @@ func loadCert(data []byte) (*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
 	}
 	return cert, nil
+}
+
+// loadCerts loads one or more certificates from PEM encoded data
+func loadCerts(data []byte) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, 0)
+	input := data
+
+	for block, rest := pem.Decode(input); block != nil; block, rest = pem.Decode(rest) {
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
+		}
+		certs = append(certs, cert)
+	}
+	return certs, nil
 }
 
 // Verifies signatures and certificate chains for JWS tokens
@@ -1096,7 +1112,7 @@ func collectVerifications(ar *ArPlain) (map[string][]Verification, error) {
 	return verMap, nil
 }
 
-func verifyCertChain(certs *CertChain) error {
+func verifyCertChain(certs *CertChain, caKeyIds [][]byte) error {
 
 	intermediatesPool := x509.NewCertPool()
 	for _, intermediate := range certs.Intermediates {
@@ -1116,6 +1132,11 @@ func verifyCertChain(certs *CertChain) error {
 		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
 	}
 
+	rootCert, err := loadCert(certs.Ca)
+	if err != nil {
+		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
+	}
+
 	chain, err := leafCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
 		return fmt.Errorf("failed to validate certificate chain: %v", err)
@@ -1125,6 +1146,19 @@ func verifyCertChain(certs *CertChain) error {
 	expectedLen := len(certs.Intermediates) + 2
 	if len(chain[0]) != expectedLen {
 		return fmt.Errorf("expected chain of length %v (got %v)", expectedLen, len(chain[0]))
+	}
+
+	// Match measurement CA against expected CAs
+	found := false
+	for _, keyId := range caKeyIds {
+		if bytes.Equal(keyId, rootCert.SubjectKeyId) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("ca Key ID %v does not match any of the expected CAs",
+			rootCert.SubjectKeyId)
 	}
 
 	return nil

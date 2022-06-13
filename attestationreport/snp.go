@@ -414,37 +414,22 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 		return result, false
 	}
 	log.Trace("Successfully verified SNP report signature")
+	result.Signature.Success = true
 
 	// Verify the SNP certificate chain
-	err = verifyCertChain(&certs)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.CertCheck.setFalse(&msg)
-		return result, false
-	}
-
-	// Compare that the measurement CA certificate matches the expected CA
 	keyId, err := hex.DecodeString(caKeyId)
 	if err != nil {
 		msg := fmt.Sprintf("failed to parse SNP Verification CA subject key identifier: %v", err)
 		result.CertCheck.setFalse(&msg)
 		return result, false
 	}
-	rootCert, err := loadCert(certs.Ca)
+	err = verifyCertChain(&certs, [][]byte{keyId})
 	if err != nil {
-		msg := fmt.Sprintf("failed to parse CA certificate: %v", err)
+		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.CertCheck.setFalse(&msg)
 		return result, false
 	}
-	if !bytes.Equal(keyId, rootCert.SubjectKeyId) {
-		msg := fmt.Sprintf("failed to verify certificate chain: key identifier %v does not match expected identifier %v",
-			rootCert.SubjectKeyId, keyId)
-		result.CertCheck.setFalse(&msg)
-		return result, false
-	}
-
 	result.CertCheck.Success = true
-	result.Signature.Success = true
 
 	return result, true
 }
