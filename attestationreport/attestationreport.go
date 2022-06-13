@@ -150,6 +150,7 @@ type SnpTcb struct {
 
 type SnpDetails struct {
 	Version uint32    `json:"version"`
+	KeyId   string    `json:"caKeyId"`
 	Policy  SnpPolicy `json:"policy"`
 	Fw      SnpFw     `json:"fw"`
 	Tcb     SnpTcb    `json:"tcb"`
@@ -1110,11 +1111,7 @@ func verifyCertChain(certs *CertChain) error {
 		return errors.New("failed to append certificate to certificate pool")
 	}
 
-	block, _ := pem.Decode(certs.Leaf)
-	if block == nil || block.Type != "CERTIFICATE" {
-		return errors.New("failed to parse leaf certificate")
-	}
-	leafCert, err := x509.ParseCertificate(block.Bytes)
+	leafCert, err := loadCert(certs.Leaf)
 	if err != nil {
 		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
 	}
