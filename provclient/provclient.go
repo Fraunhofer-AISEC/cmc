@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	log "github.com/sirupsen/logrus"
 )
 
@@ -41,9 +43,72 @@ type Content struct {
 	Name    string   `xml:",chardata"`
 }
 
-// FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
-func FetchMetadata(addr, localPath string) error {
+type Config struct {
+	FetchMetadata bool
+	StoreMetadata bool
+	LocalPath     string
+	RemoteAddr    string
+}
 
+// ProvisionMetadata either loads the metadata from the file system or fetches it
+// from a remote HTTP server. Optionally, it can store the fetched metadata on the filesystem
+func ProvisionMetadata(c *Config) ([][]byte, error) {
+	if c.FetchMetadata {
+		data, err := FetchMetadata(c.RemoteAddr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch device metadata from %v: %v", c.RemoteAddr, err)
+		}
+		if c.StoreMetadata {
+			err := StoreMetadata(data, c.LocalPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to store metadata: %v", err)
+			}
+		}
+		metadata := make([][]byte, 0, len(data))
+		for _, v := range data {
+			metadata = append(metadata, v)
+		}
+		return metadata, nil
+	} else {
+		metadata, err := LoadMetadata(c.LocalPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load metadata from %v: %v", c.LocalPath, err)
+		}
+		return metadata, nil
+	}
+}
+
+// LoadMetadata loads the metadata (manifests and descriptions) from the file system
+func LoadMetadata(dir string) (metadata [][]byte, err error) {
+	// Read number of files
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metadata folder: %v", err)
+	}
+
+	// Retrieve the metadata files
+	metadata = make([][]byte, 0)
+	log.Tracef("Parsing %v metadata files in %v", len(files), dir)
+	for i := 0; i < len(files); i++ {
+		file := path.Join(dir, files[i].Name())
+		if fileInfo, err := os.Stat(file); err == nil {
+			if fileInfo.IsDir() {
+				log.Tracef("Skipping directory %v", file)
+				continue
+			}
+		}
+		log.Tracef("Reading file %v", file)
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %v: %v", file, err)
+		}
+		metadata = append(metadata, data)
+	}
+	return metadata, nil
+}
+
+// StoreMetadata stores the metadata locally into the specified file system folder
+func StoreMetadata(data map[string][]byte, localPath string) error {
 	if _, err := os.Stat(localPath); err != nil {
 		if err := os.Mkdir(localPath, 0755); err != nil {
 			return fmt.Errorf("failed to create directory for local data '%v': %v", localPath, err)
@@ -69,24 +134,36 @@ func FetchMetadata(addr, localPath string) error {
 		}
 	}
 
+	for filename, content := range data {
+		file := filepath.Join(localPath, filename)
+		log.Debug("Writing file: ", file)
+		err := ioutil.WriteFile(file, content, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write file: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
+func FetchMetadata(addr string) (map[string][]byte, error) {
+
 	// Read file root directory
 	log.Info("Requesting data for ", addr)
 	resp, err := http.Get(addr)
 	if err != nil {
-		log.Error("HTTP request failed: ", err)
-		return err
+		return nil, fmt.Errorf("HTTP GET request to %v failed: %v", addr, err)
 	}
 	defer resp.Body.Close()
 	log.Debug("Response Status: ", resp.Status)
 	if resp.StatusCode != 200 {
-		log.Warn("Request returned error - ", resp.Status)
-		return err
+		return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
 	}
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Error("failed to read response")
-		return err
+		return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
 	}
 	log.Trace("Content:\n", string(content))
 
@@ -94,21 +171,20 @@ func FetchMetadata(addr, localPath string) error {
 	var pre Pre
 	err = xml.Unmarshal(content, &pre)
 	if err != nil {
-		log.Error("Error Unmarshalling - ", err)
-		return err
+		return nil, fmt.Errorf("failed to unmarshal HTTP response: %v", err)
 	}
 
 	// Parse subdirectories recursively and save files
-	err = fetchDataRecursively(pre, addr, localPath)
+	data, err := fetchDataRecursively(pre, addr)
 	if err != nil {
-		log.Error("Error saving data - ", err)
-		return err
+		return nil, fmt.Errorf("error fetching metadata recursively: %v", err)
 	}
 
-	return nil
+	return data, nil
 }
 
-func fetchDataRecursively(pre Pre, addr, localPath string) error {
+func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
+	data := make(map[string][]byte, 0)
 	for i := 0; i < len(pre.Content); i++ {
 
 		// Read content
@@ -121,14 +197,12 @@ func fetchDataRecursively(pre Pre, addr, localPath string) error {
 		log.Debug("Requesting ", subpath)
 		resp, err := http.Get(subpath)
 		if err != nil {
-			log.Error("HTTP request failed: ", err)
-			return err
+			return nil, fmt.Errorf("HTTP GET request failed: %v", err)
 		}
 		defer resp.Body.Close()
-		log.Debug("Response Status: ", resp.Status)
+		log.Trace("Response Status: ", resp.Status)
 		if resp.StatusCode != 200 {
-			log.Warn("Request returned error - ", resp.Status)
-			return fmt.Errorf("request returned error - %v", resp.Status)
+			return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
 		}
 
 		log.Debug("Found: ", pre.Content[i].Name, " Type:", resp.Header.Values("Content-Type")[0])
@@ -145,32 +219,24 @@ func fetchDataRecursively(pre Pre, addr, localPath string) error {
 			var pre Pre
 			err = xml.Unmarshal(content, &pre)
 			if err != nil {
-				log.Error("Error Unmarshalling - ", err)
-				return err
+				return nil, fmt.Errorf("failed to unmarshal HTTP response: %v", err)
 			}
-			err = fetchDataRecursively(pre, subpath, localPath)
+			d, err := fetchDataRecursively(pre, subpath)
+			maps.Copy(data, d)
 			if err != nil {
-				log.Error("Error saving data - ", err)
-				return err
+				return nil, fmt.Errorf("error fetching metadata recursively: %v", err)
 			}
 		} else {
 
-			// Content is a file, save it to disk
+			// Content is a file, gather content
 			content, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				log.Error("Failed to read response - ", err)
-				return err
+				return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
 			}
-
 			log.Trace("Content:\n", string(content))
 
-			file := filepath.Join(localPath, pre.Content[i].Name)
-			log.Debug("Writing file: ", file)
-			err = ioutil.WriteFile(file, content, 0644)
-			if err != nil {
-				log.Error("Error saving file - ", err)
-			}
+			data[pre.Content[i].Name] = content
 		}
 	}
-	return nil
+	return data, nil
 }
