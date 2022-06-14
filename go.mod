@@ -8,6 +8,7 @@ require (
 	github.com/google/go-tpm v0.3.3
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/sirupsen/logrus v1.8.1
+	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.6.0

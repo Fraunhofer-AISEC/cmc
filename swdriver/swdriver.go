@@ -28,6 +28,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	log "github.com/sirupsen/logrus"
@@ -45,15 +47,15 @@ type SwCertResponse struct {
 
 // Paths specifies the paths to store the certificates
 type Paths struct {
-	Leaf        string
+	TLSCert     string
 	DeviceSubCa string
 	Ca          string
 }
 
 type Config struct {
-	Url      string
-	Paths    Paths
-	Metadata [][]byte
+	Url         string
+	StoragePath string
+	Metadata    [][]byte
 }
 
 // Sw is a struct required for implementing the signer and measurer interfaces
@@ -66,6 +68,11 @@ type Sw struct {
 // NewSwDriver returns a new object for software-based measurements and signing
 func NewSwDriver(c Config) (*Sw, error) {
 	sw := &Sw{}
+
+	paths, err := createLocalStorage(c.StoragePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local storage: %v", err)
+	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -92,7 +99,7 @@ func NewSwDriver(c Config) (*Sw, error) {
 		return nil, fmt.Errorf("failed to retrieve certificates from server: %w", err)
 	}
 
-	err = saveCerts(c.Paths, certResponse.Certs)
+	err = saveCerts(*paths, certResponse.Certs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save certificates: %w", err)
 	}
@@ -160,9 +167,9 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 
 func saveCerts(paths Paths, certs ar.CertChain) error {
 
-	log.Tracef("New Leaf Cert %v: %v", paths.Leaf, string(certs.Leaf))
-	if err := ioutil.WriteFile(paths.Leaf, certs.Leaf, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Leaf, err)
+	log.Tracef("New Leaf Cert %v: %v", paths.TLSCert, string(certs.Leaf))
+	if err := ioutil.WriteFile(paths.TLSCert, certs.Leaf, 0644); err != nil {
+		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
 
 	if len(certs.Intermediates) != 1 {
@@ -207,4 +214,22 @@ func getCertParams(metadata [][]byte) ([]byte, error) {
 	}
 
 	return nil, errors.New("failed to find cert params")
+}
+
+func createLocalStorage(storagePath string) (*Paths, error) {
+
+	// Create storage folder for storage of internal data if not existing
+	if _, err := os.Stat(storagePath); err != nil {
+		if err := os.MkdirAll(storagePath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory for internal data '%v': %v", storagePath, err)
+		}
+	}
+
+	paths := &Paths{
+		TLSCert:     path.Join(storagePath, "tls_cert.pem"),
+		DeviceSubCa: path.Join(storagePath, "device_sub_ca.pem"),
+		Ca:          path.Join(storagePath, "ca.pem"),
+	}
+
+	return paths, nil
 }

@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"sort"
 	"sync"
 
@@ -58,12 +59,12 @@ type Tpm struct {
 // Config is the structure for handing over the configuration
 // for a Tpm object
 type Config struct {
-	Paths      Paths
-	ServerAddr string
-	KeyConfig  string
-	Metadata   [][]byte
-	UseIma     bool
-	ImaPcr     int32
+	StoragePath string
+	ServerAddr  string
+	KeyConfig   string
+	Metadata    [][]byte
+	UseIma      bool
+	ImaPcr      int32
 }
 
 // Certs contains the TPM certificate chain for the AK and TLS key.
@@ -132,6 +133,11 @@ var (
 // checks if provosioning is required and if so, provisions the TPM
 func NewTpm(c *Config) (*Tpm, error) {
 
+	paths, err := createLocalStorage(c.StoragePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local storage: %v", err)
+	}
+
 	// Load relevant parameters from the metadata files
 	certParams, err := getTpmCertParams(c.Metadata)
 	if err != nil {
@@ -144,7 +150,7 @@ func NewTpm(c *Config) (*Tpm, error) {
 
 	// Check if the TPM is provisioned. If provisioned, load the AK and TLS key.
 	// Otherwise perform credential activation with provisioning server and then load the keys
-	provisioningRequired, err := IsTpmProvisioningRequired(c.Paths.Ak)
+	provisioningRequired, err := IsTpmProvisioningRequired(paths.Ak)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if TPM is provisioned: %v", err)
 	}
@@ -168,19 +174,19 @@ func NewTpm(c *Config) (*Tpm, error) {
 			return nil, fmt.Errorf("failed to provision TPM: %v", err)
 		}
 
-		err = saveTpmData(&c.Paths, &certs)
+		err = saveTpmData(paths, &certs)
 		if err != nil {
-			os.Remove(c.Paths.Ak)
-			os.Remove(c.Paths.TLSKey)
+			os.Remove(paths.Ak)
+			os.Remove(paths.TLSKey)
 			return nil, fmt.Errorf("failed to save TPM data: %v", err)
 		}
 
 	} else {
-		err = loadTpmKeys(c.Paths.Ak, c.Paths.TLSKey)
+		err = loadTpmKeys(paths.Ak, paths.TLSKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load TPM keys: %v", err)
 		}
-		certs, err = loadTpmCerts(&c.Paths)
+		certs, err = loadTpmCerts(paths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load TPM certificates: %v", err)
 		}
@@ -875,4 +881,25 @@ func exists(i int, arr []int) bool {
 		}
 	}
 	return false
+}
+
+func createLocalStorage(storagePath string) (*Paths, error) {
+
+	// Create storage folder for storage of internal data if not existing
+	if _, err := os.Stat(storagePath); err != nil {
+		if err := os.MkdirAll(storagePath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory for internal data '%v': %v", storagePath, err)
+		}
+	}
+
+	paths := &Paths{
+		Ak:          path.Join(storagePath, "ak_encrypted.json"),
+		AkCert:      path.Join(storagePath, "ak_cert.pem"),
+		TLSKey:      path.Join(storagePath, "tls_key_encrypted.json"),
+		TLSCert:     path.Join(storagePath, "tls_cert.pem"),
+		DeviceSubCa: path.Join(storagePath, "device_sub_ca.pem"),
+		Ca:          path.Join(storagePath, "ca.pem"),
+	}
+
+	return paths, nil
 }

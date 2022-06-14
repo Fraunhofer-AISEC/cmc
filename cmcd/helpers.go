@@ -73,17 +73,10 @@ func printConfig(c *config) {
 	log.Info("Using the following configuration:")
 	log.Info("\tCMC Listen Address       : ", c.Addr)
 	log.Info("\tProvisioning Server URL  : ", c.ProvServerAddr)
-	log.Info("\tLocal Config Path        : ", c.LocalPath)
+	log.Info("\tLocal Storage Path       : ", c.LocalPath)
 	log.Info("\tFetch Metadata           : ", c.FetchMetadata)
 	log.Info("\tUse IMA                  : ", c.UseIma)
 	log.Info("\tIMA PCR                  : ", c.ImaPcr)
-	log.Info("\tInternal Data Path       : ", c.internalPath)
-	log.Info("\tAK Encrypted Key Path    : ", c.akPath)
-	log.Info("\tAK Certificate Path      : ", c.akCertPath)
-	log.Info("\tTLS Key Encrypted Path   : ", c.tlsKeyPath)
-	log.Info("\tTLS Key Certificate Path : ", c.tlsCertPath)
-	log.Info("\tDevice Sub CA Cert Path  : ", c.deviceSubCaPath)
-	log.Info("\tCA Certificate Path      : ", c.caPath)
 }
 
 func contains(elem string, list []string) bool {
