@@ -54,7 +54,12 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	err = verify(conn, conn.ConnectionState().PeerCertificates[0].Raw[:], cc)
 	if err != nil {
 		log.Error(err)
-		return nil, errors.New("[Dialer] Failed to verify Listener")
+		errout := errors.New("failed to verify Listener")
+		ae, ok := err.(AttestedError)
+		if ok {
+			return nil, NewAttestedError(ae.GetVerificationResult(), errout)
+		}
+		return nil, errout
 	}
 
 	if mTLS {

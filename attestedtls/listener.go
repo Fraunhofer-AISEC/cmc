@@ -102,7 +102,12 @@ func (ln Listener) Accept() (net.Conn, error) {
 		err = verify(tlsConn, tlsConn.ConnectionState().PeerCertificates[0].Raw[:], ln.cmcConfig)
 		if err != nil {
 			log.Error(err)
-			return nil, errors.New("[Listener] Failed to verify dialer")
+			errout := errors.New("failed to verify dialer")
+			ae, ok := err.(AttestedError)
+			if ok {
+				return nil, NewAttestedError(ae.GetVerificationResult(), errout)
+			}
+			return nil, errout
 		}
 	} else {
 		log.Info("[Listener] No mTLS performed")
