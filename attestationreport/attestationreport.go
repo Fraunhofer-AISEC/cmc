@@ -847,13 +847,27 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	ar := ArPlain{}
 
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM(casPem)
-	if !ok {
-		log.Warnf("Failed to setup trusted cert pool with CAs: '%v'", string(casPem))
-		result.InternalError = true
-		result.Success = true
-		return false, &ar
+	var roots *x509.CertPool
+	var err error
+
+	if len(casPem) == 0 {
+		log.Debug("Using system certificate pool in absence of provided root certifcates")
+		roots, err = x509.SystemCertPool()
+		if err != nil {
+			log.Errorf("Failed to setup trusted cert pool with system certificate pool: %v", err)
+			result.InternalError = true
+			result.Success = false
+			return false, &ar
+		}
+	} else {
+		roots = x509.NewCertPool()
+		ok := roots.AppendCertsFromPEM(casPem)
+		if !ok {
+			log.Warnf("Failed to setup trusted cert pool with CAs: '%v'", string(casPem))
+			result.InternalError = true
+			result.Success = false
+			return false, &ar
+		}
 	}
 
 	//Validate Attestation Report signature
@@ -866,7 +880,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	var arJws ArJws
-	err := json.Unmarshal(payload, &arJws)
+	err = json.Unmarshal(payload, &arJws)
 	if err != nil {
 		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v", err)
 		result.ProcessingError = append(result.ProcessingError, msg)
