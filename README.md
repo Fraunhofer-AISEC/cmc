@@ -237,10 +237,19 @@ go build
 
 ### Build and Run the CMC Daemon
 
+The below commands show how to build and run the cmcd. At runtime, a client can provide the cmcd
+with root certificates that are to be used during the verification of the attestation report. If
+these are not provided, the cmcd uses the system's root certificates instead. Under Linux, these are
+commonly stored under `/etc/ssl/certs`. To temporarily add certificates, see the commands
+using `SSL_CERT_FILE` and `SSL_CERT_DIR` below.
+
 ```sh
 cd cmcd
 go build
 ./cmcd --config <config-file> --addr <server-metadata-address>
+# with added custom certificates
+SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd --config <config-file> --addr <server-metadata-address>
+SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd --config <config-file> --addr <server-metadata-address>
 ```
 
 ### Build and Run the Test Client
