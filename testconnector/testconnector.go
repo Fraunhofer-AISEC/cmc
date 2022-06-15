@@ -98,6 +98,10 @@ func main() {
 		conn, err := ln.Accept()
 		if err != nil {
 			log.Error(err)
+			ae, ok := err.(atls.AttestedError)
+			if ok {
+				log.Error(ae.GetVerificationResult())
+			}
 			log.Error("[Testconnector] Failed to establish connection")
 			continue
 		}

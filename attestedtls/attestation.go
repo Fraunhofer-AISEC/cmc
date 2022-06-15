@@ -98,8 +98,7 @@ func verifyAR(nonce, report []byte, cc cmcConfig) error {
 
 	// check results
 	if !result.Success {
-		log.Tracef("Attestation result: %v", string(resp.GetVerificationResult()))
-		return errors.New("[attestedTLS] Verification failed")
+		return NewAttestedError(result, errors.New("verification failed"))
 	}
 	return nil
 }
@@ -226,7 +225,12 @@ func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 	if err != nil {
 		log.Error(err)
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Attestation report verification failed")
+		errout := errors.New("attestation report verification failed")
+		ae, ok := err.(AttestedError)
+		if ok {
+			return NewAttestedError(ae.GetVerificationResult(), errout)
+		}
+		return errout
 	}
 	err = sendAck(true, conn)
 	if err != nil {
