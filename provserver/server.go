@@ -211,6 +211,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		return nil, fmt.Errorf("ek public key from device not present")
 	}
 
+	// Retrieve the EK cert (varies between manufacturers)
 	var ekCert *x509.Certificate
 	var err error
 	if acRequest.Ek.Certificate == nil {
@@ -229,6 +230,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		ekCert = acRequest.Ek.Certificate
 	}
 
+	// Verify the EK certificate chain
 	if dataStore.VerifyEkCert {
 		err := verifyEkCert(dataStore.DbPath, ekCert, &acRequest.TpmInfo)
 		if err != nil {
@@ -251,6 +253,8 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		AK:         acRequest.AkParams,
 	}
 
+	// Generate the credential activation challenge. This includes verifying, that the
+	// AK is a restricted, fixedTPM, fixedParent key
 	secret, encryptedCredentials, err := params.Generate()
 	if err != nil {
 		return nil, fmt.Errorf("error Generating Credentials - '%w'", err)
