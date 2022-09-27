@@ -18,24 +18,13 @@ package attestationreport
 import (
 	"bytes"
 	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/asn1"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
-	"math/big"
 
 	log "github.com/sirupsen/logrus"
-
-	"gopkg.in/square/go-jose.v2"
 
 	"time"
 )
@@ -63,275 +52,283 @@ type Signer interface {
 	GetCertChain() CertChain
 }
 
+// Serializer is a generic interface providing methods for data serialization and
+// de-serialization. This enables to generate and verify attestation reports in
+// different formats, such as JSON/JWS or CBOR/COSE
+type Serializer interface {
+	GetPayload(raw []byte) ([]byte, error)
+	Marshal(v any) ([]byte, error)
+	Unmarshal(data []byte, v any) error
+	Sign(report []byte, signer Signer) (bool, []byte)
+	VerifyToken(data []byte, roots []*x509.Certificate) (JwsResult, []byte, bool)
+}
+
 type Policies interface{}
 
 type PolicyValidator interface {
 	Validate(result VerificationResult) error
 }
 
-// JSONType is a helper struct for just extracting the JSON 'Type'
-type JSONType struct {
-	Type string `json:"type"`
+// Type is a helper struct for just extracting the 'Type' of metadata
+type Type struct {
+	Type string `json:"type" cbor:"0,keyasint"`
 }
 
-// Validity is a helper struct for JSON 'Validity'
+// Validity is a helper struct for 'Validity'
 type Validity struct {
-	NotBefore string `json:"notBefore"`
-	NotAfter  string `json:"notAfter"`
+	NotBefore string `json:"notBefore" cbor:"0,keyasint"`
+	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
 
 const timeLayout = "20060102150405"
 
-// HashChainElem represents the JSON attestation report
+// HashChainElem represents the attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
 type HashChainElem struct {
-	Type   string   `json:"type"`
-	Pcr    int32    `json:"pcr"`
-	Sha256 []string `json:"sha256"`
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Pcr    int32    `json:"pcr" cbor:"1,keyasint"`
+	Sha256 []string `json:"sha256" cbor:"2,keyasint"`
 }
 
 // CertChain is a helper struct for certificate chains,
 // consisting of a leaf certificate, an arbitrary number
 // of intermediate (sub-CA) certificates and a CA certificate
 type CertChain struct {
-	Leaf          []byte   `json:"leaf"`
-	Intermediates [][]byte `json:"intermediates"`
-	Ca            []byte   `json:"ca"`
+	Leaf          []byte   `json:"leaf" cbor:"0,keyasint"`
+	Intermediates [][]byte `json:"intermediates" cbor:"1,keyasint"`
+	Ca            []byte   `json:"ca" cbor:"2,keyasint"`
 }
 
-// TpmMeasurement represents the JSON attestation report
+// TpmMeasurement represents the attestation report
 // element of type 'TPM Measurement'
 type TpmMeasurement struct {
-	Type      string           `json:"type"`
-	Message   string           `json:"message"`
-	Signature string           `json:"signature"`
-	Certs     CertChain        `json:"certs"`
-	HashChain []*HashChainElem `json:"hashChain"`
+	Type      string           `json:"type" cbor:"0,keyasint"`
+	Message   string           `json:"message" cbor:"1,keyasint"`
+	Signature string           `json:"signature" cbor:"2,keyasint"`
+	Certs     CertChain        `json:"certs" cbor:"3,keyasint"`
+	HashChain []*HashChainElem `json:"hashChain" cbor:"4,keyasint"`
 }
 
-// SnpMeasurement represents the JSON attestation report
+// SnpMeasurement represents the attestation report
 // element of type 'SNP Measurement' signed by the device
 type SnpMeasurement struct {
-	Type   string    `json:"type"`
-	Report []byte    `json:"blob"`
-	Certs  CertChain `json:"certs"`
+	Type   string    `json:"type" cbor:"0,keyasint"`
+	Report []byte    `json:"blob" cbor:"1,keyasint"`
+	Certs  CertChain `json:"certs" cbor:"2,keyasint"`
 }
 
-// SwMeasurement represents the JSON attestation report
+// SwMeasurement represents the attestation report
 // element of type 'Software Measurement'
 type SwMeasurement struct {
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Sha256 string `json:"sha256"`
+	Type   string `json:"type" cbor:"0,keyasint"`
+	Name   string `json:"name" cbor:"1,keyasint"`
+	Sha256 string `json:"sha256" cbor:"2,keyasint"`
 }
 
 type SnpPolicy struct {
-	Type         string `json:"type"`
-	SingleSocket bool   `json:"singleSocket"`
-	Debug        bool   `json:"debug"`
-	Migration    bool   `json:"migration"`
-	Smt          bool   `json:"smt"`
-	AbiMajor     uint8  `json:"abiMajor"`
-	AbiMinor     uint8  `json:"abiMinor"`
+	Type         string `json:"type" cbor:"0,keyasint"`
+	SingleSocket bool   `json:"singleSocket" cbor:"1,keyasint"`
+	Debug        bool   `json:"debug" cbor:"2,keyasint"`
+	Migration    bool   `json:"migration" cbor:"3,keyasint"`
+	Smt          bool   `json:"smt" cbor:"4,keyasint"`
+	AbiMajor     uint8  `json:"abiMajor" cbor:"5,keyasint"`
+	AbiMinor     uint8  `json:"abiMinor" cbor:"6,keyasint"`
 }
 
 type SnpFw struct {
-	Build uint8 `json:"build"`
-	Major uint8 `json:"major"`
-	Minor uint8 `json:"minor"`
+	Build uint8 `json:"build" cbor:"0,keyasint"`
+	Major uint8 `json:"major" cbor:"1,keyasint"`
+	Minor uint8 `json:"minor" cbor:"2,keyasint"`
 }
 
 type SnpTcb struct {
-	Bl    uint8 `json:"bl"`
-	Tee   uint8 `json:"tee"`
-	Snp   uint8 `json:"snp"`
-	Ucode uint8 `json:"ucode"`
+	Bl    uint8 `json:"bl" cbor:"0,keyasint"`
+	Tee   uint8 `json:"tee" cbor:"1,keyasint"`
+	Snp   uint8 `json:"snp" cbor:"2,keyasint"`
+	Ucode uint8 `json:"ucode" cbor:"3,keyasint"`
 }
 
 type SnpDetails struct {
-	Version uint32    `json:"version"`
-	KeyId   string    `json:"caKeyId"`
-	Policy  SnpPolicy `json:"policy"`
-	Fw      SnpFw     `json:"fw"`
-	Tcb     SnpTcb    `json:"tcb"`
+	Version uint32    `json:"version" cbor:"0,keyasint"`
+	KeyId   string    `json:"caKeyId" cbor:"1,keyasint"`
+	Policy  SnpPolicy `json:"policy" cbor:"2,keyasint"`
+	Fw      SnpFw     `json:"fw" cbor:"3,keyasint"`
+	Tcb     SnpTcb    `json:"tcb" cbor:"4,keyasint"`
 }
 
-// Verification represents the JSON attestation report
+// Verification represents the attestation report
 // element of types 'SNP Verification', 'TPM Verification'
 // and 'SW Verification'
 type Verification struct {
-	Type   string      `json:"type"`
-	Sha256 string      `json:"sha256,omitempty"`
-	Sha384 string      `json:"sha384,omitempty"`
-	Name   string      `json:"name,omitempty"`
-	Pcr    *int        `json:"pcr,omitempty"`
-	Snp    *SnpDetails `json:"snp,omitempty"`
+	Type   string      `json:"type" cbor:"0,keyasint,omitempty"`
+	Sha256 string      `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
+	Sha384 string      `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
+	Name   string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
+	Pcr    *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
+	Snp    *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
-// AppDescription represents the JSON attestation report
+// AppDescription represents the attestation report
 // element of type 'App Description'
 type AppDescription struct {
 	Type        string              `json:"type"`
 	Name        string              `json:"name"`
-	AppManifest string              `json:"appManifest"` // Links to Type 'App Manifest'->'Name'
-	External    []ExternalInterface `json:"externalConnections"`
+	AppManifest string              `json:"appManifest" cbor:"0,keyasint,omitempty"` // Links to App Manifest.Name
+	External    []ExternalInterface `json:"externalConnections" cbor:"0,keyasint"`
 }
 
-// InternalConnection represents the JSON attestation report
+// InternalConnection represents the attestation report
 // element of type 'Internal Connection'
 type InternalConnection struct {
-	Type         string `json:"type"`
-	NameAppA     string `json:"nameAppA"`     // Links to Type 'App Description'->'Name'
-	EndpointAppA string `json:"endpointAppA"` // Links to Type 'App Manifest'->'Endpoint'
-	NameAppB     string `json:"nameAppB"`     // Links to Type 'App Description'->'Name'
-	EndpointAppB string `json:"endpointAppB"` // Links to Type 'App Manifest'->'Endpoint'
+	Type         string `json:"type" cbor:"0,keyasint"`
+	NameAppA     string `json:"nameAppA" cbor:"1,keyasint"`     // Links to AppDescription.Name
+	EndpointAppA string `json:"endpointAppA" cbor:"2,keyasint"` // Links to AppManifest.Endpoint
+	NameAppB     string `json:"nameAppB" cbor:"3,keyasint"`     // Links to AppDescription.Name
+	EndpointAppB string `json:"endpointAppB" cbor:"4,keyasint"` // Links to AppManifest.Endpoint
 }
 
-// ExternalInterface represents the JSON attestation report
+// ExternalInterface represents the attestation report
 // element of type 'External Interface'
 type ExternalInterface struct {
-	Type        string `json:"type"`
-	AppEndpoint string `json:"appEndpoint"` // Links to Type 'App Manifest'->'Endpoint'
-	Interface   string `json:"interface"`   // Links to Type 'App Description'->'Name'
-	Port        int    `json:"port"`        // Links to Type 'App Manifest'->'Endpoint'
+	Type        string `json:"type"  cbor:"0,keyasint"`
+	AppEndpoint string `json:"appEndpoint"  cbor:"1,keyasint"` // Links to AppManifest.Endpoint
+	Interface   string `json:"interface"  cbor:"2,keyasint"`   // Links to AppDescription.Name
+	Port        int    `json:"port"  cbor:"3,keyasint"`        // Links to App Manifest.Endpoint
 }
 
-// AppManifest represents the JSON attestation report
+// AppManifest represents the attestation report
 // element of type 'App Manifest'
 type AppManifest struct {
-	Type               string         `json:"type"`
-	Name               string         `json:"name"`
-	DevCommonName      string         `json:"developerCommonName"`
-	Version            string         `json:"version"`
-	Oss                []string       `json:"oss"` // Links to Type 'OsManifest'->'Name'
-	Description        string         `json:"description"`
-	CertificationLevel int            `json:"certificationLevel"`
-	Validity           Validity       `json:"validity"`
-	Verifications      []Verification `json:"verifications"`
+	Type               string         `json:"type"  cbor:"0,keyasint"`
+	Name               string         `json:"name"  cbor:"1,keyasint"`
+	DevCommonName      string         `json:"developerCommonName"  cbor:"2,keyasint"`
+	Version            string         `json:"version"  cbor:"3,keyasint"`
+	Oss                []string       `json:"oss"  cbor:"4,keyasint"` // Links to OsManifest.Name
+	Description        string         `json:"description"  cbor:"5,keyasint"`
+	CertificationLevel int            `json:"certificationLevel"  cbor:"6,keyasint"`
+	Validity           Validity       `json:"validity"  cbor:"7,keyasint"`
+	Verifications      []Verification `json:"verifications"  cbor:"8,keyasint"`
 }
 
-// OsManifest represents the JSON attestation report
+// OsManifest represents the attestation report
 // element of type 'OsManifest'
 type OsManifest struct {
-	Type               string         `json:"type"`
-	Name               string         `json:"name"`
-	DevCommonName      string         `json:"developerCommonName"`
-	Version            string         `json:"version"`
-	Rtms               []string       `json:"rtms"` // Links to Type 'RTM Manifest'->'Name'
-	Description        string         `json:"description"`
-	CertificationLevel int            `json:"certificationLevel"`
-	Validity           Validity       `json:"validity"`
-	Verifications      []Verification `json:"verifications"`
+	Type               string         `json:"type"  cbor:"0,keyasint"`
+	Name               string         `json:"name"  cbor:"1,keyasint"`
+	DevCommonName      string         `json:"developerCommonName"  cbor:"2,keyasint"`
+	Version            string         `json:"version"  cbor:"3,keyasint"`
+	Rtms               []string       `json:"rtms"  cbor:"4,keyasint"` // Links to Type RtmManifest.Name
+	Description        string         `json:"description"  cbor:"5,keyasint"`
+	CertificationLevel int            `json:"certificationLevel"  cbor:"6,keyasint"`
+	Validity           Validity       `json:"validity"  cbor:"7,keyasint"`
+	Verifications      []Verification `json:"verifications"  cbor:"8,keyasint"`
 }
 
-// RtmManifest represents the JSON attestation report
+// RtmManifest represents the attestation report
 // element of type 'RTM Manifest'
 type RtmManifest struct {
-	Type               string         `json:"type"`
-	Name               string         `json:"name"`
-	DevCommonName      string         `json:"developerCommonName"`
-	Version            string         `json:"version"`
-	Description        string         `json:"description"`
-	CertificationLevel int            `json:"certificationLevel"`
-	Validity           Validity       `json:"validity"`
-	Verifications      []Verification `json:"verifications"`
+	Type               string         `json:"type" cbor:"0,keyasint"`
+	Name               string         `json:"name" cbor:"1,keyasint"`
+	DevCommonName      string         `json:"developerCommonName" cbor:"2,keyasint"`
+	Version            string         `json:"version" cbor:"3,keyasint"`
+	Description        string         `json:"description" cbor:"4,keyasint"`
+	CertificationLevel int            `json:"certificationLevel" cbor:"5,keyasint"`
+	Validity           Validity       `json:"validity" cbor:"5,keyasint"`
+	Verifications      []Verification `json:"verifications" cbor:"6,keyasint"`
 }
 
-// DeviceDescription represents the JSON attestation report
+// DeviceDescription represents the attestation report
 // element of type 'Device Description'
 type DeviceDescription struct {
-	Type            string               `json:"type"`
-	Fqdn            string               `json:"fqdn"`
-	Description     string               `json:"description"`
-	Location        string               `json:"location"`
-	RtmManifest     string               `json:"rtmManifest"`
-	OsManifest      string               `json:"osManifest"`
-	AppDescriptions []AppDescription     `json:"appDescriptions"`
-	Internal        []InternalConnection `json:"internalConnections"`
-	External        []ExternalInterface  `json:"externalEndpoints"`
+	Type            string               `json:"type" cbor:"0,keyasint"`
+	Fqdn            string               `json:"fqdn" cbor:"1,keyasint"`
+	Description     string               `json:"description" cbor:"2,keyasint"`
+	Location        string               `json:"location" cbor:"3,keyasint"`
+	RtmManifest     string               `json:"rtmManifest" cbor:"4,keyasint"`
+	OsManifest      string               `json:"osManifest" cbor:"5,keyasint"`
+	AppDescriptions []AppDescription     `json:"appDescriptions" cbor:"6,keyasint"`
+	Internal        []InternalConnection `json:"internalConnections" cbor:"7,keyasint"`
+	External        []ExternalInterface  `json:"externalEndpoints" cbor:"8,keyasint"`
 }
 
-// CompanyDescription represents the JSON attestation report
+// CompanyDescription represents the attestation report
 // element of type 'Company Description'
 type CompanyDescription struct {
-	Type               string   `json:"type"`
-	DN                 string   `json:"dn"`
-	CertificationLevel int      `json:"certificationLevel"`
-	Description        string   `json:"description"`
-	Validity           Validity `json:"validity"`
+	Type               string   `json:"type" cbor:"0,keyasint"`
+	DN                 string   `json:"dn" cbor:"1,keyasint"`
+	CertificationLevel int      `json:"certificationLevel" cbor:"2,keyasint"`
+	Description        string   `json:"description" cbor:"3,keyasint"`
+	Validity           Validity `json:"validity" cbor:"4,keyasint"`
 }
 
 // CertParams contains params of an x.509 certificate. The tpm module cannot send an AK CSR
 // to the server, as the AK is a restricted key which does not allow signing of non-TPM-based
 // objects such as CSRs. Therefore, pass the certificate parameters encoded in this structure
 type CertParams struct {
-	Type    string   `json:"type"`
-	Subject Name     `json:"subject,omitempty"`
-	SANs    []string `json:"sans,omitempty"`
+	Type    string   `json:"type" cbor:"0,keyasint"`
+	Subject Name     `json:"subject,omitempty" cbor:"1,keyasint,omitempty"`
+	SANs    []string `json:"sans,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 // Name is the PKIX Name for CertParams
 type Name struct {
-	CommonName         string        `json:"commonName,omitempty"`
-	Country            string        `json:"country,omitempty"`
-	Organization       string        `json:"organization,omitempty"`
-	OrganizationalUnit string        `json:"organizationalUnit,omitempty"`
-	Locality           string        `json:"locality,omitempty"`
-	Province           string        `json:"province,omitempty"`
-	StreetAddress      string        `json:"streetAddress,omitempty"`
-	PostalCode         string        `json:"postalCode,omitempty"`
-	Names              []interface{} `json:"names,omitempty"`
+	CommonName         string        `json:"commonName,omitempty" cbor:"0,keyasint,omitempty"`
+	Country            string        `json:"country,omitempty" cbor:"1,keyasint,omitempty"`
+	Organization       string        `json:"organization,omitempty" cbor:"2,keyasint,omitempty"`
+	OrganizationalUnit string        `json:"organizationalUnit,omitempty" cbor:"3,keyasint,omitempty"`
+	Locality           string        `json:"locality,omitempty" cbor:"4,keyasint,omitempty"`
+	Province           string        `json:"province,omitempty" cbor:"5,keyasint,omitempty"`
+	StreetAddress      string        `json:"streetAddress,omitempty" cbor:"6,keyasint,omitempty"`
+	PostalCode         string        `json:"postalCode,omitempty" cbor:"7,keyasint,omitempty"`
+	Names              []interface{} `json:"names,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 // ArPlain represents the attestation report with
 // its plain elements
 type ArPlain struct {
-	Type               string              `json:"type"`
-	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty"`
-	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty"`
-	SWM                []SwMeasurement     `json:"swMeasurements,omitempty"`
-	RtmManifest        RtmManifest         `json:"rtmManifest"`
-	OsManifest         OsManifest          `json:"osManifest"`
-	AppManifests       []AppManifest       `json:"appManifests,omitempty"`
-	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty"`
-	DeviceDescription  DeviceDescription   `json:"deviceDescription"`
-	Nonce              string              `json:"nonce"`
+	Type               string              `json:"type" cbor:"0,keyasint"`
+	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
+	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	SWM                []SwMeasurement     `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
+	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"4,keyasint"`
+	OsManifest         OsManifest          `json:"osManifest" cbor:"5,keyasint"`
+	AppManifests       []AppManifest       `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
+	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
+	DeviceDescription  DeviceDescription   `json:"deviceDescription" cbor:"8,keyasint"`
+	Nonce              string              `json:"nonce" cbor:"9,keyasint"`
 }
 
 // ArJws represents the attestation report in JWS format with its
 // contents already in signed JWs format
 type ArJws struct {
-	Type               string          `json:"type"`
-	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty"`
-	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty"`
-	SWM                []SwMeasurement `json:"swMeasurements,omitempty"`
-	RtmManifest        string          `json:"rtmManifests"`
-	OsManifest         string          `json:"osManifest"`
-	AppManifests       []string        `json:"appManifests,omitempty"`
-	CompanyDescription string          `json:"companyDescription,omitempty"`
-	DeviceDescription  string          `json:"deviceDescription"`
-	Nonce              string          `json:"nonce"`
+	Type               string          `json:"type" cbor:"0,keyasint"`
+	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
+	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	SWM                []SwMeasurement `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
+	RtmManifest        string          `json:"rtmManifests" cbor:"4,keyasint"`
+	OsManifest         string          `json:"osManifest" cbor:"5,keyasint"`
+	AppManifests       []string        `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
+	CompanyDescription string          `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
+	DeviceDescription  string          `json:"deviceDescription" cbor:"8,keyasint"`
+	Nonce              string          `json:"nonce" cbor:"9,keyasint"`
 }
 
 // Generate generates an attestation report with the provided
 // nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
-// descriptions must be raw JWS tokens in the JWS JSON full serialization
-// format. Takes a list of 'measurements' and accompanying 'measurementParams',
-// which must be arrays of the same length. The 'measurements' must
-// implement the attestation report 'Measurer' interface providing
-// a method for collecting the measurements from a hardware or software
-// interface
-func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws {
-
+// descriptions must be either raw JWS tokens in the JWS JSON full serialization
+// format or CBOR COSE tokens. Takes a list of 'measurements' implementing the
+// attestation report 'Measurer' interface providing a method for collecting
+// the measurements from a hardware or software interface
+func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Serializer) ([]byte, error) {
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
+	// TODO this will not work!!
 	ar := ArJws{
 		Type: "Attestation Report",
 	}
 
 	if len(nonce) > 32 {
-		log.Warn("Generate Attestation Report: Nonce exceeds maximum length of 32 bytes")
-		return ar
+		return nil, fmt.Errorf("Generate Attestation Report: Nonce exceeds maximum length of 32 bytes")
 	}
 	ar.Nonce = hex.EncodeToString(nonce)
 
@@ -342,19 +339,17 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws
 	numManifests := 0
 	for i := 0; i < len(metadata); i++ {
 
-		// Extract plain payload (i.e. the manifest/description itself) out of base64-encoded
-		// JSON Web Signature
-		jws, err := jose.ParseSigned(string(metadata[i]))
+		// Extract plain payload (i.e. the manifest/description itself)
+		data, err := s.GetPayload(metadata[i])
 		if err != nil {
 			log.Warnf("Failed to parse metadata object %v: %v", i, err)
 			continue
 		}
-		data := jws.UnsafePayloadWithoutVerification()
 
 		// Unmarshal the Type field of the JSON file to determine the type for
 		// later processing
-		t := new(JSONType)
-		err = json.Unmarshal(data, t)
+		t := new(Type)
+		err = s.Unmarshal(data, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)
 			continue
@@ -363,22 +358,22 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws
 		switch t.Type {
 		case "App Manifest":
 			log.Debug("Adding App Manifest")
-			ar.AppManifests = append(ar.AppManifests, jws.FullSerialize())
+			ar.AppManifests = append(ar.AppManifests, string(metadata[i]))
 			numManifests++
 		case "OS Manifest":
 			log.Debug("Adding OS Manifest")
-			ar.OsManifest = jws.FullSerialize()
+			ar.OsManifest = string(metadata[i])
 			numManifests++
 		case "RTM Manifest":
 			log.Debug("Adding RTM Manifest")
-			ar.RtmManifest = jws.FullSerialize()
+			ar.RtmManifest = string(metadata[i])
 			numManifests++
 		case "Device Description":
 			log.Debug("Adding Device Description")
-			ar.DeviceDescription = jws.FullSerialize()
+			ar.DeviceDescription = string(metadata[i])
 		case "Company Description":
 			log.Debug("Adding Company Description")
-			ar.CompanyDescription = jws.FullSerialize()
+			ar.CompanyDescription = string(metadata[i])
 		}
 	}
 
@@ -401,8 +396,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws
 		log.Trace("Getting measurements from measurement interface..")
 		data, err := measurer.Measure(nonce)
 		if err != nil {
-			log.Warnf("Failed to get measurements: %v", err)
-			return ar
+			return nil, fmt.Errorf("failed to get measurements: %v", err)
 		}
 
 		// Check the type of the measurements and add it to the attestation report
@@ -422,109 +416,32 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws
 
 	log.Trace("Finished attestation report generation")
 
-	return ar
+	// Marshal data to bytes
+	data, err := s.Marshal(ar)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+	}
+
+	return data, nil
 }
 
 // Sign signs the attestation report with the specified signer 'signer'
-func Sign(ar ArJws, signer Signer) (bool, []byte) {
-	var err error
-
-	log.Trace("Signing attestation report")
-
-	// create list of all certificates in the correct order
-	certChain := signer.GetCertChain()
-	certsPem := make([][]byte, 0)
-	certsPem = append(certsPem, certChain.Leaf)
-	certsPem = append(certsPem, certChain.Intermediates...)
-	certsPem = append(certsPem, certChain.Ca)
-
-	// certificate chain in base64 encoding
-	certsb64 := make([]string, 0)
-	for i, certPem := range certsPem {
-		cert, err := loadCert(certPem)
-		if err != nil {
-			log.Errorf("Failed to load cert[%v]: %v. PEM: %v", i, err, string(certPem))
-			return false, nil
-		}
-
-		certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
-	}
-
-	priv, pub, err := signer.GetSigningKeys()
-	if err != nil {
-		log.Errorf("Failed to get signing keys: %v", err)
-		return false, nil
-	}
-
-	// Get jose.SignatureAlgorithm
-	// Saltlength and further algorithms are set to the recommended default by x509
-	// we assume these defaults are correct
-	var alg jose.SignatureAlgorithm
-	alg, err = algFromKeyType(pub)
-	if err != nil {
-		log.Error(err)
-		return false, nil
-	}
-	log.Trace("Chosen signature algorithm: ", alg)
-
-	// create jose.OpaqueSigner with hwSigner wrapper (tpm key)
-	var hws *hwSigner
-	var opaqueSigner jose.OpaqueSigner
-	hws = &hwSigner{
-		pk:     &jose.JSONWebKey{Key: pub},
-		signer: priv,
-		alg:    alg,
-	}
-	opaqueSigner = jose.OpaqueSigner(hws)
-
-	// Create jose.Signer with OpaqueSigner
-	// x5c: adds Certificate Chain in later result
-	var opt jose.SignerOptions
-	var joseSigner jose.Signer
-	joseSigner, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
-	if err != nil {
-		log.Error("Failed to setup signer for the Attestation Report: ", err)
-		return false, nil
-	}
-
-	// Marshal data to bytes
-	data, err := json.Marshal(ar)
-	if err != nil {
-		log.Error("Failed to marshal the Attestation Report: ", err)
-		return false, nil
-	}
-
-	// This allows the signer to ensure mutual access for signing, if required
-	signer.Lock()
-	defer signer.Unlock()
-
-	// sign
-	log.Trace("Performing Sign operation")
-	obj, err := joseSigner.Sign(data)
-	if err != nil {
-		log.Error("Failed to sign the Attestation Report: ", err)
-		return false, nil
-	}
-	log.Trace("Signed attestation report")
-
-	// return signature in bytes
-	msg := obj.FullSerialize()
-
-	return true, []byte(msg)
+func Sign(report []byte, signer Signer, s Serializer) (bool, []byte) {
+	return s.Sign(report, signer)
 }
 
 // Verify verifies an attestation report in full serialized JWS
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the verifications and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, casPem []byte, policies []Policies) VerificationResult {
+func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serializer) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
 		SwCertLevel: 0}
 
 	// Verify ALL signatures and unpack plain AttestationReport
-	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem)
+	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem, s)
 	if ar == nil {
 		result.InternalError = true
 	}
@@ -680,36 +597,6 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies) Verificatio
 	return result
 }
 
-// Deduces jose signature algorithm from provided key type
-func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
-	switch key := pub.(type) {
-	case *rsa.PublicKey:
-		switch key.Size() {
-		case 256:
-			// FUTURE: use RSA PSS: PS256
-			return jose.RS256, nil
-		case 512:
-			// FUTURE: use RSA PSS: PS512
-			return jose.RS512, nil
-		default:
-			return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
-		}
-	case *ecdsa.PublicKey:
-		switch key.Curve {
-		case elliptic.P224(), elliptic.P256():
-			return jose.ES256, nil
-		case elliptic.P384():
-			return jose.ES384, nil
-		case elliptic.P521():
-			return jose.ES512, nil
-		default:
-			return jose.RS256, errors.New("failed to determine algorithm from key type: unknown elliptic curve")
-		}
-	default:
-		return jose.RS256, errors.New("failed to determine algorithm from key type: unknown key type")
-	}
-}
-
 func extendHash(hash []byte, data []byte) []byte {
 	concat := append(hash, data...)
 	h := sha256.Sum256(concat)
@@ -750,91 +637,7 @@ func loadCerts(data []byte) ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
-// Verifies signatures and certificate chains for JWS tokens
-// Optionally uses the 'OU' field of the certificate to check if the certificate
-// was signed by a valid role.
-func VerifyJws(data string, roots *x509.CertPool) (JwsResult, []byte, bool) {
-	opts := x509.VerifyOptions{
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-		Roots:     roots,
-	}
-
-	result := JwsResult{}
-	ok := true
-
-	jwsData, err := jose.ParseSigned(data)
-	if err != nil {
-		msg := fmt.Sprintf("Data could not be parsed - %v", err)
-		result.Summary.setFalseMulti(&msg)
-		return result, nil, false
-	}
-
-	if len(jwsData.Signatures) == 0 {
-		msg := "JWS does not contain signatures"
-		result.Summary.setFalseMulti(&msg)
-		return result, nil, false
-	}
-
-	index := make([]int, len(jwsData.Signatures))
-	payloads := make([][]byte, len(jwsData.Signatures))
-	for i, sig := range jwsData.Signatures {
-		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
-
-		certs, err := sig.Protected.Certificates(opts)
-		if len(certs) == 0 {
-			msg := "Failed to verify: No certificates present for provided CA(s)"
-			result.SignatureCheck[i].CertCheck.setFalse(&msg)
-			ok = false
-			continue
-		}
-		if err == nil {
-			result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
-			result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
-			result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
-			result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
-			result.SignatureCheck[i].CertCheck.Success = true
-		} else {
-			if certs != nil {
-				result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
-				result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
-				result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
-				result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
-			}
-			msg := fmt.Sprintf("Validation of certificate chain failed: %v", err)
-			result.SignatureCheck[i].CertCheck.setFalse(&msg)
-			ok = false
-			continue
-		}
-
-		index[i], _, payloads[i], err = jwsData.VerifyMulti(certs[0][0].PublicKey)
-		if err == nil {
-			result.SignatureCheck[i].Signature.Success = true
-		} else {
-			msg := fmt.Sprintf("Signature verification failed: %v", err)
-			result.SignatureCheck[i].Signature.setFalse(&msg)
-			ok = false
-		}
-
-		if index[i] != i {
-			msg := "order of signatures incorrect"
-			result.Summary.setFalseMulti(&msg)
-		}
-
-		if i > 0 {
-			if !bytes.Equal(payloads[i], payloads[i-1]) {
-				msg := "payloads differ for jws with multiple signatures"
-				result.Summary.setFalseMulti(&msg)
-			}
-		}
-	}
-
-	payload := payloads[0]
-	result.Summary.Success = ok
-
-	return result, payload, ok
-}
-
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte) (bool, *ArPlain) {
+func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte, s Serializer) (bool, *ArPlain) {
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
 		return false, nil
@@ -842,31 +645,15 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	ar := ArPlain{}
 
-	var roots *x509.CertPool
-	var err error
-
-	if len(casPem) == 0 {
-		log.Debug("Using system certificate pool in absence of provided root certifcates")
-		roots, err = x509.SystemCertPool()
-		if err != nil {
-			log.Errorf("Failed to setup trusted cert pool with system certificate pool: %v", err)
-			result.InternalError = true
-			result.Success = false
-			return false, &ar
-		}
-	} else {
-		roots = x509.NewCertPool()
-		ok := roots.AppendCertsFromPEM(casPem)
-		if !ok {
-			log.Warnf("Failed to setup trusted cert pool with CAs: '%v'", string(casPem))
-			result.InternalError = true
-			result.Success = false
-			return false, &ar
-		}
+	roots, err := loadCerts(casPem)
+	if err != nil {
+		log.Trace("Loading PEM encoded CA certificate(s) failed")
+		result.Success = false
+		return false, &ar
 	}
 
 	//Validate Attestation Report signature
-	jwsValRes, payload, ok := VerifyJws(attestationReport, roots)
+	jwsValRes, payload, ok := s.VerifyToken([]byte(attestationReport), roots)
 	result.ReportSignature = jwsValRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of Attestation Report Signatures failed")
@@ -875,7 +662,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	var arJws ArJws
-	err = json.Unmarshal(payload, &arJws)
+	err = s.Unmarshal(payload, &arJws)
 	if err != nil {
 		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v", err)
 		result.ProcessingError = append(result.ProcessingError, msg)
@@ -891,14 +678,14 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar.Nonce = arJws.Nonce
 
 	// Validate and unpack Rtm Manifest
-	jwsValRes, payload, ok = VerifyJws(arJws.RtmManifest, roots)
+	jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.RtmManifest), roots)
 	result.RtmResult.Summary = jwsValRes.Summary
 	result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of RTM Manifest Signatures failed")
 		result.Success = false
 	}
-	err = json.Unmarshal(payload, &ar.RtmManifest)
+	err = s.Unmarshal(payload, &ar.RtmManifest)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v", err)
 		result.RtmResult.Summary.setFalseMulti(&msg)
@@ -913,14 +700,14 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack OS Manifest
-	jwsValRes, payload, ok = VerifyJws(arJws.OsManifest, roots)
+	jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.OsManifest), roots)
 	result.OsResult.Summary = jwsValRes.Summary
 	result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of OS Manifest Signatures failed")
 		result.Success = false
 	}
-	err = json.Unmarshal(payload, &ar.OsManifest)
+	err = s.Unmarshal(payload, &ar.OsManifest)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v", err)
 		result.OsResult.Summary.setFalseMulti(&msg)
@@ -938,7 +725,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	for i, amSigned := range arJws.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
-		jwsValRes, payload, ok = VerifyJws(amSigned, roots)
+		jwsValRes, payload, ok = s.VerifyToken([]byte(amSigned), roots)
 		result.AppResults[i].Summary = jwsValRes.Summary
 		result.AppResults[i].SignatureCheck = jwsValRes.SignatureCheck
 		if !ok {
@@ -947,7 +734,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		}
 
 		var am AppManifest
-		err = json.Unmarshal(payload, &am)
+		err = s.Unmarshal(payload, &am)
 		if err != nil {
 			msg := fmt.Sprintf("Unpacking of App Manifest failed: %v", err)
 			result.AppResults[i].Summary.setFalseMulti(&msg)
@@ -967,7 +754,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	// Validate and unpack Company Description if present
 	if arJws.CompanyDescription != "" {
-		jwsValRes, payload, ok = VerifyJws(arJws.CompanyDescription, roots)
+		jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.CompanyDescription), roots)
 		result.CompDescResult = &CompDescResult{}
 		result.CompDescResult.Summary = jwsValRes.Summary
 		result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
@@ -975,7 +762,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			log.Trace("Verification of Company Description Signatures failed")
 			result.Success = false
 		}
-		err = json.Unmarshal(payload, &ar.CompanyDescription)
+		err = s.Unmarshal(payload, &ar.CompanyDescription)
 		if err != nil {
 			msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
 			result.CompDescResult.Summary.setFalseMulti(&msg)
@@ -994,14 +781,14 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Device Description
-	jwsValRes, payload, ok = VerifyJws(arJws.DeviceDescription, roots)
+	jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.DeviceDescription), roots)
 	result.DevDescResult.Summary = jwsValRes.Summary
 	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of Device Description Signatures failed")
 		result.Success = false
 	}
-	err = json.Unmarshal(payload, &ar.DeviceDescription)
+	err = s.Unmarshal(payload, &ar.DeviceDescription)
 	if err != nil {
 		msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
 		result.DevDescResult.Summary.setFalseMulti(&msg)
@@ -1121,58 +908,6 @@ func collectVerifications(ar *ArPlain) (map[string][]Verification, error) {
 	return verMap, nil
 }
 
-func verifyCertChain(certs *CertChain, caKeyIds [][]byte) error {
-
-	intermediatesPool := x509.NewCertPool()
-	for _, intermediate := range certs.Intermediates {
-		ok := intermediatesPool.AppendCertsFromPEM(intermediate)
-		if !ok {
-			return errors.New("failed to append certificate to certificate pool")
-		}
-	}
-	rootsPool := x509.NewCertPool()
-	ok := rootsPool.AppendCertsFromPEM(certs.Ca)
-	if !ok {
-		return errors.New("failed to append certificate to certificate pool")
-	}
-
-	leafCert, err := loadCert(certs.Leaf)
-	if err != nil {
-		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
-	}
-
-	rootCert, err := loadCert(certs.Ca)
-	if err != nil {
-		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
-	}
-
-	chain, err := leafCert.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
-	if err != nil {
-		return fmt.Errorf("failed to validate certificate chain: %v", err)
-	}
-
-	// Expected length is Leaf + Num(Intermediates) + CA
-	expectedLen := len(certs.Intermediates) + 2
-	if len(chain[0]) != expectedLen {
-		return fmt.Errorf("expected chain of length %v (got %v)", expectedLen, len(chain[0]))
-	}
-
-	// Match measurement CA against expected CAs
-	found := false
-	for _, keyId := range caKeyIds {
-		if bytes.Equal(keyId, rootCert.SubjectKeyId) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return fmt.Errorf("ca Key ID %v does not match any of the expected CAs",
-			rootCert.SubjectKeyId)
-	}
-
-	return nil
-}
-
 func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error {
 
 	for _, ext := range cert.Extensions {
@@ -1210,91 +945,6 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) error {
 	}
 
 	return fmt.Errorf("extension %v not present in certificate", oid)
-}
-
-// Used for the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
-type hwSigner struct {
-	pk     *jose.JSONWebKey
-	signer crypto.PrivateKey
-	alg    jose.SignatureAlgorithm
-}
-
-// Implements the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
-func (hws *hwSigner) Public() *jose.JSONWebKey {
-	return hws.pk
-}
-
-// Implements the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
-func (hws *hwSigner) Algs() []jose.SignatureAlgorithm {
-	return []jose.SignatureAlgorithm{hws.alg}
-}
-
-// Implements the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
-func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([]byte, error) {
-	// EC-specific: key size in byte for later padding
-	var keySize int
-	// Determine hash / SignerOpts from algorithm
-	var opts crypto.SignerOpts
-	switch alg {
-	case jose.RS256, jose.ES256: // RSA, ECDSA with SHA256
-		keySize = 32 // 256 bit
-		opts = crypto.SHA256
-	case jose.PS256: // RSA PSS with SHA256
-		// we force default saltLengths, same as x509 and TPM2.0
-		opts = &rsa.PSSOptions{SaltLength: 32, Hash: crypto.SHA256}
-	case jose.RS384, jose.ES384: // RSA, ECDSA with SHA384
-		keySize = 48
-		opts = crypto.SHA384
-	case jose.PS384: // RSA PSS with SHA384
-		opts = &rsa.PSSOptions{SaltLength: 48, Hash: crypto.SHA384}
-	case jose.RS512, jose.ES512: // RSA, ECDSA with SHA512
-		keySize = 66 // 521 bit + padding
-		opts = crypto.SHA512
-	case jose.PS512: // RSA PSS with SHA512
-		opts = &rsa.PSSOptions{SaltLength: 64, Hash: crypto.SHA512}
-	default:
-		return nil, errors.New("Signing failed: Could not determine appropriate hash type")
-	}
-
-	// Hash payload
-	hasher := opts.HashFunc().New()
-	// According to documentation, Write() on hash never fails
-	_, _ = hasher.Write(payload)
-	hashed := hasher.Sum(nil)
-
-	// sign payload
-	switch alg {
-	case jose.ES256, jose.ES384, jose.ES512:
-		// Obtain signature
-		asn1Sig, err := hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
-		if err != nil {
-			return nil, err
-		}
-		// Convert from asn1 format (as specified in crypto) to concatenated and padded format for go-jose
-		type ecdsasig struct {
-			R *big.Int
-			S *big.Int
-		}
-		var esig ecdsasig
-		ret := make([]byte, 2*keySize)
-		_, err = asn1.Unmarshal(asn1Sig, &esig)
-		if err != nil {
-			return nil, errors.New("ECDSA signature was not in expected format")
-		}
-		// Fill return buffer with padded keys
-		rBytes := esig.R.Bytes()
-		sBytes := esig.S.Bytes()
-		copy(ret[keySize-len(rBytes):keySize], rBytes)
-		copy(ret[2*keySize-len(sBytes):2*keySize], sBytes)
-		return ret, nil
-	default:
-		// The return format of all other signatures does not need to be adapted for go-jose
-		return hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
-	}
 }
 
 func contains(elem string, list []string) bool {

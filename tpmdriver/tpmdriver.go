@@ -779,8 +779,8 @@ func getTpmPcrs(metadata [][]byte) ([]int, error) {
 
 		payload := jws.UnsafePayloadWithoutVerification()
 
-		// Unmarshal the Type field of the JSON file to determine the type
-		t := new(ar.JSONType)
+		// Unmarshal the Type field of the metadata to determine the type
+		t := new(ar.Type)
 		err = json.Unmarshal(payload, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
@@ -856,8 +856,8 @@ func getTpmCertParams(metadata [][]byte) ([][]byte, error) {
 
 		payload := jws.UnsafePayloadWithoutVerification()
 
-		// Unmarshal the Type field of the JSON file to determine the type
-		t := new(ar.JSONType)
+		// Unmarshal the Type field of the metadata file to determine the type
+		t := new(ar.Type)
 		err = json.Unmarshal(payload, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)

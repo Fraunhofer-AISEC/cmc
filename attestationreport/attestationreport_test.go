@@ -122,15 +122,33 @@ func createCertsAndKeys() error {
 
 func TestVerify(t *testing.T) {
 	type args struct {
-		nonce     *[]byte
-		caCertPem *[]byte
+		nonce      *[]byte
+		caCertPem  *[]byte
+		serializer Serializer
 	}
 	tests := []struct {
 		name string
 		args args
 		want VerificationResult
 	}{
-		{name: "Empty Attestation Report", args: args{nonce: &nonce, caCertPem: &testCA}, want: VerificationResult{Success: false}},
+		{
+			name: "Empty Attestation Report JSON",
+			args: args{
+				nonce:      &nonce,
+				caCertPem:  &testCA,
+				serializer: JsonSerializer{},
+			},
+			want: VerificationResult{Success: false},
+		},
+		{
+			name: "Empty Attestation Report CBOR",
+			args: args{
+				nonce:      &nonce,
+				caCertPem:  &testCA,
+				serializer: CborSerializer{},
+			},
+			want: VerificationResult{Success: false},
+		},
 	}
 
 	// Setup logger
@@ -143,10 +161,6 @@ func TestVerify(t *testing.T) {
 		return
 	}
 
-	// Generate and sign attestation report to test Verify() function
-	var metadata [][]byte
-	a := Generate(nonce, metadata, []Measurement{})
-
 	swSigner := &SwSigner{
 		priv: testKey,
 		certChain: CertChain{
@@ -155,44 +169,25 @@ func TestVerify(t *testing.T) {
 		},
 	}
 
-	ok, ar := Sign(a, swSigner)
-	if !ok {
-		t.Error("Internal Error: Failed to sign Attestion Report")
-		return
-	}
-
 	// Perform unit tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil)
+
+			// Generate and sign attestation report to test Verify() function
+			var metadata [][]byte
+			a, err := Generate(nonce, metadata, []Measurement{}, *&tt.args.serializer)
+			if err != nil {
+				t.Errorf("Preparation failed: %v", err)
+			}
+			ok, ar := Sign(a, swSigner, tt.args.serializer)
+			if !ok {
+				t.Error("Internal Error: Failed to sign Attestion Report")
+				return
+			}
+
+			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil, *&tt.args.serializer)
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
-			}
-		})
-	}
-}
-
-func TestVerifyJws(t *testing.T) {
-	type args struct {
-		data  string
-		roots *x509.CertPool
-		roles []string
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{"VerifyJws Empty", args{"", nil, nil}, false},
-	}
-
-	log.SetLevel(log.TraceLevel)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, got := VerifyJws(tt.args.data, tt.args.roots)
-			if got != tt.want {
-				t.Errorf("VerifyJws() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

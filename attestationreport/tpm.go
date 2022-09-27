@@ -116,7 +116,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	for _, ca := range cas {
 		keyIds = append(keyIds, ca.SubjectKeyId)
 	}
-	err = verifyCertChain(&tpmM.Certs, keyIds)
+	err = verifyCertChainPem(&tpmM.Certs, keyIds)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.QuoteSignature.CertCheck.setFalse(&msg)

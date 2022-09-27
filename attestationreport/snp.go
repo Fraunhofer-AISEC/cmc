@@ -423,7 +423,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 		result.CertCheck.setFalse(&msg)
 		return result, false
 	}
-	err = verifyCertChain(&certs, [][]byte{keyId})
+	err = verifyCertChainPem(&certs, [][]byte{keyId})
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.CertCheck.setFalse(&msg)
