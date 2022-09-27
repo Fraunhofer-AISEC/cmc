@@ -154,11 +154,19 @@ func generate(addr, reportFile, nonceFile string) {
 	}
 
 	// Save the Attestation Report for the verifier
-	ioutil.WriteFile(reportFile, response.GetAttestationReport(), 0644)
+	err = ioutil.WriteFile(reportFile, response.GetAttestationReport(), 0644)
+	if err != nil {
+		log.Fatalf("Failed to save attestation report as %v: %v", reportFile, err)
+	}
+	fmt.Println("Wrote attestation report: ", reportFile)
+
 	// Save the nonce for the verifier
 	ioutil.WriteFile(nonceFile, nonce, 0644)
+	if err != nil {
+		log.Fatalf("Failed to save nonce as %v: %v", nonceFile, err)
+	}
+	fmt.Println("Wrote nonce: ", nonceFile)
 
-	fmt.Println("Wrote file ", reportFile)
 }
 
 func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
