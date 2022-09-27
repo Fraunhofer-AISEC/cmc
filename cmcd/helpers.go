@@ -77,6 +77,7 @@ func printConfig(c *config) {
 	log.Info("\tFetch Metadata           : ", c.FetchMetadata)
 	log.Info("\tUse IMA                  : ", c.UseIma)
 	log.Info("\tIMA PCR                  : ", c.ImaPcr)
+	log.Info("\tSerialization            : ", c.Serialization)
 }
 
 func contains(elem string, list []string) bool {

@@ -41,6 +41,7 @@ type ServerConfig struct {
 	Metadata              [][]byte
 	MeasurementInterfaces []ar.Measurement
 	Signer                ar.Signer
+	Serializer            ar.Serializer
 }
 
 // server is the gRPC server structure
@@ -83,7 +84,14 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
-	a := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces)
+	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces, s.config.Serializer)
+	if err != nil {
+		log.Error("Failed to generate attestation report")
+		log.Info("Prover: Finished")
+		return &ci.AttestationResponse{
+			Status: ci.Status_FAIL,
+		}, nil
+	}
 
 	if s.config.Signer == nil {
 		log.Error("No valid signer specified in config. Cannot sign attestation report")
@@ -95,7 +103,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 
 	log.Info("Prover: Signing Attestation Report")
 	var status ci.Status
-	ok, data := ar.Sign(a, s.config.Signer)
+	ok, data := ar.Sign(report, s.config.Signer, s.config.Serializer)
 	if !ok {
 		log.Error("Prover: failed to sign Attestion Report ")
 		status = ci.Status_FAIL
@@ -135,7 +143,7 @@ func (s *server) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.Ve
 	}
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, policies)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, policies, s.config.Serializer)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

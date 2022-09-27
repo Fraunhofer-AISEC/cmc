@@ -8,5 +8,6 @@
     "useIma": false,
     "imaPcr": 10,
     "keyConfig": "EC256",
-    "policies": "policies.json"
+    "policies": "policies.json",
+    "serialization": "cbor"
 }

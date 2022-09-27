@@ -45,6 +45,7 @@ type config struct {
 	UseIma                bool     `json:"useIma"`
 	ImaPcr                int32    `json:"imaPcr"`
 	KeyConfig             string   `json:"keyConfig,omitempty"` // RSA2048 RSA4096 EC256 EC384 EC521
+	Serialization         string   `json:"serialization"`       // JSON, CBOR
 }
 
 func loadConfig(configFile string) (*config, error) {
@@ -116,9 +117,12 @@ func main() {
 	var tpm *tpmdriver.Tpm
 	var snp *snpdriver.Snp
 	var sw *swdriver.Sw
+	var jsonSerializer ar.JsonSerializer
+	var cborSerializer ar.CborSerializer
 
 	measurements := make([]ar.Measurement, 0)
 	var signer ar.Signer
+	var serializer ar.Serializer
 
 	if c.SigningInterface == "SW" {
 		log.Info("Using SW as Signing Interface")
@@ -178,10 +182,21 @@ func main() {
 		measurements = append(measurements, snp)
 	}
 
+	if c.Serialization == "JSON" {
+		log.Info("Using JSON/JWS as serialization interface")
+		serializer = jsonSerializer
+	}
+
+	if c.Serialization == "CBOR" {
+		log.Info("Using CBOR/COSE as serialization interface")
+		serializer = cborSerializer
+	}
+
 	serverConfig := &ServerConfig{
 		Metadata:              metadata,
 		MeasurementInterfaces: measurements,
 		Signer:                signer,
+		Serializer:            serializer,
 	}
 
 	server := NewServer(serverConfig)
