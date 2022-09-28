@@ -425,12 +425,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement) ArJws
 	return ar
 }
 
-// Sign signs the attestation report with private key 'priv' and appends the
-// pem encoded certificate chain 'certsPem' to the JWS structure. The
-// certificates must be handed over in the order they should be appended
-// (Signing Certificate -> Intermediate Certificates -> Root CA Certificate)
-// Parameter 'mu' is an optional mutex, in case the private key requires exclusive
-// access (e.g. because it is located in a hardware module)
+// Sign signs the attestation report with the specified signer 'signer'
 func Sign(ar ArJws, signer Signer) (bool, []byte) {
 	var err error
 
