@@ -598,8 +598,8 @@ func extendHash(hash []byte, data []byte) []byte {
 	return ret
 }
 
-// loadCert loads a certificate from PEM encoded data
-func loadCert(data []byte) (*x509.Certificate, error) {
+// LoadCert loads a certificate from PEM encoded data
+func LoadCert(data []byte) (*x509.Certificate, error) {
 	input := data
 
 	block, _ := pem.Decode(data)
@@ -614,8 +614,8 @@ func loadCert(data []byte) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// loadCerts loads one or more certificates from PEM encoded data
-func loadCerts(data []byte) ([]*x509.Certificate, error) {
+// LoadCerts loads one or more certificates from PEM encoded data
+func LoadCerts(data []byte) ([]*x509.Certificate, error) {
 	certs := make([]*x509.Certificate, 0)
 	input := data
 
@@ -638,7 +638,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	ar := ArPlain{}
 
-	roots, err := loadCerts(casPem)
+	roots, err := LoadCerts(casPem)
 	if err != nil {
 		log.Trace("Loading PEM encoded CA certificate(s) failed")
 		result.Success = false

@@ -100,7 +100,7 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	// certificate chain in base64 encoding
 	certsb64 := make([]string, 0)
 	for i, certPem := range certsPem {
-		cert, err := loadCert(certPem)
+		cert, err := LoadCert(certPem)
 		if err != nil {
 			log.Errorf("Failed to load cert[%v]: %v. PEM: %v", i, err, string(certPem))
 			return false, nil
