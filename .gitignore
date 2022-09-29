@@ -12,4 +12,6 @@ tools/signing-tool/signing-tool
 tools/converter/converter
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
+example-setup/**/*.cbor
+example-setup/metadata-signed/*
 tpmdriver/test_encrypted_ak.json
