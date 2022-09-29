@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,15 +38,15 @@ type Serializer interface {
 func main() {
 	log.SetLevel(log.TraceLevel)
 
-	metadata := flag.String("data", "", "Path to metadata as JSON or CBOR to be signed")
+	metadata := flag.String("in", "", "Path to input metadata as JSON or CBOR to be signed")
 	keyFiles := flag.String("keys", "", "Paths to keys in PEM format to be used for signing, as a comma-separated list")
-	x5cFiles := flag.String("x5cs", "", "Paths to PEM encoded x509 certificate chains, as a comma-separated list")
+	x5cFiles := flag.String("x5cs", "", "Paths to PEM encoded x509 certificate chains. Certificate chains must begin with the leaf certificates, the single certificates must be comma-separated. The certificate chains must be colon separated, e.g.: '--x5cs leaf1,intermediate1,ca1:leaf2,intermediate2,ca2")
 	format := flag.String("format", "JSON", "Format of the metadata (JSON or CBOR)")
 	outputFile := flag.String("out", "", "Path to the output file to save signed metadata")
 	flag.Parse()
 
 	if *metadata == "" {
-		log.Error("metadata file not specified (--data)")
+		log.Error("input metadata file not specified (--in)")
 		flag.Usage()
 		return
 	}
@@ -97,29 +98,37 @@ func main() {
 	}
 	log.Tracef("Read %v private keys", len(keys))
 
-	// Load certificate chains
-	s2 := strings.Split(*x5cFiles, ",")
-	certs := make([][]*x509.Certificate, 0)
-	for _, pemFile := range s2 {
-		certsPem, err := ioutil.ReadFile(pemFile)
-		if err != nil {
-			log.Fatalf("failed to read certificate(s) file %v", err)
-		}
+	// Load certificate chains, splitted by colons
+	certChains := make([][]*x509.Certificate, 0)
+	chains := strings.Split(*x5cFiles, ":")
+	for _, chain := range chains {
 
-		c, err := loadCerts(certsPem)
-		if err != nil {
-			log.Fatalf("Failed to load certificates: %v", err)
-		}
+		// Load certificates in chain, splitted by commas
+		certChain := make([]*x509.Certificate, 0)
+		certFiles := strings.Split(chain, ",")
+		for _, certFile := range certFiles {
 
-		certs = append(certs, c)
+			certPem, err := ioutil.ReadFile(certFile)
+			if err != nil {
+				log.Fatalf("failed to read certificate(s) file %v", err)
+			}
+
+			c, err := ar.LoadCert(certPem)
+			if err != nil {
+				log.Fatalf("Failed to load certificates: %v", err)
+			}
+
+			certChain = append(certChain, c)
+		}
+		certChains = append(certChains, certChain)
 	}
-	if len(certs) == 0 {
+	if len(certChains) == 0 {
 		log.Fatal("No valid certificates specified")
 	}
-	log.Tracef("Read %v certificates", len(certs))
+	log.Tracef("Read %v certificate chains", len(certChains))
 
-	if len(certs) != len(keys) {
-		log.Fatalf("Number of certificates (%v) does not match number of keys (%v)", certs, keys)
+	if len(certChains) != len(keys) {
+		log.Fatalf("Number of certificates (%v) does not match number of keys (%v)", len(certChains), len(keys))
 	}
 
 	// Create serializer based on specified format
@@ -133,15 +142,20 @@ func main() {
 	}
 
 	// Sign metadata
-	signedData, err := s.Sign(data, keys, certs)
+	signedData, err := s.Sign(data, keys, certChains)
 	if err != nil {
 		log.Fatalf("failed to sign data: %v", err)
 	}
 
+	log.Trace("Signed metadata")
+
+	log.Tracef("Writing metadata to file %v", *outputFile)
 	err = ioutil.WriteFile(*outputFile, signedData, 0644)
 	if err != nil {
 		log.Fatalf("failed to write output file: %v", err)
 	}
+
+	log.Tracef("Finished")
 }
 
 // TODO use from Attestation Report Module or define generic module
