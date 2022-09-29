@@ -226,7 +226,7 @@ func main() {
 
 	parsedMode := flag.String("mode", "generate", "[generate | verify | tlsconn ]")
 	addr := flag.String("addr", "127.0.0.1:9955", "TCP address to connect to the CMC daemon gRPC interface")
-	reportFile := flag.String("report", "attestation-report.json", "Output file for the attestation report")
+	reportFile := flag.String("report", "attestation-report", "Output file for the attestation report")
 	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
 	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
 	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port to connect to the test connector")
