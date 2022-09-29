@@ -367,7 +367,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 	s.SetBytes(sRaw)
 
 	// Load the VCEK certificate
-	c, err := loadCert(certs.Leaf)
+	c, err := LoadCert(certs.Leaf)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load certificate: %v", err)
 		result.Signature.setFalse(&msg)

@@ -94,7 +94,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	}
 
 	// Verify certificate chain
-	cas, err := loadCerts(casPem)
+	cas, err := LoadCerts(casPem)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.QuoteSignature.CertCheck.setFalse(&msg)
@@ -257,7 +257,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
 	}
 
 	// Extract public key from x509 certificate
-	x509Cert, err := loadCert(cert)
+	x509Cert, err := LoadCert(cert)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
 		result.Signature.setFalse(&msg)
