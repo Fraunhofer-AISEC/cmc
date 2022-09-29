@@ -298,9 +298,9 @@ type ArPlain struct {
 	Nonce              []byte              `json:"nonce" cbor:"9,keyasint"`
 }
 
-// ArJws represents the attestation report in JWS/COSE format with its
+// ArPacked represents the attestation report in JWS/COSE format with its
 // contents already in signed JWS/COSE format
-type ArJws struct {
+type ArPacked struct {
 	Type               string          `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
@@ -323,7 +323,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Ser
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
 	// TODO this will not work!!
-	ar := ArJws{
+	ar := ArPacked{
 		Type: "Attestation Report",
 	}
 
@@ -654,8 +654,8 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		return false, &ar
 	}
 
-	var arJws ArJws
-	err = s.Unmarshal(payload, &arJws)
+	var arPacked ArPacked
+	err = s.Unmarshal(payload, &arPacked)
 	if err != nil {
 		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v", err)
 		result.ProcessingError = append(result.ProcessingError, msg)
@@ -665,13 +665,13 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	ar.Type = "ArPlain"
-	ar.TpmM = arJws.TpmM
-	ar.SnpM = arJws.SnpM
-	ar.SWM = arJws.SWM
-	ar.Nonce = arJws.Nonce
+	ar.TpmM = arPacked.TpmM
+	ar.SnpM = arPacked.SnpM
+	ar.SWM = arPacked.SWM
+	ar.Nonce = arPacked.Nonce
 
 	// Validate and unpack Rtm Manifest
-	jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.RtmManifest), roots)
+	jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.RtmManifest), roots)
 	result.RtmResult.Summary = jwsValRes.Summary
 	result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
@@ -693,7 +693,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack OS Manifest
-	jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.OsManifest), roots)
+	jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.OsManifest), roots)
 	result.OsResult.Summary = jwsValRes.Summary
 	result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
@@ -715,7 +715,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack App Manifests
-	for i, amSigned := range arJws.AppManifests {
+	for i, amSigned := range arPacked.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
 		jwsValRes, payload, ok = s.VerifyToken([]byte(amSigned), roots)
@@ -746,8 +746,8 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Company Description if present
-	if arJws.CompanyDescription != nil {
-		jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.CompanyDescription), roots)
+	if arPacked.CompanyDescription != nil {
+		jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.CompanyDescription), roots)
 		result.CompDescResult = &CompDescResult{}
 		result.CompDescResult.Summary = jwsValRes.Summary
 		result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
@@ -774,7 +774,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Device Description
-	jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.DeviceDescription), roots)
+	jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.DeviceDescription), roots)
 	result.DevDescResult.Summary = jwsValRes.Summary
 	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
 	if !ok {
