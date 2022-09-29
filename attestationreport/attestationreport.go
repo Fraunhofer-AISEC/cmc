@@ -85,9 +85,9 @@ const timeLayout = "20060102150405"
 // HashChainElem represents the attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
 type HashChainElem struct {
-	Type   string   `json:"type" cbor:"0,keyasint"`
-	Pcr    int32    `json:"pcr" cbor:"1,keyasint"`
-	Sha256 []string `json:"sha256" cbor:"2,keyasint"`
+	Type   string    `json:"type" cbor:"0,keyasint"`
+	Pcr    int32     `json:"pcr" cbor:"1,keyasint"`
+	Sha256 []HexByte `json:"sha256" cbor:"2,keyasint"`
 }
 
 // CertChain is a helper struct for certificate chains,
@@ -103,8 +103,8 @@ type CertChain struct {
 // element of type 'TPM Measurement'
 type TpmMeasurement struct {
 	Type      string           `json:"type" cbor:"0,keyasint"`
-	Message   string           `json:"message" cbor:"1,keyasint"`
-	Signature string           `json:"signature" cbor:"2,keyasint"`
+	Message   HexByte          `json:"message" cbor:"1,keyasint"`
+	Signature HexByte          `json:"signature" cbor:"2,keyasint"`
 	Certs     CertChain        `json:"certs" cbor:"3,keyasint"`
 	HashChain []*HashChainElem `json:"hashChain" cbor:"4,keyasint"`
 }
@@ -120,9 +120,9 @@ type SnpMeasurement struct {
 // SwMeasurement represents the attestation report
 // element of type 'Software Measurement'
 type SwMeasurement struct {
-	Type   string `json:"type" cbor:"0,keyasint"`
-	Name   string `json:"name" cbor:"1,keyasint"`
-	Sha256 string `json:"sha256" cbor:"2,keyasint"`
+	Type   string  `json:"type" cbor:"0,keyasint"`
+	Name   string  `json:"name" cbor:"1,keyasint"`
+	Sha256 HexByte `json:"sha256" cbor:"2,keyasint"`
 }
 
 type SnpPolicy struct {
@@ -161,8 +161,8 @@ type SnpDetails struct {
 // and 'SW Verification'
 type Verification struct {
 	Type   string      `json:"type" cbor:"0,keyasint,omitempty"`
-	Sha256 string      `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
-	Sha384 string      `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
+	Sha256 HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
+	Sha384 HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
 	Name   string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
 	Pcr    *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
 	Snp    *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
@@ -295,22 +295,22 @@ type ArPlain struct {
 	AppManifests       []AppManifest       `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
 	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
 	DeviceDescription  DeviceDescription   `json:"deviceDescription" cbor:"8,keyasint"`
-	Nonce              string              `json:"nonce" cbor:"9,keyasint"`
+	Nonce              []byte              `json:"nonce" cbor:"9,keyasint"`
 }
 
-// ArJws represents the attestation report in JWS format with its
-// contents already in signed JWs format
+// ArJws represents the attestation report in JWS/COSE format with its
+// contents already in signed JWS/COSE format
 type ArJws struct {
 	Type               string          `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
 	SWM                []SwMeasurement `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
-	RtmManifest        string          `json:"rtmManifests" cbor:"4,keyasint"`
-	OsManifest         string          `json:"osManifest" cbor:"5,keyasint"`
-	AppManifests       []string        `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
-	CompanyDescription string          `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
-	DeviceDescription  string          `json:"deviceDescription" cbor:"8,keyasint"`
-	Nonce              string          `json:"nonce" cbor:"9,keyasint"`
+	RtmManifest        []byte          `json:"rtmManifests" cbor:"4,keyasint"`
+	OsManifest         []byte          `json:"osManifest" cbor:"5,keyasint"`
+	AppManifests       [][]byte        `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
+	CompanyDescription []byte          `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
+	DeviceDescription  []byte          `json:"deviceDescription" cbor:"8,keyasint"`
+	Nonce              []byte          `json:"nonce" cbor:"9,keyasint"`
 }
 
 // Generate generates an attestation report with the provided
@@ -330,7 +330,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Ser
 	if len(nonce) > 32 {
 		return nil, fmt.Errorf("Generate Attestation Report: Nonce exceeds maximum length of 32 bytes")
 	}
-	ar.Nonce = hex.EncodeToString(nonce)
+	ar.Nonce = nonce
 
 	log.Debug("Adding manifests and descriptions to Attestation Report..")
 
@@ -358,22 +358,22 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Ser
 		switch t.Type {
 		case "App Manifest":
 			log.Debug("Adding App Manifest")
-			ar.AppManifests = append(ar.AppManifests, string(metadata[i]))
+			ar.AppManifests = append(ar.AppManifests, metadata[i])
 			numManifests++
 		case "OS Manifest":
 			log.Debug("Adding OS Manifest")
-			ar.OsManifest = string(metadata[i])
+			ar.OsManifest = metadata[i]
 			numManifests++
 		case "RTM Manifest":
 			log.Debug("Adding RTM Manifest")
-			ar.RtmManifest = string(metadata[i])
+			ar.RtmManifest = metadata[i]
 			numManifests++
 		case "Device Description":
 			log.Debug("Adding Device Description")
-			ar.DeviceDescription = string(metadata[i])
+			ar.DeviceDescription = metadata[i]
 		case "Company Description":
 			log.Debug("Adding Company Description")
-			ar.CompanyDescription = string(metadata[i])
+			ar.CompanyDescription = metadata[i]
 		}
 	}
 
@@ -451,15 +451,8 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 	}
 
 	// Verify nonce
-	arnonce, aerr := hex.DecodeString(ar.Nonce)
-	vrNonceStr := hex.EncodeToString(nonce)
-	if aerr != nil {
-		msg := fmt.Sprintf("Failed to decode nonce in Attestation Report: %v", aerr)
-		result.FreshnessCheck.setFalse(&msg)
-		result.Success = false
-	}
-	if res := bytes.Compare(arnonce, nonce); res != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: SuppliedNonce = %v, AttestationReport Nonce = %v", vrNonceStr, ar.Nonce)
+	if res := bytes.Compare(ar.Nonce, nonce); res != 0 {
+		msg := fmt.Sprintf("Nonces mismatch: SuppliedNonce = %v, AttestationReport Nonce = %v", hex.EncodeToString(nonce), hex.EncodeToString(ar.Nonce))
 		result.FreshnessCheck.setFalse(&msg)
 		result.Success = false
 	} else {
@@ -753,7 +746,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Company Description if present
-	if arJws.CompanyDescription != "" {
+	if arJws.CompanyDescription != nil {
 		jwsValRes, payload, ok = s.VerifyToken([]byte(arJws.CompanyDescription), roots)
 		result.CompDescResult = &CompDescResult{}
 		result.CompDescResult.Summary = jwsValRes.Summary
@@ -832,8 +825,7 @@ func checkValidity(val Validity) Result {
 // Searches for a specific hash value in the verifications for RTM and OS
 func getVerification(hash []byte, verifications []Verification) *Verification {
 	for _, ver := range verifications {
-		h, _ := hex.DecodeString(ver.Sha256)
-		if bytes.Equal(h, hash) {
+		if bytes.Equal(ver.Sha256, hash) {
 			return &ver
 		}
 	}
@@ -852,7 +844,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 		swRes.VerName = v.Name
 		found := false
 		for _, swm := range swMeasurements {
-			if swm.Sha256 == v.Sha256 {
+			if bytes.Equal(swm.Sha256, v.Sha256) {
 				swRes.MeasName = swm.Name
 				swRes.Validation.Success = true
 				found = true
@@ -871,7 +863,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 	for _, swM := range swMeasurements {
 		found := false
 		for _, swV := range verifications {
-			if swM.Sha256 == swV.Sha256 {
+			if bytes.Equal(swM.Sha256, swV.Sha256) {
 				found = true
 				break
 			}

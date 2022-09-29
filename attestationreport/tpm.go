@@ -54,21 +54,9 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	result.VerificationsCheck = verificationsCheck
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
-	quote, err := hex.DecodeString(tpmM.Message)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to decode TPM quote: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-	tpmsAttest, err := tpm2.DecodeAttestationData(quote)
+	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Message)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode TPM attestation data: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-	sig, err := hex.DecodeString(tpmM.Signature)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to decode TPM signature: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
@@ -100,7 +88,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 		ok = false
 	}
 
-	result.QuoteSignature = verifyTpmQuoteSignature(quote, sig, tpmM.Certs.Leaf)
+	result.QuoteSignature = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, tpmM.Certs.Leaf)
 	if !result.QuoteSignature.Signature.Success {
 		ok = false
 	}
@@ -138,10 +126,9 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 	}
 	calculatedPcrs := make(map[int][]byte)
 	for _, v := range verifications {
-		verificationHash, _ := hex.DecodeString(v.Sha256)
 
 		if v.Pcr == nil {
-			msg := fmt.Sprintf("No PCR set in TPM Verification %v (hash: %v)", v.Name, v.Sha256)
+			msg := fmt.Sprintf("No PCR set in TPM Verification %v (hash: %v)", v.Name, hex.EncodeToString(v.Sha256))
 			verificationsCheck.setFalseMulti(&msg)
 			ok = false
 			continue
@@ -152,7 +139,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 		if _, ok := calculatedPcrs[*v.Pcr]; !ok {
 			calculatedPcrs[*v.Pcr] = make([]byte, 32)
 		}
-		calculatedPcrs[*v.Pcr] = extendHash(calculatedPcrs[*v.Pcr], verificationHash)
+		calculatedPcrs[*v.Pcr] = extendHash(calculatedPcrs[*v.Pcr], v.Sha256)
 
 		// Only if the measurement contains the hashes of the individual software artifacts, (e.g.
 		// provided through BIOS or IMA  measurement lists), we can check the verification directly
@@ -160,7 +147,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 			if hce.Pcr == int32(*v.Pcr) && len(hce.Sha256) > 1 {
 				found := false
 				for _, sha256 := range hce.Sha256 {
-					if sha256 == v.Sha256 {
+					if bytes.Equal(sha256, v.Sha256) {
 						found = true
 						break
 					}
@@ -188,17 +175,16 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 				var measurement []byte
 				if len(hce.Sha256) == 1 {
 					// Measurement contains only final PCR value, so we can simply compare
-					measurement, _ = hex.DecodeString(hce.Sha256[0])
+					measurement = hce.Sha256[0]
 				} else {
 					// Measurement contains individual values which must be extended to result in
 					// the final PCR value for comparison
 					measurement = make([]byte, 32)
 					for _, sha256 := range hce.Sha256 {
-						h, _ := hex.DecodeString(sha256)
-						measurement = extendHash(measurement, h)
+						measurement = extendHash(measurement, sha256)
 
 						// Check, if a verification exists for the measured value
-						v := getVerification(h, verifications)
+						v := getVerification(sha256, verifications)
 						if v == nil {
 							msg := fmt.Sprintf("No TPM verification found for TPM measurement: %v", sha256)
 							pcrRes.Validation.setFalseMulti(&msg)

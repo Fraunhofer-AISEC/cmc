@@ -35,6 +35,34 @@ import (
 	"gopkg.in/square/go-jose.v2"
 )
 
+// Custom type for JSON unmarshaller as byte arrays are
+// encoded as hex strings in JSON but used as byte arrays
+// internally and by CBOR encoding
+type HexByte []byte
+
+// MarshalJSON marshalls a byte array into a hex string
+func (h *HexByte) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hex.EncodeToString(*h))
+}
+
+// UnmarshalJSON unmarshalls JSON hex strings into
+// byte arrays
+func (h *HexByte) UnmarshalJSON(data []byte) error {
+
+	var v string
+	err := json.Unmarshal(data, &v)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal: %v", err)
+	}
+
+	*h, err = hex.DecodeString(v)
+	if err != nil {
+		return fmt.Errorf("failed to decode string: %v", err)
+	}
+
+	return nil
+}
+
 type JsonSerializer struct{}
 
 func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
