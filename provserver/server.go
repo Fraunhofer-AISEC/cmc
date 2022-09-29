@@ -440,9 +440,13 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 // HandleSwCertRequest handles a software CSR request
 func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
+	log.Trace("Decoding request")
+
 	var req swdriver.SwCertRequest
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&req)
+
+	log.Trace("Parsing certificate parameters")
 
 	certParams, err := parseCertParams(req.CertParams)
 	if err != nil {
@@ -614,6 +618,7 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 		if strings.Compare(ctype, "signing/csr") == 0 {
 			log.Debug("Received signing/csr")
 
+			log.Trace("Reading http body")
 			b, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)
@@ -624,6 +629,7 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 			buf := bytes.NewBuffer(b)
 
 			// Handle the certificate request
+			log.Trace("Handling certificate request")
 			retBuf, err := HandleSwCertRequest(buf)
 			if err != nil {
 				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)
@@ -633,6 +639,7 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 			}
 
 			// Send back response
+			log.Trace("Sending back certificate request")
 			n, err := writer.Write(retBuf.Bytes())
 			if err != nil {
 				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)

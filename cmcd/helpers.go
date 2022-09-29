@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -82,7 +83,7 @@ func printConfig(c *config) {
 
 func contains(elem string, list []string) bool {
 	for _, s := range list {
-		if s == elem {
+		if strings.EqualFold(s, elem) {
 			return true
 		}
 	}

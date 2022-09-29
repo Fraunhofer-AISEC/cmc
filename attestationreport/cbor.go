@@ -60,7 +60,12 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	}
 
 	// create a cose signer TODO support RSA
-	coseSigner, err := cose.NewSigner(cose.AlgorithmES256, private.(*ecdsa.PrivateKey))
+	stmp, ok := private.(*ecdsa.PrivateKey)
+	if !ok {
+		log.Errorf("failed to convert signing key %v", private)
+		return false, nil
+	}
+	coseSigner, err := cose.NewSigner(cose.AlgorithmES256, stmp)
 	if err != nil {
 		log.Errorf("Failed to create signer: %v", err)
 		return false, nil
