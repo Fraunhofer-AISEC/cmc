@@ -152,13 +152,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 	result.Signature = sig
 
 	// Compare Measurements
-	v, err := hex.DecodeString(snpVerification.Sha384)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to decode SNP Verification: %v", err)
-		result.Summary.setFalse(&msg)
-		ok = false
-	}
-	if cmp := bytes.Compare(s.Measurement[:], v); cmp != 0 {
+	if cmp := bytes.Compare(s.Measurement[:], snpVerification.Sha384); cmp != 0 {
 		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v", snpVerification.Sha384, hex.EncodeToString(s.Measurement[:]))
 		result.MeasurementMatch.setFalse(&msg)
 		ok = false

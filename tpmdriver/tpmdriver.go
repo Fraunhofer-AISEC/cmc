@@ -227,7 +227,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		hashChain[i] = &ar.HashChainElem{
 			Type:   "Hash Chain",
 			Pcr:    int32(num),
-			Sha256: []string{hex.EncodeToString(pcrValues[num].Digest)}}
+			Sha256: []ar.HexByte{pcrValues[num].Digest}}
 	}
 
 	if t.UseIma {
@@ -239,9 +239,9 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			log.Error("failed to get IMA runtime digests. Ignoring..")
 		}
 
-		imaDigestsHex := make([]string, 0)
+		imaDigestsHex := make([][]byte, 0)
 		for _, elem := range imaDigests {
-			imaDigestsHex = append(imaDigestsHex, hex.EncodeToString(elem[:]))
+			imaDigestsHex = append(imaDigestsHex, elem[:])
 		}
 
 		// Find the IMA PCR in the TPM Measurement
@@ -255,8 +255,8 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	tm := ar.TpmMeasurement{
 		Type:      "TPM Measurement",
 		HashChain: hashChain,
-		Message:   hex.EncodeToString(quote.Quote),
-		Signature: hex.EncodeToString(quote.Signature),
+		Message:   quote.Quote,
+		Signature: quote.Signature,
 		Certs:     t.MeasuringCerts,
 	}
 
