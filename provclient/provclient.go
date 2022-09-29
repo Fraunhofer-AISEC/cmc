@@ -214,7 +214,6 @@ func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
 			if err != nil {
 				log.Error("Failed to read response")
 			}
-			log.Trace("Content:\n", string(content))
 
 			var pre Pre
 			err = xml.Unmarshal(content, &pre)
@@ -233,7 +232,6 @@ func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
 			}
-			log.Trace("Content:\n", string(content))
 
 			data[pre.Content[i].Name] = content
 		}
