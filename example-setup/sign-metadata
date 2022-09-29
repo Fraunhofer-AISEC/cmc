@@ -2,38 +2,73 @@
 
 set -e
 
-DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
-PCP="$DIR/../../ids-pcp/pcp.sh"
-PKI_DIR="$DIR/pki"
-INPUT_DIR="$DIR/metadata-raw"
-OUTPUT_DIR="$DIR/metadata-signed"
+if [ "$#" -ne 1 ]; then
+    echo "Error: script requires exactly one argument 'json' or 'cbor'"
+    exit
+fi
 
-if [ ! -d "$PKI_DIR" ]; then
+if [ "$1" != "cbor" ] && [ "$1" != "json" ]; then
+  echo "Error: Only 'json' or 'cbor' supported, not $1"
+  exit
+fi
+
+PKI="$DIR/example-setup/pki"
+INPUT="$DIR/example-setup/metadata-raw"
+OUTPUT="$DIR/example-setup/metadata-signed"
+
+if [ ! -d "$PKI" ]; then
   echo "PKI Directory does not exist. Did you run 'generate-pki'? Abort.."
   exit
 fi
 
-echo "PCP Binary:       $PCP"
-echo "Target Directory: $TARGET_DIR"
-echo "PKI Directory:    $PKI_DIR"
+if [ ! -d "$INPUT" ]; then
+  echo "Input Directory does not exist. Abort.."
+  exit
+fi
 
-eva () {
-  "$PCP" "$PKI_DIR" "$INPUT_DIR" "$OUTPUT_DIR" eva "$@"
-}
+SIG="$DIR/tools/signing-tool/signing-tool"
+CONV="$DIR/tools/converter/converter"
 
-sig () {
-  "$PCP" "$PKI_DIR" "$INPUT_DIR" "$OUTPUT_DIR" sig "$@"
-}
+KEY1=$PKI/developer_A/developer_A-key.pem
+CHAIN1=$PKI/users/developer_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+
+KEY2=$PKI/evaluator_A/evaluator_A-key.pem
+CHAIN2=$PKI/users/evaluator_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+
+KEY3=$PKI/certifier_A/certifier_A-key.pem
+CHAIN3=$PKI/users/certifier_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+
+KEY4=$PKI/operator_A/operator_A-key.pem
+CHAIN4=$PKI/users/operator_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
 
 # Clean start
-rm -rf $OUTPUT_DIR
-mkdir -p $OUTPUT_DIR
+rm -rf $OUTPUT
+mkdir -p $OUTPUT
 
-eva rtm.manifest.json			            developer_B evaluator_B certifier_A
-eva os.manifest.json					        developer_B evaluator_B certifier_A
-eva company.description.json				  operator_A  evaluator_C certifier_B
+# If CBOR format is specified, the json manifests must be converted first
+if [ "$1" == "cbor" ]; then
+  echo "Converting raw json metadata to cbor metadata"
+  for path in $INPUT/*; do
+    # Extract filename and extension
+    IN=$(basename ${path})
+    EXT=${IN##*.}
+    # Only convert JSON files
+    [ $EXT == "json" ] || continue
+    # Write them to the same folder as the input files
+    OUT=${IN%.*}.$1
+    # Convert JSON to CBOR using the converter-tool
+    $CONV -in $INPUT/$IN -out $INPUT/$OUT -format json
+  done
+fi
 
-sig operator device.description.json  operator_A
-sig operator ak.certparams.json		    operator_A
-sig operator tlskey.certparams.json	  operator_A
+echo "Signing $1 metadata"
+
+$SIG -in $INPUT/rtm.manifest.$1         -out $OUTPUT/rtm.manifest.$1         -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3 -format $1
+$SIG -in $INPUT/os.manifest.$1          -out $OUTPUT/os.manifest.$1          -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3 -format $1
+$SIG -in $INPUT/company.description.$1  -out $OUTPUT/company.description.$1  -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3 -format $1
+
+$SIG -in $INPUT/device.description.$1   -out $OUTPUT/device.description.$1   -keys $KEY4 -x5cs $CHAIN4 --format $1
+$SIG -in $INPUT/ak.certparams.$1        -out $OUTPUT/ak.certparams.$1        -keys $KEY4 -x5cs $CHAIN4 --format $1
+$SIG -in $INPUT/tlskey.certparams.$1    -out $OUTPUT/tlskey.certparams.$1    -keys $KEY4 -x5cs $CHAIN4 --format $1
