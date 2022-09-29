@@ -8,6 +8,8 @@ testclient/nonce
 testclient/attestation-report.json
 testclient/attestation-result.json
 dummycmc/dummycmc
+tools/signing-tool/signing-tool
+tools/converter/converter
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 tpmdriver/test_encrypted_ak.json
