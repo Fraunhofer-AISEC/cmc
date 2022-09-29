@@ -86,7 +86,7 @@ func (s *server) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.Att
 
 	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces, s.config.Serializer)
 	if err != nil {
-		log.Error("Failed to generate attestation report")
+		log.Errorf("Failed to generate attestation report: %v", err)
 		log.Info("Prover: Finished")
 		return &ci.AttestationResponse{
 			Status: ci.Status_FAIL,

@@ -216,10 +216,18 @@ func NewTpm(c *Config) (*Tpm, error) {
 // as a plugin during attestation report generation
 func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
+	if t == nil {
+		return ar.TpmMeasurement{}, fmt.Errorf("internal error: tpm object not initialized")
+	}
+
+	log.Trace("Collecting TPM Quote")
+
 	pcrValues, quote, err := GetTpmMeasurement(t, nonce, t.Pcrs)
 	if err != nil {
 		return ar.TpmMeasurement{}, fmt.Errorf("failed to get TPM Measurement: %v", err)
 	}
+
+	log.Trace("Collected TPM Quote")
 
 	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
 	for i, num := range t.Pcrs {
@@ -239,7 +247,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			log.Error("failed to get IMA runtime digests. Ignoring..")
 		}
 
-		imaDigestsHex := make([][]byte, 0)
+		imaDigestsHex := make([]ar.HexByte, 0)
 		for _, elem := range imaDigests {
 			imaDigestsHex = append(imaDigestsHex, elem[:])
 		}
@@ -261,10 +269,12 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	}
 
 	for i, elem := range tm.HashChain {
-		log.Debug(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, elem.Sha256))
+		for _, sha := range elem.Sha256 {
+			log.Debug(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, hex.EncodeToString(sha)))
+		}
 	}
-	log.Debug("Quote: ", tm.Message)
-	log.Debug("Signature: ", tm.Signature)
+	log.Debug("Quote: ", hex.EncodeToString(tm.Message))
+	log.Debug("Signature: ", hex.EncodeToString(tm.Signature))
 
 	return tm, nil
 }

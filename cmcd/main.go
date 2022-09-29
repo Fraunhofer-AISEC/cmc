@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"encoding/json"
 	"flag"
@@ -66,14 +67,17 @@ func loadConfig(configFile string) (*config, error) {
 	}
 	c.LocalPath = getFilePath(c.LocalPath, filepath.Dir(configFile))
 
-	// Check measurement and signing interface
+	// Check measurement, signing and serializer interface
 	for _, m := range c.MeasurementInterfaces {
-		if m != "TPM" && m != "SNP" {
+		if !strings.EqualFold(m, "TPM") && !strings.EqualFold(m, "SNP") {
 			return nil, fmt.Errorf("measurement interface of type %v not supported", m)
 		}
 	}
-	if c.SigningInterface != "TPM" && c.SigningInterface != "SW" && c.SigningInterface != "" {
+	if !strings.EqualFold(c.SigningInterface, "TPM") && !strings.EqualFold(c.SigningInterface, "SW") {
 		return nil, fmt.Errorf("signing Interface of type %v not supported", c.SigningInterface)
+	}
+	if !strings.EqualFold(c.Serialization, "CBOR") && !strings.EqualFold(c.Serialization, "JSON") {
+		return nil, fmt.Errorf("serialization interface of type %v not supported", c.Serialization)
 	}
 
 	printConfig(c)
@@ -124,7 +128,7 @@ func main() {
 	var signer ar.Signer
 	var serializer ar.Serializer
 
-	if c.SigningInterface == "SW" {
+	if strings.EqualFold(c.SigningInterface, "SW") {
 		log.Info("Using SW as Signing Interface")
 		swConfig := swdriver.Config{
 			Url:         c.ProvServerAddr,
@@ -140,7 +144,7 @@ func main() {
 		signer = sw
 	}
 
-	if c.SigningInterface == "TPM" || contains("TPM", c.MeasurementInterfaces) {
+	if strings.EqualFold(c.SigningInterface, "TPM") || contains("TPM", c.MeasurementInterfaces) {
 		tpmConfig := &tpmdriver.Config{
 			StoragePath: path.Join(c.LocalPath, "internal"),
 			ServerAddr:  c.ProvServerAddr,
@@ -163,7 +167,7 @@ func main() {
 		measurements = append(measurements, tpm)
 	}
 
-	if c.SigningInterface == "TPM" {
+	if strings.EqualFold(c.SigningInterface, "TPM") {
 		log.Info("Using TPM as Signing Interface")
 		signer = tpm
 	}
@@ -182,12 +186,12 @@ func main() {
 		measurements = append(measurements, snp)
 	}
 
-	if c.Serialization == "JSON" {
+	if strings.EqualFold(c.Serialization, "JSON") {
 		log.Info("Using JSON/JWS as serialization interface")
 		serializer = jsonSerializer
 	}
 
-	if c.Serialization == "CBOR" {
+	if strings.EqualFold(c.Serialization, "CBOR") {
 		log.Info("Using CBOR/COSE as serialization interface")
 		serializer = cborSerializer
 	}
