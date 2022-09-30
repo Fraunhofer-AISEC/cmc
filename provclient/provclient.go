@@ -165,7 +165,6 @@ func FetchMetadata(addr string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
 	}
-	log.Trace("Content:\n", string(content))
 
 	// Parse root directory
 	var pre Pre

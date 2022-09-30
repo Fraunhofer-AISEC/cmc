@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/gob"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -33,7 +32,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/square/go-jose.v2"
 )
 
 type SwCertRequest struct {
@@ -56,6 +54,7 @@ type Config struct {
 	Url         string
 	StoragePath string
 	Metadata    [][]byte
+	Serializer  ar.Serializer
 }
 
 // Sw is a struct required for implementing the signer and measurer interfaces
@@ -69,6 +68,14 @@ type Sw struct {
 func NewSwDriver(c Config) (*Sw, error) {
 	sw := &Sw{}
 
+	// Check if serializer is initialized
+	switch c.Serializer.(type) {
+	case ar.JsonSerializer:
+	case ar.CborSerializer:
+	default:
+		return nil, fmt.Errorf("serializer not initialized in driver config")
+	}
+
 	paths, err := createLocalStorage(c.StoragePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local storage: %v", err)
@@ -79,7 +86,7 @@ func NewSwDriver(c Config) (*Sw, error) {
 		return nil, fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	certParams, err := getCertParams(c.Metadata)
+	certParams, err := getCertParams(&c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert params: %w", err)
 	}
@@ -188,21 +195,20 @@ func saveCerts(paths Paths, certs ar.CertChain) error {
 	return nil
 }
 
-func getCertParams(metadata [][]byte) ([]byte, error) {
+func getCertParams(c *Config) ([]byte, error) {
 
-	for _, m := range metadata {
+	for i, m := range c.Metadata {
 
-		jws, err := jose.ParseSigned(string(m))
+		// Extract plain payload (i.e. the manifest/description itself)
+		payload, err := c.Serializer.GetPayload(m)
 		if err != nil {
-			log.Warnf("Failed to parse Manifest: %v", err)
+			log.Warnf("Failed to parse metadata object %v: %v", i, err)
 			continue
 		}
 
-		payload := jws.UnsafePayloadWithoutVerification()
-
 		// Unmarshal the Type field of the metadata file to determine the type
 		t := new(ar.Type)
-		err = json.Unmarshal(payload, t)
+		err = c.Serializer.Unmarshal(payload, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue

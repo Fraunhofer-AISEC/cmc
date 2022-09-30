@@ -5,7 +5,7 @@ cmcd/cmcd
 testclient/testclient
 testconnector/testconnector
 testclient/nonce
-testclient/attestation-report.json
+testclient/attestation-report
 testclient/attestation-result.json
 dummycmc/dummycmc
 tools/signing-tool/signing-tool

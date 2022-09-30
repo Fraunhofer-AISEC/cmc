@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -34,7 +33,6 @@ import (
 	"sync"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
-	"gopkg.in/square/go-jose.v2"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -65,6 +63,7 @@ type Config struct {
 	Metadata    [][]byte
 	UseIma      bool
 	ImaPcr      int32
+	Serializer  ar.Serializer
 }
 
 // Certs contains the TPM certificate chain for the AK and TLS key.
@@ -133,17 +132,25 @@ var (
 // checks if provosioning is required and if so, provisions the TPM
 func NewTpm(c *Config) (*Tpm, error) {
 
+	// Check if serializer is initialized
+	switch c.Serializer.(type) {
+	case ar.JsonSerializer:
+	case ar.CborSerializer:
+	default:
+		return nil, fmt.Errorf("serializer not initialized in driver config")
+	}
+
 	paths, err := createLocalStorage(c.StoragePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create local storage: %v", err)
 	}
 
 	// Load relevant parameters from the metadata files
-	certParams, err := getTpmCertParams(c.Metadata)
+	certParams, err := getTpmCertParams(c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load TPM cert params: %v", err)
 	}
-	pcrs, err := getTpmPcrs(c.Metadata)
+	pcrs, err := getTpmPcrs(c)
 	if err != nil {
 		return nil, fmt.Errorf("failed retrieve TPM PCRs: %v", err)
 	}
@@ -774,50 +781,37 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	return akCertResponse, nil
 }
 
-func getTpmPcrs(metadata [][]byte) ([]int, error) {
+func getTpmPcrs(c *Config) ([]int, error) {
 
 	var osMan ar.OsManifest
 	var rtmMan ar.RtmManifest
 
-	for _, m := range metadata {
+	for i, m := range c.Metadata {
 
-		jws, err := jose.ParseSigned(string(m))
+		// Extract plain payload (i.e. the manifest/description itself)
+		payload, err := c.Serializer.GetPayload(m)
 		if err != nil {
-			log.Warnf("Failed to parse Manifest: %v", err)
+			log.Warnf("Failed to parse metadata object %v: %v", i, err)
 			continue
 		}
 
-		payload := jws.UnsafePayloadWithoutVerification()
-
 		// Unmarshal the Type field of the metadata to determine the type
 		t := new(ar.Type)
-		err = json.Unmarshal(payload, t)
+		err = c.Serializer.Unmarshal(payload, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue
 		}
 
 		if t.Type == "RTM Manifest" {
-			jws, err = jose.ParseSigned(string(m))
+			err = c.Serializer.Unmarshal(payload, &rtmMan)
 			if err != nil {
-				log.Warn("Failed to parse RTM Manifest - ", err)
-			} else {
-				data := jws.UnsafePayloadWithoutVerification()
-				err = json.Unmarshal(data, &rtmMan)
-				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal data from RTM Manifest: %v", err)
-				}
+				return nil, fmt.Errorf("failed to unmarshal data from RTM Manifest: %v", err)
 			}
 		} else if t.Type == "OS Manifest" {
-			jws, err = jose.ParseSigned(string(m))
+			err = c.Serializer.Unmarshal(payload, &osMan)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse OS Manifest: %v", err)
-			} else {
-				data := jws.UnsafePayloadWithoutVerification()
-				err = json.Unmarshal(data, &osMan)
-				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal data from OS Manifest: %v", err)
-				}
+				return nil, fmt.Errorf("failed to unmarshal data from OS Manifest: %v", err)
 			}
 		}
 	}
@@ -853,22 +847,21 @@ func getTpmPcrs(metadata [][]byte) ([]int, error) {
 	return pcrs, nil
 }
 
-func getTpmCertParams(metadata [][]byte) ([][]byte, error) {
+func getTpmCertParams(c *Config) ([][]byte, error) {
 
 	certParams := make([][]byte, 0)
-	for _, m := range metadata {
+	for i, m := range c.Metadata {
 
-		jws, err := jose.ParseSigned(string(m))
+		// Extract plain payload (i.e. the manifest/description itself)
+		payload, err := c.Serializer.GetPayload(m)
 		if err != nil {
-			log.Warnf("Failed to parse Manifest: %v", err)
+			log.Warnf("Failed to parse metadata object %v: %v", i, err)
 			continue
 		}
 
-		payload := jws.UnsafePayloadWithoutVerification()
-
 		// Unmarshal the Type field of the metadata file to determine the type
 		t := new(ar.Type)
-		err = json.Unmarshal(payload, t)
+		err = c.Serializer.Unmarshal(payload, t)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue

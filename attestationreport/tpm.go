@@ -196,7 +196,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, verifications []Verification) (map[in
 				if cmp := bytes.Compare(calculatedHash, measurement); cmp == 0 {
 					pcrRes.Validation.Success = true
 				} else {
-					msg := fmt.Sprintf("PCR value did not match expectation: %v vs. %v", hce.Sha256[0], hex.EncodeToString(calculatedHash))
+					msg := fmt.Sprintf("PCR value did not match expectation: %v vs. %v", hex.EncodeToString(hce.Sha256[0]), hex.EncodeToString(calculatedHash))
 					pcrRes.Validation.setFalseMulti(&msg)
 					ok = false
 				}
