@@ -54,7 +54,6 @@ import (
 	"github.com/google/go-tpm/tpm2"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/square/go-jose.v2"
 )
 
 type config struct {
@@ -67,6 +66,7 @@ type config struct {
 	TpmEkCertDb        string `json:"tpmEkCertDb,omitempty"`
 	VcekOfflineCaching bool   `json:"vcekOfflineCaching,omitempty"`
 	VcekCacheFolder    string `json:"vcekCacheFolder,omitempty"`
+	Serialization      string `json:"serialization"`
 }
 
 type datastore struct {
@@ -83,6 +83,7 @@ type datastore struct {
 	VcekOfflineCaching bool
 	VcekCacheFolder    string
 	Vceks              map[snpdriver.VcekRequest][]byte
+	Serializer         ar.Serializer
 }
 
 const (
@@ -106,6 +107,7 @@ func printConfig(c *config, configFile string) {
 	log.Info("\tTPM EK DB              : ", getFilePath(c.TpmEkCertDb, filepath.Dir(configFile)))
 	log.Info("\tVCEK Offline Caching   : ", c.VcekOfflineCaching)
 	log.Info("\tVCEK Cache Folder      : ", getFilePath(c.VcekCacheFolder, filepath.Dir(configFile)))
+	log.Info("\tSerialization          : ", c.Serialization)
 }
 
 func readConfig(configFile string) (*config, error) {
@@ -160,34 +162,20 @@ func loadCert(certFile string) (*x509.Certificate, []byte, error) {
 
 func parseCertParams(certParams []byte) (*ar.CertParams, error) {
 
-	roots := cryptoX509.NewCertPool()
-	ok := roots.AppendCertsFromPEM(dataStore.CaCertPem)
+	// append certificates from datastore
+	roots, err := ar.LoadCert(dataStore.CaCertPem)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load CA certificate: %v", err)
+	}
+
+	_, payload, ok := dataStore.Serializer.VerifyToken(certParams, []*cryptoX509.Certificate{roots})
 	if !ok {
-		return nil, errors.New("failed to create cert pool")
-	}
-	opts := cryptoX509.VerifyOptions{
-		KeyUsages: []cryptoX509.ExtKeyUsage{cryptoX509.ExtKeyUsageAny},
-		Roots:     roots,
-	}
-
-	jwsData, err := jose.ParseSigned(string(certParams))
-	if err != nil {
-		return nil, fmt.Errorf("verifyJws: Data could not be parsed - %w", err)
-	}
-
-	certs, err := jwsData.Signatures[0].Protected.Certificates(opts)
-	if err != nil {
-		return nil, fmt.Errorf("certificate chain for Cert Params: %w", err)
-	}
-
-	payload, err := jwsData.Verify(certs[0][0].PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("signature of Cert Params: %w", err)
+		return nil, errors.New("Verification of Attestation Report Signatures failed")
 	}
 
 	// Unmarshal the certificate parameters
 	cp := new(ar.CertParams)
-	if err := json.Unmarshal(payload, cp); err != nil {
+	if err := dataStore.Serializer.Unmarshal(payload, cp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cert params: %w", err)
 	}
 
@@ -965,6 +953,7 @@ func main() {
 		return
 	}
 
+	// Read the configuration file
 	config, err := readConfig(*configFile)
 	if err != nil {
 		log.Error(err)
@@ -972,12 +961,23 @@ func main() {
 	}
 	printConfig(config, *configFile)
 
+	// Configure if EK certificate chains should be validated
 	dataStore.VerifyEkCert = config.VerifyEkCert
-
 	if dataStore.VerifyEkCert {
 		dataStore.DbPath = getFilePath(config.TpmEkCertDb, filepath.Dir(*configFile))
 	} else {
 		log.Warn("Verification of EK certificate chain turned off via Config. Use this for testing only")
+	}
+
+	// Configure serializer
+	if strings.EqualFold(config.Serialization, "JSON") {
+		log.Info("Using JSON/JWS as serialization interface")
+		dataStore.Serializer = ar.JsonSerializer{}
+	} else if strings.EqualFold(config.Serialization, "CBOR") {
+		log.Info("Using CBOR/COSE as serialization interface")
+		dataStore.Serializer = ar.CborSerializer{}
+	} else {
+		log.Error("Serializer %v not supported (only 'json' and 'cbor')", config.Serialization)
 	}
 
 	// Load CA private key and certificate for signing the AKs

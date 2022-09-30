@@ -166,31 +166,31 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 }
 
 // VerifyToken verifies signatures and certificate chains for JWS tokens
-func (s JsonSerializer) VerifyToken(data []byte, cas []*x509.Certificate) (JwsResult, []byte, bool) {
+func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (JwsResult, []byte, bool) {
 
-	var roots *x509.CertPool
+	var rootpool *x509.CertPool
 	var err error
 	result := JwsResult{}
 	ok := true
 
-	if len(cas) == 0 {
+	if len(roots) == 0 {
 		log.Debug("Using system certificate pool in absence of provided root certifcates")
-		roots, err = x509.SystemCertPool()
+		rootpool, err = x509.SystemCertPool()
 		if err != nil {
 			msg := "Failed to setup trusted cert pool with system certificate pool"
 			result.Summary.setFalseMulti(&msg)
 			return result, nil, false
 		}
 	} else {
-		roots = x509.NewCertPool()
-		for _, cert := range cas {
-			roots.AddCert(cert)
+		rootpool = x509.NewCertPool()
+		for _, cert := range roots {
+			rootpool.AddCert(cert)
 		}
 	}
 
 	opts := x509.VerifyOptions{
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-		Roots:     roots,
+		Roots:     rootpool,
 	}
 
 	jwsData, err := jose.ParseSigned(string(data))
@@ -219,6 +219,7 @@ func (s JsonSerializer) VerifyToken(data []byte, cas []*x509.Certificate) (JwsRe
 			continue
 		}
 		if err == nil {
+			// TODO log whole certificate chains including all fields
 			result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
 			result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
 			result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)

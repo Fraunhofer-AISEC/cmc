@@ -66,13 +66,12 @@ type MeasurementResult struct {
 // Device Description in the Attestation Report
 type DevDescResult struct {
 	Summary             ResultMulti       `json:"resultSummary"`
-	CorrectRtm          Result            `json:"correctRtm"`               // Result for comparison of RTM in the Device Description and the provided RTM Manifest
-	CorrectOs           Result            `json:"correctOs"`                // Result for comparison of OS in the Device Description and the provided OS Manifest
-	CorrectApps         ResultMulti       `json:"correctApps"`              // Result for comparison of App List in the Device Description and the provided App Manifest
-	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`       // Result for consistency check for mapping from OS Manifest to RTM Manifest
-	OsAppsCompatibility ResultMulti       `json:"osAppCompatibility"`       // Result for consistency check for mapping from App Manifests to OS Manifest
-	SignatureCheck      []SignatureResult `json:"signatureValidation"`      // Results for validation of the Device Description Signature(s) and the used certificates
-	OpAffiliation       Result            `json:"operatorAffiliationCheck"` // Result for comparison of the device and the operator affiliation (based on "organization" field in the identity certificates)
+	CorrectRtm          Result            `json:"correctRtm"`          // Result for comparison of RTM in the Device Description and the provided RTM Manifest
+	CorrectOs           Result            `json:"correctOs"`           // Result for comparison of OS in the Device Description and the provided OS Manifest
+	CorrectApps         ResultMulti       `json:"correctApps"`         // Result for comparison of App List in the Device Description and the provided App Manifest
+	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`  // Result for consistency check for mapping from OS Manifest to RTM Manifest
+	OsAppsCompatibility ResultMulti       `json:"osAppCompatibility"`  // Result for consistency check for mapping from App Manifests to OS Manifest
+	SignatureCheck      []SignatureResult `json:"signatureValidation"` // Results for validation of the Device Description Signature(s) and the used certificates
 }
 
 // TpmMeasurementResults represents the results of the validation

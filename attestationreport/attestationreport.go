@@ -171,10 +171,10 @@ type Verification struct {
 // AppDescription represents the attestation report
 // element of type 'App Description'
 type AppDescription struct {
-	Type        string              `json:"type"`
-	Name        string              `json:"name"`
-	AppManifest string              `json:"appManifest" cbor:"0,keyasint,omitempty"` // Links to App Manifest.Name
-	External    []ExternalInterface `json:"externalConnections" cbor:"0,keyasint"`
+	Type        string              `json:"type"  cbor:"0,keyasint,omitempty`
+	Name        string              `json:"name"  cbor:"1,keyasint,omitempty`
+	AppManifest string              `json:"appManifest" cbor:"2,keyasint,omitempty"` // Links to App Manifest.Name
+	External    []ExternalInterface `json:"externalConnections" cbor:"3,keyasint"`
 }
 
 // InternalConnection represents the attestation report
@@ -190,38 +190,38 @@ type InternalConnection struct {
 // ExternalInterface represents the attestation report
 // element of type 'External Interface'
 type ExternalInterface struct {
-	Type        string `json:"type"  cbor:"0,keyasint"`
-	AppEndpoint string `json:"appEndpoint"  cbor:"1,keyasint"` // Links to AppManifest.Endpoint
-	Interface   string `json:"interface"  cbor:"2,keyasint"`   // Links to AppDescription.Name
-	Port        int    `json:"port"  cbor:"3,keyasint"`        // Links to App Manifest.Endpoint
+	Type        string `json:"type" cbor:"0,keyasint"`
+	AppEndpoint string `json:"appEndpoint" cbor:"1,keyasint"` // Links to AppManifest.Endpoint
+	Interface   string `json:"interface" cbor:"2,keyasint"`   // Links to AppDescription.Name
+	Port        int    `json:"port" cbor:"3,keyasint"`        // Links to App Manifest.Endpoint
 }
 
 // AppManifest represents the attestation report
 // element of type 'App Manifest'
 type AppManifest struct {
-	Type               string         `json:"type"  cbor:"0,keyasint"`
-	Name               string         `json:"name"  cbor:"1,keyasint"`
+	Type               string         `json:"type" cbor:"0,keyasint"`
+	Name               string         `json:"name" cbor:"1,keyasint"`
 	DevCommonName      string         `json:"developerCommonName"  cbor:"2,keyasint"`
-	Version            string         `json:"version"  cbor:"3,keyasint"`
-	Oss                []string       `json:"oss"  cbor:"4,keyasint"` // Links to OsManifest.Name
-	Description        string         `json:"description"  cbor:"5,keyasint"`
-	CertificationLevel int            `json:"certificationLevel"  cbor:"6,keyasint"`
-	Validity           Validity       `json:"validity"  cbor:"7,keyasint"`
-	Verifications      []Verification `json:"verifications"  cbor:"8,keyasint"`
+	Version            string         `json:"version" cbor:"3,keyasint"`
+	Oss                []string       `json:"oss" cbor:"4,keyasint"` // Links to OsManifest.Name
+	Description        string         `json:"description" cbor:"5,keyasint"`
+	CertificationLevel int            `json:"certificationLevel" cbor:"6,keyasint"`
+	Validity           Validity       `json:"validity" cbor:"7,keyasint"`
+	Verifications      []Verification `json:"verifications" cbor:"8,keyasint"`
 }
 
 // OsManifest represents the attestation report
 // element of type 'OsManifest'
 type OsManifest struct {
-	Type               string         `json:"type"  cbor:"0,keyasint"`
-	Name               string         `json:"name"  cbor:"1,keyasint"`
-	DevCommonName      string         `json:"developerCommonName"  cbor:"2,keyasint"`
-	Version            string         `json:"version"  cbor:"3,keyasint"`
-	Rtms               []string       `json:"rtms"  cbor:"4,keyasint"` // Links to Type RtmManifest.Name
-	Description        string         `json:"description"  cbor:"5,keyasint"`
-	CertificationLevel int            `json:"certificationLevel"  cbor:"6,keyasint"`
-	Validity           Validity       `json:"validity"  cbor:"7,keyasint"`
-	Verifications      []Verification `json:"verifications"  cbor:"8,keyasint"`
+	Type               string         `json:"type" cbor:"0,keyasint"`
+	Name               string         `json:"name" cbor:"1,keyasint"`
+	DevCommonName      string         `json:"developerCommonName" cbor:"2,keyasint"`
+	Version            string         `json:"version" cbor:"3,keyasint"`
+	Rtms               []string       `json:"rtms" cbor:"4,keyasint"` // Links to Type RtmManifest.Name
+	Description        string         `json:"description" cbor:"5,keyasint"`
+	CertificationLevel int            `json:"certificationLevel" cbor:"6,keyasint"`
+	Validity           Validity       `json:"validity" cbor:"7,keyasint"`
+	Verifications      []Verification `json:"verifications" cbor:"8,keyasint"`
 }
 
 // RtmManifest represents the attestation report
@@ -233,8 +233,8 @@ type RtmManifest struct {
 	Version            string         `json:"version" cbor:"3,keyasint"`
 	Description        string         `json:"description" cbor:"4,keyasint"`
 	CertificationLevel int            `json:"certificationLevel" cbor:"5,keyasint"`
-	Validity           Validity       `json:"validity" cbor:"5,keyasint"`
-	Verifications      []Verification `json:"verifications" cbor:"6,keyasint"`
+	Validity           Validity       `json:"validity" cbor:"6,keyasint"`
+	Verifications      []Verification `json:"verifications" cbor:"7,keyasint"`
 }
 
 // DeviceDescription represents the attestation report
@@ -640,7 +640,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	roots, err := LoadCerts(casPem)
 	if err != nil {
-		log.Trace("Loading PEM encoded CA certificate(s) failed")
+		log.Warn("Loading PEM encoded CA certificate(s) failed")
 		result.Success = false
 		return false, &ar
 	}
@@ -707,6 +707,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.Success = false
 	} else {
 		result.OsResult.Name = ar.OsManifest.Name
+		result.RtmResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
 		result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
 		if !result.OsResult.ValidityCheck.Success {
 			result.OsResult.Summary.Success = false

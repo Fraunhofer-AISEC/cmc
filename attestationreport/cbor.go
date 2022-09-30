@@ -19,6 +19,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
@@ -104,6 +105,12 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Jws
 
 	// TODO JwsResult (Naming)
 	result := JwsResult{}
+	ok := true
+
+	if len(roots) == 0 {
+		log.Warnf("No CAs specified. Using system cert pool not implemented for CBOR")
+		return result, nil, false
+	}
 
 	// create a sign message from a raw COSE_Sign payload
 	var msgToVerify cose.SignMessage
@@ -116,46 +123,64 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Jws
 	// Extract leaf certificates, use its public keys for the verifiers and create verifiers
 	if len(msgToVerify.Signatures) == 0 {
 		log.Warnf("failed to verify COSE: no signatures present")
+		return result, nil, false
 	}
 	log.Tracef("Number of COSE signatures: %v", len(msgToVerify.Signatures))
 	verifiers := make([]cose.Verifier, 0)
-	for _, sig := range msgToVerify.Signatures {
+	for i, sig := range msgToVerify.Signatures {
+		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
 		x5Chain := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
 		certChain := make([]*x509.Certificate, 0, len(x5Chain))
 		for _, rawCert := range x5Chain {
-			cert, ok := rawCert.([]byte)
-			if !ok {
-				log.Warnf("failed to decode certificate chain")
-				return result, nil, false
+			cert, okCert := rawCert.([]byte)
+			if !okCert {
+				msg := "failed to decode certificate chain"
+				result.SignatureCheck[i].CertCheck.setFalse(&msg)
+				ok = false
+				continue
 			}
 			x509Cert, err := x509.ParseCertificate(cert)
 			if err != nil {
-				log.Warnf("failed to parse leaf certificate: %v", err)
-				return result, nil, false
+				msg := fmt.Sprintf("failed to parse leaf certificate: %v", err)
+				result.SignatureCheck[i].CertCheck.setFalse(&msg)
+				ok = false
+				continue
 			}
 
 			certChain = append(certChain, x509Cert)
 		}
 
-		// TODO Verify Cert Chain, error handling
 		err := verifyCertChainX509(certChain, roots)
 		if err != nil {
-			log.Warnf("failed to verify certificate chain")
-			return result, nil, false
+			msg := fmt.Sprintf("failed to verify certificate chain: %v", err)
+			result.SignatureCheck[i].CertCheck.setFalse(&msg)
+			ok = false
+			continue
 		}
 
-		publicKey, ok := certChain[0].PublicKey.(*ecdsa.PublicKey)
-		if !ok {
-			log.Warnf("failed to convert certificate key to ecdsa key")
-			return result, nil, false
+		// TODO log whole certificate chain including all fields
+		result.SignatureCheck[i].Name = certChain[0].Subject.CommonName
+		result.SignatureCheck[i].Organization = certChain[0].Subject.Organization
+		result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certChain[0].SubjectKeyId)
+		result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certChain[0].AuthorityKeyId)
+		result.SignatureCheck[i].CertCheck.Success = true
+
+		publicKey, okKey := certChain[0].PublicKey.(*ecdsa.PublicKey)
+		if !okKey {
+			msg := fmt.Sprintf("Failed to extract public key from certificate: %v", err)
+			result.SignatureCheck[i].Signature.setFalse(&msg)
+			ok = false
+			continue
 		}
 
 		// create a verifier from a trusted private key
 		verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 		if err != nil {
-			log.Warnf("failed to create verifier: %v", err)
-			return result, nil, false
+			msg := fmt.Sprintf("Failed to create verifier: %v", err)
+			result.SignatureCheck[i].Signature.setFalse(&msg)
+			ok = false
+			continue
 		}
 
 		verifiers = append(verifiers, verifier)
@@ -163,9 +188,20 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Jws
 
 	err = msgToVerify.Verify(nil, verifiers...)
 	if err != nil {
-		log.Warnf("error verifying cbor: %v", err)
+		msg := fmt.Sprintf("Error verifying cbor signature: %v", err)
+		// Can only be set for all signatures here
+		for i := range result.SignatureCheck {
+			result.SignatureCheck[i].Signature.setFalse(&msg)
+		}
 		return result, nil, false
+	} else {
+		// Can only be set for all signatures here
+		for i := range result.SignatureCheck {
+			result.SignatureCheck[i].Signature.Success = true
+		}
 	}
+
+	result.Summary.Success = ok
 
 	return result, msgToVerify.Payload, true
 }

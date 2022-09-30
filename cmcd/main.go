@@ -128,12 +128,23 @@ func main() {
 	var signer ar.Signer
 	var serializer ar.Serializer
 
+	if strings.EqualFold(c.Serialization, "JSON") {
+		log.Info("Using JSON/JWS as serialization interface")
+		serializer = jsonSerializer
+	}
+
+	if strings.EqualFold(c.Serialization, "CBOR") {
+		log.Info("Using CBOR/COSE as serialization interface")
+		serializer = cborSerializer
+	}
+
 	if strings.EqualFold(c.SigningInterface, "SW") {
 		log.Info("Using SW as Signing Interface")
 		swConfig := swdriver.Config{
 			Url:         c.ProvServerAddr,
 			StoragePath: path.Join(c.LocalPath, "internal"),
 			Metadata:    metadata,
+			Serializer:  serializer,
 		}
 		sw, err = swdriver.NewSwDriver(swConfig)
 		if err != nil {
@@ -152,6 +163,7 @@ func main() {
 			Metadata:    metadata,
 			UseIma:      c.UseIma,
 			ImaPcr:      c.ImaPcr,
+			Serializer:  serializer,
 		}
 
 		tpm, err = tpmdriver.NewTpm(tpmConfig)
@@ -184,16 +196,6 @@ func main() {
 		}
 
 		measurements = append(measurements, snp)
-	}
-
-	if strings.EqualFold(c.Serialization, "JSON") {
-		log.Info("Using JSON/JWS as serialization interface")
-		serializer = jsonSerializer
-	}
-
-	if strings.EqualFold(c.Serialization, "CBOR") {
-		log.Info("Using CBOR/COSE as serialization interface")
-		serializer = cborSerializer
 	}
 
 	serverConfig := &ServerConfig{
