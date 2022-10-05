@@ -17,7 +17,5 @@
 			"name": "java -jar app.jar",
 			"sha256": "727ab0052461f505c8d6ef2803a3d685ef6efdcb83baece2c0e2109dbed51e74"
 		}
-	],
-	"endpoints" : [
 	]
 }
