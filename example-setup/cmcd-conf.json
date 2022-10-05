@@ -9,5 +9,5 @@
     "imaPcr": 10,
     "keyConfig": "EC256",
     "policies": "policies.json",
-    "serialization": "cbor"
+    "serialization": "json"
 }
