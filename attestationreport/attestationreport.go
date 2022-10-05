@@ -60,7 +60,7 @@ type Serializer interface {
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
 	Sign(report []byte, signer Signer) (bool, []byte)
-	VerifyToken(data []byte, roots []*x509.Certificate) (JwsResult, []byte, bool)
+	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
 }
 
 type Policies interface{}
@@ -646,8 +646,8 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	//Validate Attestation Report signature
-	jwsValRes, payload, ok := s.VerifyToken([]byte(attestationReport), roots)
-	result.ReportSignature = jwsValRes.SignatureCheck
+	tokenRes, payload, ok := s.VerifyToken([]byte(attestationReport), roots)
+	result.ReportSignature = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of Attestation Report Signatures failed")
 		result.Success = false
@@ -671,9 +671,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	ar.Nonce = arPacked.Nonce
 
 	// Validate and unpack Rtm Manifest
-	jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.RtmManifest), roots)
-	result.RtmResult.Summary = jwsValRes.Summary
-	result.RtmResult.SignatureCheck = jwsValRes.SignatureCheck
+	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.RtmManifest), roots)
+	result.RtmResult.Summary = tokenRes.Summary
+	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of RTM Manifest Signatures failed")
 		result.Success = false
@@ -693,9 +693,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack OS Manifest
-	jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.OsManifest), roots)
-	result.OsResult.Summary = jwsValRes.Summary
-	result.OsResult.SignatureCheck = jwsValRes.SignatureCheck
+	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.OsManifest), roots)
+	result.OsResult.Summary = tokenRes.Summary
+	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of OS Manifest Signatures failed")
 		result.Success = false
@@ -719,9 +719,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	for i, amSigned := range arPacked.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
-		jwsValRes, payload, ok = s.VerifyToken([]byte(amSigned), roots)
-		result.AppResults[i].Summary = jwsValRes.Summary
-		result.AppResults[i].SignatureCheck = jwsValRes.SignatureCheck
+		tokenRes, payload, ok = s.VerifyToken([]byte(amSigned), roots)
+		result.AppResults[i].Summary = tokenRes.Summary
+		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
 			log.Trace("Verification of App Manifest Signatures failed")
 			result.Success = false
@@ -748,10 +748,10 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	// Validate and unpack Company Description if present
 	if arPacked.CompanyDescription != nil {
-		jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.CompanyDescription), roots)
+		tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.CompanyDescription), roots)
 		result.CompDescResult = &CompDescResult{}
-		result.CompDescResult.Summary = jwsValRes.Summary
-		result.CompDescResult.SignatureCheck = jwsValRes.SignatureCheck
+		result.CompDescResult.Summary = tokenRes.Summary
+		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
 			log.Trace("Verification of Company Description Signatures failed")
 			result.Success = false
@@ -775,9 +775,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	// Validate and unpack Device Description
-	jwsValRes, payload, ok = s.VerifyToken([]byte(arPacked.DeviceDescription), roots)
-	result.DevDescResult.Summary = jwsValRes.Summary
-	result.DevDescResult.SignatureCheck = jwsValRes.SignatureCheck
+	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.DeviceDescription), roots)
+	result.DevDescResult.Summary = tokenRes.Summary
+	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Verification of Device Description Signatures failed")
 		result.Success = false
