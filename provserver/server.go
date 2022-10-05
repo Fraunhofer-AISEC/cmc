@@ -977,7 +977,7 @@ func main() {
 		log.Info("Using CBOR/COSE as serialization interface")
 		dataStore.Serializer = ar.CborSerializer{}
 	} else {
-		log.Error("Serializer %v not supported (only 'json' and 'cbor')", config.Serialization)
+		log.Errorf("Serializer %v not supported (only 'json' and 'cbor')", config.Serialization)
 	}
 
 	// Load CA private key and certificate for signing the AKs
