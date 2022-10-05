@@ -1,0 +1,23 @@
+{
+	"type" : "App Manifest",
+	"name" : "de.fhg.aisec.app",
+	"developerCommonName" : "Test Developer",
+	"version" : "20210717200000",
+	"validity" : {
+		"notBefore": "20210717200000",
+		"notAfter": "20240717200000"
+	},
+	"oss" : [ "de.fhg.aisec.ids.os.drtm"
+	],
+	"description" : "Test App",
+	"certificationLevel" : 1,
+	"verifications" : [
+		{
+			"type": "Software Verification",
+			"name": "java -jar app.jar",
+			"sha256": "727ab0052461f505c8d6ef2803a3d685ef6efdcb83baece2c0e2109dbed51e74"
+		}
+	],
+	"endpoints" : [
+	]
+}
