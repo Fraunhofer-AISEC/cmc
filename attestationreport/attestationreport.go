@@ -171,8 +171,8 @@ type Verification struct {
 // AppDescription represents the attestation report
 // element of type 'App Description'
 type AppDescription struct {
-	Type        string              `json:"type"  cbor:"0,keyasint,omitempty`
-	Name        string              `json:"name"  cbor:"1,keyasint,omitempty`
+	Type        string              `json:"type" cbor:"0,keyasint,omitempty"`
+	Name        string              `json:"name" cbor:"1,keyasint,omitempty"`
 	AppManifest string              `json:"appManifest" cbor:"2,keyasint,omitempty"` // Links to App Manifest.Name
 	External    []ExternalInterface `json:"externalConnections" cbor:"3,keyasint"`
 }
