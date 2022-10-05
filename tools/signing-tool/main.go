@@ -21,8 +21,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"flag"
-	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -67,7 +66,7 @@ func main() {
 	}
 
 	// Load metadata
-	data, err := ioutil.ReadFile(*metadata)
+	data, err := os.ReadFile(*metadata)
 	if err != nil {
 		log.Fatalf("failed to read metadata file %v", *metadata)
 	}
@@ -76,7 +75,7 @@ func main() {
 	s1 := strings.Split(*keyFiles, ",")
 	keys := make([]crypto.PrivateKey, 0)
 	for _, keyFile := range s1 {
-		keyPem, err := ioutil.ReadFile(keyFile)
+		keyPem, err := os.ReadFile(keyFile)
 		if err != nil {
 			log.Fatalf("failed to read key file %v", err)
 		}
@@ -108,7 +107,7 @@ func main() {
 		certFiles := strings.Split(chain, ",")
 		for _, certFile := range certFiles {
 
-			certPem, err := ioutil.ReadFile(certFile)
+			certPem, err := os.ReadFile(certFile)
 			if err != nil {
 				log.Fatalf("failed to read certificate(s) file %v", err)
 			}
@@ -150,26 +149,10 @@ func main() {
 	log.Trace("Signed metadata")
 
 	log.Tracef("Writing metadata to file %v", *outputFile)
-	err = ioutil.WriteFile(*outputFile, signedData, 0644)
+	err = os.WriteFile(*outputFile, signedData, 0644)
 	if err != nil {
 		log.Fatalf("failed to write output file: %v", err)
 	}
 
 	log.Tracef("Finished")
-}
-
-// TODO use from Attestation Report Module or define generic module
-func loadCerts(data []byte) ([]*x509.Certificate, error) {
-	certs := make([]*x509.Certificate, 0)
-	input := data
-
-	for block, rest := pem.Decode(input); block != nil; block, rest = pem.Decode(rest) {
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
-		}
-		certs = append(certs, cert)
-	}
-	return certs, nil
 }

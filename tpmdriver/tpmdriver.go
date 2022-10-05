@@ -25,7 +25,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -520,16 +520,16 @@ func saveTpmData(paths *Paths, certs *Certs) error {
 	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(certs.TLSCert))
 	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(certs.DeviceSubCa))
 	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(certs.Ca))
-	if err := ioutil.WriteFile(paths.AkCert, certs.Ak, 0644); err != nil {
+	if err := os.WriteFile(paths.AkCert, certs.Ak, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.AkCert, err)
 	}
-	if err := ioutil.WriteFile(paths.TLSCert, certs.TLSCert, 0644); err != nil {
+	if err := os.WriteFile(paths.TLSCert, certs.TLSCert, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
-	if err := ioutil.WriteFile(paths.DeviceSubCa, certs.DeviceSubCa, 0644); err != nil {
+	if err := os.WriteFile(paths.DeviceSubCa, certs.DeviceSubCa, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
 	}
-	if err := ioutil.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
+	if err := os.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
 	}
 
@@ -538,7 +538,7 @@ func saveTpmData(paths *Paths, certs *Certs) error {
 	if err != nil {
 		return fmt.Errorf("activate credential failed: Marshal AK returned %v", err)
 	}
-	if err := ioutil.WriteFile(paths.Ak, akBytes, 0644); err != nil {
+	if err := os.WriteFile(paths.Ak, akBytes, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ak, err)
 	}
 
@@ -547,7 +547,7 @@ func saveTpmData(paths *Paths, certs *Certs) error {
 	if err != nil {
 		return fmt.Errorf("activate credential failed: Marshal TLS Key returned %v", err)
 	}
-	if err := ioutil.WriteFile(paths.TLSKey, tlsKeyBytes, 0644); err != nil {
+	if err := os.WriteFile(paths.TLSKey, tlsKeyBytes, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSKey, err)
 	}
 
@@ -562,7 +562,7 @@ func loadTpmKeys(akFile, tlsKeyFile string) error {
 
 	log.Debug("Loading TPM keys..")
 
-	akBytes, err := ioutil.ReadFile(akFile)
+	akBytes, err := os.ReadFile(akFile)
 	if err != nil {
 		return fmt.Errorf("failed to read file %v: %v", akFile, err)
 	}
@@ -573,7 +573,7 @@ func loadTpmKeys(akFile, tlsKeyFile string) error {
 
 	log.Debug("Loaded AK")
 
-	tlsKeyBytes, err := ioutil.ReadFile(tlsKeyFile)
+	tlsKeyBytes, err := os.ReadFile(tlsKeyFile)
 	if err != nil {
 		return fmt.Errorf("failed to read file %v: %v", tlsKeyFile, err)
 	}
@@ -592,22 +592,22 @@ func loadTpmCerts(paths *Paths) (Certs, error) {
 	var cert []byte
 	var err error
 	// AK
-	if cert, err = ioutil.ReadFile(paths.AkCert); err != nil {
+	if cert, err = os.ReadFile(paths.AkCert); err != nil {
 		return certs, fmt.Errorf("failed to load AK cert from %v: %v", paths.AkCert, err)
 	}
 	certs.Ak = cert
 	// TLS
-	if cert, err = ioutil.ReadFile(paths.TLSCert); err != nil {
+	if cert, err = os.ReadFile(paths.TLSCert); err != nil {
 		return certs, fmt.Errorf("failed to load TLS cert from %v: %v", paths.TLSCert, err)
 	}
 	certs.TLSCert = cert
 	//SubCA
-	if cert, err = ioutil.ReadFile(paths.DeviceSubCa); err != nil {
+	if cert, err = os.ReadFile(paths.DeviceSubCa); err != nil {
 		return certs, fmt.Errorf("failed to load Device Sub CA cert from %v: %v", paths.DeviceSubCa, err)
 	}
 	certs.DeviceSubCa = cert
 	//CA
-	if cert, err = ioutil.ReadFile(paths.Ca); err != nil {
+	if cert, err = os.ReadFile(paths.Ca); err != nil {
 		return certs, fmt.Errorf("failed to load CA cert from %v: %v", paths.Ca, err)
 	}
 	certs.Ca = cert
@@ -722,7 +722,7 @@ func sendParams(acRequest AcRequest, url string) (*AcResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error sending params - %v", err)
 	}
@@ -762,14 +762,14 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		log.Warn("Request failed: body: ", string(b))
 		return AkCertResponse{}, fmt.Errorf("request failed: HTTP Server responded '%v'", resp.Status)
 	}
 
 	log.Debug("HTTP Response OK")
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return AkCertResponse{}, fmt.Errorf("error sending params - %v", err)
 	}

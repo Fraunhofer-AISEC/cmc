@@ -18,7 +18,7 @@ package provclient
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -81,7 +81,7 @@ func ProvisionMetadata(c *Config) ([][]byte, error) {
 // LoadMetadata loads the metadata (manifests and descriptions) from the file system
 func LoadMetadata(dir string) (metadata [][]byte, err error) {
 	// Read number of files
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read metadata folder: %v", err)
 	}
@@ -98,7 +98,7 @@ func LoadMetadata(dir string) (metadata [][]byte, err error) {
 			}
 		}
 		log.Tracef("Reading file %v", file)
-		data, err := ioutil.ReadFile(file)
+		data, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %v: %v", file, err)
 		}
@@ -115,7 +115,7 @@ func StoreMetadata(data map[string][]byte, localPath string) error {
 		}
 	} else {
 		log.Tracef("Removing old metadata in %v before fetching new metadata from provisioning server", localPath)
-		dir, err := ioutil.ReadDir(localPath)
+		dir, err := os.ReadDir(localPath)
 		if err != nil {
 			return fmt.Errorf("failed to read local storage directory %v: %v", localPath, err)
 		}
@@ -137,7 +137,7 @@ func StoreMetadata(data map[string][]byte, localPath string) error {
 	for filename, content := range data {
 		file := filepath.Join(localPath, filename)
 		log.Debug("Writing file: ", file)
-		err := ioutil.WriteFile(file, content, 0644)
+		err := os.WriteFile(file, content, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write file: %v", err)
 		}
@@ -161,7 +161,7 @@ func FetchMetadata(addr string) (map[string][]byte, error) {
 		return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
 	}
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
 	}
@@ -209,7 +209,7 @@ func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
 		if strings.Compare(resp.Header.Values("Content-Type")[0], "text/html; charset=utf-8") == 0 {
 
 			// Content is a subdirectory, parse recursively
-			content, err := ioutil.ReadAll(resp.Body)
+			content, err := io.ReadAll(resp.Body)
 			if err != nil {
 				log.Error("Failed to read response")
 			}
@@ -227,7 +227,7 @@ func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
 		} else {
 
 			// Content is a file, gather content
-			content, err := ioutil.ReadAll(resp.Body)
+			content, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
 			}

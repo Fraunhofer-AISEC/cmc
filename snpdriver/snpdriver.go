@@ -30,7 +30,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 
 	"net/http"
 	"unsafe"
@@ -180,7 +180,7 @@ func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("HTTP Response Status: %v (%v)", resp.StatusCode, resp.Status)
 	}
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("failed to read HTTP body: %w", err)
 	}
@@ -226,14 +226,14 @@ func fetchVcek(url string, req VcekRequest) (VcekResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		log.Warn("Request failed: body: ", string(b))
 		return VcekResponse{}, fmt.Errorf("request Failed: HTTP Server responded '%v'", resp.Status)
 	}
 
 	log.Debug("HTTP Response OK")
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return VcekResponse{}, fmt.Errorf("error sending params - %v", err)
 	}

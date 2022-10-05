@@ -18,7 +18,7 @@ package main
 // Install github packages with "go get [url]"
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -52,7 +52,7 @@ type config struct {
 func loadConfig(configFile string) (*config, error) {
 
 	log.Infof("Using Config File %v", configFile)
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cmcd config file %v: %v", configFile, err)
 	}

@@ -25,7 +25,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -61,7 +61,7 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, addr string
 	var conf *tls.Config
 
 	// get root CA cert
-	rootCA, err := ioutil.ReadFile(rootCACertFile)
+	rootCA, err := os.ReadFile(rootCACertFile)
 	if err != nil {
 		log.Error(err)
 		log.Fatal("[Testclient] Could not find root CA cert file")
@@ -154,14 +154,14 @@ func generate(addr, reportFile, nonceFile string) {
 	}
 
 	// Save the Attestation Report for the verifier
-	err = ioutil.WriteFile(reportFile, response.GetAttestationReport(), 0644)
+	err = os.WriteFile(reportFile, response.GetAttestationReport(), 0644)
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", reportFile, err)
 	}
 	fmt.Println("Wrote attestation report: ", reportFile)
 
 	// Save the nonce for the verifier
-	ioutil.WriteFile(nonceFile, nonce, 0644)
+	os.WriteFile(nonceFile, nonce, 0644)
 	if err != nil {
 		log.Fatalf("Failed to save nonce as %v: %v", nonceFile, err)
 	}
@@ -183,17 +183,17 @@ func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []b
 	client := ci.NewCMCServiceClient(conn)
 
 	// Read the attestation report, CA and the nonce previously stored
-	data, err := ioutil.ReadFile(reportFile)
+	data, err := os.ReadFile(reportFile)
 	if err != nil {
 		log.Fatalf("Failed to read file %v: %v", reportFile, err)
 	}
 
-	ca, err := ioutil.ReadFile(caFile)
+	ca, err := os.ReadFile(caFile)
 	if err != nil {
 		log.Fatalf("Failed to read file %v: %v", caFile, err)
 	}
 
-	nonce, err := ioutil.ReadFile(nonceFile)
+	nonce, err := os.ReadFile(nonceFile)
 	if err != nil {
 		log.Fatalf("Failed to read nonce: %v", err)
 	}
@@ -217,7 +217,7 @@ func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []b
 	json.Indent(&out, response.GetVerificationResult(), "", "    ")
 
 	// Save the Attestation Result
-	ioutil.WriteFile(resultFile, out.Bytes(), 0644)
+	os.WriteFile(resultFile, out.Bytes(), 0644)
 	fmt.Println("Wrote file ", resultFile)
 }
 
@@ -251,7 +251,7 @@ func main() {
 	var err error
 	if *policiesFile != "" {
 		log.Debug("Policies specified. Adding them to verification request")
-		policies, err = ioutil.ReadFile(*policiesFile)
+		policies, err = os.ReadFile(*policiesFile)
 		if err != nil {
 			log.Fatalf("Failed to read policies file: %v", err)
 		}

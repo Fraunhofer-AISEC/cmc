@@ -20,8 +20,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"io/ioutil"
 	"net"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -43,7 +43,7 @@ func main() {
 	log.SetLevel(log.TraceLevel)
 
 	// Get root CA cert
-	rootCA, err := ioutil.ReadFile(*rootCACertFile)
+	rootCA, err := os.ReadFile(*rootCACertFile)
 	if err != nil {
 		log.Error("[Testconnector] Could not find root CA cert file.")
 		return
@@ -68,7 +68,7 @@ func main() {
 	var policies []byte = nil
 	if *policiesFile != "" {
 		log.Debug("Policies specified. Adding them to verification request")
-		policies, err = ioutil.ReadFile(*policiesFile)
+		policies, err = os.ReadFile(*policiesFile)
 		if err != nil {
 			log.Fatalf("Failed to read policies file: %v", err)
 		}

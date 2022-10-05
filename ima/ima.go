@@ -20,7 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -50,7 +50,7 @@ type imaTemplate struct {
 // GetImaRuntimeDigests returns all hashes extended by the IMA into the TPM
 // IMA PCR as read from the sysfs
 func GetImaRuntimeDigests() ([][SHA256_DIGEST_LEN]byte, error) {
-	data, err := ioutil.ReadFile("/sys/kernel/security/ima/binary_runtime_measurements")
+	data, err := os.ReadFile("/sys/kernel/security/ima/binary_runtime_measurements")
 	if err != nil {
 		log.Error("Failed to load IMA runtime measurements from /sys/kernel/security/ima/binary_runtime_measurements - ", err)
 		return nil, err
