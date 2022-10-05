@@ -32,7 +32,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"os"
@@ -111,7 +111,7 @@ func printConfig(c *config, configFile string) {
 }
 
 func readConfig(configFile string) (*config, error) {
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		log.Error("Failed to read config file '", configFile, "'")
 		return nil, err
@@ -128,7 +128,7 @@ func readConfig(configFile string) (*config, error) {
 func loadCaPriv(caPrivFile string) (*ecdsa.PrivateKey, error) {
 
 	// Read private pem-encoded key and convert it to a private key
-	privBytes, err := ioutil.ReadFile(caPrivFile)
+	privBytes, err := os.ReadFile(caPrivFile)
 	if err != nil {
 		return nil, fmt.Errorf("error loading CA - Read private key returned '%w'", err)
 	}
@@ -145,7 +145,7 @@ func loadCaPriv(caPrivFile string) (*ecdsa.PrivateKey, error) {
 
 func loadCert(certFile string) (*x509.Certificate, []byte, error) {
 
-	caCertPem, err := ioutil.ReadFile(certFile)
+	caCertPem, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error loading certificate: Read file %v returned %w", certFile, err)
 	}
@@ -165,12 +165,12 @@ func parseCertParams(certParams []byte) (*ar.CertParams, error) {
 	// append certificates from datastore
 	roots, err := ar.LoadCert(dataStore.CaCertPem)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load CA certificate: %v", err)
+		return nil, fmt.Errorf("failed to load CA certificate: %v", err)
 	}
 
 	_, payload, ok := dataStore.Serializer.VerifyToken(certParams, []*cryptoX509.Certificate{roots})
 	if !ok {
-		return nil, errors.New("Verification of Attestation Report Signatures failed")
+		return nil, errors.New("verification of attestation report signatures failed")
 	}
 
 	// Unmarshal the certificate parameters
@@ -512,7 +512,7 @@ func handleActivateCredential(writer http.ResponseWriter, req *http.Request) {
 		if strings.Compare(ctype, "tpm/attestparams") == 0 {
 			log.Debug("Received tpm/attestParams")
 
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			if err != nil {
 				msg := fmt.Sprintf("Error Activating Credential - %v", err)
 				log.Warn(msg)
@@ -549,7 +549,7 @@ func handleActivateCredential(writer http.ResponseWriter, req *http.Request) {
 		} else if strings.Compare(ctype, "tpm/akcert") == 0 {
 
 			// Retrieve secret from client
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			if err != nil {
 				msg := fmt.Sprintf("Error handling AK Cert Request: %v", err)
 				log.Warn(msg)
@@ -607,7 +607,7 @@ func handleSwSigning(writer http.ResponseWriter, req *http.Request) {
 			log.Debug("Received signing/csr")
 
 			log.Trace("Reading http body")
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			if err != nil {
 				msg := fmt.Sprintf("Failed to handle sw-sign request: %v", err)
 				log.Warn(msg)
@@ -747,7 +747,7 @@ func handleVcekRetrieval(writer http.ResponseWriter, req *http.Request) {
 		if strings.Compare(ctype, "retrieval/vcek") == 0 {
 			log.Debug("Received retrieval/vcek")
 
-			b, err := ioutil.ReadAll(req.Body)
+			b, err := io.ReadAll(req.Body)
 			if err != nil {
 				msg := fmt.Sprintf("Failed to handle vcek request: %v", err)
 				log.Warn(msg)
@@ -830,7 +830,7 @@ func tryGetCachedVcek(req snpdriver.VcekRequest) ([]byte, bool) {
 	if dataStore.VcekOfflineCaching {
 		filePath := path.Join(dataStore.VcekCacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(req.ChipId[:]), req.Tcb))
-		f, err := ioutil.ReadFile(filePath)
+		f, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Tracef("VCEK not present at %v, will be downloaded", filePath)
 			return nil, false
@@ -852,7 +852,7 @@ func cacheVcek(vcek []byte, req snpdriver.VcekRequest) error {
 	if dataStore.VcekOfflineCaching {
 		filePath := path.Join(dataStore.VcekCacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(req.ChipId[:]), req.Tcb))
-		err := ioutil.WriteFile(filePath, vcek, 0644)
+		err := os.WriteFile(filePath, vcek, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write file %v: %w", filePath, err)
 		}
@@ -921,7 +921,7 @@ func downloadCert(url string) (*x509.Certificate, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("HTTP Response Status: %v (%v)", resp.StatusCode, resp.Status)
 	}
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("failed to read HTTP body: %w", err)
 	}
@@ -1017,7 +1017,7 @@ func main() {
 
 	httpFolder := getFilePath(config.HTTPFolder, filepath.Dir(*configFile))
 
-	dirs, err := ioutil.ReadDir(httpFolder)
+	dirs, err := os.ReadDir(httpFolder)
 	if err != nil {
 		log.Errorf("Failed to open metaddata folders '%v' - %v", httpFolder, err)
 		return

@@ -25,7 +25,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -153,14 +153,14 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		log.Warn("Request failed: body: ", string(b))
 		return SwCertResponse{}, fmt.Errorf("request Failed: HTTP Server responded '%v'", resp.Status)
 	}
 
 	log.Debug("HTTP Response OK")
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return SwCertResponse{}, fmt.Errorf("error sending params - %v", err)
 	}
@@ -175,7 +175,7 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 func saveCerts(paths Paths, certs ar.CertChain) error {
 
 	log.Tracef("New Leaf Cert %v: %v", paths.TLSCert, string(certs.Leaf))
-	if err := ioutil.WriteFile(paths.TLSCert, certs.Leaf, 0644); err != nil {
+	if err := os.WriteFile(paths.TLSCert, certs.Leaf, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
 
@@ -183,12 +183,12 @@ func saveCerts(paths Paths, certs ar.CertChain) error {
 		return fmt.Errorf("SwSigner allows exactly one intermediate (%v provided)", len(certs.Intermediates))
 	}
 	log.Tracef("New Intermediate Cert %v: %v", paths.DeviceSubCa, string(certs.Intermediates[0]))
-	if err := ioutil.WriteFile(paths.DeviceSubCa, certs.Intermediates[0], 0644); err != nil {
+	if err := os.WriteFile(paths.DeviceSubCa, certs.Intermediates[0], 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
 	}
 
 	log.Tracef("New CA Cert %v: %v", paths.Ca, string(certs.Ca))
-	if err := ioutil.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
+	if err := os.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
 	}
 

@@ -19,7 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -64,7 +64,7 @@ func main() {
 
 	// Load metadata
 	log.Debugf("Reading input file %v", *inputFile)
-	data, err := ioutil.ReadFile(*inputFile)
+	data, err := os.ReadFile(*inputFile)
 	if err != nil {
 		log.Fatalf("failed to read metadata file %v", *inputFile)
 	}
@@ -151,7 +151,7 @@ func main() {
 	}
 
 	log.Tracef("Writing output file %v", *outputFile)
-	err = ioutil.WriteFile(*outputFile, raw, 0644)
+	err = os.WriteFile(*outputFile, raw, 0644)
 	if err != nil {
 		log.Fatalf("Failed to write file: %v", err)
 	}

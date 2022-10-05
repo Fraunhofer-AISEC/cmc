@@ -175,7 +175,7 @@ func TestVerify(t *testing.T) {
 
 			// Generate and sign attestation report to test Verify() function
 			var metadata [][]byte
-			a, err := Generate(nonce, metadata, []Measurement{}, *&tt.args.serializer)
+			a, err := Generate(nonce, metadata, []Measurement{}, tt.args.serializer)
 			if err != nil {
 				t.Errorf("Preparation failed: %v", err)
 			}
@@ -185,7 +185,7 @@ func TestVerify(t *testing.T) {
 				return
 			}
 
-			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil, *&tt.args.serializer)
+			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil, tt.args.serializer)
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}

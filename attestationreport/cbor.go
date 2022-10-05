@@ -33,7 +33,7 @@ func (s CborSerializer) GetPayload(raw []byte) ([]byte, error) {
 	var msg cose.SignMessage
 	err := msg.UnmarshalCBOR(raw)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get payload: %v", err)
+		return nil, fmt.Errorf("failed to get payload: %v", err)
 	}
 	return msg.Payload, nil
 }
