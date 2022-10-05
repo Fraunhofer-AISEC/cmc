@@ -169,8 +169,9 @@ type ResultMulti struct {
 	Details []string `json:"details,omitempty"` // Details on the issue which was detected during validation, remains empty if validation was successful
 }
 
-// JwsResult is a helper struct for the validation of JWS focussing on the validation of the provided signatures
-type JwsResult struct {
+// TokenResult is a helper struct for the validation of JWS or COSE tokens focussing
+// on the validation of the provided signatures
+type TokenResult struct {
 	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 }

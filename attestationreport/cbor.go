@@ -101,10 +101,10 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	return true, coseRaw
 }
 
-func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (JwsResult, []byte, bool) {
+func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool) {
 
-	// TODO JwsResult (Naming)
-	result := JwsResult{}
+	// TODO TokenResult (Naming)
+	result := TokenResult{}
 	ok := true
 
 	if len(roots) == 0 {
