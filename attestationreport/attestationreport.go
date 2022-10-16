@@ -117,6 +117,14 @@ type SnpMeasurement struct {
 	Certs  CertChain `json:"certs" cbor:"2,keyasint"`
 }
 
+// IasMeasurement represents the attestation report
+// element of type 'IAS Measurement' signed by the device
+type IasMeasurement struct {
+	Type   string    `json:"type" cbor:"0,keyasint"`
+	Report []byte    `json:"blob" cbor:"1,keyasint"`
+	Certs  CertChain `json:"certs" cbor:"2,keyasint"`
+}
+
 // SwMeasurement represents the attestation report
 // element of type 'Software Measurement'
 type SwMeasurement struct {
@@ -160,7 +168,7 @@ type SnpDetails struct {
 // element of types 'SNP Verification', 'TPM Verification'
 // and 'SW Verification'
 type Verification struct {
-	Type   string      `json:"type" cbor:"0,keyasint,omitempty"`
+	Type   string      `json:"type" cbor:"0,keyasint"`
 	Sha256 HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
 	Sha384 HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
 	Name   string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
@@ -289,6 +297,7 @@ type ArPlain struct {
 	Type               string              `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	IasM               *IasMeasurement     `cbor:"10,keyasint,omitempty"`
 	SWM                []SwMeasurement     `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
 	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"4,keyasint"`
 	OsManifest         OsManifest          `json:"osManifest" cbor:"5,keyasint"`
@@ -475,6 +484,13 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 	// If present, verify AMD SEV SNP measurements against provided SNP verifications
 	result.MeasResult.SnpMeasResult, ok = verifySnpMeasurements(ar.SnpM, nonce,
 		verifications["SNP Verification"])
+	if !ok {
+		result.Success = false
+	}
+
+	// If present, verify ARM PSA EAT measurements against provided PSA verifications
+	result.MeasResult.IasMeasResult, ok = verifyIasMeasurements(ar.IasM, nonce,
+		verifications["IAS Verification"], casPem)
 	if !ok {
 		result.Success = false
 	}

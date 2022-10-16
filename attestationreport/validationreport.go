@@ -59,6 +59,7 @@ type ManifestResult struct {
 type MeasurementResult struct {
 	TpmMeasResult *TpmMeasurementResult `json:"tpm,omitempty"`
 	SnpMeasResult *SnpMeasurementResult `json:"snp,omitempty"`
+	IasMeasResult *IasMeasurementResult `json:"ias,omitempty"`
 	SwMeasResult  []SwMeasurementResult `json:"sw,omitempty"`
 }
 
@@ -140,6 +141,15 @@ type SnpMeasurementResult struct {
 	TcbCheck           TcbCheck        `json:"tcbCheck"`
 	PolicyCheck        PolicyCheck     `json:"policyCheck"`
 	VerificationsCheck ResultMulti     `json:"verificationsCheck"` // Checks that every SNP verification was part of the measurements
+}
+
+// IasMeasurementResult represents the results for the verification
+// of ARM PSA Initial Attestation Service Token measurements
+type IasMeasurementResult struct {
+	Summary            Result          `json:"resultSummary"`
+	FreshnessCheck     Result          `json:"quoteFreshness"`
+	VerificationsCheck ResultMulti     `json:"verificationsCheck"`
+	IasSignature       SignatureResult `json:"reportSignatureCheck"`
 }
 
 // SignatureResults represents the results for validation of
