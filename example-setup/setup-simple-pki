@@ -1,0 +1,49 @@
+#!/bin/bash
+
+set -e
+
+DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+CMC_DIR="$DIR/../.."
+
+IN="$CMC_DIR/example-setup"
+OUT="$DIR"
+
+print_usage() {
+  printf "Usage: ./setup_simple_pki [-i <input-dir>] [-o <output-dir] [-h]\n"
+}
+
+while getopts 'i:o:h' flag; do
+  case "${flag}" in
+    i)
+        IN="${OPTARG}"
+        ;;
+    o)
+        OUT="${OPTARG}"
+        ;;
+    h)
+        print_usage
+        exit 1
+        ;;
+    *) print_usage
+       exit 1 ;;
+  esac
+done
+
+if [ ! -d "$IN" ]; then
+    echo "Input directory $IN does not exist"
+    exit 1
+fi
+
+echo "Using $IN as input directory"
+echo "Using $OUT as output directory"
+
+mkdir -p $OUT
+
+# Set up root CA
+cfssl gencert -initca "$IN/cfssl-ca.json" | cfssljson -bare "$OUT/ca"
+
+# Generate key and CSR
+cfssl genkey -config "$IN/cfssl-ca-config.json" -profile leafcert "$IN/cfssl-leaf.json" | cfssljson -bare "$OUT/signing-cert"
+
+# Sign CSR and generate certificate
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" "$OUT/signing-cert.csr" | cfssljson -bare "$OUT/signing-cert"

@@ -2,6 +2,8 @@
 
 set -e
 
+# TODO more arguments: PKI, INPUT, OUTPUT, FORMAT
+
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 if [ "$#" -ne 1 ]; then

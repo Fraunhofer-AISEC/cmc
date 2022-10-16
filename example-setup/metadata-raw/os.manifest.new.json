@@ -1,0 +1,31 @@
+{
+  "type": "OS Manifest",
+  "name": "de.fhg.aisec.ids.os.drtm",
+  "developerCommonName": "AISEC",
+  "version": "20210717200000",
+  "validity": {
+    "notBefore": "20210717200000",
+    "notAfter": "20240717200000"
+  },
+  "description": "AISEC PoC Demonstrator DRTM OS Manifest",
+  "certificationLevel": 3,
+  "rtms": [
+    "de.fhg.aisec.ids.rtm.drtm"
+  ],
+  "verifications": [
+    {
+      "type": "TPM Verification",
+      "name": "EV_S_CRTM_VERSION",
+      "pcr": 0,
+      "sha256": "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7",
+      "description": "CRTM Version String"
+    },
+    {
+      "type": "TPM Verification",
+      "name": "EV_S_CRTM_VERSION",
+      "pcr": 0,
+      "sha256": "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7",
+      "description": "CRTM Version String"
+    }
+  ]
+}

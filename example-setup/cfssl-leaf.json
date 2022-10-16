@@ -1,0 +1,11 @@
+{
+    "CN": "CMC Test Leaf Certificate",
+    "names": [
+        {
+        "C": "DE",
+        "L": "Test City",
+        "O": "Test Company",
+        "OU": "Test Organizational Unit"
+        }
+    ]
+}

@@ -13,27 +13,6 @@
         "de.fhg.aisec.ids.rtm.drtm"
     ],
     "verifications": [
-        {
-            "type": "TPM Verification",
-            "name": "TBOOT",
-            "pcr": 17,
-            "sha256": "71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91",
-            "description": "Event type 0x501: tboot"
-        },
-        {
-            "type": "TPM Verification",
-            "name": "Kernel Hash",
-            "pcr": 17,
-            "sha256": "69a26345f8089c7ddf04b3103ddf301ffb45d5a889259b2d0036cc34d826307a",
-            "description": "Event type 0x501: tboot: Garden Linux Kernel Hash /boot/vmlinuz-5.10.40 with cmdline: root=UUID=039357f1-2848-4d31-b4f7-a505b6ae3f85 ro ro quiet splash vt.handoff=7 console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=on noefi"
-        },
-        {
-            "type": "TPM Verification",
-            "name": "TBOOT",
-            "pcr": 17,
-            "sha256": "32fa96b898e9b5374ac53a05372389d3f432c32338260c52f8d518325ea4797b",
-            "description": "Event type 0x501: tboot"
-        }
     ]
 }
 
