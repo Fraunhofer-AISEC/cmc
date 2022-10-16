@@ -30,10 +30,18 @@ import (
 type CborSerializer struct{}
 
 func (s CborSerializer) GetPayload(raw []byte) ([]byte, error) {
+	// TODO better option to subdivide?
+	// Try unmarshalling as Sign1Message
 	var msg cose.SignMessage
-	err := msg.UnmarshalCBOR(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get payload: %v", err)
+	err1 := msg.UnmarshalCBOR(raw)
+	if err1 != nil {
+		// Try unmarshalling as SignMessage
+		var msg cose.Sign1Message
+		err2 := msg.UnmarshalCBOR(raw)
+		if err2 != nil {
+			return nil, fmt.Errorf("failed to get payload. Decode as SignMessage failed (%v), decode as Sign1Message failed (%v)", err1, err2)
+		}
+		return msg.Payload, nil
 	}
 	return msg.Payload, nil
 }
