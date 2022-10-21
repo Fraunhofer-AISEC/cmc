@@ -21,10 +21,12 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/x509/pkix"
 	"sync"
 
-	cryptoX509 "crypto/x509"
+	"crypto/x509"
 	"database/sql"
+	"encoding/asn1"
 	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
@@ -48,9 +50,6 @@ import (
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 
-	"github.com/google/certificate-transparency-go/asn1"
-	x509 "github.com/google/certificate-transparency-go/x509"
-	"github.com/google/certificate-transparency-go/x509/pkix"
 	"github.com/google/go-tpm/tpm2"
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
@@ -168,7 +167,7 @@ func parseCertParams(certParams []byte) (*ar.CertParams, error) {
 		return nil, fmt.Errorf("failed to load CA certificate: %v", err)
 	}
 
-	_, payload, ok := dataStore.Serializer.VerifyToken(certParams, []*cryptoX509.Certificate{roots})
+	_, payload, ok := dataStore.Serializer.VerifyToken(certParams, []*x509.Certificate{roots})
 	if !ok {
 		return nil, errors.New("verification of attestation report signatures failed")
 	}
@@ -444,7 +443,7 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		return nil, fmt.Errorf("unknown cert params type: %v", certParams.Type)
 	}
 
-	pubKey, err := cryptoX509.ParsePKIXPublicKey(req.PubKey)
+	pubKey, err := x509.ParsePKIXPublicKey(req.PubKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse public key: %w", err)
 	}
@@ -674,7 +673,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 		if !ok {
 			return errors.New("failed to append intermediate certificates from database")
 		}
-		log.Debugf("Added %v certificates to intermediates certificate pool", len(intermediatesPool.Subjects()))
+		log.Debug("Added certificates to intermediates certificate pool")
 	}
 
 	// Add TPM EK CA cert from database to certificate pool
@@ -690,7 +689,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 	if !ok {
 		return errors.New("failed to append root certificate from database")
 	}
-	log.Debugf("Added %v certificate to root certificate pool", len(rootsPool.Subjects()))
+	log.Debug("Added certificates to root certificate pool")
 
 	// TODO the ST certificates contain the x509 v3 extension with OID 2.5.29.17
 	// which is not handled by default. Check for other certs and decide how to handle
@@ -704,17 +703,6 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 	chain, err := ek.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
 		return err
-	}
-
-	var expectedLen int
-	if intermediatesPool == nil {
-		expectedLen = len(rootsPool.Subjects()) + 1
-	} else {
-		expectedLen = len(intermediatesPool.Subjects()) + len(rootsPool.Subjects()) + 1
-	}
-
-	if len(chain[0]) != expectedLen {
-		return fmt.Errorf("expected chain of length %v (got %v)", expectedLen, len(chain[0]))
 	}
 
 	log.Debugf("Successfully verified chain of %v elements", len(chain[0]))
