@@ -32,8 +32,6 @@ type Serializer interface {
 	Sign(data []byte, keys []crypto.PrivateKey, x5cs [][]*x509.Certificate) ([]byte, error)
 }
 
-// TODO mode verify und output gleich noch mit einbauen!!
-
 func main() {
 	log.SetLevel(log.TraceLevel)
 

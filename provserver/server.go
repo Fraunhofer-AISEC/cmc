@@ -56,26 +56,24 @@ import (
 )
 
 type config struct {
-	Port               int    `json:"port"`
-	DeviceSubCaKeyFile string `json:"deviceSubCaKey"`
-	DeviceSubCaFile    string `json:"deviceSubCaCert"`
-	CaFile             string `json:"caCert"`
-	HTTPFolder         string `json:"httpFolder"`
-	VerifyEkCert       bool   `json:"verifyEkCert"`
-	TpmEkCertDb        string `json:"tpmEkCertDb,omitempty"`
-	VcekOfflineCaching bool   `json:"vcekOfflineCaching,omitempty"`
-	VcekCacheFolder    string `json:"vcekCacheFolder,omitempty"`
-	Serialization      string `json:"serialization"`
+	Port               int      `json:"port"`
+	SigningKeyFile     string   `json:"signingKey"`
+	CertChainFiles     []string `json:"certChain"`
+	HTTPFolder         string   `json:"httpFolder"`
+	VerifyEkCert       bool     `json:"verifyEkCert"`
+	TpmEkCertDb        string   `json:"tpmEkCertDb,omitempty"`
+	VcekOfflineCaching bool     `json:"vcekOfflineCaching,omitempty"`
+	VcekCacheFolder    string   `json:"vcekCacheFolder,omitempty"`
+	Serialization      string   `json:"serialization"`
 }
 
 type datastore struct {
 	Secret             map[[32]byte][]byte
 	AkParams           map[[32]byte]attest.AttestationParameters
 	TLSKeyParams       map[[32]byte]attest.CertificationParameters
-	DeviceSubCaPriv    *ecdsa.PrivateKey
-	DeviceSubCaCert    *x509.Certificate
-	DeviceSubCaCertPem []byte
-	CaCertPem          []byte
+	SigningKey         *ecdsa.PrivateKey
+	CertChain          []*x509.Certificate
+	CertChainPem       [][]byte
 	VerifyEkCert       bool
 	DbPath             string
 	VcekMutex          sync.Mutex
@@ -97,16 +95,18 @@ var dataStore datastore
 
 func printConfig(c *config, configFile string) {
 	log.Infof("Using the configuration loaded from %v:", configFile)
-	log.Info("\tPort                   : ", c.Port)
-	log.Info("\tDevice Sub CA Key File : ", getFilePath(c.DeviceSubCaKeyFile, filepath.Dir(configFile)))
-	log.Info("\tDevice Sub CA Cert File: ", getFilePath(c.DeviceSubCaFile, filepath.Dir(configFile)))
-	log.Info("\tCA Cert File           : ", getFilePath(c.CaFile, filepath.Dir(configFile)))
-	log.Info("\tFolders to be served   : ", getFilePath(c.HTTPFolder, filepath.Dir(configFile)))
-	log.Info("\tVerify EK Cert         : ", c.VerifyEkCert)
-	log.Info("\tTPM EK DB              : ", getFilePath(c.TpmEkCertDb, filepath.Dir(configFile)))
-	log.Info("\tVCEK Offline Caching   : ", c.VcekOfflineCaching)
-	log.Info("\tVCEK Cache Folder      : ", getFilePath(c.VcekCacheFolder, filepath.Dir(configFile)))
-	log.Info("\tSerialization          : ", c.Serialization)
+	log.Infof("\tPort                : %v", c.Port)
+	log.Infof("\tSigning Key File    : %v", getFilePath(c.SigningKeyFile, filepath.Dir(configFile)))
+	log.Infof("\tCert Chain Files    :")
+	for i, f := range c.CertChainFiles {
+		log.Infof("\t\tCert %v: %v", i, f)
+	}
+	log.Infof("\tFolders to be served: %v", getFilePath(c.HTTPFolder, filepath.Dir(configFile)))
+	log.Infof("\tVerify EK Cert      : %v", c.VerifyEkCert)
+	log.Infof("\tTPM EK DB           : %v", getFilePath(c.TpmEkCertDb, filepath.Dir(configFile)))
+	log.Infof("\tVCEK Offline Caching: %v", c.VcekOfflineCaching)
+	log.Infof("\tVCEK Cache Folder   : %v", getFilePath(c.VcekCacheFolder, filepath.Dir(configFile)))
+	log.Infof("\tSerialization       : %v", c.Serialization)
 }
 
 func readConfig(configFile string) (*config, error) {
@@ -124,7 +124,7 @@ func readConfig(configFile string) (*config, error) {
 	return config, nil
 }
 
-func loadCaPriv(caPrivFile string) (*ecdsa.PrivateKey, error) {
+func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
 
 	// Read private pem-encoded key and convert it to a private key
 	privBytes, err := os.ReadFile(caPrivFile)
@@ -142,34 +142,14 @@ func loadCaPriv(caPrivFile string) (*ecdsa.PrivateKey, error) {
 	return priv, nil
 }
 
-func loadCert(certFile string) (*x509.Certificate, []byte, error) {
-
-	caCertPem, err := os.ReadFile(certFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error loading certificate: Read file %v returned %w", certFile, err)
-	}
-
-	block, _ := pem.Decode(caCertPem)
-
-	caCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error loading certificate - Parse Certificate returned %w", err)
-	}
-
-	return caCert, caCertPem, nil
-}
-
 func parseCertParams(certParams []byte) (*ar.CertParams, error) {
 
-	// append certificates from datastore
-	roots, err := ar.LoadCert(dataStore.CaCertPem)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load CA certificate: %v", err)
-	}
-
-	_, payload, ok := dataStore.Serializer.VerifyToken(certParams, []*x509.Certificate{roots})
+	_, payload, ok := dataStore.Serializer.VerifyToken(certParams,
+		[]*x509.Certificate{
+			dataStore.CertChain[len(dataStore.CertChain)-1],
+		})
 	if !ok {
-		return nil, errors.New("verification of attestation report signatures failed")
+		return nil, errors.New("verification of certificate parameter signatures failed")
 	}
 
 	// Unmarshal the certificate parameters
@@ -269,6 +249,13 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 // HandleAkCertRequest handles an AK Cert Request (Step 2)
 func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
+	if len(dataStore.CertChainPem) == 0 {
+		return nil, errors.New("failed to create AkCertResponse: certificate chain not present")
+	}
+	if len(dataStore.CertChain) == 0 {
+		return nil, errors.New("failed to create AkCertResponse: certificate chain not present")
+	}
+
 	var akCertRequest tpmdriver.AkCertRequest
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&akCertRequest)
@@ -332,7 +319,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		BasicConstraintsValid: true,
 	}
 
-	der, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, akPub.Public, dataStore.DeviceSubCaPriv)
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.CertChain[0], akPub.Public, dataStore.SigningKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AK certificate: %w", err)
 	}
@@ -395,7 +382,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		DNSNames:              tlsCertParams.SANs,
 	}
 
-	der, err = x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, tlsPub.Public, dataStore.DeviceSubCaPriv)
+	der, err = x509.CreateCertificate(rand.Reader, &tmpl, dataStore.CertChain[0], tlsPub.Public, dataStore.SigningKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS certificate: %w", err)
 	}
@@ -404,13 +391,20 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	pem.Encode(tlsKeyPem, &pem.Block{Type: "CERTIFICATE", Bytes: der})
 	log.Trace("Generated new TLS Key Certificate: ", tlsKeyPem.String())
 
+	intermediates := make([][]byte, 0)
+	intermediates = append(intermediates, dataStore.CertChainPem[:len(dataStore.CertChainPem)-1]...)
+
 	akCertResponse := tpmdriver.AkCertResponse{
 		AkQualifiedName: akCertRequest.AkQualifiedName,
-		Certs: tpmdriver.Certs{
-			Ak:          akPem.Bytes(),
-			TLSCert:     tlsKeyPem.Bytes(),
-			DeviceSubCa: dataStore.DeviceSubCaCertPem,
-			Ca:          dataStore.CaCertPem,
+		AkCertChain: ar.CertChain{
+			Leaf:          akPem.Bytes(),
+			Intermediates: intermediates,
+			Ca:            dataStore.CertChainPem[len(dataStore.CertChainPem)-1],
+		},
+		TlsCertChain: ar.CertChain{
+			Leaf:          tlsKeyPem.Bytes(),
+			Intermediates: intermediates,
+			Ca:            dataStore.CertChainPem[len(dataStore.CertChainPem)-1],
 		},
 	}
 
@@ -426,6 +420,13 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 // HandleSwCertRequest handles a software CSR request
 func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
+
+	if len(dataStore.CertChainPem) == 0 {
+		return nil, errors.New("failed to create AkCertResponse: certificate chain not present")
+	}
+	if len(dataStore.CertChain) == 0 {
+		return nil, errors.New("failed to create AkCertResponse: certificate chain not present")
+	}
 
 	log.Trace("Decoding request")
 
@@ -471,7 +472,7 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		DNSNames:              certParams.SANs,
 	}
 
-	cert, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.DeviceSubCaCert, pubKey, dataStore.DeviceSubCaPriv)
+	cert, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.CertChain[0], pubKey, dataStore.SigningKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TLS certificate: %w", err)
 	}
@@ -480,11 +481,14 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
 	log.Trace("Generated new SW TLS Certificate: ", tmp.String())
 
+	intermediates := make([][]byte, 0)
+	intermediates = append(intermediates, dataStore.CertChainPem[:len(dataStore.CertChainPem)-1]...)
+
 	certResponse := swdriver.SwCertResponse{
 		Certs: ar.CertChain{
 			Leaf:          tmp.Bytes(),
-			Intermediates: [][]byte{dataStore.DeviceSubCaCertPem},
-			Ca:            dataStore.CaCertPem,
+			Intermediates: intermediates,
+			Ca:            dataStore.CertChainPem[len(dataStore.CertChainPem)-1],
 		},
 	}
 
@@ -969,27 +973,43 @@ func main() {
 	}
 
 	// Load CA private key and certificate for signing the AKs
-	priv, err := loadCaPriv(getFilePath(config.DeviceSubCaKeyFile, filepath.Dir(*configFile)))
+	priv, err := loadPrivateKey(getFilePath(config.SigningKeyFile, filepath.Dir(*configFile)))
 	if err != nil {
 		log.Error(err)
 		return
 	}
-	dataStore.DeviceSubCaPriv = priv
+	dataStore.SigningKey = priv
 
-	dscCert, dscPem, err := loadCert(getFilePath(config.DeviceSubCaFile, filepath.Dir(*configFile)))
-	if err != nil {
-		log.Error(err)
+	if len(config.CertChainFiles) == 0 {
+		log.Error("Config error: no certificate chain specified")
 		return
 	}
-	dataStore.DeviceSubCaCert = dscCert
-	dataStore.DeviceSubCaCertPem = dscPem
 
-	_, caCertPem, err := loadCert(getFilePath(config.CaFile, filepath.Dir(*configFile)))
-	if err != nil {
-		log.Error(err)
+	// Load certificate chain
+	for _, f := range config.CertChainFiles[:len(config.CertChainFiles)] {
+		pem, err := os.ReadFile(getFilePath(f, filepath.Dir(*configFile)))
+		if err != nil {
+			log.Errorf("Error loading certificate: Read file %v returned %v", f, err)
+			return
+		}
+		dataStore.CertChainPem = append(dataStore.CertChainPem, pem)
+		cert, err := ar.LoadCert(pem)
+		if err != nil {
+			log.Errorf("failed to load certificate: %v", err)
+			return
+		}
+		dataStore.CertChain = append(dataStore.CertChain, cert)
+	}
+
+	// Sanity Check
+	if len(dataStore.CertChain) == 0 {
+		log.Error("configuration error: x509 certificate chain not present")
 		return
 	}
-	dataStore.CaCertPem = caCertPem
+	if len(dataStore.CertChainPem) == 0 {
+		log.Error("configuration error: pem certificate chain not present")
+		return
+	}
 
 	dataStore.VcekCacheFolder = getFilePath(config.VcekCacheFolder, filepath.Dir(*configFile))
 	dataStore.VcekOfflineCaching = config.VcekOfflineCaching
