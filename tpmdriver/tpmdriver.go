@@ -66,16 +66,6 @@ type Config struct {
 	Serializer  ar.Serializer
 }
 
-// Certs contains the TPM certificate chain for the AK and TLS key.
-// This is not the TPM EK certificate chain but the certificate
-// chain that was created during TPM credential activation
-type Certs struct {
-	Ak          []byte
-	TLSCert     []byte
-	DeviceSubCa []byte
-	Ca          []byte
-}
-
 // AcRequest holds the data for an activate credential request
 // for verifying that the AK and TLS Key were created on a genuine
 // TPM with a valid EK
@@ -107,7 +97,8 @@ type AkCertRequest struct {
 // certificate chain up to a Root CA
 type AkCertResponse struct {
 	AkQualifiedName [32]byte
-	Certs           Certs
+	AkCertChain     ar.CertChain
+	TlsCertChain    ar.CertChain
 }
 
 // Paths specifies the paths to store the encrypted TPM key blobs
@@ -167,7 +158,8 @@ func NewTpm(c *Config) (*Tpm, error) {
 		return nil, fmt.Errorf("failed to open the TPM. Check if you have privileges to open /dev/tpm0: %v", err)
 	}
 
-	var certs Certs
+	var akchain ar.CertChain
+	var tlschain ar.CertChain
 	if provisioningRequired {
 
 		log.Info("Provisioning TPM (might take a while)..")
@@ -176,12 +168,12 @@ func NewTpm(c *Config) (*Tpm, error) {
 			return nil, fmt.Errorf("activate credential failed: createKeys returned %v", err)
 		}
 
-		certs, err = provisionTpm(c.ServerAddr+"activate-credential/", certParams)
+		akchain, tlschain, err = provisionTpm(c.ServerAddr+"activate-credential/", certParams)
 		if err != nil {
 			return nil, fmt.Errorf("failed to provision TPM: %v", err)
 		}
 
-		err = saveTpmData(paths, &certs)
+		err = saveTpmData(paths, &akchain, &tlschain)
 		if err != nil {
 			os.Remove(paths.Ak)
 			os.Remove(paths.TLSKey)
@@ -193,27 +185,18 @@ func NewTpm(c *Config) (*Tpm, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load TPM keys: %v", err)
 		}
-		certs, err = loadTpmCerts(paths)
+		akchain, tlschain, err = loadTpmCerts(paths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load TPM certificates: %v", err)
 		}
-
 	}
 
 	tpm := &Tpm{
-		Pcrs:   pcrs,
-		UseIma: c.UseIma,
-		ImaPcr: c.ImaPcr,
-		SigningCerts: ar.CertChain{
-			Leaf:          certs.TLSCert,
-			Intermediates: [][]byte{certs.DeviceSubCa},
-			Ca:            certs.Ca,
-		},
-		MeasuringCerts: ar.CertChain{
-			Leaf:          certs.Ak,
-			Intermediates: [][]byte{certs.DeviceSubCa},
-			Ca:            certs.Ca,
-		},
+		Pcrs:           pcrs,
+		UseIma:         c.UseIma,
+		ImaPcr:         c.ImaPcr,
+		SigningCerts:   tlschain,
+		MeasuringCerts: akchain,
 	}
 
 	return tpm, nil
@@ -485,51 +468,56 @@ func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.
 	return pcrValues, quote, nil
 }
 
-func provisionTpm(provServerURL string, certParams [][]byte) (Certs, error) {
+func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.CertChain, error) {
 	log.Debug("Performing TPM credential activation..")
 
 	if TPM == nil {
-		return Certs{}, fmt.Errorf("failed to provision TPM - TPM is not openend")
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to provision TPM - TPM is not openend")
 	}
 	if ek == nil || ak == nil || tlsKey == nil {
-		return Certs{}, fmt.Errorf("failed to provision TPM - keys not created")
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to provision TPM - keys not created")
 	}
 
 	tpmInfo, err := GetTpmInfo()
 	if err != nil {
-		return Certs{}, fmt.Errorf("failed to retrieve TPM Info - %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to retrieve TPM Info - %v", err)
 	}
 
 	secret, err := activateCredential(TPM, *ak, ek[0], tpmInfo, provServerURL)
 	if err != nil {
-		return Certs{}, fmt.Errorf("activate credential failed: activateCredential returned %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("activate credential failed: activateCredential returned %v", err)
 	}
 
 	// Return challenge to server
 	resp, err := requestTpmCerts(provServerURL, secret, certParams)
 	if err != nil {
-		return Certs{}, fmt.Errorf("activate credential failed: requestAkCert returned %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("activate credential failed: requestAkCert returned %v", err)
 	}
 
-	return resp.Certs, nil
+	return resp.AkCertChain, resp.TlsCertChain, nil
 }
 
-func saveTpmData(paths *Paths, certs *Certs) error {
+func saveTpmData(paths *Paths, akchain, tlschain *ar.CertChain) error {
+
 	// Store the certificates on disk
-	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(certs.Ak))
-	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(certs.TLSCert))
-	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(certs.DeviceSubCa))
-	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(certs.Ca))
-	if err := os.WriteFile(paths.AkCert, certs.Ak, 0644); err != nil {
+	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(akchain.Leaf))
+	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(tlschain.Leaf))
+
+	// TODO currently TPM driver only supports a single intermediate certificate and same
+	// chain for AK and TLS key
+	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(akchain.Intermediates[0]))
+	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(akchain.Ca))
+
+	if err := os.WriteFile(paths.AkCert, akchain.Leaf, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.AkCert, err)
 	}
-	if err := os.WriteFile(paths.TLSCert, certs.TLSCert, 0644); err != nil {
+	if err := os.WriteFile(paths.TLSCert, tlschain.Leaf, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
-	if err := os.WriteFile(paths.DeviceSubCa, certs.DeviceSubCa, 0644); err != nil {
+	if err := os.WriteFile(paths.DeviceSubCa, akchain.Intermediates[0], 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
 	}
-	if err := os.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
+	if err := os.WriteFile(paths.Ca, akchain.Ca, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
 	}
 
@@ -587,32 +575,36 @@ func loadTpmKeys(akFile, tlsKeyFile string) error {
 	return nil
 }
 
-func loadTpmCerts(paths *Paths) (Certs, error) {
-	var certs Certs
+func loadTpmCerts(paths *Paths) (ar.CertChain, ar.CertChain, error) {
+	akchain := ar.CertChain{}
+	tlschain := ar.CertChain{}
 	var cert []byte
 	var err error
 	// AK
 	if cert, err = os.ReadFile(paths.AkCert); err != nil {
-		return certs, fmt.Errorf("failed to load AK cert from %v: %v", paths.AkCert, err)
+		return akchain, tlschain, fmt.Errorf("failed to load AK cert from %v: %v", paths.AkCert, err)
 	}
-	certs.Ak = cert
+	akchain.Leaf = cert
 	// TLS
 	if cert, err = os.ReadFile(paths.TLSCert); err != nil {
-		return certs, fmt.Errorf("failed to load TLS cert from %v: %v", paths.TLSCert, err)
+		return akchain, tlschain, fmt.Errorf("failed to load TLS cert from %v: %v", paths.TLSCert, err)
 	}
-	certs.TLSCert = cert
+	tlschain.Leaf = cert
 	//SubCA
 	if cert, err = os.ReadFile(paths.DeviceSubCa); err != nil {
-		return certs, fmt.Errorf("failed to load Device Sub CA cert from %v: %v", paths.DeviceSubCa, err)
+		return akchain, tlschain, fmt.Errorf("failed to load Device Sub CA cert from %v: %v", paths.DeviceSubCa, err)
 	}
-	certs.DeviceSubCa = cert
+	// TODO currently only one intermediate supported, only one CA supported
+	akchain.Intermediates = append(akchain.Intermediates, cert)
+	tlschain.Intermediates = append(tlschain.Intermediates, cert)
 	//CA
 	if cert, err = os.ReadFile(paths.Ca); err != nil {
-		return certs, fmt.Errorf("failed to load CA cert from %v: %v", paths.Ca, err)
+		return akchain, tlschain, fmt.Errorf("failed to load CA cert from %v: %v", paths.Ca, err)
 	}
-	certs.Ca = cert
+	akchain.Ca = cert
+	tlschain.Ca = cert
 
-	return certs, nil
+	return akchain, tlschain, nil
 }
 
 func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *attest.Key, error) {

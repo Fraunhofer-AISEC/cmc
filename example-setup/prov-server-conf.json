@@ -1,8 +1,10 @@
 {
     "port": 9001,
-    "deviceSubCaKey": "pki/ca/device_sub_ca-key.pem",
-    "deviceSubCaCert": "pki/ca/device_sub_ca.pem",
-    "caCert": "pki/ca/ca.pem",
+    "signingKey": "pki/ca/device_sub_ca-key.pem",
+    "certChain": [
+        "pki/ca/device_sub_ca.pem",
+        "pki/ca/ca.pem"
+    ],
     "httpFolder": "./",
     "verifyEkCert": false,
     "tpmEkCertDb": "tpm-ek-certs.db",
