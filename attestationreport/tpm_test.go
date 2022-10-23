@@ -317,7 +317,7 @@ var (
 	}
 
 	validSignatureResult = SignatureResult{
-		Name:            "de.fhg.aisec.ids.ak.connector0",
+		Name:            "de.test.ak.connector0",
 		Organization:    []string{"Fraunhofer AISEC"},
 		SubjectKeyId:    "80a05cdf944f637c13cb0a053a56d472fc94fe31",
 		AuthorityKeyId:  "a2f878264fe773afd441b8fdc4addf0eae9ca54b",
