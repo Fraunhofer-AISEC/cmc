@@ -212,31 +212,18 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
 		certs, err := sig.Protected.Certificates(opts)
-		if len(certs) == 0 {
-			msg := "Failed to verify: No certificates present for provided CA(s)"
+		if err != nil {
+			msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 			result.SignatureCheck[i].CertCheck.setFalse(&msg)
 			ok = false
 			continue
 		}
-		if err == nil {
-			// TODO log whole certificate chains including all fields
-			result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
-			result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
-			result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
-			result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
-			result.SignatureCheck[i].CertCheck.Success = true
-		} else {
-			if certs != nil {
-				result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
-				result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
-				result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
-				result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
-			}
-			msg := fmt.Sprintf("Validation of certificate chain failed: %v", err)
-			result.SignatureCheck[i].CertCheck.setFalse(&msg)
-			ok = false
-			continue
-		}
+		// TODO log whole certificate chains including all fields
+		result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
+		result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
+		result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
+		result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
+		result.SignatureCheck[i].CertCheck.Success = true
 
 		index[i], _, payloads[i], err = jwsData.VerifyMulti(certs[0][0].PublicKey)
 		if err == nil {
