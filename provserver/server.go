@@ -144,10 +144,18 @@ func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
 
 func parseCertParams(certParams []byte) (*ar.CertParams, error) {
 
-	_, payload, ok := dataStore.Serializer.VerifyToken(certParams,
-		[]*x509.Certificate{
-			dataStore.CertChain[len(dataStore.CertChain)-1],
-		})
+	if certParams == nil {
+		return nil, errors.New("verification of certificate parameters failed: no data provided")
+	}
+	if len(dataStore.CertChain) == 0 {
+		return nil, errors.New("verification of certificate parameters failed: internal cert chain not present")
+	}
+
+	log.Trace("Verifying certificate parameters..")
+
+	ca := dataStore.CertChain[len(dataStore.CertChain)-1]
+
+	_, payload, ok := dataStore.Serializer.VerifyToken(certParams, []*x509.Certificate{ca})
 	if !ok {
 		return nil, errors.New("verification of certificate parameter signatures failed")
 	}
@@ -970,6 +978,7 @@ func main() {
 		dataStore.Serializer = ar.CborSerializer{}
 	} else {
 		log.Errorf("Serializer %v not supported (only 'json' and 'cbor')", config.Serialization)
+		return
 	}
 
 	// Load CA private key and certificate for signing the AKs
