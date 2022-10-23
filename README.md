@@ -4,72 +4,219 @@
 [![](https://godoc.org/github.com/Fraunhofer-AISEC/cmc?status.svg)](https://pkg.go.dev/github.com/Fraunhofer-AISEC/cmc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Fraunhofer-AISEC/cmc)](https://goreportcard.com/report/github.com/Fraunhofer-AISEC/cmc)
 
-The CMC (originally Connector Measurement Component) repository provides tools and software to
-enable remote attestation of computing platforms. It was initially designed as a proposal for
-remote attestation within the International Data Spaces (IDS), but can be used for
-universal attestation of computing platforms.
+The CMC repository provides tools and software to enable remote attestation of computing platforms,
+as well as remote attested TLS channels between those platforms. Currently, the CMC repository
+supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
+
+- [CMC](#cmc)
+  - [Architecture Overview](#architecture-overview)
+  - [Basic Principle](#basic-principle)
+  - [Prerequistes](#prerequistes)
+  - [Quick Demo Setup](#quick-demo-setup)
+  - [Manual Setup](#manual-setup)
+    - [Install Prerequisites](#install-prerequisites)
+    - [Build and Install](#build-and-install)
+    - [Setup PKI and Metadata](#setup-pki-and-metadata)
+  - [Run the CMC](#run-the-cmc)
+    - [Establish an attested TLS connection](#establish-an-attested-tls-connection)
+  - [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
+    - [Metadata](#metadata)
+    - [Serialization Format](#serialization-format)
+    - [TPM Setup using Calculated Values](#tpm-setup-using-calculated-values)
+  - [Config Files](#config-files)
+    - [CMCD Configuration](#cmcd-configuration)
+    - [Provisioning Server Configuration](#provisioning-server-configuration)
+    - [Platform Configuration](#platform-configuration)
+  - [Build](#build)
+    - [Build and Run the Provisioning Server](#build-and-run-the-provisioning-server)
+    - [Build and Run the CMC Daemon](#build-and-run-the-cmc-daemon)
+    - [Build and Run the Test Client](#build-and-run-the-test-client)
+    - [Build and Run the Testconnector](#build-and-run-the-testconnector)
+    - [Regenerate Protobuf gRPC Interface](#regenerate-protobuf-grpc-interface)
 
 ## Architecture Overview
 
 ![CMC, attestation drivers and exemplary test-connector and client as well as interface descriptions](./doc/overview.svg)
 
 The figure shows how the core components interact with each other. The main software components are:
-- The cmcd collects and provides information and attestation reports from the provided trusted hardware
-- The test connector and client are exemplary applications that make use of the daemon to create an attested tls connection
-- Trusted hardware provides the attestation reports and, if available, key storage and signing functionalities
-
+- The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
+different hardware trust anchors and assembles this data together with signed metadata describing
+the platform to an attestation report (prover), or validates the measurements against the metadata
+- The test connector and client are exemplary applications that make use of the daemon to create
+an attested tls connection
+- Drivers for trusted hardware provides the attestation reports and, if available, key storage and
+signing functionalities
 
 Refer to the [Architecture](doc/Architecture.md) Readme for more information.
+
+## Basic Principle
+
+The overall exchanged data structure *Attestation Report* does not only contain measurements of
+the software running on the platform, but also metadata in the form of *Manifests* and
+*Descriptions*. This metadata describes the entire state of the platform and must be signed by
+a trusted entity. This allows a verifier to validate the attestation report without knowing the
+platform in advance. Examples and tools for creating the metadata on the prover side are given
+below.
 
 ## Prerequistes
 
 - Running the *cmcd* currently requires a Linux platform. If the *cmcd* is configured to use a TPM
-for measurements or signing, the *cmcd* must be able to access ```/dev/tpm0```. If AMD SEV-SNP is
+the *cmcd* must be able to access ```/dev/tpm0```. If AMD SEV-SNP is
 used for measurements, the *cmcd* must be run on an AMD server within an SNP Virtual Machine.
 - Building the *cmcd* requires *go* (https://golang.org/doc/install)
-- Performing a successful remote attestation further requires a correctly configured platform,
-configuration data and meta-data about the expected platform state (see
-[Manifests and Descriptions](#manifests-and-descriptions))
 
 **Note**: If configured to be used with a TPM, The *cmcd* accesses the TPM and creates keys within
-the TPM. You should not run it on your normal work laptop, as it might require the TPM and its key
+the TPM. You should not run it on your normal work laptop, as it might require the TPM and its keys
 storage for secure boot, disk encryption or other purposes. Instead, run it on a dedicated
 Virtual Machine (VM) or server.
 
-## Quick Start
+## Quick Demo Setup
 
 The CMC repository contains a complete local example setup including a demo CA and all required
-configurations and metadata. This setup is for demonstrating purposes only. Furthermore,
-it provides testing tools for local and remote attestation.
+configurations and metadata. The setup script `example-setup/setup-full-simple` clones the
+repository to a folder `cmc-workspace` in the home directory and sets up everything to quickly
+test remote attestation. It was tested on Ubuntu 22.04 LTS.
+
+> :warning: **Note:** You should run this only for testing on a development machine
 
 ```sh
-# Build and run the provisioning server that supplies the certificates and data for the cmcd
-cd cmc/provserver
-go build
-./provserver --config ../example-setup/prov-server-conf.json
+./run-full-setup
+```
+
+**Afterwards, continue with [Run the CMC](#run-the-cmc)**
+
+## Manual Setup
+
+This setup shows step-by-step how to install the tools, generate the metadata describing the
+platform and run and test the tools. It was tested on Ubuntu 22.04 LTS.
+
+### Install Prerequisites
+
+```sh
+# Install utils
+sudo apt install moreutils
+
+# Install cfssl for generating a demo PKI
+sudo apt install golang-cfssl
+
+# Install tpm-pcr-tools for calculating/parsing TPM PCR values for TPM-based attestation
+sudo apt install -y build-essential zlib1g-dev libssl-dev
+git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
+cd tpm-pcr-tools
+make
+sudo make install # Or launch from individual folders
+```
+
+### Build and Install
+
+```sh
+# 1. Setup a folder for the cmc workspace (e.g. in your home directory)
+CMC_ROOT=$HOME/cmc-workspace
+
+# 2. Clone the CMC repo
+git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
+
+# 3. Build CMC
+cd $CMC_ROOT/cmc
+go build ./...
+
+# 4. Install CMC $GOPATH/bin (export PATH=$PATH:$HOME/go/bin -> .profile/.bashrc)
+go install ./...
+```
+
+### Setup PKI and Metadata
+
+**1. Create a folder for your CMC configuration**
+
+```sh
+mkdir -p $CMC_ROOT/cmc-data
+```
+
+**2. Copy and adjust the example metadata templates**
+For the example, it is sufficient to copy the templates. For information on how to adjust
+the metadata, see [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
+```sh
+cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data
+```
+
+```sh
+# 3. Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
+$CMC_ROOT/cmc-data/setup-simple-pki -i $CMC_ROOT/cmc-data -o $CMC_ROOT/cmc-data/pki
+```
+
+**3. Generate metadata**
+
+This example uses a TPM as hardware trust anchor and an SRTM measured boot. For other setups,
+see [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
+
+```sh
+# Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
+verifications=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
+# Delete existing verifications in the RTM Manifest
+jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+
+verifications=$(sudo parse-srtm-pcrs -p 8,9 -f json)
+jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+```
+
+**4. Sign the metadata**
+
+This example uses JSON/JWS as serialization format. For different formats
+see [Serialization Format](#serialization-format)
+
+```sh
+IN=$CMC_ROOT/cmc-data/metadata-raw
+OUT=$CMC_ROOT/cmc-data/metadata-signed
+KEY=$CMC_ROOT/cmc-data/pki/signing-cert-key.pem
+CHAIN=$CMC_ROOT/cmc-data/pki/signing-cert.pem,$CMC_ROOT/cmc-data/pki/ca.pem
+
+mkdir -p $OUT
+
+signing-tool -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN -format json
+signing-tool -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN -format json
+signing-tool -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN --format json
+signing-tool -in $IN/ak.certparams.json       -out $OUT/ak.certparams.json       -keys $KEY -x5cs $CHAIN --format json
+signing-tool -in $IN/tlskey.certparams.json   -out $OUT/tlskey.certparams.json   -keys $KEY -x5cs $CHAIN --format json
+```
+
+**5. Adjust the *cmcd* configuration**
+
+Open the cmcd-configuration in `$CMC_ROOT/cmc-data/cmcd-conf.json` and adjust it if required.
+For more information about the configuration see [CMCD Configuration](#cmcd-configuration)
+or run `cmcd --help`
+
+**6. Adjust the provisioning server configuration**
+Open the provisioning server configuration in `$CMC_ROOT/cmc-data/prov-server-conf.json` and
+adjust it if required. For more information about the configuration see
+[Provisioning Server Configuration](#provisioning-server-configuration) or run `provserver --help`
+
+
+## Run the CMC
+
+```sh
+# Start the provisioning server that supplies the certificates and metadata for the cmcd
+provserver --config $CMC_ROOT/cmc-data/prov-server-conf.json
 
 # Build and run the cmcd
-cd cmc/cmcd
-go build
-./cmcd --config ../example-setup/cmcd-conf.json --addr http://127.0.0.1:9001/metadata-signed
+cmcd --config $CMC_ROOT/cmc-data/cmcd-conf.json --addr http://127.0.0.1:9001/metadata-signed
 
-# Build the testclient
-cd cmc/testclient
-go build
+# Run the testclient to retrieve an attestation report (stored in current folder unless otherwise specified)
+testclient --mode generate
 
-# Run the testclient to retrieve an attestation report (stored in cmc/testclient)
-./testclient --mode generate
+# Run the testclient to verify the attestation report (stored in current folder unless otherwise specified)
+testclient --mode verify --rootcacertfile $CMC_ROOT/cmc-data/pki/ca.pem
+```
 
-# Run the testclient to verify the attestation report (result also stored in cmc/testclient)
-./testclient --mode verify --rootcacertfile ../example-setup/ca/ca.pem
+### Establish an attested TLS connection
 
+```sh
 # To test the attested TLS connection
-cd cmc/testconnector
-go build
-./testconnector --rootcacertfile ../example-setup/ca/ca.pem
+testconnector --rootcacertfile $CMC_ROOT/cmc-data/pki/ca.pem
 
 # Run the testclient to test the attested TLS connection with the connector
-./testclient --mode tlsconn -rootcacertfile ../example-setup/ca/ca.pem -connector 127.0.0.1:443 -mTLS
+testclient --mode tlsconn -rootcacertfile $CMC_ROOT/cmc-data/pki/ca.pem -connector 127.0.0.1:443 -mTLS
 ```
 
 **Note**: by default, *cmcd* and *testclient* use localhost port 9955 to communicate. This can be changed in the *cmcd*
@@ -85,51 +232,75 @@ warning is printed. The intermediate and root CA for this chain can be downloade
 vendor. The certificates can then be added in to the ```cmc/example-setup/tpm-ek-certs.db```
 database. The ```verifyEkCert``` parameter in the *provserver* config can then be set to true.
 
-**Note**: The verification of the attestation report will most likely fail. This is due to the
-software on your machine differing from the software defined in the example-setup. Use
-the *ids-pcp*-tool to update the manifests and descriptions (see
-[Manifests and Descriptions](#manifests-and-descriptions))
 
+## Generating Metadata and Setup Alternatives
 
-## Manifests and Descriptions
+Metadata and PKI can be generated in different formats and configurations, which is shortly
+described in this section.
 
-The *cmcd* requires metadata (manifests and descriptions) that describe the platform and the
-software artefacts running on the platform. A successful remote attestation requires signed
-manifests for all components running on the platform. In a productive setup, it would be the
-task of a developer of an IDS component to deliver a manifest together with the software component.
+### Metadata
 
-For demonstration purposes, this meta-data can be generated via the *ids-pcp* tool, which is also
-open source:
+The example setup contains templates for the required metadata files in JSON. The attributes
+of these files can be adjusted according to individual requirements:
+
+- **rtm.manifest.json**: Contains information about the Root of Trust for Measurements, which
+usually comprises the reference values (hashes) for BIOS/UEFI, bootloader and other early boot
+components
+- **os.manifest.json**: Contains the operating system reference values and information
+- **company.description.json**: Optional, metadata describing the operater of the computing platform
+- **device.description.json**: Metadata describing the overall platform, contains links to
+RTM Manifest, OS Manifest and App Manifests
+- **ak.certparams.json**: Certificate Parameters for the TPM Attestation Key certificate to be
+generated by the provisioning server during TPM credential activation
+- **tlskey.certparams.json**: Certificate Parameters for the TLS Key certificate to be
+generated by the provisioning server during
+
+### Serialization Format
+
+The attestation report can be serialized to JSON and signed via JSON Web signatures (JWS), or to
+CBOR and signed via CBOR Object Signing and Encryption (COSE). This must be specified in the
+configuration of the *cmcd* (see [CMCD Configuration](#cmcd-configuration) and the
+provisioning server (see [Provisioning Server Configuration](#provisioning-server-configuration))
+
+As CBOR is a binary serialization format, the serialized data is not human-readable. Therefore, the
+metadata templates are always in JSON. A converter tool is provided to convert the metadata files
+to CBOR before signing them. To convert a metadata file from JSON to CBOR:
 
 ```sh
-git clone https://github.com/Fraunhofer-AISEC/ids-pcp
+# Convert JSON to CBOR using the converter-tool
+$CMC_ROOT/cmc/tools/converter/converter -in <input-file>.json -out <output-file.cbor> -format json
 ```
 
-The repository contains example setups for a TPM based attestation of a device using
-Static Root of Trust for Measurements (SRTM) in folder
-`ids-pcp/examples/demo-setup/input/srtm-connector` as well a device using Dynamic Root of Trust for
-Measurements (DRTM) in folder `ids-pcp/examples/demo-setup/input/drtm-connector`. The values must
-be adjusted in the *manifest* files to the values of the platform. For testing, the values can be
-retrieved e.g. via the tools ```fwupdtpmevlog``` or ```tpm2_eventlog```.
+### TPM Setup using Calculated Values
 
-After the values are adjusted, the manifests and descriptions can be signed by the demo
-*ids-pcp* tool and provided to the *cmcd*:
+In the example setup, the platform is simply seen as a "good reference platform" and the
+verifications are generated through parsing the TPM measurements from the `sysfs`. Ideally, the
+verifications are generated from the single software artefacts running on the platform. For
+QEMU VMs with OVMF and a kernel with appended initramfs, the `calculate-srtm-pcrs` tool can
+be used:
 
 ```sh
-cd cmc/example-setup
-# If desired, generate a new PKI
-./generate-pki
-# Sign the metadata files
-./sign-metadata
-```
+# 5. a) TPM Setup using calculated values
+# Calculate verifications
+verifications=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 0,1,2,3,6,7 --eventlog --config configs/ovmf-f80580f56b.cfg)
+# Delete all existing verifications
+jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+# Insert new verifications
+jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 
-**Note:** We aim to provide a VM and tools for automatically generating the manifest files
-in the suitable format in the future.
+verifications=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 4,5 --eventlog --config configs/ovmf-f80580f56b.cfg)
+jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+```
 
 ## Config Files
 
 The *cmcd* and *provserver* require JSON configuration files. An example setup with all
-required configuration files is provided in the ```examples/``` folder of this repository.
+required configuration files is provided in the ```examples/``` folder of this repository. Paths
+in the configuration files can either be absolute, or relative to the path of the configuration
+file.
+
+### CMCD Configuration
 
 The *cmcd* requires a JSON configuration file with the following information:
 - **addr**: The address the *cmcd* should listen on, e.g. 127.0.0.1:9955
@@ -155,6 +326,9 @@ TPM quote will always be signed with the TPM's AK.
 configuration). The linux kernel default is 10
 - **keyConfig**: The algorithm to be used for the *cmcd* keys. Possible values are:  RSA2048,
 RSA4096, EC256, EC384, EC521
+- **policies**: An optional custom policies file
+- **serialization**: The serialiazation format to use for the attestation report. Can be either
+`cbor` or `json`
 
 ```json
 {
@@ -167,9 +341,12 @@ RSA4096, EC256, EC384, EC521
     "signingInterface": "TPM",
     "useIma": false,
     "imaPcr": 10,
-    "keyConfig": "EC256"
+    "keyConfig": "EC256",
+    "serialization": "json"
 }
 ```
+
+### Provisioning Server Configuration
 
 The provisioning server requires a configuration file with the following information:
 - **port**: The port the server should listen on
@@ -200,14 +377,16 @@ relevant if vcekOfflineCaching is set to true)
 ```json
 {
     "port": 9000,
-    "deviceSubCaKey": "ca/device_sub_ca-key.pem",
-    "deviceSubCaCert": "ca/device_sub_ca.pem",
-    "caCert": "ca/ca.pem",
-    "httpFolder": "data-server",
-    "verifyEkCert": false,
+    "signingKey": "pki/ca-key.pem",
+    "certChain": [
+        "pki/ca.pem"
+    ],
+    "httpFolder": "./",
+    "verifyEkCert": true,
     "tpmEkCertDb": "tpm-ek-certs.db",
     "vcekOfflineCaching": true,
-    "vcekCacheFolder": "ca/vceks"
+    "vcekCacheFolder": "ca/vceks",
+    "serialization": "json"
 }
 ```
 
