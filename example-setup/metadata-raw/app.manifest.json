@@ -1,13 +1,13 @@
 {
 	"type" : "App Manifest",
-	"name" : "de.fhg.aisec.app",
+	"name" : "de.test.app",
 	"developerCommonName" : "Test Developer",
 	"version" : "20210717200000",
 	"validity" : {
 		"notBefore": "20210717200000",
 		"notAfter": "20240717200000"
 	},
-	"oss" : [ "de.fhg.aisec.ids.os.drtm"
+	"oss" : [ "de.test.os"
 	],
 	"description" : "Test App",
 	"certificationLevel" : 1,

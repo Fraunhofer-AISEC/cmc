@@ -1,13 +1,13 @@
 {
-    "type": "AK Cert Params", 
+    "type": "AK Cert Params",
     "subject": {
-      "commonName": "de.fhg.aisec.ids.ak.connector0",
+      "commonName": "de.test.ak.device0",
       "country": "DE",
-      "organization": "Fraunhofer AISEC",
+      "organization": "Test Organization",
       "organizationalUnit": "device",
       "locality": "Munich",
       "province": "BY",
-      "streetAddress": "Lichtenbergstrasse 11",
+      "streetAddress": "teststreet 15",
       "postalCode": "85748"
     },
     "sans": [ "127.0.0.1:9000", "test.connector.de" ]

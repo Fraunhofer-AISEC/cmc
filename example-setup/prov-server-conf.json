@@ -1,9 +1,8 @@
 {
     "port": 9001,
-    "signingKey": "pki/ca/device_sub_ca-key.pem",
+    "signingKey": "pki/ca-key.pem",
     "certChain": [
-        "pki/ca/device_sub_ca.pem",
-        "pki/ca/ca.pem"
+        "pki/ca.pem"
     ],
     "httpFolder": "./",
     "verifyEkCert": false,

@@ -3,7 +3,7 @@
 set -e
 
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
-CMC_DIR="$DIR/../.."
+CMC_DIR="$DIR/.."
 
 IN="$CMC_DIR/example-setup"
 OUT="$DIR"

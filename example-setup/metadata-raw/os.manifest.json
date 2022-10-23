@@ -1,16 +1,16 @@
 {
     "type": "OS Manifest",
-    "name": "de.fhg.aisec.ids.os.drtm",
-    "developerCommonName": "AISEC",
+    "name": "de.test.os",
+    "developerCommonName": "Test Developer",
     "version" : "20210717200000",
 	"validity" : {
 		"notBefore": "20210717200000",
 		"notAfter": "20240717200000"
 	},
-    "description": "AISEC PoC Demonstrator DRTM OS Manifest",
+    "description": "PoC Demonstrator OS Manifest",
     "certificationLevel" : 3,
     "rtms": [
-        "de.fhg.aisec.ids.rtm.drtm"
+        "de.test.rtm"
     ],
     "verifications": [
     ]
