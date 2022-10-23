@@ -104,12 +104,12 @@ type AkCertResponse struct {
 // Paths specifies the paths to store the encrypted TPM key blobs
 // and the certificates
 type Paths struct {
-	Ak          string
-	TLSKey      string
-	AkCert      string
-	TLSCert     string
-	DeviceSubCa string
-	Ca          string
+	Ak            string
+	TLSKey        string
+	AkCert        string
+	TLSCert       string
+	Intermediates []string
+	Ca            string
 }
 
 var (
@@ -173,7 +173,7 @@ func NewTpm(c *Config) (*Tpm, error) {
 			return nil, fmt.Errorf("failed to provision TPM: %v", err)
 		}
 
-		err = saveTpmData(paths, &akchain, &tlschain)
+		err = saveTpmData(c, paths, &akchain, &tlschain)
 		if err != nil {
 			os.Remove(paths.Ak)
 			os.Remove(paths.TLSKey)
@@ -497,16 +497,19 @@ func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.C
 	return resp.AkCertChain, resp.TlsCertChain, nil
 }
 
-func saveTpmData(paths *Paths, akchain, tlschain *ar.CertChain) error {
+func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error {
 
 	// Store the certificates on disk
 	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(akchain.Leaf))
 	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(tlschain.Leaf))
 
-	// TODO currently TPM driver only supports a single intermediate certificate and same
-	// chain for AK and TLS key
-	log.Tracef("New Device Sub CA Cert %v: %v", paths.DeviceSubCa, string(akchain.Intermediates[0]))
-	log.Tracef("New Device CA Cert %v: %v", paths.Ca, string(akchain.Ca))
+	// TODO currently only the same certificate chain is supported for AK and TLS key
+	for i, inter := range akchain.Intermediates {
+		path := path.Join(c.StoragePath, fmt.Sprintf("intermediate%v.pem", i))
+		paths.Intermediates = append(paths.Intermediates, path)
+		log.Tracef("New Intermediate Cert %v: %v", path, string(inter))
+	}
+	log.Tracef("New CA Cert %v: %v", paths.Ca, string(akchain.Ca))
 
 	if err := os.WriteFile(paths.AkCert, akchain.Leaf, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.AkCert, err)
@@ -514,8 +517,13 @@ func saveTpmData(paths *Paths, akchain, tlschain *ar.CertChain) error {
 	if err := os.WriteFile(paths.TLSCert, tlschain.Leaf, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
 	}
-	if err := os.WriteFile(paths.DeviceSubCa, akchain.Intermediates[0], 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
+	if len(paths.Intermediates) != len(akchain.Intermediates) {
+		return errors.New("internal error: length of intermediate certificates does not match length of paths")
+	}
+	for i := range akchain.Intermediates {
+		if err := os.WriteFile(paths.Intermediates[i], akchain.Intermediates[i], 0644); err != nil {
+			return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Intermediates[i], err)
+		}
 	}
 	if err := os.WriteFile(paths.Ca, akchain.Ca, 0644); err != nil {
 		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
@@ -581,23 +589,27 @@ func loadTpmCerts(paths *Paths) (ar.CertChain, ar.CertChain, error) {
 	var cert []byte
 	var err error
 	// AK
+	log.Tracef("Loading AK cert from %v", paths.AkCert)
 	if cert, err = os.ReadFile(paths.AkCert); err != nil {
 		return akchain, tlschain, fmt.Errorf("failed to load AK cert from %v: %v", paths.AkCert, err)
 	}
 	akchain.Leaf = cert
 	// TLS
+	log.Tracef("Loading TLS cert from %v", paths.TLSCert)
 	if cert, err = os.ReadFile(paths.TLSCert); err != nil {
 		return akchain, tlschain, fmt.Errorf("failed to load TLS cert from %v: %v", paths.TLSCert, err)
 	}
 	tlschain.Leaf = cert
-	//SubCA
-	if cert, err = os.ReadFile(paths.DeviceSubCa); err != nil {
-		return akchain, tlschain, fmt.Errorf("failed to load Device Sub CA cert from %v: %v", paths.DeviceSubCa, err)
+	// Intermediates
+	for _, path := range paths.Intermediates {
+		if cert, err = os.ReadFile(path); err != nil {
+			return akchain, tlschain, fmt.Errorf("failed to load intermediate cert from %v: %v", path, err)
+		}
+		akchain.Intermediates = append(akchain.Intermediates, cert)
+		// TODO currently only one CA supported for AK and TLS key
+		tlschain.Intermediates = append(tlschain.Intermediates, cert)
 	}
-	// TODO currently only one intermediate supported, only one CA supported
-	akchain.Intermediates = append(akchain.Intermediates, cert)
-	tlschain.Intermediates = append(tlschain.Intermediates, cert)
-	//CA
+	// CA
 	if cert, err = os.ReadFile(paths.Ca); err != nil {
 		return akchain, tlschain, fmt.Errorf("failed to load CA cert from %v: %v", paths.Ca, err)
 	}
@@ -887,13 +899,28 @@ func createLocalStorage(storagePath string) (*Paths, error) {
 		}
 	}
 
+	// Read existing intermediate certificates
+	intermediates := make([]string, 0)
+	index := 0
+	for {
+		path := path.Join(storagePath, fmt.Sprintf("intermediate%v.pem", index))
+		if _, err := os.Stat(path); err == nil {
+			log.Tracef("Adding %v", path)
+			intermediates = append(intermediates, path)
+		} else {
+			log.Tracef("Finished adding intermediates")
+			break
+		}
+		index += 1
+	}
+
 	paths := &Paths{
-		Ak:          path.Join(storagePath, "ak_encrypted.json"),
-		AkCert:      path.Join(storagePath, "ak_cert.pem"),
-		TLSKey:      path.Join(storagePath, "tls_key_encrypted.json"),
-		TLSCert:     path.Join(storagePath, "tls_cert.pem"),
-		DeviceSubCa: path.Join(storagePath, "device_sub_ca.pem"),
-		Ca:          path.Join(storagePath, "ca.pem"),
+		Ak:            path.Join(storagePath, "ak_encrypted.json"),
+		AkCert:        path.Join(storagePath, "ak_cert.pem"),
+		TLSKey:        path.Join(storagePath, "tls_key_encrypted.json"),
+		TLSCert:       path.Join(storagePath, "tls_cert.pem"),
+		Intermediates: intermediates,
+		Ca:            path.Join(storagePath, "ca.pem"),
 	}
 
 	return paths, nil
