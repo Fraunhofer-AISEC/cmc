@@ -17,7 +17,7 @@ package attestedtls
 
 import (
 	"crypto/tls"
-	"errors"
+	"fmt"
 	"net"
 
 	log "github.com/sirupsen/logrus"
@@ -35,8 +35,7 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	dialer.Timeout = timeout
 	conn, err := tls.DialWithDialer(&dialer, network, addr, config)
 	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[Dialer] TLS establishment failed")
+		return nil, fmt.Errorf("failed to establish tls connection: %w", err)
 	}
 
 	// get cmc Config: start with defaults
@@ -53,26 +52,19 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	// FUTURE: check if certificate can be obtained differently
 	err = verify(conn, conn.ConnectionState().PeerCertificates[0].Raw[:], cc)
 	if err != nil {
-		log.Error(err)
-		errout := errors.New("failed to verify Listener")
-		ae, ok := err.(AttestedError)
-		if ok {
-			return nil, NewAttestedError(ae.GetVerificationResult(), errout)
-		}
-		return nil, errout
+		return nil, fmt.Errorf("failed to verify listener: %w", err)
 	}
 
 	if mTLS {
-		log.Info("[Dialer] Performing mTLS: verifying dialer...")
+		log.Info("Performing mTLS: verifying dialer...")
 		// attest itself: include own certificate in AR
 		// Future: check if certificate can be obtained differently
 		err = attest(conn, config.Certificates[0].Certificate[0], cc)
 		if err != nil {
-			log.Error(err)
-			return nil, errors.New("[Dialer] remote verification of dialer failed")
+			return nil, fmt.Errorf("remote verification of dialer failed: %w", err)
 		}
 	} else {
-		log.Info("[Dialer] No mTLS performed")
+		log.Info("No mTLS performed")
 	}
 
 	// finished

@@ -77,14 +77,14 @@ Virtual Machine (VM) or server.
 ## Quick Demo Setup
 
 The CMC repository contains a complete local example setup including a demo CA and all required
-configurations and metadata. The setup script `example-setup/setup-full-simple` clones the
+configurations and metadata. The setup script `example-setup/setup-full-simple` clones this
 repository to a folder `cmc-workspace` in the home directory and sets up everything to quickly
 test remote attestation. It was tested on Ubuntu 22.04 LTS.
 
 > :warning: **Note:** You should run this only for testing on a development machine
 
 ```sh
-./run-full-setup
+./setup-full-simple
 ```
 
 **Afterwards, continue with [Run the CMC](#run-the-cmc)**
@@ -487,7 +487,7 @@ go build
 ```sh
 cd testconnector
 go build
-./testconnector [-ca <file>] [-connector <listen-addr>] [-policies <file>]
+./testconnector [-ca <file>] [-addr <listen-addr>] [-policies <file>] [-cmcport <port>]
 ```
 
 ### Regenerate Protobuf gRPC Interface

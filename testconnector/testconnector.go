@@ -19,6 +19,8 @@ import (
 	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
+	"errors"
 	"flag"
 	"net"
 	"os"
@@ -34,16 +36,16 @@ func main() {
 	var err error
 	var config *tls.Config
 
-	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
-	port := flag.String("port", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
-	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port on which to listen")
+	caFile := flag.String("ca", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
+	port := flag.String("cmcport", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
+	connectoraddress := flag.String("addr", "0.0.0.0:443", "ip:port on which to listen")
 	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
 	flag.Parse()
 
 	log.SetLevel(log.TraceLevel)
 
 	// Get root CA cert
-	rootCA, err := os.ReadFile(*rootCACertFile)
+	rootCA, err := os.ReadFile(*caFile)
 	if err != nil {
 		log.Error("[Testconnector] Could not find root CA cert file.")
 		return
@@ -97,12 +99,17 @@ func main() {
 		// Finish TLS connection establishment with Remote Attestation
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Error(err)
-			ae, ok := err.(atls.AttestedError)
-			if ok {
-				log.Error(ae.GetVerificationResult())
+			var attestedErr atls.AttestedError
+			if errors.As(err, &attestedErr) {
+				result, err := json.Marshal(attestedErr.GetVerificationResult())
+				if err != nil {
+					log.Errorf("[Testconnector] Internal error: failed to marshal verification result: %v", err)
+				} else {
+					log.Errorf("[Testconnector] Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
+				}
+			} else {
+				log.Errorf("[Testconnector] Failed to establish connection: %v", err)
 			}
-			log.Error("[Testconnector] Failed to establish connection")
 			continue
 		}
 		// Handle established connections

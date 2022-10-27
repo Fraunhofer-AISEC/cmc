@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 
 	log "github.com/sirupsen/logrus"
@@ -101,8 +102,7 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 	// Create Sign request
 	hash, err := convertHash(opts)
 	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[Private Key] Sign request creation failed")
+		return nil, fmt.Errorf("[Private Key] Sign request creation failed: %w", err)
 	}
 	req := ci.TLSSignRequest{
 		Id:       id,
@@ -118,13 +118,12 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 	// Send Sign request
 	resp, err := cmcClient.TLSSign(context.Background(), &req)
 	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[PrivateKey] Sign request failed")
+		return nil, fmt.Errorf("sign request failed: %w", err)
 	}
 
 	// Check Sign response
 	if resp.GetStatus() != ci.Status_OK {
-		return nil, errors.New("[PrivateKey] Signature creation failed")
+		return nil, fmt.Errorf("signature creation failed with status %v", resp.GetStatus())
 	}
 	log.Trace("[PrivateKey] signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
 	return resp.GetSignedContent(), nil
@@ -163,13 +162,12 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 	// Call TLSCert request
 	resp, err := cmcClient.TLSCert(context.Background(), &req)
 	if err != nil {
-		log.Error(err)
-		return tls.Certificate{}, errors.New("[Listener] Failed to request TLS certificate")
+		return tls.Certificate{}, fmt.Errorf("failed to request TLS certificate: %w", err)
 	}
 
 	// Check TLSCert response
 	if resp.GetStatus() != ci.Status_OK || len(resp.GetCertificate()) == 0 {
-		return tls.Certificate{}, errors.New("[Listener] Could not receive TLS certificate")
+		return tls.Certificate{}, errors.New("could not receive TLS certificate")
 	}
 
 	// Convert each certificate (assuming it has superfluous "---------[]BEGIN CERTIFICATE[]-----" still there)
@@ -178,26 +176,25 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 		var remain []byte
 		currentBlock, remain = pem.Decode(cert)
 		if currentBlock == nil {
-			return tls.Certificate{}, errors.New("[Listener] Certificate inside the certificate chain could not be decoded")
+			return tls.Certificate{}, errors.New("certificate inside the certificate chain could not be decoded")
 		}
 		if newBlock, _ := pem.Decode(remain); newBlock != nil {
-			return tls.Certificate{}, errors.New("[Listener] Certificate inside certificate chain contain superfluous data. Expecting separate Certificates")
+			return tls.Certificate{}, errors.New("certificate inside certificate chain contain superfluous data. Expecting separate Certificates")
 		}
 		if currentBlock.Type == "CERTIFICATE" {
 			tlsCert.Certificate = append(tlsCert.Certificate, currentBlock.Bytes)
 		} else {
-			return tls.Certificate{}, errors.New("[Listener] Certificate inside the certificate chain not of correct type")
+			return tls.Certificate{}, errors.New("certificate inside the certificate chain not of correct type")
 		}
 	}
 	if len(tlsCert.Certificate) == 0 {
-		return tls.Certificate{}, errors.New("[Listener] Could not parse any certificate")
+		return tls.Certificate{}, errors.New("could not parse any certificate")
 	}
 
 	// Convert TLS cert (first cert) only to obtain its crypto.PublicKey
 	x509Cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
 	if err != nil {
-		log.Error(err)
-		return tls.Certificate{}, errors.New("[Listener] Could not parse certificate")
+		return tls.Certificate{}, fmt.Errorf("could not parse certificate: %w", err)
 	}
 
 	// Create TLS Cert

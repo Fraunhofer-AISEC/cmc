@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -100,9 +101,14 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, addr string
 
 	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcAddress(addrParts[0]), atls.WithCmcPort(addrParts[1]), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
 	if err != nil {
-		ae, ok := err.(atls.AttestedError)
-		if ok {
-			log.Error(ae.GetVerificationResult())
+		var attestedErr atls.AttestedError
+		if errors.As(err, &attestedErr) {
+			result, err := json.Marshal(attestedErr.GetVerificationResult())
+			if err != nil {
+				log.Fatalf("[Testclient] Internal error: failed to marshal verification result: %v",
+					err)
+			}
+			log.Fatalf("[Testclient] Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
 		}
 		log.Fatalf("[Testclient] failed to dial server: %v", err)
 	}
