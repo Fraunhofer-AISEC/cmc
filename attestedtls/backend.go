@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -54,7 +55,7 @@ func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, con
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
-		log.Error("[Backend] ERROR: did not connect:", err)
+		log.Errorf("[Backend] ERROR: did not connect: %v", err)
 		cancel()
 		return nil, nil, nil
 	}
@@ -84,15 +85,14 @@ func Read(c net.Conn) ([]byte, error) {
 	_, err := c.Read(lenbuf)
 
 	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[Backend] Failed to receive message: no length")
+		return nil, fmt.Errorf("failed to receive message: no length: %v", err)
 	}
 
 	len := binary.BigEndian.Uint32(lenbuf) // Max size of 4GB
 	log.Trace("TCP Message Length: ", len)
 
 	if len == 0 {
-		return nil, errors.New("[Backend] Message length is zero")
+		return nil, errors.New("message length is zero")
 	}
 
 	// Receive data in chunks of 1024 bytes as the Read function receives a maxium of 65536 bytes
@@ -105,15 +105,14 @@ func Read(c net.Conn) ([]byte, error) {
 		n, err := c.Read(tmpbuf)
 		rcvlen += uint32(n)
 		if err != nil {
-			log.Error(err)
-			return nil, errors.New("[Backend] Failed to receive message")
+			return nil, fmt.Errorf("failed to receive message: %w", err)
 		}
 		buf = append(buf, tmpbuf[:n]...)
 
 		// Abort as soon as we have read the expected data as signaled in the first 4 bytes
 		// of the message
 		if rcvlen == len {
-			log.Trace("[Backend] Received message")
+			log.Trace("Received message")
 			break
 		}
 	}

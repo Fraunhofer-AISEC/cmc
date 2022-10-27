@@ -17,7 +17,7 @@ package attestedtls
 
 import (
 	"crypto/tls"
-	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -85,8 +85,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 	// include components of tls.Conn to link both protocols: use own cert
 	err = attest(tlsConn, ln.Certificates[0].Certificate[0], ln.cmcConfig)
 	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[Listener] Failed to attest listener")
+		return nil, fmt.Errorf("failed to attest listener: %w", err)
 	}
 
 	// if client provides its cert: mTLS
@@ -101,13 +100,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 		//         (function GetClientCertificate, func GetCertificate or func GetConfigForClient)
 		err = verify(tlsConn, tlsConn.ConnectionState().PeerCertificates[0].Raw[:], ln.cmcConfig)
 		if err != nil {
-			log.Error(err)
-			errout := errors.New("failed to verify dialer")
-			ae, ok := err.(AttestedError)
-			if ok {
-				return nil, NewAttestedError(ae.GetVerificationResult(), errout)
-			}
-			return nil, errout
+			return nil, fmt.Errorf("failed to verify dialer: %w", err)
 		}
 	} else {
 		log.Info("[Listener] No mTLS performed")
@@ -144,8 +137,7 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 	// Listen
 	ln, err := tls.Listen(network, laddr, config)
 	if err != nil {
-		log.Error(err)
-		return listener, errors.New("[Listener] Failed")
+		return listener, fmt.Errorf("failed to listen: %w", err)
 	}
 	// Apply all additional (CMC) configs
 	listener.Listener = ln

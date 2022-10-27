@@ -4,15 +4,15 @@ set -e
 
 sudo apt install moreutils golang-cfssl
 
-# Install tools
-sudo apt install -y build-essential zlib1g-dev libssl-dev
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
-cd tpm-pcr-tools
-make
-sudo make install
-
 # Setup a folder for the cmc workspace (e.g. in your home directory)
 CMC_ROOT=$HOME/cmc-workspace
+
+# Install tools
+sudo apt install -y build-essential zlib1g-dev libssl-dev
+git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $CMC_ROOT/tpm-pcr-tools
+cd $CMC_ROOT/tpm-pcr-tools
+make
+sudo make install
 
 # Clone the CMC repo
 git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc

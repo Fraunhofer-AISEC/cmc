@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -39,11 +40,11 @@ func obtainAR(req *ci.AttestationRequest, cc cmcConfig) (resp *ci.AttestationRes
 	// Get backend connection
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
-		return nil, errors.New("[attestedTLS] Connection failed. No result obtained")
+		return nil, errors.New("failed to establish connection to obtain attestation report")
 	}
 	defer cmcconn.Close()
 	defer cancel()
-	log.Trace("[attestedTLS] Contacting backend to obtain AR.")
+	log.Trace("Contacting backend to obtain AR.")
 
 	// Extend Attest request with id
 	req.Id = id
@@ -51,8 +52,7 @@ func obtainAR(req *ci.AttestationRequest, cc cmcConfig) (resp *ci.AttestationRes
 	// Call Attest request
 	resp, err = cmcClient.Attest(context.Background(), req)
 	if err != nil {
-		log.Error(err)
-		return nil, errors.New("[attestedTLS] Could not obtain attestation report")
+		return nil, fmt.Errorf("failed to obtain attestation report: %w", err)
 	}
 
 	// Return response
@@ -64,11 +64,11 @@ func verifyAR(nonce, report []byte, cc cmcConfig) error {
 	// Get backend connection
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
-		return errors.New("[attestedTLS] Connection failed. No result obtained")
+		return errors.New("failed to establish connection to obtain attestation result")
 	}
 	defer conn.Close()
 	defer cancel()
-	log.Trace("[attestedTLS] Contacting backend for AR verification")
+	log.Trace("Contacting backend for AR verification")
 
 	// Create Verification request
 	req := ci.VerificationRequest{
@@ -80,20 +80,18 @@ func verifyAR(nonce, report []byte, cc cmcConfig) error {
 	// Perform Verify request
 	resp, err := cmcClient.Verify(context.Background(), &req)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Could not obtain verification result")
+		return fmt.Errorf("could not obtain verification result: %w", err)
 	}
 	// Check Verify response
 	if resp.GetStatus() != ci.Status_OK {
-		return errors.New("[attestedTLS] Obtaining verification result failed")
+		return fmt.Errorf("obtaining verification result failed with status %v", resp.GetStatus())
 	}
 
 	// parse VerificationResult
 	var result ar.VerificationResult
 	err = json.Unmarshal(resp.GetVerificationResult(), &result)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Could not parse verification result")
+		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
 	// check results
@@ -105,25 +103,23 @@ func verifyAR(nonce, report []byte, cc cmcConfig) error {
 
 // Attests itself by receiving a nonce, creating an AR and returning it
 func attest(conn *tls.Conn, cert []byte, cc cmcConfig) error {
-	log.Info("[attestedTLS] Attesting to peer in connection...")
+	log.Info("Attesting to peer in connection...")
 
 	// Obtain request msg
 	data, err := Read(conn)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Did not receive attestation request")
+		return fmt.Errorf("failed to receive attestation request: %w", err)
 	}
 	// Parse request msg
 	req := &ci.AttestationRequest{}
 	err = proto.Unmarshal(data, req)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Failed to parse attestation request")
+		return fmt.Errorf("failed to parse attestation request: %w", err)
 	}
 
 	// Check nonce length
 	if len(req.Nonce) != noncelen {
-		return errors.New("[attestedTLS] Nonce does not have expected size")
+		return fmt.Errorf("nonce (%v) does not have expected size (%v)", len(req.Nonce), noncelen)
 	}
 
 	// include components of tls.Conn to link both protocols: use serverCert
@@ -133,44 +129,39 @@ func attest(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 	// Obtain response (AR)
 	resp, err := obtainAR(req, cc)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Could not obtain response")
+		return fmt.Errorf("could not obtain response: %w", err)
 	}
 	data, err = proto.Marshal(resp)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Failed to marshal response")
+		return fmt.Errorf("failed to marshal response: %w", err)
 	}
 
 	// Send response
 	err = Write(data, conn)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Failed to send AR")
+		return fmt.Errorf("failed to send AR: %w", err)
 	}
-	log.Info("[attestedTLS] Sent AR")
+	log.Info("Sent AR")
 
 	// Receive Ack to know if verification was successful
 	err = receiveAck(conn)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Other side failed to verify AR")
+		return fmt.Errorf("other side failed to verify AR: %w", err)
 	}
-	log.Info("[attestedTLS] Attestation to peer successful")
+	log.Info("Attestation to peer successful")
 	return nil
 }
 
 // Verifies remote party by sending nonce, receiving an AR and verfying it
 func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
-	log.Info("[attestedTLS] Verifying peer in connection...")
+	log.Info("Verifying peer in connection...")
 
 	// Create nonce
 	nonce := make([]byte, noncelen)
 	_, err := rand.Read(nonce)
 	if err != nil {
-		log.Error(err)
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Failed to generate nonce")
+		return fmt.Errorf("failed to generate nonce: %w", err)
 	}
 
 	// Create AR request with nonce
@@ -179,71 +170,60 @@ func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 	}
 	data, err := proto.Marshal(req)
 	if err != nil {
-		log.Error(err)
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Failed to generate request")
+		return fmt.Errorf("failed to generate request: %w", err)
 	}
 
 	// Send Request msg
 	err = Write(data, conn)
 	if err != nil {
-		log.Error(err)
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Failed to write request")
+		return fmt.Errorf("failed to write request: %w", err)
 	}
 
 	// Receive response
-	log.Trace("[attestedTLS] Waiting for AR...")
+	log.Trace("Waiting for AR...")
 	data, err = Read(conn)
 	if err != nil {
-		log.Error(err)
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Failed to read response")
+		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// Parse response msg
 	resp := &ci.AttestationResponse{}
 	err = proto.Unmarshal(data, resp)
 	if err != nil {
-		log.Error(err)
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Failed to parse response")
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	// Check response status
 	if resp.Status != ci.Status_OK || len(resp.AttestationReport) == 0 {
 		_ = sendAck(false, conn)
-		return errors.New("[attestedTLS] Did not receive attestation report")
+		return errors.New("did not receive attestation report")
 	}
 
 	// include components of tls.Conn to link both protocols
 	combinedNonce := sha256.Sum256(append(cert[:], nonce[:]...))
 
 	// Verify AR
-	log.Trace("[attestedTLS] Verifying attestation report...")
+	log.Trace("Verifying attestation report...")
 	err = verifyAR(combinedNonce[:], resp.AttestationReport, cc)
 	if err != nil {
-		log.Error(err)
 		_ = sendAck(false, conn)
-		errout := errors.New("attestation report verification failed")
-		ae, ok := err.(AttestedError)
-		if ok {
-			return NewAttestedError(ae.GetVerificationResult(), errout)
-		}
-		return errout
+		return err
 	}
 	err = sendAck(true, conn)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Failed to send ACK")
+		return fmt.Errorf("failed to send ACK: %w", err)
 	}
-	log.Trace("[attestedTLS] Verified peer")
+	log.Trace("Verified peer")
 	return nil
 }
 
 // Sends success ACK or failure to peer
 func sendAck(success bool, conn *tls.Conn) error {
-	log.Trace("[attestedTLS] Sending ACK...")
+	log.Trace("Sending ACK...")
 
 	data := make([]byte, 1)
 	if success {
@@ -253,8 +233,7 @@ func sendAck(success bool, conn *tls.Conn) error {
 	}
 	err := Write(data, conn)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Failed to write ACK")
+		return fmt.Errorf("failed to write ACK: %w", err)
 	}
 	return nil
 }
@@ -262,15 +241,14 @@ func sendAck(success bool, conn *tls.Conn) error {
 // Waits for and reads success ACK or failure
 // In case of failure, an error is returned
 func receiveAck(conn *tls.Conn) error {
-	log.Trace("[attestedTLS] Waiting for ACK...")
+	log.Trace("Waiting for ACK...")
 
 	data, err := Read(conn)
 	if err != nil {
-		log.Error(err)
-		return errors.New("[attestedTLS] Failed to read ACK")
+		return fmt.Errorf("failed to read ACK: %w", err)
 	}
 	if len(data) != 1 || data[0] != 0 {
-		return errors.New("[attestedTLS] Did not receive success ACK")
+		return errors.New("did not receive success ACK")
 	}
 	return nil
 }
