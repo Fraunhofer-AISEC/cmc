@@ -59,7 +59,7 @@ func obtainAR(req *ci.AttestationRequest, cc cmcConfig) (resp *ci.AttestationRes
 	return resp, nil
 }
 
-//Checks Attestation report by calling the CMC to Verify and checking its status response
+// Checks Attestation report by calling the CMC to Verify and checking its status response
 func verifyAR(nonce, report []byte, cc cmcConfig) error {
 	// Get backend connection
 	cmcClient, conn, cancel := getCMCServiceConn(cc)

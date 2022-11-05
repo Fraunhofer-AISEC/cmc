@@ -4,10 +4,9 @@
 cmcd/cmcd
 testclient/testclient
 testconnector/testconnector
-testclient/nonce
-testclient/attestation-report
-testclient/attestation-result.json
-dummycmc/dummycmc
+**/nonce
+**/attestation-report
+**/attestation-result.json
 tools/signing-tool/signing-tool
 tools/converter/converter
 tpm/test_encrypted_ak.json

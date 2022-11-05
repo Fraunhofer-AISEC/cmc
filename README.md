@@ -206,17 +206,17 @@ cmcd --config $CMC_ROOT/cmc-data/cmcd-conf.json --addr http://127.0.0.1:9001/met
 testclient --mode generate
 
 # Run the testclient to verify the attestation report (stored in current folder unless otherwise specified)
-testclient --mode verify --rootcacertfile $CMC_ROOT/cmc-data/pki/ca.pem
+testclient --mode verify --ca $CMC_ROOT/cmc-data/pki/ca.pem
 ```
 
 ### Establish an attested TLS connection
 
 ```sh
 # To test the attested TLS connection
-testconnector --rootcacertfile $CMC_ROOT/cmc-data/pki/ca.pem
+testconnector --ca $CMC_ROOT/cmc-data/pki/ca.pem
 
 # Run the testclient to test the attested TLS connection with the connector
-testclient --mode tlsconn -rootcacertfile $CMC_ROOT/cmc-data/pki/ca.pem -connector 127.0.0.1:443 -mTLS
+testclient --mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -connector 127.0.0.1:443 -mTLS
 ```
 
 **Note**: by default, *cmcd* and *testclient* use localhost port 9955 to communicate. This can be changed in the *cmcd*
@@ -436,7 +436,7 @@ SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd --config <config-file> --addr <serv
 ```sh
 cd testclient
 go build
-./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS] [--rootcacertfile <file>] [--policies <file>]
+./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS] [--ca <file>] [--policies <file>]
 ```
 
 ### Build and Run the Testconnector
@@ -444,7 +444,7 @@ go build
 ```sh
 cd testconnector
 go build
-./testconnector [--rootcacertfile <file>] [--connector <listen-addr>] [--policies <file>]
+./testconnector [--ca <file>] [--connector <listen-addr>] [--policies <file>]
 ```
 
 ### Regenerate Protobuf gRPC Interface
