@@ -29,7 +29,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	// local modules
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/coapapi"
+	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provclient"
 	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/swdriver"
@@ -47,6 +51,7 @@ type config struct {
 	ImaPcr                int32    `json:"imaPcr"`
 	KeyConfig             string   `json:"keyConfig,omitempty"` // RSA2048 RSA4096 EC256 EC384 EC521
 	Serialization         string   `json:"serialization"`       // JSON, CBOR
+	Api                   string   `json:"api"`                 // gRPC, CoAP
 }
 
 func loadConfig(configFile string) (*config, error) {
@@ -65,7 +70,7 @@ func loadConfig(configFile string) (*config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
 	}
-	c.LocalPath = getFilePath(c.LocalPath, filepath.Dir(configFile))
+	c.LocalPath = internal.GetFilePath(c.LocalPath, filepath.Dir(configFile))
 
 	// Check measurement, signing and serializer interface
 	for _, m := range c.MeasurementInterfaces {
@@ -83,6 +88,17 @@ func loadConfig(configFile string) (*config, error) {
 	printConfig(c)
 
 	return c, nil
+}
+
+func printConfig(c *config) {
+	log.Info("Using the following configuration:")
+	log.Info("\tCMC Listen Address       : ", c.Addr)
+	log.Info("\tProvisioning Server URL  : ", c.ProvServerAddr)
+	log.Info("\tLocal Storage Path       : ", c.LocalPath)
+	log.Info("\tFetch Metadata           : ", c.FetchMetadata)
+	log.Info("\tUse IMA                  : ", c.UseIma)
+	log.Info("\tIMA PCR                  : ", c.ImaPcr)
+	log.Info("\tSerialization            : ", c.Serialization)
 }
 
 func main() {
@@ -155,7 +171,7 @@ func main() {
 		signer = sw
 	}
 
-	if strings.EqualFold(c.SigningInterface, "TPM") || contains("TPM", c.MeasurementInterfaces) {
+	if strings.EqualFold(c.SigningInterface, "TPM") || internal.Contains("TPM", c.MeasurementInterfaces) {
 		tpmConfig := &tpmdriver.Config{
 			StoragePath: path.Join(c.LocalPath, "internal"),
 			ServerAddr:  c.ProvServerAddr,
@@ -174,7 +190,7 @@ func main() {
 		defer tpmdriver.CloseTpm()
 	}
 
-	if contains("TPM", c.MeasurementInterfaces) {
+	if internal.Contains("TPM", c.MeasurementInterfaces) {
 		log.Info("Using TPM as Measurement Interface")
 		measurements = append(measurements, tpm)
 	}
@@ -184,7 +200,7 @@ func main() {
 		signer = tpm
 	}
 
-	if contains("SNP", c.MeasurementInterfaces) {
+	if internal.Contains("SNP", c.MeasurementInterfaces) {
 		log.Info("Using SNP as Measurement Interface")
 		snpConfig := snpdriver.Config{
 			Url: c.ProvServerAddr,
@@ -198,18 +214,27 @@ func main() {
 		measurements = append(measurements, snp)
 	}
 
-	serverConfig := &ServerConfig{
+	serverConfig := &api.ServerConfig{
 		Metadata:              metadata,
 		MeasurementInterfaces: measurements,
 		Signer:                signer,
 		Serializer:            serializer,
 	}
 
-	server := NewServer(serverConfig)
-
-	err = Serve(c.Addr, &server)
-	if err != nil {
-		log.Error(err)
-		return
+	// TODO configuration
+	if strings.EqualFold(c.Api, "grpc") {
+		server := grpcapi.NewServer(serverConfig)
+		err = server.(*grpcapi.GrpcServer).Serve(c.Addr)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+	} else if strings.EqualFold(c.Api, "coap") {
+		server := coapapi.NewServer(serverConfig)
+		err = server.Serve(c.Addr)
+		if err != nil {
+			log.Error(err)
+			return
+		}
 	}
 }

@@ -230,7 +230,7 @@ func main() {
 	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
 	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
 	connectoraddress := flag.String("connector", "0.0.0.0:443", "ip:port to connect to the test connector")
-	rootCACertFile := flag.String("rootcacertfile", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
+	rootCACertFile := flag.String("ca", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
 	mTLS := flag.Bool("mTLS", false, "Performs mutual TLS with remote attestation on both sides. Only in mode tlsconn")
 	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
 	flag.Parse()
@@ -248,15 +248,17 @@ func main() {
 
 	// Add optional policies if present
 	var policies []byte = nil
-	var err error
-	if *policiesFile != "" {
-		log.Debug("Policies specified. Adding them to verification request")
-		policies, err = os.ReadFile(*policiesFile)
-		if err != nil {
-			log.Fatalf("Failed to read policies file: %v", err)
+	if mode == Verify {
+		var err error
+		if *policiesFile != "" {
+			log.Debug("Policies specified. Adding them to verification request")
+			policies, err = os.ReadFile(*policiesFile)
+			if err != nil {
+				log.Fatalf("Failed to read policies file: %v", err)
+			}
+		} else {
+			log.Debug("No policies specified. Verifying with default parameters")
 		}
-	} else {
-		log.Debug("No policies specified. Verifying with default parameters")
 	}
 
 	if mode == Generate {
