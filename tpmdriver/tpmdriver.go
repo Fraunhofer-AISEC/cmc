@@ -260,11 +260,11 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
 	for i, elem := range tm.HashChain {
 		for _, sha := range elem.Sha256 {
-			log.Debug(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, hex.EncodeToString(sha)))
+			log.Trace(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, hex.EncodeToString(sha)))
 		}
 	}
-	log.Debug("Quote: ", hex.EncodeToString(tm.Message))
-	log.Debug("Signature: ", hex.EncodeToString(tm.Signature))
+	log.Trace("Quote: ", hex.EncodeToString(tm.Message))
+	log.Trace("Signature: ", hex.EncodeToString(tm.Signature))
 
 	return tm, nil
 }
