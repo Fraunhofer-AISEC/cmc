@@ -23,329 +23,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	validQuote, _ = hex.DecodeString("ff54434780180022000bf340a1bdf8e802edef4d9a61f2b001d53def584a5b49b5d186e5cc5655445fd600085db48f3e33c9792a0000000004433c1bdbb7488e58a0415901ac24e803dae6440600000001000b030000060020a27bd934bc103d872e21df8329ef76a9cb7050b59c8762395de1f0a0385bfd79")
-
-	validSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
-
-	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8da74dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
-
-	validHashChain = []*HashChainElem{
-		{
-			Type:   "Hash Chain",
-			Pcr:    17,
-			Sha256: []HexByte{dec("1a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
-		},
-		{
-			Type:   "Hash Chain",
-			Pcr:    18,
-			Sha256: []HexByte{dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
-		},
-	}
-
-	invalidHashChain = []*HashChainElem{
-		{
-			Type:   "Hash Chain",
-			Pcr:    17,
-			Sha256: []HexByte{dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
-		},
-		{
-			Type:   "Hash Chain",
-			Pcr:    18,
-			Sha256: []HexByte{dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
-		},
-	}
-
-	validTpmNonce = []byte{0x5d, 0xb4, 0x8f, 0x3e, 0x33, 0xc9, 0x79, 0x2a}
-
-	invalidTpmNonce = []byte{0x6d, 0xb4, 0x8f, 0x3e, 0x33, 0xc9, 0x79, 0x2a}
-
-	validAk = "-----BEGIN CERTIFICATE-----\nMIIDVDCCAtqgAwIBAgIBATAKBggqhkjOPQQDAzBpMQswCQYDVQQGEwJERTERMA8G\nA1UEBxMIR2FyY2hpbmcxGTAXBgNVBAoTEEZyYXVuaG9mZXIgQUlTRUMxFTATBgNV\nBAsTDERldmljZSBTdWJDQTEVMBMGA1UEAxMMRGV2aWNlIFN1YkNBMB4XDTIyMDUw\nNDE3NDE0NFoXDTIyMTAzMTE3NDE0NFowgbAxCzAJBgNVBAYTAkRFMQswCQYDVQQI\nEwJCWTEPMA0GA1UEBxMGTXVuaWNoMR4wHAYDVQQJExVMaWNodGVuYmVyZ3N0cmFz\nc2UgMTExDjAMBgNVBBETBTg1NzQ4MRkwFwYDVQQKExBGcmF1bmhvZmVyIEFJU0VD\nMQ8wDQYDVQQLEwZkZXZpY2UxJzAlBgNVBAMTHmRlLmZoZy5haXNlYy5pZHMuYWsu\nY29ubmVjdG9yMDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALLkGMKG\nTwN5l8STOeoaEppeyQrkBMnkd+z5292EatVKRcHc4YZ/2ymTVsN9wnufcyqVXTH9\nGZNU3FG2+BQ0WzWIOZoh++f2FyVW6pfkCmYaOhtfzJDnL5tOhAi9tSb9KADn0gXi\ntIQJ4LTTimK8diEQEMO36kc7V2rnIbAp6XsldhdfzDq/x21SdDzz7tgmGqRKfW6J\n0WnU4lsswOXsaA1nfpntkqBAEetIPyWHNTCiuR8nsTodO2iB4kFFRpq8uy0vRjv3\nFUdmw4t9hLj89SjVLYOQtPu7HE+GBA0/MMj2PS0iUP9qgROjbl660RjZzcGP8jwm\nEtKOJKIMCV9dpPECAwEAAaNgMF4wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQC\nMAAwHQYDVR0OBBYEFICgXN+UT2N8E8sKBTpW1HL8lP4xMB8GA1UdIwQYMBaAFKL4\neCZP53Ov1EG4/cSt3w6unKVLMAoGCCqGSM49BAMDA2gAMGUCMQCjYNPMbOWUuXjj\nFVeTjX8R9oBlnDs+vib7jRxXxKsP6YXugz1ljPBmH0UJYl4AJSUCMA+amGNqs2b0\n84xW/a/CbCzpIbfO+c7iclWaWv+y//CQzS9XncOBQZyG54/wFmKxJw==\n-----END CERTIFICATE-----\n"
-
-	validIntermediate = "-----BEGIN CERTIFICATE-----\nMIICxzCCAk6gAwIBAgIUKJ3Q4qFWJxg082iXRpworGDyGiswCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDQyMTE3MDBaMGkxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEVMBMGA1UECxMMRGV2aWNlIFN1YkNBMRUwEwYDVQQDEwxEZXZpY2UgU3ViQ0Ew\ndjAQBgcqhkjOPQIBBgUrgQQAIgNiAASKwF7CxuBrmrOgWbDEU86t8/V3GPPNWkJ/\nt7uKO958kWXJ+CPMsco+X5aay5mWaYvYDd+GlAuP/sbPaRzy5c/CWvCVTOQ1kryk\nk7PwvLsxsQUoL7RPb9UUmrCFtjX37xSjgbwwgbkwDgYDVR0PAQH/BAQDAgGGMCcG\nA1UdJQQgMB4GCCsGAQUFBwMJBggrBgEFBQcDAgYIKwYBBQUHAwEwEgYDVR0TAQH/\nBAgwBgEB/wIBADAdBgNVHQ4EFgQUovh4Jk/nc6/UQbj9xK3fDq6cpUswHwYDVR0j\nBBgwFoAU8hU6qpbdP2MSQYggd1jO5ZKallYwKgYIKwYBBQUHAQEEHjAcMBoGCCsG\nAQUFBzABhg4xMjcuMC4wLjE6ODg4NzAKBggqhkjOPQQDAwNnADBkAjBV8xyxk9N6\nzEK4fdOsGtgIgFUeIAh26DdMEhEiB+oosbAqRGjvZfLbgBX8qQXWZdYCMFgtTChU\nxZn6cplAJma23FAkHu1AZNu9snmXc25PvjVrGBJQWwETNVwdtvkal+Fq0g==\n-----END CERTIFICATE-----\n"
-
-	validCa = "-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"
-
-	validTpmCertChain = CertChain{
-		Leaf:          []byte(validAk),
-		Intermediates: [][]byte{[]byte(validIntermediate)},
-		Ca:            []byte(validCa),
-	}
-
-	pcrs = [23]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
-
-	validVerifications = []Verification{
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("0310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
-			Name:   "SINIT ACM Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("b1a7fdf8c2bc04902c73104dbd362cbe45fe41d7110d0ef209bbbb94bef2f243"),
-			Name:   "BIOS ACM Registration Data",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450"),
-			Name:   "SRTM Status",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"),
-			Name:   "Launch Control Policy Control Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"),
-			Name:   "LCP Details Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"),
-			Name:   "STM Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("5a3e80a37915b1601c363acd1601df7ef257d5d32c664004a2ec0484a4f60628"),
-			Name:   "OS SINIT Data Capabilities Field Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("e21a507b6e8831ddef5db74a130d6b2e943cae55e0c9a5471d15d41976e0418f"),
-			Name:   "MLE Hash",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("a2b69438999767b0c3479a9fcc28ce2442b8d0357d95dca3ad1f74a887622497"),
-			Name:   "TPM NV Index Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("3b5f9781c4347f5d3af1daf7019654dc05d1af857a598c18f3bc77e7b042b37f"),
-			Name:   "SINIT Public Key Hash",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450"),
-			Name:   "SRTM Status",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("5a3e80a37915b1601c363acd1601df7ef257d5d32c664004a2ec0484a4f60628"),
-			Name:   "OS SINIT Data Capabilities Field Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"),
-			Name:   "Launch Control Policy Control Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"),
-			Name:   "LCP Authorities Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("a2b69438999767b0c3479a9fcc28ce2442b8d0357d95dca3ad1f74a887622497"),
-			Name:   "TPM NV Index Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91"),
-			Name:   "TBOOT Unknown",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91"),
-			Name:   "TBOOT",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("69a26345f8089c7ddf04b3103ddf301ffb45d5a889259b2d0036cc34d826307a"),
-			Name:   "Kernel Hash",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("32fa96b898e9b5374ac53a05372389d3f432c32338260c52f8d518325ea4797b"),
-			Name:   "TBOOT",
-			Pcr:    &pcrs[17],
-		},
-	}
-
-	invalidVerifications = []Verification{
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
-			Name:   "SINIT ACM Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("b1a7fdf8c2bc04902c73104dbd362cbe45fe41d7110d0ef209bbbb94bef2f243"),
-			Name:   "BIOS ACM Registration Data",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450"),
-			Name:   "SRTM Status",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"),
-			Name:   "Launch Control Policy Control Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"),
-			Name:   "LCP Details Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"),
-			Name:   "STM Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("5a3e80a37915b1601c363acd1601df7ef257d5d32c664004a2ec0484a4f60628"),
-			Name:   "OS SINIT Data Capabilities Field Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("e21a507b6e8831ddef5db74a130d6b2e943cae55e0c9a5471d15d41976e0418f"),
-			Name:   "MLE Hash",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("a2b69438999767b0c3479a9fcc28ce2442b8d0357d95dca3ad1f74a887622497"),
-			Name:   "TPM NV Index Digest",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("3b5f9781c4347f5d3af1daf7019654dc05d1af857a598c18f3bc77e7b042b37f"),
-			Name:   "SINIT Public Key Hash",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("67abdd721024f0ff4e0b3f4c2fc13bc5bad42d0b7851d456d88d203d15aaa450"),
-			Name:   "SRTM Status",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("5a3e80a37915b1601c363acd1601df7ef257d5d32c664004a2ec0484a4f60628"),
-			Name:   "OS SINIT Data Capabilities Field Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("fb5e512425fc9449316ec95969ebe71e2d576dbab833d61e2a5b9330fd70ee02"),
-			Name:   "Launch Control Policy Control Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"),
-			Name:   "LCP Authorities Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("a2b69438999767b0c3479a9fcc28ce2442b8d0357d95dca3ad1f74a887622497"),
-			Name:   "TPM NV Index Digest",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91"),
-			Name:   "TBOOT Unknown",
-			Pcr:    &pcrs[18],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("71be5852a14eabefebf0df0e1acc5da291883b6d4c5ab20914ed987c1daf3f91"),
-			Name:   "TBOOT",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("69a26345f8089c7ddf04b3103ddf301ffb45d5a889259b2d0036cc34d826307a"),
-			Name:   "Kernel Hash",
-			Pcr:    &pcrs[17],
-		},
-		{
-			Type:   "TPM Verification",
-			Sha256: dec("32fa96b898e9b5374ac53a05372389d3f432c32338260c52f8d518325ea4797b"),
-			Name:   "TBOOT",
-			Pcr:    &pcrs[17],
-		},
-	}
-
-	validResult = Result{
-		Success: true,
-	}
-
-	validResultMulti = ResultMulti{
-		Success: true,
-	}
-
-	validSignatureResult = SignatureResult{
-		Name:            "de.fhg.aisec.ids.ak.connector0",
-		Organization:    []string{"Fraunhofer AISEC"},
-		SubjectKeyId:    "80a05cdf944f637c13cb0a053a56d472fc94fe31",
-		AuthorityKeyId:  "a2f878264fe773afd441b8fdc4addf0eae9ca54b",
-		Signature:       validResult,
-		CertCheck:       validResult,
-		RoleCheck:       nil,
-		ExtensionsCheck: nil,
-	}
-
-	validTpmMeasurementResult = TpmMeasurementResult{
-		Summary: validResult,
-		PcrRecalculation: []PcrResult{
-			{
-				Pcr:        17,
-				Validation: validResultMulti,
-			},
-			{
-				Pcr:        18,
-				Validation: validResultMulti,
-			},
-		},
-		AggPcrQuoteMatch:   validResult,
-		QuoteFreshness:     validResult,
-		QuoteSignature:     validSignatureResult,
-		VerificationsCheck: validResultMulti,
-	}
-)
-
 func Test_verifyTpmMeasurements(t *testing.T) {
 	type args struct {
 		tpmM          *TpmMeasurement
@@ -456,7 +133,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				},
 				nonce:         validTpmNonce,
 				verifications: validVerifications,
-				casPem:        []byte(validIntermediate),
+				casPem:        []byte(invalidCa),
 			},
 			want:  nil,
 			want1: false,
@@ -467,9 +144,6 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			log.Warnf("QUOTE: %v", hex.EncodeToString(tt.args.tpmM.Message))
-
 			got, got1 := verifyTpmMeasurements(tt.args.tpmM, tt.args.nonce, tt.args.verifications, tt.args.casPem)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
@@ -488,3 +162,188 @@ func dec(s string) []byte {
 	}
 	return b
 }
+
+var (
+	validQuote, _ = hex.DecodeString("ff54434780180022000b518b2cf29ba4f1c5ae463aec4159a9b7e7d6ec3b7632eac14119b73d3bb39e930008db6c3c042fa12645000000004c1efc09d977f45ed5c84b9501262219245c49af3000000001000b03120000002083a306865290be1f8912c44dc520f1b9271b9ecd23b2bbf3a41c9586c69464b2")
+
+	validSignature, _ = hex.DecodeString("0014000b0100b03c414fd7ae091f3c0b1bf2917f4e947ce951f36f00107c5ea088c30a4bc20164a9e2a1671209863299b5df0649a93cb50c76b01365f2bdfd8299c4118dd48d7952c9f92957dd3cd78f5935972aa478099a725d57f2ce42e600e0c2cfd537cd8fa708a82c4deaf02959a1fb0a998c8018f598db51217affb8e37a45ae0d07b0ea9e68d8ec5fbb9f9027105ba2bccd0e33decc30cbf8335065efeb124c5c0869fbed3e45378ac580a2ce099470d893685263339291a586fefff0ccee2b811e627509e027d4eb697d490d7d55819dd8233e35d404762f274c0eea8b057e79148aac79834984d47926acb57c1e8e0c1a404d113c7fe39e0a7d6a49ec90e8d07378")
+
+	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
+
+	validHashChain = []*HashChainElem{
+		{
+			Type:   "Hash Chain",
+			Pcr:    1,
+			Sha256: []HexByte{dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
+		},
+		{
+			Type:   "Hash Chain",
+			Pcr:    4,
+			Sha256: []HexByte{dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")},
+		},
+	}
+
+	invalidHashChain = []*HashChainElem{
+		{
+			Type:   "Hash Chain",
+			Pcr:    1,
+			Sha256: []HexByte{dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
+		},
+		{
+			Type:   "Hash Chain",
+			Pcr:    4,
+			Sha256: []HexByte{dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
+		},
+	}
+
+	validTpmNonce = []byte{0xdb, 0x6c, 0x3c, 0x04, 0x2f, 0xa1, 0x26, 0x45}
+
+	invalidTpmNonce = []byte{0x6d, 0xb4, 0x8f, 0x3e, 0x33, 0xc9, 0x79, 0x2a}
+
+	validAk = "-----BEGIN CERTIFICATE-----\nMIIDGjCCAr+gAwIBAgIBATAKBggqhkjOPQQDAjBhMQswCQYDVQQGEwJERTESMBAG\nA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAOBgNVBAsT\nB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTAeFw0yMjExMDcwODUxNDla\nFw0yNzEwMTIwODUxNDlaMIGdMQswCQYDVQQGEwJERTELMAkGA1UECBMCQlkxDzAN\nBgNVBAcTBk11bmljaDEWMBQGA1UECRMNdGVzdHN0cmVldCAxNTEOMAwGA1UEERMF\nODU3NDgxGjAYBgNVBAoTEVRlc3QgT3JnYW5pemF0aW9uMQ8wDQYDVQQLEwZkZXZp\nY2UxGzAZBgNVBAMTEmRlLnRlc3QuYWsuZGV2aWNlMDCCASIwDQYJKoZIhvcNAQEB\nBQADggEPADCCAQoCggEBALMxAElQ+xiBcNrfpPNd6ksmoftvdIAwBHaXJXta0JcN\n28aveILx2gWuAlhpB90h0IngWpETUckxmAJ/KvTtsOH1lhRQeWwXLmFciXc2lKD3\nNk//dtp6LVd7WaJzx8MtNMlsrYgG9tpjGggISTQyFACQYnmapbqvf8OS0UP93vUT\neAnCKBRDAOKT3FjpUl6y66buAnU1u1I9N7XBUem6nQSlw9KymrgXSG0Hvbpe7f6c\nWmNJC2dJOdxxpN523Fq9I9iMIOi+K2DXfsw2ShxtIj0NEWx+/gKNhsdVln5EnYar\nSef7N12tHTSZnl6oTWtnTGMaSmOfa1bkEpXguM9xV9cCAwEAAaNgMF4wDgYDVR0P\nAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0OBBYEFNKgV/REoVQpy8eJ/cOR\nXsE58bLRMB8GA1UdIwQYMBaAFD+Fycu3JAX3sNTSRMvABDRDeOICMAoGCCqGSM49\nBAMCA0kAMEYCIQDIC7CTHr1RYwUIvmd+lfZme2g1lUmuLWlWRzpEhP1K5AIhAMnp\nFhf+1eNqcZkg2ISsZ5GefN/A/5xvbQXPj06hHwZq\n-----END CERTIFICATE-----"
+
+	validCa = "-----BEGIN CERTIFICATE-----\nMIICBjCCAaygAwIBAgIUbzIW+iUiIFmCWbOL4rW4UBQfj7AwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMDIzMTcwMTAwWhcNMjcxMDIyMTcwMTAwWjBhMQswCQYDVQQGEwJE\nRTESMBAGA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAO\nBgNVBAsTB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTBZMBMGByqGSM49\nAgEGCCqGSM49AwEHA0IABEqaNo91iTSSbc9BL1iIQIVpZLd88RL5LfH15SVugJy4\n3d0jeE+KHtpQA8FpAvxXQHJm31z5V6+oLG4MQfVHN/GjQjBAMA4GA1UdDwEB/wQE\nAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBQ/hcnLtyQF97DU0kTLwAQ0\nQ3jiAjAKBggqhkjOPQQDAgNIADBFAiAFsmaZDBu+cfOqX9a5YAOgSeYB4Sb+r18m\nBIcuxwthhgIhALRHfA32ZcOA6piTKtWLZsdsG6CH50KGImHlkj4TwfXw\n-----END CERTIFICATE-----"
+
+	invalidCa = "-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"
+
+	validTpmCertChain = CertChain{
+		Leaf:          []byte(validAk),
+		Intermediates: [][]byte{},
+		Ca:            []byte(validCa),
+	}
+
+	pcrs = [23]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
+
+	validVerifications = []Verification{
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
+			Name:   "EV_CPU_MICROCODE",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
+			Name:   "Unknown Event Type",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
+			Name:   "EV_NONHOST_CONFIG",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			Name:   "EV_SEPARATOR",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			Name:   "EV_PLATFORM_CONFIG_FLAGS",
+			Pcr:    &pcrs[1],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
+			Name:   "EV_EFI_ACTION",
+			Pcr:    &pcrs[4],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			Name:   "EV_SEPARATOR",
+			Pcr:    &pcrs[4],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:    &pcrs[4],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:    &pcrs[4],
+		},
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:    &pcrs[4],
+		},
+	}
+
+	invalidVerifications = []Verification{
+		{
+			Type:   "TPM Verification",
+			Sha256: dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
+			Name:   "SINIT ACM Digest",
+			Pcr:    &pcrs[4],
+		},
+	}
+
+	validResult = Result{
+		Success: true,
+	}
+
+	validResultMulti = ResultMulti{
+		Success: true,
+	}
+
+	validSignatureResult = SignatureResult{
+		Name:            "de.test.ak.device0",
+		Organization:    []string{"Test Organization"},
+		SubjectKeyId:    "d2a057f444a15429cbc789fdc3915ec139f1b2d1",
+		AuthorityKeyId:  "3f85c9cbb72405f7b0d4d244cbc004344378e202",
+		Signature:       validResult,
+		CertCheck:       validResult,
+		RoleCheck:       nil,
+		ExtensionsCheck: nil,
+	}
+
+	validTpmMeasurementResult = TpmMeasurementResult{
+		Summary: validResult,
+		PcrRecalculation: []PcrResult{
+			{
+				Pcr:        1,
+				Validation: validResultMulti,
+			},
+			{
+				Pcr:        4,
+				Validation: validResultMulti,
+			},
+		},
+		AggPcrQuoteMatch:   validResult,
+		QuoteFreshness:     validResult,
+		QuoteSignature:     validSignatureResult,
+		VerificationsCheck: validResultMulti,
+	}
+)
