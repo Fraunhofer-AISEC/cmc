@@ -27,10 +27,12 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
     - [CMCD Configuration](#cmcd-configuration)
     - [Provisioning Server Configuration](#provisioning-server-configuration)
     - [Platform Configuration](#platform-configuration)
+  - [Custom Policies](#custom-policies)
   - [Build](#build)
     - [Build and Run the Provisioning Server](#build-and-run-the-provisioning-server)
     - [Build and Run the CMC Daemon](#build-and-run-the-cmc-daemon)
     - [Build and Run the Test Client](#build-and-run-the-test-client)
+    - [Build and Run the CoAP Client](#build-and-run-the-coap-client)
     - [Build and Run the Testconnector](#build-and-run-the-testconnector)
     - [Regenerate Protobuf gRPC Interface](#regenerate-protobuf-grpc-interface)
 
@@ -41,9 +43,11 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
 The figure shows how the core components interact with each other. The main software components are:
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
 different hardware trust anchors and assembles this data together with signed metadata describing
-the platform to an attestation report (prover), or validates the measurements against the metadata
-- The test connector and client are exemplary applications that make use of the daemon to create
-an attested tls connection
+the platform to an attestation report (prover), or validates the measurements against the metadata.
+The *cmcd* provides a gRPC as well as a CoAP REST API for interaction.
+- The testclient and testconnector are exemplary applications that make use of the daemon to
+generate and verify attestation reports and to create an attested tls connection. The coapclient
+uses CoAP instead of gRPC
 - Drivers for trusted hardware provides the attestation reports and, if available, key storage and
 signing functionalities
 
@@ -185,44 +189,44 @@ signing-tool -in $IN/tlskey.certparams.json   -out $OUT/tlskey.certparams.json  
 
 Open the cmcd-configuration in `$CMC_ROOT/cmc-data/cmcd-conf.json` and adjust it if required.
 For more information about the configuration see [CMCD Configuration](#cmcd-configuration)
-or run `cmcd --help`
+or run `cmcd -help`
 
 **6. Adjust the provisioning server configuration**
 Open the provisioning server configuration in `$CMC_ROOT/cmc-data/prov-server-conf.json` and
 adjust it if required. For more information about the configuration see
-[Provisioning Server Configuration](#provisioning-server-configuration) or run `provserver --help`
+[Provisioning Server Configuration](#provisioning-server-configuration) or run `provserver -help`
 
 
 ## Run the CMC
 
 ```sh
 # Start the provisioning server that supplies the certificates and metadata for the cmcd
-provserver --config $CMC_ROOT/cmc-data/prov-server-conf.json
+provserver -config $CMC_ROOT/cmc-data/prov-server-conf.json
 
 # Build and run the cmcd
-cmcd --config $CMC_ROOT/cmc-data/cmcd-conf.json --addr http://127.0.0.1:9001/metadata-signed
+cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json -addr http://127.0.0.1:9001/metadata-signed
 
 # Run the testclient to retrieve an attestation report (stored in current folder unless otherwise specified)
-testclient --mode generate
+testclient -mode generate
 
 # Run the testclient to verify the attestation report (stored in current folder unless otherwise specified)
-testclient --mode verify --ca $CMC_ROOT/cmc-data/pki/ca.pem
+testclient -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/cmc-data/policies.json]
 ```
 
 ### Establish an attested TLS connection
 
 ```sh
 # To test the attested TLS connection
-testconnector --ca $CMC_ROOT/cmc-data/pki/ca.pem
+testconnector -ca $CMC_ROOT/cmc-data/pki/ca.pem
 
 # Run the testclient to test the attested TLS connection with the connector
-testclient --mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -connector 127.0.0.1:443 -mTLS
+testclient -mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -connector 127.0.0.1:443 -mTLS
 ```
 
 **Note**: by default, *cmcd* and *testclient* use localhost port 9955 to communicate. This can be changed in the *cmcd*
-configuration and using the ```--addr <host:port>``` command line argument for the testclient.
+configuration and using the ```-addr <host:port>``` command line argument for the testclient.
 
-**Note**: The *cmcd* --addr parameter is the server address where metadata can be found and must
+**Note**: The *cmcd* -addr parameter is the server address where metadata can be found and must
 correspond to the address in the *provserver* config
 
 **Note**: The *cmcd* TPM provisioning process includes the verification of the TPM's EK certificate
@@ -308,7 +312,7 @@ The *cmcd* requires a JSON configuration file with the following information:
 TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
 - **localPath**: the local path to store the meta-data and internal files. In a local setup, all
 manifests and descriptions must be placed in this folder. If the provisioning server is used for
-the meta-data (*cmcd* command line argument *--fetch-metadata*), the *cmcd* will store those files
+the meta-data (*cmcd* command line argument *-fetch-metadata*), the *cmcd* will store those files
 in this folder. In this case, it is not required that the folder already exists, the *cmcd* will
 handle everything automatically
 - **fetchMetadata**: Boolean to specify whether the *cmcd* should load/update its metadata from
@@ -326,9 +330,10 @@ TPM quote will always be signed with the TPM's AK.
 configuration). The linux kernel default is 10
 - **keyConfig**: The algorithm to be used for the *cmcd* keys. Possible values are:  RSA2048,
 RSA4096, EC256, EC384, EC521
-- **policies**: An optional custom policies file
 - **serialization**: The serialiazation format to use for the attestation report. Can be either
 `cbor` or `json`
+- **api**: The API to use. The *cmcd* supports a gRPC API as well as a Constrained Application
+Procotol (CoAP) API
 
 ```json
 {
@@ -342,7 +347,8 @@ RSA4096, EC256, EC384, EC521
     "useIma": false,
     "imaPcr": 10,
     "keyConfig": "EC256",
-    "serialization": "json"
+    "serialization": "json",
+    "api": "grpc"
 }
 ```
 
@@ -401,17 +407,46 @@ to work (e.g., if used, TPM-support must be enabled in the kernel configuration)
 Further information about the platform configuration can be found
 [here](doc/platform-configuration.md)
 
+## Custom Policies
+
+The basic validation verifies all signatures, certificate chains and reference values against the
+measurements. To enable custom policies, such as the verification of certain certificate properties,
+the blacklisting of certain software artifacts with known vulnerabilities or the enforcement of a
+four eyes principle mandating different PKIs for the manifests, the attestation report module
+implements a generic policies interface.
+
+The current implementation contains the `attestationpolicies` module which implements a javascript
+engine. This allows passing arbitrary javascript files via the `testclient` `-policies` parameter.
+The policies javascript file is then used to evaluate arbitrary attributes of the JSON
+attestation result output by the `cmcd` and stored by the `testclient`. The attestation result
+can be referenced via the `json` variable in the script. The javascript code must return a single
+boolean indicating success or failure of the custom policy validation. A minimal policies file, verifying only the `type` field of the attesation result could look as follows:
+
+```js
+// Parse the verification result
+var obj = JSON.parse(json);
+var success = true;
+
+// Check the type field of the verification result
+if (obj.type != "Verification Result") {
+    console.log("Invalid type");
+    success = false;
+}
+
+success
+```
+
 ## Build
 
 All binaries can be built with the *go*-compiler. For an explanation of the various flags run
-<binary> --help
+<binary> -help
 
 ### Build and Run the Provisioning Server
 
 ```sh
 cd provserver
 go build
-./provserver --config <config-file>
+./provserver -config <config-file>
 ```
 
 ### Build and Run the CMC Daemon
@@ -425,10 +460,10 @@ using `SSL_CERT_FILE` and `SSL_CERT_DIR` below.
 ```sh
 cd cmcd
 go build
-./cmcd --config <config-file> --addr <server-metadata-address>
+./cmcd -config <config-file> -addr <server-metadata-address>
 # with added custom certificates
-SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd --config <config-file> --addr <server-metadata-address>
-SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd --config <config-file> --addr <server-metadata-address>
+SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd -config <config-file> -addr <server-metadata-address>
+SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file> -addr <server-metadata-address>
 ```
 
 ### Build and Run the Test Client
@@ -436,7 +471,15 @@ SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd --config <config-file> --addr <serv
 ```sh
 cd testclient
 go build
-./testclient --mode < generate | verify | tlsconn > [--port <port-number>] [--connector <remote-address>] [--mTLS] [--ca <file>] [--policies <file>]
+./testclient -mode < generate | verify | tlsconn > [-port <port-number>] [-connector <remote-address>] [-mTLS] [-ca <file>] [-policies <file>]
+```
+
+### Build and Run the CoAP Client
+
+```sh
+cd coapclient
+go build
+./testclient -mode < generate | verify > [-port <port-number>] [-ca <file>] [-policies <file>]
 ```
 
 ### Build and Run the Testconnector
@@ -444,7 +487,7 @@ go build
 ```sh
 cd testconnector
 go build
-./testconnector [--ca <file>] [--connector <listen-addr>] [--policies <file>]
+./testconnector [-ca <file>] [-connector <listen-addr>] [-policies <file>]
 ```
 
 ### Regenerate Protobuf gRPC Interface

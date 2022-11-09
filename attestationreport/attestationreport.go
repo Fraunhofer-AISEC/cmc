@@ -66,7 +66,7 @@ type Serializer interface {
 type Policies interface{}
 
 type PolicyValidator interface {
-	Validate(result VerificationResult) error
+	Validate(result VerificationResult) bool
 }
 
 // Type is a helper struct for just extracting the 'Type' of metadata
@@ -594,12 +594,12 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 			continue
 		}
 
-		err := pv.Validate(result)
-		if err != nil {
+		ok = pv.Validate(result)
+		if !ok {
 			result.Success = false
 			// TODO should be two different types, result without success and policy validation
 			// which are merged together here
-			log.Warnf("policy validation failed: %v", err)
+			log.Warnf("Custom policy validation failed")
 		}
 	}
 

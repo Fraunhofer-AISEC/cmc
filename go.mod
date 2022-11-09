@@ -8,6 +8,7 @@ require (
 	github.com/google/go-tpm v0.3.3
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/plgd-dev/go-coap/v3 v3.0.0
+	github.com/robertkrimen/otto v0.0.0-20221025135307-511d75fba9f8
 	github.com/sirupsen/logrus v1.8.1
 	github.com/veraison/go-cose v1.0.0-rc.1
 	golang.org/x/exp v0.0.0-20221006183845-316c7553db56
@@ -33,4 +34,5 @@ require (
 	golang.org/x/sys v0.0.0-20221006211917-84dc82d7e875 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20211222154725-9823f7ba7562 // indirect
+	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 )

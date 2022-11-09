@@ -126,12 +126,7 @@ func (s *GrpcServer) Verify(ctx context.Context, in *ci.VerificationRequest) (*c
 	var policies []ar.Policies
 	if in.Policies != nil {
 		log.Trace("Policies specified. Creating policy validator for remote attestation")
-		var p ip.Policies
-		err := json.Unmarshal(in.Policies, &p)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object %v", err)
-		}
-		policies = append(policies, ip.NewPolicyValidator(p))
+		policies = append(policies, ip.NewPolicyValidator(in.Policies))
 	} else {
 		log.Trace("No policies specified. Performing default remote attestation")
 	}

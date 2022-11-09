@@ -16,48 +16,76 @@
 package attestationpolicies
 
 import (
-	"errors"
-	"fmt"
+	"encoding/json"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/robertkrimen/otto"
+	log "github.com/sirupsen/logrus"
 )
 
-// TODO name, comment
-type Policies struct {
-	Type                     string `json:"type"`
-	ExpectCertificationLevel int    `json:"expectCertificationLevel"`
-	ExpectTpmMeasurement     bool   `json:"expectTpmMeasurement"`
-	ExpectSnpMeasurement     bool   `json:"expectSnpMeasurement"`
+// JavaScriptValidator is a javascript implementation of the
+// attestation report generic PolicyValidator interface
+type JavaScriptValidator struct {
+	policies []byte
 }
 
-// TODO name, comment
-type PolicyValidator struct {
-	policies Policies
-}
-
-func NewPolicyValidator(p Policies) *PolicyValidator {
-	return &PolicyValidator{
-		policies: p,
+// NewPolicyValidator creates a new JavaScriptValidator with custom policies.
+// Custom policies are handed over as a byte array. This implementation
+// accepts custom policies as javascript code. The javascript code
+// can parse the VerificationResult in the variable 'json', i.e.:
+//
+//	var obj = JSON.parse(json);
+//
+// The javascript code must return a single boolean to indicate the
+// success of the parsing. Logs can be output via: console.log()
+// A very simple example of a custom Policy could look as follows:
+//
+//		var obj = JSON.parse(json);
+//		var success = true;
+//		if (obj.type != "Verification Result") {
+//			console.log("Invalid type");
+//			success = false;
+//		}
+//	    success
+func NewPolicyValidator(policies []byte) *JavaScriptValidator {
+	return &JavaScriptValidator{
+		policies: policies,
 	}
 }
 
-// TODO name, comment
-func (p *PolicyValidator) Validate(result ar.VerificationResult) error {
+// Validate uses a javascript engine to validate the JavaScriptValidator's
+// custom javascript policies against the verification result
+func (p *JavaScriptValidator) Validate(result ar.VerificationResult) bool {
 
-	if p.policies.ExpectTpmMeasurement && result.MeasResult.TpmMeasResult == nil {
-		return errors.New("policies validation failed: ExpectTpmMeasurement")
+	log.Debugf("Validating custom javascript policies")
+
+	vr, err := json.Marshal(result)
+	if err != nil {
+		log.Errorf("Failed to marshal verification result: %v", err)
+		return false
 	}
 
-	if p.policies.ExpectSnpMeasurement && result.MeasResult.SnpMeasResult == nil {
-		return errors.New("policies validation failed: ExpectSnpMeasurement")
+	// Create new javascript engine
+	vm := otto.New()
+
+	// Set variable json = vr
+	vm.Set("json", string(vr))
+
+	// Run javascript validation
+	val, err := vm.Run(string(p.policies))
+	if err != nil {
+		log.Errorf("Failed run policy validation: %v", err)
+		return false
 	}
 
-	if p.policies.ExpectCertificationLevel > result.SwCertLevel {
-		return fmt.Errorf("policies validation failed: ExpectCertificationLevel %v, got %v",
-			p.policies.ExpectCertificationLevel, result.SwCertLevel)
+	// Retrieve result
+	ok, err := val.ToBoolean()
+	if err != nil {
+		log.Errorf("Failed convert policy validation result: %v", err)
+		return false
 	}
 
-	// TODO add policies
+	log.Debugf("Policy Validation: %v", ok)
 
-	return nil
+	return ok
 }
