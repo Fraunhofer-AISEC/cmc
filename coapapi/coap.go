@@ -214,12 +214,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	var policies []ar.Policies
 	if req.Policies != nil {
 		log.Trace("Policies specified. Creating policy validator for remote attestation")
-		var p ip.Policies
-		err := json.Unmarshal(req.Policies, &p)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object %v", err)
-		}
-		policies = append(policies, ip.NewPolicyValidator(p))
+		policies = append(policies, ip.NewPolicyValidator(req.Policies))
 	} else {
 		log.Trace("No policies specified. Performing default remote attestation")
 	}

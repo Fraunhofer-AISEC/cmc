@@ -99,6 +99,7 @@ func printConfig(c *config) {
 	log.Info("\tUse IMA                  : ", c.UseIma)
 	log.Info("\tIMA PCR                  : ", c.ImaPcr)
 	log.Info("\tSerialization            : ", c.Serialization)
+	log.Info("\tAPI                      : ", c.Api)
 }
 
 func main() {

@@ -10,5 +10,5 @@
     "keyConfig": "EC256",
     "policies": "policies.json",
     "serialization": "json",
-    "api": "coap"
+    "api": "grpc"
 }
