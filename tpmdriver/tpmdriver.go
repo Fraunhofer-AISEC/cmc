@@ -849,18 +849,18 @@ func getTpmPcrs(c *Config) ([]int, error) {
 
 	// Generate the list of PCRs to be included in the quote
 	pcrs := make([]int, 0)
-	log.Debug("Parsing ", len(rtmMan.Verifications), " RTM verifications")
-	for _, ver := range rtmMan.Verifications {
-		if ver.Type != "TPM Verification" || ver.Pcr == nil {
+	log.Debug("Parsing ", len(rtmMan.ReferenceValues), "RTM Reference Values")
+	for _, ver := range rtmMan.ReferenceValues {
+		if ver.Type != "TPM Reference Value" || ver.Pcr == nil {
 			continue
 		}
 		if !exists(*ver.Pcr, pcrs) {
 			pcrs = append(pcrs, *ver.Pcr)
 		}
 	}
-	log.Debug("Parsing ", len(osMan.Verifications), " OS verifications")
-	for _, ver := range osMan.Verifications {
-		if ver.Type != "TPM Verification" || ver.Pcr == nil {
+	log.Debug("Parsing ", len(osMan.ReferenceValues), "OS Reference Values")
+	for _, ver := range osMan.ReferenceValues {
+		if ver.Type != "TPM Reference Value" || ver.Pcr == nil {
 			continue
 		}
 		if !exists(*ver.Pcr, pcrs) {

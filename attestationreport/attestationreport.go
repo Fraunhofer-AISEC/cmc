@@ -166,10 +166,10 @@ type SnpDetails struct {
 	Tcb     SnpTcb    `json:"tcb" cbor:"4,keyasint"`
 }
 
-// Verification represents the attestation report
-// element of types 'SNP Verification', 'TPM Verification'
-// and 'SW Verification'
-type Verification struct {
+// ReferenceValue represents the attestation report
+// element of types 'SNP Reference Value', 'TPM Reference Value'
+// and 'SW Reference Value'
+type ReferenceValue struct {
 	Type   string      `json:"type" cbor:"0,keyasint"`
 	Sha256 HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
 	Sha384 HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
@@ -209,42 +209,42 @@ type ExternalInterface struct {
 // AppManifest represents the attestation report
 // element of type 'App Manifest'
 type AppManifest struct {
-	Type               string         `json:"type" cbor:"0,keyasint"`
-	Name               string         `json:"name" cbor:"1,keyasint"`
-	DevCommonName      string         `json:"developerCommonName"  cbor:"2,keyasint"`
-	Version            string         `json:"version" cbor:"3,keyasint"`
-	Oss                []string       `json:"oss" cbor:"4,keyasint"` // Links to OsManifest.Name
-	Description        string         `json:"description" cbor:"5,keyasint"`
-	CertificationLevel int            `json:"certificationLevel" cbor:"6,keyasint"`
-	Validity           Validity       `json:"validity" cbor:"7,keyasint"`
-	Verifications      []Verification `json:"verifications" cbor:"8,keyasint"`
+	Type               string           `json:"type" cbor:"0,keyasint"`
+	Name               string           `json:"name" cbor:"1,keyasint"`
+	DevCommonName      string           `json:"developerCommonName"  cbor:"2,keyasint"`
+	Version            string           `json:"version" cbor:"3,keyasint"`
+	Oss                []string         `json:"oss" cbor:"4,keyasint"` // Links to OsManifest.Name
+	Description        string           `json:"description" cbor:"5,keyasint"`
+	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
+	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
+	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
 }
 
 // OsManifest represents the attestation report
 // element of type 'OsManifest'
 type OsManifest struct {
-	Type               string         `json:"type" cbor:"0,keyasint"`
-	Name               string         `json:"name" cbor:"1,keyasint"`
-	DevCommonName      string         `json:"developerCommonName" cbor:"2,keyasint"`
-	Version            string         `json:"version" cbor:"3,keyasint"`
-	Rtms               []string       `json:"rtms" cbor:"4,keyasint"` // Links to Type RtmManifest.Name
-	Description        string         `json:"description" cbor:"5,keyasint"`
-	CertificationLevel int            `json:"certificationLevel" cbor:"6,keyasint"`
-	Validity           Validity       `json:"validity" cbor:"7,keyasint"`
-	Verifications      []Verification `json:"verifications" cbor:"8,keyasint"`
+	Type               string           `json:"type" cbor:"0,keyasint"`
+	Name               string           `json:"name" cbor:"1,keyasint"`
+	DevCommonName      string           `json:"developerCommonName" cbor:"2,keyasint"`
+	Version            string           `json:"version" cbor:"3,keyasint"`
+	Rtms               []string         `json:"rtms" cbor:"4,keyasint"` // Links to Type RtmManifest.Name
+	Description        string           `json:"description" cbor:"5,keyasint"`
+	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
+	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
+	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
 }
 
 // RtmManifest represents the attestation report
 // element of type 'RTM Manifest'
 type RtmManifest struct {
-	Type               string         `json:"type" cbor:"0,keyasint"`
-	Name               string         `json:"name" cbor:"1,keyasint"`
-	DevCommonName      string         `json:"developerCommonName" cbor:"2,keyasint"`
-	Version            string         `json:"version" cbor:"3,keyasint"`
-	Description        string         `json:"description" cbor:"4,keyasint"`
-	CertificationLevel int            `json:"certificationLevel" cbor:"5,keyasint"`
-	Validity           Validity       `json:"validity" cbor:"6,keyasint"`
-	Verifications      []Verification `json:"verifications" cbor:"7,keyasint"`
+	Type               string           `json:"type" cbor:"0,keyasint"`
+	Name               string           `json:"name" cbor:"1,keyasint"`
+	DevCommonName      string           `json:"developerCommonName" cbor:"2,keyasint"`
+	Version            string           `json:"version" cbor:"3,keyasint"`
+	Description        string           `json:"description" cbor:"4,keyasint"`
+	CertificationLevel int              `json:"certificationLevel" cbor:"5,keyasint"`
+	Validity           Validity         `json:"validity" cbor:"6,keyasint"`
+	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"7,keyasint"`
 }
 
 // DeviceDescription represents the attestation report
@@ -444,7 +444,7 @@ func Sign(report []byte, signer Signer, s Serializer) (bool, []byte) {
 // Verify verifies an attestation report in full serialized JWS
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
-// the verifications and the compatibility of software artefacts.
+// the reference values and the compatibility of software artefacts.
 func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serializer) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
@@ -470,36 +470,36 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 		result.FreshnessCheck.Success = true
 	}
 
-	verifications, err := collectVerifications(ar)
+	referenceValues, err := collectReferenceValues(ar)
 	if err != nil {
 		result.ProcessingError = append(result.ProcessingError, err.Error())
 		result.Success = false
 	}
 
-	// If present, verify TPM measurements against provided TPM verifications
+	// If present, verify TPM measurements against provided TPM reference values
 	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(ar.TpmM, nonce,
-		verifications["TPM Verification"], casPem)
+		referenceValues["TPM Reference Value"], casPem)
 	if !ok {
 		result.Success = false
 	}
 
-	// If present, verify AMD SEV SNP measurements against provided SNP verifications
+	// If present, verify AMD SEV SNP measurements against provided SNP reference values
 	result.MeasResult.SnpMeasResult, ok = verifySnpMeasurements(ar.SnpM, nonce,
-		verifications["SNP Verification"])
+		referenceValues["SNP Reference Value"])
 	if !ok {
 		result.Success = false
 	}
 
-	// If present, verify ARM PSA EAT measurements against provided PSA verifications
+	// If present, verify ARM PSA EAT measurements against provided PSA reference values
 	result.MeasResult.IasMeasResult, ok = verifyIasMeasurements(ar.IasM, nonce,
-		verifications["IAS Verification"], casPem)
+		referenceValues["IAS Reference Value"], casPem)
 	if !ok {
 		result.Success = false
 	}
 
-	// If present, verify software measurements against provided software verifications
+	// If present, verify software measurements against provided software reference values
 	result.MeasResult.SwMeasResult, ok = verifySwMeasurements(ar.SWM,
-		verifications["SW Verification"])
+		referenceValues["SW Reference Value"])
 	if !ok {
 		result.Success = false
 	}
@@ -519,7 +519,7 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 		}
 	}
 	// If no hardware trust anchor is present, the maximum certification level is 1
-	// If there are verifications with a higher trust level present, the remote attestation
+	// If there are referenceValues with a higher trust level present, the remote attestation
 	// must fail
 	if ar.TpmM == nil && ar.SnpM == nil && aggCertLevel > 1 {
 		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
@@ -605,6 +605,8 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 		}
 	}
 
+	log.Tracef("Verification Result: %v", result.Success)
+
 	return result
 }
 
@@ -635,7 +637,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	tokenRes, payload, ok := s.VerifyToken([]byte(attestationReport), roots)
 	result.ReportSignature = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Verification of Attestation Report Signatures failed")
+		log.Trace("Validation of Attestation Report Signatures failed")
 		result.Success = false
 		return false, &ar
 	}
@@ -661,7 +663,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.RtmResult.Summary = tokenRes.Summary
 	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Verification of RTM Manifest Signatures failed")
+		log.Trace("Validation of RTM Manifest Signatures failed")
 		result.Success = false
 	}
 	err = s.Unmarshal(payload, &ar.RtmManifest)
@@ -683,7 +685,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.OsResult.Summary = tokenRes.Summary
 	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Verification of OS Manifest Signatures failed")
+		log.Trace("Validation of OS Manifest Signatures failed")
 		result.Success = false
 	}
 	err = s.Unmarshal(payload, &ar.OsManifest)
@@ -709,7 +711,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.AppResults[i].Summary = tokenRes.Summary
 		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
-			log.Trace("Verification of App Manifest Signatures failed")
+			log.Trace("Validation of App Manifest Signatures failed")
 			result.Success = false
 		}
 
@@ -739,7 +741,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.CompDescResult.Summary = tokenRes.Summary
 		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
-			log.Trace("Verification of Company Description Signatures failed")
+			log.Trace("Validation of Company Description Signatures failed")
 			result.Success = false
 		}
 		err = s.Unmarshal(payload, &ar.CompanyDescription)
@@ -765,7 +767,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.DevDescResult.Summary = tokenRes.Summary
 	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Verification of Device Description Signatures failed")
+		log.Trace("Validation of Device Description Signatures failed")
 		result.Success = false
 	}
 	err = s.Unmarshal(payload, &ar.DeviceDescription)
@@ -809,9 +811,9 @@ func checkValidity(val Validity) Result {
 	return result
 }
 
-// Searches for a specific hash value in the verifications for RTM and OS
-func getVerification(hash []byte, verifications []Verification) *Verification {
-	for _, ver := range verifications {
+// Searches for a specific hash value in the reference values for RTM and OS
+func getReferenceValue(hash []byte, referenceValues []ReferenceValue) *ReferenceValue {
+	for _, ver := range referenceValues {
 		if bytes.Equal(ver.Sha256, hash) {
 			return &ver
 		}
@@ -819,13 +821,13 @@ func getVerification(hash []byte, verifications []Verification) *Verification {
 	return nil
 }
 
-func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verification) ([]SwMeasurementResult, bool) {
+func verifySwMeasurements(swMeasurements []SwMeasurement, referenceValues []ReferenceValue) ([]SwMeasurementResult, bool) {
 
 	swMeasurementResults := make([]SwMeasurementResult, 0)
 	ok := true
 
-	// Check that every verification is reflected by a measurement
-	for _, v := range verifications {
+	// Check that every reference value is reflected by a measurement
+	for _, v := range referenceValues {
 		swRes := SwMeasurementResult{}
 		swRes.Validation.Success = false
 		swRes.VerName = v.Name
@@ -839,17 +841,17 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 			}
 		}
 		if !found {
-			msg := fmt.Sprintf("no SW Measurement found for SW Verification %v (hash: %v)", v.Name, v.Sha256)
+			msg := fmt.Sprintf("no SW Measurement found for SW Reference Value %v (hash: %v)", v.Name, v.Sha256)
 			swRes.Validation.setFalse(&msg)
 			ok = false
 		}
 		swMeasurementResults = append(swMeasurementResults, swRes)
 	}
 
-	// Check that every measurement is reflected by a verification
+	// Check that every measurement is reflected by a reference value
 	for _, swM := range swMeasurements {
 		found := false
-		for _, swV := range verifications {
+		for _, swV := range referenceValues {
 			if bytes.Equal(swM.Sha256, swV.Sha256) {
 				found = true
 				break
@@ -858,7 +860,7 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 		if !found {
 			swRes := SwMeasurementResult{}
 			swRes.MeasName = swM.Name
-			msg := fmt.Sprintf("no SW Verification found for SW Measurement: %v", swM.Sha256)
+			msg := fmt.Sprintf("no SW Reference Value found for SW Measurement: %v", swM.Sha256)
 			swRes.Validation.setFalse(&msg)
 			swMeasurementResults = append(swMeasurementResults, swRes)
 			ok = false
@@ -868,19 +870,19 @@ func verifySwMeasurements(swMeasurements []SwMeasurement, verifications []Verifi
 	return swMeasurementResults, ok
 }
 
-func collectVerifications(ar *ArPlain) (map[string][]Verification, error) {
-	// Gather a list of all verifications independent of the type
-	verList := append(ar.RtmManifest.Verifications, ar.OsManifest.Verifications...)
+func collectReferenceValues(ar *ArPlain) (map[string][]ReferenceValue, error) {
+	// Gather a list of all reference values independent of the type
+	verList := append(ar.RtmManifest.ReferenceValues, ar.OsManifest.ReferenceValues...)
 	for _, appManifest := range ar.AppManifests {
-		verList = append(verList, appManifest.Verifications...)
+		verList = append(verList, appManifest.ReferenceValues...)
 	}
 
-	verMap := make(map[string][]Verification)
+	verMap := make(map[string][]ReferenceValue)
 
-	// Iterate through the verifications and sort them into the different types
+	// Iterate through the reference values and sort them into the different types
 	for _, v := range verList {
-		if v.Type != "SNP Verification" && v.Type != "SW Verification" && v.Type != "TPM Verification" {
-			return nil, fmt.Errorf("verification of type %v is not supported", v.Type)
+		if v.Type != "SNP Reference Value" && v.Type != "SW Reference Value" && v.Type != "TPM Reference Value" {
+			return nil, fmt.Errorf("reference value of type %v is not supported", v.Type)
 		}
 		verMap[v.Type] = append(verMap[v.Type], v)
 	}

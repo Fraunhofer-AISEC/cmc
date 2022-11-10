@@ -48,29 +48,29 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, verifications []Verification, casPem []byte) (*IasMeasurementResult, bool) {
+func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues []ReferenceValue, casPem []byte) (*IasMeasurementResult, bool) {
 	result := &IasMeasurementResult{}
 	ok := true
 
-	// If the attestationreport does contain neither IAS measurements, nor IAS verifications
+	// If the attestationreport does contain neither IAS measurements, nor IAS Reference Values
 	// there is nothing to to
-	if iasM == nil && len(verifications) == 0 {
+	if iasM == nil && len(referenceValues) == 0 {
 		return nil, true
 	}
 
-	// If the attestationreport contains IAS verifications, but no IAS measurement, the
+	// If the attestationreport contains IAS Reference Values, but no IAS measurement, the
 	// attestation must fail
 	if iasM == nil {
-		for _, v := range verifications {
-			msg := fmt.Sprintf("IAS Measurement not present. Cannot verify IAS verification (hash: %v)", v.Sha256)
-			result.VerificationsCheck.setFalseMulti(&msg)
+		for _, v := range referenceValues {
+			msg := fmt.Sprintf("IAS Measurement not present. Cannot verify IAS Reference Value (hash: %v)", v.Sha256)
+			result.ReferenceValueCheck.setFalseMulti(&msg)
 		}
 		result.Summary.Success = false
 		return result, false
 	}
 
-	if len(verifications) == 0 {
-		msg := "Could not find IAS verification"
+	if len(referenceValues) == 0 {
+		msg := "Could not find IAS Reference Value"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
@@ -139,10 +139,10 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, verifications []V
 	log.Trace("Verifying measurements")
 
 	// Verify measurements
-	for _, ver := range verifications {
-		log.Tracef("Found verification %v: %v", ver.Name, hex.EncodeToString(ver.Sha256))
-		if ver.Type != "IAS Verification" {
-			msg := fmt.Sprintf("IAS Verification invalid type %v", ver.Type)
+	for _, ver := range referenceValues {
+		log.Tracef("Found reference value %v: %v", ver.Name, hex.EncodeToString(ver.Sha256))
+		if ver.Type != "IAS Reference Value" {
+			msg := fmt.Sprintf("IAS Reference Value invalid type %v", ver.Type)
 			result.Summary.setFalse(&msg)
 			return result, false
 		}
@@ -154,25 +154,25 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, verifications []V
 		}
 		if !found {
 			ok = false
-			msg := fmt.Sprintf("IAS Measurement for verification %v: %v not present",
+			msg := fmt.Sprintf("IAS Measurement for reference value %v: %v not present",
 				ver.Name, hex.EncodeToString(ver.Sha256))
-			result.VerificationsCheck.setFalseMulti(&msg)
+			result.ReferenceValueCheck.setFalseMulti(&msg)
 		}
 	}
 	for _, swc := range iat.SwComponents {
 		log.Tracef("Found measurement %v: %v", swc.MeasurementDescription,
 			hex.EncodeToString(swc.MeasurementValue))
 		found := false
-		for _, ver := range verifications {
+		for _, ver := range referenceValues {
 			if bytes.Equal(ver.Sha256, swc.MeasurementValue) {
 				found = true
 			}
 		}
 		if !found {
 			ok = false
-			msg := fmt.Sprintf("IAS Verification for measurement %v: %v not present",
+			msg := fmt.Sprintf("IAS Reference Value for measurement %v: %v not present",
 				swc.MeasurementDescription, hex.EncodeToString(swc.MeasurementValue))
-			result.VerificationsCheck.setFalseMulti(&msg)
+			result.ReferenceValueCheck.setFalseMulti(&msg)
 		}
 	}
 

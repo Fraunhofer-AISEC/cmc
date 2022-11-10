@@ -194,47 +194,47 @@ func TestVerify(t *testing.T) {
 }
 
 var (
-	vers = []Verification{
-		{Type: "TPM Verification", Name: "TPM1"},
-		{Type: "TPM Verification", Name: "TPM2"},
-		{Type: "SNP Verification", Name: "SNP1"},
-		{Type: "SW Verification", Name: "SW1"},
-		{Type: "SW Verification", Name: "SW2"},
+	vers = []ReferenceValue{
+		{Type: "TPM Reference Value", Name: "TPM1"},
+		{Type: "TPM Reference Value", Name: "TPM2"},
+		{Type: "SNP Reference Value", Name: "SNP1"},
+		{Type: "SW Reference Value", Name: "SW1"},
+		{Type: "SW Reference Value", Name: "SW2"},
 	}
 
-	verMap = map[string][]Verification{
-		"TPM Verification": vers[:2],
-		"SNP Verification": {vers[2]},
-		"SW Verification":  vers[3:],
+	verMap = map[string][]ReferenceValue{
+		"TPM Reference Value": vers[:2],
+		"SNP Reference Value": {vers[2]},
+		"SW Reference Value":  vers[3:],
 	}
 
 	rtmManifest = RtmManifest{
-		Verifications: []Verification{
+		ReferenceValues: []ReferenceValue{
 			vers[0],
 			vers[2],
 		},
 	}
 
 	osManifest = OsManifest{
-		Verifications: []Verification{
+		ReferenceValues: []ReferenceValue{
 			vers[1],
 		},
 	}
 
 	appManifests = []AppManifest{
-		{Verifications: []Verification{vers[3]}},
-		{Verifications: []Verification{vers[4]}},
+		{ReferenceValues: []ReferenceValue{vers[3]}},
+		{ReferenceValues: []ReferenceValue{vers[4]}},
 	}
 )
 
-func Test_collectVerifications(t *testing.T) {
+func Test_collectReferenceValues(t *testing.T) {
 	type args struct {
 		ar *ArPlain
 	}
 	tests := []struct {
 		name    string
 		args    args
-		want    map[string][]Verification
+		want    map[string][]ReferenceValue
 		wantErr bool
 	}{
 		{
@@ -252,13 +252,13 @@ func Test_collectVerifications(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := collectVerifications(tt.args.ar)
+			got, err := collectReferenceValues(tt.args.ar)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("collectVerifications() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("collectReferenceValues() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("collectVerifications() = %v, want %v", got, tt.want)
+				t.Errorf("collectReferenceValues() = %v, want %v", got, tt.want)
 			}
 		})
 	}
