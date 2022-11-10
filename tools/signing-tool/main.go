@@ -24,7 +24,7 @@ import (
 	"os"
 	"strings"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -110,7 +110,7 @@ func main() {
 				log.Fatalf("failed to read certificate(s) file %v", err)
 			}
 
-			c, err := ar.LoadCert(certPem)
+			c, err := internal.LoadCert(certPem)
 			if err != nil {
 				log.Fatalf("Failed to load certificates: %v", err)
 			}

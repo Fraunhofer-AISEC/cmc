@@ -37,6 +37,7 @@ import (
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // Mode defines the mode the testclient should run

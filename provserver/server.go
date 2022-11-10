@@ -44,6 +44,7 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
@@ -1002,7 +1003,7 @@ func main() {
 			return
 		}
 		dataStore.CertChainPem = append(dataStore.CertChainPem, pem)
-		cert, err := ar.LoadCert(pem)
+		cert, err := internal.LoadCert(pem)
 		if err != nil {
 			log.Errorf("failed to load certificate: %v", err)
 			return

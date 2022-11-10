@@ -19,6 +19,10 @@ package internal
 import (
 	"crypto"
 	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -77,4 +81,64 @@ func Contains(elem string, list []string) bool {
 		}
 	}
 	return false
+}
+
+// LoadCert loads a certificate from PEM encoded data
+func LoadCert(data []byte) (*x509.Certificate, error) {
+	input := data
+
+	block, _ := pem.Decode(data)
+	if block != nil {
+		input = block.Bytes
+	}
+
+	cert, err := x509.ParseCertificate(input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
+	}
+	return cert, nil
+}
+
+// LoadCerts loads one or more certificates from PEM encoded data
+func LoadCerts(data []byte) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, 0)
+	input := data
+
+	for block, rest := pem.Decode(input); block != nil; block, rest = pem.Decode(rest) {
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
+		}
+		certs = append(certs, cert)
+	}
+	return certs, nil
+}
+
+func PrintTlsConfig(conf *tls.Config, roots []byte) error {
+	for i, certs := range conf.Certificates {
+		log.Tracef("TLS leaf certificate %v: %v, SubjectKeyID %v, AuthorityKeyID %v",
+			i, certs.Leaf.Subject.CommonName,
+			hex.EncodeToString(certs.Leaf.SubjectKeyId),
+			hex.EncodeToString(certs.Leaf.AuthorityKeyId))
+		for j, data := range certs.Certificate {
+			c, err := LoadCert(data)
+			if err != nil {
+				return fmt.Errorf("failed to convert certificate: %w", err)
+			}
+			log.Tracef("Cert %v TLS Certificate Chain %v: %v, SubjectKeyID %v, AuthorityKeyID %v",
+				i, j, c.Subject.CommonName,
+				hex.EncodeToString(c.SubjectKeyId),
+				hex.EncodeToString(c.AuthorityKeyId))
+		}
+	}
+	certs, err := LoadCerts(roots)
+	if err != nil {
+		return fmt.Errorf("failed to load certs: %w", err)
+	}
+	for i, c := range certs {
+		log.Tracef("Trusted Root Cert %v: %v, SubjectKeyID %v",
+			i, c.Subject.CommonName, hex.EncodeToString(c.SubjectKeyId))
+	}
+	return nil
 }

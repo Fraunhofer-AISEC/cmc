@@ -21,6 +21,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func certChainToDer(certChain CertChain) ([][]byte, error) {
@@ -108,12 +110,12 @@ func verifyCertChainPem(certs *CertChain, caKeyIds [][]byte) error {
 		return errors.New("failed to append certificate to certificate pool")
 	}
 
-	leafCert, err := LoadCert(certs.Leaf)
+	leafCert, err := internal.LoadCert(certs.Leaf)
 	if err != nil {
 		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
 	}
 
-	rootCert, err := LoadCert(certs.Ca)
+	rootCert, err := internal.LoadCert(certs.Ca)
 	if err != nil {
 		return fmt.Errorf("failed to parse leaf certificate public key: %v", err)
 	}
