@@ -49,9 +49,9 @@ const (
 type certFormat int
 
 var (
-	vcekUrlPrefix = "https://kdsintf.amd.com/vcek/v1/Milan/"
-
-	milanUrl = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
+	snpProtocolVersion = 1
+	vcekUrlPrefix      = "https://kdsintf.amd.com/vcek/v1/Milan/"
+	milanUrl           = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
 )
 
 // Snp is a structure required for implementing the Measure method
@@ -65,12 +65,14 @@ type Config struct {
 }
 
 type VcekRequest struct {
-	ChipId [64]byte
-	Tcb    uint64
+	Version int
+	ChipId  [64]byte
+	Tcb     uint64
 }
 
 type VcekResponse struct {
-	Vcek []byte
+	Version int
+	Vcek    []byte
 }
 
 func NewSnpDriver(c Config) (*Snp, error) {
@@ -97,12 +99,18 @@ func NewSnpDriver(c Config) (*Snp, error) {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 	req := VcekRequest{
-		ChipId: s.ChipId,
-		Tcb:    s.CurrentTcb,
+		Version: snpProtocolVersion,
+		ChipId:  s.ChipId,
+		Tcb:     s.CurrentTcb,
 	}
 	resp, err := fetchVcek(c.Url+"vcek-retrieval/", req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VCEK: %w", err)
+	}
+
+	if resp.Version != snpProtocolVersion {
+		return nil, fmt.Errorf("response protocol version (%v) does not match our protocol version (%v)",
+			resp.Version, snpProtocolVersion)
 	}
 
 	snp.certChain = ar.CertChain{

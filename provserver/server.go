@@ -92,7 +92,12 @@ const (
 	snpMaxRetries         = 3
 )
 
-var dataStore datastore
+var (
+	tpmProtocolVersion = 1
+	swProtocolVersion  = 1
+	snpProtocolVersion = 1
+	dataStore          datastore
+)
 
 func printConfig(c *config, configFile string) {
 	log.Infof("Using the configuration loaded from %v:", configFile)
@@ -183,6 +188,11 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	d := gob.NewDecoder(buf)
 	d.Decode(&acRequest)
 
+	if acRequest.Version != tpmProtocolVersion {
+		return nil, fmt.Errorf("activate credential request protocol version of server (%d) does not match client (%d)",
+			tpmProtocolVersion, acRequest.Version)
+	}
+
 	if acRequest.Ek.Public == nil {
 		return nil, fmt.Errorf("ek public key from device not present")
 	}
@@ -238,7 +248,8 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	// Return encrypted credentials to client
 	acResponse := tpmdriver.AcResponse{
-		Ec: *encryptedCredentials,
+		Version: tpmProtocolVersion,
+		Ec:      *encryptedCredentials,
 	}
 
 	var retBuf bytes.Buffer
@@ -268,6 +279,11 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	var akCertRequest tpmdriver.AkCertRequest
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&akCertRequest)
+
+	if akCertRequest.Version != tpmProtocolVersion {
+		return nil, fmt.Errorf("ak cert request protocol version of server (%d) does not match client (%d)",
+			tpmProtocolVersion, akCertRequest.Version)
+	}
 
 	// Compare the client returned decrypted secret with the
 	// server generated secret
@@ -404,6 +420,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	intermediates = append(intermediates, dataStore.CertChainPem[:len(dataStore.CertChainPem)-1]...)
 
 	akCertResponse := tpmdriver.AkCertResponse{
+		Version:         tpmProtocolVersion,
 		AkQualifiedName: akCertRequest.AkQualifiedName,
 		AkCertChain: ar.CertChain{
 			Leaf:          akPem.Bytes(),
@@ -442,6 +459,11 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	var req swdriver.SwCertRequest
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&req)
+
+	if req.Version != swProtocolVersion {
+		return nil, fmt.Errorf("sw request protocol version of server (%d) does not match client (%d)",
+			tpmProtocolVersion, req.Version)
+	}
 
 	log.Trace("Parsing certificate parameters")
 
@@ -494,6 +516,7 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	intermediates = append(intermediates, dataStore.CertChainPem[:len(dataStore.CertChainPem)-1]...)
 
 	certResponse := swdriver.SwCertResponse{
+		Version: swProtocolVersion,
 		Certs: ar.CertChain{
 			Leaf:          tmp.Bytes(),
 			Intermediates: intermediates,
@@ -795,13 +818,19 @@ func handleVcekRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	decoder := gob.NewDecoder(buf)
 	decoder.Decode(&req)
 
+	if req.Version != snpProtocolVersion {
+		return nil, fmt.Errorf("snp request protocol version of server (%d) does not match client (%d)",
+			tpmProtocolVersion, req.Version)
+	}
+
 	vcek, err := getVcek(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VCEK: %w", err)
 	}
 
 	resp := snpdriver.VcekResponse{
-		Vcek: encodeCertPem(vcek),
+		Version: snpProtocolVersion,
+		Vcek:    encodeCertPem(vcek),
 	}
 
 	var retBuf bytes.Buffer
