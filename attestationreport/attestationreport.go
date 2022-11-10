@@ -21,9 +21,9 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"fmt"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
 
 	"time"
@@ -614,38 +614,6 @@ func extendHash(hash []byte, data []byte) []byte {
 	return ret
 }
 
-// LoadCert loads a certificate from PEM encoded data
-func LoadCert(data []byte) (*x509.Certificate, error) {
-	input := data
-
-	block, _ := pem.Decode(data)
-	if block != nil {
-		input = block.Bytes
-	}
-
-	cert, err := x509.ParseCertificate(input)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
-	}
-	return cert, nil
-}
-
-// LoadCerts loads one or more certificates from PEM encoded data
-func LoadCerts(data []byte) ([]*x509.Certificate, error) {
-	certs := make([]*x509.Certificate, 0)
-	input := data
-
-	for block, rest := pem.Decode(input); block != nil; block, rest = pem.Decode(rest) {
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
-		}
-		certs = append(certs, cert)
-	}
-	return certs, nil
-}
-
 func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte, s Serializer) (bool, *ArPlain) {
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
@@ -654,7 +622,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	ar := ArPlain{}
 
-	roots, err := LoadCerts(casPem)
+	roots, err := internal.LoadCerts(casPem)
 	if err != nil {
 		log.Warn("Loading PEM encoded CA certificate(s) failed")
 		result.Success = false

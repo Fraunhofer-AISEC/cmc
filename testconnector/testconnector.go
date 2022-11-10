@@ -29,6 +29,7 @@ import (
 
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func main() {
@@ -84,6 +85,8 @@ func main() {
 		ClientAuth:   tls.VerifyClientCertIfGiven, // make mTLS an option
 		ClientCAs:    roots,
 	}
+
+	internal.PrintTlsConfig(config, rootCA)
 
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))

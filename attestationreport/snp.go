@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -367,7 +368,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 	s.SetBytes(sRaw)
 
 	// Load the VCEK certificate
-	c, err := LoadCert(certs.Leaf)
+	c, err := internal.LoadCert(certs.Leaf)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load certificate: %v", err)
 		result.Signature.setFalse(&msg)

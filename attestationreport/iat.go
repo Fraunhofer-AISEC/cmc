@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/veraison/go-cose"
 )
@@ -78,7 +79,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, verifications []V
 
 	log.Trace("Loading certificates")
 
-	cert, err := LoadCert(iasM.Certs.Leaf)
+	cert, err := internal.LoadCert(iasM.Certs.Leaf)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load CA certificate: %v", err)
 		result.Summary.setFalse(&msg)
@@ -117,7 +118,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, verifications []V
 	}
 
 	// Verify certificate chain
-	cas, err := LoadCerts(casPem)
+	cas, err := internal.LoadCerts(casPem)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.IasSignature.CertCheck.setFalse(&msg)

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-tpm/tpm2"
 )
 
@@ -94,7 +95,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, verifications []V
 	}
 
 	// Verify certificate chain
-	cas, err := LoadCerts(casPem)
+	cas, err := internal.LoadCerts(casPem)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.QuoteSignature.CertCheck.setFalse(&msg)
@@ -258,7 +259,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
 	}
 
 	// Extract public key from x509 certificate
-	x509Cert, err := LoadCert(cert)
+	x509Cert, err := internal.LoadCert(cert)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
 		result.Signature.setFalse(&msg)
