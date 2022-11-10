@@ -191,7 +191,7 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 		return tls.Certificate{}, errors.New("could not parse any certificate")
 	}
 
-	// Convert TLS cert (first cert) only to obtain its crypto.PublicKey
+	// Convert TLS cert (first cert)
 	x509Cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("could not parse certificate: %w", err)
@@ -200,6 +200,7 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 	log.Tracef("Retrieved TLS certificate %v with SANS %v", x509Cert.Subject.CommonName, x509Cert.DNSNames)
 
 	// Create TLS Cert
+	tlsCert.Leaf = x509Cert
 	tlsCert.PrivateKey = PrivateKey{
 		pubKey: x509Cert.PublicKey,
 		cmcConfig: cmcConfig{
@@ -207,6 +208,6 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 			cmcPort:    cc.cmcPort,
 		},
 	}
-	// return cert
+	// Return cert
 	return tlsCert, nil
 }
