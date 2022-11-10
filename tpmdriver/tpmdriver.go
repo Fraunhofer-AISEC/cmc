@@ -43,6 +43,10 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 )
 
+var (
+	tpmProtocolVersion = 1
+)
+
 // Tpm is a structure that implements the Measure method
 // of the attestation report Measurer interface
 type Tpm struct {
@@ -70,6 +74,7 @@ type Config struct {
 // for verifying that the AK and TLS Key were created on a genuine
 // TPM with a valid EK
 type AcRequest struct {
+	Version         int
 	AkQualifiedName [32]byte
 	TpmInfo         attest.TPMInfo
 	Ek              attest.EK
@@ -79,6 +84,7 @@ type AcRequest struct {
 
 // AcResponse holds the activate credential challenge
 type AcResponse struct {
+	Version         int
 	AkQualifiedName [32]byte
 	Ec              attest.EncryptedCredential
 }
@@ -88,6 +94,7 @@ type AcResponse struct {
 // of the to be generated certificates (as the AK can only sign
 // objects form within the TPM, a CSR is not possible)
 type AkCertRequest struct {
+	Version         int
 	AkQualifiedName [32]byte
 	Secret          []byte
 	CertParams      [][]byte
@@ -96,6 +103,7 @@ type AkCertRequest struct {
 // AkCertResponse holds the issued certificates including the
 // certificate chain up to a Root CA
 type AkCertResponse struct {
+	Version         int
 	AkQualifiedName [32]byte
 	AkCertChain     ar.CertChain
 	TlsCertChain    ar.CertChain
@@ -494,26 +502,31 @@ func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.C
 	log.Debug("Performing TPM credential activation..")
 
 	if TPM == nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to provision TPM - TPM is not openend")
+		return ar.CertChain{}, ar.CertChain{}, errors.New("TPM is not openend")
 	}
 	if ek == nil || ak == nil || tlsKey == nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to provision TPM - keys not created")
+		return ar.CertChain{}, ar.CertChain{}, errors.New("keys not created")
 	}
 
 	tpmInfo, err := GetTpmInfo()
 	if err != nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to retrieve TPM Info - %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to retrieve TPM Info: %v", err)
 	}
 
-	secret, err := activateCredential(TPM, *ak, ek[0], tpmInfo, provServerURL)
+	secret, err := requestActivateCredential(TPM, *ak, ek[0], tpmInfo, provServerURL)
 	if err != nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("activate credential failed: activateCredential returned %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("request activate credential failed: %v", err)
 	}
 
 	// Return challenge to server
 	resp, err := requestTpmCerts(provServerURL, secret, certParams)
 	if err != nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("activate credential failed: requestAkCert returned %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to request tpm certs: %v", err)
+	}
+
+	if resp.Version != tpmProtocolVersion {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("tpm certs response protocol version (%v) does not match our protocol versio (%v)",
+			resp.Version, tpmProtocolVersion)
 	}
 
 	return resp.AkCertChain, resp.TlsCertChain, nil
@@ -534,21 +547,21 @@ func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error
 	log.Tracef("New CA Cert %v: %v", paths.Ca, string(akchain.Ca))
 
 	if err := os.WriteFile(paths.AkCert, akchain.Leaf, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.AkCert, err)
+		return fmt.Errorf("failed to write file %v: %v", paths.AkCert, err)
 	}
 	if err := os.WriteFile(paths.TLSCert, tlschain.Leaf, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
+		return fmt.Errorf("failed to write %v: %v", paths.TLSCert, err)
 	}
 	if len(paths.Intermediates) != len(akchain.Intermediates) {
 		return errors.New("internal error: length of intermediate certificates does not match length of paths")
 	}
 	for i := range akchain.Intermediates {
 		if err := os.WriteFile(paths.Intermediates[i], akchain.Intermediates[i], 0644); err != nil {
-			return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Intermediates[i], err)
+			return fmt.Errorf("failed to write  %v: %v", paths.Intermediates[i], err)
 		}
 	}
 	if err := os.WriteFile(paths.Ca, akchain.Ca, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
+		return fmt.Errorf("failed to write %v: %v", paths.Ca, err)
 	}
 
 	// Store the encrypted AK blob on disk
@@ -557,7 +570,7 @@ func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error
 		return fmt.Errorf("activate credential failed: Marshal AK returned %v", err)
 	}
 	if err := os.WriteFile(paths.Ak, akBytes, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ak, err)
+		return fmt.Errorf("failed to write file %v: %v", paths.Ak, err)
 	}
 
 	// Store the encrypted TLS Key blob on disk
@@ -566,7 +579,7 @@ func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error
 		return fmt.Errorf("activate credential failed: Marshal TLS Key returned %v", err)
 	}
 	if err := os.WriteFile(paths.TLSKey, tlsKeyBytes, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSKey, err)
+		return fmt.Errorf("failed to write file %v: %v", paths.TLSKey, err)
 	}
 
 	return nil
@@ -575,7 +588,7 @@ func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error
 func loadTpmKeys(akFile, tlsKeyFile string) error {
 
 	if TPM == nil {
-		return fmt.Errorf("failed to load keys - TPM is not opened")
+		return errors.New("tpm is not opened")
 	}
 
 	log.Debug("Loading TPM keys..")
@@ -690,16 +703,17 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 	return eks, ak, tlsKey, nil
 }
 
-func activateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *attest.TPMInfo, url string) ([]byte, error) {
+func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *attest.TPMInfo, url string) ([]byte, error) {
 
 	attestParams := ak.AttestationParameters()
 
 	qn, err := GetAkQualifiedName()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve AK qualified name - %v", err)
+		return nil, fmt.Errorf("failed to retrieve AK qualified name: %v", err)
 	}
 
 	acRequest := AcRequest{
+		Version:         tpmProtocolVersion,
 		AkQualifiedName: qn,
 		TpmInfo:         *tpmInfo,
 		Ek:              ek,
@@ -710,22 +724,26 @@ func activateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *at
 	// send EK and Attestation Parameters including AK to the server
 	acResponse, err := sendParams(acRequest, url)
 	if err != nil {
-		return nil, fmt.Errorf("send params failed - %v", err)
+		return nil, fmt.Errorf("send params failed: %v", err)
 	}
 
 	// Client decrypts the credential
 	log.Debug("Activate Credential")
 
+	if acResponse.Version != tpmProtocolVersion {
+		return nil, fmt.Errorf("activate credential response protocol version (%v) does not match our protocol version (%v)",
+			acResponse.Version, tpmProtocolVersion)
+	}
 	if acResponse.Ec.Credential == nil {
-		return nil, fmt.Errorf("did not receive encrypted credential from server")
+		return nil, errors.New("did not receive encrypted credential from server")
 	}
 	if acResponse.Ec.Secret == nil {
-		return nil, fmt.Errorf("did not receive encrypted secret from server")
+		return nil, errors.New("did not receive encrypted secret from server")
 	}
 
 	secret, err := ak.ActivateCredential(tpm, acResponse.Ec)
 	if err != nil {
-		return nil, fmt.Errorf("error activating credential - %v", err)
+		return nil, fmt.Errorf("activate credential failed: %v", err)
 	}
 
 	return secret, nil
@@ -744,13 +762,18 @@ func sendParams(acRequest AcRequest, url string) (*AcResponse, error) {
 	log.Debug("Sending Credential Activation HTTP POST Request")
 	resp, err := http.Post(url, "tpm/attestparams", &buf)
 	if err != nil {
-		return nil, fmt.Errorf("error sending params - %v", err)
+		return nil, fmt.Errorf("failed to send POST request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error sending params - %v", err)
+		return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed: HTTP Server responded %v: %v",
+			resp.Status, string(b))
 	}
 
 	var acResponse AcResponse
@@ -768,6 +791,7 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	}
 
 	akCertRequest := AkCertRequest{
+		Version:         tpmProtocolVersion,
 		AkQualifiedName: qn,
 		Secret:          secret,
 		CertParams:      certParams,
@@ -787,17 +811,14 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		log.Warn("Request failed: body: ", string(b))
-		return AkCertResponse{}, fmt.Errorf("request failed: HTTP Server responded '%v'", resp.Status)
-	}
-
-	log.Debug("HTTP Response OK")
-
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return AkCertResponse{}, fmt.Errorf("error sending params - %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return AkCertResponse{}, fmt.Errorf("request failed: HTTP Server responded %v: %v",
+			resp.Status, string(b))
 	}
 
 	var akCertResponse AkCertResponse

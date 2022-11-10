@@ -34,15 +34,20 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("service", "swdriver")
+var (
+	swProtocolVersion = 1
+	log               = logrus.WithField("service", "swdriver")
+)
 
 type SwCertRequest struct {
+	Version    int
 	CertParams []byte
 	PubKey     []byte
 }
 
 type SwCertResponse struct {
-	Certs ar.CertChain
+	Version int
+	Certs   ar.CertChain
 }
 
 // Paths specifies the paths to store the certificates
@@ -99,6 +104,7 @@ func NewSwDriver(c Config) (*Sw, error) {
 	}
 
 	certRequest := SwCertRequest{
+		Version:    swProtocolVersion,
 		CertParams: certParams,
 		PubKey:     pub,
 	}
@@ -106,6 +112,11 @@ func NewSwDriver(c Config) (*Sw, error) {
 	certResponse, err := getCerts(c.Url+"sw-signing/", certRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certificates from server: %w", err)
+	}
+
+	if certResponse.Version != swProtocolVersion {
+		return nil, fmt.Errorf("response protocol version (%v) does not match our protocol version (%v)",
+			certResponse.Version, swProtocolVersion)
 	}
 
 	err = saveCerts(*paths, certResponse.Certs)
