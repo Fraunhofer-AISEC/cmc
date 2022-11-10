@@ -27,8 +27,10 @@ import (
 
 	"golang.org/x/exp/maps"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("service", "provisioning-client")
 
 // Pre is a struct for parsing HTML content
 type Pre struct {

@@ -30,11 +30,13 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/udp"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/coapapi"
 )
+
+var log = logrus.WithField("service", "coapclient")
 
 // Mode defines the mode the testclient should run
 type Mode int
@@ -180,7 +182,7 @@ func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []b
 }
 
 func main() {
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	parsedMode := flag.String("mode", "generate", "[generate | verify ]")
 	addr := flag.String("addr", "127.0.0.1:9955", "TCP address to connect to the CMC daemon gRPC interface")

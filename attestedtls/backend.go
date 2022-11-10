@@ -23,7 +23,6 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -51,16 +50,16 @@ type cmcConfig struct {
 
 // Creates connection with cmcd deamon at specified address
 func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
-	log.Trace("[Backend] Contacting cmcd on: " + cc.cmcAddress + ":" + cc.cmcPort)
+	log.Trace("Contacting cmcd on: " + cc.cmcAddress + ":" + cc.cmcPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
-		log.Errorf("[Backend] ERROR: did not connect: %v", err)
+		log.Errorf("ERROR: did not connect: %v", err)
 		cancel()
 		return nil, nil, nil
 	}
 
-	log.Trace("[Backend] Creating new service client")
+	log.Trace("Creating new service client")
 	return ci.NewCMCServiceClient(conn), conn, cancel
 }
 

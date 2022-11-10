@@ -20,8 +20,7 @@ import (
 	"testing"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func TestValidate(t *testing.T) {
@@ -53,7 +52,7 @@ func TestValidate(t *testing.T) {
 	}
 
 	// Setup logger
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

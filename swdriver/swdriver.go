@@ -31,8 +31,10 @@ import (
 	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("service", "swdriver")
 
 type SwCertRequest struct {
 	CertParams []byte

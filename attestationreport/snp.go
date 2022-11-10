@@ -26,7 +26,6 @@ import (
 	"math/big"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	log "github.com/sirupsen/logrus"
 )
 
 type snpreport struct {

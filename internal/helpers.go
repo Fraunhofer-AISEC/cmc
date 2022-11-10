@@ -28,12 +28,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	// local modules
 
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
+
+var log = logrus.WithField("service", "internal")
 
 // Converts Protobuf hashtype to crypto.SignerOpts
 func ConvertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.SignerOpts, error) {
@@ -50,7 +52,7 @@ func ConvertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.Signe
 		len = 64
 		hash = crypto.SHA512
 	default:
-		return crypto.SHA512, fmt.Errorf("[cmcd] Hash function not implemented: %v", hashtype)
+		return crypto.SHA512, fmt.Errorf("hash function not implemented: %v", hashtype)
 	}
 	if pssOpts != nil {
 		saltlen := int(pssOpts.SaltLength)

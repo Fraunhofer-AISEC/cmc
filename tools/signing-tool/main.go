@@ -24,8 +24,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type Serializer interface {

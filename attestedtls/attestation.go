@@ -24,16 +24,18 @@ import (
 	"errors"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	"github.com/sirupsen/logrus"
 )
 
 var id = "0000"
 var noncelen = 32
+
+var log = logrus.WithField("service", "atls")
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
 func obtainAR(req *ci.AttestationRequest, cc cmcConfig) (resp *ci.AttestationResponse, err error) {

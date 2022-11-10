@@ -20,8 +20,10 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/robertkrimen/otto"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("service", "policy-agent")
 
 // JavaScriptValidator is a javascript implementation of the
 // attestation report generic PolicyValidator interface

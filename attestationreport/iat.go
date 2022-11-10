@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	log "github.com/sirupsen/logrus"
 	"github.com/veraison/go-cose"
 )
 

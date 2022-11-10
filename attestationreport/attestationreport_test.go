@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -152,7 +152,7 @@ func TestVerify(t *testing.T) {
 	}
 
 	// Setup logger
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	// Setup Test Keys and Certificates
 	log.Trace("Creating Keys and Certificates")

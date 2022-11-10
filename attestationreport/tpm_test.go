@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func Test_verifyTpmMeasurements(t *testing.T) {
@@ -140,7 +140,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		},
 	}
 
-	log.SetLevel(log.InfoLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

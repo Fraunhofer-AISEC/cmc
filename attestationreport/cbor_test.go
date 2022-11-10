@@ -21,7 +21,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func TestVerifyCbor(t *testing.T) {
@@ -46,7 +46,7 @@ func TestVerifyCbor(t *testing.T) {
 	}
 
 	// Setup logger
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	// Setup certificate chain and keys
 	certChain, privateKey := testCreatePki(leaf1Pem, leaf1KeyPem)

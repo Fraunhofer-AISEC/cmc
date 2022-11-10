@@ -25,12 +25,14 @@ import (
 	"net"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
+
+var log = logrus.WithField("service", "testconnector")
 
 func main() {
 	var cert tls.Certificate
@@ -43,12 +45,12 @@ func main() {
 	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
 	flag.Parse()
 
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	// Get root CA cert
 	rootCA, err := os.ReadFile(*caFile)
 	if err != nil {
-		log.Error("[Testconnector] Could not find root CA cert file.")
+		log.Error("Could not find root CA cert file.")
 		return
 	}
 
@@ -56,14 +58,14 @@ func main() {
 	roots := x509.NewCertPool()
 	success := roots.AppendCertsFromPEM(rootCA)
 	if !success {
-		log.Error("[Testconnector] Could not add cert to root CAs.")
+		log.Error("Could not add cert to root CAs.")
 		return
 	}
 
 	// Load certificate
 	cert, err = atls.GetCert(atls.WithCmcPort(*port))
 	if err != nil {
-		log.Error("[Testconnector] failed to get TLS Certificate. ", err)
+		log.Error("failed to get TLS Certificate. ", err)
 		return
 	}
 
@@ -92,13 +94,13 @@ func main() {
 	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
 	if err != nil {
 		log.Error(err)
-		log.Error("[Testconnector] Failed to listen for connections")
+		log.Error("Failed to listen for connections")
 		return
 	}
 	defer ln.Close()
 
 	for {
-		log.Info("[Testconnector] serving under " + *connectoraddress)
+		log.Info("serving under " + *connectoraddress)
 		// Finish TLS connection establishment with Remote Attestation
 		conn, err := ln.Accept()
 		if err != nil {
@@ -106,12 +108,12 @@ func main() {
 			if errors.As(err, &attestedErr) {
 				result, err := json.Marshal(attestedErr.GetVerificationResult())
 				if err != nil {
-					log.Errorf("[Testconnector] Internal error: failed to marshal verification result: %v", err)
+					log.Errorf("Internal error: failed to marshal verification result: %v", err)
 				} else {
-					log.Errorf("[Testconnector] Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
+					log.Errorf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
 				}
 			} else {
-				log.Errorf("[Testconnector] Failed to establish connection: %v", err)
+				log.Errorf("Failed to establish connection: %v", err)
 			}
 			continue
 		}
@@ -128,7 +130,7 @@ func handleConnection(conn net.Conn) {
 	msg, err := r.ReadString('\n')
 	if err != nil {
 		log.Error(err)
-		log.Error("[Testconnector] Failed to read")
+		log.Error("Failed to read")
 		return
 	}
 	println(msg)
@@ -137,7 +139,7 @@ func handleConnection(conn net.Conn) {
 	_, err = conn.Write([]byte("answer to : " + msg + "\n"))
 	if err != nil {
 		log.Error(err)
-		log.Error("[Testconnector] Failed to write")
+		log.Error("Failed to write")
 		return
 	}
 }

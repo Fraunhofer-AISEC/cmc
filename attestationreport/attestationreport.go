@@ -24,10 +24,12 @@ import (
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"time"
 )
+
+var log = logrus.WithField("service", "ar")
 
 // Measurement is a generic interface for a Measurement, such as a TpmMeasurement
 type Measurement interface{}

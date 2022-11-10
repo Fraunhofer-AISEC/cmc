@@ -19,8 +19,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // Wraps tls.Dial
@@ -68,6 +66,6 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	}
 
 	// finished
-	log.Info("[Listener] Client-side aTLS connection complete")
+	log.Info("Client-side aTLS connection complete")
 	return conn, nil
 }

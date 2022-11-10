@@ -22,8 +22,9 @@ import (
 	"os"
 	"strings"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	log "github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 func convert(data []byte, v any, si ar.Serializer, so ar.Serializer) ([]byte, error) {

@@ -27,13 +27,15 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
+
+var log = logrus.WithField("service", "coap-api")
 
 // CoapServer is the CoAP server structure
 type CoapServer struct {

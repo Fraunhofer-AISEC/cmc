@@ -36,7 +36,7 @@ import (
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -118,6 +118,8 @@ var (
 	tlsKey *attest.Key = nil
 	ek     []attest.EK
 )
+
+var log = logrus.WithField("service", "tpmdriver")
 
 // NewTpm creates a new TPM object, opens and initializes the TPM object,
 // checks if provosioning is required and if so, provisions the TPM
@@ -258,9 +260,9 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		Certs:     t.MeasuringCerts,
 	}
 
-	for i, elem := range tm.HashChain {
+	for _, elem := range tm.HashChain {
 		for _, sha := range elem.Sha256 {
-			log.Trace(fmt.Sprintf("[%v], PCR%v: %v\n", i, elem.Pcr, hex.EncodeToString(sha)))
+			log.Tracef("PCR%v: %v\n", elem.Pcr, hex.EncodeToString(sha))
 		}
 	}
 	log.Trace("Quote: ", hex.EncodeToString(tm.Message))
