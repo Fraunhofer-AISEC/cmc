@@ -148,7 +148,7 @@ func NewTpm(c *Config) (*Tpm, error) {
 
 	// Check if the TPM is provisioned. If provisioned, load the AK and TLS key.
 	// Otherwise perform credential activation with provisioning server and then load the keys
-	provisioningRequired, err := IsTpmProvisioningRequired(paths.Ak)
+	provisioningRequired, err := IsTpmProvisioningRequired(paths)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if TPM is provisioned: %v", err)
 	}
@@ -305,9 +305,29 @@ func (t *Tpm) GetCertChain() ar.CertChain {
 // indicator that the TPM is provisioned and the AK can directly be loaded.
 // This function uses the low-level go-tpm library directly as go-attestation
 // does not provide such a functionality.
-func IsTpmProvisioningRequired(ak string) (bool, error) {
+func IsTpmProvisioningRequired(paths *Paths) (bool, error) {
 
-	if _, err := os.Stat(ak); err != nil {
+	if _, err := os.Stat(paths.Ak); err != nil {
+		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		return true, nil
+	}
+
+	if _, err := os.Stat(paths.AkCert); err != nil {
+		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		return true, nil
+	}
+
+	if _, err := os.Stat(paths.TLSKey); err != nil {
+		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		return true, nil
+	}
+
+	if _, err := os.Stat(paths.TLSCert); err != nil {
+		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		return true, nil
+	}
+
+	if _, err := os.Stat(paths.Ca); err != nil {
 		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
 		return true, nil
 	}
