@@ -82,45 +82,47 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []Verification) (*SnpMeasurementResult, bool) {
+func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues []ReferenceValue) (*SnpMeasurementResult, bool) {
 	result := &SnpMeasurementResult{}
 	ok := true
 
-	// If the attestationreport does contain neither SNP measurements, nor SNP verifications
+	// If the attestationreport does contain neither SNP measurements, nor SNP Reference Values
 	// there is nothing to to
-	if snpM == nil && len(verifications) == 0 {
+	if snpM == nil && len(referenceValues) == 0 {
 		return nil, true
 	}
 
-	// If the attestationreport contains SNP verifications, but no SNP measurement, the
+	// If the attestationreport contains SNP Reference Values, but no SNP measurement, the
 	// attestation must fail
 	if snpM == nil {
-		for _, v := range verifications {
-			msg := fmt.Sprintf("SNP Measurement not present. Cannot verify SNP verification (hash: %v)", v.Sha384)
-			result.VerificationsCheck.setFalseMulti(&msg)
+		for _, v := range referenceValues {
+			msg := fmt.Sprintf("SNP Measurement not present. Cannot verify SNP Reference Value (hash: %v)",
+				v.Sha384)
+			result.ReferenceValueCheck.setFalseMulti(&msg)
 		}
 		result.Summary.Success = false
 		return result, false
 	}
 
-	if len(verifications) == 0 {
-		msg := "Could not find SNP verification"
+	if len(referenceValues) == 0 {
+		msg := "Could not find SNP Reference Value"
 		result.Summary.setFalse(&msg)
 		return result, false
-	} else if len(verifications) > 1 {
-		msg := fmt.Sprintf("Report contains %v verifications. Currently, only 1 SNP verification is supported", len(verifications))
+	} else if len(referenceValues) > 1 {
+		msg := fmt.Sprintf("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
+			len(referenceValues))
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	snpVerification := verifications[0]
+	snpReferenceValue := referenceValues[0]
 
-	if snpVerification.Type != "SNP Verification" {
-		msg := fmt.Sprintf("SNP Verification invalid type %v", snpVerification.Type)
+	if snpReferenceValue.Type != "SNP Reference Value" {
+		msg := fmt.Sprintf("SNP Reference Value invalid type %v", snpReferenceValue.Type)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	if snpVerification.Snp == nil {
-		msg := "SNP Verification does not contain policy"
+	if snpReferenceValue.Snp == nil {
+		msg := "SNP Reference Value does not contain policy"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
@@ -137,7 +139,8 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)", hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
+		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
+			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
 		result.Freshness.setFalse(&msg)
 		ok = false
 	} else {
@@ -145,38 +148,39 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, verifications []V
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Report, s, snpM.Certs, snpVerification.Snp.KeyId)
+	sig, ret := verifySnpSignature(snpM.Report, s, snpM.Certs, snpReferenceValue.Snp.KeyId)
 	if !ret {
 		ok = false
 	}
 	result.Signature = sig
 
 	// Compare Measurements
-	if cmp := bytes.Compare(s.Measurement[:], snpVerification.Sha384); cmp != 0 {
-		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v", snpVerification.Sha384, hex.EncodeToString(s.Measurement[:]))
+	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
+		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v",
+			snpReferenceValue.Sha384, hex.EncodeToString(s.Measurement[:]))
 		result.MeasurementMatch.setFalse(&msg)
 		ok = false
 	} else {
 		result.MeasurementMatch.Success = true
 		// As we previously checked, that the attestation report contains exactly one
-		// SNP verification, we can set this here:
-		result.VerificationsCheck.Success = true
+		// SNP Reference Value, we can set this here:
+		result.ReferenceValueCheck.Success = true
 	}
 
 	// Compare SNP parameters
-	result.VersionMatch, ret = verifySnpVersion(s, snpVerification.Snp.Version)
+	result.VersionMatch, ret = verifySnpVersion(s, snpReferenceValue.Snp.Version)
 	if !ret {
 		ok = false
 	}
-	result.PolicyCheck, ret = verifySnpPolicy(s, snpVerification.Snp.Policy)
+	result.PolicyCheck, ret = verifySnpPolicy(s, snpReferenceValue.Snp.Policy)
 	if !ret {
 		ok = false
 	}
-	result.FwCheck, ret = verifySnpFw(s, snpVerification.Snp.Fw)
+	result.FwCheck, ret = verifySnpFw(s, snpReferenceValue.Snp.Fw)
 	if !ret {
 		ok = false
 	}
-	result.TcbCheck, ret = verifySnpTcb(s, snpVerification.Snp.Tcb)
+	result.TcbCheck, ret = verifySnpTcb(s, snpReferenceValue.Snp.Tcb)
 	if !ret {
 		ok = false
 	}
@@ -413,7 +417,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 	// Verify the SNP certificate chain
 	keyId, err := hex.DecodeString(caKeyId)
 	if err != nil {
-		msg := fmt.Sprintf("failed to parse SNP Verification CA subject key identifier: %v", err)
+		msg := fmt.Sprintf("failed to parse SNP Reference Value CA subject key identifier: %v", err)
 		result.CertCheck.setFalse(&msg)
 		return result, false
 	}

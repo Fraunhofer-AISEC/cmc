@@ -14,8 +14,10 @@ cd $CMC_ROOT/tpm-pcr-tools
 make
 sudo make install
 
-# Clone the CMC repo
-git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
+# Clone the CMC repo if not already present
+[ -d "${CMC_ROOT}/cmc" ] || {
+    git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
+}
 
 # Build CMC
 cd $CMC_ROOT/cmc
@@ -34,18 +36,18 @@ cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data
 $CMC_ROOT/cmc-data/setup-simple-pki -i $CMC_ROOT/cmc-data -o $CMC_ROOT/cmc-data/pki
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-verifications=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
 
-# Delete existing verifications in the RTM Manifest
-jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+# Delete existing reference values in the RTM Manifest
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 
-# Add new verifications
-jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+# Add new reference values
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 
 # Do this for the OS manifest as well
-verifications=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
 
 # Sign the metadata*
 IN=$CMC_ROOT/cmc-data/metadata-raw

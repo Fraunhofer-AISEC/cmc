@@ -9,6 +9,6 @@
 	},
     "description": "PoC Demonstrator RTM Manifest",
     "certificationLevel" : 3,
-    "verifications": [
+    "referenceValues": [
     ]
 }

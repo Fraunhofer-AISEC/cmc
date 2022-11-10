@@ -1037,7 +1037,7 @@ var (
 func Test_verifySnpMeasurements(t *testing.T) {
 	type args struct {
 		snpM  *SnpMeasurement
-		snpV  []Verification
+		snpV  []ReferenceValue
 		nonce []byte
 	}
 	tests := []struct {
@@ -1053,9 +1053,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1078,9 +1078,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: invalidReportSignature,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1103,9 +1103,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  invalidCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1128,9 +1128,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  invalidLeafCert,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1153,9 +1153,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: invalidReportData,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1178,9 +1178,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: invalidMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1203,9 +1203,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1228,9 +1228,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1246,16 +1246,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Invalid Verification Type",
+			name: "Invalid Reference Value Type",
 			args: args{
 				snpM: &SnpMeasurement{
 					Type:   "SNP Measurement",
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "TPM Verification",
+						Type:   "TPM Reference Value",
 						Sha256: validMeasurement,
 					},
 				},
@@ -1264,7 +1264,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "No Verifications Present",
+			name: "No Reference Values Present",
 			args: args{
 				snpM: &SnpMeasurement{
 					Type:   "SNP Measurement",
@@ -1278,9 +1278,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "No Measurement Present",
 			args: args{
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1303,9 +1303,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1328,9 +1328,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
@@ -1353,9 +1353,9 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Report: validReport,
 					Certs:  validCertChain,
 				},
-				snpV: []Verification{
+				snpV: []ReferenceValue{
 					{
-						Type:   "SNP Verification",
+						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,

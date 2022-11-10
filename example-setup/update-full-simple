@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -e
+
+# Setup a folder for the cmc workspace (e.g. in your home directory)
+CMC_ROOT=$HOME/cmc-workspace
+
+# Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
+referenceValuess=$(sudo parse-srtm-pcrs -p 1 -f json)
+
+# Delete existing reference values in the RTM Manifest
+jq 'del(.referenceValuess[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+
+# Add new reference values
+jq --argjson ver "$referenceValuess" '.referenceValuess += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+
+# Do this for the OS manifest as well
+referenceValuess=$(sudo parse-srtm-pcrs -p 4 -f json)
+jq 'del(.referenceValuess[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValuess" '.referenceValuess += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+
+# Sign the metadata*
+IN=$CMC_ROOT/cmc-data/metadata-raw
+OUT=$CMC_ROOT/cmc-data/metadata-signed
+KEY=$CMC_ROOT/cmc-data/pki/signing-cert-key.pem
+CHAIN=$CMC_ROOT/cmc-data/pki/signing-cert.pem,$CMC_ROOT/cmc-data/pki/ca.pem
+
+mkdir -p $OUT
+
+signing-tool -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN -format json
+signing-tool -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN -format json
+signing-tool -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN --format json
+signing-tool -in $IN/ak.certparams.json       -out $OUT/ak.certparams.json       -keys $KEY -x5cs $CHAIN --format json
+signing-tool -in $IN/tlskey.certparams.json   -out $OUT/tlskey.certparams.json   -keys $KEY -x5cs $CHAIN --format json

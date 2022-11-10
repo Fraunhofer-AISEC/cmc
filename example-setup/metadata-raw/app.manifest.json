@@ -11,6 +11,6 @@
 	],
 	"description" : "Test App",
 	"certificationLevel" : 1,
-	"verifications" : [
+	"referenceValues" : [
 	]
 }

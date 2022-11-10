@@ -155,14 +155,14 @@ see [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-
 
 ```sh
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-verifications=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
-# Delete existing verifications in the RTM Manifest
-jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
+# Delete existing reference values in the RTM Manifest
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 
-verifications=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
 ```
 
 **4. Sign the metadata**
@@ -278,23 +278,23 @@ $CMC_ROOT/cmc/tools/converter/converter -in <input-file>.json -out <output-file.
 ### TPM Setup using Calculated Values
 
 In the example setup, the platform is simply seen as a "good reference platform" and the
-verifications are generated through parsing the TPM measurements from the `sysfs`. Ideally, the
-verifications are generated from the single software artefacts running on the platform. For
+reference values are generated through parsing the TPM measurements from the `sysfs`. Ideally, the
+reference values are generated from the single software artefacts running on the platform. For
 QEMU VMs with OVMF and a kernel with appended initramfs, the `calculate-srtm-pcrs` tool can
 be used:
 
 ```sh
 # 5. a) TPM Setup using calculated values
-# Calculate verifications
-verifications=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 0,1,2,3,6,7 --eventlog --config configs/ovmf-f80580f56b.cfg)
-# Delete all existing verifications
-jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-# Insert new verifications
-jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+# Calculate reference values
+referenceValues=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 0,1,2,3,6,7 --eventlog --config configs/ovmf-f80580f56b.cfg)
+# Delete all existing reference values
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+# Insert new reference values
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 
-verifications=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 4,5 --eventlog --config configs/ovmf-f80580f56b.cfg)
-jq 'del(.verifications[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$verifications" '.verifications += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+referenceValues=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 4,5 --eventlog --config configs/ovmf-f80580f56b.cfg)
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
 ```
 
 ## Config Files

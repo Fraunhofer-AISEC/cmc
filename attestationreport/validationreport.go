@@ -54,7 +54,7 @@ type ManifestResult struct {
 }
 
 // MeasurementResult represents the results of the comparison of
-// verifications and measurements. The used attributes depend on
+// reference values and measurements. The used attributes depend on
 // the technologies used for calculating the measurements
 type MeasurementResult struct {
 	TpmMeasResult *TpmMeasurementResult `json:"tpm,omitempty"`
@@ -76,14 +76,14 @@ type DevDescResult struct {
 }
 
 // TpmMeasurementResults represents the results of the validation
-// of the provided TPM Quote and its comparison to the verifications in the manifests
+// of the provided TPM Quote and its comparison to the reference values in the manifests
 type TpmMeasurementResult struct {
-	Summary            Result          `json:"resultSummary"`
-	PcrRecalculation   []PcrResult     `json:"pcrRecalculation"`   // Result for validation whether the measured PCR values match the provided verifications
-	AggPcrQuoteMatch   Result          `json:"aggPcrQuoteMatch"`   // Result for comparing the aggregated PCR values with the value in the TPM Quote
-	QuoteFreshness     Result          `json:"quoteFreshness"`     // Result for comparison of the expected nonce to the one provided in the TPM Quote
-	QuoteSignature     SignatureResult `json:"quoteSignature"`     // Results for validation of the TPM Quote Signature and the used certificates
-	VerificationsCheck ResultMulti     `json:"verificationsCheck"` // Checks that every TPM verification was part of the measurements
+	Summary             Result          `json:"resultSummary"`
+	PcrRecalculation    []PcrResult     `json:"pcrRecalculation"`    // Result for validation whether the measured PCR values match the provided reference values
+	AggPcrQuoteMatch    Result          `json:"aggPcrQuoteMatch"`    // Result for comparing the aggregated PCR values with the value in the TPM Quote
+	QuoteFreshness      Result          `json:"quoteFreshness"`      // Result for comparison of the expected nonce to the one provided in the TPM Quote
+	QuoteSignature      SignatureResult `json:"quoteSignature"`      // Results for validation of the TPM Quote Signature and the used certificates
+	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"` // Checks that every TPM Reference Value was part of the measurements
 }
 
 // PcrResult represents the results for the recalculation of a specific PCR
@@ -92,11 +92,11 @@ type PcrResult struct {
 	Validation ResultMulti `json:"validation"`
 }
 
-// SwMeasurementResult represents the results for the verification of
-// a software measurement (currently only used for app verifications)
+// SwMeasurementResult represents the results for the reference values of
+// a software measurement (currently only used for app reference values)
 type SwMeasurementResult struct {
-	MeasName   string `json:"measurementName"`  // Name associated with the measurement used for validation
-	VerName    string `json:"verificationName"` // Name of the verification information used for validation
+	MeasName   string `json:"measurementName"`    // Name associated with the measurement used for validation
+	VerName    string `json:"referenceValueName"` // Name of the reference value information used for validation
 	Validation Result `json:"validation"`
 }
 
@@ -132,24 +132,24 @@ type PolicyCheck struct {
 // SnpMeasurementResult represents the results for the verification
 // of AMD SEV SNP measurements
 type SnpMeasurementResult struct {
-	Summary            Result          `json:"resultSummary"`
-	Freshness          Result          `json:"freshness"`
-	Signature          SignatureResult `json:"signature"`
-	MeasurementMatch   Result          `json:"measurementMatch"`
-	VersionMatch       Result          `json:"reportVersionMatch"`
-	FwCheck            VersionCheck    `json:"fwCheck"`
-	TcbCheck           TcbCheck        `json:"tcbCheck"`
-	PolicyCheck        PolicyCheck     `json:"policyCheck"`
-	VerificationsCheck ResultMulti     `json:"verificationsCheck"` // Checks that every SNP verification was part of the measurements
+	Summary             Result          `json:"resultSummary"`
+	Freshness           Result          `json:"freshness"`
+	Signature           SignatureResult `json:"signature"`
+	MeasurementMatch    Result          `json:"measurementMatch"`
+	VersionMatch        Result          `json:"reportVersionMatch"`
+	FwCheck             VersionCheck    `json:"fwCheck"`
+	TcbCheck            TcbCheck        `json:"tcbCheck"`
+	PolicyCheck         PolicyCheck     `json:"policyCheck"`
+	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"` // Checks that every SNP Reference Value was part of the measurements
 }
 
 // IasMeasurementResult represents the results for the verification
 // of ARM PSA Initial Attestation Service Token measurements
 type IasMeasurementResult struct {
-	Summary            Result          `json:"resultSummary"`
-	FreshnessCheck     Result          `json:"quoteFreshness"`
-	VerificationsCheck ResultMulti     `json:"verificationsCheck"`
-	IasSignature       SignatureResult `json:"reportSignatureCheck"`
+	Summary             Result          `json:"resultSummary"`
+	FreshnessCheck      Result          `json:"quoteFreshness"`
+	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"`
+	IasSignature        SignatureResult `json:"reportSignatureCheck"`
 }
 
 // SignatureResults represents the results for validation of
