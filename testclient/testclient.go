@@ -66,19 +66,19 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, addr string
 	rootCA, err := os.ReadFile(rootCACertFile)
 	if err != nil {
 		log.Error(err)
-		log.Fatal("[Testclient] Could not find root CA cert file")
+		log.Fatal("Could not find root CA cert file")
 	}
 
 	// Add root CA
 	roots := x509.NewCertPool()
 	success := roots.AppendCertsFromPEM(rootCA)
 	if !success {
-		log.Fatal("[Testclient] Could not add cert to root CAs")
+		log.Fatal("Could not add cert to root CAs")
 	}
 
 	addrParts := strings.Split(addr, ":")
 	if len(addrParts) != 2 {
-		log.Fatal("[Testclient] Invalid Address, must be <address>:<port>")
+		log.Fatal("Invalid Address, must be <address>:<port>")
 	}
 
 	if mTLS {
@@ -86,7 +86,7 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, addr string
 		var cert tls.Certificate
 		cert, err = atls.GetCert(atls.WithCmcAddress(addrParts[0]), atls.WithCmcPort(addrParts[1]))
 		if err != nil {
-			log.Fatalf("[Testclient] failed to get TLS Certificate: %v", err)
+			log.Fatalf("failed to get TLS Certificate: %v", err)
 		}
 		// Create TLS config with root CA and own certificate
 		conf = &tls.Config{
@@ -100,33 +100,35 @@ func testTLSConn(connectoraddress, rootCACertFile string, mTLS bool, addr string
 		}
 	}
 
+	internal.PrintTlsConfig(conf, rootCA)
+
 	conn, err := atls.Dial("tcp", connectoraddress, conf, atls.WithCmcAddress(addrParts[0]), atls.WithCmcPort(addrParts[1]), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
 			result, err := json.Marshal(attestedErr.GetVerificationResult())
 			if err != nil {
-				log.Fatalf("[Testclient] Internal error: failed to marshal verification result: %v",
+				log.Fatalf("Internal error: failed to marshal verification result: %v",
 					err)
 			}
-			log.Fatalf("[Testclient] Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
+			log.Fatalf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
 		}
-		log.Fatalf("[Testclient] failed to dial server: %v", err)
+		log.Fatalf("failed to dial server: %v", err)
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
 	// write sth
 	_, err = conn.Write([]byte("hello\n"))
 	if err != nil {
-		log.Fatalf("[Testclient] failed to write: %v", err)
+		log.Fatalf("failed to write: %v", err)
 	}
 	// read sth
 	buf := make([]byte, 100)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Fatalf("[Testclient] failed to read. %v", err)
+		log.Fatalf("failed to read. %v", err)
 	}
-	log.Info("[Testclient] received: " + string(buf[:n]))
+	log.Info("received: " + string(buf[:n]))
 }
 
 func generate(addr, reportFile, nonceFile string) {
