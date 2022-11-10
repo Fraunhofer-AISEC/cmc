@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
-	log "github.com/sirupsen/logrus"
 	"github.com/veraison/go-cose"
 )
 

@@ -26,10 +26,9 @@ import (
 	"fmt"
 	"io"
 
-	log "github.com/sirupsen/logrus"
-
 	// local modules
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+
 	// debug
 	"encoding/hex"
 )
@@ -77,7 +76,7 @@ func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
 		return ci.HashFunction_BLAKE2b_512, nil
 	default:
 	}
-	return ci.HashFunction_SHA512, errors.New("[PrivateKey] Could not determine correct Hash function")
+	return ci.HashFunction_SHA512, errors.New("could not determine correct Hash function")
 }
 
 // PrivateKey Wrapper Implementing crypto.Signer interface
@@ -93,16 +92,16 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 	// Get backend connection
 	cmcClient, conn, cancel := getCMCServiceConn(priv.cmcConfig)
 	if cmcClient == nil {
-		return nil, errors.New("[PrivateKey] Connection failed. No signing performed")
+		return nil, errors.New("connection failed. No signing performed")
 	}
 	defer conn.Close()
 	defer cancel()
-	log.Info("[PrivateKey] Contacting backend for Sign Operation")
+	log.Info("contacting backend for Sign Operation")
 
 	// Create Sign request
 	hash, err := convertHash(opts)
 	if err != nil {
-		return nil, fmt.Errorf("[Private Key] Sign request creation failed: %w", err)
+		return nil, fmt.Errorf("sign request creation failed: %w", err)
 	}
 	req := ci.TLSSignRequest{
 		Id:       id,
@@ -125,7 +124,7 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 	if resp.GetStatus() != ci.Status_OK {
 		return nil, fmt.Errorf("signature creation failed with status %v", resp.GetStatus())
 	}
-	log.Trace("[PrivateKey] signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
+	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
 	return resp.GetSignedContent(), nil
 }
 
@@ -149,7 +148,7 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 	// Get backend connection
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
-		return tls.Certificate{}, errors.New("[Listener] Connection failed. No Cert obtained")
+		return tls.Certificate{}, errors.New("connection failed. No Cert obtained")
 	}
 	defer cmcconn.Close()
 	defer cancel()

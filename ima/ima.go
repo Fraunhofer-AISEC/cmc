@@ -23,8 +23,10 @@ import (
 	"os"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("service", "ima")
 
 // Constants for digests and TCG Events
 const (

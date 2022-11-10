@@ -32,7 +32,6 @@ import (
 	"math/big"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/square/go-jose.v2"
 )
 

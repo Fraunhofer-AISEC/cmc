@@ -48,12 +48,12 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 
 	"github.com/google/go-tpm/tpm2"
 	_ "github.com/mattn/go-sqlite3"
-	log "github.com/sirupsen/logrus"
 )
 
 type config struct {

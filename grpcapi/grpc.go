@@ -27,7 +27,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	// local modules
@@ -37,6 +37,8 @@ import (
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
+
+var log = logrus.WithField("service", "grpc-api")
 
 // GrpcServer is the gRPC server structure
 type GrpcServer struct {
@@ -163,21 +165,21 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TL
 	// get sign opts
 	opts, err = internal.ConvertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
-		log.Error("[Prover] failed to choose requested hash function.", err.Error())
+		log.Error("failed to choose requested hash function.", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to find appropriate hash function")
 	}
 	// get key
 	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
-		log.Error("[Prover] failed to get TLS key. ", err.Error())
+		log.Error("failed to get TLS key. ", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to get TLS key")
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
-	log.Trace("[Prover] TLSSign using opts: ", opts)
+	log.Trace("TLSSign using opts: ", opts)
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
 	if err != nil {
-		log.Error("[Prover] ", err.Error())
+		log.Error("", err.Error())
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
 	}
 	// Create response

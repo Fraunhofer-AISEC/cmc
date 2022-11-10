@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func Test_verifyIasMeasurements(t *testing.T) {
@@ -176,8 +176,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 			want: false,
 		},
 	}
-
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

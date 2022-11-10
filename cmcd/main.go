@@ -26,8 +26,6 @@ import (
 	"encoding/json"
 	"flag"
 
-	log "github.com/sirupsen/logrus"
-
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -38,6 +36,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
+	"github.com/sirupsen/logrus"
 )
 
 type config struct {
@@ -53,6 +52,8 @@ type config struct {
 	Serialization         string   `json:"serialization"`       // JSON, CBOR
 	Api                   string   `json:"api"`                 // gRPC, CoAP
 }
+
+var log = logrus.WithField("service", "cmcd")
 
 func loadConfig(configFile string) (*config, error) {
 
@@ -104,7 +105,7 @@ func printConfig(c *config) {
 
 func main() {
 
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	log.Info("Starting cmcd")
 

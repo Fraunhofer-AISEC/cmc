@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"net"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const timeout = 10 * time.Second
@@ -78,7 +76,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	log.Trace("[Listener] TLS established. Providing attestation report....")
+	log.Trace("TLS established. Providing attestation report....")
 	tlsConn := conn.(*tls.Conn)
 
 	// Perform remote attestation
@@ -94,7 +92,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 	mTLS := len(tlsConn.ConnectionState().PeerCertificates) != 0
 
 	if mTLS {
-		log.Info("[Listener] Performing mTLS: verifying dialer...")
+		log.Info("Performing mTLS: verifying dialer...")
 		// include components of tls.Conn to link both protocols: use dialer cert
 		// FUTURE: certificate can be obtained differently as well
 		//         (function GetClientCertificate, func GetCertificate or func GetConfigForClient)
@@ -103,10 +101,10 @@ func (ln Listener) Accept() (net.Conn, error) {
 			return nil, fmt.Errorf("failed to verify dialer: %w", err)
 		}
 	} else {
-		log.Info("[Listener] No mTLS performed")
+		log.Info("No mTLS performed")
 	}
 
-	log.Info("[Listener] Server-side aTLS connection complete")
+	log.Info("Server-side aTLS connection complete")
 	// finished
 	return conn, nil
 }

@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -55,6 +55,8 @@ const (
 const (
 	timeoutSec = 10
 )
+
+var log = logrus.WithField("service", "testclient")
 
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
@@ -231,7 +233,7 @@ func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []b
 }
 
 func main() {
-	log.SetLevel(log.TraceLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	parsedMode := flag.String("mode", "generate", "[generate | verify | tlsconn ]")
 	addr := flag.String("addr", "127.0.0.1:9955", "TCP address to connect to the CMC daemon gRPC interface")
