@@ -110,7 +110,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	log.Trace("Verifying certificate chain")
+	log.Trace("Verifying nonce")
 
 	// Verify nonce
 	if bytes.Equal(nonce, iat.AuthChallenge) {
@@ -121,27 +121,41 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 		ok = false
 	}
 
+	log.Trace("Verifying certificate chain")
+
 	// Verify certificate chain
 	cas, err := internal.ParseCerts(casPem)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse cas: %v", err)
-		result.IasSignature.CertCheck.setFalse(&msg)
+		result.IasSignature.CertChainCheck.setFalse(&msg)
 		ok = false
 	}
 	certs, err := internal.ParseCerts(iasM.Certs)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse certs: %v", err)
-		result.IasSignature.CertCheck.setFalse(&msg)
+		result.IasSignature.CertChainCheck.setFalse(&msg)
 		ok = false
 	}
-	err = internal.VerifyCertChain(certs, cas)
+
+	x509Chains, err := internal.VerifyCertChain(certs, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.IasSignature.CertCheck.setFalse(&msg)
+		result.IasSignature.CertChainCheck.setFalse(&msg)
 		ok = false
 	} else {
-		result.IasSignature.CertCheck.Success = true
+		result.IasSignature.CertChainCheck.Success = true
 	}
+
+	//Store details from (all) validated certificate chain(s) in the report
+	for _, chain := range x509Chains {
+		chainExtracted := []x509CertExtracted{}
+		for _, cert := range chain {
+			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+		}
+		result.IasSignature.ValidatedCerts = append(result.IasSignature.ValidatedCerts, chainExtracted)
+	}
+
+	result.Summary.Success = ok
 
 	log.Trace("Verifying measurements")
 
@@ -189,11 +203,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 func verifyIat(data []byte, cert *x509.Certificate) (SignatureResult, []byte, bool) {
 
 	result := SignatureResult{
-		Name:           cert.Subject.CommonName,
-		Organization:   cert.Subject.Organization,
-		SubjectKeyId:   hex.EncodeToString(cert.SubjectKeyId),
-		AuthorityKeyId: hex.EncodeToString(cert.AuthorityKeyId),
-		CertCheck:      Result{Success: true},
+		CertChainCheck: Result{Success: true},
 	}
 
 	// create a Sign1Message from a raw COSE_Sign payload
@@ -207,7 +217,7 @@ func verifyIat(data []byte, cert *x509.Certificate) (SignatureResult, []byte, bo
 	publicKey, okKey := cert.PublicKey.(*ecdsa.PublicKey)
 	if !okKey {
 		msg := fmt.Sprintf("Failed to extract public key from certificate: %v", err)
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, nil, false
 	}
 
@@ -215,18 +225,18 @@ func verifyIat(data []byte, cert *x509.Certificate) (SignatureResult, []byte, bo
 	verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create verifier: %v", err)
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, nil, false
 	}
 
 	err = msgToVerify.Verify(nil, verifier)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify COSE token: %v", err)
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, nil, false
 	}
 
-	result.Signature.Success = true
+	result.SignCheck.Success = true
 
 	return result, msgToVerify.Payload, true
 }

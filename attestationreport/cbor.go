@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -143,7 +142,7 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		x5Chain, okConv := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
 		if !okConv {
 			msg := fmt.Sprintf("failed to parse x5c header: %v", err)
-			result.SignatureCheck[i].CertCheck.setFalse(&msg)
+			result.SignatureCheck[i].CertChainCheck.setFalse(&msg)
 			ok = false
 			continue
 		}
@@ -152,14 +151,14 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 			cert, okCert := rawCert.([]byte)
 			if !okCert {
 				msg := "failed to decode certificate chain"
-				result.SignatureCheck[i].CertCheck.setFalse(&msg)
+				result.SignatureCheck[i].CertChainCheck.setFalse(&msg)
 				ok = false
 				continue
 			}
 			x509Cert, err := x509.ParseCertificate(cert)
 			if err != nil {
 				msg := fmt.Sprintf("failed to parse leaf certificate: %v", err)
-				result.SignatureCheck[i].CertCheck.setFalse(&msg)
+				result.SignatureCheck[i].CertChainCheck.setFalse(&msg)
 				ok = false
 				continue
 			}
@@ -167,25 +166,29 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 			certChain = append(certChain, x509Cert)
 		}
 
-		err = internal.VerifyCertChain(certChain, roots)
+		x509Chains, err := internal.VerifyCertChain(certChain, roots)
 		if err != nil {
 			msg := fmt.Sprintf("failed to verify certificate chain: %v", err)
-			result.SignatureCheck[i].CertCheck.setFalse(&msg)
+			result.SignatureCheck[i].CertChainCheck.setFalse(&msg)
 			ok = false
 			continue
 		}
 
-		// TODO log whole certificate chain including all fields
-		result.SignatureCheck[i].Name = certChain[0].Subject.CommonName
-		result.SignatureCheck[i].Organization = certChain[0].Subject.Organization
-		result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certChain[0].SubjectKeyId)
-		result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certChain[0].AuthorityKeyId)
-		result.SignatureCheck[i].CertCheck.Success = true
+		//Store details from (all) validated certificate chain(s) in the report
+		for _, chain := range x509Chains {
+			chainExtracted := []x509CertExtracted{}
+			for _, cert := range chain {
+				chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+			}
+			result.SignatureCheck[i].ValidatedCerts = append(result.SignatureCheck[i].ValidatedCerts, chainExtracted)
+		}
+
+		result.SignatureCheck[i].CertChainCheck.Success = true
 
 		publicKey, okKey := certChain[0].PublicKey.(*ecdsa.PublicKey)
 		if !okKey {
 			msg := fmt.Sprintf("Failed to extract public key from certificate: %v", err)
-			result.SignatureCheck[i].Signature.setFalse(&msg)
+			result.SignatureCheck[i].SignCheck.setFalse(&msg)
 			ok = false
 			continue
 		}
@@ -194,7 +197,7 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to create verifier: %v", err)
-			result.SignatureCheck[i].Signature.setFalse(&msg)
+			result.SignatureCheck[i].SignCheck.setFalse(&msg)
 			ok = false
 			continue
 		}
@@ -207,13 +210,13 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		msg := fmt.Sprintf("Error verifying cbor signature: %v", err)
 		// Can only be set for all signatures here
 		for i := range result.SignatureCheck {
-			result.SignatureCheck[i].Signature.setFalse(&msg)
+			result.SignatureCheck[i].SignCheck.setFalse(&msg)
 		}
 		return result, nil, false
 	} else {
 		// Can only be set for all signatures here
 		for i := range result.SignatureCheck {
-			result.SignatureCheck[i].Signature.Success = true
+			result.SignatureCheck[i].SignCheck.Success = true
 		}
 	}
 

@@ -101,30 +101,39 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 
 	cas, err := internal.ParseCerts(casPem)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.QuoteSignature.CertCheck.setFalse(&msg)
+		msg := fmt.Sprintf("Failed to parse ca certs: %v", err)
+		result.QuoteSignature.CertChainCheck.setFalse(&msg)
 		ok = false
 	}
 
 	mCerts, err := internal.ParseCerts(tpmM.Certs)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load measurement certs: %v", err)
-		result.QuoteSignature.CertCheck.setFalse(&msg)
+		result.QuoteSignature.CertChainCheck.setFalse(&msg)
 		ok = false
 	}
 
-	result.QuoteSignature = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, mCerts[0])
-	if !result.QuoteSignature.Signature.Success {
+	result.QuoteSignature.SignCheck = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, mCerts[0])
+	if !result.QuoteSignature.SignCheck.Success {
 		ok = false
 	}
 
-	err = internal.VerifyCertChain(mCerts, cas)
+	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.QuoteSignature.CertCheck.setFalse(&msg)
+		result.QuoteSignature.CertChainCheck.setFalse(&msg)
 		ok = false
 	} else {
-		result.QuoteSignature.CertCheck.Success = true
+		result.QuoteSignature.CertChainCheck.Success = true
+	}
+
+	//Store details from (all) validated certificate chain(s) in the report
+	for _, chain := range x509Chains {
+		chainExtracted := []x509CertExtracted{}
+		for _, cert := range chain {
+			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+		}
+		result.QuoteSignature.ValidatedCerts = append(result.QuoteSignature.ValidatedCerts, chainExtracted)
 	}
 
 	result.Summary.Success = ok
@@ -174,6 +183,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 			}
 		}
 	}
+	print("Verification PCR 0: ", hex.EncodeToString(calculatedPcrs[0]), "\n")
 
 	// Compare the calculated pcr values from the reference values with the measurement list
 	// pcr values to provide a detailed report
@@ -190,6 +200,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 				if len(hce.Sha256) == 1 {
 					// Measurement contains only final PCR value, so we can simply compare
 					measurement = hce.Sha256[0]
+					print("single PCR value found for pcr ", pcrNum, ": ", hex.EncodeToString(hce.Sha256[0]), "\n")
 				} else {
 					// Measurement contains individual values which must be extended to result in
 					// the final PCR value for comparison
@@ -252,22 +263,22 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 	return calculatedPcrs, pcrResult, referenceValuesCheck, ok
 }
 
-func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) SignatureResult {
-	result := SignatureResult{}
-	result.Signature.Success = true
+func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {
+	result := Result{}
+	result.Success = true
 
 	buf := new(bytes.Buffer)
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode TPM signature: %v", err)
-		result.Signature.setFalse(&msg)
+		result.setFalse(&msg)
 		return result
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
 		msg := fmt.Sprintf("Hash algorithm %v not supported", tpmtSig.Alg)
-		result.Signature.setFalse(&msg)
+		result.setFalse(&msg)
 		return result
 	}
 
@@ -275,28 +286,22 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Signatur
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
 		msg := "Failed to extract public key from certificate"
-		result.Signature.setFalse(&msg)
+		result.setFalse(&msg)
 		return result
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
 		msg := "Hash algorithm not supported"
-		result.Signature.setFalse(&msg)
+		result.setFalse(&msg)
 		return result
 	}
-
-	// Store Name and Organization of AK Cert for the report
-	result.Name = cert.Subject.CommonName
-	result.Organization = cert.Subject.Organization
-	result.SubjectKeyId = hex.EncodeToString(cert.SubjectKeyId)
-	result.AuthorityKeyId = hex.EncodeToString(cert.AuthorityKeyId)
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TPM quote signature: %v", err)
-		result.Signature.setFalse(&msg)
+		result.setFalse(&msg)
 		return result
 	}
 	return result
