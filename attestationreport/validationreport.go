@@ -15,6 +15,14 @@
 
 package attestationreport
 
+import (
+	"crypto/x509"
+	"encoding/asn1"
+	"math/big"
+	"net"
+	"net/url"
+)
+
 // VerificationResult represents the results of all steps taken during
 // the validation of an attestation report
 type VerificationResult struct {
@@ -155,14 +163,102 @@ type IasMeasurementResult struct {
 // SignatureResults represents the results for validation of
 // a provided signature and the used certificates
 type SignatureResult struct {
-	Name            string       `json:"commonName"`             // Name of the certificate used for calculating the signature
-	Organization    []string     `json:"organization"`           // Name of the organization the signer belongs to
-	SubjectKeyId    string       `json:"subjectKeyIdentifier"`   // Hex-encoded certificate Subject Key Identifier
-	AuthorityKeyId  string       `json:"authoritykeyidentifier"` // Hex-encoded certificate autorithy key identifier
-	Signature       Result       `json:"signatureVerification"`  // Result from checking the signature has been calculated with this certificate
-	CertCheck       Result       `json:"certChainValidation"`    // Result from validatint the certification chain back to a shared root of trust
-	RoleCheck       *Result      `json:"roleCheck,omitempty"`    // Result for checking the role in the certificate (optional)
-	ExtensionsCheck *ResultMulti `json:"extensionsCheck,omitempty"`
+	ValidatedCerts  [][]x509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
+	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
+	CertChainCheck  Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
+	RoleCheck       *Result               `json:"roleCheck,omitempty"`   // Result for checking the role in the certificate (optional)
+	ExtensionsCheck *ResultMulti          `json:"extensionsCheck,omitempty"`
+}
+
+type x509CertExtracted struct {
+	Raw                   []byte                  `json:"raw"` // Complete ASN.1 DER content (certificate, signature algorithm and signature).
+	Version               int                     `json:"version"`
+	SerialNumber          *big.Int                `json:"serialNumber"`
+	Issuer                x509Name                `json:"issuer"`
+	Subject               x509Name                `json:"subject"`
+	Validity              Validity                `json:"validity"`
+	KeyUsage              []string                `json:"keyUsage"`
+	SignatureAlgorithm    string                  `json:"signatureAlgorithm"`
+	PublicKeyAlgorithm    string                  `json:"publicKeyAlgorithm"`
+	Extensions            []PkixExtension         `json:"pkixExtenstions"`
+	ExtKeyUsage           []string                `json:"extKeyUsage,omitempty"`        // Sequence of extended key usages.
+	UnknownExtKeyUsage    []asn1.ObjectIdentifier `json:"unknownExtKeyUsage,omitempty"` // Encountered extended key usages unknown to this package.
+	BasicConstraintsValid bool                    `json:"basicConstraintsValid"`        // BasicConstraintsValid indicates whether IsCA, MaxPathLen, and MaxPathLenZero are valid.
+	IsCA                  bool                    `json:"isCA,omitempty"`
+	MaxPathLen            int                     `json:"maxPathLen,omitempty"`
+	MaxPathLenZero        bool                    `json:"maxPathLenZero,omitempty"`
+	SubjectKeyId          []byte                  `json:"subjectKeyId"`
+	AuthorityKeyId        []byte                  `json:"authorityKeyId"`
+	// Subject Alternate Name values.
+	DNSNames       []string   `json:"dnsNames,omitempty"`
+	EmailAddresses []string   `json:"emailAddresses,omitempty"`
+	IPAddresses    []net.IP   `json:"ipAddresses,omitempty"`
+	URIs           []*url.URL `json:"uris,omitempty"`
+}
+
+type x509Name struct {
+	Country            []string `json:"country,omitempty"`
+	Organization       []string `json:"organization,omitempty"`
+	OrganizationalUnit []string `json:"organizationalUnit,omitempty"`
+	Locality           []string `json:"locality,omitempty"`
+	Province           []string `json:"providence,omitempty"`
+	StreetAddress      []string `json:"streetAddress,omitempty"`
+	PostalCode         []string `json:"postalCode,omitempty"`
+	SerialNumber       string   `json:"serialNumber,omitempty"`
+	CommonName         string   `json:"commonName,omitempty"`
+}
+
+type PkixExtension struct {
+	Id       string `json:"id"`
+	Critical bool   `json:"critical"`
+	Value    []byte `json:"value"`
+}
+
+var keyUsageName = [...]string{
+	x509.KeyUsageDigitalSignature:  "Digital Signature",
+	x509.KeyUsageContentCommitment: "Content Commitment",
+	x509.KeyUsageKeyEncipherment:   "Key Encipherment",
+	x509.KeyUsageDataEncipherment:  "Data Encipherment",
+	x509.KeyUsageKeyAgreement:      "Key Agreement",
+	x509.KeyUsageCertSign:          "Cert Sign",
+	x509.KeyUsageCRLSign:           "CRL Sign",
+	x509.KeyUsageEncipherOnly:      "Encipher Only",
+	x509.KeyUsageDecipherOnly:      "Decipher Only",
+}
+
+func KeyUsageToString(usage x509.KeyUsage) []string {
+	res := []string{}
+	for i := 0; i < len(keyUsageName); i++ {
+		if ((1 << i) & usage) != 0 {
+			res = append(res, keyUsageName[1<<i])
+		}
+	}
+	return res
+}
+
+var extkeyUsageName = [...]string{
+	x509.ExtKeyUsageAny:                            "Any",
+	x509.ExtKeyUsageServerAuth:                     "Server Auth",
+	x509.ExtKeyUsageClientAuth:                     "Client Auth",
+	x509.ExtKeyUsageCodeSigning:                    "Code Signing",
+	x509.ExtKeyUsageEmailProtection:                "Email Protection",
+	x509.ExtKeyUsageIPSECEndSystem:                 "IPsec Endsystem",
+	x509.ExtKeyUsageIPSECTunnel:                    "IPsec Tunnel",
+	x509.ExtKeyUsageIPSECUser:                      "IPsec User",
+	x509.ExtKeyUsageTimeStamping:                   "Time Stamping",
+	x509.ExtKeyUsageOCSPSigning:                    "OCSP Signing",
+	x509.ExtKeyUsageMicrosoftServerGatedCrypto:     "Microsoft Server Gated Crypto",
+	x509.ExtKeyUsageNetscapeServerGatedCrypto:      "Netscape Server Gated Crypto",
+	x509.ExtKeyUsageMicrosoftCommercialCodeSigning: "Microsoft Commercial Code Signing",
+	x509.ExtKeyUsageMicrosoftKernelCodeSigning:     "Microsoft Kernel Code Signing",
+}
+
+func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
+	res := []string{}
+	for i := 0; i < len(usage); i++ {
+		res = append(res, extkeyUsageName[usage[i]])
+	}
+	return res
 }
 
 // Result is a generic type for storing a boolean result value
@@ -184,4 +280,63 @@ type ResultMulti struct {
 type TokenResult struct {
 	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
+}
+
+func ExtractX509Infos(cert *x509.Certificate) x509CertExtracted {
+	certExtracted := x509CertExtracted{}
+
+	certExtracted.Raw = cert.Raw
+	certExtracted.Version = cert.Version
+	certExtracted.SerialNumber = cert.SerialNumber
+	certExtracted.Issuer = x509Name{
+		Country:            cert.Issuer.Country,
+		Organization:       cert.Issuer.Organization,
+		OrganizationalUnit: cert.Issuer.OrganizationalUnit,
+		Locality:           cert.Issuer.Locality,
+		Province:           cert.Issuer.Province,
+		StreetAddress:      cert.Issuer.StreetAddress,
+		PostalCode:         cert.Issuer.PostalCode,
+		SerialNumber:       cert.Issuer.SerialNumber,
+		CommonName:         cert.Issuer.CommonName,
+	}
+	certExtracted.Subject = x509Name{
+		Country:            cert.Subject.Country,
+		Organization:       cert.Subject.Organization,
+		OrganizationalUnit: cert.Subject.OrganizationalUnit,
+		Locality:           cert.Subject.Locality,
+		Province:           cert.Subject.Province,
+		StreetAddress:      cert.Subject.StreetAddress,
+		PostalCode:         cert.Subject.PostalCode,
+		SerialNumber:       cert.Subject.SerialNumber,
+		CommonName:         cert.Subject.CommonName,
+	}
+	certExtracted.Validity = Validity{
+		NotBefore: cert.NotBefore.String(),
+		NotAfter:  cert.NotAfter.String(),
+	}
+	certExtracted.KeyUsage = KeyUsageToString(cert.KeyUsage)
+	certExtracted.SignatureAlgorithm = cert.SignatureAlgorithm.String()
+	certExtracted.PublicKeyAlgorithm = cert.PublicKeyAlgorithm.String()
+	for _, ext := range cert.Extensions {
+		ext_extracted := PkixExtension{
+			Id:       ext.Id.String(),
+			Critical: ext.Critical,
+			Value:    ext.Value,
+		}
+		certExtracted.Extensions = append(certExtracted.Extensions, ext_extracted)
+	}
+	certExtracted.ExtKeyUsage = ExtKeyUsageToString(cert.ExtKeyUsage)
+	certExtracted.UnknownExtKeyUsage = cert.UnknownExtKeyUsage
+	certExtracted.BasicConstraintsValid = cert.BasicConstraintsValid
+	certExtracted.IsCA = cert.IsCA
+	certExtracted.MaxPathLen = cert.MaxPathLen
+	certExtracted.MaxPathLenZero = cert.MaxPathLenZero
+	certExtracted.SubjectKeyId = cert.SubjectKeyId
+	certExtracted.AuthorityKeyId = cert.AuthorityKeyId
+	certExtracted.DNSNames = cert.DNSNames
+	certExtracted.EmailAddresses = cert.EmailAddresses
+	certExtracted.IPAddresses = cert.IPAddresses
+	certExtracted.URIs = cert.URIs
+
+	return certExtracted
 }

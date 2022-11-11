@@ -97,13 +97,13 @@ func WriteCertsPem(certs []*x509.Certificate) [][]byte {
 
 // verifyCertChain tries to verify the certificate chain certs with leaf
 // certificate first up to one of the root certificates in cas
-func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) error {
+func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x509.Certificate, error) {
 
 	if len(certs) == 0 {
-		return errors.New("no certificate chain provided")
+		return nil, errors.New("no certificate chain provided")
 	}
 	if len(cas) == 0 {
-		return errors.New("no CA provided")
+		return nil, errors.New("no CA provided")
 	}
 
 	leafCert := certs[0]
@@ -124,9 +124,9 @@ func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) error {
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
-	_, err := leafCert.Verify(opts)
+	chains, err := leafCert.Verify(opts)
 
-	return err
+	return chains, err
 }
 
 func PrintTlsConfig(conf *tls.Config, roots []byte) error {

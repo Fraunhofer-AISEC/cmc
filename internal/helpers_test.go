@@ -135,7 +135,7 @@ func TestVerifyCertChain(t *testing.T) {
 			}
 
 			// Test
-			if err := VerifyCertChain(certs, cas); (err != nil) != tt.wantErr {
+			if _, err := VerifyCertChain(certs, cas); (err != nil) != tt.wantErr {
 				t.Errorf("VerifyCertChain() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

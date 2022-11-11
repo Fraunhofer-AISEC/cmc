@@ -365,7 +365,7 @@ func verifySnpSignature(
 
 	if len(reportRaw) < (header_offset + signature_offset) {
 		msg := "Internal Error: Report buffer too small"
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, false
 	}
 
@@ -389,12 +389,6 @@ func verifySnpSignature(
 	s := new(big.Int)
 	s.SetBytes(sRaw)
 
-	// The leaf certificate is the VCEK certificate
-	result.Name = certs[0].Subject.CommonName
-	result.Organization = certs[0].Subject.Organization
-	result.SubjectKeyId = hex.EncodeToString(certs[0].SubjectKeyId)
-	result.AuthorityKeyId = hex.EncodeToString(certs[0].AuthorityKeyId)
-
 	// Examine SNP x509 extensions
 	extensionResult, ok := verifySnpExtensions(certs[0], &report)
 	result.ExtensionsCheck = &extensionResult
@@ -405,7 +399,7 @@ func verifySnpSignature(
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
 		msg := fmt.Sprintf("Signature Algorithm %v not supported", report.SignatureAlgo)
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, false
 	}
 
@@ -413,7 +407,7 @@ func verifySnpSignature(
 	pub, ok := certs[0].PublicKey.(*ecdsa.PublicKey)
 	if !ok {
 		msg := "Failed to extract ECDSA public key from certificate"
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, false
 	}
 
@@ -421,20 +415,29 @@ func verifySnpSignature(
 	ok = ecdsa.Verify(pub, digest[:], r, s)
 	if !ok {
 		msg := "Failed to verify SNP report signature"
-		result.Signature.setFalse(&msg)
+		result.SignCheck.setFalse(&msg)
 		return result, false
 	}
 	log.Trace("Successfully verified SNP report signature")
-	result.Signature.Success = true
+	result.SignCheck.Success = true
 
 	// Verify the SNP certificate chain
-	err := internal.VerifyCertChain(certs, cas)
+	x509Chains, err := internal.VerifyCertChain(certs, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.CertCheck.setFalse(&msg)
+		result.CertChainCheck.setFalse(&msg)
 		return result, false
 	}
-	result.CertCheck.Success = true
+	result.CertChainCheck.Success = true
+
+	//Store details from (all) validated certificate chain(s) in the report
+	for _, chain := range x509Chains {
+		chainExtracted := []x509CertExtracted{}
+		for _, cert := range chain {
+			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+		}
+		result.ValidatedCerts = append(result.ValidatedCerts, chainExtracted)
+	}
 
 	return result, true
 }

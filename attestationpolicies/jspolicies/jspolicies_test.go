@@ -75,7 +75,15 @@ var (
 			"rtmValidation": {
 				"signatureValidation": [
 					{
-						"commonName": "Test Cert"
+						"validatedCerts": [
+							[
+								{
+									"subject": {
+										"commonName": "Test Cert"
+									}
+								}
+							]
+						]
 					}
 				]
 			}
@@ -112,8 +120,12 @@ var (
 		// Check a certain certificate property in the RTM Manifest
 		var found = false
 		for (var i = 0; i < obj.rtmValidation.signatureValidation.length; i++) {
-			if (obj.rtmValidation.signatureValidation[i].commonName == "Test Cert") {
-				found = true;
+			for (var j = 0; j < obj.rtmValidation.signatureValidation[i].validatedCerts.length; j++) {
+				for (var k = 0; k < obj.rtmValidation.signatureValidation[i].validatedCerts[j].length; k++) {
+					if (obj.rtmValidation.signatureValidation[i].validatedCerts[j][k].subject.commonName == "Test Cert") {
+						found = true;
+					}
+				}
 			}
 		}
 		if (!found) {

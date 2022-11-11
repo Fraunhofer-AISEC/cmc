@@ -203,23 +203,28 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		certs, err := sig.Protected.Certificates(opts)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-			result.SignatureCheck[i].CertCheck.setFalse(&msg)
+			result.SignatureCheck[i].CertChainCheck.setFalse(&msg)
 			ok = false
 			continue
 		}
-		// TODO log whole certificate chains including all fields
-		result.SignatureCheck[i].Name = certs[0][0].Subject.CommonName
-		result.SignatureCheck[i].Organization = certs[0][0].Subject.Organization
-		result.SignatureCheck[i].SubjectKeyId = hex.EncodeToString(certs[0][0].SubjectKeyId)
-		result.SignatureCheck[i].AuthorityKeyId = hex.EncodeToString(certs[0][0].AuthorityKeyId)
-		result.SignatureCheck[i].CertCheck.Success = true
+
+		//Store details from (all) validated certificate chain(s) in the report
+		for _, chain := range certs {
+			chainExtracted := []x509CertExtracted{}
+			for _, cert := range chain {
+				chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+			}
+			result.SignatureCheck[i].ValidatedCerts = append(result.SignatureCheck[i].ValidatedCerts, chainExtracted)
+		}
+
+		result.SignatureCheck[i].CertChainCheck.Success = true
 
 		index[i], _, payloads[i], err = jwsData.VerifyMulti(certs[0][0].PublicKey)
 		if err == nil {
-			result.SignatureCheck[i].Signature.Success = true
+			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
 			msg := fmt.Sprintf("Signature verification failed: %v", err)
-			result.SignatureCheck[i].Signature.setFalse(&msg)
+			result.SignatureCheck[i].SignCheck.setFalse(&msg)
 			ok = false
 		}
 
