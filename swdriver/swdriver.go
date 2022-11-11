@@ -27,8 +27,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/sirupsen/logrus"
@@ -58,10 +56,9 @@ type Paths struct {
 }
 
 type Config struct {
-	Url         string
-	StoragePath string
-	Metadata    [][]byte
-	Serializer  ar.Serializer
+	Url        string
+	Metadata   [][]byte
+	Serializer ar.Serializer
 }
 
 // Sw is a struct required for implementing the signer and measurer interfaces
@@ -81,11 +78,6 @@ func NewSwDriver(c Config) (*Sw, error) {
 	case ar.CborSerializer:
 	default:
 		return nil, fmt.Errorf("serializer not initialized in driver config")
-	}
-
-	paths, err := createLocalStorage(c.StoragePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create local storage: %v", err)
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -117,11 +109,6 @@ func NewSwDriver(c Config) (*Sw, error) {
 	if certResponse.Version != swProtocolVersion {
 		return nil, fmt.Errorf("response protocol version (%v) does not match our protocol version (%v)",
 			certResponse.Version, swProtocolVersion)
-	}
-
-	err = saveCerts(*paths, certResponse.Certs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to save certificates: %w", err)
 	}
 
 	sw.certChain = certResponse.Certs
@@ -185,29 +172,6 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 	return response, nil
 }
 
-func saveCerts(paths Paths, certs ar.CertChain) error {
-
-	log.Tracef("New Leaf Cert %v: %v", paths.TLSCert, string(certs.Leaf))
-	if err := os.WriteFile(paths.TLSCert, certs.Leaf, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.TLSCert, err)
-	}
-
-	if len(certs.Intermediates) != 1 {
-		return fmt.Errorf("SwSigner allows exactly one intermediate (%v provided)", len(certs.Intermediates))
-	}
-	log.Tracef("New Intermediate Cert %v: %v", paths.DeviceSubCa, string(certs.Intermediates[0]))
-	if err := os.WriteFile(paths.DeviceSubCa, certs.Intermediates[0], 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.DeviceSubCa, err)
-	}
-
-	log.Tracef("New CA Cert %v: %v", paths.Ca, string(certs.Ca))
-	if err := os.WriteFile(paths.Ca, certs.Ca, 0644); err != nil {
-		return fmt.Errorf("activate credential failed: WriteFile %v returned %v", paths.Ca, err)
-	}
-
-	return nil
-}
-
 func getCertParams(c *Config) ([]byte, error) {
 
 	for i, m := range c.Metadata {
@@ -233,22 +197,4 @@ func getCertParams(c *Config) ([]byte, error) {
 	}
 
 	return nil, errors.New("failed to find cert params")
-}
-
-func createLocalStorage(storagePath string) (*Paths, error) {
-
-	// Create storage folder for storage of internal data if not existing
-	if _, err := os.Stat(storagePath); err != nil {
-		if err := os.MkdirAll(storagePath, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create directory for internal data '%v': %v", storagePath, err)
-		}
-	}
-
-	paths := &Paths{
-		TLSCert:     path.Join(storagePath, "tls_cert.pem"),
-		DeviceSubCa: path.Join(storagePath, "device_sub_ca.pem"),
-		Ca:          path.Join(storagePath, "ca.pem"),
-	}
-
-	return paths, nil
 }

@@ -157,12 +157,11 @@ func main() {
 	}
 
 	if strings.EqualFold(c.SigningInterface, "SW") {
-		log.Info("Using SW as Signing Interface")
+		log.Warn("Using unsafe swdriver as Signing Interface")
 		swConfig := swdriver.Config{
-			Url:         c.ProvServerAddr,
-			StoragePath: path.Join(c.LocalPath, "internal"),
-			Metadata:    metadata,
-			Serializer:  serializer,
+			Url:        c.ProvServerAddr,
+			Metadata:   metadata,
+			Serializer: serializer,
 		}
 		sw, err = swdriver.NewSwDriver(swConfig)
 		if err != nil {
