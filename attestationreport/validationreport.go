@@ -37,9 +37,8 @@ type VerificationResult struct {
 	AppResults      []ManifestResult  `json:"appValidation,omitempty"`
 	MeasResult      MeasurementResult `json:"measurementValidation"`
 	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
-	ProcessingError []string          `json:"processingError,omitempty"`  // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
-	InternalError   bool              `json:"internalError,omitempty"`    // used to document if internal errors (independent from provided Attestation Report) occurred which hindered a complete validation
-	PlainAttReport  ArPlain           `json:"validatedAttestationReport"` // The unpacked and validated attestation report content for further processing
+	ProcessingError []string          `json:"processingError,omitempty"` // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
+	InternalError   bool              `json:"internalError,omitempty"`   // used to document if internal errors (independent from provided Attestation Report) occurred which hindered a complete validation
 }
 
 // CompDescResult represents the results of the validation of the
@@ -166,10 +165,11 @@ type SignatureResult struct {
 	ValidatedCerts  [][]x509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
 	CertChainCheck  Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
-	RoleCheck       *Result               `json:"roleCheck,omitempty"`   // Result for checking the role in the certificate (optional)
 	ExtensionsCheck *ResultMulti          `json:"extensionsCheck,omitempty"`
 }
 
+//X509CertExtracted represents a x509 certificate
+// with attributes in a human-readable way and prepared for (Un)Marshaling JSON objects
 type x509CertExtracted struct {
 	Raw                   []byte                  `json:"raw"` // Complete ASN.1 DER content (certificate, signature algorithm and signature).
 	Version               int                     `json:"version"`
@@ -214,6 +214,9 @@ type PkixExtension struct {
 	Value    []byte `json:"value"`
 }
 
+// The variable keyUsageName is used for translating the
+// internal representation of allowed key usage in an x509 certificate
+// to a string array
 var keyUsageName = [...]string{
 	x509.KeyUsageDigitalSignature:  "Digital Signature",
 	x509.KeyUsageContentCommitment: "Content Commitment",
@@ -226,6 +229,9 @@ var keyUsageName = [...]string{
 	x509.KeyUsageDecipherOnly:      "Decipher Only",
 }
 
+// The function KeyUsageToString translates the
+// internal representation of allowed key usage in an x509 certificate
+// to a string array
 func KeyUsageToString(usage x509.KeyUsage) []string {
 	res := []string{}
 	for i := 0; i < len(keyUsageName); i++ {
@@ -236,6 +242,9 @@ func KeyUsageToString(usage x509.KeyUsage) []string {
 	return res
 }
 
+// The variable extkeyUsageName is used for translating the
+// internal representation of allowed extended key usage in an x509 certificate
+// to a string array
 var extkeyUsageName = [...]string{
 	x509.ExtKeyUsageAny:                            "Any",
 	x509.ExtKeyUsageServerAuth:                     "Server Auth",
@@ -253,6 +262,9 @@ var extkeyUsageName = [...]string{
 	x509.ExtKeyUsageMicrosoftKernelCodeSigning:     "Microsoft Kernel Code Signing",
 }
 
+// The function ExtKeyUsageToString translates the
+// internal representation of allowed extended key usage in an x509 certificate
+// to a string array
 func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 	res := []string{}
 	for i := 0; i < len(usage); i++ {
@@ -282,6 +294,9 @@ type TokenResult struct {
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 }
 
+// ExtractX509Infos extracts relevant attributes from the internal
+// x509.Certificate structure and transform some attribute into
+// a more human-readable form by translating enums to a string representations
 func ExtractX509Infos(cert *x509.Certificate) x509CertExtracted {
 	certExtracted := x509CertExtracted{}
 
