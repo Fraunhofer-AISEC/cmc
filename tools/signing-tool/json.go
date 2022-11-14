@@ -17,10 +17,13 @@ package main
 
 import (
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/square/go-jose.v2"
 )
 
@@ -32,11 +35,22 @@ func (s JsonSerializer) Sign(data []byte, keys []crypto.PrivateKey, x5cs [][]*x5
 		return nil, fmt.Errorf("length of keys (%v) not equal to length of certificate chains (%v)", keys, x5cs)
 	}
 
-	// TODO cryptographic agility
-	alg := jose.SignatureAlgorithm("ES256")
-
 	var sig *jose.JSONWebSignature
 	for i := range keys {
+
+		var alg jose.SignatureAlgorithm
+		switch keys[i].(type) {
+		case *ecdsa.PrivateKey:
+			log.Trace("Key type ECDSA")
+			alg = jose.SignatureAlgorithm("ES256")
+		case ed25519.PrivateKey:
+			log.Trace("Key type EdDSA")
+			alg = jose.SignatureAlgorithm("EdDSA")
+		default:
+			return nil, fmt.Errorf("key type %v not supported", keys[i])
+		}
+		log.Tracef("Using signature algorithm: %v", alg)
+
 		var opts jose.SignerOptions
 		key := jose.SigningKey{Algorithm: alg, Key: keys[i]}
 		certchain := make([]string, 0)
