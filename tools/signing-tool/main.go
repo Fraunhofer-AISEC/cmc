@@ -80,16 +80,20 @@ func main() {
 		}
 
 		block, _ := pem.Decode(keyPem)
-		if block == nil || block.Type != "EC PRIVATE KEY" {
+		if block == nil || !strings.Contains(block.Type, "PRIVATE KEY") {
 			log.Fatal("failed to decode PEM block containing private key")
 		}
 
 		key, err := x509.ParseECPrivateKey(block.Bytes)
-		if err != nil {
-			log.Fatal("Failed to parse private key")
+		if err == nil {
+			keys = append(keys, key)
+		} else {
+			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				log.Fatalf("Failed to parse private key: %v", err)
+			}
+			keys = append(keys, key)
 		}
-
-		keys = append(keys, key)
 	}
 	if len(keys) == 0 {
 		log.Fatal("No valid keys specified")
