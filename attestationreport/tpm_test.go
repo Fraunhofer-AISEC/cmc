@@ -448,7 +448,6 @@ var (
 		},
 		SignCheck:       validResult,
 		CertChainCheck:  validResult,
-		RoleCheck:       nil,
 		ExtensionsCheck: nil,
 	}
 

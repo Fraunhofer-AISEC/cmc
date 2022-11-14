@@ -783,7 +783,6 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		}
 	}
 
-	result.PlainAttReport = ar
 	return true, &ar
 }
 
