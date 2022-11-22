@@ -3,40 +3,58 @@
 set -e
 
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+CMC_DIR="$DIR/.."
 
-PCP="$DIR/../../ids-pcp/pcp.sh"
+PCP="$CMC_DIR/ids-pcp"
+OUT="$DIR/pki"
 
-TARGET_DIR="$DIR/pki"
-
-printf "Using PCP=%s and DIR=%s\n" "$PCP" "$DIR"
-
-ca  () {
-  "$PCP" "$TARGET_DIR" ca  "$@"
+print_usage() {
+  printf "Usage: ./setup_ids_pki [-p <dir with pcp tool>] [-o <output-dir] [-h]\n"
 }
 
-gen () {
-  "$PCP" "$TARGET_DIR" gen "$@"
-}
+while getopts 'p:o:h' flag; do
+  case "${flag}" in
+    p)
+        PCP="${OPTARG}"
+        ;;
+    o)
+        OUT="${OPTARG}"
+        ;;
+    h)
+        print_usage
+        exit 1
+        ;;
+    *) print_usage
+       exit 1 ;;
+  esac
+done
 
-
-# Remove the previous PKI and signed files to ensure a clean start
-if [ -d $TARGET_DIR ]; then
-  rm -rf $TARGET_DIR
+if [ ! -d "$PCP" ]; then
+    echo "PCP tool directory $PCP does not exist"
+    exit 1
 fi
 
+echo "Using $PCP as pcp directory"
+echo "Using $OUT as output directory"
+
+mkdir -p $OUT
+
 # Setup PKI with root CA and two SubCAs (one for users, one for devices)
-ca
+"$PCP"/pcp.sh "$OUT" ca
 
 # Generate user certificates as required
+gen () {
+  "$PCP"/pcp.sh "$OUT" gen "$@"
+}
+
 gen developer developer_A
 gen developer developer_B
-gen developer developer_C
 
 gen operator operator_A
+gen developer operator_B
 
 gen evaluator evaluator_A
 gen evaluator evaluator_B
-gen evaluator evaluator_C
 
 gen certifier certifier_A
 gen certifier certifier_B

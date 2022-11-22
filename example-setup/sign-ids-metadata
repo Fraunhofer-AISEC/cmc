@@ -2,74 +2,111 @@
 
 set -e
 
-# TODO more arguments: PKI, INPUT, OUTPUT, FORMAT
-
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
-
-if [ "$#" -ne 1 ]; then
-    echo "Error: script requires exactly one argument 'json' or 'cbor'"
-    exit
-fi
-
-if [ "$1" != "cbor" ] && [ "$1" != "json" ]; then
-  echo "Error: Only 'json' or 'cbor' supported, not $1"
-  exit
-fi
-
-PKI="$DIR/example-setup/pki"
+PKI="$DIR/example-setup/pki-ids"
 INPUT="$DIR/example-setup/metadata-raw"
-OUTPUT="$DIR/example-setup/metadata-signed"
+OUTPUT="$DIR/example-setup/metadata-signed-ids"
+
+print_usage() {
+  printf 'Usage: ./sign-ids-metadata -f <"json"|"cbor"> [-p <pki-dir>] [-i <input-dir>] [-o <output-dir] [-h]\n'
+}
+
+while getopts 'f:p:i:o:h' flag; do
+  case "${flag}" in
+    f)
+      if [ "${OPTARG}" != "cbor" ] && [ "${OPTARG}" != "json" ]; then
+        printf "Error: Only 'json' or 'cbor' supported, not ${OPTARG}"
+        print_usage
+        exit 1
+      fi
+      FORMAT="${OPTARG}"
+	;;
+    p)
+        PKI="${OPTARG}"
+        ;;
+    i)
+        INPUT="${OPTARG}"
+        ;;
+    o)
+        OUTPUT="${OPTARG}"
+        ;;
+    h)
+        print_usage
+        exit 1
+        ;;
+    *) print_usage
+       exit 1 ;;
+  esac
+done
+
+if [ -z "$FORMAT" ]; then
+  printf "Error: format must be specified"
+  print_usage
+  exit 1
+fi   
 
 if [ ! -d "$PKI" ]; then
-  echo "PKI Directory does not exist. Did you run 'generate-pki'? Abort.."
-  exit
+  echo "PKI Directory $PKI does not exist. Did you run 'generate-pki'? Abort.."
+  exit 1
 fi
 
 if [ ! -d "$INPUT" ]; then
-  echo "Input Directory does not exist. Abort.."
-  exit
+  echo "Input Directory $INPUT does not exist. Abort.."
+  exit 1
 fi
 
-SIG="$DIR/tools/signing-tool/signing-tool"
-CONV="$DIR/tools/converter/converter"
+echo "Using $FORMAT as format"
+echo "Using $PKI as pki directory"
+echo "Using $INPUT as input directory"
+echo "Using $OUTPUT as output directory"
 
-KEY1=$PKI/developer_A/developer_A-key.pem
-CHAIN1=$PKI/users/developer_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+SIG="signing-tool"
+CONV="converter"
 
-KEY2=$PKI/evaluator_A/evaluator_A-key.pem
-CHAIN2=$PKI/users/evaluator_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+KEY_DEV_A=$PKI/developer_A/developer_A-key.pem
+CHAIN_DEV_A=$PKI/users/developer_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
 
-KEY3=$PKI/certifier_A/certifier_A-key.pem
-CHAIN3=$PKI/users/certifier_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+KEY_EVA_A=$PKI/evaluator_A/evaluator_A-key.pem
+CHAIN_EVA_A=$PKI/users/evaluator_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
 
-KEY4=$PKI/operator_A/operator_A-key.pem
-CHAIN4=$PKI/users/operator_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+KEY_EVA_B=$PKI/evaluator_B/evaluator_B-key.pem
+CHAIN_EVA_B=$PKI/users/evaluator_B.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+
+KEY_CERT_A=$PKI/certifier_A/certifier_A-key.pem
+CHAIN_CERT_A=$PKI/users/certifier_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+
+KEY_CERT_B=$PKI/certifier_B/certifier_B-key.pem
+CHAIN_CERT_B=$PKI/users/certifier_B.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
+
+KEY_OP_A=$PKI/operator_A/operator_A-key.pem
+CHAIN_OP_A=$PKI/users/operator_A.pem,$PKI/ca/user_sub_ca.pem,$PKI/ca/ca.pem
 
 # Clean start
 rm -rf $OUTPUT
 mkdir -p $OUTPUT
 
 # If CBOR format is specified, the json manifests must be converted first
-if [ "$1" == "cbor" ]; then
+if [ "$FORMAT" == "cbor" ]; then
   echo "Converting raw json metadata to cbor metadata"
-  for path in $INPUT/*; do
+  for path in $IN/*; do
     # Extract filename and extension
     IN=$(basename ${path})
     EXT=${IN##*.}
     # Only convert JSON files
     [ $EXT == "json" ] || continue
     # Write them to the same folder as the input files
-    OUT=${IN%.*}.$1
+    OUT=${IN%.*}.$FORMAT
     # Convert JSON to CBOR using the converter-tool
     $CONV -in $INPUT/$IN -out $INPUT/$OUT -inform json -outform cbor
   done
 fi
 
-echo "Signing $1 metadata"
+echo "Signing $FORMAT metadata"
 
-$SIG -in $INPUT/rtm.manifest.$1         -out $OUTPUT/rtm.manifest.$1         -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3
-$SIG -in $INPUT/os.manifest.$1          -out $OUTPUT/os.manifest.$1          -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3
-$SIG -in $INPUT/company.description.$1  -out $OUTPUT/company.description.$1  -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3
+$SIG -in $INPUT/rtm.manifest.$FORMAT         -out $OUTPUT/rtm.manifest.$FORMAT         -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
+$SIG -in $INPUT/os.manifest.$FORMAT          -out $OUTPUT/os.manifest.$FORMAT          -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
+$SIG -in $INPUT/company.description.$FORMAT  -out $OUTPUT/company.description.$FORMAT  -keys $KEY_OP_A,$KEY_EVA_B,$KEY_CERT_B -x5cs $CHAIN_OP_A:$CHAIN_EVA_B:$CHAIN_CERT_B
 
-$SIG -in $INPUT/device.description.$1   -out $OUTPUT/device.description.$1   -keys $KEY4 -x5cs $CHAIN4
-$SIG -in $INPUT/device.config.$1        -out $OUTPUT/device.config.$1        -keys $KEY4 -x5cs $CHAIN4
+$SIG -in $INPUT/device.description.$FORMAT   -out $OUTPUT/device.description.$FORMAT   -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+$SIG -in $INPUT/ak.certparams.$FORMAT        -out $OUTPUT/ak.certparams.$FORMAT        -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+$SIG -in $INPUT/tlskey.certparams.$FORMAT    -out $OUTPUT/tlskey.certparams.$FORMAT    -keys $KEY_OP_A -x5cs $CHAIN_OP_A
