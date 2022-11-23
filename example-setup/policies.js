@@ -16,9 +16,13 @@ if (!obj.raSuccessful) {
 // Check a certain certificate property in the RTM Manifest
 var found = false
 for (var i = 0; i < obj.rtmValidation.signatureValidation.length; i++) {
-    if (obj.rtmValidation.signatureValidation[i].commonName == "CMC Test Leaf Certificate") {
-        found = true;
-    }
+	for (var j = 0; j < obj.rtmValidation.signatureValidation[i].validatedCerts.length; j++) {
+		for (var k = 0; k < obj.rtmValidation.signatureValidation[i].validatedCerts[j].length; k++) {
+			if (obj.rtmValidation.signatureValidation[i].validatedCerts[j][k].subject.commonName == "CMC Test Leaf Certificate") {
+				found = true;
+			}
+		}
+	}
 }
 if (!found) {
     console.log("Failed to find certificate 'CMC Test Leaf Certificate'");
