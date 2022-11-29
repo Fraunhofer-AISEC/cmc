@@ -37,6 +37,7 @@ type VerificationResult struct {
 	AppResults      []ManifestResult  `json:"appValidation,omitempty"`
 	MeasResult      MeasurementResult `json:"measurementValidation"`
 	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
+	PolicySuccess   bool              `json:"policySuccess,omitempty"`   // document result of custom policy validation (if utilized)
 	ProcessingError []string          `json:"processingError,omitempty"` // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
 	InternalError   bool              `json:"internalError,omitempty"`   // used to document if internal errors (independent from provided Attestation Report) occurred which hindered a complete validation
 }

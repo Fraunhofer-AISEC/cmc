@@ -589,6 +589,8 @@ func Verify(arRaw string, nonce, casPem []byte, policies []byte, polEng PolicyEn
 
 	// Validate policies if specified
 	if policies != nil {
+		result.PolicySuccess = true
+
 		p, ok := policyEngines[polEng]
 		if !ok {
 			msg := fmt.Sprintf("Internal error: policy engine %v not implemented", polEng)
