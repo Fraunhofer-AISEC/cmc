@@ -16,19 +16,12 @@
 package attestedtls
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 
-	"google.golang.org/protobuf/proto"
-
-	// local modules
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 	"github.com/sirupsen/logrus"
 )
 
@@ -37,109 +30,24 @@ var noncelen = 32
 
 var log = logrus.WithField("service", "atls")
 
-// Checks Attestation report by calling the CMC to Verify and checking its status response
-func obtainAR(req *ci.AttestationRequest, cc cmcConfig) (resp *ci.AttestationResponse, err error) {
-	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return nil, errors.New("failed to establish connection to obtain attestation report")
-	}
-	defer cmcconn.Close()
-	defer cancel()
-	log.Trace("Contacting backend to obtain AR.")
-
-	// Extend Attest request with id
-	req.Id = id
-
-	// Call Attest request
-	resp, err = cmcClient.Attest(context.Background(), req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to obtain attestation report: %w", err)
-	}
-
-	// Return response
-	return resp, nil
-}
-
-// Checks Attestation report by calling the CMC to Verify and checking its status response
-func verifyAR(nonce, report []byte, cc cmcConfig) error {
-	// Get backend connection
-	cmcClient, conn, cancel := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return errors.New("failed to establish connection to obtain attestation result")
-	}
-	defer conn.Close()
-	defer cancel()
-	log.Trace("Contacting backend for AR verification")
-
-	// Create Verification request
-	req := ci.VerificationRequest{
-		Nonce:             nonce,
-		AttestationReport: report,
-		Ca:                cc.ca,
-		Policies:          cc.policies,
-	}
-	// Perform Verify request
-	resp, err := cmcClient.Verify(context.Background(), &req)
-	if err != nil {
-		return fmt.Errorf("could not obtain verification result: %w", err)
-	}
-	// Check Verify response
-	if resp.GetStatus() != ci.Status_OK {
-		return fmt.Errorf("obtaining verification result failed with status %v", resp.GetStatus())
-	}
-
-	// parse VerificationResult
-	var result ar.VerificationResult
-	err = json.Unmarshal(resp.GetVerificationResult(), &result)
-	if err != nil {
-		return fmt.Errorf("could not parse verification result: %w", err)
-	}
-
-	// check results
-	if !result.Success {
-		return NewAttestedError(result, errors.New("verification failed"))
-	}
-	return nil
-}
-
 // Attests itself by receiving a nonce, creating an AR and returning it
 func attest(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 	log.Info("Attesting to peer in connection...")
 
 	// Obtain request msg
-	data, err := Read(conn)
+	req, err := Read(conn)
 	if err != nil {
 		return fmt.Errorf("failed to receive attestation request: %w", err)
 	}
-	// Parse request msg
-	req := &ci.AttestationRequest{}
-	err = proto.Unmarshal(data, req)
-	if err != nil {
-		return fmt.Errorf("failed to parse attestation request: %w", err)
-	}
-
-	// Check nonce length
-	if len(req.Nonce) != noncelen {
-		return fmt.Errorf("nonce (%v) does not have expected size (%v)", len(req.Nonce), noncelen)
-	}
-
-	// include components of tls.Conn to link both protocols: use serverCert
-	combinedNonce := sha256.Sum256(append(cert[:], req.Nonce[:]...))
-	req.Nonce = combinedNonce[:]
 
 	// Obtain response (AR)
-	resp, err := obtainAR(req, cc)
+	resp, err := cc.cmcApi.obtainAR(req, cc, cert)
 	if err != nil {
 		return fmt.Errorf("could not obtain response: %w", err)
 	}
-	data, err = proto.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response: %w", err)
-	}
 
 	// Send response
-	err = Write(data, conn)
+	err = Write(resp, conn)
 	if err != nil {
 		return fmt.Errorf("failed to send AR: %w", err)
 	}
@@ -166,14 +74,10 @@ func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 		return fmt.Errorf("failed to generate nonce: %w", err)
 	}
 
-	// Create AR request with nonce
-	req := &ci.AttestationRequest{
-		Nonce: nonce,
-	}
-	data, err := proto.Marshal(req)
+	data, err := cc.cmcApi.createARRequest(nonce)
 	if err != nil {
 		_ = sendAck(false, conn)
-		return fmt.Errorf("failed to generate request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Send Request msg
@@ -191,18 +95,10 @@ func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse response msg
-	resp := &ci.AttestationResponse{}
-	err = proto.Unmarshal(data, resp)
+	report, err := cc.cmcApi.parseARResponse(data)
 	if err != nil {
 		_ = sendAck(false, conn)
 		return fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	// Check response status
-	if resp.Status != ci.Status_OK || len(resp.AttestationReport) == 0 {
-		_ = sendAck(false, conn)
-		return errors.New("did not receive attestation report")
 	}
 
 	// include components of tls.Conn to link both protocols
@@ -210,7 +106,7 @@ func verify(conn *tls.Conn, cert []byte, cc cmcConfig) error {
 
 	// Verify AR
 	log.Trace("Verifying attestation report...")
-	err = verifyAR(combinedNonce[:], resp.AttestationReport, cc)
+	err = cc.cmcApi.verifyAR(combinedNonce[:], report, cc)
 	if err != nil {
 		_ = sendAck(false, conn)
 		return err

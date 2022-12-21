@@ -13,22 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package main
 
 import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-type Server interface{}
+var servers = map[string]Server{}
+
+type Server interface {
+	Serve(addr string, config *ServerConfig) error
+}
 
 type ServerConfig struct {
-	// metadata (manifests and descriptions of the device)
 	Metadata              [][]byte
 	MeasurementInterfaces []ar.Measurement
 	Signer                ar.Signer
 	Serializer            ar.Serializer
-}
-
-type Api interface {
-	Serve(addr string) error
 }

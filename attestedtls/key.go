@@ -16,68 +16,14 @@
 package attestedtls
 
 import (
-	"context"
 	"crypto"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
-
-	// local modules
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
-
-	// debug
-	"encoding/hex"
 )
-
-// Converts Hash Types from crypto.SignerOpts to the types specified in the CMC interface
-func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
-	switch opts.HashFunc() {
-	case crypto.MD4:
-		return ci.HashFunction_MD4, nil
-	case crypto.MD5:
-		return ci.HashFunction_MD5, nil
-	case crypto.SHA1:
-		return ci.HashFunction_SHA1, nil
-	case crypto.SHA224:
-		return ci.HashFunction_SHA224, nil
-	case crypto.SHA256:
-		return ci.HashFunction_SHA256, nil
-	case crypto.SHA384:
-		return ci.HashFunction_SHA384, nil
-	case crypto.SHA512:
-		return ci.HashFunction_SHA512, nil
-	case crypto.MD5SHA1:
-		return ci.HashFunction_MD5SHA1, nil
-	case crypto.RIPEMD160:
-		return ci.HashFunction_RIPEMD160, nil
-	case crypto.SHA3_224:
-		return ci.HashFunction_SHA3_224, nil
-	case crypto.SHA3_256:
-		return ci.HashFunction_SHA3_256, nil
-	case crypto.SHA3_384:
-		return ci.HashFunction_SHA3_384, nil
-	case crypto.SHA3_512:
-		return ci.HashFunction_SHA3_512, nil
-	case crypto.SHA512_224:
-		return ci.HashFunction_SHA512_224, nil
-	case crypto.SHA512_256:
-		return ci.HashFunction_SHA512_256, nil
-	case crypto.BLAKE2s_256:
-		return ci.HashFunction_BLAKE2s_256, nil
-	case crypto.BLAKE2b_256:
-		return ci.HashFunction_BLAKE2b_256, nil
-	case crypto.BLAKE2b_384:
-		return ci.HashFunction_BLAKE2b_384, nil
-	case crypto.BLAKE2b_512:
-		return ci.HashFunction_BLAKE2b_512, nil
-	default:
-	}
-	return ci.HashFunction_SHA512, errors.New("could not determine correct Hash function")
-}
 
 // PrivateKey Wrapper Implementing crypto.Signer interface
 // Used to contact cmcd for signing operations
@@ -89,43 +35,10 @@ type PrivateKey struct {
 // Implementation of Sign() in crypto.Signer iface
 // Contacts cmcd for sign operation and returns received signature
 func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-	// Get backend connection
-	cmcClient, conn, cancel := getCMCServiceConn(priv.cmcConfig)
-	if cmcClient == nil {
-		return nil, errors.New("connection failed. No signing performed")
+	if priv.cmcConfig.cmcApi == nil {
+		return nil, errors.New("failed to get CMC API: nil")
 	}
-	defer conn.Close()
-	defer cancel()
-	log.Info("contacting backend for Sign Operation")
-
-	// Create Sign request
-	hash, err := convertHash(opts)
-	if err != nil {
-		return nil, fmt.Errorf("sign request creation failed: %w", err)
-	}
-	req := ci.TLSSignRequest{
-		Id:       id,
-		Content:  digest,
-		Hashtype: hash,
-	}
-
-	// parse additional signing options - not implemented fields assume recommend defaults
-	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		req.PssOpts = &ci.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
-	}
-
-	// Send Sign request
-	resp, err := cmcClient.TLSSign(context.Background(), &req)
-	if err != nil {
-		return nil, fmt.Errorf("sign request failed: %w", err)
-	}
-
-	// Check Sign response
-	if resp.GetStatus() != ci.Status_OK {
-		return nil, fmt.Errorf("signature creation failed with status %v", resp.GetStatus())
-	}
-	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
-	return resp.GetSignedContent(), nil
+	return priv.cmcConfig.cmcApi.fetchSignature(priv.cmcConfig, digest, opts)
 }
 
 func (priv PrivateKey) Public() crypto.PublicKey {
@@ -136,41 +49,28 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 
-	// get cmc Config: start with defaults
+	// Get cmc Config: start with defaults
 	cc := cmcConfig{
 		cmcAddress: cmcAddressDefault,
 		cmcPort:    cmcPortDefault,
+		cmcApi:     cmcApis[cmcApiSelectDefault],
 	}
 	for _, c := range moreConfigs {
 		c(&cc)
 	}
 
-	// Get backend connection
-	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return tls.Certificate{}, errors.New("connection failed. No Cert obtained")
-	}
-	defer cmcconn.Close()
-	defer cancel()
-
-	// Create TLSCert request
-	req := ci.TLSCertRequest{
-		Id: id,
+	// Check that selected API is implemented
+	if cc.cmcApi == nil {
+		return tls.Certificate{}, fmt.Errorf("selected CMC API is not implemented")
 	}
 
-	// Call TLSCert request
-	resp, err := cmcClient.TLSCert(context.Background(), &req)
+	certs, err := cc.cmcApi.fetchCerts(cc)
 	if err != nil {
-		return tls.Certificate{}, fmt.Errorf("failed to request TLS certificate: %w", err)
-	}
-
-	// Check TLSCert response
-	if resp.GetStatus() != ci.Status_OK || len(resp.GetCertificate()) == 0 {
-		return tls.Certificate{}, errors.New("could not receive TLS certificate")
+		return tls.Certificate{}, fmt.Errorf("failed to fetch certificate from cmc: %w", err)
 	}
 
 	// Convert each certificate (assuming it has superfluous "---------[]BEGIN CERTIFICATE[]-----" still there)
-	for _, cert := range resp.GetCertificate() {
+	for _, cert := range certs {
 		var currentBlock *pem.Block
 		var remain []byte
 		currentBlock, remain = pem.Decode(cert)
@@ -201,12 +101,10 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 	// Create TLS Cert
 	tlsCert.Leaf = x509Cert
 	tlsCert.PrivateKey = PrivateKey{
-		pubKey: x509Cert.PublicKey,
-		cmcConfig: cmcConfig{
-			cmcAddress: cc.cmcAddress,
-			cmcPort:    cc.cmcPort,
-		},
+		pubKey:    x509Cert.PublicKey,
+		cmcConfig: cc,
 	}
+
 	// Return cert
 	return tlsCert, nil
 }

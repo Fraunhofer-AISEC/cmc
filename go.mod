@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20221021134609-a1d5c57b1083
+	github.com/fxamacker/cbor v1.5.1
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/google/go-tpm v0.3.3
 	github.com/mattn/go-sqlite3 v1.14.9

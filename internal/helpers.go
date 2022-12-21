@@ -17,8 +17,6 @@ package internal
 
 // Install github packages with "go get [url]"
 import (
-	"crypto"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
@@ -29,42 +27,9 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-
-	// local modules
-
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
 
 var log = logrus.WithField("service", "internal")
-
-// Converts Protobuf hashtype to crypto.SignerOpts
-func ConvertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.SignerOpts, error) {
-	var hash crypto.Hash
-	var len int
-	switch hashtype {
-	case ci.HashFunction_SHA256:
-		hash = crypto.SHA256
-		len = 32
-	case ci.HashFunction_SHA384:
-		hash = crypto.SHA384
-		len = 48
-	case ci.HashFunction_SHA512:
-		len = 64
-		hash = crypto.SHA512
-	default:
-		return crypto.SHA512, fmt.Errorf("hash function not implemented: %v", hashtype)
-	}
-	if pssOpts != nil {
-		saltlen := int(pssOpts.SaltLength)
-		// go-attestation / go-tpm does not allow -1 as definition for length of hash
-		if saltlen < 0 {
-			log.Warning("Signature Options: Adapted RSA PSS Salt length to length of hash: ", len)
-			saltlen = len
-		}
-		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
-	}
-	return hash, nil
-}
 
 // Returns either the unmodified absolute path or the absolute path
 // retrieved from a path relative to a base path

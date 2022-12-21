@@ -13,10 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package coapapi
+//go:build !nodefaults || coap
+
+package main
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rand"
 	"fmt"
 
 	"encoding/hex"
@@ -27,81 +31,34 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
-	"github.com/sirupsen/logrus"
 
 	// local modules
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	api "github.com/Fraunhofer-AISEC/cmc/coapapi"
 )
 
-var log = logrus.WithField("service", "coap-api")
-
 // CoapServer is the CoAP server structure
-type CoapServer struct {
+type CoapServer struct{}
+
+var serverConfig *ServerConfig
+
+func init() {
+	log.Trace("Adding CoAP server to supported servers")
+	servers["coap"] = CoapServer{}
 }
 
-type AttestationRequest struct {
-	Id    string
-	Nonce []byte
-}
+func (s CoapServer) Serve(addr string, c *ServerConfig) error {
 
-type AttestationResponse struct {
-	// Status            Status
-	AttestationReport []byte
-}
-
-type VerificationRequest struct {
-	Nonce             []byte
-	AttestationReport []byte
-	Ca                []byte
-	Policies          []byte
-}
-
-type VerificationResponse struct {
-	// Status             Status
-	VerificationResult []byte
-}
-
-type TLSSignRequest struct {
-	Id      string
-	Content []byte
-	// Hashtype HashFunction
-	// PssOpts  *PSSOptions
-}
-
-type TLSSignResponse struct {
-	// Status        Status
-	SignedContent []byte
-}
-
-type TLSCertRequest struct {
-	Id string
-}
-
-type TLSCertResponse struct {
-	// Status      Status
-	Certificate [][]byte
-}
-
-var config *api.ServerConfig
-
-func NewServer(c *api.ServerConfig) *CoapServer {
-	server := &CoapServer{}
-	config = c
-	return server
-}
-
-func (server *CoapServer) Serve(addr string) error {
+	serverConfig = c
 
 	log.Infof("Starting CMC CoAP Server on %v", addr)
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
 	r.Handle("/Attest", mux.HandlerFunc(Attest))
 	r.Handle("/Verify", mux.HandlerFunc(Verify))
-	// TODO
-	// r.Handle("/TLSSign", mux.HandlerFunc(TLSSign))
-	// r.Handle("/Verify", mux.HandlerFunc(TLSCert))
+	r.Handle("/TLSSign", mux.HandlerFunc(TlsSign))
+	r.Handle("/TLSCert", mux.HandlerFunc(TlsCert))
 
 	log.Infof("Waiting for requests on %v", addr)
 
@@ -141,9 +98,9 @@ func SendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code, text s
 
 func Attest(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Info("Prover: Received CoAP attestation request")
+	log.Debug("Prover: Received CoAP attestation request")
 
-	var req AttestationRequest
+	var req api.AttestationRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
 		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
@@ -152,9 +109,9 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
+	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, err := ar.Generate(req.Nonce, config.Metadata, config.MeasurementInterfaces, config.Serializer)
+	report, err := ar.Generate(req.Nonce, serverConfig.Metadata, serverConfig.MeasurementInterfaces, serverConfig.Serializer)
 	if err != nil {
 		msg := fmt.Sprintf("failed to generate attestation report: %v", err)
 		SendCoapError(w, r, codes.InternalServerError, msg)
@@ -162,15 +119,15 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	if config.Signer == nil {
+	if serverConfig.Signer == nil {
 		msg := "Failed to sign attestation report: No valid signer specified in config"
 		log.Warn(msg)
 		SendCoapError(w, r, codes.InternalServerError, msg)
 		return
 	}
 
-	log.Info("Prover: Signing Attestation Report")
-	ok, data := ar.Sign(report, config.Signer, config.Serializer)
+	log.Debug("Prover: Signing Attestation Report")
+	ok, data := ar.Sign(report, serverConfig.Signer, serverConfig.Serializer)
 	if !ok {
 		msg := "Failed to sign attestation report"
 		log.Warn(msg)
@@ -178,10 +135,10 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Info("Prover: Finished")
+	log.Debug("Prover: Finished")
 
 	// Serialize CoAP payload
-	resp := AttestationResponse{
+	resp := api.AttestationResponse{
 		AttestationReport: data,
 	}
 	payload, err := cbor.Marshal(&resp)
@@ -195,14 +152,14 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Info("Prover: Finished")
+	log.Debug("Prover: Finished")
 }
 
 func Verify(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Info("Received Connection Request Type 'Verification Request'")
+	log.Debug("Received Connection Request Type 'Verification Request'")
 
-	var req VerificationRequest
+	var req api.VerificationRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
 		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
@@ -221,10 +178,10 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 		log.Trace("No policies specified. Performing default remote attestation")
 	}
 
-	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, policies, config.Serializer)
+	log.Debug("Verifier: Verifying Attestation Report")
+	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, policies, serverConfig.Serializer)
 
-	log.Info("Verifier: Marshaling Attestation Result")
+	log.Debug("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
 	if err != nil {
 		msg := fmt.Sprintf("Verifier: failed to marshal Attestation Result: %v", err)
@@ -234,7 +191,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Serialize CoAP payload
-	resp := VerificationResponse{
+	resp := api.VerificationResponse{
 		VerificationResult: data,
 	}
 	payload, err := cbor.Marshal(&resp)
@@ -248,7 +205,107 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Info("Verifier: Finished")
+	log.Debug("Verifier: Finished")
+}
+
+func TlsSign(w mux.ResponseWriter, r *mux.Message) {
+
+	log.Debug("Received CoAP TLS sign request")
+
+	// Parse the CoAP message and return the TLS signing request
+	var req api.TLSSignRequest
+	err := unmarshalCoapPayload(r, &req)
+	if err != nil {
+		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		log.Warn(msg)
+		return
+	}
+
+	// Get signing options from request
+	opts, err := api.HashToSignerOpts(req.Hashtype, req.PssOpts)
+	if err != nil {
+		msg := fmt.Sprintf("failed to choose requested hash function: %v", err)
+		log.Warn(msg)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		return
+	}
+
+	// Get key handle from (hardware) interface
+	tlsKeyPriv, _, err := serverConfig.Signer.GetSigningKeys()
+	if err != nil {
+		msg := fmt.Sprintf("failed to get TLS key: %v", err)
+		log.Warn(msg)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		return
+	}
+
+	// Sign
+	log.Trace("TLSSign using opts: ", opts)
+	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
+	if err != nil {
+		msg := fmt.Sprintf("failed to sign: %v", err)
+		log.Warn(msg)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		return
+	}
+
+	// Create response
+	resp := &api.TLSSignResponse{
+		SignedContent: signature,
+	}
+	payload, err := cbor.Marshal(&resp)
+	if err != nil {
+		msg := fmt.Sprintf("failed to marshal message: %v", err)
+		log.Warn(msg)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		return
+	}
+
+	// CoAP response
+	SendCoapResponse(w, r, payload)
+
+	log.Debug("Performed signing")
+}
+
+func TlsCert(w mux.ResponseWriter, r *mux.Message) {
+
+	log.Debug("Received CoAP TLS cert request")
+
+	// Parse the CoAP message and return the TLS signing request
+	var req api.TLSCertRequest
+	err := unmarshalCoapPayload(r, &req)
+	if err != nil {
+		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		log.Warn(msg)
+		return
+	}
+	// TODO ID is currently not used
+	log.Tracef("Received COAP TLS cert request with ID %v", req.Id)
+
+	// Retrieve certificates
+	certChain := serverConfig.Signer.GetCertChain()
+	certs := make([][]byte, 0)
+	certs = append(certs, certChain.Leaf)
+	certs = append(certs, certChain.Intermediates...)
+
+	// Create response
+	resp := &api.TLSCertResponse{
+		Certificate: certs,
+	}
+	payload, err := cbor.Marshal(&resp)
+	if err != nil {
+		msg := fmt.Sprintf("failed to marshal message: %v", err)
+		log.Warn(msg)
+		SendCoapError(w, r, codes.InternalServerError, msg)
+		return
+	}
+
+	// CoAP response
+	SendCoapResponse(w, r, payload)
+
+	log.Debug("Obtained TLS cert")
 }
 
 func loggingMiddleware(next mux.Handler) mux.Handler {

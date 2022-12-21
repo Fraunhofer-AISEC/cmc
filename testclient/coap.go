@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !nodefaults || coap
+
 package main
 
 // Install github packages with "go get [url]"
@@ -21,34 +23,26 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/udp"
-	"github.com/sirupsen/logrus"
 
 	// local modules
+	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/coapapi"
 )
 
-var log = logrus.WithField("service", "coapclient")
+type CoapApi struct{}
 
-// Mode defines the mode the testclient should run
-type Mode int
+func init() {
+	apis["coap"] = CoapApi{}
+}
 
-const (
-	// Generate an attestation report (Mode)
-	Generate = 0
-	// Verify an attestatoin report (Mode)
-	Verify = 1
-)
-
-func generate(addr, reportFile, nonceFile string) {
+func (a CoapApi) generate(addr, reportFile, nonceFile string) {
 
 	// Establish connection
 	conn, err := udp.Dial(addr)
@@ -90,7 +84,7 @@ func generate(addr, reportFile, nonceFile string) {
 		log.Fatalf("failed to read body: %v", err)
 	}
 
-	// Unmarshal attetation response
+	// Unmarshal attestation response
 	var attestationResp coapapi.AttestationResponse
 	err = cbor.Unmarshal(payload, &attestationResp)
 	if err != nil {
@@ -113,7 +107,7 @@ func generate(addr, reportFile, nonceFile string) {
 
 }
 
-func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
+func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
 
 	// Establish connection
 	conn, err := udp.Dial(addr)
@@ -166,7 +160,7 @@ func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []b
 		log.Fatalf("failed to read body: %v", err)
 	}
 
-	// Unmarshal attetation response
+	// Unmarshal attestation response
 	var verifyResp coapapi.VerificationResponse
 	err = cbor.Unmarshal(payload, &verifyResp)
 	if err != nil {
@@ -181,47 +175,6 @@ func verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []b
 	fmt.Println("Wrote file ", resultFile)
 }
 
-func main() {
-	logrus.SetLevel(logrus.TraceLevel)
-
-	parsedMode := flag.String("mode", "generate", "[generate | verify ]")
-	addr := flag.String("addr", "127.0.0.1:9955", "TCP address to connect to the CMC daemon gRPC interface")
-	reportFile := flag.String("report", "attestation-report", "Output file for the attestation report")
-	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
-	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
-	rootCACertFile := flag.String("ca", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
-	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
-	flag.Parse()
-
-	var mode Mode
-	if strings.EqualFold(*parsedMode, "generate") {
-		mode = Generate
-	} else if strings.EqualFold(*parsedMode, "verify") {
-		mode = Verify
-	} else {
-		log.Fatal("Wrong mode. Possible [Generate | Verify]")
-	}
-
-	// Add optional policies if present
-	var policies []byte = nil
-	if mode == Verify {
-		var err error
-		if *policiesFile != "" {
-			log.Debug("Policies specified. Adding them to verification request")
-			policies, err = os.ReadFile(*policiesFile)
-			if err != nil {
-				log.Fatalf("Failed to read policies file: %v", err)
-			}
-		} else {
-			log.Debug("No policies specified. Verifying with default parameters")
-		}
-	}
-
-	if mode == Generate {
-		generate(*addr, *reportFile, *nonceFile)
-	} else if mode == Verify {
-		verify(*addr, *reportFile, *resultFile, *nonceFile, *rootCACertFile, policies)
-	} else {
-		log.Println("Unknown mode")
-	}
+func (a CoapApi) testTLSConn(destAddr, cmcAddr, ca string, mTLS bool, policies []byte) {
+	testTLSConnInternal(attestedtls.CmcApi_COAP, destAddr, cmcAddr, ca, mTLS, policies)
 }

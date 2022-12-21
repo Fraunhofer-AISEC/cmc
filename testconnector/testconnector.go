@@ -24,6 +24,7 @@ import (
 	"flag"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -40,9 +41,10 @@ func main() {
 	var config *tls.Config
 
 	caFile := flag.String("ca", "ca.pem", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
-	port := flag.String("cmcport", "9955", "TCP Port to connect to the CMC daemon gRPC interface")
+	port := flag.String("cmcport", "9955", "TCP Port to connect to the CMC daemon")
 	connectoraddress := flag.String("addr", "0.0.0.0:443", "ip:port on which to listen")
 	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
+	apiFlag := flag.String("api", "grpc", "API to contact the cmcd (grpc or coap)")
 	flag.Parse()
 
 	logrus.SetLevel(logrus.TraceLevel)
@@ -62,11 +64,22 @@ func main() {
 		return
 	}
 
+	// Get API
+	var api atls.CmcApiSelect
+	if strings.EqualFold(*apiFlag, "grpc") {
+		log.Info("Using CMC gRPC API")
+		api = atls.CmcApi_GRPC
+	} else if strings.EqualFold(*apiFlag, "coap") {
+		log.Info("Using CMC CoAP API")
+		api = atls.CmcApi_COAP
+	} else {
+		log.Fatalf("API type '%v' is not supported", *apiFlag)
+	}
+
 	// Load certificate
-	cert, err = atls.GetCert(atls.WithCmcPort(*port))
+	cert, err = atls.GetCert(atls.WithCmcPort(*port), atls.WithCmcApi(api))
 	if err != nil {
-		log.Error("failed to get TLS Certificate. ", err)
-		return
+		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
 
 	// Add optional policies if present
@@ -91,11 +104,13 @@ func main() {
 	internal.PrintTlsConfig(config, rootCA)
 
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", *connectoraddress, config, atls.WithCmcPort(*port), atls.WithCmcCa(rootCA), atls.WithCmcPolicies(policies))
+	ln, err := atls.Listen("tcp", *connectoraddress, config,
+		atls.WithCmcPort(*port),
+		atls.WithCmcCa(rootCA),
+		atls.WithCmcPolicies(policies),
+		atls.WithCmcApi(api))
 	if err != nil {
-		log.Error(err)
-		log.Error("Failed to listen for connections")
-		return
+		log.Fatalf("Failed to listen for connections: %v", err)
 	}
 	defer ln.Close()
 

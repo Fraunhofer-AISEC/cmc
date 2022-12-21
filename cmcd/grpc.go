@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpcapi
+//go:build !nodefaults || grpc
+
+package main
 
 // Install github packages with "go get [url]"
 import (
 	"context"
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"net"
@@ -27,34 +30,31 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	// local modules
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-var log = logrus.WithField("service", "grpc-api")
+type GrpcServerWrapper struct{}
 
 // GrpcServer is the gRPC server structure
 type GrpcServer struct {
 	ci.UnimplementedCMCServiceServer
-	config *api.ServerConfig
+	config *ServerConfig
 }
 
-func NewServer(config *api.ServerConfig) ci.CMCServiceServer {
+func init() {
+	log.Info("Adding gRPC server to supported servers")
+	servers["grpc"] = GrpcServerWrapper{}
+}
+
+func (wrapper GrpcServerWrapper) Serve(addr string, config *ServerConfig) error {
 	server := &GrpcServer{
 		config: config,
 	}
-
-	return server
-}
-
-func (server *GrpcServer) Serve(addr string) error {
 
 	// Create TCP server
 	log.Infof("Starting CMC gRPC Server on %v", addr)
@@ -163,15 +163,15 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TL
 	var tlsKeyPriv crypto.PrivateKey
 
 	// get sign opts
-	opts, err = internal.ConvertHash(in.GetHashtype(), in.GetPssOpts())
+	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
-		log.Error("failed to choose requested hash function.", err.Error())
+		log.Errorf("Failed to choose requested hash function: %v", err)
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to find appropriate hash function")
 	}
 	// get key
 	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
-		log.Error("failed to get TLS key. ", err.Error())
+		log.Errorf("Failed to get TLS key: %v", err)
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to get TLS key")
 	}
 	// Sign
@@ -179,7 +179,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TL
 	log.Trace("TLSSign using opts: ", opts)
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
 	if err != nil {
-		log.Error("", err.Error())
+		log.Errorf("Failed to sign: %v", err)
 		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
 	}
 	// Create response
@@ -204,4 +204,33 @@ func (s *GrpcServer) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TL
 	resp.Status = ci.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil
+}
+
+// Converts Protobuf hashtype to crypto.SignerOpts
+func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.SignerOpts, error) {
+	var hash crypto.Hash
+	var len int
+	switch hashtype {
+	case ci.HashFunction_SHA256:
+		hash = crypto.SHA256
+		len = 32
+	case ci.HashFunction_SHA384:
+		hash = crypto.SHA384
+		len = 48
+	case ci.HashFunction_SHA512:
+		len = 64
+		hash = crypto.SHA512
+	default:
+		return crypto.SHA512, fmt.Errorf("hash function not implemented: %v", hashtype)
+	}
+	if pssOpts != nil {
+		saltlen := int(pssOpts.SaltLength)
+		// go-attestation / go-tpm does not allow -1 as definition for length of hash
+		if saltlen < 0 {
+			log.Warning("Signature Options: Adapted RSA PSS Salt length to length of hash: ", len)
+			saltlen = len
+		}
+		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
+	}
+	return hash, nil
 }

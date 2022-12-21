@@ -16,57 +16,14 @@
 package attestedtls
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
-	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
-	// local modules
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
 )
-
-/***********************************************************/
-/* Backend to CMC */
-
-const (
-	cmcAddressDefault = "localhost"
-	cmcPortDefault    = "9955"
-	timeoutSec        = 10
-)
-
-// Struct that holds information on cmc address and port
-// to be used by Listener and DialConfig
-type cmcConfig struct {
-	cmcPort    string
-	cmcAddress string
-	ca         []byte
-	policies   []byte
-}
-
-// Creates connection with cmcd deamon at specified address
-func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
-	log.Trace("Contacting cmcd on: " + cc.cmcAddress + ":" + cc.cmcPort)
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
-	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-	if err != nil {
-		log.Errorf("ERROR: did not connect: %v", err)
-		cancel()
-		return nil, nil, nil
-	}
-
-	log.Trace("Creating new service client")
-	return ci.NewCMCServiceClient(conn), conn, cancel
-}
-
-/***********************************************************/
-/* Backend between two connectors / client and connector */
 
 // Writes byte array to provided channel by first sending length information, then data
+// Used for transmitting the attestation reports between peers
 func Write(msg []byte, c net.Conn) error {
 	lenbuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenbuf, uint32(len(msg)))
@@ -79,6 +36,7 @@ func Write(msg []byte, c net.Conn) error {
 }
 
 // Receives byte array from provided channel by first receiving length information, then data
+// Used for transmitting the attestation reports between peers
 func Read(c net.Conn) ([]byte, error) {
 	lenbuf := make([]byte, 4)
 	_, err := c.Read(lenbuf)

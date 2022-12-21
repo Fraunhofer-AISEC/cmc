@@ -333,7 +333,6 @@ type ArPacked struct {
 func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Serializer) ([]byte, error) {
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
-	// TODO this will not work!!
 	ar := ArPacked{
 		Type: "Attestation Report",
 	}
