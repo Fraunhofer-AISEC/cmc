@@ -32,40 +32,6 @@ type Listener struct {
 	*tls.Config  // embedded struct
 }
 
-type ConnectionOption[T any] func(*T)
-
-// WithCmcPort sets the port on which to contact the CMC.
-// If not specified, default is "9955"
-func WithCmcPort(port string) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.cmcPort = port
-	}
-}
-
-// WithCmcAddress sets the address with which to contact the CMC.
-// If not specified, default is "localhost"
-func WithCmcAddress(address string) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.cmcAddress = address
-	}
-}
-
-// WithCmcCa specifies the CA the attestation report should be verified against
-// in PEM format
-func WithCmcCa(pem []byte) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.ca = pem
-	}
-}
-
-// WithCmcPolicies specified optional custom policies the attestation report should
-// be verified against
-func WithCmcPolicies(policies []byte) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.policies = policies
-	}
-}
-
 // Implementation of Accept() in net.Listener iface
 // Calls Accept of the net.Listnener and additionally performs remote attestation
 // after connection establishment before returning the connection
@@ -76,7 +42,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	log.Trace("TLS established. Providing attestation report....")
+	log.Trace("TLS established. Providing attestation report..")
 	tlsConn := conn.(*tls.Conn)
 
 	// Perform remote attestation
@@ -125,23 +91,33 @@ func (ln Listener) Addr() net.Addr {
 // Returns custom Listener that will perform additional remote attestation
 // operations right after successful TLS connection establishment
 func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[cmcConfig]) (net.Listener, error) {
+
 	// Default listener
 	listener := Listener{
 		cmcConfig: cmcConfig{
 			cmcAddress: cmcAddressDefault,
 			cmcPort:    cmcPortDefault,
+			cmcApi:     cmcApis[cmcApiSelectDefault],
 		},
 	}
+
+	// Apply all additional (CMC) configs
+	for _, c := range moreConfigs {
+		c(&listener.cmcConfig)
+	}
+
+	// Check that selected API is implemented
+	if listener.cmcConfig.cmcApi == nil {
+		return listener, fmt.Errorf("selected CMC API is not implemented")
+	}
+
 	// Listen
 	ln, err := tls.Listen(network, laddr, config)
 	if err != nil {
 		return listener, fmt.Errorf("failed to listen: %w", err)
 	}
-	// Apply all additional (CMC) configs
 	listener.Listener = ln
 	listener.Config = config
-	for _, c := range moreConfigs {
-		c(&listener.cmcConfig)
-	}
+
 	return net.Listener(listener), nil
 }

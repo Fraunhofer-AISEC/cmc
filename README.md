@@ -32,9 +32,11 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
     - [Build and Run the Provisioning Server](#build-and-run-the-provisioning-server)
     - [Build and Run the CMC Daemon](#build-and-run-the-cmc-daemon)
     - [Build and Run the Test Client](#build-and-run-the-test-client)
-    - [Build and Run the CoAP Client](#build-and-run-the-coap-client)
     - [Build and Run the Testconnector](#build-and-run-the-testconnector)
-    - [Regenerate Protobuf gRPC Interface](#regenerate-protobuf-grpc-interface)
+    - [Customize Builds](#customize-builds)
+      - [Reduce General Size](#reduce-general-size)
+      - [Reduce Size by Disabling Features](#reduce-size-by-disabling-features)
+      - [Regenerate Protobuf gRPC Interface](#regenerate-protobuf-grpc-interface)
 
 ## Architecture Overview
 
@@ -44,10 +46,9 @@ The figure shows how the core components interact with each other. The main soft
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
 different hardware trust anchors and assembles this data together with signed metadata describing
 the platform to an attestation report (prover), or validates the measurements against the metadata.
-The *cmcd* provides a gRPC as well as a CoAP REST API for interaction.
+The *cmcd* provides a gRPC as well as a CoAP REST API.
 - The testclient and testconnector are exemplary applications that make use of the daemon to
-generate and verify attestation reports and to create an attested tls connection. The coapclient
-uses CoAP instead of gRPC
+generate and verify attestation reports and to create an attested tls connection.
 - Drivers for trusted hardware provides the attestation reports and, if available, key storage and
 signing functionalities
 
@@ -64,7 +65,7 @@ below.
 
 ## Prerequistes
 
-- Running the *cmcd* currently requires a Linux platform. If the *cmcd* is configured to use a TPM
+- Running the *cmcd* currently requires a Linux platform. If the *cmcd* is configured to use a TPM,
 the *cmcd* must be able to access ```/dev/tpm0```. If AMD SEV-SNP is
 used for measurements, the *cmcd* must be run on an AMD server within an SNP Virtual Machine.
 - Building the *cmcd* requires *go* (https://golang.org/doc/install)
@@ -217,10 +218,10 @@ testclient -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/c
 
 ```sh
 # To test the attested TLS connection
-testconnector -ca $CMC_ROOT/cmc-data/pki/ca.pem
+testconnector -ca $CMC_ROOT/cmc-data/pki/ca.pem -addr 0.0.0.0:4443
 
 # Run the testclient to test the attested TLS connection with the connector
-testclient -mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -connector 127.0.0.1:443 -mTLS
+testclient -mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -destAddr 127.0.0.1:4443 -mTLS
 ```
 
 **Note**: by default, *cmcd* and *testclient* use localhost port 9955 to communicate. This can be changed in the *cmcd*
@@ -332,8 +333,6 @@ configuration). The linux kernel default is 10
 RSA4096, EC256, EC384, EC521
 - **serialization**: The serialiazation format to use for the attestation report. Can be either
 `cbor` or `json`
-- **api**: The API to use. The *cmcd* supports a gRPC API as well as a Constrained Application
-Procotol (CoAP) API
 
 ```json
 {
@@ -348,7 +347,6 @@ Procotol (CoAP) API
     "imaPcr": 10,
     "keyConfig": "EC256",
     "serialization": "json",
-    "api": "grpc"
 }
 ```
 
@@ -471,15 +469,7 @@ SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file> -addr <server
 ```sh
 cd testclient
 go build
-./testclient -mode < generate | verify | tlsconn > [-port <port-number>] [-connector <remote-address>] [-mTLS] [-ca <file>] [-policies <file>]
-```
-
-### Build and Run the CoAP Client
-
-```sh
-cd coapclient
-go build
-./testclient -mode < generate | verify > [-port <port-number>] [-ca <file>] [-policies <file>]
+./testclient -mode < generate | verify | tlsconn > [-port <port-number>] [-destAddr <remote-address>] [-mTLS] [-ca <file>] [-policies <file>] [-api < coap | grpc >] [-cmcAddr <cmc-address>]
 ```
 
 ### Build and Run the Testconnector
@@ -487,10 +477,41 @@ go build
 ```sh
 cd testconnector
 go build
-./testconnector [-ca <file>] [-addr <listen-addr>] [-policies <file>] [-cmcport <port>]
+./testconnector [-ca <file>] [-addr <listen-addr>] [-policies <file>] [-cmcport <port>] [-api < coap | grpc >]
 ```
 
-### Regenerate Protobuf gRPC Interface
+### Customize Builds
+
+#### Reduce General Size
+
+The size of all binaries can be reduced via go linker flags:
+```sh
+go build ldflags="-s -w"
+```
+For more information see the go documentation.
+
+#### Reduce Size by Disabling Features
+
+The size of the binaries can further be reduced by a considerable amount through disabling
+unused features during build time. The `go build` command builds each binary with all features
+enabled. The project uses the go build system with build tags to disable features.
+
+To disable all features, use the custom `nodefaults` tag. You can then enable the features you
+want to build via additional tags.
+
+Currently supported tags for the `cmcd`, `testclient`, and `testconnector` are:
+- `grpc` Enables the gRPC API
+- `coap` Enables the CoAP API
+
+To build all binaries with `coap` but without `grpc` support:
+```sh
+go build -tags nodefaults,coap
+```
+
+> Note: disabling features during build-time but specifying to use them in the configuration files
+> will lead to errors during runtime
+
+#### Regenerate Protobuf gRPC Interface
 
 ```sh
 sudo apt install -y protobuf-compiler

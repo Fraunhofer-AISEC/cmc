@@ -33,16 +33,26 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	dialer.Timeout = timeout
 	conn, err := tls.DialWithDialer(&dialer, network, addr, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to establish tls connection: %w", err)
+		details := fmt.Sprintf("%v certificate chain(s) provided: ", len(config.Certificates))
+		for _, cert := range config.Certificates {
+			details = details + fmt.Sprintf("%v with SANS %v; ", cert.Leaf.Subject.CommonName, cert.Leaf.DNSNames)
+		}
+		return nil, fmt.Errorf("failed to establish tls connection: %w. %v", err, details)
 	}
 
-	// get cmc Config: start with defaults
+	// Get cmc Config: start with defaults
 	cc := cmcConfig{
 		cmcAddress: cmcAddressDefault,
 		cmcPort:    cmcPortDefault,
+		cmcApi:     cmcApis[cmcApiSelectDefault],
 	}
 	for _, c := range moreConfigs {
 		c(&cc)
+	}
+
+	// Check that selected API is implemented
+	if cc.cmcApi == nil {
+		return nil, fmt.Errorf("selected CMC API is not implemented")
 	}
 
 	// Perform remote attestation

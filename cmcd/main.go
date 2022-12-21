@@ -27,10 +27,7 @@ import (
 	"flag"
 
 	// local modules
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/coapapi"
-	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provclient"
 	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
@@ -215,27 +212,18 @@ func main() {
 		measurements = append(measurements, snp)
 	}
 
-	serverConfig := &api.ServerConfig{
+	serverConfig := &ServerConfig{
 		Metadata:              metadata,
 		MeasurementInterfaces: measurements,
 		Signer:                signer,
 		Serializer:            serializer,
 	}
 
-	// TODO configuration
-	if strings.EqualFold(c.Api, "grpc") {
-		server := grpcapi.NewServer(serverConfig)
-		err = server.(*grpcapi.GrpcServer).Serve(c.Addr)
-		if err != nil {
-			log.Error(err)
-			return
-		}
-	} else if strings.EqualFold(c.Api, "coap") {
-		server := coapapi.NewServer(serverConfig)
-		err = server.Serve(c.Addr)
-		if err != nil {
-			log.Error(err)
-			return
-		}
+	server, ok := servers[strings.ToLower(c.Api)]
+	if !ok {
+		log.Errorf("API '%v' is not implemented", c.Api)
+		return
 	}
+
+	server.Serve(c.Addr, serverConfig)
 }
