@@ -219,6 +219,9 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	if t == nil {
 		return ar.TpmMeasurement{}, fmt.Errorf("internal error: tpm object not initialized")
 	}
+	if len(t.Pcrs) == 0 {
+		log.Warn("TPM measurement based on reference values does not contain any PCRs")
+	}
 
 	log.Trace("Collecting TPM Quote")
 
