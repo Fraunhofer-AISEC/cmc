@@ -11,8 +11,9 @@ The following components correspond to the packages / directories of this reposi
 __cmcd:__
 The CMC daemon (*cmcd*) is the main component running on the platform. On request, the cmcd either
 generates or verifies an attestation-report, i.e. the state of the platform. The cmcd provides
-a gRPC interface to access its services (*cmcinterface*). For the generation and verification
-of attestation reports, the *cmcd* relies on the *attestationreport* package.
+a gRPC interface to access its services (*grpcapi*), as well as a REST CoAP interface. For the
+generation and verification of attestation reports, the *cmcd* relies on the *attestationreport*
+package.
 
 __attestationreport:__
 The *attestationreport* package provides a generic JSON-based serialization format to summarize

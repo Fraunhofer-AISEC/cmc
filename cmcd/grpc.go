@@ -35,14 +35,14 @@ import (
 	// local modules
 	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 )
 
 type GrpcServerWrapper struct{}
 
 // GrpcServer is the gRPC server structure
 type GrpcServer struct {
-	ci.UnimplementedCMCServiceServer
+	api.UnimplementedCMCServiceServer
 	config *ServerConfig
 }
 
@@ -65,7 +65,7 @@ func (wrapper GrpcServerWrapper) Serve(addr string, config *ServerConfig) error 
 
 	// Start gRPC server
 	s := grpc.NewServer()
-	ci.RegisterCMCServiceServer(s, server)
+	api.RegisterCMCServiceServer(s, server)
 
 	log.Infof("Waiting for requests on %v", listener.Addr())
 	err = s.Serve(listener)
@@ -76,7 +76,7 @@ func (wrapper GrpcServerWrapper) Serve(addr string, config *ServerConfig) error 
 	return nil
 }
 
-func (s *GrpcServer) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci.AttestationResponse, error) {
+func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*api.AttestationResponse, error) {
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
@@ -84,32 +84,32 @@ func (s *GrpcServer) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci
 	if err != nil {
 		log.Errorf("Failed to generate attestation report: %v", err)
 		log.Info("Prover: Finished")
-		return &ci.AttestationResponse{
-			Status: ci.Status_FAIL,
+		return &api.AttestationResponse{
+			Status: api.Status_FAIL,
 		}, nil
 	}
 
 	if s.config.Signer == nil {
 		log.Error("No valid signer specified in config. Cannot sign attestation report")
 		log.Info("Prover: Finished")
-		return &ci.AttestationResponse{
-			Status: ci.Status_FAIL,
+		return &api.AttestationResponse{
+			Status: api.Status_FAIL,
 		}, nil
 	}
 
 	log.Info("Prover: Signing Attestation Report")
-	var status ci.Status
+	var status api.Status
 	ok, data := ar.Sign(report, s.config.Signer, s.config.Serializer)
 	if !ok {
 		log.Error("Prover: failed to sign Attestion Report ")
-		status = ci.Status_FAIL
+		status = api.Status_FAIL
 	} else {
-		status = ci.Status_OK
+		status = api.Status_OK
 	}
 
 	log.Info("Prover: Finished")
 
-	response := &ci.AttestationResponse{
+	response := &api.AttestationResponse{
 		Status:            status,
 		AttestationReport: data,
 	}
@@ -117,9 +117,9 @@ func (s *GrpcServer) Attest(ctx context.Context, in *ci.AttestationRequest) (*ci
 	return response, nil
 }
 
-func (s *GrpcServer) Verify(ctx context.Context, in *ci.VerificationRequest) (*ci.VerificationResponse, error) {
+func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*api.VerificationResponse, error) {
 
-	var status ci.Status
+	var status api.Status
 
 	log.Info("Received Connection Request Type 'Verification Request'")
 
@@ -140,12 +140,12 @@ func (s *GrpcServer) Verify(ctx context.Context, in *ci.VerificationRequest) (*c
 	data, err := json.Marshal(result)
 	if err != nil {
 		log.Errorf("Verifier: failed to marshal Attestation Result: %v", err)
-		status = ci.Status_FAIL
+		status = api.Status_FAIL
 	} else {
-		status = ci.Status_OK
+		status = api.Status_OK
 	}
 
-	response := &ci.VerificationResponse{
+	response := &api.VerificationResponse{
 		Status:             status,
 		VerificationResult: data,
 	}
@@ -155,9 +155,9 @@ func (s *GrpcServer) Verify(ctx context.Context, in *ci.VerificationRequest) (*c
 	return response, nil
 }
 
-func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TLSSignResponse, error) {
+func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.TLSSignResponse, error) {
 	var err error
-	var sr *ci.TLSSignResponse
+	var sr *api.TLSSignResponse
 	var opts crypto.SignerOpts
 	var signature []byte
 	var tlsKeyPriv crypto.PrivateKey
@@ -166,13 +166,13 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TL
 	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
 		log.Errorf("Failed to choose requested hash function: %v", err)
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to find appropriate hash function")
+		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to find appropriate hash function")
 	}
 	// get key
 	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
 		log.Errorf("Failed to get TLS key: %v", err)
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to get TLS key")
+		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to get TLS key")
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
@@ -180,11 +180,11 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TL
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
 	if err != nil {
 		log.Errorf("Failed to sign: %v", err)
-		return &ci.TLSSignResponse{Status: ci.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
+		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
 	}
 	// Create response
-	sr = &ci.TLSSignResponse{
-		Status:        ci.Status_OK,
+	sr = &api.TLSSignResponse{
+		Status:        api.Status_OK,
 		SignedContent: signature,
 	}
 	// Return response
@@ -193,31 +193,31 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *ci.TLSSignRequest) (*ci.TL
 }
 
 // Loads public key for tls certificate
-func (s *GrpcServer) TLSCert(ctx context.Context, in *ci.TLSCertRequest) (*ci.TLSCertResponse, error) {
-	var resp *ci.TLSCertResponse = &ci.TLSCertResponse{}
+func (s *GrpcServer) TLSCert(ctx context.Context, in *api.TLSCertRequest) (*api.TLSCertResponse, error) {
+	var resp *api.TLSCertResponse = &api.TLSCertResponse{}
 
 	// provide TLS certificate chain
 	certChain := s.config.Signer.GetCertChain()
 	resp.Certificate = make([][]byte, 0)
 	resp.Certificate = append(resp.Certificate, certChain.Leaf)
 	resp.Certificate = append(resp.Certificate, certChain.Intermediates...)
-	resp.Status = ci.Status_OK
+	resp.Status = api.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil
 }
 
 // Converts Protobuf hashtype to crypto.SignerOpts
-func convertHash(hashtype ci.HashFunction, pssOpts *ci.PSSOptions) (crypto.SignerOpts, error) {
+func convertHash(hashtype api.HashFunction, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
 	var hash crypto.Hash
 	var len int
 	switch hashtype {
-	case ci.HashFunction_SHA256:
+	case api.HashFunction_SHA256:
 		hash = crypto.SHA256
 		len = 32
-	case ci.HashFunction_SHA384:
+	case api.HashFunction_SHA384:
 		hash = crypto.SHA384
 		len = 48
-	case ci.HashFunction_SHA512:
+	case api.HashFunction_SHA512:
 		len = 64
 		hash = crypto.SHA512
 	default:
