@@ -33,7 +33,7 @@ import (
 	// local modules
 
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 )
 
 type GrpcApi struct{}
@@ -53,7 +53,7 @@ func (a GrpcApi) generate(addr, reportFile, nonceFile string) {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
 	defer conn.Close()
-	client := ci.NewCMCServiceClient(conn)
+	client := api.NewCMCServiceClient(conn)
 
 	// Generate random nonce
 	nonce := make([]byte, 8)
@@ -62,14 +62,14 @@ func (a GrpcApi) generate(addr, reportFile, nonceFile string) {
 		log.Fatalf("Failed to read random bytes: %v", err)
 	}
 
-	request := ci.AttestationRequest{
+	request := api.AttestationRequest{
 		Nonce: nonce,
 	}
 	response, err := client.Attest(ctx, &request)
 	if err != nil {
 		log.Fatalf("GRPC Attest Call failed: %v", err)
 	}
-	if response.GetStatus() != ci.Status_OK {
+	if response.GetStatus() != api.Status_OK {
 		log.Fatalf("Failed to generate attestation report. Status %v", response.GetStatus())
 	}
 
@@ -100,7 +100,7 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
 	defer conn.Close()
-	client := ci.NewCMCServiceClient(conn)
+	client := api.NewCMCServiceClient(conn)
 
 	// Read the attestation report, CA and the nonce previously stored
 	data, err := os.ReadFile(reportFile)
@@ -118,7 +118,7 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 		log.Fatalf("Failed to read nonce: %v", err)
 	}
 
-	request := ci.VerificationRequest{
+	request := api.VerificationRequest{
 		Nonce:             nonce,
 		AttestationReport: data,
 		Ca:                ca,
@@ -129,7 +129,7 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 	if err != nil {
 		log.Fatalf("GRPC Verify Call failed: %v", err)
 	}
-	if response.GetStatus() != ci.Status_OK {
+	if response.GetStatus() != api.Status_OK {
 		log.Warnf("Failed to verify attestation report. Status %v", response.GetStatus())
 	}
 

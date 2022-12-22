@@ -29,7 +29,7 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	ci "github.com/Fraunhofer-AISEC/cmc/cmcinterface"
+	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -43,7 +43,7 @@ func init() {
 }
 
 // Creates connection with cmcd deamon at specified address
-func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
+func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
 	log.Trace("Contacting cmcd via grpc on: " + cc.cmcAddress + ":" + cc.cmcPort)
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
@@ -54,13 +54,13 @@ func getCMCServiceConn(cc cmcConfig) (ci.CMCServiceClient, *grpc.ClientConn, con
 	}
 
 	log.Trace("Creating new service client")
-	return ci.NewCMCServiceClient(conn), conn, cancel
+	return api.NewCMCServiceClient(conn), conn, cancel
 }
 
 // Creates attestation report request to be sent to peer
 func (a GrpcApi) createARRequest(nonce []byte) ([]byte, error) {
 	// Create AR request with nonce
-	req := &ci.AttestationRequest{
+	req := &api.AttestationRequest{
 		Nonce: nonce,
 	}
 	data, err := proto.Marshal(req)
@@ -73,14 +73,14 @@ func (a GrpcApi) createARRequest(nonce []byte) ([]byte, error) {
 // Parses attestation report response received from peer
 func (a GrpcApi) parseARResponse(data []byte) ([]byte, error) {
 	// Parse response msg
-	resp := &ci.AttestationResponse{}
+	resp := &api.AttestationResponse{}
 	err := proto.Unmarshal(data, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	// Check response status
-	if resp.Status != ci.Status_OK || len(resp.AttestationReport) == 0 {
+	if resp.Status != api.Status_OK || len(resp.AttestationReport) == 0 {
 		return nil, errors.New("did not receive attestation report")
 	}
 
@@ -91,7 +91,7 @@ func (a GrpcApi) parseARResponse(data []byte) ([]byte, error) {
 func (a GrpcApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, error) {
 
 	// Parse request msg
-	req := &ci.AttestationRequest{}
+	req := &api.AttestationRequest{}
 	err := proto.Unmarshal(request, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse attestation request: %w", err)
@@ -147,7 +147,7 @@ func (a GrpcApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
 	log.Trace("Contacting backend for AR verification")
 
 	// Create Verification request
-	req := ci.VerificationRequest{
+	req := api.VerificationRequest{
 		Nonce:             nonce,
 		AttestationReport: report,
 		Ca:                cc.ca,
@@ -159,7 +159,7 @@ func (a GrpcApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
 		return fmt.Errorf("could not obtain verification result: %w", err)
 	}
 	// Check Verify response
-	if resp.GetStatus() != ci.Status_OK {
+	if resp.GetStatus() != api.Status_OK {
 		return fmt.Errorf("obtaining verification result failed with status %v", resp.GetStatus())
 	}
 
@@ -192,7 +192,7 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	if err != nil {
 		return nil, fmt.Errorf("sign request creation failed: %w", err)
 	}
-	req := ci.TLSSignRequest{
+	req := api.TLSSignRequest{
 		Id:       id,
 		Content:  digest,
 		Hashtype: hash,
@@ -200,7 +200,7 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 
 	// parse additional signing options - not implemented fields assume recommend defaults
 	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		req.PssOpts = &ci.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
+		req.PssOpts = &api.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
 	}
 
 	// Send Sign request
@@ -210,7 +210,7 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	}
 
 	// Check Sign response
-	if resp.GetStatus() != ci.Status_OK {
+	if resp.GetStatus() != api.Status_OK {
 		return nil, fmt.Errorf("signature creation failed with status %v", resp.GetStatus())
 	}
 	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
@@ -227,7 +227,7 @@ func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	defer cancel()
 
 	// Create TLSCert request
-	req := ci.TLSCertRequest{
+	req := api.TLSCertRequest{
 		Id: id,
 	}
 
@@ -238,7 +238,7 @@ func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	}
 
 	// Check TLSCert response
-	if resp.GetStatus() != ci.Status_OK || len(resp.GetCertificate()) == 0 {
+	if resp.GetStatus() != api.Status_OK || len(resp.GetCertificate()) == 0 {
 		return nil, errors.New("could not receive TLS certificate")
 	}
 
@@ -246,47 +246,47 @@ func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 }
 
 // Converts Hash Types from crypto.SignerOpts to the types specified in the CMC interface
-func convertHash(opts crypto.SignerOpts) (ci.HashFunction, error) {
+func convertHash(opts crypto.SignerOpts) (api.HashFunction, error) {
 	switch opts.HashFunc() {
 	case crypto.MD4:
-		return ci.HashFunction_MD4, nil
+		return api.HashFunction_MD4, nil
 	case crypto.MD5:
-		return ci.HashFunction_MD5, nil
+		return api.HashFunction_MD5, nil
 	case crypto.SHA1:
-		return ci.HashFunction_SHA1, nil
+		return api.HashFunction_SHA1, nil
 	case crypto.SHA224:
-		return ci.HashFunction_SHA224, nil
+		return api.HashFunction_SHA224, nil
 	case crypto.SHA256:
-		return ci.HashFunction_SHA256, nil
+		return api.HashFunction_SHA256, nil
 	case crypto.SHA384:
-		return ci.HashFunction_SHA384, nil
+		return api.HashFunction_SHA384, nil
 	case crypto.SHA512:
-		return ci.HashFunction_SHA512, nil
+		return api.HashFunction_SHA512, nil
 	case crypto.MD5SHA1:
-		return ci.HashFunction_MD5SHA1, nil
+		return api.HashFunction_MD5SHA1, nil
 	case crypto.RIPEMD160:
-		return ci.HashFunction_RIPEMD160, nil
+		return api.HashFunction_RIPEMD160, nil
 	case crypto.SHA3_224:
-		return ci.HashFunction_SHA3_224, nil
+		return api.HashFunction_SHA3_224, nil
 	case crypto.SHA3_256:
-		return ci.HashFunction_SHA3_256, nil
+		return api.HashFunction_SHA3_256, nil
 	case crypto.SHA3_384:
-		return ci.HashFunction_SHA3_384, nil
+		return api.HashFunction_SHA3_384, nil
 	case crypto.SHA3_512:
-		return ci.HashFunction_SHA3_512, nil
+		return api.HashFunction_SHA3_512, nil
 	case crypto.SHA512_224:
-		return ci.HashFunction_SHA512_224, nil
+		return api.HashFunction_SHA512_224, nil
 	case crypto.SHA512_256:
-		return ci.HashFunction_SHA512_256, nil
+		return api.HashFunction_SHA512_256, nil
 	case crypto.BLAKE2s_256:
-		return ci.HashFunction_BLAKE2s_256, nil
+		return api.HashFunction_BLAKE2s_256, nil
 	case crypto.BLAKE2b_256:
-		return ci.HashFunction_BLAKE2b_256, nil
+		return api.HashFunction_BLAKE2b_256, nil
 	case crypto.BLAKE2b_384:
-		return ci.HashFunction_BLAKE2b_384, nil
+		return api.HashFunction_BLAKE2b_384, nil
 	case crypto.BLAKE2b_512:
-		return ci.HashFunction_BLAKE2b_512, nil
+		return api.HashFunction_BLAKE2b_512, nil
 	default:
 	}
-	return ci.HashFunction_SHA512, errors.New("could not determine correct Hash function")
+	return api.HashFunction_SHA512, errors.New("could not determine correct Hash function")
 }

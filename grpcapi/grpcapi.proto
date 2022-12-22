@@ -15,8 +15,8 @@
 
 syntax = "proto3";
 
-package cmcinterface;
-option go_package = "./;cmcinterface";
+package grpcapi;
+option go_package = "./;grpcapi";
 
 enum Status {
   OK = 0;
