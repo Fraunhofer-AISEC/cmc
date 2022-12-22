@@ -77,7 +77,10 @@ func main() {
 	}
 
 	// Load certificate
-	cert, err = atls.GetCert(atls.WithCmcPort(*port), atls.WithCmcApi(api))
+	cert, err = atls.GetCert(
+		atls.WithCmcAddress("127.0.0.1"),
+		atls.WithCmcPort(*port),
+		atls.WithCmcApi(api))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
@@ -105,6 +108,7 @@ func main() {
 
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", *connectoraddress, config,
+		atls.WithCmcAddress("127.0.0.1"),
 		atls.WithCmcPort(*port),
 		atls.WithCmcCa(rootCA),
 		atls.WithCmcPolicies(policies),
