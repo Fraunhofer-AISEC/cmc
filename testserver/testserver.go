@@ -33,7 +33,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-var log = logrus.WithField("service", "testconnector")
+var log = logrus.WithField("service", "testserver")
 
 func main() {
 	var cert tls.Certificate

@@ -53,8 +53,8 @@ might be split onto different servers (e.g. a CA server and an internal metadata
 __attestedtls:__
 The *attestedtls* package provides an exemplary protocol which shows how a connection between two parties can be performed using remote attestation. After a tls connection is established, additional steps are performed to obtain and verify the attestation reports from the respective communication partner. Only then is the connection provided to the server / client.
 
-__testconnector / testclient:__
-The *testconnector* and *testclient* make use of the attested TLS package and thus services provided by the cmcd to create an attested TLS connection. The client can be configured to use one-sided or mutual attestation
+__testserver / testclient:__
+The *testserver* and *testclient* make use of the attested TLS package and thus services provided by the cmcd to create an attested TLS connection. The client can be configured to use one-sided or mutual attestation
 
 ### Interfaces
 - __CMC Interface:__ A gRPC interface defining services for signing, measuring and verification operations (TLSSign(), TLSCert(), Attest(), Verify())
