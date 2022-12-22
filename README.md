@@ -32,7 +32,7 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
     - [Build and Run the Provisioning Server](#build-and-run-the-provisioning-server)
     - [Build and Run the CMC Daemon](#build-and-run-the-cmc-daemon)
     - [Build and Run the Test Client](#build-and-run-the-test-client)
-    - [Build and Run the Testconnector](#build-and-run-the-testconnector)
+    - [Build and Run the Testserver](#build-and-run-the-testserver)
     - [Customize Builds](#customize-builds)
       - [Reduce General Size](#reduce-general-size)
       - [Reduce Size by Disabling Features](#reduce-size-by-disabling-features)
@@ -47,7 +47,7 @@ The figure shows how the core components interact with each other. The main soft
 different hardware trust anchors and assembles this data together with signed metadata describing
 the platform to an attestation report (prover), or validates the measurements against the metadata.
 The *cmcd* provides a gRPC as well as a CoAP REST API.
-- The testclient and testconnector are exemplary applications that make use of the daemon to
+- The testclient and testserver are exemplary applications that make use of the daemon to
 generate and verify attestation reports and to create an attested tls connection.
 - Drivers for trusted hardware provides the attestation reports and, if available, key storage and
 signing functionalities
@@ -215,7 +215,7 @@ testclient -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/c
 
 ```sh
 # To test the attested TLS connection
-testconnector -ca $CMC_ROOT/cmc-data/pki/ca.pem -addr 0.0.0.0:4443
+testserver -ca $CMC_ROOT/cmc-data/pki/ca.pem -addr 0.0.0.0:4443
 
 # Run the testclient to test the attested TLS connection with the connector
 testclient -mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -destAddr 127.0.0.1:4443 -mTLS
@@ -469,12 +469,12 @@ go build
 ./testclient -mode < generate | verify | tlsconn > [-port <port-number>] [-destAddr <remote-address>] [-mTLS] [-ca <file>] [-policies <file>] [-api < coap | grpc >] [-cmcAddr <cmc-address>]
 ```
 
-### Build and Run the Testconnector
+### Build and Run the Testserver
 
 ```sh
-cd testconnector
+cd testserver
 go build
-./testconnector [-ca <file>] [-addr <listen-addr>] [-policies <file>] [-cmcport <port>] [-api < coap | grpc >]
+./testserver [-ca <file>] [-addr <listen-addr>] [-policies <file>] [-cmcport <port>] [-api < coap | grpc >]
 ```
 
 ### Customize Builds
@@ -496,7 +496,7 @@ enabled. The project uses the go build system with build tags to disable feature
 To disable all features, use the custom `nodefaults` tag. You can then enable the features you
 want to build via additional tags.
 
-Currently supported tags for the `cmcd`, `testclient`, and `testconnector` are:
+Currently supported tags for the `cmcd`, `testclient`, and `testserver` are:
 - `grpc` Enables the gRPC API
 - `coap` Enables the CoAP API
 

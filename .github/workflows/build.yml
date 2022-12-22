@@ -26,7 +26,7 @@ jobs:
           pushd testclient
           make
           popd
-          pushd testconnector
+          pushd testserver
           make
           popd
       - name: Vet Check
@@ -54,8 +54,8 @@ jobs:
         with:
           name: testclient
           path: testclient/testclient
-      - name: "Upload testconnector"
+      - name: "Upload testserver"
         uses: actions/upload-artifact@v2
         with:
-          name: testconnector
-          path: testconnector/testconnector
+          name: testserver
+          path: testserver/testserver
