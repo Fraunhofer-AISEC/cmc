@@ -99,10 +99,7 @@ platform and run and test the tools. It was tested on Ubuntu 22.04 LTS.
 
 ```sh
 # Install utils
-sudo apt install moreutils
-
-# Install cfssl for generating a demo PKI
-sudo apt install golang-cfssl
+sudo apt install moreutils golang-cfssl build-essential
 
 # Install tpm-pcr-tools for calculating/parsing TPM PCR values for TPM-based attestation
 sudo apt install -y build-essential zlib1g-dev libssl-dev

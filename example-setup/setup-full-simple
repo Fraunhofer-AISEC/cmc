@@ -2,7 +2,7 @@
 
 set -e
 
-sudo apt install moreutils golang-cfssl
+sudo apt install moreutils golang-cfssl build-essential
 
 # Setup a folder for the cmc workspace (e.g. in your home directory)
 CMC_ROOT=$HOME/cmc-workspace
