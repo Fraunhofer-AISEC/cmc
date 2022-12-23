@@ -25,8 +25,7 @@ const (
 )
 
 const (
-	cmcAddressDefault   = "localhost"
-	cmcPortDefault      = "9955"
+	cmcAddrDefault      = "127.0.0.1:9955"
 	cmcApiSelectDefault = CmcApi_GRPC
 	timeoutSec          = 10
 )
@@ -34,11 +33,10 @@ const (
 // Struct that holds information on cmc address and port
 // to be used by Listener and DialConfig
 type cmcConfig struct {
-	cmcPort    string
-	cmcAddress string
-	cmcApi     CmcApi
-	ca         []byte
-	policies   []byte
+	cmcAddr  string
+	cmcApi   CmcApi
+	ca       []byte
+	policies []byte
 }
 
 type CmcApi interface {
@@ -54,19 +52,11 @@ var cmcApis = map[CmcApiSelect]CmcApi{}
 
 type ConnectionOption[T any] func(*T)
 
-// WithCmcPort sets the port on which to contact the CMC.
-// If not specified, default is "9955"
-func WithCmcPort(port string) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.cmcPort = port
-	}
-}
-
 // WithCmcAddress sets the address with which to contact the CMC.
 // If not specified, default is "localhost"
-func WithCmcAddress(address string) ConnectionOption[cmcConfig] {
+func WithCmcAddr(address string) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
-		c.cmcAddress = address
+		c.cmcAddr = address
 	}
 }
 

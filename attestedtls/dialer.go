@@ -42,9 +42,8 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 
 	// Get cmc Config: start with defaults
 	cc := cmcConfig{
-		cmcAddress: cmcAddressDefault,
-		cmcPort:    cmcPortDefault,
-		cmcApi:     cmcApis[cmcApiSelectDefault],
+		cmcAddr: cmcAddrDefault,
+		cmcApi:  cmcApis[cmcApiSelectDefault],
 	}
 	for _, c := range moreConfigs {
 		c(&cc)

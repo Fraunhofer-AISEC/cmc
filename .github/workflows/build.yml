@@ -23,10 +23,7 @@ jobs:
           pushd cmcd
           make
           popd
-          pushd testclient
-          make
-          popd
-          pushd testserver
+          pushd testtool
           make
           popd
       - name: Vet Check
@@ -49,13 +46,8 @@ jobs:
         with:
           name: cmcd
           path: cmcd/cmcd
-      - name: "Upload testclient"
+      - name: "Upload testtool"
         uses: actions/upload-artifact@v2
         with:
-          name: testclient
-          path: testclient/testclient
-      - name: "Upload testserver"
-        uses: actions/upload-artifact@v2
-        with:
-          name: testserver
-          path: testserver/testserver
+          name: testtool
+          path: testtool/testtool

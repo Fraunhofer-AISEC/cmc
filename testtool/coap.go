@@ -107,7 +107,7 @@ func (a CoapApi) generate(addr, reportFile, nonceFile string) {
 
 }
 
-func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
+func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile string, ca, policies []byte) {
 
 	// Establish connection
 	conn, err := udp.Dial(addr)
@@ -123,11 +123,6 @@ func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 	data, err := os.ReadFile(reportFile)
 	if err != nil {
 		log.Fatalf("Failed to read file %v: %v", reportFile, err)
-	}
-
-	ca, err := os.ReadFile(caFile)
-	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", caFile, err)
 	}
 
 	nonce, err := os.ReadFile(nonceFile)
@@ -175,6 +170,10 @@ func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 	fmt.Println("Wrote file ", resultFile)
 }
 
-func (a CoapApi) testTLSConn(destAddr, cmcAddr, ca string, mTLS bool, policies []byte) {
-	testTLSConnInternal(attestedtls.CmcApi_COAP, destAddr, cmcAddr, ca, mTLS, policies)
+func (a CoapApi) dial(addr, cmcAddr string, mtls bool, ca, policies []byte) {
+	dial(attestedtls.CmcApi_COAP, addr, cmcAddr, mtls, ca, policies)
+}
+
+func (a CoapApi) listen(addr, cmcAddr string, mtls bool, ca, policies []byte) {
+	listen(attestedtls.CmcApi_COAP, addr, cmcAddr, mtls, ca, policies)
 }

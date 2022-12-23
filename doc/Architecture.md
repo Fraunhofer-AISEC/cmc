@@ -1,9 +1,8 @@
 # Architecture
 
-![CMC, attestation drivers and exemplary test-connector and client as well as interface descriptions](./architecture.svg)
+![CMC, drivers and exemplary testtool as well as interface descriptions](./architecture.svg)
 
 The figure shows how the core components interact with each other.
-
 
 ## Components
 The following components correspond to the packages / directories of this repository.
@@ -51,14 +50,26 @@ provision TPM certificates, and can provide the metadata (manifests and configur
 might be split onto different servers (e.g. a CA server and an internal metadata server).
 
 __attestedtls:__
-The *attestedtls* package provides an exemplary protocol which shows how a connection between two parties can be performed using remote attestation. After a tls connection is established, additional steps are performed to obtain and verify the attestation reports from the respective communication partner. Only then is the connection provided to the server / client.
+The *attestedtls* package provides an exemplary protocol which shows how a connection between two
+parties can be performed using remote attestation. After a tls connection is established, additional
+steps are performed to obtain and verify the attestation reports from the respective communication
+partner. Only then is the connection provided to the server / client.
 
-__testserver / testclient:__
-The *testserver* and *testclient* make use of the attested TLS package and thus services provided by the cmcd to create an attested TLS connection. The client can be configured to use one-sided or mutual attestation
+__testtool:__
+The *testtool* can generate and verify attestation reports and establish attested TLS connections.
+To estblish attestation TLS connections, the testtool makes use of the attested TLS package and thus
+services provided by the cmcd to create an attested TLS connection. The client can be configured to
+use one-sided or mutual attestation.
 
 ### Interfaces
-- __CMC Interface:__ A gRPC interface defining services for signing, measuring and verification operations (TLSSign(), TLSCert(), Attest(), Verify())
-- __Measurer Interface:__ One of the golang interfaces a driver can implement. It defines the Measure() function
-- __Signer Interfacfe:__ One of the golang interfaces a driver can implement. Importantly, it defines access to the crypto.PrivateKey interface for signing oprations as well as the certificates of the associated public key
+- __CMC Interface:__ A gRPC interface defining services for signing, measuring and verification
+operations (TLSSign(), TLSCert(), Attest(), Verify())
+- __Measurer Interface:__ One of the golang interfaces a driver can implement. It defines the
+Measure() function
+- __Signer Interfacfe:__ One of the golang interfaces a driver can implement. Importantly, it
+defines access to the crypto.PrivateKey interface for signing oprations as well as the certificates
+of the associated public key
 - __Device Interface:__ An interface as defined by the used device
-- __aTLS:__ Offers wrappers around the TLS listener and dialer, namely tls.Dial() and net.Listen(), and uses the same function structure. It performs additional remote attestation operations after the TLS handshake is complete. Only once these are successful is the established connection returned
+- __aTLS:__ Offers wrappers around the TLS listener and dialer, namely tls.Dial() and net.Listen(),
+and uses the same function structure. It performs additional remote attestation operations after
+the TLS handshake is complete. Only once these are successful is the established connection returned

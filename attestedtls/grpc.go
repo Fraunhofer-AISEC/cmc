@@ -42,11 +42,11 @@ func init() {
 	cmcApis[CmcApi_GRPC] = GrpcApi{}
 }
 
-// Creates connection with cmcd deamon at specified address
+// Creates connection with cmcd at specified address
 func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
-	log.Trace("Contacting cmcd via grpc on: " + cc.cmcAddress + ":" + cc.cmcPort)
+	log.Tracef("Contacting cmcd via grpc on: %v", cc.cmcAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
-	conn, err := grpc.DialContext(ctx, cc.cmcAddress+":"+cc.cmcPort, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, cc.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Errorf("failed to connect: %v", err)
 		cancel()
