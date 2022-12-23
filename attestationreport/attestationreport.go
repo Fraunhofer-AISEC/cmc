@@ -65,10 +65,16 @@ type Serializer interface {
 	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
 }
 
-type Policies interface{}
+type PolicyEngineSelect uint32
+
+const (
+	PolicyEngineSelect_JS PolicyEngineSelect = 0
+)
+
+var policyEngines = map[PolicyEngineSelect]PolicyValidator{}
 
 type PolicyValidator interface {
-	Validate(result VerificationResult) bool
+	Validate(policies []byte, result VerificationResult) bool
 }
 
 // Type is a helper struct for just extracting the 'Type' of metadata
@@ -444,7 +450,7 @@ func Sign(report []byte, signer Signer, s Serializer) (bool, []byte) {
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the reference values and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serializer) VerificationResult {
+func Verify(arRaw string, nonce, casPem []byte, policies []byte, polEng PolicyEngineSelect, s Serializer) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
@@ -584,24 +590,25 @@ func Verify(arRaw string, nonce, casPem []byte, policies []Policies, s Serialize
 		}
 	}
 
-	// Validate every specified policy
-	for _, policy := range policies {
-		pv, ok := policy.(PolicyValidator)
+	// Validate policies if specified
+	if policies != nil {
+		p, ok := policyEngines[polEng]
 		if !ok {
-			msg := "Internal Error: policy does not implement PolicyValidator"
-			log.Warn(msg)
-			result.Success = false
+			msg := fmt.Sprintf("Internal error: policy engine %v not implemented", polEng)
 			result.ProcessingError = append(result.ProcessingError, msg)
-			continue
-		}
-
-		ok = pv.Validate(result)
-		if !ok {
+			log.Trace(msg)
 			result.Success = false
-			// TODO should be two different types, result without success and policy validation
-			// which are merged together here
-			log.Warnf("Custom policy validation failed")
+		} else {
+			ok = p.Validate(policies, result)
+			if !ok {
+				result.Success = false
+				msg := "Custom policy validation failed"
+				result.ProcessingError = append(result.ProcessingError, msg)
+				log.Warnf(msg)
+			}
 		}
+	} else {
+		log.Tracef("No custom policies specified")
 	}
 
 	log.Tracef("Verification Result: %v", result.Success)

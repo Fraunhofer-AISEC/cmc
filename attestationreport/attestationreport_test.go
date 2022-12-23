@@ -185,7 +185,7 @@ func TestVerify(t *testing.T) {
 				return
 			}
 
-			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil, tt.args.serializer)
+			got := Verify(string(ar), *tt.args.nonce, *tt.args.caCertPem, nil, 0, tt.args.serializer)
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}

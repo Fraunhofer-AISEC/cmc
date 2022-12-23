@@ -33,7 +33,6 @@ import (
 	"github.com/plgd-dev/go-coap/v3/mux"
 
 	// local modules
-	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	api "github.com/Fraunhofer-AISEC/cmc/coapapi"
 )
@@ -168,18 +167,8 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	// The verifying party can optionally specify custom policies that should be verified
-	// If present, create a policy validator to be handed over to Verify()
-	var policies []ar.Policies
-	if req.Policies != nil {
-		log.Trace("Policies specified. Creating policy validator for remote attestation")
-		policies = append(policies, ip.NewPolicyValidator(req.Policies))
-	} else {
-		log.Trace("No policies specified. Performing default remote attestation")
-	}
-
 	log.Debug("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, policies, serverConfig.Serializer)
+	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, req.Policies, ar.PolicyEngineSelect_JS, serverConfig.Serializer)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

@@ -13,13 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationpolicies
+package jspolicies
 
 import (
-	"encoding/json"
 	"testing"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/sirupsen/logrus"
 )
 
@@ -57,18 +55,11 @@ func TestValidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			// Marshal Verification Result
-			var vr ar.VerificationResult
-			err := json.Unmarshal(tt.args.result, &vr)
-			if err != nil {
-				t.Errorf("Test preparation: failed to marshal: %v", err)
-			}
-
 			// Prepare policy validator
-			v := NewPolicyValidator(tt.args.policies)
+			v := NewJsPolicyEngine(tt.args.policies)
 
 			// Test policy validaton
-			got := v.Validate(vr)
+			got := v.Validate(tt.args.result)
 			if got != tt.want {
 				t.Errorf("Result.Success = %v, want %v", got, tt.want)
 			}

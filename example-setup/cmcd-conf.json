@@ -8,7 +8,6 @@
     "useIma": false,
     "imaPcr": 10,
     "keyConfig": "EC256",
-    "policies": "policies.json",
     "serialization": "json",
     "api": "grpc"
 }
