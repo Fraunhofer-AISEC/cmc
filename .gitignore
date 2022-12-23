@@ -2,9 +2,7 @@
 .vscode/
 
 cmcd/cmcd
-testclient/testclient
-coapclient/coapclient
-testserver/testserver
+testtool/testtool
 **/nonce
 **/attestation-report
 **/attestation-result.json

@@ -75,8 +75,8 @@ func (a CoapApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, er
 	path := "/Attest"
 
 	// Establish connection
-	log.Trace("Contacting cmcd via coap on: " + cc.cmcAddress + ":" + cc.cmcPort)
-	conn, err := udp.Dial(cc.cmcAddress + ":" + cc.cmcPort)
+	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
+	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}
@@ -127,8 +127,8 @@ func (a CoapApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
 	path := "/Verify"
 
 	// Establish connection
-	log.Trace("Contacting cmcd via coap on: " + cc.cmcAddress + ":" + cc.cmcPort)
-	conn, err := udp.Dial(cc.cmcAddress + ":" + cc.cmcPort)
+	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
+	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("Error dialing: %w", err)
 	}
@@ -183,8 +183,8 @@ func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	path := "/TLSSign"
 
 	// Establish connection
-	log.Trace("Contacting cmcd via coap on: " + cc.cmcAddress + ":" + cc.cmcPort)
-	conn, err := udp.Dial(cc.cmcAddress + ":" + cc.cmcPort)
+	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
+	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}
@@ -237,8 +237,8 @@ func (a CoapApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	path := "/TLSCert"
 
 	// Establish connection
-	log.Trace("Contacting cmcd via coap on: " + cc.cmcAddress + ":" + cc.cmcPort)
-	conn, err := udp.Dial(cc.cmcAddress + ":" + cc.cmcPort)
+	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
+	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}

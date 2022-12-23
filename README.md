@@ -31,8 +31,7 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
   - [Build](#build)
     - [Build and Run the Provisioning Server](#build-and-run-the-provisioning-server)
     - [Build and Run the CMC Daemon](#build-and-run-the-cmc-daemon)
-    - [Build and Run the Test Client](#build-and-run-the-test-client)
-    - [Build and Run the Testserver](#build-and-run-the-testserver)
+    - [Build and Run the Test Tool](#build-and-run-the-test-tool)
     - [Customize Builds](#customize-builds)
       - [Reduce General Size](#reduce-general-size)
       - [Reduce Size by Disabling Features](#reduce-size-by-disabling-features)
@@ -47,8 +46,8 @@ The figure shows how the core components interact with each other. The main soft
 different hardware trust anchors and assembles this data together with signed metadata describing
 the platform to an attestation report (prover), or validates the measurements against the metadata.
 The *cmcd* provides a gRPC as well as a CoAP REST API.
-- The testclient and testserver are exemplary applications that make use of the daemon to
-generate and verify attestation reports and to create an attested tls connection.
+- The testtool is an exemplary application that make use of the *cmcd* to
+generate and verify attestation reports and to create an attested tls connections.
 - Drivers for trusted hardware provides the attestation reports and, if available, key storage and
 signing functionalities
 
@@ -204,25 +203,26 @@ provserver -config $CMC_ROOT/cmc-data/prov-server-conf.json
 # Build and run the cmcd
 cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json -addr http://127.0.0.1:9001/metadata-signed
 
-# Run the testclient to retrieve an attestation report (stored in current folder unless otherwise specified)
-testclient -mode generate
+# Run the testtool to retrieve an attestation report (stored in current folder unless otherwise specified)
+testtool -mode generate
 
-# Run the testclient to verify the attestation report (stored in current folder unless otherwise specified)
-testclient -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/cmc-data/policies.json]
+# Run the testtool to verify the attestation report (stored in current folder unless otherwise specified)
+testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/cmc-data/policies.json]
 ```
 
 ### Establish an attested TLS connection
 
 ```sh
-# To test the attested TLS connection
-testserver -ca $CMC_ROOT/cmc-data/pki/ca.pem -addr 0.0.0.0:4443
+# Run an attested TLS server
+testtool -mode listen -addr 0.0.0.0:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem
 
-# Run the testclient to test the attested TLS connection with the connector
-testclient -mode tlsconn -ca $CMC_ROOT/cmc-data/pki/ca.pem -destAddr 127.0.0.1:4443 -mTLS
+# Run an attested TLS client estblishing a mutually attested TLS connection to the server
+testtool -mode dial -addr 127.0.0.1:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
 ```
 
-**Note**: by default, *cmcd* and *testclient* use localhost port 9955 to communicate. This can be changed in the *cmcd*
-configuration and using the ```-addr <host:port>``` command line argument for the testclient.
+**Note**: by default, *cmcd* and *testtool* use localhost port 9955 to communicate. This can be
+changed in the *cmcd* configuration and using the `-cmc <host:port>` command line argument for
+the testtool.
 
 **Note**: The *cmcd* -addr parameter is the server address where metadata can be found and must
 correspond to the address in the *provserver* config
@@ -411,9 +411,9 @@ four eyes principle mandating different PKIs for the manifests, the attestation 
 implements a generic policies interface.
 
 The current implementation contains the `attestationpolicies` module which implements a javascript
-engine. This allows passing arbitrary javascript files via the `testclient` `-policies` parameter.
+engine. This allows passing arbitrary javascript files via the `testtool` `-policies` parameter.
 The policies javascript file is then used to evaluate arbitrary attributes of the JSON
-attestation result output by the `cmcd` and stored by the `testclient`. The attestation result
+attestation result output by the `cmcd` and stored by the `testtool`. The attestation result
 can be referenced via the `json` variable in the script. The javascript code must return a single
 boolean indicating success or failure of the custom policy validation. A minimal policies file, verifying only the `type` field of the attesation result could look as follows:
 
@@ -461,20 +461,12 @@ SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd -config <config-file> -addr 
 SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file> -addr <server-metadata-address>
 ```
 
-### Build and Run the Test Client
+### Build and Run the Test Tool
 
 ```sh
-cd testclient
+cd testtool
 go build
-./testclient -mode < generate | verify | tlsconn > [-port <port-number>] [-destAddr <remote-address>] [-mTLS] [-ca <file>] [-policies <file>] [-api < coap | grpc >] [-cmcAddr <cmc-address>]
-```
-
-### Build and Run the Testserver
-
-```sh
-cd testserver
-go build
-./testserver [-ca <file>] [-addr <listen-addr>] [-policies <file>] [-cmcport <port>] [-api < coap | grpc >]
+./testtool [-mode < generate | verify | dial | listen >] [-addr <remote-address>] [-cmc <cmc-address>] [-report <attestationreport-file>] [-result <attestationresult-file>] [-nonce <nonce-file>] [-ca <file>] [-mtls][-policies <file>] [-api < coap | grpc >]
 ```
 
 ### Customize Builds
@@ -496,7 +488,7 @@ enabled. The project uses the go build system with build tags to disable feature
 To disable all features, use the custom `nodefaults` tag. You can then enable the features you
 want to build via additional tags.
 
-Currently supported tags for the `cmcd`, `testclient`, and `testserver` are:
+Currently supported tags for the `cmcd` and `testtool` are:
 - `grpc` Enables the gRPC API
 - `coap` Enables the CoAP API
 

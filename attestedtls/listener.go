@@ -95,9 +95,8 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 	// Default listener
 	listener := Listener{
 		cmcConfig: cmcConfig{
-			cmcAddress: cmcAddressDefault,
-			cmcPort:    cmcPortDefault,
-			cmcApi:     cmcApis[cmcApiSelectDefault],
+			cmcAddr: cmcAddrDefault,
+			cmcApi:  cmcApis[cmcApiSelectDefault],
 		},
 	}
 

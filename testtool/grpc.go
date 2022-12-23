@@ -89,7 +89,7 @@ func (a GrpcApi) generate(addr, reportFile, nonceFile string) {
 
 }
 
-func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, policies []byte) {
+func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile string, ca, policies []byte) {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -106,11 +106,6 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 	data, err := os.ReadFile(reportFile)
 	if err != nil {
 		log.Fatalf("Failed to read file %v: %v", reportFile, err)
-	}
-
-	ca, err := os.ReadFile(caFile)
-	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", caFile, err)
 	}
 
 	nonce, err := os.ReadFile(nonceFile)
@@ -141,6 +136,10 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile, caFile string, 
 	fmt.Println("Wrote file ", resultFile)
 }
 
-func (a GrpcApi) testTLSConn(destAddr, cmcAddr, ca string, mTLS bool, policies []byte) {
-	testTLSConnInternal(attestedtls.CmcApi_GRPC, destAddr, cmcAddr, ca, mTLS, policies)
+func (a GrpcApi) dial(destAddr, cmcAddr string, mtls bool, ca, policies []byte) {
+	dial(attestedtls.CmcApi_GRPC, destAddr, cmcAddr, mtls, ca, policies)
+}
+
+func (a GrpcApi) listen(destAddr, cmcAddr string, mtls bool, ca, policies []byte) {
+	listen(attestedtls.CmcApi_GRPC, destAddr, cmcAddr, mtls, ca, policies)
 }
