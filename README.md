@@ -39,7 +39,7 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
 
 ## Architecture Overview
 
-![CMC, attestation drivers and exemplary test-connector and client as well as interface descriptions](./doc/overview.svg)
+![CMC, drivers and exemplary testtool as well as interface descriptions](./doc/overview.drawio.svg)
 
 The figure shows how the core components interact with each other. The main software components are:
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
