@@ -1,6 +1,6 @@
 # Architecture
 
-![CMC, drivers and exemplary testtool as well as interface descriptions](./architecture.svg)
+![CMC, drivers and exemplary testtool as well as interface descriptions](./architecture.drawio.svg)
 
 The figure shows how the core components interact with each other.
 
