@@ -33,7 +33,7 @@ import (
 	"google.golang.org/grpc"
 
 	// local modules
-	ip "github.com/Fraunhofer-AISEC/cmc/attestationpolicies"
+
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 )
@@ -123,18 +123,8 @@ func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*
 
 	log.Info("Received Connection Request Type 'Verification Request'")
 
-	// The verifying party can optionally specify custom policies that should be verified
-	// If present, create a policy validator to be handed over to Verify()
-	var policies []ar.Policies
-	if in.Policies != nil {
-		log.Trace("Policies specified. Creating policy validator for remote attestation")
-		policies = append(policies, ip.NewPolicyValidator(in.Policies))
-	} else {
-		log.Trace("No policies specified. Performing default remote attestation")
-	}
-
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, policies, s.config.Serializer)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, in.Policies, ar.PolicyEngineSelect_JS, s.config.Serializer)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

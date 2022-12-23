@@ -13,25 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationpolicies
+package jspolicies
 
 import (
-	"encoding/json"
-
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/robertkrimen/otto"
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("service", "policy-agent")
+var log = logrus.WithField("service", "jspolicies")
 
-// JavaScriptValidator is a javascript implementation of the
+// JsPolicyEngine is a javascript implementation of the
 // attestation report generic PolicyValidator interface
-type JavaScriptValidator struct {
+type JsPolicyEngine struct {
 	policies []byte
 }
 
-// NewPolicyValidator creates a new JavaScriptValidator with custom policies.
+// NewJsPolicyEngine creates a new JsPolicyEngine with custom policies.
 // Custom policies are handed over as a byte array. This implementation
 // accepts custom policies as javascript code. The javascript code
 // can parse the VerificationResult in the variable 'json', i.e.:
@@ -49,29 +46,23 @@ type JavaScriptValidator struct {
 //			success = false;
 //		}
 //	    success
-func NewPolicyValidator(policies []byte) *JavaScriptValidator {
-	return &JavaScriptValidator{
+func NewJsPolicyEngine(policies []byte) *JsPolicyEngine {
+	return &JsPolicyEngine{
 		policies: policies,
 	}
 }
 
 // Validate uses a javascript engine to validate the JavaScriptValidator's
 // custom javascript policies against the verification result
-func (p *JavaScriptValidator) Validate(result ar.VerificationResult) bool {
+func (p *JsPolicyEngine) Validate(result []byte) bool {
 
 	log.Debugf("Validating custom javascript policies")
-
-	vr, err := json.Marshal(result)
-	if err != nil {
-		log.Errorf("Failed to marshal verification result: %v", err)
-		return false
-	}
 
 	// Create new javascript engine
 	vm := otto.New()
 
 	// Set variable json = vr
-	vm.Set("json", string(vr))
+	vm.Set("json", string(result))
 
 	// Run javascript validation
 	val, err := vm.Run(string(p.policies))
