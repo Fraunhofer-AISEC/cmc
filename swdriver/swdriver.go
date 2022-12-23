@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/sirupsen/logrus"
@@ -56,9 +58,10 @@ type Paths struct {
 }
 
 type Config struct {
-	Url        string
-	Metadata   [][]byte
-	Serializer ar.Serializer
+	StoragePath string
+	Url         string
+	Metadata    [][]byte
+	Serializer  ar.Serializer
 }
 
 // Sw is a struct required for implementing the signer and measurer interfaces
@@ -78,6 +81,11 @@ func NewSwDriver(c Config) (*Sw, error) {
 	case ar.CborSerializer:
 	default:
 		return nil, fmt.Errorf("serializer not initialized in driver config")
+	}
+
+	caPath, err := createLocalStorage(c.StoragePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local storage: %v", err)
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -109,6 +117,11 @@ func NewSwDriver(c Config) (*Sw, error) {
 	if certResponse.Version != swProtocolVersion {
 		return nil, fmt.Errorf("response protocol version (%v) does not match our protocol version (%v)",
 			certResponse.Version, swProtocolVersion)
+	}
+
+	err = os.WriteFile(caPath, certResponse.Certs.Ca, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write file %v: %w", caPath, err)
 	}
 
 	sw.certChain = certResponse.Certs
@@ -197,4 +210,17 @@ func getCertParams(c *Config) ([]byte, error) {
 	}
 
 	return nil, errors.New("failed to find cert params")
+}
+
+func createLocalStorage(storagePath string) (string, error) {
+
+	// Create storage folder for storage of internal data if not existing
+	if _, err := os.Stat(storagePath); err != nil {
+		if err := os.MkdirAll(storagePath, 0755); err != nil {
+			return "", fmt.Errorf("failed to create directory for internal data '%v': %w",
+				storagePath, err)
+		}
+	}
+
+	return path.Join(storagePath, "ca.pem"), nil
 }
