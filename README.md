@@ -77,14 +77,13 @@ Virtual Machine (VM) or server.
 ## Quick Demo Setup
 
 The CMC repository contains a complete local example setup including a demo CA and all required
-configurations and metadata. The setup script `example-setup/setup-full-simple` clones this
-repository to a folder `cmc-workspace` in the home directory and sets up everything to quickly
+configurations and metadata. The setup script `example-setup/setup-full-simple` requires two parameters: the folder this repository was cloned to and a non-existing folder which is used for storing metadata and configuration. The script sets up everything to quickly
 test remote attestation. It was tested on Ubuntu 22.04 LTS.
 
 > :warning: **Note:** You should run this only for testing on a development machine
 
 ```sh
-./setup-full-simple
+./setup-full-simple <cmc-folder> <metadata-folder>
 ```
 
 **Afterwards, continue with [Run the CMC](#run-the-cmc)**
@@ -217,7 +216,7 @@ testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/cmc
 testtool -mode listen -addr 0.0.0.0:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-testtool -mode dial -addr 127.0.0.1:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
+testtool -mode dial -addr localhost:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
 ```
 
 **Note**: by default, *cmcd* and *testtool* use localhost port 9955 to communicate. This can be

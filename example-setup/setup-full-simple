@@ -1,59 +1,81 @@
 #!/bin/bash
 
+function abs_path() {
+  if [ -d "$(dirname "$1")" ]
+  then
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  fi
+}
+
 set -e
+
+if [ "$#" -ne 2 ]; then
+   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder>"
+   exit
+fi
+
+CMC="$(abs_path $1)"
+DATA="$(abs_path $2)"
+
+if [ ! -d "$CMC" ]; then
+  echo "CMC directory does not exist. Did you clone the repository? Abort.."
+  exit
+fi
+
+if [ -d "$DATA" ]; then
+  echo "Data directory does already exist. Please choose a new directory. Abort.."
+  exit
+fi
+
+echo "Using CMC: $CMC"
+echo "Using $DATA as directory for local data"
+
+# Create a folder for the cmc configuration and metadata
+mkdir -p $DATA
 
 sudo apt install moreutils golang-cfssl build-essential
 
-# Setup a folder for the cmc workspace (e.g. in your home directory)
-CMC_ROOT=$HOME/cmc-workspace
-
 # Install tools
 sudo apt install -y build-essential zlib1g-dev libssl-dev
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $CMC_ROOT/tpm-pcr-tools
-cd $CMC_ROOT/tpm-pcr-tools
+git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $DATA/tpm-pcr-tools
+cd $DATA/tpm-pcr-tools
 make
 sudo make install
 
-# Clone the CMC repo if not already present
-[ -d "${CMC_ROOT}/cmc" ] || {
-    git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
-}
-
 # Build CMC
-cd $CMC_ROOT/cmc
+cd $CMC
+echo "Building CMC.."
 go build ./...
 
 # Install CMC to $GOPATH/bin
+echo "Installing CMC"
 go install ./...
 
-# Create a folder for the cmc configuration
-mkdir -p $CMC_ROOT/cmc-data
-
 # Copy metadata templates
-cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data
+cp -r $CMC/example-setup/* $DATA
 
 # Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
-$CMC_ROOT/cmc-data/setup-simple-pki -i $CMC_ROOT/cmc-data -o $CMC_ROOT/cmc-data/pki
+$DATA/setup-simple-pki -i $DATA -o $DATA/pki
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
 
 # Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq 'del(.referenceValues[])' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
 
 # Add new reference values
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
 
 # Do this for the OS manifest as well
 referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq 'del(.referenceValues[])' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
 
 # Sign the metadata*
-IN=$CMC_ROOT/cmc-data/metadata-raw
-OUT=$CMC_ROOT/cmc-data/metadata-signed
-KEY=$CMC_ROOT/cmc-data/pki/signing-cert-key.pem
-CHAIN=$CMC_ROOT/cmc-data/pki/signing-cert.pem,$CMC_ROOT/cmc-data/pki/ca.pem
+IN=$DATA/metadata-raw
+OUT=$DATA/metadata-signed
+KEY=$DATA/pki/signing-cert-key.pem
+CHAIN=$DATA/pki/signing-cert.pem,$DATA/pki/ca.pem
 
 mkdir -p $OUT
 
