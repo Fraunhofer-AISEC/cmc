@@ -20,7 +20,7 @@ package attestationreport
 import (
 	"encoding/json"
 
-	"github.com/Fraunhofer-AISEC/cmc/jspolicies"
+	"github.com/Fraunhofer-AISEC/cmc/attestationpolicies/jspolicies"
 )
 
 type JsPolicyEngine struct{}

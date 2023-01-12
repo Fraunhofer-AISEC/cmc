@@ -13,22 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+//go:build !nodefaults || duktapepolicies
+
+package attestationreport
 
 import (
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"encoding/json"
+
+	"github.com/Fraunhofer-AISEC/cmc/attestationpolicies/duktape"
 )
 
-var servers = map[string]Server{}
+type DukTapePolicyEngine struct{}
 
-type Server interface {
-	Serve(addr string, config *ServerConfig) error
+func init() {
+	policyEngines[PolicyEngineSelect_DukTape] = DukTapePolicyEngine{}
 }
 
-type ServerConfig struct {
-	Metadata              [][]byte
-	MeasurementInterfaces []ar.Measurement
-	Signer                ar.Signer
-	Serializer            ar.Serializer
-	PolicyEngineSelect    ar.PolicyEngineSelect
+func (p DukTapePolicyEngine) Validate(policies []byte, result VerificationResult) bool {
+	vr, err := json.Marshal(result)
+	if err != nil {
+		log.Errorf("Failed to marshal verification result: %v", err)
+		return false
+	}
+	engine := duktape.NewDukTapePolicyEngine(policies)
+	return engine.Validate(vr)
 }
