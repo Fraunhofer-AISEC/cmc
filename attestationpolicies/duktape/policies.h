@@ -13,22 +13,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
 
-import (
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-)
-
-var servers = map[string]Server{}
-
-type Server interface {
-	Serve(addr string, config *ServerConfig) error
-}
-
-type ServerConfig struct {
-	Metadata              [][]byte
-	MeasurementInterfaces []ar.Measurement
-	Signer                ar.Signer
-	Serializer            ar.Serializer
-	PolicyEngineSelect    ar.PolicyEngineSelect
-}
+bool Validate(uint8_t *ar, size_t ar_size, uint8_t *policies, size_t policies_size);

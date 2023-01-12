@@ -41,13 +41,14 @@ type config struct {
 	ProvServerAddr        string   `json:"provServerAddr"`
 	LocalPath             string   `json:"localPath"`
 	FetchMetadata         bool     `json:"fetchMetadata"`
-	MeasurementInterfaces []string `json:"measurementInterfaces"` // TPM, SNP
-	SigningInterface      string   `json:"signingInterface"`      // TPM, SW
-	UseIma                bool     `json:"useIma"`
-	ImaPcr                int32    `json:"imaPcr"`
-	KeyConfig             string   `json:"keyConfig,omitempty"` // RSA2048 RSA4096 EC256 EC384 EC521
-	Serialization         string   `json:"serialization"`       // JSON, CBOR
-	Api                   string   `json:"api"`                 // gRPC, CoAP
+	MeasurementInterfaces []string `json:"measurementInterfaces"`  // TPM, SNP
+	SigningInterface      string   `json:"signingInterface"`       // TPM, SW
+	UseIma                bool     `json:"useIma"`                 // TRUE, FALSE
+	ImaPcr                int32    `json:"imaPcr"`                 // 10-15
+	KeyConfig             string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
+	Serialization         string   `json:"serialization"`          // JSON, CBOR
+	Api                   string   `json:"api"`                    // gRPC, CoAP
+	PolicyEngine          string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
 }
 
 var log = logrus.WithField("service", "cmcd")
@@ -98,6 +99,7 @@ func printConfig(c *config) {
 	log.Info("\tIMA PCR                  : ", c.ImaPcr)
 	log.Info("\tSerialization            : ", c.Serialization)
 	log.Info("\tAPI                      : ", c.Api)
+	log.Info("\tPolicy Engine            : ", c.PolicyEngine)
 }
 
 func main() {
@@ -213,11 +215,19 @@ func main() {
 		measurements = append(measurements, snp)
 	}
 
+	var policyEngineSelect ar.PolicyEngineSelect = ar.PolicyEngineSelect_None
+	if strings.EqualFold(c.PolicyEngine, "JS") {
+		policyEngineSelect = ar.PolicyEngineSelect_JS
+	} else if strings.EqualFold(c.PolicyEngine, "DUKTAPE") {
+		policyEngineSelect = ar.PolicyEngineSelect_DukTape
+	}
+
 	serverConfig := &ServerConfig{
 		Metadata:              metadata,
 		MeasurementInterfaces: measurements,
 		Signer:                signer,
 		Serializer:            serializer,
+		PolicyEngineSelect:    policyEngineSelect,
 	}
 
 	server, ok := servers[strings.ToLower(c.Api)]

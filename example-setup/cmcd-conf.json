@@ -9,5 +9,6 @@
     "imaPcr": 10,
     "keyConfig": "EC256",
     "serialization": "json",
-    "api": "grpc"
+    "api": "grpc",
+    "policyEngine": "js"
 }

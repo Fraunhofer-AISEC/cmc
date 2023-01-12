@@ -124,7 +124,8 @@ func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, in.Policies, ar.PolicyEngineSelect_JS, s.config.Serializer)
+	result := ar.Verify(string(in.AttestationReport), in.Nonce, in.Ca, in.Policies,
+		s.config.PolicyEngineSelect, s.config.Serializer)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

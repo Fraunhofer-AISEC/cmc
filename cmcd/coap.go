@@ -168,7 +168,8 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, req.Policies, ar.PolicyEngineSelect_JS, serverConfig.Serializer)
+	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, req.Policies,
+		serverConfig.PolicyEngineSelect, serverConfig.Serializer)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

@@ -68,7 +68,9 @@ type Serializer interface {
 type PolicyEngineSelect uint32
 
 const (
-	PolicyEngineSelect_JS PolicyEngineSelect = 0
+	PolicyEngineSelect_None    PolicyEngineSelect = 0
+	PolicyEngineSelect_JS      PolicyEngineSelect = 1
+	PolicyEngineSelect_DukTape PolicyEngineSelect = 2
 )
 
 var policyEngines = map[PolicyEngineSelect]PolicyValidator{}
