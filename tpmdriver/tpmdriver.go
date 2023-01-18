@@ -412,19 +412,18 @@ func GetTpmInfo() (*attest.TPMInfo, error) {
 	return tpmInfo, nil
 }
 
-// GetAkQualifiedName gets the Attestation Key Qualified Name which is the
-// hash of the public area of the key concatenated with the qualified names
-// of all parent keys. This name acts as the unique identifier for the AK
-// TODO check calculation again
-func GetAkQualifiedName() ([32]byte, error) {
-
-	var qualifiedName [32]byte
+// GetAkQualifiedName gets the Attestation Key Qualified Name. According to
+// Trusted Platform Module Library Part 1: Architecture:
+//
+//	Name = nameAlg || HASH (TPMS_NV_PUBLIC)
+//	QName = HASH(QName_parent || Name)
+func GetAkQualifiedName() ([]byte, error) {
 
 	if TPM == nil {
-		return qualifiedName, fmt.Errorf("failed to get AK Qualified Name - TPM is not opened")
+		return nil, errors.New("failed to get AK Qualified Name: TPM is not opened")
 	}
 	if ak == nil {
-		return qualifiedName, fmt.Errorf("failed to get AK Qualified Name - AK does not exist")
+		return nil, errors.New("failed to get AK Qualified Name: AK does not exist")
 	}
 
 	// This is a TPMT_PUBLIC structure
@@ -434,37 +433,37 @@ func GetAkQualifiedName() ([32]byte, error) {
 	// the name (nameAlg)
 	tpm2Pub, err := tpm2.DecodePublic(pub)
 	if err != nil {
-		return qualifiedName, fmt.Errorf("failed to Decode AK Public - %v", err)
+		return nil, fmt.Errorf("failed to Decode AK Public: %v", err)
 	}
 
 	if tpm2Pub.NameAlg != tpm2.AlgSHA256 {
-		return qualifiedName, errors.New("failed to Get AK public - unsupported hash algorithm")
+		return nil, errors.New("failed to Get AK public: unsupported hash algorithm")
 	}
 
 	// Name of object is nameAlg || Digest(TPMT_PUBLIC)
 	alg := make([]byte, 2)
-	binary.LittleEndian.PutUint16(alg, uint16(tpm2Pub.NameAlg))
+	binary.BigEndian.PutUint16(alg, uint16(tpm2Pub.NameAlg))
 	digestPub := sha256.Sum256(pub)
 	name := append(alg, digestPub[:]...)
-
-	log.Debug("Name: ", hex.EncodeToString(name[:]))
 
 	// TPMS_CREATION_DATA contains parentQualifiedName
 	createData := ak.AttestationParameters().CreateData
 	tpm2CreateData, err := tpm2.DecodeCreationData(createData)
 	if err != nil {
-		return qualifiedName, fmt.Errorf("failed to Decode Creation Data: %v", err)
+		return nil, fmt.Errorf("failed to Decode Creation Data: %v", err)
 	}
-	parentQualifiedName := tpm2CreateData.ParentQualifiedName.Digest.Value
 
-	log.Trace("Parent Name: ", hex.EncodeToString(tpm2CreateData.ParentName.Digest.Value))
-	log.Trace("Parent Qualified Name: ", hex.EncodeToString(parentQualifiedName))
+	parentAlg := make([]byte, 2)
+	binary.BigEndian.PutUint16(parentAlg, uint16(tpm2CreateData.ParentNameAlg))
+	parentQualifiedName := append(parentAlg, tpm2CreateData.ParentQualifiedName.Digest.Value...)
 
 	// QN_AK := H_AK(QN_Parent || NAME_AK)
 	buf := append(parentQualifiedName[:], name[:]...)
-	qualifiedName = sha256.Sum256(buf)
+	qualifiedNameDigest := sha256.Sum256(buf)
+	qualifiedName := append(alg, qualifiedNameDigest[:]...)
 
-	log.Debug("AK Qualified Name: ", hex.EncodeToString(qualifiedName[:]))
+	log.Debugf("AK Name:           %v", hex.EncodeToString(name[:]))
+	log.Debugf("AK Qualified Name: %v", hex.EncodeToString(qualifiedName[:]))
 
 	return qualifiedName, nil
 }
@@ -714,10 +713,12 @@ func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmI
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve AK qualified name: %v", err)
 	}
+	var qnSlice [32]byte
+	copy(qnSlice[:], qn)
 
 	acRequest := AcRequest{
 		Version:         tpmProtocolVersion,
-		AkQualifiedName: qn,
+		AkQualifiedName: qnSlice,
 		TpmInfo:         *tpmInfo,
 		Ek:              ek,
 		AkParams:        attestParams,
@@ -792,10 +793,12 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 	if err != nil {
 		return AkCertResponse{}, fmt.Errorf("failed to retrieve AK qualified name - %v", err)
 	}
+	var qnSlice [32]byte
+	copy(qnSlice[:], qn)
 
 	akCertRequest := AkCertRequest{
 		Version:         tpmProtocolVersion,
-		AkQualifiedName: qn,
+		AkQualifiedName: qnSlice,
 		Secret:          secret,
 		CertParams:      certParams,
 	}
