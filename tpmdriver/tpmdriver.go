@@ -71,7 +71,7 @@ type Config struct {
 }
 
 // AcRequest holds the data for an activate credential request
-// for verifying that the AK and TLS Key were created on a genuine
+// for verifying that the AK and IK were created on a genuine
 // TPM with a valid EK
 type AcRequest struct {
 	Version         int
@@ -79,7 +79,7 @@ type AcRequest struct {
 	TpmInfo         attest.TPMInfo
 	Ek              attest.EK
 	AkParams        attest.AttestationParameters
-	TLSKeyParams    attest.CertificationParameters
+	IkParams        attest.CertificationParameters
 }
 
 // AcResponse holds the activate credential challenge
@@ -106,25 +106,25 @@ type AkCertResponse struct {
 	Version         int
 	AkQualifiedName [32]byte
 	AkCertChain     ar.CertChain
-	TlsCertChain    ar.CertChain
+	IkCertChain     ar.CertChain
 }
 
 // Paths specifies the paths to store the encrypted TPM key blobs
 // and the certificates
 type Paths struct {
 	Ak            string
-	TLSKey        string
+	Ik            string
 	AkCert        string
-	TLSCert       string
+	IkCert        string
 	Intermediates []string
 	Ca            string
 }
 
 var (
-	TPM    *attest.TPM = nil
-	ak     *attest.AK  = nil
-	tlsKey *attest.Key = nil
-	ek     []attest.EK
+	TPM *attest.TPM = nil
+	ak  *attest.AK  = nil
+	ik  *attest.Key = nil
+	ek  []attest.EK
 )
 
 var log = logrus.WithField("service", "tpmdriver")
@@ -151,12 +151,15 @@ func NewTpm(c *Config) (*Tpm, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load TPM cert params: %v", err)
 	}
+	for _, c := range certParams {
+		log.Warnf("XXX: %v", string(c))
+	}
 	pcrs, err := getTpmPcrs(c)
 	if err != nil {
 		return nil, fmt.Errorf("failed retrieve TPM PCRs: %v", err)
 	}
 
-	// Check if the TPM is provisioned. If provisioned, load the AK and TLS key.
+	// Check if the TPM is provisioned. If provisioned, load the AK and IK key.
 	// Otherwise perform credential activation with provisioning server and then load the keys
 	provisioningRequired, err := IsTpmProvisioningRequired(paths)
 	if err != nil {
@@ -169,33 +172,33 @@ func NewTpm(c *Config) (*Tpm, error) {
 	}
 
 	var akchain ar.CertChain
-	var tlschain ar.CertChain
+	var ikchain ar.CertChain
 	if provisioningRequired {
 
 		log.Info("Provisioning TPM (might take a while)..")
-		ek, ak, tlsKey, err = createKeys(TPM, c.KeyConfig)
+		ek, ak, ik, err = createKeys(TPM, c.KeyConfig)
 		if err != nil {
 			return nil, fmt.Errorf("activate credential failed: createKeys returned %v", err)
 		}
 
-		akchain, tlschain, err = provisionTpm(c.ServerAddr+"activate-credential/", certParams)
+		akchain, ikchain, err = provisionTpm(c.ServerAddr+"activate-credential/", certParams)
 		if err != nil {
 			return nil, fmt.Errorf("failed to provision TPM: %v", err)
 		}
 
-		err = saveTpmData(c, paths, &akchain, &tlschain)
+		err = saveTpmData(c, paths, &akchain, &ikchain)
 		if err != nil {
 			os.Remove(paths.Ak)
-			os.Remove(paths.TLSKey)
+			os.Remove(paths.Ik)
 			return nil, fmt.Errorf("failed to save TPM data: %v", err)
 		}
 
 	} else {
-		err = loadTpmKeys(paths.Ak, paths.TLSKey)
+		err = loadTpmKeys(paths.Ak, paths.Ik)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load TPM keys: %v", err)
 		}
-		akchain, tlschain, err = loadTpmCerts(paths)
+		akchain, ikchain, err = loadTpmCerts(paths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load TPM certificates: %v", err)
 		}
@@ -205,7 +208,7 @@ func NewTpm(c *Config) (*Tpm, error) {
 		Pcrs:           pcrs,
 		UseIma:         c.UseIma,
 		ImaPcr:         c.ImaPcr,
-		SigningCerts:   tlschain,
+		SigningCerts:   ikchain,
 		MeasuringCerts: akchain,
 	}
 
@@ -294,19 +297,19 @@ func (t *Tpm) Unlock() {
 	log.Trace("Released TPM Lock")
 }
 
-// GetSigningKeys returns the TLS private and public key as a generic
+// GetSigningKeys returns the IK private and public key as a generic
 // crypto interface
 func (t *Tpm) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
 
-	if tlsKey == nil {
-		return nil, nil, fmt.Errorf("failed to get TLS Key Signer: not initialized")
+	if ik == nil {
+		return nil, nil, fmt.Errorf("failed to get IK Signer: not initialized")
 	}
-	priv, err := tlsKey.Private(tlsKey.Public())
+	priv, err := ik.Private(ik.Public())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get TLS Key Private")
+		return nil, nil, fmt.Errorf("failed to get IK Private")
 	}
 
-	return priv, tlsKey.Public(), nil
+	return priv, ik.Public(), nil
 }
 
 func (t *Tpm) GetCertChain() ar.CertChain {
@@ -330,12 +333,12 @@ func IsTpmProvisioningRequired(paths *Paths) (bool, error) {
 		return true, nil
 	}
 
-	if _, err := os.Stat(paths.TLSKey); err != nil {
+	if _, err := os.Stat(paths.Ik); err != nil {
 		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
 		return true, nil
 	}
 
-	if _, err := os.Stat(paths.TLSCert); err != nil {
+	if _, err := os.Stat(paths.IkCert); err != nil {
 		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
 		return true, nil
 	}
@@ -506,7 +509,7 @@ func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.C
 	if TPM == nil {
 		return ar.CertChain{}, ar.CertChain{}, errors.New("TPM is not openend")
 	}
-	if ek == nil || ak == nil || tlsKey == nil {
+	if ek == nil || ak == nil || ik == nil {
 		return ar.CertChain{}, ar.CertChain{}, errors.New("keys not created")
 	}
 
@@ -531,16 +534,16 @@ func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.C
 			resp.Version, tpmProtocolVersion)
 	}
 
-	return resp.AkCertChain, resp.TlsCertChain, nil
+	return resp.AkCertChain, resp.IkCertChain, nil
 }
 
-func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error {
+func saveTpmData(c *Config, paths *Paths, akchain, ikchain *ar.CertChain) error {
 
 	// Store the certificates on disk
 	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(akchain.Leaf))
-	log.Tracef("New TLS Key Cert %v: %v", paths.TLSCert, string(tlschain.Leaf))
+	log.Tracef("New IK Cert %v: %v", paths.IkCert, string(ikchain.Leaf))
 
-	// TODO currently only the same certificate chain is supported for AK and TLS key
+	// TODO currently only the same certificate chain is supported for AK and IK
 	for i, inter := range akchain.Intermediates {
 		path := path.Join(c.StoragePath, fmt.Sprintf("intermediate%v.pem", i))
 		paths.Intermediates = append(paths.Intermediates, path)
@@ -551,8 +554,8 @@ func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error
 	if err := os.WriteFile(paths.AkCert, akchain.Leaf, 0644); err != nil {
 		return fmt.Errorf("failed to write file %v: %v", paths.AkCert, err)
 	}
-	if err := os.WriteFile(paths.TLSCert, tlschain.Leaf, 0644); err != nil {
-		return fmt.Errorf("failed to write %v: %v", paths.TLSCert, err)
+	if err := os.WriteFile(paths.IkCert, ikchain.Leaf, 0644); err != nil {
+		return fmt.Errorf("failed to write %v: %v", paths.IkCert, err)
 	}
 	if len(paths.Intermediates) != len(akchain.Intermediates) {
 		return errors.New("internal error: length of intermediate certificates does not match length of paths")
@@ -575,19 +578,19 @@ func saveTpmData(c *Config, paths *Paths, akchain, tlschain *ar.CertChain) error
 		return fmt.Errorf("failed to write file %v: %v", paths.Ak, err)
 	}
 
-	// Store the encrypted TLS Key blob on disk
-	tlsKeyBytes, err := tlsKey.Marshal()
+	// Store the encrypted IK blob on disk
+	ikBytes, err := ik.Marshal()
 	if err != nil {
-		return fmt.Errorf("activate credential failed: Marshal TLS Key returned %v", err)
+		return fmt.Errorf("activate credential failed: Marshal IK returned %v", err)
 	}
-	if err := os.WriteFile(paths.TLSKey, tlsKeyBytes, 0644); err != nil {
-		return fmt.Errorf("failed to write file %v: %v", paths.TLSKey, err)
+	if err := os.WriteFile(paths.Ik, ikBytes, 0644); err != nil {
+		return fmt.Errorf("failed to write file %v: %v", paths.Ik, err)
 	}
 
 	return nil
 }
 
-func loadTpmKeys(akFile, tlsKeyFile string) error {
+func loadTpmKeys(akFile, ikFile string) error {
 
 	if TPM == nil {
 		return errors.New("tpm is not opened")
@@ -606,54 +609,54 @@ func loadTpmKeys(akFile, tlsKeyFile string) error {
 
 	log.Debug("Loaded AK")
 
-	tlsKeyBytes, err := os.ReadFile(tlsKeyFile)
+	ikBytes, err := os.ReadFile(ikFile)
 	if err != nil {
-		return fmt.Errorf("failed to read file %v: %v", tlsKeyFile, err)
+		return fmt.Errorf("failed to read file %v: %v", ikFile, err)
 	}
-	tlsKey, err = TPM.LoadKey(tlsKeyBytes)
+	ik, err = TPM.LoadKey(ikBytes)
 	if err != nil {
 		return fmt.Errorf("failed to load key: %v", err)
 	}
 
-	log.Debug("Loaded TLS Key")
+	log.Debug("Loaded IK")
 
 	return nil
 }
 
 func loadTpmCerts(paths *Paths) (ar.CertChain, ar.CertChain, error) {
 	akchain := ar.CertChain{}
-	tlschain := ar.CertChain{}
+	ikchain := ar.CertChain{}
 	var cert []byte
 	var err error
 	// AK
 	log.Tracef("Loading AK cert from %v", paths.AkCert)
 	if cert, err = os.ReadFile(paths.AkCert); err != nil {
-		return akchain, tlschain, fmt.Errorf("failed to load AK cert from %v: %v", paths.AkCert, err)
+		return akchain, ikchain, fmt.Errorf("failed to load AK cert from %v: %v", paths.AkCert, err)
 	}
 	akchain.Leaf = cert
-	// TLS
-	log.Tracef("Loading TLS cert from %v", paths.TLSCert)
-	if cert, err = os.ReadFile(paths.TLSCert); err != nil {
-		return akchain, tlschain, fmt.Errorf("failed to load TLS cert from %v: %v", paths.TLSCert, err)
+	// IK
+	log.Tracef("Loading IK cert from %v", paths.IkCert)
+	if cert, err = os.ReadFile(paths.IkCert); err != nil {
+		return akchain, ikchain, fmt.Errorf("failed to load IK cert from %v: %v", paths.IkCert, err)
 	}
-	tlschain.Leaf = cert
+	ikchain.Leaf = cert
 	// Intermediates
 	for _, path := range paths.Intermediates {
 		if cert, err = os.ReadFile(path); err != nil {
-			return akchain, tlschain, fmt.Errorf("failed to load intermediate cert from %v: %v", path, err)
+			return akchain, ikchain, fmt.Errorf("failed to load intermediate cert from %v: %v", path, err)
 		}
 		akchain.Intermediates = append(akchain.Intermediates, cert)
-		// TODO currently only one CA supported for AK and TLS key
-		tlschain.Intermediates = append(tlschain.Intermediates, cert)
+		// TODO currently only one CA supported for AK and IK
+		ikchain.Intermediates = append(ikchain.Intermediates, cert)
 	}
 	// CA
 	if cert, err = os.ReadFile(paths.Ca); err != nil {
-		return akchain, tlschain, fmt.Errorf("failed to load CA cert from %v: %v", paths.Ca, err)
+		return akchain, ikchain, fmt.Errorf("failed to load CA cert from %v: %v", paths.Ca, err)
 	}
 	akchain.Ca = cert
-	tlschain.Ca = cert
+	ikchain.Ca = cert
 
-	return akchain, tlschain, nil
+	return akchain, ikchain, nil
 }
 
 func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *attest.Key, error) {
@@ -673,36 +676,36 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 		return nil, nil, nil, fmt.Errorf("failed to create new AK - %v", err)
 	}
 
-	log.Debug("Creating new TLS Key")
+	log.Debug("Creating new IK Key")
 
 	// Create key as specified in the config file
-	tlsKeyConfig := &attest.KeyConfig{}
+	ikConfig := &attest.KeyConfig{}
 	switch keyConfig {
 	case "EC256":
-		tlsKeyConfig.Algorithm = attest.ECDSA
-		tlsKeyConfig.Size = 256
+		ikConfig.Algorithm = attest.ECDSA
+		ikConfig.Size = 256
 	case "EC384":
-		tlsKeyConfig.Algorithm = attest.ECDSA
-		tlsKeyConfig.Size = 384
+		ikConfig.Algorithm = attest.ECDSA
+		ikConfig.Size = 384
 	case "EC521":
-		tlsKeyConfig.Algorithm = attest.ECDSA
-		tlsKeyConfig.Size = 521
+		ikConfig.Algorithm = attest.ECDSA
+		ikConfig.Size = 521
 	case "RSA2048":
-		tlsKeyConfig.Algorithm = attest.RSA
-		tlsKeyConfig.Size = 2048
+		ikConfig.Algorithm = attest.RSA
+		ikConfig.Size = 2048
 	case "RSA4096":
-		tlsKeyConfig.Algorithm = attest.RSA
-		tlsKeyConfig.Size = 4096
+		ikConfig.Algorithm = attest.RSA
+		ikConfig.Size = 4096
 	default:
-		return nil, nil, nil, fmt.Errorf("failed to create new TLS Key, unknown key configuration: %v", keyConfig)
+		return nil, nil, nil, fmt.Errorf("failed to create new IK Key, unknown key configuration: %v", keyConfig)
 	}
 
-	tlsKey, err := tpm.NewKey(ak, tlsKeyConfig)
+	ik, err := tpm.NewKey(ak, ikConfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create new TLS key - %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to create new IK key - %v", err)
 	}
 
-	return eks, ak, tlsKey, nil
+	return eks, ak, ik, nil
 }
 
 func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *attest.TPMInfo, url string) ([]byte, error) {
@@ -722,7 +725,7 @@ func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmI
 		TpmInfo:         *tpmInfo,
 		Ek:              ek,
 		AkParams:        attestParams,
-		TLSKeyParams:    tlsKey.CertificationParameters(),
+		IkParams:        ik.CertificationParameters(),
 	}
 
 	// send EK and Attestation Parameters including AK to the server
@@ -966,8 +969,8 @@ func createLocalStorage(storagePath string) (*Paths, error) {
 	paths := &Paths{
 		Ak:            path.Join(storagePath, "ak_encrypted.json"),
 		AkCert:        path.Join(storagePath, "ak_cert.pem"),
-		TLSKey:        path.Join(storagePath, "tls_key_encrypted.json"),
-		TLSCert:       path.Join(storagePath, "tls_cert.pem"),
+		Ik:            path.Join(storagePath, "ik_encrypted.json"),
+		IkCert:        path.Join(storagePath, "ik_cert.pem"),
 		Intermediates: intermediates,
 		Ca:            path.Join(storagePath, "ca.pem"),
 	}

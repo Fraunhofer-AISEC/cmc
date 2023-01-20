@@ -71,7 +71,7 @@ type config struct {
 type datastore struct {
 	Secret             map[[32]byte][]byte
 	AkParams           map[[32]byte]attest.AttestationParameters
-	TLSKeyParams       map[[32]byte]attest.CertificationParameters
+	IkParams           map[[32]byte]attest.CertificationParameters
 	SigningKey         *ecdsa.PrivateKey
 	CertChain          []*x509.Certificate
 	CertChainPem       [][]byte
@@ -261,7 +261,7 @@ func HandleAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	dataStore.Secret[acRequest.AkQualifiedName] = secret
 	dataStore.AkParams[acRequest.AkQualifiedName] = acRequest.AkParams
-	dataStore.TLSKeyParams[acRequest.AkQualifiedName] = acRequest.TLSKeyParams
+	dataStore.IkParams[acRequest.AkQualifiedName] = acRequest.IkParams
 
 	return &retBuf, nil
 }
@@ -295,7 +295,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	// Parse certificate parameters
 	akCertParams := ar.CertParams{}
-	tlsCertParams := ar.CertParams{}
+	ikCertParams := ar.CertParams{}
 	for _, c := range akCertRequest.CertParams {
 		cp, err := parseCertParams(c)
 		if err != nil {
@@ -305,8 +305,8 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 			log.Debug("Added AK Certificate Parameters")
 			akCertParams = *cp
 		} else if cp.Type == "TLS Key Cert Params" {
-			log.Debug("Added TLS Key Certificate Parameters")
-			tlsCertParams = *cp
+			log.Debug("Added IK Certificate Parameters")
+			ikCertParams = *cp
 		} else {
 			return nil, fmt.Errorf("unknown cert params type: %v", cp.Type)
 		}
@@ -353,7 +353,7 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	pem.Encode(akPem, &pem.Block{Type: "CERTIFICATE", Bytes: der})
 	log.Trace("Generated new AK Certificate: ", akPem.String())
 
-	// Verify that TLS Key is a TPM key signed by the AK
+	// Verify that IK is a TPM key signed by the AK
 	pub, err := tpm2.DecodePublic(dataStore.AkParams[akCertRequest.AkQualifiedName].Public)
 	if err != nil {
 		return nil, fmt.Errorf("decode public failed: %w", err)
@@ -367,36 +367,36 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		Public: akPubVerify,
 		Hash:   hash,
 	}
-	p := dataStore.TLSKeyParams[akCertRequest.AkQualifiedName]
+	p := dataStore.IkParams[akCertRequest.AkQualifiedName]
 	err = p.Verify(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify TLS Key with AK: %w", err)
+		return nil, fmt.Errorf("failed to verify IK with AK: %w", err)
 	}
-	log.Debug("Successfully verified TLS key with AK")
+	log.Debug("Successfully verified IK with AK")
 
-	tlsPub, err := attest.ParseAKPublic(attest.TPMVersion20, dataStore.TLSKeyParams[akCertRequest.AkQualifiedName].Public)
+	ikPub, err := attest.ParseAKPublic(attest.TPMVersion20, dataStore.IkParams[akCertRequest.AkQualifiedName].Public)
 	if err != nil {
-		return nil, fmt.Errorf("activate credential Failed - parse TLS key returned %w", err)
+		return nil, fmt.Errorf("activate credential Failed - parse IK returned %w", err)
 	}
 
-	encodedpub, err = x509.MarshalPKIXPublicKey(tlsPub.Public)
+	encodedpub, err = x509.MarshalPKIXPublicKey(ikPub.Public)
 	if err != nil {
 		return nil, fmt.Errorf("activate credential failed - marshal public key returned %w", err)
 	}
 	ski = sha1.Sum(encodedpub)
 
-	// Create TLS key certificate
+	// Create IK certificate
 	tmpl = x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			CommonName:         tlsCertParams.Subject.CommonName,
-			Country:            []string{tlsCertParams.Subject.Country},
-			Province:           []string{tlsCertParams.Subject.Province},
-			Locality:           []string{tlsCertParams.Subject.Locality},
-			Organization:       []string{tlsCertParams.Subject.Organization},
-			OrganizationalUnit: []string{tlsCertParams.Subject.OrganizationalUnit},
-			StreetAddress:      []string{tlsCertParams.Subject.StreetAddress},
-			PostalCode:         []string{tlsCertParams.Subject.PostalCode},
+			CommonName:         ikCertParams.Subject.CommonName,
+			Country:            []string{ikCertParams.Subject.Country},
+			Province:           []string{ikCertParams.Subject.Province},
+			Locality:           []string{ikCertParams.Subject.Locality},
+			Organization:       []string{ikCertParams.Subject.Organization},
+			OrganizationalUnit: []string{ikCertParams.Subject.OrganizationalUnit},
+			StreetAddress:      []string{ikCertParams.Subject.StreetAddress},
+			PostalCode:         []string{ikCertParams.Subject.PostalCode},
 		},
 		SubjectKeyId:          ski[:],
 		NotBefore:             time.Now(),
@@ -404,17 +404,17 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              tlsCertParams.SANs,
+		DNSNames:              ikCertParams.SANs,
 	}
 
-	der, err = x509.CreateCertificate(rand.Reader, &tmpl, dataStore.CertChain[0], tlsPub.Public, dataStore.SigningKey)
+	der, err = x509.CreateCertificate(rand.Reader, &tmpl, dataStore.CertChain[0], ikPub.Public, dataStore.SigningKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create TLS certificate: %w", err)
+		return nil, fmt.Errorf("failed to create IK certificate: %w", err)
 	}
 
-	tlsKeyPem := &bytes.Buffer{}
-	pem.Encode(tlsKeyPem, &pem.Block{Type: "CERTIFICATE", Bytes: der})
-	log.Trace("Generated new TLS Key Certificate: ", tlsKeyPem.String())
+	ikPem := &bytes.Buffer{}
+	pem.Encode(ikPem, &pem.Block{Type: "CERTIFICATE", Bytes: der})
+	log.Trace("Generated new IK Certificate: ", ikPem.String())
 
 	intermediates := make([][]byte, 0)
 	intermediates = append(intermediates, dataStore.CertChainPem[:len(dataStore.CertChainPem)-1]...)
@@ -427,8 +427,8 @@ func HandleAkCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 			Intermediates: intermediates,
 			Ca:            dataStore.CertChainPem[len(dataStore.CertChainPem)-1],
 		},
-		TlsCertChain: ar.CertChain{
-			Leaf:          tlsKeyPem.Bytes(),
+		IkCertChain: ar.CertChain{
+			Leaf:          ikPem.Bytes(),
 			Intermediates: intermediates,
 			Ca:            dataStore.CertChainPem[len(dataStore.CertChainPem)-1],
 		},
@@ -505,12 +505,12 @@ func HandleSwCertRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	cert, err := x509.CreateCertificate(rand.Reader, &tmpl, dataStore.CertChain[0], pubKey, dataStore.SigningKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create TLS certificate: %w", err)
+		return nil, fmt.Errorf("failed to create IK certificate: %w", err)
 	}
 
 	tmp := &bytes.Buffer{}
 	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert})
-	log.Trace("Generated new SW TLS Certificate: ", tmp.String())
+	log.Trace("Generated new SW IK Certificate: ", tmp.String())
 
 	intermediates := make([][]byte, 0)
 	intermediates = append(intermediates, dataStore.CertChainPem[:len(dataStore.CertChainPem)-1]...)
@@ -1055,7 +1055,7 @@ func main() {
 
 	dataStore.AkParams = make(map[[32]byte]attest.AttestationParameters)
 	dataStore.Secret = make(map[[32]byte][]byte)
-	dataStore.TLSKeyParams = make(map[[32]byte]attest.CertificationParameters)
+	dataStore.IkParams = make(map[[32]byte]attest.CertificationParameters)
 	dataStore.Vceks = make(map[snpdriver.VcekRequest][]byte)
 
 	// Retrieve the directories to be provided from config and create http
