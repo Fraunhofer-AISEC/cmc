@@ -18,11 +18,15 @@ package tpmdriver
 import (
 	"bytes"
 	"crypto"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -44,7 +48,7 @@ import (
 )
 
 var (
-	tpmProtocolVersion = 1
+	tpmProtocolVersion = 2
 )
 
 // Tpm is a structure that implements the Measure method
@@ -97,7 +101,8 @@ type AkCertRequest struct {
 	Version         int
 	AkQualifiedName [32]byte
 	Secret          []byte
-	CertParams      [][]byte
+	AkCsr           []byte
+	IkCsr           []byte
 }
 
 // AkCertResponse holds the issued certificates including the
@@ -146,14 +151,8 @@ func NewTpm(c *Config) (*Tpm, error) {
 		return nil, fmt.Errorf("failed to create local storage: %v", err)
 	}
 
-	// Load relevant parameters from the metadata files
-	certParams, err := getTpmCertParams(c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load TPM cert params: %v", err)
-	}
-	for _, c := range certParams {
-		log.Warnf("XXX: %v", string(c))
-	}
+	// Retrieve the TPM PCRs to be included in the attestation report from
+	// the manifest files
 	pcrs, err := getTpmPcrs(c)
 	if err != nil {
 		return nil, fmt.Errorf("failed retrieve TPM PCRs: %v", err)
@@ -181,7 +180,16 @@ func NewTpm(c *Config) (*Tpm, error) {
 			return nil, fmt.Errorf("activate credential failed: createKeys returned %v", err)
 		}
 
-		akchain, ikchain, err = provisionTpm(c.ServerAddr+"activate-credential/", certParams)
+		// Load relevant parameters from the metadata files
+		akCsr, ikCsr, err := createCsrs(c, ak, ik)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TPM cert params: %v", err)
+		}
+
+		log.Tracef("Created AK CSR: %v", string(akCsr))
+		log.Tracef("Created IK CSR: %v", string(ikCsr))
+
+		akchain, ikchain, err = provisionTpm(c.ServerAddr+"activate-credential/", akCsr, ikCsr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to provision TPM: %v", err)
 		}
@@ -503,7 +511,7 @@ func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.
 	return pcrValues, quote, nil
 }
 
-func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.CertChain, error) {
+func provisionTpm(provServerURL string, akCsr, ikCsr []byte) (ar.CertChain, ar.CertChain, error) {
 	log.Debug("Performing TPM credential activation..")
 
 	if TPM == nil {
@@ -524,7 +532,7 @@ func provisionTpm(provServerURL string, certParams [][]byte) (ar.CertChain, ar.C
 	}
 
 	// Return challenge to server
-	resp, err := requestTpmCerts(provServerURL, secret, certParams)
+	resp, err := requestTpmCerts(provServerURL, secret, akCsr, ikCsr)
 	if err != nil {
 		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to request tpm certs: %v", err)
 	}
@@ -790,7 +798,7 @@ func sendParams(acRequest AcRequest, url string) (*AcResponse, error) {
 	return &acResponse, nil
 }
 
-func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResponse, error) {
+func requestTpmCerts(url string, secret []byte, akCsr, ikCsr []byte) (AkCertResponse, error) {
 
 	qn, err := GetAkQualifiedName()
 	if err != nil {
@@ -803,7 +811,8 @@ func requestTpmCerts(url string, secret []byte, certParams [][]byte) (AkCertResp
 		Version:         tpmProtocolVersion,
 		AkQualifiedName: qnSlice,
 		Secret:          secret,
-		CertParams:      certParams,
+		AkCsr:           akCsr,
+		IkCsr:           ikCsr,
 	}
 
 	var buf bytes.Buffer
@@ -879,7 +888,7 @@ func getTpmPcrs(c *Config) ([]int, error) {
 
 	// Generate the list of PCRs to be included in the quote
 	pcrs := make([]int, 0)
-	log.Debug("Parsing ", len(rtmMan.ReferenceValues), "RTM Reference Values")
+	log.Debugf("Parsing %v RTM Reference Values", len(rtmMan.ReferenceValues))
 	for _, ver := range rtmMan.ReferenceValues {
 		if ver.Type != "TPM Reference Value" || ver.Pcr == nil {
 			continue
@@ -888,7 +897,7 @@ func getTpmPcrs(c *Config) ([]int, error) {
 			pcrs = append(pcrs, *ver.Pcr)
 		}
 	}
-	log.Debug("Parsing ", len(osMan.ReferenceValues), "OS Reference Values")
+	log.Debugf("Parsing %v OS Reference Values", len(osMan.ReferenceValues))
 	for _, ver := range osMan.ReferenceValues {
 		if ver.Type != "TPM Reference Value" || ver.Pcr == nil {
 			continue
@@ -903,9 +912,8 @@ func getTpmPcrs(c *Config) ([]int, error) {
 	return pcrs, nil
 }
 
-func getTpmCertParams(c *Config) ([][]byte, error) {
+func createCsrs(c *Config, ak *attest.AK, ik *attest.Key) (akCsr, ikCsr []byte, err error) {
 
-	certParams := make([][]byte, 0)
 	for i, m := range c.Metadata {
 
 		// Extract plain payload (i.e. the manifest/description itself)
@@ -924,13 +932,103 @@ func getTpmCertParams(c *Config) ([][]byte, error) {
 		}
 
 		if t.Type == "AK Cert Params" {
-			certParams = append(certParams, m)
+			var certParams ar.CertParams
+			err = c.Serializer.Unmarshal(payload, &certParams)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to unmarshal CertParams: %w", err)
+			}
+			akCsr, err = createAkCsr(ak, certParams)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
+			}
 		} else if t.Type == "TLS Key Cert Params" {
-			certParams = append(certParams, m)
+			var certParams ar.CertParams
+			err = c.Serializer.Unmarshal(payload, &certParams)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to unmarshal CertParams: %w", err)
+			}
+			ikCsr, err = createIkCsr(ik, certParams)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
+			}
 		}
 	}
 
-	return certParams, nil
+	return akCsr, ikCsr, nil
+}
+
+func createAkCsr(ak *attest.AK, params ar.CertParams) ([]byte, error) {
+
+	tmpl := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:         params.Subject.CommonName,
+			Country:            []string{params.Subject.Country},
+			Province:           []string{params.Subject.Province},
+			Locality:           []string{params.Subject.Locality},
+			Organization:       []string{params.Subject.Organization},
+			OrganizationalUnit: []string{params.Subject.OrganizationalUnit},
+			StreetAddress:      []string{params.Subject.StreetAddress},
+			PostalCode:         []string{params.Subject.PostalCode},
+		},
+	}
+
+	der, err := CreateCertificateRequest(rand.Reader, &tmpl, ak.Private())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create certificate request: %v", err)
+	}
+	tmp := &bytes.Buffer{}
+	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})
+
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse created CSR: %v", err)
+	}
+	err = csr.CheckSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
+	}
+
+	return tmp.Bytes(), nil
+}
+
+func createIkCsr(ik *attest.Key, params ar.CertParams) ([]byte, error) {
+
+	tmpl := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:         params.Subject.CommonName,
+			Country:            []string{params.Subject.Country},
+			Province:           []string{params.Subject.Province},
+			Locality:           []string{params.Subject.Locality},
+			Organization:       []string{params.Subject.Organization},
+			OrganizationalUnit: []string{params.Subject.OrganizationalUnit},
+			StreetAddress:      []string{params.Subject.StreetAddress},
+			PostalCode:         []string{params.Subject.PostalCode},
+		},
+		DNSNames: params.SANs,
+	}
+
+	priv, err := ik.Private(ik.Public())
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
+	}
+
+	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create certificate request: %v", err)
+	}
+	tmp := &bytes.Buffer{}
+	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})
+
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse created CSR: %v", err)
+	}
+	err = csr.CheckSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
+	}
+
+	return tmp.Bytes(), nil
 }
 
 func exists(i int, arr []int) bool {
