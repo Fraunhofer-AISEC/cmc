@@ -3,16 +3,17 @@ module github.com/Fraunhofer-AISEC/cmc
 go 1.18
 
 require (
-	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20221021134609-a1d5c57b1083
+	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230119160236-158f31c8a0a1
 	github.com/fxamacker/cbor/v2 v2.4.0
+	github.com/google/go-attestation v0.4.4-0.20220404204839-8820d49b18d9
 	github.com/google/go-tpm v0.3.3
-	github.com/mattn/go-sqlite3 v1.14.9
-	github.com/plgd-dev/go-coap/v3 v3.0.0
-	github.com/robertkrimen/otto v0.0.0-20221025135307-511d75fba9f8
-	github.com/sirupsen/logrus v1.8.1
-	github.com/veraison/go-cose v1.0.0-rc.1
-	golang.org/x/exp v0.0.0-20221006183845-316c7553db56
-	google.golang.org/grpc v1.51.0
+	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/plgd-dev/go-coap/v3 v3.0.2
+	github.com/robertkrimen/otto v0.2.1
+	github.com/sirupsen/logrus v1.9.0
+	github.com/veraison/go-cose v1.0.0
+	golang.org/x/exp v0.0.0-20230118134722-a68e582fa157
+	google.golang.org/grpc v1.52.0
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/square/go-jose.v2 v2.6.0
 )
@@ -20,19 +21,19 @@ require (
 require (
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/certificate-transparency-go v1.1.2 // indirect
-	github.com/google/go-tspi v0.2.1-0.20190423175329-115dea689aad // indirect
-	github.com/pion/dtls/v2 v2.1.6-0.20220815090156-a04cfccb23e5 // indirect
+	github.com/google/certificate-transparency-go v1.1.4 // indirect
+	github.com/google/go-tspi v0.3.0 // indirect
+	github.com/pion/dtls/v2 v2.1.6-0.20230104045405-f40c61d83b5f // indirect
 	github.com/pion/logging v0.2.2 // indirect
-	github.com/pion/transport v0.13.1 // indirect
-	github.com/pion/udp v0.1.2-0.20221011090648-2589407f52c9 // indirect
+	github.com/pion/transport v0.14.1 // indirect
+	github.com/pion/udp v0.1.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20221005025214-4161e89ecf1b // indirect
-	golang.org/x/net v0.4.0 // indirect
-	golang.org/x/sync v0.0.0-20220929204114-8fcdb60fdcc0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
-	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
+	golang.org/x/crypto v0.5.0 // indirect
+	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
+	google.golang.org/genproto v0.0.0-20230119192704-9d59e20e5cd1 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 )

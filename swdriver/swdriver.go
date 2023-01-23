@@ -22,7 +22,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/gob"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -35,14 +37,14 @@ import (
 )
 
 var (
-	swProtocolVersion = 1
+	swProtocolVersion = 2
 	log               = logrus.WithField("service", "swdriver")
 )
 
 type SwCertRequest struct {
-	Version    int
-	CertParams []byte
-	PubKey     []byte
+	Version int
+	Csr     []byte
+	PubKey  []byte
 }
 
 type SwCertResponse struct {
@@ -93,7 +95,7 @@ func NewSwDriver(c Config) (*Sw, error) {
 		return nil, fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	certParams, err := getCertParams(&c)
+	csr, err := createCsr(&c, priv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert params: %w", err)
 	}
@@ -104,9 +106,9 @@ func NewSwDriver(c Config) (*Sw, error) {
 	}
 
 	certRequest := SwCertRequest{
-		Version:    swProtocolVersion,
-		CertParams: certParams,
-		PubKey:     pub,
+		Version: swProtocolVersion,
+		Csr:     csr,
+		PubKey:  pub,
 	}
 
 	certResponse, err := getCerts(c.Url+"sw-signing/", certRequest)
@@ -185,7 +187,7 @@ func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
 	return response, nil
 }
 
-func getCertParams(c *Config) ([]byte, error) {
+func createCsr(c *Config, priv crypto.PrivateKey) ([]byte, error) {
 
 	for i, m := range c.Metadata {
 
@@ -205,11 +207,55 @@ func getCertParams(c *Config) ([]byte, error) {
 		}
 
 		if t.Type == "TLS Key Cert Params" {
-			return m, nil
+			var certParams ar.CertParams
+			err = c.Serializer.Unmarshal(payload, &certParams)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal CertParams: %w", err)
+			}
+			csr, err := createCsrFromParams(priv, certParams)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create CSR: %w", err)
+			}
+			return csr, nil
 		}
 	}
 
 	return nil, errors.New("failed to find cert params")
+}
+
+func createCsrFromParams(priv crypto.PrivateKey, params ar.CertParams) ([]byte, error) {
+
+	tmpl := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:         params.Subject.CommonName,
+			Country:            []string{params.Subject.Country},
+			Province:           []string{params.Subject.Province},
+			Locality:           []string{params.Subject.Locality},
+			Organization:       []string{params.Subject.Organization},
+			OrganizationalUnit: []string{params.Subject.OrganizationalUnit},
+			StreetAddress:      []string{params.Subject.StreetAddress},
+			PostalCode:         []string{params.Subject.PostalCode},
+		},
+		DNSNames: params.SANs,
+	}
+
+	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create certificate request: %v", err)
+	}
+	pemCert := &bytes.Buffer{}
+	pem.Encode(pemCert, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})
+
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse created CSR: %v", err)
+	}
+	err = csr.CheckSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
+	}
+
+	return pemCert.Bytes(), nil
 }
 
 func createLocalStorage(storagePath string) (string, error) {
