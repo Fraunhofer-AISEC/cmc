@@ -97,7 +97,7 @@ func NewSwDriver(c Config) (*Sw, error) {
 
 	csr, err := createCsr(&c, priv)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cert params: %w", err)
+		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
 	pub, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
@@ -206,13 +206,13 @@ func createCsr(c *Config, priv crypto.PrivateKey) ([]byte, error) {
 			continue
 		}
 
-		if t.Type == "TLS Key Cert Params" {
-			var certParams ar.CertParams
-			err = c.Serializer.Unmarshal(payload, &certParams)
+		if t.Type == "Device Config" {
+			var deviceConfig ar.DeviceConfig
+			err = c.Serializer.Unmarshal(payload, &deviceConfig)
 			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal CertParams: %w", err)
+				return nil, fmt.Errorf("failed to unmarshal DeviceConfig: %w", err)
 			}
-			csr, err := createCsrFromParams(priv, certParams)
+			csr, err := createCsrFromParams(priv, deviceConfig.IkCsr)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create CSR: %w", err)
 			}
@@ -220,10 +220,10 @@ func createCsr(c *Config, priv crypto.PrivateKey) ([]byte, error) {
 		}
 	}
 
-	return nil, errors.New("failed to find cert params")
+	return nil, errors.New("failed to find device config for creating CSRs")
 }
 
-func createCsrFromParams(priv crypto.PrivateKey, params ar.CertParams) ([]byte, error) {
+func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams) ([]byte, error) {
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{

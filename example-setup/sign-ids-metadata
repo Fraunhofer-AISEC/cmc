@@ -72,5 +72,4 @@ $SIG -in $INPUT/os.manifest.$1          -out $OUTPUT/os.manifest.$1          -ke
 $SIG -in $INPUT/company.description.$1  -out $OUTPUT/company.description.$1  -keys $KEY1,$KEY2,$KEY3 -x5cs $CHAIN1:$CHAIN2:$CHAIN3 -format $1
 
 $SIG -in $INPUT/device.description.$1   -out $OUTPUT/device.description.$1   -keys $KEY4 -x5cs $CHAIN4 --format $1
-$SIG -in $INPUT/ak.certparams.$1        -out $OUTPUT/ak.certparams.$1        -keys $KEY4 -x5cs $CHAIN4 --format $1
-$SIG -in $INPUT/tlskey.certparams.$1    -out $OUTPUT/tlskey.certparams.$1    -keys $KEY4 -x5cs $CHAIN4 --format $1
+$SIG -in $INPUT/device.config.$1        -out $OUTPUT/device.config.$1        -keys $KEY4 -x5cs $CHAIN4 --format $1

@@ -130,17 +130,9 @@ func main() {
 			log.Fatalf("Failed to convert: %v", err)
 		}
 
-	case "AK Cert Params":
-		log.Debug("Found AK Cert Params")
-		var d ar.CertParams
-		raw, err = convert(data, &d, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-
-	case "TLS Key Cert Params":
-		log.Debug("Found TLS Key Cert Params")
-		var d ar.CertParams
+	case "Device Config":
+		log.Debug("Found Device Config")
+		var d ar.DeviceConfig
 		raw, err = convert(data, &d, si, so)
 		if err != nil {
 			log.Fatalf("Failed to convert: %v", err)

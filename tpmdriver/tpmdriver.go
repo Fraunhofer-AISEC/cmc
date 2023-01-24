@@ -183,7 +183,7 @@ func NewTpm(c *Config) (*Tpm, error) {
 		// Load relevant parameters from the metadata files
 		akCsr, ikCsr, err := createCsrs(c, ak, ik)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load TPM cert params: %v", err)
+			return nil, fmt.Errorf("failed to create CSRs: %v", err)
 		}
 
 		log.Tracef("Created AK CSR: %v", string(akCsr))
@@ -684,7 +684,7 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 		return nil, nil, nil, fmt.Errorf("failed to create new AK - %v", err)
 	}
 
-	log.Debug("Creating new IK Key")
+	log.Debug("Creating new IK")
 
 	// Create key as specified in the config file
 	ikConfig := &attest.KeyConfig{}
@@ -914,9 +914,10 @@ func getTpmPcrs(c *Config) ([]int, error) {
 
 func createCsrs(c *Config, ak *attest.AK, ik *attest.Key) (akCsr, ikCsr []byte, err error) {
 
+	// Get device configuration from metadata
 	for i, m := range c.Metadata {
 
-		// Extract plain payload (i.e. the manifest/description itself)
+		// Extract plain payload of metadata
 		payload, err := c.Serializer.GetPayload(m)
 		if err != nil {
 			log.Warnf("Failed to parse metadata object %v: %v", i, err)
@@ -931,33 +932,31 @@ func createCsrs(c *Config, ak *attest.AK, ik *attest.Key) (akCsr, ikCsr []byte, 
 			continue
 		}
 
-		if t.Type == "AK Cert Params" {
-			var certParams ar.CertParams
-			err = c.Serializer.Unmarshal(payload, &certParams)
+		if t.Type == "Device Config" {
+			log.Tracef("Found Device Config")
+			var deviceConfig ar.DeviceConfig
+			err = c.Serializer.Unmarshal(payload, &deviceConfig)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to unmarshal CertParams: %w", err)
+				return nil, nil, fmt.Errorf("failed to unmarshal DeviceConfig: %w", err)
 			}
-			akCsr, err = createAkCsr(ak, certParams)
+			akCsr, err = createAkCsr(ak, deviceConfig.AkCsr)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
 			}
-		} else if t.Type == "TLS Key Cert Params" {
-			var certParams ar.CertParams
-			err = c.Serializer.Unmarshal(payload, &certParams)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to unmarshal CertParams: %w", err)
-			}
-			ikCsr, err = createIkCsr(ik, certParams)
+			ikCsr, err = createIkCsr(ik, deviceConfig.IkCsr)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
 			}
+			return akCsr, ikCsr, nil
 		}
 	}
 
-	return akCsr, ikCsr, nil
+	return nil, nil, errors.New("failed to find device configuration")
 }
 
-func createAkCsr(ak *attest.AK, params ar.CertParams) ([]byte, error) {
+func createAkCsr(ak *attest.AK, params ar.CsrParams) ([]byte, error) {
+
+	log.Tracef("Creating AK CSR..")
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{
@@ -991,7 +990,9 @@ func createAkCsr(ak *attest.AK, params ar.CertParams) ([]byte, error) {
 	return tmp.Bytes(), nil
 }
 
-func createIkCsr(ik *attest.Key, params ar.CertParams) ([]byte, error) {
+func createIkCsr(ik *attest.Key, params ar.CsrParams) ([]byte, error) {
+
+	log.Tracef("Creating IK CSR..")
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{

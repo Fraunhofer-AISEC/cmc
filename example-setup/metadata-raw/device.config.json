@@ -1,0 +1,29 @@
+{
+    "type": "Device Config",
+    "akCsr": {
+        "subject": {
+            "commonName": "de.test.ik.device0",
+            "country": "DE",
+            "organization": "Test organization",
+            "organizationalUnit": "device",
+            "locality": "Munich",
+            "province": "BY",
+            "streetAddress": "teststreet 16",
+            "postalCode": "85748"
+        },
+        "sans": [ "127.0.0.1", "test.connector.de" , "localhost"]
+    },
+    "ikCsr": {
+        "subject": {
+            "commonName": "de.test.ak.device0",
+            "country": "DE",
+            "organization": "Test Organization",
+            "organizationalUnit": "device",
+            "locality": "Munich",
+            "province": "BY",
+            "streetAddress": "teststreet 15",
+            "postalCode": "85748"
+        },
+        "sans": [ "127.0.0.1:9000", "test.connector.de" ]
+    }
+}
