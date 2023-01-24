@@ -279,16 +279,20 @@ type CompanyDescription struct {
 	Validity           Validity `json:"validity" cbor:"4,keyasint"`
 }
 
-// CertParams contains params of an x.509 certificate. The tpm module cannot send an AK CSR
-// to the server, as the AK is a restricted key which does not allow signing of non-TPM-based
-// objects such as CSRs. Therefore, pass the certificate parameters encoded in this structure
-type CertParams struct {
-	Type    string   `json:"type" cbor:"0,keyasint"`
-	Subject Name     `json:"subject,omitempty" cbor:"1,keyasint,omitempty"`
-	SANs    []string `json:"sans,omitempty" cbor:"2,keyasint,omitempty"`
+// DeviceConfig contains the local device configuration parameters
+type DeviceConfig struct {
+	Type  string    `json:"type" cbor:"0,keyasint"`
+	AkCsr CsrParams `json:"akCsr" cbor:"1,keyasint"`
+	IkCsr CsrParams `json:"ikCsr" cbor:"2,keyasint"`
 }
 
-// Name is the PKIX Name for CertParams
+// CsrParams contains certificate signing request parameters
+type CsrParams struct {
+	Subject Name     `json:"subject" cbor:"0,keyasint"`
+	SANs    []string `json:"sans,omitempty" cbor:"1,keyasint,omitempty"`
+}
+
+// Name is the PKIX Name for CsrParams
 type Name struct {
 	CommonName         string        `json:"commonName,omitempty" cbor:"0,keyasint,omitempty"`
 	Country            string        `json:"country,omitempty" cbor:"1,keyasint,omitempty"`

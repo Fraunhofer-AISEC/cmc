@@ -162,8 +162,8 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 	// get key
 	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
-		log.Errorf("Failed to get TLS key: %v", err)
-		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to get TLS key")
+		log.Errorf("Failed to get IK: %v", err)
+		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to get IK")
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer

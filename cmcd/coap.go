@@ -224,7 +224,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	// Get key handle from (hardware) interface
 	tlsKeyPriv, _, err := serverConfig.Signer.GetSigningKeys()
 	if err != nil {
-		msg := fmt.Sprintf("failed to get TLS key: %v", err)
+		msg := fmt.Sprintf("failed to get IK: %v", err)
 		log.Warn(msg)
 		SendCoapError(w, r, codes.InternalServerError, msg)
 		return

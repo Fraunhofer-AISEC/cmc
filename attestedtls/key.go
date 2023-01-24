@@ -45,7 +45,7 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 	return priv.pubKey
 }
 
-// Obtains Certificate for the used TLS key from cmcd
+// Obtains Certificate for the Identity Key (IK) used for the connection from cmcd
 func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 
