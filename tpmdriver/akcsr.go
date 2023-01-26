@@ -36,13 +36,6 @@ import (
 	_ "crypto/sha512"
 )
 
-// pkixPublicKey reflects a PKIX public key structure. See SubjectPublicKeyInfo
-// in RFC 3280.
-type pkixPublicKey struct {
-	Algo      pkix.AlgorithmIdentifier
-	BitString asn1.BitString
-}
-
 // pkcs1PublicKey reflects the ASN.1 structure of a PKCS #1 public key.
 type pkcs1PublicKey struct {
 	N *big.Int
@@ -89,35 +82,6 @@ func marshalPublicKey(pub any) (publicKeyBytes []byte, publicKeyAlgorithm pkix.A
 	return publicKeyBytes, publicKeyAlgorithm, nil
 }
 
-// MarshalPKIXPublicKey converts a public key to PKIX, ASN.1 DER form.
-// The encoded public key is a SubjectPublicKeyInfo structure
-// (see RFC 5280, Section 4.1).
-//
-// The following key types are currently supported: *rsa.PublicKey, *ecdsa.PublicKey
-// and ed25519.PublicKey. Unsupported key types result in an error.
-//
-// This kind of key is commonly encoded in PEM blocks of type "PUBLIC KEY".
-func MarshalPKIXPublicKey(pub any) ([]byte, error) {
-	var publicKeyBytes []byte
-	var publicKeyAlgorithm pkix.AlgorithmIdentifier
-	var err error
-
-	if publicKeyBytes, publicKeyAlgorithm, err = marshalPublicKey(pub); err != nil {
-		return nil, err
-	}
-
-	pkix := pkixPublicKey{
-		Algo: publicKeyAlgorithm,
-		BitString: asn1.BitString{
-			Bytes:     publicKeyBytes,
-			BitLength: 8 * len(publicKeyBytes),
-		},
-	}
-
-	ret, _ := asn1.Marshal(pkix)
-	return ret, nil
-}
-
 type publicKeyInfo struct {
 	Raw       asn1.RawContent
 	Algorithm pkix.AlgorithmIdentifier
@@ -130,13 +94,6 @@ var publicKeyAlgoName = [...]string{
 	x509.ECDSA:   "ECDSA",
 	x509.Ed25519: "Ed25519",
 }
-
-// func (algo x509.PublicKeyAlgorithm) String() string {
-// 	if 0 < algo && int(algo) < len(publicKeyAlgoName) {
-// 		return publicKeyAlgoName[algo]
-// 	}
-// 	return strconv.Itoa(int(algo))
-// }
 
 // OIDs for signature algorithms
 //

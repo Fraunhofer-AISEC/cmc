@@ -92,7 +92,7 @@ const (
 )
 
 var (
-	tpmProtocolVersion = 2
+	tpmProtocolVersion = 3
 	swProtocolVersion  = 2
 	snpProtocolVersion = 1
 	dataStore          datastore
@@ -439,43 +439,48 @@ func handleVcekRetrieval(writer http.ResponseWriter, req *http.Request) {
 // processAcRequest processes a TPM Activate Credential Request (Step 1)
 func processAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
-	var acRequest tpmdriver.AcRequest
-	// Registers specific type for value transferred as interface
-	gob.Register(rsa.PublicKey{})
+	acRequest := new(tpmdriver.AcRequest)
 	d := gob.NewDecoder(buf)
-	d.Decode(&acRequest)
+	d.Decode(acRequest)
 
 	if acRequest.Version != tpmProtocolVersion {
 		return nil, fmt.Errorf("activate credential request protocol version of server (%d) does not match client (%d)",
 			tpmProtocolVersion, acRequest.Version)
 	}
 
-	if acRequest.Ek.Public == nil {
+	if acRequest.EkPublic == nil {
 		return nil, fmt.Errorf("ek public key from device not present")
+	}
+	ekPub, err := x509.ParsePKIXPublicKey(acRequest.EkPublic)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse PKIX public key: %w", err)
 	}
 
 	// Retrieve the EK cert (varies between manufacturers)
 	var ekCert *x509.Certificate
-	var err error
-	if acRequest.Ek.Certificate == nil {
-		if acRequest.Ek.CertificateURL == "" {
+	if acRequest.EkCertDer == nil {
+		if acRequest.EkCertUrl == "" {
 			return nil, fmt.Errorf("neither EK Certificate nor Certificate URL present")
 		}
 		// Intel TPMs do not provide their EK certificate but instead a certificate URL from where the certificate can be retrieved via its public key
-		if acRequest.TpmInfo.Manufacturer.String() != manufacturerIntel {
-			return nil, fmt.Errorf("ek certificate not present and Certificate URL not supported for manufacturer %v", acRequest.TpmInfo.Manufacturer)
+		if acRequest.TpmManufacturer != manufacturerIntel {
+			return nil, fmt.Errorf("ek certificate not present and Certificate URL not supported for manufacturer %v", acRequest.TpmManufacturer)
 		}
-		ekCert, err = getIntelEkCert(acRequest.Ek.CertificateURL)
+		ekCert, err = getIntelEkCert(acRequest.EkCertUrl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve Intel TPM EK certificate from Intel server: %w", err)
 		}
 	} else {
-		ekCert = acRequest.Ek.Certificate
+		ekCert, err = x509.ParseCertificate(acRequest.EkCertDer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse EK certificate: %w", err)
+		}
 	}
 
 	// Verify the EK certificate chain
 	if dataStore.VerifyEkCert {
-		err := verifyEkCert(dataStore.DbPath, ekCert, &acRequest.TpmInfo)
+		err := verifyEkCert(dataStore.DbPath, ekCert, acRequest.TpmManufacturer,
+			acRequest.TpmFwMajor, acRequest.TpmFwMinor)
 		if err != nil {
 			return nil, fmt.Errorf("verify EK certificate chain: error = %w", err)
 		}
@@ -484,16 +489,25 @@ func processAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 		log.Warn("skipping EK certificate chain validation (turned off via config)")
 	}
 
-	var ekPub rsa.PublicKey
-	ekPub, ok := acRequest.Ek.Public.(rsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("rsa public key required for credential activation")
+	akParams := attest.AttestationParameters{
+		Public:                  acRequest.AkPublic,
+		UseTCSDActivationFormat: false,
+		CreateData:              acRequest.AkCreateData,
+		CreateAttestation:       acRequest.AkCreateAttestation,
+		CreateSignature:         acRequest.AkCreateSignature,
+	}
+
+	ikParams := attest.CertificationParameters{
+		Public:            acRequest.IkPublic,
+		CreateData:        acRequest.IkCreateData,
+		CreateAttestation: acRequest.IkCreateAttestation,
+		CreateSignature:   acRequest.IkCreateSignature,
 	}
 
 	params := attest.ActivationParameters{
 		TPMVersion: 2,
-		EK:         &ekPub,
-		AK:         acRequest.AkParams,
+		EK:         ekPub,
+		AK:         akParams,
 	}
 
 	// Generate the credential activation challenge. This includes verifying, that the
@@ -505,8 +519,9 @@ func processAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 
 	// Return encrypted credentials to client
 	acResponse := tpmdriver.AcResponse{
-		Version: tpmProtocolVersion,
-		Ec:      *encryptedCredentials,
+		Version:              tpmProtocolVersion,
+		ActivationCredential: encryptedCredentials.Credential,
+		ActivationSecret:     encryptedCredentials.Secret,
 	}
 
 	var retBuf bytes.Buffer
@@ -517,8 +532,8 @@ func processAcRequest(buf *bytes.Buffer) (*bytes.Buffer, error) {
 	}
 
 	dataStore.Secret[acRequest.AkQualifiedName] = secret
-	dataStore.AkParams[acRequest.AkQualifiedName] = acRequest.AkParams
-	dataStore.IkParams[acRequest.AkQualifiedName] = acRequest.IkParams
+	dataStore.AkParams[acRequest.AkQualifiedName] = akParams
+	dataStore.IkParams[acRequest.AkQualifiedName] = ikParams
 
 	return &retBuf, nil
 }
@@ -974,7 +989,7 @@ func generateCertificate(tmpl *x509.Certificate, pubTpmBlob []byte) ([]byte, err
 	return pemCert.Bytes(), nil
 }
 
-func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) error {
+func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, major, minor int) error {
 	// Load the TPM EK Certificate database for validating sent EK certificates
 	db, err := sql.Open("sqlite3", dbpath)
 	if err != nil {
@@ -985,7 +1000,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 	// Add TPM EK intermediate certs from database to certificate pool
 	var intermediates []byte
 	var intermediatesPool *x509.CertPool = nil
-	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND FwMajor=? AND CA=0", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor).Scan(&intermediates)
+	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND FwMajor=? AND CA=0", manufacturer, major).Scan(&intermediates)
 	if err == sql.ErrNoRows {
 		log.Debug("TPM EK cert chain does not contain intermediate certificates")
 	} else if err != nil {
@@ -1003,9 +1018,9 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, tpmInfo *attest.TPMInfo) 
 
 	// Add TPM EK CA cert from database to certificate pool
 	var roots []byte
-	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND CA=1", tpmInfo.Manufacturer.String()).Scan(&roots)
+	err = db.QueryRow("SELECT Certs FROM trustanchors WHERE Manufacturer LIKE ? AND CA=1", manufacturer).Scan(&roots)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve CA certificate for TPM from %v (Major: %v, Minor: %v): %w", tpmInfo.Manufacturer.String(), tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor, err)
+		return fmt.Errorf("failed to retrieve CA certificate for TPM from %v (Major: %v, Minor: %v): %w", manufacturer, major, minor, err)
 	}
 	log.Trace("Found Root Certs in DB: ", string(roots))
 
