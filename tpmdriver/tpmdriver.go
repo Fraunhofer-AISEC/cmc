@@ -48,7 +48,7 @@ import (
 )
 
 var (
-	tpmProtocolVersion = 2
+	tpmProtocolVersion = 3
 )
 
 // Tpm is a structure that implements the Measure method
@@ -78,19 +78,31 @@ type Config struct {
 // for verifying that the AK and IK were created on a genuine
 // TPM with a valid EK
 type AcRequest struct {
-	Version         int
-	AkQualifiedName [32]byte
-	TpmInfo         attest.TPMInfo
-	Ek              attest.EK
-	AkParams        attest.AttestationParameters
-	IkParams        attest.CertificationParameters
+	Version             int      // Protocol version
+	AkQualifiedName     [32]byte // TPM Attestation Key Qualified Name
+	TpmManufacturer     string   // TPM Manufaturer
+	TpmFwMajor          int      // TPM Firmware Minor Version
+	TpmFwMinor          int      // TPM Firmware Major Version
+	EkPublic            []byte   // PKIX, ASN.1 DER SubjectPublicKeyInfo (RFC 5280)
+	EkCertDer           []byte   // X.509 DER Certificate
+	EkCertUrl           string   // Alternative to EkCertDer, for Intel TPMs
+	AkPublic            []byte   // TPMT_PUBLIC structure
+	AkCreateData        []byte   // TPMS_CREATION_DATA structure
+	AkCreateAttestation []byte   // TPMS_ATTEST structure
+	AkCreateSignature   []byte   // TPMT_SIGNATURE
+	IkPublic            []byte   // TPMT_PUBLIC structure
+	IkCreateData        []byte   // TPMS_CREATION_DATA structure
+	IkCreateAttestation []byte   // TPMS_ATTEST structure
+	IkCreateSignature   []byte   // TPMT_SIGNATURE
+
 }
 
 // AcResponse holds the activate credential challenge
 type AcResponse struct {
-	Version         int
-	AkQualifiedName [32]byte
-	Ec              attest.EncryptedCredential
+	Version              int
+	AkQualifiedName      [32]byte
+	ActivationCredential []byte
+	ActivationSecret     []byte
 }
 
 // AkCertRequest holds the secret from the activate
@@ -718,22 +730,41 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 
 func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *attest.TPMInfo, url string) ([]byte, error) {
 
-	attestParams := ak.AttestationParameters()
+	akParams := ak.AttestationParameters()
 
+	// Create AK Qualified Name
 	qn, err := GetAkQualifiedName()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve AK qualified name: %v", err)
+		return nil, fmt.Errorf("failed to retrieve AK qualified name: %w", err)
 	}
 	var qnSlice [32]byte
 	copy(qnSlice[:], qn)
 
+	// Encode EK public key
+	ekPub, err := x509.MarshalPKIXPublicKey(ek.Public)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal EK public key: %w", err)
+	}
+
+	ikParams := ik.CertificationParameters()
+
 	acRequest := AcRequest{
-		Version:         tpmProtocolVersion,
-		AkQualifiedName: qnSlice,
-		TpmInfo:         *tpmInfo,
-		Ek:              ek,
-		AkParams:        attestParams,
-		IkParams:        ik.CertificationParameters(),
+		Version:             tpmProtocolVersion,
+		AkQualifiedName:     qnSlice,
+		TpmManufacturer:     tpmInfo.Manufacturer.String(),
+		TpmFwMajor:          tpmInfo.FirmwareVersionMajor,
+		TpmFwMinor:          tpmInfo.FirmwareVersionMinor,
+		EkPublic:            ekPub,
+		EkCertDer:           ek.Certificate.Raw,
+		EkCertUrl:           ek.CertificateURL,
+		AkPublic:            akParams.Public,
+		AkCreateData:        akParams.CreateData,
+		AkCreateAttestation: akParams.CreateAttestation,
+		AkCreateSignature:   akParams.CreateSignature,
+		IkPublic:            ikParams.Public,
+		IkCreateData:        ikParams.CreateData,
+		IkCreateAttestation: ikParams.CreateAttestation,
+		IkCreateSignature:   ikParams.CreateSignature,
 	}
 
 	// send EK and Attestation Parameters including AK to the server
@@ -749,14 +780,19 @@ func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmI
 		return nil, fmt.Errorf("activate credential response protocol version (%v) does not match our protocol version (%v)",
 			acResponse.Version, tpmProtocolVersion)
 	}
-	if acResponse.Ec.Credential == nil {
+	if acResponse.ActivationCredential == nil {
 		return nil, errors.New("did not receive encrypted credential from server")
 	}
-	if acResponse.Ec.Secret == nil {
+	if acResponse.ActivationSecret == nil {
 		return nil, errors.New("did not receive encrypted secret from server")
 	}
 
-	secret, err := ak.ActivateCredential(tpm, acResponse.Ec)
+	encryptedCredential := attest.EncryptedCredential{
+		Credential: acResponse.ActivationCredential,
+		Secret:     acResponse.ActivationSecret,
+	}
+
+	secret, err := ak.ActivateCredential(tpm, encryptedCredential)
 	if err != nil {
 		return nil, fmt.Errorf("activate credential failed: %v", err)
 	}
