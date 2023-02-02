@@ -649,7 +649,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	tokenRes, payload, ok := s.VerifyToken([]byte(attestationReport), roots)
 	result.ReportSignature = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Validation of Attestation Report Signatures failed")
+		log.Trace("Validation of Attestation Report failed")
 		result.Success = false
 		return false, &ar
 	}
@@ -675,20 +675,21 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.RtmResult.Summary = tokenRes.Summary
 	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Validation of RTM Manifest Signatures failed")
-		result.Success = false
-	}
-	err = s.Unmarshal(payload, &ar.RtmManifest)
-	if err != nil {
-		msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v", err)
-		result.RtmResult.Summary.setFalseMulti(&msg)
+		log.Trace("Validation of RTM Manifest failed")
 		result.Success = false
 	} else {
-		result.RtmResult.Name = ar.RtmManifest.Name
-		result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
-		if !result.RtmResult.ValidityCheck.Success {
-			result.RtmResult.Summary.Success = false
+		err = s.Unmarshal(payload, &ar.RtmManifest)
+		if err != nil {
+			msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v", err)
+			result.RtmResult.Summary.setFalseMulti(&msg)
 			result.Success = false
+		} else {
+			result.RtmResult.Name = ar.RtmManifest.Name
+			result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
+			if !result.RtmResult.ValidityCheck.Success {
+				result.RtmResult.Summary.Success = false
+				result.Success = false
+			}
 		}
 	}
 
@@ -697,21 +698,22 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.OsResult.Summary = tokenRes.Summary
 	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Validation of OS Manifest Signatures failed")
-		result.Success = false
-	}
-	err = s.Unmarshal(payload, &ar.OsManifest)
-	if err != nil {
-		msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v", err)
-		result.OsResult.Summary.setFalseMulti(&msg)
+		log.Trace("Validation of OS Manifest failed")
 		result.Success = false
 	} else {
-		result.OsResult.Name = ar.OsManifest.Name
-		result.RtmResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
-		result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
-		if !result.OsResult.ValidityCheck.Success {
-			result.OsResult.Summary.Success = false
+		err = s.Unmarshal(payload, &ar.OsManifest)
+		if err != nil {
+			msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v", err)
+			result.OsResult.Summary.setFalseMulti(&msg)
 			result.Success = false
+		} else {
+			result.OsResult.Name = ar.OsManifest.Name
+			result.RtmResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
+			result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
+			if !result.OsResult.ValidityCheck.Success {
+				result.OsResult.Summary.Success = false
+				result.Success = false
+			}
 		}
 	}
 
@@ -723,25 +725,25 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		result.AppResults[i].Summary = tokenRes.Summary
 		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
-			log.Trace("Validation of App Manifest Signatures failed")
-			result.Success = false
-		}
-
-		var am AppManifest
-		err = s.Unmarshal(payload, &am)
-		if err != nil {
-			msg := fmt.Sprintf("Unpacking of App Manifest failed: %v", err)
-			result.AppResults[i].Summary.setFalseMulti(&msg)
+			log.Trace("Validation of App Manifest failed")
 			result.Success = false
 		} else {
-			ar.AppManifests = append(ar.AppManifests, am)
-			result.AppResults[i].Name = am.Name
-			result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
-			if !result.AppResults[i].ValidityCheck.Success {
-				log.Trace("App Manifest invalid - " + am.Name)
-				result.AppResults[i].Summary.Success = false
+			var am AppManifest
+			err = s.Unmarshal(payload, &am)
+			if err != nil {
+				msg := fmt.Sprintf("Unpacking of App Manifest failed: %v", err)
+				result.AppResults[i].Summary.setFalseMulti(&msg)
 				result.Success = false
+			} else {
+				ar.AppManifests = append(ar.AppManifests, am)
+				result.AppResults[i].Name = am.Name
+				result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
+				if !result.AppResults[i].ValidityCheck.Success {
+					log.Trace("App Manifest invalid - " + am.Name)
+					result.AppResults[i].Summary.Success = false
+					result.Success = false
 
+				}
 			}
 		}
 	}
@@ -755,21 +757,22 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		if !ok {
 			log.Trace("Validation of Company Description Signatures failed")
 			result.Success = false
-		}
-		err = s.Unmarshal(payload, &ar.CompanyDescription)
-		if err != nil {
-			msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
-			result.CompDescResult.Summary.setFalseMulti(&msg)
-			result.Success = false
 		} else {
-			result.CompDescResult.Name = ar.CompanyDescription.DN
-			result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
-
-			result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
-			if !result.CompDescResult.ValidityCheck.Success {
-				log.Trace("Company Description invalid")
-				result.CompDescResult.Summary.Success = false
+			err = s.Unmarshal(payload, &ar.CompanyDescription)
+			if err != nil {
+				msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
+				result.CompDescResult.Summary.setFalseMulti(&msg)
 				result.Success = false
+			} else {
+				result.CompDescResult.Name = ar.CompanyDescription.DN
+				result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
+
+				result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
+				if !result.CompDescResult.ValidityCheck.Success {
+					log.Trace("Company Description invalid")
+					result.CompDescResult.Summary.Success = false
+					result.Success = false
+				}
 			}
 		}
 	}
@@ -779,13 +782,14 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	result.DevDescResult.Summary = tokenRes.Summary
 	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
-		log.Trace("Validation of Device Description Signatures failed")
+		log.Trace("Validation of Device Description failed")
 		result.Success = false
-	}
-	err = s.Unmarshal(payload, &ar.DeviceDescription)
-	if err != nil {
-		msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
-		result.DevDescResult.Summary.setFalseMulti(&msg)
+	} else {
+		err = s.Unmarshal(payload, &ar.DeviceDescription)
+		if err != nil {
+			msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
+			result.DevDescResult.Summary.setFalseMulti(&msg)
+		}
 	}
 
 	result.PlainAttReport = ar

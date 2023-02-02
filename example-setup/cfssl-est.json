@@ -1,0 +1,15 @@
+{
+    "CN": "CMC Test EST Certificate",
+    "names": [
+        {
+        "C": "DE",
+        "L": "Test City",
+        "O": "Test Company",
+        "OU": "Test Organizational Unit"
+        }
+    ],
+    "hosts": [
+        "localhost",
+        "127.0.0.1"
+    ]
+}

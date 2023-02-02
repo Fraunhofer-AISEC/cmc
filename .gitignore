@@ -13,3 +13,4 @@ example-setup/data-cmc/
 example-setup/**/*.cbor
 example-setup/metadata-signed/*
 tpmdriver/test_encrypted_ak.json
+est/server/server

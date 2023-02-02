@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/Fraunhofer-AISEC/cmc/est/client"
 )
 
 // Mode defines the mode to be run
@@ -32,6 +34,7 @@ const (
 	Verify   = 1 // Verify an attestation report
 	Dial     = 2 // Act as client to establish an attested TLS connection
 	Listen   = 3 // Act as server in etsblishing attested TLS connections
+	CaCerts  = 4 // Retrieve CA certs from EST server
 )
 
 const (
@@ -73,6 +76,8 @@ func main() {
 		mode = Dial
 	} else if strings.EqualFold(*modeFlag, "listen") {
 		mode = Listen
+	} else if strings.EqualFold(*modeFlag, "cacerts") {
+		mode = CaCerts
 	} else {
 		log.Fatal("Wrong mode. Possible [Generate | Verify | TLSConn]")
 	}
@@ -85,7 +90,7 @@ func main() {
 	// Get root CA certificate in PEM format
 	var ca []byte
 	var err error
-	if mode != Generate {
+	if mode != Generate && mode != CaCerts {
 		ca, err = os.ReadFile(*caFile)
 		if err != nil {
 			log.Fatalf("Failed to read file %v: %v", *caFile, err)
@@ -102,15 +107,31 @@ func main() {
 		}
 	}
 
-	if mode == Generate {
+	switch mode {
+	case Generate:
 		api.generate(*cmcAddr, *reportFile, *nonceFile)
-	} else if mode == Verify {
+	case Verify:
 		api.verify(*cmcAddr, *reportFile, *resultFile, *nonceFile, ca, policies)
-	} else if mode == Dial {
+	case Dial:
 		api.dial(*addr, *cmcAddr, *mtls, ca, policies)
-	} else if mode == Listen {
+	case Listen:
 		api.listen(*addr, *cmcAddr, *mtls, ca, policies)
-	} else {
+	case CaCerts:
+		getCaCerts(*addr)
+	default:
 		log.Fatalf("Unknown mode %v", mode)
+	}
+}
+
+func getCaCerts(addr string) {
+	log.Info("Retrieving CA certs")
+	estclient := client.NewClient(nil)
+	certs, err := estclient.CaCerts(addr)
+	if err != nil {
+		log.Fatalf("Failed to retrieve certificates: %v", err)
+	}
+	log.Debug("Received certs:")
+	for _, c := range certs {
+		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 }

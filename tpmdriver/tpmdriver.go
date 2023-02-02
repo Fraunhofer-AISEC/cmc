@@ -16,27 +16,22 @@
 package tpmdriver
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/binary"
-	"encoding/gob"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path"
 	"sort"
 	"sync"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"go.mozilla.org/pkcs7"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -44,11 +39,9 @@ import (
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/est/client"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
-)
-
-var (
-	tpmProtocolVersion = 3
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // Tpm is a structure that implements the Measure method
@@ -72,58 +65,6 @@ type Config struct {
 	UseIma      bool
 	ImaPcr      int32
 	Serializer  ar.Serializer
-}
-
-// AcRequest holds the data for an activate credential request
-// for verifying that the AK and IK were created on a genuine
-// TPM with a valid EK
-type AcRequest struct {
-	Version             int      // Protocol version
-	AkQualifiedName     [32]byte // TPM Attestation Key Qualified Name
-	TpmManufacturer     string   // TPM Manufaturer
-	TpmFwMajor          int      // TPM Firmware Minor Version
-	TpmFwMinor          int      // TPM Firmware Major Version
-	EkPublic            []byte   // PKIX, ASN.1 DER SubjectPublicKeyInfo (RFC 5280)
-	EkCertDer           []byte   // X.509 DER Certificate
-	EkCertUrl           string   // Alternative to EkCertDer, for Intel TPMs
-	AkPublic            []byte   // TPMT_PUBLIC structure
-	AkCreateData        []byte   // TPMS_CREATION_DATA structure
-	AkCreateAttestation []byte   // TPMS_ATTEST structure
-	AkCreateSignature   []byte   // TPMT_SIGNATURE
-	IkPublic            []byte   // TPMT_PUBLIC structure
-	IkCreateData        []byte   // TPMS_CREATION_DATA structure
-	IkCreateAttestation []byte   // TPMS_ATTEST structure
-	IkCreateSignature   []byte   // TPMT_SIGNATURE
-
-}
-
-// AcResponse holds the activate credential challenge
-type AcResponse struct {
-	Version              int
-	AkQualifiedName      [32]byte
-	ActivationCredential []byte
-	ActivationSecret     []byte
-}
-
-// AkCertRequest holds the secret from the activate
-// credential challenge as well as certificate parameters
-// of the to be generated certificates (as the AK can only sign
-// objects form within the TPM, a CSR is not possible)
-type AkCertRequest struct {
-	Version         int
-	AkQualifiedName [32]byte
-	Secret          []byte
-	AkCsr           []byte
-	IkCsr           []byte
-}
-
-// AkCertResponse holds the issued certificates including the
-// certificate chain up to a Root CA
-type AkCertResponse struct {
-	Version         int
-	AkQualifiedName [32]byte
-	AkCertChain     ar.CertChain
-	IkCertChain     ar.CertChain
 }
 
 // Paths specifies the paths to store the encrypted TPM key blobs
@@ -198,19 +139,22 @@ func NewTpm(c *Config) (*Tpm, error) {
 			return nil, fmt.Errorf("failed to create CSRs: %v", err)
 		}
 
-		log.Tracef("Created AK CSR: %v", string(akCsr))
-		log.Tracef("Created IK CSR: %v", string(ikCsr))
+		log.Tracef("Created AK CSR: %v", akCsr.Subject.CommonName)
+		log.Tracef("Created IK CSR: %v", ikCsr.Subject.CommonName)
 
-		akchain, ikchain, err = provisionTpm(c.ServerAddr+"activate-credential/", akCsr, ikCsr)
+		akchain, ikchain, err = provisionTpm(c.ServerAddr, akCsr, ikCsr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to provision TPM: %v", err)
 		}
 
-		err = saveTpmData(c, paths, &akchain, &ikchain)
+		err = saveCerts(c.StoragePath, paths, &akchain, &ikchain)
 		if err != nil {
-			os.Remove(paths.Ak)
-			os.Remove(paths.Ik)
 			return nil, fmt.Errorf("failed to save TPM data: %v", err)
+		}
+
+		err = saveKeys(paths)
+		if err != nil {
+			return nil, fmt.Errorf("failed to save keys: %w", err)
 		}
 
 	} else {
@@ -523,53 +467,131 @@ func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.
 	return pcrValues, quote, nil
 }
 
-func provisionTpm(provServerURL string, akCsr, ikCsr []byte) (ar.CertChain, ar.CertChain, error) {
+func provisionTpm(provServerURL string, akCsr, ikCsr *x509.CertificateRequest,
+) (ar.CertChain, ar.CertChain, error) {
 	log.Debug("Performing TPM credential activation..")
 
 	if TPM == nil {
 		return ar.CertChain{}, ar.CertChain{}, errors.New("TPM is not openend")
 	}
-	if ek == nil || ak == nil || ik == nil {
+	if len(ek) == 0 || ak == nil || ik == nil {
 		return ar.CertChain{}, ar.CertChain{}, errors.New("keys not created")
 	}
 
 	tpmInfo, err := GetTpmInfo()
 	if err != nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to retrieve TPM Info: %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to retrieve TPM Info: %w", err)
 	}
 
-	secret, err := requestActivateCredential(TPM, *ak, ek[0], tpmInfo, provServerURL)
+	// TODO provision EST server certificate with a different mechanism,
+	// otherwise this step has to happen in a secure environment. Allow
+	// different CAs for metadata and the EST server authentication
+	log.Warn("Creating new EST client without server authentication")
+	estclient := client.NewClient(nil)
+
+	log.Info("Retrieving CA certs")
+	caCerts, err := estclient.CaCerts(provServerURL)
 	if err != nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("request activate credential failed: %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to retrieve certificates: %w", err)
+	}
+	log.Debugf("Received cert chain length %v:", len(caCerts))
+	for _, c := range caCerts {
+		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 
-	// Return challenge to server
-	resp, err := requestTpmCerts(provServerURL, secret, akCsr, ikCsr)
+	log.Warn("Setting retrieved certificate for future authentication")
+	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to request tpm certs: %v", err)
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
-	if resp.Version != tpmProtocolVersion {
-		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("tpm certs response protocol version (%v) does not match our protocol versio (%v)",
-			resp.Version, tpmProtocolVersion)
+	akParams := ak.AttestationParameters()
+
+	// Encode EK public key
+	ekPub, err := x509.MarshalPKIXPublicKey(ek[0].Public)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to marshal EK public key: %w", err)
 	}
 
-	return resp.AkCertChain, resp.IkCertChain, nil
+	log.Info("Performing TPM AK Enroll")
+	encCredential, encSecret, pkcs7Cert, err := estclient.TpmActivateEnroll(
+		provServerURL, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
+		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
+		akCsr,
+		akParams.Public, akParams.CreateData, akParams.CreateAttestation, akParams.CreateSignature,
+		ekPub, ek[0].Certificate.Raw,
+	)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to enroll AK: %w", err)
+	}
+
+	secret, err := ActivateCredential(TPM, ak, encCredential, encSecret)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("request activate credential failed: %w", err)
+	}
+
+	encryptedCert, err := pkcs7.Parse(pkcs7Cert)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to parse PKCS7 CMS EnvelopedData: %v", err)
+	}
+
+	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES256GCM
+	certDer, err := encryptedCert.DecryptUsingPSK(secret)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to decrypt PKCS7 encrypted cert: %w", err)
+	}
+
+	akCert, err := x509.ParseCertificate(certDer)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	log.Tracef("Created new AK Cert: %v", akCert.Subject.CommonName)
+
+	log.Info("Performing TPM IK Enroll")
+	ikParams := ik.CertificationParameters()
+
+	ikCert, err := estclient.TpmCertifyEnroll(
+		provServerURL,
+		ikCsr,
+		ikParams.Public, ikParams.CreateData, ikParams.CreateAttestation, ikParams.CreateSignature,
+		akParams.Public,
+	)
+	if err != nil {
+		return ar.CertChain{}, ar.CertChain{}, fmt.Errorf("failed to enroll IK: %w", err)
+	}
+
+	log.Tracef("Created new IK cert: %v", ikCert.Subject.CommonName)
+
+	// TODO clean solution
+	akchain := ar.CertChain{
+		Leaf:          internal.WriteCertPem(akCert),
+		Intermediates: internal.WriteCertsPem(caCerts[:len(caCerts)-1]),
+		Ca:            internal.WriteCertPem(caCerts[len(caCerts)-1]),
+	}
+	ikchain := ar.CertChain{
+		Leaf:          internal.WriteCertPem(ikCert),
+		Intermediates: internal.WriteCertsPem(caCerts[:len(caCerts)-1]),
+		Ca:            internal.WriteCertPem(caCerts[len(caCerts)-1]),
+	}
+
+	return akchain, ikchain, nil
 }
 
-func saveTpmData(c *Config, paths *Paths, akchain, ikchain *ar.CertChain) error {
+func saveCerts(storagePath string, paths *Paths, akchain, ikchain *ar.CertChain) error {
 
 	// Store the certificates on disk
-	log.Tracef("New AK Cert %v: %v", paths.AkCert, string(akchain.Leaf))
-	log.Tracef("New IK Cert %v: %v", paths.IkCert, string(ikchain.Leaf))
+	log.Tracef("New AK Cert %v:\n%v", paths.AkCert, string(akchain.Leaf))
+	log.Tracef("New IK Cert %v:\n%v", paths.IkCert, string(ikchain.Leaf))
 
 	// TODO currently only the same certificate chain is supported for AK and IK
+	paths.Intermediates = nil
 	for i, inter := range akchain.Intermediates {
-		path := path.Join(c.StoragePath, fmt.Sprintf("intermediate%v.pem", i))
+		path := path.Join(storagePath, fmt.Sprintf("intermediate%v.pem", i))
 		paths.Intermediates = append(paths.Intermediates, path)
-		log.Tracef("New Intermediate Cert %v: %v", path, string(inter))
+		log.Tracef("New Intermediate Cert %v:\n%v", path, string(inter))
 	}
-	log.Tracef("New CA Cert %v: %v", paths.Ca, string(akchain.Ca))
+	log.Tracef("New CA Cert %v:\n%v", paths.Ca, string(akchain.Ca))
 
 	if err := os.WriteFile(paths.AkCert, akchain.Leaf, 0644); err != nil {
 		return fmt.Errorf("failed to write file %v: %v", paths.AkCert, err)
@@ -578,7 +600,9 @@ func saveTpmData(c *Config, paths *Paths, akchain, ikchain *ar.CertChain) error 
 		return fmt.Errorf("failed to write %v: %v", paths.IkCert, err)
 	}
 	if len(paths.Intermediates) != len(akchain.Intermediates) {
-		return errors.New("internal error: length of intermediate certificates does not match length of paths")
+		return fmt.Errorf("internal error: length of intermediate certificates (%v) "+
+			"does not match length of paths (%v)",
+			len(akchain.Intermediates), len(paths.Intermediates))
 	}
 	for i := range akchain.Intermediates {
 		if err := os.WriteFile(paths.Intermediates[i], akchain.Intermediates[i], 0644); err != nil {
@@ -589,6 +613,10 @@ func saveTpmData(c *Config, paths *Paths, akchain, ikchain *ar.CertChain) error 
 		return fmt.Errorf("failed to write %v: %v", paths.Ca, err)
 	}
 
+	return nil
+}
+
+func saveKeys(paths *Paths) error {
 	// Store the encrypted AK blob on disk
 	akBytes, err := ak.Marshal()
 	if err != nil {
@@ -728,68 +756,21 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 	return eks, ak, ik, nil
 }
 
-func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmInfo *attest.TPMInfo, url string) ([]byte, error) {
+func ActivateCredential(
+	tpm *attest.TPM, ak *attest.AK,
+	activationCredential, activationSecret []byte,
+) ([]byte, error) {
 
-	akParams := ak.AttestationParameters()
-
-	// Create AK Qualified Name
-	qn, err := GetAkQualifiedName()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve AK qualified name: %w", err)
-	}
-	var qnSlice [32]byte
-	copy(qnSlice[:], qn)
-
-	// Encode EK public key
-	ekPub, err := x509.MarshalPKIXPublicKey(ek.Public)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal EK public key: %w", err)
-	}
-
-	ikParams := ik.CertificationParameters()
-
-	acRequest := AcRequest{
-		Version:             tpmProtocolVersion,
-		AkQualifiedName:     qnSlice,
-		TpmManufacturer:     tpmInfo.Manufacturer.String(),
-		TpmFwMajor:          tpmInfo.FirmwareVersionMajor,
-		TpmFwMinor:          tpmInfo.FirmwareVersionMinor,
-		EkPublic:            ekPub,
-		EkCertDer:           ek.Certificate.Raw,
-		EkCertUrl:           ek.CertificateURL,
-		AkPublic:            akParams.Public,
-		AkCreateData:        akParams.CreateData,
-		AkCreateAttestation: akParams.CreateAttestation,
-		AkCreateSignature:   akParams.CreateSignature,
-		IkPublic:            ikParams.Public,
-		IkCreateData:        ikParams.CreateData,
-		IkCreateAttestation: ikParams.CreateAttestation,
-		IkCreateSignature:   ikParams.CreateSignature,
-	}
-
-	// send EK and Attestation Parameters including AK to the server
-	acResponse, err := sendParams(acRequest, url)
-	if err != nil {
-		return nil, fmt.Errorf("send params failed: %v", err)
-	}
-
-	// Client decrypts the credential
-	log.Debug("Activate Credential")
-
-	if acResponse.Version != tpmProtocolVersion {
-		return nil, fmt.Errorf("activate credential response protocol version (%v) does not match our protocol version (%v)",
-			acResponse.Version, tpmProtocolVersion)
-	}
-	if acResponse.ActivationCredential == nil {
+	if activationCredential == nil {
 		return nil, errors.New("did not receive encrypted credential from server")
 	}
-	if acResponse.ActivationSecret == nil {
+	if activationSecret == nil {
 		return nil, errors.New("did not receive encrypted secret from server")
 	}
 
 	encryptedCredential := attest.EncryptedCredential{
-		Credential: acResponse.ActivationCredential,
-		Secret:     acResponse.ActivationSecret,
+		Credential: activationCredential,
+		Secret:     activationSecret,
 	}
 
 	secret, err := ak.ActivateCredential(tpm, encryptedCredential)
@@ -798,88 +779,6 @@ func requestActivateCredential(tpm *attest.TPM, ak attest.AK, ek attest.EK, tpmI
 	}
 
 	return secret, nil
-}
-
-func sendParams(acRequest AcRequest, url string) (*AcResponse, error) {
-
-	var buf bytes.Buffer
-	// Registers specific type for value transferred as interface
-	gob.Register(rsa.PublicKey{})
-	e := gob.NewEncoder(&buf)
-	if err := e.Encode(acRequest); err != nil {
-		return nil, fmt.Errorf("failed to send to server: %v", err)
-	}
-
-	log.Debug("Sending Credential Activation HTTP POST Request")
-	resp, err := http.Post(url, "tpm/attestparams", &buf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send POST request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("request failed: HTTP Server responded %v: %v",
-			resp.Status, string(b))
-	}
-
-	var acResponse AcResponse
-	d := gob.NewDecoder((bytes.NewBuffer(b)))
-	d.Decode(&acResponse)
-
-	return &acResponse, nil
-}
-
-func requestTpmCerts(url string, secret []byte, akCsr, ikCsr []byte) (AkCertResponse, error) {
-
-	qn, err := GetAkQualifiedName()
-	if err != nil {
-		return AkCertResponse{}, fmt.Errorf("failed to retrieve AK qualified name - %v", err)
-	}
-	var qnSlice [32]byte
-	copy(qnSlice[:], qn)
-
-	akCertRequest := AkCertRequest{
-		Version:         tpmProtocolVersion,
-		AkQualifiedName: qnSlice,
-		Secret:          secret,
-		AkCsr:           akCsr,
-		IkCsr:           ikCsr,
-	}
-
-	var buf bytes.Buffer
-	e := gob.NewEncoder(&buf)
-	if err := e.Encode(akCertRequest); err != nil {
-		return AkCertResponse{}, fmt.Errorf("failed to send akCertRequest to server: %v", err)
-	}
-
-	log.Debug("Sending AK Certificate HTTP POST Request")
-
-	resp, err := http.Post(url, "tpm/akcert", &buf)
-	if err != nil {
-		return AkCertResponse{}, fmt.Errorf("error sending params - %v", err)
-	}
-	defer resp.Body.Close()
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return AkCertResponse{}, fmt.Errorf("error sending params - %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return AkCertResponse{}, fmt.Errorf("request failed: HTTP Server responded %v: %v",
-			resp.Status, string(b))
-	}
-
-	var akCertResponse AkCertResponse
-	d := gob.NewDecoder((bytes.NewBuffer(b)))
-	d.Decode(&akCertResponse)
-
-	return akCertResponse, nil
 }
 
 func getTpmPcrs(c *Config) ([]int, error) {
@@ -948,7 +847,8 @@ func getTpmPcrs(c *Config) ([]int, error) {
 	return pcrs, nil
 }
 
-func createCsrs(c *Config, ak *attest.AK, ik *attest.Key) (akCsr, ikCsr []byte, err error) {
+func createCsrs(c *Config, ak *attest.AK, ik *attest.Key,
+) (akCsr, ikCsr *x509.CertificateRequest, err error) {
 
 	// Get device configuration from metadata
 	for i, m := range c.Metadata {
@@ -990,7 +890,7 @@ func createCsrs(c *Config, ak *attest.AK, ik *attest.Key) (akCsr, ikCsr []byte, 
 	return nil, nil, errors.New("failed to find device configuration")
 }
 
-func createAkCsr(ak *attest.AK, params ar.CsrParams) ([]byte, error) {
+func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, error) {
 
 	log.Tracef("Creating AK CSR..")
 
@@ -1011,8 +911,6 @@ func createAkCsr(ak *attest.AK, params ar.CsrParams) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate request: %v", err)
 	}
-	tmp := &bytes.Buffer{}
-	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})
 
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
@@ -1023,10 +921,10 @@ func createAkCsr(ak *attest.AK, params ar.CsrParams) ([]byte, error) {
 		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
 	}
 
-	return tmp.Bytes(), nil
+	return csr, nil
 }
 
-func createIkCsr(ik *attest.Key, params ar.CsrParams) ([]byte, error) {
+func createIkCsr(ik *attest.Key, params ar.CsrParams) (*x509.CertificateRequest, error) {
 
 	log.Tracef("Creating IK CSR..")
 
@@ -1053,8 +951,6 @@ func createIkCsr(ik *attest.Key, params ar.CsrParams) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate request: %v", err)
 	}
-	tmp := &bytes.Buffer{}
-	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})
 
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
@@ -1065,7 +961,7 @@ func createIkCsr(ik *attest.Key, params ar.CsrParams) ([]byte, error) {
 		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
 	}
 
-	return tmp.Bytes(), nil
+	return csr, nil
 }
 
 func exists(i int, arr []int) bool {
