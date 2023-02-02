@@ -23,9 +23,7 @@ package snpdriver
 */
 import "C"
 import (
-	"bytes"
 	"crypto/x509"
-	"encoding/gob"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -36,6 +34,8 @@ import (
 	"unsafe"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -49,9 +49,8 @@ const (
 type certFormat int
 
 var (
-	snpProtocolVersion = 1
-	vcekUrlPrefix      = "https://kdsintf.amd.com/vcek/v1/Milan/"
-	milanUrl           = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
+	vcekUrlPrefix = "https://kdsintf.amd.com/vcek/v1/Milan/"
+	milanUrl      = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
 )
 
 // Snp is a structure required for implementing the Measure method
@@ -62,17 +61,6 @@ type Snp struct {
 
 type Config struct {
 	Url string
-}
-
-type VcekRequest struct {
-	Version int
-	ChipId  [64]byte
-	Tcb     uint64
-}
-
-type VcekResponse struct {
-	Version int
-	Vcek    []byte
 }
 
 func NewSnpDriver(c Config) (*Snp, error) {
@@ -98,25 +86,21 @@ func NewSnpDriver(c Config) (*Snp, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
-	req := VcekRequest{
-		Version: snpProtocolVersion,
-		ChipId:  s.ChipId,
-		Tcb:     s.CurrentTcb,
-	}
-	resp, err := fetchVcek(c.Url+"vcek-retrieval/", req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get VCEK: %w", err)
-	}
 
-	if resp.Version != snpProtocolVersion {
-		return nil, fmt.Errorf("response protocol version (%v) does not match our protocol version (%v)",
-			resp.Version, snpProtocolVersion)
+	// TODO mandate server authentication in the future, otherwise
+	// this step has to happen in a secure environment
+	log.Warn("Creating new EST client without server authentication")
+	estclient := client.NewClient(nil)
+
+	vcek, err := estclient.SnpEnroll(c.Url, s.ChipId, s.CurrentTcb)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 	}
 
 	snp.certChain = ar.CertChain{
-		Leaf:          resp.Vcek,
-		Intermediates: [][]byte{encodeCertPem(ca[0])},
-		Ca:            encodeCertPem(ca[1]),
+		Leaf:          internal.WriteCertPem(vcek),
+		Intermediates: [][]byte{internal.WriteCertPem(ca[0])},
+		Ca:            internal.WriteCertPem(ca[1]),
 	}
 
 	return snp, nil
@@ -166,15 +150,9 @@ func GetSnpMeasurement(nonce []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to retrieve SNP AR. C.snp_dump_ar returned %v", res)
 	}
 
-	log.Tracef("Generated SNP attestation report: %v", hex.EncodeToString(buf))
+	log.Trace("Generated SNP attestation report")
 
 	return buf, nil
-}
-
-func encodeCertPem(cert *x509.Certificate) []byte {
-	tmp := &bytes.Buffer{}
-	pem.Encode(tmp, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
-	return tmp.Bytes()
 }
 
 func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
@@ -218,39 +196,4 @@ func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("failed to parse x509 Certificate: %w", err)
 	}
 	return certs, resp.StatusCode, nil
-}
-
-func fetchVcek(url string, req VcekRequest) (VcekResponse, error) {
-	var buf bytes.Buffer
-	e := gob.NewEncoder(&buf)
-	if err := e.Encode(req); err != nil {
-		return VcekResponse{}, fmt.Errorf("failed to send request to server: %v", err)
-	}
-
-	log.Debugf("Sending CSR HTTP POST Request to %v", url)
-
-	resp, err := http.Post(url, "retrieval/vcek", &buf)
-	if err != nil {
-		return VcekResponse{}, fmt.Errorf("error sending params - %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		log.Warn("Request failed: body: ", string(b))
-		return VcekResponse{}, fmt.Errorf("request Failed: HTTP Server responded '%v'", resp.Status)
-	}
-
-	log.Debug("HTTP Response OK")
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return VcekResponse{}, fmt.Errorf("error sending params - %v", err)
-	}
-
-	var response VcekResponse
-	d := gob.NewDecoder((bytes.NewBuffer(b)))
-	d.Decode(&response)
-
-	return response, nil
 }

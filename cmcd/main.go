@@ -28,8 +28,8 @@ import (
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/est/client"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provclient"
 	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/swdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
@@ -123,13 +123,13 @@ func main() {
 		return
 	}
 
-	provConfig := &provclient.Config{
+	provConfig := &client.Config{
 		FetchMetadata: c.FetchMetadata,
 		StoreMetadata: true,
 		LocalPath:     c.LocalPath,
 		RemoteAddr:    *metadataAddr,
 	}
-	metadata, err := provclient.ProvisionMetadata(provConfig)
+	metadata, err := client.ProvisionMetadata(provConfig)
 	if err != nil {
 		log.Errorf("Failed to provision metadata: %v", err)
 		return

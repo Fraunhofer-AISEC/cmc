@@ -1,6 +1,6 @@
 {
-    "addr": "127.0.0.1:9955",
-    "provServerAddr": "http://127.0.0.1:9001/",
+    "addr": "localhost:9955",
+    "provServerAddr": "http://localhost:9000/",
     "localPath": "data-cmc/",
     "fetchMetadata": true,
     "measurementInterfaces": [ "TPM" ],

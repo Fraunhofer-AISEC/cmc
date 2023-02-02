@@ -17,6 +17,7 @@ package internal
 
 // Install github packages with "go get [url]"
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
@@ -80,6 +81,20 @@ func LoadCerts(data []byte) ([]*x509.Certificate, error) {
 		certs = append(certs, cert)
 	}
 	return certs, nil
+}
+
+func WriteCertPem(cert *x509.Certificate) []byte {
+	p := &bytes.Buffer{}
+	pem.Encode(p, &pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	return p.Bytes()
+}
+
+func WriteCertsPem(certs []*x509.Certificate) [][]byte {
+	pems := make([][]byte, 0)
+	for _, c := range certs {
+		pems = append(pems, WriteCertPem(c))
+	}
+	return pems
 }
 
 func PrintTlsConfig(conf *tls.Config, roots []byte) error {

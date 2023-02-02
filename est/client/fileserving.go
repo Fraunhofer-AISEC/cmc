@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package provclient
+package client
 
 import (
 	"encoding/xml"
@@ -26,11 +26,7 @@ import (
 	"strings"
 
 	"golang.org/x/exp/maps"
-
-	"github.com/sirupsen/logrus"
 )
-
-var log = logrus.WithField("service", "provisioning-client")
 
 // Pre is a struct for parsing HTML content
 type Pre struct {
@@ -56,12 +52,12 @@ type Config struct {
 // from a remote HTTP server. Optionally, it can store the fetched metadata on the filesystem
 func ProvisionMetadata(c *Config) ([][]byte, error) {
 	if c.FetchMetadata {
-		data, err := FetchMetadata(c.RemoteAddr)
+		data, err := fetchMetadata(c.RemoteAddr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch device metadata from %v: %v", c.RemoteAddr, err)
+			return nil, fmt.Errorf("failed to fetch metadata from %v: %v", c.RemoteAddr, err)
 		}
 		if c.StoreMetadata {
-			err := StoreMetadata(data, c.LocalPath)
+			err := storeMetadata(data, c.LocalPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to store metadata: %v", err)
 			}
@@ -72,7 +68,7 @@ func ProvisionMetadata(c *Config) ([][]byte, error) {
 		}
 		return metadata, nil
 	} else {
-		metadata, err := LoadMetadata(c.LocalPath)
+		metadata, err := loadMetadata(c.LocalPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load metadata from %v: %v", c.LocalPath, err)
 		}
@@ -80,8 +76,8 @@ func ProvisionMetadata(c *Config) ([][]byte, error) {
 	}
 }
 
-// LoadMetadata loads the metadata (manifests and descriptions) from the file system
-func LoadMetadata(dir string) (metadata [][]byte, err error) {
+// loadMetadata loads the metadata (manifests and descriptions) from the file system
+func loadMetadata(dir string) (metadata [][]byte, err error) {
 	// Read number of files
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -109,8 +105,8 @@ func LoadMetadata(dir string) (metadata [][]byte, err error) {
 	return metadata, nil
 }
 
-// StoreMetadata stores the metadata locally into the specified file system folder
-func StoreMetadata(data map[string][]byte, localPath string) error {
+// storeMetadata stores the metadata locally into the specified file system folder
+func storeMetadata(data map[string][]byte, localPath string) error {
 	if _, err := os.Stat(localPath); err != nil {
 		if err := os.Mkdir(localPath, 0755); err != nil {
 			return fmt.Errorf("failed to create directory for local data '%v': %v", localPath, err)
@@ -148,16 +144,17 @@ func StoreMetadata(data map[string][]byte, localPath string) error {
 	return nil
 }
 
-// FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
-func FetchMetadata(addr string) (map[string][]byte, error) {
+// fetchMetadata fetches the metadata (manifests and descriptions) from a remote server
+func fetchMetadata(addr string) (map[string][]byte, error) {
 
-	// Read file root directory
-	log.Info("Requesting data for ", addr)
-	resp, err := http.Get(addr)
+	client := NewClient(nil)
+
+	resp, err := request(client.client, http.MethodGet, addr, "", "", "", nil)
 	if err != nil {
-		return nil, fmt.Errorf("HTTP GET request to %v failed: %v", addr, err)
+		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
 	defer resp.Body.Close()
+
 	log.Debug("Response Status: ", resp.Status)
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
@@ -176,15 +173,15 @@ func FetchMetadata(addr string) (map[string][]byte, error) {
 	}
 
 	// Parse subdirectories recursively and save files
-	data, err := fetchDataRecursively(pre, addr)
+	data, err := fetchDataRecursively(client, pre, addr)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching metadata recursively: %v", err)
+		return nil, fmt.Errorf("failed to fetch recursively: %v", err)
 	}
 
 	return data, nil
 }
 
-func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
+func fetchDataRecursively(client *Client, pre Pre, addr string) (map[string][]byte, error) {
 	data := make(map[string][]byte, 0)
 	for i := 0; i < len(pre.Content); i++ {
 
@@ -195,12 +192,14 @@ func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
 		} else {
 			subpath = addr + "/" + pre.Content[i].Name
 		}
+
 		log.Debug("Requesting ", subpath)
-		resp, err := http.Get(subpath)
+		resp, err := request(client.client, http.MethodGet, subpath, "", "", "", nil)
 		if err != nil {
-			return nil, fmt.Errorf("HTTP GET request failed: %v", err)
+			return nil, fmt.Errorf("failed to perform request: %w", err)
 		}
 		defer resp.Body.Close()
+
 		log.Trace("Response Status: ", resp.Status)
 		if resp.StatusCode != 200 {
 			return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
@@ -221,10 +220,10 @@ func fetchDataRecursively(pre Pre, addr string) (map[string][]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal HTTP response: %v", err)
 			}
-			d, err := fetchDataRecursively(pre, subpath)
+			d, err := fetchDataRecursively(client, pre, subpath)
 			maps.Copy(data, d)
 			if err != nil {
-				return nil, fmt.Errorf("error fetching metadata recursively: %v", err)
+				return nil, fmt.Errorf("failed to fetch recursively: %v", err)
 			}
 		} else {
 

@@ -16,48 +16,26 @@
 package swdriver
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/gob"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	swProtocolVersion = 2
-	log               = logrus.WithField("service", "swdriver")
+	log = logrus.WithField("service", "swdriver")
 )
-
-type SwCertRequest struct {
-	Version int
-	Csr     []byte
-	PubKey  []byte
-}
-
-type SwCertResponse struct {
-	Version int
-	Certs   ar.CertChain
-}
-
-// Paths specifies the paths to store the certificates
-type Paths struct {
-	TLSCert     string
-	DeviceSubCa string
-	Ca          string
-}
 
 type Config struct {
 	StoragePath string
@@ -100,33 +78,50 @@ func NewSwDriver(c Config) (*Sw, error) {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
-	pub, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	// Get CA certificates and enroll newly created CSR
+	// TODO provision EST server certificate with a different mechanism,
+	// otherwise this step has to happen in a secure environment. Allow
+	// different CAs for metadata and the EST server authentication
+	log.Warn("Creating new EST client without server authentication")
+	estclient := client.NewClient(nil)
+
+	log.Info("Retrieving CA certs")
+	caCerts, err := estclient.CaCerts(c.Url)
 	if err != nil {
-		return nil, fmt.Errorf("marshal public key returned %w", err)
+		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
+	}
+	log.Debug("Received certs:")
+	for _, c := range caCerts {
+		log.Debugf("\t%v", c.Subject.CommonName)
+	}
+	if len(caCerts) == 0 {
+		return nil, fmt.Errorf("no certs provided")
 	}
 
-	certRequest := SwCertRequest{
-		Version: swProtocolVersion,
-		Csr:     csr,
-		PubKey:  pub,
-	}
-
-	certResponse, err := getCerts(c.Url+"sw-signing/", certRequest)
+	log.Warn("Setting retrieved cert for future authentication")
+	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certificates from server: %w", err)
+		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
-	if certResponse.Version != swProtocolVersion {
-		return nil, fmt.Errorf("response protocol version (%v) does not match our protocol version (%v)",
-			certResponse.Version, swProtocolVersion)
+	cert, err := estclient.SimpleEnroll(c.Url, csr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enroll cert: %w", err)
 	}
 
-	err = os.WriteFile(caPath, certResponse.Certs.Ca, 0644)
+	caPem := internal.WriteCertPem(caCerts[len(caCerts)-1])
+
+	err = os.WriteFile(caPath, caPem, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write file %v: %w", caPath, err)
 	}
 
-	sw.certChain = certResponse.Certs
+	// TODO clean solution
+	sw.certChain = ar.CertChain{
+		Leaf:          internal.WriteCertPem(cert),
+		Intermediates: internal.WriteCertsPem(caCerts[:len(caCerts)-1]),
+		Ca:            internal.WriteCertPem(caCerts[len(caCerts)-1]),
+	}
 	sw.priv = priv
 
 	return sw, nil
@@ -152,42 +147,7 @@ func (s *Sw) GetCertChain() ar.CertChain {
 	return s.certChain
 }
 
-func getCerts(url string, req SwCertRequest) (SwCertResponse, error) {
-	var buf bytes.Buffer
-	e := gob.NewEncoder(&buf)
-	if err := e.Encode(req); err != nil {
-		return SwCertResponse{}, fmt.Errorf("failed to send request to server: %v", err)
-	}
-
-	log.Debugf("Sending CSR HTTP POST Request to %v", url)
-
-	resp, err := http.Post(url, "signing/csr", &buf)
-	if err != nil {
-		return SwCertResponse{}, fmt.Errorf("error sending params - %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		log.Warn("Request failed: body: ", string(b))
-		return SwCertResponse{}, fmt.Errorf("request Failed: HTTP Server responded '%v'", resp.Status)
-	}
-
-	log.Debug("HTTP Response OK")
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return SwCertResponse{}, fmt.Errorf("error sending params - %v", err)
-	}
-
-	var response SwCertResponse
-	d := gob.NewDecoder((bytes.NewBuffer(b)))
-	d.Decode(&response)
-
-	return response, nil
-}
-
-func createCsr(c *Config, priv crypto.PrivateKey) ([]byte, error) {
+func createCsr(c *Config, priv crypto.PrivateKey) (*x509.CertificateRequest, error) {
 
 	for i, m := range c.Metadata {
 
@@ -223,7 +183,8 @@ func createCsr(c *Config, priv crypto.PrivateKey) ([]byte, error) {
 	return nil, errors.New("failed to find device config for creating CSRs")
 }
 
-func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams) ([]byte, error) {
+func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams,
+) (*x509.CertificateRequest, error) {
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{
@@ -243,8 +204,6 @@ func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate request: %v", err)
 	}
-	pemCert := &bytes.Buffer{}
-	pem.Encode(pemCert, &pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})
 
 	csr, err := x509.ParseCertificateRequest(der)
 	if err != nil {
@@ -255,7 +214,7 @@ func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams) ([]byte, e
 		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
 	}
 
-	return pemCert.Bytes(), nil
+	return csr, nil
 }
 
 func createLocalStorage(storagePath string) (string, error) {
