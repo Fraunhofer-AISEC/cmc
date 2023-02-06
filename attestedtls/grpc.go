@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -44,7 +43,6 @@ func init() {
 
 // Creates connection with cmcd at specified address
 func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
-	log.Tracef("Contacting cmcd via grpc on: %v", cc.cmcAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	conn, err := grpc.DialContext(ctx, cc.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
@@ -53,21 +51,7 @@ func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, co
 		return nil, nil, nil
 	}
 
-	log.Trace("Creating new service client")
 	return api.NewCMCServiceClient(conn), conn, cancel
-}
-
-// Creates attestation report request to be sent to peer
-func (a GrpcApi) createARRequest(nonce []byte) ([]byte, error) {
-	// Create AR request with nonce
-	req := &api.AttestationRequest{
-		Nonce: nonce,
-	}
-	data, err := proto.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate request: %w", err)
-	}
-	return data, nil
 }
 
 // Parses attestation report response received from peer
@@ -87,27 +71,11 @@ func (a GrpcApi) parseARResponse(data []byte) ([]byte, error) {
 	return resp.AttestationReport, nil
 }
 
-// Obtains attestation report from CMCdf
-func (a GrpcApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, error) {
-
-	// Parse request msg
-	req := &api.AttestationRequest{}
-	err := proto.Unmarshal(request, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse attestation request: %w", err)
-	}
-
-	// Check nonce length
-	if len(req.Nonce) != noncelen {
-		return nil, fmt.Errorf("nonce (%v) does not have expected size (%v)", len(req.Nonce), noncelen)
-	}
-
-	// Generate final nonce through combining the request nonce with the
-	// certificate the connection was established to prevent MitM-attacks
-	combinedNonce := sha256.Sum256(append(cert[:], req.Nonce[:]...))
-	req.Nonce = combinedNonce[:]
+// Obtains attestation report from CMCd
+func (a GrpcApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
 	// Get backend connection
+	log.Tracef("Obtaining AR from local cmcd on %v", cc.cmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to obtain attestation report")
@@ -116,8 +84,10 @@ func (a GrpcApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, er
 	defer cancel()
 	log.Trace("Contacting backend to obtain AR.")
 
-	// Extend Attest request with id
-	req.Id = id
+	req := &api.AttestationRequest{
+		Id:    id,
+		Nonce: chbindings,
+	}
 
 	// Call Attest request
 	resp, err := cmcClient.Attest(context.Background(), req)
@@ -136,8 +106,9 @@ func (a GrpcApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, er
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
-func (a GrpcApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
+func (a GrpcApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	// Get backend connection
+	log.Tracef("Verifying remote AR via local cmcd on %v", cc.cmcAddr)
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return errors.New("failed to establish connection to obtain attestation result")
@@ -148,7 +119,7 @@ func (a GrpcApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
 
 	// Create Verification request
 	req := api.VerificationRequest{
-		Nonce:             nonce,
+		Nonce:             chbindings,
 		AttestationReport: report,
 		Ca:                cc.ca,
 		Policies:          cc.policies,
@@ -179,13 +150,14 @@ func (a GrpcApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
 
 func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// Get backend connection
+	log.Tracef("Fetching signature from local cmcd on %v", cc.cmcAddr)
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("connection failed. No signing performed")
 	}
 	defer conn.Close()
 	defer cancel()
-	log.Info("contacting backend for Sign Operation")
+	log.Trace("contacting backend for Sign Operation")
 
 	// Create Sign request
 	hash, err := convertHash(opts)
@@ -219,6 +191,7 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 
 func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	// Get backend connection
+	log.Tracef("Fetching certificates from local cmcd on %v", cc.cmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("connection failed. No Cert obtained")

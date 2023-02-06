@@ -195,7 +195,7 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 
 	jwsData, err := jose.ParseSigned(string(data))
 	if err != nil {
-		msg := fmt.Sprintf("Data could not be parsed - %v", err)
+		msg := fmt.Sprintf("Data could not be parsed: %v", err)
 		result.Summary.setFalseMulti(&msg)
 		return result, nil, false
 	}

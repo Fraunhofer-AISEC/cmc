@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,19 +43,6 @@ func init() {
 	cmcApis[CmcApi_COAP] = CoapApi{}
 }
 
-// Creates attestation report request to be sent to peer
-func (a CoapApi) createARRequest(nonce []byte) ([]byte, error) {
-	// Create AR request with nonce
-	req := &api.AttestationRequest{
-		Nonce: nonce,
-	}
-	data, err := cbor.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal data: %w", err)
-	}
-	return data, nil
-}
-
 // Parses attestation report response received from peer
 func (a CoapApi) parseARResponse(data []byte) ([]byte, error) {
 	// Parse response msg
@@ -70,7 +56,7 @@ func (a CoapApi) parseARResponse(data []byte) ([]byte, error) {
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, error) {
+func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
 	path := "/Attest"
 
@@ -83,24 +69,12 @@ func (a CoapApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, er
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	// Unmarshal incoming attestation request to get nonce
-	req := &api.AttestationRequest{}
-	err = cbor.Unmarshal(request, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal CoAP message body: %v", err)
+	req := &api.AttestationRequest{
+		Id:    id,
+		Nonce: chbindings,
 	}
 
-	// Check nonce length
-	if len(req.Nonce) != noncelen {
-		return nil, fmt.Errorf("nonce (%v) does not have expected size (%v)", len(req.Nonce), noncelen)
-	}
-
-	// Generate final nonce through combining the request nonce with the
-	// certificate the connection was established to prevent MitM-attacks
-	combinedNonce := sha256.Sum256(append(cert[:], req.Nonce[:]...))
-	req.Nonce = combinedNonce[:]
-
-	// Marshal request with final nonce again
+	// Marshal request
 	payload, err := cbor.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
@@ -122,7 +96,7 @@ func (a CoapApi) obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, er
 }
 
 // Sends attestationreport to cmcd for verification
-func (a CoapApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
+func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	path := "/Verify"
 
@@ -137,7 +111,7 @@ func (a CoapApi) verifyAR(nonce, report []byte, cc cmcConfig) error {
 
 	// Create Verification request
 	req := &api.VerificationRequest{
-		Nonce:             nonce,
+		Nonce:             chbindings,
 		AttestationReport: report,
 		Ca:                cc.ca,
 		Policies:          cc.policies,

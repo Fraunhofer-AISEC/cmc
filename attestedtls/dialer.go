@@ -25,8 +25,6 @@ import (
 // Additionally performs remote attestation
 // before returning the established connection.
 func Dial(network string, addr string, config *tls.Config, moreConfigs ...ConnectionOption[cmcConfig]) (*tls.Conn, error) {
-	//use mTLS if client provides its own certificate
-	mTLS := (config.Certificates != nil)
 
 	// Create TLS connection
 	var dialer net.Dialer
@@ -38,6 +36,13 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 			details = details + fmt.Sprintf("%v with SANS %v; ", cert.Leaf.Subject.CommonName, cert.Leaf.DNSNames)
 		}
 		return nil, fmt.Errorf("failed to establish tls connection: %w. %v", err, details)
+	}
+
+	cs := conn.ConnectionState()
+	log.Tracef("TLS Handshake Complete: %v, generating channel bindings", cs.HandshakeComplete)
+	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
 	}
 
 	// Get cmc Config: start with defaults
@@ -54,27 +59,13 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 		return nil, fmt.Errorf("selected CMC API is not implemented")
 	}
 
-	// Perform remote attestation
-	// include components of tls.Conn to link both protocols: use peer (server) cert
-	// FUTURE: check if certificate can be obtained differently
-	err = verify(conn, conn.ConnectionState().PeerCertificates[0].Raw[:], cc)
+	// Perform remote attestation with unique channel binding as specified in RFC5056,
+	// RFC5705, and RFC9266
+	err = attestDialer(conn, chbindings, cc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify listener: %w", err)
+		return nil, fmt.Errorf("remote attestation failed: %w", err)
 	}
 
-	if mTLS {
-		log.Info("Performing mTLS: verifying dialer...")
-		// attest itself: include own certificate in AR
-		// Future: check if certificate can be obtained differently
-		err = attest(conn, config.Certificates[0].Certificate[0], cc)
-		if err != nil {
-			return nil, fmt.Errorf("remote verification of dialer failed: %w", err)
-		}
-	} else {
-		log.Info("No mTLS performed")
-	}
-
-	// finished
 	log.Info("Client-side aTLS connection complete")
 	return conn, nil
 }

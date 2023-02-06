@@ -95,8 +95,6 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 		return tls.Certificate{}, fmt.Errorf("could not parse certificate: %w", err)
 	}
 
-	log.Tracef("Retrieved TLS certificate %v with SANS %v", x509Cert.Subject.CommonName, x509Cert.DNSNames)
-
 	// Create TLS Cert
 	tlsCert.Leaf = x509Cert
 	tlsCert.PrivateKey = PrivateKey{

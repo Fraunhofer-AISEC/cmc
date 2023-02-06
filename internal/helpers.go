@@ -84,16 +84,12 @@ func LoadCerts(data []byte) ([]*x509.Certificate, error) {
 
 func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 	for i, certs := range conf.Certificates {
-		log.Tracef("TLS leaf certificate %v: %v, SubjectKeyID %v, AuthorityKeyID %v",
-			i, certs.Leaf.Subject.CommonName,
-			hex.EncodeToString(certs.Leaf.SubjectKeyId),
-			hex.EncodeToString(certs.Leaf.AuthorityKeyId))
 		for j, data := range certs.Certificate {
 			c, err := LoadCert(data)
 			if err != nil {
 				return fmt.Errorf("failed to convert certificate: %w", err)
 			}
-			log.Tracef("Cert %v TLS Certificate Chain %v: %v, SubjectKeyID %v, AuthorityKeyID %v",
+			log.Tracef("Cert %v:%v: %v, SubjectKeyID %v, AuthorityKeyID %v",
 				i, j, c.Subject.CommonName,
 				hex.EncodeToString(c.SubjectKeyId),
 				hex.EncodeToString(c.AuthorityKeyId))
@@ -104,7 +100,7 @@ func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 		return fmt.Errorf("failed to load certs: %w", err)
 	}
 	for i, c := range certs {
-		log.Tracef("Trusted Root Cert %v: %v, SubjectKeyID %v",
+		log.Tracef("CA Cert%v: %v, SubjectKeyID %v",
 			i, c.Subject.CommonName, hex.EncodeToString(c.SubjectKeyId))
 	}
 	return nil

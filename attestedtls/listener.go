@@ -17,6 +17,7 @@ package attestedtls
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -39,39 +40,43 @@ func (ln Listener) Accept() (net.Conn, error) {
 	// Accept TLS connection
 	conn, err := ln.Listener.Accept()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to accept connection: %w", err)
 	}
-	_ = conn.SetReadDeadline(time.Now().Add(timeout))
-	log.Trace("TLS established. Providing attestation report..")
-	tlsConn := conn.(*tls.Conn)
-
-	// Perform remote attestation
-	// include components of tls.Conn to link both protocols: use own cert
-	err = attest(tlsConn, ln.Certificates[0].Certificate[0], ln.cmcConfig)
+	err = conn.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		return nil, fmt.Errorf("failed to attest listener: %w", err)
+		return nil, fmt.Errorf("failed to set read deadline: %w", err)
 	}
 
-	// if client provides its cert: mTLS
-	// IMPORTANT: This info can only be obtained, once connection is established
-	// Connection will only be established when used (read/write operations)
-	mTLS := len(tlsConn.ConnectionState().PeerCertificates) != 0
+	log.Trace("TLS established. Providing attestation report..")
+	tlsConn, ok := conn.(*tls.Conn)
+	if !ok {
+		return nil, errors.New("internal error: failed to convert to tlsconn")
+	}
 
-	if mTLS {
-		log.Info("Performing mTLS: verifying dialer...")
-		// include components of tls.Conn to link both protocols: use dialer cert
-		// FUTURE: certificate can be obtained differently as well
-		//         (function GetClientCertificate, func GetCertificate or func GetConfigForClient)
-		err = verify(tlsConn, tlsConn.ConnectionState().PeerCertificates[0].Raw[:], ln.cmcConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify dialer: %w", err)
-		}
-	} else {
-		log.Info("No mTLS performed")
+	// Usually, not required, as the the first Read or Write will call it
+	// automatically. We run it here to export the keying material for
+	// channel binding before sending the first message
+	err = tlsConn.Handshake()
+	if err != nil {
+		return nil, fmt.Errorf("TLS handshake failed: %w", err)
+	}
+
+	cs := tlsConn.ConnectionState()
+	log.Tracef("TLS Handshake Complete: %v, generating channel bindings", cs.HandshakeComplete)
+	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
+	}
+
+	// Perform remote attestation with unique channel binding as specified in RFC5056,
+	// RFC5705, and RFC9266
+	err = attestListener(tlsConn, chbindings, ln.cmcConfig)
+	if err != nil {
+		return nil, fmt.Errorf("remote attestation failed: %w", err)
 	}
 
 	log.Info("Server-side aTLS connection complete")
-	// finished
+
 	return conn, nil
 }
 
