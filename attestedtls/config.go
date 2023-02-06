@@ -37,13 +37,13 @@ type cmcConfig struct {
 	cmcApi   CmcApi
 	ca       []byte
 	policies []byte
+	mtls     bool
 }
 
 type CmcApi interface {
-	createARRequest(nonce []byte) ([]byte, error)
 	parseARResponse(data []byte) ([]byte, error)
-	obtainAR(request []byte, cc cmcConfig, cert []byte) ([]byte, error)
-	verifyAR(nonce, report []byte, cc cmcConfig) error
+	obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error)
+	verifyAR(chbindings, report []byte, cc cmcConfig) error
 	fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc cmcConfig) ([][]byte, error)
 }
@@ -81,5 +81,13 @@ func WithCmcCa(pem []byte) ConnectionOption[cmcConfig] {
 func WithCmcPolicies(policies []byte) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.policies = policies
+	}
+}
+
+// WithMtls specifies whether to perform mutual TLS with mutual attestation
+// or server-side authentication and attestation only
+func WithMtls(mtls bool) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.mtls = mtls
 	}
 }

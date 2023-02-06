@@ -212,7 +212,7 @@ testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/cmc
 
 ```sh
 # Run an attested TLS server
-testtool -mode listen -addr 0.0.0.0:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem
+testtool -mode listen -addr 0.0.0.0:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
 testtool -mode dial -addr localhost:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls

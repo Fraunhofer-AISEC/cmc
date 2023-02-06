@@ -60,7 +60,8 @@ func dial(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies [
 	} else {
 		// Create TLS config with root CA only
 		conf = &tls.Config{
-			RootCAs: roots,
+			RootCAs:       roots,
+			Renegotiation: tls.RenegotiateNever,
 		}
 	}
 
@@ -70,7 +71,8 @@ func dial(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies [
 		atls.WithCmcAddr(cmcAddr),
 		atls.WithCmcCa(ca),
 		atls.WithCmcPolicies(policies),
-		atls.WithCmcApi(api))
+		atls.WithCmcApi(api),
+		atls.WithMtls(mtls))
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
@@ -118,11 +120,21 @@ func listen(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies
 		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
 
+	var clientAuth tls.ClientAuthType
+	if mtls {
+		// Mandate client authentication
+		clientAuth = tls.RequireAndVerifyClientCert
+	} else {
+		// Make client authentication optional
+		clientAuth = tls.VerifyClientCertIfGiven
+	}
+
 	// Create TLS config
 	config := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		ClientAuth:   tls.VerifyClientCertIfGiven, // make mTLS an option
-		ClientCAs:    roots,
+		Certificates:  []tls.Certificate{cert},
+		ClientAuth:    clientAuth,
+		ClientCAs:     roots,
+		Renegotiation: tls.RenegotiateNever,
 	}
 
 	internal.PrintTlsConfig(config, ca)
@@ -132,7 +144,8 @@ func listen(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies
 		atls.WithCmcAddr(cmcAddr),
 		atls.WithCmcCa(ca),
 		atls.WithCmcPolicies(policies),
-		atls.WithCmcApi(api))
+		atls.WithCmcApi(api),
+		atls.WithMtls(mtls))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
