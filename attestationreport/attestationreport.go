@@ -906,17 +906,25 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error 
 	for _, ext := range cert.Extensions {
 
 		if ext.Id.String() == oid {
-			if len(ext.Value) != 3 {
-				return fmt.Errorf("extension %v value unexpected length %v (expected 3)", oid, len(ext.Value))
+			if len(ext.Value) != 3 && len(ext.Value) != 4 {
+				return fmt.Errorf("extension %v value unexpected length %v (expected 3 or 4)", oid, len(ext.Value))
 			}
 			if ext.Value[0] != 0x2 {
-				return fmt.Errorf("extension %v value[0] = %v does not match expected value 2", oid, ext.Value[0])
+				return fmt.Errorf("extension %v value[0] = %v does not match expected value 2 (tag Integer)", oid, ext.Value[0])
 			}
-			if ext.Value[1] != 0x1 {
-				return fmt.Errorf("extension %v value[1] = %v does not match expected value 1", oid, ext.Value[1])
-			}
-			if ext.Value[2] != value {
-				return fmt.Errorf("extension %v value[2] = %v does not match expected value %v", oid, ext.Value[2], value)
+			if ext.Value[1] == 0x1 {
+				if ext.Value[2] != value {
+					return fmt.Errorf("extension %v value[2] = %v does not match expected value %v", oid, ext.Value[2], value)
+				}
+			} else if ext.Value[1] == 0x2 {
+				// Due to openssl, the sign bit must remain zero for positive integers
+				// even though this field is defined as unsigned int in the AMD spec
+				// Thus, if the most significant bit is required, one byte of additional 0x00 padding is added
+				if ext.Value[2] != 0x00 || ext.Value[3] != value {
+					return fmt.Errorf("extension %v value = %v%v does not match expected value  %v", oid, ext.Value[2], ext.Value[3], value)
+				}
+			} else {
+				return fmt.Errorf("extension %v value[1] = %v does not match expected value 1 or 2 (length of integer)", oid, ext.Value[1])
 			}
 			return nil
 		}
