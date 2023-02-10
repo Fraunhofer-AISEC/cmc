@@ -88,13 +88,6 @@ type publicKeyInfo struct {
 	PublicKey asn1.BitString
 }
 
-var publicKeyAlgoName = [...]string{
-	x509.RSA:     "RSA",
-	x509.DSA:     "DSA",
-	x509.ECDSA:   "ECDSA",
-	x509.Ed25519: "Ed25519",
-}
-
 // OIDs for signature algorithms
 //
 //	pkcs-1 OBJECT IDENTIFIER ::= {
