@@ -36,6 +36,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type GrpcServerWrapper struct{}
@@ -189,9 +190,7 @@ func (s *GrpcServer) TLSCert(ctx context.Context, in *api.TLSCertRequest) (*api.
 
 	// provide TLS certificate chain
 	certChain := s.config.Signer.GetCertChain()
-	resp.Certificate = make([][]byte, 0)
-	resp.Certificate = append(resp.Certificate, certChain.Leaf)
-	resp.Certificate = append(resp.Certificate, certChain.Intermediates...)
+	resp.Certificate = internal.WriteCertsPem(certChain)
 	resp.Status = api.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")
 	return resp, nil

@@ -56,7 +56,7 @@ var (
 // Snp is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
 type Snp struct {
-	certChain ar.CertChain
+	certChain []*x509.Certificate
 }
 
 type Config struct {
@@ -64,7 +64,6 @@ type Config struct {
 }
 
 func NewSnpDriver(c Config) (*Snp, error) {
-	snp := &Snp{}
 
 	ca, _, err := getCerts(milanUrl, PEM)
 	if err != nil {
@@ -97,10 +96,8 @@ func NewSnpDriver(c Config) (*Snp, error) {
 		return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 	}
 
-	snp.certChain = ar.CertChain{
-		Leaf:          internal.WriteCertPem(vcek),
-		Intermediates: [][]byte{internal.WriteCertPem(ca[0])},
-		Ca:            internal.WriteCertPem(ca[1]),
+	snp := &Snp{
+		certChain: append([]*x509.Certificate{vcek}, ca...),
 	}
 
 	return snp, nil
@@ -118,7 +115,7 @@ func (snp Snp) Measure(nonce []byte) (ar.Measurement, error) {
 	measurement := ar.SnpMeasurement{
 		Type:   "SNP Measurement",
 		Report: data,
-		Certs:  snp.certChain,
+		Certs:  internal.WriteCertsPem(snp.certChain),
 	}
 
 	return measurement, nil

@@ -194,7 +194,7 @@ func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	log.Tracef("Fetching certificates from local cmcd on %v", cc.cmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
-		return nil, errors.New("connection failed. No Cert obtained")
+		return nil, errors.New("failed to establish connection to cmcd")
 	}
 	defer cmcconn.Close()
 	defer cancel()
@@ -211,8 +211,11 @@ func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	}
 
 	// Check TLSCert response
-	if resp.GetStatus() != api.Status_OK || len(resp.GetCertificate()) == 0 {
-		return nil, errors.New("could not receive TLS certificate")
+	if resp.GetStatus() != api.Status_OK {
+		return nil, fmt.Errorf("grpc call returned status %v", resp.GetStatus())
+	}
+	if len(resp.GetCertificate()) == 0 {
+		return nil, errors.New("grpc call returned 0 certificates")
 	}
 
 	return resp.GetCertificate(), nil

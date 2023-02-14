@@ -21,6 +21,7 @@ import (
 	"encoding/pem"
 	"testing"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -54,14 +55,6 @@ func TestVerifyCbor(t *testing.T) {
 		certChain: certChain,
 		priv:      privateKey,
 	}
-	block, _ := pem.Decode(certChain.Ca)
-	if block == nil || block.Type != "CERTIFICATE" {
-		log.Fatal("failed to decode PEM block containing certificate")
-	}
-	ca, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		log.Fatal("failed to parse certificate")
-	}
 
 	s := CborSerializer{}
 
@@ -81,7 +74,7 @@ func TestVerifyCbor(t *testing.T) {
 			}
 
 			// Verify attestation report
-			_, _, got := s.VerifyToken(coseRaw, []*x509.Certificate{ca})
+			_, _, got := s.VerifyToken(coseRaw, []*x509.Certificate{certChain[len(certChain)-1]})
 			if got != tt.want {
 				t.Errorf("Result.Success = %v, want %v", got, tt.want)
 			}
@@ -89,7 +82,7 @@ func TestVerifyCbor(t *testing.T) {
 	}
 }
 
-func testCreatePki(certPem, keyPem []byte) (CertChain, *ecdsa.PrivateKey) {
+func testCreatePki(certPem, keyPem []byte) ([]*x509.Certificate, *ecdsa.PrivateKey) {
 
 	block, _ := pem.Decode(keyPem)
 	if block == nil || block.Type != "EC PRIVATE KEY" {
@@ -101,11 +94,22 @@ func testCreatePki(certPem, keyPem []byte) (CertChain, *ecdsa.PrivateKey) {
 		log.Fatal("Failed to parse private key")
 	}
 
-	certChain := CertChain{
-		Ca:            caPem,
-		Intermediates: [][]byte{intermediatePem},
-		Leaf:          certPem,
+	leaf, err := internal.ParseCert(certPem)
+	if err != nil {
+		log.Fatal("Failed to parse leaf certificate")
 	}
+
+	intermediate, err := internal.ParseCert(intermediatePem)
+	if err != nil {
+		log.Fatal("Failed to parse intermediate certificate")
+	}
+
+	ca, err := internal.ParseCert(caPem)
+	if err != nil {
+		log.Fatal("Failed to parse ca certificate")
+	}
+
+	certChain := []*x509.Certificate{leaf, intermediate, ca}
 
 	return certChain, privateKey
 }

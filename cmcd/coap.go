@@ -35,6 +35,7 @@ import (
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	api "github.com/Fraunhofer-AISEC/cmc/coapapi"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // CoapServer is the CoAP server structure
@@ -276,13 +277,10 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	// Retrieve certificates
 	certChain := serverConfig.Signer.GetCertChain()
-	certs := make([][]byte, 0)
-	certs = append(certs, certChain.Leaf)
-	certs = append(certs, certChain.Intermediates...)
 
 	// Create response
 	resp := &api.TLSCertResponse{
-		Certificate: certs,
+		Certificate: internal.WriteCertsPem(certChain),
 	}
 	payload, err := cbor.Marshal(&resp)
 	if err != nil {

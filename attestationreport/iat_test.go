@@ -41,10 +41,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs: CertChain{
-						Leaf: []byte(validIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -61,10 +58,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: invalidIat,
-					Certs: CertChain{
-						Leaf: []byte(validIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -81,10 +75,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs: CertChain{
-						Leaf: []byte(invalidIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(invalidIasCert), []byte(validIasCa)},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -101,10 +92,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs: CertChain{
-						Leaf: []byte(validIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -121,10 +109,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs: CertChain{
-						Leaf: []byte(validIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
 				},
 				nonce: invalidIasNonce,
 				referenceValues: []ReferenceValue{
@@ -141,10 +126,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs: CertChain{
-						Leaf: []byte(validIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -161,10 +143,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "SNP Measurement",
 					Report: validIat,
-					Certs: CertChain{
-						Leaf: []byte(validIasCert),
-						Ca:   []byte(validIasCa),
-					},
+					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
