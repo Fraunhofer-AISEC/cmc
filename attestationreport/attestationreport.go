@@ -51,7 +51,7 @@ type Signer interface {
 	Lock()
 	Unlock()
 	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error)
-	GetCertChain() CertChain
+	GetCertChain() []*x509.Certificate
 }
 
 // Serializer is a generic interface providing methods for data serialization and
@@ -100,39 +100,30 @@ type HashChainElem struct {
 	Sha256 []HexByte `json:"sha256" cbor:"2,keyasint"`
 }
 
-// CertChain is a helper struct for certificate chains,
-// consisting of a leaf certificate, an arbitrary number
-// of intermediate (sub-CA) certificates and a CA certificate
-type CertChain struct {
-	Leaf          []byte   `json:"leaf" cbor:"0,keyasint"`
-	Intermediates [][]byte `json:"intermediates" cbor:"1,keyasint"`
-	Ca            []byte   `json:"ca" cbor:"2,keyasint"`
-}
-
 // TpmMeasurement represents the attestation report
 // element of type 'TPM Measurement'
 type TpmMeasurement struct {
 	Type      string           `json:"type" cbor:"0,keyasint"`
 	Message   HexByte          `json:"message" cbor:"1,keyasint"`
 	Signature HexByte          `json:"signature" cbor:"2,keyasint"`
-	Certs     CertChain        `json:"certs" cbor:"3,keyasint"`
+	Certs     [][]byte         `json:"certs" cbor:"3,keyasint"`
 	HashChain []*HashChainElem `json:"hashChain" cbor:"4,keyasint"`
 }
 
 // SnpMeasurement represents the attestation report
 // element of type 'SNP Measurement' signed by the device
 type SnpMeasurement struct {
-	Type   string    `json:"type" cbor:"0,keyasint"`
-	Report []byte    `json:"blob" cbor:"1,keyasint"`
-	Certs  CertChain `json:"certs" cbor:"2,keyasint"`
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Report []byte   `json:"blob" cbor:"1,keyasint"`
+	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
 }
 
 // IasMeasurement represents the attestation report
 // element of type 'IAS Measurement' signed by the device
 type IasMeasurement struct {
-	Type   string    `json:"type" cbor:"0,keyasint"`
-	Report []byte    `json:"blob" cbor:"1,keyasint"`
-	Certs  CertChain `json:"certs" cbor:"2,keyasint"`
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Report []byte   `json:"blob" cbor:"1,keyasint"`
+	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
 }
 
 // SwMeasurement represents the attestation report
@@ -168,7 +159,7 @@ type SnpTcb struct {
 
 type SnpDetails struct {
 	Version uint32    `json:"version" cbor:"0,keyasint"`
-	KeyId   string    `json:"caKeyId" cbor:"1,keyasint"`
+	Cas     [][]byte  `json:"cas" cbor:"1,keyasint"`
 	Policy  SnpPolicy `json:"policy" cbor:"2,keyasint"`
 	Fw      SnpFw     `json:"fw" cbor:"3,keyasint"`
 	Tcb     SnpTcb    `json:"tcb" cbor:"4,keyasint"`
@@ -638,7 +629,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 
 	ar := ArPlain{}
 
-	roots, err := internal.LoadCerts(casPem)
+	roots, err := internal.ParseCerts(casPem)
 	if err != nil {
 		log.Warn("Loading PEM encoded CA certificate(s) failed")
 		result.Success = false

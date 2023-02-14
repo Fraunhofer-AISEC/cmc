@@ -115,7 +115,7 @@ func main() {
 				log.Fatalf("failed to read certificate(s) file %v", err)
 			}
 
-			c, err := internal.LoadCert(certPem)
+			c, err := internal.ParseCert(certPem)
 			if err != nil {
 				log.Fatalf("Failed to load certificates: %v", err)
 			}

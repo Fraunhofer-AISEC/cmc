@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // Mode defines the mode to be run
@@ -117,13 +118,13 @@ func main() {
 	case Listen:
 		api.listen(*addr, *cmcAddr, *mtls, ca, policies)
 	case CaCerts:
-		getCaCerts(*addr)
+		getCaCerts(*addr, *caFile)
 	default:
 		log.Fatalf("Unknown mode %v", mode)
 	}
 }
 
-func getCaCerts(addr string) {
+func getCaCerts(addr, caFile string) {
 	log.Info("Retrieving CA certs")
 	estclient := client.NewClient(nil)
 	certs, err := estclient.CaCerts(addr)
@@ -133,5 +134,10 @@ func getCaCerts(addr string) {
 	log.Debug("Received certs:")
 	for _, c := range certs {
 		log.Debugf("\t%v", c.Subject.CommonName)
+	}
+	// Store CA certificate
+	err = os.WriteFile(caFile, internal.WriteCertPem(certs[len(certs)-1]), 0644)
+	if err != nil {
+		log.Fatalf("Failed to store CA certificate: %v", err)
 	}
 }

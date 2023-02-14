@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -98,23 +99,26 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 		ok = false
 	}
 
-	result.QuoteSignature = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, tpmM.Certs.Leaf)
-	if !result.QuoteSignature.Signature.Success {
-		ok = false
-	}
-
-	// Verify certificate chain
-	cas, err := internal.LoadCerts(casPem)
+	cas, err := internal.ParseCerts(casPem)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.QuoteSignature.CertCheck.setFalse(&msg)
 		ok = false
 	}
-	keyIds := make([][]byte, 0)
-	for _, ca := range cas {
-		keyIds = append(keyIds, ca.SubjectKeyId)
+
+	mCerts, err := internal.ParseCerts(tpmM.Certs)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to load measurement certs: %v", err)
+		result.QuoteSignature.CertCheck.setFalse(&msg)
+		ok = false
 	}
-	err = verifyCertChainPem(&tpmM.Certs, keyIds)
+
+	result.QuoteSignature = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, mCerts[0])
+	if !result.QuoteSignature.Signature.Success {
+		ok = false
+	}
+
+	err = internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.QuoteSignature.CertCheck.setFalse(&msg)
@@ -248,7 +252,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 	return calculatedPcrs, pcrResult, referenceValuesCheck, ok
 }
 
-func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
+func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) SignatureResult {
 	result := SignatureResult{}
 	result.Signature.Success = true
 
@@ -268,13 +272,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
 	}
 
 	// Extract public key from x509 certificate
-	x509Cert, err := internal.LoadCert(cert)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to parse TPM certificate: %v", err)
-		result.Signature.setFalse(&msg)
-		return result
-	}
-	pubKey, ok := x509Cert.PublicKey.(*rsa.PublicKey)
+	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
 		msg := "Failed to extract public key from certificate"
 		result.Signature.setFalse(&msg)
@@ -288,10 +286,10 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert []byte) SignatureResult {
 	}
 
 	// Store Name and Organization of AK Cert for the report
-	result.Name = x509Cert.Subject.CommonName
-	result.Organization = x509Cert.Subject.Organization
-	result.SubjectKeyId = hex.EncodeToString(x509Cert.SubjectKeyId)
-	result.AuthorityKeyId = hex.EncodeToString(x509Cert.AuthorityKeyId)
+	result.Name = cert.Subject.CommonName
+	result.Organization = cert.Subject.Organization
+	result.SubjectKeyId = hex.EncodeToString(cert.SubjectKeyId)
+	result.AuthorityKeyId = hex.EncodeToString(cert.AuthorityKeyId)
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)

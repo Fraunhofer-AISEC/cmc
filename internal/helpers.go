@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -51,8 +52,8 @@ func Contains(elem string, list []string) bool {
 	return false
 }
 
-// LoadCert loads a certificate from PEM encoded data
-func LoadCert(data []byte) (*x509.Certificate, error) {
+// ParseCert parses a certificate from PEM encoded data into an X.509 certificate
+func ParseCert(data []byte) (*x509.Certificate, error) {
 	input := data
 
 	block, _ := pem.Decode(data)
@@ -67,20 +68,17 @@ func LoadCert(data []byte) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// LoadCerts loads one or more certificates from PEM encoded data
-func LoadCerts(data []byte) ([]*x509.Certificate, error) {
-	certs := make([]*x509.Certificate, 0)
-	input := data
-
-	for block, rest := pem.Decode(input); block != nil; block, rest = pem.Decode(rest) {
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
-		}
-		certs = append(certs, cert)
+// ParseCerts parses certificates in a single PEM encoded blob or a list of
+// PEM encoded blobs into a list of X.509 certificates
+func ParseCerts(data any) ([]*x509.Certificate, error) {
+	switch d := data.(type) {
+	case []byte:
+		return parseCertBlob(d)
+	case [][]byte:
+		return parseCertsList(d)
+	default:
+		return nil, fmt.Errorf("not implemented for type %T", data)
 	}
-	return certs, nil
 }
 
 func WriteCertPem(cert *x509.Certificate) []byte {
@@ -97,10 +95,44 @@ func WriteCertsPem(certs []*x509.Certificate) [][]byte {
 	return pems
 }
 
+// verifyCertChain tries to verify the certificate chain certs with leaf
+// certificate first up to one of the root certificates in cas
+func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) error {
+
+	if len(certs) == 0 {
+		return errors.New("no certificate chain provided")
+	}
+	if len(cas) == 0 {
+		return errors.New("no CA provided")
+	}
+
+	leafCert := certs[0]
+
+	intermediates := x509.NewCertPool()
+	for _, cert := range certs[1:] {
+		intermediates.AddCert(cert)
+	}
+
+	roots := x509.NewCertPool()
+	for _, ca := range cas {
+		roots.AddCert(ca)
+	}
+
+	opts := x509.VerifyOptions{
+		Intermediates: intermediates,
+		Roots:         roots,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+	}
+
+	_, err := leafCert.Verify(opts)
+
+	return err
+}
+
 func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 	for i, certs := range conf.Certificates {
 		for j, data := range certs.Certificate {
-			c, err := LoadCert(data)
+			c, err := ParseCert(data)
 			if err != nil {
 				return fmt.Errorf("failed to convert certificate: %w", err)
 			}
@@ -110,7 +142,7 @@ func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 				hex.EncodeToString(c.AuthorityKeyId))
 		}
 	}
-	certs, err := LoadCerts(roots)
+	certs, err := ParseCerts(roots)
 	if err != nil {
 		return fmt.Errorf("failed to load certs: %w", err)
 	}
@@ -119,4 +151,37 @@ func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 			i, c.Subject.CommonName, hex.EncodeToString(c.SubjectKeyId))
 	}
 	return nil
+}
+
+func parseCertsList(data [][]byte) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, 0)
+	for _, d := range data {
+		cert, err := ParseCert(d)
+		if err != nil {
+			return nil, err
+		}
+		certs = append(certs, cert)
+	}
+	if len(certs) == 0 {
+		return nil, errors.New("did not find certs in provided data")
+	}
+	return certs, nil
+}
+
+func parseCertBlob(data []byte) ([]*x509.Certificate, error) {
+	certs := make([]*x509.Certificate, 0)
+	input := data
+
+	for block, rest := pem.Decode(input); block != nil; block, rest = pem.Decode(rest) {
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
+		}
+		certs = append(certs, cert)
+	}
+	if len(certs) == 0 {
+		return nil, errors.New("did not find certs in provided data")
+	}
+	return certs, nil
 }

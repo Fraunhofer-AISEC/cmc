@@ -69,6 +69,11 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
+	if len(iasM.Certs) == 0 {
+		msg := "Measurement certificates not provided"
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
 	if len(referenceValues) == 0 {
 		msg := "Could not find IAS Reference Value"
 		result.Summary.setFalse(&msg)
@@ -78,7 +83,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 
 	log.Trace("Loading certificates")
 
-	cert, err := internal.LoadCert(iasM.Certs.Leaf)
+	cert, err := internal.ParseCert(iasM.Certs[0])
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load CA certificate: %v", err)
 		result.Summary.setFalse(&msg)
@@ -117,17 +122,19 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Verify certificate chain
-	cas, err := internal.LoadCerts(casPem)
+	cas, err := internal.ParseCerts(casPem)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
+		msg := fmt.Sprintf("Failed to parse cas: %v", err)
 		result.IasSignature.CertCheck.setFalse(&msg)
 		ok = false
 	}
-	keyIds := make([][]byte, 0)
-	for _, ca := range cas {
-		keyIds = append(keyIds, ca.SubjectKeyId)
+	certs, err := internal.ParseCerts(iasM.Certs)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse certs: %v", err)
+		result.IasSignature.CertCheck.setFalse(&msg)
+		ok = false
 	}
-	err = verifyCertChainPem(&iasM.Certs, keyIds)
+	err = internal.VerifyCertChain(certs, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.IasSignature.CertCheck.setFalse(&msg)

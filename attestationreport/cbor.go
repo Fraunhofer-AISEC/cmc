@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/veraison/go-cose"
 )
@@ -61,10 +62,9 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 		return false, nil
 	}
 
-	certChain, err := certChainToDer(signer.GetCertChain())
-	if err != nil {
-		log.Errorf("failed to get certificate chain (DER): %v", err)
-		return false, nil
+	certChain := make([][]byte, 0)
+	for _, cert := range signer.GetCertChain() {
+		certChain = append(certChain, cert.Raw)
 	}
 
 	// create a cose signer TODO support RSA
@@ -137,7 +137,13 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 	for i, sig := range msgToVerify.Signatures {
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
-		x5Chain := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
+		x5Chain, okConv := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
+		if !okConv {
+			msg := fmt.Sprintf("failed to parse x5c header: %v", err)
+			result.SignatureCheck[i].CertCheck.setFalse(&msg)
+			ok = false
+			continue
+		}
 		certChain := make([]*x509.Certificate, 0, len(x5Chain))
 		for _, rawCert := range x5Chain {
 			cert, okCert := rawCert.([]byte)
@@ -158,7 +164,7 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 			certChain = append(certChain, x509Cert)
 		}
 
-		err := verifyCertChainX509(certChain, roots)
+		err = internal.VerifyCertChain(certChain, roots)
 		if err != nil {
 			msg := fmt.Sprintf("failed to verify certificate chain: %v", err)
 			result.SignatureCheck[i].CertCheck.setFalse(&msg)

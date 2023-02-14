@@ -82,7 +82,8 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues []ReferenceValue) (*SnpMeasurementResult, bool) {
+func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues []ReferenceValue,
+) (*SnpMeasurementResult, bool) {
 	result := &SnpMeasurementResult{}
 	ok := true
 
@@ -147,8 +148,22 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 		result.Freshness.Success = true
 	}
 
+	certs, err := internal.ParseCerts(snpM.Certs)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse certificates: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	cas, err := internal.ParseCerts(snpReferenceValue.Snp.Cas)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse ca: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Report, s, snpM.Certs, snpReferenceValue.Snp.KeyId)
+	sig, ret := verifySnpSignature(snpM.Report, s, certs, cas)
 	if !ret {
 		ok = false
 	}
@@ -341,7 +356,11 @@ func verifySnpTcb(s snpreport, v SnpTcb) (TcbCheck, bool) {
 	return r, ok
 }
 
-func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caKeyId string) (SignatureResult, bool) {
+func verifySnpSignature(
+	reportRaw []byte, report snpreport,
+	certs []*x509.Certificate, cas []*x509.Certificate,
+) (SignatureResult, bool) {
+
 	result := SignatureResult{}
 
 	if len(reportRaw) < (header_offset + signature_offset) {
@@ -370,20 +389,14 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 	s := new(big.Int)
 	s.SetBytes(sRaw)
 
-	// Load the VCEK certificate
-	c, err := internal.LoadCert(certs.Leaf)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to load certificate: %v", err)
-		result.Signature.setFalse(&msg)
-		return result, false
-	}
-	result.Name = c.Subject.CommonName
-	result.Organization = c.Subject.Organization
-	result.SubjectKeyId = hex.EncodeToString(c.SubjectKeyId)
-	result.AuthorityKeyId = hex.EncodeToString(c.AuthorityKeyId)
+	// The leaf certificate is the VCEK certificate
+	result.Name = certs[0].Subject.CommonName
+	result.Organization = certs[0].Subject.Organization
+	result.SubjectKeyId = hex.EncodeToString(certs[0].SubjectKeyId)
+	result.AuthorityKeyId = hex.EncodeToString(certs[0].AuthorityKeyId)
 
 	// Examine SNP x509 extensions
-	extensionResult, ok := verifySnpExtensions(c, &report)
+	extensionResult, ok := verifySnpExtensions(certs[0], &report)
 	result.ExtensionsCheck = &extensionResult
 	if !ok {
 		return result, false
@@ -397,7 +410,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 	}
 
 	// Extract the public key from the certificate
-	pub, ok := c.PublicKey.(*ecdsa.PublicKey)
+	pub, ok := certs[0].PublicKey.(*ecdsa.PublicKey)
 	if !ok {
 		msg := "Failed to extract ECDSA public key from certificate"
 		result.Signature.setFalse(&msg)
@@ -415,13 +428,7 @@ func verifySnpSignature(reportRaw []byte, report snpreport, certs CertChain, caK
 	result.Signature.Success = true
 
 	// Verify the SNP certificate chain
-	keyId, err := hex.DecodeString(caKeyId)
-	if err != nil {
-		msg := fmt.Sprintf("failed to parse SNP Reference Value CA subject key identifier: %v", err)
-		result.CertCheck.setFalse(&msg)
-		return result, false
-	}
-	err = verifyCertChainPem(&certs, [][]byte{keyId})
+	err := internal.VerifyCertChain(certs, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
 		result.CertCheck.setFalse(&msg)

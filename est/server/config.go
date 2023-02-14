@@ -78,7 +78,7 @@ func printConfig(c *config, configFile string) {
 	log.Infof("Using the configuration loaded from %v:", configFile)
 	log.Infof("\tPort                : %v", c.Port)
 	log.Infof("\tSigning Key File    : %v", getFilePath(c.SigningKey, filepath.Dir(configFile)))
-	log.Infof("\tSigning Certificats :")
+	log.Infof("\tSigning Certificates:")
 	for i, c := range c.SigningCerts {
 		log.Infof("\t\tCert %v: %v", i, c)
 	}
@@ -109,7 +109,7 @@ func loadCertChain(certChainFiles []string, configFile string) ([]*x509.Certific
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %v: %w", f, err)
 		}
-		cert, err := internal.LoadCert(pem)
+		cert, err := internal.ParseCert(pem)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load certificate: %w", err)
 		}

@@ -25,11 +25,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/est/client"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,7 +45,7 @@ type Config struct {
 // Sw is a struct required for implementing the signer and measurer interfaces
 // of the attestation report to perform software measurements and signing
 type Sw struct {
-	certChain ar.CertChain
+	certChain []*x509.Certificate
 	priv      crypto.PrivateKey
 }
 
@@ -63,9 +61,12 @@ func NewSwDriver(c Config) (*Sw, error) {
 		return nil, fmt.Errorf("serializer not initialized in driver config")
 	}
 
-	caPath, err := createLocalStorage(c.StoragePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create local storage: %v", err)
+	// Create storage folder for storage of internal data if not existing
+	if _, err := os.Stat(c.StoragePath); err != nil {
+		if err := os.MkdirAll(c.StoragePath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create directory for internal data '%v': %w",
+				c.StoragePath, err)
+		}
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -109,19 +110,7 @@ func NewSwDriver(c Config) (*Sw, error) {
 		return nil, fmt.Errorf("failed to enroll cert: %w", err)
 	}
 
-	caPem := internal.WriteCertPem(caCerts[len(caCerts)-1])
-
-	err = os.WriteFile(caPath, caPem, 0644)
-	if err != nil {
-		return nil, fmt.Errorf("failed to write file %v: %w", caPath, err)
-	}
-
-	// TODO clean solution
-	sw.certChain = ar.CertChain{
-		Leaf:          internal.WriteCertPem(cert),
-		Intermediates: internal.WriteCertsPem(caCerts[:len(caCerts)-1]),
-		Ca:            internal.WriteCertPem(caCerts[len(caCerts)-1]),
-	}
+	sw.certChain = append([]*x509.Certificate{cert}, caCerts...)
 	sw.priv = priv
 
 	return sw, nil
@@ -143,7 +132,7 @@ func (s *Sw) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
 	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
-func (s *Sw) GetCertChain() ar.CertChain {
+func (s *Sw) GetCertChain() []*x509.Certificate {
 	return s.certChain
 }
 
@@ -215,17 +204,4 @@ func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams,
 	}
 
 	return csr, nil
-}
-
-func createLocalStorage(storagePath string) (string, error) {
-
-	// Create storage folder for storage of internal data if not existing
-	if _, err := os.Stat(storagePath); err != nil {
-		if err := os.MkdirAll(storagePath, 0755); err != nil {
-			return "", fmt.Errorf("failed to create directory for internal data '%v': %w",
-				storagePath, err)
-		}
-	}
-
-	return path.Join(storagePath, "ca.pem"), nil
 }
