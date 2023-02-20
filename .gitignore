@@ -3,6 +3,7 @@
 
 cmcd/cmcd
 testtool/testtool
+est/server/server
 **/nonce
 **/attestation-report
 **/attestation-result.json
