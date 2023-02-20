@@ -84,7 +84,6 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces, s.config.Serializer)
 	if err != nil {
 		log.Errorf("Failed to generate attestation report: %v", err)
-		log.Info("Prover: Finished")
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
 		}, nil
@@ -92,7 +91,6 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 
 	if s.config.Signer == nil {
 		log.Error("No valid signer specified in config. Cannot sign attestation report")
-		log.Info("Prover: Finished")
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
 		}, nil
@@ -108,12 +106,12 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 		status = api.Status_OK
 	}
 
-	log.Info("Prover: Finished")
-
 	response := &api.AttestationResponse{
 		Status:            status,
 		AttestationReport: data,
 	}
+
+	log.Info("Prover: Finished")
 
 	return response, nil
 }

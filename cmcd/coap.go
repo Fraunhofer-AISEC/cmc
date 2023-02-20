@@ -135,8 +135,6 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Debug("Prover: Finished")
-
 	// Serialize CoAP payload
 	resp := api.AttestationResponse{
 		AttestationReport: data,
