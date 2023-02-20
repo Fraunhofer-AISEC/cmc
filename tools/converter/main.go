@@ -44,7 +44,8 @@ func main() {
 
 	inputFile := flag.String("in", "", "Path to metadata as JSON or CBOR to be signed")
 	outputFile := flag.String("out", "", "Path to the output file to save signed metadata")
-	inFormat := flag.String("format", "", "Input format (JSON or CBOR)")
+	inForm := flag.String("inform", "", "Input format (JSON or CBOR)")
+	outForm := flag.String("outform", "", "Output format (JSON or CBOR)")
 	flag.Parse()
 
 	if *inputFile == "" {
@@ -57,8 +58,13 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if *inFormat == "" {
+	if *inForm == "" {
 		log.Error("input format not specified")
+		flag.Usage()
+		return
+	}
+	if *outForm == "" {
+		log.Error("output format not specified")
 		flag.Usage()
 		return
 	}
@@ -72,15 +78,21 @@ func main() {
 
 	// Initialize serializers
 	var si ar.Serializer
-	var so ar.Serializer
-	if strings.EqualFold(*inFormat, "json") {
+	if strings.EqualFold(*inForm, "json") {
 		si = ar.JsonSerializer{}
-		so = ar.CborSerializer{}
-	} else if strings.EqualFold(*inFormat, "cbor") {
+	} else if strings.EqualFold(*inForm, "cbor") {
 		si = ar.CborSerializer{}
-		so = ar.JsonSerializer{}
 	} else {
-		log.Fatalf("Serializer %v not supported (only JSON and CBOR are supported)", *inFormat)
+		log.Fatalf("Input format %v not supported (only JSON and CBOR are supported)", *inForm)
+	}
+
+	var so ar.Serializer
+	if strings.EqualFold(*outForm, "json") {
+		so = ar.JsonSerializer{}
+	} else if strings.EqualFold(*outForm, "cbor") {
+		so = ar.CborSerializer{}
+	} else {
+		log.Fatalf("Output format %v not supported (only JSON and CBOR are supported)", *outForm)
 	}
 
 	t := new(ar.Type)
