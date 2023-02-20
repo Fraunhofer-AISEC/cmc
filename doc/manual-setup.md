@@ -133,7 +133,7 @@ to CBOR before signing them. To convert a metadata file from JSON to CBOR:
 
 ```sh
 # Convert JSON to CBOR using the converter-tool
-$CMC_ROOT/cmc/tools/converter/converter -in <input-file>.json -out <output-file.cbor> -format json
+$CMC_ROOT/cmc/tools/converter/converter -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
 ```
 
 ### TPM Setup using Calculated Values
