@@ -92,6 +92,10 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	msgToSign.Payload = report
 	msgToSign.Signatures = append(msgToSign.Signatures, sigHolder)
 
+	// This allows the signer to ensure mutual access for signing, if required
+	signer.Lock()
+	defer signer.Unlock()
+
 	err = msgToSign.Sign(rand.Reader, nil, coseSigner)
 	if err != nil {
 		log.Errorf("failed to sign cbor object: %v", err)
