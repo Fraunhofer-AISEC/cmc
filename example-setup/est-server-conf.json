@@ -1,11 +1,15 @@
 {
-    "port": 9001,
+    "port": 9000,
     "signingKey": "pki/ca-key.pem",
-    "certChain": [
+    "signingCerts": [
         "pki/ca.pem"
     ],
     "httpFolder": "./",
     "verifyEkCert": false,
     "tpmEkCertDb": "tpm-ek-certs.db",
-    "serialization": "json"
+    "serialization": "json",
+    "estKey": "pki/est-key.pem",
+    "estCerts": [
+        "pki/est.pem"
+    ]
 }

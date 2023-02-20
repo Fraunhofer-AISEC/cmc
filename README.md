@@ -13,19 +13,11 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
   - [Basic Principle](#basic-principle)
   - [Prerequistes](#prerequistes)
   - [Quick Demo Setup](#quick-demo-setup)
-  - [Manual Setup](#manual-setup)
-    - [Install Prerequisites](#install-prerequisites)
-    - [Build and Install](#build-and-install)
-    - [Setup PKI and Metadata](#setup-pki-and-metadata)
   - [Run the CMC](#run-the-cmc)
     - [Establish an attested TLS connection](#establish-an-attested-tls-connection)
-  - [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
-    - [Metadata](#metadata)
-    - [Serialization Format](#serialization-format)
-    - [TPM Setup using Calculated Values](#tpm-setup-using-calculated-values)
   - [Config Files](#config-files)
     - [CMCD Configuration](#cmcd-configuration)
-    - [Provisioning Server Configuration](#provisioning-server-configuration)
+    - [EST Server Configuration](#est-server-configuration)
     - [Platform Configuration](#platform-configuration)
   - [Custom Policies](#custom-policies)
   - [Build](#build)
@@ -58,9 +50,9 @@ Refer to the [Architecture](doc/Architecture.md) Readme for more information.
 The overall exchanged data structure *Attestation Report* does not only contain measurements of
 the software running on the platform, but also metadata in the form of *Manifests* and
 *Descriptions*. This metadata describes the entire state of the platform and must be signed by
-a trusted entity. This allows a verifier to validate the attestation report without knowing the
-platform in advance. Examples and tools for creating the metadata on the prover side are given
-below.
+one or more trusted entities. This allows a verifier to validate the attestation report without
+knowing the platform in advance. Examples and tools for creating the metadata on the prover side
+are given below.
 
 ## Prerequistes
 
@@ -77,126 +69,25 @@ Virtual Machine (VM) or server.
 ## Quick Demo Setup
 
 The CMC repository contains a complete local example setup including a demo CA and all required
-configurations and metadata. The setup script `example-setup/setup-full-simple` requires two parameters: the folder this repository was cloned to and a non-existing folder which is used for storing metadata and configuration. The script sets up everything to quickly
-test remote attestation. It was tested on Ubuntu 22.04 LTS.
+configurations and metadata. It was tested on Ubuntu 22.04 LTS.
 
 > :warning: **Note:** You should run this only for testing on a development machine
 
 ```sh
-./setup-full-simple <cmc-folder> <metadata-folder>
+git clone https://github.com/Fraunhofer-AISEC/cmc.git
+./cmc/example-setup/setup-full-simple <cmc-folder> <metadata-folder>
 ```
+with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` repository and
+`<metadata-folder>` as an arbitrary folder where metadata and configuration files are stored.
 
-**Afterwards, continue with [Run the CMC](#run-the-cmc)**
-
-## Manual Setup
-
-This setup shows step-by-step how to install the tools, generate the metadata describing the
-platform and run and test the tools. It was tested on Ubuntu 22.04 LTS.
-
-### Install Prerequisites
-
-```sh
-# Install utils
-sudo apt install moreutils golang-cfssl build-essential
-
-# Install tpm-pcr-tools for calculating/parsing TPM PCR values for TPM-based attestation
-sudo apt install -y build-essential zlib1g-dev libssl-dev
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
-cd tpm-pcr-tools
-make
-sudo make install # Or launch from individual folders
-```
-
-### Build and Install
-
-```sh
-# 1. Setup a folder for the cmc workspace (e.g. in your home directory)
-CMC_ROOT=$HOME/cmc-workspace
-
-# 2. Clone the CMC repo
-git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
-
-# 3. Build CMC
-cd $CMC_ROOT/cmc
-go build ./...
-
-# 4. Install CMC $GOPATH/bin (export PATH=$PATH:$HOME/go/bin -> .profile/.bashrc)
-go install ./...
-```
-
-### Setup PKI and Metadata
-
-**1. Create a folder for your CMC configuration**
-
-```sh
-mkdir -p $CMC_ROOT/cmc-data
-```
-
-**2. Copy and adjust the example metadata templates**
-For the example, it is sufficient to copy the templates. For information on how to adjust
-the metadata, see [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
-```sh
-cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data
-```
-
-```sh
-# 3. Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
-$CMC_ROOT/cmc-data/setup-simple-pki -i $CMC_ROOT/cmc-data -o $CMC_ROOT/cmc-data/pki
-```
-
-**3. Generate metadata**
-
-This example uses a TPM as hardware trust anchor and an SRTM measured boot. For other setups,
-see [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
-
-```sh
-# Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
-# Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-
-referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-```
-
-**4. Sign the metadata**
-
-This example uses JSON/JWS as serialization format. For different formats
-see [Serialization Format](#serialization-format)
-
-```sh
-IN=$CMC_ROOT/cmc-data/metadata-raw
-OUT=$CMC_ROOT/cmc-data/metadata-signed
-KEY=$CMC_ROOT/cmc-data/pki/signing-cert-key.pem
-CHAIN=$CMC_ROOT/cmc-data/pki/signing-cert.pem,$CMC_ROOT/cmc-data/pki/ca.pem
-
-mkdir -p $OUT
-
-signing-tool -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN -format json
-signing-tool -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN -format json
-signing-tool -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN --format json
-signing-tool -in $IN/device.config.json       -out $OUT/device.config.json       -keys $KEY -x5cs $CHAIN --format json
-```
-
-**5. Adjust the *cmcd* configuration**
-
-Open the cmcd-configuration in `$CMC_ROOT/cmc-data/cmcd-conf.json` and adjust it if required.
-For more information about the configuration see [CMCD Configuration](#cmcd-configuration)
-or run `cmcd -help`
-
-**6. Adjust the provisioning server configuration**
-Open the provisioning server configuration in `$CMC_ROOT/cmc-data/prov-server-conf.json` and
-adjust it if required. For more information about the configuration see
-[Provisioning Server Configuration](#provisioning-server-configuration) or run `provserver -help`
-
+**As an alternative, you can create and sign the metadata with an arbitrary PKI yourself,**
+**see [Manual Setup](./doc/manual-setup.md)**
 
 ## Run the CMC
 
 ```sh
-# Start the provisioning server that supplies the certificates and metadata for the cmcd
-provserver -config $CMC_ROOT/cmc-data/prov-server-conf.json
+# Start the EST server that supplies the certificates and metadata for the cmcd
+server -config $CMC_ROOT/cmc-data/prov-server-conf.json
 
 # Build and run the cmcd
 cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json -addr http://127.0.0.1:9001/metadata-signed
@@ -232,68 +123,9 @@ warning is printed. The intermediate and root CA for this chain can be downloade
 vendor. The certificates can then be added in to the ```cmc/example-setup/tpm-ek-certs.db```
 database. The ```verifyEkCert``` parameter in the *provserver* config can then be set to true.
 
-
-## Generating Metadata and Setup Alternatives
-
-Metadata and PKI can be generated in different formats and configurations, which is shortly
-described in this section.
-
-### Metadata
-
-The example setup contains templates for the required metadata files in JSON. The attributes
-of these files can be adjusted according to individual requirements:
-
-- **rtm.manifest.json**: Contains information about the Root of Trust for Measurements, which
-usually comprises the reference values (hashes) for BIOS/UEFI, bootloader and other early boot
-components
-- **os.manifest.json**: Contains the operating system reference values and information
-- **company.description.json**: Optional, metadata describing the operater of the computing platform
-- **device.description.json**: Metadata describing the overall platform, contains links to
-RTM Manifest, OS Manifest and App Manifests
-- **device.config.json**: Signed local device configuration, contains e.g. the parameters for
-the Certificate Signing Requests for the attestation and identity keys
-
-### Serialization Format
-
-The attestation report can be serialized to JSON and signed via JSON Web signatures (JWS), or to
-CBOR and signed via CBOR Object Signing and Encryption (COSE). This must be specified in the
-configuration of the *cmcd* (see [CMCD Configuration](#cmcd-configuration) and the
-provisioning server (see [Provisioning Server Configuration](#provisioning-server-configuration))
-
-As CBOR is a binary serialization format, the serialized data is not human-readable. Therefore, the
-metadata templates are always in JSON. A converter tool is provided to convert the metadata files
-to CBOR before signing them. To convert a metadata file from JSON to CBOR:
-
-```sh
-# Convert JSON to CBOR using the converter-tool
-$CMC_ROOT/cmc/tools/converter/converter -in <input-file>.json -out <output-file.cbor> -format json
-```
-
-### TPM Setup using Calculated Values
-
-In the example setup, the platform is simply seen as a "good reference platform" and the
-reference values are generated through parsing the TPM measurements from the `sysfs`. Ideally, the
-reference values are generated from the single software artefacts running on the platform. For
-QEMU VMs with OVMF and a kernel with appended initramfs, the `calculate-srtm-pcrs` tool can
-be used:
-
-```sh
-# 5. a) TPM Setup using calculated values
-# Calculate reference values
-referenceValues=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 0,1,2,3,6,7 --eventlog --config configs/ovmf-f80580f56b.cfg)
-# Delete all existing reference values
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-# Insert new reference values
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-
-referenceValues=$(calculate-srtm-pcrs --kernel linux-amd64-virtio-systemd-debug.bzImage --ovmf OVMF-DEBUG.fd --format json --pcrs 4,5 --eventlog --config configs/ovmf-f80580f56b.cfg)
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-```
-
 ## Config Files
 
-The *cmcd* and *provserver* require JSON configuration files. An example setup with all
+The *cmcd* and *estserver* require JSON configuration files. An example setup with all
 required configuration files is provided in the ```examples/``` folder of this repository. Paths
 in the configuration files can either be absolute, or relative to the path of the configuration
 file.
@@ -343,7 +175,7 @@ RSA4096, EC256, EC384, EC521
 }
 ```
 
-### Provisioning Server Configuration
+### EST Server Configuration
 
 The provisioning server requires a configuration file with the following information:
 - **port**: The port the server should listen on
@@ -370,6 +202,8 @@ certificates might need to be added.
 - **vcekOfflineCaching**: Boolean, specifies whether AMD SEV-SNP VCEK certificates downloaded from the AMD KDS server should be stored locally for later offline retrieval
 - **vcekCacheFolder**: The folder the downloaded VCEK certificates should locally be stored (only
 relevant if vcekOfflineCaching is set to true)
+- **estKey**: Server private key for establishing HTTPS connections
+- **estCerts**: Server certificate chain(s) for establishing HTTPS connections
 
 ```json
 {
@@ -383,7 +217,11 @@ relevant if vcekOfflineCaching is set to true)
     "tpmEkCertDb": "tpm-ek-certs.db",
     "vcekOfflineCaching": true,
     "vcekCacheFolder": "ca/vceks",
-    "serialization": "json"
+    "serialization": "json",
+    "estKey": "pki/est-key.pem",
+    "estCerts": [
+        "pki/est.pem"
+    ]
 }
 ```
 
