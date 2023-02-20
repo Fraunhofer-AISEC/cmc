@@ -132,7 +132,6 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		log.Warnf("failed to verify COSE: no signatures present")
 		return result, nil, false
 	}
-	log.Tracef("Number of COSE signatures: %v", len(msgToVerify.Signatures))
 	verifiers := make([]cose.Verifier, 0)
 	for i, sig := range msgToVerify.Signatures {
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})

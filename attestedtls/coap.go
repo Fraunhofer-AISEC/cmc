@@ -66,7 +66,7 @@ func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	req := &api.AttestationRequest{
