@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
@@ -67,10 +68,9 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 		certChain = append(certChain, cert.Raw)
 	}
 
-	// create a cose signer TODO support RSA
-	stmp, ok := private.(*ecdsa.PrivateKey)
+	stmp, ok := private.(crypto.Signer)
 	if !ok {
-		log.Errorf("failed to convert signing key %v", private)
+		log.Errorf("failed to convert signing key of type %T", private)
 		return false, nil
 	}
 	coseSigner, err := cose.NewSigner(cose.AlgorithmES256, stmp)
