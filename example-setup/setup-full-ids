@@ -8,7 +8,7 @@ sudo apt install moreutils golang-cfssl
 export PATH=$PATH:$(go env GOPATH)/bin
 
 # Setup a folder for the cmc workspace (e.g. in your home directory)
-CMC_ROOT=$HOME #/cmc-workspace
+CMC_ROOT=$HOME/cmc-workspace
 
 # Install tools
 sudo apt install -y build-essential zlib1g-dev libssl-dev
@@ -24,6 +24,9 @@ sudo apt install -y sqlite3
 [ -d "${CMC_ROOT}/ids-pcp" ] || {
     git clone https://github.com/Fraunhofer-AISEC/ids-pcp.git $CMC_ROOT/ids-pcp
 }
+cd $CMC_ROOT/ids-pcp/pcp_utils
+go build sign_artefact
+go install sign_artefact
 
 # Clone the CMC repo if not already present
 [ -d "${CMC_ROOT}/cmc" ] || {
@@ -32,33 +35,34 @@ sudo apt install -y sqlite3
 
 # Build CMC
 cd $CMC_ROOT/cmc
+git pull
 go build ./...
 
 # Install CMC to $GOPATH/bin
 go install ./...
 
 # Create a folder for the cmc configuration
-mkdir -p $CMC_ROOT/cmc-data
+mkdir -p $CMC_ROOT/cmc-data-ids
 
 # Copy metadata templates
-cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data
+cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data-ids
 
-# Generate a PKI suitable for your needs. You can use the IDS PKI example-setup for testing:
-$CMC_ROOT/cmc-data/setup-ids-pki -p $CMC_ROOT/ids-pcp -o $CMC_ROOT/cmc-data/pki-ids
+#- Generate a PKI suitable for your needs. You can use the IDS PKI example-setup for testing:
+$CMC_ROOT/cmc-data-ids/setup-ids-pki -p $CMC_ROOT/ids-pcp -o $CMC_ROOT/cmc-data-ids/pki-ids
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$(sudo parse-srtm-pcrs -p 1,2,3,4,5,6,7 -f json) #currently PCR0 removed from the list due to issues with parsing tool -> re-add in the future
 
 # Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json
 
 # Add new reference values
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json
 
 # Do this for the OS manifest as well
 referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json
 
 # Sign the metadata*
-$CMC_ROOT/cmc-data/sign-ids-metadata -f json -p $CMC_ROOT/cmc-data/pki-ids -i $CMC_ROOT/cmc-data/metadata-raw -o $CMC_ROOT/cmc-data/metadata-signed-ids
+$CMC_ROOT/cmc-data-ids/sign-ids-metadata -f json -p $CMC_ROOT/cmc-data-ids/pki-ids -i $CMC_ROOT/cmc-data-ids/metadata-raw -o $CMC_ROOT/cmc-data-ids/metadata-signed-ids
