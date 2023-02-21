@@ -17,34 +17,24 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/fxamacker/cbor/v2"
 	log "github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
-
-func convert(data []byte, v any, si ar.Serializer, so ar.Serializer) ([]byte, error) {
-	err := si.Unmarshal(data, v)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal: %v", err)
-	}
-	raw, err := so.Marshal(v)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal: %v", err)
-	}
-	return raw, nil
-}
 
 func main() {
 	log.SetLevel(log.TraceLevel)
 
 	inputFile := flag.String("in", "", "Path to metadata as JSON or CBOR to be signed")
 	outputFile := flag.String("out", "", "Path to the output file to save signed metadata")
-	inForm := flag.String("inform", "", "Input format (JSON or CBOR)")
 	outForm := flag.String("outform", "", "Output format (JSON or CBOR)")
 	flag.Parse()
 
@@ -58,11 +48,6 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if *inForm == "" {
-		log.Error("input format not specified")
-		flag.Usage()
-		return
-	}
 	if *outForm == "" {
 		log.Error("output format not specified")
 		flag.Usage()
@@ -73,86 +58,12 @@ func main() {
 	log.Debugf("Reading input file %v", *inputFile)
 	data, err := os.ReadFile(*inputFile)
 	if err != nil {
-		log.Fatalf("failed to read metadata file %v", *inputFile)
+		log.Fatalf("Failed to read metadata file %v", *inputFile)
 	}
 
-	// Initialize serializers
-	var si ar.Serializer
-	if strings.EqualFold(*inForm, "json") {
-		si = ar.JsonSerializer{}
-	} else if strings.EqualFold(*inForm, "cbor") {
-		si = ar.CborSerializer{}
-	} else {
-		log.Fatalf("Input format %v not supported (only JSON and CBOR are supported)", *inForm)
-	}
-
-	var so ar.Serializer
-	if strings.EqualFold(*outForm, "json") {
-		so = ar.JsonSerializer{}
-	} else if strings.EqualFold(*outForm, "cbor") {
-		so = ar.CborSerializer{}
-	} else {
-		log.Fatalf("Output format %v not supported (only JSON and CBOR are supported)", *outForm)
-	}
-
-	t := new(ar.Type)
-	err = si.Unmarshal(data, t)
+	raw, err := convert(data, *outForm)
 	if err != nil {
-		log.Fatalf("failed to unmarshal: %v", err)
-	}
-
-	var raw []byte
-	switch t.Type {
-	case "App Manifest":
-		log.Debug("Found App Manifest")
-		var m ar.AppManifest
-		raw, err = convert(data, &m, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-	case "OS Manifest":
-		log.Debug("Found OS Manifest")
-		var m ar.OsManifest
-		raw, err = convert(data, &m, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-
-	case "RTM Manifest":
-		log.Debug("Found RTM Manifest")
-		var m ar.RtmManifest
-		raw, err = convert(data, &m, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-
-	case "Device Description":
-		log.Debug("Found Device Description")
-		var d ar.DeviceDescription
-		raw, err = convert(data, &d, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-
-	case "Company Description":
-		log.Debug("Found Company Description")
-		var d ar.CompanyDescription
-		raw, err = convert(data, &d, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-
-	case "Device Config":
-		log.Debug("Found Device Config")
-		var d ar.DeviceConfig
-		raw, err = convert(data, &d, si, so)
-		if err != nil {
-			log.Fatalf("Failed to convert: %v", err)
-		}
-
-	default:
-		log.Fatalf("Type %v not supported", t.Type)
-
+		log.Fatalf("Failed to convert: %v", err)
 	}
 
 	log.Tracef("Writing output file %v", *outputFile)
@@ -160,4 +71,100 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to write file: %v", err)
 	}
+}
+
+func convert(data []byte, outform string) ([]byte, error) {
+	// Initialize serializers: detect input format
+	var si ar.Serializer
+	if json.Valid(data) {
+		si = ar.JsonSerializer{}
+	} else if err := cbor.Valid(data); err == nil {
+		si = ar.CborSerializer{}
+	} else {
+		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
+	}
+
+	// Initialize serializers: use specified output format
+	var so ar.Serializer
+	if strings.EqualFold(outform, "json") {
+		so = ar.JsonSerializer{}
+	} else if strings.EqualFold(outform, "cbor") {
+		so = ar.CborSerializer{}
+	} else {
+		return nil, fmt.Errorf("output format %v not supported (only JSON and CBOR are supported)",
+			outform)
+	}
+
+	t := new(ar.Type)
+	err := si.Unmarshal(data, t)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	var raw []byte
+	switch t.Type {
+	case "App Manifest":
+		log.Debug("Found App Manifest")
+		var m ar.AppManifest
+		raw, err = convertInternal(data, &m, si, so)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert: %w", err)
+		}
+	case "OS Manifest":
+		log.Debug("Found OS Manifest")
+		var m ar.OsManifest
+		raw, err = convertInternal(data, &m, si, so)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert: %w", err)
+		}
+
+	case "RTM Manifest":
+		log.Debug("Found RTM Manifest")
+		var m ar.RtmManifest
+		raw, err = convertInternal(data, &m, si, so)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert: %w", err)
+		}
+
+	case "Device Description":
+		log.Debug("Found Device Description")
+		var d ar.DeviceDescription
+		raw, err = convertInternal(data, &d, si, so)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert: %w", err)
+		}
+
+	case "Company Description":
+		log.Debug("Found Company Description")
+		var d ar.CompanyDescription
+		raw, err = convertInternal(data, &d, si, so)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert: %w", err)
+		}
+
+	case "Device Config":
+		log.Debug("Found Device Config")
+		var d ar.DeviceConfig
+		raw, err = convertInternal(data, &d, si, so)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert: %w", err)
+		}
+
+	default:
+		return nil, fmt.Errorf("type %T not supported", t)
+	}
+
+	return raw, nil
+}
+
+func convertInternal(data []byte, v any, si ar.Serializer, so ar.Serializer) ([]byte, error) {
+	err := si.Unmarshal(data, v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %v", err)
+	}
+	raw, err := so.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %v", err)
+	}
+	return raw, nil
 }
