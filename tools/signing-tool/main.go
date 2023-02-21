@@ -68,6 +68,7 @@ func main() {
 	}
 
 	// Load metadata
+	log.Infof("Reading: %v", *metadata)
 	data, err := os.ReadFile(*metadata)
 	if err != nil {
 		log.Fatalf("failed to read metadata file %v", *metadata)
@@ -108,7 +109,7 @@ func main() {
 		log.Fatalf("Failed to sign data: %v", err)
 	}
 
-	log.Tracef("Writing metadata to file %v", *outputFile)
+	log.Infof("Writing  %v", *outputFile)
 	err = os.WriteFile(*outputFile, signedData, 0644)
 	if err != nil {
 		log.Fatalf("failed to write output file: %v", err)
