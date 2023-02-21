@@ -19,14 +19,18 @@ package main
 import (
 	"crypto"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/fxamacker/cbor/v2"
 )
 
 type Serializer interface {
@@ -39,27 +43,26 @@ func main() {
 	metadata := flag.String("in", "", "Path to input metadata as JSON or CBOR to be signed")
 	keyFiles := flag.String("keys", "", "Paths to keys in PEM format to be used for signing, as a comma-separated list")
 	x5cFiles := flag.String("x5cs", "", "Paths to PEM encoded x509 certificate chains. Certificate chains must begin with the leaf certificates, the single certificates must be comma-separated. The certificate chains must be colon separated, e.g.: '--x5cs leaf1,intermediate1,ca1:leaf2,intermediate2,ca2")
-	format := flag.String("format", "JSON", "Format of the metadata (JSON or CBOR)")
 	outputFile := flag.String("out", "", "Path to the output file to save signed metadata")
 	flag.Parse()
 
 	if *metadata == "" {
-		log.Error("input metadata file not specified (--in)")
+		log.Error("input metadata file not specified (-in)")
 		flag.Usage()
 		return
 	}
 	if *keyFiles == "" {
-		log.Error("key file(s) not specified (--keys)")
+		log.Error("key file(s) not specified (-keys)")
 		flag.Usage()
 		return
 	}
 	if *x5cFiles == "" {
-		log.Error("certificate chain file(s) not specified (--x5cs)")
+		log.Error("certificate chain file(s) not specified (-x5cs)")
 		flag.Usage()
 		return
 	}
 	if *outputFile == "" {
-		log.Error("output file not specified (--out)")
+		log.Error("output file not specified (-out)")
 		flag.Usage()
 		return
 	}
@@ -70,43 +73,24 @@ func main() {
 		log.Fatalf("failed to read metadata file %v", *metadata)
 	}
 
-	// Load keys
+	// Load keys from file system
 	s1 := strings.Split(*keyFiles, ",")
-	keys := make([]crypto.PrivateKey, 0)
+	keysPem := make([][]byte, 0)
 	for _, keyFile := range s1 {
-		keyPem, err := os.ReadFile(keyFile)
+		k, err := os.ReadFile(keyFile)
 		if err != nil {
 			log.Fatalf("failed to read key file %v", err)
 		}
-
-		block, _ := pem.Decode(keyPem)
-		if block == nil || !strings.Contains(block.Type, "PRIVATE KEY") {
-			log.Fatal("failed to decode PEM block containing private key")
-		}
-
-		key, err := x509.ParseECPrivateKey(block.Bytes)
-		if err == nil {
-			keys = append(keys, key)
-		} else {
-			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-			if err != nil {
-				log.Fatalf("Failed to parse private key: %v", err)
-			}
-			keys = append(keys, key)
-		}
+		keysPem = append(keysPem, k)
 	}
-	if len(keys) == 0 {
-		log.Fatal("No valid keys specified")
-	}
-	log.Tracef("Read %v private keys", len(keys))
 
-	// Load certificate chains, splitted by colons
-	certChains := make([][]*x509.Certificate, 0)
+	// Load certificate chains, splitted by colons, from file system
+	certChainsPem := make([][][]byte, 0)
 	chains := strings.Split(*x5cFiles, ":")
 	for _, chain := range chains {
 
 		// Load certificates in chain, splitted by commas
-		certChain := make([]*x509.Certificate, 0)
+		certChainPem := make([][]byte, 0)
 		certFiles := strings.Split(chain, ",")
 		for _, certFile := range certFiles {
 
@@ -114,42 +98,15 @@ func main() {
 			if err != nil {
 				log.Fatalf("failed to read certificate(s) file %v", err)
 			}
-
-			c, err := internal.ParseCert(certPem)
-			if err != nil {
-				log.Fatalf("Failed to load certificates: %v", err)
-			}
-
-			certChain = append(certChain, c)
+			certChainPem = append(certChainPem, certPem)
 		}
-		certChains = append(certChains, certChain)
-	}
-	if len(certChains) == 0 {
-		log.Fatal("No valid certificates specified")
-	}
-	log.Tracef("Read %v certificate chains", len(certChains))
-
-	if len(certChains) != len(keys) {
-		log.Fatalf("Number of certificates (%v) does not match number of keys (%v)", len(certChains), len(keys))
+		certChainsPem = append(certChainsPem, certChainPem)
 	}
 
-	// Create serializer based on specified format
-	var s Serializer
-	if strings.EqualFold(*format, "json") {
-		s = JsonSerializer{}
-	} else if strings.EqualFold(*format, "cbor") {
-		s = CborSerializer{}
-	} else {
-		log.Fatalf("Serializer %v not supported (only JSON and CBOR are supported)", *format)
-	}
-
-	// Sign metadata
-	signedData, err := s.Sign(data, keys, certChains)
+	signedData, err := sign(data, keysPem, certChainsPem)
 	if err != nil {
-		log.Fatalf("failed to sign data: %v", err)
+		log.Fatalf("Failed to sign data: %v", err)
 	}
-
-	log.Trace("Signed metadata")
 
 	log.Tracef("Writing metadata to file %v", *outputFile)
 	err = os.WriteFile(*outputFile, signedData, 0644)
@@ -158,4 +115,79 @@ func main() {
 	}
 
 	log.Tracef("Finished")
+}
+
+func sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
+
+	// Load keys
+	keys := make([]crypto.PrivateKey, 0)
+	for _, keyPem := range keysPem {
+		block, _ := pem.Decode(keyPem)
+		if block == nil || !strings.Contains(block.Type, "PRIVATE KEY") {
+			return nil, errors.New("failed to decode PEM block containing private key")
+		}
+
+		key, err := x509.ParseECPrivateKey(block.Bytes)
+		if err == nil {
+			keys = append(keys, key)
+		} else {
+			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse private key: %w", err)
+			}
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		return nil, errors.New("no valid keys specified")
+	}
+	log.Tracef("Read %v private keys", len(keys))
+
+	// Load certificate chains
+	certChains := make([][]*x509.Certificate, 0)
+	for i, chainPem := range chainsPem {
+		certChain := make([]*x509.Certificate, 0)
+		for _, certPem := range chainPem {
+			c, err := internal.ParseCert(certPem)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load certificates: %w", err)
+			}
+			certChain = append(certChain, c)
+		}
+		if len(certChain) == 0 {
+			return nil, fmt.Errorf("certificate chain %v is empty", i)
+		}
+		certChains = append(certChains, certChain)
+	}
+	if len(certChains) == 0 {
+		return nil, errors.New("no valid certificates specified")
+	}
+	log.Tracef("Read %v certificate chains", len(certChains))
+
+	if len(certChains) != len(keys) {
+		return nil, fmt.Errorf("number of certificates (%v) does not match number of keys (%v)",
+			len(certChains), len(keys))
+	}
+
+	// Detect serialization format. Currently, JSON and CBOR are supported
+	var s Serializer
+	if json.Valid(data) {
+		log.Trace("Detected JSON serialization")
+		s = JsonSerializer{}
+	} else if err := cbor.Valid(data); err == nil {
+		log.Trace("Detected CBOR serialization")
+		s = CborSerializer{}
+	} else {
+		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
+	}
+
+	// Sign metadata
+	signedData, err := s.Sign(data, keys, certChains)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign data: %w", err)
+	}
+
+	log.Trace("Signed metadata")
+
+	return signedData, nil
 }

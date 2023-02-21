@@ -50,15 +50,15 @@ if [ "$1" == "cbor" ]; then
     # Write them to the same folder as the input files
     OUT=${IN%.*}.$1
     # Convert JSON to CBOR using the converter-tool
-    $CONV -in $INPUT/$IN -out $INPUT/$OUT -format json
+    $CONV -in $INPUT/$IN -out $INPUT/$OUT -inform json -outform cbor
   done
 fi
 
 echo "Signing $1 metadata"
 
-$SIG -in $INPUT/rtm.manifest.$1         -out $OUTPUT/rtm.manifest.$1         -keys $KEY -x5cs $CHAIN -format $1
-$SIG -in $INPUT/os.manifest.$1          -out $OUTPUT/os.manifest.$1          -keys $KEY -x5cs $CHAIN -format $1
-$SIG -in $INPUT/company.description.$1  -out $OUTPUT/company.description.$1  -keys $KEY -x5cs $CHAIN -format $1
+$SIG -in $INPUT/rtm.manifest.$1         -out $OUTPUT/rtm.manifest.$1         -keys $KEY -x5cs $CHAIN
+$SIG -in $INPUT/os.manifest.$1          -out $OUTPUT/os.manifest.$1          -keys $KEY -x5cs $CHAIN
+$SIG -in $INPUT/company.description.$1  -out $OUTPUT/company.description.$1  -keys $KEY -x5cs $CHAIN
 
-$SIG -in $INPUT/device.description.$1   -out $OUTPUT/device.description.$1   -keys $KEY4 -x5cs $CHAIN --format $1
-$SIG -in $INPUT/device.config.$1        -out $OUTPUT/device.config.$1        -keys $KEY4 -x5cs $CHAIN --format $1
+$SIG -in $INPUT/device.description.$1   -out $OUTPUT/device.description.$1   -keys $KEY4 -x5cs $CHAIN
+$SIG -in $INPUT/device.config.$1        -out $OUTPUT/device.config.$1        -keys $KEY4 -x5cs $CHAIN
