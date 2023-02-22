@@ -46,7 +46,7 @@ function checkRoles(signatureResults, expectedRoles){
 }
 
 //Verify AR was signed by a device
-if (!checkRoles(obj.reportSignatureCheck, ["Device"])) {
+if (!checkRoles(obj.reportSignatureCheck, ["device"])) {
     console.log("Role check for Attestation Report Signature failed")
     success = false;
 } else {
