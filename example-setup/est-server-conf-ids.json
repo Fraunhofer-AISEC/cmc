@@ -1,0 +1,16 @@
+{
+    "port": 9000,
+    "signingKey": "pki/device_sub_ca-key.pem",
+    "signingCerts": [
+        "pki/device_sub_ca.pem",
+        "pki/ca.pem"
+    ],
+    "httpFolder": "./",
+    "verifyEkCert": false,
+    "tpmEkCertDb": "tpm-ek-certs.db",
+    "serialization": "json",
+    "estKey": "pki/est-key.pem",
+    "estCerts": [
+        "pki/est.pem"
+    ]
+}
