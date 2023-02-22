@@ -80,7 +80,9 @@ git clone https://github.com/Fraunhofer-AISEC/cmc.git
 with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` repository and
 `<metadata-folder>` as an arbitrary folder where metadata and configuration files are stored.
 
-**As an alternative, you can create and sign the metadata with an arbitrary PKI yourself,**
+*For an alternative demo setup with a more complex PKI and policies based on the requirements of the International Data Spaces (IDS), see [IDS Example Setup](./doc/ids-example-setup.md)*
+
+**For instructions on creating and signing the metadata with an arbitrary PKI yourself,**
 **see [Manual Setup](./doc/manual-setup.md)**
 
 ## Run the CMC
