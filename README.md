@@ -87,10 +87,10 @@ with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` reposit
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-server -config $CMC_ROOT/cmc-data/prov-server-conf.json
+server -config $CMC_ROOT/cmc-data/est-server-conf.json
 
 # Build and run the cmcd
-cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json -addr http://127.0.0.1:9001/metadata-signed
+cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json -addr https://127.0.0.1:9001/metadata-signed
 
 # Run the testtool to retrieve an attestation report (stored in current folder unless otherwise specified)
 testtool -mode generate
