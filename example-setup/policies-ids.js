@@ -46,7 +46,7 @@ function checkRoles(signatureResults, expectedRoles){
 }
 
 //Verify AR was signed by a device
-if (!checkRoles(obj.reportSignatureCheck, ["device"])) {
+if (!checkRoles(obj.reportSignatureCheck, ["Device"])) {
     console.log("Role check for Attestation Report Signature failed")
     success = false;
 } else {
@@ -54,7 +54,7 @@ if (!checkRoles(obj.reportSignatureCheck, ["device"])) {
 }
 
 //Verify roles used to sign RTM Manifest
-if (!checkRoles(obj.rtmValidation.signatureValidation, ["developer", "evaluator", "certifier"])) {
+if (!checkRoles(obj.rtmValidation.signatureValidation, ["Developer", "Evaluator", "Certifier"])) {
     console.log("Role check for RTM Manifest Signatures failed")
     success = false;
 } else {
@@ -63,7 +63,7 @@ if (!checkRoles(obj.rtmValidation.signatureValidation, ["developer", "evaluator"
 
 
 //Verify roles used to sign OS Manifest
-if (!checkRoles(obj.osValidation.signatureValidation, ["developer", "evaluator", "certifier"])) {
+if (!checkRoles(obj.osValidation.signatureValidation, ["Developer", "Evaluator", "Certifier"])) {
     console.log("Role check for OS Manifest Signatures failed")
     success = false;
 } else {
@@ -74,7 +74,7 @@ if (!checkRoles(obj.osValidation.signatureValidation, ["developer", "evaluator",
 //Verify roles used to sign App Manifests (if applicable)
 if (obj.appValidation) {
 	for (i=0; i < obj.appValidation.length; i++){
-		if (!checkRoles(obj.appValidation[i].signatureValidation, ["developer", "evaluator", "certifier"])) {
+		if (!checkRoles(obj.appValidation[i].signatureValidation, ["Developer", "Evaluator", "Certifier"])) {
    		console.log("Role check for Signatures of App Manifest " + i + " failed")
    		success = false;
 		} else {
@@ -84,7 +84,7 @@ if (obj.appValidation) {
 }
 
 //Verify roles used to sign Company Description
-if (!checkRoles(obj.companyValidation.signatureValidation, ["operator", "evaluator", "certifier"])) {
+if (!checkRoles(obj.companyValidation.signatureValidation, ["Operator", "Evaluator", "Certifier"])) {
     console.log("Role check for Company Description Signatures failed")
     success = false;
 } else {

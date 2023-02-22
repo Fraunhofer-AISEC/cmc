@@ -5,17 +5,17 @@ set -e
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 CMC_DIR="$DIR/.."
 
-PCP="$CMC_DIR/ids-pcp"
+IN="$CMC_DIR/example-setup"
 OUT="$DIR/pki"
 
 print_usage() {
-  printf "Usage: ./setup_ids_pki [-p <dir with pcp tool>] [-o <output-dir] [-h]\n"
+  printf "Usage: ./setup_simple_pki [-i <input-dir>] [-o <output-dir] [-h]\n"
 }
 
-while getopts 'p:o:h' flag; do
+while getopts 'i:o:h' flag; do
   case "${flag}" in
-    p)
-        PCP="${OPTARG}"
+    i)
+        IN="${OPTARG}"
         ;;
     o)
         OUT="${OPTARG}"
@@ -29,32 +29,72 @@ while getopts 'p:o:h' flag; do
   esac
 done
 
-if [ ! -d "$PCP" ]; then
-    echo "PCP tool directory $PCP does not exist"
+if [ ! -d "$IN" ]; then
+    echo "Input directory $IN does not exist"
     exit 1
 fi
 
-echo "Using $PCP as pcp directory"
+echo "Using $IN as input directory"
 echo "Using $OUT as output directory"
 
 mkdir -p $OUT
 
 # Setup PKI with root CA and two SubCAs (one for users, one for devices)
-"$PCP"/pcp.sh "$OUT" ca
+# 1. Set up root CA (using ca.json to generate ca.pem and ca-key.pem)
+cfssl gencert -initca "$IN/ca.json" | cfssljson -bare "$OUT/ca"
 
-# Generate user certificates as required
+# 2. Set up an OCSP Server for the Root CA
+# Setup the database based on the .sql file derived from ~/go/src/github.com/cloudflare/cfssl/certdb/sqlite/migrations/001_CreateCertificates.sql
+cat "$IN/certs_subcas.sql" | sqlite3 "$OUT/certdb_subcas.db"
+echo "{\"driver\":\"sqlite3\",\"data_source\":\"$OUT/certdb_subcas.db\"}" > "$OUT/sqlite_db_subcas.json"
+
+# Generate key/certificate for OCSP Signing
+cfssl genkey "$IN/ocsp_subcas.json" | cfssljson -bare "$OUT/ocsp_subcas"
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" "$OUT/ocsp_subcas.csr" | cfssljson -bare "$OUT/ocsp_subcas"
+
+# 3. Set up the intermediate CAs (using device_sub_ca.json and user_sub_ca.json)
+cfssl genkey "$IN/device_sub_ca.json" | cfssljson -bare "$OUT/device_sub_ca" 
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" -db-config "$OUT/sqlite_db_subcas.json" --config "$IN/ca-config.json" -profile intermediate  "$OUT/device_sub_ca.csr" | cfssljson -bare "$OUT/device_sub_ca"
+
+cfssl genkey "$IN/user_sub_ca.json" | cfssljson -bare "$OUT/user_sub_ca"  
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" -db-config "$OUT/sqlite_db_subcas.json" --config "$IN/ca-config.json" -profile intermediate "$OUT/user_sub_ca.csr" | cfssljson -bare "$OUT/user_sub_ca"
+
+# 4. Set up OCSP Servers for the User Sub CAs
+cat "$IN/certs_users.sql" | sqlite3 "$OUT/certdb_users.db"
+echo "{\"driver\":\"sqlite3\",\"data_source\":\"$OUT/certdb_users.db\"}" > "$OUT/sqlite_db_users.json"
+
+# Generate key/certificate for OCSP Signing
+cfssl genkey "$IN/ocsp_users.json" | cfssljson -bare "$OUT/ocsp_users"
+cfssl sign -ca "$OUT/user_sub_ca.pem" -ca-key "$OUT/user_sub_ca-key.pem" "$OUT/ocsp_users.csr" | cfssljson -bare "$OUT/ocsp_users"
+
+# 5. Set up OCSP Servers for the User Sub CAs
+cat "$IN/certs_devices.sql" | sqlite3 "$OUT/certdb_devices.db"
+echo "{\"driver\":\"sqlite3\",\"data_source\":\"$OUT/certdb_devices.db\"}" > "$OUT/sqlite_db_devices.json"
+
+# Generate key/certificate for OCSP Signing
+cfssl genkey "$IN/ocsp_devices.json" | cfssljson -bare "$OUT/ocsp_devices"
+cfssl sign -ca "$OUT/device_sub_ca.pem" -ca-key "$OUT/device_sub_ca-key.pem" "$OUT/ocsp_devices.csr" | cfssljson -bare "$OUT/ocsp_devices"
+
+# Generate and sign certs for all needed users
 gen () {
-  "$PCP"/pcp.sh "$OUT" gen "$@"
+	cfssl genkey -config "$IN/ca-config.json" -profile user "$IN/$1.json" | cfssljson -bare "$OUT/$1"
+	cfssl sign -ca "$OUT/user_sub_ca.pem" -ca-key "$OUT/user_sub_ca-key.pem" -db-config "$OUT/sqlite_db_users.json" "$OUT/$1.csr" | cfssljson -bare "$OUT/$1"
 }
 
-gen developer developer_A
-gen developer developer_B
+gen developer_A
+gen developer_B
 
-gen operator operator_A
-gen developer operator_B
+gen operator_A
+gen operator_B
 
-gen evaluator evaluator_A
-gen evaluator evaluator_B
+gen evaluator_A
+gen evaluator_B
 
-gen certifier certifier_A
-gen certifier certifier_B
+gen certifier_A
+gen certifier_B
+
+# Generate key and CSR for EST server
+cfssl genkey -config "$IN/ca-config.json" -profile leafcert "$IN/cfssl-est.json" | cfssljson -bare "$OUT/est"
+
+# Sign CSR and generate certificate for EST server
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" "$OUT/est.csr" | cfssljson -bare "$OUT/est"

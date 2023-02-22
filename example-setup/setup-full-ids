@@ -1,68 +1,106 @@
 #!/bin/bash
 
+function abs_path() {
+  if [ -d "$(dirname "$1")" ]
+  then
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  fi
+}
+
 set -e
 
-sudo apt install moreutils golang-cfssl
+if [ "$#" -ne 2 ]; then
+   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder>"
+   exit
+fi
 
-# Define necessary environment variables for usage of installed Go binaries
-export PATH=$PATH:$(go env GOPATH)/bin
+CMC="$(abs_path $1)"
+DATA="$(abs_path $2)"
 
-# Setup a folder for the cmc workspace (e.g. in your home directory)
-CMC_ROOT=$HOME/cmc-workspace
+if [ ! -d "$CMC" ]; then
+  echo "CMC directory does not exist. Did you clone the repository? Abort.."
+  exit
+fi
+
+if [ -d "$DATA" ]; then
+  echo "Data directory does already exist. Please choose a new directory. Abort.."
+  exit
+fi
+
+echo "Using CMC: $CMC"
+echo "Using $DATA as directory for local data"
+
+# Create a folder for the cmc configuration and metadata
+mkdir -p $DATA
+
+sudo apt install moreutils golang-cfssl build-essential sqlite3
 
 # Install tools
 sudo apt install -y build-essential zlib1g-dev libssl-dev
-[ -d "${CMC_ROOT}/tpm-pcr-tools" ] || {
-    git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $CMC_ROOT/tpm-pcr-tools
-}
-cd $CMC_ROOT/tpm-pcr-tools
+git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $DATA/tpm-pcr-tools
+cd $DATA/tpm-pcr-tools
 make
 sudo make install
 
-# Install PCP tool for IDS-conform PKI
-sudo apt install -y sqlite3
-[ -d "${CMC_ROOT}/ids-pcp" ] || {
-    git clone https://github.com/Fraunhofer-AISEC/ids-pcp.git $CMC_ROOT/ids-pcp
-}
-cd $CMC_ROOT/ids-pcp/pcp_utils
-go build sign_artefact
-go install sign_artefact
-
-# Clone the CMC repo if not already present
-[ -d "${CMC_ROOT}/cmc" ] || {
-    git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
-}
-
 # Build CMC
-cd $CMC_ROOT/cmc
-git pull
+cd $CMC
+echo "Building CMC.."
 go build ./...
 
 # Install CMC to $GOPATH/bin
+echo "Installing CMC"
 go install ./...
 
-# Create a folder for the cmc configuration
-mkdir -p $CMC_ROOT/cmc-data-ids
-
 # Copy metadata templates
-cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data-ids
+cp -r $CMC/example-setup/* $DATA
 
-#- Generate a PKI suitable for your needs. You can use the IDS PKI example-setup for testing:
-$CMC_ROOT/cmc-data-ids/setup-ids-pki -p $CMC_ROOT/ids-pcp -o $CMC_ROOT/cmc-data-ids/pki-ids
+# Generate a PKI suitable for your needs. You can use the IDS PKI example-setup for testing:
+$DATA/setup-ids-pki -i $DATA/pki-input-ids -o $DATA/pki
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 1,2,3,4,5,6,7 -f json) #currently PCR0 removed from the list due to issues with parsing tool -> re-add in the future
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
 
 # Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json
+jq 'del(.referenceValues[])' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
 
 # Add new reference values
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/rtm.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
 
 # Do this for the OS manifest as well
 referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data-ids/metadata-raw/os.manifest.json
+jq 'del(.referenceValues[])' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
 
 # Sign the metadata*
-$CMC_ROOT/cmc-data-ids/sign-ids-metadata -f json -p $CMC_ROOT/cmc-data-ids/pki-ids -i $CMC_ROOT/cmc-data-ids/metadata-raw -o $CMC_ROOT/cmc-data-ids/metadata-signed-ids
+IN=$DATA/metadata-raw
+OUT=$DATA/metadata-signed
+
+KEY_DEV_A=$DATA/pki/developer_A-key.pem
+CHAIN_DEV_A=$DATA/pki/developer_A.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+KEY_DEV_B=$DATA/pki/developer_B-key.pem
+CHAIN_DEV_B=$DATA/pki/developer_B.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+KEY_EVA_A=$DATA/pki/evaluator_A-key.pem
+CHAIN_EVA_A=$DATA/pki/evaluator_A.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+KEY_EVA_B=$DATA/pki/evaluator_B-key.pem
+CHAIN_EVA_B=$DATA/pki/evaluator_B.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+KEY_CERT_A=$DATA/pki/certifier_A-key.pem
+CHAIN_CERT_A=$DATA/pki/certifier_A.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+KEY_CERT_B=$DATA/pki/certifier_B-key.pem
+CHAIN_CERT_B=$DATA/pki/certifier_B.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+KEY_OP_A=$DATA/pki/operator_A-key.pem
+CHAIN_OP_A=$DATA/pki/operator_A.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
+
+mkdir -p $OUT
+
+signing-tool -in $IN/rtm.manifest.json         -out $OUT/rtm.manifest.json         -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
+signing-tool -in $IN/os.manifest.json          -out $OUT/os.manifest.json          -keys $KEY_DEV_B,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_B:$CHAIN_EVA_A:$CHAIN_CERT_A
+signing-tool -in $IN/company.description.json  -out $OUT/company.description.json  -keys $KEY_OP_A,$KEY_EVA_B,$KEY_CERT_B -x5cs $CHAIN_OP_A:$CHAIN_EVA_B:$CHAIN_CERT_B
+
+signing-tool -in $IN/device.description.json   -out $OUT/device.description.json   -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+signing-tool -in $IN/device.config.json        -out $OUT/device.config.json        -keys $KEY_OP_A -x5cs $CHAIN_OP_A
