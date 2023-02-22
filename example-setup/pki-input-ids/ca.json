@@ -1,0 +1,18 @@
+{
+  "CN": "Test IDS Root CA",
+  "key": {
+    "algo": "ecdsa",
+    "size": 521
+  },
+  "names": [
+    {
+      "C": "DE",
+      "L": "Test City",
+      "O": "Test Company",
+      "OU": "Root CA"
+    }
+  ],
+  "expiry": "87660h",
+  "usages": ["cert sign"],
+  "ca_constraint": {"is_ca": true}
+}

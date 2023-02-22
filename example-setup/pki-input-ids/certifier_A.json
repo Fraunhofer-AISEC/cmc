@@ -1,0 +1,11 @@
+{
+  "CN": "Certifier A",
+  "names": [
+    {
+      "C": "DE",
+      "L": "Test City",
+      "O": "Test Company",
+      "OU": "Certifier"
+    }
+  ]
+}
