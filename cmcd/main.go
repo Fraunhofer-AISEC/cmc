@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 
 	"encoding/json"
@@ -102,11 +103,33 @@ func printConfig(c *config) {
 	log.Info("\tPolicy Engine            : ", c.PolicyEngine)
 }
 
+func getVersion() string {
+	version := "unknown"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if strings.EqualFold(info.Main.Version, "(devel)") {
+			commit := "unknown"
+			created := "unknown"
+			for _, elem := range info.Settings {
+				if strings.EqualFold(elem.Key, "vcs.revision") {
+					commit = elem.Value
+				}
+				if strings.EqualFold(elem.Key, "vcs.time") {
+					created = elem.Value
+				}
+			}
+			version = fmt.Sprintf("%v, commit %v, created %v", info.Main.Version, commit, created)
+		} else {
+			version = info.Main.Version
+		}
+	}
+	return version
+}
+
 func main() {
 
 	logrus.SetLevel(logrus.TraceLevel)
 
-	log.Info("Starting cmcd")
+	log.Infof("Starting cmcd %v", getVersion())
 
 	configFile := flag.String("config", "", "configuration file")
 	metadataAddr := flag.String("addr", "", "metadata server address")
