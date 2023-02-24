@@ -1,29 +1,47 @@
 #!/bin/bash
 
+function abs_path() {
+  if [ -d "$(dirname "$1")" ]
+  then
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  fi
+}
+
 set -e
 
-# Setup a folder for the cmc workspace (e.g. in your home directory)
-CMC_ROOT=$HOME/cmc-workspace
+if [ "$#" -ne 1 ]; then
+   echo "Usage: ./update-full-simple <data-folder>"
+   exit
+fi
+
+DATA="$(abs_path $1)"
+
+if [ ! -d "$DATA" ]; then
+  echo "Data directory $DATA does not exist. Did you run the setup-full-simple script? Abort.."
+  exit
+fi
+
+echo "Using $DATA as directory for local data"
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 1,2,3,4,5,6,7 -f json)
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
 
 # Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq 'del(.referenceValues[])' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
 
 # Add new reference values
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
 
 # Do this for the OS manifest as well
 referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+jq 'del(.referenceValues[])' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
+jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
 
 # Sign the metadata*
-IN=$CMC_ROOT/cmc-data/metadata-raw
-OUT=$CMC_ROOT/cmc-data/metadata-signed
-KEY=$CMC_ROOT/cmc-data/pki/signing-cert-key.pem
-CHAIN=$CMC_ROOT/cmc-data/pki/signing-cert.pem,$CMC_ROOT/cmc-data/pki/ca.pem
+IN=$DATA/metadata-raw
+OUT=$DATA/metadata-signed
+KEY=$DATA/pki/signing-cert-key.pem
+CHAIN=$DATA/pki/signing-cert.pem,$DATA/pki/ca.pem
 
 mkdir -p $OUT
 
