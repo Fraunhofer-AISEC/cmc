@@ -432,7 +432,7 @@ func verifySnpSignature(
 
 	//Store details from (all) validated certificate chain(s) in the report
 	for _, chain := range x509Chains {
-		chainExtracted := []x509CertExtracted{}
+		chainExtracted := []X509CertExtracted{}
 		for _, cert := range chain {
 			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 		}

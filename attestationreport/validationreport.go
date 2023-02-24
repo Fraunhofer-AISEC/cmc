@@ -27,7 +27,7 @@ import (
 // the validation of an attestation report
 type VerificationResult struct {
 	Type            string            `json:"type"`
-	Success         bool              `json:"raSuccessful"`         // Summarizing value illustrating whether any issues were detected during validation
+	Success         bool              `json:"raSuccessful"`         // Summarizing value illustrating whether any issues were detected during validation of the Attestation Report
 	SwCertLevel     int               `json:"swCertLevel"`          // Overall certification level for the entire software stack (the minimum of all CertificationLevels in the used manifests)
 	FreshnessCheck  Result            `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
 	ReportSignature []SignatureResult `json:"reportSignatureCheck"` // Result for validation of the overall report signature
@@ -37,26 +37,26 @@ type VerificationResult struct {
 	AppResults      []ManifestResult  `json:"appValidation,omitempty"`
 	MeasResult      MeasurementResult `json:"measurementValidation"`
 	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
-	PolicySuccess   bool              `json:"policySuccess,omitempty"`   // document result of custom policy validation (if utilized)
-	ProcessingError []string          `json:"processingError,omitempty"` // used to document any processing errors (dependent from provided Attestation Report) which hindered a complete validation
-	InternalError   bool              `json:"internalError,omitempty"`   // used to document if internal errors (independent from provided Attestation Report) occurred which hindered a complete validation
+	PolicySuccess   bool              `json:"policySuccess,omitempty"`   // Result of custom policy validation (if utilized)
+	ProcessingError []string          `json:"processingError,omitempty"` // Documentation of processing errors (dependent from provided Attestation Report) which hindered a complete validation
+	InternalError   bool              `json:"internalError,omitempty"`   // Documentation of internal errors (independent from provided Attestation Report) which hindered a complete validation
 }
 
 // CompDescResult represents the results of the validation of the
 // Company Description and its mapping to the used device certificate
 type CompDescResult struct {
 	Name           string            `json:"name"`
-	CompCertLevel  int               `json:"compCertLevel"` // Overall certification level for the company operating the device
-	Summary        ResultMulti       `json:"resultSummary"`
+	CompCertLevel  int               `json:"compCertLevel"`       // Certification level for the company operating the device
+	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Company Description
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
-	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
+	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the description
 }
 
 // ManifestResult represents the results of the validation of a
 // manifest provided in the Attestation Report
 type ManifestResult struct {
 	Name           string            `json:"name"`
-	Summary        ResultMulti       `json:"resultSummary"`
+	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Software Manifest
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Manifest Signatures and the used certificates
 	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
 }
@@ -74,7 +74,7 @@ type MeasurementResult struct {
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report
 type DevDescResult struct {
-	Summary             ResultMulti       `json:"resultSummary"`
+	Summary             ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Device Description
 	CorrectRtm          Result            `json:"correctRtm"`          // Result for comparison of RTM in the Device Description and the provided RTM Manifest
 	CorrectOs           Result            `json:"correctOs"`           // Result for comparison of OS in the Device Description and the provided OS Manifest
 	CorrectApps         ResultMulti       `json:"correctApps"`         // Result for comparison of App List in the Device Description and the provided App Manifest
@@ -86,7 +86,7 @@ type DevDescResult struct {
 // TpmMeasurementResults represents the results of the validation
 // of the provided TPM Quote and its comparison to the reference values in the manifests
 type TpmMeasurementResult struct {
-	Summary             Result          `json:"resultSummary"`
+	Summary             Result          `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the TPM Measurement
 	PcrRecalculation    []PcrResult     `json:"pcrRecalculation"`    // Result for validation whether the measured PCR values match the provided reference values
 	AggPcrQuoteMatch    Result          `json:"aggPcrQuoteMatch"`    // Result for comparing the aggregated PCR values with the value in the TPM Quote
 	QuoteFreshness      Result          `json:"quoteFreshness"`      // Result for comparison of the expected nonce to the one provided in the TPM Quote
@@ -96,8 +96,8 @@ type TpmMeasurementResult struct {
 
 // PcrResult represents the results for the recalculation of a specific PCR
 type PcrResult struct {
-	Pcr        int         `json:"pcr"` // Number for the PCR which was validated
-	Validation ResultMulti `json:"validation"`
+	Pcr        int         `json:"pcr"`        // Number for the PCR which was validated
+	Validation ResultMulti `json:"validation"` // Result for the validation of the respective PCR
 }
 
 // SwMeasurementResult represents the results for the reference values of
@@ -105,7 +105,7 @@ type PcrResult struct {
 type SwMeasurementResult struct {
 	MeasName   string `json:"measurementName"`    // Name associated with the measurement used for validation
 	VerName    string `json:"referenceValueName"` // Name of the reference value information used for validation
-	Validation Result `json:"validation"`
+	Validation Result `json:"validation"`         //Result of the validation of the software measurement
 }
 
 type VersionCheck struct {
@@ -163,20 +163,19 @@ type IasMeasurementResult struct {
 // SignatureResults represents the results for validation of
 // a provided signature and the used certificates
 type SignatureResult struct {
-	ValidatedCerts  [][]x509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
+	ValidatedCerts  [][]X509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
 	CertChainCheck  Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
 	ExtensionsCheck *ResultMulti          `json:"extensionsCheck,omitempty"`
 }
 
-//X509CertExtracted represents a x509 certificate
-// with attributes in a human-readable way and prepared for (Un)Marshaling JSON objects
-type x509CertExtracted struct {
-	Raw                   []byte                  `json:"raw"` // Complete ASN.1 DER content (certificate, signature algorithm and signature).
+// X509CertExtracted represents a x509 certificate with attributes
+// in a human-readable way and prepared for (un)marshaling JSON objects.
+type X509CertExtracted struct {
 	Version               int                     `json:"version"`
 	SerialNumber          *big.Int                `json:"serialNumber"`
-	Issuer                x509Name                `json:"issuer"`
-	Subject               x509Name                `json:"subject"`
+	Issuer                X509Name                `json:"issuer"`
+	Subject               X509Name                `json:"subject"`
 	Validity              Validity                `json:"validity"`
 	KeyUsage              []string                `json:"keyUsage"`
 	SignatureAlgorithm    string                  `json:"signatureAlgorithm"`
@@ -197,7 +196,9 @@ type x509CertExtracted struct {
 	URIs           []*url.URL `json:"uris,omitempty"`
 }
 
-type x509Name struct {
+// X509Name represents an X.509 distinguished name. This only includes the common
+// elements of a DN. Note that the structure is not a complete representation of the X.509 structure.
+type X509Name struct {
 	Country            []string `json:"country,omitempty"`
 	Organization       []string `json:"organization,omitempty"`
 	OrganizationalUnit []string `json:"organizationalUnit,omitempty"`
@@ -209,15 +210,15 @@ type x509Name struct {
 	CommonName         string   `json:"commonName,omitempty"`
 }
 
+// PkixExtension represents extensions of a x509 certificate.
 type PkixExtension struct {
 	Id       string `json:"id"`
 	Critical bool   `json:"critical"`
 	Value    []byte `json:"value"`
 }
 
-// The variable keyUsageName is used for translating the
-// internal representation of allowed key usage in an x509 certificate
-// to a string array
+// keyUsageName is used for translating the internal representation of allowed
+// key usage in an x509 certificate to a string array.
 var keyUsageName = [...]string{
 	x509.KeyUsageDigitalSignature:  "Digital Signature",
 	x509.KeyUsageContentCommitment: "Content Commitment",
@@ -230,9 +231,8 @@ var keyUsageName = [...]string{
 	x509.KeyUsageDecipherOnly:      "Decipher Only",
 }
 
-// The function KeyUsageToString translates the
-// internal representation of allowed key usage in an x509 certificate
-// to a string array
+// KeyUsageToString translates the internal representation of allowed key usage
+// in an x509 certificate to a string array.
 func KeyUsageToString(usage x509.KeyUsage) []string {
 	res := []string{}
 	for i := 0; i < len(keyUsageName); i++ {
@@ -243,9 +243,8 @@ func KeyUsageToString(usage x509.KeyUsage) []string {
 	return res
 }
 
-// The variable extkeyUsageName is used for translating the
-// internal representation of allowed extended key usage in an x509 certificate
-// to a string array
+// extkeyUsageName is used for translating the internal representation of allowed
+// extended key usage in an x509 certificate to a string array.
 var extkeyUsageName = [...]string{
 	x509.ExtKeyUsageAny:                            "Any",
 	x509.ExtKeyUsageServerAuth:                     "Server Auth",
@@ -263,9 +262,8 @@ var extkeyUsageName = [...]string{
 	x509.ExtKeyUsageMicrosoftKernelCodeSigning:     "Microsoft Kernel Code Signing",
 }
 
-// The function ExtKeyUsageToString translates the
-// internal representation of allowed extended key usage in an x509 certificate
-// to a string array
+// ExtKeyUsageToString translates the internal representation of allowed extended
+// key usage in an x509 certificate to a string array
 func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 	res := []string{}
 	for i := 0; i < len(usage); i++ {
@@ -295,16 +293,14 @@ type TokenResult struct {
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 }
 
-// ExtractX509Infos extracts relevant attributes from the internal
-// x509.Certificate structure and transform some attribute into
-// a more human-readable form by translating enums to a string representations
-func ExtractX509Infos(cert *x509.Certificate) x509CertExtracted {
-	certExtracted := x509CertExtracted{}
+// ExtractX509Infos extracts relevant attributes from cert and transform some attribute
+// into a more human-readable form by translating enums to a string representations
+func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
+	certExtracted := X509CertExtracted{}
 
-	certExtracted.Raw = cert.Raw
 	certExtracted.Version = cert.Version
 	certExtracted.SerialNumber = cert.SerialNumber
-	certExtracted.Issuer = x509Name{
+	certExtracted.Issuer = X509Name{
 		Country:            cert.Issuer.Country,
 		Organization:       cert.Issuer.Organization,
 		OrganizationalUnit: cert.Issuer.OrganizationalUnit,
@@ -315,7 +311,7 @@ func ExtractX509Infos(cert *x509.Certificate) x509CertExtracted {
 		SerialNumber:       cert.Issuer.SerialNumber,
 		CommonName:         cert.Issuer.CommonName,
 	}
-	certExtracted.Subject = x509Name{
+	certExtracted.Subject = X509Name{
 		Country:            cert.Subject.Country,
 		Organization:       cert.Subject.Organization,
 		OrganizationalUnit: cert.Subject.OrganizationalUnit,
