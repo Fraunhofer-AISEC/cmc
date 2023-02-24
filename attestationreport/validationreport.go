@@ -17,14 +17,11 @@ package attestationreport
 
 import (
 	"crypto/x509"
-	"encoding/asn1"
 	"math/big"
-	"net"
-	"net/url"
 )
 
 // VerificationResult represents the results of all steps taken during
-// the validation of an attestation report
+// the validation of an attestation report.
 type VerificationResult struct {
 	Type            string            `json:"type"`
 	Success         bool              `json:"raSuccessful"`         // Summarizing value illustrating whether any issues were detected during validation of the Attestation Report
@@ -43,7 +40,7 @@ type VerificationResult struct {
 }
 
 // CompDescResult represents the results of the validation of the
-// Company Description and its mapping to the used device certificate
+// Company Description and its mapping to the used device certificate.
 type CompDescResult struct {
 	Name           string            `json:"name"`
 	CompCertLevel  int               `json:"compCertLevel"`       // Certification level for the company operating the device
@@ -53,7 +50,7 @@ type CompDescResult struct {
 }
 
 // ManifestResult represents the results of the validation of a
-// manifest provided in the Attestation Report
+// manifest provided in the Attestation Report.
 type ManifestResult struct {
 	Name           string            `json:"name"`
 	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Software Manifest
@@ -63,7 +60,7 @@ type ManifestResult struct {
 
 // MeasurementResult represents the results of the comparison of
 // reference values and measurements. The used attributes depend on
-// the technologies used for calculating the measurements
+// the technologies used for calculating the measurements.
 type MeasurementResult struct {
 	TpmMeasResult *TpmMeasurementResult `json:"tpm,omitempty"`
 	SnpMeasResult *SnpMeasurementResult `json:"snp,omitempty"`
@@ -72,7 +69,7 @@ type MeasurementResult struct {
 }
 
 // DevDescResult represents the results of the validation of the
-// Device Description in the Attestation Report
+// Device Description in the Attestation Report.
 type DevDescResult struct {
 	Summary             ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Device Description
 	CorrectRtm          Result            `json:"correctRtm"`          // Result for comparison of RTM in the Device Description and the provided RTM Manifest
@@ -84,7 +81,7 @@ type DevDescResult struct {
 }
 
 // TpmMeasurementResults represents the results of the validation
-// of the provided TPM Quote and its comparison to the reference values in the manifests
+// of the provided TPM Quote and its comparison to the reference values in the manifests.
 type TpmMeasurementResult struct {
 	Summary             Result          `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the TPM Measurement
 	PcrRecalculation    []PcrResult     `json:"pcrRecalculation"`    // Result for validation whether the measured PCR values match the provided reference values
@@ -94,14 +91,14 @@ type TpmMeasurementResult struct {
 	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"` // Checks that every TPM Reference Value was part of the measurements
 }
 
-// PcrResult represents the results for the recalculation of a specific PCR
+// PcrResult represents the results for the recalculation of a specific PCR.
 type PcrResult struct {
 	Pcr        int         `json:"pcr"`        // Number for the PCR which was validated
 	Validation ResultMulti `json:"validation"` // Result for the validation of the respective PCR
 }
 
 // SwMeasurementResult represents the results for the reference values of
-// a software measurement (currently only used for app reference values)
+// a software measurement (currently only used for app reference values).
 type SwMeasurementResult struct {
 	MeasName   string `json:"measurementName"`    // Name associated with the measurement used for validation
 	VerName    string `json:"referenceValueName"` // Name of the reference value information used for validation
@@ -138,7 +135,7 @@ type PolicyCheck struct {
 }
 
 // SnpMeasurementResult represents the results for the verification
-// of AMD SEV SNP measurements
+// of AMD SEV SNP measurements.
 type SnpMeasurementResult struct {
 	Summary             Result          `json:"resultSummary"`
 	Freshness           Result          `json:"freshness"`
@@ -152,7 +149,7 @@ type SnpMeasurementResult struct {
 }
 
 // IasMeasurementResult represents the results for the verification
-// of ARM PSA Initial Attestation Service Token measurements
+// of ARM PSA Initial Attestation Service Token measurements.
 type IasMeasurementResult struct {
 	Summary             Result          `json:"resultSummary"`
 	FreshnessCheck      Result          `json:"quoteFreshness"`
@@ -161,7 +158,7 @@ type IasMeasurementResult struct {
 }
 
 // SignatureResults represents the results for validation of
-// a provided signature and the used certificates
+// a provided signature and the used certificates.
 type SignatureResult struct {
 	ValidatedCerts  [][]X509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
@@ -171,33 +168,53 @@ type SignatureResult struct {
 
 // X509CertExtracted represents a x509 certificate with attributes
 // in a human-readable way and prepared for (un)marshaling JSON objects.
+// It is based on the type Certificate from the crypto/x509 package.
 type X509CertExtracted struct {
-	Version               int                     `json:"version"`
-	SerialNumber          *big.Int                `json:"serialNumber"`
-	Issuer                X509Name                `json:"issuer"`
-	Subject               X509Name                `json:"subject"`
-	Validity              Validity                `json:"validity"`
-	KeyUsage              []string                `json:"keyUsage"`
-	SignatureAlgorithm    string                  `json:"signatureAlgorithm"`
-	PublicKeyAlgorithm    string                  `json:"publicKeyAlgorithm"`
-	Extensions            []PkixExtension         `json:"pkixExtenstions"`
-	ExtKeyUsage           []string                `json:"extKeyUsage,omitempty"`        // Sequence of extended key usages.
-	UnknownExtKeyUsage    []asn1.ObjectIdentifier `json:"unknownExtKeyUsage,omitempty"` // Encountered extended key usages unknown to this package.
-	BasicConstraintsValid bool                    `json:"basicConstraintsValid"`        // BasicConstraintsValid indicates whether IsCA, MaxPathLen, and MaxPathLenZero are valid.
-	IsCA                  bool                    `json:"isCA,omitempty"`
-	MaxPathLen            int                     `json:"maxPathLen,omitempty"`
-	MaxPathLenZero        bool                    `json:"maxPathLenZero,omitempty"`
-	SubjectKeyId          []byte                  `json:"subjectKeyId"`
-	AuthorityKeyId        []byte                  `json:"authorityKeyId"`
+	Version            int      `json:"version"`
+	SerialNumber       *big.Int `json:"serialNumber"`
+	Issuer             X509Name `json:"issuer"`
+	Subject            X509Name `json:"subject"`
+	Validity           Validity `json:"validity"`
+	KeyUsage           []string `json:"keyUsage"`
+	SignatureAlgorithm string   `json:"signatureAlgorithm"`
+	PublicKeyAlgorithm string   `json:"publicKeyAlgorithm"`
+
+	// Extensions contains raw X.509 extensions extracted during parsing.
+	Extensions []PkixExtension `json:"pkixExtenstions"`
+
+	ExtKeyUsage        []string `json:"extKeyUsage,omitempty"`        // Sequence of extended key usages.
+	UnknownExtKeyUsage []string `json:"unknownExtKeyUsage,omitempty"` // Encountered extended key usages unknown to this package.
+
+	BasicConstraintsValid bool `json:"basicConstraintsValid"` // BasicConstraintsValid indicates whether IsCA, MaxPathLen, and MaxPathLenZero are valid.
+	IsCA                  bool `json:"isCA,omitempty"`
+
+	// MaxPathLen and MaxPathLenZero indicate the presence and
+	// value of the BasicConstraints' "pathLenConstraint".
+	//
+	// A positive non-zero MaxPathLen means that the field was specified,
+	// -1 means it was unset, and MaxPathLenZero being true means that the field was
+	// explicitly set to zero. The case of MaxPathLen==0 with MaxPathLenZero==false
+	// should be treated equivalent to -1 (unset).
+	MaxPathLen int `json:"maxPathLen,omitempty"`
+	// MaxPathLenZero indicates that BasicConstraintsValid==true
+	// and MaxPathLen==0 should be interpreted as an actual
+	// maximum path length of zero. Otherwise, that combination is
+	// interpreted as MaxPathLen not being set.
+	MaxPathLenZero bool `json:"maxPathLenZero,omitempty"`
+
+	SubjectKeyId   []byte `json:"subjectKeyId"`
+	AuthorityKeyId []byte `json:"authorityKeyId"`
+
 	// Subject Alternate Name values.
-	DNSNames       []string   `json:"dnsNames,omitempty"`
-	EmailAddresses []string   `json:"emailAddresses,omitempty"`
-	IPAddresses    []net.IP   `json:"ipAddresses,omitempty"`
-	URIs           []*url.URL `json:"uris,omitempty"`
+	DNSNames       []string `json:"dnsNames,omitempty"`
+	EmailAddresses []string `json:"emailAddresses,omitempty"`
+	IPAddresses    []string `json:"ipAddresses,omitempty"`
+	URIs           []string `json:"uris,omitempty"`
 }
 
 // X509Name represents an X.509 distinguished name. This only includes the common
-// elements of a DN. Note that the structure is not a complete representation of the X.509 structure.
+// elements of a DN. Note that the structure is not a complete representation of
+// the X.509 structure.
 type X509Name struct {
 	Country            []string `json:"country,omitempty"`
 	Organization       []string `json:"organization,omitempty"`
@@ -263,7 +280,7 @@ var extkeyUsageName = [...]string{
 }
 
 // ExtKeyUsageToString translates the internal representation of allowed extended
-// key usage in an x509 certificate to a string array
+// key usage in an x509 certificate to a string array.
 func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 	res := []string{}
 	for i := 0; i < len(usage); i++ {
@@ -273,33 +290,34 @@ func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 }
 
 // Result is a generic type for storing a boolean result value
-// and details on the validation (used in case of errors)
+// and details on the validation (used in case of errors).
 type Result struct {
 	Success bool   `json:"success"`
-	Details string `json:"details,omitempty"` // Details on the issue which was detected during validation, remains empty if validation was successful
+	Details string `json:"details,omitempty"` // Details on the issue detected during validation, remains empty if validation was successful.
 }
 
 // ResultMulti is a generic type for storing a boolean result value
-// and possibly multiple details on the validation (used in case of errors)
+// and possibly multiple details on the validation (used in case of errors).
 type ResultMulti struct {
 	Success bool     `json:"success"`
-	Details []string `json:"details,omitempty"` // Details on the issue which was detected during validation, remains empty if validation was successful
+	Details []string `json:"details,omitempty"` // Details on the issue(s) detected during validation, remains empty if validation was successful.
 }
 
 // TokenResult is a helper struct for the validation of JWS or COSE tokens focussing
-// on the validation of the provided signatures
+// on the validation of the provided signatures.
 type TokenResult struct {
 	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 }
 
 // ExtractX509Infos extracts relevant attributes from cert and transform some attribute
-// into a more human-readable form by translating enums to a string representations
+// into a more human-readable form by translating enums to a string representations.
 func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 	certExtracted := X509CertExtracted{}
 
 	certExtracted.Version = cert.Version
 	certExtracted.SerialNumber = cert.SerialNumber
+
 	certExtracted.Issuer = X509Name{
 		Country:            cert.Issuer.Country,
 		Organization:       cert.Issuer.Organization,
@@ -311,6 +329,7 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 		SerialNumber:       cert.Issuer.SerialNumber,
 		CommonName:         cert.Issuer.CommonName,
 	}
+
 	certExtracted.Subject = X509Name{
 		Country:            cert.Subject.Country,
 		Organization:       cert.Subject.Organization,
@@ -322,13 +341,16 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 		SerialNumber:       cert.Subject.SerialNumber,
 		CommonName:         cert.Subject.CommonName,
 	}
+
 	certExtracted.Validity = Validity{
 		NotBefore: cert.NotBefore.String(),
 		NotAfter:  cert.NotAfter.String(),
 	}
+
 	certExtracted.KeyUsage = KeyUsageToString(cert.KeyUsage)
 	certExtracted.SignatureAlgorithm = cert.SignatureAlgorithm.String()
 	certExtracted.PublicKeyAlgorithm = cert.PublicKeyAlgorithm.String()
+
 	for _, ext := range cert.Extensions {
 		ext_extracted := PkixExtension{
 			Id:       ext.Id.String(),
@@ -338,17 +360,27 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 		certExtracted.Extensions = append(certExtracted.Extensions, ext_extracted)
 	}
 	certExtracted.ExtKeyUsage = ExtKeyUsageToString(cert.ExtKeyUsage)
-	certExtracted.UnknownExtKeyUsage = cert.UnknownExtKeyUsage
+
+	for _, keyusage := range cert.UnknownExtKeyUsage {
+		certExtracted.UnknownExtKeyUsage = append(certExtracted.UnknownExtKeyUsage, keyusage.String())
+	}
+
 	certExtracted.BasicConstraintsValid = cert.BasicConstraintsValid
 	certExtracted.IsCA = cert.IsCA
 	certExtracted.MaxPathLen = cert.MaxPathLen
 	certExtracted.MaxPathLenZero = cert.MaxPathLenZero
+
 	certExtracted.SubjectKeyId = cert.SubjectKeyId
 	certExtracted.AuthorityKeyId = cert.AuthorityKeyId
+
 	certExtracted.DNSNames = cert.DNSNames
 	certExtracted.EmailAddresses = cert.EmailAddresses
-	certExtracted.IPAddresses = cert.IPAddresses
-	certExtracted.URIs = cert.URIs
+	for _, uri := range cert.URIs {
+		certExtracted.URIs = append(certExtracted.URIs, uri.String())
+	}
+	for _, ip := range cert.IPAddresses {
+		certExtracted.IPAddresses = append(certExtracted.IPAddresses, ip.String())
+	}
 
 	return certExtracted
 }
