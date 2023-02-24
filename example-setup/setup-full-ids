@@ -55,7 +55,7 @@ go install ./...
 cp -r $CMC/example-setup/* $DATA
 
 # Generate a PKI suitable for your needs. You can use the IDS PKI example-setup for testing:
-$DATA/setup-ids-pki -i $DATA/pki-input-ids -o $DATA/pki
+$DATA/setup-pki-ids -i $DATA/pki-input-ids -o $DATA/pki
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
