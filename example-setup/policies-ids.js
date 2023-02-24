@@ -91,8 +91,4 @@ if (!checkRoles(obj.companyValidation.signatureValidation, ["Operator", "Evaluat
 	console.log("Role check for Company Description Signatures successful")
 }
 
-//TODO: Verify that operator who signed the Company Description belongs to the company mentioned in the Company Description
-
-//TODO: Verify the operator who signed the Device Description belongs to the company mentioned in the Company Description
-
 success
