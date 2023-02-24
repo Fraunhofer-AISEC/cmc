@@ -1,13 +1,26 @@
 #!/bin/bash
 
+function abs_path() {
+  if [ -d "$(dirname "$1")" ]
+  then
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+  fi
+}
+
 set -e
 
-if [ "$#" -ne 0 ]; then
-   echo "Usage: ./update-full-simple (run within the working data folder)"
+if [ "$#" -ne 1 ]; then
+   echo "Usage: ./update-full-ids <data-folder>"
    exit
 fi
 
-DATA="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+DATA="$(abs_path $1)"
+
+if [ ! -d "$DATA" ]; then
+  echo "Data directory $DATA does not exist. Did you run the setup-full-ids script? Abort.."
+  exit
+fi
+
 echo "Using $DATA as directory for local data"
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
