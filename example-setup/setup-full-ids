@@ -30,6 +30,8 @@ fi
 echo "Using CMC: $CMC"
 echo "Using $DATA as directory for local data"
 
+export PATH=$PATH:$HOME/go/bin
+
 # Create a folder for the cmc configuration and metadata
 mkdir -p $DATA
 
