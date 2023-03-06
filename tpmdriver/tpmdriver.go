@@ -497,13 +497,21 @@ func provisionTpm(
 		return nil, nil, fmt.Errorf("failed to marshal EK public key: %w", err)
 	}
 
+	var ekRaw []byte
+	if ek[0].Certificate != nil {
+		ekRaw = ek[0].Certificate.Raw
+	} else {
+		ekRaw = nil
+		log.Tracef("EK not present. Using EK URL %v", ek[0].CertificateURL)
+	}
+
 	log.Info("Performing TPM AK Enroll")
 	encCredential, encSecret, pkcs7Cert, err := estclient.TpmActivateEnroll(
 		provServerURL, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
 		akParams.Public, akParams.CreateData, akParams.CreateAttestation, akParams.CreateSignature,
-		ekPub, ek[0].Certificate.Raw,
+		ekPub, ekRaw,
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll AK: %w", err)
