@@ -3,7 +3,7 @@ module github.com/Fraunhofer-AISEC/cmc
 go 1.18
 
 require (
-	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230119160236-158f31c8a0a1
+	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230306143918-e20e49317a80
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/google/go-attestation v0.4.4-0.20220404204839-8820d49b18d9
 	github.com/google/go-tpm v0.3.3

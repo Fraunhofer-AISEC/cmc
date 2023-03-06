@@ -110,6 +110,15 @@ func DecodeBase64(data []byte) ([]byte, error) {
 	return decoded[:n], nil
 }
 
+func DecodeBase64Url(data []byte) ([]byte, error) {
+	decoded := make([]byte, base64.RawURLEncoding.DecodedLen(len(data)))
+	n, err := base64.RawURLEncoding.Decode(decoded, data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+	return decoded[:n], nil
+}
+
 // Break lines after 76 characters
 func formatBase64(data []byte) []byte {
 	lf := []byte{'\r', '\n'}
