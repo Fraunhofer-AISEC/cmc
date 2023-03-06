@@ -38,7 +38,7 @@ mkdir -p $DATA
 sudo apt install moreutils golang-cfssl build-essential sqlite3
 
 # Install tools
-sudo apt install -y build-essential zlib1g-dev libssl-dev
+sudo apt install -y build-essential zlib1g-dev libssl-dev jq
 git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $DATA/tpm-pcr-tools
 cd $DATA/tpm-pcr-tools
 make
