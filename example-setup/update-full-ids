@@ -21,6 +21,8 @@ if [ ! -d "$DATA" ]; then
   exit
 fi
 
+export PATH=$PATH:$HOME/go/bin
+
 echo "Using $DATA as directory for local data"
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
