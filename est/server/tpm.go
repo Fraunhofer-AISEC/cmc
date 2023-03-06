@@ -20,11 +20,15 @@ import (
 	"crypto/x509"
 	"database/sql"
 	"encoding/asn1"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/Fraunhofer-AISEC/cmc/est/common"
 	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm/tpm2"
 
@@ -65,7 +69,7 @@ func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error 
 
 	// Retrieve the EK cert (varies between manufacturers)
 	var ekCert *x509.Certificate
-	if cert == nil {
+	if (cert == nil) || (len(cert) == 0) {
 		if certUrl == "" {
 			return fmt.Errorf("neither EK Certificate nor Certificate URL present")
 		}
@@ -73,9 +77,13 @@ func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error 
 		if manufacturer != manufacturerIntel {
 			return fmt.Errorf("ek certificate not present and Certificate URL not supported for manufacturer %v", manufacturer)
 		}
-		ekCert, err = getIntelEkCert(certUrl)
+		resp, err := getIntelEkCert(certUrl)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve Intel TPM EK certificate from Intel server: %w", err)
+		}
+		ekCert, err = parseIntelEkCert(resp)
+		if err != nil {
+			return fmt.Errorf("failed to parse Intel EK cert: %w", err)
 		}
 	} else {
 		// Other manufacturers simply provde their cert in an NV index
@@ -99,8 +107,53 @@ func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error 
 	return nil
 }
 
-func getIntelEkCert(certificateURL string) (*x509.Certificate, error) {
-	return nil, fmt.Errorf("retrieval of Intel EK Certificates not implemented yet")
+func getIntelEkCert(certificateUrl string) ([]byte, error) {
+
+	log.Println("Requesting Cert from ", certificateUrl)
+
+	resp, err := http.Get(certificateUrl)
+
+	if err != nil {
+		return nil, fmt.Errorf("error GET: %w", err)
+	}
+	defer resp.Body.Close()
+	log.Println("Response Status: ", resp.Status)
+	if resp.StatusCode != 200 {
+		return nil, err
+	}
+
+	content, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
+}
+
+type IntelEk struct {
+	Pubhash string `json:"pubhash"`
+	Cert    string `json:"certificate"`
+}
+
+func parseIntelEkCert(data []byte) (*x509.Certificate, error) {
+
+	intelEk := new(IntelEk)
+	err := json.Unmarshal(data, intelEk)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Intel EK: %w", err)
+	}
+
+	der, err := common.DecodeBase64Url([]byte(intelEk.Cert))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse: %w", err)
+	}
+
+	return cert, nil
 }
 
 func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, major, minor int) error {
