@@ -61,7 +61,7 @@ type Serializer interface {
 	GetPayload(raw []byte) ([]byte, error)
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
-	Sign(report []byte, signer Signer) (bool, []byte)
+	Sign(report []byte, signer Signer) ([]byte, error)
 	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
 }
 
@@ -439,7 +439,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Ser
 }
 
 // Sign signs the attestation report with the specified signer 'signer'
-func Sign(report []byte, signer Signer, s Serializer) (bool, []byte) {
+func Sign(report []byte, signer Signer, s Serializer) ([]byte, error) {
 	return s.Sign(report, signer)
 }
 

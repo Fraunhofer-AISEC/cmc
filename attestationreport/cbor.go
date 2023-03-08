@@ -54,12 +54,11 @@ func (s CborSerializer) Unmarshal(data []byte, v any) error {
 	return cbor.Unmarshal(data, v)
 }
 
-func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
+func (s CborSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
 
 	private, _, err := signer.GetSigningKeys()
 	if err != nil {
-		log.Errorf("failed to get signing keys: %v", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to get signing keys: %w", err)
 	}
 
 	certChain := make([][]byte, 0)
@@ -69,13 +68,11 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 
 	stmp, ok := private.(crypto.Signer)
 	if !ok {
-		log.Errorf("failed to convert signing key of type %T", private)
-		return false, nil
+		return nil, fmt.Errorf("failed to convert signing key of type %T", private)
 	}
 	coseSigner, err := cose.NewSigner(cose.AlgorithmES256, stmp)
 	if err != nil {
-		log.Errorf("Failed to create signer: %v", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to create signer: %w", err)
 	}
 
 	// create a signature holder
@@ -97,18 +94,16 @@ func (s CborSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 
 	err = msgToSign.Sign(rand.Reader, nil, coseSigner)
 	if err != nil {
-		log.Errorf("failed to sign cbor object: %v", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to sign cbor object: %w", err)
 	}
 
 	// sign and marshal message
 	coseRaw, err := msgToSign.MarshalCBOR()
 	if err != nil {
-		log.Errorf("failed to marshal cbor object: %v", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to marshal cbor object: %w", err)
 	}
 
-	return true, coseRaw
+	return coseRaw, nil
 }
 
 func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool) {

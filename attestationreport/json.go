@@ -84,8 +84,7 @@ func (s JsonSerializer) Unmarshal(data []byte, v any) error {
 }
 
 // Sign signs the attestation report with the specified signer 'signer'
-func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
-	var err error
+func (s JsonSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
 
 	log.Trace("Signing attestation report")
 
@@ -100,8 +99,7 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 
 	priv, pub, err := signer.GetSigningKeys()
 	if err != nil {
-		log.Errorf("Failed to get signing keys: %v", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to get signing keys: %w", err)
 	}
 
 	// Get jose.SignatureAlgorithm
@@ -110,8 +108,7 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	var alg jose.SignatureAlgorithm
 	alg, err = algFromKeyType(pub)
 	if err != nil {
-		log.Error(err)
-		return false, nil
+		return nil, fmt.Errorf("failed to get alg from key type: %w", err)
 	}
 	log.Trace("Chosen signature algorithm: ", alg)
 
@@ -131,8 +128,7 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	var joseSigner jose.Signer
 	joseSigner, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
 	if err != nil {
-		log.Error("Failed to setup signer for the Attestation Report: ", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to setup signer for the Attestation Report: %w", err)
 	}
 
 	// This allows the signer to ensure mutual access for signing, if required
@@ -143,15 +139,14 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) (bool, []byte) {
 	log.Trace("Performing Sign operation")
 	obj, err := joseSigner.Sign(report)
 	if err != nil {
-		log.Error("Failed to sign the Attestation Report: ", err)
-		return false, nil
+		return nil, fmt.Errorf("failed to sign the Attestation Report: %w", err)
 	}
 	log.Trace("Signed attestation report")
 
 	// return signature in bytes
 	msg := obj.FullSerialize()
 
-	return true, []byte(msg)
+	return []byte(msg), nil
 }
 
 // VerifyToken verifies signatures and certificate chains for JWS tokens

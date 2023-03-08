@@ -183,7 +183,6 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 			}
 		}
 	}
-	print("Verification PCR 0: ", hex.EncodeToString(calculatedPcrs[0]), "\n")
 
 	// Compare the calculated pcr values from the reference values with the measurement list
 	// pcr values to provide a detailed report
@@ -200,7 +199,6 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 				if len(hce.Sha256) == 1 {
 					// Measurement contains only final PCR value, so we can simply compare
 					measurement = hce.Sha256[0]
-					print("single PCR value found for pcr ", pcrNum, ": ", hex.EncodeToString(hce.Sha256[0]), "\n")
 				} else {
 					// Measurement contains individual values which must be extended to result in
 					// the final PCR value for comparison

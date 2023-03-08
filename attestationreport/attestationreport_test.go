@@ -201,10 +201,9 @@ func TestVerify(t *testing.T) {
 			if err != nil {
 				t.Errorf("Preparation failed: %v", err)
 			}
-			ok, ar := Sign(a, swSigner, tt.args.serializer)
-			if !ok {
-				t.Error("Internal Error: Failed to sign Attestion Report")
-				return
+			ar, err := Sign(a, swSigner, tt.args.serializer)
+			if err != nil {
+				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
 			}
 
 			// Run FUT
