@@ -68,9 +68,9 @@ func TestVerifyCbor(t *testing.T) {
 				t.Errorf("Failed to setup test. Marshal failed")
 			}
 
-			ok, coseRaw := s.Sign(report, signer)
-			if !ok {
-				t.Errorf("Failed to setup test. Sign failed")
+			coseRaw, err := s.Sign(report, signer)
+			if err != nil {
+				t.Errorf("Failed to setup test. Sign failed: %v", err)
 			}
 
 			// Verify attestation report

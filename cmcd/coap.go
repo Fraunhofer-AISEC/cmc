@@ -127,9 +127,9 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("Prover: Signing Attestation Report")
-	ok, data := ar.Sign(report, serverConfig.Signer, serverConfig.Serializer)
-	if !ok {
-		msg := "Failed to sign attestation report"
+	data, err := ar.Sign(report, serverConfig.Signer, serverConfig.Serializer)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to sign attestation report: %v", err)
 		log.Warn(msg)
 		SendCoapError(w, r, codes.InternalServerError, msg)
 		return

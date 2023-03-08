@@ -98,9 +98,9 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 
 	log.Info("Prover: Signing Attestation Report")
 	var status api.Status
-	ok, data := ar.Sign(report, s.config.Signer, s.config.Serializer)
-	if !ok {
-		log.Error("Prover: failed to sign Attestion Report ")
+	data, err := ar.Sign(report, s.config.Signer, s.config.Serializer)
+	if err != nil {
+		log.Errorf("Prover: failed to sign Attestion Report: %v", err)
 		status = api.Status_FAIL
 	} else {
 		status = api.Status_OK
