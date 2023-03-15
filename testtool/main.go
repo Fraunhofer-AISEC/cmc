@@ -27,8 +27,8 @@ var (
 		"verify":   verify,     // Verify an attestation report
 		"dial":     dial,       // Act as client to establish an attested TLS connection
 		"listen":   listen,     // Act as server in etsblishing attested TLS connections
-		"caCerts":  getCaCerts, // Retrieve CA certs from EST server
-		"ioTHub":   iotHub,     // Simulate an IoT hub for Cortex-M IAS Attestation Demo
+		"cacerts":  getCaCerts, // Retrieve CA certs from EST server
+		"iothub":   iothub,     // Simulate an IoT hub for Cortex-M IAS Attestation Demo
 	}
 )
 

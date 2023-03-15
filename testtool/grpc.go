@@ -32,6 +32,7 @@ import (
 
 	// local modules
 
+	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 )
 
@@ -133,4 +134,20 @@ func (a GrpcApi) verify(c *config) {
 	// Save the Attestation Result
 	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
 	fmt.Println("Wrote file ", c.ResultFile)
+}
+
+func (a GrpcApi) dial(c *config) {
+	dialInternal(c, attestedtls.CmcApi_GRPC)
+}
+
+func (a GrpcApi) listen(c *config) {
+	listenInternal(c, attestedtls.CmcApi_GRPC)
+}
+
+func (a GrpcApi) cacerts(c *config) {
+	getCaCertsInternal(c)
+}
+
+func (a GrpcApi) iothub(c *config) {
+	log.Fatalf("IoT hub not implemented for gRPC")
 }

@@ -50,6 +50,10 @@ var (
 type Api interface {
 	generate(c *config)
 	verify(c *config)
+	dial(c *config)
+	listen(c *config)
+	iothub(c *config)
+	cacerts(c *config)
 }
 
 type config struct {

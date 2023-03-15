@@ -33,6 +33,7 @@ import (
 
 	// local modules
 
+	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/coapapi"
 )
 
@@ -109,16 +110,6 @@ func (a CoapApi) generate(c *config) {
 
 func (a CoapApi) verify(c *config) {
 
-	// Establish connection
-	conn, err := udp.Dial(c.Addr)
-	if err != nil {
-		log.Fatalf("Error dialing: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	path := "/Verify"
-
 	// Read the attestation report, CA and the nonce previously stored
 	data, err := os.ReadFile(c.ReportFile)
 	if err != nil {
@@ -137,35 +128,75 @@ func (a CoapApi) verify(c *config) {
 		Policies:          c.policies,
 	}
 
+	resp, err := verifyInternal(c.CmcAddr, req)
+	if err != nil {
+		log.Fatalf("Failed to verify: %v", err)
+	}
+
+	var out bytes.Buffer
+	json.Indent(&out, resp.VerificationResult, "", "    ")
+
+	// Save the Attestation Result
+	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
+	fmt.Println("Wrote file ", c.ResultFile)
+}
+
+func (a CoapApi) dial(c *config) {
+	dialInternal(c, attestedtls.CmcApi_COAP)
+}
+
+func (a CoapApi) listen(c *config) {
+	listenInternal(c, attestedtls.CmcApi_COAP)
+}
+
+func (a CoapApi) cacerts(c *config) {
+	getCaCertsInternal(c)
+}
+
+func (a CoapApi) iothub(c *config) {
+	// Start coap server
+	err := serve(c)
+	if err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
+}
+
+func verifyInternal(addr string, req *coapapi.VerificationRequest,
+) (*coapapi.VerificationResponse, error) {
+	// Establish connection
+	conn, err := udp.Dial(addr)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	path := "/Verify"
+
 	// Marshal CoAP payload
 	payload, err := cbor.Marshal(req)
 	if err != nil {
-		log.Fatalf("failed to marshal payload: %v", err)
+		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
 	// Send CoAP POST request
 	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
 	if err != nil {
-		log.Fatalf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
 	// Read CoAP reply body
 	payload, err = resp.ReadBody()
 	if err != nil {
-		log.Fatalf("failed to read body: %v", err)
+		return nil, fmt.Errorf("failed to read body: %v", err)
 	}
 
 	// Unmarshal attestation response
-	var verifyResp coapapi.VerificationResponse
-	err = cbor.Unmarshal(payload, &verifyResp)
+	verifyResp := new(coapapi.VerificationResponse)
+	err = cbor.Unmarshal(payload, verifyResp)
 	if err != nil {
-		log.Fatalf("failed to unmarshal response")
+		return nil, fmt.Errorf("failed to unmarshal response")
 	}
 
-	var out bytes.Buffer
-	json.Indent(&out, verifyResp.VerificationResult, "", "    ")
-
-	// Save the Attestation Result
-	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
-	fmt.Println("Wrote file ", c.ResultFile)
+	return verifyResp, nil
 }
