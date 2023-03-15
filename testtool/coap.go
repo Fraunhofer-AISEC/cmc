@@ -32,7 +32,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/udp"
 
 	// local modules
-	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
+
 	"github.com/Fraunhofer-AISEC/cmc/coapapi"
 )
 
@@ -168,12 +168,4 @@ func (a CoapApi) verify(c *config) {
 	// Save the Attestation Result
 	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
 	fmt.Println("Wrote file ", c.ResultFile)
-}
-
-func (a CoapApi) dial(c *config) {
-	dial(attestedtls.CmcApi_COAP, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
-}
-
-func (a CoapApi) listen(c *config) {
-	listen(attestedtls.CmcApi_COAP, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
 }

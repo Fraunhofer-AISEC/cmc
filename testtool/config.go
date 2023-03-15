@@ -22,39 +22,21 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
-
-	"github.com/Fraunhofer-AISEC/cmc/est/client"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
-)
-
-// Mode defines the mode to be run
-type Mode int
-
-const (
-	Generate = 0 // Generate an attestation report
-	Verify   = 1 // Verify an attestation report
-	Dial     = 2 // Act as client to establish an attested TLS connection
-	Listen   = 3 // Act as server in etsblishing attested TLS connections
-	CaCerts  = 4 // Retrieve CA certs from EST server
-	IoTHub   = 5 // Simulate an IoT hub for Cortex-M IAS Attestation Demo
 )
 
 const (
 	timeoutSec = 10
 )
 
+var (
+	apis = map[string]Api{}
+)
+
 type Api interface {
 	generate(c *config)
 	verify(c *config)
-	dial(c *config)
-	listen(c *config)
 }
-
-var apis = map[string]Api{}
-
-var log = logrus.WithField("service", "testtool")
 
 type config struct {
 	Mode         string
@@ -70,10 +52,12 @@ type config struct {
 
 	ca       []byte
 	policies []byte
+	api      Api
 }
 
 func getConfig() *config {
 	var err error
+	var ok bool
 
 	// configFile := flag.String("config", "", "configuration file")
 	modeFlag := flag.String("mode", "generate", "[generate | verify | dial  | listen | cacerts | iothub ]")
@@ -118,68 +102,12 @@ func getConfig() *config {
 		}
 	}
 
-	return c
-}
-
-func main() {
-	logrus.SetLevel(logrus.TraceLevel)
-
-	c := getConfig()
-
-	var mode Mode
-	if strings.EqualFold(c.Mode, "generate") {
-		mode = Generate
-	} else if strings.EqualFold(c.Mode, "verify") {
-		mode = Verify
-	} else if strings.EqualFold(c.Mode, "dial") {
-		mode = Dial
-	} else if strings.EqualFold(c.Mode, "listen") {
-		mode = Listen
-	} else if strings.EqualFold(c.Mode, "cacerts") {
-		mode = CaCerts
-	} else {
-		log.Errorf("Undefined mode %v", c.Mode)
-		flag.Usage()
-		return
-	}
-
-	api, ok := apis[strings.ToLower(c.ApiFlag)]
+	// Get API
+	c.api, ok = apis[strings.ToLower(c.ApiFlag)]
 	if !ok {
-		log.Errorf("API %v is not implemented\n", c.ApiFlag)
 		flag.Usage()
-		return
+		log.Fatalf("API %v is not implemented\n", c.ApiFlag)
 	}
 
-	switch mode {
-	case Generate:
-		api.generate(c)
-	case Verify:
-		api.verify(c)
-	case Dial:
-		api.dial(c)
-	case Listen:
-		api.listen(c)
-	case CaCerts:
-		getCaCerts(c)
-	default:
-		log.Fatalf("Unknown mode %v", mode)
-	}
-}
-
-func getCaCerts(c *config) {
-	log.Info("Retrieving CA certs")
-	estclient := client.NewClient(nil)
-	certs, err := estclient.CaCerts(c.Addr)
-	if err != nil {
-		log.Fatalf("Failed to retrieve certificates: %v", err)
-	}
-	log.Debug("Received certs:")
-	for _, c := range certs {
-		log.Debugf("\t%v", c.Subject.CommonName)
-	}
-	// Store CA certificate
-	err = os.WriteFile(c.CaFile, internal.WriteCertPem(certs[len(certs)-1]), 0644)
-	if err != nil {
-		log.Fatalf("Failed to store CA certificate: %v", err)
-	}
+	return c
 }
