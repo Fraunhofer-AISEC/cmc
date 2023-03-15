@@ -32,7 +32,6 @@ import (
 
 	// local modules
 
-	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 )
 
@@ -134,12 +133,4 @@ func (a GrpcApi) verify(c *config) {
 	// Save the Attestation Result
 	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
 	fmt.Println("Wrote file ", c.ResultFile)
-}
-
-func (a GrpcApi) dial(c *config) {
-	dial(attestedtls.CmcApi_GRPC, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
-}
-
-func (a GrpcApi) listen(c *config) {
-	listen(attestedtls.CmcApi_GRPC, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
 }

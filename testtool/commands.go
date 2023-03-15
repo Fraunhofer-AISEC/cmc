@@ -23,56 +23,69 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"os"
 	"time"
 
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	"github.com/Fraunhofer-AISEC/cmc/est/client"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
+
+func generate(c *config) {
+	c.api.generate(c)
+}
+
+func verify(c *config) {
+	c.api.verify(c)
+}
 
 /* Creates TLS connection between this client and a server and performs a remote
  * attestation of the server before exchanging few a exemplary messages with it
  */
-func dial(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies []byte) {
-	var conf *tls.Config
+func dial(c *config) {
+	var tlsConf *tls.Config
+
+	// Get API
+	api := apiToCmcApiSelect(c.api)
 
 	// Add root CA
 	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(ca)
+	success := roots.AppendCertsFromPEM(c.ca)
 	if !success {
 		log.Fatal("Could not add cert to root CAs")
 	}
 
-	if mtls {
+	if c.Mtls {
 		// Load own certificate
 		var cert tls.Certificate
 		cert, err := atls.GetCert(
-			atls.WithCmcAddr(cmcAddr),
+			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(api))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
 		}
 		// Create TLS config with root CA and own certificate
-		conf = &tls.Config{
+		tlsConf = &tls.Config{
 			Certificates: []tls.Certificate{cert},
 			RootCAs:      roots,
 		}
 	} else {
 		// Create TLS config with root CA only
-		conf = &tls.Config{
+		tlsConf = &tls.Config{
 			RootCAs:       roots,
 			Renegotiation: tls.RenegotiateNever,
 		}
 	}
 
-	internal.PrintTlsConfig(conf, ca)
+	internal.PrintTlsConfig(tlsConf, c.ca)
 
-	conn, err := atls.Dial("tcp", addr, conf,
-		atls.WithCmcAddr(cmcAddr),
-		atls.WithCmcCa(ca),
-		atls.WithCmcPolicies(policies),
+	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
+		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcCa(c.ca),
+		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
-		atls.WithMtls(mtls))
+		atls.WithMtls(c.Mtls))
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
@@ -103,25 +116,28 @@ func dial(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies [
 	log.Infof("Received from peer: %v", string(buf[:n-1]))
 }
 
-func listen(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies []byte) {
+func listen(c *config) {
+
+	// Get API
+	api := apiToCmcApiSelect(c.api)
 
 	// Add root CA
 	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(ca)
+	success := roots.AppendCertsFromPEM(c.ca)
 	if !success {
 		log.Fatal("Could not add cert to root CAs")
 	}
 
 	// Load certificate
 	cert, err := atls.GetCert(
-		atls.WithCmcAddr(cmcAddr),
+		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(api))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
 
 	var clientAuth tls.ClientAuthType
-	if mtls {
+	if c.Mtls {
 		// Mandate client authentication
 		clientAuth = tls.RequireAndVerifyClientCert
 	} else {
@@ -130,29 +146,29 @@ func listen(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies
 	}
 
 	// Create TLS config
-	config := &tls.Config{
+	tlsConf := &tls.Config{
 		Certificates:  []tls.Certificate{cert},
 		ClientAuth:    clientAuth,
 		ClientCAs:     roots,
 		Renegotiation: tls.RenegotiateNever,
 	}
 
-	internal.PrintTlsConfig(config, ca)
+	internal.PrintTlsConfig(tlsConf, c.ca)
 
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", addr, config,
-		atls.WithCmcAddr(cmcAddr),
-		atls.WithCmcCa(ca),
-		atls.WithCmcPolicies(policies),
+	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
+		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcCa(c.ca),
+		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
-		atls.WithMtls(mtls))
+		atls.WithMtls(c.Mtls))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
 	defer ln.Close()
 
 	for {
-		log.Infof("serving under %v", addr)
+		log.Infof("serving under %v", c.Addr)
 		// Finish TLS connection establishment with Remote Attestation
 		conn, err := ln.Accept()
 		if err != nil {
@@ -174,6 +190,20 @@ func listen(api atls.CmcApiSelect, addr, cmcAddr string, mtls bool, ca, policies
 	}
 }
 
+func apiToCmcApiSelect(api Api) atls.CmcApiSelect {
+	var cmcApi atls.CmcApiSelect
+	switch api.(type) {
+	case CoapApi:
+		cmcApi = atls.CmcApi_COAP
+	case GrpcApi:
+		cmcApi = atls.CmcApi_GRPC
+	default:
+		log.Fatalf("Internal error: unknown API")
+	}
+
+	return cmcApi
+}
+
 // Simply acts as an echo server and returns the received string
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
@@ -190,4 +220,26 @@ func handleConnection(conn net.Conn) {
 	if err != nil {
 		log.Errorf("Failed to write: %v", err)
 	}
+}
+
+func getCaCerts(c *config) {
+	log.Info("Retrieving CA certs")
+	estclient := client.NewClient(nil)
+	certs, err := estclient.CaCerts(c.Addr)
+	if err != nil {
+		log.Fatalf("Failed to retrieve certificates: %v", err)
+	}
+	log.Debug("Received certs:")
+	for _, c := range certs {
+		log.Debugf("\t%v", c.Subject.CommonName)
+	}
+	// Store CA certificate
+	err = os.WriteFile(c.CaFile, internal.WriteCertPem(certs[len(certs)-1]), 0644)
+	if err != nil {
+		log.Fatalf("Failed to store CA certificate: %v", err)
+	}
+}
+
+func iotHub(c *config) {
+	log.Fatal("IoTHub Demo not implemented yet")
 }
