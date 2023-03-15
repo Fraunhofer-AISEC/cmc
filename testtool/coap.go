@@ -42,10 +42,10 @@ func init() {
 	apis["coap"] = CoapApi{}
 }
 
-func (a CoapApi) generate(addr, reportFile, nonceFile string) {
+func (a CoapApi) generate(c *config) {
 
 	// Establish connection
-	conn, err := udp.Dial(addr)
+	conn, err := udp.Dial(c.Addr)
 	if err != nil {
 		log.Fatalf("Error dialing: %v", err)
 	}
@@ -92,25 +92,25 @@ func (a CoapApi) generate(addr, reportFile, nonceFile string) {
 	}
 
 	// Save the attestation report for the verifier
-	err = os.WriteFile(reportFile, attestationResp.AttestationReport, 0644)
+	err = os.WriteFile(c.ReportFile, attestationResp.AttestationReport, 0644)
 	if err != nil {
-		log.Fatalf("Failed to save attestation report as %v: %v", reportFile, err)
+		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	fmt.Println("Wrote attestation report: ", reportFile)
+	fmt.Println("Wrote attestation report: ", c.ReportFile)
 
 	// Save the nonce for the verifier
-	os.WriteFile(nonceFile, nonce, 0644)
+	os.WriteFile(c.NonceFile, nonce, 0644)
 	if err != nil {
-		log.Fatalf("Failed to save nonce as %v: %v", nonceFile, err)
+		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
 	}
-	fmt.Println("Wrote nonce: ", nonceFile)
+	fmt.Println("Wrote nonce: ", c.NonceFile)
 
 }
 
-func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile string, ca, policies []byte) {
+func (a CoapApi) verify(c *config) {
 
 	// Establish connection
-	conn, err := udp.Dial(addr)
+	conn, err := udp.Dial(c.Addr)
 	if err != nil {
 		log.Fatalf("Error dialing: %v", err)
 	}
@@ -120,12 +120,12 @@ func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile string, ca, poli
 	path := "/Verify"
 
 	// Read the attestation report, CA and the nonce previously stored
-	data, err := os.ReadFile(reportFile)
+	data, err := os.ReadFile(c.ReportFile)
 	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", reportFile, err)
+		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
 	}
 
-	nonce, err := os.ReadFile(nonceFile)
+	nonce, err := os.ReadFile(c.NonceFile)
 	if err != nil {
 		log.Fatalf("Failed to read nonce: %v", err)
 	}
@@ -133,8 +133,8 @@ func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile string, ca, poli
 	req := &coapapi.VerificationRequest{
 		Nonce:             nonce,
 		AttestationReport: data,
-		Ca:                ca,
-		Policies:          policies,
+		Ca:                c.ca,
+		Policies:          c.policies,
 	}
 
 	// Marshal CoAP payload
@@ -166,14 +166,14 @@ func (a CoapApi) verify(addr, reportFile, resultFile, nonceFile string, ca, poli
 	json.Indent(&out, verifyResp.VerificationResult, "", "    ")
 
 	// Save the Attestation Result
-	os.WriteFile(resultFile, out.Bytes(), 0644)
-	fmt.Println("Wrote file ", resultFile)
+	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
+	fmt.Println("Wrote file ", c.ResultFile)
 }
 
-func (a CoapApi) dial(addr, cmcAddr string, mtls bool, ca, policies []byte) {
-	dial(attestedtls.CmcApi_COAP, addr, cmcAddr, mtls, ca, policies)
+func (a CoapApi) dial(c *config) {
+	dial(attestedtls.CmcApi_COAP, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
 }
 
-func (a CoapApi) listen(addr, cmcAddr string, mtls bool, ca, policies []byte) {
-	listen(attestedtls.CmcApi_COAP, addr, cmcAddr, mtls, ca, policies)
+func (a CoapApi) listen(c *config) {
+	listen(attestedtls.CmcApi_COAP, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
 }

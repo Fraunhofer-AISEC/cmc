@@ -42,13 +42,13 @@ func init() {
 	apis["grpc"] = GrpcApi{}
 }
 
-func (a GrpcApi) generate(addr, reportFile, nonceFile string) {
+func (a GrpcApi) generate(c *config) {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, c.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -74,28 +74,28 @@ func (a GrpcApi) generate(addr, reportFile, nonceFile string) {
 	}
 
 	// Save the Attestation Report for the verifier
-	err = os.WriteFile(reportFile, response.GetAttestationReport(), 0644)
+	err = os.WriteFile(c.ReportFile, response.GetAttestationReport(), 0644)
 	if err != nil {
-		log.Fatalf("Failed to save attestation report as %v: %v", reportFile, err)
+		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	fmt.Println("Wrote attestation report: ", reportFile)
+	fmt.Println("Wrote attestation report: ", c.ReportFile)
 
 	// Save the nonce for the verifier
-	os.WriteFile(nonceFile, nonce, 0644)
+	os.WriteFile(c.NonceFile, nonce, 0644)
 	if err != nil {
-		log.Fatalf("Failed to save nonce as %v: %v", nonceFile, err)
+		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
 	}
-	fmt.Println("Wrote nonce: ", nonceFile)
+	fmt.Println("Wrote nonce: ", c.NonceFile)
 
 }
 
-func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile string, ca, policies []byte) {
+func (a GrpcApi) verify(c *config) {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, c.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -103,12 +103,12 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile string, ca, poli
 	client := api.NewCMCServiceClient(conn)
 
 	// Read the attestation report, CA and the nonce previously stored
-	data, err := os.ReadFile(reportFile)
+	data, err := os.ReadFile(c.ReportFile)
 	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", reportFile, err)
+		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
 	}
 
-	nonce, err := os.ReadFile(nonceFile)
+	nonce, err := os.ReadFile(c.NonceFile)
 	if err != nil {
 		log.Fatalf("Failed to read nonce: %v", err)
 	}
@@ -116,8 +116,8 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile string, ca, poli
 	request := api.VerificationRequest{
 		Nonce:             nonce,
 		AttestationReport: data,
-		Ca:                ca,
-		Policies:          policies,
+		Ca:                c.ca,
+		Policies:          c.policies,
 	}
 
 	response, err := client.Verify(ctx, &request)
@@ -132,14 +132,14 @@ func (a GrpcApi) verify(addr, reportFile, resultFile, nonceFile string, ca, poli
 	json.Indent(&out, response.GetVerificationResult(), "", "    ")
 
 	// Save the Attestation Result
-	os.WriteFile(resultFile, out.Bytes(), 0644)
-	fmt.Println("Wrote file ", resultFile)
+	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
+	fmt.Println("Wrote file ", c.ResultFile)
 }
 
-func (a GrpcApi) dial(destAddr, cmcAddr string, mtls bool, ca, policies []byte) {
-	dial(attestedtls.CmcApi_GRPC, destAddr, cmcAddr, mtls, ca, policies)
+func (a GrpcApi) dial(c *config) {
+	dial(attestedtls.CmcApi_GRPC, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
 }
 
-func (a GrpcApi) listen(destAddr, cmcAddr string, mtls bool, ca, policies []byte) {
-	listen(attestedtls.CmcApi_GRPC, destAddr, cmcAddr, mtls, ca, policies)
+func (a GrpcApi) listen(c *config) {
+	listen(attestedtls.CmcApi_GRPC, c.Addr, c.CmcAddr, c.Mtls, c.ca, c.policies)
 }
