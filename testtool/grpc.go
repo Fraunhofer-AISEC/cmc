@@ -47,7 +47,7 @@ func (a GrpcApi) generate(c *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, c.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -94,7 +94,7 @@ func (a GrpcApi) verify(c *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, c.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}

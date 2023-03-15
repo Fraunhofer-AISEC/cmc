@@ -17,11 +17,13 @@ package main
 
 // Install github packages with "go get [url]"
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
 
@@ -31,6 +33,18 @@ const (
 
 var (
 	apis = map[string]Api{}
+
+	logLevels = map[string]logrus.Level{
+		"panic": logrus.PanicLevel,
+		"fatal": logrus.FatalLevel,
+		"error": logrus.ErrorLevel,
+		"warn":  logrus.WarnLevel,
+		"info":  logrus.InfoLevel,
+		"debug": logrus.DebugLevel,
+		"trace": logrus.TraceLevel,
+	}
+
+	log = logrus.WithField("service", "testtool")
 )
 
 type Api interface {
@@ -39,51 +53,126 @@ type Api interface {
 }
 
 type config struct {
-	Mode         string
-	Addr         string
-	CmcAddr      string
-	ReportFile   string
-	ResultFile   string
-	NonceFile    string
-	CaFile       string
-	Mtls         bool
-	PoliciesFile string
-	ApiFlag      string
+	Mode         string `json:"mode"`
+	Addr         string `json:"addr"`
+	CmcAddr      string `json:"cmc"`
+	ReportFile   string `json:"report"`
+	ResultFile   string `json:"result"`
+	NonceFile    string `json:"nonce"`
+	CaFile       string `json:"ca"`
+	Mtls         bool   `json:"mtls"`
+	PoliciesFile string `json:"policies"`
+	ApiFlag      string `json:"api"`
+	LogLevel     string `json:"logLevel"`
 
 	ca       []byte
 	policies []byte
 	api      Api
 }
 
+const (
+	configFlag   = "config"
+	modeFlag     = "mode"
+	addrFlag     = "addr"
+	cmcFlag      = "cmc"
+	reportFlag   = "report"
+	resultFlag   = "result"
+	nonceFlag    = "nonce"
+	caFlag       = "ca"
+	policiesFlag = "policies"
+	apiFlag      = "api"
+	mtlsFlag     = "mtls"
+	logFlag      = "log"
+)
+
 func getConfig() *config {
 	var err error
 	var ok bool
 
-	// configFile := flag.String("config", "", "configuration file")
-	modeFlag := flag.String("mode", "generate", "[generate | verify | dial  | listen | cacerts | iothub ]")
-	addr := flag.String("addr", "0.0.0.0:443", "server ip:port to connect to / listen on via attested tls")
-	cmcAddr := flag.String("cmc", "127.0.0.1:9955", "TCP address to connect to the cmcd API")
-	reportFile := flag.String("report", "attestation-report", "Output file for the attestation report")
-	resultFile := flag.String("result", "attestation-result.json", "Output file for the attestation result")
-	nonceFile := flag.String("nonce", "nonce", "Output file for the nonce")
-	caFile := flag.String("ca", "", "TLS Certificate of CA / Entity that is RoT of the connector's TLS certificate")
-	mtls := flag.Bool("mtls", false, "Performs mutual TLS with remote attestation on both sides. Only in mode tlsconn")
-	policiesFile := flag.String("policies", "", "JSON policies file for custom verification")
-	apiFlag := flag.String("api", "grpc", fmt.Sprintf("API to contact the cmcd. Possible: %v", maps.Keys(apis)))
+	configFile := flag.String(configFlag, "", "configuration file")
+	mode := flag.String(modeFlag, "", fmt.Sprintf("Possible modes: %v", maps.Keys(cmds)))
+	addr := flag.String(addrFlag, "", "server ip:port to connect to / listen on via attested tls")
+	cmcAddr := flag.String(cmcFlag, "", "TCP address to connect to the cmcd API")
+	reportFile := flag.String(reportFlag, "", "Output file for the attestation report")
+	resultFile := flag.String(resultFlag, "", "Output file for the attestation result")
+	nonceFile := flag.String(nonceFlag, "", "Output file for the nonce")
+	caFile := flag.String(caFlag, "", "Certificate Authorities to be trusted in PEM format")
+	policiesFile := flag.String(policiesFlag, "", "JSON policies file for custom verification")
+	api := flag.String(apiFlag, "", fmt.Sprintf("APIs for cmcd Possible: %v", maps.Keys(apis)))
+	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS with remote attestation on both sides.")
+	logLevel := flag.String(logFlag, "",
+		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	flag.Parse()
 
+	// Create default configuration
 	c := &config{
-		Mode:         *modeFlag,
-		Addr:         *addr,
-		CmcAddr:      *cmcAddr,
-		ReportFile:   *reportFile,
-		ResultFile:   *resultFile,
-		NonceFile:    *nonceFile,
-		CaFile:       *caFile,
-		Mtls:         *mtls,
-		PoliciesFile: *policiesFile,
-		ApiFlag:      *apiFlag,
+		Addr:       "0.0.0.0:4443",
+		CmcAddr:    "127.0.0.1:9955",
+		ReportFile: "attestation-report",
+		ResultFile: "attestation-result.json",
+		NonceFile:  "nonce",
+		ApiFlag:    "grpc",
+		LogLevel:   "info",
 	}
+
+	// Obtain custom configuration from file if specified
+	if flagPassed(configFlag) {
+		log.Infof("Loading config from file %v", *configFile)
+		data, err := os.ReadFile(*configFile)
+		if err != nil {
+			log.Fatalf("failed to read cmcd config file %v: %v", *configFile, err)
+		}
+		err = json.Unmarshal(data, c)
+		if err != nil {
+			log.Fatalf("failed to parse cmcd config: %v", err)
+		}
+	}
+
+	// Overwrite config file configuration with given command line arguments
+	if flagPassed(modeFlag) {
+		c.Mode = *mode
+	}
+	if flagPassed(addrFlag) {
+		c.Addr = *addr
+	}
+	if flagPassed(cmcFlag) {
+		c.CmcAddr = *cmcAddr
+	}
+	if flagPassed(reportFlag) {
+		c.ReportFile = *reportFile
+	}
+	if flagPassed(resultFlag) {
+		c.ResultFile = *resultFile
+	}
+	if flagPassed(nonceFlag) {
+		c.NonceFile = *nonceFile
+	}
+	if flagPassed(caFlag) {
+		c.CaFile = *caFile
+	}
+	if flagPassed(policiesFlag) {
+		c.PoliciesFile = *policiesFile
+	}
+	if flagPassed(apiFlag) {
+		c.ApiFlag = *api
+	}
+	if flagPassed(mtlsFlag) {
+		c.Mtls = *mtls
+	}
+	if flagPassed(logFlag) {
+		c.LogLevel = *logLevel
+	}
+
+	// Configure the logger
+	l, ok := logLevels[strings.ToLower(c.LogLevel)]
+	if !ok {
+		flag.Usage()
+		log.Fatalf("LogLevel %v does not exist", c.LogLevel)
+	}
+	logrus.SetLevel(l)
+
+	// Print the parsed configuration
+	printConfig(c)
 
 	// Get root CA certificate in PEM format if specified
 	if c.CaFile != "" {
@@ -110,4 +199,29 @@ func getConfig() *config {
 	}
 
 	return c
+}
+
+func flagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+func printConfig(c *config) {
+	log.Debugf("Using the following configuration:")
+	log.Debugf("\tMode         : %v", c.Mode)
+	log.Debugf("\tAddr         : %v", c.Addr)
+	log.Debugf("\tCmcAddr      : %v", c.CmcAddr)
+	log.Debugf("\tReportFile   : %v", c.ReportFile)
+	log.Debugf("\tResultFile   : %v", c.ResultFile)
+	log.Debugf("\tNonceFile    : %v", c.NonceFile)
+	log.Debugf("\tCaFile       : %v", c.CaFile)
+	log.Debugf("\tMtls         : %v", c.Mtls)
+	log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
+	log.Debugf("\tApiFlag      : %v", c.ApiFlag)
+	log.Debugf("\tLogLevel     : %v", c.LogLevel)
 }

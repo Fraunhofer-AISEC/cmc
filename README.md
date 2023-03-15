@@ -18,6 +18,7 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
   - [Config Files](#config-files)
     - [CMCD Configuration](#cmcd-configuration)
     - [EST Server Configuration](#est-server-configuration)
+  - [Testtool Configuration](#testtool-configuration)
     - [Platform Configuration](#platform-configuration)
   - [Custom Policies](#custom-policies)
   - [Build](#build)
@@ -224,6 +225,29 @@ relevant if vcekOfflineCaching is set to true)
     "estCerts": [
         "pki/est.pem"
     ]
+}
+```
+
+## Testtool Configuration
+
+The testtool can be configured entirely by commandline flags (see `testtool -help` for available
+options) or via a configuration file which is passed via `-config <file>`. If a configuration
+option is configured both via config file and commandline, the commandline supersedes.
+
+Example configuration:
+```json
+{
+    "mode": "generate",
+    "addr": "localhost:4443",
+    "cmc": "127.0.0.1:9955",
+    "report": "attestation-report",
+    "result": "attestation-result.json",
+    "nonce": "nonce",
+    "ca": "pki/ca.pem",
+    "policies": "policies.js",
+    "mtls": true,
+    "api": "coap",
+    "logLevel": "trace"
 }
 ```
 

@@ -19,13 +19,9 @@ package main
 import (
 	"flag"
 	"strings"
-
-	"github.com/sirupsen/logrus"
 )
 
 var (
-	log = logrus.WithField("service", "testtool")
-
 	cmds = map[string]func(*config){
 		"generate": generate,   // Generate an attestation report
 		"verify":   verify,     // Verify an attestation report
@@ -37,7 +33,6 @@ var (
 )
 
 func main() {
-	logrus.SetLevel(logrus.TraceLevel)
 
 	c := getConfig()
 
