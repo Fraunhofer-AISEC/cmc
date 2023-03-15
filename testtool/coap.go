@@ -45,7 +45,7 @@ func init() {
 func (a CoapApi) generate(c *config) {
 
 	// Establish connection
-	conn, err := udp.Dial(c.Addr)
+	conn, err := udp.Dial(c.CmcAddr)
 	if err != nil {
 		log.Fatalf("Error dialing: %v", err)
 	}
