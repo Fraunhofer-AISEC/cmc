@@ -24,7 +24,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"path"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -33,14 +33,54 @@ import (
 
 var log = logrus.WithField("service", "internal")
 
-// Returns either the unmodified absolute path or the absolute path
-// retrieved from a path relative to a base path
-func GetFilePath(p, base string) string {
-	if path.IsAbs(p) {
-		return p
+// Tries to retrieve a file from an absolute path, or path relative to
+// the running binary or the optional base path
+func GetFile(file string, base *string) ([]byte, error) {
+	f, err := GetFilePath(file, base)
+	if err != nil {
+		return nil, err
 	}
-	ret, _ := filepath.Abs(filepath.Join(base, p))
-	return ret
+	data, err := os.ReadFile(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %v: %v", f, err)
+	}
+	return data, nil
+}
+
+// Tries to retrieve a filepath from an absolute path, or path relative to
+// the running binary or the optional base path
+func GetFilePath(file string, base *string) (string, error) {
+
+	// Search for the exact filename given
+	if FileExists(file) {
+		return file, nil
+	}
+
+	// Search relative to the given base path
+	var rf string
+	var err error
+	if base != nil {
+		rf, err = filepath.Abs(filepath.Join(*base, file))
+		if err == nil {
+			if FileExists(rf) {
+				return rf, nil
+			}
+		}
+	}
+
+	// Search relative to the running binary
+	bin, err := GetBinaryPath()
+	if err != nil {
+		return "", err
+	}
+	f, err := filepath.Abs(filepath.Join(bin, file))
+	if err == nil {
+		if FileExists(f) {
+			return f, nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to find file. Places searched: %v, %v, %v", file, rf, f)
 }
 
 func Contains(elem string, list []string) bool {
@@ -184,4 +224,20 @@ func parseCertBlob(data []byte) ([]*x509.Certificate, error) {
 		return nil, errors.New("did not find certs in provided data")
 	}
 	return certs, nil
+}
+
+func FileExists(f string) bool {
+	if _, err := os.Stat(f); err == nil {
+		return true
+	}
+	return false
+}
+
+func GetBinaryPath() (string, error) {
+	bin, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("failed to get path of executable: %w", err)
+	}
+	d := filepath.Dir(bin)
+	return d, nil
 }

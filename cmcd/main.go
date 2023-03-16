@@ -70,7 +70,11 @@ func loadConfig(configFile string) (*config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
 	}
-	c.LocalPath = internal.GetFilePath(c.LocalPath, filepath.Dir(configFile))
+	dir := filepath.Dir(configFile)
+	c.LocalPath, err = internal.GetFilePath(c.LocalPath, &dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get local storage path: %w", err)
+	}
 
 	// Check measurement, signing and serializer interface
 	for _, m := range c.MeasurementInterfaces {
