@@ -16,26 +16,19 @@
 package main
 
 import (
-	"flag"
-
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
 
-	log.Info("Starting EST server..")
-
-	log.SetLevel(log.TraceLevel)
-
-	configFile := flag.String("config", "", "configuration file")
-	flag.Parse()
-
-	config, err := readConfig(*configFile)
+	config, err := getConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	s, err := NewServer(config, *configFile)
+	log.Info("Starting EST server..")
+
+	s, err := NewServer(config)
 	if err != nil {
 		log.Fatalf("Failed to create new server: %v", err)
 	}

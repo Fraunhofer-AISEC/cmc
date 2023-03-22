@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -122,7 +122,7 @@ func getIntelEkCert(certificateUrl string) ([]byte, error) {
 		return nil, err
 	}
 
-	content, err := ioutil.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

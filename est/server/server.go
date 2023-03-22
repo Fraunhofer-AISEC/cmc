@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/common"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
 	"go.mozilla.org/pkcs7"
@@ -46,45 +46,19 @@ type Server struct {
 	server       *http.Server
 	signingKey   *ecdsa.PrivateKey
 	signingCerts []*x509.Certificate
-	serializer   ar.Serializer
 	tpmConf      tpmConfig
 	snpConf      snpConfig
 }
 
-func NewServer(c *config, configPath string) (*Server, error) {
-
-	signingPriv, err := loadPrivateKey(getFilePath(c.SigningKey, filepath.Dir(configPath)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
-	}
-
-	signingCerts, err := loadCertChain(c.SigningCerts, configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
-	}
-
-	estPriv, err := loadPrivateKey(getFilePath(c.EstKey, filepath.Dir(configPath)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
-	}
-
-	estCerts, err := loadCertChain(c.EstCerts, configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
-	}
-
-	serializer, err := getSerializer(c.Serialization)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get serializer: %w", err)
-	}
+func NewServer(c *config) (*Server, error) {
 
 	var tlsCerts [][]byte
-	for _, c := range estCerts {
+	for _, c := range c.estCerts {
 		tlsCerts = append(tlsCerts, c.Raw)
 	}
 
 	clientCAs := x509.NewCertPool()
-	clientCAs.AddCert(signingCerts[len(signingCerts)-1])
+	clientCAs.AddCert(c.signingCerts[len(c.signingCerts)-1])
 
 	tlsCfg := &tls.Config{
 		MinVersion:       tls.VersionTLS12,
@@ -93,8 +67,8 @@ func NewServer(c *config, configPath string) (*Server, error) {
 		Certificates: []tls.Certificate{
 			{
 				Certificate: tlsCerts,
-				PrivateKey:  estPriv,
-				Leaf:        estCerts[0],
+				PrivateKey:  c.estKey,
+				Leaf:        c.estCerts[0],
 			},
 		},
 		ClientCAs: clientCAs,
@@ -110,16 +84,15 @@ func NewServer(c *config, configPath string) (*Server, error) {
 
 	server := &Server{
 		server:       s,
-		signingKey:   signingPriv,
-		signingCerts: signingCerts,
-		serializer:   serializer,
+		signingKey:   c.signingKey,
+		signingCerts: c.signingCerts,
 		tpmConf: tpmConfig{
 			verifyEkCert: c.VerifyEkCert,
-			dbPath:       getFilePath(c.TpmEkCertDb, filepath.Dir(configPath)),
+			dbPath:       c.TpmEkCertDb,
 		},
 		snpConf: snpConfig{
 			vcekOfflineCaching: c.VcekOfflineCaching,
-			vcekCacheFolder:    getFilePath(c.VcekCacheFolder, filepath.Dir(configPath)),
+			vcekCacheFolder:    c.VcekCacheFolder,
 			vceks:              make(map[vcekInfo][]byte),
 		},
 	}
@@ -136,7 +109,7 @@ func NewServer(c *config, configPath string) (*Server, error) {
 	http.HandleFunc(tpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
 	http.HandleFunc(snpEnrollEndpoint, server.handleSnpEnroll)
 
-	err = httpHandleMetadata(c.HttpFolder, configPath)
+	err := httpHandleMetadata(c.HttpFolder, c.configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serve metadata: %w", err)
 	}
@@ -455,12 +428,15 @@ func (s *Server) handleSnpEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func httpHandleMetadata(httpFolder, configPath string) error {
+func httpHandleMetadata(httpFolder string, configPath *string) error {
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
-	log.Info("Serving Directories: ")
+	log.Debug("Serving Directories: ")
 
-	folder := getFilePath(httpFolder, filepath.Dir(configPath))
+	folder, err := internal.GetFilePath(httpFolder, configPath)
+	if err != nil {
+		return fmt.Errorf("failed to get metadata folder path %v: %w", httpFolder, err)
+	}
 
 	dirs, err := os.ReadDir(folder)
 	if err != nil {
@@ -469,7 +445,7 @@ func httpHandleMetadata(httpFolder, configPath string) error {
 
 	for _, dir := range dirs {
 		d := dir.Name()
-		log.Info("\t", d)
+		log.Debugf("\t%v", d)
 		path := path.Join(folder, d)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			abs, _ := filepath.Abs(path)
