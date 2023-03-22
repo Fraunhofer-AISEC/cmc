@@ -60,14 +60,14 @@ message PSSOptions {
 
 message TLSSignRequest {
   string id = 1;
-  bytes content = 2;
+  bytes digest = 2;
   HashFunction hashtype = 3;
   PSSOptions pssOpts = 4;
 }
 
 message TLSSignResponse {
   Status status = 1;
-  bytes signed_content = 2;
+  bytes signed_digest = 2;
 }
 
 message TLSCertRequest {
