@@ -167,15 +167,15 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
 	log.Trace("TLSSign using opts: ", opts)
-	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
+	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetDigest(), opts)
 	if err != nil {
 		log.Errorf("Failed to sign: %v", err)
 		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
 	}
 	// Create response
 	sr = &api.TLSSignResponse{
-		Status:        api.Status_OK,
-		SignedContent: signature,
+		Status:       api.Status_OK,
+		SignedDigest: signature,
 	}
 	// Return response
 	log.Info("Prover: Performed Sign operation.")
