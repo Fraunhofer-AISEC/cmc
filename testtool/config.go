@@ -95,6 +95,7 @@ func getConfig() *config {
 	var err error
 	var ok bool
 
+	// Parse given command line flags
 	configFile := flag.String(configFlag, "", "configuration file")
 	mode := flag.String(modeFlag, "", fmt.Sprintf("Possible modes: %v", maps.Keys(cmds)))
 	addr := flag.String(addrFlag, "", "server ip:port to connect to / listen on via attested tls")
@@ -122,7 +123,7 @@ func getConfig() *config {
 	}
 
 	// Obtain custom configuration from file if specified
-	if flagPassed(configFlag) {
+	if internal.FlagPassed(configFlag) {
 		log.Infof("Loading config from file %v", *configFile)
 		data, err := internal.GetFile(*configFile, nil)
 		if err != nil {
@@ -137,37 +138,37 @@ func getConfig() *config {
 	}
 
 	// Overwrite config file configuration with given command line arguments
-	if flagPassed(modeFlag) {
+	if internal.FlagPassed(modeFlag) {
 		c.Mode = *mode
 	}
-	if flagPassed(addrFlag) {
+	if internal.FlagPassed(addrFlag) {
 		c.Addr = *addr
 	}
-	if flagPassed(cmcFlag) {
+	if internal.FlagPassed(cmcFlag) {
 		c.CmcAddr = *cmcAddr
 	}
-	if flagPassed(reportFlag) {
+	if internal.FlagPassed(reportFlag) {
 		c.ReportFile = *reportFile
 	}
-	if flagPassed(resultFlag) {
+	if internal.FlagPassed(resultFlag) {
 		c.ResultFile = *resultFile
 	}
-	if flagPassed(nonceFlag) {
+	if internal.FlagPassed(nonceFlag) {
 		c.NonceFile = *nonceFile
 	}
-	if flagPassed(caFlag) {
+	if internal.FlagPassed(caFlag) {
 		c.CaFile = *caFile
 	}
-	if flagPassed(policiesFlag) {
+	if internal.FlagPassed(policiesFlag) {
 		c.PoliciesFile = *policiesFile
 	}
-	if flagPassed(apiFlag) {
+	if internal.FlagPassed(apiFlag) {
 		c.ApiFlag = *api
 	}
-	if flagPassed(mtlsFlag) {
+	if internal.FlagPassed(mtlsFlag) {
 		c.Mtls = *mtls
 	}
-	if flagPassed(logFlag) {
+	if internal.FlagPassed(logFlag) {
 		c.LogLevel = *logLevel
 	}
 
@@ -207,16 +208,6 @@ func getConfig() *config {
 	}
 
 	return c
-}
-
-func flagPassed(name string) bool {
-	found := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
 }
 
 func printConfig(c *config) {
