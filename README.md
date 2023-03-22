@@ -15,7 +15,7 @@ supports Trusted Platform Module (TPM) as well as AMD SEV-SNP attestation.
   - [Quick Demo Setup](#quick-demo-setup)
   - [Run the CMC](#run-the-cmc)
     - [Establish an attested TLS connection](#establish-an-attested-tls-connection)
-  - [Config Files](#config-files)
+  - [Configuration](#configuration)
     - [CMCD Configuration](#cmcd-configuration)
     - [EST Server Configuration](#est-server-configuration)
   - [Testtool Configuration](#testtool-configuration)
@@ -93,13 +93,13 @@ with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` reposit
 server -config $CMC_ROOT/cmc-data/est-server-conf.json
 
 # Build and run the cmcd
-cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json -addr https://127.0.0.1:9001/metadata-signed
+cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json
 
 # Run the testtool to retrieve an attestation report (stored in current folder unless otherwise specified)
 testtool -mode generate
 
 # Run the testtool to verify the attestation report (stored in current folder unless otherwise specified)
-testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem [-policies $CMC_ROOT/cmc-data/policies.json]
+testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem
 ```
 
 ### Establish an attested TLS connection
@@ -112,13 +112,6 @@ testtool -mode listen -addr 0.0.0.0:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
 testtool -mode dial -addr localhost:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
 ```
 
-**Note**: by default, *cmcd* and *testtool* use localhost port 9955 to communicate. This can be
-changed in the *cmcd* configuration and using the `-cmc <host:port>` command line argument for
-the testtool.
-
-**Note**: The *cmcd* -addr parameter is the server address where metadata can be found and must
-correspond to the address in the *provserver* config
-
 **Note**: The *cmcd* TPM provisioning process includes the verification of the TPM's EK certificate
 chain. In the example setup, this verification is turned off, as the database might not contain
 the certificate chain for the TPM of the machine the *cmcd* is running on. Instead, simply a
@@ -126,19 +119,24 @@ warning is printed. The intermediate and root CA for this chain can be downloade
 vendor. The certificates can then be added in to the ```cmc/example-setup/tpm-ek-certs.db```
 database. The ```verifyEkCert``` parameter in the *provserver* config can then be set to true.
 
-## Config Files
+## Configuration
 
-The *cmcd* and *estserver* require JSON configuration files. An example setup with all
-required configuration files is provided in the ```examples/``` folder of this repository. Paths
-in the configuration files can either be absolute, or relative to the path of the configuration
-file.
+All binaries can be configured via JSON configuration files and commandline flags. If a
+configuration option is specified both via configuration file and commandline flag, the
+commandline flag supersedes.
+
+The commandline flags can be shown via `<binary> -help`. Exemplary JSON configuration file examples
+can be found in the `examples/` folder of this repository. Paths in the configuration files can
+either be absolute, or relative to the path of the configuration file or the binary.
+
+The remainder of this section explains the different options.
 
 ### CMCD Configuration
 
-The *cmcd* requires a JSON configuration file with the following information:
 - **addr**: The address the *cmcd* should listen on, e.g. 127.0.0.1:9955
 - **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
 TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
+- **metadataAddr**: The URL of the metadata server to retrieve the metadata from.
 - **localPath**: the local path to store the meta-data and internal files. In a local setup, all
 manifests and descriptions must be placed in this folder. If the provisioning server is used for
 the meta-data (*cmcd* command line argument *-fetch-metadata*), the *cmcd* will store those files
@@ -161,26 +159,11 @@ configuration). The linux kernel default is 10
 RSA4096, EC256, EC384, EC521
 - **serialization**: The serialiazation format to use for the attestation report. Can be either
 `cbor` or `json`
-
-```json
-{
-    "addr": "127.0.0.1:9955",
-    "provServerAddr": "http://127.0.0.1:9001/",
-    "serverPath": "drtm-example/",
-    "localPath": "metadata/",
-    "fetchMetadata": true,
-    "measurementInterfaces": [ "TPM", "SNP" ],
-    "signingInterface": "TPM",
-    "useIma": false,
-    "imaPcr": 10,
-    "keyConfig": "EC256",
-    "serialization": "json",
-}
-```
+- **api**: Selects whether to use the `grpc` or `coap` API
+- **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 
 ### EST Server Configuration
 
-The provisioning server requires a configuration file with the following information:
 - **port**: The port the server should listen on
 - **deviceSubCaKey**: The private key of the CA used to sign the device certificates. For the demo,
 the *Device Sub CA* key from the *ids-pcp* tool located in
@@ -202,54 +185,35 @@ manufacturers. The provisioning server uses these certificates to verify the TPM
 Endorsement Key (EK) certificate. The repository contains an example database with the
 certificates of some TPM manufacturers which can be used. For different manufacturers,
 certificates might need to be added.
-- **vcekOfflineCaching**: Boolean, specifies whether AMD SEV-SNP VCEK certificates downloaded from the AMD KDS server should be stored locally for later offline retrieval
+- **vcekOfflineCaching**: Boolean, specifies whether AMD SEV-SNP VCEK certificates downloaded from
+the AMD KDS server should be stored locally for later offline retrieval
 - **vcekCacheFolder**: The folder the downloaded VCEK certificates should locally be stored (only
 relevant if vcekOfflineCaching is set to true)
 - **estKey**: Server private key for establishing HTTPS connections
 - **estCerts**: Server certificate chain(s) for establishing HTTPS connections
-
-```json
-{
-    "port": 9000,
-    "signingKey": "pki/ca-key.pem",
-    "certChain": [
-        "pki/ca.pem"
-    ],
-    "httpFolder": "./",
-    "verifyEkCert": true,
-    "tpmEkCertDb": "tpm-ek-certs.db",
-    "vcekOfflineCaching": true,
-    "vcekCacheFolder": "ca/vceks",
-    "serialization": "json",
-    "estKey": "pki/est-key.pem",
-    "estCerts": [
-        "pki/est.pem"
-    ]
-}
-```
+- **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 
 ## Testtool Configuration
 
-The testtool can be configured entirely by commandline flags (see `testtool -help` for available
-options) or via a configuration file which is passed via `-config <file>`. If a configuration
-option is configured both via config file and commandline, the commandline supersedes.
+- **mode**: The mode to run. Possible are generate, verify, dial, listen, cacerts and iothub
+- **addr**: The address to serve in mode listen, and to connect to in mode dial
+- **cmc**: The address of the CMC server
+- **report**: The file to store the attestation report in (mode generate) or to retrieve
+from (mode verify)
+- **result**: The file to store the attestation result in (mode verify)
+- **nonce**: The file to store the nonce in (mode generate) or to retrieve from (mode verify)
+- **ca**: The trust anchor CA(s)
+- **policies**: Optional policies files
+- **mtls**: Perform mutual TLS in mode dial and listen
+- **api**: Selects whether to use the `grpc` or `coap` API
+- **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 
-Example configuration:
-```json
-{
-    "mode": "generate",
-    "addr": "localhost:4443",
-    "cmc": "127.0.0.1:9955",
-    "report": "attestation-report",
-    "result": "attestation-result.json",
-    "nonce": "nonce",
-    "ca": "pki/ca.pem",
-    "policies": "policies.js",
-    "mtls": true,
-    "api": "coap",
-    "logLevel": "trace"
-}
-```
+**The testtool can run the following commands/modes:**
+- **cacerts**: Retrieves the CA certificates from the EST server
+- **generate**: Generates an attestation report and stores it under the specified path
+- **verify**: Verifies a previously generated attestation report
+- **dial**: Run attestedTLS client application
+- **listen**: Serve as a attestedTLS echo server
 
 ### Platform Configuration
 
@@ -301,7 +265,7 @@ All binaries can be built with the *go*-compiler. For an explanation of the vari
 ```sh
 cd provserver
 go build
-./provserver -config <config-file>
+./provserver -help # For all commandline flags
 ```
 
 ### Build and Run the CMC Daemon
@@ -315,10 +279,10 @@ using `SSL_CERT_FILE` and `SSL_CERT_DIR` below.
 ```sh
 cd cmcd
 go build
-./cmcd -config <config-file> -addr <server-metadata-address>
+./cmcd -help # For all command line options
 # with added custom certificates
-SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd -config <config-file> -addr <server-metadata-address>
-SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file> -addr <server-metadata-address>
+SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd -config <config-file>
+SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file>
 ```
 
 ### Build and Run the Test Tool
@@ -326,7 +290,7 @@ SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file> -addr <server
 ```sh
 cd testtool
 go build
-./testtool [-mode < generate | verify | dial | listen >] [-addr <remote-address>] [-cmc <cmc-address>] [-report <attestationreport-file>] [-result <attestationresult-file>] [-nonce <nonce-file>] [-ca <file>] [-mtls][-policies <file>] [-api < coap | grpc >]
+./testtool -help # To display all commandline options
 ```
 
 ### Customize Builds
