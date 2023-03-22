@@ -1,5 +1,6 @@
 {
     "addr": "localhost:9955",
+    "metadataAddr": "https://localhost:9000/metadata-signed",
     "provServerAddr": "https://localhost:9000/",
     "localPath": "data-cmc/",
     "fetchMetadata": true,
@@ -10,5 +11,6 @@
     "keyConfig": "EC256",
     "serialization": "json",
     "api": "grpc",
-    "policyEngine": "js"
+    "policyEngine": "js",
+    "logLevel": "trace"
 }
