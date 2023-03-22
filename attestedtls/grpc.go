@@ -166,7 +166,7 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	}
 	req := api.TLSSignRequest{
 		Id:       id,
-		Content:  digest,
+		Digest:   digest,
 		Hashtype: hash,
 	}
 
@@ -185,8 +185,8 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	if resp.GetStatus() != api.Status_OK {
 		return nil, fmt.Errorf("signature creation failed with status %v", resp.GetStatus())
 	}
-	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
-	return resp.GetSignedContent(), nil
+	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedDigest()))
+	return resp.GetSignedDigest(), nil
 }
 
 func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
