@@ -23,8 +23,10 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -36,6 +38,9 @@ var log = logrus.WithField("service", "internal")
 // Tries to retrieve a file from an absolute path, or path relative to
 // the running binary or the optional base path
 func GetFile(file string, base *string) ([]byte, error) {
+	if file == "" {
+		return nil, fmt.Errorf("empty filename passed")
+	}
 	f, err := GetFilePath(file, base)
 	if err != nil {
 		return nil, err
@@ -51,8 +56,15 @@ func GetFile(file string, base *string) ([]byte, error) {
 // the running binary or the optional base path
 func GetFilePath(file string, base *string) (string, error) {
 
-	// Search for the exact filename given
-	if FileExists(file) {
+	if base != nil {
+		log.Tracef("Searching for file '%v' with optional base path '%v'", file, *base)
+	} else {
+		log.Tracef("Searching for file '%v'", file)
+	}
+
+	// Search for the absolute path
+	if path.IsAbs(file) && FileExists(file) {
+		log.Tracef("Found: %v (absolute path)", file)
 		return file, nil
 	}
 
@@ -63,6 +75,7 @@ func GetFilePath(file string, base *string) (string, error) {
 		rf, err = filepath.Abs(filepath.Join(*base, file))
 		if err == nil {
 			if FileExists(rf) {
+				log.Tracef("Found: %v (relative to base path)", rf)
 				return rf, nil
 			}
 		}
@@ -76,6 +89,7 @@ func GetFilePath(file string, base *string) (string, error) {
 	f, err := filepath.Abs(filepath.Join(bin, file))
 	if err == nil {
 		if FileExists(f) {
+			log.Tracef("Found: %v (relative to binary)", f)
 			return f, nil
 		}
 	}
@@ -240,4 +254,14 @@ func GetBinaryPath() (string, error) {
 	}
 	d := filepath.Dir(bin)
 	return d, nil
+}
+
+func FlagPassed(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
