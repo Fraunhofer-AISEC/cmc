@@ -46,7 +46,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 		for _, v := range referenceValues {
 			msg := fmt.Sprintf("TPM Measurement not present. Cannot verify TPM Reference Value %v (hash: %v)",
 				v.Name, v.Sha256)
-			result.ReferenceValueCheck.setFalseMulti(&msg)
+			result.Extends.Summary.setFalseMulti(&msg)
 		}
 		result.Summary.Success = false
 		return result, false
@@ -55,9 +55,9 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
-	calculatedPcrs, pcrResult, referenceValuesCheck, ok := recalculatePcrs(tpmM, referenceValues)
-	result.PcrRecalculation = pcrResult
-	result.ReferenceValueCheck = referenceValuesCheck
+	calculatedPcrs, pcrResult, extends, ok := recalculatePcrs(tpmM, referenceValues)
+	result.PcrMatch = pcrResult
+	result.Extends = extends
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Message)
@@ -141,18 +141,20 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	return result, ok
 }
 
-func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, ResultMulti, bool) {
+func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, DigestResult, bool) {
 	ok := true
 	pcrResult := make([]PcrResult, 0)
-	referenceValuesCheck := ResultMulti{
-		Success: true,
+	extends := DigestResult{
+		Summary: ResultMulti{
+			Success: true,
+		},
 	}
 	calculatedPcrs := make(map[int][]byte)
 	for _, v := range referenceValues {
 
 		if v.Pcr == nil {
 			msg := fmt.Sprintf("No PCR set in TPM Reference Value %v (hash: %v)", v.Name, hex.EncodeToString(v.Sha256))
-			referenceValuesCheck.setFalseMulti(&msg)
+			extends.Summary.setFalseMulti(&msg)
 			ok = false
 			continue
 		}
@@ -163,6 +165,11 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 			calculatedPcrs[*v.Pcr] = make([]byte, 32)
 		}
 		calculatedPcrs[*v.Pcr] = extendHash(calculatedPcrs[*v.Pcr], v.Sha256)
+		extends.Digests = append(extends.Digests, Digest{
+			Pcr:    *v.Pcr,
+			Name:   v.Name,
+			Digest: hex.EncodeToString(v.Sha256),
+		})
 
 		// Only if the measurement contains the hashes of the individual software artifacts, (e.g.
 		// provided through BIOS or IMA  measurement lists), we can check the reference values directly
@@ -177,7 +184,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 				}
 				if !found {
 					msg := fmt.Sprintf("No TPM Measurement found for TPM Reference Value %v (hash: %v)", v.Name, v.Sha256)
-					referenceValuesCheck.setFalseMulti(&msg)
+					extends.Summary.setFalseMulti(&msg)
 					ok = false
 				}
 			}
@@ -219,17 +226,18 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 				if cmp := bytes.Compare(calculatedHash, measurement); cmp == 0 {
 					pcrRes.Validation.Success = true
 				} else {
-					msg := fmt.Sprintf("PCR%v value did not match expectation: %v vs. %v", hce.Pcr,
+					msg := fmt.Sprintf("PCR%v calculation does not match: %v",
 						hex.EncodeToString(hce.Sha256[0]), hex.EncodeToString(calculatedHash))
 					pcrRes.Validation.setFalseMulti(&msg)
 					ok = false
 				}
+				pcrRes.Digest = hex.EncodeToString(measurement)
 				pcrResult = append(pcrResult, pcrRes)
 			}
 		}
 		if !found {
 			msg := fmt.Sprintf("No TPM Measurement found for TPM Reference Values of PCR %v", pcrNum)
-			referenceValuesCheck.setFalseMulti(&msg)
+			extends.Summary.setFalseMulti(&msg)
 			ok = false
 		}
 	}
@@ -258,7 +266,9 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 		}
 	}
 
-	return calculatedPcrs, pcrResult, referenceValuesCheck, ok
+	extends.Summary.Success = ok
+
+	return calculatedPcrs, pcrResult, extends, ok
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {

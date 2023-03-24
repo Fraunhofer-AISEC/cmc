@@ -99,7 +99,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 		for _, v := range referenceValues {
 			msg := fmt.Sprintf("SNP Measurement not present. Cannot verify SNP Reference Value (hash: %v)",
 				v.Sha384)
-			result.ReferenceValueCheck.setFalseMulti(&msg)
+			result.ReferenceValueResult.Summary.setFalseMulti(&msg)
 		}
 		result.Summary.Success = false
 		return result, false
@@ -173,13 +173,21 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
 		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v",
 			snpReferenceValue.Sha384, hex.EncodeToString(s.Measurement[:]))
-		result.MeasurementMatch.setFalse(&msg)
+		result.MeasurementResult.Summary.setFalseMulti(&msg)
 		ok = false
 	} else {
-		result.MeasurementMatch.Success = true
 		// As we previously checked, that the attestation report contains exactly one
 		// SNP Reference Value, we can set this here:
-		result.ReferenceValueCheck.Success = true
+		result.MeasurementResult.Summary.Success = true
+		result.MeasurementResult.Digests = append(result.MeasurementResult.Digests, Digest{
+			Name:   snpReferenceValue.Name,
+			Digest: hex.EncodeToString(s.Measurement[:]),
+		})
+		result.ReferenceValueResult.Summary.Success = true
+		result.ReferenceValueResult.Digests = append(result.MeasurementResult.Digests, Digest{
+			Name:   snpReferenceValue.Name,
+			Digest: hex.EncodeToString(snpReferenceValue.Sha384),
+		})
 	}
 
 	// Compare SNP parameters
