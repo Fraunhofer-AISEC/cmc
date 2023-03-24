@@ -63,7 +63,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 	if iasM == nil {
 		for _, v := range referenceValues {
 			msg := fmt.Sprintf("IAS Measurement not present. Cannot verify IAS Reference Value (hash: %v)", v.Sha256)
-			result.ReferenceValueCheck.setFalseMulti(&msg)
+			result.ReferenceValueResult.Summary.setFalseMulti(&msg)
 		}
 		result.Summary.Success = false
 		return result, false
@@ -159,7 +159,8 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 
 	log.Trace("Verifying measurements")
 
-	// Verify measurements
+	// Verify that every reference value has a corresponding measurement
+	result.ReferenceValueResult.Summary.Success = true
 	for _, ver := range referenceValues {
 		log.Tracef("Found reference value %v: %v", ver.Name, hex.EncodeToString(ver.Sha256))
 		if ver.Type != "IAS Reference Value" {
@@ -170,6 +171,11 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 		found := false
 		for _, swc := range iat.SwComponents {
 			if bytes.Equal(ver.Sha256, swc.MeasurementValue) {
+				result.ReferenceValueResult.Digests = append(result.ReferenceValueResult.Digests,
+					Digest{
+						Name:   ver.Name,
+						Digest: hex.EncodeToString(ver.Sha256),
+					})
 				found = true
 			}
 		}
@@ -177,15 +183,22 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 			ok = false
 			msg := fmt.Sprintf("IAS Measurement for reference value %v: %v not present",
 				ver.Name, hex.EncodeToString(ver.Sha256))
-			result.ReferenceValueCheck.setFalseMulti(&msg)
+			result.ReferenceValueResult.Summary.setFalseMulti(&msg)
 		}
 	}
+
+	// Verify that every measurement has a corresponding reference value
+	result.MeasurementResult.Summary.Success = true
 	for _, swc := range iat.SwComponents {
 		log.Tracef("Found measurement %v: %v", swc.MeasurementDescription,
 			hex.EncodeToString(swc.MeasurementValue))
 		found := false
 		for _, ver := range referenceValues {
 			if bytes.Equal(ver.Sha256, swc.MeasurementValue) {
+				result.MeasurementResult.Digests = append(result.MeasurementResult.Digests, Digest{
+					Name:   ver.Name,
+					Digest: hex.EncodeToString(swc.MeasurementValue),
+				})
 				found = true
 			}
 		}
@@ -193,7 +206,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 			ok = false
 			msg := fmt.Sprintf("IAS Reference Value for measurement %v: %v not present",
 				swc.MeasurementDescription, hex.EncodeToString(swc.MeasurementValue))
-			result.ReferenceValueCheck.setFalseMulti(&msg)
+			result.MeasurementResult.Summary.setFalseMulti(&msg)
 		}
 	}
 

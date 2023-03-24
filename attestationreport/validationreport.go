@@ -83,18 +83,33 @@ type DevDescResult struct {
 // TpmMeasurementResults represents the results of the validation
 // of the provided TPM Quote and its comparison to the reference values in the manifests.
 type TpmMeasurementResult struct {
-	Summary             Result          `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the TPM Measurement
-	PcrRecalculation    []PcrResult     `json:"pcrRecalculation"`    // Result for validation whether the measured PCR values match the provided reference values
-	AggPcrQuoteMatch    Result          `json:"aggPcrQuoteMatch"`    // Result for comparing the aggregated PCR values with the value in the TPM Quote
-	QuoteFreshness      Result          `json:"quoteFreshness"`      // Result for comparison of the expected nonce to the one provided in the TPM Quote
-	QuoteSignature      SignatureResult `json:"quoteSignature"`      // Results for validation of the TPM Quote Signature and the used certificates
-	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"` // Checks that every TPM Reference Value was part of the measurements
+	Summary          Result          `json:"resultSummary"`    // Summarizing value illustrating whether any issues were detected during validation of the TPM Measurement
+	PcrMatch         []PcrResult     `json:"pcrMatch"`         // Result for validation whether the measured PCR values match the provided reference values
+	AggPcrQuoteMatch Result          `json:"aggPcrQuoteMatch"` // Result for comparing the aggregated PCR values with the value in the TPM Quote
+	Extends          DigestResult    `json:"extends"`          // Checks that every TPM Reference Value was part of the measurements
+	QuoteFreshness   Result          `json:"quoteFreshness"`   // Result for comparison of the expected nonce to the one provided in the TPM Quote
+	QuoteSignature   SignatureResult `json:"quoteSignature"`   // Results for validation of the TPM Quote Signature and the used certificates
 }
 
 // PcrResult represents the results for the recalculation of a specific PCR.
 type PcrResult struct {
 	Pcr        int         `json:"pcr"`        // Number for the PCR which was validated
+	Digest     string      `json:"digest"`     // PCR Digest that was recalculated
 	Validation ResultMulti `json:"validation"` // Result for the validation of the respective PCR
+}
+
+// Helper struct for DigestResult
+type Digest struct {
+	Pcr    int    `json:"pcr,omitempty"`  // Number for the PCR if present (TPM)
+	Name   string `json:"name,omitempty"` // Name of the software artifact
+	Digest string `json:"digest"`         // Digest that was processed
+}
+
+// DigestResult represents a generic result for a digest that was processed
+// during attestation
+type DigestResult struct {
+	Summary ResultMulti `json:"resultSummary"`
+	Digests []Digest    `json:"digests"`
 }
 
 // SwMeasurementResult represents the results for the reference values of
@@ -137,24 +152,25 @@ type PolicyCheck struct {
 // SnpMeasurementResult represents the results for the verification
 // of AMD SEV SNP measurements.
 type SnpMeasurementResult struct {
-	Summary             Result          `json:"resultSummary"`
-	Freshness           Result          `json:"freshness"`
-	Signature           SignatureResult `json:"signature"`
-	MeasurementMatch    Result          `json:"measurementMatch"`
-	VersionMatch        Result          `json:"reportVersionMatch"`
-	FwCheck             VersionCheck    `json:"fwCheck"`
-	TcbCheck            TcbCheck        `json:"tcbCheck"`
-	PolicyCheck         PolicyCheck     `json:"policyCheck"`
-	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"` // Checks that every SNP Reference Value was part of the measurements
+	Summary              Result          `json:"resultSummary"`
+	Freshness            Result          `json:"freshness"`
+	Signature            SignatureResult `json:"signature"`
+	MeasurementResult    DigestResult    `json:"measurementResult"`    // Checks that every SNP measurement was part of the reference values
+	ReferenceValueResult DigestResult    `json:"referenceValueResult"` // Checks that every SNP Reference Value was part of the measurements
+	VersionMatch         Result          `json:"reportVersionMatch"`
+	FwCheck              VersionCheck    `json:"fwCheck"`
+	TcbCheck             TcbCheck        `json:"tcbCheck"`
+	PolicyCheck          PolicyCheck     `json:"policyCheck"`
 }
 
 // IasMeasurementResult represents the results for the verification
 // of ARM PSA Initial Attestation Service Token measurements.
 type IasMeasurementResult struct {
-	Summary             Result          `json:"resultSummary"`
-	FreshnessCheck      Result          `json:"quoteFreshness"`
-	ReferenceValueCheck ResultMulti     `json:"referenceValueCheck"`
-	IasSignature        SignatureResult `json:"reportSignatureCheck"`
+	Summary              Result          `json:"resultSummary"`
+	FreshnessCheck       Result          `json:"quoteFreshness"`
+	MeasurementResult    DigestResult    `json:"measurementResult"`
+	ReferenceValueResult DigestResult    `json:"referenceValueResult"`
+	IasSignature         SignatureResult `json:"reportSignatureCheck"`
 }
 
 // SignatureResults represents the results for validation of
@@ -293,14 +309,14 @@ func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 // and details on the validation (used in case of errors).
 type Result struct {
 	Success bool   `json:"success"`
-	Details string `json:"details,omitempty"` // Details on the issue detected during validation, remains empty if validation was successful.
+	Details string `json:"details,omitempty"`
 }
 
 // ResultMulti is a generic type for storing a boolean result value
 // and possibly multiple details on the validation (used in case of errors).
 type ResultMulti struct {
 	Success bool     `json:"success"`
-	Details []string `json:"details,omitempty"` // Details on the issue(s) detected during validation, remains empty if validation was successful.
+	Details []string `json:"details,omitempty"`
 }
 
 // TokenResult is a helper struct for the validation of JWS or COSE tokens focussing
