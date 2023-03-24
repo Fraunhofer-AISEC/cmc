@@ -24,6 +24,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	// local modules
@@ -82,7 +83,11 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 				log.Fatalf("Internal error: failed to marshal verification result: %v",
 					err)
 			}
-			log.Fatalf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
+			r, err := strconv.Unquote(string(result))
+			if err != nil {
+				r = string(result)
+			}
+			log.Fatalf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", r)
 		}
 		log.Fatalf("Failed to dial server: %v", err)
 	}
@@ -162,7 +167,11 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 				if err != nil {
 					log.Errorf("Internal error: failed to marshal verification result: %v", err)
 				} else {
-					log.Errorf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", string(result))
+					r, err := strconv.Unquote(string(result))
+					if err != nil {
+						r = string(result)
+					}
+					log.Errorf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", r)
 				}
 			} else {
 				log.Errorf("Failed to establish connection: %v", err)
