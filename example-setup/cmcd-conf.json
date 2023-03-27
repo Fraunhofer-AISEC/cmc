@@ -11,6 +11,7 @@
     "keyConfig": "EC256",
     "serialization": "json",
     "api": "grpc",
+    "network": "unix",
     "policyEngine": "js",
     "logLevel": "trace"
 }
