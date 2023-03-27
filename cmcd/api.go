@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Contains the API definitions for the CoAP and unix domain socket API
+// The gRPC API is in a separate file
 package main
 
 import (
@@ -31,4 +33,5 @@ type ServerConfig struct {
 	Signer                ar.Signer
 	Serializer            ar.Serializer
 	PolicyEngineSelect    ar.PolicyEngineSelect
+	Network               string
 }

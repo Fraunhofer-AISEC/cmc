@@ -13,38 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nodefaults || coap
+//go:build !nodefaults || socket
 
 package attestedtls
 
 import (
-	"bytes"
-	"context"
 	"crypto"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
+	"net"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/plgd-dev/go-coap/v3/message"
-	"github.com/plgd-dev/go-coap/v3/udp"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-type CoapApi struct{}
+type SocketApi struct{}
 
 func init() {
-	log.Trace("Adding CoAP API to APIs")
-	cmcApis[CmcApi_COAP] = CoapApi{}
+	log.Trace("Adding Socket API to APIs")
+	cmcApis[CmcApi_Socket] = SocketApi{}
 }
 
 // Parses attestation report response received from peer
-func (a CoapApi) parseARResponse(data []byte) ([]byte, error) {
+func (a SocketApi) parseARResponse(data []byte) ([]byte, error) {
 	// Parse response msg
 	resp := &api.AttestationResponse{}
 	err := cbor.Unmarshal(data, resp)
@@ -56,18 +52,14 @@ func (a CoapApi) parseARResponse(data []byte) ([]byte, error) {
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
-
-	path := "/Attest"
+func (a SocketApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
+	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
 
 	req := &api.AttestationRequest{
 		Id:    id,
@@ -80,34 +72,30 @@ func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	// Send request
+	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Read CoAP reply body
-	payload, err = resp.ReadBody()
+	// Read reply
+	payload, _, err = api.Receive(conn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		log.Fatalf("failed to receive: %v", err)
 	}
 
 	return payload, nil
 }
 
 // Sends attestationreport to cmcd for verification
-func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
-
-	path := "/Verify"
+func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
+	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("Error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 
 	// Create Verification request
 	req := &api.VerificationRequest{
@@ -122,13 +110,15 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	}
 
 	// Perform Verify request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	err = api.Send(conn, payload, api.TypeVerify)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	payload, err = resp.ReadBody()
+
+	// Read reply
+	payload, _, err = api.Receive(conn)
 	if err != nil {
-		return fmt.Errorf("failed to read body: %w", err)
+		log.Fatalf("failed to receive: %v", err)
 	}
 
 	// Unmarshal verify response
@@ -145,25 +135,21 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
-	// check results
+	// Check results
 	if !result.Success {
 		return NewAttestedError(result, errors.New("verification failed"))
 	}
 	return nil
 }
 
-func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-
-	path := "/TLSSign"
+func (a SocketApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
+	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 
 	hash, err := api.SignerOptsToHash(opts)
 	if err != nil {
@@ -187,13 +173,15 @@ func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	}
 
 	// Send sign request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	err = api.Send(conn, payload, api.TypeTLSSign)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	payload, err = resp.ReadBody()
+
+	// Read reply
+	payload, _, err = api.Receive(conn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		log.Fatalf("failed to receive: %v", err)
 	}
 
 	// Unmarshal sign response
@@ -206,18 +194,14 @@ func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	return signResp.SignedContent, nil
 }
 
-func (a CoapApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
-
-	path := "/TLSCert"
+func (a SocketApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
+	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("Error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 
 	// Create TLS certificate request
 	req := api.TLSCertRequest{
@@ -232,13 +216,15 @@ func (a CoapApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	}
 
 	// Send cert request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	err = api.Send(conn, payload, api.TypeTLSCert)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	payload, err = resp.ReadBody()
+
+	// Read reply
+	payload, _, err = api.Receive(conn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		log.Fatalf("failed to receive: %v", err)
 	}
 
 	// Unmarshal cert response

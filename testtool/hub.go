@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Fraunhofer-AISEC/cmc/coapapi"
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	coap "github.com/plgd-dev/go-coap/v3"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -76,7 +76,7 @@ func attest(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Verifier: Verifying Attestation Report")
 
 	// Send attestation report to cmcd
-	req := &coapapi.VerificationRequest{
+	req := &api.VerificationRequest{
 		// TODO COAP GET
 		Nonce:             []byte{0xde, 0xad},
 		AttestationReport: body,

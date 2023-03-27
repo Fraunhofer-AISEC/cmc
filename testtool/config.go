@@ -67,7 +67,8 @@ type config struct {
 	CaFile       string `json:"ca"`
 	Mtls         bool   `json:"mtls"`
 	PoliciesFile string `json:"policies"`
-	ApiFlag      string `json:"api"`
+	Api          string `json:"api"`
+	Network      string `json:"network"`
 	LogLevel     string `json:"logLevel"`
 
 	ca        []byte
@@ -87,6 +88,7 @@ const (
 	caFlag       = "ca"
 	policiesFlag = "policies"
 	apiFlag      = "api"
+	networkFlag  = "network"
 	mtlsFlag     = "mtls"
 	logFlag      = "log"
 )
@@ -106,6 +108,7 @@ func getConfig() *config {
 	caFile := flag.String(caFlag, "", "Certificate Authorities to be trusted in PEM format")
 	policiesFile := flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	api := flag.String(apiFlag, "", fmt.Sprintf("APIs for cmcd Possible: %v", maps.Keys(apis)))
+	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS with remote attestation on both sides.")
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
@@ -118,7 +121,7 @@ func getConfig() *config {
 		ReportFile: "attestation-report",
 		ResultFile: "attestation-result.json",
 		NonceFile:  "nonce",
-		ApiFlag:    "grpc",
+		Api:        "grpc",
 		LogLevel:   "info",
 	}
 
@@ -163,7 +166,10 @@ func getConfig() *config {
 		c.PoliciesFile = *policiesFile
 	}
 	if internal.FlagPassed(apiFlag) {
-		c.ApiFlag = *api
+		c.Api = *api
+	}
+	if internal.FlagPassed(networkFlag) {
+		c.Network = *network
 	}
 	if internal.FlagPassed(mtlsFlag) {
 		c.Mtls = *mtls
@@ -201,10 +207,10 @@ func getConfig() *config {
 	}
 
 	// Get API
-	c.api, ok = apis[strings.ToLower(c.ApiFlag)]
+	c.api, ok = apis[strings.ToLower(c.Api)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("API %v is not implemented\n", c.ApiFlag)
+		log.Fatalf("API %v is not implemented\n", c.Api)
 	}
 
 	return c
@@ -221,6 +227,7 @@ func printConfig(c *config) {
 	log.Debugf("\tCaFile       : %v", c.CaFile)
 	log.Debugf("\tMtls         : %v", c.Mtls)
 	log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
-	log.Debugf("\tApiFlag      : %v", c.ApiFlag)
+	log.Debugf("\tApi          : %v", c.Api)
+	log.Debugf("\tNetwork      : %v", c.Network)
 	log.Debugf("\tLogLevel     : %v", c.LogLevel)
 }

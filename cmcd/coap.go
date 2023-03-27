@@ -33,8 +33,8 @@ import (
 	"github.com/plgd-dev/go-coap/v3/mux"
 
 	// local modules
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	api "github.com/Fraunhofer-AISEC/cmc/coapapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -83,13 +83,15 @@ func SendCoapResponse(w mux.ResponseWriter, r *mux.Message, payload []byte) {
 	}
 }
 
-func SendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code, text string) {
+func sendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code,
+	format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
 	customResp := w.Conn().AcquireMessage(r.Context())
 	defer w.Conn().ReleaseMessage(customResp)
 	customResp.SetCode(code)
 	customResp.SetToken(r.Token())
 	customResp.SetContentFormat(message.TextPlain)
-	customResp.SetBody(bytes.NewReader([]byte(text)))
+	customResp.SetBody(bytes.NewReader([]byte(msg)))
 	err := w.Conn().WriteMessage(customResp)
 	if err != nil {
 		log.Errorf("cannot set response: %v", err)
@@ -103,9 +105,9 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	var req api.AttestationRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
-		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
-		SendCoapError(w, r, codes.InternalServerError, msg)
-		log.Warn(msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to unmarshal CoAP payload: %v",
+			err)
+
 		return
 	}
 
@@ -113,25 +115,22 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	report, err := ar.Generate(req.Nonce, serverConfig.Metadata, serverConfig.MeasurementInterfaces, serverConfig.Serializer)
 	if err != nil {
-		msg := fmt.Sprintf("failed to generate attestation report: %v", err)
-		SendCoapError(w, r, codes.InternalServerError, msg)
-		log.Warn(msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to generate attestation report: %v", err)
 		return
 	}
 
 	if serverConfig.Signer == nil {
-		msg := "Failed to sign attestation report: No valid signer specified in config"
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"Failed to sign attestation report: No valid signer specified in config")
 		return
 	}
 
 	log.Debug("Prover: Signing Attestation Report")
 	data, err := ar.Sign(report, serverConfig.Signer, serverConfig.Serializer)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to sign attestation report: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"Failed to sign attestation report: %v", err)
 		return
 	}
 
@@ -141,9 +140,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 	payload, err := cbor.Marshal(&resp)
 	if err != nil {
-		msg := fmt.Sprintf("failed to marshal message: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
 	}
 
@@ -160,9 +157,8 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	var req api.VerificationRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
-		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
-		SendCoapError(w, r, codes.InternalServerError, msg)
-		log.Warn(msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to unmarshal CoAP payload: %v", err)
 		return
 	}
 
@@ -173,9 +169,8 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
 	if err != nil {
-		msg := fmt.Sprintf("Verifier: failed to marshal Attestation Result: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"Verifier: failed to marshal Attestation Result: %v", err)
 		return
 	}
 
@@ -185,9 +180,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 	payload, err := cbor.Marshal(&resp)
 	if err != nil {
-		msg := fmt.Sprintf("failed to marshal message: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
 	}
 
@@ -205,27 +198,24 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	var req api.TLSSignRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
-		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
-		SendCoapError(w, r, codes.InternalServerError, msg)
-		log.Warn(msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to unmarshal CoAP payload: %v", err)
+
 		return
 	}
 
 	// Get signing options from request
 	opts, err := api.HashToSignerOpts(req.Hashtype, req.PssOpts)
 	if err != nil {
-		msg := fmt.Sprintf("failed to choose requested hash function: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to choose requested hash function: %v", err)
 		return
 	}
 
 	// Get key handle from (hardware) interface
 	tlsKeyPriv, _, err := serverConfig.Signer.GetSigningKeys()
 	if err != nil {
-		msg := fmt.Sprintf("failed to get IK: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to get IK: %v", err)
 		return
 	}
 
@@ -233,9 +223,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	log.Trace("TLSSign using opts: ", opts)
 	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
 	if err != nil {
-		msg := fmt.Sprintf("failed to sign: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to sign: %v", err)
 		return
 	}
 
@@ -245,9 +233,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 	payload, err := cbor.Marshal(&resp)
 	if err != nil {
-		msg := fmt.Sprintf("failed to marshal message: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
 	}
 
@@ -265,9 +251,8 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	var req api.TLSCertRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
-		msg := fmt.Sprintf("failed to unmarshal CoAP payload: %v", err)
-		SendCoapError(w, r, codes.InternalServerError, msg)
-		log.Warn(msg)
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to unmarshal CoAP payload: %v", err)
 		return
 	}
 	// TODO ID is currently not used
@@ -282,9 +267,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	}
 	payload, err := cbor.Marshal(&resp)
 	if err != nil {
-		msg := fmt.Sprintf("failed to marshal message: %v", err)
-		log.Warn(msg)
-		SendCoapError(w, r, codes.InternalServerError, msg)
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
 	}
 

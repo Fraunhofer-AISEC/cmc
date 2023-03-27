@@ -20,8 +20,9 @@ import "crypto"
 type CmcApiSelect uint32
 
 const (
-	CmcApi_GRPC CmcApiSelect = 0
-	CmcApi_COAP CmcApiSelect = 1
+	CmcApi_GRPC   CmcApiSelect = 0
+	CmcApi_COAP   CmcApiSelect = 1
+	CmcApi_Socket CmcApiSelect = 2
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 type cmcConfig struct {
 	cmcAddr  string
 	cmcApi   CmcApi
+	network  string
 	ca       []byte
 	policies []byte
 	mtls     bool
@@ -65,6 +67,14 @@ func WithCmcAddr(address string) ConnectionOption[cmcConfig] {
 func WithCmcApi(api CmcApiSelect) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.cmcApi = cmcApis[api]
+	}
+}
+
+// WithCmcNetwork specifies the network type to be used to connect
+// to the cmcd in case the socket API is selected
+func WithCmcNetwork(network string) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.network = network
 	}
 }
 

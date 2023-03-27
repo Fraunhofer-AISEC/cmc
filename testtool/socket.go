@@ -13,23 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nodefaults || coap
+//go:build !nodefaults || socket
 
 package main
 
 // Install github packages with "go get [url]"
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
-	"time"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/plgd-dev/go-coap/v3/message"
-	"github.com/plgd-dev/go-coap/v3/udp"
 
 	// local modules
 
@@ -38,23 +35,19 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-type CoapApi struct{}
+type SocketApi struct{}
 
 func init() {
-	apis["coap"] = CoapApi{}
+	apis["socket"] = SocketApi{}
 }
 
-func (a CoapApi) generate(c *config) {
+func (a SocketApi) generate(c *config) {
 
 	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
+	conn, err := net.Dial(c.Network, c.CmcAddr)
 	if err != nil {
 		log.Fatalf("Error dialing: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	path := "/Attest"
 
 	// Generate random nonce
 	nonce := make([]byte, 8)
@@ -68,22 +61,22 @@ func (a CoapApi) generate(c *config) {
 		Nonce: nonce,
 	}
 
-	// Marshal CoAP payload
+	// Marshal payload
 	payload, err := cbor.Marshal(req)
 	if err != nil {
 		log.Fatalf("failed to marshal payload: %v", err)
 	}
 
-	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	// Send request
+	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
 		log.Fatalf("failed to send request: %v", err)
 	}
 
-	// Read CoAP reply body
-	payload, err = resp.ReadBody()
+	// Read reply
+	payload, _, err = api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to read body: %v", err)
+		log.Fatalf("failed to receive: %v", err)
 	}
 
 	// Unmarshal attestation response
@@ -109,7 +102,7 @@ func (a CoapApi) generate(c *config) {
 
 }
 
-func (a CoapApi) verify(c *config) {
+func (a SocketApi) verify(c *config) {
 
 	// Read the attestation report, CA and the nonce previously stored
 	data, err := internal.GetFile(c.ReportFile, c.configDir)
@@ -129,7 +122,7 @@ func (a CoapApi) verify(c *config) {
 		Policies:          c.policies,
 	}
 
-	resp, err := verifyInternal(c.CmcAddr, req)
+	resp, err := verifySocketRequest(c.Network, c.CmcAddr, req)
 	if err != nil {
 		log.Fatalf("Failed to verify: %v", err)
 	}
@@ -142,54 +135,46 @@ func (a CoapApi) verify(c *config) {
 	fmt.Println("Wrote file ", c.ResultFile)
 }
 
-func (a CoapApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_COAP)
+func (a SocketApi) dial(c *config) {
+	dialInternal(c, attestedtls.CmcApi_Socket)
 }
 
-func (a CoapApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_COAP)
+func (a SocketApi) listen(c *config) {
+	listenInternal(c, attestedtls.CmcApi_Socket)
 }
 
-func (a CoapApi) cacerts(c *config) {
+func (a SocketApi) cacerts(c *config) {
 	getCaCertsInternal(c)
 }
 
-func (a CoapApi) iothub(c *config) {
-	// Start coap server
-	err := serve(c)
-	if err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
+func (a SocketApi) iothub(c *config) {
+	log.Fatalf("IoT hub not implemented for sockets API")
 }
 
-func verifyInternal(addr string, req *api.VerificationRequest,
+func verifySocketRequest(network, addr string, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 	// Establish connection
-	conn, err := udp.Dial(addr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
 
-	path := "/Verify"
-
-	// Marshal CoAP payload
+	// Marshal payload
 	payload, err := cbor.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
-	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	// Send request
+	err = api.Send(conn, payload, api.TypeVerify)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 
-	// Read CoAP reply body
-	payload, err = resp.ReadBody()
+	// Read reply
+	payload, _, err = api.Receive(conn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %v", err)
+		log.Fatalf("failed to receive: %v", err)
 	}
 
 	// Unmarshal attestation response

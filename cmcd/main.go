@@ -125,6 +125,7 @@ func main() {
 		Signer:                signer,
 		Serializer:            c.serializer,
 		PolicyEngineSelect:    c.policyEngineSelect,
+		Network:               c.Network,
 	}
 
 	server, ok := servers[strings.ToLower(c.Api)]
