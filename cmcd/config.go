@@ -40,13 +40,14 @@ type config struct {
 	MetadataAddr          string   `json:"metadataAddr"`
 	LocalPath             string   `json:"localPath"`
 	FetchMetadata         bool     `json:"fetchMetadata"`
-	MeasurementInterfaces []string `json:"measurementInterfaces"`  // TPM, SNP
-	SigningInterface      string   `json:"signingInterface"`       // TPM, SW
-	UseIma                bool     `json:"useIma"`                 // TRUE, FALSE
-	ImaPcr                int32    `json:"imaPcr"`                 // 10-15
-	KeyConfig             string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
-	Serialization         string   `json:"serialization"`          // JSON, CBOR
-	Api                   string   `json:"api"`                    // gRPC, CoAP
+	MeasurementInterfaces []string `json:"measurementInterfaces"` // TPM, SNP
+	SigningInterface      string   `json:"signingInterface"`      // TPM, SW
+	UseIma                bool     `json:"useIma"`                // TRUE, FALSE
+	ImaPcr                int32    `json:"imaPcr"`                // 10-15
+	KeyConfig             string   `json:"keyConfig,omitempty"`   // RSA2048 RSA4096 EC256 EC384 EC521
+	Serialization         string   `json:"serialization"`         // JSON, CBOR
+	Api                   string   `json:"api"`                   // gRPC, CoAP, Socket
+	Network               string   `json:"network,omitempty"`
 	PolicyEngine          string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
 	LogLevel              string   `json:"logLevel"`
 
@@ -93,6 +94,7 @@ const (
 	keyConfigFlag     = "algo"
 	serializationFlag = "serializer"
 	apiFlag           = "api"
+	networkFlag       = "network"
 	policyEngineFlag  = "policies"
 	logFlag           = "log"
 )
@@ -124,6 +126,7 @@ func getConfig() (*config, error) {
 	serialization := flag.String(serializationFlag, "",
 		fmt.Sprintf("Possible serializers: %v", maps.Keys(serializers)))
 	api := flag.String(apiFlag, "", "API")
+	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine := flag.String(policyEngineFlag, "",
 		fmt.Sprintf("Possible policy engines: %v", maps.Keys(policyEngines)))
 	logLevel := flag.String(logFlag, "",
@@ -189,6 +192,9 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(apiFlag) {
 		c.Api = *api
 	}
+	if internal.FlagPassed(networkFlag) {
+		c.Network = *network
+	}
 	if internal.FlagPassed(policyEngineFlag) {
 		c.PolicyEngine = *policyEngine
 	}
@@ -243,6 +249,7 @@ func printConfig(c *config) {
 	log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
 	log.Debugf("\tSerialization            : %v", c.Serialization)
 	log.Debugf("\tAPI                      : %v", c.Api)
+	log.Debugf("\tNetwork                  : %v", c.Network)
 	log.Debugf("\tPolicy Engine            : %v", c.PolicyEngine)
 	log.Debugf("\tKey Config               : %v", c.KeyConfig)
 	log.Debugf("\tLogging Level            : %v", c.LogLevel)

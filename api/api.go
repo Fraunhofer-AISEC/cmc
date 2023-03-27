@@ -13,52 +13,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package coapapi
+// Contains the API definitions for the CoAP and unix domain socket API
+// The gRPC API is in a separate file
+package api
 
 import (
 	"crypto"
 	"crypto/rsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
+
+	"github.com/fxamacker/cbor/v2"
+	log "github.com/sirupsen/logrus"
 )
 
+type SocketError struct {
+	Msg string `json:"msg" cbor:"0,keyasint"`
+}
+
 type AttestationRequest struct {
-	Id    string
-	Nonce []byte
+	Id    string `json:"id" cbor:"0,keyasint"`
+	Nonce []byte `json:"nonce" nonce:"1,keyasint"`
 }
 
 type AttestationResponse struct {
-	AttestationReport []byte
+	AttestationReport []byte `json:"attestationReport" cbor:"0,keyasint"`
 }
 
 type VerificationRequest struct {
-	Nonce             []byte
-	AttestationReport []byte
-	Ca                []byte
-	Policies          []byte
+	Nonce             []byte `json:"nonce" cbor:"0,keyasint"`
+	AttestationReport []byte `json:"attestationReport" cbor:"1,keyasint"`
+	Ca                []byte `json:"ca" cbor:"2,keyasint"`
+	Policies          []byte `json:"policies" cbor:"3,keyasint"`
 }
 
 type VerificationResponse struct {
-	VerificationResult []byte
+	VerificationResult []byte `json:"verificationResult" cbor:"0,keyasint"`
 }
 
 type TLSSignRequest struct {
-	Id       string
-	Content  []byte
-	Hashtype HashFunction
-	PssOpts  *PSSOptions
+	Id       string       `json:"id" cbor:"0,keyasint"`
+	Content  []byte       `json:"content" cbor:"1,keyasint"`
+	Hashtype HashFunction `json:"hashType" cbor:"2,keyasint"`
+	PssOpts  *PSSOptions  `json:"pssOpts" cbor:"3,keyasint"`
 }
 
 type TLSSignResponse struct {
-	SignedContent []byte
+	SignedContent []byte `json:"signedContent" cbor:"0,keyasint"`
 }
 
 type TLSCertRequest struct {
-	Id string
+	Id string `json:"id" cbor:"0,keyasint"`
 }
 
 type TLSCertResponse struct {
-	Certificate [][]byte
+	Certificate [][]byte `json:"certificate" cbor:"0,keyasint"`
 }
 
 type HashFunction int32
@@ -88,6 +99,14 @@ const (
 type PSSOptions struct {
 	SaltLength int32
 }
+
+const (
+	TypeError   uint32 = 0
+	TypeAttest  uint32 = 1
+	TypeVerify  uint32 = 2
+	TypeTLSSign uint32 = 3
+	TypeTLSCert uint32 = 4
+)
 
 // Converts Protobuf hashtype to crypto.SignerOpts
 func HashToSignerOpts(hashtype HashFunction, pssOpts *PSSOptions) (crypto.SignerOpts, error) {
@@ -161,4 +180,93 @@ func SignerOptsToHash(opts crypto.SignerOpts) (HashFunction, error) {
 	default:
 	}
 	return HashFunction_SHA512, errors.New("could not determine correct Hash function")
+}
+
+// Receive receives data from a socket with the following format
+//
+//	Len uint32 -> Length of the payload to be sent
+//	Type uint32 -> Type of the payload
+//	payload []byte -> CBOR-encoded payload
+func Receive(conn net.Conn) ([]byte, uint32, error) {
+	// Read header
+	buf := make([]byte, 8)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read header: %w", err)
+	}
+	if n != 8 {
+		return nil, 0, fmt.Errorf("read %v bytes (expected 8)", n)
+	}
+	log.Tracef("Read header with %v bytes", n)
+
+	// Decode header to get length and type
+	len := binary.BigEndian.Uint32(buf[0:4])
+	msgType := binary.BigEndian.Uint32(buf[4:8])
+	log.Tracef("Payload length: %v bytes, type: %v", len, msgType)
+
+	// Read payload
+	payload := make([]byte, len)
+	n, err = conn.Read(payload)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read payload: %w", err)
+	}
+	if uint32(n) != len {
+		return nil, 0, fmt.Errorf("failed to read payload (received %v, expected %v bytes)",
+			n, len)
+	}
+	log.Tracef("Received payload with %v bytes", n)
+
+	if msgType == TypeError {
+		resp := new(SocketError)
+		err = cbor.Unmarshal(payload, resp)
+		if err != nil {
+			return nil, 0, fmt.Errorf("server responded with error: %v", resp.Msg)
+		} else {
+			return nil, 0, fmt.Errorf("failed to unmarshal error response")
+		}
+	}
+
+	return payload, msgType, nil
+}
+
+// Send sends data to a socket with the following format
+//
+//	Len uint32 -> Length of the payload to be sent
+//	Type uint32 -> Type of the payload
+//	payload []byte -> CBOR-encoded payload
+func Send(conn net.Conn, payload []byte, t uint32) error {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint32(buf[0:4], uint32(len(payload)))
+	binary.BigEndian.PutUint32(buf[4:8], t)
+	n, err := conn.Write(buf)
+	if err != nil {
+		return fmt.Errorf("failed to send header: %w", err)
+	}
+	log.Tracef("Sent header with %v bytes", n)
+	if n != len(buf) {
+		return fmt.Errorf("could only send %v of %v bytes", n, len(buf))
+	}
+	n, err = conn.Write(payload)
+	if err != nil {
+		return fmt.Errorf("failed to send response: %w", err)
+	}
+	if n != len(payload) {
+		return fmt.Errorf("could only send %v of %v bytes", n, len(payload))
+	}
+
+	return nil
+}
+
+func SendError(conn net.Conn, format string, args ...interface{}) error {
+	msg := fmt.Sprintf(format, args...)
+	log.Warn(msg)
+	resp := &SocketError{
+		Msg: msg,
+	}
+	payload, err := cbor.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal error response: %v", err)
+	}
+
+	return Send(conn, payload, TypeError)
 }

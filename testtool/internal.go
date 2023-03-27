@@ -50,7 +50,8 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 		var cert tls.Certificate
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(api))
+			atls.WithCmcApi(api),
+			atls.WithCmcNetwork(c.Network))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
 		}
@@ -74,7 +75,8 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 		atls.WithCmcCa(c.ca),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
-		atls.WithMtls(c.Mtls))
+		atls.WithMtls(c.Mtls),
+		atls.WithCmcNetwork(c.Network))
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
@@ -120,7 +122,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 	// Load certificate
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcApi(api))
+		atls.WithCmcApi(api),
+		atls.WithCmcNetwork(c.Network))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
@@ -150,7 +153,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 		atls.WithCmcCa(c.ca),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
-		atls.WithMtls(c.Mtls))
+		atls.WithMtls(c.Mtls),
+		atls.WithCmcNetwork(c.Network))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
