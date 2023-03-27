@@ -159,7 +159,9 @@ configuration). The linux kernel default is 10
 RSA4096, EC256, EC384, EC521
 - **serialization**: The serialiazation format to use for the attestation report. Can be either
 `cbor` or `json`
-- **api**: Selects whether to use the `grpc` or `coap` API
+- **api**: Selects whether to use the `grpc`, `coap`, or `socket` API
+- **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
+`Unix Domain Sockets`
 - **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 
 ### EST Server Configuration
@@ -205,7 +207,9 @@ from (mode verify)
 - **ca**: The trust anchor CA(s)
 - **policies**: Optional policies files
 - **mtls**: Perform mutual TLS in mode dial and listen
-- **api**: Selects whether to use the `grpc` or `coap` API
+- **api**: Selects whether to use the `grpc`, `coap`, or `socket` API
+- **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
+`Unix Domain Sockets`
 - **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 
 **The testtool can run the following commands/modes:**
