@@ -190,7 +190,7 @@ func getConfig() *config {
 	printConfig(c)
 
 	// Get root CA certificate in PEM format if specified
-	if c.CaFile != "" {
+	if c.CaFile != "" && c.Mode != "cacerts" {
 		c.ca, err = internal.GetFile(c.CaFile, c.configDir)
 		if err != nil {
 			log.Fatalf("Failed to read file %v: %v", *caFile, err)
