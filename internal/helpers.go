@@ -62,6 +62,11 @@ func GetFilePath(file string, base *string) (string, error) {
 		log.Tracef("Get path of '%v'", file)
 	}
 
+	// Check direct path
+	if FileExists(file) {
+		return filepath.Abs(file)
+	}
+
 	// Search for the absolute path
 	if path.IsAbs(file) && FileExists(file) {
 		log.Tracef("Got: %v (absolute path)", file)
@@ -92,6 +97,10 @@ func GetFilePath(file string, base *string) (string, error) {
 			log.Tracef("Got: %v (relative to binary)", f)
 			return f, nil
 		}
+	}
+
+	if base == nil {
+		return "", fmt.Errorf("failed to find file. Places searched: %v, %v", file, f)
 	}
 
 	return "", fmt.Errorf("failed to find file. Places searched: %v, %v, %v", file, rf, f)
