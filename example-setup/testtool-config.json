@@ -5,9 +5,9 @@
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
-    "ca": "",
+    "ca": "pki/ca.pem",
     "policies": "",
     "mtls": true,
-    "api": "coap",
+    "api": "grpc",
     "logLevel": "trace"
 }

@@ -226,8 +226,13 @@ func printConfig(c *config) {
 	log.Debugf("\tNonceFile    : %v", c.NonceFile)
 	log.Debugf("\tCaFile       : %v", c.CaFile)
 	log.Debugf("\tMtls         : %v", c.Mtls)
-	log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
-	log.Debugf("\tApi          : %v", c.Api)
-	log.Debugf("\tNetwork      : %v", c.Network)
+	if c.PoliciesFile != "" {
+		log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
+	}
+	if strings.EqualFold(c.Api, "socket") {
+		log.Debugf("\tApi (Network): %v (%v)", c.Api, c.Network)
+	} else {
+		log.Debugf("\tApi          : %v", c.Api)
+	}
 	log.Debugf("\tLogLevel     : %v", c.LogLevel)
 }

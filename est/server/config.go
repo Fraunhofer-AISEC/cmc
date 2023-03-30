@@ -111,7 +111,7 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(configFlag) {
 		data, err := internal.GetFile(*configFile, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read config file '%v': %w", configFile, err)
+			return nil, fmt.Errorf("failed to read config file '%v': %w", *configFile, err)
 		}
 		err = json.Unmarshal(data, c)
 		if err != nil {

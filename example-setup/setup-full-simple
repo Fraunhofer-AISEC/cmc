@@ -35,10 +35,10 @@ export PATH=$PATH:$HOME/go/bin
 # Create a folder for the cmc configuration and metadata
 mkdir -p $DATA
 
-sudo apt install moreutils golang-cfssl build-essential
+# Install dependencies
+sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq
 
-# Install tools
-sudo apt install -y build-essential zlib1g-dev libssl-dev jq
+# Intall tpm-pcr-tools
 git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git $DATA/tpm-pcr-tools
 cd $DATA/tpm-pcr-tools
 make

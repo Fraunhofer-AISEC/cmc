@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -218,10 +219,19 @@ func getConfig() (*config, error) {
 	//
 
 	// Transform local file path
-	c.LocalPath, err = internal.GetFilePath(c.LocalPath, &c.configDir)
+	p, err := internal.GetFilePath(c.LocalPath, &c.configDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get local storage path: %w", err)
+		log.Tracef("Local storage %v does not yet exist", c.LocalPath)
+		if !path.IsAbs(c.LocalPath) {
+			c.LocalPath, err = filepath.Abs(filepath.Join(c.configDir, c.LocalPath))
+			if err != nil {
+				return nil, fmt.Errorf("failed to construct path of internal storage: %v", err)
+			}
+		}
+	} else {
+		c.LocalPath = p
 	}
+	log.Tracef("Will use %v as local storage dir", c.LocalPath)
 
 	// Get serializer
 	c.serializer, ok = serializers[strings.ToLower(c.Serialization)]
