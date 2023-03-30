@@ -166,7 +166,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 		}
 		calculatedPcrs[*v.Pcr] = extendHash(calculatedPcrs[*v.Pcr], v.Sha256)
 		extends.Digests = append(extends.Digests, Digest{
-			Pcr:    *v.Pcr,
+			Pcr:    v.Pcr,
 			Name:   v.Name,
 			Digest: hex.EncodeToString(v.Sha256),
 		})
@@ -227,7 +227,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					pcrRes.Validation.Success = true
 				} else {
 					msg := fmt.Sprintf("PCR%v calculation does not match: %v",
-						hex.EncodeToString(hce.Sha256[0]), hex.EncodeToString(calculatedHash))
+						hce.Pcr, hex.EncodeToString(calculatedHash))
 					pcrRes.Validation.setFalseMulti(&msg)
 					ok = false
 				}

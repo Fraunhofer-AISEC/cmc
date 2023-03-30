@@ -181,6 +181,8 @@ func dec(s string) []byte {
 	return b
 }
 
+func ptr[T any](v T) *T { return &v }
+
 var (
 	validQuote, _ = hex.DecodeString("ff54434780180022000b518b2cf29ba4f1c5ae463aec4159a9b7e7d6ec3b7632eac14119b73d3bb39e930008db6c3c042fa12645000000004c1efc09d977f45ed5c84b9501262219245c49af3000000001000b03120000002083a306865290be1f8912c44dc520f1b9271b9ecd23b2bbf3a41c9586c69464b2")
 
@@ -339,72 +341,72 @@ var (
 			{
 				Digest: "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
 				Name:   "EV_CPU_MICROCODE",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
 				Name:   "Unknown Event Type",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
 				Name:   "EV_NONHOST_CONFIG",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
 				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
 				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
 				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
 				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
 				Name:   "EV_SEPARATOR",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
 				Name:   "EV_PLATFORM_CONFIG_FLAGS",
-				Pcr:    1,
+				Pcr:    ptr(1),
 			},
 			{
 				Digest: "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
 				Name:   "EV_EFI_ACTION",
-				Pcr:    4,
+				Pcr:    ptr(4),
 			},
 			{
 				Digest: "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
 				Name:   "EV_SEPARATOR",
-				Pcr:    4,
+				Pcr:    ptr(4),
 			},
 			{
 				Digest: "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
 				Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-				Pcr:    4,
+				Pcr:    ptr(4),
 			},
 			{
 				Digest: "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
 				Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-				Pcr:    4,
+				Pcr:    ptr(4),
 			},
 			{
 				Digest: "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
 				Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-				Pcr:    4,
+				Pcr:    ptr(4),
 			},
 		},
 	}

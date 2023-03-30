@@ -100,7 +100,7 @@ type PcrResult struct {
 
 // Helper struct for DigestResult
 type Digest struct {
-	Pcr    int    `json:"pcr,omitempty"`  // Number for the PCR if present (TPM)
+	Pcr    *int   `json:"pcr,omitempty"`  // Number for the PCR if present (TPM)
 	Name   string `json:"name,omitempty"` // Name of the software artifact
 	Digest string `json:"digest"`         // Digest that was processed
 }
