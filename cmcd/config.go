@@ -17,6 +17,7 @@ package main
 
 // Install github packages with "go get [url]"
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -219,6 +220,9 @@ func getConfig() (*config, error) {
 	//
 
 	// Transform local file path
+	if c.LocalPath == "" {
+		return nil, errors.New("please provide a local storage path via config or cmdline")
+	}
 	p, err := internal.GetFilePath(c.LocalPath, &c.configDir)
 	if err != nil {
 		log.Tracef("Local storage %v does not yet exist", c.LocalPath)
