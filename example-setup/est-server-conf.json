@@ -7,7 +7,6 @@
     "httpFolder": "./",
     "verifyEkCert": false,
     "tpmEkCertDb": "tpm-ek-certs.db",
-    "serialization": "json",
     "estKey": "pki/est-key.pem",
     "estCerts": [
         "pki/est.pem"

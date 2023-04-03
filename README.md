@@ -167,19 +167,10 @@ RSA4096, EC256, EC384, EC521
 ### EST Server Configuration
 
 - **port**: The port the server should listen on
-- **deviceSubCaKey**: The private key of the CA used to sign the device certificates. For the demo,
-the *Device Sub CA* key from the *ids-pcp* tool located in
-```ids-pcp/examples/demo_setup/pki/ca/device_sub_ca-key.pem``` can be used
-- **deviceSubCaCert**: The certificate of the CA used to sign the device certificates. For the
-demo, the *Device Sub CA* certificate from the *ids-pcp* tool located in
-```ids-pcp/examples/demo_setup/pki/ca/device_sub_ca.pem``` can be used
-- **caCert**: The root CA. For the demo, the *CA* certification from the *ids-pcp* tool
-located in ```ids-pcp/examples/demo_setup/pki/ca/ca.pem``` can be used
+- **signingKey**: The private key of the CA used to sign the device certificates.
+- **signingCerts**: The certificate chain of the CA used to sign the device certificates.
 - **httpFolder**: The root folder containing metadata (manifests and descriptions) that is served
-by the provisioning server. This root folder must contain folders that match the **serverPath**
-from the *cmcd* config of the individual devices. Inside the folders, the metadata
-(manifests and descriptions) for the device must be stored. The files can be generated with
-the *ids-pcp* tool.
+by the provisioning server to be fetched by the `cmcd`
 - **verifyEkCert**: Boolean, specifies if the EK certificate chain should be validated via the
 **tpmEkCertDb**
 - **tpmEkCertDb**: SQLite database containing intermediate CA and CA certificates from the TPM
