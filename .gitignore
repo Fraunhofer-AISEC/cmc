@@ -7,8 +7,8 @@ est/server/server
 **/nonce
 **/attestation-report
 **/attestation-result.json
-tools/signing-tool/signing-tool
-tools/converter/converter
+tools/cmc-signing-tool/cmc-signing-tool
+tools/cmc-converter/cmc-converter
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
