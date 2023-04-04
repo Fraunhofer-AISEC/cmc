@@ -100,9 +100,9 @@ CHAIN_OP_A=$DATA/pki/operator_A.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
 
 mkdir -p $OUT
 
-signing-tool -in $IN/rtm.manifest.json         -out $OUT/rtm.manifest.json         -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
-signing-tool -in $IN/os.manifest.json          -out $OUT/os.manifest.json          -keys $KEY_DEV_B,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_B:$CHAIN_EVA_A:$CHAIN_CERT_A
-signing-tool -in $IN/company.description.json  -out $OUT/company.description.json  -keys $KEY_OP_A,$KEY_EVA_B,$KEY_CERT_B -x5cs $CHAIN_OP_A:$CHAIN_EVA_B:$CHAIN_CERT_B
+cmc-signing-tool -in $IN/rtm.manifest.json         -out $OUT/rtm.manifest.json         -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
+cmc-signing-tool -in $IN/os.manifest.json          -out $OUT/os.manifest.json          -keys $KEY_DEV_B,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_B:$CHAIN_EVA_A:$CHAIN_CERT_A
+cmc-signing-tool -in $IN/company.description.json  -out $OUT/company.description.json  -keys $KEY_OP_A,$KEY_EVA_B,$KEY_CERT_B -x5cs $CHAIN_OP_A:$CHAIN_EVA_B:$CHAIN_CERT_B
 
-signing-tool -in $IN/device.description.json   -out $OUT/device.description.json   -keys $KEY_OP_A -x5cs $CHAIN_OP_A
-signing-tool -in $IN/device.config.json        -out $OUT/device.config.json        -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+cmc-signing-tool -in $IN/device.description.json   -out $OUT/device.description.json   -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+cmc-signing-tool -in $IN/device.config.json        -out $OUT/device.config.json        -keys $KEY_OP_A -x5cs $CHAIN_OP_A
