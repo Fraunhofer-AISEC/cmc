@@ -83,22 +83,26 @@ var (
 
 var log = logrus.WithField("service", "tpmdriver")
 
-// NewTpm creates a new TPM object, opens and initializes the TPM object,
-// checks if provosioning is required and if so, provisions the TPM
-func NewTpm(c *Config) (*Tpm, error) {
+// Init opens and initializes a TPM object, checks if provosioning is
+// required and if so, provisions the TPM
+func (t *Tpm) Init(c *Config) error {
+
+	if t == nil {
+		return errors.New("internal error: TPM object is nil")
+	}
 
 	// Check if serializer is initialized
 	switch c.Serializer.(type) {
 	case ar.JsonSerializer:
 	case ar.CborSerializer:
 	default:
-		return nil, fmt.Errorf("serializer not initialized in driver config")
+		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
 	// Create storage folder for storage of internal data if not existing
 	if _, err := os.Stat(c.StoragePath); err != nil {
 		if err := os.MkdirAll(c.StoragePath, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create local storage '%v': %v", c.StoragePath, err)
+			return fmt.Errorf("failed to create local storage '%v': %v", c.StoragePath, err)
 		}
 	}
 
@@ -106,19 +110,19 @@ func NewTpm(c *Config) (*Tpm, error) {
 	// the manifest files
 	pcrs, err := getTpmPcrs(c)
 	if err != nil {
-		return nil, fmt.Errorf("failed retrieve TPM PCRs: %v", err)
+		return fmt.Errorf("failed retrieve TPM PCRs: %v", err)
 	}
 
 	// Check if the TPM is provisioned. If provisioned, load the AK and IK key.
 	// Otherwise perform credential activation with provisioning server and then load the keys
 	provisioningRequired, err := IsTpmProvisioningRequired(c.StoragePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if TPM is provisioned: %v", err)
+		return fmt.Errorf("failed to check if TPM is provisioned: %v", err)
 	}
 
 	err = OpenTpm()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open the TPM. Check if you have privileges to open /dev/tpm0: %v", err)
+		return fmt.Errorf("failed to open the TPM. Check if you have privileges to open /dev/tpm0: %v", err)
 	}
 
 	var akchain []*x509.Certificate
@@ -128,13 +132,13 @@ func NewTpm(c *Config) (*Tpm, error) {
 		log.Info("Provisioning TPM (might take a while)..")
 		ek, ak, ik, err = createKeys(TPM, c.KeyConfig)
 		if err != nil {
-			return nil, fmt.Errorf("activate credential failed: createKeys returned %v", err)
+			return fmt.Errorf("activate credential failed: createKeys returned %v", err)
 		}
 
 		// Load relevant parameters from the metadata files
 		akCsr, ikCsr, err := createCsrs(c, ak, ik)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create CSRs: %v", err)
+			return fmt.Errorf("failed to create CSRs: %v", err)
 		}
 
 		log.Tracef("Created AK CSR: %v", akCsr.Subject.CommonName)
@@ -142,39 +146,37 @@ func NewTpm(c *Config) (*Tpm, error) {
 
 		akchain, ikchain, err = provisionTpm(c.ServerAddr, akCsr, ikCsr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to provision TPM: %v", err)
+			return fmt.Errorf("failed to provision TPM: %v", err)
 		}
 
 		err = saveCerts(c.StoragePath, akchain, ikchain)
 		if err != nil {
-			return nil, fmt.Errorf("failed to save TPM data: %v", err)
+			return fmt.Errorf("failed to save TPM data: %v", err)
 		}
 
 		err = saveKeys(c.StoragePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to save keys: %w", err)
+			return fmt.Errorf("failed to save keys: %w", err)
 		}
 
 	} else {
 		err = loadTpmKeys(c.StoragePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load TPM keys: %v", err)
+			return fmt.Errorf("failed to load TPM keys: %v", err)
 		}
 		akchain, ikchain, err = loadTpmCerts(c.StoragePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load TPM certificates: %v", err)
+			return fmt.Errorf("failed to load TPM certificates: %v", err)
 		}
 	}
 
-	tpm := &Tpm{
-		Pcrs:           pcrs,
-		UseIma:         c.UseIma,
-		ImaPcr:         c.ImaPcr,
-		SigningCerts:   ikchain,
-		MeasuringCerts: akchain,
-	}
+	t.Pcrs = pcrs
+	t.UseIma = c.UseIma
+	t.ImaPcr = c.ImaPcr
+	t.SigningCerts = ikchain
+	t.MeasuringCerts = akchain
 
-	return tpm, nil
+	return nil
 }
 
 // Measure implements the attestation reports generic Measure interface to be called
@@ -247,22 +249,33 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	return tm, nil
 }
 
-func (t *Tpm) Lock() {
+func (t *Tpm) Lock() error {
+	if t == nil {
+		return errors.New("internal error: TPM object is nil")
+	}
 	log.Trace("Trying to get lock for TPM")
 	t.Mu.Lock()
 	log.Trace("Got lock for TPM")
+	return nil
 }
 
-func (t *Tpm) Unlock() {
+func (t *Tpm) Unlock() error {
+	if t == nil {
+		return errors.New("internal error: TPM object is nil")
+	}
 	log.Trace("Releasing TPM Lock")
 	t.Mu.Unlock()
 	log.Trace("Released TPM Lock")
+	return nil
 }
 
 // GetSigningKeys returns the IK private and public key as a generic
 // crypto interface
 func (t *Tpm) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
 
+	if t == nil {
+		return nil, nil, errors.New("internal error: TPM object is nil")
+	}
 	if ik == nil {
 		return nil, nil, fmt.Errorf("failed to get IK Signer: not initialized")
 	}
@@ -274,8 +287,11 @@ func (t *Tpm) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
 	return priv, ik.Public(), nil
 }
 
-func (t *Tpm) GetCertChain() []*x509.Certificate {
-	return t.SigningCerts
+func (t *Tpm) GetCertChain() ([]*x509.Certificate, error) {
+	if t == nil {
+		return nil, errors.New("internal error: TPM object is nil")
+	}
+	return t.SigningCerts, nil
 }
 
 // IsTpmProvisioningRequired checks if the Storage Root Key (SRK) is persisted

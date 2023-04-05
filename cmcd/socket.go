@@ -243,7 +243,11 @@ func tlscert(conn net.Conn, payload []byte, conf *ServerConfig) {
 	log.Tracef("Received TLS cert request with ID %v", req.Id)
 
 	// Retrieve certificates
-	certChain := conf.Signer.GetCertChain()
+	certChain, err := conf.Signer.GetCertChain()
+	if err != nil {
+		api.SendError(conn, "failed to get certchain: %v", err)
+		return
+	}
 
 	// Create response
 	resp := &api.TLSCertResponse{

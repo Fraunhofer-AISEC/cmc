@@ -89,7 +89,10 @@ func (s JsonSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
 	log.Trace("Signing attestation report")
 
 	// create list of all certificates in the correct order
-	certs := signer.GetCertChain()
+	certs, err := signer.GetCertChain()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cert chain: %w", err)
+	}
 
 	// certificate chain in base64 encoding
 	certsb64 := make([]string, 0)

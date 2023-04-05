@@ -63,14 +63,19 @@ type Config struct {
 	Url string
 }
 
-func NewSnpDriver(c Config) (*Snp, error) {
+// Init initializaes the SNP driver with the specifified configuration
+func (snp *Snp) Init(c Config) error {
+
+	if snp == nil {
+		return errors.New("internal error: SNP object is nil")
+	}
 
 	ca, _, err := getCerts(milanUrl, PEM)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP certificate chain: %w", err)
+		return fmt.Errorf("failed to get SNP certificate chain: %w", err)
 	}
 	if len(ca) != 2 {
-		return nil, fmt.Errorf("failed to get SNP certificate chain. Expected 2 certificates, got %v", len(ca))
+		return fmt.Errorf("failed to get SNP certificate chain. Expected 2 certificates, got %v", len(ca))
 	}
 
 	// Fetch the VCEK. TODO as a workaround, we get the parameters through
@@ -79,11 +84,11 @@ func NewSnpDriver(c Config) (*Snp, error) {
 	// the host should provide the VCEK
 	arRaw, err := GetSnpMeasurement(make([]byte, 64))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP report: %w", err)
+		return fmt.Errorf("failed to get SNP report: %w", err)
 	}
 	s, err := ar.DecodeSnpReport(arRaw)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
+		return fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
 	// TODO mandate server authentication in the future, otherwise
@@ -93,19 +98,21 @@ func NewSnpDriver(c Config) (*Snp, error) {
 
 	vcek, err := estclient.SnpEnroll(c.Url, s.ChipId, s.CurrentTcb)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll SNP: %w", err)
+		return fmt.Errorf("failed to enroll SNP: %w", err)
 	}
 
-	snp := &Snp{
-		certChain: append([]*x509.Certificate{vcek}, ca...),
-	}
+	snp.certChain = append([]*x509.Certificate{vcek}, ca...)
 
-	return snp, nil
+	return nil
 }
 
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
-func (snp Snp) Measure(nonce []byte) (ar.Measurement, error) {
+func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
+
+	if snp == nil {
+		return ar.SnpMeasurement{}, errors.New("internal error: SNP object is nil")
+	}
 
 	data, err := GetSnpMeasurement(nonce)
 	if err != nil {
