@@ -28,10 +28,9 @@ type Server interface {
 }
 
 type ServerConfig struct {
-	Metadata              [][]byte
-	MeasurementInterfaces []ar.Measurement
-	Signer                ar.Signer
-	Serializer            ar.Serializer
-	PolicyEngineSelect    ar.PolicyEngineSelect
-	Network               string
+	Metadata           [][]byte
+	Drivers            []ar.Driver
+	Serializer         ar.Serializer
+	PolicyEngineSelect ar.PolicyEngineSelect
+	Network            string
 }

@@ -145,13 +145,9 @@ handle everything automatically
 - **fetchMetadata**: Boolean to specify whether the *cmcd* should load/update its metadata from
 the provisioning server. If set to false, the *cmcd* expects all files to be present in the
 *localPath*
-- **measurementInterfaces**: Tells the *cmcd* prover which measurement interfaces to use, currently
-supported are "TPM" and "SNP".
-- **signingInterface**: Tells the *cmcd* prover with which interface to sign the overall generated
-attestation report. Currently supported are "TPM", "SNP", and "SW". **Note**: This is only for the
-overall report. The hardware-based measurements are signed by the respective hardware-based keys
-of the measurement interface itself. E.g. if the TPM is selected as measurement interface, the
-TPM quote will always be signed with the TPM's AK.
+- **drivers**: Tells the *cmcd* prover which drivers to use, currently
+supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
+first provided driver is used for signing operations
 - **useIma**: Bool that indicates whether the Integrity Measurement Architecture (IMA) shall be used
 - **imaPcr**: TPM PCR where the IMA measurements are recorded (must match the kernel
 configuration). The linux kernel default is 10

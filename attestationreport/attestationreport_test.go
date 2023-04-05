@@ -71,6 +71,14 @@ type SwSigner struct {
 	priv      crypto.PrivateKey
 }
 
+func (s *SwSigner) Init(c *DriverConfig) error {
+	return nil
+}
+
+func (s *SwSigner) Measure(nonce []byte) (Measurement, error) {
+	return nil, nil
+}
+
 func (s *SwSigner) Lock() error {
 	return nil
 }
@@ -201,7 +209,7 @@ func TestVerify(t *testing.T) {
 
 			// Preparation: Generate and sign attestation report
 			var metadata [][]byte
-			a, err := Generate(nonce, metadata, []Measurement{}, tt.args.serializer)
+			a, err := Generate(nonce, metadata, []Driver{}, tt.args.serializer)
 			if err != nil {
 				t.Errorf("Preparation failed: %v", err)
 			}

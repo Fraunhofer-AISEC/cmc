@@ -21,7 +21,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"errors"
 	"fmt"
 	"os"
@@ -35,13 +34,6 @@ var (
 	log = logrus.WithField("service", "swdriver")
 )
 
-type Config struct {
-	StoragePath string
-	Url         string
-	Metadata    [][]byte
-	Serializer  ar.Serializer
-}
-
 // Sw is a struct required for implementing the signer and measurer interfaces
 // of the attestation report to perform software measurements and signing
 type Sw struct {
@@ -50,7 +42,7 @@ type Sw struct {
 }
 
 // Init a new object for software-based signing
-func (s *Sw) Init(c Config) error {
+func (s *Sw) Init(c *ar.DriverConfig) error {
 
 	if s == nil {
 		return errors.New("internal error: SW object is nil")
@@ -72,49 +64,18 @@ func (s *Sw) Init(c Config) error {
 		}
 	}
 
+	// Create new private key for signing
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return fmt.Errorf("failed to generate private key: %w", err)
 	}
-
-	csr, err := createCsr(&c, priv)
-	if err != nil {
-		return fmt.Errorf("failed to create CSRs: %w", err)
-	}
-
-	// Get CA certificates and enroll newly created CSR
-	// TODO provision EST server certificate with a different mechanism,
-	// otherwise this step has to happen in a secure environment. Allow
-	// different CAs for metadata and the EST server authentication
-	log.Warn("Creating new EST client without server authentication")
-	estclient := client.NewClient(nil)
-
-	log.Info("Retrieving CA certs")
-	caCerts, err := estclient.CaCerts(c.Url)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve certs: %w", err)
-	}
-	log.Debug("Received certs:")
-	for _, c := range caCerts {
-		log.Debugf("\t%v", c.Subject.CommonName)
-	}
-	if len(caCerts) == 0 {
-		return fmt.Errorf("no certs provided")
-	}
-
-	log.Warn("Setting retrieved cert for future authentication")
-	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
-	if err != nil {
-		return fmt.Errorf("failed to set EST CA: %w", err)
-	}
-
-	cert, err := estclient.SimpleEnroll(c.Url, csr)
-	if err != nil {
-		return fmt.Errorf("failed to enroll cert: %w", err)
-	}
-
-	s.certChain = append([]*x509.Certificate{cert}, caCerts...)
 	s.priv = priv
+
+	// Create CSR and fetch new certificate including its chain from EST server
+	s.certChain, err = getSigningCertChain(priv, c.Serializer, c.Metadata, c.ServerAddr)
+	if err != nil {
+		return fmt.Errorf("failed to get signing cert chain: %w", err)
+	}
 
 	return nil
 }
@@ -147,72 +108,49 @@ func (s *Sw) GetCertChain() ([]*x509.Certificate, error) {
 	return s.certChain, nil
 }
 
-func createCsr(c *Config, priv crypto.PrivateKey) (*x509.CertificateRequest, error) {
-
-	for i, m := range c.Metadata {
-
-		// Extract plain payload (i.e. the manifest/description itself)
-		payload, err := c.Serializer.GetPayload(m)
-		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
-			continue
-		}
-
-		// Unmarshal the Type field of the metadata file to determine the type
-		t := new(ar.Type)
-		err = c.Serializer.Unmarshal(payload, t)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
-			continue
-		}
-
-		if t.Type == "Device Config" {
-			var deviceConfig ar.DeviceConfig
-			err = c.Serializer.Unmarshal(payload, &deviceConfig)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal DeviceConfig: %w", err)
-			}
-			csr, err := createCsrFromParams(priv, deviceConfig.IkCsr)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create CSR: %w", err)
-			}
-			return csr, nil
-		}
-	}
-
-	return nil, errors.New("failed to find device config for creating CSRs")
+func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
+	return ar.SwMeasurement{}, errors.New("Measure method not implemented for SW driver")
 }
 
-func createCsrFromParams(priv crypto.PrivateKey, params ar.CsrParams,
-) (*x509.CertificateRequest, error) {
+func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,
+	addr string,
+) ([]*x509.Certificate, error) {
 
-	tmpl := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:         params.Subject.CommonName,
-			Country:            []string{params.Subject.Country},
-			Province:           []string{params.Subject.Province},
-			Locality:           []string{params.Subject.Locality},
-			Organization:       []string{params.Subject.Organization},
-			OrganizationalUnit: []string{params.Subject.OrganizationalUnit},
-			StreetAddress:      []string{params.Subject.StreetAddress},
-			PostalCode:         []string{params.Subject.PostalCode},
-		},
-		DNSNames: params.SANs,
-	}
-
-	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
+	csr, err := ar.CreateCsr(priv, s, metadata)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate request: %v", err)
+		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
-	csr, err := x509.ParseCertificateRequest(der)
+	// Get CA certificates and enroll newly created CSR
+	// TODO provision EST server certificate with a different mechanism,
+	// otherwise this step has to happen in a secure environment. Allow
+	// different CAs for metadata and the EST server authentication
+	log.Warn("Creating new EST client without server authentication")
+	estclient := client.NewClient(nil)
+
+	log.Info("Retrieving CA certs")
+	caCerts, err := estclient.CaCerts(addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse created CSR: %v", err)
+		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
-	err = csr.CheckSignature()
-	if err != nil {
-		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
+	log.Debug("Received certs:")
+	for _, c := range caCerts {
+		log.Debugf("\t%v", c.Subject.CommonName)
+	}
+	if len(caCerts) == 0 {
+		return nil, fmt.Errorf("no certs provided")
 	}
 
-	return csr, nil
+	log.Warn("Setting retrieved cert for future authentication")
+	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
+	if err != nil {
+		return nil, fmt.Errorf("failed to set EST CA: %w", err)
+	}
+
+	cert, err := estclient.SimpleEnroll(addr, csr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enroll cert: %w", err)
+	}
+
+	return append([]*x509.Certificate{cert}, caCerts...), nil
 }

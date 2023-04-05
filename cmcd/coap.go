@@ -102,6 +102,12 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Received CoAP attestation request")
 
+	if len(serverConfig.Drivers) == 0 {
+		sendCoapError(w, r, codes.InternalServerError,
+			"Failed to generate attestation report: No valid drivers specified in config")
+		return
+	}
+
 	var req api.AttestationRequest
 	err := unmarshalCoapPayload(r, &req)
 	if err != nil {
@@ -113,21 +119,15 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, err := ar.Generate(req.Nonce, serverConfig.Metadata, serverConfig.MeasurementInterfaces, serverConfig.Serializer)
+	report, err := ar.Generate(req.Nonce, serverConfig.Metadata, serverConfig.Drivers, serverConfig.Serializer)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
 		return
 	}
 
-	if serverConfig.Signer == nil {
-		sendCoapError(w, r, codes.InternalServerError,
-			"Failed to sign attestation report: No valid signer specified in config")
-		return
-	}
-
 	log.Debug("Prover: Signing Attestation Report")
-	data, err := ar.Sign(report, serverConfig.Signer, serverConfig.Serializer)
+	data, err := ar.Sign(report, serverConfig.Drivers[0], serverConfig.Serializer)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign attestation report: %v", err)
@@ -194,6 +194,12 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received CoAP TLS sign request")
 
+	if len(serverConfig.Drivers) == 0 {
+		sendCoapError(w, r, codes.InternalServerError,
+			"Failed to sign: No valid drivers specified in config")
+		return
+	}
+
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSSignRequest
 	err := unmarshalCoapPayload(r, &req)
@@ -213,7 +219,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := serverConfig.Signer.GetSigningKeys()
+	tlsKeyPriv, _, err := serverConfig.Drivers[0].GetSigningKeys()
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get IK: %v", err)
 		return
@@ -247,6 +253,12 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received CoAP TLS cert request")
 
+	if len(serverConfig.Drivers) == 0 {
+		sendCoapError(w, r, codes.InternalServerError,
+			"Failed to sign: No valid drivers specified in config")
+		return
+	}
+
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSCertRequest
 	err := unmarshalCoapPayload(r, &req)
@@ -259,7 +271,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	log.Tracef("Received COAP TLS cert request with ID %v", req.Id)
 
 	// Retrieve certificates
-	certChain, err := serverConfig.Signer.GetCertChain()
+	certChain, err := serverConfig.Drivers[0].GetCertChain()
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return

@@ -55,18 +55,6 @@ type Tpm struct {
 	ImaPcr         int32
 }
 
-// Config is the structure for handing over the configuration
-// for a Tpm object
-type Config struct {
-	StoragePath string
-	ServerAddr  string
-	KeyConfig   string
-	Metadata    [][]byte
-	UseIma      bool
-	ImaPcr      int32
-	Serializer  ar.Serializer
-}
-
 const (
 	akchainFile = "akchain.pem"
 	ikchainFile = "ikchain.pem"
@@ -85,7 +73,7 @@ var log = logrus.WithField("service", "tpmdriver")
 
 // Init opens and initializes a TPM object, checks if provosioning is
 // required and if so, provisions the TPM
-func (t *Tpm) Init(c *Config) error {
+func (t *Tpm) Init(c *ar.DriverConfig) error {
 
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
@@ -758,7 +746,7 @@ func ActivateCredential(
 	return secret, nil
 }
 
-func getTpmPcrs(c *Config) ([]int, error) {
+func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 
 	var osMan ar.OsManifest
 	var rtmMan ar.RtmManifest
@@ -824,7 +812,7 @@ func getTpmPcrs(c *Config) ([]int, error) {
 	return pcrs, nil
 }
 
-func createCsrs(c *Config, ak *attest.AK, ik *attest.Key,
+func createCsrs(c *ar.DriverConfig, ak *attest.AK, ik *attest.Key,
 ) (akCsr, ikCsr *x509.CertificateRequest, err error) {
 
 	// Get device configuration from metadata

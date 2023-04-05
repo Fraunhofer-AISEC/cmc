@@ -24,10 +24,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/est/client"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
-	"github.com/Fraunhofer-AISEC/cmc/swdriver"
-	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 )
 
 func main() {
@@ -52,80 +48,32 @@ func main() {
 		return
 	}
 
-	tpm := tpmdriver.Tpm{}
-	snp := snpdriver.Snp{}
-	sw := swdriver.Sw{}
+	// Create driver configuration
+	driverConf := &ar.DriverConfig{
+		StoragePath: path.Join(c.LocalPath, "internal"),
+		ServerAddr:  c.ProvServerAddr,
+		KeyConfig:   c.KeyConfig,
+		Metadata:    metadata,
+		UseIma:      c.UseIma,
+		ImaPcr:      c.ImaPcr,
+		Serializer:  c.serializer,
+	}
 
-	measurements := make([]ar.Measurement, 0)
-	var signer ar.Signer
-
-	if strings.EqualFold(c.SigningInterface, "SW") {
-		log.Warn("Using unsafe swdriver as Signing Interface")
-		swConfig := swdriver.Config{
-			StoragePath: path.Join(c.LocalPath, "internal"),
-			Url:         c.ProvServerAddr,
-			Metadata:    metadata,
-			Serializer:  c.serializer,
-		}
-		err = sw.Init(swConfig)
+	// Initialize drivers
+	for _, m := range c.drivers {
+		err = m.Init(driverConf)
 		if err != nil {
-			log.Errorf("failed to create new SW driver: %v", err)
+			log.Errorf("Failed to initialize measurer: %v", err)
 			return
 		}
-
-		signer = &sw
-	}
-
-	if strings.EqualFold(c.SigningInterface, "TPM") || internal.Contains("TPM", c.MeasurementInterfaces) {
-		tpmConfig := &tpmdriver.Config{
-			StoragePath: path.Join(c.LocalPath, "internal"),
-			ServerAddr:  c.ProvServerAddr,
-			KeyConfig:   c.KeyConfig,
-			Metadata:    metadata,
-			UseIma:      c.UseIma,
-			ImaPcr:      c.ImaPcr,
-			Serializer:  c.serializer,
-		}
-
-		err = tpm.Init(tpmConfig)
-		if err != nil {
-			log.Errorf("Failed to create new TPM driver: %v", err)
-			return
-		}
-		defer tpmdriver.CloseTpm()
-	}
-
-	if internal.Contains("TPM", c.MeasurementInterfaces) {
-		log.Info("Using TPM as Measurement Interface")
-		measurements = append(measurements, &tpm)
-	}
-
-	if strings.EqualFold(c.SigningInterface, "TPM") {
-		log.Info("Using TPM as Signing Interface")
-		signer = &tpm
-	}
-
-	if internal.Contains("SNP", c.MeasurementInterfaces) {
-		log.Info("Using SNP as Measurement Interface")
-		snpConfig := snpdriver.Config{
-			Url: c.ProvServerAddr,
-		}
-		err = snp.Init(snpConfig)
-		if err != nil {
-			log.Errorf("failed to create new SNP driver: %v", err)
-			return
-		}
-
-		measurements = append(measurements, &snp)
 	}
 
 	serverConfig := &ServerConfig{
-		Metadata:              metadata,
-		MeasurementInterfaces: measurements,
-		Signer:                signer,
-		Serializer:            c.serializer,
-		PolicyEngineSelect:    c.policyEngineSelect,
-		Network:               c.Network,
+		Metadata:           metadata,
+		Drivers:            c.drivers,
+		Serializer:         c.serializer,
+		PolicyEngineSelect: c.policyEngineSelect,
+		Network:            c.Network,
 	}
 
 	server, ok := servers[strings.ToLower(c.Api)]

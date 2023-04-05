@@ -32,29 +32,32 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
+	"github.com/Fraunhofer-AISEC/cmc/swdriver"
+	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
 
 type config struct {
-	Addr                  string   `json:"addr"`
-	ProvServerAddr        string   `json:"provServerAddr"`
-	MetadataAddr          string   `json:"metadataAddr"`
-	LocalPath             string   `json:"localPath"`
-	FetchMetadata         bool     `json:"fetchMetadata"`
-	MeasurementInterfaces []string `json:"measurementInterfaces"` // TPM, SNP
-	SigningInterface      string   `json:"signingInterface"`      // TPM, SW
-	UseIma                bool     `json:"useIma"`                // TRUE, FALSE
-	ImaPcr                int32    `json:"imaPcr"`                // 10-15
-	KeyConfig             string   `json:"keyConfig,omitempty"`   // RSA2048 RSA4096 EC256 EC384 EC521
-	Serialization         string   `json:"serialization"`         // JSON, CBOR
-	Api                   string   `json:"api"`                   // gRPC, CoAP, Socket
-	Network               string   `json:"network,omitempty"`
-	PolicyEngine          string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
-	LogLevel              string   `json:"logLevel"`
+	Addr           string   `json:"addr"`
+	ProvServerAddr string   `json:"provServerAddr"`
+	MetadataAddr   string   `json:"metadataAddr"`
+	LocalPath      string   `json:"localPath"`
+	FetchMetadata  bool     `json:"fetchMetadata"`
+	Drivers        []string `json:"drivers"`                // TPM, SNP
+	UseIma         bool     `json:"useIma"`                 // TRUE, FALSE
+	ImaPcr         int32    `json:"imaPcr"`                 // 10-15
+	KeyConfig      string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
+	Serialization  string   `json:"serialization"`          // JSON, CBOR
+	Api            string   `json:"api"`                    // gRPC, CoAP, Socket
+	Network        string   `json:"network,omitempty"`      // unix, socket
+	PolicyEngine   string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
+	LogLevel       string   `json:"logLevel"`
 
 	serializer         ar.Serializer
 	policyEngineSelect ar.PolicyEngineSelect
+	drivers            []ar.Driver
 	configDir          string
 }
 
@@ -79,6 +82,12 @@ var (
 		"duktape": ar.PolicyEngineSelect_DukTape,
 	}
 
+	drivers = map[string]ar.Driver{
+		"tpm": &tpmdriver.Tpm{},
+		"snp": &snpdriver.Snp{},
+		"sw":  &swdriver.Sw{},
+	}
+
 	log = logrus.WithField("service", "cmcd")
 )
 
@@ -89,8 +98,7 @@ const (
 	provAddrFlag      = "prov"
 	localPathFlag     = "storage"
 	fetchMetadataFlag = "fetch"
-	measurementsFlag  = "measurements"
-	signerFlag        = "signer"
+	driversFlag       = "drivers"
 	imaFlag           = "ima"
 	imaPcrFlag        = "pcr"
 	keyConfigFlag     = "algo"
@@ -118,21 +126,21 @@ func getConfig() (*config, error) {
 	localPath := flag.String(localPathFlag, "", "Path for CMC internal storage")
 	fetchMetadata := flag.Bool(fetchMetadataFlag, false,
 		"Indicates whether to fetch metadata")
-	measurements := flag.String(measurementsFlag, "",
-		"Measurement Interfaces (comma separated list)")
-	signer := flag.String(signerFlag, "", "Signing Interface")
+	driversList := flag.String(driversFlag, "",
+		fmt.Sprintf("Drivers (comma separated list). Possible: %v",
+			strings.Join(maps.Keys(drivers), ",")))
 	ima := flag.Bool(imaFlag, false,
 		"Indicates whether to use Integrity Measurement Architecture (IMA)")
 	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
 	keyConfig := flag.String(keyConfigFlag, "", "Key configuration")
 	serialization := flag.String(serializationFlag, "",
-		fmt.Sprintf("Possible serializers: %v", maps.Keys(serializers)))
+		fmt.Sprintf("Possible serializers: %v", strings.Join(maps.Keys(serializers), ",")))
 	api := flag.String(apiFlag, "", "API")
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine := flag.String(policyEngineFlag, "",
-		fmt.Sprintf("Possible policy engines: %v", maps.Keys(policyEngines)))
+		fmt.Sprintf("Possible policy engines: %v", strings.Join(maps.Keys(policyEngines), ",")))
 	logLevel := flag.String(logFlag, "",
-		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
+		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	flag.Parse()
 
 	// Create default configuration
@@ -173,11 +181,8 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(fetchMetadataFlag) {
 		c.FetchMetadata = *fetchMetadata
 	}
-	if internal.FlagPassed(measurementsFlag) {
-		c.MeasurementInterfaces = strings.Split(*measurements, ",")
-	}
-	if internal.FlagPassed(signerFlag) {
-		c.SigningInterface = *signer
+	if internal.FlagPassed(driversFlag) {
+		c.Drivers = strings.Split(*driversList, ",")
 	}
 	if internal.FlagPassed(imaFlag) {
 		c.UseIma = *ima
@@ -249,6 +254,16 @@ func getConfig() (*config, error) {
 		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
 	}
 
+	// Get drivers
+	for _, driver := range c.Drivers {
+		d, ok := drivers[strings.ToLower(driver)]
+		if !ok {
+			return nil,
+				fmt.Errorf("measurement interface %v not implemented", c.Drivers)
+		}
+		c.drivers = append(c.drivers, d)
+	}
+
 	return c, nil
 }
 
@@ -267,11 +282,7 @@ func printConfig(c *config) {
 	log.Debugf("\tPolicy Engine            : %v", c.PolicyEngine)
 	log.Debugf("\tKey Config               : %v", c.KeyConfig)
 	log.Debugf("\tLogging Level            : %v", c.LogLevel)
-	log.Debug("\tMeasurement Interfaces   : ")
-	for i, m := range c.MeasurementInterfaces {
-		log.Debugf("\t\t%v: %v", i, m)
-	}
-	log.Debugf("\tSigning Interface        : %v", c.SigningInterface)
+	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))
 }
 
 func getVersion() string {

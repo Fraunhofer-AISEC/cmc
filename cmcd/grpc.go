@@ -81,21 +81,21 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
-	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces, s.config.Serializer)
+	if len(s.config.Drivers) == 0 {
+		return &api.AttestationResponse{
+			Status: api.Status_FAIL,
+		}, errors.New("no valid signers configured")
+	}
+
+	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.Drivers, s.config.Serializer)
 	if err != nil {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
 		}, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	if s.config.Signer == nil {
-		return &api.AttestationResponse{
-			Status: api.Status_FAIL,
-		}, errors.New("no valid signer specified in config. Cannot sign attestation report")
-	}
-
 	log.Info("Prover: Signing Attestation Report")
-	data, err := ar.Sign(report, s.config.Signer, s.config.Serializer)
+	data, err := ar.Sign(report, s.config.Drivers[0], s.config.Serializer)
 	if err != nil {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
@@ -148,6 +148,12 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 	var signature []byte
 	var tlsKeyPriv crypto.PrivateKey
 
+	if len(s.config.Drivers) == 0 {
+		return &api.TLSSignResponse{
+			Status: api.Status_FAIL,
+		}, errors.New("no valid signers configured")
+	}
+
 	// get sign opts
 	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
@@ -155,7 +161,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 			fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
 	// get key
-	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
+	tlsKeyPriv, _, err = s.config.Drivers[0].GetSigningKeys()
 	if err != nil {
 		return &api.TLSSignResponse{Status: api.Status_FAIL},
 			fmt.Errorf("failed to get IK: %w", err)
@@ -182,8 +188,14 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 func (s *GrpcServer) TLSCert(ctx context.Context, in *api.TLSCertRequest) (*api.TLSCertResponse, error) {
 	var resp *api.TLSCertResponse = &api.TLSCertResponse{}
 
+	if len(s.config.Drivers) == 0 {
+		return &api.TLSCertResponse{
+			Status: api.Status_FAIL,
+		}, errors.New("no valid signers configured")
+	}
+
 	// provide TLS certificate chain
-	certChain, err := s.config.Signer.GetCertChain()
+	certChain, err := s.config.Drivers[0].GetCertChain()
 	if err != nil {
 		return &api.TLSCertResponse{Status: api.Status_FAIL},
 			fmt.Errorf("failed to get cert chain: %w", err)
