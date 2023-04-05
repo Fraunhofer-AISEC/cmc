@@ -54,7 +54,7 @@ func (s CborSerializer) Unmarshal(data []byte, v any) error {
 	return cbor.Unmarshal(data, v)
 }
 
-func (s CborSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
+func (s CborSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 
 	private, _, err := signer.GetSigningKeys()
 	if err != nil {

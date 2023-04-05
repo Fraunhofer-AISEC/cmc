@@ -32,26 +32,34 @@ import (
 var log = logrus.WithField("service", "ar")
 
 // Measurement is a generic interface for a Measurement, such as a TpmMeasurement
+// or SnpMeasurement
 type Measurement interface{}
 
-// Measurer is an interface implementing the Measure method for each type of measurement
-// Each type of interface that is capable of providing measurements (such
-// as the tpmw module) is expected to implement this method. The
-// attestationreport module will call this method to retrieve the measurements
-// of the platform during attestation report generation.
-type Measurer interface {
-	Measure(nonce []byte) (Measurement, error)
+// Driver is an interface representing a driver for a hardware trust anchor,
+// capable of providing attestation evidence and signing data. This can be
+// e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
+// Initial Attestation Service (IAS). The driver must be capable of
+// performing measurements, i.e. retrieving attestation evidence such as
+// a TPM Quote or an SNP attestation report and providing handles to
+// signing keys and their certificate chains
+type Driver interface {
+	Init(c *DriverConfig) error                                   // Initializes the driver
+	Measure(nonce []byte) (Measurement, error)                    // Retrieves measurements
+	Lock() error                                                  // For sync, if required
+	Unlock() error                                                // For sync, if required
+	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) // Get Signing key handles
+	GetCertChain() ([]*x509.Certificate, error)                   // Get cert chain for signing key
 }
 
-// Signer is a generic interface for an entity capable of signing an attestation report,
-// such as a TPM or other hardware interface
-type Signing interface{}
-
-type Signer interface {
-	Lock() error
-	Unlock() error
-	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error)
-	GetCertChain() ([]*x509.Certificate, error)
+// DriverConfig contains all configuration values required for the different drivers
+type DriverConfig struct {
+	StoragePath string
+	ServerAddr  string
+	KeyConfig   string
+	Metadata    [][]byte
+	UseIma      bool
+	ImaPcr      int32
+	Serializer  Serializer
 }
 
 // Serializer is a generic interface providing methods for data serialization and
@@ -61,7 +69,7 @@ type Serializer interface {
 	GetPayload(raw []byte) ([]byte, error)
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
-	Sign(report []byte, signer Signer) ([]byte, error)
+	Sign(report []byte, signer Driver) ([]byte, error)
 	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
 }
 
@@ -328,12 +336,11 @@ type ArPacked struct {
 }
 
 // Generate generates an attestation report with the provided
-// nonce 'nonce' and manifests and descriptions 'metadata'. The manifests and
-// descriptions must be either raw JWS tokens in the JWS JSON full serialization
-// format or CBOR COSE tokens. Takes a list of 'measurements' implementing the
-// attestation report 'Measurer' interface providing a method for collecting
-// the measurements from a hardware or software interface
-func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Serializer) ([]byte, error) {
+// nonce and manifests and descriptions metadata. The manifests and descriptions
+// must be either raw JWS tokens in the JWS JSON full serialization
+// format or CBOR COSE tokens. Takes a list of measurers providing a method
+// for collecting  the measurements from a hardware or software interface
+func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer) ([]byte, error) {
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
 	ar := ArPacked{
@@ -396,13 +403,8 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Ser
 		log.Debug("Added ", numManifests, " manifests to attestation report")
 	}
 
-	log.Tracef("Retrieving measurements from %v measurement interfaces", len(measurements))
-	for _, m := range measurements {
-		measurer, ok := m.(Measurer)
-		if !ok {
-			log.Warn("Internal Error: Measurement does not implement Measurer. Will not add measurement to attestation report")
-			continue
-		}
+	log.Tracef("Retrieving measurements from %v measurers", len(measurers))
+	for _, measurer := range measurers {
 
 		// This actually collects the measurements. The methods are implemented
 		// in the respective module (e.g. tpm module)
@@ -439,7 +441,7 @@ func Generate(nonce []byte, metadata [][]byte, measurements []Measurement, s Ser
 }
 
 // Sign signs the attestation report with the specified signer 'signer'
-func Sign(report []byte, signer Signer, s Serializer) ([]byte, error) {
+func Sign(report []byte, signer Driver, s Serializer) ([]byte, error) {
 	return s.Sign(report, signer)
 }
 

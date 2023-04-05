@@ -84,7 +84,7 @@ func (s JsonSerializer) Unmarshal(data []byte, v any) error {
 }
 
 // Sign signs the attestation report with the specified signer 'signer'
-func (s JsonSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
+func (s JsonSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 
 	log.Trace("Signing attestation report")
 
@@ -320,7 +320,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 	case jose.PS512: // RSA PSS with SHA512
 		opts = &rsa.PSSOptions{SaltLength: 64, Hash: crypto.SHA512}
 	default:
-		return nil, errors.New("Signing failed: Could not determine appropriate hash type")
+		return nil, errors.New("could not determine appropriate hash type")
 	}
 
 	// Hash payload

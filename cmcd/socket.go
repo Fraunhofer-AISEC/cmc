@@ -47,7 +47,7 @@ func init() {
 
 func (s SocketServer) Serve(addr string, conf *ServerConfig) error {
 
-	log.Infof("Starting CMC %v server on %v", conf.Network, addr)
+	log.Infof("Waiting for requests on %v (%v)", addr, conf.Network)
 
 	socket, err := net.Listen(conf.Network, addr)
 	if err != nil {
@@ -100,6 +100,11 @@ func attest(conn net.Conn, payload []byte, conf *ServerConfig) {
 
 	log.Debug("Prover: Received attestation request")
 
+	if len(conf.Drivers) == 0 {
+		api.SendError(conn, "no valid signers configured")
+		return
+	}
+
 	req := new(api.AttestationRequest)
 	err := cbor.Unmarshal(payload, req)
 	if err != nil {
@@ -109,19 +114,14 @@ func attest(conn net.Conn, payload []byte, conf *ServerConfig) {
 
 	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
 
-	report, err := ar.Generate(req.Nonce, conf.Metadata, conf.MeasurementInterfaces, conf.Serializer)
+	report, err := ar.Generate(req.Nonce, conf.Metadata, conf.Drivers, conf.Serializer)
 	if err != nil {
 		api.SendError(conn, "failed to generate attestation report: %v", err)
 		return
 	}
 
-	if conf.Signer == nil {
-		api.SendError(conn, "Failed to sign attestation report: No valid signer specified in config")
-		return
-	}
-
 	log.Debug("Prover: Signing Attestation Report")
-	r, err := ar.Sign(report, conf.Signer, conf.Serializer)
+	r, err := ar.Sign(report, conf.Drivers[0], conf.Serializer)
 	if err != nil {
 		api.SendError(conn, "Failed to sign attestation report: %v", err)
 		return
@@ -183,6 +183,11 @@ func tlssign(conn net.Conn, payload []byte, conf *ServerConfig) {
 
 	log.Debug("Received TLS sign request")
 
+	if len(conf.Drivers) == 0 {
+		api.SendError(conn, "no valid signers configured")
+		return
+	}
+
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSSignRequest)
 	err := cbor.Unmarshal(payload, req)
@@ -199,7 +204,7 @@ func tlssign(conn net.Conn, payload []byte, conf *ServerConfig) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := conf.Signer.GetSigningKeys()
+	tlsKeyPriv, _, err := conf.Drivers[0].GetSigningKeys()
 	if err != nil {
 		api.SendError(conn, "failed to get IK: %v", err)
 		return
@@ -232,6 +237,11 @@ func tlscert(conn net.Conn, payload []byte, conf *ServerConfig) {
 
 	log.Debug("Received TLS cert request")
 
+	if len(conf.Drivers) == 0 {
+		api.SendError(conn, "no valid signers configured")
+		return
+	}
+
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSSignRequest)
 	err := cbor.Unmarshal(payload, req)
@@ -243,7 +253,7 @@ func tlscert(conn net.Conn, payload []byte, conf *ServerConfig) {
 	log.Tracef("Received TLS cert request with ID %v", req.Id)
 
 	// Retrieve certificates
-	certChain, err := conf.Signer.GetCertChain()
+	certChain, err := conf.Drivers[0].GetCertChain()
 	if err != nil {
 		api.SendError(conn, "failed to get certchain: %v", err)
 		return
