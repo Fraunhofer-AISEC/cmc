@@ -61,9 +61,13 @@ func (s CborSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get signing keys: %w", err)
 	}
 
-	certChain := make([][]byte, 0)
-	for _, cert := range signer.GetCertChain() {
-		certChain = append(certChain, cert.Raw)
+	certChain, err := signer.GetCertChain()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cert chain: %w", err)
+	}
+	certChainRaw := make([][]byte, 0)
+	for _, cert := range certChain {
+		certChainRaw = append(certChainRaw, cert.Raw)
 	}
 
 	stmp, ok := private.(crypto.Signer)
@@ -82,7 +86,7 @@ func (s CborSerializer) Sign(report []byte, signer Signer) ([]byte, error) {
 	// https://datatracker.ietf.org/doc/draft-ietf-cose-x509/08/ section 2
 	// If multiple certificates are conveyed, a CBOR array of byte strings is used,
 	// with each certificate being in its own byte string (DER Encoded)
-	sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChain
+	sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChainRaw
 
 	msgToSign := cose.NewSignMessage()
 	msgToSign.Payload = report

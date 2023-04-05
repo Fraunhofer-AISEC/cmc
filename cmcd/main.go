@@ -52,9 +52,9 @@ func main() {
 		return
 	}
 
-	var tpm *tpmdriver.Tpm
-	var snp *snpdriver.Snp
-	var sw *swdriver.Sw
+	tpm := tpmdriver.Tpm{}
+	snp := snpdriver.Snp{}
+	sw := swdriver.Sw{}
 
 	measurements := make([]ar.Measurement, 0)
 	var signer ar.Signer
@@ -67,13 +67,13 @@ func main() {
 			Metadata:    metadata,
 			Serializer:  c.serializer,
 		}
-		sw, err = swdriver.NewSwDriver(swConfig)
+		err = sw.Init(swConfig)
 		if err != nil {
 			log.Errorf("failed to create new SW driver: %v", err)
 			return
 		}
 
-		signer = sw
+		signer = &sw
 	}
 
 	if strings.EqualFold(c.SigningInterface, "TPM") || internal.Contains("TPM", c.MeasurementInterfaces) {
@@ -87,7 +87,7 @@ func main() {
 			Serializer:  c.serializer,
 		}
 
-		tpm, err = tpmdriver.NewTpm(tpmConfig)
+		err = tpm.Init(tpmConfig)
 		if err != nil {
 			log.Errorf("Failed to create new TPM driver: %v", err)
 			return
@@ -97,12 +97,12 @@ func main() {
 
 	if internal.Contains("TPM", c.MeasurementInterfaces) {
 		log.Info("Using TPM as Measurement Interface")
-		measurements = append(measurements, tpm)
+		measurements = append(measurements, &tpm)
 	}
 
 	if strings.EqualFold(c.SigningInterface, "TPM") {
 		log.Info("Using TPM as Signing Interface")
-		signer = tpm
+		signer = &tpm
 	}
 
 	if internal.Contains("SNP", c.MeasurementInterfaces) {
@@ -110,13 +110,13 @@ func main() {
 		snpConfig := snpdriver.Config{
 			Url: c.ProvServerAddr,
 		}
-		snp, err = snpdriver.NewSnpDriver(snpConfig)
+		err = snp.Init(snpConfig)
 		if err != nil {
 			log.Errorf("failed to create new SNP driver: %v", err)
 			return
 		}
 
-		measurements = append(measurements, snp)
+		measurements = append(measurements, &snp)
 	}
 
 	serverConfig := &ServerConfig{

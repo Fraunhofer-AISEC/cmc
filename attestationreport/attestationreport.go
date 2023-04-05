@@ -48,10 +48,10 @@ type Measurer interface {
 type Signing interface{}
 
 type Signer interface {
-	Lock()
-	Unlock()
+	Lock() error
+	Unlock() error
 	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error)
-	GetCertChain() []*x509.Certificate
+	GetCertChain() ([]*x509.Certificate, error)
 }
 
 // Serializer is a generic interface providing methods for data serialization and

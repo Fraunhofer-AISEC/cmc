@@ -83,31 +83,27 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 
 	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.MeasurementInterfaces, s.config.Serializer)
 	if err != nil {
-		log.Errorf("Failed to generate attestation report: %v", err)
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
-		}, nil
+		}, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
 	if s.config.Signer == nil {
-		log.Error("No valid signer specified in config. Cannot sign attestation report")
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
-		}, nil
+		}, errors.New("no valid signer specified in config. Cannot sign attestation report")
 	}
 
 	log.Info("Prover: Signing Attestation Report")
-	var status api.Status
 	data, err := ar.Sign(report, s.config.Signer, s.config.Serializer)
 	if err != nil {
-		log.Errorf("Prover: failed to sign Attestion Report: %v", err)
-		status = api.Status_FAIL
-	} else {
-		status = api.Status_OK
+		return &api.AttestationResponse{
+			Status: api.Status_FAIL,
+		}, fmt.Errorf("failed to sign attestion report: %w", err)
 	}
 
 	response := &api.AttestationResponse{
-		Status:            status,
+		Status:            api.Status_OK,
 		AttestationReport: data,
 	}
 
@@ -155,22 +151,22 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 	// get sign opts
 	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
 	if err != nil {
-		log.Errorf("Failed to choose requested hash function: %v", err)
-		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to find appropriate hash function")
+		return &api.TLSSignResponse{Status: api.Status_FAIL},
+			fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
 	// get key
 	tlsKeyPriv, _, err = s.config.Signer.GetSigningKeys()
 	if err != nil {
-		log.Errorf("Failed to get IK: %v", err)
-		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to get IK")
+		return &api.TLSSignResponse{Status: api.Status_FAIL},
+			fmt.Errorf("failed to get IK: %w", err)
 	}
 	// Sign
 	// Convert crypto.PrivateKey to crypto.Signer
 	log.Trace("TLSSign using opts: ", opts)
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetDigest(), opts)
 	if err != nil {
-		log.Errorf("Failed to sign: %v", err)
-		return &api.TLSSignResponse{Status: api.Status_FAIL}, errors.New("prover: failed to perform Signing operation")
+		return &api.TLSSignResponse{Status: api.Status_FAIL},
+			fmt.Errorf("failed to perform Signing operation: %w", err)
 	}
 	// Create response
 	sr = &api.TLSSignResponse{
@@ -187,7 +183,11 @@ func (s *GrpcServer) TLSCert(ctx context.Context, in *api.TLSCertRequest) (*api.
 	var resp *api.TLSCertResponse = &api.TLSCertResponse{}
 
 	// provide TLS certificate chain
-	certChain := s.config.Signer.GetCertChain()
+	certChain, err := s.config.Signer.GetCertChain()
+	if err != nil {
+		return &api.TLSCertResponse{Status: api.Status_FAIL},
+			fmt.Errorf("failed to get cert chain: %w", err)
+	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
 	resp.Status = api.Status_OK
 	log.Info("Prover: Obtained TLS Cert.")

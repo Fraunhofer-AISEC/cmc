@@ -71,16 +71,20 @@ type SwSigner struct {
 	priv      crypto.PrivateKey
 }
 
-func (s *SwSigner) Lock() {}
+func (s *SwSigner) Lock() error {
+	return nil
+}
 
-func (s *SwSigner) Unlock() {}
+func (s *SwSigner) Unlock() error {
+	return nil
+}
 
 func (s *SwSigner) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
 	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
-func (s *SwSigner) GetCertChain() []*x509.Certificate {
-	return s.certChain
+func (s *SwSigner) GetCertChain() ([]*x509.Certificate, error) {
+	return s.certChain, nil
 }
 
 func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {

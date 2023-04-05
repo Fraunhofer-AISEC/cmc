@@ -49,34 +49,37 @@ type Sw struct {
 	priv      crypto.PrivateKey
 }
 
-// NewSwDriver returns a new object for software-based measurements and signing
-func NewSwDriver(c Config) (*Sw, error) {
-	sw := &Sw{}
+// Init a new object for software-based signing
+func (s *Sw) Init(c Config) error {
+
+	if s == nil {
+		return errors.New("internal error: SW object is nil")
+	}
 
 	// Check if serializer is initialized
 	switch c.Serializer.(type) {
 	case ar.JsonSerializer:
 	case ar.CborSerializer:
 	default:
-		return nil, fmt.Errorf("serializer not initialized in driver config")
+		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
 	// Create storage folder for storage of internal data if not existing
 	if _, err := os.Stat(c.StoragePath); err != nil {
 		if err := os.MkdirAll(c.StoragePath, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create directory for internal data '%v': %w",
+			return fmt.Errorf("failed to create directory for internal data '%v': %w",
 				c.StoragePath, err)
 		}
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate private key: %w", err)
+		return fmt.Errorf("failed to generate private key: %w", err)
 	}
 
 	csr, err := createCsr(&c, priv)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create CSRs: %w", err)
+		return fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
 	// Get CA certificates and enroll newly created CSR
@@ -89,51 +92,59 @@ func NewSwDriver(c Config) (*Sw, error) {
 	log.Info("Retrieving CA certs")
 	caCerts, err := estclient.CaCerts(c.Url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
+		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 	log.Debug("Received certs:")
 	for _, c := range caCerts {
 		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 	if len(caCerts) == 0 {
-		return nil, fmt.Errorf("no certs provided")
+		return fmt.Errorf("no certs provided")
 	}
 
 	log.Warn("Setting retrieved cert for future authentication")
 	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
-		return nil, fmt.Errorf("failed to set EST CA: %w", err)
+		return fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
 	cert, err := estclient.SimpleEnroll(c.Url, csr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll cert: %w", err)
+		return fmt.Errorf("failed to enroll cert: %w", err)
 	}
 
-	sw.certChain = append([]*x509.Certificate{cert}, caCerts...)
-	sw.priv = priv
+	s.certChain = append([]*x509.Certificate{cert}, caCerts...)
+	s.priv = priv
 
-	return sw, nil
+	return nil
 }
 
 // Lock implements the locking method for the attestation report signer interface
-func (s *Sw) Lock() {
+func (s *Sw) Lock() error {
 	// No locking mechanism required for software key
+	return nil
 }
 
 // Lock implements the unlocking method for the attestation report signer interface
-func (s *Sw) Unlock() {
+func (s *Sw) Unlock() error {
 	// No unlocking mechanism required for software key
+	return nil
 }
 
 // GetSigningKeys returns the TLS private and public key as a generic
 // crypto interface
 func (s *Sw) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+	if s == nil {
+		return nil, nil, errors.New("internal error: SW object is nil")
+	}
 	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
-func (s *Sw) GetCertChain() []*x509.Certificate {
-	return s.certChain
+func (s *Sw) GetCertChain() ([]*x509.Certificate, error) {
+	if s == nil {
+		return nil, errors.New("internal error: SW object is nil")
+	}
+	return s.certChain, nil
 }
 
 func createCsr(c *Config, priv crypto.PrivateKey) (*x509.CertificateRequest, error) {

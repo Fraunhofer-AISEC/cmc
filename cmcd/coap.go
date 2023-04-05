@@ -259,7 +259,11 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	log.Tracef("Received COAP TLS cert request with ID %v", req.Id)
 
 	// Retrieve certificates
-	certChain := serverConfig.Signer.GetCertChain()
+	certChain, err := serverConfig.Signer.GetCertChain()
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
+		return
+	}
 
 	// Create response
 	resp := &api.TLSCertResponse{

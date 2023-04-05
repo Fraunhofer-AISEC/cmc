@@ -45,7 +45,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	if tpmM == nil {
 		for _, v := range referenceValues {
 			msg := fmt.Sprintf("TPM Measurement not present. Cannot verify TPM Reference Value %v (hash: %v)",
-				v.Name, v.Sha256)
+				v.Name, hex.EncodeToString(v.Sha256))
 			result.Extends.Summary.setFalseMulti(&msg)
 		}
 		result.Summary.Success = false
