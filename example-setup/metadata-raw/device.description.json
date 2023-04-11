@@ -1,6 +1,7 @@
 {
 	"type" : "Device Description",
-	"fqdn" : "test-device.test.de",
+	"name" : "test-device.test.de",
+	"version" : "2023-04-10T20:00:00Z",
 	"description" : "PoC Demonstrator Device Description",
 	"location" : "Munich, Germany",
 	"rtmManifest" : "de.test.rtm",

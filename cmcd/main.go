@@ -17,13 +17,11 @@ package main
 
 // Install github packages with "go get [url]"
 import (
-	"path"
 	"strings"
 
 	// local modules
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/est/client"
 )
 
 func main() {
@@ -32,25 +30,17 @@ func main() {
 
 	c, err := getConfig()
 	if err != nil {
-		log.Errorf("failed to load config: %v", err)
-		return
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	provConfig := &client.Config{
-		FetchMetadata: c.FetchMetadata,
-		StoreMetadata: true,
-		LocalPath:     c.LocalPath,
-		RemoteAddr:    c.MetadataAddr,
-	}
-	metadata, err := client.ProvisionMetadata(provConfig)
+	metadata, err := getMetadata(c.Metadata, c.configDir, c.Cache, c.serializer)
 	if err != nil {
-		log.Errorf("Failed to provision metadata: %v", err)
-		return
+		log.Fatalf("Failed to get metadata: %v", err)
 	}
 
 	// Create driver configuration
 	driverConf := &ar.DriverConfig{
-		StoragePath: path.Join(c.LocalPath, "internal"),
+		StoragePath: c.Storage,
 		ServerAddr:  c.ProvServerAddr,
 		KeyConfig:   c.KeyConfig,
 		Metadata:    metadata,
@@ -63,8 +53,7 @@ func main() {
 	for _, m := range c.drivers {
 		err = m.Init(driverConf)
 		if err != nil {
-			log.Errorf("Failed to initialize measurer: %v", err)
-			return
+			log.Fatalf("Failed to initialize measurer: %v", err)
 		}
 	}
 
@@ -78,9 +67,11 @@ func main() {
 
 	server, ok := servers[strings.ToLower(c.Api)]
 	if !ok {
-		log.Errorf("API '%v' is not implemented", c.Api)
-		return
+		log.Fatalf("API '%v' is not implemented", c.Api)
 	}
 
-	server.Serve(c.Addr, serverConfig)
+	err = server.Serve(c.Addr, serverConfig)
+	if err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
 }

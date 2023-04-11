@@ -17,7 +17,6 @@ package main
 
 // Install github packages with "go get [url]"
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -42,9 +41,7 @@ import (
 type config struct {
 	Addr           string   `json:"addr"`
 	ProvServerAddr string   `json:"provServerAddr"`
-	MetadataAddr   string   `json:"metadataAddr"`
-	LocalPath      string   `json:"localPath"`
-	FetchMetadata  bool     `json:"fetchMetadata"`
+	Metadata       []string `json:"metadata"`
 	Drivers        []string `json:"drivers"`                // TPM, SNP
 	UseIma         bool     `json:"useIma"`                 // TRUE, FALSE
 	ImaPcr         int32    `json:"imaPcr"`                 // 10-15
@@ -53,7 +50,9 @@ type config struct {
 	Api            string   `json:"api"`                    // gRPC, CoAP, Socket
 	Network        string   `json:"network,omitempty"`      // unix, socket
 	PolicyEngine   string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
-	LogLevel       string   `json:"logLevel"`
+	LogLevel       string   `json:"logLevel,omitempty"`
+	Storage        string   `json:"storage,omitempty"`
+	Cache          string   `json:"cache,omitempty"`
 
 	serializer         ar.Serializer
 	policyEngineSelect ar.PolicyEngineSelect
@@ -93,11 +92,9 @@ var (
 
 const (
 	configFlag        = "config"
-	metadataAddrFlag  = "metadata"
+	metadataFlag      = "metadata"
 	cmcAddrFlag       = "cmc"
 	provAddrFlag      = "prov"
-	localPathFlag     = "storage"
-	fetchMetadataFlag = "fetch"
 	driversFlag       = "drivers"
 	imaFlag           = "ima"
 	imaPcrFlag        = "pcr"
@@ -107,6 +104,8 @@ const (
 	networkFlag       = "network"
 	policyEngineFlag  = "policies"
 	logFlag           = "log"
+	storageFlag       = "storage"
+	cacheFlag         = "cache"
 )
 
 func getConfig() (*config, error) {
@@ -120,12 +119,10 @@ func getConfig() (*config, error) {
 
 	// Parse given command line flags
 	configFile := flag.String(configFlag, "", "configuration file")
-	metadataAddr := flag.String(metadataAddrFlag, "", "metadata server address")
+	metadata := flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
+		"with file:// for local locations or https:// for remote locations (can be mixed)")
 	cmcAddr := flag.String(cmcAddrFlag, "", "Address the CMC is serving under")
 	provAddr := flag.String(provAddrFlag, "", "Address of the provisioning server")
-	localPath := flag.String(localPathFlag, "", "Path for CMC internal storage")
-	fetchMetadata := flag.Bool(fetchMetadataFlag, false,
-		"Indicates whether to fetch metadata")
 	driversList := flag.String(driversFlag, "",
 		fmt.Sprintf("Drivers (comma separated list). Possible: %v",
 			strings.Join(maps.Keys(drivers), ",")))
@@ -141,6 +138,8 @@ func getConfig() (*config, error) {
 		fmt.Sprintf("Possible policy engines: %v", strings.Join(maps.Keys(policyEngines), ",")))
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
+	storage := flag.String(storageFlag, "", "Optional folder to store internal CMC data in")
+	cache := flag.String(cacheFlag, "", "Optional folder to cache metadata for offline backup")
 	flag.Parse()
 
 	// Create default configuration
@@ -166,20 +165,14 @@ func getConfig() (*config, error) {
 	}
 
 	// Overwrite config file configuration with given command line arguments
-	if internal.FlagPassed(metadataAddrFlag) {
-		c.MetadataAddr = *metadataAddr
+	if internal.FlagPassed(metadataFlag) {
+		c.Metadata = strings.Split(*metadata, ",")
 	}
 	if internal.FlagPassed(cmcAddrFlag) {
 		c.Addr = *cmcAddr
 	}
 	if internal.FlagPassed(provAddrFlag) {
 		c.ProvServerAddr = *provAddr
-	}
-	if internal.FlagPassed(localPathFlag) {
-		c.LocalPath = *localPath
-	}
-	if internal.FlagPassed(fetchMetadataFlag) {
-		c.FetchMetadata = *fetchMetadata
 	}
 	if internal.FlagPassed(driversFlag) {
 		c.Drivers = strings.Split(*driversList, ",")
@@ -208,6 +201,12 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(logFlag) {
 		c.LogLevel = *logLevel
 	}
+	if internal.FlagPassed(storageFlag) {
+		c.Storage = *storage
+	}
+	if internal.FlagPassed(cacheFlag) {
+		c.Cache = *cache
+	}
 
 	// Configure the logger
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
@@ -224,23 +223,15 @@ func getConfig() (*config, error) {
 	// Perform custom config actions
 	//
 
-	// Transform local file path
-	if c.LocalPath == "" {
-		return nil, errors.New("please provide a local storage path via config or cmdline")
-	}
-	p, err := internal.GetFilePath(c.LocalPath, &c.configDir)
+	// Retrieve local file paths relative to config directory or binary
+	c.Storage, err = transformLocalPath(c.Storage, c.configDir)
 	if err != nil {
-		log.Tracef("Local storage %v does not yet exist", c.LocalPath)
-		if !path.IsAbs(c.LocalPath) {
-			c.LocalPath, err = filepath.Abs(filepath.Join(c.configDir, c.LocalPath))
-			if err != nil {
-				return nil, fmt.Errorf("failed to construct path of internal storage: %v", err)
-			}
-		}
-	} else {
-		c.LocalPath = p
+		return nil, fmt.Errorf("failed to get storage path: %w", err)
 	}
-	log.Tracef("Will use %v as local storage dir", c.LocalPath)
+	c.Cache, err = transformLocalPath(c.Cache, c.configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cache path: %w", err)
+	}
 
 	// Get serializer
 	c.serializer, ok = serializers[strings.ToLower(c.Serialization)]
@@ -271,9 +262,7 @@ func printConfig(c *config) {
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tCMC Listen Address       : %v", c.Addr)
 	log.Debugf("\tProvisioning Server URL  : %v", c.ProvServerAddr)
-	log.Debugf("\tMetadata Server Address  : %v", c.MetadataAddr)
-	log.Debugf("\tLocal Storage Path       : %v", c.LocalPath)
-	log.Debugf("\tFetch Metadata           : %v", c.FetchMetadata)
+	log.Debugf("\tMetadata Locations       : %v", strings.Join(c.Metadata, ","))
 	log.Debugf("\tUse IMA                  : %v", c.UseIma)
 	log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
 	log.Debugf("\tSerialization            : %v", c.Serialization)
@@ -283,6 +272,12 @@ func printConfig(c *config) {
 	log.Debugf("\tKey Config               : %v", c.KeyConfig)
 	log.Debugf("\tLogging Level            : %v", c.LogLevel)
 	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))
+	if c.Storage != "" {
+		log.Debugf("\tInternal storage path    : %v", c.Storage)
+	}
+	if c.Cache != "" {
+		log.Debugf("\tMetadata cache path      : %v", c.Cache)
+	}
 }
 
 func getVersion() string {
@@ -305,4 +300,25 @@ func getVersion() string {
 		}
 	}
 	return version
+}
+
+func transformLocalPath(localPath, dir string) (string, error) {
+	if localPath == "" {
+		return localPath, nil
+	}
+	p, err := internal.GetFilePath(localPath, &dir)
+	if err != nil {
+		log.Tracef("Path %v does not yet exist", localPath)
+		if !path.IsAbs(localPath) {
+			localPath, err = filepath.Abs(filepath.Join(dir, localPath))
+			if err != nil {
+				return "", fmt.Errorf("failed to construct path: %v", err)
+			}
+		}
+	} else {
+		localPath = p
+	}
+	log.Tracef("Will use %v as local path", localPath)
+
+	return localPath, nil
 }

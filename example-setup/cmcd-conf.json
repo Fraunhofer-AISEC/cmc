@@ -1,9 +1,10 @@
 {
     "addr": "localhost:9955",
-    "metadataAddr": "https://localhost:9000/metadata-signed",
+    "metadata": [
+        "https://localhost:9000/metadata-signed",
+        "file:///var/metadata"
+    ],
     "provServerAddr": "https://localhost:9000/",
-    "localPath": "data-cmc/",
-    "fetchMetadata": true,
     "drivers": [ "TPM" ],
     "useIma": false,
     "imaPcr": 10,
@@ -12,5 +13,7 @@
     "api": "grpc",
     "network": "unix",
     "policyEngine": "js",
-    "logLevel": "trace"
+    "logLevel": "trace",
+    "storage": "cmc-internal/",
+    "cache": "cmc-cache/"
 }

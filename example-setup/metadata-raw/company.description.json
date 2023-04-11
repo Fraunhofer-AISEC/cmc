@@ -1,11 +1,11 @@
 {
     "type" : "Company Description",
-    "dn" : "company0.test.de",
+    "name" : "company0.test.de",
+    "version" : "2023-04-10T20:00:00Z",
     "certificationLevel" : 3,
     "description" : "Test Company 0",
-    "version" : "20210717200000",
 	"validity" : {
-		"notBefore": "20210717200000",
-		"notAfter": "20240717200000"
+		"notBefore": "2023-04-10T20:00:00Z",
+		"notAfter": "2026-04-10T20:00:00Z"
 	}
 }

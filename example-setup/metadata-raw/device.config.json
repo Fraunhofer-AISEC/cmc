@@ -1,5 +1,7 @@
 {
     "type": "Device Config",
+    "name": "de.test.example.config",
+    "version" : "2023-04-10T20:00:00Z",
     "akCsr": {
         "subject": {
             "commonName": "de.test.ak.device0",

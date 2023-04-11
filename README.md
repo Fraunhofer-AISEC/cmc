@@ -136,15 +136,9 @@ The remainder of this section explains the different options.
 - **addr**: The address the *cmcd* should listen on, e.g. 127.0.0.1:9955
 - **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
 TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
-- **metadataAddr**: The URL of the metadata server to retrieve the metadata from.
-- **localPath**: the local path to store the meta-data and internal files. In a local setup, all
-manifests and descriptions must be placed in this folder. If the provisioning server is used for
-the meta-data (*cmcd* command line argument *-fetch-metadata*), the *cmcd* will store those files
-in this folder. In this case, it is not required that the folder already exists, the *cmcd* will
-handle everything automatically
-- **fetchMetadata**: Boolean to specify whether the *cmcd* should load/update its metadata from
-the provisioning server. If set to false, the *cmcd* expects all files to be present in the
-*localPath*
+- **metadata**: A list of locations to fetch metadata from. This can be local files, e.g.,
+`file://manifest.json`, local folders, e.g., `file:///var/metadata/`, or remote HTTPS URLs,
+e.g., `https://localhost:9000/metadata`
 - **drivers**: Tells the *cmcd* prover which drivers to use, currently
 supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
 first provided driver is used for signing operations
@@ -159,6 +153,12 @@ RSA4096, EC256, EC384, EC521
 - **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
 `Unix Domain Sockets`
 - **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
+- **cache** : An optional folder the *cmcd* uses to cache retrieved metadata. If one or multiple
+locations specified via **metadata** cannot be fetched, the *cmcd** additionally uses this cache.
+File are stored by their sha256 hash as a filename and in case of duplicates, always the newest
+version of a metadata item is chosen
+- **storage**: An optional local storage path. If provided, the *cmcd* uses this path to store
+internal data such as downloaded certificates or created key handles
 
 ### EST Server Configuration
 

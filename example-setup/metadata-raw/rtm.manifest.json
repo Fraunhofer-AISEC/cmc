@@ -1,11 +1,12 @@
 {
     "type": "RTM Manifest",
     "name": "de.test.rtm",
+
     "developerCommonName": "Test Developer",
-    "version" : "20210717200000",
+    "version" : "2023-04-10T20:00:00Z",
 	"validity" : {
-		"notBefore": "20210717200000",
-		"notAfter": "20240717200000"
+		"notBefore": "2023-04-10T20:00:00Z",
+		"notAfter": "2026-04-10T20:00:00Z"
 	},
     "description": "PoC Demonstrator RTM Manifest",
     "certificationLevel" : 3,

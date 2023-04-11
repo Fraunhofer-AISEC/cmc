@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/hex"
 	"reflect"
+	"strings"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -44,22 +45,27 @@ func Test_convert(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log.Infof("INDATA: %v", string(tt.args.data))
 			got, err := convert(tt.args.data, tt.args.outform)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("convert() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			log.Infof("OUTDATA: %v", hex.EncodeToString(got))
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("convert() = %v, want %v", got, tt.want)
+				log.Errorf("INDATA: %v", string(tt.args.data))
+				if strings.EqualFold(tt.args.outform, "json") {
+					log.Errorf("OUTDATA: %v", string(got))
+				} else {
+					log.Errorf("OUTDATA: %v", hex.EncodeToString(got))
+				}
+
 			}
 		})
 	}
 }
 
 var (
-	jsonData = []byte(`{"type":"RTM Manifest","name":"test.data.input","developerCommonName":"","version":"","description":"","certificationLevel":0,"validity":{"notBefore":"","notAfter":""},"referenceValues":null}`)
+	jsonData = []byte(`{"type":"RTM Manifest","name":"test.data.input","version":"","developerCommonName":"","description":"","certificationLevel":0,"validity":{"notBefore":"","notAfter":""},"referenceValues":null}`)
 
 	cborData = []byte{
 		0xa8, 0x00, 0x6c, 0x52, 0x54, 0x4d, 0x20, 0x4d, 0x61, 0x6e, 0x69, 0x66,
