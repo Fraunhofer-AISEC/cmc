@@ -56,11 +56,6 @@ func GetFilePath(file string, base *string) (string, error) {
 		log.Tracef("Get path of '%v'", file)
 	}
 
-	// Check direct path
-	if FileExists(file) {
-		return filepath.Abs(file)
-	}
-
 	// Search for the absolute path
 	if path.IsAbs(file) && FileExists(file) {
 		log.Tracef("Got: %v (absolute path)", file)
@@ -133,4 +128,13 @@ func FlagPassed(name string) bool {
 		}
 	})
 	return found
+}
+
+func IsDir(p string) (bool, error) {
+	info, err := os.Stat(p)
+	if err != nil {
+		return false, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	return info.IsDir(), nil
 }

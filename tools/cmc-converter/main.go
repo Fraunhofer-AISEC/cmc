@@ -95,14 +95,14 @@ func convert(data []byte, outform string) ([]byte, error) {
 			outform)
 	}
 
-	t := new(ar.Type)
-	err := si.Unmarshal(data, t)
+	info := new(ar.BasicInfo)
+	err := si.Unmarshal(data, info)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
 	var raw []byte
-	switch t.Type {
+	switch info.Type {
 	case "App Manifest":
 		log.Debug("Found App Manifest")
 		var m ar.AppManifest
@@ -151,7 +151,7 @@ func convert(data []byte, outform string) ([]byte, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("type %T not supported", t)
+		return nil, fmt.Errorf("type %v not supported", info.Type)
 	}
 
 	return raw, nil

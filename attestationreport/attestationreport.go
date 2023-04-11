@@ -87,9 +87,12 @@ type PolicyValidator interface {
 	Validate(policies []byte, result VerificationResult) bool
 }
 
-// Type is a helper struct for just extracting the 'Type' of metadata
-type Type struct {
-	Type string `json:"type" cbor:"0,keyasint"`
+// Basic is a helper struct for just extracting generic info
+// present in every metadata object
+type BasicInfo struct {
+	Type    string `json:"type" cbor:"0,keyasint"`
+	Name    string `json:"name" cbor:"1,keyasint"`
+	Version string `json:"version" cbor:"2,keyasint"`
 }
 
 // Validity is a helper struct for 'Validity'
@@ -97,8 +100,6 @@ type Validity struct {
 	NotBefore string `json:"notBefore" cbor:"0,keyasint"`
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
-
-const timeLayout = "20060102150405"
 
 // HashChainElem represents the attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
@@ -188,10 +189,11 @@ type ReferenceValue struct {
 // AppDescription represents the attestation report
 // element of type 'App Description'
 type AppDescription struct {
-	Type        string              `json:"type" cbor:"0,keyasint,omitempty"`
-	Name        string              `json:"name" cbor:"1,keyasint,omitempty"`
-	AppManifest string              `json:"appManifest" cbor:"2,keyasint,omitempty"` // Links to App Manifest.Name
-	External    []ExternalInterface `json:"externalConnections" cbor:"3,keyasint"`
+	Type        string              `json:"type" cbor:"0,keyasint"`
+	Name        string              `json:"name" cbor:"1,keyasint"`
+	Version     string              `json:"version" cbor:"2,keyasint"`
+	AppManifest string              `json:"appManifest" cbor:"3,keyasint,omitempty"` // Links to App Manifest.Name
+	External    []ExternalInterface `json:"externalConnections" cbor:"4,keyasint"`
 }
 
 // InternalConnection represents the attestation report
@@ -218,8 +220,8 @@ type ExternalInterface struct {
 type AppManifest struct {
 	Type               string           `json:"type" cbor:"0,keyasint"`
 	Name               string           `json:"name" cbor:"1,keyasint"`
-	DevCommonName      string           `json:"developerCommonName"  cbor:"2,keyasint"`
-	Version            string           `json:"version" cbor:"3,keyasint"`
+	Version            string           `json:"version" cbor:"2,keyasint"`
+	DevCommonName      string           `json:"developerCommonName"  cbor:"3,keyasint"`
 	Oss                []string         `json:"oss" cbor:"4,keyasint"` // Links to OsManifest.Name
 	Description        string           `json:"description" cbor:"5,keyasint"`
 	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
@@ -232,8 +234,8 @@ type AppManifest struct {
 type OsManifest struct {
 	Type               string           `json:"type" cbor:"0,keyasint"`
 	Name               string           `json:"name" cbor:"1,keyasint"`
-	DevCommonName      string           `json:"developerCommonName" cbor:"2,keyasint"`
-	Version            string           `json:"version" cbor:"3,keyasint"`
+	Version            string           `json:"version" cbor:"2,keyasint"`
+	DevCommonName      string           `json:"developerCommonName" cbor:"3,keyasint"`
 	Rtms               []string         `json:"rtms" cbor:"4,keyasint"` // Links to Type RtmManifest.Name
 	Description        string           `json:"description" cbor:"5,keyasint"`
 	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
@@ -246,8 +248,8 @@ type OsManifest struct {
 type RtmManifest struct {
 	Type               string           `json:"type" cbor:"0,keyasint"`
 	Name               string           `json:"name" cbor:"1,keyasint"`
-	DevCommonName      string           `json:"developerCommonName" cbor:"2,keyasint"`
-	Version            string           `json:"version" cbor:"3,keyasint"`
+	Version            string           `json:"version" cbor:"2,keyasint"`
+	DevCommonName      string           `json:"developerCommonName" cbor:"3,keyasint"`
 	Description        string           `json:"description" cbor:"4,keyasint"`
 	CertificationLevel int              `json:"certificationLevel" cbor:"5,keyasint"`
 	Validity           Validity         `json:"validity" cbor:"6,keyasint"`
@@ -258,31 +260,35 @@ type RtmManifest struct {
 // element of type 'Device Description'
 type DeviceDescription struct {
 	Type            string               `json:"type" cbor:"0,keyasint"`
-	Fqdn            string               `json:"fqdn" cbor:"1,keyasint"`
-	Description     string               `json:"description" cbor:"2,keyasint"`
-	Location        string               `json:"location" cbor:"3,keyasint"`
-	RtmManifest     string               `json:"rtmManifest" cbor:"4,keyasint"`
-	OsManifest      string               `json:"osManifest" cbor:"5,keyasint"`
-	AppDescriptions []AppDescription     `json:"appDescriptions" cbor:"6,keyasint"`
-	Internal        []InternalConnection `json:"internalConnections" cbor:"7,keyasint"`
-	External        []ExternalInterface  `json:"externalEndpoints" cbor:"8,keyasint"`
+	Name            string               `json:"name" cbor:"1,keyasint"` // FQDN
+	Version         string               `json:"version" cbor:"2,keyasint"`
+	Description     string               `json:"description" cbor:"3,keyasint"`
+	Location        string               `json:"location" cbor:"4,keyasint"`
+	RtmManifest     string               `json:"rtmManifest" cbor:"5,keyasint"`
+	OsManifest      string               `json:"osManifest" cbor:"6,keyasint"`
+	AppDescriptions []AppDescription     `json:"appDescriptions" cbor:"7,keyasint"`
+	Internal        []InternalConnection `json:"internalConnections" cbor:"8,keyasint"`
+	External        []ExternalInterface  `json:"externalEndpoints" cbor:"9,keyasint"`
 }
 
 // CompanyDescription represents the attestation report
 // element of type 'Company Description'
 type CompanyDescription struct {
 	Type               string   `json:"type" cbor:"0,keyasint"`
-	DN                 string   `json:"dn" cbor:"1,keyasint"`
-	CertificationLevel int      `json:"certificationLevel" cbor:"2,keyasint"`
-	Description        string   `json:"description" cbor:"3,keyasint"`
-	Validity           Validity `json:"validity" cbor:"4,keyasint"`
+	Name               string   `json:"name" cbor:"1,keyasint"` // Domain Name
+	Version            string   `json:"version" cbor:"2,keyasing"`
+	CertificationLevel int      `json:"certificationLevel" cbor:"3,keyasint"`
+	Description        string   `json:"description" cbor:"4,keyasint"`
+	Validity           Validity `json:"validity" cbor:"5,keyasint"`
 }
 
 // DeviceConfig contains the local device configuration parameters
 type DeviceConfig struct {
-	Type  string    `json:"type" cbor:"0,keyasint"`
-	AkCsr CsrParams `json:"akCsr" cbor:"1,keyasint"`
-	IkCsr CsrParams `json:"ikCsr" cbor:"2,keyasint"`
+	Type    string    `json:"type" cbor:"0,keyasint"`
+	Name    string    `json:"name" cbor:"1,keyasint"`
+	Version string    `json:"version" cbor:"2,keyasing"`
+	AkCsr   CsrParams `json:"akCsr" cbor:"3,keyasint"`
+	IkCsr   CsrParams `json:"ikCsr" cbor:"4,keyasint"`
 }
 
 // CsrParams contains certificate signing request parameters
@@ -368,14 +374,14 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 
 		// Unmarshal the Type field of the JSON file to determine the type for
 		// later processing
-		t := new(Type)
-		err = s.Unmarshal(data, t)
+		elem := new(BasicInfo)
+		err = s.Unmarshal(data, elem)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)
 			continue
 		}
 
-		switch t.Type {
+		switch elem.Type {
 		case "App Manifest":
 			log.Debug("Adding App Manifest")
 			ar.AppManifests = append(ar.AppManifests, metadata[i])
@@ -759,7 +765,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 				result.CompDescResult.Summary.setFalseMulti(&msg)
 				result.Success = false
 			} else {
-				result.CompDescResult.Name = ar.CompanyDescription.DN
+				result.CompDescResult.Name = ar.CompanyDescription.Name
 				result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
 
 				result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
@@ -794,13 +800,13 @@ func checkValidity(val Validity) Result {
 	result := Result{}
 	result.Success = true
 
-	notBefore, err := time.Parse(timeLayout, val.NotBefore)
+	notBefore, err := time.Parse(time.RFC3339, val.NotBefore)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse NotBefore time. Time.Parse returned %v", err)
 		result.setFalse(&msg)
 		return result
 	}
-	notAfter, err := time.Parse(timeLayout, val.NotAfter)
+	notAfter, err := time.Parse(time.RFC3339, val.NotAfter)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse NotAfter time. Time.Parse returned %v", err)
 		result.setFalse(&msg)

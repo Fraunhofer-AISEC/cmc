@@ -761,19 +761,19 @@ func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 		}
 
 		// Unmarshal the Type field of the metadata to determine the type
-		t := new(ar.Type)
-		err = c.Serializer.Unmarshal(payload, t)
+		info := new(ar.BasicInfo)
+		err = c.Serializer.Unmarshal(payload, info)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue
 		}
 
-		if t.Type == "RTM Manifest" {
+		if info.Type == "RTM Manifest" {
 			err = c.Serializer.Unmarshal(payload, &rtmMan)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal data from RTM Manifest: %v", err)
 			}
-		} else if t.Type == "OS Manifest" {
+		} else if info.Type == "OS Manifest" {
 			err = c.Serializer.Unmarshal(payload, &osMan)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal data from OS Manifest: %v", err)
@@ -826,14 +826,14 @@ func createCsrs(c *ar.DriverConfig, ak *attest.AK, ik *attest.Key,
 		}
 
 		// Unmarshal the Type field of the metadata file to determine the type
-		t := new(ar.Type)
-		err = c.Serializer.Unmarshal(payload, t)
+		info := new(ar.BasicInfo)
+		err = c.Serializer.Unmarshal(payload, info)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue
 		}
 
-		if t.Type == "Device Config" {
+		if info.Type == "Device Config" {
 			log.Tracef("Found Device Config")
 			var deviceConfig ar.DeviceConfig
 			err = c.Serializer.Unmarshal(payload, &deviceConfig)

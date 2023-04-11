@@ -1,11 +1,11 @@
 {
 	"type" : "App Manifest",
 	"name" : "de.test.app",
+	"version" : "2023-04-10T20:00:00Z",
 	"developerCommonName" : "Test Developer",
-	"version" : "20210717200000",
 	"validity" : {
-		"notBefore": "20210717200000",
-		"notAfter": "20240717200000"
+		"notBefore": "2023-04-10T20:00:00Z",
+		"notAfter": "2026-04-10T20:00:00Z"
 	},
 	"oss" : [ "de.test.os"
 	],

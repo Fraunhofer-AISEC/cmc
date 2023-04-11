@@ -37,14 +37,14 @@ func CreateCsr(priv crypto.PrivateKey, s Serializer, metadata [][]byte) (*x509.C
 		}
 
 		// Unmarshal the Type field of the metadata file to determine the type
-		t := new(Type)
-		err = s.Unmarshal(payload, t)
+		info := new(BasicInfo)
+		err = s.Unmarshal(payload, info)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue
 		}
 
-		if t.Type == "Device Config" {
+		if info.Type == "Device Config" {
 			var deviceConfig DeviceConfig
 			err = s.Unmarshal(payload, &deviceConfig)
 			if err != nil {
