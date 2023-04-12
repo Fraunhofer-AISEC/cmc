@@ -151,14 +151,14 @@ func (snp *Snp) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
 	if snp == nil {
 		return nil, nil, errors.New("internal error: SW object is nil")
 	}
-	return nil, nil, errors.New("GetSigningKeys not implemented for SNP driver")
+	return snp.priv, &snp.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
 func (snp *Snp) GetCertChain() ([]*x509.Certificate, error) {
 	if snp == nil {
 		return nil, errors.New("internal error: SW object is nil")
 	}
-	return nil, errors.New("GetCertChain not implemented for SNP driver")
+	return snp.signingCertChain, nil
 }
 
 func getSnpMeasurement(nonce []byte) ([]byte, error) {
