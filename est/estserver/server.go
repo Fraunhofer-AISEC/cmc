@@ -90,9 +90,8 @@ func NewServer(c *config) (*Server, error) {
 			dbPath:       c.TpmEkCertDb,
 		},
 		snpConf: snpConfig{
-			vcekOfflineCaching: c.VcekOfflineCaching,
-			vcekCacheFolder:    c.VcekCacheFolder,
-			vceks:              make(map[vcekInfo][]byte),
+			vcekCacheFolder: c.VcekCacheFolder,
+			vceks:           make(map[vcekInfo][]byte),
 		},
 	}
 
