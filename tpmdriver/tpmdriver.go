@@ -298,6 +298,14 @@ func IsTpmProvisioningRequired(storagePath string) (bool, error) {
 		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
 		return true, nil
 	}
+	if _, err := os.Stat(path.Join(storagePath, akFile)); err != nil {
+		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		return true, nil
+	}
+	if _, err := os.Stat(path.Join(storagePath, ikFile)); err != nil {
+		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		return true, nil
+	}
 
 	rwc, err := tpm2.OpenTPM("/dev/tpm0")
 	if err != nil {
