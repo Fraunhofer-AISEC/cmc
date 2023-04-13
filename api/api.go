@@ -197,12 +197,10 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 	if n != 8 {
 		return nil, 0, fmt.Errorf("read %v bytes (expected 8)", n)
 	}
-	log.Tracef("Read header with %v bytes", n)
 
 	// Decode header to get length and type
 	len := binary.BigEndian.Uint32(buf[0:4])
 	msgType := binary.BigEndian.Uint32(buf[4:8])
-	log.Tracef("Payload length: %v bytes, type: %v", len, msgType)
 
 	// Read payload
 	payload := make([]byte, len)
@@ -214,15 +212,14 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 		return nil, 0, fmt.Errorf("failed to read payload (received %v, expected %v bytes)",
 			n, len)
 	}
-	log.Tracef("Received payload with %v bytes", n)
 
 	if msgType == TypeError {
 		resp := new(SocketError)
 		err = cbor.Unmarshal(payload, resp)
 		if err != nil {
-			return nil, 0, fmt.Errorf("server responded with error: %v", resp.Msg)
-		} else {
 			return nil, 0, fmt.Errorf("failed to unmarshal error response")
+		} else {
+			return nil, 0, fmt.Errorf("server responded with error: %v", resp.Msg)
 		}
 	}
 
@@ -242,7 +239,6 @@ func Send(conn net.Conn, payload []byte, t uint32) error {
 	if err != nil {
 		return fmt.Errorf("failed to send header: %w", err)
 	}
-	log.Tracef("Sent header with %v bytes", n)
 	if n != len(buf) {
 		return fmt.Errorf("could only send %v of %v bytes", n, len(buf))
 	}
