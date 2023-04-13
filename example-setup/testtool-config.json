@@ -5,7 +5,7 @@
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
-    "ca": "pki/ca.pem",
+    "ca": "../../cmc-data/pki/ca.pem",
     "policies": "",
     "mtls": true,
     "api": "grpc",

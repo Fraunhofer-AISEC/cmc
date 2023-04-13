@@ -35,7 +35,6 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type CoapApi struct{}
@@ -112,12 +111,12 @@ func (a CoapApi) generate(c *config) {
 func (a CoapApi) verify(c *config) {
 
 	// Read the attestation report, CA and the nonce previously stored
-	data, err := internal.GetFile(c.ReportFile, c.configDir)
+	data, err := os.ReadFile(c.ReportFile)
 	if err != nil {
 		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
 	}
 
-	nonce, err := internal.GetFile(c.NonceFile, c.configDir)
+	nonce, err := os.ReadFile(c.NonceFile)
 	if err != nil {
 		log.Fatalf("Failed to read nonce: %v", err)
 	}

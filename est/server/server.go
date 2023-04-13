@@ -34,7 +34,6 @@ import (
 	"time"
 
 	est "github.com/Fraunhofer-AISEC/cmc/est/common"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
 	"go.mozilla.org/pkcs7"
@@ -109,7 +108,7 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc(tpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
 	http.HandleFunc(snpEnrollEndpoint, server.handleSnpEnroll)
 
-	err := httpHandleMetadata(c.HttpFolder, c.configDir)
+	err := httpHandleMetadata(c.HttpFolder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serve metadata: %w", err)
 	}
@@ -428,15 +427,10 @@ func (s *Server) handleSnpEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func httpHandleMetadata(httpFolder string, configPath *string) error {
+func httpHandleMetadata(folder string) error {
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
 	log.Debug("Serving Directories: ")
-
-	folder, err := internal.GetFilePath(httpFolder, configPath)
-	if err != nil {
-		return fmt.Errorf("failed to get metadata folder path %v: %w", httpFolder, err)
-	}
 
 	dirs, err := os.ReadDir(folder)
 	if err != nil {

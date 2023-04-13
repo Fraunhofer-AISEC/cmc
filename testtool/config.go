@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"path/filepath"
+	"os"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -71,10 +71,9 @@ type config struct {
 	Network      string `json:"network"`
 	LogLevel     string `json:"logLevel"`
 
-	ca        []byte
-	policies  []byte
-	api       Api
-	configDir *string
+	ca       []byte
+	policies []byte
+	api      Api
 }
 
 const (
@@ -128,7 +127,7 @@ func getConfig() *config {
 	// Obtain custom configuration from file if specified
 	if internal.FlagPassed(configFlag) {
 		log.Infof("Loading config from file %v", *configFile)
-		data, err := internal.GetFile(*configFile, nil)
+		data, err := os.ReadFile(*configFile)
 		if err != nil {
 			log.Fatalf("failed to read cmcd config file %v: %v", *configFile, err)
 		}
@@ -136,8 +135,6 @@ func getConfig() *config {
 		if err != nil {
 			log.Fatalf("failed to parse cmcd config: %v", err)
 		}
-		dir := filepath.Dir(*configFile)
-		c.configDir = &dir
 	}
 
 	// Overwrite config file configuration with given command line arguments
@@ -191,7 +188,7 @@ func getConfig() *config {
 
 	// Get root CA certificate in PEM format if specified
 	if c.CaFile != "" && c.Mode != "cacerts" {
-		c.ca, err = internal.GetFile(c.CaFile, c.configDir)
+		c.ca, err = os.ReadFile(c.CaFile)
 		if err != nil {
 			log.Fatalf("Failed to read file %v: %v", *caFile, err)
 		}
@@ -200,7 +197,7 @@ func getConfig() *config {
 	// Add optional policies if specified
 	if c.PoliciesFile != "" {
 		log.Debug("Adding specified policies")
-		c.policies, err = internal.GetFile(c.PoliciesFile, c.configDir)
+		c.policies, err = os.ReadFile(c.PoliciesFile)
 		if err != nil {
 			log.Fatalf("Failed to read policies file: %v", err)
 		}

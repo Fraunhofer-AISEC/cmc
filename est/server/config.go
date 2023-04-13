@@ -23,7 +23,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"path/filepath"
+	"os"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -56,7 +56,6 @@ type config struct {
 	VcekCacheFolder    string   `json:"vcekCacheFolder,omitempty"`
 	LogLevel           string   `json:"logLevel"`
 
-	configDir    *string
 	signingKey   *ecdsa.PrivateKey
 	signingCerts []*x509.Certificate
 	estKey       *ecdsa.PrivateKey
@@ -109,7 +108,7 @@ func getConfig() (*config, error) {
 
 	// Obtain custom configuration from file if specified
 	if internal.FlagPassed(configFlag) {
-		data, err := internal.GetFile(*configFile, nil)
+		data, err := os.ReadFile(*configFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read config file '%v': %w", *configFile, err)
 		}
@@ -117,8 +116,6 @@ func getConfig() (*config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 		}
-		dir := filepath.Dir(*configFile)
-		c.configDir = &dir
 	}
 
 	// Overwrite config file configuration with given commandline arguments
@@ -168,22 +165,22 @@ func getConfig() (*config, error) {
 	printConfig(c)
 
 	// Load specified files
-	c.signingKey, err = loadPrivateKey(c.SigningKey, c.configDir)
+	c.signingKey, err = loadPrivateKey(c.SigningKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.signingCerts, err = loadCertChain(c.SigningCerts, c.configDir)
+	c.signingCerts, err = loadCertChain(c.SigningCerts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
 
-	c.estKey, err = loadPrivateKey(c.EstKey, c.configDir)
+	c.estKey, err = loadPrivateKey(c.EstKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.estCerts, err = loadCertChain(c.EstCerts, c.configDir)
+	c.estCerts, err = loadCertChain(c.EstCerts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
@@ -216,7 +213,7 @@ func printConfig(c *config) {
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 }
 
-func loadCertChain(certChainFiles []string, base *string) ([]*x509.Certificate, error) {
+func loadCertChain(certChainFiles []string) ([]*x509.Certificate, error) {
 
 	certChain := make([]*x509.Certificate, 0)
 
@@ -226,7 +223,7 @@ func loadCertChain(certChainFiles []string, base *string) ([]*x509.Certificate, 
 
 	// Load certificate chain
 	for _, f := range certChainFiles {
-		pem, err := internal.GetFile(f, base)
+		pem, err := os.ReadFile(f)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get file: %w", err)
 		}
@@ -240,10 +237,10 @@ func loadCertChain(certChainFiles []string, base *string) ([]*x509.Certificate, 
 	return certChain, nil
 }
 
-func loadPrivateKey(caPrivFile string, base *string) (*ecdsa.PrivateKey, error) {
+func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
 
 	// Read private pem-encoded key and convert it to a private key
-	privBytes, err := internal.GetFile(caPrivFile, base)
+	privBytes, err := os.ReadFile(caPrivFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file: %w", err)
 	}

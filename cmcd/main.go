@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	metadata, err := getMetadata(c.Metadata, c.configDir, c.Cache, c.serializer)
+	metadata, err := getMetadata(c.Metadata, c.Cache, c.serializer)
 	if err != nil {
 		log.Fatalf("Failed to get metadata: %v", err)
 	}
