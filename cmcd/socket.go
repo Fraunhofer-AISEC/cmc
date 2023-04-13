@@ -53,6 +53,7 @@ func (s SocketServer) Serve(addr string, conf *ServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen on unix domain soket: %w", err)
 	}
+	defer socket.Close()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
