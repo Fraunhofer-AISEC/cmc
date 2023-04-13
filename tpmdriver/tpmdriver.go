@@ -39,7 +39,7 @@ import (
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -475,10 +475,10 @@ func provisionTpm(
 	// otherwise this step has to happen in a secure environment. Allow
 	// different CAs for metadata and the EST server authentication
 	log.Warn("Creating new EST client without server authentication")
-	estclient := client.NewClient(nil)
+	client := est.NewClient(nil)
 
 	log.Info("Retrieving CA certs")
-	caCerts, err := estclient.CaCerts(provServerURL)
+	caCerts, err := client.CaCerts(provServerURL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certificates: %w", err)
 	}
@@ -488,7 +488,7 @@ func provisionTpm(
 	}
 
 	log.Warn("Setting retrieved certificate for future authentication")
-	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
+	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
@@ -510,7 +510,7 @@ func provisionTpm(
 	}
 
 	log.Info("Performing TPM AK Enroll")
-	encCredential, encSecret, pkcs7Cert, err := estclient.TpmActivateEnroll(
+	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
 		provServerURL, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
@@ -547,7 +547,7 @@ func provisionTpm(
 	log.Info("Performing TPM IK Enroll")
 	ikParams := ik.CertificationParameters()
 
-	ikCert, err := estclient.TpmCertifyEnroll(
+	ikCert, err := client.TpmCertifyEnroll(
 		provServerURL,
 		ikCsr,
 		ikParams.Public, ikParams.CreateData, ikParams.CreateAttestation, ikParams.CreateSignature,
