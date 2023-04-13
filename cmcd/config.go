@@ -285,7 +285,7 @@ func printConfig(c *config) {
 	if err != nil {
 		log.Warnf("Failed to get working directory: %v", err)
 	}
-	log.Infof("Running estserver from working directory %v", wd)
+	log.Infof("Running cmcd from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tCMC Listen Address       : %v", c.Addr)
