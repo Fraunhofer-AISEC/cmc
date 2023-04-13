@@ -42,10 +42,9 @@ type vcekInfo struct {
 }
 
 type snpConfig struct {
-	vcekMutex          sync.Mutex
-	vcekOfflineCaching bool
-	vcekCacheFolder    string
-	vceks              map[vcekInfo][]byte
+	vcekMutex       sync.Mutex
+	vcekCacheFolder string
+	vceks           map[vcekInfo][]byte
 }
 
 func (s *Server) lockVcekMutex() {
@@ -118,7 +117,7 @@ func (s *Server) getVcek(chipId []byte, tcb uint64) (*x509.Certificate, error) {
 
 // tryGetCachedVcek returns cached VCEKs in DER format if available
 func (s *Server) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool) {
-	if s.snpConf.vcekOfflineCaching {
+	if s.snpConf.vcekCacheFolder != "" {
 		filePath := path.Join(s.snpConf.vcekCacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
 		f, err := os.ReadFile(filePath)
@@ -144,7 +143,7 @@ func (s *Server) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool) {
 
 // cacheVcek caches VCEKs in DER format
 func (s *Server) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
-	if s.snpConf.vcekOfflineCaching {
+	if s.snpConf.vcekCacheFolder != "" {
 		filePath := path.Join(s.snpConf.vcekCacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
 		err := os.WriteFile(filePath, vcek, 0644)
