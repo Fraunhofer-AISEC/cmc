@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -183,6 +184,9 @@ func getConfig() *config {
 	}
 	logrus.SetLevel(l)
 
+	// Convert all paths to absolute paths
+	pathsToAbs(c)
+
 	// Print the parsed configuration
 	printConfig(c)
 
@@ -213,7 +217,44 @@ func getConfig() *config {
 	return c
 }
 
+func pathsToAbs(c *config) {
+	var err error
+	if strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
+		c.CmcAddr, err = filepath.Abs(c.CmcAddr)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.CmcAddr, err)
+		}
+	}
+
+	c.ReportFile, err = filepath.Abs(c.ReportFile)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.ReportFile, err)
+	}
+
+	c.ResultFile, err = filepath.Abs(c.ResultFile)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.ResultFile, err)
+	}
+
+	c.NonceFile, err = filepath.Abs(c.NonceFile)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.NonceFile, err)
+	}
+
+	c.CaFile, err = filepath.Abs(c.CaFile)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
+	}
+}
+
 func printConfig(c *config) {
+
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Warnf("Failed to get working directory: %v", err)
+	}
+	log.Infof("Running estserver from working directory %v", wd)
+
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tMode         : %v", c.Mode)
 	log.Debugf("\tAddr         : %v", c.Addr)
