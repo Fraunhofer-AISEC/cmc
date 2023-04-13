@@ -92,7 +92,7 @@ the same root folder the `cmc` repository resides in as the `<metadata-folder>`.
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-server -config $CMC_ROOT/cmc-data/est-server-conf.json
+estserver -config $CMC_ROOT/cmc-data/est-server-conf.json
 
 # Build and run the cmcd
 cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json
@@ -256,9 +256,9 @@ All binaries can be built with the *go*-compiler. For an explanation of the vari
 ### Build and Run the Provisioning Server
 
 ```sh
-cd provserver
+cd est/estserver
 go build
-./provserver -help # For all commandline flags
+./estserver -help # For all commandline flags
 ```
 
 ### Build and Run the CMC Daemon

@@ -39,7 +39,7 @@ import (
 	"unsafe"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
@@ -260,9 +260,9 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 	// TODO mandate server authentication in the future, otherwise
 	// this step has to happen in a secure environment
 	log.Warn("Creating new EST client without server authentication")
-	estclient := client.NewClient(nil)
+	client := est.NewClient(nil)
 
-	vcek, err := estclient.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
+	vcek, err := client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 	}
@@ -284,10 +284,10 @@ func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]b
 	// otherwise this step has to happen in a secure environment. Allow
 	// different CAs for metadata and the EST server authentication
 	log.Warn("Creating new EST client without server authentication")
-	estclient := client.NewClient(nil)
+	client := est.NewClient(nil)
 
 	log.Info("Retrieving CA certs")
-	caCerts, err := estclient.CaCerts(addr)
+	caCerts, err := client.CaCerts(addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -300,12 +300,12 @@ func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]b
 	}
 
 	log.Warn("Setting retrieved cert for future authentication")
-	err = estclient.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
+	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
 		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
-	cert, err := estclient.SimpleEnroll(addr, csr)
+	cert, err := client.SimpleEnroll(addr, csr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll cert: %w", err)
 	}

@@ -28,7 +28,7 @@ import (
 	// local modules
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 )
 
 func getMetadata(paths []string, cache string, s ar.Serializer) ([][]byte, error) {
@@ -50,7 +50,7 @@ func getMetadata(paths []string, cache string, s ar.Serializer) ([][]byte, error
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := client.FetchMetadata(p)
+			data, err := est.FetchMetadata(p)
 			if err != nil {
 				log.Warnf("failed to fetch %v: %v", p, err)
 				fails++

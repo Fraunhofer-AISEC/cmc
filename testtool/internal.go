@@ -29,7 +29,7 @@ import (
 
 	// local modules
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/est/client"
+	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -189,8 +189,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 
 func getCaCertsInternal(c *config) {
 	log.Info("Retrieving CA certs")
-	estclient := client.NewClient(nil)
-	certs, err := estclient.CaCerts(c.Addr)
+	client := est.NewClient(nil)
+	certs, err := client.CaCerts(c.Addr)
 	if err != nil {
 		log.Fatalf("Failed to retrieve certificates: %v", err)
 	}
