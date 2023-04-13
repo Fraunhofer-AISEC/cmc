@@ -2,7 +2,6 @@
     "addr": "localhost:9955",
     "metadata": [
         "https://localhost:9000/metadata-signed",
-        "file:///var/metadata"
     ],
     "provServerAddr": "https://localhost:9000/",
     "drivers": [ "TPM" ],
@@ -14,6 +13,6 @@
     "network": "unix",
     "policyEngine": "js",
     "logLevel": "trace",
-    "storage": "cmc-internal/",
-    "cache": "cmc-cache/"
+    "storage": "../../cmc-data/cmc-internal/",
+    "cache": "../../cmc-data/cmc-cache/"
 }

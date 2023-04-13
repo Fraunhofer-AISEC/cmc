@@ -29,10 +29,9 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/est/client"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-func getMetadata(paths []string, base, cache string, s ar.Serializer) ([][]byte, error) {
+func getMetadata(paths []string, cache string, s ar.Serializer) ([][]byte, error) {
 
 	metadata := make([][]byte, 0)
 	fails := 0
@@ -43,7 +42,7 @@ func getMetadata(paths []string, base, cache string, s ar.Serializer) ([][]byte,
 		log.Tracef("Retrieving metadata from %v", p)
 		if strings.HasPrefix(p, "file://") {
 			f := strings.TrimPrefix(p, "file://")
-			data, err := loadMetadata(f, &base)
+			data, err := loadMetadata(f)
 			if err != nil {
 				log.Warnf("failed to read %v: %v", f, err)
 				fails++
@@ -67,7 +66,7 @@ func getMetadata(paths []string, base, cache string, s ar.Serializer) ([][]byte,
 	if fails > 0 {
 		if cache != "" {
 			log.Tracef("Additionally loading cached metadata from %v", cache)
-			data, err := loadMetadata(cache, nil)
+			data, err := loadMetadata(cache)
 			if err != nil {
 				log.Warnf("failed to read cache %v: %v", cache, err)
 			} else {
@@ -98,23 +97,19 @@ func getMetadata(paths []string, base, cache string, s ar.Serializer) ([][]byte,
 }
 
 // loadMetadata loads the metadata (manifests and descriptions) from the file system
-func loadMetadata(dir string, base *string) ([][]byte, error) {
+func loadMetadata(dir string) ([][]byte, error) {
 
 	metadata := make([][]byte, 0)
 
 	// Check if file or directory
-	dir, err := internal.GetFilePath(dir, base)
+	info, err := os.Stat(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get path: %w", err)
-	}
-	isDir, err := internal.IsDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get path info: %w", err)
+		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
 	// If it is a file, read it directly
-	if !isDir {
-		data, err := internal.GetFile(dir, base)
+	if !info.IsDir() {
+		data, err := os.ReadFile(dir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get file: %w", err)
 		}

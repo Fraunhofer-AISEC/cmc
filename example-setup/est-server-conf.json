@@ -1,15 +1,15 @@
 {
     "port": 9000,
-    "signingKey": "pki/ca-key.pem",
+    "signingKey": "../../../cmc-data/pki/ca-key.pem",
     "signingCerts": [
-        "pki/ca.pem"
+        "../../../cmc-data/pki/ca.pem"
     ],
     "httpFolder": "./",
     "verifyEkCert": false,
-    "tpmEkCertDb": "tpm-ek-certs.db",
-    "estKey": "pki/est-key.pem",
+    "tpmEkCertDb": "../../../cmc-data/tpm-ek-certs.db",
+    "estKey": "../../../cmc-data/pki/est-key.pem",
     "estCerts": [
-        "pki/est.pem"
+        "../../../cmc-data/pki/est.pem"
     ],
     "logLevel": "trace"
 }

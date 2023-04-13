@@ -19,8 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 
@@ -57,7 +55,6 @@ type config struct {
 	serializer         ar.Serializer
 	policyEngineSelect ar.PolicyEngineSelect
 	drivers            []ar.Driver
-	configDir          string
 }
 
 var (
@@ -109,8 +106,6 @@ const (
 )
 
 func getConfig() (*config, error) {
-	var err error
-	var ok bool
 
 	//
 	// Parse configuration from commandline flags and configuration file if
@@ -161,7 +156,6 @@ func getConfig() (*config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
 		}
-		c.configDir = filepath.Dir(*configFile)
 	}
 
 	// Overwrite config file configuration with given command line arguments
@@ -222,16 +216,6 @@ func getConfig() (*config, error) {
 	//
 	// Perform custom config actions
 	//
-
-	// Retrieve local file paths relative to config directory or binary
-	c.Storage, err = transformLocalPath(c.Storage, c.configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get storage path: %w", err)
-	}
-	c.Cache, err = transformLocalPath(c.Cache, c.configDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cache path: %w", err)
-	}
 
 	// Get serializer
 	c.serializer, ok = serializers[strings.ToLower(c.Serialization)]
@@ -300,25 +284,4 @@ func getVersion() string {
 		}
 	}
 	return version
-}
-
-func transformLocalPath(localPath, dir string) (string, error) {
-	if localPath == "" {
-		return localPath, nil
-	}
-	p, err := internal.GetFilePath(localPath, &dir)
-	if err != nil {
-		log.Tracef("Path %v does not yet exist", localPath)
-		if !path.IsAbs(localPath) {
-			localPath, err = filepath.Abs(filepath.Join(dir, localPath))
-			if err != nil {
-				return "", fmt.Errorf("failed to construct path: %v", err)
-			}
-		}
-	} else {
-		localPath = p
-	}
-	log.Tracef("Will use %v as local path", localPath)
-
-	return localPath, nil
 }

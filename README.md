@@ -80,6 +80,8 @@ git clone https://github.com/Fraunhofer-AISEC/cmc.git
 ```
 with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` repository and
 `<metadata-folder>` as an arbitrary folder where metadata and configuration files are stored.
+For the JSON example configuration folders to work without modifications, choose `cmc-data` in
+the same root folder the `cmc` repository resides in as the `<metadata-folder>`.
 
 *For an alternative demo setup with a more complex PKI and policies based on the requirements of the International Data Spaces (IDS), see [IDS Example Setup](./doc/ids-example-setup.md)*
 
@@ -126,8 +128,8 @@ configuration option is specified both via configuration file and commandline fl
 commandline flag supersedes.
 
 The commandline flags can be shown via `<binary> -help`. Exemplary JSON configuration file examples
-can be found in the `examples/` folder of this repository. Paths in the configuration files can
-either be absolute, or relative to the path of the configuration file or the binary.
+can be found in the `examples/` folder of this repository. Paths in the configuration file can
+either be absolete or relative to the working directory.
 
 The remainder of this section explains the different options.
 
