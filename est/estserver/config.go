@@ -24,6 +24,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -44,17 +45,16 @@ var (
 )
 
 type config struct {
-	Port               int      `json:"port"`
-	SigningKey         string   `json:"signingKey"`
-	SigningCerts       []string `json:"signingCerts"`
-	EstKey             string   `json:"estKey"`
-	EstCerts           []string `json:"estCerts"`
-	HttpFolder         string   `json:"httpFolder"`
-	VerifyEkCert       bool     `json:"verifyEkCert"`
-	TpmEkCertDb        string   `json:"tpmEkCertDb,omitempty"`
-	VcekOfflineCaching bool     `json:"vcekOfflineCaching,omitempty"`
-	VcekCacheFolder    string   `json:"vcekCacheFolder,omitempty"`
-	LogLevel           string   `json:"logLevel"`
+	Port            int      `json:"port"`
+	SigningKey      string   `json:"signingKey"`
+	SigningCerts    []string `json:"signingCerts"`
+	EstKey          string   `json:"estKey"`
+	EstCerts        []string `json:"estCerts"`
+	HttpFolder      string   `json:"httpFolder"`
+	VerifyEkCert    bool     `json:"verifyEkCert"`
+	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
+	VcekCacheFolder string   `json:"vcekCacheFolder,omitempty"`
+	LogLevel        string   `json:"logLevel"`
 
 	signingKey   *ecdsa.PrivateKey
 	signingCerts []*x509.Certificate
@@ -63,18 +63,17 @@ type config struct {
 }
 
 const (
-	configFlag             = "config"
-	portFlag               = "port"
-	signingKeyFlag         = "signingkey"
-	signingCertsFlag       = "signingcerts"
-	estKeyFlag             = "estkey"
-	estCertsFlag           = "estcerts"
-	httpFolderFlag         = "httpfolder"
-	verifyEkCertFlag       = "verifyek"
-	tpmEkCertDbFlag        = "ekdb"
-	vcekOfflineCachingFlag = "vcekcaching"
-	vcekCacheFolderFlag    = "vcekfolder"
-	logFlag                = "log"
+	configFlag          = "config"
+	portFlag            = "port"
+	signingKeyFlag      = "signingkey"
+	signingCertsFlag    = "signingcerts"
+	estKeyFlag          = "estkey"
+	estCertsFlag        = "estcerts"
+	httpFolderFlag      = "httpfolder"
+	verifyEkCertFlag    = "verifyek"
+	tpmEkCertDbFlag     = "ekdb"
+	vcekCacheFolderFlag = "vcekfolder"
+	logFlag             = "log"
 )
 
 func getConfig() (*config, error) {
@@ -92,8 +91,6 @@ func getConfig() (*config, error) {
 	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
 		"Indicates whether to verify TPM EK certificate chains")
 	tpmEkCertDb := flag.String(tpmEkCertDbFlag, "", "Database for EK cert chain verification")
-	vcekOfflineCaching := flag.Bool(vcekOfflineCachingFlag, false,
-		"Indicates whether to cache downloaded AMD SNP VCEKs")
 	vcekCacheFolder := flag.String(vcekCacheFolderFlag, "", "Folder to cache AMD SNP VCEKs")
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
@@ -143,9 +140,6 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(tpmEkCertDbFlag) {
 		c.TpmEkCertDb = *tpmEkCertDb
 	}
-	if internal.FlagPassed(vcekOfflineCachingFlag) {
-		c.VcekOfflineCaching = *vcekOfflineCaching
-	}
 	if internal.FlagPassed(vcekCacheFolderFlag) {
 		c.VcekCacheFolder = *vcekCacheFolder
 	}
@@ -160,6 +154,9 @@ func getConfig() (*config, error) {
 		log.Fatalf("LogLevel %v does not exist", c.LogLevel)
 	}
 	log.SetLevel(l)
+
+	// Convert all paths to absolute paths
+	pathsToAbs(c)
 
 	// Print the parsed configuration
 	printConfig(c)
@@ -192,23 +189,67 @@ func getConfig() (*config, error) {
 	return c, nil
 }
 
+func pathsToAbs(c *config) {
+	var err error
+	c.SigningKey, err = filepath.Abs(c.SigningKey)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.signingKey, err)
+	}
+
+	for i := 0; i < len(c.SigningCerts); i++ {
+		c.SigningCerts[i], err = filepath.Abs(c.SigningCerts[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.SigningCerts[i], err)
+		}
+	}
+
+	c.EstKey, err = filepath.Abs(c.EstKey)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.EstKey, err)
+	}
+
+	for i := 0; i < len(c.EstCerts); i++ {
+		c.EstCerts[i], err = filepath.Abs(c.EstCerts[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.EstCerts[i], err)
+		}
+	}
+
+	c.HttpFolder, err = filepath.Abs(c.HttpFolder)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
+	}
+
+	c.TpmEkCertDb, err = filepath.Abs(c.TpmEkCertDb)
+	if err != nil {
+		log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
+	}
+
+	if c.VcekCacheFolder != "" {
+		c.VcekCacheFolder, err = filepath.Abs(c.VcekCacheFolder)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
+		}
+	}
+}
+
 func printConfig(c *config) {
-	log.Debugf("Using the following configuration:")
+
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Warnf("Failed to get working directory: %v", err)
+	}
+	log.Infof("Running estserver from working directory %v", wd)
+
+	log.Debug("Using the following configuration:")
 	log.Debugf("\tPort                : %v", c.Port)
 	log.Debugf("\tSigning Key File    : %v", c.SigningKey)
-	log.Debugf("\tSigning Certificates:")
-	for i, c := range c.SigningCerts {
-		log.Debugf("\t\tCert %v: %v", i, c)
-	}
+	log.Debugf("\tSigning Certificates: %v", strings.Join(c.SigningCerts, ","))
 	log.Debugf("\tEST Key File        : %v", c.EstKey)
-	log.Debugf("\tEST Certificates    : ")
-	for i, c := range c.EstCerts {
-		log.Debugf("\t\tCert %v: %v", i, c)
-	}
+	log.Debugf("\tEST Certificates    : %v", strings.Join(c.EstCerts, ","))
 	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
-	log.Debugf("\tVCEK Offline Caching: %v", c.VcekOfflineCaching)
 	log.Debugf("\tVCEK Cache Folder   : %v", c.VcekCacheFolder)
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 }
