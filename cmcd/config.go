@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
@@ -210,6 +211,9 @@ func getConfig() (*config, error) {
 	}
 	logrus.SetLevel(l)
 
+	// Convert all paths to absolute paths
+	pathsToAbs(c)
+
 	// Print the parsed configuration
 	printConfig(c)
 
@@ -242,7 +246,47 @@ func getConfig() (*config, error) {
 	return c, nil
 }
 
+func pathsToAbs(c *config) {
+	var err error
+	if strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
+		c.Addr, err = filepath.Abs(c.Addr)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Addr, err)
+		}
+	}
+	if c.Storage != "" {
+		c.Storage, err = filepath.Abs(c.Storage)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Storage, err)
+		}
+	}
+	if c.Cache != "" {
+		c.Cache, err = filepath.Abs(c.Cache)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
+		}
+	}
+	for i := 0; i < len(c.Metadata); i++ {
+		if strings.HasPrefix(c.Metadata[i], "file://") {
+			f := strings.TrimPrefix(c.Metadata[i], "file://")
+			f, err = filepath.Abs(f)
+			if err != nil {
+				log.Warnf("Failed to get absolute path for %v: %v", f, err)
+				continue
+			}
+			c.Metadata[i] = "file://" + f
+		}
+	}
+}
+
 func printConfig(c *config) {
+
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Warnf("Failed to get working directory: %v", err)
+	}
+	log.Infof("Running estserver from working directory %v", wd)
+
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tCMC Listen Address       : %v", c.Addr)
 	log.Debugf("\tProvisioning Server URL  : %v", c.ProvServerAddr)
