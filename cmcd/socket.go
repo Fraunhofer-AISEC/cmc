@@ -41,7 +41,7 @@ import (
 type SocketServer struct{}
 
 func init() {
-	log.Trace("Adding unix domain socket server to supported servers")
+	log.Info("Adding unix domain socket server to supported servers")
 	servers["socket"] = SocketServer{}
 }
 

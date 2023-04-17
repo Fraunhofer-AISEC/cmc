@@ -30,9 +30,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
-	"github.com/Fraunhofer-AISEC/cmc/swdriver"
-	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
@@ -79,11 +76,7 @@ var (
 		"duktape": ar.PolicyEngineSelect_DukTape,
 	}
 
-	drivers = map[string]ar.Driver{
-		"tpm": &tpmdriver.Tpm{},
-		"snp": &snpdriver.Snp{},
-		"sw":  &swdriver.Sw{},
-	}
+	drivers = map[string]ar.Driver{}
 
 	log = logrus.WithField("service", "cmcd")
 )
@@ -238,7 +231,7 @@ func getConfig() (*config, error) {
 		d, ok := drivers[strings.ToLower(driver)]
 		if !ok {
 			return nil,
-				fmt.Errorf("measurement interface %v not implemented", c.Drivers)
+				fmt.Errorf("driver %v not implemented", c.Drivers)
 		}
 		c.drivers = append(c.drivers, d)
 	}
