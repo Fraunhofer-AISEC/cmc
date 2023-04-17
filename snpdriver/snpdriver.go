@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 
 	"net/http"
 	"unsafe"
@@ -49,6 +50,11 @@ var log = logrus.WithField("service", "snpdriver")
 const (
 	PEM = iota
 	DER = iota
+)
+const (
+	snpChainFile     = "akchain.pem"
+	signingChainFile = "ikchain.pem"
+	snpPrivFile      = "ikpriv.key"
 )
 
 type certFormat int
@@ -82,30 +88,47 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 	}
 
 	// Create storage folder for storage of internal data if not existing
-	if _, err := os.Stat(c.StoragePath); err != nil {
-		if err := os.MkdirAll(c.StoragePath, 0755); err != nil {
-			return fmt.Errorf("failed to create directory for internal data '%v': %w",
-				c.StoragePath, err)
+	if c.StoragePath != "" {
+		if _, err := os.Stat(c.StoragePath); err != nil {
+			if err := os.MkdirAll(c.StoragePath, 0755); err != nil {
+				return fmt.Errorf("failed to create directory for internal data '%v': %w",
+					c.StoragePath, err)
+			}
 		}
 	}
 
-	// Create new private key for signing
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("failed to generate private key: %w", err)
-	}
-	snp.priv = priv
+	if provisioningRequired(c.StoragePath) {
+		// Create new private key for signing
+		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return fmt.Errorf("failed to generate private key: %w", err)
+		}
+		snp.priv = priv
 
-	// Create IK CSR and fetch new certificate including its chain from EST server
-	snp.signingCertChain, err = getSigningCertChain(priv, c.Serializer, c.Metadata, c.ServerAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get signing cert chain: %w", err)
-	}
+		// Create IK CSR and fetch new certificate including its chain from EST server
+		snp.signingCertChain, err = getSigningCertChain(priv, c.Serializer, c.Metadata,
+			c.ServerAddr)
+		if err != nil {
+			return fmt.Errorf("failed to get signing cert chain: %w", err)
+		}
 
-	// Fetch SNP certificate chain for VCEK (AK)
-	snp.snpCertChain, err = getSnpCertChain(c.ServerAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get SNP cert chain: %w", err)
+		// Fetch SNP certificate chain for VCEK (AK)
+		snp.snpCertChain, err = getSnpCertChain(c.ServerAddr)
+		if err != nil {
+			return fmt.Errorf("failed to get SNP cert chain: %w", err)
+		}
+
+		if c.StoragePath != "" {
+			err = saveCredentials(c.StoragePath, snp)
+			if err != nil {
+				return fmt.Errorf("failed to save SNP credentials: %w", err)
+			}
+		}
+	} else {
+		snp.snpCertChain, snp.signingCertChain, snp.priv, err = loadCredentials(c.StoragePath)
+		if err != nil {
+			return fmt.Errorf("failed to load SNP credentials: %w", err)
+		}
 	}
 
 	return nil
@@ -311,4 +334,95 @@ func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]b
 	}
 
 	return append([]*x509.Certificate{cert}, caCerts...), nil
+}
+
+func provisioningRequired(p string) bool {
+	// Stateless operation always requires provisioning
+	if p == "" {
+		log.Info("SNP Provisioning REQUIRED")
+		return true
+	}
+
+	// If any of the required files is not present, we need to provision
+	if _, err := os.Stat(path.Join(p, snpChainFile)); err != nil {
+		log.Info("SNP Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, signingChainFile)); err != nil {
+		log.Info("SNP Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, snpPrivFile)); err != nil {
+		log.Info("SNP Provisioning REQUIRED")
+		return true
+	}
+
+	log.Info("SNP Provisioning NOT REQUIRED")
+
+	return false
+}
+
+func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
+	crypto.PrivateKey, error,
+) {
+	data, err := os.ReadFile(path.Join(p, snpChainFile))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+	}
+	akchain, err := internal.ParseCerts(data)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+	}
+	log.Tracef("Parsed stored AK chain of length %v", len(akchain))
+
+	data, err = os.ReadFile(path.Join(p, signingChainFile))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+	}
+	ikchain, err := internal.ParseCerts(data)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+	}
+	log.Tracef("Parsed stored IK chain of length %v", len(akchain))
+
+	data, err = os.ReadFile(path.Join(p, snpPrivFile))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read SNP private key from %v: %w", p, err)
+	}
+	priv, err := x509.ParsePKCS8PrivateKey(data)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse SNP private key: %w", err)
+	}
+
+	return akchain, ikchain, priv, nil
+}
+
+func saveCredentials(p string, snp *Snp) error {
+	akchainPem := make([]byte, 0)
+	for _, cert := range snp.snpCertChain {
+		c := internal.WriteCertPem(cert)
+		akchainPem = append(akchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(p, snpChainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, snpChainFile), err)
+	}
+
+	ikchainPem := make([]byte, 0)
+	for _, cert := range snp.signingCertChain {
+		c := internal.WriteCertPem(cert)
+		ikchainPem = append(ikchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(p, signingChainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, signingChainFile), err)
+	}
+
+	key, err := x509.MarshalPKCS8PrivateKey(snp.priv)
+	if err != nil {
+		return fmt.Errorf("failed marshal private key: %w", err)
+	}
+	if err := os.WriteFile(path.Join(p, snpPrivFile), key, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(p, snpPrivFile), err)
+	}
+
+	return nil
 }
