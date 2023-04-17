@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
@@ -54,14 +53,6 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 	case ar.CborSerializer:
 	default:
 		return fmt.Errorf("serializer not initialized in driver config")
-	}
-
-	// Create storage folder for storage of internal data if not existing
-	if _, err := os.Stat(c.StoragePath); err != nil {
-		if err := os.MkdirAll(c.StoragePath, 0755); err != nil {
-			return fmt.Errorf("failed to create directory for internal data '%v': %w",
-				c.StoragePath, err)
-		}
 	}
 
 	// Create new private key for signing
