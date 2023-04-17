@@ -53,7 +53,7 @@ func main() {
 	for _, m := range c.drivers {
 		err = m.Init(driverConf)
 		if err != nil {
-			log.Fatalf("Failed to initialize measurer: %v", err)
+			log.Fatalf("Failed to initialize driver: %v", err)
 		}
 	}
 

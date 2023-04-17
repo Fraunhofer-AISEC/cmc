@@ -44,7 +44,7 @@ type CoapServer struct{}
 var serverConfig *ServerConfig
 
 func init() {
-	log.Trace("Adding CoAP server to supported servers")
+	log.Info("Adding CoAP server to supported servers")
 	servers["coap"] = CoapServer{}
 }
 
