@@ -155,15 +155,8 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	cas, err := internal.ParseCerts(snpReferenceValue.Snp.Cas)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to parse ca: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Report, s, certs, cas)
+	sig, ret := verifySnpSignature(snpM.Report, s, certs, snpReferenceValue.Snp.KeyId)
 	if !ret {
 		ok = false
 	}
@@ -366,7 +359,7 @@ func verifySnpTcb(s snpreport, v SnpTcb) (TcbCheck, bool) {
 
 func verifySnpSignature(
 	reportRaw []byte, report snpreport,
-	certs []*x509.Certificate, cas []*x509.Certificate,
+	certs []*x509.Certificate, caKeyId string,
 ) (SignatureResult, bool) {
 
 	result := SignatureResult{}
@@ -430,9 +423,23 @@ func verifySnpSignature(
 	result.SignCheck.Success = true
 
 	// Verify the SNP certificate chain
-	x509Chains, err := internal.VerifyCertChain(certs, cas)
+	ca := certs[len(certs)-1]
+	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
+		result.CertChainCheck.setFalse(&msg)
+		return result, false
+	}
+	// Verify that the reference value key-id matches the cert chain CA key id
+	rawId, err := hex.DecodeString(caKeyId)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to decode CA key-id %v: %v", caKeyId, err)
+		result.CertChainCheck.setFalse(&msg)
+		return result, false
+	}
+	if !bytes.Equal(rawId, ca.SubjectKeyId) {
+		msg := fmt.Sprintf("Reference key-id %v does not match measurement CA key-id %v",
+			caKeyId, hex.EncodeToString(ca.SubjectKeyId))
 		result.CertChainCheck.setFalse(&msg)
 		return result, false
 	}
