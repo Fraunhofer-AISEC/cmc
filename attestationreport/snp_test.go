@@ -955,8 +955,6 @@ var (
 		0x41, 0x54, 0x45, 0x2d, 0x2d, 0x2d, 0x2d, 0x2d, 0x0a,
 	}
 
-	invalidCaSnp = []byte("-----BEGIN CERTIFICATE-----\nMIIDGjCCAr+gAwIBAgIBATAKBggqhkjOPQQDAjBhMQswCQYDVQQGEwJERTESMBAG\nA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAOBgNVBAsT\nB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTAeFw0yMjExMDcwODUxNDla\nFw0yNzEwMTIwODUxNDlaMIGdMQswCQYDVQQGEwJERTELMAkGA1UECBMCQlkxDzAN\nBgNVBAcTBk11bmljaDEWMBQGA1UECRMNdGVzdHN0cmVldCAxNTEOMAwGA1UEERMF\nODU3NDgxGjAYBgNVBAoTEVRlc3QgT3JnYW5pemF0aW9uMQ8wDQYDVQQLEwZkZXZp\nY2UxGzAZBgNVBAMTEmRlLnRlc3QuYWsuZGV2aWNlMDCCASIwDQYJKoZIhvcNAQEB\nBQADggEPADCCAQoCggEBALMxAElQ+xiBcNrfpPNd6ksmoftvdIAwBHaXJXta0JcN\n28aveILx2gWuAlhpB90h0IngWpETUckxmAJ/KvTtsOH1lhRQeWwXLmFciXc2lKD3\nNk//dtp6LVd7WaJzx8MtNMlsrYgG9tpjGggISTQyFACQYnmapbqvf8OS0UP93vUT\neAnCKBRDAOKT3FjpUl6y66buAnU1u1I9N7XBUem6nQSlw9KymrgXSG0Hvbpe7f6c\nWmNJC2dJOdxxpN523Fq9I9iMIOi+K2DXfsw2ShxtIj0NEWx+/gKNhsdVln5EnYar\nSef7N12tHTSZnl6oTWtnTGMaSmOfa1bkEpXguM9xV9cCAwEAAaNgMF4wDgYDVR0P\nAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0OBBYEFNKgV/REoVQpy8eJ/cOR\nXsE58bLRMB8GA1UdIwQYMBaAFD+Fycu3JAX3sNTSRMvABDRDeOICMAoGCCqGSM49\nBAMCA0kAMEYCIQDIC7CTHr1RYwUIvmd+lfZme2g1lUmuLWlWRzpEhP1K5AIhAMnp\nFhf+1eNqcZkg2ISsZ5GefN/A/5xvbQXPj06hHwZq\n-----END CERTIFICATE-----")
-
 	validNonce = []byte{0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23}
 
 	invalidNonce = []byte{0xAA, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23, 0x23}
@@ -1018,6 +1016,10 @@ var (
 		Snp:   6,
 		Ucode: 68,
 	}
+
+	validKeyId = "85AC1AD143F7C8AC55D4C51D4148ABD5784AD453"
+
+	invalidKeyId = "99AC1AD143F7C8AC55D4C51D4148ABD5784AD453"
 )
 
 func Test_verifySnpMeasurements(t *testing.T) {
@@ -1045,7 +1047,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1070,7 +1072,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1095,7 +1097,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1120,7 +1122,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1145,7 +1147,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1170,7 +1172,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: invalidMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1195,7 +1197,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  invalidSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1220,7 +1222,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1270,7 +1272,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,
@@ -1295,7 +1297,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      invalidFw,
 							Tcb:     validTcb,
@@ -1320,7 +1322,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{arkMilan},
+							KeyId:   validKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     invalidTcb,
@@ -1345,7 +1347,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Sha384: validMeasurement,
 						Snp: &SnpDetails{
 							Version: validVersion,
-							Cas:     [][]byte{invalidCaSnp},
+							KeyId:   invalidKeyId,
 							Policy:  validSnpPolicy,
 							Fw:      validFw,
 							Tcb:     validTcb,

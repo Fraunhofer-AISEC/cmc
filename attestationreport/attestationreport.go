@@ -168,7 +168,7 @@ type SnpTcb struct {
 
 type SnpDetails struct {
 	Version uint32    `json:"version" cbor:"0,keyasint"`
-	Cas     [][]byte  `json:"cas" cbor:"1,keyasint"`
+	KeyId   string    `json:"caKeyId" cbor:"1,keyasint"`
 	Policy  SnpPolicy `json:"policy" cbor:"2,keyasint"`
 	Fw      SnpFw     `json:"fw" cbor:"3,keyasint"`
 	Tcb     SnpTcb    `json:"tcb" cbor:"4,keyasint"`
