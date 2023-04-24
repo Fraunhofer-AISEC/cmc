@@ -167,11 +167,11 @@ type SnpTcb struct {
 }
 
 type SnpDetails struct {
-	Version uint32    `json:"version" cbor:"0,keyasint"`
-	KeyId   string    `json:"caKeyId" cbor:"1,keyasint"`
-	Policy  SnpPolicy `json:"policy" cbor:"2,keyasint"`
-	Fw      SnpFw     `json:"fw" cbor:"3,keyasint"`
-	Tcb     SnpTcb    `json:"tcb" cbor:"4,keyasint"`
+	Version       uint32    `json:"version" cbor:"0,keyasint"`
+	CaFingerprint string    `json:"caFingerprint" cbor:"1,keyasint"`
+	Policy        SnpPolicy `json:"policy" cbor:"2,keyasint"`
+	Fw            SnpFw     `json:"fw" cbor:"3,keyasint"`
+	Tcb           SnpTcb    `json:"tcb" cbor:"4,keyasint"`
 }
 
 // ReferenceValue represents the attestation report
