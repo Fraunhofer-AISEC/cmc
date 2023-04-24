@@ -18,6 +18,7 @@ package attestationreport
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/binary"
@@ -156,7 +157,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Report, s, certs, snpReferenceValue.Snp.KeyId)
+	sig, ret := verifySnpSignature(snpM.Report, s, certs, snpReferenceValue.Snp.CaFingerprint)
 	if !ret {
 		ok = false
 	}
@@ -359,7 +360,7 @@ func verifySnpTcb(s snpreport, v SnpTcb) (TcbCheck, bool) {
 
 func verifySnpSignature(
 	reportRaw []byte, report snpreport,
-	certs []*x509.Certificate, caKeyId string,
+	certs []*x509.Certificate, fingerprint string,
 ) (SignatureResult, bool) {
 
 	result := SignatureResult{}
@@ -430,16 +431,17 @@ func verifySnpSignature(
 		result.CertChainCheck.setFalse(&msg)
 		return result, false
 	}
-	// Verify that the reference value key-id matches the cert chain CA key id
-	rawId, err := hex.DecodeString(caKeyId)
+	// Verify that the reference value fingerprint matches the certificate fingerprint
+	refFingerprint, err := hex.DecodeString(fingerprint)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode CA key-id %v: %v", caKeyId, err)
+		msg := fmt.Sprintf("Failed to decode CA fingerprint %v: %v", fingerprint, err)
 		result.CertChainCheck.setFalse(&msg)
 		return result, false
 	}
-	if !bytes.Equal(rawId, ca.SubjectKeyId) {
-		msg := fmt.Sprintf("Reference key-id %v does not match measurement CA key-id %v",
-			caKeyId, hex.EncodeToString(ca.SubjectKeyId))
+	caFingerprint := sha256.Sum256(ca.Raw)
+	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
+		msg := fmt.Sprintf("CA fingerprint %v does not match measurement CA fingerprint %v",
+			fingerprint, hex.EncodeToString(caFingerprint[:]))
 		result.CertChainCheck.setFalse(&msg)
 		return result, false
 	}
