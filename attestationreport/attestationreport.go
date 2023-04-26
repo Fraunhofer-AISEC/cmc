@@ -461,7 +461,7 @@ func Verify(arRaw string, nonce, casPem []byte, policies []byte, polEng PolicyEn
 		Success:     true,
 		SwCertLevel: 0}
 
-	// Verify ALL signatures and unpack plain AttestationReport
+	// Verify all signatures and unpack plain AttestationReport
 	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem, s)
 	if ar == nil {
 		result.InternalError = true
@@ -617,6 +617,10 @@ func Verify(arRaw string, nonce, casPem []byte, policies []byte, polEng PolicyEn
 	} else {
 		log.Tracef("No custom policies specified")
 	}
+
+	// Add addtional information
+	result.Prover = ar.DeviceDescription.Name
+	result.Created = time.Now().Format(time.RFC3339)
 
 	log.Tracef("Verification Result: %v", result.Success)
 
