@@ -25,6 +25,8 @@ import (
 type VerificationResult struct {
 	Type            string            `json:"type"`
 	Success         bool              `json:"raSuccessful"`         // Summarizing value illustrating whether any issues were detected during validation of the Attestation Report
+	Prover          string            `json:"prover,omitempty"`     // Name of the proving device the report was created for
+	Created         string            `json:"created,omitempty"`    // Timestamp the attestation verification was completed
 	SwCertLevel     int               `json:"swCertLevel"`          // Overall certification level for the entire software stack (the minimum of all CertificationLevels in the used manifests)
 	FreshnessCheck  Result            `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
 	ReportSignature []SignatureResult `json:"reportSignatureCheck"` // Result for validation of the overall report signature
