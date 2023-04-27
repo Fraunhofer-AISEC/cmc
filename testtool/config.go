@@ -71,6 +71,7 @@ type config struct {
 	Api          string `json:"api"`
 	Network      string `json:"network"`
 	LogLevel     string `json:"logLevel"`
+	Publish      string `json:"publish"`
 
 	ca       []byte
 	policies []byte
@@ -91,6 +92,7 @@ const (
 	networkFlag  = "network"
 	mtlsFlag     = "mtls"
 	logFlag      = "log"
+	publishFlag  = "publish"
 )
 
 func getConfig() *config {
@@ -112,6 +114,7 @@ func getConfig() *config {
 	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS with remote attestation on both sides.")
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
+	publish := flag.String(publishFlag, "", "HTTP address to publish attestation results to")
 	flag.Parse()
 
 	// Create default configuration
@@ -174,6 +177,9 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(logFlag) {
 		c.LogLevel = *logLevel
+	}
+	if internal.FlagPassed(publishFlag) {
+		c.Publish = *publish
 	}
 
 	// Configure the logger

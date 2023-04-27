@@ -129,15 +129,17 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	}
 
 	// Parse VerificationResult
-	var result ar.VerificationResult
-	err = json.Unmarshal(verifyResp.VerificationResult, &result)
+	if cc.result == nil {
+		cc.result = new(ar.VerificationResult)
+	}
+	err = json.Unmarshal(verifyResp.VerificationResult, cc.result)
 	if err != nil {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
 	// Check results
-	if !result.Success {
-		return NewAttestedError(result, errors.New("verification failed"))
+	if !cc.result.Success {
+		return NewAttestedError(*cc.result, errors.New("verification failed"))
 	}
 	return nil
 }
