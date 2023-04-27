@@ -15,7 +15,11 @@
 
 package attestedtls
 
-import "crypto"
+import (
+	"crypto"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+)
 
 type CmcApiSelect uint32
 
@@ -40,6 +44,7 @@ type cmcConfig struct {
 	ca       []byte
 	policies []byte
 	mtls     bool
+	result   *ar.VerificationResult
 }
 
 type CmcApi interface {
@@ -99,5 +104,13 @@ func WithCmcPolicies(policies []byte) ConnectionOption[cmcConfig] {
 func WithMtls(mtls bool) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.mtls = mtls
+	}
+}
+
+// WithResult takes an attestation result by reference as input parameter
+// and writes the attestation result
+func WithResult(result *ar.VerificationResult) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.result = result
 	}
 }

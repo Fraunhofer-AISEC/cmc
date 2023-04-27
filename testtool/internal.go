@@ -18,19 +18,25 @@ package main
 // Install github packages with "go get [url]"
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
 
 	// local modules
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/plgd-dev/go-coap/v3/message"
 )
 
 // Creates TLS connection between this client and a server and performs a remote
@@ -70,13 +76,16 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 
 	internal.PrintTlsConfig(tlsConf, c.ca)
 
+	verificationResult := new(ar.VerificationResult)
+
 	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcCa(c.ca),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
-		atls.WithCmcNetwork(c.Network))
+		atls.WithCmcNetwork(c.Network),
+		atls.WithResult(verificationResult))
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
@@ -89,20 +98,38 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 			if err != nil {
 				r = string(result)
 			}
-			log.Fatalf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", r)
+
+			// Publish the attestation result if publishing address was specified
+			err = publish(c.Publish, verificationResult)
+			if err != nil {
+				log.Warnf("failed to publish result: %v", err)
+			}
+
+			log.Fatalf(
+				"Verification Result: %v\nCannot establish connection: Remote attestation Failed.",
+				r)
 		}
 		log.Fatalf("Failed to dial server: %v", err)
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
-	// write sth
+
+	// Publish the attestation result if publishing address was specified
+	// TODO maybe async
+	err = publish(c.Publish, verificationResult)
+	if err != nil {
+		log.Warnf("failed to publish result: %v", err)
+	}
+
+	// Testing: write a hello string
 	msg := "hello\n"
 	log.Infof("Sending to peer: %v", msg)
 	_, err = conn.Write([]byte(msg))
 	if err != nil {
 		log.Fatalf("Failed to write: %v", err)
 	}
-	// read sth
+
+	// Testing: read the answer from the server and print
 	buf := make([]byte, 100)
 	n, err := conn.Read(buf)
 	if err != nil {
@@ -147,6 +174,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 
 	internal.PrintTlsConfig(tlsConf, c.ca)
 
+	verificationResult := new(ar.VerificationResult)
+
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
@@ -154,7 +183,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
-		atls.WithCmcNetwork(c.Network))
+		atls.WithCmcNetwork(c.Network),
+		atls.WithResult(verificationResult))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
@@ -175,13 +205,31 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 					if err != nil {
 						r = string(result)
 					}
-					log.Errorf("Cannot establish connection: Remote attestation Failed. Verification Result: %v", r)
+
+					// Publish the attestation result if publishing address was specified
+					err = publish(c.Publish, verificationResult)
+					if err != nil {
+						log.Warnf("failed to publish result: %v", err)
+					}
+
+					log.Errorf("Verification Result: %v\n"+
+						"Cannot establish connection: Remote attestation Failed.", r)
 				}
 			} else {
 				log.Errorf("Failed to establish connection: %v", err)
 			}
 			continue
 		}
+
+		// TODO maybe async
+		if c.Mtls {
+			// Publish the attestation result if publishing address was specified
+			err = publish(c.Publish, verificationResult)
+			if err != nil {
+				log.Warnf("failed to publish result: %v", err)
+			}
+		}
+
 		// Handle established connections
 		go handleConnection(conn)
 	}
@@ -221,4 +269,37 @@ func handleConnection(conn net.Conn) {
 	if err != nil {
 		log.Errorf("Failed to write: %v", err)
 	}
+}
+
+func publish(addr string, result *ar.VerificationResult) error {
+
+	if addr == "" {
+		return nil
+	}
+
+	data, err := json.Marshal(*result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal result: %w", err)
+	}
+
+	resp, err := http.Post(addr, message.AppJSON.String(), bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to publish attestation result: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != 201 {
+		return fmt.Errorf("failed to publish result for %v created %v: server responded with %v: %v",
+			result.Prover, result.Created, resp.Status, string(data))
+	}
+
+	log.Tracef("Successfully published result for %v created %v: server responded with %v",
+		result.Prover, result.Created, resp.Status)
+
+	return nil
 }
