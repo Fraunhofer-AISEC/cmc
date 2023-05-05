@@ -177,7 +177,7 @@ func filterMetadata(inlist [][]byte, s ar.Serializer) ([][]byte, error) {
 			continue
 		}
 
-		in := new(ar.BasicInfo)
+		in := new(ar.MetaInfo)
 		err = s.Unmarshal(data, in)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
@@ -201,7 +201,7 @@ func filterMetadata(inlist [][]byte, s ar.Serializer) ([][]byte, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse metadata object %v: %v", i, err)
 			}
-			out := new(ar.BasicInfo)
+			out := new(ar.MetaInfo)
 			err = s.Unmarshal(data, out)
 			if err != nil {
 				return nil, fmt.Errorf("internal error: failed to unmarshal result: %v", err)

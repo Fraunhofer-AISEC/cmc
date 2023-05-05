@@ -87,9 +87,9 @@ type PolicyValidator interface {
 	Validate(policies []byte, result VerificationResult) bool
 }
 
-// BasicInfo is a helper struct for generic info
+// MetaInfo is a helper struct for generic info
 // present in every metadata object
-type BasicInfo struct {
+type MetaInfo struct {
 	Type    string `json:"type" cbor:"0,keyasint"`
 	Name    string `json:"name" cbor:"1,keyasint"`
 	Version string `json:"version" cbor:"2,keyasint"`
@@ -189,7 +189,7 @@ type ReferenceValue struct {
 // AppDescription represents the attestation report
 // element of type 'App Description'
 type AppDescription struct {
-	BasicInfo
+	MetaInfo
 	AppManifest string              `json:"appManifest" cbor:"3,keyasint,omitempty"` // Links to App Manifest.Name
 	External    []ExternalInterface `json:"externalConnections" cbor:"4,keyasint"`
 }
@@ -216,7 +216,7 @@ type ExternalInterface struct {
 // AppManifest represents the attestation report
 // element of type 'App Manifest'
 type AppManifest struct {
-	BasicInfo
+	MetaInfo
 	DevCommonName      string           `json:"developerCommonName"  cbor:"3,keyasint"`
 	Oss                []string         `json:"oss" cbor:"4,keyasint"` // Links to OsManifest.Name
 	Description        string           `json:"description" cbor:"5,keyasint"`
@@ -228,7 +228,7 @@ type AppManifest struct {
 // OsManifest represents the attestation report
 // element of type 'OsManifest'
 type OsManifest struct {
-	BasicInfo
+	MetaInfo
 	DevCommonName      string           `json:"developerCommonName" cbor:"3,keyasint"`
 	Rtms               []string         `json:"rtms" cbor:"4,keyasint"` // Links to Type RtmManifest.Name
 	Description        string           `json:"description" cbor:"5,keyasint"`
@@ -240,7 +240,7 @@ type OsManifest struct {
 // RtmManifest represents the attestation report
 // element of type 'RTM Manifest'
 type RtmManifest struct {
-	BasicInfo
+	MetaInfo
 	DevCommonName      string           `json:"developerCommonName" cbor:"3,keyasint"`
 	Description        string           `json:"description" cbor:"4,keyasint"`
 	CertificationLevel int              `json:"certificationLevel" cbor:"5,keyasint"`
@@ -251,7 +251,7 @@ type RtmManifest struct {
 // DeviceDescription represents the attestation report
 // element of type 'Device Description'
 type DeviceDescription struct {
-	BasicInfo
+	MetaInfo
 	Description     string               `json:"description" cbor:"3,keyasint"`
 	Location        string               `json:"location" cbor:"4,keyasint"`
 	RtmManifest     string               `json:"rtmManifest" cbor:"5,keyasint"`
@@ -264,7 +264,7 @@ type DeviceDescription struct {
 // CompanyDescription represents the attestation report
 // element of type 'Company Description'
 type CompanyDescription struct {
-	BasicInfo
+	MetaInfo
 	CertificationLevel int      `json:"certificationLevel" cbor:"3,keyasint"`
 	Description        string   `json:"description" cbor:"4,keyasint"`
 	Validity           Validity `json:"validity" cbor:"5,keyasint"`
@@ -272,7 +272,7 @@ type CompanyDescription struct {
 
 // DeviceConfig contains the local device configuration parameters
 type DeviceConfig struct {
-	BasicInfo
+	MetaInfo
 	AkCsr CsrParams `json:"akCsr" cbor:"3,keyasint"`
 	IkCsr CsrParams `json:"ikCsr" cbor:"4,keyasint"`
 }
@@ -360,7 +360,7 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 
 		// Unmarshal the Type field of the JSON file to determine the type for
 		// later processing
-		elem := new(BasicInfo)
+		elem := new(MetaInfo)
 		err = s.Unmarshal(data, elem)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)

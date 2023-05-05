@@ -787,7 +787,7 @@ func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 		}
 
 		// Unmarshal the Type field of the metadata to determine the type
-		info := new(ar.BasicInfo)
+		info := new(ar.MetaInfo)
 		err = c.Serializer.Unmarshal(payload, info)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
@@ -852,7 +852,7 @@ func createCsrs(c *ar.DriverConfig, ak *attest.AK, ik *attest.Key,
 		}
 
 		// Unmarshal the Type field of the metadata file to determine the type
-		info := new(ar.BasicInfo)
+		info := new(ar.MetaInfo)
 		err = c.Serializer.Unmarshal(payload, info)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
