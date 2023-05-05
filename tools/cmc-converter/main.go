@@ -95,7 +95,7 @@ func convert(data []byte, outform string) ([]byte, error) {
 			outform)
 	}
 
-	info := new(ar.BasicInfo)
+	info := new(ar.MetaInfo)
 	err := si.Unmarshal(data, info)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
