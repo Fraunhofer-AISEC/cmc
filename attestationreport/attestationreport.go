@@ -604,7 +604,7 @@ func Verify(arRaw string, nonce, casPem []byte, policies []byte, polEng PolicyEn
 		log.Tracef("No custom policies specified")
 	}
 
-	// Add addtional information
+	// Add additional information
 	result.Prover = ar.DeviceDescription.Name
 	result.Created = time.Now().Format(time.RFC3339)
 
@@ -676,6 +676,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			result.Success = false
 		} else {
 			result.RtmResult.Name = ar.RtmManifest.Name
+			result.RtmResult.Version = ar.RtmManifest.Version
 			result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
 			if !result.RtmResult.ValidityCheck.Success {
 				result.RtmResult.Summary.Success = false
@@ -699,6 +700,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			result.Success = false
 		} else {
 			result.OsResult.Name = ar.OsManifest.Name
+			result.OsResult.Version = ar.OsManifest.Version
 			result.RtmResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
 			result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
 			if !result.OsResult.ValidityCheck.Success {
@@ -728,6 +730,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 			} else {
 				ar.AppManifests = append(ar.AppManifests, am)
 				result.AppResults[i].Name = am.Name
+				result.AppResults[i].Version = am.Version
 				result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
 				if !result.AppResults[i].ValidityCheck.Success {
 					log.Trace("App Manifest invalid - " + am.Name)
@@ -756,6 +759,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 				result.Success = false
 			} else {
 				result.CompDescResult.Name = ar.CompanyDescription.Name
+				result.CompDescResult.Version = ar.CompanyDescription.Version
 				result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
 
 				result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
@@ -780,6 +784,9 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 		if err != nil {
 			msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
 			result.DevDescResult.Summary.setFalseMulti(&msg)
+		} else {
+			result.DevDescResult.Name = ar.DeviceDescription.Name
+			result.DevDescResult.Version = ar.DeviceDescription.Version
 		}
 	}
 
