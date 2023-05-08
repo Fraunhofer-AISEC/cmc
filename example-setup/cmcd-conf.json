@@ -1,7 +1,7 @@
 {
     "addr": "localhost:9955",
     "metadata": [
-        "https://localhost:9000/metadata-signed",
+        "https://localhost:9000/metadata-signed"
     ],
     "provServerAddr": "https://localhost:9000/",
     "drivers": [ "TPM" ],
