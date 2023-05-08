@@ -45,6 +45,7 @@ type VerificationResult struct {
 // Company Description and its mapping to the used device certificate.
 type CompDescResult struct {
 	Name           string            `json:"name"`
+	Version        string            `json:"version"`
 	CompCertLevel  int               `json:"compCertLevel"`       // Certification level for the company operating the device
 	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Company Description
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
@@ -55,6 +56,7 @@ type CompDescResult struct {
 // manifest provided in the Attestation Report.
 type ManifestResult struct {
 	Name           string            `json:"name"`
+	Version        string            `json:"version"`
 	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Software Manifest
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Manifest Signatures and the used certificates
 	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
@@ -73,6 +75,8 @@ type MeasurementResult struct {
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report.
 type DevDescResult struct {
+	Name                string            `json:"name"`
+	Version             string            `json:"version"`
 	Summary             ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Device Description
 	CorrectRtm          Result            `json:"correctRtm"`          // Result for comparison of RTM in the Device Description and the provided RTM Manifest
 	CorrectOs           Result            `json:"correctOs"`           // Result for comparison of OS in the Device Description and the provided OS Manifest
