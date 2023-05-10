@@ -4,7 +4,7 @@
     "signingCerts": [
         "../../../cmc-data/pki/ca.pem"
     ],
-    "httpFolder": "./",
+    "httpFolder": "../../../cmc-data",
     "verifyEkCert": false,
     "tpmEkCertDb": "../../../cmc-data/tpm-ek-certs.db",
     "estKey": "../../../cmc-data/pki/est-key.pem",
