@@ -39,10 +39,10 @@ The figure shows how the core components interact with each other. The main soft
 different hardware trust anchors and assembles this data together with signed metadata describing
 the platform to an attestation report (prover), or validates the measurements against the metadata.
 The *cmcd* provides a gRPC as well as a CoAP REST API.
-- The testtool is an exemplary application that make use of the *cmcd* to
-generate and verify attestation reports and to create an attested tls connections.
-- Drivers for trusted hardware provides the attestation reports and, if available, key storage and
-signing functionalities
+- The testtool is an exemplary application that makes use of the *cmcd* to
+generate and verify attestation reports and to create attested tls connections.
+- Drivers for trusted hardware provide the attestation reports and, if available, key storage and
+signing functionalities.
 
 Refer to the [Architecture](doc/Architecture.md) Readme for more information.
 
@@ -55,14 +55,14 @@ one or more trusted entities. This allows a verifier to validate the attestation
 knowing the platform in advance. Examples and tools for creating the metadata on the prover side
 are given below.
 
-## Prerequistes
+## Prerequisites
 
 - Running the *cmcd* currently requires a Linux platform. If the *cmcd* is configured to use a TPM,
 the *cmcd* must be able to access ```/dev/tpm0```. If AMD SEV-SNP is
 used for measurements, the *cmcd* must be run on an AMD server within an SNP Virtual Machine.
 - Building the *cmcd* requires *go* (https://golang.org/doc/install)
 
-**Note**: If configured to be used with a TPM, The *cmcd* accesses the TPM and creates keys within
+**Note**: If configured to be used with a TPM, the *cmcd* accesses the TPM and creates keys within
 the TPM. You should not run it on your normal work laptop, as it might require the TPM and its keys
 storage for secure boot, disk encryption or other purposes. Instead, run it on a dedicated
 Virtual Machine (VM) or server.
@@ -79,9 +79,13 @@ git clone https://github.com/Fraunhofer-AISEC/cmc.git
 ./cmc/example-setup/setup-full-simple <cmc-folder> <metadata-folder>
 ```
 with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` repository and
-`<metadata-folder>` as an arbitrary folder where metadata and configuration files are stored.
-For the JSON example configuration folders to work without modifications, choose `cmc-data` in
-the same root folder the `cmc` repository resides in as the `<metadata-folder>`.
+`<metadata-folder>` as an arbitrary folder that will be created and that will store metadata and
+configuration files.
+The binaries will be created inside the user's `$GOPATH/bin`.
+
+For the JSON example configuration folders to work without modifications, choose as `<metadata-folder>`
+the folder `cmc-data` located in the same root folder the `cmc` repository resides in.
+Export this root folder as `$CMC_ROOT`.
 
 *For an alternative demo setup with a more complex PKI and policies based on the requirements of the International Data Spaces (IDS), see [IDS Example Setup](./doc/ids-example-setup.md)*
 
@@ -103,6 +107,10 @@ testtool -mode generate
 # Run the testtool to verify the attestation report (stored in current folder unless otherwise specified)
 testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem
 ```
+
+Note that the JSON configuration files in the example setup contain relative paths and the
+above commands are meant to be run from within the respective source directories inside the
+`cmc` repository.
 
 ### Establish an attested TLS connection
 
@@ -187,7 +195,7 @@ relevant if vcekOfflineCaching is set to true)
 ## Testtool Configuration
 
 - **mode**: The mode to run. Possible are generate, verify, dial, listen, cacerts and iothub
-- **addr**: The address to serve in mode listen, and to connect to in mode dial
+- **addr**: List of addresses to connect to in mode dial and anddress to serve in mode listen.
 - **cmc**: The address of the CMC server
 - **report**: The file to store the attestation report in (mode generate) or to retrieve
 from (mode verify)
@@ -200,6 +208,9 @@ from (mode verify)
 - **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
 `Unix Domain Sockets`
 - **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
+- **interval**: Interval at which dial will be executed. If set to `0s` or less, then dial will only execute once.
+The interval format has to be in accordance with the input format of Go's
+[`time.Duration`](https://pkg.go.dev/time#ParseDuration).
 
 **The testtool can run the following commands/modes:**
 - **cacerts**: Retrieves the CA certificates from the EST server
