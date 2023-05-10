@@ -100,7 +100,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	// the manifest files
 	pcrs, err := getTpmPcrs(c)
 	if err != nil {
-		return fmt.Errorf("failed retrieve TPM PCRs: %w", err)
+		return fmt.Errorf("failed to retrieve TPM PCRs: %w", err)
 	}
 
 	// Check if the TPM is provisioned. If provisioned, load the AK and IK key.
