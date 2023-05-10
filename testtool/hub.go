@@ -48,14 +48,19 @@ func serve(c *config) error {
 
 	conf = c
 
-	log.Infof("Starting IoT Hub CoAP Server on %v", c.Addr)
+	addr := ""
+	if len(c.Addr) > 0 {
+		addr = c.Addr[0]
+	}
+
+	log.Infof("Starting IoT Hub CoAP Server on %v", addr)
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
 	r.Handle("/attest", mux.HandlerFunc(attest))
 
-	log.Infof("Waiting for requests on %v", c.Addr)
+	log.Infof("Waiting for requests on %v", addr)
 
-	err := coap.ListenAndServe("udp", c.Addr, r)
+	err := coap.ListenAndServe("udp", addr, r)
 	if err != nil {
 		return fmt.Errorf("failed to serve: %v", err)
 	}

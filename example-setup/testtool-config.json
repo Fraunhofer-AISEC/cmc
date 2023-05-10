@@ -1,6 +1,8 @@
 {
     "mode": "generate",
-    "addr": "localhost:4443",
+    "addr": [
+        "localhost:4443"
+    ],
     "cmc": "127.0.0.1:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
@@ -9,5 +11,6 @@
     "policies": "",
     "mtls": true,
     "api": "grpc",
-    "logLevel": "trace"
+    "logLevel": "trace",
+    "interval": "5m30s"
 }

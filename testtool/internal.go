@@ -41,6 +41,72 @@ import (
 
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging few a exemplary messages with it
+func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tls.Config) error {
+	verificationResult := new(ar.VerificationResult)
+
+	conn, err := atls.Dial("tcp", addr, tlsConf,
+		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcCa(c.ca),
+		atls.WithCmcPolicies(c.policies),
+		atls.WithCmcApi(api),
+		atls.WithMtls(c.Mtls),
+		atls.WithCmcNetwork(c.Network),
+		atls.WithResult(verificationResult))
+	if err != nil {
+		var attestedErr atls.AttestedError
+		if errors.As(err, &attestedErr) {
+			result, err := json.Marshal(attestedErr.GetVerificationResult())
+			if err != nil {
+				return fmt.Errorf("internal error: failed to marshal verification result: %v",
+					err)
+			}
+			r, err := strconv.Unquote(string(result))
+			if err != nil {
+				r = string(result)
+			}
+
+			// Publish the attestation result if publishing address was specified
+			err = publish(c.Publish, verificationResult)
+			if err != nil {
+				log.Warnf("failed to publish result: %v", err)
+			}
+
+			return fmt.Errorf(
+				"verification Result: %v. Cannot establish connection: remote attestation failed",
+				r)
+		}
+		return fmt.Errorf("failed to dial server: %v", err)
+	}
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
+
+	// Publish the attestation result if publishing address was specified
+	// TODO maybe async
+	err = publish(c.Publish, verificationResult)
+	if err != nil {
+		log.Warnf("failed to publish result: %v", err)
+	}
+
+	// Testing: write a hello string
+	msg := "hello\n"
+	log.Infof("Sending to peer: %v", msg)
+	_, err = conn.Write([]byte(msg))
+	if err != nil {
+		return fmt.Errorf("failed to write: %v", err)
+	}
+
+	// Testing: read the answer from the server and print
+	buf := make([]byte, 100)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read. %v", err)
+	}
+	log.Infof("Received from peer: %v", string(buf[:n-1]))
+
+	return nil
+}
+
+// Wrapper for dialInternalAddr
 func dialInternal(c *config, api atls.CmcApiSelect) {
 	var tlsConf *tls.Config
 
@@ -76,66 +142,31 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 
 	internal.PrintTlsConfig(tlsConf, c.ca)
 
-	verificationResult := new(ar.VerificationResult)
+	testTime := time.Unix(0, 0)
 
-	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
-		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcCa(c.ca),
-		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(api),
-		atls.WithMtls(c.Mtls),
-		atls.WithCmcNetwork(c.Network),
-		atls.WithResult(verificationResult))
-	if err != nil {
-		var attestedErr atls.AttestedError
-		if errors.As(err, &attestedErr) {
-			result, err := json.Marshal(attestedErr.GetVerificationResult())
-			if err != nil {
-				log.Fatalf("Internal error: failed to marshal verification result: %v",
-					err)
-			}
-			r, err := strconv.Unquote(string(result))
-			if err != nil {
-				r = string(result)
-			}
+	// Check if interval is non-negative
+	if testTime.Before(testTime.Add(c.interval)) {
+		ticker := time.NewTicker(c.interval)
 
-			// Publish the attestation result if publishing address was specified
-			err = publish(c.Publish, verificationResult)
-			if err != nil {
-				log.Warnf("failed to publish result: %v", err)
-			}
+		log.Infof("Starting monitoring with interval %v", c.interval)
 
-			log.Fatalf(
-				"Verification Result: %v\nCannot establish connection: Remote attestation Failed.",
-				r)
+		for {
+			<-ticker.C
+			for _, addr := range c.Addr {
+				err := dialInternalAddr(c, api, addr, tlsConf)
+				if err != nil {
+					log.Warnf(err.Error())
+				}
+			}
 		}
-		log.Fatalf("Failed to dial server: %v", err)
+	} else {
+		for _, addr := range c.Addr {
+			err := dialInternalAddr(c, api, addr, tlsConf)
+			if err != nil {
+				log.Warnf(err.Error())
+			}
+		}
 	}
-	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
-
-	// Publish the attestation result if publishing address was specified
-	// TODO maybe async
-	err = publish(c.Publish, verificationResult)
-	if err != nil {
-		log.Warnf("failed to publish result: %v", err)
-	}
-
-	// Testing: write a hello string
-	msg := "hello\n"
-	log.Infof("Sending to peer: %v", msg)
-	_, err = conn.Write([]byte(msg))
-	if err != nil {
-		log.Fatalf("Failed to write: %v", err)
-	}
-
-	// Testing: read the answer from the server and print
-	buf := make([]byte, 100)
-	n, err := conn.Read(buf)
-	if err != nil {
-		log.Fatalf("Failed to read. %v", err)
-	}
-	log.Infof("Received from peer: %v", string(buf[:n-1]))
 }
 
 func listenInternal(c *config, api atls.CmcApiSelect) {
@@ -176,8 +207,13 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 
 	verificationResult := new(ar.VerificationResult)
 
+	addr := ""
+	if len(c.Addr) > 0 {
+		addr = c.Addr[0]
+	}
+
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
+	ln, err := atls.Listen("tcp", addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcCa(c.ca),
 		atls.WithCmcPolicies(c.policies),
@@ -191,7 +227,7 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 	defer ln.Close()
 
 	for {
-		log.Infof("serving under %v", c.Addr)
+		log.Infof("serving under %v", addr)
 		// Finish TLS connection establishment with Remote Attestation
 		conn, err := ln.Accept()
 		if err != nil {
@@ -236,9 +272,14 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 }
 
 func getCaCertsInternal(c *config) {
+	addr := ""
+	if len(c.Addr) > 0 {
+		addr = c.Addr[0]
+	}
+
 	log.Info("Retrieving CA certs")
 	client := est.NewClient(nil)
-	certs, err := client.CaCerts(c.Addr)
+	certs, err := client.CaCerts(addr)
 	if err != nil {
 		log.Fatalf("Failed to retrieve certificates: %v", err)
 	}
