@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
@@ -59,23 +60,25 @@ type Api interface {
 }
 
 type config struct {
-	Mode         string `json:"mode"`
-	Addr         string `json:"addr"`
-	CmcAddr      string `json:"cmc"`
-	ReportFile   string `json:"report"`
-	ResultFile   string `json:"result"`
-	NonceFile    string `json:"nonce"`
-	CaFile       string `json:"ca"`
-	Mtls         bool   `json:"mtls"`
-	PoliciesFile string `json:"policies"`
-	Api          string `json:"api"`
-	Network      string `json:"network"`
-	LogLevel     string `json:"logLevel"`
-	Publish      string `json:"publish"`
+	Mode         string   `json:"mode"`
+	Addr         []string `json:"addr"`
+	CmcAddr      string   `json:"cmc"`
+	ReportFile   string   `json:"report"`
+	ResultFile   string   `json:"result"`
+	NonceFile    string   `json:"nonce"`
+	CaFile       string   `json:"ca"`
+	Mtls         bool     `json:"mtls"`
+	PoliciesFile string   `json:"policies"`
+	Api          string   `json:"api"`
+	Network      string   `json:"network"`
+	LogLevel     string   `json:"logLevel"`
+	Publish      string   `json:"publish"`
+	IntervalStr  string   `json:"interval"`
 
 	ca       []byte
 	policies []byte
 	api      Api
+	interval time.Duration
 }
 
 const (
@@ -93,6 +96,7 @@ const (
 	mtlsFlag     = "mtls"
 	logFlag      = "log"
 	publishFlag  = "publish"
+	intervalFlag = "interval"
 )
 
 func getConfig() *config {
@@ -100,32 +104,35 @@ func getConfig() *config {
 	var ok bool
 
 	// Parse given command line flags
-	configFile := flag.String(configFlag, "", "configuration file")
+	configFile := flag.String(configFlag, "", "Configuration file")
 	mode := flag.String(modeFlag, "", fmt.Sprintf("Possible modes: %v", maps.Keys(cmds)))
-	addr := flag.String(addrFlag, "", "server ip:port to connect to / listen on via attested tls")
+	addr := flag.String(addrFlag, "", "Server ip:port to connect to / listen on via attested tls")
 	cmcAddr := flag.String(cmcFlag, "", "TCP address to connect to the cmcd API")
 	reportFile := flag.String(reportFlag, "", "Output file for the attestation report")
 	resultFile := flag.String(resultFlag, "", "Output file for the attestation result")
 	nonceFile := flag.String(nonceFlag, "", "Output file for the nonce")
 	caFile := flag.String(caFlag, "", "Certificate Authorities to be trusted in PEM format")
 	policiesFile := flag.String(policiesFlag, "", "JSON policies file for custom verification")
-	api := flag.String(apiFlag, "", fmt.Sprintf("APIs for cmcd Possible: %v", maps.Keys(apis)))
+	api := flag.String(apiFlag, "", fmt.Sprintf("APIs for cmcd. Possible: %v", maps.Keys(apis)))
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
-	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS with remote attestation on both sides.")
+	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS with remote attestation on both sides")
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	publish := flag.String(publishFlag, "", "HTTP address to publish attestation results to")
+	interval := flag.String(intervalFlag, "",
+		"Interval at which connectors will be attested. If set to <=0, attestation will only be done once")
 	flag.Parse()
 
 	// Create default configuration
 	c := &config{
-		Addr:       "0.0.0.0:4443",
-		CmcAddr:    "127.0.0.1:9955",
-		ReportFile: "attestation-report",
-		ResultFile: "attestation-result.json",
-		NonceFile:  "nonce",
-		Api:        "grpc",
-		LogLevel:   "info",
+		Addr:        []string{"0.0.0.0:4443"},
+		CmcAddr:     "127.0.0.1:9955",
+		ReportFile:  "attestation-report",
+		ResultFile:  "attestation-result.json",
+		NonceFile:   "nonce",
+		Api:         "grpc",
+		LogLevel:    "info",
+		IntervalStr: "0s",
 	}
 
 	// Obtain custom configuration from file if specified
@@ -133,11 +140,11 @@ func getConfig() *config {
 		log.Infof("Loading config from file %v", *configFile)
 		data, err := os.ReadFile(*configFile)
 		if err != nil {
-			log.Fatalf("failed to read cmcd config file %v: %v", *configFile, err)
+			log.Fatalf("Failed to read cmcd config file %v: %v", *configFile, err)
 		}
 		err = json.Unmarshal(data, c)
 		if err != nil {
-			log.Fatalf("failed to parse cmcd config: %v", err)
+			log.Fatalf("Failed to parse cmcd config: %v", err)
 		}
 	}
 
@@ -146,7 +153,7 @@ func getConfig() *config {
 		c.Mode = *mode
 	}
 	if internal.FlagPassed(addrFlag) {
-		c.Addr = *addr
+		c.Addr = strings.Split(*addr, ",")
 	}
 	if internal.FlagPassed(cmcFlag) {
 		c.CmcAddr = *cmcAddr
@@ -181,6 +188,15 @@ func getConfig() *config {
 	if internal.FlagPassed(publishFlag) {
 		c.Publish = *publish
 	}
+	if internal.FlagPassed(intervalFlag) {
+		c.IntervalStr = *interval
+	}
+
+	intervalDuration, err := time.ParseDuration(c.IntervalStr)
+	if err != nil {
+		log.Fatalf("Failed to parse monitoring interval: %v", err)
+	}
+	c.interval = intervalDuration
 
 	// Configure the logger
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
@@ -200,7 +216,7 @@ func getConfig() *config {
 	if c.CaFile != "" && c.Mode != "cacerts" {
 		c.ca, err = os.ReadFile(c.CaFile)
 		if err != nil {
-			log.Fatalf("Failed to read file %v: %v", *caFile, err)
+			log.Fatalf("Failed to read certificate file %v: %v", *caFile, err)
 		}
 	}
 
@@ -225,36 +241,43 @@ func getConfig() *config {
 
 func pathsToAbs(c *config) {
 	var err error
-	if strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
+	if c.CmcAddr != "" && strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
 		c.CmcAddr, err = filepath.Abs(c.CmcAddr)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.CmcAddr, err)
 		}
 	}
 
-	c.ReportFile, err = filepath.Abs(c.ReportFile)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.ReportFile, err)
+	if c.ReportFile != "" {
+		c.ReportFile, err = filepath.Abs(c.ReportFile)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.ReportFile, err)
+		}
 	}
 
-	c.ResultFile, err = filepath.Abs(c.ResultFile)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.ResultFile, err)
+	if c.ResultFile != "" {
+		c.ResultFile, err = filepath.Abs(c.ResultFile)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.ResultFile, err)
+		}
 	}
 
-	c.NonceFile, err = filepath.Abs(c.NonceFile)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.NonceFile, err)
+	if c.NonceFile != "" {
+		c.NonceFile, err = filepath.Abs(c.NonceFile)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.NonceFile, err)
+		}
 	}
 
-	c.CaFile, err = filepath.Abs(c.CaFile)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
+	if c.CaFile != "" {
+		c.CaFile, err = filepath.Abs(c.CaFile)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
+		}
 	}
 }
 
 func printConfig(c *config) {
-
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Warnf("Failed to get working directory: %v", err)
@@ -264,6 +287,7 @@ func printConfig(c *config) {
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tMode         : %v", c.Mode)
 	log.Debugf("\tAddr         : %v", c.Addr)
+	log.Debugf("\tInterval     : %v", c.interval)
 	log.Debugf("\tCmcAddr      : %v", c.CmcAddr)
 	log.Debugf("\tReportFile   : %v", c.ReportFile)
 	log.Debugf("\tResultFile   : %v", c.ResultFile)
