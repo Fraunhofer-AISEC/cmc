@@ -242,7 +242,7 @@ type X509Name struct {
 	Organization       []string `json:"organization,omitempty"`
 	OrganizationalUnit []string `json:"organizationalUnit,omitempty"`
 	Locality           []string `json:"locality,omitempty"`
-	Province           []string `json:"providence,omitempty"`
+	Province           []string `json:"province,omitempty"`
 	StreetAddress      []string `json:"streetAddress,omitempty"`
 	PostalCode         []string `json:"postalCode,omitempty"`
 	SerialNumber       string   `json:"serialNumber,omitempty"`
