@@ -78,7 +78,7 @@ func (a GrpcApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 	log.Tracef("Obtaining AR from local cmcd on %v", cc.cmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
-		return nil, errors.New("failed to establish connection to obtain attestation report")
+		return nil, errors.New("failed to establish connection to obtain AR")
 	}
 	defer cmcconn.Close()
 	defer cancel()
@@ -92,13 +92,13 @@ func (a GrpcApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 	// Call Attest request
 	resp, err := cmcClient.Attest(context.Background(), req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to obtain attestation report: %w", err)
+		return nil, fmt.Errorf("failed to obtain AR: %w", err)
 	}
 
 	// Marshal response
 	data, err := proto.Marshal(resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
+		return nil, fmt.Errorf("failed to marshal AR response: %w", err)
 	}
 
 	// Return response
