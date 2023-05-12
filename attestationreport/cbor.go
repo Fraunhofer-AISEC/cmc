@@ -98,7 +98,7 @@ func (s CborSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 
 	err = msgToSign.Sign(rand.Reader, nil, coseSigner)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign cbor object: %w", err)
+		return nil, fmt.Errorf("signing failed: %w. len(report): %v", err, len(report))
 	}
 
 	// sign and marshal message

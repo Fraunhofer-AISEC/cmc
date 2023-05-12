@@ -88,6 +88,10 @@ func (s JsonSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 
 	log.Trace("Signing attestation report")
 
+	// This allows the signer to ensure mutual access for signing, if required
+	signer.Lock()
+	defer signer.Unlock()
+
 	// create list of all certificates in the correct order
 	certs, err := signer.GetCertChain()
 	if err != nil {
@@ -134,15 +138,11 @@ func (s JsonSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 		return nil, fmt.Errorf("failed to setup signer for the Attestation Report: %w", err)
 	}
 
-	// This allows the signer to ensure mutual access for signing, if required
-	signer.Lock()
-	defer signer.Unlock()
-
 	// sign
 	log.Trace("Performing Sign operation")
 	obj, err := joseSigner.Sign(report)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign the Attestation Report: %w", err)
+		return nil, err
 	}
 	log.Trace("Signed attestation report")
 
@@ -325,8 +325,10 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 
 	// Hash payload
 	hasher := opts.HashFunc().New()
-	// According to documentation, Write() on hash never fails
-	_, _ = hasher.Write(payload)
+	n, err := hasher.Write(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash: %w", err)
+	}
 	hashed := hasher.Sum(nil)
 
 	// sign payload
@@ -335,7 +337,9 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		// Obtain signature
 		asn1Sig, err := hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("signing failed: %w. Additional info: "+
+				"opts: %v, keySize: %v, len(report): %v, len(hash): %v",
+				err, opts, keySize, n, len(hashed))
 		}
 		// Convert from asn1 format (as specified in crypto) to concatenated and padded format for go-jose
 		type ecdsasig struct {
