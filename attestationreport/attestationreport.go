@@ -21,9 +21,11 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/sirupsen/logrus"
 
 	"time"
@@ -441,11 +443,26 @@ func Sign(report []byte, signer Driver, s Serializer) ([]byte, error) {
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the reference values and the compatibility of software artefacts.
-func Verify(arRaw string, nonce, casPem []byte, policies []byte, polEng PolicyEngineSelect, s Serializer) VerificationResult {
+func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSelect) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
 		SwCertLevel: 0}
+
+	// Detect serialization format
+	var s Serializer
+	if json.Valid(arRaw) {
+		log.Trace("Detected JSON serialization")
+		s = JsonSerializer{}
+	} else if err := cbor.Valid(arRaw); err == nil {
+		log.Trace("Detected CBOR serialization")
+		s = CborSerializer{}
+	} else {
+		result.Success = false
+		result.ProcessingError = append(result.ProcessingError,
+			"Unable to detect AR serialization format")
+		return result
+	}
 
 	// Verify all signatures and unpack plain AttestationReport
 	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem, s)
@@ -621,7 +638,7 @@ func extendHash(hash []byte, data []byte) []byte {
 	return ret
 }
 
-func verifyAndUnpackAttestationReport(attestationReport string, result *VerificationResult, casPem []byte, s Serializer) (bool, *ArPlain) {
+func verifyAndUnpackAttestationReport(attestationReport []byte, result *VerificationResult, casPem []byte, s Serializer) (bool, *ArPlain) {
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
 		return false, nil
@@ -637,7 +654,7 @@ func verifyAndUnpackAttestationReport(attestationReport string, result *Verifica
 	}
 
 	//Validate Attestation Report signature
-	tokenRes, payload, ok := s.VerifyToken([]byte(attestationReport), roots)
+	tokenRes, payload, ok := s.VerifyToken(attestationReport, roots)
 	result.ReportSignature = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of Attestation Report failed")

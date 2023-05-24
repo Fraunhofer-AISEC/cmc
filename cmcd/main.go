@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	metadata, err := getMetadata(c.Metadata, c.Cache, c.serializer)
+	metadata, s, err := getMetadata(c.Metadata, c.Cache)
 	if err != nil {
 		log.Fatalf("Failed to get metadata: %v", err)
 	}
@@ -46,7 +46,7 @@ func main() {
 		Metadata:    metadata,
 		UseIma:      c.UseIma,
 		ImaPcr:      c.ImaPcr,
-		Serializer:  c.serializer,
+		Serializer:  s,
 	}
 
 	// Initialize drivers
@@ -60,7 +60,7 @@ func main() {
 	serverConfig := &ServerConfig{
 		Metadata:           metadata,
 		Drivers:            c.drivers,
-		Serializer:         c.serializer,
+		Serializer:         s,
 		PolicyEngineSelect: c.policyEngineSelect,
 		Network:            c.Network,
 	}

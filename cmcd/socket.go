@@ -155,8 +155,8 @@ func verify(conn net.Conn, payload []byte, conf *ServerConfig) {
 	}
 
 	log.Debug("Verifier: Verifying Attestation Report")
-	result := ar.Verify(string(req.AttestationReport), req.Nonce, req.Ca, req.Policies,
-		conf.PolicyEngineSelect, conf.Serializer)
+	result := ar.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
+		conf.PolicyEngineSelect)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	r, err := json.Marshal(result)
