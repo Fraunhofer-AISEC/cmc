@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 function abs_path() {
   if [ -d "$(dirname "$1")" ]
   then
@@ -7,18 +9,17 @@ function abs_path() {
   fi
 }
 
-set -e
-
-if [ "$#" -ne 1 ]; then
-   echo "Usage: ./update-full-ids <data-folder>"
-   exit
+if [ "$#" -ne 2 ]; then
+   echo "Usage: ./update-full-ids <data-folder> <cbor|json>"
+   exit 1
 fi
 
 DATA="$(abs_path $1)"
+SER="$2"
 
 if [ ! -d "$DATA" ]; then
   echo "Data directory $DATA does not exist. Did you run the setup-full-ids script? Abort.."
-  exit
+  exit 1
 fi
 
 export PATH=$PATH:$HOME/go/bin
@@ -41,6 +42,7 @@ jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-ra
 
 # Sign the metadata*
 IN=$DATA/metadata-raw
+TMP=$DATA/metadata-tmp
 OUT=$DATA/metadata-signed
 
 KEY_DEV_A=$DATA/pki/developer_A-key.pem
@@ -64,11 +66,33 @@ CHAIN_CERT_B=$DATA/pki/certifier_B.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pe
 KEY_OP_A=$DATA/pki/operator_A-key.pem
 CHAIN_OP_A=$DATA/pki/operator_A.pem,$DATA/pki/user_sub_ca.pem,$DATA/pki/ca.pem
 
+rm -rf $TMP
+rm -rf $OUT
+
+mkdir -p $TMP
 mkdir -p $OUT
 
-cmc-signing-tool -in $IN/rtm.manifest.json         -out $OUT/rtm.manifest.json         -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
-cmc-signing-tool -in $IN/os.manifest.json          -out $OUT/os.manifest.json          -keys $KEY_DEV_B,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_B:$CHAIN_EVA_A:$CHAIN_CERT_A
-cmc-signing-tool -in $IN/company.description.json  -out $OUT/company.description.json  -keys $KEY_OP_A,$KEY_EVA_B,$KEY_CERT_B -x5cs $CHAIN_OP_A:$CHAIN_EVA_B:$CHAIN_CERT_B
+if [ "${SER,,}" = "json" ]; then
+  echo "using json serialization"
+  cp $IN/rtm.manifest.json        $TMP/rtm.manifest.json
+  cp $IN/os.manifest.json         $TMP/os.manifest.json
+  cp $IN/device.description.json  $TMP/device.description.json
+  cp $IN/device.config.json       $TMP/device.config.json
+  cp $IN/company.description.json $TMP/company.description.json
+elif [ "${SER,,}" = "cbor" ]; then
+  echo "using cbor serialiation"
+  cmc-converter -in $IN/rtm.manifest.json        -out $TMP/rtm.manifest.cbor        -outform cbor
+  cmc-converter -in $IN/os.manifest.json         -out $TMP/os.manifest.cbor         -outform cbor
+  cmc-converter -in $IN/device.description.json  -out $TMP/device.description.cbor  -outform cbor
+  cmc-converter -in $IN/device.config.json       -out $TMP/device.config.cbor       -outform cbor
+  cmc-converter -in $IN/company.description.json -out $TMP/company.description.cbor -outform cbor
+else
+  echo "serialization format ${SER} is not supported"
+  exit 1
+fi
 
-cmc-signing-tool -in $IN/device.description.json   -out $OUT/device.description.json   -keys $KEY_OP_A -x5cs $CHAIN_OP_A
-cmc-signing-tool -in $IN/device.config.json        -out $OUT/device.config.json        -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+cmc-signing-tool -in $TMP/rtm.manifest."${SER}"         -out $OUT/rtm.manifest."${SER}"         -keys $KEY_DEV_A,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_A:$CHAIN_EVA_A:$CHAIN_CERT_A
+cmc-signing-tool -in $TMP/os.manifest."${SER}"          -out $OUT/os.manifest."${SER}"          -keys $KEY_DEV_B,$KEY_EVA_A,$KEY_CERT_A -x5cs $CHAIN_DEV_B:$CHAIN_EVA_A:$CHAIN_CERT_A
+cmc-signing-tool -in $TMP/company.description."${SER}"  -out $OUT/company.description."${SER}"  -keys $KEY_OP_A,$KEY_EVA_B,$KEY_CERT_B -x5cs $CHAIN_OP_A:$CHAIN_EVA_B:$CHAIN_CERT_B
+cmc-signing-tool -in $TMP/device.description."${SER}"   -out $OUT/device.description."${SER}"   -keys $KEY_OP_A -x5cs $CHAIN_OP_A
+cmc-signing-tool -in $TMP/device.config."${SER}"        -out $OUT/device.config."${SER}"        -keys $KEY_OP_A -x5cs $CHAIN_OP_A

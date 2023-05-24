@@ -42,7 +42,6 @@ type config struct {
 	UseIma         bool     `json:"useIma"`                 // TRUE, FALSE
 	ImaPcr         int32    `json:"imaPcr"`                 // 10-15
 	KeyConfig      string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
-	Serialization  string   `json:"serialization"`          // JSON, CBOR
 	Api            string   `json:"api"`                    // gRPC, CoAP, Socket
 	Network        string   `json:"network,omitempty"`      // unix, socket
 	PolicyEngine   string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
@@ -50,7 +49,6 @@ type config struct {
 	Storage        string   `json:"storage,omitempty"`
 	Cache          string   `json:"cache,omitempty"`
 
-	serializer         ar.Serializer
 	policyEngineSelect ar.PolicyEngineSelect
 	drivers            []ar.Driver
 }
@@ -66,11 +64,6 @@ var (
 		"trace": logrus.TraceLevel,
 	}
 
-	serializers = map[string]ar.Serializer{
-		"json": ar.JsonSerializer{},
-		"cbor": ar.CborSerializer{},
-	}
-
 	policyEngines = map[string]ar.PolicyEngineSelect{
 		"js":      ar.PolicyEngineSelect_JS,
 		"duktape": ar.PolicyEngineSelect_DukTape,
@@ -82,21 +75,20 @@ var (
 )
 
 const (
-	configFlag        = "config"
-	metadataFlag      = "metadata"
-	cmcAddrFlag       = "cmc"
-	provAddrFlag      = "prov"
-	driversFlag       = "drivers"
-	imaFlag           = "ima"
-	imaPcrFlag        = "pcr"
-	keyConfigFlag     = "algo"
-	serializationFlag = "serializer"
-	apiFlag           = "api"
-	networkFlag       = "network"
-	policyEngineFlag  = "policies"
-	logFlag           = "log"
-	storageFlag       = "storage"
-	cacheFlag         = "cache"
+	configFlag       = "config"
+	metadataFlag     = "metadata"
+	cmcAddrFlag      = "cmc"
+	provAddrFlag     = "prov"
+	driversFlag      = "drivers"
+	imaFlag          = "ima"
+	imaPcrFlag       = "pcr"
+	keyConfigFlag    = "algo"
+	apiFlag          = "api"
+	networkFlag      = "network"
+	policyEngineFlag = "policies"
+	logFlag          = "log"
+	storageFlag      = "storage"
+	cacheFlag        = "cache"
 )
 
 func getConfig() (*config, error) {
@@ -119,8 +111,6 @@ func getConfig() (*config, error) {
 		"Indicates whether to use Integrity Measurement Architecture (IMA)")
 	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
 	keyConfig := flag.String(keyConfigFlag, "", "Key configuration")
-	serialization := flag.String(serializationFlag, "",
-		fmt.Sprintf("Possible serializers: %v", strings.Join(maps.Keys(serializers), ",")))
 	api := flag.String(apiFlag, "", "API")
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine := flag.String(policyEngineFlag, "",
@@ -133,10 +123,9 @@ func getConfig() (*config, error) {
 
 	// Create default configuration
 	c := &config{
-		KeyConfig:     "EC256",
-		Serialization: "json",
-		Api:           "grpc",
-		LogLevel:      "trace",
+		KeyConfig: "EC256",
+		Api:       "grpc",
+		LogLevel:  "trace",
 	}
 
 	// Obtain custom configuration from file if specified
@@ -174,9 +163,6 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(keyConfigFlag) {
 		c.KeyConfig = *keyConfig
 	}
-	if internal.FlagPassed(serializationFlag) {
-		c.Serialization = *serialization
-	}
 	if internal.FlagPassed(apiFlag) {
 		c.Api = *api
 	}
@@ -213,12 +199,6 @@ func getConfig() (*config, error) {
 	//
 	// Perform custom config actions
 	//
-
-	// Get serializer
-	c.serializer, ok = serializers[strings.ToLower(c.Serialization)]
-	if !ok {
-		return nil, fmt.Errorf("serialization Interface %v not implemented", c.Serialization)
-	}
 
 	// Get policy engine
 	c.policyEngineSelect, ok = policyEngines[strings.ToLower(c.PolicyEngine)]
@@ -286,7 +266,6 @@ func printConfig(c *config) {
 	log.Debugf("\tMetadata Locations       : %v", strings.Join(c.Metadata, ","))
 	log.Debugf("\tUse IMA                  : %v", c.UseIma)
 	log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
-	log.Debugf("\tSerialization            : %v", c.Serialization)
 	log.Debugf("\tAPI                      : %v", c.Api)
 	log.Debugf("\tNetwork                  : %v", c.Network)
 	log.Debugf("\tPolicy Engine            : %v", c.PolicyEngine)

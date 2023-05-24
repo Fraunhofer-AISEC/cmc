@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 function abs_path() {
   if [ -d "$(dirname "$1")" ]
   then
@@ -7,18 +9,17 @@ function abs_path() {
   fi
 }
 
-set -e
-
-if [ "$#" -ne 1 ]; then
-   echo "Usage: ./update-full-simple <data-folder>"
-   exit
+if [ "$#" -ne 2 ]; then
+   echo "Usage: ./update-full-simple <data-folder> <cbor|json>"
+   exit 1
 fi
 
 DATA="$(abs_path $1)"
+SER="$2"
 
 if [ ! -d "$DATA" ]; then
   echo "Data directory $DATA does not exist. Did you run the setup-full-simple script? Abort.."
-  exit
+  exit 1
 fi
 
 echo "Using $DATA as directory for local data"
@@ -41,13 +42,35 @@ jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-ra
 
 # Sign the metadata*
 IN=$DATA/metadata-raw
+TMP=$DATA/metadata-tmp
 OUT=$DATA/metadata-signed
 KEY=$DATA/pki/signing-cert-key.pem
 CHAIN=$DATA/pki/signing-cert.pem,$DATA/pki/ca.pem
 
+rm -rf $TMP
+rm -rf $OUT
+
+mkdir -p $TMP
 mkdir -p $OUT
 
-cmc-signing-tool -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $IN/device.config.json       -out $OUT/device.config.json       -keys $KEY -x5cs $CHAIN
+if [ "${SER,,}" = "json" ]; then
+  echo "using json serialization"
+  cp $IN/rtm.manifest.json        $TMP/rtm.manifest.json
+  cp $IN/os.manifest.json         $TMP/os.manifest.json
+  cp $IN/device.description.json  $TMP/device.description.json
+  cp $IN/device.config.json       $TMP/device.config.json
+elif [ "${SER,,}" = "cbor" ]; then
+  echo "using cbor serialiation"
+  cmc-converter -in $IN/rtm.manifest.json        -out $TMP/rtm.manifest.cbor       -outform cbor
+  cmc-converter -in $IN/os.manifest.json         -out $TMP/os.manifest.cbor        -outform cbor
+  cmc-converter -in $IN/device.description.json  -out $TMP/device.description.cbor -outform cbor
+  cmc-converter -in $IN/device.config.json       -out $TMP/device.config.cbor      -outform cbor
+else
+  echo "serialization format ${SER} is not supported"
+  exit 1
+fi
+
+cmc-signing-tool -in $TMP/rtm.manifest."${SER}"        -out $OUT/rtm.manifest."${SER}"        -keys $KEY -x5cs $CHAIN
+cmc-signing-tool -in $TMP/os.manifest."${SER}"         -out $OUT/os.manifest."${SER}"         -keys $KEY -x5cs $CHAIN
+cmc-signing-tool -in $TMP/device.description."${SER}"  -out $OUT/device.description."${SER}"  -keys $KEY -x5cs $CHAIN
+cmc-signing-tool -in $TMP/device.config."${SER}"       -out $OUT/device.config."${SER}"       -keys $KEY -x5cs $CHAIN

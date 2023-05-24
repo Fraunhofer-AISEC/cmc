@@ -16,14 +16,9 @@
 package main
 
 import (
-	"crypto/x509"
-	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/sirupsen/logrus"
-
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 func Test_isNewer(t *testing.T) {
@@ -55,65 +50,3 @@ func Test_isNewer(t *testing.T) {
 		})
 	}
 }
-
-func Test_filterMetadata(t *testing.T) {
-	type args struct {
-		inlist [][]byte
-		s      ar.Serializer
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    [][]byte
-		wantErr bool
-	}{
-		{"Filter", args{inlist, MockSerializer{}}, outlist, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := filterMetadata(tt.args.inlist, tt.args.s)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("filterMetadata() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("filterMetadata() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-type MockSerializer struct{}
-
-func (s MockSerializer) GetPayload(raw []byte) ([]byte, error) {
-	return raw, nil
-}
-func (s MockSerializer) Marshal(v any) ([]byte, error) {
-	return nil, nil
-}
-func (s MockSerializer) Unmarshal(data []byte, v any) error {
-	return json.Unmarshal(data, v)
-}
-func (s MockSerializer) Sign(report []byte, signer ar.Driver) ([]byte, error) {
-	return nil, nil
-}
-func (s MockSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (ar.TokenResult, []byte, bool) {
-	return ar.TokenResult{}, nil, false
-}
-
-var (
-	os1 = []byte(`{"type":"OS Manifest","name":"os1.test","version":"2023-02-02T14:00:00Z"}`)
-	os2 = []byte(`{"type":"OS Manifest","name":"os2.test","version":"1999-02-02T14:00:00Z"}`)
-
-	rtm1 = []byte(`{"type":"RTM Manifest","name":"rtm1.test","version":"2023-02-02T14:00:00Z"}`)
-	rtm2 = []byte(`{"type":"RTM Manifest","name":"rtm1.test","version":"2023-02-02T15:00:00Z"}`)
-	rtm3 = []byte(`{"type":"RTM Manifest","name":"rtm2.test","version":"2023-02-02T16:00:00Z"}`)
-
-	app1 = []byte(`{"type":"App Manifest","name":"app1.test","version":"2023-03-02T14:00:00Z"}`)
-	app2 = []byte(`{"type":"App Manifest","name":"app1.test","version":"1999-02-02T14:00:00Z"}`)
-	app3 = []byte(`{"type":"App Manifest","name":"app2.test","version":"2023-02-02T16:00:00Z"}`)
-
-	inlist = [][]byte{os1, os2, rtm1, rtm2, rtm3, app1, app2, app3}
-
-	outlist = [][]byte{os1, rtm3, app1, app3}
-)

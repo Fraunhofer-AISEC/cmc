@@ -220,9 +220,9 @@ func TestVerify(t *testing.T) {
 
 			// Run FUT
 			got := Verify(
-				string(ar), nonce,
+				ar, nonce,
 				internal.WriteCertPem(certchain[len(certchain)-1]),
-				nil, 0, tt.args.serializer)
+				nil, 0)
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}
