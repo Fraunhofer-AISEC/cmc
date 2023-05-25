@@ -449,6 +449,14 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		Success:     true,
 		SwCertLevel: 0}
 
+	cas, err := internal.ParseCertsPem(casPem)
+	if err != nil {
+		result.Success = false
+		result.ProcessingError = append(result.ProcessingError,
+			fmt.Sprintf("Failed to parse specified CA certificate(s): %v", err))
+		return result
+	}
+
 	// Detect serialization format
 	var s Serializer
 	if json.Valid(arRaw) {
@@ -465,7 +473,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	}
 
 	// Verify all signatures and unpack plain AttestationReport
-	ok, ar := verifyAndUnpackAttestationReport(arRaw, &result, casPem, s)
+	ok, ar := verifyAr(arRaw, &result, cas, s)
 	if ar == nil {
 		result.InternalError = true
 	}
@@ -491,7 +499,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	// If present, verify TPM measurements against provided TPM reference values
 	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(ar.TpmM, nonce,
-		referenceValues["TPM Reference Value"], casPem)
+		referenceValues["TPM Reference Value"], cas)
 	if !ok {
 		result.Success = false
 	}
@@ -505,7 +513,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	// If present, verify ARM PSA EAT measurements against provided PSA reference values
 	result.MeasResult.IasMeasResult, ok = verifyIasMeasurements(ar.IasM, nonce,
-		referenceValues["IAS Reference Value"], casPem)
+		referenceValues["IAS Reference Value"], cas)
 	if !ok {
 		result.Success = false
 	}
@@ -638,7 +646,10 @@ func extendHash(hash []byte, data []byte) []byte {
 	return ret
 }
 
-func verifyAndUnpackAttestationReport(attestationReport []byte, result *VerificationResult, casPem []byte, s Serializer) (bool, *ArPlain) {
+func verifyAr(attestationReport []byte, result *VerificationResult,
+	cas []*x509.Certificate, s Serializer,
+) (bool, *ArPlain) {
+
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
 		return false, nil
@@ -646,15 +657,8 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 
 	ar := ArPlain{}
 
-	roots, err := internal.ParseCerts(casPem)
-	if err != nil {
-		log.Warn("Loading PEM encoded CA certificate(s) failed")
-		result.Success = false
-		return false, &ar
-	}
-
 	//Validate Attestation Report signature
-	tokenRes, payload, ok := s.VerifyToken(attestationReport, roots)
+	tokenRes, payload, ok := s.VerifyToken(attestationReport, cas)
 	result.ReportSignature = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of Attestation Report failed")
@@ -663,7 +667,7 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 	}
 
 	var arPacked ArPacked
-	err = s.Unmarshal(payload, &arPacked)
+	err := s.Unmarshal(payload, &arPacked)
 	if err != nil {
 		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v", err)
 		result.ProcessingError = append(result.ProcessingError, msg)
@@ -679,7 +683,7 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 	ar.Nonce = arPacked.Nonce
 
 	// Validate and unpack Rtm Manifest
-	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.RtmManifest), roots)
+	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.RtmManifest), cas)
 	result.RtmResult.Summary = tokenRes.Summary
 	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
@@ -703,7 +707,7 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 	}
 
 	// Validate and unpack OS Manifest
-	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.OsManifest), roots)
+	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.OsManifest), cas)
 	result.OsResult.Summary = tokenRes.Summary
 	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
@@ -731,7 +735,7 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 	for i, amSigned := range arPacked.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
-		tokenRes, payload, ok = s.VerifyToken([]byte(amSigned), roots)
+		tokenRes, payload, ok = s.VerifyToken([]byte(amSigned), cas)
 		result.AppResults[i].Summary = tokenRes.Summary
 		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
@@ -761,7 +765,7 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 
 	// Validate and unpack Company Description if present
 	if arPacked.CompanyDescription != nil {
-		tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.CompanyDescription), roots)
+		tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.CompanyDescription), cas)
 		result.CompDescResult = &CompDescResult{}
 		result.CompDescResult.Summary = tokenRes.Summary
 		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
@@ -790,7 +794,7 @@ func verifyAndUnpackAttestationReport(attestationReport []byte, result *Verifica
 	}
 
 	// Validate and unpack Device Description
-	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.DeviceDescription), roots)
+	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.DeviceDescription), cas)
 	result.DevDescResult.Summary = tokenRes.Summary
 	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {

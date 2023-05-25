@@ -268,7 +268,7 @@ func loadCertChain(certChainFiles []string) ([]*x509.Certificate, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to get file: %w", err)
 		}
-		cert, err := internal.ParseCert(pem)
+		cert, err := internal.ParseCertPem(pem)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load certificate: %w", err)
 		}

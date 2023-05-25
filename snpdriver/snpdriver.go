@@ -150,7 +150,7 @@ func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 	measurement := ar.SnpMeasurement{
 		Type:   "SNP Measurement",
 		Report: data,
-		Certs:  internal.WriteCertsPem(snp.snpCertChain),
+		Certs:  internal.WriteCertsDer(snp.snpCertChain),
 	}
 
 	return measurement, nil
@@ -369,7 +369,7 @@ func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
 	}
-	akchain, err := internal.ParseCerts(data)
+	akchain, err := internal.ParseCertsPem(data)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
 	}
@@ -379,7 +379,7 @@ func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
 	}
-	ikchain, err := internal.ParseCerts(data)
+	ikchain, err := internal.ParseCertsPem(data)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
 	}

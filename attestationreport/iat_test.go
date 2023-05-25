@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"crypto/x509"
 	"encoding/hex"
 	"reflect"
 	"testing"
@@ -28,7 +29,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		IasM            *IasMeasurement
 		nonce           []byte
 		referenceValues []ReferenceValue
-		ca              []byte
+		ca              *x509.Certificate
 	}
 	tests := []struct {
 		name string
@@ -41,14 +42,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(validIasCa),
+				ca: validIasCa,
 			},
 			want: true,
 		},
@@ -58,14 +59,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: invalidIat,
-					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(validIasCa),
+				ca: validIasCa,
 			},
 			want: false,
 		},
@@ -75,14 +76,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs:  [][]byte{[]byte(invalidIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{invalidIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(validIasCa),
+				ca: validIasCa,
 			},
 			want: false,
 		},
@@ -92,14 +93,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(invalidIasCa),
+				ca: invalidIasCa,
 			},
 			want: false,
 		},
@@ -109,14 +110,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: invalidIasNonce,
 				referenceValues: []ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(validIasCa),
+				ca: validIasCa,
 			},
 			want: false,
 		},
@@ -126,14 +127,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "IAS Measurement",
 					Report: validIat,
-					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(validIasCa),
+				ca: validIasCa,
 			},
 			want: false,
 		},
@@ -143,14 +144,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 				IasM: &IasMeasurement{
 					Type:   "SNP Measurement",
 					Report: validIat,
-					Certs:  [][]byte{[]byte(validIasCert), []byte(validIasCa)},
+					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: []byte(validIasCa),
+				ca: validIasCa,
 			},
 			want: false,
 		},
@@ -159,7 +160,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifyIasMeasurements(tt.args.IasM, tt.args.nonce, tt.args.referenceValues, tt.args.ca)
+			_, got := verifyIasMeasurements(tt.args.IasM, tt.args.nonce, tt.args.referenceValues, []*x509.Certificate{tt.args.ca})
 			if got != tt.want {
 				t.Errorf("verifyIasMeasurements() error = %v, wantErr %v", got, tt.want)
 				return
@@ -180,13 +181,13 @@ var (
 
 	invalidIasNonce, _ = hex.DecodeString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899aabbccddee00")
 
-	validIasCert = "-----BEGIN CERTIFICATE-----\nMIICDzCCAbagAwIBAgIUCVN2jieJodotvnOcp2EITdQyCrIwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMTA2MTYwMTAwWhcNMjMxMTA2MTYwMTAwWjAuMQ8wDQYDVQQKEwZM\naW5hcm8xGzAZBgNVBAMTEkRldmljZSBDZXJ0aWZpY2F0ZTBZMBMGByqGSM49AgEG\nCCqGSM49AwEHA0IABHnrqQ6L9FCmdRV2rUWZsHrfk42juwvRfQA27Umi0Pw/v836\niVa1aL/bhnPmSNi1jZKZVbFKJsMIDzQRfZcdaGSjfzB9MA4GA1UdDwEB/wQEAwIF\noDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDAYDVR0TAQH/BAIwADAd\nBgNVHQ4EFgQUBbkwzYUWT/LvCMVh5dtZP0AycN0wHwYDVR0jBBgwFoAUP4XJy7ck\nBfew1NJEy8AENEN44gIwCgYIKoZIzj0EAwIDRwAwRAIgNPTUtvZ42YaWBSWmNGjA\nijLYO8ncUPjdgNQ0fOGAgzkCIG/OiC5pTdMZkCEGSM+t2lE+LnQ/Az4h4oo1fpPf\nhwsx\n-----END CERTIFICATE-----"
+	validIasCert = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICDzCCAbagAwIBAgIUCVN2jieJodotvnOcp2EITdQyCrIwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMTA2MTYwMTAwWhcNMjMxMTA2MTYwMTAwWjAuMQ8wDQYDVQQKEwZM\naW5hcm8xGzAZBgNVBAMTEkRldmljZSBDZXJ0aWZpY2F0ZTBZMBMGByqGSM49AgEG\nCCqGSM49AwEHA0IABHnrqQ6L9FCmdRV2rUWZsHrfk42juwvRfQA27Umi0Pw/v836\niVa1aL/bhnPmSNi1jZKZVbFKJsMIDzQRfZcdaGSjfzB9MA4GA1UdDwEB/wQEAwIF\noDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDAYDVR0TAQH/BAIwADAd\nBgNVHQ4EFgQUBbkwzYUWT/LvCMVh5dtZP0AycN0wHwYDVR0jBBgwFoAUP4XJy7ck\nBfew1NJEy8AENEN44gIwCgYIKoZIzj0EAwIDRwAwRAIgNPTUtvZ42YaWBSWmNGjA\nijLYO8ncUPjdgNQ0fOGAgzkCIG/OiC5pTdMZkCEGSM+t2lE+LnQ/Az4h4oo1fpPf\nhwsx\n-----END CERTIFICATE-----"))
 
-	invalidIasCert = "-----BEGIN CERTIFICATE-----\nMIIDVDCCAtqgAwIBAgIBATAKBggqhkjOPQQDAzBpMQswCQYDVQQGEwJERTERMA8G\nA1UEBxMIR2FyY2hpbmcxGTAXBgNVBAoTEEZyYXVuaG9mZXIgQUlTRUMxFTATBgNV\nBAsTDERldmljZSBTdWJDQTEVMBMGA1UEAxMMRGV2aWNlIFN1YkNBMB4XDTIyMDUw\nNDE3NDE0NFoXDTIyMTAzMTE3NDE0NFowgbAxCzAJBgNVBAYTAkRFMQswCQYDVQQI\nEwJCWTEPMA0GA1UEBxMGTXVuaWNoMR4wHAYDVQQJExVMaWNodGVuYmVyZ3N0cmFz\nc2UgMTExDjAMBgNVBBETBTg1NzQ4MRkwFwYDVQQKExBGcmF1bmhvZmVyIEFJU0VD\nMQ8wDQYDVQQLEwZkZXZpY2UxJzAlBgNVBAMTHmRlLmZoZy5haXNlYy5pZHMuYWsu\nY29ubmVjdG9yMDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALLkGMKG\nTwN5l8STOeoaEppeyQrkBMnkd+z5292EatVKRcHc4YZ/2ymTVsN9wnufcyqVXTH9\nGZNU3FG2+BQ0WzWIOZoh++f2FyVW6pfkCmYaOhtfzJDnL5tOhAi9tSb9KADn0gXi\ntIQJ4LTTimK8diEQEMO36kc7V2rnIbAp6XsldhdfzDq/x21SdDzz7tgmGqRKfW6J\n0WnU4lsswOXsaA1nfpntkqBAEetIPyWHNTCiuR8nsTodO2iB4kFFRpq8uy0vRjv3\nFUdmw4t9hLj89SjVLYOQtPu7HE+GBA0/MMj2PS0iUP9qgROjbl660RjZzcGP8jwm\nEtKOJKIMCV9dpPECAwEAAaNgMF4wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQC\nMAAwHQYDVR0OBBYEFICgXN+UT2N8E8sKBTpW1HL8lP4xMB8GA1UdIwQYMBaAFKL4\neCZP53Ov1EG4/cSt3w6unKVLMAoGCCqGSM49BAMDA2gAMGUCMQCjYNPMbOWUuXjj\nFVeTjX8R9oBlnDs+vib7jRxXxKsP6YXugz1ljPBmH0UJYl4AJSUCMA+amGNqs2b0\n84xW/a/CbCzpIbfO+c7iclWaWv+y//CQzS9XncOBQZyG54/wFmKxJw==\n-----END CERTIFICATE-----\n"
+	invalidIasCert = conv([]byte("-----BEGIN CERTIFICATE-----\nMIIDVDCCAtqgAwIBAgIBATAKBggqhkjOPQQDAzBpMQswCQYDVQQGEwJERTERMA8G\nA1UEBxMIR2FyY2hpbmcxGTAXBgNVBAoTEEZyYXVuaG9mZXIgQUlTRUMxFTATBgNV\nBAsTDERldmljZSBTdWJDQTEVMBMGA1UEAxMMRGV2aWNlIFN1YkNBMB4XDTIyMDUw\nNDE3NDE0NFoXDTIyMTAzMTE3NDE0NFowgbAxCzAJBgNVBAYTAkRFMQswCQYDVQQI\nEwJCWTEPMA0GA1UEBxMGTXVuaWNoMR4wHAYDVQQJExVMaWNodGVuYmVyZ3N0cmFz\nc2UgMTExDjAMBgNVBBETBTg1NzQ4MRkwFwYDVQQKExBGcmF1bmhvZmVyIEFJU0VD\nMQ8wDQYDVQQLEwZkZXZpY2UxJzAlBgNVBAMTHmRlLmZoZy5haXNlYy5pZHMuYWsu\nY29ubmVjdG9yMDCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALLkGMKG\nTwN5l8STOeoaEppeyQrkBMnkd+z5292EatVKRcHc4YZ/2ymTVsN9wnufcyqVXTH9\nGZNU3FG2+BQ0WzWIOZoh++f2FyVW6pfkCmYaOhtfzJDnL5tOhAi9tSb9KADn0gXi\ntIQJ4LTTimK8diEQEMO36kc7V2rnIbAp6XsldhdfzDq/x21SdDzz7tgmGqRKfW6J\n0WnU4lsswOXsaA1nfpntkqBAEetIPyWHNTCiuR8nsTodO2iB4kFFRpq8uy0vRjv3\nFUdmw4t9hLj89SjVLYOQtPu7HE+GBA0/MMj2PS0iUP9qgROjbl660RjZzcGP8jwm\nEtKOJKIMCV9dpPECAwEAAaNgMF4wDgYDVR0PAQH/BAQDAgeAMAwGA1UdEwEB/wQC\nMAAwHQYDVR0OBBYEFICgXN+UT2N8E8sKBTpW1HL8lP4xMB8GA1UdIwQYMBaAFKL4\neCZP53Ov1EG4/cSt3w6unKVLMAoGCCqGSM49BAMDA2gAMGUCMQCjYNPMbOWUuXjj\nFVeTjX8R9oBlnDs+vib7jRxXxKsP6YXugz1ljPBmH0UJYl4AJSUCMA+amGNqs2b0\n84xW/a/CbCzpIbfO+c7iclWaWv+y//CQzS9XncOBQZyG54/wFmKxJw==\n-----END CERTIFICATE-----\n"))
 
-	validIasCa = "-----BEGIN CERTIFICATE-----\nMIICBjCCAaygAwIBAgIUbzIW+iUiIFmCWbOL4rW4UBQfj7AwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMDIzMTcwMTAwWhcNMjcxMDIyMTcwMTAwWjBhMQswCQYDVQQGEwJE\nRTESMBAGA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAO\nBgNVBAsTB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTBZMBMGByqGSM49\nAgEGCCqGSM49AwEHA0IABEqaNo91iTSSbc9BL1iIQIVpZLd88RL5LfH15SVugJy4\n3d0jeE+KHtpQA8FpAvxXQHJm31z5V6+oLG4MQfVHN/GjQjBAMA4GA1UdDwEB/wQE\nAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBQ/hcnLtyQF97DU0kTLwAQ0\nQ3jiAjAKBggqhkjOPQQDAgNIADBFAiAFsmaZDBu+cfOqX9a5YAOgSeYB4Sb+r18m\nBIcuxwthhgIhALRHfA32ZcOA6piTKtWLZsdsG6CH50KGImHlkj4TwfXw\n-----END CERTIFICATE-----"
+	validIasCa = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICBjCCAaygAwIBAgIUbzIW+iUiIFmCWbOL4rW4UBQfj7AwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMDIzMTcwMTAwWhcNMjcxMDIyMTcwMTAwWjBhMQswCQYDVQQGEwJE\nRTESMBAGA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAO\nBgNVBAsTB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTBZMBMGByqGSM49\nAgEGCCqGSM49AwEHA0IABEqaNo91iTSSbc9BL1iIQIVpZLd88RL5LfH15SVugJy4\n3d0jeE+KHtpQA8FpAvxXQHJm31z5V6+oLG4MQfVHN/GjQjBAMA4GA1UdDwEB/wQE\nAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBQ/hcnLtyQF97DU0kTLwAQ0\nQ3jiAjAKBggqhkjOPQQDAgNIADBFAiAFsmaZDBu+cfOqX9a5YAOgSeYB4Sb+r18m\nBIcuxwthhgIhALRHfA32ZcOA6piTKtWLZsdsG6CH50KGImHlkj4TwfXw\n-----END CERTIFICATE-----"))
 
-	invalidIasCa = "-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"
+	invalidIasCa = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"))
 
 	validSpeMeasurement, _ = hex.DecodeString("c6c06836e8cd07dead305c01ec46a3e264858c47d661e5a257ab81aed87e34f0")
 
