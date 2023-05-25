@@ -48,7 +48,9 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues []ReferenceValue, casPem []byte) (*IasMeasurementResult, bool) {
+func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues []ReferenceValue,
+	cas []*x509.Certificate,
+) (*IasMeasurementResult, bool) {
 	result := &IasMeasurementResult{}
 	ok := true
 
@@ -69,11 +71,14 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	if len(iasM.Certs) == 0 {
-		msg := "Measurement certificates not provided"
+	log.Tracef("Parsing %v certificates", len(iasM.Certs))
+	certs, err := internal.ParseCertsDer(iasM.Certs)
+	if err != nil {
+		msg := fmt.Sprintf("failed to parse IAS certificates: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
+
 	if len(referenceValues) == 0 {
 		msg := "Could not find IAS Reference Value"
 		result.Summary.setFalse(&msg)
@@ -81,18 +86,9 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 	}
 	s := CborSerializer{}
 
-	log.Trace("Loading certificates")
-
-	cert, err := internal.ParseCert(iasM.Certs[0])
-	if err != nil {
-		msg := fmt.Sprintf("Failed to load CA certificate: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
 	log.Trace("Verifying CBOR IAT")
 
-	iatresult, payload, ok := verifyIat(iasM.Report, cert)
+	iatresult, payload, ok := verifyIat(iasM.Report, certs[0])
 	if !ok {
 		msg := "IAS signature verification failed"
 		result.Summary.setFalse(&msg)
@@ -124,19 +120,6 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 	log.Trace("Verifying certificate chain")
 
 	// Verify certificate chain
-	cas, err := internal.ParseCerts(casPem)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to parse cas: %v", err)
-		result.IasSignature.CertChainCheck.setFalse(&msg)
-		ok = false
-	}
-	certs, err := internal.ParseCerts(iasM.Certs)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to parse certs: %v", err)
-		result.IasSignature.CertChainCheck.setFalse(&msg)
-		ok = false
-	}
-
 	x509Chains, err := internal.VerifyCertChain(certs, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)

@@ -50,7 +50,7 @@ func TestParseCerts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseCerts(tt.args.data)
+			got, err := ParseCertsPem(tt.args.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseCerts() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -125,11 +125,11 @@ func TestVerifyCertChain(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// Preparation
-			certs, err := ParseCerts(tt.args.certs)
+			certs, err := ParseCertsPem(tt.args.certs)
 			if err != nil {
 				t.Errorf("Preparation: %v", err)
 			}
-			cas, err := ParseCerts(tt.args.cas)
+			cas, err := ParseCertsPem(tt.args.cas)
 			if err != nil {
 				t.Errorf("Preparation: %v", err)
 			}

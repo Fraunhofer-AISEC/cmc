@@ -28,7 +28,7 @@ import (
 	"github.com/google/go-tpm/tpm2"
 )
 
-func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues []ReferenceValue, casPem []byte) (*TpmMeasurementResult, bool) {
+func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues []ReferenceValue, cas []*x509.Certificate) (*TpmMeasurementResult, bool) {
 	result := &TpmMeasurementResult{}
 
 	log.Trace("Verifying TPM measurements")
@@ -99,18 +99,12 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 		ok = false
 	}
 
-	cas, err := internal.ParseCerts(casPem)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to parse ca certs: %v", err)
-		result.QuoteSignature.CertChainCheck.setFalse(&msg)
-		ok = false
-	}
-
-	mCerts, err := internal.ParseCerts(tpmM.Certs)
+	mCerts, err := internal.ParseCertsDer(tpmM.Certs)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load measurement certs: %v", err)
 		result.QuoteSignature.CertChainCheck.setFalse(&msg)
-		ok = false
+		result.Summary.Success = false
+		return result, false
 	}
 
 	result.QuoteSignature.SignCheck = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, mCerts[0])

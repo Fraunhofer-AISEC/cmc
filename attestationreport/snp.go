@@ -149,7 +149,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 		result.Freshness.Success = true
 	}
 
-	certs, err := internal.ParseCerts(snpM.Certs)
+	certs, err := internal.ParseCertsDer(snpM.Certs)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse certificates: %v", err)
 		result.Summary.setFalse(&msg)

@@ -234,7 +234,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		HashChain: hashChain,
 		Message:   quote.Quote,
 		Signature: quote.Signature,
-		Certs:     internal.WriteCertsPem(t.MeasuringCerts),
+		Certs:     internal.WriteCertsDer(t.MeasuringCerts),
 	}
 
 	for _, elem := range tm.HashChain {
@@ -678,7 +678,7 @@ func loadTpmCerts(storagePath string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", storagePath, err)
 	}
-	akchain, err := internal.ParseCerts(data)
+	akchain, err := internal.ParseCertsPem(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
 	}
@@ -688,7 +688,7 @@ func loadTpmCerts(storagePath string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", storagePath, err)
 	}
-	ikchain, err := internal.ParseCerts(data)
+	ikchain, err := internal.ParseCertsPem(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
 	}
