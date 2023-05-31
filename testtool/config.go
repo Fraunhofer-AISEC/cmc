@@ -125,6 +125,7 @@ func getConfig() *config {
 
 	// Create default configuration
 	c := &config{
+		Mode:        "generate",
 		Addr:        []string{"0.0.0.0:4443"},
 		CmcAddr:     "127.0.0.1:9955",
 		ReportFile:  "attestation-report",
@@ -213,14 +214,14 @@ func getConfig() *config {
 	printConfig(c)
 
 	// Get root CA certificate in PEM format if specified
-	if c.Mode != "cacerts" && c.Mode != "generate" {
+	if c.Mode != "generate" {
 		if c.CaFile != "" {
 			c.ca, err = os.ReadFile(c.CaFile)
 			if err != nil {
 				log.Fatalf("Failed to read certificate file %v: %v", *caFile, err)
 			}
 		} else {
-			log.Fatal("CA certificate file must be specified either via config file or commandline")
+			log.Fatal("CA certificate file (store or read) must be specified either via config file or commandline")
 		}
 	}
 

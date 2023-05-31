@@ -142,7 +142,7 @@ type TcbCheck struct {
 	Summary Result       `json:"resultSummary"`
 	Bl      VersionCheck `json:"bl"`
 	Tee     VersionCheck `json:"tee"`
-	Snp     VersionCheck `json:"Snp"`
+	Snp     VersionCheck `json:"snp"`
 	Ucode   VersionCheck `json:"ucode"`
 }
 
