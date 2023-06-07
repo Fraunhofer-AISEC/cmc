@@ -168,6 +168,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
+
 			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n--WANT = %v", got, tt.want)
 			}
@@ -459,6 +460,7 @@ var (
 					KeyUsage:           []string{"Digital Signature"},
 					SignatureAlgorithm: "ECDSA-SHA256",
 					PublicKeyAlgorithm: "RSA",
+					PublicKey:          "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszEASVD7GIFw2t+k813q\nSyah+290gDAEdpcle1rQlw3bxq94gvHaBa4CWGkH3SHQieBakRNRyTGYAn8q9O2w\n4fWWFFB5bBcuYVyJdzaUoPc2T/922notV3tZonPHwy00yWytiAb22mMaCAhJNDIU\nAJBieZqluq9/w5LRQ/3e9RN4CcIoFEMA4pPcWOlSXrLrpu4CdTW7Uj03tcFR6bqd\nBKXD0rKauBdIbQe9ul7t/pxaY0kLZ0k53HGk3nbcWr0j2Iwg6L4rYNd+zDZKHG0i\nPQ0RbH7+Ao2Gx1WWfkSdhqtJ5/s3Xa0dNJmeXqhNa2dMYxpKY59rVuQSleC4z3FX\n1wIDAQAB\n-----END PUBLIC KEY-----\n",
 					Extensions: []PkixExtension{
 						{
 							Id:       "2.5.29.15",
@@ -511,6 +513,7 @@ var (
 					KeyUsage:           []string{"Cert Sign", "CRL Sign"},
 					SignatureAlgorithm: "ECDSA-SHA256",
 					PublicKeyAlgorithm: "ECDSA",
+					PublicKey:          "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAESpo2j3WJNJJtz0EvWIhAhWlkt3zx\nEvkt8fXlJW6AnLjd3SN4T4oe2lADwWkC/FdAcmbfXPlXr6gsbgxB9Uc38Q==\n-----END PUBLIC KEY-----\n",
 					Extensions: []PkixExtension{
 						{
 							Id:       "2.5.29.15",
