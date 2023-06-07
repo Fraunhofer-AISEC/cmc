@@ -18,6 +18,7 @@ package internal
 // Install github packages with "go get [url]"
 import (
 	"bytes"
+	"crypto"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
@@ -91,6 +92,16 @@ func WriteCertsDer(certs []*x509.Certificate) [][]byte {
 		raw = append(raw, c.Raw)
 	}
 	return raw
+}
+
+func WritePublicKeyPem(key crypto.PublicKey) ([]byte, error) {
+	pk, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal PKIX public key")
+	}
+	p := &bytes.Buffer{}
+	pem.Encode(p, &pem.Block{Type: "PUBLIC KEY", Bytes: pk})
+	return p.Bytes(), nil
 }
 
 // verifyCertChain tries to verify the certificate chain certs with leaf

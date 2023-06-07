@@ -18,6 +18,8 @@ package attestationreport
 import (
 	"crypto/x509"
 	"math/big"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // VerificationResult represents the results of all steps taken during
@@ -200,9 +202,10 @@ type X509CertExtracted struct {
 	KeyUsage           []string `json:"keyUsage"`
 	SignatureAlgorithm string   `json:"signatureAlgorithm"`
 	PublicKeyAlgorithm string   `json:"publicKeyAlgorithm"`
+	PublicKey          string   `json:"publicKey"`
 
 	// Extensions contains raw X.509 extensions extracted during parsing.
-	Extensions []PkixExtension `json:"pkixExtenstions"`
+	Extensions []PkixExtension `json:"pkixExtensions"`
 
 	ExtKeyUsage        []string `json:"extKeyUsage,omitempty"`        // Sequence of extended key usages.
 	UnknownExtKeyUsage []string `json:"unknownExtKeyUsage,omitempty"` // Encountered extended key usages unknown to this package.
@@ -372,6 +375,13 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 	certExtracted.KeyUsage = KeyUsageToString(cert.KeyUsage)
 	certExtracted.SignatureAlgorithm = cert.SignatureAlgorithm.String()
 	certExtracted.PublicKeyAlgorithm = cert.PublicKeyAlgorithm.String()
+
+	pk, err := internal.WritePublicKeyPem(cert.PublicKey)
+	if err != nil {
+		log.Warnf("failed to marshal PKIX public key")
+	} else {
+		certExtracted.PublicKey = string(pk)
+	}
 
 	for _, ext := range cert.Extensions {
 		ext_extracted := PkixExtension{
