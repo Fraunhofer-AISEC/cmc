@@ -144,10 +144,10 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 		},
 	}
 	calculatedPcrs := make(map[int][]byte)
-	for _, v := range referenceValues {
+	for _, ref := range referenceValues {
 
-		if v.Pcr == nil {
-			msg := fmt.Sprintf("No PCR set in TPM Reference Value %v (hash: %v)", v.Name, hex.EncodeToString(v.Sha256))
+		if ref.Pcr == nil {
+			msg := fmt.Sprintf("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
 			extends.Summary.setFalseMulti(&msg)
 			ok = false
 			continue
@@ -155,29 +155,30 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 
 		// Initialize calculated PCR if not yet initialized, afterwards extend
 		// reference values
-		if _, ok := calculatedPcrs[*v.Pcr]; !ok {
-			calculatedPcrs[*v.Pcr] = make([]byte, 32)
+		if _, ok := calculatedPcrs[*ref.Pcr]; !ok {
+			calculatedPcrs[*ref.Pcr] = make([]byte, 32)
 		}
-		calculatedPcrs[*v.Pcr] = extendHash(calculatedPcrs[*v.Pcr], v.Sha256)
+		calculatedPcrs[*ref.Pcr] = extendHash(calculatedPcrs[*ref.Pcr], ref.Sha256)
 		extends.Digests = append(extends.Digests, Digest{
-			Pcr:    v.Pcr,
-			Name:   v.Name,
-			Digest: hex.EncodeToString(v.Sha256),
+			Pcr:         ref.Pcr,
+			Name:        ref.Name,
+			Digest:      hex.EncodeToString(ref.Sha256),
+			Description: ref.Description,
 		})
 
 		// Only if the measurement contains the hashes of the individual software artifacts, (e.g.
 		// provided through BIOS or IMA  measurement lists), we can check the reference values directly
 		for _, hce := range tpmM.HashChain {
-			if hce.Pcr == int32(*v.Pcr) && len(hce.Sha256) > 1 {
+			if hce.Pcr == int32(*ref.Pcr) && len(hce.Sha256) > 1 {
 				found := false
 				for _, sha256 := range hce.Sha256 {
-					if bytes.Equal(sha256, v.Sha256) {
+					if bytes.Equal(sha256, ref.Sha256) {
 						found = true
 						break
 					}
 				}
 				if !found {
-					msg := fmt.Sprintf("No TPM Measurement found for TPM Reference Value %v (hash: %v)", v.Name, v.Sha256)
+					msg := fmt.Sprintf("No TPM Measurement found for TPM Reference Value %v (hash: %v)", ref.Name, ref.Sha256)
 					extends.Summary.setFalseMulti(&msg)
 					ok = false
 				}
