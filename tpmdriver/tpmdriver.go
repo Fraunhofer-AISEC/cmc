@@ -33,7 +33,7 @@ import (
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"go.mozilla.org/pkcs7"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	"github.com/sirupsen/logrus"
 

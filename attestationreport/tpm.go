@@ -25,7 +25,7 @@ import (
 	"sort"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues []ReferenceValue, cas []*x509.Certificate) (*TpmMeasurementResult, bool) {
