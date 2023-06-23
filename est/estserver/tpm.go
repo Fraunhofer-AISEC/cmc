@@ -30,7 +30,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/est/common"
 	"github.com/google/go-attestation/attest"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 
 	log "github.com/sirupsen/logrus"
 )
