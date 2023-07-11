@@ -94,31 +94,28 @@ type TpmMeasurementResult struct {
 	Summary          Result          `json:"resultSummary"`    // Summarizing value illustrating whether any issues were detected during validation of the TPM Measurement
 	PcrMatch         []PcrResult     `json:"pcrMatch"`         // Result for validation whether the measured PCR values match the provided reference values
 	AggPcrQuoteMatch Result          `json:"aggPcrQuoteMatch"` // Result for comparing the aggregated PCR values with the value in the TPM Quote
-	Extends          DigestResult    `json:"extends"`          // Checks that every TPM Reference Value was part of the measurements
+	Artifacts        []DigestResult  `json:"artifacts"`        // Checks that every TPM Reference Value was part of the measurements and vice versa
 	QuoteFreshness   Result          `json:"quoteFreshness"`   // Result for comparison of the expected nonce to the one provided in the TPM Quote
 	QuoteSignature   SignatureResult `json:"quoteSignature"`   // Results for validation of the TPM Quote Signature and the used certificates
 }
 
 // PcrResult represents the results for the recalculation of a specific PCR.
 type PcrResult struct {
-	Pcr        int         `json:"pcr"`        // Number for the PCR which was validated
-	Digest     string      `json:"digest"`     // PCR Digest that was recalculated
-	Validation ResultMulti `json:"validation"` // Result for the validation of the respective PCR
-}
-
-// Helper struct for DigestResult
-type Digest struct {
-	Pcr         *int   `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
-	Name        string `json:"name,omitempty"`        // Name of the software artifact
-	Digest      string `json:"digest"`                // Digest that was processed
-	Description string `json:"description,omitempty"` // Optional description
+	Pcr        int    `json:"pcr"`                  // Number for the PCR which was validated
+	Calculated string `json:"calculated,omitempty"` // PCR Digest that was recalculated
+	Measured   string `json:"measured,omitempty"`   // PCR Digest from the measurement
+	Success    bool   `json:"success"`
 }
 
 // DigestResult represents a generic result for a digest that was processed
 // during attestation
 type DigestResult struct {
-	Summary ResultMulti `json:"resultSummary"`
-	Digests []Digest    `json:"digests"`
+	Pcr         *int   `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
+	Name        string `json:"name,omitempty"`        // Name of the software artifact
+	Digest      string `json:"digest"`                // Digest that was processed
+	Description string `json:"description,omitempty"` // Optional description
+	Success     bool   `json:"success"`               // Indicates whether match was found
+	Type        string `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
 }
 
 // SwMeasurementResult represents the results for the reference values of
@@ -161,25 +158,23 @@ type PolicyCheck struct {
 // SnpMeasurementResult represents the results for the verification
 // of AMD SEV SNP measurements.
 type SnpMeasurementResult struct {
-	Summary              Result          `json:"resultSummary"`
-	Freshness            Result          `json:"freshness"`
-	Signature            SignatureResult `json:"signature"`
-	MeasurementResult    DigestResult    `json:"measurementResult"`    // Checks that every SNP measurement was part of the reference values
-	ReferenceValueResult DigestResult    `json:"referenceValueResult"` // Checks that every SNP Reference Value was part of the measurements
-	VersionMatch         Result          `json:"reportVersionMatch"`
-	FwCheck              VersionCheck    `json:"fwCheck"`
-	TcbCheck             TcbCheck        `json:"tcbCheck"`
-	PolicyCheck          PolicyCheck     `json:"policyCheck"`
+	Summary      Result          `json:"resultSummary"`
+	Freshness    Result          `json:"freshness"`
+	Signature    SignatureResult `json:"signature"`
+	Artifacts    []DigestResult  `json:"artifacts"`
+	VersionMatch Result          `json:"reportVersionMatch"`
+	FwCheck      VersionCheck    `json:"fwCheck"`
+	TcbCheck     TcbCheck        `json:"tcbCheck"`
+	PolicyCheck  PolicyCheck     `json:"policyCheck"`
 }
 
 // IasMeasurementResult represents the results for the verification
 // of ARM PSA Initial Attestation Service Token measurements.
 type IasMeasurementResult struct {
-	Summary              Result          `json:"resultSummary"`
-	FreshnessCheck       Result          `json:"quoteFreshness"`
-	MeasurementResult    DigestResult    `json:"measurementResult"`
-	ReferenceValueResult DigestResult    `json:"referenceValueResult"`
-	IasSignature         SignatureResult `json:"reportSignatureCheck"`
+	Summary        Result          `json:"resultSummary"`
+	FreshnessCheck Result          `json:"quoteFreshness"`
+	Artifacts      []DigestResult  `json:"artifacts"`
+	IasSignature   SignatureResult `json:"reportSignatureCheck"`
 }
 
 // SignatureResults represents the results for validation of

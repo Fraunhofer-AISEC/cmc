@@ -40,6 +40,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		want1 bool
 	}{
 		{
+			name: "Valid TPM Measurement Summary",
+			args: args{
+				tpmM: &TpmMeasurement{
+					Type:      "TPM Measurement",
+					Message:   validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					HashChain: validSummaryHashChain,
+				},
+				nonce:           validTpmNonce,
+				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  &validTpmMeasurementResult,
+			want1: true,
+		},
+		{
 			name: "Valid TPM Measurement",
 			args: args{
 				tpmM: &TpmMeasurement{
@@ -64,7 +81,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Message:   validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validHashChain,
+					HashChain: validSummaryHashChain,
 				},
 				nonce:           invalidTpmNonce,
 				referenceValues: validReferenceValues,
@@ -81,7 +98,24 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Message:   validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validHashChain,
+					HashChain: validSummaryHashChain,
+				},
+				nonce:           validTpmNonce,
+				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  nil,
+			want1: false,
+		},
+		{
+			name: "Invalid HashChain Summary",
+			args: args{
+				tpmM: &TpmMeasurement{
+					Type:      "TPM Measurement",
+					Message:   validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					HashChain: invalidSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -96,7 +130,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				tpmM: &TpmMeasurement{
 					Type:      "TPM Measurement",
 					Message:   validQuote,
-					Signature: invalidSignature,
+					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: invalidHashChain,
 				},
@@ -115,7 +149,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Message:   validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validHashChain,
+					HashChain: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: invalidReferenceValues,
@@ -132,7 +166,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Message:   validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validHashChain,
+					HashChain: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -149,7 +183,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Message:   validQuote,
 					Signature: validSignature,
 					Certs:     invalidTpmCertChain,
-					HashChain: validHashChain,
+					HashChain: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -160,7 +194,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		},
 	}
 
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.TraceLevel)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,7 +204,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			}
 
 			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n--WANT = %v", got, tt.want)
+				t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n\n--WANT = %v", got, tt.want)
 			}
 		})
 	}
@@ -206,29 +240,95 @@ var (
 
 	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
 
-	validHashChain = []*HashChainElem{
+	validSummaryHashChain = []*HashChainElem{
 		{
-			Type:   "Hash Chain",
-			Pcr:    1,
-			Sha256: []HexByte{dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
+			Type:    "Hash Chain",
+			Pcr:     1,
+			Sha256:  []HexByte{dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
+			Summary: true,
 		},
 		{
-			Type:   "Hash Chain",
-			Pcr:    4,
-			Sha256: []HexByte{dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")},
+			Type:    "Hash Chain",
+			Pcr:     4,
+			Sha256:  []HexByte{dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")},
+			Summary: true,
+		},
+	}
+
+	invalidSummaryHashChain = []*HashChainElem{
+		{
+			Type:    "Hash Chain",
+			Pcr:     1,
+			Sha256:  []HexByte{dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
+			Summary: true,
+		},
+		{
+			Type:    "Hash Chain",
+			Pcr:     4,
+			Sha256:  []HexByte{dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
+			Summary: true,
+		},
+	}
+
+	validHashChain = []*HashChainElem{
+		{
+			Type: "Hash Chain",
+			Pcr:  1,
+			Sha256: []HexByte{
+				dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
+				dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
+				dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
+				dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
+				dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
+				dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
+				dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
+				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+				dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			},
+			Summary: false,
+		},
+		{
+			Type: "Hash Chain",
+			Pcr:  4,
+			Sha256: []HexByte{
+				dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
+				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+				dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
+				dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
+				dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
+			},
+			Summary: false,
 		},
 	}
 
 	invalidHashChain = []*HashChainElem{
 		{
-			Type:   "Hash Chain",
-			Pcr:    1,
-			Sha256: []HexByte{dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
+			Type: "Hash Chain",
+			Pcr:  1,
+			Sha256: []HexByte{
+				dec("ff5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
+				dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
+				dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
+				dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
+				dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
+				dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
+				dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
+				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+				dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			},
+			Summary: false,
 		},
 		{
-			Type:   "Hash Chain",
-			Pcr:    4,
-			Sha256: []HexByte{dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
+			Type: "Hash Chain",
+			Pcr:  4,
+			Sha256: []HexByte{
+				dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
+				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+				dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
+				dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
+				dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
+			},
+			Summary: false,
 		},
 	}
 
@@ -347,83 +447,90 @@ var (
 		Success: true,
 	}
 
-	validResultMulti = ResultMulti{
-		Success: true,
-	}
-
-	validExtends = DigestResult{
-		Summary: validResultMulti,
-		Digests: []Digest{
-			{
-				Digest: "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
-				Name:   "EV_CPU_MICROCODE",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
-				Name:   "Unknown Event Type",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
-				Name:   "EV_NONHOST_CONFIG",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
-				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
-				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
-				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
-				Name:   "EV_EFI_VARIABLE_BOOT",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-				Name:   "EV_SEPARATOR",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
-				Name:   "EV_PLATFORM_CONFIG_FLAGS",
-				Pcr:    ptr(1),
-			},
-			{
-				Digest: "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
-				Name:   "EV_EFI_ACTION",
-				Pcr:    ptr(4),
-			},
-			{
-				Digest: "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-				Name:   "EV_SEPARATOR",
-				Pcr:    ptr(4),
-			},
-			{
-				Digest: "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
-				Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-				Pcr:    ptr(4),
-			},
-			{
-				Digest: "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
-				Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-				Pcr:    ptr(4),
-			},
-			{
-				Digest: "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
-				Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-				Pcr:    ptr(4),
-			},
+	validArtifacts = []DigestResult{
+		{
+			Digest:  "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
+			Name:    "EV_CPU_MICROCODE",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
+			Name:    "Unknown Event Type",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
+			Name:    "EV_NONHOST_CONFIG",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
+			Name:    "EV_EFI_VARIABLE_BOOT",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
+			Name:    "EV_EFI_VARIABLE_BOOT",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
+			Name:    "EV_EFI_VARIABLE_BOOT",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
+			Name:    "EV_EFI_VARIABLE_BOOT",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+			Name:    "EV_SEPARATOR",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
+			Name:    "EV_PLATFORM_CONFIG_FLAGS",
+			Pcr:     ptr(1),
+			Success: true,
+		},
+		{
+			Digest:  "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
+			Name:    "EV_EFI_ACTION",
+			Pcr:     ptr(4),
+			Success: true,
+		},
+		{
+			Digest:  "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+			Name:    "EV_SEPARATOR",
+			Pcr:     ptr(4),
+			Success: true,
+		},
+		{
+			Digest:  "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
+			Name:    "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:     ptr(4),
+			Success: true,
+		},
+		{
+			Digest:  "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
+			Name:    "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:     ptr(4),
+			Success: true,
+		},
+		{
+			Digest:  "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
+			Name:    "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:     ptr(4),
+			Success: true,
 		},
 	}
 
@@ -550,18 +657,18 @@ var (
 		PcrMatch: []PcrResult{
 			{
 				Pcr:        1,
-				Digest:     "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
-				Validation: validResultMulti,
+				Calculated: "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
+				Success:    true,
 			},
 			{
 				Pcr:        4,
-				Digest:     "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
-				Validation: validResultMulti,
+				Calculated: "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
+				Success:    true,
 			},
 		},
 		AggPcrQuoteMatch: validResult,
 		QuoteFreshness:   validResult,
 		QuoteSignature:   validSignatureResult,
-		Extends:          validExtends,
+		Artifacts:        validArtifacts,
 	}
 )

@@ -196,15 +196,37 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.TpmMeasurement{}, fmt.Errorf("failed to get TPM Measurement: %w", err)
 	}
 
-	log.Trace("Collected TPM Quote")
+	log.Trace("Collecting binary bios measurements")
+
+	// For a more detailed measurement, try to read the kernel binary bios measurements
+	// and use these values, which represent the software artifacts that have been
+	// extended. Use the final PCR values only as a fallback, if the file cannot be read
+	useBiosMeasurements := true
+	biosMeasurements, err := GetBiosMeasurements("/sys/kernel/security/tpm0/binary_bios_measurements")
+	if err != nil {
+		useBiosMeasurements = false
+		log.Warnf("failed to read binary bios measurements. Using final PCR values as measurements")
+	}
 
 	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
 	for i, num := range t.Pcrs {
+		sha256 := make([]ar.HexByte, 0)
+		if useBiosMeasurements {
+			for _, digest := range biosMeasurements {
+				if num == *digest.Pcr {
+					sha256 = append(sha256, digest.Sha256)
+				}
+			}
+		} else {
+			sha256 = append(sha256, pcrValues[num].Digest)
+		}
 
 		hashChain[i] = &ar.HashChainElem{
-			Type:   "Hash Chain",
-			Pcr:    int32(num),
-			Sha256: []ar.HexByte{pcrValues[num].Digest}}
+			Type:    "Hash Chain",
+			Pcr:     int32(num),
+			Sha256:  sha256,
+			Summary: !useBiosMeasurements,
+		}
 	}
 
 	if t.UseIma {
@@ -225,6 +247,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		for _, elem := range hashChain {
 			if elem.Pcr == t.ImaPcr {
 				elem.Sha256 = imaDigestsHex
+				elem.Summary = false
 			}
 		}
 	}

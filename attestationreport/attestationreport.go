@@ -106,9 +106,10 @@ type Validity struct {
 // HashChainElem represents the attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
 type HashChainElem struct {
-	Type   string    `json:"type" cbor:"0,keyasint"`
-	Pcr    int32     `json:"pcr" cbor:"1,keyasint"`
-	Sha256 []HexByte `json:"sha256" cbor:"2,keyasint"`
+	Type    string    `json:"type" cbor:"0,keyasint"`
+	Pcr     int32     `json:"pcr" cbor:"1,keyasint"`
+	Sha256  []HexByte `json:"sha256" cbor:"2,keyasint"`
+	Summary bool      `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final PCR value or single artifact
 }
 
 // TpmMeasurement represents the attestation report
