@@ -98,11 +98,16 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 	// attestation must fail
 	if snpM == nil {
 		for _, v := range referenceValues {
-			msg := fmt.Sprintf("SNP Measurement not present. Cannot verify SNP Reference Value (hash: %v)",
-				v.Sha384)
-			result.ReferenceValueResult.Summary.setFalseMulti(&msg)
+			result.Artifacts = append(result.Artifacts,
+				DigestResult{
+					Name:    v.Name,
+					Digest:  hex.EncodeToString(v.Sha256),
+					Success: false,
+					Type:    "Reference Value",
+				})
 		}
-		result.Summary.Success = false
+		msg := "SNP Measurement not present"
+		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
@@ -165,23 +170,31 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 
 	// Compare Measurements
 	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
-		msg := fmt.Sprintf("SNP Measurement mismatch: Supplied measurement = %v, SNP report measurement = %v",
-			snpReferenceValue.Sha384, hex.EncodeToString(s.Measurement[:]))
-		result.MeasurementResult.Summary.setFalseMulti(&msg)
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    snpReferenceValue.Name,
+				Digest:  hex.EncodeToString(snpReferenceValue.Sha384),
+				Success: false,
+				Type:    "Reference Value",
+			})
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    snpReferenceValue.Name,
+				Digest:  hex.EncodeToString(s.Measurement[:]),
+				Success: false,
+				Type:    "Measurement",
+			})
+
 		ok = false
 	} else {
 		// As we previously checked, that the attestation report contains exactly one
 		// SNP Reference Value, we can set this here:
-		result.MeasurementResult.Summary.Success = true
-		result.MeasurementResult.Digests = append(result.MeasurementResult.Digests, Digest{
-			Name:   snpReferenceValue.Name,
-			Digest: hex.EncodeToString(s.Measurement[:]),
-		})
-		result.ReferenceValueResult.Summary.Success = true
-		result.ReferenceValueResult.Digests = append(result.MeasurementResult.Digests, Digest{
-			Name:   snpReferenceValue.Name,
-			Digest: hex.EncodeToString(snpReferenceValue.Sha384),
-		})
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    snpReferenceValue.Name,
+				Digest:  hex.EncodeToString(s.Measurement[:]),
+				Success: true,
+			})
 	}
 
 	// Compare SNP parameters

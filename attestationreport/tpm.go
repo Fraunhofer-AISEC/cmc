@@ -44,20 +44,28 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	// attestation must fail
 	if tpmM == nil {
 		for _, v := range referenceValues {
-			msg := fmt.Sprintf("TPM Measurement not present. Cannot verify TPM Reference Value %v (hash: %v)",
-				v.Name, hex.EncodeToString(v.Sha256))
-			result.Extends.Summary.setFalseMulti(&msg)
+			result.Artifacts = append(result.Artifacts,
+				DigestResult{
+					Name:    v.Name,
+					Digest:  hex.EncodeToString(v.Sha256),
+					Success: false,
+					Type:    "Reference Value",
+				})
 		}
-		result.Summary.Success = false
+		msg := "TPM Measurement not present"
+		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
-	calculatedPcrs, pcrResult, extends, ok := recalculatePcrs(tpmM, referenceValues)
+	calculatedPcrs, pcrResult, artifacts, ok := recalculatePcrs(tpmM, referenceValues)
+	if !ok {
+		log.Trace("failed to recalculate PCRs")
+	}
 	result.PcrMatch = pcrResult
-	result.Extends = extends
+	result.Artifacts = artifacts
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Message)
@@ -135,20 +143,16 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	return result, ok
 }
 
-func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, DigestResult, bool) {
+func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, []DigestResult, bool) {
 	ok := true
 	pcrResult := make([]PcrResult, 0)
-	extends := DigestResult{
-		Summary: ResultMulti{
-			Success: true,
-		},
-	}
+	artifacts := make([]DigestResult, 0)
 	calculatedPcrs := make(map[int][]byte)
+
 	for _, ref := range referenceValues {
 
 		if ref.Pcr == nil {
-			msg := fmt.Sprintf("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
-			extends.Summary.setFalseMulti(&msg)
+			log.Warnf("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
 			ok = false
 			continue
 		}
@@ -159,31 +163,35 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 			calculatedPcrs[*ref.Pcr] = make([]byte, 32)
 		}
 		calculatedPcrs[*ref.Pcr] = extendHash(calculatedPcrs[*ref.Pcr], ref.Sha256)
-		extends.Digests = append(extends.Digests, Digest{
+		refResult := DigestResult{
 			Pcr:         ref.Pcr,
 			Name:        ref.Name,
 			Digest:      hex.EncodeToString(ref.Sha256),
 			Description: ref.Description,
-		})
+		}
 
-		// Only if the measurement contains the hashes of the individual software artifacts, (e.g.
-		// provided through BIOS or IMA  measurement lists), we can check the reference values directly
+		// Only if the measurement contains the hashes of the individual software artifacts,
+		// (e.g.,  provided through BIOS or IMA  measurement lists), we can check the
+		// reference values directly
 		for _, hce := range tpmM.HashChain {
-			if hce.Pcr == int32(*ref.Pcr) && len(hce.Sha256) > 1 {
+			if hce.Pcr == int32(*ref.Pcr) && !hce.Summary {
 				found := false
 				for _, sha256 := range hce.Sha256 {
 					if bytes.Equal(sha256, ref.Sha256) {
 						found = true
+						refResult.Success = true
 						break
 					}
 				}
 				if !found {
-					msg := fmt.Sprintf("No TPM Measurement found for TPM Reference Value %v (hash: %v)", ref.Name, ref.Sha256)
-					extends.Summary.setFalseMulti(&msg)
 					ok = false
+					refResult.Success = false
+					refResult.Type = "Reference Value"
 				}
 			}
 		}
+
+		artifacts = append(artifacts, refResult)
 	}
 
 	// Compare the calculated pcr values from the reference values with the measurement list
@@ -198,7 +206,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 				found = true
 
 				var measurement []byte
-				if len(hce.Sha256) == 1 {
+				if hce.Summary {
 					// Measurement contains only final PCR value, so we can simply compare
 					measurement = hce.Sha256[0]
 				} else {
@@ -211,28 +219,50 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 						// Check, if a reference value exists for the measured value
 						v := getReferenceValue(sha256, referenceValues)
 						if v == nil {
-							msg := fmt.Sprintf("No TPM Reference Value found for TPM measurement: %v", sha256)
-							pcrRes.Validation.setFalseMulti(&msg)
+							pcr := int(hce.Pcr)
+							measResult := DigestResult{
+								Pcr:     &pcr,
+								Digest:  hex.EncodeToString(sha256),
+								Success: false,
+								Type:    "Measurement",
+							}
+							artifacts = append(artifacts, measResult)
 							ok = false
 						}
 					}
 				}
 
-				if cmp := bytes.Compare(calculatedHash, measurement); cmp == 0 {
-					pcrRes.Validation.Success = true
+				// Compare the calculated hash for the current PCR with the measured hash
+				equal := bytes.Equal(calculatedHash, measurement)
+				if equal {
+					pcrRes.Success = true
+					pcrRes.Calculated = hex.EncodeToString(measurement)
 				} else {
-					msg := fmt.Sprintf("PCR%v calculation does not match: %v",
-						hce.Pcr, hex.EncodeToString(calculatedHash))
-					pcrRes.Validation.setFalseMulti(&msg)
+					pcrRes.Success = false
+					pcrRes.Calculated = hex.EncodeToString(calculatedHash)
+					pcrRes.Measured = hex.EncodeToString(measurement)
 					ok = false
 				}
-				pcrRes.Digest = hex.EncodeToString(measurement)
+				// If the measurement only contains the final PCR value, set all reference values
+				// for this PCR to to the according value, as we cannot determine which ones
+				// were good or potentially failed
+				for i, elem := range artifacts {
+					if *elem.Pcr == pcrNum && hce.Summary {
+						artifacts[i].Success = equal
+					}
+				}
+
 				pcrResult = append(pcrResult, pcrRes)
 			}
 		}
 		if !found {
-			msg := fmt.Sprintf("No TPM Measurement found for TPM Reference Values of PCR %v", pcrNum)
-			extends.Summary.setFalseMulti(&msg)
+			// Set all reference values for this PCR to false, as the measurement did not
+			// contain this PCR
+			for i, elem := range artifacts {
+				if *elem.Pcr == pcrNum {
+					artifacts[i].Success = false
+				}
+			}
 			ok = false
 		}
 	}
@@ -252,18 +282,33 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 			}
 		}
 		if !found {
-			pcrRes := PcrResult{}
-			pcrRes.Pcr = int(hce.Pcr)
-			msg := fmt.Sprintf("No TPM Reference Values found for TPM measurement PCR: %v", hce.Pcr)
-			pcrRes.Validation.setFalseMulti(&msg)
+
+			// Calculate the measurement value for this PCR
+			var measurement []byte
+			if hce.Summary {
+				// Measurement contains only final PCR value, so we can simply compare
+				measurement = hce.Sha256[0]
+			} else {
+				// Measurement contains individual values which must be extended to result in
+				// the final PCR value for comparison
+				measurement = make([]byte, 32)
+				for _, sha256 := range hce.Sha256 {
+					measurement = extendHash(measurement, sha256)
+				}
+			}
+
+			pcrRes := PcrResult{
+				Pcr:      int(hce.Pcr),
+				Measured: hex.EncodeToString(measurement),
+				Success:  false,
+			}
+
 			pcrResult = append(pcrResult, pcrRes)
 			ok = false
 		}
 	}
 
-	extends.Summary.Success = ok
-
-	return calculatedPcrs, pcrResult, extends, ok
+	return calculatedPcrs, pcrResult, artifacts, ok
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {
