@@ -194,8 +194,8 @@ type ReferenceValue struct {
 // element of type 'App Description'
 type AppDescription struct {
 	MetaInfo
-	AppManifest string              `json:"appManifest" cbor:"3,keyasint,omitempty"` // Links to App Manifest.Name
-	External    []ExternalInterface `json:"externalConnections" cbor:"4,keyasint"`
+	AppManifest string              `json:"appManifest" cbor:"3,keyasint"` // Links to App Manifest.Name
+	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // InternalConnection represents the attestation report
@@ -239,6 +239,7 @@ type OsManifest struct {
 	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
 	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
 	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
+	Details            any              `json:"details,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
 // RtmManifest represents the attestation report
@@ -250,6 +251,7 @@ type RtmManifest struct {
 	CertificationLevel int              `json:"certificationLevel" cbor:"5,keyasint"`
 	Validity           Validity         `json:"validity" cbor:"6,keyasint"`
 	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"7,keyasint"`
+	Details            any              `json:"details,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 // DeviceDescription represents the attestation report
@@ -701,6 +703,7 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 			result.RtmResult.Name = ar.RtmManifest.Name
 			result.RtmResult.Version = ar.RtmManifest.Version
 			result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
+			result.RtmResult.Details = ar.RtmManifest.Details
 			if !result.RtmResult.ValidityCheck.Success {
 				result.RtmResult.Summary.Success = false
 				result.Success = false
@@ -724,8 +727,8 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 		} else {
 			result.OsResult.Name = ar.OsManifest.Name
 			result.OsResult.Version = ar.OsManifest.Version
-			result.RtmResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
 			result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
+			result.OsResult.Details = ar.OsManifest.Details
 			if !result.OsResult.ValidityCheck.Success {
 				result.OsResult.Summary.Success = false
 				result.Success = false

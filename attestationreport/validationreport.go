@@ -59,9 +59,10 @@ type CompDescResult struct {
 type ManifestResult struct {
 	Name           string            `json:"name"`
 	Version        string            `json:"version"`
-	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Software Manifest
-	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Manifest Signatures and the used certificates
-	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the manifest
+	Summary        ResultMulti       `json:"resultSummary"`
+	SignatureCheck []SignatureResult `json:"signatureValidation"`
+	ValidityCheck  Result            `json:"validityCheck"`
+	Details        any               `json:"details,omitempty"`
 }
 
 // MeasurementResult represents the results of the comparison of
