@@ -26,10 +26,10 @@ import (
 // the validation of an attestation report.
 type VerificationResult struct {
 	Type            string            `json:"type"`
-	Success         bool              `json:"raSuccessful"`         // Summarizing value illustrating whether any issues were detected during validation of the Attestation Report
+	Success         bool              `json:"raSuccessful"`
 	Prover          string            `json:"prover,omitempty"`     // Name of the proving device the report was created for
 	Created         string            `json:"created,omitempty"`    // Timestamp the attestation verification was completed
-	SwCertLevel     int               `json:"swCertLevel"`          // Overall certification level for the entire software stack (the minimum of all CertificationLevels in the used manifests)
+	SwCertLevel     int               `json:"swCertLevel"`          // Overall certification level for the software stack
 	FreshnessCheck  Result            `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
 	ReportSignature []SignatureResult `json:"reportSignatureCheck"` // Result for validation of the overall report signature
 	CompDescResult  *CompDescResult   `json:"companyValidation,omitempty"`
@@ -40,7 +40,7 @@ type VerificationResult struct {
 	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
 	PolicySuccess   bool              `json:"policySuccess,omitempty"`   // Result of custom policy validation (if utilized)
 	ProcessingError []string          `json:"processingError,omitempty"` // Documentation of processing errors (dependent from provided Attestation Report) which hindered a complete validation
-	InternalError   bool              `json:"internalError,omitempty"`   // Documentation of internal errors (independent from provided Attestation Report) which hindered a complete validation
+	InternalError   bool              `json:"internalError,omitempty"`
 }
 
 // CompDescResult represents the results of the validation of the
@@ -79,13 +79,15 @@ type MeasurementResult struct {
 type DevDescResult struct {
 	Name                string            `json:"name"`
 	Version             string            `json:"version"`
-	Summary             ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Device Description
-	CorrectRtm          Result            `json:"correctRtm"`          // Result for comparison of RTM in the Device Description and the provided RTM Manifest
-	CorrectOs           Result            `json:"correctOs"`           // Result for comparison of OS in the Device Description and the provided OS Manifest
-	CorrectApps         ResultMulti       `json:"correctApps"`         // Result for comparison of App List in the Device Description and the provided App Manifest
-	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`  // Result for consistency check for mapping from OS Manifest to RTM Manifest
-	OsAppsCompatibility ResultMulti       `json:"osAppCompatibility"`  // Result for consistency check for mapping from App Manifests to OS Manifest
-	SignatureCheck      []SignatureResult `json:"signatureValidation"` // Results for validation of the Device Description Signature(s) and the used certificates
+	Description         string            `json:"description"`
+	Location            string            `json:"location"`
+	Summary             ResultMulti       `json:"resultSummary"`
+	CorrectRtm          Result            `json:"correctRtm"`
+	CorrectOs           Result            `json:"correctOs"`
+	CorrectApps         ResultMulti       `json:"correctApps"`
+	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`
+	OsAppsCompatibility ResultMulti       `json:"osAppCompatibility"`
+	SignatureCheck      []SignatureResult `json:"signatureValidation"`
 }
 
 // TpmMeasurementResults represents the results of the validation

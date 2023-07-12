@@ -810,6 +810,8 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 		} else {
 			result.DevDescResult.Name = ar.DeviceDescription.Name
 			result.DevDescResult.Version = ar.DeviceDescription.Version
+			result.DevDescResult.Description = ar.DeviceDescription.Description
+			result.DevDescResult.Location = ar.DeviceDescription.Location
 		}
 	}
 
