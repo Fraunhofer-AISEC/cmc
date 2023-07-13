@@ -181,6 +181,7 @@ func (snp *Snp) GetCertChain() ([]*x509.Certificate, error) {
 	if snp == nil {
 		return nil, errors.New("internal error: SW object is nil")
 	}
+	log.Tracef("Returning %v certificates", len(snp.signingCertChain))
 	return snp.signingCertChain, nil
 }
 

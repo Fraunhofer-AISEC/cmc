@@ -314,6 +314,7 @@ func (t *Tpm) GetCertChain() ([]*x509.Certificate, error) {
 	if t == nil {
 		return nil, errors.New("internal error: TPM object is nil")
 	}
+	log.Tracef("Returning %v certificates", len(t.SigningCerts))
 	return t.SigningCerts, nil
 }
 

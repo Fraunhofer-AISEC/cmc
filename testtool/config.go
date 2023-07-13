@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
@@ -74,6 +75,11 @@ type config struct {
 	LogLevel     string   `json:"logLevel"`
 	Publish      string   `json:"publish"`
 	IntervalStr  string   `json:"interval"`
+	ProvAddr     string   `json:"provServerAddr"`
+	Metadata     []string `json:"metadata"`
+	Drivers      []string `json:"drivers"`
+	Storage      string   `json:"storage"`
+	Cache        string   `json:"cache"`
 
 	ca       []byte
 	policies []byte
@@ -97,6 +103,11 @@ const (
 	logFlag      = "log"
 	publishFlag  = "publish"
 	intervalFlag = "interval"
+	provAddrFlag = "prov"
+	metadataFlag = "metadata"
+	driversFlag  = "drivers"
+	storageFlag  = "storage"
+	cacheFlag    = "cache"
 )
 
 func getConfig() *config {
@@ -120,7 +131,22 @@ func getConfig() *config {
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	publish := flag.String(publishFlag, "", "HTTP address to publish attestation results to")
 	interval := flag.String(intervalFlag, "",
-		"Interval at which connectors will be attested. If set to <=0, attestation will only be done once")
+		"Interval at which connectors will be attested. If set to <=0, attestation will only be"+
+			" done once")
+	// Lib API flags
+	provAddr := flag.String(provAddrFlag, "",
+		"Address of the provisioning server (only for libapi)")
+	metadata := flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
+		"with file:// for local locations or https:// for remote locations (can be mixed)"+
+		"(only for libapi)")
+	driversList := flag.String(driversFlag, "",
+		fmt.Sprintf("Drivers (comma separated list). Only for libapi. Possible: %v",
+			strings.Join(maps.Keys(cmc.GetDrivers()), ",")))
+	storage := flag.String(storageFlag, "",
+		"Optional folder to store internal CMC data in (only for libapi)")
+	cache := flag.String(cacheFlag, "",
+		"Optional folder to cache metadata for offline backup (only for libapi)")
+
 	flag.Parse()
 
 	// Create default configuration
@@ -191,6 +217,22 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(intervalFlag) {
 		c.IntervalStr = *interval
+	}
+	// Lib API flags
+	if internal.FlagPassed(provAddrFlag) {
+		c.ProvAddr = *provAddr
+	}
+	if internal.FlagPassed(metadataFlag) {
+		c.Metadata = strings.Split(*metadata, ",")
+	}
+	if internal.FlagPassed(driversFlag) {
+		c.Drivers = strings.Split(*driversList, ",")
+	}
+	if internal.FlagPassed(storageFlag) {
+		c.Storage = *storage
+	}
+	if internal.FlagPassed(cacheFlag) {
+		c.Cache = *cache
 	}
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)

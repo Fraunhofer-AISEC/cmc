@@ -35,6 +35,7 @@ import (
 	// local modules
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -44,7 +45,7 @@ type GrpcServerWrapper struct{}
 // GrpcServer is the gRPC server structure
 type GrpcServer struct {
 	api.UnimplementedCMCServiceServer
-	config *ServerConfig
+	cmc *cmc.Cmc
 }
 
 func init() {
@@ -52,9 +53,9 @@ func init() {
 	servers["grpc"] = GrpcServerWrapper{}
 }
 
-func (wrapper GrpcServerWrapper) Serve(addr string, config *ServerConfig) error {
+func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 	server := &GrpcServer{
-		config: config,
+		cmc: cmc,
 	}
 
 	// Create TCP server
@@ -81,13 +82,13 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
-	if len(s.config.Drivers) == 0 {
+	if len(s.cmc.Drivers) == 0 {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
 		}, errors.New("no valid signers configured")
 	}
 
-	report, err := ar.Generate(in.Nonce, s.config.Metadata, s.config.Drivers, s.config.Serializer)
+	report, err := ar.Generate(in.Nonce, s.cmc.Metadata, s.cmc.Drivers, s.cmc.Serializer)
 	if err != nil {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
@@ -95,7 +96,7 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 	}
 
 	log.Info("Prover: Signing Attestation Report")
-	data, err := ar.Sign(report, s.config.Drivers[0], s.config.Serializer)
+	data, err := ar.Sign(report, s.cmc.Drivers[0], s.cmc.Serializer)
 	if err != nil {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
@@ -120,7 +121,7 @@ func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*
 
 	log.Info("Verifier: Verifying Attestation Report")
 	result := ar.Verify(in.AttestationReport, in.Nonce, in.Ca, in.Policies,
-		s.config.PolicyEngineSelect)
+		s.cmc.PolicyEngineSelect)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
@@ -148,7 +149,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 	var signature []byte
 	var tlsKeyPriv crypto.PrivateKey
 
-	if len(s.config.Drivers) == 0 {
+	if len(s.cmc.Drivers) == 0 {
 		return &api.TLSSignResponse{
 			Status: api.Status_FAIL,
 		}, errors.New("no valid signers configured")
@@ -161,7 +162,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 			fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
 	// get key
-	tlsKeyPriv, _, err = s.config.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err = s.cmc.Drivers[0].GetSigningKeys()
 	if err != nil {
 		return &api.TLSSignResponse{Status: api.Status_FAIL},
 			fmt.Errorf("failed to get IK: %w", err)
@@ -188,21 +189,21 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *api.TLSSignRequest) (*api.
 func (s *GrpcServer) TLSCert(ctx context.Context, in *api.TLSCertRequest) (*api.TLSCertResponse, error) {
 	var resp *api.TLSCertResponse = &api.TLSCertResponse{}
 
-	if len(s.config.Drivers) == 0 {
+	if len(s.cmc.Drivers) == 0 {
 		return &api.TLSCertResponse{
 			Status: api.Status_FAIL,
 		}, errors.New("no valid signers configured")
 	}
 
 	// provide TLS certificate chain
-	certChain, err := s.config.Drivers[0].GetCertChain()
+	certChain, err := s.cmc.Drivers[0].GetCertChain()
 	if err != nil {
 		return &api.TLSCertResponse{Status: api.Status_FAIL},
 			fmt.Errorf("failed to get cert chain: %w", err)
 	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
 	resp.Status = api.Status_OK
-	log.Info("Prover: Obtained TLS Cert.")
+	log.Infof("Prover: Sending back %v TLS Cert(s)", len(resp.Certificate))
 	return resp, nil
 }
 

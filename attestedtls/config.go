@@ -19,6 +19,7 @@ import (
 	"crypto"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
 type CmcApiSelect uint32
@@ -27,6 +28,7 @@ const (
 	CmcApi_GRPC   CmcApiSelect = 0
 	CmcApi_COAP   CmcApiSelect = 1
 	CmcApi_Socket CmcApiSelect = 2
+	CmcApi_Lib    CmcApiSelect = 3
 )
 
 const (
@@ -45,6 +47,7 @@ type cmcConfig struct {
 	policies []byte
 	mtls     bool
 	result   *ar.VerificationResult
+	cmc      *cmc.Cmc
 }
 
 type CmcApi interface {
@@ -112,5 +115,13 @@ func WithMtls(mtls bool) ConnectionOption[cmcConfig] {
 func WithResult(result *ar.VerificationResult) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.result = result
+	}
+}
+
+// WithCmc takes a CMC object. This is only required for the Lib API, where
+// the CMC is integrated directly into binary (instead of using the cmcd)
+func WithCmc(cmc *cmc.Cmc) ConnectionOption[cmcConfig] {
+	return func(c *cmcConfig) {
+		c.cmc = cmc
 	}
 }

@@ -28,30 +28,11 @@ import (
 
 	// local modules
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
-
-type config struct {
-	Addr           string   `json:"addr"`
-	ProvServerAddr string   `json:"provServerAddr"`
-	Metadata       []string `json:"metadata"`
-	Drivers        []string `json:"drivers"`                // TPM, SNP
-	UseIma         bool     `json:"useIma"`                 // TRUE, FALSE
-	ImaPcr         int32    `json:"imaPcr"`                 // 10-15
-	KeyConfig      string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
-	Api            string   `json:"api"`                    // gRPC, CoAP, Socket
-	Network        string   `json:"network,omitempty"`      // unix, socket
-	PolicyEngine   string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
-	LogLevel       string   `json:"logLevel,omitempty"`
-	Storage        string   `json:"storage,omitempty"`
-	Cache          string   `json:"cache,omitempty"`
-
-	policyEngineSelect ar.PolicyEngineSelect
-	drivers            []ar.Driver
-}
 
 var (
 	logLevels = map[string]logrus.Level{
@@ -63,13 +44,6 @@ var (
 		"debug": logrus.DebugLevel,
 		"trace": logrus.TraceLevel,
 	}
-
-	policyEngines = map[string]ar.PolicyEngineSelect{
-		"js":      ar.PolicyEngineSelect_JS,
-		"duktape": ar.PolicyEngineSelect_DukTape,
-	}
-
-	drivers = map[string]ar.Driver{}
 
 	log = logrus.WithField("service", "cmcd")
 )
@@ -91,7 +65,7 @@ const (
 	cacheFlag        = "cache"
 )
 
-func getConfig() (*config, error) {
+func getConfig() (*cmc.Config, error) {
 
 	//
 	// Parse configuration from commandline flags and configuration file if
@@ -106,7 +80,7 @@ func getConfig() (*config, error) {
 	provAddr := flag.String(provAddrFlag, "", "Address of the provisioning server")
 	driversList := flag.String(driversFlag, "",
 		fmt.Sprintf("Drivers (comma separated list). Possible: %v",
-			strings.Join(maps.Keys(drivers), ",")))
+			strings.Join(maps.Keys(cmc.GetDrivers()), ",")))
 	ima := flag.Bool(imaFlag, false,
 		"Indicates whether to use Integrity Measurement Architecture (IMA)")
 	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
@@ -114,7 +88,7 @@ func getConfig() (*config, error) {
 	api := flag.String(apiFlag, "", "API")
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine := flag.String(policyEngineFlag, "",
-		fmt.Sprintf("Possible policy engines: %v", strings.Join(maps.Keys(policyEngines), ",")))
+		fmt.Sprintf("Possible policy engines: %v", strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")))
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	storage := flag.String(storageFlag, "", "Optional folder to store internal CMC data in")
@@ -122,7 +96,7 @@ func getConfig() (*config, error) {
 	flag.Parse()
 
 	// Create default configuration
-	c := &config{
+	c := &cmc.Config{
 		KeyConfig: "EC256",
 		Api:       "grpc",
 		LogLevel:  "trace",
@@ -196,30 +170,10 @@ func getConfig() (*config, error) {
 	// Print the parsed configuration
 	printConfig(c)
 
-	//
-	// Perform custom config actions
-	//
-
-	// Get policy engine
-	c.policyEngineSelect, ok = policyEngines[strings.ToLower(c.PolicyEngine)]
-	if !ok {
-		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
-	}
-
-	// Get drivers
-	for _, driver := range c.Drivers {
-		d, ok := drivers[strings.ToLower(driver)]
-		if !ok {
-			return nil,
-				fmt.Errorf("driver %v not implemented", c.Drivers)
-		}
-		c.drivers = append(c.drivers, d)
-	}
-
 	return c, nil
 }
 
-func pathsToAbs(c *config) {
+func pathsToAbs(c *cmc.Config) {
 	var err error
 	if strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
 		c.Addr, err = filepath.Abs(c.Addr)
@@ -252,7 +206,7 @@ func pathsToAbs(c *config) {
 	}
 }
 
-func printConfig(c *config) {
+func printConfig(c *cmc.Config) {
 
 	wd, err := os.Getwd()
 	if err != nil {

@@ -18,19 +18,11 @@
 package main
 
 import (
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
 var servers = map[string]Server{}
 
 type Server interface {
-	Serve(addr string, config *ServerConfig) error
-}
-
-type ServerConfig struct {
-	Metadata           [][]byte
-	Drivers            []ar.Driver
-	Serializer         ar.Serializer
-	PolicyEngineSelect ar.PolicyEngineSelect
-	Network            string
+	Serve(addr string, cmc *cmc.Cmc) error
 }

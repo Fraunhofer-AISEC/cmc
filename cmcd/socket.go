@@ -34,6 +34,7 @@ import (
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -45,11 +46,11 @@ func init() {
 	servers["socket"] = SocketServer{}
 }
 
-func (s SocketServer) Serve(addr string, conf *ServerConfig) error {
+func (s SocketServer) Serve(addr string, cmc *cmc.Cmc) error {
 
-	log.Infof("Waiting for requests on %v (%v)", addr, conf.Network)
+	log.Infof("Waiting for requests on %v (%v)", addr, cmc.Network)
 
-	socket, err := net.Listen(conf.Network, addr)
+	socket, err := net.Listen(cmc.Network, addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on unix domain soket: %w", err)
 	}
@@ -69,11 +70,11 @@ func (s SocketServer) Serve(addr string, conf *ServerConfig) error {
 			return fmt.Errorf("failed to accept connection: %w", err)
 		}
 
-		go handleIncoming(conn, conf)
+		go handleIncoming(conn, cmc)
 	}
 }
 
-func handleIncoming(conn net.Conn, conf *ServerConfig) {
+func handleIncoming(conn net.Conn, cmc *cmc.Cmc) {
 	defer conn.Close()
 
 	payload, reqType, err := api.Receive(conn)
@@ -85,23 +86,23 @@ func handleIncoming(conn net.Conn, conf *ServerConfig) {
 	// Handle request
 	switch reqType {
 	case api.TypeAttest:
-		attest(conn, payload, conf)
+		attest(conn, payload, cmc)
 	case api.TypeVerify:
-		verify(conn, payload, conf)
+		verify(conn, payload, cmc)
 	case api.TypeTLSCert:
-		tlscert(conn, payload, conf)
+		tlscert(conn, payload, cmc)
 	case api.TypeTLSSign:
-		tlssign(conn, payload, conf)
+		tlssign(conn, payload, cmc)
 	default:
 		api.SendError(conn, "Invalid Type: %v", reqType)
 	}
 }
 
-func attest(conn net.Conn, payload []byte, conf *ServerConfig) {
+func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 
 	log.Debug("Prover: Received attestation request")
 
-	if len(conf.Drivers) == 0 {
+	if len(cmc.Drivers) == 0 {
 		api.SendError(conn, "no valid signers configured")
 		return
 	}
@@ -115,14 +116,14 @@ func attest(conn net.Conn, payload []byte, conf *ServerConfig) {
 
 	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
 
-	report, err := ar.Generate(req.Nonce, conf.Metadata, conf.Drivers, conf.Serializer)
+	report, err := ar.Generate(req.Nonce, cmc.Metadata, cmc.Drivers, cmc.Serializer)
 	if err != nil {
 		api.SendError(conn, "failed to generate attestation report: %v", err)
 		return
 	}
 
 	log.Debug("Prover: Signing Attestation Report")
-	r, err := ar.Sign(report, conf.Drivers[0], conf.Serializer)
+	r, err := ar.Sign(report, cmc.Drivers[0], cmc.Serializer)
 	if err != nil {
 		api.SendError(conn, "Failed to sign attestation report: %v", err)
 		return
@@ -143,7 +144,7 @@ func attest(conn net.Conn, payload []byte, conf *ServerConfig) {
 	log.Debug("Prover: Finished")
 }
 
-func verify(conn net.Conn, payload []byte, conf *ServerConfig) {
+func verify(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 
 	log.Debug("Received Connection Request Type 'Verification Request'")
 
@@ -156,7 +157,7 @@ func verify(conn net.Conn, payload []byte, conf *ServerConfig) {
 
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
-		conf.PolicyEngineSelect)
+		cmc.PolicyEngineSelect)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	r, err := json.Marshal(result)
@@ -180,11 +181,11 @@ func verify(conn net.Conn, payload []byte, conf *ServerConfig) {
 	log.Debug("Verifier: Finished")
 }
 
-func tlssign(conn net.Conn, payload []byte, conf *ServerConfig) {
+func tlssign(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 
 	log.Debug("Received TLS sign request")
 
-	if len(conf.Drivers) == 0 {
+	if len(cmc.Drivers) == 0 {
 		api.SendError(conn, "no valid signers configured")
 		return
 	}
@@ -205,7 +206,7 @@ func tlssign(conn net.Conn, payload []byte, conf *ServerConfig) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := conf.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err := cmc.Drivers[0].GetSigningKeys()
 	if err != nil {
 		api.SendError(conn, "failed to get IK: %v", err)
 		return
@@ -234,11 +235,11 @@ func tlssign(conn net.Conn, payload []byte, conf *ServerConfig) {
 	log.Debug("Performed signing")
 }
 
-func tlscert(conn net.Conn, payload []byte, conf *ServerConfig) {
+func tlscert(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 
 	log.Debug("Received TLS cert request")
 
-	if len(conf.Drivers) == 0 {
+	if len(cmc.Drivers) == 0 {
 		api.SendError(conn, "no valid signers configured")
 		return
 	}
@@ -254,7 +255,7 @@ func tlscert(conn net.Conn, payload []byte, conf *ServerConfig) {
 	log.Tracef("Received TLS cert request with ID %v", req.Id)
 
 	// Retrieve certificates
-	certChain, err := conf.Drivers[0].GetCertChain()
+	certChain, err := cmc.Drivers[0].GetCertChain()
 	if err != nil {
 		api.SendError(conn, "failed to get certchain: %v", err)
 		return

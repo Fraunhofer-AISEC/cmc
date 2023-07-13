@@ -15,7 +15,7 @@
 
 //go:build !nodefaults || snp
 
-package main
+package cmc
 
 import "github.com/Fraunhofer-AISEC/cmc/snpdriver"
 
