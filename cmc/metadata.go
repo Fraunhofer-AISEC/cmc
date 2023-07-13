@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmc
 
 // Install github packages with "go get [url]"
 import (
@@ -34,7 +34,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-func getMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) {
+func GetMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) {
 
 	metadata := make([][]byte, 0)
 	fails := 0

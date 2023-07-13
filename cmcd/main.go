@@ -15,13 +15,10 @@
 
 package main
 
-// Install github packages with "go get [url]"
 import (
 	"strings"
 
-	// local modules
-
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
 func main() {
@@ -33,36 +30,9 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	metadata, s, err := getMetadata(c.Metadata, c.Cache)
+	cmc, err := cmc.NewCmc(c)
 	if err != nil {
-		log.Fatalf("Failed to get metadata: %v", err)
-	}
-
-	// Create driver configuration
-	driverConf := &ar.DriverConfig{
-		StoragePath: c.Storage,
-		ServerAddr:  c.ProvServerAddr,
-		KeyConfig:   c.KeyConfig,
-		Metadata:    metadata,
-		UseIma:      c.UseIma,
-		ImaPcr:      c.ImaPcr,
-		Serializer:  s,
-	}
-
-	// Initialize drivers
-	for _, m := range c.drivers {
-		err = m.Init(driverConf)
-		if err != nil {
-			log.Fatalf("Failed to initialize driver: %v", err)
-		}
-	}
-
-	serverConfig := &ServerConfig{
-		Metadata:           metadata,
-		Drivers:            c.drivers,
-		Serializer:         s,
-		PolicyEngineSelect: c.policyEngineSelect,
-		Network:            c.Network,
+		log.Fatalf("Failed to init CMC: %v", err)
 	}
 
 	server, ok := servers[strings.ToLower(c.Api)]
@@ -70,8 +40,9 @@ func main() {
 		log.Fatalf("API '%v' is not implemented", c.Api)
 	}
 
-	err = server.Serve(c.Addr, serverConfig)
+	err = server.Serve(c.Addr, cmc)
 	if err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
+
 }

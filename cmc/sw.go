@@ -15,7 +15,7 @@
 
 //go:build !nodefaults || sw
 
-package main
+package cmc
 
 import "github.com/Fraunhofer-AISEC/cmc/swdriver"
 

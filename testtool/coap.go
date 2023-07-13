@@ -142,11 +142,11 @@ func (a CoapApi) verify(c *config) {
 }
 
 func (a CoapApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_COAP)
+	dialInternal(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_COAP)
+	listenInternal(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) cacerts(c *config) {

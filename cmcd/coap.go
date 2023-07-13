@@ -35,22 +35,23 @@ import (
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // CoapServer is the CoAP server structure
 type CoapServer struct{}
 
-var serverConfig *ServerConfig
+var Cmc *cmc.Cmc
 
 func init() {
 	log.Info("Adding CoAP server to supported servers")
 	servers["coap"] = CoapServer{}
 }
 
-func (s CoapServer) Serve(addr string, c *ServerConfig) error {
+func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 
-	serverConfig = c
+	Cmc = c
 
 	log.Infof("Starting CMC CoAP Server on %v", addr)
 	r := mux.NewRouter()
@@ -102,7 +103,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Received CoAP attestation request")
 
-	if len(serverConfig.Drivers) == 0 {
+	if len(Cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to generate attestation report: No valid drivers specified in config")
 		return
@@ -119,7 +120,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, err := ar.Generate(req.Nonce, serverConfig.Metadata, serverConfig.Drivers, serverConfig.Serializer)
+	report, err := ar.Generate(req.Nonce, Cmc.Metadata, Cmc.Drivers, Cmc.Serializer)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
@@ -127,7 +128,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("Prover: Signing Attestation Report")
-	data, err := ar.Sign(report, serverConfig.Drivers[0], serverConfig.Serializer)
+	data, err := ar.Sign(report, Cmc.Drivers[0], Cmc.Serializer)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign attestation report: %v", err)
@@ -164,7 +165,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
-		serverConfig.PolicyEngineSelect)
+		Cmc.PolicyEngineSelect)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)
@@ -194,7 +195,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received CoAP TLS sign request")
 
-	if len(serverConfig.Drivers) == 0 {
+	if len(Cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign: No valid drivers specified in config")
 		return
@@ -219,7 +220,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := serverConfig.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err := Cmc.Drivers[0].GetSigningKeys()
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get IK: %v", err)
 		return
@@ -253,7 +254,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received CoAP TLS cert request")
 
-	if len(serverConfig.Drivers) == 0 {
+	if len(Cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign: No valid drivers specified in config")
 		return
@@ -271,7 +272,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	log.Tracef("Received COAP TLS cert request with ID %v", req.Id)
 
 	// Retrieve certificates
-	certChain, err := serverConfig.Drivers[0].GetCertChain()
+	certChain, err := Cmc.Drivers[0].GetCertChain()
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return

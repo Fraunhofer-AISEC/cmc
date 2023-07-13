@@ -96,6 +96,7 @@ func (s *Sw) GetCertChain() ([]*x509.Certificate, error) {
 	if s == nil {
 		return nil, errors.New("internal error: SW object is nil")
 	}
+	log.Tracef("Returning %v certificates", len(s.certChain))
 	return s.certChain, nil
 }
 

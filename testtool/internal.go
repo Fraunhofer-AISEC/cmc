@@ -34,6 +34,7 @@ import (
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -41,7 +42,7 @@ import (
 
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging few a exemplary messages with it
-func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tls.Config) error {
+func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tls.Config, cmc *cmc.Cmc) error {
 	verificationResult := new(ar.VerificationResult)
 
 	conn, err := atls.Dial("tcp", addr, tlsConf,
@@ -51,7 +52,8 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
 		atls.WithCmcNetwork(c.Network),
-		atls.WithResult(verificationResult))
+		atls.WithResult(verificationResult),
+		atls.WithCmc(cmc))
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
@@ -107,7 +109,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 }
 
 // Wrapper for dialInternalAddr
-func dialInternal(c *config, api atls.CmcApiSelect) {
+func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	var tlsConf *tls.Config
 
 	// Add root CA
@@ -123,7 +125,8 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(api),
-			atls.WithCmcNetwork(c.Network))
+			atls.WithCmcNetwork(c.Network),
+			atls.WithCmc(cmc))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
 		}
@@ -153,7 +156,7 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 		for {
 			<-ticker.C
 			for _, addr := range c.Addr {
-				err := dialInternalAddr(c, api, addr, tlsConf)
+				err := dialInternalAddr(c, api, addr, tlsConf, cmc)
 				if err != nil {
 					log.Warnf(err.Error())
 				}
@@ -161,7 +164,7 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 		}
 	} else {
 		for _, addr := range c.Addr {
-			err := dialInternalAddr(c, api, addr, tlsConf)
+			err := dialInternalAddr(c, api, addr, tlsConf, cmc)
 			if err != nil {
 				log.Warnf(err.Error())
 			}
@@ -169,7 +172,7 @@ func dialInternal(c *config, api atls.CmcApiSelect) {
 	}
 }
 
-func listenInternal(c *config, api atls.CmcApiSelect) {
+func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	// Add root CA
 	roots := x509.NewCertPool()
 	success := roots.AppendCertsFromPEM(c.ca)
@@ -181,7 +184,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(api),
-		atls.WithCmcNetwork(c.Network))
+		atls.WithCmcNetwork(c.Network),
+		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
@@ -220,7 +224,8 @@ func listenInternal(c *config, api atls.CmcApiSelect) {
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
 		atls.WithCmcNetwork(c.Network),
-		atls.WithResult(verificationResult))
+		atls.WithResult(verificationResult),
+		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}

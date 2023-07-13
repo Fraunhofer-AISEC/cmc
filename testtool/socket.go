@@ -135,11 +135,11 @@ func (a SocketApi) verify(c *config) {
 }
 
 func (a SocketApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_Socket)
+	dialInternal(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_Socket)
+	listenInternal(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) cacerts(c *config) {

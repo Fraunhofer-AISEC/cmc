@@ -137,11 +137,11 @@ func (a GrpcApi) verify(c *config) {
 }
 
 func (a GrpcApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_GRPC)
+	dialInternal(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_GRPC)
+	listenInternal(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) cacerts(c *config) {
