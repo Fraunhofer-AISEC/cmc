@@ -205,7 +205,8 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	biosMeasurements, err := GetBiosMeasurements("/sys/kernel/security/tpm0/binary_bios_measurements")
 	if err != nil {
 		useBiosMeasurements = false
-		log.Warnf("failed to read binary bios measurements. Using final PCR values as measurements")
+		log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
+			err)
 	}
 
 	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
