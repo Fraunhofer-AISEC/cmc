@@ -62,7 +62,7 @@ func GetMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) 
 			metadata = append(metadata, data...)
 		}
 	}
-	log.Tracef("Successfully retrieved metadata from %v of %v locations (%v failed)",
+	log.Tracef("Retrieved metadata from %v of %v locations (%v failed)",
 		len(paths)-fails, len(paths), fails)
 
 	// In case of errors, load cached metadata if cache is available
@@ -78,6 +78,11 @@ func GetMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) 
 		} else {
 			log.Trace("No cache available. Do not load additional metadata")
 		}
+	}
+
+	if len(metadata) == 0 {
+		var s ar.Serializer
+		return nil, s, errors.New("failed to retrieve any metadata")
 	}
 
 	// Filter metadata: remove any duplicates through always choosing the
