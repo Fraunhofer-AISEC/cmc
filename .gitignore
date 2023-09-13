@@ -1,4 +1,5 @@
 *.o
+*.bkp
 .vscode/
 
 cmcd/cmcd
