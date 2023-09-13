@@ -36,7 +36,6 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	// If the attestationreport does contain neither TPM measurements, nor TPM Reference Values
 	// there is nothing to do
 	if tpmM == nil && len(referenceValues) == 0 {
-		log.Trace("Attestation report does not contain TPM measurements or TPM reference values")
 		return nil, true
 	}
 
