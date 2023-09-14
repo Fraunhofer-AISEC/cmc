@@ -167,11 +167,11 @@ func getConfig() *config {
 		log.Infof("Loading config from file %v", *configFile)
 		data, err := os.ReadFile(*configFile)
 		if err != nil {
-			log.Fatalf("Failed to read cmcd config file %v: %v", *configFile, err)
+			log.Fatalf("Failed to read testtool config file %v: %v", *configFile, err)
 		}
 		err = json.Unmarshal(data, c)
 		if err != nil {
-			log.Fatalf("Failed to parse cmcd config: %v", err)
+			log.Fatalf("Failed to parse testtool config: %v", err)
 		}
 	}
 
