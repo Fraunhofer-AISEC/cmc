@@ -113,12 +113,13 @@ type PcrResult struct {
 // DigestResult represents a generic result for a digest that was processed
 // during attestation
 type DigestResult struct {
-	Pcr         *int   `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
-	Name        string `json:"name,omitempty"`        // Name of the software artifact
-	Digest      string `json:"digest"`                // Digest that was processed
-	Description string `json:"description,omitempty"` // Optional description
-	Success     bool   `json:"success"`               // Indicates whether match was found
-	Type        string `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
+	Pcr         *int       `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
+	Name        string     `json:"name,omitempty"`        // Name of the software artifact
+	Digest      string     `json:"digest"`                // Digest that was processed
+	Description string     `json:"description,omitempty"` // Optional description
+	Success     bool       `json:"success"`               // Indicates whether match was found
+	Type        string     `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
+	EventData   *EventData `json:"eventdata,omitempty"`   // data that was included from bioseventlog
 }
 
 // SwMeasurementResult represents the results for the reference values of

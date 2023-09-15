@@ -56,13 +56,14 @@ type Driver interface {
 
 // DriverConfig contains all configuration values required for the different drivers
 type DriverConfig struct {
-	StoragePath string
-	ServerAddr  string
-	KeyConfig   string
-	Metadata    [][]byte
-	UseIma      bool
-	ImaPcr      int32
-	Serializer  Serializer
+	StoragePath    string
+	ServerAddr     string
+	KeyConfig      string
+	Metadata       [][]byte
+	UseIma         bool
+	ImaPcr         int32
+	Serializer     Serializer
+	MeasurementLog bool
 }
 
 // Serializer is a generic interface providing methods for data serialization and
@@ -107,10 +108,11 @@ type Validity struct {
 // HashChainElem represents the attestation report
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
 type HashChainElem struct {
-	Type    string    `json:"type" cbor:"0,keyasint"`
-	Pcr     int32     `json:"pcr" cbor:"1,keyasint"`
-	Sha256  []HexByte `json:"sha256" cbor:"2,keyasint"`
-	Summary bool      `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final PCR value or single artifact
+	Type      string      `json:"type" cbor:"0,keyasint"`
+	Pcr       int32       `json:"pcr" cbor:"1,keyasint"`
+	Sha256    []HexByte   `json:"sha256" cbor:"2,keyasint"`
+	Summary   bool        `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final PCR value or single artifact
+	EventData []EventData `json:"eventdata,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // TpmMeasurement represents the attestation report
@@ -189,6 +191,7 @@ type ReferenceValue struct {
 	Pcr         *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
 	Snp         *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
 	Description string      `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	EventData   *EventData  `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
 }
 
 // AppDescription represents the attestation report

@@ -53,6 +53,7 @@ type Tpm struct {
 	MeasuringCerts []*x509.Certificate
 	UseIma         bool
 	ImaPcr         int32
+	MeasurementLog bool
 }
 
 const (
@@ -173,6 +174,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	t.ImaPcr = c.ImaPcr
 	t.SigningCerts = ikchain
 	t.MeasuringCerts = akchain
+	t.MeasurementLog = c.MeasurementLog
 
 	return nil
 }
@@ -195,26 +197,33 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.TpmMeasurement{}, fmt.Errorf("failed to get TPM Measurement: %w", err)
 	}
 
-	log.Trace("Collecting binary bios measurements")
-
 	// For a more detailed measurement, try to read the kernel binary bios measurements
 	// and use these values, which represent the software artifacts that have been
 	// extended. Use the final PCR values only as a fallback, if the file cannot be read
-	useBiosMeasurements := true
-	biosMeasurements, err := GetBiosMeasurements("/sys/kernel/security/tpm0/binary_bios_measurements")
-	if err != nil {
-		useBiosMeasurements = false
-		log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
-			err)
+	var biosMeasurements []ar.ReferenceValue
+	if t.MeasurementLog {
+		log.Trace("Collecting binary bios measurements")
+		biosMeasurements, err = GetBiosMeasurements("/sys/kernel/security/tpm0/binary_bios_measurements")
+		if err != nil {
+			t.MeasurementLog = false
+			log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
+				err)
+		}
 	}
 
 	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
 	for i, num := range t.Pcrs {
 		sha256 := make([]ar.HexByte, 0)
-		if useBiosMeasurements {
+		eventDataArray := make([]ar.EventData, 0) //to capture additional EventData
+
+		if t.MeasurementLog {
 			for _, digest := range biosMeasurements {
 				if num == *digest.Pcr {
 					sha256 = append(sha256, digest.Sha256)
+
+					if t.MeasurementLog {
+						eventDataArray = append(eventDataArray, *digest.EventData)
+					}
 				}
 			}
 		} else {
@@ -225,7 +234,11 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			Type:    "Hash Chain",
 			Pcr:     int32(num),
 			Sha256:  sha256,
-			Summary: !useBiosMeasurements,
+			Summary: !t.MeasurementLog,
+		}
+		//appending EventData
+		if t.MeasurementLog {
+			hashChain[i].EventData = eventDataArray
 		}
 	}
 

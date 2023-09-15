@@ -175,10 +175,13 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 		for _, hce := range tpmM.HashChain {
 			if hce.Pcr == int32(*ref.Pcr) && !hce.Summary {
 				found := false
-				for _, sha256 := range hce.Sha256 {
+				for i, sha256 := range hce.Sha256 {
 					if bytes.Equal(sha256, ref.Sha256) {
 						found = true
 						refResult.Success = true
+						if hce.EventData != nil {
+							refResult.EventData = &hce.EventData[i]
+						}
 						break
 					}
 				}
@@ -214,7 +217,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					// Measurement contains individual values which must be extended to result in
 					// the final PCR value for comparison
 					measurement = make([]byte, 32)
-					for _, sha256 := range hce.Sha256 {
+					for i, sha256 := range hce.Sha256 {
 						measurement = extendHash(measurement, sha256)
 
 						// Check, if a reference value exists for the measured value
@@ -227,6 +230,11 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 								Success: false,
 								Type:    "Measurement",
 							}
+
+							if hce.EventData != nil {
+								measResult.EventData = &hce.EventData[i]
+							}
+
 							artifacts = append(artifacts, measResult)
 							log.Warnf("Failed to find measurement %v in reference values",
 								hex.EncodeToString(sha256))

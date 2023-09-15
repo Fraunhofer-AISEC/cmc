@@ -49,6 +49,7 @@ type Config struct {
 	LogLevel       string   `json:"logLevel,omitempty"`
 	Storage        string   `json:"storage,omitempty"`
 	Cache          string   `json:"cache,omitempty"`
+	MeasurementLog bool     `json:"measurementLog,omitempty"`
 }
 
 type Cmc struct {
@@ -75,13 +76,14 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 	// Create driver configuration
 	driverConf := &ar.DriverConfig{
-		StoragePath: c.Storage,
-		ServerAddr:  c.ProvServerAddr,
-		KeyConfig:   c.KeyConfig,
-		Metadata:    metadata,
-		UseIma:      c.UseIma,
-		ImaPcr:      c.ImaPcr,
-		Serializer:  s,
+		StoragePath:    c.Storage,
+		ServerAddr:     c.ProvServerAddr,
+		KeyConfig:      c.KeyConfig,
+		Metadata:       metadata,
+		UseIma:         c.UseIma,
+		ImaPcr:         c.ImaPcr,
+		MeasurementLog: c.MeasurementLog,
+		Serializer:     s,
 	}
 
 	// Get policy engine

@@ -111,13 +111,13 @@ type TPMT_HA struct {
 // the TPM PCRs by BIOS, UEFI and IPL. The file with the binary
 // measurements (usually /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file string, parseEventInformation bool) ([]ar.ReferenceValue, error) {
+func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %v: %w", file, err)
 	}
 
-	digests, err := parseBiosMeasurements(data, parseEventInformation)
+	digests, err := parseBiosMeasurements(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
@@ -125,8 +125,7 @@ func GetBiosMeasurements(file string, parseEventInformation bool) ([]ar.Referenc
 	return digests, nil
 }
 
-// needs to load to lookup the config option, if extended eventdata should be included
-func parseBiosMeasurements(data []byte, parseEventInformation bool) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 
 	extends := make([]ar.ReferenceValue, 0)
 	buf := bytes.NewBuffer(data)
@@ -193,16 +192,10 @@ func parseBiosMeasurements(data []byte, parseEventInformation bool) ([]ar.Refere
 		//data to include in the ReferenceValues
 		var extendedeventData *ar.EventData
 
-		//if eventinformation get parsed
-		if parseEventInformation {
-			//bytes of the event should be added to the array
-			eventData := make([]uint8, eventSize)
-			binary.Read(buf, binary.LittleEndian, &eventData)
-			extendedeventData = ar.ParseEventData(eventData, eventName)
-		} else {
-			//skip the bytes of the event
-			buf.Next(int(eventSize))
-		}
+		//bytes of the event should be added to the array
+		eventData := make([]uint8, eventSize)
+		binary.Read(buf, binary.LittleEndian, &eventData)
+		extendedeventData = ar.ParseEventData(eventData, eventName)
 
 		//either Sha256 or Sha384 must be present
 		if !(len(sha384Digest) == SHA384_DIGEST_LEN || len(sha256Digest) == SHA256_DIGEST_LEN) {
@@ -210,15 +203,10 @@ func parseBiosMeasurements(data []byte, parseEventInformation bool) ([]ar.Refere
 		}
 		pcrP := int(pcrIndex)
 
-		//add to extends,
-		if parseEventInformation {
-			extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
-				Pcr: &pcrP, Snp: nil, EventData: extendedeventData})
+		//add to extends
+		extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
+			Pcr: &pcrP, Snp: nil, EventData: extendedeventData})
 
-		} else {
-			extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
-				Pcr: &pcrP, Snp: nil})
-		}
 	}
 
 	return extends, nil
