@@ -53,6 +53,7 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 	cc := cmcConfig{
 		cmcAddr: cmcAddrDefault,
 		cmcApi:  cmcApis[cmcApiSelectDefault],
+		attest:  attestDefault,
 	}
 	for _, c := range moreConfigs {
 		c(&cc)
