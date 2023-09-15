@@ -49,20 +49,21 @@ var (
 )
 
 const (
-	configFlag       = "config"
-	metadataFlag     = "metadata"
-	cmcAddrFlag      = "cmc"
-	provAddrFlag     = "prov"
-	driversFlag      = "drivers"
-	imaFlag          = "ima"
-	imaPcrFlag       = "pcr"
-	keyConfigFlag    = "algo"
-	apiFlag          = "api"
-	networkFlag      = "network"
-	policyEngineFlag = "policies"
-	logFlag          = "log"
-	storageFlag      = "storage"
-	cacheFlag        = "cache"
+	configFlag         = "config"
+	metadataFlag       = "metadata"
+	cmcAddrFlag        = "cmc"
+	provAddrFlag       = "prov"
+	driversFlag        = "drivers"
+	imaFlag            = "ima"
+	imaPcrFlag         = "pcr"
+	keyConfigFlag      = "algo"
+	apiFlag            = "api"
+	networkFlag        = "network"
+	policyEngineFlag   = "policies"
+	logFlag            = "log"
+	storageFlag        = "storage"
+	cacheFlag          = "cache"
+	measurementLogFlag = "measuementLog"
 )
 
 func getConfig() (*cmc.Config, error) {
@@ -93,6 +94,7 @@ func getConfig() (*cmc.Config, error) {
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	storage := flag.String(storageFlag, "", "Optional folder to store internal CMC data in")
 	cache := flag.String(cacheFlag, "", "Optional folder to cache metadata for offline backup")
+	measurementLog := flag.Bool(measurementLogFlag, false, "Indicates whether to include measured events in measurement and validation report")
 	flag.Parse()
 
 	// Create default configuration
@@ -154,6 +156,9 @@ func getConfig() (*cmc.Config, error) {
 	}
 	if internal.FlagPassed(cacheFlag) {
 		c.Cache = *cache
+	}
+	if internal.FlagPassed(measurementLogFlag) {
+		c.MeasurementLog = *measurementLog
 	}
 
 	// Configure the logger
@@ -226,6 +231,7 @@ func printConfig(c *cmc.Config) {
 	log.Debugf("\tKey Config               : %v", c.KeyConfig)
 	log.Debugf("\tLogging Level            : %v", c.LogLevel)
 	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))
+	log.Debugf("\tMeasurement Log          : %v", c.MeasurementLog)
 	if c.Storage != "" {
 		log.Debugf("\tInternal storage path    : %v", c.Storage)
 	}
