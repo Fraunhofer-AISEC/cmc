@@ -20,20 +20,28 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/sirupsen/logrus"
 )
 
 type CmcApiSelect uint32
+type AttestSelect byte
 
 const (
 	CmcApi_GRPC   CmcApiSelect = 0
 	CmcApi_COAP   CmcApiSelect = 1
 	CmcApi_Socket CmcApiSelect = 2
 	CmcApi_Lib    CmcApiSelect = 3
+
+	Attest_Mutual AttestSelect = 0
+	Attest_Client AttestSelect = 1
+	Attest_Server AttestSelect = 2
+	Attest_None   AttestSelect = 3
 )
 
 const (
 	cmcAddrDefault      = "127.0.0.1:9955"
 	cmcApiSelectDefault = CmcApi_GRPC
+	attestDefault       = Attest_Mutual
 	timeoutSec          = 10
 )
 
@@ -46,6 +54,7 @@ type cmcConfig struct {
 	ca       []byte
 	policies []byte
 	mtls     bool
+	attest   AttestSelect
 	result   *ar.VerificationResult
 	cmc      *cmc.Cmc
 }
@@ -106,6 +115,27 @@ func WithCmcPolicies(policies []byte) ConnectionOption[cmcConfig] {
 func WithMtls(mtls bool) ConnectionOption[cmcConfig] {
 	return func(c *cmcConfig) {
 		c.mtls = mtls
+	}
+}
+
+// WithAttest specifies whether to perform mutual, dialer only, or listener only attestation
+func WithAttest(mAttest string) ConnectionOption[cmcConfig] {
+	var selection AttestSelect
+	switch mAttest {
+	case "mutual":
+		selection = Attest_Mutual
+	case "server":
+		selection = Attest_Server
+	case "client":
+		selection = Attest_Client
+	case "none":
+		selection = Attest_None
+	default:
+		logrus.Infoln("No mattest flag set, running default mutual attestation")
+		selection = Attest_Mutual
+	}
+	return func(c *cmcConfig) {
+		c.attest = selection
 	}
 }
 

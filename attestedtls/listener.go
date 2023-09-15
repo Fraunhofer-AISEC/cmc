@@ -102,6 +102,7 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 		cmcConfig: cmcConfig{
 			cmcAddr: cmcAddrDefault,
 			cmcApi:  cmcApis[cmcApiSelectDefault],
+			attest:  attestDefault,
 		},
 	}
 
