@@ -27,11 +27,13 @@ import (
 
 // Constants for digests and TCG Events
 const (
-	SHA1_DIGEST_LEN   = 20
-	SHA256_DIGEST_LEN = 32
-	SHA384_DIGEST_LEN = 48
-	MAX_TCG_EVENT_LEN = 1024
-	EVENT_TYPE        = "Bios Measurement"
+	SHA1_DIGEST_LEN    = 20
+	SHA256_DIGEST_LEN  = 32
+	SHA384_DIGEST_LEN  = 48
+	SHA512_DIGEST_LEN  = 64
+	SM3_256_DIGEST_LEN = 32
+	MAX_TCG_EVENT_LEN  = 1024
+	EVENT_TYPE         = "Bios Measurement"
 )
 
 // Constants
@@ -109,13 +111,13 @@ type TPMT_HA struct {
 // the TPM PCRs by BIOS, UEFI and IPL. The file with the binary
 // measurements (usually /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
+func GetBiosMeasurements(file string, parseEventInformation bool) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %v: %w", file, err)
 	}
 
-	digests, err := parseBiosMeasurements(data)
+	digests, err := parseBiosMeasurements(data, parseEventInformation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
@@ -123,7 +125,8 @@ func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
+// needs to load to lookup the config option, if extended eventdata should be included
+func parseBiosMeasurements(data []byte, parseEventInformation bool) ([]ar.ReferenceValue, error) {
 
 	extends := make([]ar.ReferenceValue, 0)
 	buf := bytes.NewBuffer(data)
@@ -159,8 +162,8 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 		binary.Read(buf, binary.LittleEndian, &digestCount)
 
 		var digestAlgorithmID uint16
-		sha256Digest := make([]byte, SHA256_DIGEST_LEN)
-		sha384Digest := make([]byte, SHA384_DIGEST_LEN)
+		var sha256Digest ar.HexByte
+		var sha384Digest ar.HexByte
 		for i := 0; i < int(digestCount); i++ {
 			binary.Read(buf, binary.LittleEndian, &digestAlgorithmID)
 			digestLength, err := algorithmIDtoSize(digestAlgorithmID)
@@ -170,12 +173,14 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 			if int(digestLength)+4 > buf.Len() {
 				return nil, fmt.Errorf("not enough remaining bytes in buffer: %w", err)
 			}
-			digest := make([]byte, digestLength)
+			digest := make(ar.HexByte, digestLength)
 			binary.Read(buf, binary.LittleEndian, &digest)
 			switch digestAlgorithmID {
 			case 0x000b: //sha256
+				sha256Digest = make(ar.HexByte, SHA256_DIGEST_LEN)
 				copy(sha256Digest, digest)
 			case 0x000c: //sha384
+				sha384Digest = make(ar.HexByte, SHA384_DIGEST_LEN)
 				copy(sha384Digest, digest)
 			}
 		}
@@ -185,8 +190,19 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 			return nil, fmt.Errorf("not enough remaining bytes in buffer: %w", err)
 		}
 
-		//skip the bytes of the event
-		buf.Next(int(eventSize))
+		//data to include in the ReferenceValues
+		var extendedeventData *ar.EventData
+
+		//if eventinformation get parsed
+		if parseEventInformation {
+			//bytes of the event should be added to the array
+			eventData := make([]uint8, eventSize)
+			binary.Read(buf, binary.LittleEndian, &eventData)
+			extendedeventData = ar.ParseEventData(eventData, eventName)
+		} else {
+			//skip the bytes of the event
+			buf.Next(int(eventSize))
+		}
 
 		//either Sha256 or Sha384 must be present
 		if !(len(sha384Digest) == SHA384_DIGEST_LEN || len(sha256Digest) == SHA256_DIGEST_LEN) {
@@ -195,7 +211,14 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 		pcrP := int(pcrIndex)
 
 		//add to extends,
-		extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName, Pcr: &pcrP, Snp: nil})
+		if parseEventInformation {
+			extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
+				Pcr: &pcrP, Snp: nil, EventData: extendedeventData})
+
+		} else {
+			extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
+				Pcr: &pcrP, Snp: nil})
+		}
 	}
 
 	return extends, nil
@@ -279,6 +302,10 @@ func algorithmIDtoSize(algorithmID uint16) (uint16, error) {
 		return SHA256_DIGEST_LEN, nil
 	case 0x000c:
 		return SHA384_DIGEST_LEN, nil
+	case 0x000d:
+		return SHA512_DIGEST_LEN, nil
+	case 0x0012:
+		return SM3_256_DIGEST_LEN, nil
 	}
 	return 0, fmt.Errorf("unknown Hash Algorithm")
 }
