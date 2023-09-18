@@ -50,6 +50,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
+		atls.WithAttest(c.Attest),
 		atls.WithCmcNetwork(c.Network),
 		atls.WithResult(verificationResult),
 		atls.WithCmc(cmc))
@@ -119,6 +120,8 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		}
 	}
 
+	atls.WithAttest(c.Attest)
+
 	internal.PrintTlsConfig(tlsConf, c.ca)
 
 	testTime := time.Unix(0, 0)
@@ -183,6 +186,8 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Renegotiation: tls.RenegotiateNever,
 	}
 
+	atls.WithAttest(c.Attest)
+
 	internal.PrintTlsConfig(tlsConf, c.ca)
 
 	verificationResult := new(ar.VerificationResult)
@@ -199,6 +204,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
+		atls.WithAttest(c.Attest),
 		atls.WithCmcNetwork(c.Network),
 		atls.WithResult(verificationResult),
 		atls.WithCmc(cmc))
