@@ -69,6 +69,7 @@ type config struct {
 	NonceFile    string   `json:"nonce"`
 	CaFile       string   `json:"ca"`
 	Mtls         bool     `json:"mtls"`
+	Attest       string   `json:"attest"`
 	PoliciesFile string   `json:"policies"`
 	Api          string   `json:"api"`
 	Network      string   `json:"network"`
@@ -100,6 +101,7 @@ const (
 	apiFlag      = "api"
 	networkFlag  = "network"
 	mtlsFlag     = "mtls"
+	attestFlag   = "attest"
 	logFlag      = "log"
 	publishFlag  = "publish"
 	intervalFlag = "interval"
@@ -126,7 +128,9 @@ func getConfig() *config {
 	policiesFile := flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	api := flag.String(apiFlag, "", fmt.Sprintf("APIs for cmcd. Possible: %v", maps.Keys(apis)))
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
-	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS with remote attestation on both sides")
+	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS")
+	attest := flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
+		"client only, or none [mutual, server, client, none]")
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	publish := flag.String(publishFlag, "", "HTTP address to publish attestation results to")
@@ -208,6 +212,9 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(mtlsFlag) {
 		c.Mtls = *mtls
+	}
+	if internal.FlagPassed(attestFlag) {
+		c.Attest = *attest
 	}
 	if internal.FlagPassed(logFlag) {
 		c.LogLevel = *logLevel
@@ -345,6 +352,7 @@ func printConfig(c *config) {
 	log.Debugf("\tNonceFile    : %v", c.NonceFile)
 	log.Debugf("\tCaFile       : %v", c.CaFile)
 	log.Debugf("\tMtls         : %v", c.Mtls)
+	log.Debugf("\tAttest       : %v", c.Attest)
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
 	}
