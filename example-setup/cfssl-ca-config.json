@@ -2,11 +2,11 @@
     "signing": {
         "profiles": {
             "leafcert": {
+                "expiry": "876000h",
                 "key": {
                     "algo": "ecdsa",
                     "size": 256
                 },
-                "expiry": "17532h",
                 "usages": [
                     "signing",
                     "digital signature",

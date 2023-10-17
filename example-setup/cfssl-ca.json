@@ -1,4 +1,8 @@
 {
+  "CA": {
+    "expiry": "876000h",
+    "pathlen": 0
+  },
   "CN": "Test Root CA",
   "key": {
     "algo": "ecdsa",
@@ -12,7 +16,6 @@
     "OU": "Root CA"
   }
  ],
- "expiry": "87660h",
  "usages": ["cert sign"],
  "ca_constraint": {"is_ca": true}
 }
