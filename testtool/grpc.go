@@ -19,10 +19,8 @@ package main
 
 // Install github packages with "go get [url]"
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -128,12 +126,12 @@ func (a GrpcApi) verify(c *config) {
 		log.Warnf("Failed to verify attestation report. Status %v", response.GetStatus())
 	}
 
-	var out bytes.Buffer
-	json.Indent(&out, response.GetVerificationResult(), "", "    ")
+	err = saveResult(c.ResultFile, c.Publish, response.GetVerificationResult())
+	if err != nil {
+		log.Fatalf("Failed to save result: %v", err)
+	}
 
-	// Save the Attestation Result
-	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
-	fmt.Println("Wrote file ", c.ResultFile)
+	log.Debug("Finished verify")
 }
 
 func (a GrpcApi) dial(c *config) {
