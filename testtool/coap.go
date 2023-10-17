@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -133,12 +132,10 @@ func (a CoapApi) verify(c *config) {
 		log.Fatalf("Failed to verify: %v", err)
 	}
 
-	var out bytes.Buffer
-	json.Indent(&out, resp.VerificationResult, "", "    ")
-
-	// Save the Attestation Result
-	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
-	fmt.Println("Wrote file ", c.ResultFile)
+	err = saveResult(c.ResultFile, c.Publish, resp.VerificationResult)
+	if err != nil {
+		log.Fatalf("Failed to save result: %v", err)
+	}
 }
 
 func (a CoapApi) dial(c *config) {

@@ -22,7 +22,6 @@ import (
 
 	// local modules
 
-	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -121,12 +120,10 @@ func (a LibApi) verify(c *config) {
 		return
 	}
 
-	var out bytes.Buffer
-	json.Indent(&out, r, "", "    ")
-
-	// Save the Attestation Result
-	os.WriteFile(c.ResultFile, out.Bytes(), 0644)
-	fmt.Println("Wrote file ", c.ResultFile)
+	err = saveResult(c.ResultFile, c.Publish, r)
+	if err != nil {
+		log.Fatalf("Failed to save result: %v", err)
+	}
 }
 
 func (a LibApi) cacerts(c *config) {

@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -37,7 +38,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/plgd-dev/go-coap/v3/message"
 )
 
 // Creates TLS connection between this client and a server and performs a remote
@@ -68,7 +68,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 			}
 
 			// Publish the attestation result if publishing address was specified
-			err = publish(c.Publish, verificationResult)
+			err = publishResult(c.Publish, verificationResult)
 			if err != nil {
 				log.Warnf("failed to publish result: %v", err)
 			}
@@ -83,8 +83,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
 
 	// Publish the attestation result if publishing address was specified
-	// TODO maybe async
-	err = publish(c.Publish, verificationResult)
+	err = publishResult(c.Publish, verificationResult)
 	if err != nil {
 		log.Warnf("failed to publish result: %v", err)
 	}
@@ -248,7 +247,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 					}
 
 					// Publish the attestation result if publishing address was specified
-					err = publish(c.Publish, verificationResult)
+					err = publishResult(c.Publish, verificationResult)
 					if err != nil {
 						log.Warnf("failed to publish result: %v", err)
 					}
@@ -262,17 +261,16 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			continue
 		}
 
-		// TODO maybe async
+		// Handle established connections
+		go handleConnection(conn)
+
 		if c.Mtls {
 			// Publish the attestation result if publishing address was specified
-			err = publish(c.Publish, verificationResult)
+			err = publishResult(c.Publish, verificationResult)
 			if err != nil {
 				log.Warnf("failed to publish result: %v", err)
 			}
 		}
-
-		// Handle established connections
-		go handleConnection(conn)
 	}
 }
 
@@ -317,35 +315,75 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func publish(addr string, result *ar.VerificationResult) error {
-
-	if addr == "" {
-		return nil
-	}
-
+func publishResult(addr string, result *ar.VerificationResult) error {
 	data, err := json.Marshal(*result)
 	if err != nil {
 		return fmt.Errorf("failed to marshal result: %w", err)
 	}
 
-	resp, err := http.Post(addr, message.AppJSON.String(), bytes.NewBuffer(data))
+	return publish(addr, data)
+}
+
+func publish(addr string, result []byte) error {
+
+	if addr == "" {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, bytes.NewBuffer(result))
 	if err != nil {
-		return fmt.Errorf("failed to publish attestation result: %w", err)
+		return fmt.Errorf("failed to create new http request with context: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("http post request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	data, err = io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode != 201 {
-		return fmt.Errorf("failed to publish result for %v created %v: server responded with %v: %v",
-			result.Prover, result.Created, resp.Status, string(data))
+		return fmt.Errorf("failed to publish result: server responded with %v: %v",
+			resp.Status, string(data))
 	}
 
-	log.Tracef("Successfully published result for %v created %v: server responded with %v",
-		result.Prover, result.Created, resp.Status)
+	log.Tracef("Successfully published result: server responded with %v", resp.Status)
+
+	return nil
+}
+
+func saveResult(file, addr string, result []byte) error {
+
+	// Convert to human readable
+	var out bytes.Buffer
+	json.Indent(&out, result, "", "    ")
+
+	// Save the Attestation Result to file
+	if file != "" {
+		os.WriteFile(file, out.Bytes(), 0644)
+		fmt.Println("Wrote file ", file)
+	} else {
+		log.Debug("No config file specified: will not save attestation report")
+	}
+
+	// Publish the attestation result if publishing address was specified
+	if addr != "" {
+		err := publish(addr, result)
+		if err != nil {
+			log.Warnf("failed to publish result: %v", err)
+		}
+		log.Debug("Published attestation report")
+	} else {
+		log.Debug("No publish address specified: will not publish attestation report")
+	}
 
 	return nil
 }
