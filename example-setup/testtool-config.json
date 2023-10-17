@@ -3,7 +3,7 @@
     "addr": [
         "localhost:4443"
     ],
-    "cmc": "127.0.0.1:9955",
+    "cmc": "localhost:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",

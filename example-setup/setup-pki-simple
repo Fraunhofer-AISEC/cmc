@@ -46,10 +46,10 @@ cfssl gencert -initca "$IN/cfssl-ca.json" | cfssljson -bare "$OUT/ca"
 cfssl genkey -config "$IN/cfssl-ca-config.json" -profile leafcert "$IN/cfssl-leaf.json" | cfssljson -bare "$OUT/signing-cert"
 
 # Sign CSR and generate certificate for metadata signing
-cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" "$OUT/signing-cert.csr" | cfssljson -bare "$OUT/signing-cert"
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" -profile leafcert -config $IN/cfssl-ca-config.json "$OUT/signing-cert.csr" | cfssljson -bare "$OUT/signing-cert"
 
 # Generate key and CSR for EST server
 cfssl genkey -config "$IN/cfssl-ca-config.json" -profile leafcert "$IN/cfssl-est.json" | cfssljson -bare "$OUT/est"
 
 # Sign CSR and generate certificate for EST server
-cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" "$OUT/est.csr" | cfssljson -bare "$OUT/est"
+cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" -profile leafcert -config $IN/cfssl-ca-config.json "$OUT/est.csr" | cfssljson -bare "$OUT/est"
