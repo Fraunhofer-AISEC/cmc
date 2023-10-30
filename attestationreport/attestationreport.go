@@ -146,6 +146,34 @@ type SwMeasurement struct {
 	Sha256 HexByte `json:"sha256" cbor:"2,keyasint"`
 }
 
+// TdxMeasurement represents the attestation report
+// element of type 'TDX Measurement' signed by the device
+type TdxMeasurement struct {
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Report []byte   `json:"blob" cbor:"1,keyasint"`
+	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
+}
+
+type TdxPolicy struct {
+	Type  string `json:"type" cbor:"0,keyasint"`
+	Debug bool   `json:"debug" cbor:"2,keyasint"`
+	// maybe also tcb min/max version, etc.
+}
+
+// SgxMeasurement represents the attestation report
+// element of type 'SGX Measurement' signed by the device
+type SgxMeasurement struct {
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Report []byte   `json:"blob" cbor:"1,keyasint"`
+	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
+}
+
+type SgxPolicy struct {
+	Type  string `json:"type" cbor:"0,keyasint"`
+	Debug bool   `json:"debug" cbor:"2,keyasint"`
+	// maybe also tcb min/max version, etc.
+}
+
 type SnpPolicy struct {
 	Type         string `json:"type" cbor:"0,keyasint"`
 	SingleSocket bool   `json:"singleSocket" cbor:"1,keyasint"`
@@ -177,6 +205,30 @@ type SnpDetails struct {
 	Tcb           SnpTcb    `json:"tcb" cbor:"4,keyasint"`
 }
 
+type SGXCollateral struct {
+	// Format of CRLs:
+	// version 1.0: PEM, v3.0: DER base16, v3.1: DER raw binary
+	TeeType        uint32          `json:"teeType" cbor:"2,keyasint" description:"Type of the Tee (0x00000000: SGX, 0x00000081: TDX)"`
+	TcbInfo        json.RawMessage `json:"tcbInfo" cbor:"3,keyasint" description:"TCB Info structure in JSON format"`
+	TcbInfoSize    uint32          `json:"tcbInfoSize" cbor:"4,keyasint" description:"Size of the TCB Info"`
+	QeIdentity     json.RawMessage `json:"qeIdentity" cbor:"5,keyasint" description:"QE identity structure in JSON format"`
+	QeIdentitySize uint32          `json:"qeIdentitySize" cbor:"6,keyasint" description:"Size of the QE identity"`
+}
+
+type SGXDetails struct {
+	Version       uint16        `json:"version" cbor:"0,keyasint"`
+	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
+	CAfingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	Policy        SgxPolicy     `json:"policy" cbor:"3,keyasint"`
+	Attributes    [16]byte      `json:"attributes" cbor:"4,keyasint"`
+	IsvProdId     uint16        `json:"isvProdId" cbor:"5,keyasint"`
+	MRSIGNER      string        `json:"mrsigner" cbor:"6,keyasint"`
+}
+
+type TDXDetails struct {
+	// TODO: add attributes to this struct
+}
+
 // ReferenceValue represents the attestation report
 // element of types 'SNP Reference Value', 'TPM Reference Value'
 // and 'SW Reference Value'
@@ -187,6 +239,8 @@ type ReferenceValue struct {
 	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
 	Pcr         *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
 	Snp         *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
+	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"7,keyasint,omitempty"`
+	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"8,keyasint,omitempty"`
 	Description string      `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
 }
 
@@ -308,6 +362,8 @@ type ArPlain struct {
 	Type               string              `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	SgxM               *SgxMeasurement     `json:"sgxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
+	TdxM               *TdxMeasurement     `json:"tdxMeasurement,omitempty" cbor:"12,keyasint,omitempty"`
 	IasM               *IasMeasurement     `cbor:"10,keyasint,omitempty"`
 	SWM                []SwMeasurement     `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
 	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"4,keyasint"`
@@ -324,6 +380,8 @@ type ArPacked struct {
 	Type               string          `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	SgxM               *SgxMeasurement `json:"sgxMeasurement,omitempty" cbor:"10,keyasint,omitempty"`
+	TdxM               *TdxMeasurement `json:"tdxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
 	SWM                []SwMeasurement `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
 	RtmManifest        []byte          `json:"rtmManifests" cbor:"4,keyasint"`
 	OsManifest         []byte          `json:"osManifest" cbor:"5,keyasint"`

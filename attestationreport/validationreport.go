@@ -73,6 +73,8 @@ type MeasurementResult struct {
 	SnpMeasResult *SnpMeasurementResult `json:"snp,omitempty"`
 	IasMeasResult *IasMeasurementResult `json:"ias,omitempty"`
 	SwMeasResult  []SwMeasurementResult `json:"sw,omitempty"`
+	SgxMeasResult *SgxMeasurementResult `json:"sgx,omitempty"`
+	TdxMeasResult *TdxMeasurementResult `json:"tdx,omitempty"`
 }
 
 // DevDescResult represents the results of the validation of the
@@ -169,6 +171,26 @@ type SnpMeasurementResult struct {
 	FwCheck      VersionCheck    `json:"fwCheck"`
 	TcbCheck     TcbCheck        `json:"tcbCheck"`
 	PolicyCheck  PolicyCheck     `json:"policyCheck"`
+}
+
+// SgxMeasurementResult represents the results for the verification
+// of Intel SGX measurements.
+type SgxMeasurementResult struct {
+	Summary      Result          `json:"resultSummary"`
+	Freshness    Result          `json:"freshness"`
+	Signature    SignatureResult `json:"signature"`
+	Artifacts    []DigestResult  `json:"artifacts"`
+	VersionMatch Result          `json:"reportVersionMatch"`
+}
+
+// TdxMeasurementResult represents the results for the verification
+// of Intel TDX measurements.
+type TdxMeasurementResult struct {
+	Summary      Result          `json:"resultSummary"`
+	Freshness    Result          `json:"freshness"`
+	Signature    SignatureResult `json:"signature"`
+	Artifacts    []DigestResult  `json:"artifacts"`
+	VersionMatch Result          `json:"reportVersionMatch"`
 }
 
 // IasMeasurementResult represents the results for the verification
