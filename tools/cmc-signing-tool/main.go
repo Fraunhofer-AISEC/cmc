@@ -149,7 +149,7 @@ func sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
 	for i, chainPem := range chainsPem {
 		certChain := make([]*x509.Certificate, 0)
 		for _, certPem := range chainPem {
-			c, err := internal.ParseCertPem(certPem)
+			c, err := internal.ParseCert(certPem)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load certificates: %w", err)
 			}
