@@ -94,12 +94,12 @@ func testCreatePki(certPem, keyPem []byte) ([]*x509.Certificate, *ecdsa.PrivateK
 		log.Fatal("Failed to parse private key")
 	}
 
-	leaf, err := internal.ParseCertPem(certPem)
+	leaf, err := internal.ParseCert(certPem)
 	if err != nil {
 		log.Fatal("Failed to parse leaf certificate")
 	}
 
-	ca, err := internal.ParseCertPem(caPem)
+	ca, err := internal.ParseCert(caPem)
 	if err != nil {
 		log.Fatal("Failed to parse ca certificate")
 	}
