@@ -226,7 +226,10 @@ type SGXDetails struct {
 }
 
 type TDXDetails struct {
-	// TODO: add attributes to this struct
+	// TODO: add more attributes to this struct
+	Version       uint16 `json:"version" cbor:"0,keyasint"`
+	Cafingerprint string `json:"caFingerprint" cbor:"1,keyasint"` // Intel Root CA Certificate Fingerprint
+
 }
 
 // ReferenceValue represents the attestation report

@@ -54,19 +54,18 @@ type ECDSA256QuoteSignatureDataStructureV4 struct {
 	ECDSAAttestationKey [64]byte
 	QECertDataType      uint16
 	QECertDataSize      uint32
-	QECertData          []byte // Version 4
+	QECertData          QEReportCertDataV4 // Version 4
 }
 
 // This is the datastructure of QECertDataType 6
-type QEReportCertData struct {
+type QEReportCertDataV4 struct {
 	QEReport          EnclaveReportBody
 	QEReportSignature [64]byte
 	QEAuthDataSize    uint16
 	QEAuthData        []byte
 	QECertDataType    uint16 // Type 5 (PCK Cert Chain)
 	QECertDataSize    uint32
-	// QECertData        []byte // Version 4 (here: PCK Cert Chain)
-	QECertData SgxCertificates
+	QECertData        SgxCertificates
 }
 
 // Parses the report into the TDReport structure
@@ -111,7 +110,7 @@ func DecodeTdxReportV4(report []byte) (TdxReport, error) {
 	return reportStruct, nil
 }
 
-// parses quote signature data structure from buf to sig
+// parse the full quote signature data structure (V4) from buf to sig
 func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStructureV4) error {
 
 	err := binary.Read(buf, binary.LittleEndian, &sig.QuoteSignature)
@@ -130,62 +129,53 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 	if err != nil {
 		return fmt.Errorf("failed to parse QECertDataSize")
 	}
-	tmp := make([]byte, sig.QECertDataSize)
-	err = binary.Read(buf, binary.LittleEndian, &tmp)
+
+	rawData := make([]byte, sig.QECertDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &rawData)
 	if err != nil {
 		return fmt.Errorf("failed to parse QECertData")
 	}
-	sig.QECertData = tmp
 
-	return nil
-}
-
-func ParseQEReportCertificationData(rawData []byte, qeReportCertData *QEReportCertData) error {
-
-	// parse QE Report
-	buf := bytes.NewBuffer(rawData)
-	err := binary.Read(buf, binary.LittleEndian, &qeReportCertData.QEReport)
+	// parse QEReportCertDataV4
+	buf = bytes.NewBuffer(rawData)
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QEReport)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Report: %v", err)
 	}
 
-	// parse QE Report Signature
-	err = binary.Read(buf, binary.LittleEndian, &qeReportCertData.QEReportSignature)
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QEReportSignature)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Report Signature: %v", err)
 	}
 
-	// parse QE Authentication Data Size
-	err = binary.Read(buf, binary.LittleEndian, &qeReportCertData.QEAuthDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QEAuthDataSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Authentication Data Size: %v", err)
 	}
 
-	// parse QE Authentication Data
-	tmp := make([]byte, qeReportCertData.QEAuthDataSize)
+	tmp := make([]byte, sig.QECertData.QEAuthDataSize)
 	err = binary.Read(buf, binary.LittleEndian, &tmp)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Authentication Data: %v", err)
 	}
-	qeReportCertData.QEAuthData = tmp
+	sig.QECertData.QEAuthData = tmp
 
 	// parse QE Certification Data Type (has to be type 5)
-	err = binary.Read(buf, binary.LittleEndian, &qeReportCertData.QECertDataType)
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QECertDataType)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Certification Data Type: %v", err)
 	}
-	if qeReportCertData.QECertDataType != 5 {
-		return fmt.Errorf("wrong QECertDataType. Expected: 5, Got: %v", qeReportCertData.QECertDataType)
+	if sig.QECertData.QECertDataType != 5 {
+		return fmt.Errorf("wrong QECertDataType. Expected: 5, Got: %v", sig.QECertData.QECertDataType)
 	}
 
-	// parse QE Certification Data Size
-	err = binary.Read(buf, binary.LittleEndian, &qeReportCertData.QECertDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QECertDataSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Certification Data Size: %v", err)
 	}
 
 	// parse QE Certification Data (Raw)
-	tmp = make([]byte, qeReportCertData.QECertDataSize)
+	tmp = make([]byte, sig.QECertData.QECertDataSize)
 	err = binary.Read(buf, binary.LittleEndian, &tmp)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Certification Data: %v", err)
@@ -196,7 +186,7 @@ func ParseQEReportCertificationData(rawData []byte, qeReportCertData *QEReportCe
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate chain from QECertData: %v", err)
 	}
-	qeReportCertData.QECertData = certChain
+	sig.QECertData.QECertData = certChain
 
 	return nil
 }

@@ -333,6 +333,8 @@ var (
 	}
 	validTDXCertChain   = [][]byte{}
 	validTDXMeasurement = []byte{}
+
+	rootCAFingerprint = "BF85A53FC08F84CB1F73A4F75F48AF566E30AC040699BA0EC1B8D593C05B56FC"
 )
 
 func Test_verifyTdxMeasurements(t *testing.T) {
@@ -360,7 +362,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx:    &TDXDetails{},
+						Tdx: &TDXDetails{
+							Version:       0x04,
+							Cafingerprint: rootCAFingerprint,
+						},
 					},
 				},
 				nonce: validSGXNonce,

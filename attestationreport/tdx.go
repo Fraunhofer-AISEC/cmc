@@ -15,11 +15,16 @@
 
 package attestationreport
 
-import "fmt"
+import (
+	"crypto/x509"
+	"fmt"
+	"time"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+)
 
 func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues []ReferenceValue) (*TdxMeasurementResult, bool) {
 	var err error
-	var qeReportCertData QEReportCertData
 	result := &TdxMeasurementResult{}
 	ok := true
 
@@ -29,6 +34,19 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return nil, true
 	}
 
+	if len(referenceValues) == 0 {
+		msg := "Could not find TDX Reference Value"
+		result.Summary.setFalse(&msg)
+		return result, false
+	} else if len(referenceValues) > 1 {
+		msg := fmt.Sprintf("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
+			len(referenceValues))
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+	tdxReferenceValue := referenceValues[0]
+
+	// TODO: support other report types
 	tdxQuote, err := DecodeTdxReportV4(tdxM.Report)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode TDX report: %v", err)
@@ -36,27 +54,40 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// fmt.Println(tdxQuote)
+	var current_time time.Time = time.Now()
+	log.Trace("current time: ", current_time)
 
-	fmt.Println("Certification Data Type: ", tdxQuote.QuoteSignatureData.QECertDataType)
+	var certChain SgxCertificates = tdxQuote.QuoteSignatureData.QECertData.QECertData
 
-	if tdxQuote.QuoteSignatureData.QECertDataType == 6 {
-		err = ParseQEReportCertificationData(tdxQuote.QuoteSignatureData.QECertData, &qeReportCertData)
-		if err != nil {
-			msg := fmt.Sprintf("Failed to parse QE Report Certification Data: %v", err)
-			result.Summary.setFalse(&msg)
-			return result, false
-		}
-		fmt.Println("Successfully parsed QECertData: ", qeReportCertData)
-
-	} else {
-		msg := fmt.Sprintf("QECertDataType not supported: %v", tdxQuote.QuoteSignatureData.QECertDataType)
+	if certChain.RootCACert == nil || certChain.IntermediateCert == nil || certChain.PCKCert == nil {
+		msg := "incomplete certificate chain"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	fmt.Println("QEReportCertData.QECertDataType", qeReportCertData.QECertDataType)
 
-	fmt.Println("QEReportCertData.QECertData", qeReportCertData.QECertData)
+	// (from DCAP Library): parse and verify PCK certificate chain
+	_, err = internal.VerifyCertChain(
+		[]*x509.Certificate{certChain.PCKCert, certChain.IntermediateCert},
+		[]*x509.Certificate{certChain.RootCACert})
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify pck certificate chain: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// TODO: verify the certificates (fetch CRLs and check expiration date)
+
+	// Verify Quote Signature
+	sig, ret := VerifyIntelQuoteSignature(tdxM.Report, tdxQuote.QuoteSignatureData,
+		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), certChain,
+		tdxReferenceValue.Tdx.Cafingerprint, TDX_QUOTE_TYPE)
+	if !ret {
+		msg := fmt.Sprintf("Failed to verify Quote Signature: %v", sig)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	//result.Signature = sig
 
 	return result, ok
 }
