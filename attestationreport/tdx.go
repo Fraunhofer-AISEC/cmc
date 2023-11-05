@@ -182,12 +182,6 @@ func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 	}
 
 	// check MrTd reference value
-	fmt.Println("MrSeam: ", hex.EncodeToString(body.MrSeam[:]))
-	fmt.Println("SeamAttributes: ", body.SeamAttributes[:])
-	fmt.Println("MrSignerSeam: ", body.MrSignerSeam[:])
-	fmt.Println("MrTd: ", hex.EncodeToString(body.MrTd[:]))
-	fmt.Println("TdAttributes: ", body.TdAttributes[:])
-
 	// (MrTd is the measurement of the initial contents of the TD)
 	if !reflect.DeepEqual(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
@@ -208,7 +202,6 @@ func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 
 	// check SeamAttributes
 	attributes_quote := body.SeamAttributes
-
 	if !reflect.DeepEqual(tdxReferenceValue.Tdx.SeamAttributes[:], attributes_quote[:]) {
 		return fmt.Errorf("SeamAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.SeamAttributes, attributes_quote)
 	}
@@ -223,7 +216,6 @@ func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 	}
 
 	attributes_quote = body.TdAttributes
-
 	if !reflect.DeepEqual(tdxReferenceValue.Tdx.TdAttributes[:], attributes_quote[:]) {
 		return fmt.Errorf("TdAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdAttributes, attributes_quote)
 	}
