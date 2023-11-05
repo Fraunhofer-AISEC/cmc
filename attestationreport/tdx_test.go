@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"encoding/hex"
 	"fmt"
 	"testing"
 )
@@ -745,11 +746,28 @@ var (
 		0x3b, 0xf7, 0x34, 0xd9, 0x56, 0xac, 0xf8, 0xe7, 0x3d, 0xac, 0x69, 0x02,
 		0xe9, 0x55, 0x5a, 0x81, 0x79, 0xb1, 0x8c, 0x4d, 0x71, 0xc5, 0x59, 0x4a,
 	}
-	validTDXCertChain   = [][]byte{}
-	validTDXMeasurement = []byte{}
+
+	tcb_signing_cert_tdx = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICizCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIw\naDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENv\ncnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJ\nBgNVBAYTAlVTMB4XDTE4MDUyMTEwNTAxMFoXDTI1MDUyMTEwNTAxMFowbDEeMBwG\nA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQKDBFJbnRlbCBDb3Jw\nb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYD\nVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGv\nP+mAh91PEyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2lju\nypajgbUwgbIwHwYDVR0jBBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0f\nBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2Vz\nLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYDVR0OBBYEFH44gtX7VSlK\nQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAAMAoGCCqG\nSM49BAMCA0cAMEQCIB9C8wOAN/ImxDtGACV246KcqjagZOR0kyctyBrsGGJVAiAj\nftbrNGsGU8YH211dRiYNoPPu19Zp/ze8JmhujB0oBw==\n-----END CERTIFICATE-----"))
+
+	// valid test collateral
+	tee_type_tdx = uint32(81)
+	// tcbInfo for aisec quote fetched from Intel server with FMSPC from pck cert
+	tcb_info_tdx         = []byte(`{"tcbInfo":{"id":"TDX","version":3,"issueDate":"2023-11-05T15:18:58Z","nextUpdate":"2023-12-05T15:18:58Z","fmspc":"00806f050000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":16,"tdxModule":{"mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF"},"tdxModuleIdentities":[{"id":"TDX_01","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":2},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"UpToDate"}]}],"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":6,"category":"BIOS","type":"Early Microcode Update"},{"svn":6,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":6,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00837"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00115","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00220","INTEL-SA-00233","INTEL-SA-00270","INTEL-SA-00293","INTEL-SA-00320","INTEL-SA-00329","INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00477","INTEL-SA-00837"]}]},"signature":"551d46c841ebed44bf34b659009fa1f8ca6a6c5ee3aafb5a0ae59a2c989d761b534e6ec815a42db3af09d5362a3b79e49f6aabe8a1f4e8c6fe3cc7954d7c5b1e"}`)
+	tcb_info_tdx_size    = uint32(3574)
+	qe_identity_tdx      = []byte(`{"enclaveIdentity":{"id":"TD_QE","version":2,"issueDate":"2023-11-05T15:39:30Z","nextUpdate":"2023-12-05T15:39:30Z","tcbEvaluationDataNumber":16,"miscselect":"00000000","miscselectMask":"FFFFFFFF","attributes":"11000000000000000000000000000000","attributesMask":"FBFFFFFFFFFFFFFF0000000000000000","mrsigner":"DC9E2A7C6F948F17474E34A7FC43ED030F7C1563F1BABDDF6340C82E0E54A8C5","isvprodid":2,"tcbLevels":[{"tcb":{"isvsvn":4},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"UpToDate"}]},"signature":"93b578ccf06cbc9119e1ccd5d57575309495f48712a38227c4e1fee46ef9f87dd48576666ea7854da53f233765cb73fe10fafba310948935cdcca06b1e679a72"}`)
+	qe_identity_tdx_size = uint32(624)
+
+	validTDXCertChain      = [][]byte{tcb_signing_cert_tdx.Raw}
+	validTDXMeasurement, _ = hex.DecodeString(validMrTd)
 
 	rootCAFingerprint          = "BF85A53FC08F84CB1F73A4F75F48AF566E30AC040699BA0EC1B8D593C05B56FC"
 	aisecCertrootCAFingerprint = "44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"
+
+	validMrSeam         = "2fd279c16164a93dd5bf373d834328d46008c2b693af9ebb865b08b2ced320c9a89b4869a9fab60fbe9d0c5a5363c656"
+	validMrSignerSeam   = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+	validSeamAttributes = [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	validTdAttributes   = [8]byte{0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00}
+	validMrTd           = "145fe28dab356d75767ab56ae83bc59ac045dc548bf40a3fb11390446af19f6ee21b0b8874c9a7864cedb64c6573d932"
 )
 
 func Test_verifyTdxMeasurements(t *testing.T) {
@@ -770,7 +788,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 			args: args{
 				tdxM: &TdxMeasurement{
 					Type:   "TDX Measurement",
-					Report: validTDXQuote,
+					Report: aisecTDXQuote,
 					Certs:  validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
@@ -778,8 +796,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
 						Tdx: &TDXDetails{
-							Version:       0x04,
-							Cafingerprint: rootCAFingerprint,
+							Version: 0x04,
+							Collateral: SGXCollateral{
+								TeeType:        tee_type_tdx,
+								TcbInfo:        tcb_info_tdx,
+								TcbInfoSize:    tcb_info_tdx_size,
+								QeIdentity:     qe_identity_tdx,
+								QeIdentitySize: qe_identity_tdx_size,
+							},
+							Cafingerprint:  aisecCertrootCAFingerprint,
+							SeamAttributes: validSeamAttributes,
+							MrSignerSeam:   validMrSignerSeam,
+							MrSeam:         validMrSeam,
+							TdAttributes:   validTdAttributes,
 						},
 					},
 				},

@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -150,22 +151,22 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// parse cert chain
-	certs, err := ParseCertificates(sgxM.Certs, true)
+	referenceCerts, err := ParseCertificates(sgxM.Certs, true)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse certificates: %v", err)
+		msg := fmt.Sprintf("Failed to parse reference certificates: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	fmt.Println("certs:", certs)
+	fmt.Println("certs:", referenceCerts)
 
 	var current_time time.Time = time.Now()
 	log.Trace("current time: ", current_time)
 
 	// (from DCAP Library): parse PCK Cert chain (from the quote) into CertificateChain object. return error in case of failure
 	// TODO: handle other QECertDataTypes (for now: throw an error)
-	var certChain SgxCertificates
+	var quoteCerts SgxCertificates
 	if sgxQuote.QuoteSignatureData.QECertDataType == 5 {
-		certChain, err = ParseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
+		quoteCerts, err = ParseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to parse certificate chain from QECertData: %v", err)
 			result.Summary.setFalse(&msg)
@@ -178,56 +179,23 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// (from DCAP Library): extract root CA from PCK cert chain in quote -> compare nullptr
-	if certChain.RootCACert == nil {
+	if quoteCerts.RootCACert == nil {
 		msg := "root cert is null"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
 	// (from DCAP Library): check root public key
-	if !reflect.DeepEqual(certChain.RootCACert.PublicKey, certs.RootCACert.PublicKey) {
+	if !reflect.DeepEqual(quoteCerts.RootCACert.PublicKey, referenceCerts.RootCACert.PublicKey) {
 		msg := "root cert public key didn't match"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
-	// (from DCAP Library): parse and verify PCK certificate chain
-	x509CertChains, err := internal.VerifyCertChain(
-		[]*x509.Certificate{certChain.PCKCert, certChain.IntermediateCert},
-		[]*x509.Certificate{certChain.RootCACert})
+	// (from DCAP Library): parse and verify the entire PCK certificate chain
+	x509CertChains, err := VerifyIntelCertChainFull(quoteCerts)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify pck certificate chain: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
-	// download CRLs from PCS
-	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME)
-	if err != nil {
-		msg := fmt.Sprintf("downloading ROOT CA CRL from PCS failed: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
-	pck_crl_uri := fmt.Sprintf(PCS_PCK_CERT_CRL_URI, "processor")
-	pck_crl, err := fetchCRL(pck_crl_uri, PCK_CERT_CRL_NAME)
-	if err != nil {
-		msg := fmt.Sprintf("downloading PCK Cert CRL from PCS failed: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
-	// perform CRL checks (signature + values)
-	res, err := CrlCheck(root_ca_crl, certChain.RootCACert, certChain.RootCACert)
-	if !res || err != nil {
-		msg := fmt.Sprintf("CRL check on rootCert failed: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
-	res, err = CrlCheck(pck_crl, certChain.PCKCert, certChain.IntermediateCert)
-	if !res || err != nil {
-		msg := fmt.Sprintf("CRL check on pckCert failed: %v", err)
+		msg := fmt.Sprintf("Failed to verify certificates from the quote: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
@@ -244,13 +212,12 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	// (from DCAP Library): parse and verify TcbInfo object
 	tcbInfo, err := ParseTcbInfo(sgxReferenceValue.Sgx.Collateral.TcbInfo)
 	if err != nil {
-		log.Trace("tcb_info:", sgxReferenceValue.Sgx.Collateral.TcbInfo)
 		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), certs.TCBSigningCert)
+	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -266,7 +233,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	}
 
 	err = VerifyQEIdentity(&sgxQuote.QuoteSignatureData.QEReport, &qeIdentity,
-		string(sgxReferenceValue.Sgx.Collateral.QeIdentity), certs.TCBSigningCert, SGX_QUOTE_TYPE)
+		string(sgxReferenceValue.Sgx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, SGX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -275,7 +242,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 
 	// Verify Quote Signature
 	sig, ret := VerifyIntelQuoteSignature(sgxM.Report, sgxQuote.QuoteSignatureData,
-		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), certs,
+		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), referenceCerts,
 		sgxReferenceValue.Sgx.CAfingerprint, quoteType)
 	if !ret {
 		msg := fmt.Sprintf("Failed to verify Quote Signature: %v", sig)
@@ -292,7 +259,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Verify Quote Body values
-	err = VerifyEnclaveReportValues(&sgxQuote.ISVEnclaveReport, &tcbInfo, &certChain, &sgxReferenceValue, result)
+	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &tcbInfo, &quoteCerts, &sgxReferenceValue, result)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify Enclave Report Values: %v", err)
 		result.Summary.setFalse(&msg)
@@ -534,7 +501,7 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 }
 
 // Only for SGX report body
-func VerifyEnclaveReportValues(body *EnclaveReportBody, tcbInfo *TcbInfo,
+func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	certs *SgxCertificates, sgxReferenceValue *ReferenceValue, result *SgxMeasurementResult) error {
 	if body == nil || tcbInfo == nil || certs == nil || sgxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
@@ -805,4 +772,46 @@ func downloadCRL(uri string, name string) (*x509.RevocationList, error) {
 	}
 
 	return crl, nil
+}
+
+// verifies the given SGX certificate chain, fetches CRLs and chechs if the certs are outdated
+// writes results back to verification report
+func VerifyIntelCertChainFull(quoteCerts SgxCertificates) ([][]*x509.Certificate, error) {
+	// verify PCK certificate chain
+	x509CertChains, err := internal.VerifyCertChain(
+		[]*x509.Certificate{quoteCerts.PCKCert, quoteCerts.IntermediateCert},
+		[]*x509.Certificate{quoteCerts.RootCACert})
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify pck certificate chain: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	// download CRLs from PCS
+	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME)
+	if err != nil {
+		msg := fmt.Sprintf("downloading ROOT CA CRL from PCS failed: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	pck_crl_uri := fmt.Sprintf(PCS_PCK_CERT_CRL_URI, "processor")
+	pck_crl, err := fetchCRL(pck_crl_uri, PCK_CERT_CRL_NAME)
+	if err != nil {
+		msg := fmt.Sprintf("downloading PCK Cert CRL from PCS failed: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	// perform CRL checks (signature + values)
+	res, err := CrlCheck(root_ca_crl, quoteCerts.RootCACert, quoteCerts.RootCACert)
+	if !res || err != nil {
+		msg := fmt.Sprintf("CRL check on rootCert failed: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	res, err = CrlCheck(pck_crl, quoteCerts.PCKCert, quoteCerts.IntermediateCert)
+	if !res || err != nil {
+		msg := fmt.Sprintf("CRL check on pckCert failed: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	return x509CertChains, nil
 }

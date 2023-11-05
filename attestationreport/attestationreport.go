@@ -227,9 +227,14 @@ type SGXDetails struct {
 
 type TDXDetails struct {
 	// TODO: add more attributes to this struct
-	Version       uint16 `json:"version" cbor:"0,keyasint"`
-	Cafingerprint string `json:"caFingerprint" cbor:"1,keyasint"` // Intel Root CA Certificate Fingerprint
-
+	Version        uint16        `json:"version" cbor:"0,keyasint"`
+	Collateral     SGXCollateral `json:"collateral" cbor:"1,keyasint"`
+	Cafingerprint  string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	Policy         TdxPolicy     `json:"policy" cbor:"3,keyasint"`
+	SeamAttributes [8]byte       `json:"seamattributes" cbor:"4,keyasint"`
+	MrSignerSeam   string        `json:"mrsignerseam" cbor:"6,keyasint"`
+	MrSeam         string        `json:"mrseam" cbor:"7,keyasint"`
+	TdAttributes   [8]byte       `json:"tdattributes" cbor:"8,keyasint"`
 }
 
 // ReferenceValue represents the attestation report

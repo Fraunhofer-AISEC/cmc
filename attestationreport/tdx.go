@@ -16,11 +16,10 @@
 package attestationreport
 
 import (
-	"crypto/x509"
+	"encoding/hex"
 	"fmt"
+	"reflect"
 	"time"
-
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues []ReferenceValue) (*TdxMeasurementResult, bool) {
@@ -54,32 +53,78 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
+	// TODO: check nonce in the report
+
+	// parse cert chain
+	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse reference certificates: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
 	var current_time time.Time = time.Now()
 	log.Trace("current time: ", current_time)
 
-	var certChain SgxCertificates = tdxQuote.QuoteSignatureData.QECertData.QECertData
+	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertData.QECertData
 
-	if certChain.RootCACert == nil || certChain.IntermediateCert == nil || certChain.PCKCert == nil {
+	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
 		msg := "incomplete certificate chain"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
-	// (from DCAP Library): parse and verify PCK certificate chain
-	_, err = internal.VerifyCertChain(
-		[]*x509.Certificate{certChain.PCKCert, certChain.IntermediateCert},
-		[]*x509.Certificate{certChain.RootCACert})
+	// (from DCAP Library): parse and verify the entire PCK certificate chain
+	x509CertChains, err := VerifyIntelCertChainFull(quoteCerts)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify pck certificate chain: %v", err)
+		msg := err.Error()
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
-	// TODO: verify the certificates (fetch CRLs and check expiration date)
+	// Store details from validated certificate chain(s) in the validation report
+	for _, chain := range x509CertChains {
+		chainExtracted := []X509CertExtracted{}
+		for _, cert := range chain {
+			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+		}
+		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
+	}
+
+	// (from DCAP Library): parse and verify TcbInfo object
+	tcbInfo, err := ParseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	err = verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// (from DCAP Library): parse and verify QE Identity object
+	qeIdentity, err := ParseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	err = VerifyQEIdentity(&tdxQuote.QuoteSignatureData.QECertData.QEReport, &qeIdentity,
+		string(tdxReferenceValue.Tdx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, TDX_QUOTE_TYPE)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
 
 	// Verify Quote Signature
 	sig, ret := VerifyIntelQuoteSignature(tdxM.Report, tdxQuote.QuoteSignatureData,
-		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), certChain,
+		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		tdxReferenceValue.Tdx.Cafingerprint, TDX_QUOTE_TYPE)
 	if !ret {
 		msg := fmt.Sprintf("Failed to verify Quote Signature: %v", sig)
@@ -87,7 +132,100 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	//result.Signature = sig
+	result.Signature = sig
+
+	// check version
+	result.VersionMatch, ret = verifySgxVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
+	if !ret {
+		return result, false
+	}
+
+	// Verify Quote Body values
+	err = VerifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify TDX Report Body: %v", err)
+		result.Summary.setFalse(&msg)
+		result.Summary.Success = false
+		return result, false
+	} else {
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    tdxReferenceValue.Name,
+				Digest:  hex.EncodeToString(tdxQuote.QuoteBody.MrSeam[:]),
+				Success: true,
+			})
+		ok = true
+	}
 
 	return result, ok
+}
+
+func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
+	if body == nil || tcbInfo == nil || certs == nil || tdxReferenceValue == nil || result == nil {
+		return fmt.Errorf("invalid function parameter (null pointer exception)")
+	}
+
+	// Parse and verify PCK certificate extensions
+	sgxExtensions, err := ParseSGXExtensions(certs.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant, only means it is a sequence)
+	if err != nil {
+		return fmt.Errorf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+	}
+
+	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
+		return fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
+			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
+	}
+
+	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
+		return fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
+			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
+	}
+
+	// check MrTd reference value
+	fmt.Println("MrSeam: ", hex.EncodeToString(body.MrSeam[:]))
+	fmt.Println("SeamAttributes: ", body.SeamAttributes[:])
+	fmt.Println("MrSignerSeam: ", body.MrSignerSeam[:])
+	fmt.Println("MrTd: ", hex.EncodeToString(body.MrTd[:]))
+	fmt.Println("TdAttributes: ", body.TdAttributes[:])
+
+	// (MrTd is the measurement of the initial contents of the TD)
+	if !reflect.DeepEqual(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    tdxReferenceValue.Name,
+				Digest:  hex.EncodeToString(tdxReferenceValue.Sha256[:]),
+				Success: false,
+			})
+		return fmt.Errorf("MrSeam mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
+	} else {
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    tdxReferenceValue.Name,
+				Digest:  hex.EncodeToString(body.MrSeam[:]),
+				Success: true,
+			})
+	}
+
+	// check SeamAttributes
+	attributes_quote := body.SeamAttributes
+
+	if !reflect.DeepEqual(tdxReferenceValue.Tdx.SeamAttributes[:], attributes_quote[:]) {
+		return fmt.Errorf("SeamAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.SeamAttributes, attributes_quote)
+	}
+
+	// check MrSignerSeam value
+	refSigner, err := hex.DecodeString(tdxReferenceValue.Tdx.MrSignerSeam)
+	if err != nil {
+		return fmt.Errorf("decoding MRSIGNERSEAM reference value failed: %v", err)
+	}
+	if !reflect.DeepEqual(refSigner[:], body.MrSignerSeam[:]) {
+		return fmt.Errorf("MRSIGNERSEAM mismatch. Expected: %v, Got: %v", refSigner, body.MrSignerSeam[:])
+	}
+
+	attributes_quote = body.TdAttributes
+
+	if !reflect.DeepEqual(tdxReferenceValue.Tdx.TdAttributes[:], attributes_quote[:]) {
+		return fmt.Errorf("TdAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdAttributes, attributes_quote)
+	}
+	return nil
 }

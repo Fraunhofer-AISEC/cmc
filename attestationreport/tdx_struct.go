@@ -24,7 +24,7 @@ import (
 // TDX Report V4
 type TdxReport struct {
 	QuoteHeader           QuoteHeader
-	ISVEnclaveReport      TdxReportBody
+	QuoteBody             TdxReportBody
 	QuoteSignatureDataLen uint32
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructureV4 // variable size
 }
@@ -33,7 +33,7 @@ type TdxReport struct {
 type TdxReportBody struct {
 	TeeTcbSvn      [16]byte
 	MrSeam         [48]byte
-	MrSigner       [48]byte
+	MrSignerSeam   [48]byte
 	SeamAttributes [8]byte
 	TdAttributes   [8]byte
 	XFAM           [8]byte
@@ -103,7 +103,7 @@ func DecodeTdxReportV4(report []byte) (TdxReport, error) {
 
 	// compose the final report struct
 	reportStruct.QuoteHeader = header
-	reportStruct.ISVEnclaveReport = body
+	reportStruct.QuoteBody = body
 	reportStruct.QuoteSignatureDataLen = sigLen
 	reportStruct.QuoteSignatureData = sig
 
@@ -182,7 +182,7 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 	}
 
 	// parse PCK Cert Chain (PCK Leaf Cert || Intermediate CA Cert || Root CA Cert)
-	certChain, err := ParseCertificates(tmp[:], false)
+	certChain, err := ParseCertificates(tmp[:], true)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate chain from QECertData: %v", err)
 	}
