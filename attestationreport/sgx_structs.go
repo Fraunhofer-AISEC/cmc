@@ -258,23 +258,18 @@ type PlatformInstanceId struct {
 	Value []byte
 }
 
+// ConfigurationId determines the type of the ConfigurationValue:
+// [0]: dynamicPlatform, [1]: cachedKeys, [2]: sMTenabled
 type Configuration struct {
 	Id    asn1.ObjectIdentifier
 	Value []struct {
 		ConfigurationId    asn1.ObjectIdentifier
-		ConfigurationValue ConfigurationValue
+		ConfigurationValue bool
 	}
-}
-
-type ConfigurationValue struct {
-	DynamicPlatform bool
-	CachedKeys      bool
-	SMTEnabled      bool
 }
 
 // ------------------------- end SGX Extensions -------------------------
 
-// expects enclave Identity structure in JSON format
 func ParseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
 	var sgx_extensions SGXExtensionsValue
 
@@ -301,11 +296,11 @@ func ParseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
 		// parse optional parameters
 		rest, err = asn1.Unmarshal(rest, &sgx_extensions.PlatformInstanceId)
 		if err != nil || len(rest) == 0 {
-			return SGXExtensionsValue{}, fmt.Errorf("failed to decode SGX extensions TCB %v", err)
+			return SGXExtensionsValue{}, fmt.Errorf("failed to decode SGX extensions PlatfromInstanceId %v", err)
 		}
 		rest, err = asn1.Unmarshal(rest, &sgx_extensions.Configuration)
 		if err != nil || len(rest) != 0 {
-			return SGXExtensionsValue{}, fmt.Errorf("failed to decode SGX extensions TCB %v", err)
+			return SGXExtensionsValue{}, fmt.Errorf("failed to decode SGX extensions Configuration %v", err)
 		}
 	}
 
