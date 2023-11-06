@@ -16,10 +16,14 @@
 package attestationreport
 
 import (
+	"bytes"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"reflect"
 	"time"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues []ReferenceValue) (*TdxMeasurementResult, bool) {
@@ -38,12 +42,23 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		result.Summary.setFalse(&msg)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		msg := fmt.Sprintf("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
+		msg := fmt.Sprintf("Report contains %v reference values. Currently, only one TDX Reference Value is supported",
 			len(referenceValues))
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 	tdxReferenceValue := referenceValues[0]
+
+	if tdxReferenceValue.Type != "TDX Reference Value" {
+		msg := fmt.Sprintf("TDX Reference Value invalid type %v", tdxReferenceValue.Type)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+	if tdxReferenceValue.Tdx == nil {
+		msg := "TDX Reference Value does not contain policy"
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
 
 	// TODO: support other report types
 	tdxQuote, err := DecodeTdxReportV4(tdxM.Report)
@@ -53,12 +68,33 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// TODO: check nonce in the report
+	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
+	nonce64 := make([]byte, 64)
+	copy(nonce64, nonce)
+	if cmp := bytes.Compare(tdxQuote.QuoteBody.ReportData[:], nonce64); cmp != 0 {
+		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
+			hex.EncodeToString(nonce), hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:]))
+		result.Freshness.setFalse(&msg)
+		ok = false
+		return result, ok
+	} else {
+		result.Freshness.Success = true
+	}
 
 	// parse cert chain
 	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse reference certificates: %v", err)
+		msg := fmt.Sprintf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// verify TCB Signing cert chain
+	_, err = internal.VerifyCertChain(
+		[]*x509.Certificate{referenceCerts.TCBSigningCert},
+		[]*x509.Certificate{referenceCerts.RootCACert})
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify TCB Signing certificate chain: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
