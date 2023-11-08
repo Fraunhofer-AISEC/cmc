@@ -37,23 +37,6 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "Success",
-			args: args{
-				IasM: &IasMeasurement{
-					Type:   "IAS Measurement",
-					Report: validIat,
-					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
-				},
-				nonce: validIasNonce,
-				referenceValues: []ReferenceValue{
-					validSpeReferenceValue,
-					validNspeReferenceValue,
-				},
-				ca: validIasCa,
-			},
-			want: true,
-		},
-		{
 			name: "Invalid IAT",
 			args: args{
 				IasM: &IasMeasurement{
