@@ -46,6 +46,10 @@ func (ln Listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to set read deadline: %w", err)
 	}
+	err = conn.SetWriteDeadline(time.Now().Add(timeout))
+	if err != nil {
+		return nil, fmt.Errorf("failed to set write deadline: %w", err)
+	}
 
 	log.Trace("TLS established. Providing attestation report..")
 	tlsConn, ok := conn.(*tls.Conn)
