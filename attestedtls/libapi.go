@@ -73,6 +73,10 @@ func (a LibApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(report, chbindings, cc.ca, nil, cc.cmc.PolicyEngineSelect)
 
+	if cc.result != nil {
+		*cc.result = result
+	}
+
 	if !result.Success {
 		return NewAttestedError(result, errors.New("verification failed"))
 	}
