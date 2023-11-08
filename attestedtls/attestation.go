@@ -49,14 +49,9 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 
 	// Wait for attestation report from listener
 	log.Trace("Waiting for attestation report from listener")
-	data, err := Read(conn)
+	report, err := Read(conn)
 	if err != nil {
 		return fmt.Errorf("failed to read response: %w", err)
-	}
-
-	report, err := cc.cmcApi.parseARResponse(data)
-	if err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	// Verify AR from listener with own channel bindings
@@ -90,14 +85,9 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 	// Wait for attestation report from dialer if mTLS is to be performed
 	if cc.mtls {
 		log.Debug("Performing mutual attestation: Waiting for dialer attestation report")
-		data, err := Read(conn)
+		report, err := Read(conn)
 		if err != nil {
 			return fmt.Errorf("failed to read response: %w", err)
-		}
-
-		report, err := cc.cmcApi.parseARResponse(data)
-		if err != nil {
-			return fmt.Errorf("failed to parse response: %w", err)
 		}
 
 		// Verify AR from dialer with own channel bindings

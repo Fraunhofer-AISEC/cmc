@@ -39,18 +39,6 @@ func init() {
 	cmcApis[CmcApi_Socket] = SocketApi{}
 }
 
-// Parses attestation report response received from peer
-func (a SocketApi) parseARResponse(data []byte) ([]byte, error) {
-	// Parse response msg
-	resp := &api.AttestationResponse{}
-	err := cbor.Unmarshal(data, resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse attestation report response: %w", err)
-	}
-
-	return resp.AttestationReport, nil
-}
-
 // Obtains attestation report from cmcd
 func (a SocketApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
@@ -84,7 +72,13 @@ func (a SocketApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 		log.Fatalf("failed to receive: %v", err)
 	}
 
-	return payload, nil
+	resp := new(api.AttestationResponse)
+	err = cbor.Unmarshal(payload, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+	}
+
+	return resp.AttestationReport, nil
 }
 
 // Sends attestationreport to cmcd for verification
