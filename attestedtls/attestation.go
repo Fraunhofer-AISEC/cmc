@@ -37,7 +37,7 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 		}
 
 		// Send created attestation report to listener
-		log.Trace("Sending attestation report to listener")
+		log.Tracef("Sending attestation report length %v to listener", len(resp))
 		err = Write(resp, conn)
 		if err != nil {
 			return fmt.Errorf("failed to send AR: %w", err)
