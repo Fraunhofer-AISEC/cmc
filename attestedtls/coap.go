@@ -43,18 +43,6 @@ func init() {
 	cmcApis[CmcApi_COAP] = CoapApi{}
 }
 
-// Parses attestation report response received from peer
-func (a CoapApi) parseARResponse(data []byte) ([]byte, error) {
-	// Parse response msg
-	resp := &api.AttestationResponse{}
-	err := cbor.Unmarshal(data, resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse attestation report response: %w", err)
-	}
-
-	return resp.AttestationReport, nil
-}
-
 // Obtains attestation report from cmcd
 func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
@@ -81,18 +69,25 @@ func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	coapResp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read CoAP reply body
-	payload, err = resp.ReadBody()
+	body, err := coapResp.ReadBody()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %w", err)
 	}
 
-	return payload, nil
+	// Unmarshal response
+	resp := new(api.AttestationResponse)
+	err = cbor.Unmarshal(body, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+	}
+
+	return resp.AttestationReport, nil
 }
 
 // Sends attestationreport to cmcd for verification

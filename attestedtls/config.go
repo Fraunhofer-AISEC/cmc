@@ -51,7 +51,6 @@ type cmcConfig struct {
 }
 
 type CmcApi interface {
-	parseARResponse(data []byte) ([]byte, error)
 	obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error)
 	verifyAR(chbindings, report []byte, cc cmcConfig) error
 	fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)

@@ -35,11 +35,6 @@ func init() {
 	cmcApis[CmcApi_Lib] = LibApi{}
 }
 
-// Parses attestation report response received from peer
-func (a LibApi) parseARResponse(data []byte) ([]byte, error) {
-	return data, nil
-}
-
 // Obtains attestation report from CMCd
 func (a LibApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
