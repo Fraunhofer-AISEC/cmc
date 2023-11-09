@@ -307,42 +307,42 @@ func ParseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
 	return sgx_extensions, nil
 }
 
-func GetTCBCompByIndex(tcb TCB, index int) (TCBComp, error) {
+func GetTCBCompByIndex(tcb TCB, index int) TCBComp {
 	switch index {
 	case 1:
-		return tcb.Value.Comp_01, nil
+		return tcb.Value.Comp_01
 	case 2:
-		return tcb.Value.Comp_02, nil
+		return tcb.Value.Comp_02
 	case 3:
-		return tcb.Value.Comp_03, nil
+		return tcb.Value.Comp_03
 	case 4:
-		return tcb.Value.Comp_04, nil
+		return tcb.Value.Comp_04
 	case 5:
-		return tcb.Value.Comp_05, nil
+		return tcb.Value.Comp_05
 	case 6:
-		return tcb.Value.Comp_06, nil
+		return tcb.Value.Comp_06
 	case 7:
-		return tcb.Value.Comp_07, nil
+		return tcb.Value.Comp_07
 	case 8:
-		return tcb.Value.Comp_08, nil
+		return tcb.Value.Comp_08
 	case 9:
-		return tcb.Value.Comp_09, nil
+		return tcb.Value.Comp_09
 	case 10:
-		return tcb.Value.Comp_10, nil
+		return tcb.Value.Comp_10
 	case 11:
-		return tcb.Value.Comp_11, nil
+		return tcb.Value.Comp_11
 	case 12:
-		return tcb.Value.Comp_12, nil
+		return tcb.Value.Comp_12
 	case 13:
-		return tcb.Value.Comp_13, nil
+		return tcb.Value.Comp_13
 	case 14:
-		return tcb.Value.Comp_14, nil
+		return tcb.Value.Comp_14
 	case 15:
-		return tcb.Value.Comp_15, nil
+		return tcb.Value.Comp_15
 	case 16:
-		return tcb.Value.Comp_16, nil
+		return tcb.Value.Comp_16
 	default:
-		return TCBComp{}, fmt.Errorf("invalid index")
+		return TCBComp{}
 	}
 }
 

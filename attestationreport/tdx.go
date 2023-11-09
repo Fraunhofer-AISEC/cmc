@@ -81,24 +81,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		result.Freshness.Success = true
 	}
 
-	// parse cert chain
-	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
-	// verify TCB Signing cert chain
-	_, err = internal.VerifyCertChain(
-		[]*x509.Certificate{referenceCerts.TCBSigningCert},
-		[]*x509.Certificate{referenceCerts.RootCACert})
-	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TCB Signing certificate chain: %v", err)
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
 	var current_time time.Time = time.Now()
 	log.Trace("current time: ", current_time)
 
@@ -127,6 +109,32 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
 	}
 
+	// parse reference cert chain (TCBSigningCert chain)
+	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// verify TCB Signing cert chain
+	_, err = internal.VerifyCertChain(
+		[]*x509.Certificate{referenceCerts.TCBSigningCert},
+		[]*x509.Certificate{quoteCerts.RootCACert})
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify TCB Signing certificate chain: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
+	// Parse and verify PCK certificate extensions
+	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	if err != nil {
+		msg := fmt.Sprintf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
 	// (from DCAP Library): parse and verify TcbInfo object
 	tcbInfo, err := ParseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
 	if err != nil {
@@ -135,7 +143,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert)
+	err = verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)

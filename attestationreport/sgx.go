@@ -209,6 +209,14 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
 	}
 
+	// Parse and verify PCK certificate extensions
+	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	if err != nil {
+		msg := fmt.Sprintf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		result.Summary.setFalse(&msg)
+		return result, false
+	}
+
 	// (from DCAP Library): parse and verify TcbInfo object
 	tcbInfo, err := ParseTcbInfo(sgxReferenceValue.Sgx.Collateral.TcbInfo)
 	if err != nil {
@@ -217,7 +225,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert)
+	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -462,7 +470,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	return result, true
 }
 
-func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate) error {
+func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate, sgxExtensions SGXExtensionsValue) error {
 	if tcbInfo == nil || tcbKeyCert == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
@@ -495,6 +503,54 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 
 	if now.After(tcbInfo.TcbInfo.NextUpdate) {
 		return fmt.Errorf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
+	}
+
+	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
+		return fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
+			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
+	}
+
+	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
+		return fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
+			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
+	}
+
+	// TODO: check TCB Levels (sgx/tdx tcb component svns, pcesvn)
+	// 1. Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to 16)
+	// with the corresponding values of SVNs in sgxtcbcomponents array of TCB Level.
+	var levelOk bool
+	for i, tcbLevel := range tcbInfo.TcbInfo.TcbLevels {
+		levelOk = true
+		tcbFromCert := GetTCBCompByIndex(sgxExtensions.Tcb, i)
+		// a) Compare all of the SGX TCB Comp SVNs from PCK Cert with with the corresponding values
+		// of SVNs in sgxtcbcomponents array of TCB Level
+		for _, component := range tcbLevel.Tcb.SgxTcbComponents {
+			fmt.Println("TCBCompSVN from PCK Cert: ", tcbFromCert.Value)
+			fmt.Println("SGXCompSVN from TCBLevel: ", component.Svn)
+			if tcbFromCert.Value < int(component.Svn) {
+				levelOk = false
+				break
+			}
+		}
+		if !levelOk {
+			continue
+		}
+		// b) Compare PCESVN
+		if sgxExtensions.Tcb.Value.PceSvn.Value < int(tcbLevel.Tcb.PceSvn) {
+			levelOk = false
+			break
+		}
+		// c) Compare all of the SVNs in TEE TCB SVN array retrieved from TD Report in Quote
+		// with the corresponding values of SVNs in tdxtcbcomponents array of TCB Level
+		for _, component := range tcbLevel.Tcb.TdxTcbComponents {
+			// TODO: get report body and TEE TCB SVN array and compare with the component svn values
+			fmt.Println("TDXCompSVN from TCBLevel: ", component.Svn)
+
+		}
+	}
+
+	if levelOk == false {
+		return fmt.Errorf("TCB Level mismatch!")
 	}
 
 	return nil
@@ -577,8 +633,8 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
 
-	regex := regexp.MustCompile(`\s+`)
-	regex.ReplaceAllString(qeIdentityBodyRaw, "")                             // remove whitespace
+	//regex := regexp.MustCompile(`\s+`)
+	//regex.ReplaceAllString(qeIdentityBodyRaw, "")                             // remove whitespace
 	qeIdentityBodyRaw = qeIdentityBodyRaw[19 : len(qeIdentityBodyRaw)-128-16] // remove "{"enclaveIdentity":" from beginning and signature + rest from the end
 
 	// get checksum of qe identity body
