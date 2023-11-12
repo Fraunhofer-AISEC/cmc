@@ -838,6 +838,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
+							Policy: TdxPolicy{
+								Type:           TDX_ID,
+								Debug:          false,
+								ValidTcbStatus: []string{string(OutOfDate)},
+							},
 							Cafingerprint:  aisecCertrootCAFingerprint,
 							SeamAttributes: validSeamAttributes,
 							MrSignerSeam:   validMrSignerSeam,

@@ -181,6 +181,9 @@ type SgxMeasurementResult struct {
 	Signature    SignatureResult `json:"signature"`
 	Artifacts    []DigestResult  `json:"artifacts"`
 	VersionMatch Result          `json:"reportVersionMatch"`
+	FwCheck      VersionCheck    `json:"fwCheck"`
+	TcbCheck     TcbCheck        `json:"tcbCheck"`
+	PolicyCheck  PolicyCheck     `json:"policyCheck"`
 }
 
 // TdxMeasurementResult represents the results for the verification
@@ -191,6 +194,9 @@ type TdxMeasurementResult struct {
 	Signature    SignatureResult `json:"signature"`
 	Artifacts    []DigestResult  `json:"artifacts"`
 	VersionMatch Result          `json:"reportVersionMatch"`
+	FwCheck      VersionCheck    `json:"fwCheck"`
+	TcbCheck     TcbCheck        `json:"tcbCheck"`
+	PolicyCheck  PolicyCheck     `json:"policyCheck"`
 }
 
 // IasMeasurementResult represents the results for the verification

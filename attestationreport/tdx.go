@@ -17,13 +17,10 @@ package attestationreport
 
 import (
 	"bytes"
-	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"reflect"
 	"time"
-
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues []ReferenceValue) (*TdxMeasurementResult, bool) {
@@ -92,7 +89,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// (from DCAP Library): parse and verify the entire PCK certificate chain
+	// Parse and verify the entire PCK certificate chain
 	x509CertChains, err := VerifyIntelCertChainFull(quoteCerts)
 	if err != nil {
 		msg := err.Error()
@@ -117,12 +114,9 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// verify TCB Signing cert chain
-	_, err = internal.VerifyCertChain(
-		[]*x509.Certificate{referenceCerts.TCBSigningCert},
-		[]*x509.Certificate{quoteCerts.RootCACert})
+	_, err = VerifyTCBSigningCertChain(referenceCerts)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TCB Signing certificate chain: %v", err)
+		msg := err.Error()
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
@@ -143,7 +137,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
+	tcbStatus, err := verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
@@ -179,12 +173,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 
 	result.Signature = sig
 
-	// check version
-	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
-	if !ret {
-		return result, false
-	}
-
 	// Verify Quote Body values
 	err = VerifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
 	if err != nil {
@@ -202,7 +190,24 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		ok = true
 	}
 
+	// check version
+	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
+	if !ret {
+		return result, false
+	}
+	result.PolicyCheck, ret = verifyTdxPolicy(tdxQuote, tdxReferenceValue.Tdx.Policy, tcbStatus)
+	if !ret {
+		ok = false
+	}
+
 	return result, ok
+}
+
+// TODO: implement this function
+func verifyTdxPolicy(s TdxReport, v TdxPolicy, tcbStatus TcbStatus) (PolicyCheck, bool) {
+	r := PolicyCheck{}
+
+	return r, true
 }
 
 func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {

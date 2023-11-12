@@ -155,8 +155,9 @@ type TdxMeasurement struct {
 }
 
 type TdxPolicy struct {
-	Type  string `json:"type" cbor:"0,keyasint"`
-	Debug bool   `json:"debug" cbor:"2,keyasint"`
+	Type           string   `json:"type" cbor:"0,keyasint"`
+	Debug          bool     `json:"debug" cbor:"2,keyasint"`
+	ValidTcbStatus []string `json:"validTcbStatus" cbor:"3,keyasint"` // list of TCB status that are still accepted (e.g. Valid, OutOfDate)
 	// maybe also tcb min/max version, etc.
 }
 
@@ -169,8 +170,9 @@ type SgxMeasurement struct {
 }
 
 type SgxPolicy struct {
-	Type  string `json:"type" cbor:"0,keyasint"`
-	Debug bool   `json:"debug" cbor:"2,keyasint"`
+	Type           string   `json:"type" cbor:"0,keyasint"`
+	Debug          bool     `json:"debug" cbor:"2,keyasint"`
+	ValidTcbStatus []string `json:"validTcbStatus" cbor:"3,keyasint"` // list of TCB status that are still accepted (e.g. Valid, OutOfDate)
 	// maybe also tcb min/max version, etc.
 }
 

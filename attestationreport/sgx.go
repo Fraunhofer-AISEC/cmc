@@ -25,7 +25,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"os"
@@ -225,7 +225,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions,
+	tcbStatus, err := verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions,
 		[16]byte{}, SGX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
@@ -261,12 +261,6 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 
 	result.Signature = sig
 
-	// check version
-	result.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
-	if !ret {
-		return result, false
-	}
-
 	// Verify Quote Body values
 	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &tcbInfo, &quoteCerts, &sgxReferenceValue, result)
 	if err != nil {
@@ -284,9 +278,27 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 		ok = true
 	}
 
+	// Compare SGX Parameters
+	result.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
+	if !ret {
+		return result, false
+	}
+
+	result.PolicyCheck, ret = verifySgxPolicy(sgxQuote, sgxReferenceValue.Sgx.Policy, tcbStatus)
+	if !ret {
+		ok = false
+	}
+
 	result.Summary.Success = ok
 
 	return result, ok
+}
+
+// TODO: implement this function
+func verifySgxPolicy(s SgxReport, v SgxPolicy, tcbStatus TcbStatus) (PolicyCheck, bool) {
+	r := PolicyCheck{}
+
+	return r, true
 }
 
 func verifyQuoteVersion(quote QuoteHeader, version uint16) (Result, bool) {
@@ -473,9 +485,9 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 
 // teeTcbSvn is only required for TDX (from TdxReportBody)
 func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate,
-	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) error {
+	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) (TcbStatus, error) {
 	if tcbInfo == nil || tcbKeyCert == nil {
-		return fmt.Errorf("invalid function parameter (null pointer exception)")
+		return "", fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
 
 	regex := regexp.MustCompile(`\s+`)
@@ -493,57 +505,54 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 
 	pub_key, ok := tcbKeyCert.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		return fmt.Errorf("failed to extract public key from certificate")
+		return "", fmt.Errorf("failed to extract public key from certificate")
 	}
 
 	// verify signature
 	ok = ecdsa.Verify(pub_key, digest[:], r, s)
 	if !ok {
-		return fmt.Errorf("failed to verify tcbInfo signature")
+		return "", fmt.Errorf("failed to verify tcbInfo signature")
 	}
 
 	now := time.Now()
 
 	if now.After(tcbInfo.TcbInfo.NextUpdate) {
-		return fmt.Errorf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
+		return "", fmt.Errorf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
 	}
 
 	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
-		return fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
+		return "", fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
 	}
 
 	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
-		return fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
+		return "", fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
 	}
 
 	// checking tcb level
-	var levelOk bool = false
 	for _, tcbLevel := range tcbInfo.TcbInfo.TcbLevels {
 		// Compare SGX TCB Comp SVNs from PCK Certificate with TCB Level
 		if compareSgxTcbCompSvns(sgxExtensions, tcbLevel) {
 			// Compare PCESVN value
 			if sgxExtensions.Tcb.Value.PceSvn.Value >= int(tcbLevel.Tcb.PceSvn) {
-				// Compare TEE TCB SVNs from TDX Report with TCB Level
-				if compareTeeTcbSvns(teeTcbSvn, tcbLevel) {
-					if tcbLevel.Tcb.TdxTcbComponents[1].Svn == teeTcbSvn[1] {
-						levelOk = true
-						fmt.Println("TCB Level Status: ", tcbLevel.TcbStatus) // handle result based on policy
-						break
-					} else {
-						return fmt.Errorf("TCB Level rejected: unsupported")
+				if quoteType == SGX_QUOTE_TYPE {
+					return TcbStatus(tcbLevel.TcbStatus), nil
+				} else {
+					// Compare TEE TCB SVNs from TDX Report with TCB Level
+					if compareTeeTcbSvns(teeTcbSvn, tcbLevel) {
+						if tcbLevel.Tcb.TdxTcbComponents[1].Svn == teeTcbSvn[1] {
+							return TcbStatus(tcbLevel.TcbStatus), nil
+						} else {
+							return "", fmt.Errorf("TCB Level rejected: unsupported")
+						}
 					}
-
 				}
 			}
 		}
 	}
-	if !levelOk {
-		return fmt.Errorf("TCB Level not supported")
-	}
 
-	return nil
+	return "", fmt.Errorf("TCB Level not supported")
 }
 
 // helper function for verifyTcbInfo
@@ -820,7 +829,7 @@ func downloadCRL(uri string, name string) (*x509.RevocationList, error) {
 	}
 
 	// Read response body into a byte slice
-	crlData, err := ioutil.ReadAll(resp.Body)
+	crlData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -878,4 +887,30 @@ func VerifyIntelCertChainFull(quoteCerts SgxCertificates) ([][]*x509.Certificate
 	}
 
 	return x509CertChains, nil
+}
+
+func VerifyTCBSigningCertChain(quoteCerts SgxCertificates) ([][]*x509.Certificate, error) {
+	// verify TCB Signing cert chain
+	tcbSigningCertChain, err := internal.VerifyCertChain(
+		[]*x509.Certificate{quoteCerts.TCBSigningCert},
+		[]*x509.Certificate{quoteCerts.RootCACert})
+	if err != nil {
+		msg := fmt.Sprintf("Failed to verify TCB Signing certificate chain: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME)
+	if err != nil {
+		msg := fmt.Sprintf("downloading Root CA CRL from PCS failed: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	// perform CRL checks (signature + values)
+	res, err := CrlCheck(root_ca_crl, quoteCerts.TCBSigningCert, quoteCerts.RootCACert)
+	if !res || err != nil {
+		msg := fmt.Sprintf("CRL check on TcbSigningCert failed: %v", err)
+		return nil, errors.New(msg)
+	}
+
+	return tcbSigningCertChain, nil
 }
