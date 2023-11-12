@@ -225,7 +225,8 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions)
+	err = verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions,
+		[16]byte{}, SGX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -261,7 +262,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	result.Signature = sig
 
 	// check version
-	result.VersionMatch, ret = verifySgxVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
+	result.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
 	if !ret {
 		return result, false
 	}
@@ -288,11 +289,11 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	return result, ok
 }
 
-func verifySgxVersion(quote QuoteHeader, version uint16) (Result, bool) {
+func verifyQuoteVersion(quote QuoteHeader, version uint16) (Result, bool) {
 	r := Result{}
 	ok := quote.Version == version
 	if !ok {
-		msg := fmt.Sprintf("SGX report version mismatch: Report = %v, supplied = %v", quote.Version, version)
+		msg := fmt.Sprintf("Quote version mismatch: Report = %v, supplied = %v", quote.Version, version)
 		r.setFalse(&msg)
 	} else {
 		r.Success = true
@@ -470,7 +471,9 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	return result, true
 }
 
-func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate, sgxExtensions SGXExtensionsValue) error {
+// teeTcbSvn is only required for TDX (from TdxReportBody)
+func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate,
+	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) error {
 	if tcbInfo == nil || tcbKeyCert == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
@@ -515,45 +518,57 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
 	}
 
-	// TODO: check TCB Levels (sgx/tdx tcb component svns, pcesvn)
-	// 1. Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to 16)
-	// with the corresponding values of SVNs in sgxtcbcomponents array of TCB Level.
-	var levelOk bool
-	for i, tcbLevel := range tcbInfo.TcbInfo.TcbLevels {
-		levelOk = true
-		tcbFromCert := GetTCBCompByIndex(sgxExtensions.Tcb, i)
-		// a) Compare all of the SGX TCB Comp SVNs from PCK Cert with with the corresponding values
-		// of SVNs in sgxtcbcomponents array of TCB Level
-		for _, component := range tcbLevel.Tcb.SgxTcbComponents {
-			fmt.Println("TCBCompSVN from PCK Cert: ", tcbFromCert.Value)
-			fmt.Println("SGXCompSVN from TCBLevel: ", component.Svn)
-			if tcbFromCert.Value < int(component.Svn) {
-				levelOk = false
-				break
+	// checking tcb level
+	var levelOk bool = false
+	for _, tcbLevel := range tcbInfo.TcbInfo.TcbLevels {
+		// Compare SGX TCB Comp SVNs from PCK Certificate with TCB Level
+		if compareSgxTcbCompSvns(sgxExtensions, tcbLevel) {
+			// Compare PCESVN value
+			if sgxExtensions.Tcb.Value.PceSvn.Value >= int(tcbLevel.Tcb.PceSvn) {
+				// Compare TEE TCB SVNs from TDX Report with TCB Level
+				if compareTeeTcbSvns(teeTcbSvn, tcbLevel) {
+					if tcbLevel.Tcb.TdxTcbComponents[1].Svn == teeTcbSvn[1] {
+						levelOk = true
+						fmt.Println("TCB Level Status: ", tcbLevel.TcbStatus) // handle result based on policy
+						break
+					} else {
+						return fmt.Errorf("TCB Level rejected: unsupported")
+					}
+
+				}
 			}
 		}
-		if !levelOk {
-			continue
-		}
-		// b) Compare PCESVN
-		if sgxExtensions.Tcb.Value.PceSvn.Value < int(tcbLevel.Tcb.PceSvn) {
-			levelOk = false
-			break
-		}
-		// c) Compare all of the SVNs in TEE TCB SVN array retrieved from TD Report in Quote
-		// with the corresponding values of SVNs in tdxtcbcomponents array of TCB Level
-		for _, component := range tcbLevel.Tcb.TdxTcbComponents {
-			// TODO: get report body and TEE TCB SVN array and compare with the component svn values
-			fmt.Println("TDXCompSVN from TCBLevel: ", component.Svn)
-
-		}
 	}
-
-	if levelOk == false {
-		return fmt.Errorf("TCB Level mismatch!")
+	if !levelOk {
+		return fmt.Errorf("TCB Level not supported")
 	}
 
 	return nil
+}
+
+// helper function for verifyTcbInfo
+func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, tcbLevel TcbLevel) bool {
+	// Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to 16)
+	// with the corresponding values of SVNs in sgxtcbcomponents array of TCB Level.
+	for i := 0; i < 16; i++ {
+		tcbFromCert := GetTCBCompByIndex(sgxExtensions.Tcb, i+1)
+		if byte(tcbFromCert.Value) < tcbLevel.Tcb.SgxTcbComponents[i].Svn {
+			return false
+		}
+	}
+	return true
+}
+
+// helper function for verifyTcbInfo
+func compareTeeTcbSvns(teeTcbSvn [16]byte, tcbLevel TcbLevel) bool {
+	// Compare all of the SVNs in TEE TCB SVN array retrieved from TD Report in Quote (from index 0 to 15)
+	// with the corresponding values of SVNs in tdxtcbcomponents array of TCB Level
+	for i := 0; i < 16; i++ {
+		if teeTcbSvn[i] < tcbLevel.Tcb.TdxTcbComponents[i].Svn {
+			return false
+		}
+	}
+	return true
 }
 
 // Only for SGX report body
@@ -620,7 +635,6 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	}
 
 	// TODO: check CPUSVN from report body
-	// TODO: check TCB level (call GetTcbStatusEnclave):
 	// - Check if TCB Level status is OutOfDate/REVOKED/ConfigurationNeeded/ConfigurationAndSWHardeningNeeded/UpToDate/SWHardeningNeeded/OutOfDateConfigurationNeeded/TCB Level error status is unrecognized
 	// - handle result of TCB Status based on policy
 	return nil
@@ -633,8 +647,8 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
 
-	//regex := regexp.MustCompile(`\s+`)
-	//regex.ReplaceAllString(qeIdentityBodyRaw, "")                             // remove whitespace
+	regex := regexp.MustCompile(`\s+`)
+	regex.ReplaceAllString(qeIdentityBodyRaw, "")                             // remove whitespace
 	qeIdentityBodyRaw = qeIdentityBodyRaw[19 : len(qeIdentityBodyRaw)-128-16] // remove "{"enclaveIdentity":" from beginning and signature + rest from the end
 
 	// get checksum of qe identity body
@@ -716,7 +730,7 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	}
 
 	// TODO: return a corresponding result based on a policy.
-	switch GetTcbStatusQE(qeIdentity, qeReportBody) {
+	switch getTcbStatusQE(qeIdentity, qeReportBody) {
 	case Revoked:
 		log.Tracef("Value of tcbStatus for the selected Enclave's Identity tcbLevel (isvSvn: %v) is 'Revoked'", qeReportBody.ISVSVN)
 	case OutOfDate:
@@ -727,18 +741,12 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	return nil
 }
 
-func GetTcbStatusQE(qeIdentity *QEIdentity, body *EnclaveReportBody) TcbStatus {
+func getTcbStatusQE(qeIdentity *QEIdentity, body *EnclaveReportBody) TcbStatus {
 	for _, level := range qeIdentity.EnclaveIdentity.TcbLevels {
 		if uint16(level.Tcb.Isvsvn) <= body.ISVSVN {
 			return level.TcbStatus
 		}
 	}
-	return Revoked
-}
-
-// TODO (important): implement this function (from DCAP QuoteVerifier.cpp: function checkTcbLevel())
-func GetTcbStatusEnclave(tcb_info *TcbInfo, quote *SgxReport, sgxExtensions SGXExtensionsValue) TcbStatus {
-	//tcbLevel := getMatchingTcbLevel(tcb_info, quote, sgxExtensions)
 	return Revoked
 }
 

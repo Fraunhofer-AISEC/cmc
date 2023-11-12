@@ -135,7 +135,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// (from DCAP Library): parse and verify TcbInfo object
+	// Parse and verify TcbInfo object
 	tcbInfo, err := ParseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
@@ -143,14 +143,15 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert, sgxExtensions)
+	err = verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
+		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
 
-	// (from DCAP Library): parse and verify QE Identity object
+	// Parse and verify QE Identity object
 	qeIdentity, err := ParseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
@@ -179,7 +180,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	result.Signature = sig
 
 	// check version
-	result.VersionMatch, ret = verifySgxVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
+	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
 	if !ret {
 		return result, false
 	}
