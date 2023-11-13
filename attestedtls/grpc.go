@@ -121,7 +121,7 @@ func (a GrpcApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	// check results
 	if !cc.result.Success {
-		return NewAttestedError(*cc.result, errors.New("verification failed"))
+		return errors.New("attestation report verification failed")
 	}
 	return nil
 }
