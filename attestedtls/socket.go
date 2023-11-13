@@ -46,7 +46,7 @@ func (a SocketApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
 	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 
 	req := &api.AttestationRequest{
@@ -88,7 +88,7 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
 	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
-		return fmt.Errorf("Error dialing: %w", err)
+		return fmt.Errorf("error dialing: %w", err)
 	}
 
 	// Create Verification request
@@ -133,7 +133,7 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	// Check results
 	if !cc.result.Success {
-		return NewAttestedError(*cc.result, errors.New("verification failed"))
+		return errors.New("attestation report verification failed")
 	}
 	return nil
 }
@@ -144,7 +144,7 @@ func (a SocketApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.Signe
 	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
 	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 
 	hash, err := api.SignerOptsToHash(opts)
@@ -196,7 +196,7 @@ func (a SocketApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
 	conn, err := net.Dial(cc.network, cc.cmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 
 	// Create TLS certificate request

@@ -52,7 +52,7 @@ func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
 	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -99,7 +99,7 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
 	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
-		return fmt.Errorf("Error dialing: %w", err)
+		return fmt.Errorf("error dialing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -144,7 +144,7 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	// check results
 	if !cc.result.Success {
-		return NewAttestedError(*cc.result, errors.New("verification failed"))
+		return errors.New("attestation report verification failed")
 	}
 
 	return nil
@@ -158,7 +158,7 @@ func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
 	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -212,7 +212,7 @@ func (a CoapApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
 	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
 	conn, err := udp.Dial(cc.cmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("Error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

@@ -73,7 +73,7 @@ func (a LibApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	}
 
 	if !result.Success {
-		return NewAttestedError(result, errors.New("verification failed"))
+		return errors.New("attestation report verification failed")
 	}
 	return nil
 }

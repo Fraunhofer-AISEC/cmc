@@ -23,13 +23,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"strconv"
+	"sync"
 	"time"
 
 	// local modules
@@ -54,40 +53,17 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithCmcNetwork(c.Network),
 		atls.WithResult(verificationResult),
 		atls.WithCmc(cmc))
+	// Publish the attestation result asynchronously if publishing address was specified and
+	// the result is present
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+	defer wg.Wait()
+	go publishResultAsync(c.Publish, verificationResult, wg)
 	if err != nil {
-		var attestedErr atls.AttestedError
-		if errors.As(err, &attestedErr) {
-			arresult := attestedErr.GetVerificationResult()
-			result, err := json.Marshal(arresult)
-			if err != nil {
-				return fmt.Errorf("internal error: failed to marshal verification result: %v",
-					err)
-			}
-			r, err := strconv.Unquote(string(result))
-			if err != nil {
-				r = string(result)
-			}
-
-			// Publish the attestation result if publishing address was specified
-			err = publishResult(c.Publish, &arresult)
-			if err != nil {
-				log.Warnf("failed to publish result: %v", err)
-			}
-
-			return fmt.Errorf(
-				"verification Result: %v. Cannot establish connection: remote attestation failed",
-				r)
-		}
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
-
-	// Publish the attestation result if publishing address was specified
-	err = publishResult(c.Publish, verificationResult)
-	if err != nil {
-		log.Warnf("failed to publish result: %v", err)
-	}
 
 	// Testing: write a hello string
 	msg := "hello\n"
@@ -154,13 +130,13 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		log.Infof("Starting monitoring with interval %v", c.interval)
 
 		for {
-			<-ticker.C
 			for _, addr := range c.Addr {
 				err := dialInternalAddr(c, api, addr, tlsConf, cmc)
 				if err != nil {
 					log.Warnf(err.Error())
 				}
 			}
+			<-ticker.C
 		}
 	} else {
 		for _, addr := range c.Addr {
@@ -233,32 +209,14 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	for {
 		log.Infof("serving under %v", addr)
-		// Finish TLS connection establishment with Remote Attestation
+		// Accept connection and perform remote attestation
 		conn, err := ln.Accept()
 		if err != nil {
-			var attestedErr atls.AttestedError
-			if errors.As(err, &attestedErr) {
-				arresult := attestedErr.GetVerificationResult()
-				result, err := json.Marshal(arresult)
-				if err != nil {
-					log.Errorf("Internal error: failed to marshal verification result: %v", err)
-				} else {
-					r, err := strconv.Unquote(string(result))
-					if err != nil {
-						r = string(result)
-					}
-
-					// Publish the attestation result if publishing address was specified
-					err = publishResult(c.Publish, &arresult)
-					if err != nil {
-						log.Warnf("failed to publish result: %v", err)
-					}
-
-					log.Errorf("Verification Result: %v\n"+
-						"Cannot establish connection: Remote attestation Failed.", r)
-				}
-			} else {
-				log.Errorf("Failed to establish connection: %v", err)
+			log.Errorf("Failed to establish connection: %v", err)
+			if c.Mtls {
+				// Publish the attestation result if publishing address was specified
+				// and result is not empty
+				go publishResult(c.Publish, verificationResult)
 			}
 			continue
 		}
@@ -268,10 +226,8 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 		if c.Mtls {
 			// Publish the attestation result if publishing address was specified
-			err = publishResult(c.Publish, verificationResult)
-			if err != nil {
-				log.Warnf("failed to publish result: %v", err)
-			}
+			// and result is not empty
+			go publishResult(c.Publish, verificationResult)
 		}
 	}
 }
@@ -317,13 +273,31 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func publishResult(addr string, result *ar.VerificationResult) error {
-	data, err := json.Marshal(*result)
-	if err != nil {
-		return fmt.Errorf("failed to marshal result: %w", err)
+func publishResultAsync(addr string, result *ar.VerificationResult, wg *sync.WaitGroup) {
+	defer wg.Done()
+	publishResult(addr, result)
+}
+
+func publishResult(addr string, result *ar.VerificationResult) {
+
+	log.Tracef("Publishing result to %v", addr)
+
+	if result.Prover == "" {
+		log.Trace("Will not publish result: prover is empty (this happens if connection could not be established)")
+		return
 	}
 
-	return publish(addr, data)
+	data, err := json.Marshal(*result)
+	if err != nil {
+		log.Tracef("Failed to marshal result: %v", err)
+		return
+	}
+
+	err = publish(addr, data)
+	if err != nil {
+		log.Tracef("Failed to publish: %v", err)
+		return
+	}
 }
 
 func publish(addr string, result []byte) error {
