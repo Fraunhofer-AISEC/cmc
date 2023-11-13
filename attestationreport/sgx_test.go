@@ -488,7 +488,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity,
 								QeIdentitySize: qe_identity_size,
 							},
-							CAfingerprint: rootCACertFingerprint,
+							CaFingerprint: rootCACertFingerprint,
 							Attributes:    validSGXAttributes,
 							IsvProdId:     validIsvProdId,
 							MRSIGNER:      validMRSIGNER,
@@ -671,7 +671,6 @@ func Test_verifySgxMeasurements(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestParseSGXExtensions(t *testing.T) {

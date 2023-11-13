@@ -763,6 +763,15 @@ var (
 	// rootCAFingerprint          = "BF85A53FC08F84CB1F73A4F75F48AF566E30AC040699BA0EC1B8D593C05B56FC"
 	aisecCertrootCAFingerprint = "44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"
 
+	// valid report body values
+	mrOwner       = [48]byte{} // 0x00s
+	mrOwnerConfig = [48]byte{} // 0x00s
+	mrConfigId    = [48]byte{} // 0x00s
+	rtMr0         = [48]byte{225, 175, 117, 230, 25, 39, 65, 14, 66, 181, 75, 57, 246, 104, 28, 249, 176, 191, 186, 229, 18, 177, 94, 135, 14, 76, 141, 157, 90, 92, 179, 133, 87, 27, 14, 29, 194, 247, 11, 249, 204, 239, 8, 86, 15, 10, 43, 88}
+	rtMr1         = [48]byte{1, 28, 185, 253, 213, 20, 180, 71, 150, 2, 57, 206, 119, 160, 255, 200, 7, 135, 119, 55, 31, 126, 191, 235, 76, 160, 72, 13, 3, 60, 229, 236, 97, 67, 72, 6, 73, 247, 90, 144, 87, 157, 245, 245, 1, 107, 231, 202}
+	rtMr2         = [48]byte{} // 0x00s
+	rtMr3         = [48]byte{} // 0x00s
+
 	validMrSeam         = "2fd279c16164a93dd5bf373d834328d46008c2b693af9ebb865b08b2ced320c9a89b4869a9fab60fbe9d0c5a5363c656"
 	validMrSignerSeam   = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 	validSeamAttributes = [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
@@ -805,11 +814,21 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							Cafingerprint:  aisecCertrootCAFingerprint,
-							SeamAttributes: validSeamAttributes,
-							MrSignerSeam:   validMrSignerSeam,
-							MrSeam:         validMrSeam,
-							TdAttributes:   validTdAttributes,
+							CaFingerprint: aisecCertrootCAFingerprint,
+							TdId: TDId{
+								MrOwner:       mrOwner,
+								MrOwnerConfig: mrOwnerConfig,
+								MrConfigId:    mrConfigId,
+								RtMr0:         rtMr0,
+								RtMr1:         rtMr1,
+								RtMr2:         rtMr2,
+								RtMr3:         rtMr3,
+							},
+							TdAttributes: TDAttributes{
+								Tud:   0,
+								Sec:   [3]byte{0x00, 0x00, 0x10},
+								Other: [4]byte{0x00, 0x00, 0x00, 0x00},
+							},
 						},
 					},
 				},
@@ -843,11 +862,15 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								Debug:          false,
 								ValidTcbStatus: []string{string(OutOfDate)},
 							},
-							Cafingerprint:  aisecCertrootCAFingerprint,
+							CaFingerprint:  aisecCertrootCAFingerprint,
 							SeamAttributes: validSeamAttributes,
 							MrSignerSeam:   validMrSignerSeam,
 							MrSeam:         validMrSeam,
-							TdAttributes:   validTdAttributes,
+							TdAttributes: TDAttributes{
+								Tud:   0,
+								Sec:   [3]byte{0x00, 0x00, 0x10},
+								Other: [4]byte{0x00, 0x00, 0x00, 0x00},
+							},
 						},
 					},
 				},

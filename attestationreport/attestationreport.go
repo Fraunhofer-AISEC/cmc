@@ -220,7 +220,7 @@ type SGXCollateral struct {
 type SGXDetails struct {
 	Version       uint16        `json:"version" cbor:"0,keyasint"`
 	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
-	CAfingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
 	Policy        SgxPolicy     `json:"policy" cbor:"3,keyasint"`
 	Attributes    [16]byte      `json:"attributes" cbor:"4,keyasint"`
 	IsvProdId     uint16        `json:"isvProdId" cbor:"5,keyasint"`
@@ -228,15 +228,36 @@ type SGXDetails struct {
 }
 
 type TDXDetails struct {
-	// TODO: add more attributes to this struct
-	Version        uint16        `json:"version" cbor:"0,keyasint"`
-	Collateral     SGXCollateral `json:"collateral" cbor:"1,keyasint"`
-	Cafingerprint  string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	Policy         TdxPolicy     `json:"policy" cbor:"3,keyasint"`
-	SeamAttributes [8]byte       `json:"seamattributes" cbor:"4,keyasint"`
-	MrSignerSeam   string        `json:"mrsignerseam" cbor:"6,keyasint"`
-	MrSeam         string        `json:"mrseam" cbor:"7,keyasint"`
-	TdAttributes   [8]byte       `json:"tdattributes" cbor:"8,keyasint"`
+	Version       uint16        `json:"version" cbor:"0,keyasint"`
+	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
+	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	Policy        TdxPolicy     `json:"policy" cbor:"3,keyasint"`
+	TdId          TDId          `json:"tdId" cbor:"4,keyasint"`
+	TdAttributes  TDAttributes  `json:"tdAttributes" cbor:"5,keyasint"`
+	Xfam          [8]byte       `json:"xfam" cbor:"6,keyasint"`
+
+	// TODO: check if these are necessary
+	SeamAttributes [8]byte `json:"seamattributes" cbor:"7,keyasint"`
+	MrSignerSeam   string  `json:"mrsignerseam" cbor:"8,keyasint"`
+	MrSeam         string  `json:"mrseam" cbor:"9,keyasint"`
+}
+
+// Identity of TD, i.e. the contained measurement
+// MrTd is already given in ReferenceValue.Sha256
+type TDId struct {
+	MrOwner       [48]byte `json:"mrOwner" cbor:"0,keyasint"`
+	MrOwnerConfig [48]byte `json:"mrOwnerConfig" cbor:"1,keyasint"`
+	MrConfigId    [48]byte `json:"mrConfigId" cbor:"2,keyasint"`
+	RtMr0         [48]byte `json:"rtMr0" cbor:"0,keyasint"` // updated by the TD virtual firmware/BIOS
+	RtMr1         [48]byte `json:"rtMr1" cbor:"0,keyasint"` // updated by the TD virtual firmware/BIOS
+	RtMr2         [48]byte `json:"rtMr2" cbor:"0,keyasint"` // runtime measurement
+	RtMr3         [48]byte `json:"rtMr3" cbor:"0,keyasint"` // runtime measurement
+}
+
+type TDAttributes struct {
+	Tud   byte    `json:"tud" cbor:"0,keyasint"`
+	Sec   [3]byte `json:"sec" cbor:"1,keyasint"`
+	Other [4]byte `json:"other" cbor:"2,keyasint"`
 }
 
 // ReferenceValue represents the attestation report

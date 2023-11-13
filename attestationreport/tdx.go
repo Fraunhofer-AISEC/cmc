@@ -149,7 +149,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	// Verify Quote Signature
 	sig, ret := VerifyIntelQuoteSignature(tdxM.Report, tdxQuote.QuoteSignatureData,
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		tdxReferenceValue.Tdx.Cafingerprint, TDX_QUOTE_TYPE)
+		tdxReferenceValue.Tdx.CaFingerprint, TDX_QUOTE_TYPE)
 	if !ret {
 		ok = false
 	}
@@ -170,11 +170,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 				Success: true,
 			})
 	}
-
-	fmt.Println(tdxQuote.QuoteBody.RtMr0)
-	fmt.Println(tdxQuote.QuoteBody.RtMr1)
-	fmt.Println(tdxQuote.QuoteBody.RtMr2)
-	fmt.Println(tdxQuote.QuoteBody.RtMr3)
 
 	// check version
 	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
@@ -245,24 +240,28 @@ func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 			})
 	}
 
-	// check SeamAttributes
-	attributes_quote := body.SeamAttributes
-	if !reflect.DeepEqual(tdxReferenceValue.Tdx.SeamAttributes[:], attributes_quote[:]) {
-		return fmt.Errorf("SeamAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.SeamAttributes, attributes_quote)
+	if !bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]) {
+		return fmt.Errorf("MrOwner mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdId.MrOwner, body.MrOwner)
 	}
+	// check SeamAttributes
+	// attributes_quote := body.SeamAttributes
+	// if !reflect.DeepEqual(tdxReferenceValue.Tdx.SeamAttributes[:], attributes_quote[:]) {
+	// 	return fmt.Errorf("SeamAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.SeamAttributes, attributes_quote)
+	// }
 
 	// check MrSignerSeam value
-	refSigner, err := hex.DecodeString(tdxReferenceValue.Tdx.MrSignerSeam)
-	if err != nil {
-		return fmt.Errorf("decoding MRSIGNERSEAM reference value failed: %v", err)
-	}
-	if !reflect.DeepEqual(refSigner[:], body.MrSignerSeam[:]) {
-		return fmt.Errorf("MRSIGNERSEAM mismatch. Expected: %v, Got: %v", refSigner, body.MrSignerSeam[:])
-	}
+	// refSigner, err := hex.DecodeString(tdxReferenceValue.Tdx.MrSignerSeam)
+	// if err != nil {
+	// 	return fmt.Errorf("decoding MRSIGNERSEAM reference value failed: %v", err)
+	// }
+	// if !reflect.DeepEqual(refSigner[:], body.MrSignerSeam[:]) {
+	// 	return fmt.Errorf("MRSIGNERSEAM mismatch. Expected: %v, Got: %v", refSigner, body.MrSignerSeam[:])
+	// }
 
-	attributes_quote = body.TdAttributes
-	if !reflect.DeepEqual(tdxReferenceValue.Tdx.TdAttributes[:], attributes_quote[:]) {
-		return fmt.Errorf("TdAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdAttributes, attributes_quote)
-	}
+	// fmt.Println(body.TdAttributes)
+	// attributes_quote = body.TdAttributes
+	// if !reflect.DeepEqual(tdxReferenceValue.Tdx.TdAttributes[:], attributes_quote[:]) {
+	// 	return fmt.Errorf("TdAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdAttributes, attributes_quote)
+	// }
 	return nil
 }

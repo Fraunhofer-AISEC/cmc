@@ -237,7 +237,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 	// Verify Quote Signature
 	sig, ret := VerifyIntelQuoteSignature(sgxM.Report, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), referenceCerts,
-		sgxReferenceValue.Sgx.CAfingerprint, quoteType)
+		sgxReferenceValue.Sgx.CaFingerprint, quoteType)
 	if !ret {
 		msg := fmt.Sprintf("Failed to verify Quote Signature: %v", sig)
 		result.Summary.setFalse(&msg)
