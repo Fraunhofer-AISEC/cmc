@@ -18,6 +18,7 @@ package attestationreport
 import (
 	"crypto/x509"
 	"math/big"
+	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -181,9 +182,9 @@ type SgxMeasurementResult struct {
 	Signature    SignatureResult `json:"signature"`
 	Artifacts    []DigestResult  `json:"artifacts"`
 	VersionMatch Result          `json:"reportVersionMatch"`
-	FwCheck      VersionCheck    `json:"fwCheck"`
-	TcbCheck     TcbCheck        `json:"tcbCheck"`
-	PolicyCheck  PolicyCheck     `json:"policyCheck"`
+	TcbInfoCheck TcbInfoCheck    `json:"tcbInfoCheck"`
+	PolicyCheck  PolicyCheck     `json:"policyCheck"` // TODO: test
+	FwCheck      VersionCheck    `json:"fwCheck"`     // TODO: test
 }
 
 // TdxMeasurementResult represents the results for the verification
@@ -194,9 +195,16 @@ type TdxMeasurementResult struct {
 	Signature    SignatureResult `json:"signature"`
 	Artifacts    []DigestResult  `json:"artifacts"`
 	VersionMatch Result          `json:"reportVersionMatch"`
-	FwCheck      VersionCheck    `json:"fwCheck"`
-	TcbCheck     TcbCheck        `json:"tcbCheck"`
-	PolicyCheck  PolicyCheck     `json:"policyCheck"`
+	TcbInfoCheck TcbInfoCheck    `json:"tcbInfoCheck"`
+	FwCheck      VersionCheck    `json:"fwCheck"`     // TODO: test
+	PolicyCheck  PolicyCheck     `json:"policyCheck"` // TODO: test
+}
+
+type TcbInfoCheck struct {
+	Success        bool      `json:"success"`
+	TcbLevelStatus string    `json:"status"`
+	TcbLevelDate   time.Time `json:"date"`
+	Details        string    `json:"details,omitempty"`
 }
 
 // IasMeasurementResult represents the results for the verification

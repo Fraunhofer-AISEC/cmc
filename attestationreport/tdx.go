@@ -89,23 +89,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// Parse and verify the entire PCK certificate chain
-	x509CertChains, err := VerifyIntelCertChainFull(quoteCerts)
-	if err != nil {
-		msg := err.Error()
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
-
-	// Store details from validated certificate chain(s) in the validation report
-	for _, chain := range x509CertChains {
-		chainExtracted := []X509CertExtracted{}
-		for _, cert := range chain {
-			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
-		}
-		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
-	}
-
 	// parse reference cert chain (TCBSigningCert chain)
 	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
 	if err != nil {
@@ -137,13 +120,14 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	tcbStatus, err := verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
+	tcbInfoResult, err := verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
+	result.TcbInfoCheck = tcbInfoResult
 
 	// Parse and verify QE Identity object
 	qeIdentity, err := ParseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
@@ -166,11 +150,8 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		tdxReferenceValue.Tdx.Cafingerprint, TDX_QUOTE_TYPE)
 	if !ret {
-		msg := fmt.Sprintf("Failed to verify Quote Signature: %v", sig)
-		result.Summary.setFalse(&msg)
-		return result, false
+		ok = false
 	}
-
 	result.Signature = sig
 
 	// Verify Quote Body values
@@ -190,12 +171,17 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		ok = true
 	}
 
+	fmt.Println(tdxQuote.QuoteBody.RtMr0)
+	fmt.Println(tdxQuote.QuoteBody.RtMr1)
+	fmt.Println(tdxQuote.QuoteBody.RtMr2)
+	fmt.Println(tdxQuote.QuoteBody.RtMr3)
+
 	// check version
 	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
 	if !ret {
 		return result, false
 	}
-	result.PolicyCheck, ret = verifyTdxPolicy(tdxQuote, tdxReferenceValue.Tdx.Policy, tcbStatus)
+	result.PolicyCheck, ret = verifyTdxPolicy(tdxQuote, tdxReferenceValue.Tdx.Policy)
 	if !ret {
 		ok = false
 	}
@@ -204,7 +190,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 }
 
 // TODO: implement this function
-func verifyTdxPolicy(s TdxReport, v TdxPolicy, tcbStatus TcbStatus) (PolicyCheck, bool) {
+func verifyTdxPolicy(s TdxReport, v TdxPolicy) (PolicyCheck, bool) {
 	r := PolicyCheck{}
 
 	return r, true
@@ -237,15 +223,24 @@ func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
 				Name:    tdxReferenceValue.Name,
-				Digest:  hex.EncodeToString(tdxReferenceValue.Sha256[:]),
+				Digest:  hex.EncodeToString(tdxReferenceValue.Sha256),
 				Success: false,
+				Type:    "Reference Value",
+			})
+
+		result.Artifacts = append(result.Artifacts,
+			DigestResult{
+				Name:    tdxReferenceValue.Name,
+				Digest:  hex.EncodeToString(body.MrTd[:]),
+				Success: false,
+				Type:    "Measurement",
 			})
 		return fmt.Errorf("MrSeam mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
 				Name:    tdxReferenceValue.Name,
-				Digest:  hex.EncodeToString(body.MrSeam[:]),
+				Digest:  hex.EncodeToString(body.MrTd[:]),
 				Success: true,
 			})
 	}
