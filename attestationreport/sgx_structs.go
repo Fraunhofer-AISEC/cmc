@@ -39,7 +39,8 @@ const (
 	ConfigurationNeeded          TcbStatus = "ConfigurationNeeded"
 	OutOfDate                    TcbStatus = "OutOfDate"
 	OutOfDateConfigurationNeeded TcbStatus = "OutOfDateConfigurationNeeded"
-	Revoked                      TcbStatus = "Revoked"
+	Revoked                      TcbStatus = "REVOKED"
+	NotSupported                 TcbStatus = "NotSupported"
 )
 
 // Overall structure: table 2 from https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf

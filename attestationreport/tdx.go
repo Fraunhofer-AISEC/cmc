@@ -122,12 +122,12 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 
 	tcbInfoResult, err := verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
+	result.TcbInfoCheck = tcbInfoResult
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	result.TcbInfoCheck = tcbInfoResult
 
 	// Parse and verify QE Identity object
 	qeIdentity, err := ParseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
@@ -137,8 +137,9 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = VerifyQEIdentity(&tdxQuote.QuoteSignatureData.QECertData.QEReport, &qeIdentity,
+	qeIdentityResult, err := VerifyQEIdentity(&tdxQuote.QuoteSignatureData.QECertData.QEReport, &qeIdentity,
 		string(tdxReferenceValue.Tdx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, TDX_QUOTE_TYPE)
+	result.QeIdentityCheck = qeIdentityResult
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -168,7 +169,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 				Digest:  hex.EncodeToString(tdxQuote.QuoteBody.MrSeam[:]),
 				Success: true,
 			})
-		ok = true
 	}
 
 	fmt.Println(tdxQuote.QuoteBody.RtMr0)

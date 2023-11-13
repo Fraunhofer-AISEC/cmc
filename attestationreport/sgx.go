@@ -225,13 +225,14 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	err = VerifyQEIdentity(&sgxQuote.QuoteSignatureData.QEReport, &qeIdentity,
+	qeIdentityResult, err := VerifyQEIdentity(&sgxQuote.QuoteSignatureData.QEReport, &qeIdentity,
 		string(sgxReferenceValue.Sgx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, SGX_QUOTE_TYPE)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
+	result.QeIdentityCheck = qeIdentityResult
 
 	// Verify Quote Signature
 	sig, ret := VerifyIntelQuoteSignature(sgxM.Report, sgxQuote.QuoteSignatureData,
@@ -542,6 +543,13 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 					// Compare TEE TCB SVNs from TDX Report with TCB Level
 					if compareTeeTcbSvns(teeTcbSvn, tcbLevel) {
 						if tcbLevel.Tcb.TdxTcbComponents[1].Svn == teeTcbSvn[1] {
+							// fail if Status == REVOKED
+							if tcbLevel.TcbStatus == string(Revoked) {
+								result.Success = false
+								result.TcbLevelStatus = string(Revoked)
+								result.TcbLevelDate = tcbLevel.TcbDate
+								return result, fmt.Errorf("TCB Level status: REVOKED")
+							}
 							result.Success = true
 							result.TcbLevelDate = tcbLevel.TcbDate
 							result.TcbLevelStatus = tcbLevel.TcbStatus
@@ -556,6 +564,8 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 			}
 		}
 	}
+	// - Check if TCB Level status is OutOfDate/REVOKED/ConfigurationNeeded/ConfigurationAndSWHardeningNeeded/UpToDate/SWHardeningNeeded/OutOfDateConfigurationNeeded/TCB Level error status is unrecognized
+	// - handle result of TCB Status based on policy
 
 	result.Success = false
 	result.Details = "TCB Level not supported"
@@ -651,16 +661,15 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	}
 
 	// TODO: check CPUSVN from report body
-	// - Check if TCB Level status is OutOfDate/REVOKED/ConfigurationNeeded/ConfigurationAndSWHardeningNeeded/UpToDate/SWHardeningNeeded/OutOfDateConfigurationNeeded/TCB Level error status is unrecognized
-	// - handle result of TCB Status based on policy
+
 	return nil
 }
 
-// verify QE Identity and compare the values to the QE
-// Can be used by SGX/TDX
-func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, qeIdentityBodyRaw string, tcbKeyCert *x509.Certificate, teeType uint32) error {
+// verify QE Identity and compare the values to the QE (SGX/TDX)
+func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, qeIdentityBodyRaw string, tcbKeyCert *x509.Certificate, teeType uint32) (QEIdentityCheck, error) {
+	result := QEIdentityCheck{}
 	if qeReportBody == nil || qeIdentity == nil || tcbKeyCert == nil {
-		return fmt.Errorf("invalid function parameter (null pointer exception)")
+		return result, fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
 
 	regex := regexp.MustCompile(`\s+`)
@@ -678,92 +687,106 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 
 	pub_key, ok := tcbKeyCert.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		return fmt.Errorf("failed to extract public key from certificate")
+		return result, fmt.Errorf("failed to extract public key from certificate")
 	}
 
 	// verify signature
 	ok = ecdsa.Verify(pub_key, digest[:], r, s)
 	if !ok {
-		return fmt.Errorf("failed to verify QE Identity signature")
+		return result, fmt.Errorf("failed to verify QE Identity signature")
 	}
 
 	now := time.Now()
-
 	if now.After(qeIdentity.EnclaveIdentity.NextUpdate) {
-		return fmt.Errorf("qeIdentity has expired since: %v", qeIdentity.EnclaveIdentity.NextUpdate)
+		return result, fmt.Errorf("qeIdentity has expired since: %v", qeIdentity.EnclaveIdentity.NextUpdate)
 	}
 
 	// from Intel SGX DCAP Library
 	if teeType == TDX_QUOTE_TYPE {
 		if qeIdentity.EnclaveIdentity.Version == 1 {
-			return fmt.Errorf("enclave Identity version 1 is invalid for TDX TEE")
+			return result, fmt.Errorf("enclave Identity version 1 is invalid for TDX TEE")
 		} else if qeIdentity.EnclaveIdentity.Version == 2 {
 			if qeIdentity.EnclaveIdentity.Id != TD_QE {
-				return fmt.Errorf("enclave Identity is not generated for TDX and does not match Quote's TEE")
+				return result, fmt.Errorf("enclave Identity is not generated for TDX and does not match Quote's TEE")
 			}
 		}
 	} else if teeType == SGX_QUOTE_TYPE {
 		if qeIdentity.EnclaveIdentity.Id != QE {
-			return fmt.Errorf("enclave Identity is not generated for SGX and does not match Quote's TEE")
+			return result, fmt.Errorf("enclave Identity is not generated for SGX and does not match Quote's TEE")
 		}
 	} else {
-		return fmt.Errorf("unknown Quote's TEE. Enclave Identity cannot be valid")
+		return result, fmt.Errorf("unknown Quote's TEE. Enclave Identity cannot be valid")
 	}
 
-	miscselect_qe_identity := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.Miscselect)
-	miscselectMask_qe_identity := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.MiscselectMask)
+	// check mrsigner
+	if !bytes.Equal([]byte(qeIdentity.EnclaveIdentity.Mrsigner), qeReportBody.MRSIGNER[:]) {
+		msg := fmt.Sprintf("MRSIGNER mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Mrsigner, qeReportBody.MRSIGNER)
+		result.Details = msg
+		result.Success = false
+		return result, nil
+	}
 
-	if qeReportBody.MISCSELECT != (miscselect_qe_identity & miscselectMask_qe_identity) {
-		return fmt.Errorf("miscSelect value from Enclave Report: %v does not match miscSelect value from QE Identity: %v",
-			qeReportBody.MISCSELECT, (miscselect_qe_identity & miscselectMask_qe_identity))
+	// check isvProdId
+	if qeReportBody.ISVProdID != uint16(qeIdentity.EnclaveIdentity.IsvProdId) {
+		msg := fmt.Sprintf("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdId, qeReportBody.ISVProdID)
+		result.Details = msg
+		result.Success = false
+		return result, nil
+	}
+
+	// check miscselect
+	miscselectMask := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.MiscselectMask)
+	if binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.Miscselect) != (qeReportBody.MISCSELECT & miscselectMask) {
+		msg := fmt.Sprintf("miscSelect value from QEIdentity: %v does not match miscSelect value from QE Report: %v",
+			qeIdentity.EnclaveIdentity.Miscselect, (qeReportBody.MISCSELECT & miscselectMask))
+		result.Details = msg
+		result.Success = false
+		return result, nil
 	}
 
 	// check attributes
 	attributes_quote := qeReportBody.Attributes
 	attributes_mask := qeIdentity.EnclaveIdentity.AttributesMask
-
 	if len(attributes_mask) == len(attributes_quote) {
 		for i := range attributes_quote {
 			attributes_quote[i] &= attributes_mask[i]
 		}
 	}
-
 	if !reflect.DeepEqual([]byte(qeIdentity.EnclaveIdentity.Attributes), attributes_quote[:]) {
-		return fmt.Errorf("attributes mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Attributes, attributes_quote)
+		msg := fmt.Sprintf("attributes mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Attributes, attributes_quote)
+		result.Details = msg
+		result.Success = false
+		return result, nil
 	}
 
-	// check mrsigner value
-	mrsigner_quote := qeReportBody.MRSIGNER
-	mrsigner_qe_identity := qeIdentity.EnclaveIdentity.Mrsigner
-	if mrsigner_qe_identity != nil &&
-		!reflect.DeepEqual([]byte(mrsigner_qe_identity), mrsigner_quote[:]) {
-		return fmt.Errorf("MRSIGNER mismatch. Expected: %v, Got: %v", mrsigner_qe_identity, mrsigner_quote)
-	}
+	tcbStatus, tcbDate := getTcbStatusAndDateQE(qeIdentity, qeReportBody)
+	log.Tracef("TcbStatus for Enclave's Identity tcbLevel (isvSvn: %v): '%v'", qeReportBody.ISVSVN, tcbStatus)
 
-	// check isvProdId value
-	if qeReportBody.ISVProdID != uint16(qeIdentity.EnclaveIdentity.IsvProdId) {
-		return fmt.Errorf("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdId, qeReportBody.ISVProdID)
-	}
-
-	// TODO: return a corresponding result based on a policy.
-	switch getTcbStatusQE(qeIdentity, qeReportBody) {
+	switch tcbStatus {
 	case Revoked:
-		log.Tracef("Value of tcbStatus for the selected Enclave's Identity tcbLevel (isvSvn: %v) is 'Revoked'", qeReportBody.ISVSVN)
-	case OutOfDate:
-		log.Tracef("Value of tcbStatus for the selected Enclave's Identity tcbLevel (isvSvn: %v) is 'OutOfDate'", qeReportBody.ISVSVN)
+		fallthrough
+	case NotSupported:
+		result.Details = "invalid tcbStatus"
+		result.TcbLevelStatus = string(tcbStatus)
+		result.TcbLevelDate = tcbDate
+		result.Success = false
+		return result, fmt.Errorf("tcbStatus: %v", tcbStatus)
 	default:
+		result.TcbLevelStatus = string(tcbStatus)
+		result.TcbLevelDate = tcbDate
+		result.Success = true
+		return result, nil
 	}
-
-	return nil
 }
 
-func getTcbStatusQE(qeIdentity *QEIdentity, body *EnclaveReportBody) TcbStatus {
-	for _, level := range qeIdentity.EnclaveIdentity.TcbLevels {
-		if uint16(level.Tcb.Isvsvn) <= body.ISVSVN {
-			return level.TcbStatus
+func getTcbStatusAndDateQE(qeIdentity *QEIdentity, body *EnclaveReportBody) (TcbStatus, time.Time) {
+	for i := len(qeIdentity.EnclaveIdentity.TcbLevels) - 1; i >= 0; i-- {
+		tcbLevel := qeIdentity.EnclaveIdentity.TcbLevels[i]
+		if uint16(tcbLevel.Tcb.Isvsvn) <= body.ISVSVN {
+			return tcbLevel.TcbStatus, tcbLevel.TcbDate
 		}
 	}
-	return Revoked
+	return NotSupported, time.Now()
 }
 
 // Check if CRL parameters are valid and check if the certificate has been revoked

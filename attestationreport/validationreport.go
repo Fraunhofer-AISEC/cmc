@@ -177,30 +177,39 @@ type SnpMeasurementResult struct {
 // SgxMeasurementResult represents the results for the verification
 // of Intel SGX measurements.
 type SgxMeasurementResult struct {
-	Summary      Result          `json:"resultSummary"`
-	Freshness    Result          `json:"freshness"`
-	Signature    SignatureResult `json:"signature"`
-	Artifacts    []DigestResult  `json:"artifacts"`
-	VersionMatch Result          `json:"reportVersionMatch"`
-	TcbInfoCheck TcbInfoCheck    `json:"tcbInfoCheck"`
-	PolicyCheck  PolicyCheck     `json:"policyCheck"` // TODO: test
-	FwCheck      VersionCheck    `json:"fwCheck"`     // TODO: test
+	Summary         Result          `json:"resultSummary"`
+	Freshness       Result          `json:"freshness"`
+	Signature       SignatureResult `json:"signature"`
+	Artifacts       []DigestResult  `json:"artifacts"`
+	VersionMatch    Result          `json:"reportVersionMatch"`
+	TcbInfoCheck    TcbInfoCheck    `json:"tcbInfoCheck"`
+	QeIdentityCheck QEIdentityCheck `json:"qeIdentityCheck"`
+	PolicyCheck     PolicyCheck     `json:"policyCheck"` // TODO: test
+	FwCheck         VersionCheck    `json:"fwCheck"`     // TODO: test
 }
 
 // TdxMeasurementResult represents the results for the verification
 // of Intel TDX measurements.
 type TdxMeasurementResult struct {
-	Summary      Result          `json:"resultSummary"`
-	Freshness    Result          `json:"freshness"`
-	Signature    SignatureResult `json:"signature"`
-	Artifacts    []DigestResult  `json:"artifacts"`
-	VersionMatch Result          `json:"reportVersionMatch"`
-	TcbInfoCheck TcbInfoCheck    `json:"tcbInfoCheck"`
-	FwCheck      VersionCheck    `json:"fwCheck"`     // TODO: test
-	PolicyCheck  PolicyCheck     `json:"policyCheck"` // TODO: test
+	Summary         Result          `json:"resultSummary"`
+	Freshness       Result          `json:"freshness"`
+	Signature       SignatureResult `json:"signature"`
+	Artifacts       []DigestResult  `json:"artifacts"`
+	VersionMatch    Result          `json:"reportVersionMatch"`
+	TcbInfoCheck    TcbInfoCheck    `json:"tcbInfoCheck"`
+	QeIdentityCheck QEIdentityCheck `json:"qeIdentityCheck"`
+	FwCheck         VersionCheck    `json:"fwCheck"`     // TODO: test
+	PolicyCheck     PolicyCheck     `json:"policyCheck"` // TODO: test
 }
 
 type TcbInfoCheck struct {
+	Success        bool      `json:"success"`
+	TcbLevelStatus string    `json:"status"`
+	TcbLevelDate   time.Time `json:"date"`
+	Details        string    `json:"details,omitempty"`
+}
+
+type QEIdentityCheck struct {
 	Success        bool      `json:"success"`
 	TcbLevelStatus string    `json:"status"`
 	TcbLevelDate   time.Time `json:"date"`
