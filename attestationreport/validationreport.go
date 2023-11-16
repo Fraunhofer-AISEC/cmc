@@ -182,8 +182,8 @@ type SgxMeasurementResult struct {
 	Signature       SignatureResult `json:"signature"`
 	Artifacts       []DigestResult  `json:"artifacts"`
 	VersionMatch    Result          `json:"reportVersionMatch"`
-	TcbInfoCheck    TcbInfoCheck    `json:"tcbInfoCheck"`
-	QeIdentityCheck QEIdentityCheck `json:"qeIdentityCheck"`
+	TcbInfoCheck    TcbLevelCheck   `json:"tcbInfoCheck"`
+	QeIdentityCheck TcbLevelCheck   `json:"qeIdentityCheck"`
 	PolicyCheck     PolicyCheck     `json:"policyCheck"` // TODO: test
 	FwCheck         VersionCheck    `json:"fwCheck"`     // TODO: test
 }
@@ -196,24 +196,22 @@ type TdxMeasurementResult struct {
 	Signature       SignatureResult `json:"signature"`
 	Artifacts       []DigestResult  `json:"artifacts"`
 	VersionMatch    Result          `json:"reportVersionMatch"`
-	TcbInfoCheck    TcbInfoCheck    `json:"tcbInfoCheck"`
-	QeIdentityCheck QEIdentityCheck `json:"qeIdentityCheck"`
-	FwCheck         VersionCheck    `json:"fwCheck"`     // TODO: test
-	PolicyCheck     PolicyCheck     `json:"policyCheck"` // TODO: test
+	TcbInfoCheck    TcbLevelCheck   `json:"tcbInfoCheck"`
+	QeIdentityCheck TcbLevelCheck   `json:"qeIdentityCheck"`
+	ExtendedTdCheck ExtendedTdCheck `json:"extendedTdCheck"`
+
+	FwCheck     VersionCheck `json:"fwCheck"`     // TODO: test
+	PolicyCheck PolicyCheck  `json:"policyCheck"` // TODO: test
 }
 
-type TcbInfoCheck struct {
-	Success        bool      `json:"success"`
+type TcbLevelCheck struct {
+	Summary        Result    `json:"success"`
 	TcbLevelStatus string    `json:"status"`
 	TcbLevelDate   time.Time `json:"date"`
-	Details        string    `json:"details,omitempty"`
 }
 
-type QEIdentityCheck struct {
-	Success        bool      `json:"success"`
-	TcbLevelStatus string    `json:"status"`
-	TcbLevelDate   time.Time `json:"date"`
-	Details        string    `json:"details,omitempty"`
+type ExtendedTdCheck struct {
+	Summary Result `json:"success"`
 }
 
 // IasMeasurementResult represents the results for the verification

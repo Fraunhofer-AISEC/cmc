@@ -469,8 +469,8 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 
 // teeTcbSvn is only required for TDX (from TdxReportBody)
 func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate,
-	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) (TcbInfoCheck, error) {
-	var result TcbInfoCheck
+	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) (TcbLevelCheck, error) {
+	var result TcbLevelCheck
 
 	if tcbInfo == nil || tcbKeyCert == nil {
 		return result, fmt.Errorf("invalid function parameter (null pointer exception)")
@@ -491,38 +491,38 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 
 	pub_key, ok := tcbKeyCert.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		result.Success = false
-		result.Details = "failed to extract public key from certificate"
+		result.Summary.Success = false
+		result.Summary.Details = "failed to extract public key from certificate"
 		return result, fmt.Errorf("failed to extract public key from certificate")
 	}
 
 	// verify signature
 	ok = ecdsa.Verify(pub_key, digest[:], r, s)
 	if !ok {
-		result.Success = false
-		result.Details = "failed to verify tcbInfo signature"
+		result.Summary.Success = false
+		result.Summary.Details = "failed to verify tcbInfo signature"
 		return result, fmt.Errorf("failed to verify tcbInfo signature")
 	}
 
 	now := time.Now()
 
 	if now.After(tcbInfo.TcbInfo.NextUpdate) {
-		result.Success = false
-		result.Details = fmt.Sprintf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
+		result.Summary.Success = false
+		result.Summary.Details = fmt.Sprintf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
 		return result, fmt.Errorf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
 	}
 
 	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
-		result.Success = false
-		result.Details = fmt.Sprintf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
+		result.Summary.Success = false
+		result.Summary.Details = fmt.Sprintf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
 		return result, fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
 	}
 
 	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
-		result.Success = false
-		result.Details = fmt.Sprintf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
+		result.Summary.Success = false
+		result.Summary.Details = fmt.Sprintf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
 		return result, fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
@@ -535,7 +535,7 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 			// Compare PCESVN value
 			if sgxExtensions.Tcb.Value.PceSvn.Value >= int(tcbLevel.Tcb.PceSvn) {
 				if quoteType == SGX_QUOTE_TYPE {
-					result.Success = true
+					result.Summary.Success = true
 					result.TcbLevelDate = tcbLevel.TcbDate
 					result.TcbLevelStatus = tcbLevel.TcbStatus
 					return result, nil
@@ -545,18 +545,18 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 						if tcbLevel.Tcb.TdxTcbComponents[1].Svn == teeTcbSvn[1] {
 							// fail if Status == REVOKED
 							if tcbLevel.TcbStatus == string(Revoked) {
-								result.Success = false
+								result.Summary.Success = false
 								result.TcbLevelStatus = string(Revoked)
 								result.TcbLevelDate = tcbLevel.TcbDate
 								return result, fmt.Errorf("TCB Level status: REVOKED")
 							}
-							result.Success = true
+							result.Summary.Success = true
 							result.TcbLevelDate = tcbLevel.TcbDate
 							result.TcbLevelStatus = tcbLevel.TcbStatus
 							return result, nil
 						} else {
-							result.Success = false
-							result.Details = "TCB Level rejected: unsupported"
+							result.Summary.Success = false
+							result.Summary.Details = "TCB Level rejected: unsupported"
 							return result, fmt.Errorf("TCB Level rejected: unsupported")
 						}
 					}
@@ -567,8 +567,8 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 	// - Check if TCB Level status is OutOfDate/REVOKED/ConfigurationNeeded/ConfigurationAndSWHardeningNeeded/UpToDate/SWHardeningNeeded/OutOfDateConfigurationNeeded/TCB Level error status is unrecognized
 	// - handle result of TCB Status based on policy
 
-	result.Success = false
-	result.Details = "TCB Level not supported"
+	result.Summary.Success = false
+	result.Summary.Details = "TCB Level not supported"
 	return result, fmt.Errorf("TCB Level not supported")
 }
 
@@ -602,22 +602,6 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	certs *SgxCertificates, sgxReferenceValue *ReferenceValue, result *SgxMeasurementResult) error {
 	if body == nil || tcbInfo == nil || certs == nil || sgxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
-	}
-
-	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := ParseSGXExtensions(certs.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
-	if err != nil {
-		return fmt.Errorf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-	}
-
-	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
-		return fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
-			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
-	}
-
-	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
-		return fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
-			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
 	}
 
 	// check MRENCLAVE reference value
@@ -666,8 +650,8 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 }
 
 // verify QE Identity and compare the values to the QE (SGX/TDX)
-func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, qeIdentityBodyRaw string, tcbKeyCert *x509.Certificate, teeType uint32) (QEIdentityCheck, error) {
-	result := QEIdentityCheck{}
+func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, qeIdentityBodyRaw string, tcbKeyCert *x509.Certificate, teeType uint32) (TcbLevelCheck, error) {
+	result := TcbLevelCheck{}
 	if qeReportBody == nil || qeIdentity == nil || tcbKeyCert == nil {
 		return result, fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
@@ -721,16 +705,16 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	// check mrsigner
 	if !bytes.Equal([]byte(qeIdentity.EnclaveIdentity.Mrsigner), qeReportBody.MRSIGNER[:]) {
 		msg := fmt.Sprintf("MRSIGNER mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Mrsigner, qeReportBody.MRSIGNER)
-		result.Details = msg
-		result.Success = false
+		result.Summary.Details = msg
+		result.Summary.Success = false
 		return result, nil
 	}
 
 	// check isvProdId
 	if qeReportBody.ISVProdID != uint16(qeIdentity.EnclaveIdentity.IsvProdId) {
 		msg := fmt.Sprintf("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdId, qeReportBody.ISVProdID)
-		result.Details = msg
-		result.Success = false
+		result.Summary.Details = msg
+		result.Summary.Success = false
 		return result, nil
 	}
 
@@ -739,8 +723,8 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	if binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.Miscselect) != (qeReportBody.MISCSELECT & miscselectMask) {
 		msg := fmt.Sprintf("miscSelect value from QEIdentity: %v does not match miscSelect value from QE Report: %v",
 			qeIdentity.EnclaveIdentity.Miscselect, (qeReportBody.MISCSELECT & miscselectMask))
-		result.Details = msg
-		result.Success = false
+		result.Summary.Details = msg
+		result.Summary.Success = false
 		return result, nil
 	}
 
@@ -754,8 +738,8 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	}
 	if !reflect.DeepEqual([]byte(qeIdentity.EnclaveIdentity.Attributes), attributes_quote[:]) {
 		msg := fmt.Sprintf("attributes mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Attributes, attributes_quote)
-		result.Details = msg
-		result.Success = false
+		result.Summary.Details = msg
+		result.Summary.Success = false
 		return result, nil
 	}
 
@@ -766,15 +750,15 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	case Revoked:
 		fallthrough
 	case NotSupported:
-		result.Details = "invalid tcbStatus"
+		result.Summary.Details = "invalid tcbStatus"
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
-		result.Success = false
+		result.Summary.Success = false
 		return result, fmt.Errorf("tcbStatus: %v", tcbStatus)
 	default:
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
-		result.Success = true
+		result.Summary.Success = true
 		return result, nil
 	}
 }

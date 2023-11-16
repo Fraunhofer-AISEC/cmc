@@ -156,7 +156,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	result.Signature = sig
 
 	// Verify Quote Body values
-	err = VerifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
+	err = verifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TDX Report Body: %v", err)
 		result.Summary.setFalse(&msg)
@@ -191,29 +191,12 @@ func verifyTdxPolicy(s TdxReport, v TdxPolicy) (PolicyCheck, bool) {
 	return r, true
 }
 
-func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
+func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
 	if body == nil || tcbInfo == nil || certs == nil || tdxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
 
-	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := ParseSGXExtensions(certs.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant, only means it is a sequence)
-	if err != nil {
-		return fmt.Errorf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-	}
-
-	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
-		return fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
-			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
-	}
-
-	if !reflect.DeepEqual([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
-		return fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
-			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
-	}
-
-	// check MrTd reference value
-	// (MrTd is the measurement of the initial contents of the TD)
+	// check MrTd reference value (measurement of the initial contents of the TD)
 	if !reflect.DeepEqual(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
@@ -243,6 +226,21 @@ func VerifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 	if !bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]) {
 		return fmt.Errorf("MrOwner mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdId.MrOwner, body.MrOwner)
 	}
+
+	if !bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner, body.MrSignerSeam[:]) {
+		return fmt.Errorf("MrSigner mismatch. Expected: %v, Got: %v", tcbInfo.TcbInfo.TdxModule.Mrsigner, body.MrSignerSeam)
+	}
+
+	// check attributes
+	// quoteSeamAttributes := body.SeamAttributes
+	// tcbInfoSeamAttributes := tcbInfo.TcbInfo.TdxModule.Attributes
+
+	// if len(attributes_mask) == len() {
+	// 	for i := range attributes_quote {
+	// 		attributes_quote[i] &= attributes_mask[i]
+	// 	}
+	// }
+
 	// check SeamAttributes
 	// attributes_quote := body.SeamAttributes
 	// if !reflect.DeepEqual(tdxReferenceValue.Tdx.SeamAttributes[:], attributes_quote[:]) {

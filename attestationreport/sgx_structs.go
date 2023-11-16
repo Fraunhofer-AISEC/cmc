@@ -113,7 +113,7 @@ type TcbInfoBody struct {
 	TcbEvaluationDataNumber uint32     `json:"tcbEvaluationDataNumber"`
 	TcbLevels               []TcbLevel `json:"tcbLevels"`
 
-	// Get properties of Intel’s TDX SEAM module
+	// Holds properties of Intel’s TDX SEAM module
 	TdxModule TdxModule `json:"tdxModule"` // Only required for TDX
 }
 
@@ -127,11 +127,6 @@ type TcbLevel struct {
 	TcbStatus   string    `json:"tcbStatus"`
 	TcbDate     time.Time `json:"tcbDate"`
 	AdvisoryIDs []string  `json:"advisoryIDs"`
-
-	// TODO: not sure if these 3 values are entirely correct
-	Id               string  `json:"id"`
-	Version          uint32  `json:"version"`
-	CpuSvnComponents HexByte `json:"cpuSvnComponents"`
 }
 
 type TcbComponent struct {
