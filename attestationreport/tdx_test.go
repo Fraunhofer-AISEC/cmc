@@ -772,12 +772,11 @@ var (
 	rtMr2         = [48]byte{} // 0x00s
 	rtMr3         = [48]byte{} // 0x00s
 
-	validMrSeam         = "2fd279c16164a93dd5bf373d834328d46008c2b693af9ebb865b08b2ced320c9a89b4869a9fab60fbe9d0c5a5363c656"
-	validMrSignerSeam   = "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-	validSeamAttributes = [8]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	validTdAttributes   = [8]byte{0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00}
-	validMrTd           = "145fe28dab356d75767ab56ae83bc59ac045dc548bf40a3fb11390446af19f6ee21b0b8874c9a7864cedb64c6573d932"
-	validTDXNonce, _    = hex.DecodeString("324e81d1e3d71e9f77c9e1aafcbdf157aa532d059c3637da19bd28f70e654540b3c711969e303515f916bff5d4b04c7e037a84a0b0bb7ac978a3c0860806c6bb")
+	validMrSeam       = "2fd279c16164a93dd5bf373d834328d46008c2b693af9ebb865b08b2ced320c9a89b4869a9fab60fbe9d0c5a5363c656"
+	validTdAttributes = [8]byte{0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00}
+	validMrTd         = "145fe28dab356d75767ab56ae83bc59ac045dc548bf40a3fb11390446af19f6ee21b0b8874c9a7864cedb64c6573d932"
+	validTDXNonce, _  = hex.DecodeString("324e81d1e3d71e9f77c9e1aafcbdf157aa532d059c3637da19bd28f70e654540b3c711969e303515f916bff5d4b04c7e037a84a0b0bb7ac978a3c0860806c6bb")
+	validXFAM         = [8]byte{0xE7, 0x02, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00}
 )
 
 func Test_verifyTdxMeasurements(t *testing.T) {
@@ -824,11 +823,9 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								RtMr2:         rtMr2,
 								RtMr3:         rtMr3,
 							},
-							TdAttributes: TDAttributes{
-								Tud:   0,
-								Sec:   [3]byte{0x00, 0x00, 0x10},
-								Other: [4]byte{0x00, 0x00, 0x00, 0x00},
-							},
+							MrSeam:       validMrSeam,
+							TdAttributes: validTdAttributes,
+							Xfam:         validXFAM,
 						},
 					},
 				},
@@ -862,15 +859,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								Debug:          false,
 								ValidTcbStatus: []string{string(OutOfDate)},
 							},
-							CaFingerprint:  aisecCertrootCAFingerprint,
-							SeamAttributes: validSeamAttributes,
-							MrSignerSeam:   validMrSignerSeam,
-							MrSeam:         validMrSeam,
-							TdAttributes: TDAttributes{
-								Tud:   0,
-								Sec:   [3]byte{0x00, 0x00, 0x10},
-								Other: [4]byte{0x00, 0x00, 0x00, 0x00},
-							},
+							CaFingerprint: aisecCertrootCAFingerprint,
+							MrSeam:        validMrSeam,
+							TdAttributes:  validTdAttributes,
+							Xfam:          validXFAM,
 						},
 					},
 				},

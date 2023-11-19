@@ -213,7 +213,7 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 				Success: false,
 				Type:    "Measurement",
 			})
-		return fmt.Errorf("MrSeam mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
+		return fmt.Errorf("MrTd mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
@@ -223,43 +223,105 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 			})
 	}
 
-	if !bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]) {
-		return fmt.Errorf("MrOwner mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdId.MrOwner, body.MrOwner)
+	// Perform Extended TD Check (see DCAP documentation)
+	result.ExtendedTdCheck.TdIdentity = append(result.ExtendedTdCheck.TdIdentity,
+		// TODO: maybe move the next two values to result.Artifacts
+		ComparisonResult{
+			Name:     "MrSignerSeam",
+			Success:  bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner[:], body.MrSignerSeam[:]),
+			Claimed:  hex.EncodeToString(tcbInfo.TcbInfo.TdxModule.Mrsigner[:]),
+			Measured: hex.EncodeToString(body.MrSignerSeam[:]),
+		},
+		ComparisonResult{
+			Name:     "MrSeam",
+			Success:  tdxReferenceValue.Tdx.MrSeam == hex.EncodeToString(body.MrSeam[:]),
+			Claimed:  tdxReferenceValue.Tdx.MrSeam,
+			Measured: hex.EncodeToString(body.MrSeam[:]),
+		},
+		ComparisonResult{
+			Name:     "MrOwner",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.MrOwner[:]),
+			Measured: hex.EncodeToString(body.MrOwner[:]),
+		},
+		ComparisonResult{
+			Name:     "MrOwnerConfig",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwnerConfig[:], body.MrOwnerConfig[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.MrOwnerConfig[:]),
+			Measured: hex.EncodeToString(body.MrOwnerConfig[:]),
+		},
+		ComparisonResult{
+			Name:     "MrConfigId",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrConfigId[:], body.MrConfigId[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.MrConfigId[:]),
+			Measured: hex.EncodeToString(body.MrConfigId[:]),
+		},
+		ComparisonResult{
+			Name:     "RtMr0",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.RtMr0[:], body.RtMr0[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.RtMr0[:]),
+			Measured: hex.EncodeToString(body.RtMr0[:]),
+		},
+		ComparisonResult{
+			Name:     "RtMr1",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.RtMr1[:], body.RtMr1[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.RtMr1[:]),
+			Measured: hex.EncodeToString(body.RtMr1[:]),
+		},
+		ComparisonResult{
+			Name:     "RtMr2",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.RtMr2[:], body.RtMr2[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.RtMr2[:]),
+			Measured: hex.EncodeToString(body.RtMr3[:]),
+		},
+		ComparisonResult{
+			Name:     "RtMr3",
+			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.RtMr3[:], body.RtMr3[:]),
+			Claimed:  hex.EncodeToString(tdxReferenceValue.Tdx.TdId.RtMr3[:]),
+			Measured: hex.EncodeToString(body.RtMr3[:]),
+		},
+	)
+
+	seamAttributesQuote := body.SeamAttributes
+	if len(tcbInfo.TcbInfo.TdxModule.AttributesMask) == len(seamAttributesQuote) {
+		for i := range seamAttributesQuote {
+			seamAttributesQuote[i] &= tcbInfo.TcbInfo.TdxModule.AttributesMask[i]
+		}
+	}
+	seamAttributesResult := bytes.Equal(tcbInfo.TcbInfo.TdxModule.Attributes, seamAttributesQuote[:])
+
+	result.ExtendedTdCheck.TdAttributes = append(result.ExtendedTdCheck.TdAttributes,
+		AttributesCheck{
+			Name:     "TdAttributes",
+			Success:  bytes.Equal(body.TdAttributes[:], tdxReferenceValue.Tdx.TdAttributes[:]),
+			Claimed:  tdxReferenceValue.Tdx.TdAttributes[:],
+			Measured: body.TdAttributes[:],
+		},
+		AttributesCheck{
+			Name:     "XFAM",
+			Success:  bytes.Equal(body.XFAM[:], tdxReferenceValue.Tdx.Xfam[:]),
+			Claimed:  tdxReferenceValue.Tdx.Xfam[:],
+			Measured: body.XFAM[:],
+		},
+		AttributesCheck{
+			Name:     "SeamAttributes",
+			Success:  seamAttributesResult,
+			Claimed:  tcbInfo.TcbInfo.TdxModule.Attributes,
+			Measured: seamAttributesQuote[:],
+		},
+	)
+
+	for _, v := range result.ExtendedTdCheck.TdIdentity {
+		if !v.Success {
+			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Expected: %v, Got: %v)", v.Name, v.Claimed, v.Measured)
+		}
 	}
 
-	if !bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner, body.MrSignerSeam[:]) {
-		return fmt.Errorf("MrSigner mismatch. Expected: %v, Got: %v", tcbInfo.TcbInfo.TdxModule.Mrsigner, body.MrSignerSeam)
+	for _, v := range result.ExtendedTdCheck.TdAttributes {
+		if !v.Success {
+			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Expected: %v, Got: %v)", v.Name, v.Claimed, v.Measured)
+		}
 	}
 
-	// check attributes
-	// quoteSeamAttributes := body.SeamAttributes
-	// tcbInfoSeamAttributes := tcbInfo.TcbInfo.TdxModule.Attributes
-
-	// if len(attributes_mask) == len() {
-	// 	for i := range attributes_quote {
-	// 		attributes_quote[i] &= attributes_mask[i]
-	// 	}
-	// }
-
-	// check SeamAttributes
-	// attributes_quote := body.SeamAttributes
-	// if !reflect.DeepEqual(tdxReferenceValue.Tdx.SeamAttributes[:], attributes_quote[:]) {
-	// 	return fmt.Errorf("SeamAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.SeamAttributes, attributes_quote)
-	// }
-
-	// check MrSignerSeam value
-	// refSigner, err := hex.DecodeString(tdxReferenceValue.Tdx.MrSignerSeam)
-	// if err != nil {
-	// 	return fmt.Errorf("decoding MRSIGNERSEAM reference value failed: %v", err)
-	// }
-	// if !reflect.DeepEqual(refSigner[:], body.MrSignerSeam[:]) {
-	// 	return fmt.Errorf("MRSIGNERSEAM mismatch. Expected: %v, Got: %v", refSigner, body.MrSignerSeam[:])
-	// }
-
-	// fmt.Println(body.TdAttributes)
-	// attributes_quote = body.TdAttributes
-	// if !reflect.DeepEqual(tdxReferenceValue.Tdx.TdAttributes[:], attributes_quote[:]) {
-	// 	return fmt.Errorf("TdAttributes mismatch. Expected: %v, Got: %v", tdxReferenceValue.Tdx.TdAttributes, attributes_quote)
-	// }
 	return nil
 }

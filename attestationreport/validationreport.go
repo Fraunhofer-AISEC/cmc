@@ -184,8 +184,9 @@ type SgxMeasurementResult struct {
 	VersionMatch    Result          `json:"reportVersionMatch"`
 	TcbInfoCheck    TcbLevelCheck   `json:"tcbInfoCheck"`
 	QeIdentityCheck TcbLevelCheck   `json:"qeIdentityCheck"`
-	PolicyCheck     PolicyCheck     `json:"policyCheck"` // TODO: test
-	FwCheck         VersionCheck    `json:"fwCheck"`     // TODO: test
+
+	PolicyCheck PolicyCheck  `json:"policyCheck"` // TODO: test
+	FwCheck     VersionCheck `json:"fwCheck"`     // TODO: test
 }
 
 // TdxMeasurementResult represents the results for the verification
@@ -211,7 +212,23 @@ type TcbLevelCheck struct {
 }
 
 type ExtendedTdCheck struct {
-	Summary Result `json:"success"`
+	Summary      Result             `json:"success"`
+	TdIdentity   []ComparisonResult `json:"tdId"`         // TD identity values from quote body
+	TdAttributes []AttributesCheck  `json:"tdAttributes"` // attributes and attribute masks from body
+}
+
+type ComparisonResult struct {
+	Name     string `json:"name"`
+	Success  bool   `json:"success"`
+	Claimed  string `json:"claimed"`
+	Measured string `json:"measured"`
+}
+
+type AttributesCheck struct {
+	Name     string `json:"name"`
+	Success  bool   `json:"success"`
+	Claimed  []byte `json:"claimed"`
+	Measured []byte `json:"measured"`
 }
 
 // IasMeasurementResult represents the results for the verification

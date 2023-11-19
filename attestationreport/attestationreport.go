@@ -233,13 +233,9 @@ type TDXDetails struct {
 	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
 	Policy        TdxPolicy     `json:"policy" cbor:"3,keyasint"`
 	TdId          TDId          `json:"tdId" cbor:"4,keyasint"`
-	TdAttributes  TDAttributes  `json:"tdAttributes" cbor:"5,keyasint"`
+	TdAttributes  [8]byte       `json:"tdAttributes" cbor:"5,keyasint"`
 	Xfam          [8]byte       `json:"xfam" cbor:"6,keyasint"`
-
-	// TODO: check if these are necessary
-	SeamAttributes [8]byte `json:"seamattributes" cbor:"7,keyasint"`
-	MrSignerSeam   string  `json:"mrsignerseam" cbor:"8,keyasint"`
-	MrSeam         string  `json:"mrseam" cbor:"9,keyasint"`
+	MrSeam        string        `json:"mrseam" cbor:"9,keyasint"`
 }
 
 // Identity of TD, i.e. the contained measurement
@@ -252,12 +248,6 @@ type TDId struct {
 	RtMr1         [48]byte `json:"rtMr1" cbor:"0,keyasint"` // updated by the TD virtual firmware/BIOS
 	RtMr2         [48]byte `json:"rtMr2" cbor:"0,keyasint"` // runtime measurement
 	RtMr3         [48]byte `json:"rtMr3" cbor:"0,keyasint"` // runtime measurement
-}
-
-type TDAttributes struct {
-	Tud   byte    `json:"tud" cbor:"0,keyasint"`
-	Sec   [3]byte `json:"sec" cbor:"1,keyasint"`
-	Other [4]byte `json:"other" cbor:"2,keyasint"`
 }
 
 // ReferenceValue represents the attestation report
