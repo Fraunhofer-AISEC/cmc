@@ -594,6 +594,13 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		result.Success = false
 	}
 
+	// If present, verify AMD SEV SNP measurements against provided SNP reference values
+	result.MeasResult.TdxMeasResult, ok = verifyTdxMeasurements(ar.TdxM, nonce,
+		referenceValues["TDX Reference Value"])
+	if !ok {
+		result.Success = false
+	}
+
 	// If present, verify ARM PSA EAT measurements against provided PSA reference values
 	result.MeasResult.IasMeasResult, ok = verifyIasMeasurements(ar.IasM, nonce,
 		referenceValues["IAS Reference Value"], cas)
@@ -625,7 +632,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	// If no hardware trust anchor is present, the maximum certification level is 1
 	// If there are referenceValues with a higher trust level present, the remote attestation
 	// must fail
-	if ar.TpmM == nil && ar.SnpM == nil && aggCertLevel > 1 {
+	if ar.TpmM == nil && ar.SnpM == nil && ar.TdxM == nil && aggCertLevel > 1 {
 		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ProcessingError = append(result.ProcessingError, msg)
 		result.Success = false
@@ -1001,7 +1008,7 @@ func collectReferenceValues(ar *ArPlain) (map[string][]ReferenceValue, error) {
 
 	// Iterate through the reference values and sort them into the different types
 	for _, v := range verList {
-		if v.Type != "SNP Reference Value" && v.Type != "SW Reference Value" && v.Type != "TPM Reference Value" {
+		if v.Type != "SNP Reference Value" && v.Type != "SW Reference Value" && v.Type != "TPM Reference Value" && v.Type != "TDX Reference Value" {
 			return nil, fmt.Errorf("reference value of type %v is not supported", v.Type)
 		}
 		verMap[v.Type] = append(verMap[v.Type], v)

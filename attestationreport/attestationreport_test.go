@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -226,6 +227,7 @@ func TestVerify(t *testing.T) {
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}
+			fmt.Println(got)
 		})
 	}
 }
@@ -263,6 +265,122 @@ func Test_collectReferenceValues(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("collectReferenceValues() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+var (
+	validTdxReferenceValue = []ReferenceValue{
+		{
+			Type:   "TDX Reference Value",
+			Sha256: validTDXMeasurement,
+			Tdx: &TDXDetails{
+				Version: 0x04,
+				Collateral: SGXCollateral{
+					TeeType:        tee_type_tdx,
+					TcbInfo:        tcb_info_tdx,
+					TcbInfoSize:    tcb_info_tdx_size,
+					QeIdentity:     qe_identity_tdx,
+					QeIdentitySize: qe_identity_tdx_size,
+				},
+				CaFingerprint: aisecCertrootCAFingerprint,
+				TdId: TDId{
+					MrOwner:       mrOwner,
+					MrOwnerConfig: mrOwnerConfig,
+					MrConfigId:    mrConfigId,
+					RtMr0:         rtMr0,
+					RtMr1:         rtMr1,
+					RtMr2:         rtMr2,
+					RtMr3:         rtMr3,
+				},
+				MrSeam:       validMrSeam,
+				TdAttributes: validTdAttributes,
+				Xfam:         validXFAM,
+			},
+		},
+	}
+
+	tdxRtmManifest = RtmManifest{
+		ReferenceValues: validTdxReferenceValue,
+	}
+)
+
+func Test_verifyTdxReport(t *testing.T) {
+	type args struct {
+		tdxMeas *TdxMeasurement
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// TODO: implement tests
+		{
+			name: "Valid TDX Report",
+			args: args{
+				tdxMeas: &TdxMeasurement{
+					Type:   "TDX Measurement",
+					Report: aisecTDXQuote,
+					Certs:  validTDXCertChain,
+				},
+			},
+			want: true,
+		},
+	}
+	logrus.SetLevel(logrus.TraceLevel)
+
+	// Setup Test Keys and Certificates
+	log.Trace("Creating Keys and Certificates")
+	key, certchain, err := createCertsAndKeys()
+	if err != nil {
+		log.Errorf("Internal Error: Failed to create testing certs and keys: %v", err)
+		return
+	}
+
+	swSigner := &SwSigner{
+		priv:      key,
+		certChain: certchain,
+	}
+
+	s := JsonSerializer{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			// Generating a TDX Report
+			ar := ArPacked{
+				Type: "Attestation Report",
+			}
+			ar.Nonce = validTDXNonce
+
+			ar.RtmManifest, err = json.Marshal(tdxRtmManifest)
+			if err != nil {
+				t.Errorf("failed to marshal the RtmManifest: %v", err)
+			}
+
+			ar.TdxM = tt.args.tdxMeas
+
+			report, err := s.Marshal(ar)
+			if err != nil {
+				t.Errorf("failed to marshal the Attestation Report: %v", err)
+			}
+			// end of Generate()
+
+			// sign the report
+			arSigned, err := Sign(report, swSigner, s)
+			if err != nil {
+				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
+			}
+
+			// call Verifier
+			res := Verify(arSigned, validTDXNonce,
+				internal.WriteCertPem(certchain[len(certchain)-1]), nil, 0)
+
+			if res.Success != tt.want {
+				t.Errorf("verifyAr() wrong result. expected: %v, got: %v", tt.want, res.Success)
+			}
+
+			fmt.Println(res)
 		})
 	}
 }

@@ -162,13 +162,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		result.Summary.setFalse(&msg)
 		result.Summary.Success = false
 		return result, false
-	} else {
-		result.Artifacts = append(result.Artifacts,
-			DigestResult{
-				Name:    tdxReferenceValue.Name,
-				Digest:  hex.EncodeToString(tdxQuote.QuoteBody.MrSeam[:]),
-				Success: true,
-			})
 	}
 
 	// check version
@@ -176,19 +169,8 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	if !ret {
 		return result, false
 	}
-	result.PolicyCheck, ret = verifyTdxPolicy(tdxQuote, tdxReferenceValue.Tdx.Policy)
-	if !ret {
-		ok = false
-	}
 
 	return result, ok
-}
-
-// TODO: implement this function
-func verifyTdxPolicy(s TdxReport, v TdxPolicy) (PolicyCheck, bool) {
-	r := PolicyCheck{}
-
-	return r, true
 }
 
 func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
@@ -225,7 +207,6 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 
 	// Perform Extended TD Check (see DCAP documentation)
 	result.ExtendedTdCheck.TdIdentity = append(result.ExtendedTdCheck.TdIdentity,
-		// TODO: maybe move the next two values to result.Artifacts
 		ComparisonResult{
 			Name:     "MrSignerSeam",
 			Success:  bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner[:], body.MrSignerSeam[:]),

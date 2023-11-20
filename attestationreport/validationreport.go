@@ -200,9 +200,6 @@ type TdxMeasurementResult struct {
 	TcbInfoCheck    TcbLevelCheck   `json:"tcbInfoCheck"`
 	QeIdentityCheck TcbLevelCheck   `json:"qeIdentityCheck"`
 	ExtendedTdCheck ExtendedTdCheck `json:"extendedTdCheck"`
-
-	FwCheck     VersionCheck `json:"fwCheck"`     // TODO: test
-	PolicyCheck PolicyCheck  `json:"policyCheck"` // TODO: test
 }
 
 type TcbLevelCheck struct {
