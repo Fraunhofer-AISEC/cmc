@@ -22,7 +22,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -283,7 +282,7 @@ var (
 					QeIdentity:     qe_identity_tdx,
 					QeIdentitySize: qe_identity_tdx_size,
 				},
-				CaFingerprint: aisecCertrootCAFingerprint,
+				CaFingerprint: tdxRootCAFingerprint,
 				TdId: TDId{
 					MrOwner:       mrOwner,
 					MrOwnerConfig: mrOwnerConfig,
@@ -300,33 +299,132 @@ var (
 		},
 	}
 
-	tdxRtmManifest = RtmManifest{
-		ReferenceValues: validTdxReferenceValue,
+	validTdxRtmManifest = RtmManifest{
+		MetaInfo: MetaInfo{
+			Type:    "RTM Manifest",
+			Name:    "de.test.rtm",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		DevCommonName: "Test Developer",
+		Validity: Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2026-04-10T20:00:00Z",
+		},
+		Description:        "de.test.rtm",
+		CertificationLevel: 3,
+		ReferenceValues:    validTdxReferenceValue,
+	}
+
+	validTdxOsManifest = OsManifest{
+		MetaInfo: MetaInfo{
+			Type:    "OS Manifest",
+			Name:    "de.test.os",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		DevCommonName: "Test Developer",
+		Validity: Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2026-04-10T20:00:00Z",
+		},
+		Description:        "PoC Fraunhofer AISEC TDX Report",
+		CertificationLevel: 3,
+		Rtms: []string{
+			"de.test.rtm",
+		},
+	}
+
+	validTdxDeviceDescription = DeviceDescription{
+		MetaInfo: MetaInfo{
+			Type:    "Device Description",
+			Name:    "test-device.test.de",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		Location:    "Munich, Germany",
+		RtmManifest: "de.test.rtm",
+		OsManifest:  "de.test.os",
 	}
 )
 
 func Test_verifyTdxReport(t *testing.T) {
 	type args struct {
-		tdxMeas *TdxMeasurement
+		tdxMeas           *TdxMeasurement
+		serializer        Serializer
+		rtmManifest       RtmManifest
+		osManifest        OsManifest
+		deviceDescription DeviceDescription
+		nonce             []byte
 	}
 	tests := []struct {
 		name string
 		args args
 		want bool
 	}{
-		// TODO: implement tests
 		{
-			name: "Valid TDX Report",
+			name: "Valid TDX Report JSON",
 			args: args{
 				tdxMeas: &TdxMeasurement{
 					Type:   "TDX Measurement",
 					Report: aisecTDXQuote,
 					Certs:  validTDXCertChain,
 				},
+				serializer:        JsonSerializer{},
+				rtmManifest:       validTdxRtmManifest,
+				osManifest:        validTdxOsManifest,
+				deviceDescription: validTdxDeviceDescription,
+				nonce:             validTDXNonce,
 			},
 			want: true,
 		},
+		{
+			name: "Valid TDX Report CBOR",
+			args: args{
+				tdxMeas: &TdxMeasurement{
+					Type:   "TDX Measurement",
+					Report: aisecTDXQuote,
+					Certs:  validTDXCertChain,
+				},
+				serializer:        CborSerializer{},
+				rtmManifest:       validTdxRtmManifest,
+				osManifest:        validTdxOsManifest,
+				deviceDescription: validTdxDeviceDescription,
+				nonce:             validTDXNonce,
+			},
+			want: true,
+		},
+		{
+			name: "Invalid TDX Certificate Chain",
+			args: args{
+				tdxMeas: &TdxMeasurement{
+					Type:   "TDX Measurement",
+					Report: aisecTDXQuote,
+					Certs:  [][]byte{root_ca_cert_tdx.Raw},
+				},
+				serializer:        JsonSerializer{},
+				rtmManifest:       validTdxRtmManifest,
+				osManifest:        validTdxOsManifest,
+				deviceDescription: validTdxDeviceDescription,
+				nonce:             validTDXNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Invalid Nonce",
+			args: args{
+				tdxMeas: &TdxMeasurement{
+					Type:   "TDX Measurement",
+					Report: aisecTDXQuote,
+					Certs:  validTDXCertChain,
+				},
+				serializer:        JsonSerializer{},
+				rtmManifest:       validTdxRtmManifest,
+				osManifest:        validTdxOsManifest,
+				deviceDescription: validTdxDeviceDescription,
+				nonce:             []byte{},
+			},
+			want: false,
+		},
 	}
+
 	logrus.SetLevel(logrus.TraceLevel)
 
 	// Setup Test Keys and Certificates
@@ -342,29 +440,49 @@ func Test_verifyTdxReport(t *testing.T) {
 		certChain: certchain,
 	}
 
-	s := JsonSerializer{}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			s := tt.args.serializer
 
 			// Generating a TDX Report
-			ar := ArPacked{
-				Type: "Attestation Report",
-			}
-			ar.Nonce = validTDXNonce
+			log.Trace("Generating a TDX Report")
 
-			ar.RtmManifest, err = json.Marshal(tdxRtmManifest)
+			ar := ArPacked{
+				Type:  "Attestation Report",
+				Nonce: tt.args.nonce,
+				TdxM:  tt.args.tdxMeas,
+			}
+
+			// create signed manifests and deviceDescription
+			rtmManifest, err := s.Marshal(tt.args.rtmManifest)
 			if err != nil {
 				t.Errorf("failed to marshal the RtmManifest: %v", err)
 			}
-
-			ar.TdxM = tt.args.tdxMeas
+			osManifest, err := s.Marshal(tt.args.osManifest)
+			if err != nil {
+				t.Errorf("failed to marshal the OsManifest: %v", err)
+			}
+			deviceDescription, err := s.Marshal(tt.args.deviceDescription)
+			if err != nil {
+				t.Errorf("failed to marshal the DeviceDescription: %v", err)
+			}
+			ar.RtmManifest, err = Sign(rtmManifest, swSigner, s)
+			if err != nil {
+				t.Errorf("failed to sign the RtmManifest: %v", err)
+			}
+			ar.OsManifest, err = Sign(osManifest, swSigner, s)
+			if err != nil {
+				t.Errorf("failed to sign the OsManifest: %v", err)
+			}
+			ar.DeviceDescription, err = Sign(deviceDescription, swSigner, s)
+			if err != nil {
+				t.Errorf("failed to sign the DeviceDescription: %v", err)
+			}
 
 			report, err := s.Marshal(ar)
 			if err != nil {
 				t.Errorf("failed to marshal the Attestation Report: %v", err)
 			}
-			// end of Generate()
 
 			// sign the report
 			arSigned, err := Sign(report, swSigner, s)

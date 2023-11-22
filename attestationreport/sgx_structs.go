@@ -376,7 +376,7 @@ func ParseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
 			certs, err = internal.ParseCertsDer(t)
 		}
 		if err != nil {
-			return SgxCertificates{}, fmt.Errorf("failed to parse PEM certificates %v", err)
+			return SgxCertificates{}, fmt.Errorf("failed to parse certificates %v", err)
 		}
 	case [][]byte:
 		if pem {
@@ -385,7 +385,7 @@ func ParseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
 			certs, err = internal.ParseCertsDer(t)
 		}
 		if err != nil {
-			return SgxCertificates{}, fmt.Errorf("failed to parse DER certificates %v", err)
+			return SgxCertificates{}, fmt.Errorf("failed to parse certificates %v", err)
 		}
 	default:
 		return SgxCertificates{}, fmt.Errorf("ParseCertificates not implemented for type %T", certsRaw)

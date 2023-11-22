@@ -449,22 +449,20 @@ var (
 
 	validTDXCertChain      = [][]byte{tcb_signing_cert_tdx.Raw, root_ca_cert_tdx.Raw}
 	validTDXMeasurement, _ = hex.DecodeString(validMrTd)
-
-	aisecCertrootCAFingerprint = "44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"
+	validTDXNonce, _       = hex.DecodeString("324e81d1e3d71e9f77c9e1aafcbdf157aa532d059c3637da19bd28f70e654540b3c711969e303515f916bff5d4b04c7e037a84a0b0bb7ac978a3c0860806c6bb")
+	tdxRootCAFingerprint   = "44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"
 
 	// valid report body values
-	mrOwner       = [48]byte{} // 0x00s
-	mrOwnerConfig = [48]byte{} // 0x00s
-	mrConfigId    = [48]byte{} // 0x00s
-	rtMr0         = [48]byte{225, 175, 117, 230, 25, 39, 65, 14, 66, 181, 75, 57, 246, 104, 28, 249, 176, 191, 186, 229, 18, 177, 94, 135, 14, 76, 141, 157, 90, 92, 179, 133, 87, 27, 14, 29, 194, 247, 11, 249, 204, 239, 8, 86, 15, 10, 43, 88}
-	rtMr1         = [48]byte{1, 28, 185, 253, 213, 20, 180, 71, 150, 2, 57, 206, 119, 160, 255, 200, 7, 135, 119, 55, 31, 126, 191, 235, 76, 160, 72, 13, 3, 60, 229, 236, 97, 67, 72, 6, 73, 247, 90, 144, 87, 157, 245, 245, 1, 107, 231, 202}
-	rtMr2         = [48]byte{} // 0x00s
-	rtMr3         = [48]byte{} // 0x00s
-
+	mrOwner           = [48]byte{} // 0x00s
+	mrOwnerConfig     = [48]byte{} // 0x00s
+	mrConfigId        = [48]byte{} // 0x00s
+	rtMr0             = [48]byte{225, 175, 117, 230, 25, 39, 65, 14, 66, 181, 75, 57, 246, 104, 28, 249, 176, 191, 186, 229, 18, 177, 94, 135, 14, 76, 141, 157, 90, 92, 179, 133, 87, 27, 14, 29, 194, 247, 11, 249, 204, 239, 8, 86, 15, 10, 43, 88}
+	rtMr1             = [48]byte{1, 28, 185, 253, 213, 20, 180, 71, 150, 2, 57, 206, 119, 160, 255, 200, 7, 135, 119, 55, 31, 126, 191, 235, 76, 160, 72, 13, 3, 60, 229, 236, 97, 67, 72, 6, 73, 247, 90, 144, 87, 157, 245, 245, 1, 107, 231, 202}
+	rtMr2             = [48]byte{} // 0x00s
+	rtMr3             = [48]byte{} // 0x00s
 	validMrSeam       = "2fd279c16164a93dd5bf373d834328d46008c2b693af9ebb865b08b2ced320c9a89b4869a9fab60fbe9d0c5a5363c656"
-	validTdAttributes = [8]byte{0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00}
 	validMrTd         = "145fe28dab356d75767ab56ae83bc59ac045dc548bf40a3fb11390446af19f6ee21b0b8874c9a7864cedb64c6573d932"
-	validTDXNonce, _  = hex.DecodeString("324e81d1e3d71e9f77c9e1aafcbdf157aa532d059c3637da19bd28f70e654540b3c711969e303515f916bff5d4b04c7e037a84a0b0bb7ac978a3c0860806c6bb")
+	validTdAttributes = [8]byte{0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00}
 	validXFAM         = [8]byte{0xE7, 0x02, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00}
 )
 
@@ -480,7 +478,6 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		want  *TdxMeasurementResult
 		want1 bool
 	}{
-		// TODO: Add more test cases.
 		{
 			name: "Valid Attestation Report",
 			args: args{
@@ -502,7 +499,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							CaFingerprint: aisecCertrootCAFingerprint,
+							CaFingerprint: tdxRootCAFingerprint,
 							TdId: TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
@@ -543,12 +540,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							Policy: TdxPolicy{
-								Type:           TDX_ID,
-								Debug:          false,
-								ValidTcbStatus: []string{string(OutOfDate)},
-							},
-							CaFingerprint: aisecCertrootCAFingerprint,
+							CaFingerprint: tdxRootCAFingerprint,
 							MrSeam:        validMrSeam,
 							TdAttributes:  validTdAttributes,
 							Xfam:          validXFAM,
@@ -580,7 +572,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							CaFingerprint: aisecCertrootCAFingerprint,
+							CaFingerprint: tdxRootCAFingerprint,
 							TdId: TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
@@ -621,7 +613,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							CaFingerprint: aisecCertrootCAFingerprint,
+							CaFingerprint: tdxRootCAFingerprint,
 							TdId: TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
@@ -662,7 +654,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							CaFingerprint: aisecCertrootCAFingerprint,
+							CaFingerprint: tdxRootCAFingerprint,
 							TdId: TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
@@ -703,7 +695,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentity:     qe_identity_tdx,
 								QeIdentitySize: qe_identity_tdx_size,
 							},
-							CaFingerprint: aisecCertrootCAFingerprint,
+							CaFingerprint: tdxRootCAFingerprint,
 							TdId: TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,

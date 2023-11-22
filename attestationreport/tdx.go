@@ -19,8 +19,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"reflect"
-	"time"
 )
 
 func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues []ReferenceValue) (*TdxMeasurementResult, bool) {
@@ -78,9 +76,6 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		result.Freshness.Success = true
 	}
 
-	var current_time time.Time = time.Now()
-	log.Trace("current time: ", current_time)
-
 	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertData.QECertData
 
 	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
@@ -91,7 +86,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 
 	// parse reference cert chain (TCBSigningCert chain)
 	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
-	if err != nil {
+	if err != nil || referenceCerts.TCBSigningCert == nil || referenceCerts.RootCACert == nil {
 		msg := fmt.Sprintf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
 		result.Summary.setFalse(&msg)
 		return result, false
@@ -164,7 +159,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 		return result, false
 	}
 
-	// check version
+	// Check version
 	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
 	if !ret {
 		return result, false
@@ -173,13 +168,14 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	return result, ok
 }
 
-func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
+func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
+	certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
 	if body == nil || tcbInfo == nil || certs == nil || tdxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
 
 	// check MrTd reference value (measurement of the initial contents of the TD)
-	if !reflect.DeepEqual(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
+	if !bytes.Equal(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
 				Name:    tdxReferenceValue.Name,
@@ -187,7 +183,6 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 				Success: false,
 				Type:    "Reference Value",
 			})
-
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
 				Name:    tdxReferenceValue.Name,
@@ -206,7 +201,7 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 	}
 
 	// Perform Extended TD Check (see DCAP documentation)
-	result.ExtendedTdCheck.TdIdentity = append(result.ExtendedTdCheck.TdIdentity,
+	result.ExtendedQuoteCheck.TeeIdentity = append(result.ExtendedQuoteCheck.TeeIdentity,
 		ComparisonResult{
 			Name:     "MrSignerSeam",
 			Success:  bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner[:], body.MrSignerSeam[:]),
@@ -271,7 +266,7 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 	}
 	seamAttributesResult := bytes.Equal(tcbInfo.TcbInfo.TdxModule.Attributes, seamAttributesQuote[:])
 
-	result.ExtendedTdCheck.TdAttributes = append(result.ExtendedTdCheck.TdAttributes,
+	result.ExtendedQuoteCheck.TeeAttributes = append(result.ExtendedQuoteCheck.TeeAttributes,
 		AttributesCheck{
 			Name:     "TdAttributes",
 			Success:  bytes.Equal(body.TdAttributes[:], tdxReferenceValue.Tdx.TdAttributes[:]),
@@ -292,13 +287,13 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo, certs *SgxCertifi
 		},
 	)
 
-	for _, v := range result.ExtendedTdCheck.TdIdentity {
+	for _, v := range result.ExtendedQuoteCheck.TeeIdentity {
 		if !v.Success {
 			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Expected: %v, Got: %v)", v.Name, v.Claimed, v.Measured)
 		}
 	}
 
-	for _, v := range result.ExtendedTdCheck.TdAttributes {
+	for _, v := range result.ExtendedQuoteCheck.TeeAttributes {
 		if !v.Success {
 			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Expected: %v, Got: %v)", v.Name, v.Claimed, v.Measured)
 		}

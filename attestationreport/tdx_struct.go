@@ -22,14 +22,14 @@ import (
 )
 
 // TDX Report V4
-type TdxReport struct {
+type TdxReportV4 struct {
 	QuoteHeader           QuoteHeader
 	QuoteBody             TdxReportBody
 	QuoteSignatureDataLen uint32
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructureV4 // variable size
 }
 
-// 584 bytes (TDX 1.0)
+// TDX 1.0: 584 bytes
 type TdxReportBody struct {
 	TeeTcbSvn      [16]byte
 	MrSeam         [48]byte
@@ -69,8 +69,8 @@ type QEReportCertDataV4 struct {
 }
 
 // Parses the report into the TDReport structure
-func DecodeTdxReportV4(report []byte) (TdxReport, error) {
-	var reportStruct TdxReport
+func DecodeTdxReportV4(report []byte) (TdxReportV4, error) {
+	var reportStruct TdxReportV4
 	var header QuoteHeader
 	var body TdxReportBody
 	var sig ECDSA256QuoteSignatureDataStructureV4
@@ -80,25 +80,25 @@ func DecodeTdxReportV4(report []byte) (TdxReport, error) {
 	buf := bytes.NewBuffer(report)
 	err := binary.Read(buf, binary.LittleEndian, &header)
 	if err != nil {
-		return TdxReport{}, fmt.Errorf("failed to decode TD report header: %v", err)
+		return TdxReportV4{}, fmt.Errorf("failed to decode TD report header: %v", err)
 	}
 
 	// parse body
 	err = binary.Read(buf, binary.LittleEndian, &body)
 	if err != nil {
-		return TdxReport{}, fmt.Errorf("failed to decode TD report body: %v", err)
+		return TdxReportV4{}, fmt.Errorf("failed to decode TD report body: %v", err)
 	}
 
 	// parse signature size
 	err = binary.Read(buf, binary.LittleEndian, &sigLen)
 	if err != nil {
-		return TdxReport{}, fmt.Errorf("failed to decode TD report QuoteSignatureDataLen: %v", err)
+		return TdxReportV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureDataLen: %v", err)
 	}
 
 	// parse signature
 	err = parseECDSASignatureV4(buf, &sig)
 	if err != nil {
-		return TdxReport{}, fmt.Errorf("failed to decode TD report QuoteSignatureData: %v", err)
+		return TdxReportV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureData: %v", err)
 	}
 
 	// compose the final report struct

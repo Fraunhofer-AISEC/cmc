@@ -177,41 +177,40 @@ type SnpMeasurementResult struct {
 // SgxMeasurementResult represents the results for the verification
 // of Intel SGX measurements.
 type SgxMeasurementResult struct {
-	Summary         Result          `json:"resultSummary"`
-	Freshness       Result          `json:"freshness"`
-	Signature       SignatureResult `json:"signature"`
-	Artifacts       []DigestResult  `json:"artifacts"`
-	VersionMatch    Result          `json:"reportVersionMatch"`
-	TcbInfoCheck    TcbLevelCheck   `json:"tcbInfoCheck"`
-	QeIdentityCheck TcbLevelCheck   `json:"qeIdentityCheck"`
-
-	PolicyCheck PolicyCheck  `json:"policyCheck"` // TODO: test
-	FwCheck     VersionCheck `json:"fwCheck"`     // TODO: test
+	Summary            Result             `json:"resultSummary"`
+	Freshness          Result             `json:"freshness"`
+	Signature          SignatureResult    `json:"signature"`
+	Artifacts          []DigestResult     `json:"artifacts"`
+	VersionMatch       Result             `json:"reportVersionMatch"`
+	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck"`
+	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck"`
+	ExtendedQuoteCheck ExtendedQuoteCheck `json:"extendedQuoteCheck"`
 }
 
 // TdxMeasurementResult represents the results for the verification
 // of Intel TDX measurements.
 type TdxMeasurementResult struct {
-	Summary         Result          `json:"resultSummary"`
-	Freshness       Result          `json:"freshness"`
-	Signature       SignatureResult `json:"signature"`
-	Artifacts       []DigestResult  `json:"artifacts"`
-	VersionMatch    Result          `json:"reportVersionMatch"`
-	TcbInfoCheck    TcbLevelCheck   `json:"tcbInfoCheck"`
-	QeIdentityCheck TcbLevelCheck   `json:"qeIdentityCheck"`
-	ExtendedTdCheck ExtendedTdCheck `json:"extendedTdCheck"`
+	Summary            Result             `json:"resultSummary"`
+	Freshness          Result             `json:"freshness"`
+	Signature          SignatureResult    `json:"signature"`
+	Artifacts          []DigestResult     `json:"artifacts"`
+	VersionMatch       Result             `json:"reportVersionMatch"`
+	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck"`
+	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck"`
+	ExtendedQuoteCheck ExtendedQuoteCheck `json:"extendedQuoteCheck"`
 }
 
-type TcbLevelCheck struct {
+type TcbLevelResult struct {
 	Summary        Result    `json:"success"`
 	TcbLevelStatus string    `json:"status"`
 	TcbLevelDate   time.Time `json:"date"`
 }
 
-type ExtendedTdCheck struct {
-	Summary      Result             `json:"success"`
-	TdIdentity   []ComparisonResult `json:"tdId"`         // TD identity values from quote body
-	TdAttributes []AttributesCheck  `json:"tdAttributes"` // attributes and attribute masks from body
+// Stores the results of the quote body verification
+type ExtendedQuoteCheck struct {
+	Summary       Result             `json:"success"`
+	TeeIdentity   []ComparisonResult `json:"teeIdentity"`   // TD/SGX identity values from quote body
+	TeeAttributes []AttributesCheck  `json:"teeAttributes"` // attributes and attribute masks from body
 }
 
 type ComparisonResult struct {

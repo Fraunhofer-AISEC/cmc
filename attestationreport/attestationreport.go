@@ -154,26 +154,12 @@ type TdxMeasurement struct {
 	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
 }
 
-type TdxPolicy struct {
-	Type           string   `json:"type" cbor:"0,keyasint"`
-	Debug          bool     `json:"debug" cbor:"2,keyasint"`
-	ValidTcbStatus []string `json:"validTcbStatus" cbor:"3,keyasint"` // list of TCB status that are still accepted (e.g. Valid, OutOfDate)
-	// maybe also tcb min/max version, etc.
-}
-
 // SgxMeasurement represents the attestation report
 // element of type 'SGX Measurement' signed by the device
 type SgxMeasurement struct {
 	Type   string   `json:"type" cbor:"0,keyasint"`
 	Report []byte   `json:"blob" cbor:"1,keyasint"`
 	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
-}
-
-type SgxPolicy struct {
-	Type           string   `json:"type" cbor:"0,keyasint"`
-	Debug          bool     `json:"debug" cbor:"2,keyasint"`
-	ValidTcbStatus []string `json:"validTcbStatus" cbor:"3,keyasint"` // list of TCB status that are still accepted (e.g. Valid, OutOfDate)
-	// maybe also tcb min/max version, etc.
 }
 
 type SnpPolicy struct {
@@ -210,48 +196,46 @@ type SnpDetails struct {
 type SGXCollateral struct {
 	// Format of CRLs:
 	// version 1.0: PEM, v3.0: DER base16, v3.1: DER raw binary
-	TeeType        uint32          `json:"teeType" cbor:"2,keyasint" description:"Type of the Tee (0x00000000: SGX, 0x00000081: TDX)"`
-	TcbInfo        json.RawMessage `json:"tcbInfo" cbor:"3,keyasint" description:"TCB Info structure in JSON format"`
-	TcbInfoSize    uint32          `json:"tcbInfoSize" cbor:"4,keyasint" description:"Size of the TCB Info"`
-	QeIdentity     json.RawMessage `json:"qeIdentity" cbor:"5,keyasint" description:"QE identity structure in JSON format"`
-	QeIdentitySize uint32          `json:"qeIdentitySize" cbor:"6,keyasint" description:"Size of the QE identity"`
+	TeeType        uint32          `json:"teeType" cbor:"0,keyasint"`
+	TcbInfo        json.RawMessage `json:"tcbInfo" cbor:"1,keyasint"`
+	TcbInfoSize    uint32          `json:"tcbInfoSize" cbor:"2,keyasint"`
+	QeIdentity     json.RawMessage `json:"qeIdentity" cbor:"3,keyasint"`
+	QeIdentitySize uint32          `json:"qeIdentitySize" cbor:"4,keyasint"`
 }
 
 type SGXDetails struct {
 	Version       uint16        `json:"version" cbor:"0,keyasint"`
 	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
 	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	Policy        SgxPolicy     `json:"policy" cbor:"3,keyasint"`
-	Attributes    [16]byte      `json:"attributes" cbor:"4,keyasint"`
-	IsvProdId     uint16        `json:"isvProdId" cbor:"5,keyasint"`
-	MRSIGNER      string        `json:"mrsigner" cbor:"6,keyasint"`
+	Attributes    [16]byte      `json:"attributes" cbor:"3,keyasint"`
+	IsvProdId     uint16        `json:"isvProdId" cbor:"4,keyasint"`
+	MrSigner      string        `json:"mrSigner" cbor:"5,keyasint"`
+	IsvSvn        uint16        `json:"isvSvn" cbor:"6,keyasint"`
 }
 
 type TDXDetails struct {
 	Version       uint16        `json:"version" cbor:"0,keyasint"`
 	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
 	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	Policy        TdxPolicy     `json:"policy" cbor:"3,keyasint"`
-	TdId          TDId          `json:"tdId" cbor:"4,keyasint"`
-	TdAttributes  [8]byte       `json:"tdAttributes" cbor:"5,keyasint"`
-	Xfam          [8]byte       `json:"xfam" cbor:"6,keyasint"`
-	MrSeam        string        `json:"mrseam" cbor:"9,keyasint"`
+	TdId          TDId          `json:"tdId" cbor:"3,keyasint"`
+	TdAttributes  [8]byte       `json:"tdAttributes" cbor:"4,keyasint"`
+	Xfam          [8]byte       `json:"xfam" cbor:"5,keyasint"`
+	MrSeam        string        `json:"mrseam" cbor:"6,keyasint"`
 }
 
-// Identity of TD, i.e. the contained measurement
-// MrTd is already given in ReferenceValue.Sha256
+// Note: MrTd is already given in ReferenceValue.Sha256
 type TDId struct {
 	MrOwner       [48]byte `json:"mrOwner" cbor:"0,keyasint"`
 	MrOwnerConfig [48]byte `json:"mrOwnerConfig" cbor:"1,keyasint"`
 	MrConfigId    [48]byte `json:"mrConfigId" cbor:"2,keyasint"`
-	RtMr0         [48]byte `json:"rtMr0" cbor:"0,keyasint"` // updated by the TD virtual firmware/BIOS
-	RtMr1         [48]byte `json:"rtMr1" cbor:"0,keyasint"` // updated by the TD virtual firmware/BIOS
-	RtMr2         [48]byte `json:"rtMr2" cbor:"0,keyasint"` // runtime measurement
-	RtMr3         [48]byte `json:"rtMr3" cbor:"0,keyasint"` // runtime measurement
+	RtMr0         [48]byte `json:"rtMr0" cbor:"3,keyasint"` // updated by the TD virtual firmware/BIOS
+	RtMr1         [48]byte `json:"rtMr1" cbor:"4,keyasint"` // updated by the TD virtual firmware/BIOS
+	RtMr2         [48]byte `json:"rtMr2" cbor:"5,keyasint"` // runtime measurement
+	RtMr3         [48]byte `json:"rtMr3" cbor:"6,keyasint"` // runtime measurement
 }
 
 // ReferenceValue represents the attestation report
-// element of types 'SNP Reference Value', 'TPM Reference Value'
+// element of types 'SNP Reference Value', 'TPM Reference Value', 'SGX Reference Value', TDX Reference Value'
 // and 'SW Reference Value'
 type ReferenceValue struct {
 	Type        string      `json:"type" cbor:"0,keyasint"`
@@ -262,7 +246,7 @@ type ReferenceValue struct {
 	Snp         *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
 	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"7,keyasint,omitempty"`
 	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"8,keyasint,omitempty"`
-	Description string      `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
 // AppDescription represents the attestation report
@@ -770,6 +754,7 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 	ar.TpmM = arPacked.TpmM
 	ar.SnpM = arPacked.SnpM
 	ar.SWM = arPacked.SWM
+	ar.TdxM = arPacked.TdxM
 	ar.Nonce = arPacked.Nonce
 
 	// Validate and unpack Rtm Manifest
