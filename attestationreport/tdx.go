@@ -56,7 +56,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// TODO: support other report types
-	tdxQuote, err := DecodeTdxReportV4(tdxM.Report)
+	tdxQuote, err := decodeTdxReportV4(tdxM.Report)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode TDX report: %v", err)
 		result.Summary.setFalse(&msg)
@@ -85,7 +85,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// parse reference cert chain (TCBSigningCert chain)
-	referenceCerts, err := ParseCertificates(tdxM.Certs, true)
+	referenceCerts, err := parseCertificates(tdxM.Certs, true)
 	if err != nil || referenceCerts.TCBSigningCert == nil || referenceCerts.RootCACert == nil {
 		msg := fmt.Sprintf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
 		result.Summary.setFalse(&msg)
@@ -100,7 +100,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	sgxExtensions, err := parseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
 		msg := fmt.Sprintf("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.setFalse(&msg)
@@ -108,7 +108,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Parse and verify TcbInfo object
-	tcbInfo, err := ParseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
+	tcbInfo, err := parseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
 		result.Summary.setFalse(&msg)
@@ -125,7 +125,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Parse and verify QE Identity object
-	qeIdentity, err := ParseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
+	qeIdentity, err := parseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
 		result.Summary.setFalse(&msg)

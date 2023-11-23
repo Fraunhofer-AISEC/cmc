@@ -69,7 +69,7 @@ type QEReportCertDataV4 struct {
 }
 
 // Parses the report into the TDReport structure
-func DecodeTdxReportV4(report []byte) (TdxReportV4, error) {
+func decodeTdxReportV4(report []byte) (TdxReportV4, error) {
 	var reportStruct TdxReportV4
 	var header QuoteHeader
 	var body TdxReportBody
@@ -182,7 +182,7 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 	}
 
 	// parse PCK Cert Chain (PCK Leaf Cert || Intermediate CA Cert || Root CA Cert)
-	certChain, err := ParseCertificates(tmp[:], true)
+	certChain, err := parseCertificates(tmp[:], true)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate chain from QECertData: %v", err)
 	}

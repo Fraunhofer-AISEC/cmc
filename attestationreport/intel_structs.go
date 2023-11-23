@@ -43,16 +43,6 @@ const (
 	NotSupported                 TcbStatus = "NotSupported"
 )
 
-// Overall structure: table 2 from https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf
-// Endianess: Little Endian (all Integer fields)
-type SgxReport struct {
-	QuoteHeader           QuoteHeader
-	ISVEnclaveReport      EnclaveReportBody
-	QuoteSignatureDataLen uint32
-	QuoteSignatureData    ECDSA256QuoteSignatureDataStructure // variable size
-}
-
-// Quote Header: Table 3 from https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf
 // 48 bytes
 type QuoteHeader struct {
 	Version            uint16
@@ -64,7 +54,6 @@ type QuoteHeader struct {
 	UserData           [20]byte
 }
 
-// Enclave Report Body: Table 5 from https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf
 // 384 bytes
 type EnclaveReportBody struct {
 	CPUSVN     [16]byte
@@ -81,7 +70,6 @@ type EnclaveReportBody struct {
 	ReportData [64]byte
 }
 
-// table 4: https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf
 type ECDSA256QuoteSignatureDataStructure struct {
 	ISVEnclaveReportSignature [64]byte
 	ECDSAAttestationKey       [64]byte
@@ -96,7 +84,6 @@ type ECDSA256QuoteSignatureDataStructure struct {
 	QECertData     []byte
 }
 
-// from Intel SGX DCAP library: AttestationParsers.h
 type TcbInfo struct {
 	TcbInfo   TcbInfoBody `json:"tcbInfo"`
 	Signature HexByte     `json:"signature"`
@@ -135,7 +122,6 @@ type TcbComponent struct {
 	Type     string `json:"type"`
 }
 
-// TODO: not sure if this is correct
 type TdxModule struct {
 	Mrsigner       HexByte `json:"mrsigner"`
 	Attributes     HexByte `json:"attributes"`
@@ -266,7 +252,7 @@ type Configuration struct {
 
 // ------------------------- end SGX Extensions -------------------------
 
-func ParseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
+func parseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
 	var sgx_extensions SGXExtensionsValue
 
 	rest, err := asn1.Unmarshal(extensions, &sgx_extensions.Ppid)
@@ -303,7 +289,7 @@ func ParseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
 	return sgx_extensions, nil
 }
 
-func GetTCBCompByIndex(tcb TCB, index int) TCBComp {
+func getTCBCompByIndex(tcb TCB, index int) TCBComp {
 	switch index {
 	case 1:
 		return tcb.Value.Comp_01
@@ -343,7 +329,7 @@ func GetTCBCompByIndex(tcb TCB, index int) TCBComp {
 }
 
 // expects enclave Identity structure in JSON format
-func ParseQEIdentity(qeIdentityJson []byte) (QEIdentity, error) {
+func parseQEIdentity(qeIdentityJson []byte) (QEIdentity, error) {
 	var qe_identity QEIdentity
 	err := json.Unmarshal(qeIdentityJson, &qe_identity)
 	if err != nil {
@@ -353,7 +339,7 @@ func ParseQEIdentity(qeIdentityJson []byte) (QEIdentity, error) {
 }
 
 // expects tcb Info in JSON format
-func ParseTcbInfo(tcbInfoJson []byte) (TcbInfo, error) {
+func parseTcbInfo(tcbInfoJson []byte) (TcbInfo, error) {
 	var tcbInfo TcbInfo
 	err := json.Unmarshal(tcbInfoJson, &tcbInfo)
 	if err != nil {
@@ -363,7 +349,7 @@ func ParseTcbInfo(tcbInfoJson []byte) (TcbInfo, error) {
 }
 
 // parse PEM/DER formatted certificates into a SgxCertificates struct
-func ParseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
+func parseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
 	var certChain SgxCertificates
 	var certs []*x509.Certificate
 	var err error
@@ -410,48 +396,6 @@ func ParseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
 	return certChain, nil
 }
 
-// Parses the report into the SgxReport structure
-func DecodeSgxReport(report []byte) (SgxReport, error) {
-	var reportStruct SgxReport
-	var header QuoteHeader
-	var body EnclaveReportBody
-	var sig ECDSA256QuoteSignatureDataStructure
-	var sigLen uint32
-
-	// parse header
-	buf := bytes.NewBuffer(report)
-	err := binary.Read(buf, binary.LittleEndian, &header)
-	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report header: %v", err)
-	}
-
-	// parse body
-	err = binary.Read(buf, binary.LittleEndian, &body)
-	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report body: %v", err)
-	}
-
-	// parse signature size
-	err = binary.Read(buf, binary.LittleEndian, &sigLen)
-	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report QuoteSignatureDataLen: %v", err)
-	}
-
-	// parse signature
-	err = parseECDSASignature(buf, &sig)
-	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report ECDSA256QuotesignatureDataStructure: %v", err)
-	}
-
-	// compose the final report struct
-	reportStruct.QuoteHeader = header
-	reportStruct.ISVEnclaveReport = body
-	reportStruct.QuoteSignatureDataLen = sigLen
-	reportStruct.QuoteSignatureData = sig
-
-	return reportStruct, nil
-}
-
 // parses quote signature data structure from buf to sig
 func parseECDSASignature(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStructure) error {
 
@@ -471,7 +415,6 @@ func parseECDSASignature(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStruc
 	if err != nil {
 		return fmt.Errorf("failed to parse QEReportSignature")
 	}
-
 	err = binary.Read(buf, binary.LittleEndian, &sig.QEAuthDataSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse QEAuthDataSize")

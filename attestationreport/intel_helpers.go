@@ -341,7 +341,7 @@ func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, tcbLevel TcbLevel) 
 	// Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to 16)
 	// with the corresponding values of SVNs in sgxtcbcomponents array of TCB Level.
 	for i := 0; i < 16; i++ {
-		tcbFromCert := GetTCBCompByIndex(sgxExtensions.Tcb, i+1)
+		tcbFromCert := getTCBCompByIndex(sgxExtensions.Tcb, i+1)
 		if byte(tcbFromCert.Value) < tcbLevel.Tcb.SgxTcbComponents[i].Svn {
 			return false
 		}
@@ -571,7 +571,7 @@ func downloadCRL(uri string, name string) (*x509.RevocationList, error) {
 	}
 
 	// Store CRL in file
-	err = os.WriteFile(name, crlData, 0644)
+	err = os.WriteFile("./cache/"+name, crlData, 0644)
 	if err != nil {
 		return nil, err
 	}
