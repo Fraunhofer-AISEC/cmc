@@ -35,11 +35,6 @@ func init() {
 	cmcApis[CmcApi_Lib] = LibApi{}
 }
 
-// Parses attestation report response received from peer
-func (a LibApi) parseARResponse(data []byte) ([]byte, error) {
-	return data, nil
-}
-
 // Obtains attestation report from CMCd
 func (a LibApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 
@@ -72,6 +67,10 @@ func (a LibApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(report, chbindings, cc.ca, nil, cc.cmc.PolicyEngineSelect)
+
+	if cc.result != nil {
+		*cc.result = result
+	}
 
 	if !result.Success {
 		return NewAttestedError(result, errors.New("verification failed"))

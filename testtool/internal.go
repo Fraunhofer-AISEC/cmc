@@ -57,7 +57,8 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 	if err != nil {
 		var attestedErr atls.AttestedError
 		if errors.As(err, &attestedErr) {
-			result, err := json.Marshal(attestedErr.GetVerificationResult())
+			arresult := attestedErr.GetVerificationResult()
+			result, err := json.Marshal(arresult)
 			if err != nil {
 				return fmt.Errorf("internal error: failed to marshal verification result: %v",
 					err)
@@ -68,7 +69,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 			}
 
 			// Publish the attestation result if publishing address was specified
-			err = publishResult(c.Publish, verificationResult)
+			err = publishResult(c.Publish, &arresult)
 			if err != nil {
 				log.Warnf("failed to publish result: %v", err)
 			}
@@ -237,7 +238,8 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		if err != nil {
 			var attestedErr atls.AttestedError
 			if errors.As(err, &attestedErr) {
-				result, err := json.Marshal(attestedErr.GetVerificationResult())
+				arresult := attestedErr.GetVerificationResult()
+				result, err := json.Marshal(arresult)
 				if err != nil {
 					log.Errorf("Internal error: failed to marshal verification result: %v", err)
 				} else {
@@ -247,7 +249,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 					}
 
 					// Publish the attestation result if publishing address was specified
-					err = publishResult(c.Publish, verificationResult)
+					err = publishResult(c.Publish, &arresult)
 					if err != nil {
 						log.Warnf("failed to publish result: %v", err)
 					}

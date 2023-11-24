@@ -112,8 +112,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 
 	err = OpenTpm()
 	if err != nil {
-		return fmt.Errorf(
-			"failed to open the TPM. Check if you have privileges to open /dev/tpm0: %w", err)
+		return fmt.Errorf("failed to open TPM: %w", err)
 	}
 
 	var akchain []*x509.Certificate
@@ -327,32 +326,36 @@ func IsTpmProvisioningRequired(storagePath string) (bool, error) {
 
 	// Stateless operation always requires provisioning
 	if storagePath == "" {
-		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		log.Info("TPM Credential Activation REQUIRED (no storage path)")
 		return true, nil
 	}
 
 	// If any of the required files is not present, we need to provision
 	if _, err := os.Stat(path.Join(storagePath, akchainFile)); err != nil {
-		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		log.Info("TPM Credential Activation REQUIRED (no AK cert chain)")
 		return true, nil
 	}
 	if _, err := os.Stat(path.Join(storagePath, ikchainFile)); err != nil {
-		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		log.Info("TPM Credential Activation REQUIRED (no IK cert chain)")
 		return true, nil
 	}
 	if _, err := os.Stat(path.Join(storagePath, akFile)); err != nil {
-		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		log.Info("TPM Credential Activation REQUIRED (no AK)")
 		return true, nil
 	}
 	if _, err := os.Stat(path.Join(storagePath, ikFile)); err != nil {
-		log.Info("TPM Provisioning (Credential Activation) REQUIRED")
+		log.Info("TPM Credential Activation REQUIRED (no IK)")
 		return true, nil
 	}
 
 	// If the AK is not persisted in the TPM, we need to provision
-	rwc, err := tpm2.OpenTPM("/dev/tpm0")
+	addr, err := getTpmAddr()
 	if err != nil {
-		return true, fmt.Errorf("failed to Open TPM. Check access rights to /dev/tpm0")
+		return true, fmt.Errorf("failed to find TPM device: %w", err)
+	}
+	rwc, err := tpm2.OpenTPM(addr)
+	if err != nil {
+		return true, fmt.Errorf("failed to open TPM%v: %w", addr, err)
 	}
 	defer rwc.Close()
 	srkHandle := tpmutil.Handle(0x81000001)
@@ -364,6 +367,17 @@ func IsTpmProvisioningRequired(storagePath string) (bool, error) {
 	log.Info("TPM Provisioning (Credential Activation) REQUIRED")
 
 	return true, nil
+}
+
+func getTpmAddr() (string, error) {
+	// TODO more robust
+	if _, err := os.Stat("/dev/tpmrm0"); err == nil {
+		return "/dev/tpmrm0", nil
+	} else if _, err := os.Stat("/dev/tpm0"); err == nil {
+		return "/dev/tpm0", nil
+	} else {
+		return "", errors.New("failed to find TPM device in /dev")
+	}
 }
 
 // OpenTpm opens the TPM and stores the handle internally

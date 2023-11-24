@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 )
 
 // Writes byte array to provided channel by first sending length information, then data
@@ -38,6 +39,8 @@ func Write(msg []byte, c net.Conn) error {
 // Receives byte array from provided channel by first receiving length information, then data
 // Used for transmitting the attestation reports between peers
 func Read(c net.Conn) ([]byte, error) {
+	start := time.Now()
+
 	lenbuf := make([]byte, 4)
 	_, err := c.Read(lenbuf)
 
@@ -70,6 +73,11 @@ func Read(c net.Conn) ([]byte, error) {
 		// of the message
 		if rcvlen == len {
 			log.Trace("Received message")
+			break
+		}
+
+		if time.Since(start).Seconds() >= 10 {
+			log.Warn("Manual timeout during read")
 			break
 		}
 	}

@@ -31,7 +31,6 @@ import (
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 )
 
 type GrpcApi struct{}
@@ -52,23 +51,6 @@ func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, co
 	}
 
 	return api.NewCMCServiceClient(conn), conn, cancel
-}
-
-// Parses attestation report response received from peer
-func (a GrpcApi) parseARResponse(data []byte) ([]byte, error) {
-	// Parse response msg
-	resp := &api.AttestationResponse{}
-	err := proto.Unmarshal(data, resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	// Check response status
-	if resp.Status != api.Status_OK || len(resp.AttestationReport) == 0 {
-		return nil, errors.New("did not receive attestation report")
-	}
-
-	return resp.AttestationReport, nil
 }
 
 // Obtains attestation report from CMCd
@@ -95,14 +77,8 @@ func (a GrpcApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to obtain AR: %w", err)
 	}
 
-	// Marshal response
-	data, err := proto.Marshal(resp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal AR response: %w", err)
-	}
-
 	// Return response
-	return data, nil
+	return resp.AttestationReport, nil
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response

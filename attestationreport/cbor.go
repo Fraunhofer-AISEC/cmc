@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -126,6 +127,11 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 	err := msgToVerify.UnmarshalCBOR(data)
 	if err != nil {
 		log.Warnf("error unmarshalling cose: %v", err)
+		log.Tracef("%v -> this is the hex-byte representation that could not be unmarshalled",
+			hex.EncodeToString(data))
+		log.Tracef("%v -> this is the string representation that could not be unmarshalled",
+			string(data))
+		log.Tracef("Length: %v (0x%x)", len(data), len(data))
 		return result, nil, false
 	}
 
