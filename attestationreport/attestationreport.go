@@ -154,14 +154,6 @@ type TdxMeasurement struct {
 	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
 }
 
-// SgxMeasurement represents the attestation report
-// element of type 'SGX Measurement' signed by the device
-type SgxMeasurement struct {
-	Type   string   `json:"type" cbor:"0,keyasint"`
-	Report []byte   `json:"blob" cbor:"1,keyasint"`
-	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
-}
-
 type SnpPolicy struct {
 	Type         string `json:"type" cbor:"0,keyasint"`
 	SingleSocket bool   `json:"singleSocket" cbor:"1,keyasint"`
@@ -193,7 +185,7 @@ type SnpDetails struct {
 	Tcb           SnpTcb    `json:"tcb" cbor:"4,keyasint"`
 }
 
-type SGXCollateral struct {
+type IntelCollateral struct {
 	// Format of CRLs:
 	// version 1.0: PEM, v3.0: DER base16, v3.1: DER raw binary
 	TeeType        uint32          `json:"teeType" cbor:"0,keyasint"`
@@ -203,24 +195,14 @@ type SGXCollateral struct {
 	QeIdentitySize uint32          `json:"qeIdentitySize" cbor:"4,keyasint"`
 }
 
-type SGXDetails struct {
-	Version       uint16        `json:"version" cbor:"0,keyasint"`
-	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
-	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	Attributes    [16]byte      `json:"attributes" cbor:"3,keyasint"`
-	IsvProdId     uint16        `json:"isvProdId" cbor:"4,keyasint"`
-	MrSigner      string        `json:"mrSigner" cbor:"5,keyasint"`
-	IsvSvn        uint16        `json:"isvSvn" cbor:"6,keyasint"`
-}
-
 type TDXDetails struct {
-	Version       uint16        `json:"version" cbor:"0,keyasint"`
-	Collateral    SGXCollateral `json:"collateral" cbor:"1,keyasint"`
-	CaFingerprint string        `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	TdId          TDId          `json:"tdId" cbor:"3,keyasint"`
-	TdAttributes  [8]byte       `json:"tdAttributes" cbor:"4,keyasint"`
-	Xfam          [8]byte       `json:"xfam" cbor:"5,keyasint"`
-	MrSeam        string        `json:"mrseam" cbor:"6,keyasint"`
+	Version       uint16          `json:"version" cbor:"0,keyasint"`
+	Collateral    IntelCollateral `json:"collateral" cbor:"1,keyasint"`
+	CaFingerprint string          `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	TdId          TDId            `json:"tdId" cbor:"3,keyasint"`
+	TdAttributes  [8]byte         `json:"tdAttributes" cbor:"4,keyasint"`
+	Xfam          [8]byte         `json:"xfam" cbor:"5,keyasint"`
+	MrSeam        string          `json:"mrseam" cbor:"6,keyasint"`
 }
 
 // Note: MrTd is already given in ReferenceValue.Sha256
@@ -235,7 +217,7 @@ type TDId struct {
 }
 
 // ReferenceValue represents the attestation report
-// element of types 'SNP Reference Value', 'TPM Reference Value', 'SGX Reference Value', TDX Reference Value'
+// element of types 'SNP Reference Value', 'TPM Reference Value', TDX Reference Value'
 // and 'SW Reference Value'
 type ReferenceValue struct {
 	Type        string      `json:"type" cbor:"0,keyasint"`
@@ -244,7 +226,6 @@ type ReferenceValue struct {
 	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
 	Pcr         *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
 	Snp         *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
-	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"7,keyasint,omitempty"`
 	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"8,keyasint,omitempty"`
 	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
 }
@@ -367,7 +348,6 @@ type ArPlain struct {
 	Type               string              `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
-	SgxM               *SgxMeasurement     `json:"sgxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
 	TdxM               *TdxMeasurement     `json:"tdxMeasurement,omitempty" cbor:"12,keyasint,omitempty"`
 	IasM               *IasMeasurement     `cbor:"10,keyasint,omitempty"`
 	SWM                []SwMeasurement     `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
@@ -385,7 +365,6 @@ type ArPacked struct {
 	Type               string          `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
-	SgxM               *SgxMeasurement `json:"sgxMeasurement,omitempty" cbor:"10,keyasint,omitempty"`
 	TdxM               *TdxMeasurement `json:"tdxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
 	SWM                []SwMeasurement `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
 	RtmManifest        []byte          `json:"rtmManifests" cbor:"4,keyasint"`

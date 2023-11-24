@@ -492,7 +492,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Sha256: validTDXMeasurement,
 						Tdx: &TDXDetails{
 							Version: 0x04,
-							Collateral: SGXCollateral{
+							Collateral: IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        tcb_info_tdx,
 								TcbInfoSize:    tcb_info_tdx_size,
@@ -533,7 +533,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Sha256: validTDXMeasurement,
 						Tdx: &TDXDetails{
 							Version: 0x04,
-							Collateral: SGXCollateral{
+							Collateral: IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        tcb_info_tdx,
 								TcbInfoSize:    tcb_info_tdx_size,
@@ -565,7 +565,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Sha256: validTDXMeasurement,
 						Tdx: &TDXDetails{
 							Version: 0x04,
-							Collateral: SGXCollateral{
+							Collateral: IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        tcb_info_tdx,
 								TcbInfoSize:    tcb_info_tdx_size,
@@ -606,7 +606,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Sha256: []byte("12345"),
 						Tdx: &TDXDetails{
 							Version: 0x04,
-							Collateral: SGXCollateral{
+							Collateral: IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        tcb_info_tdx,
 								TcbInfoSize:    tcb_info_tdx_size,
@@ -647,7 +647,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Sha256: validTDXMeasurement,
 						Tdx: &TDXDetails{
 							Version: 0x04,
-							Collateral: SGXCollateral{
+							Collateral: IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        tcb_info_tdx,
 								TcbInfoSize:    tcb_info_tdx_size,
@@ -688,7 +688,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						Sha256: validTDXMeasurement,
 						Tdx: &TDXDetails{
 							Version: 0x04,
-							Collateral: SGXCollateral{
+							Collateral: IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    tcb_info_tdx_size,

@@ -275,7 +275,7 @@ var (
 			Sha256: validTDXMeasurement,
 			Tdx: &TDXDetails{
 				Version: 0x04,
-				Collateral: SGXCollateral{
+				Collateral: IntelCollateral{
 					TeeType:        tee_type_tdx,
 					TcbInfo:        tcb_info_tdx,
 					TcbInfoSize:    tcb_info_tdx_size,
