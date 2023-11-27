@@ -66,6 +66,129 @@ var (
 	}
 )
 
+// variables for TestVerify
+var (
+	validTdxReferenceValue = []ReferenceValue{
+		{
+			Type:   "TDX Reference Value",
+			Sha256: validTDXMeasurement,
+			Tdx: &TDXDetails{
+				Version: 0x04,
+				Collateral: IntelCollateral{
+					TeeType:        tee_type_tdx,
+					TcbInfo:        tcb_info_tdx,
+					TcbInfoSize:    tcb_info_tdx_size,
+					QeIdentity:     qe_identity_tdx,
+					QeIdentitySize: qe_identity_tdx_size,
+				},
+				CaFingerprint: tdxRootCAFingerprint,
+				TdId: TDId{
+					MrOwner:       mrOwner,
+					MrOwnerConfig: mrOwnerConfig,
+					MrConfigId:    mrConfigId,
+					RtMr0:         rtMr0,
+					RtMr1:         rtMr1,
+					RtMr2:         rtMr2,
+					RtMr3:         rtMr3,
+				},
+				MrSeam:       validMrSeam,
+				TdAttributes: validTdAttributes,
+				Xfam:         validXFAM,
+			},
+		},
+	}
+
+	validTdxRtmManifest = RtmManifest{
+		MetaInfo: MetaInfo{
+			Type:    "RTM Manifest",
+			Name:    "de.test.rtm",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		DevCommonName: "Test Developer",
+		Validity: Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2026-04-10T20:00:00Z",
+		},
+		Description:        "de.test.rtm",
+		CertificationLevel: 3,
+		ReferenceValues:    validTdxReferenceValue,
+	}
+
+	emptyTdxRtmManifest = RtmManifest{
+		MetaInfo: MetaInfo{
+			Type:    "RTM Manifest",
+			Name:    "de.test.rtm",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		DevCommonName: "Test Developer",
+		Validity: Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2026-04-10T20:00:00Z",
+		},
+		Description:        "de.test.rtm",
+		CertificationLevel: 3,
+		ReferenceValues:    []ReferenceValue{},
+	}
+
+	validTdxOsManifest = OsManifest{
+		MetaInfo: MetaInfo{
+			Type:    "OS Manifest",
+			Name:    "de.test.os",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		DevCommonName: "Test Developer",
+		Validity: Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2026-04-10T20:00:00Z",
+		},
+		Description:        "PoC Fraunhofer AISEC TDX Report",
+		CertificationLevel: 3,
+		Rtms: []string{
+			"de.test.rtm",
+		},
+	}
+
+	incompatibleTdxOsManifest = OsManifest{
+		MetaInfo: MetaInfo{
+			Type:    "OS Manifest",
+			Name:    "de.test.os",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		DevCommonName: "Test Developer",
+		Validity: Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2026-04-10T20:00:00Z",
+		},
+		Description:        "PoC Fraunhofer AISEC TDX Report",
+		CertificationLevel: 3,
+		Rtms: []string{
+			"INVALID",
+		},
+	}
+
+	validTdxDeviceDescription = DeviceDescription{
+		MetaInfo: MetaInfo{
+			Type:    "Device Description",
+			Name:    "test-device.test.de",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		Location:    "Munich, Germany",
+		RtmManifest: "de.test.rtm",
+		OsManifest:  "de.test.os",
+	}
+
+	invalidTdxDeviceDescription = DeviceDescription{
+		MetaInfo: MetaInfo{
+			Type:    "Device Description",
+			Name:    "test-device.test.de",
+			Version: "2023-04-10T20:00:00Z",
+		},
+		Location:    "Munich, Germany",
+		RtmManifest: "INVALID",
+		OsManifest:  "INVALID",
+	}
+)
+
 type SwSigner struct {
 	certChain []*x509.Certificate
 	priv      crypto.PrivateKey
@@ -195,128 +318,6 @@ func Test_collectReferenceValues(t *testing.T) {
 	}
 }
 
-var (
-	validTdxReferenceValue = []ReferenceValue{
-		{
-			Type:   "TDX Reference Value",
-			Sha256: validTDXMeasurement,
-			Tdx: &TDXDetails{
-				Version: 0x04,
-				Collateral: IntelCollateral{
-					TeeType:        tee_type_tdx,
-					TcbInfo:        tcb_info_tdx,
-					TcbInfoSize:    tcb_info_tdx_size,
-					QeIdentity:     qe_identity_tdx,
-					QeIdentitySize: qe_identity_tdx_size,
-				},
-				CaFingerprint: tdxRootCAFingerprint,
-				TdId: TDId{
-					MrOwner:       mrOwner,
-					MrOwnerConfig: mrOwnerConfig,
-					MrConfigId:    mrConfigId,
-					RtMr0:         rtMr0,
-					RtMr1:         rtMr1,
-					RtMr2:         rtMr2,
-					RtMr3:         rtMr3,
-				},
-				MrSeam:       validMrSeam,
-				TdAttributes: validTdAttributes,
-				Xfam:         validXFAM,
-			},
-		},
-	}
-
-	validTdxRtmManifest = RtmManifest{
-		MetaInfo: MetaInfo{
-			Type:    "RTM Manifest",
-			Name:    "de.test.rtm",
-			Version: "2023-04-10T20:00:00Z",
-		},
-		DevCommonName: "Test Developer",
-		Validity: Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2026-04-10T20:00:00Z",
-		},
-		Description:        "de.test.rtm",
-		CertificationLevel: 3,
-		ReferenceValues:    validTdxReferenceValue,
-	}
-
-	emptyTdxRtmManifest = RtmManifest{
-		MetaInfo: MetaInfo{
-			Type:    "RTM Manifest",
-			Name:    "de.test.rtm",
-			Version: "2023-04-10T20:00:00Z",
-		},
-		DevCommonName: "Test Developer",
-		Validity: Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2026-04-10T20:00:00Z",
-		},
-		Description:        "de.test.rtm",
-		CertificationLevel: 3,
-		ReferenceValues:    []ReferenceValue{},
-	}
-
-	validTdxOsManifest = OsManifest{
-		MetaInfo: MetaInfo{
-			Type:    "OS Manifest",
-			Name:    "de.test.os",
-			Version: "2023-04-10T20:00:00Z",
-		},
-		DevCommonName: "Test Developer",
-		Validity: Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2026-04-10T20:00:00Z",
-		},
-		Description:        "PoC Fraunhofer AISEC TDX Report",
-		CertificationLevel: 3,
-		Rtms: []string{
-			"de.test.rtm",
-		},
-	}
-
-	invalidTdxOsManifest = OsManifest{
-		MetaInfo: MetaInfo{
-			Type:    "OS Manifest",
-			Name:    "de.test.os",
-			Version: "2023-04-10T20:00:00Z",
-		},
-		DevCommonName: "Test Developer",
-		Validity: Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2026-04-10T20:00:00Z",
-		},
-		Description:        "PoC Fraunhofer AISEC TDX Report",
-		CertificationLevel: 3,
-		Rtms: []string{
-			"INVALID",
-		},
-	}
-
-	validTdxDeviceDescription = DeviceDescription{
-		MetaInfo: MetaInfo{
-			Type:    "Device Description",
-			Name:    "test-device.test.de",
-			Version: "2023-04-10T20:00:00Z",
-		},
-		Location:    "Munich, Germany",
-		RtmManifest: "de.test.rtm",
-		OsManifest:  "de.test.os",
-	}
-
-	invalidTdxDeviceDescription = DeviceDescription{
-		MetaInfo: MetaInfo{
-			Type:    "Device Description",
-			Name:    "test-device.test.de",
-			Version: "2023-04-10T20:00:00Z",
-		},
-		Location:    "Munich, Germany",
-		RtmManifest: "INVALID",
-		OsManifest:  "INVALID",
-	}
-)
-
 func TestVerify(t *testing.T) {
 	type args struct {
 		tdxMeas           *TdxMeasurement
@@ -417,7 +418,7 @@ func TestVerify(t *testing.T) {
 				},
 				serializer:        JsonSerializer{},
 				rtmManifest:       validTdxRtmManifest,
-				osManifest:        invalidTdxOsManifest,
+				osManifest:        incompatibleTdxOsManifest,
 				deviceDescription: validTdxDeviceDescription,
 				nonce:             validTDXNonce,
 			},
