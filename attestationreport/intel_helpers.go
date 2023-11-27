@@ -571,7 +571,7 @@ func downloadCRL(uri string, name string) (*x509.RevocationList, error) {
 	}
 
 	// Store CRL in file
-	err = os.WriteFile("./cache/"+name, crlData, 0644)
+	err = os.WriteFile(name, crlData, 0644)
 	if err != nil {
 		return nil, err
 	}
