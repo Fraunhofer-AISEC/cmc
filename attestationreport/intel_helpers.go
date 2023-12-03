@@ -62,6 +62,7 @@ const (
 	CA_PROCESSOR         = "processor"
 	ROOT_CA_CRL_NAME     = "RootCaCRL"
 	PCK_CERT_CRL_NAME    = "PCKCertCRL"
+	CACHE_DIR            = "cache" // stores the CRLs
 
 	QE    EnclaveID = "QE"
 	QVE   EnclaveID = "QVE"
@@ -936,10 +937,11 @@ func CrlCheck(crl *x509.RevocationList, cert *x509.Certificate, parentCert *x509
 
 // fetch the CRL either from cache (filesystem) or download it from PCS
 // TODO: implement a better caching mechanism
-func fetchCRL(uri string, name string) (*x509.RevocationList, error) {
-	fileInfo, err := os.Stat(name)
+func fetchCRL(uri string, name string, ca string) (*x509.RevocationList, error) {
+	filePath := fmt.Sprintf("%s/%s_%s", CACHE_DIR, name, ca)
+	fileInfo, err := os.Stat(filePath)
 	if err == nil {
-		log.Tracef("File %s exists.\n", name)
+		log.Tracef("File %s exists.\n", filePath)
 
 		lastModifiedTime := fileInfo.ModTime()
 		currentTime := time.Now()
@@ -947,13 +949,13 @@ func fetchCRL(uri string, name string) (*x509.RevocationList, error) {
 
 		// Update the CRL if it is older than a day
 		if timeSinceLastModification > 24*time.Hour {
-			return downloadCRL(uri, name)
+			return downloadCRL(uri, filePath)
 		}
 
 		// Read CRL
-		crl_raw, err := os.ReadFile(name)
+		crl_raw, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read quote.dat: %w", err)
+			return nil, fmt.Errorf("failed to read CRL: %w", err)
 		}
 
 		// Parse CRL
@@ -963,14 +965,19 @@ func fetchCRL(uri string, name string) (*x509.RevocationList, error) {
 		}
 		return crl, nil
 	} else if os.IsNotExist(err) {
-		return downloadCRL(uri, name)
+		err := os.MkdirAll(CACHE_DIR, 0755)
+		if err != nil {
+			fmt.Println("Error creating cache folder:", err)
+			return nil, err
+		}
+		return downloadCRL(uri, filePath)
 	} else {
 		return nil, err
 	}
 }
 
 // Download CRL from the Intel PCS
-func downloadCRL(uri string, name string) (*x509.RevocationList, error) {
+func downloadCRL(uri string, filePath string) (*x509.RevocationList, error) {
 	resp, err := http.Get(uri)
 	if err != nil {
 		return nil, err
@@ -987,7 +994,7 @@ func downloadCRL(uri string, name string) (*x509.RevocationList, error) {
 	}
 
 	// Store CRL in file
-	err = os.WriteFile(name, crlData, 0644)
+	err = os.WriteFile(filePath, crlData, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -1013,14 +1020,14 @@ func VerifyIntelCertChainFull(quoteCerts SgxCertificates, ca string) ([][]*x509.
 	}
 
 	// download CRLs from PCS
-	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME)
+	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME, "")
 	if err != nil {
 		msg := fmt.Sprintf("downloading ROOT CA CRL from PCS failed: %v", err)
 		return nil, errors.New(msg)
 	}
 
 	pck_crl_uri := fmt.Sprintf(PCS_PCK_CERT_CRL_URI, ca)
-	pck_crl, err := fetchCRL(pck_crl_uri, PCK_CERT_CRL_NAME)
+	pck_crl, err := fetchCRL(pck_crl_uri, PCK_CERT_CRL_NAME, ca)
 	if err != nil {
 		msg := fmt.Sprintf("downloading PCK Cert CRL from PCS failed: %v", err)
 		return nil, errors.New(msg)
@@ -1052,7 +1059,7 @@ func VerifyTCBSigningCertChain(quoteCerts SgxCertificates) ([][]*x509.Certificat
 		return nil, errors.New(msg)
 	}
 
-	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME)
+	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME, "")
 	if err != nil {
 		msg := fmt.Sprintf("downloading Root CA CRL from PCS failed: %v", err)
 		return nil, errors.New(msg)
