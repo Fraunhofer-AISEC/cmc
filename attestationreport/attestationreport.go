@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -150,6 +151,22 @@ type SwMeasurement struct {
 	Sha256 HexByte `json:"sha256" cbor:"2,keyasint"`
 }
 
+// TdxMeasurement represents the attestation report
+// element of type 'TDX Measurement' signed by the device
+type TdxMeasurement struct {
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Report []byte   `json:"blob" cbor:"1,keyasint"`
+	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
+}
+
+// SgxMeasurement represents the attestation report
+// element of type 'SGX Measurement' signed by the device
+type SgxMeasurement struct {
+	Type   string   `json:"type" cbor:"0,keyasint"`
+	Report []byte   `json:"blob" cbor:"1,keyasint"`
+	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
+}
+
 type SnpPolicy struct {
 	Type         string `json:"type" cbor:"0,keyasint"`
 	SingleSocket bool   `json:"singleSocket" cbor:"1,keyasint"`
@@ -181,8 +198,82 @@ type SnpDetails struct {
 	Tcb           SnpTcb    `json:"tcb" cbor:"4,keyasint"`
 }
 
+type IntelCollateral struct {
+	TeeType        uint32          `json:"teeType" cbor:"0,keyasint"`
+	TcbInfo        json.RawMessage `json:"tcbInfo" cbor:"1,keyasint"`
+	TcbInfoSize    uint32          `json:"tcbInfoSize" cbor:"2,keyasint"`
+	QeIdentity     json.RawMessage `json:"qeIdentity" cbor:"3,keyasint"`
+	QeIdentitySize uint32          `json:"qeIdentitySize" cbor:"4,keyasint"`
+}
+
+// RtMrHashChainElem represents the attestation report
+// element of type 'HashChain' embedded in 'TDXDetails'
+type RtMrHashChainElem struct {
+	Type    string    `json:"type" cbor:"0,keyasint"`
+	Name    string    `json:"name" cbor:"1,keyasint"`
+	Hashes  []HexByte `json:"Hashes" cbor:"2,keyasint"`
+	Summary bool      `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final RMTR value or single artifact
+}
+
+type TDXDetails struct {
+	Version       uint16          `json:"version" cbor:"0,keyasint"`
+	Collateral    IntelCollateral `json:"collateral" cbor:"1,keyasint"`
+	CaFingerprint string          `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	TdId          TDId            `json:"tdId" cbor:"3,keyasint"`
+	TdMeas        TDMeasurements  `json:"tdMeasurements" cbor:"4,keyasint"`
+	Xfam          [8]byte         `json:"xfam" cbor:"5,keyasint"`
+	TdAttributes  TDAttributes    `json:"tdAttributes" cbor:"6,keyasint"`
+}
+
+type SGXDetails struct {
+	Version       uint16          `json:"version" cbor:"0,keyasint"`
+	Collateral    IntelCollateral `json:"collateral" cbor:"1,keyasint"`
+	CaFingerprint string          `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
+	IsvProdId     uint16          `json:"isvProdId" cbor:"3,keyasint"`
+	MrSigner      string          `json:"mrSigner" cbor:"4,keyasint"`
+	IsvSvn        uint16          `json:"isvSvn" cbor:"5,keyasint"`
+	Attributes    SGXAttributes   `json:"attributes" cbor:"6,keyasint"`
+}
+
+// SGX attributes according to
+// https://download.01.org/intel-sgx/latest/linux-latest/docs/Intel_SGX_Developer_Reference_Linux_2.22_Open_Source.pdf (page 414)
+type SGXAttributes struct {
+	Initted      bool `json:"initted" cbor:"0,keyasint"`
+	Debug        bool `json:"debug" cbor:"1,keyasint"`
+	Mode64Bit    bool `json:"mode64Bit" cbor:"2,keyasint"`
+	ProvisionKey bool `json:"provisionKey" cbor:"3,keyasint"`
+	EInitToken   bool `json:"eInitToken" cbor:"4,keyasint"`
+	Kss          bool `json:"kss" cbor:"5,keyasint"`
+	Legacy       bool `json:"legacy" cbor:"6,keyasint"`
+	Avx          bool `json:"avx" cbor:"7,keyasint"`
+}
+
+// Structure of the security relevant attributes for a TD
+// (Bits 0 - 31 of attributes array in quote)
+// according to https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_TDX_DCAP_Quoting_Library_API.pdf (page 40)
+type TDAttributes struct {
+	Debug         bool `json:"debug" cbor:"0,keyasint"`
+	SeptVEDisable bool `json:"septVEDisable" cbor:"1,keyasint"`
+	Pks           bool `json:"pks" cbor:"2,keyasint"`
+	Kl            bool `json:"kl" cbor:"3,keyasint"`
+}
+
+type TDMeasurements struct {
+	RtMr0  RtMrHashChainElem `json:"rtMr0" cbor:"0,keyasint"`  // Firmware measurement
+	RtMr1  RtMrHashChainElem `json:"rtMr1" cbor:"1,keyasint"`  // BIOS measurement
+	RtMr2  RtMrHashChainElem `json:"rtMr2" cbor:"2,keyasint"`  // OS measurement
+	RtMr3  RtMrHashChainElem `json:"rtMr3" cbor:"3,keyasint"`  // Runtime measurement
+	MrSeam HexByte           `json:"mrSeam" cbor:"4,keyasint"` // TDX Module measurement
+}
+
+type TDId struct {
+	MrOwner       [48]byte `json:"mrOwner" cbor:"0,keyasint"`
+	MrOwnerConfig [48]byte `json:"mrOwnerConfig" cbor:"1,keyasint"`
+	MrConfigId    [48]byte `json:"mrConfigId" cbor:"2,keyasint"`
+}
+
 // ReferenceValue represents the attestation report
-// element of types 'SNP Reference Value', 'TPM Reference Value'
+// element of types 'SNP Reference Value', 'TPM Reference Value', 'TDX Reference Value', 'SGX Reference Value'
 // and 'SW Reference Value'
 type ReferenceValue struct {
 	Type        string      `json:"type" cbor:"0,keyasint"`
@@ -191,6 +282,8 @@ type ReferenceValue struct {
 	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
 	Pcr         *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
 	Snp         *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
+	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"8,keyasint,omitempty"`
+	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"9,keyasint,omitempty"`
 	Description string      `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
 	EventData   *EventData  `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
 }
@@ -313,6 +406,8 @@ type ArPlain struct {
 	Type               string              `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	TdxM               *TdxMeasurement     `json:"tdxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
+	SgxM               *SgxMeasurement     `json:"sgxMeasurement,omitempty" cbor:"12,keyasint,omitempty"`
 	IasM               *IasMeasurement     `cbor:"10,keyasint,omitempty"`
 	SWM                []SwMeasurement     `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
 	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"4,keyasint"`
@@ -329,6 +424,9 @@ type ArPacked struct {
 	Type               string          `json:"type" cbor:"0,keyasint"`
 	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
 	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
+	TdxM               *TdxMeasurement `json:"tdxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
+	SgxM               *SgxMeasurement `json:"sgxMeasurement,omitempty" cbor:"12,keyasint,omitempty"`
+	IasM               *IasMeasurement `cbor:"10,keyasint,omitempty"`
 	SWM                []SwMeasurement `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
 	RtmManifest        []byte          `json:"rtmManifests" cbor:"4,keyasint"`
 	OsManifest         []byte          `json:"osManifest" cbor:"5,keyasint"`
@@ -457,7 +555,7 @@ func Sign(report []byte, signer Driver, s Serializer) ([]byte, error) {
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the reference values and the compatibility of software artefacts.
-func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSelect) VerificationResult {
+func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSelect, intelCache string) VerificationResult {
 	result := VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
@@ -525,6 +623,20 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		result.Success = false
 	}
 
+	// If present, verify Intel TDX measurements against provided TDX reference values
+	result.MeasResult.TdxMeasResult, ok = verifyTdxMeasurements(ar.TdxM, nonce, intelCache,
+		referenceValues["TDX Reference Value"])
+	if !ok {
+		result.Success = false
+	}
+
+	// If present, verify Intel SGX measurements against provided SGX reference values
+	result.MeasResult.SgxMeasResult, ok = verifySgxMeasurements(ar.SgxM, nonce, intelCache,
+		referenceValues["SGX Reference Value"])
+	if !ok {
+		result.Success = false
+	}
+
 	// If present, verify ARM PSA EAT measurements against provided PSA reference values
 	result.MeasResult.IasMeasResult, ok = verifyIasMeasurements(ar.IasM, nonce,
 		referenceValues["IAS Reference Value"], cas)
@@ -556,7 +668,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	// If no hardware trust anchor is present, the maximum certification level is 1
 	// If there are referenceValues with a higher trust level present, the remote attestation
 	// must fail
-	if ar.TpmM == nil && ar.SnpM == nil && aggCertLevel > 1 {
+	if ar.TpmM == nil && ar.SnpM == nil && ar.TdxM == nil && ar.SgxM == nil && aggCertLevel > 1 {
 		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ProcessingError = append(result.ProcessingError, msg)
 		result.Success = false
@@ -660,6 +772,14 @@ func extendHash(hash []byte, data []byte) []byte {
 	return ret
 }
 
+func extendHash384(hash []byte, data []byte) []byte {
+	concat := append(hash, data...)
+	h := sha512.Sum384(concat)
+	ret := make([]byte, 48)
+	copy(ret, h[:])
+	return ret
+}
+
 func verifyAr(attestationReport []byte, result *VerificationResult,
 	cas []*x509.Certificate, s Serializer,
 ) (bool, *ArPlain) {
@@ -694,6 +814,8 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 	ar.TpmM = arPacked.TpmM
 	ar.SnpM = arPacked.SnpM
 	ar.SWM = arPacked.SWM
+	ar.TdxM = arPacked.TdxM
+	ar.SgxM = arPacked.SgxM
 	ar.Nonce = arPacked.Nonce
 
 	// Validate and unpack Rtm Manifest
@@ -932,7 +1054,7 @@ func collectReferenceValues(ar *ArPlain) (map[string][]ReferenceValue, error) {
 
 	// Iterate through the reference values and sort them into the different types
 	for _, v := range verList {
-		if v.Type != "SNP Reference Value" && v.Type != "SW Reference Value" && v.Type != "TPM Reference Value" {
+		if v.Type != "SNP Reference Value" && v.Type != "SW Reference Value" && v.Type != "TPM Reference Value" && v.Type != "TDX Reference Value" && v.Type != "SGX Reference Value" {
 			return nil, fmt.Errorf("reference value of type %v is not supported", v.Type)
 		}
 		verMap[v.Type] = append(verMap[v.Type], v)

@@ -171,7 +171,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
-		Cmc.PolicyEngineSelect)
+		Cmc.PolicyEngineSelect, Cmc.IntelStorage)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

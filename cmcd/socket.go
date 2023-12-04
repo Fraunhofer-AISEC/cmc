@@ -162,7 +162,7 @@ func verify(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
-		cmc.PolicyEngineSelect)
+		cmc.PolicyEngineSelect, cmc.IntelStorage)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	r, err := json.Marshal(result)

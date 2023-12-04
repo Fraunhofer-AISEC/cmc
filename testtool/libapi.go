@@ -115,7 +115,7 @@ func (a LibApi) verify(c *config) {
 	}
 
 	// Verify the attestation report
-	result := ar.Verify(report, nonce, c.ca, c.policies, a.cmc.PolicyEngineSelect)
+	result := ar.Verify(report, nonce, c.ca, c.policies, a.cmc.PolicyEngineSelect, a.cmc.IntelStorage)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	r, err := json.Marshal(result)

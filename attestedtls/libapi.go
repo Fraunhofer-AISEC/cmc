@@ -66,7 +66,7 @@ func (a LibApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 func (a LibApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 
 	log.Debug("Verifier: Verifying Attestation Report")
-	result := ar.Verify(report, chbindings, cc.ca, nil, cc.cmc.PolicyEngineSelect)
+	result := ar.Verify(report, chbindings, cc.ca, nil, cc.cmc.PolicyEngineSelect, cc.cmc.IntelStorage)
 
 	if cc.result != nil {
 		*cc.result = result
