@@ -18,6 +18,7 @@ package attestationreport
 import (
 	"crypto/x509"
 	"math/big"
+	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -73,6 +74,8 @@ type MeasurementResult struct {
 	SnpMeasResult *SnpMeasurementResult `json:"snp,omitempty"`
 	IasMeasResult *IasMeasurementResult `json:"ias,omitempty"`
 	SwMeasResult  []SwMeasurementResult `json:"sw,omitempty"`
+	SgxMeasResult *SgxMeasurementResult `json:"sgx,omitempty"`
+	TdxMeasResult *TdxMeasurementResult `json:"tdx,omitempty"`
 }
 
 // DevDescResult represents the results of the validation of the
@@ -170,6 +173,62 @@ type SnpMeasurementResult struct {
 	FwCheck      VersionCheck    `json:"fwCheck"`
 	TcbCheck     TcbCheck        `json:"tcbCheck"`
 	PolicyCheck  PolicyCheck     `json:"policyCheck"`
+}
+
+// IntelMeasurementResult represents the results for the verification
+// of Intel SGX or TDX measurements.
+type SgxMeasurementResult struct {
+	Summary            Result             `json:"resultSummary"`
+	Freshness          Result             `json:"freshness"`
+	Signature          SignatureResult    `json:"signature"`
+	Artifacts          []DigestResult     `json:"artifacts"`
+	VersionMatch       Result             `json:"reportVersionMatch"`
+	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck"`
+	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck"`
+	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck"`
+}
+
+type TdxMeasurementResult struct {
+	Summary             Result            `json:"resultSummary"`
+	Freshness           Result            `json:"freshness"`
+	Signature           SignatureResult   `json:"signature"`
+	Artifacts           []DigestResult    `json:"artifacts"`
+	VersionMatch        Result            `json:"reportVersionMatch"`
+	TcbInfoCheck        TcbLevelResult    `json:"tcbInfoCheck"`
+	QeIdentityCheck     TcbLevelResult    `json:"qeIdentityCheck"`
+	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck"`
+	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck"`
+	XfamCheck           AttributesCheck   `json:"xfamCheck"`
+}
+
+type AttributesCheck struct {
+	Success  bool    `json:"success"`
+	Claimed  HexByte `json:"claimed"`
+	Measured HexByte `json:"measured"`
+}
+
+type TcbLevelResult struct {
+	Summary        Result    `json:"success"`
+	TcbLevelStatus string    `json:"status"`
+	TcbLevelDate   time.Time `json:"date"`
+}
+
+type SgxAttributesCheck struct {
+	Initted      BooleanMatch `json:"initted"`
+	Debug        BooleanMatch `json:"debug"`
+	Mode64Bit    BooleanMatch `json:"mode64Bit"`
+	ProvisionKey BooleanMatch `json:"provisionKey"`
+	EInitToken   BooleanMatch `json:"eInitToken"`
+	Kss          BooleanMatch `json:"kss"`
+	Legacy       BooleanMatch `json:"legacy"`
+	Avx          BooleanMatch `json:"avx"`
+}
+
+type TdAttributesCheck struct {
+	Debug         BooleanMatch `json:"debug"`
+	SeptVEDisable BooleanMatch `json:"septVEDisable"`
+	Pks           BooleanMatch `json:"pks"`
+	Kl            BooleanMatch `json:"kl"`
 }
 
 // IasMeasurementResult represents the results for the verification

@@ -129,7 +129,7 @@ func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*
 
 	log.Info("Verifier: Verifying Attestation Report")
 	result := ar.Verify(in.AttestationReport, in.Nonce, in.Ca, in.Policies,
-		s.cmc.PolicyEngineSelect)
+		s.cmc.PolicyEngineSelect, s.cmc.IntelStorage)
 
 	log.Info("Verifier: Marshaling Attestation Result")
 	data, err := json.Marshal(result)

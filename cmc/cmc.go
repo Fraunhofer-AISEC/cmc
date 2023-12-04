@@ -58,6 +58,7 @@ type Cmc struct {
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
 	Network            string
+	IntelStorage       string
 }
 
 func GetDrivers() map[string]ar.Driver {
@@ -112,6 +113,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Drivers:            usedDrivers,
 		Serializer:         s,
 		Network:            c.Network,
+		IntelStorage:       c.Storage,
 	}
 
 	return cmc, nil
