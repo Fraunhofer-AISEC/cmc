@@ -16,8 +16,7 @@
 package tpmdriver
 
 import (
-	"encoding/hex"
-	"strconv"
+	"encoding/json"
 	"testing"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -42,15 +41,14 @@ func Test_parseBiosMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			attestationreport, err := parseBiosMeasurements(tt.args.data)
+			attestationreport, err := parseBiosMeasurements(tt.args.data, true)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseBiosMeasurements() error = %v, wantErr %v", err, tt.wantErr)
 				//maybe print the return value of the BIOS Measurements
 				return
 			}
-			for _, value := range attestationreport {
-				logrus.Tracef("%v, %v, %v, %v", value.Type, strconv.Itoa(*value.Pcr), value.Name, hex.EncodeToString(value.Sha256))
-			}
+			val, _ := json.MarshalIndent(attestationreport, "", " ")
+			logrus.Tracef("%v", string(val))
 		})
 	}
 }
