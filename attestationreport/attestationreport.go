@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -339,6 +340,11 @@ type ArPacked struct {
 // format or CBOR COSE tokens. Takes a list of measurers providing a method
 // for collecting  the measurements from a hardware or software interface
 func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer) ([]byte, error) {
+
+	if s == nil {
+		return nil, errors.New("serializer not specified")
+	}
+
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
 	ar := ArPacked{
@@ -346,7 +352,7 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 	}
 
 	if len(nonce) > 32 {
-		return nil, fmt.Errorf("Generate Attestation Report: Nonce exceeds maximum length of 32 bytes")
+		return nil, fmt.Errorf("nonce exceeds maximum length of 32 bytes")
 	}
 	ar.Nonce = nonce
 

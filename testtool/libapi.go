@@ -52,6 +52,10 @@ func (a LibApi) generate(c *config) {
 		a.cmc = cmc
 	}
 
+	if a.cmc.Metadata == nil {
+		log.Fatalf("Metadata not specified. Can work only as verifier")
+	}
+
 	// Generate random nonce
 	nonce := make([]byte, 8)
 	_, err := rand.Read(nonce)

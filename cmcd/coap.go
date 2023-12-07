@@ -118,6 +118,12 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
+	if Cmc.Metadata == nil {
+		sendCoapError(w, r, codes.InternalServerError,
+			"Metadata not specified. Can work only as verifier")
+		return
+	}
+
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
 	report, err := ar.Generate(req.Nonce, Cmc.Metadata, Cmc.Drivers, Cmc.Serializer)
