@@ -445,6 +445,11 @@ func verifySnpSignature(
 		return result, false
 	}
 	// Verify that the reference value fingerprint matches the certificate fingerprint
+	if fingerprint == "" {
+		msg := "Reference value SNP CA fingerprint not present"
+		result.CertChainCheck.setFalse(&msg)
+		return result, false
+	}
 	refFingerprint, err := hex.DecodeString(fingerprint)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode CA fingerprint %v: %v", fingerprint, err)
@@ -453,7 +458,7 @@ func verifySnpSignature(
 	}
 	caFingerprint := sha256.Sum256(ca.Raw)
 	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		msg := fmt.Sprintf("CA fingerprint %v does not match measurement CA fingerprint %v",
+		msg := fmt.Sprintf("Reference Values CA fingerprint '%v' does not match trusted CA fingerprint '%v'",
 			fingerprint, hex.EncodeToString(caFingerprint[:]))
 		result.CertChainCheck.setFalse(&msg)
 		return result, false
