@@ -280,12 +280,16 @@ func publishResultAsync(addr string, result *ar.VerificationResult, wg *sync.Wai
 
 func publishResult(addr string, result *ar.VerificationResult) {
 
-	log.Tracef("Publishing result to %v", addr)
-
 	if result.Prover == "" {
 		log.Trace("Will not publish result: prover is empty (this happens if connection could not be established)")
 		return
 	}
+	if addr == "" {
+		log.Trace("Will not publish: no address specified")
+		return
+	}
+
+	log.Tracef("Publishing result to '%v'", addr)
 
 	data, err := json.Marshal(*result)
 	if err != nil {
