@@ -4,6 +4,7 @@
 
 cmcd/cmcd
 testtool/testtool
+testtool/ca.pem
 est/estserver/estserver
 **/nonce
 **/attestation-report

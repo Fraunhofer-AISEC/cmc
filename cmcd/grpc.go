@@ -80,13 +80,21 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 
 func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*api.AttestationResponse, error) {
 
-	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
+	log.Debug("Prover: Received gRPC attestation request")
 
 	if len(s.cmc.Drivers) == 0 {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
 		}, errors.New("no valid signers configured")
 	}
+
+	if s.cmc.Metadata == nil {
+		return &api.AttestationResponse{
+			Status: api.Status_FAIL,
+		}, errors.New("metadata not specified. Can work only as verifier")
+	}
+
+	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
 	report, err := ar.Generate(in.Nonce, s.cmc.Metadata, s.cmc.Drivers, s.cmc.Serializer)
 	if err != nil {

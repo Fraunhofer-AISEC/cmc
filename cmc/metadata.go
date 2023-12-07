@@ -36,6 +36,12 @@ import (
 
 func GetMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) {
 
+	if paths == nil {
+		log.Trace("No metadata specified via config. Will only work as verifier")
+		var s ar.Serializer
+		return nil, s, nil
+	}
+
 	metadata := make([][]byte, 0)
 	fails := 0
 

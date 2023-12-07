@@ -100,10 +100,15 @@ func handleIncoming(conn net.Conn, cmc *cmc.Cmc) {
 
 func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 
-	log.Debug("Prover: Received attestation request")
+	log.Debug("Prover: Received socket attestation request")
 
 	if len(cmc.Drivers) == 0 {
 		api.SendError(conn, "no valid signers configured")
+		return
+	}
+
+	if cmc.Metadata == nil {
+		api.SendError(conn, "Metadata not specified. Can work only as verifier")
 		return
 	}
 
