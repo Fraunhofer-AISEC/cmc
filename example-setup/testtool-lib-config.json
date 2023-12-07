@@ -1,0 +1,21 @@
+{
+    "mode": "listen",
+    "addr": [
+        "localhost:4443"
+    ],
+    "report": "attestation-report",
+    "result": "attestation-result.json",
+    "nonce": "nonce",
+    "ca": "../../cmc-data/pki/ca.pem",
+    "policies": "",
+    "mtls": true,
+    "api": "libapi",
+    "logLevel": "trace",
+    "cache": "../../cmc-data/testtool-cache",
+    "storage": "../../cmc-data/testtool-storage",
+    "drivers": [ "tpm" ],
+    "metadata": [
+	"file://../../cmc-data/metadata-signed"
+    ],
+    "provServerAddr": "https://localhost:9000/"
+}
