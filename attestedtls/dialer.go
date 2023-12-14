@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"time"
 )
 
 // Wraps tls.Dial
@@ -29,6 +30,7 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	// Create TLS connection
 	var dialer net.Dialer
 	dialer.Timeout = timeout
+	dialer.Deadline = (time.Now().Add(timeout))
 	conn, err := tls.DialWithDialer(&dialer, network, addr, config)
 	if err != nil {
 		details := fmt.Sprintf("%v certificate chain(s) provided: ", len(config.Certificates))
