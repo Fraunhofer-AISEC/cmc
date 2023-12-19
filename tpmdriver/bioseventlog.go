@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
@@ -110,9 +110,9 @@ type TPMT_HA struct {
 // measurements (usually /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
 func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load IMA runtime measurements from %v: %w", file, err)
+		return nil, fmt.Errorf("failed to read %v: %w", file, err)
 	}
 
 	digests, err := parseBiosMeasurements(data)

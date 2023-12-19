@@ -51,8 +51,7 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to send skip client Attestation: %w", err)
 		}
-		log.Debug("Sent skip response")
-		log.Debug("Skipping, Server only attestation: client side attestation only")
+		log.Debug("Skipping client-side attestation")
 	}
 
 	readvalue, err := readValue(conn, cc.attest, true)
@@ -62,8 +61,6 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 
 	//optional: Wait for attestation report from Server
 	if cc.attest == Attest_Mutual || cc.attest == Attest_Server {
-		log.Trace("Attesting the Server")
-
 		report := readvalue
 		// Verify AR from listener with own channel bindings
 		log.Trace("Verifying attestation report from listener")
@@ -72,7 +69,7 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 			return err
 		}
 	} else {
-		log.Debug("Skipping, Client only attestation: client side attestation only")
+		log.Debug("Skipping client-side verification")
 	}
 
 	log.Trace("Attestation successful")
@@ -102,8 +99,7 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to send skip client Attestation: %w", err)
 		}
-		log.Debug("Sent skip response")
-		log.Debug("Skipping, Client only attestation: client side attestation only")
+		log.Debug("Skipping server-side attestation")
 	}
 
 	readValue, err := readValue(conn, cc.attest, false)
@@ -113,7 +109,6 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 
 	// optional: Wait for attestation report from client
 	if cc.attest == Attest_Mutual || cc.attest == Attest_Client {
-		log.Debug("Attesting the Client")
 		report := readValue
 		// Verify AR from dialer with own channel bindings
 		log.Trace("Verifying attestation report from dialer...")
@@ -122,7 +117,7 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 			return err
 		}
 	} else {
-		log.Debug("Skipping, Server only attestation: server side attestation only")
+		log.Debug("Skipping server-side verification")
 	}
 
 	log.Trace("Attestation successful")
@@ -143,7 +138,7 @@ func readValue(conn *tls.Conn, selection AttestSelect, dialer bool) ([]byte, err
 
 	// the first byte should always be the attestation mode
 	if readvalue[0] == byte(selection) {
-		log.Debug("Matching attestation mode, both are set to:", selectionStr)
+		log.Debugf("Matching attestation mode: [%v]", selectionStr)
 	} else {
 		reportByte := readvalue[0]
 		reportStr, errS1 := selectionString(reportByte)

@@ -183,6 +183,8 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					}
 				}
 				if !found {
+					log.Warnf("Failed to find reference value %v in measurements",
+						hex.EncodeToString(ref.Sha256))
 					ok = false
 					refResult.Success = false
 					refResult.Type = "Reference Value"
@@ -226,6 +228,8 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 								Type:    "Measurement",
 							}
 							artifacts = append(artifacts, measResult)
+							log.Warnf("Failed to find measurement %v in reference values",
+								hex.EncodeToString(sha256))
 							ok = false
 						}
 					}
@@ -237,6 +241,8 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					pcrRes.Success = true
 					pcrRes.Calculated = hex.EncodeToString(measurement)
 				} else {
+					log.Warnf("PCR%v mismatch: measured: %v, calculated: %v", pcrNum,
+						hex.EncodeToString(measurement), hex.EncodeToString(calculatedHash))
 					pcrRes.Success = false
 					pcrRes.Calculated = hex.EncodeToString(calculatedHash)
 					pcrRes.Measured = hex.EncodeToString(measurement)
@@ -262,6 +268,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					artifacts[i].Success = false
 				}
 			}
+			log.Warnf("Measurement did not contain PCR%v", pcrNum)
 			ok = false
 		}
 	}
