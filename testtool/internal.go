@@ -55,13 +55,15 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithResult(verificationResult),
 		atls.WithCmc(cmc))
 	// Publish the attestation result asynchronously if publishing address was specified and
-	// the result is present
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	defer wg.Wait()
-	go publishResultAsync(c.Publish, verificationResult, wg)
-	if err != nil {
-		return fmt.Errorf("failed to dial server: %v", err)
+	// and attestation was performed
+	if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
+		wg := new(sync.WaitGroup)
+		wg.Add(1)
+		defer wg.Wait()
+		go publishResultAsync(c.Publish, verificationResult, wg)
+		if err != nil {
+			return fmt.Errorf("failed to dial server: %v", err)
+		}
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
@@ -230,7 +232,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		// Handle established connections
 		go handleConnection(conn)
 
-		if c.Mtls {
+		if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "client") {
 			// Publish the attestation result if publishing address was specified
 			// and result is not empty
 			go publishResult(c.Publish, verificationResult)
