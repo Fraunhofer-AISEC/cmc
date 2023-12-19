@@ -27,7 +27,7 @@ echo "Using $DATA as directory for local data"
 export PATH=$PATH:$HOME/go/bin
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 1,2,3,4,5,6,7 -f json)
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
 
 # Delete existing reference values in the RTM Manifest
 jq 'del(.referenceValues[])' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
