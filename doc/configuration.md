@@ -33,7 +33,7 @@ RSA4096, EC256, EC384, EC521
 `Unix Domain Sockets`
 - **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 - **cache** : An optional folder the *cmcd* uses to cache retrieved metadata. If one or multiple
-locations specified via **metadata** cannot be fetched, the *cmcd** additionally uses this cache.
+locations specified via **metadata** cannot be fetched, the *cmcd* additionally uses this cache.
 File are stored by their sha256 hash as a filename and in case of duplicates, always the newest
 version of a metadata item is chosen
 - **storage**: An optional local storage path. If provided, the *cmcd* uses this path to store
@@ -45,7 +45,7 @@ internal data such as downloaded certificates or created key handles
 - **signingKey**: The private key of the CA used to sign the device certificates.
 - **signingCerts**: The certificate chain of the CA used to sign the device certificates.
 - **httpFolder**: The root folder containing metadata (manifests and descriptions) that is served
-by the provisioning server to be fetched by the `cmcd`
+by the provisioning server to be fetched by the *cmcd*
 - **verifyEkCert**: Boolean, specifies if the EK certificate chain should be validated via the
 **tpmEkCertDb**
 - **tpmEkCertDb**: SQLite database containing intermediate CA and CA certificates from the TPM
@@ -73,13 +73,32 @@ from (mode verify)
 - **ca**: The trust anchor CA(s)
 - **policies**: Optional policies files
 - **mtls**: Perform mutual TLS in mode dial and listen
-- **api**: Selects whether to use the `grpc`, `coap`, or `socket` API
+- **api**: Selects whether to use the `grpc`, `coap`, `socket` or `lib` API
 - **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
 `Unix Domain Sockets`
 - **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
 - **interval**: Interval at which dial will be executed. If set to `0s` or less, then dial will only execute once.
 The interval format has to be in accordance with the input format of Go's
 [`time.Duration`](https://pkg.go.dev/time#ParseDuration).
+- **publish**: Optional HTTP address to publish attestation results to
+
+Further configuration options are only relevant if the testtool is operated with the `lib` API,
+i.e., standalone without the *cmcd* running as a separate binary:
+
+- **cache** : An optional folder the *cmcd* uses to cache retrieved metadata. If one or multiple
+locations specified via **metadata** cannot be fetched, the *cmcd* additionally uses this cache.
+File are stored by their sha256 hash as a filename and in case of duplicates, always the newest
+version of a metadata item is chosen
+- **storage**: An optional local storage path. If provided, the *cmcd* uses this path to store
+internal data such as downloaded certificates or created key handles
+- **drivers**: Tells the *cmcd* prover which drivers to use, currently
+supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
+first provided driver is used for signing operations
+- **metadata**: A list of locations to fetch metadata from. This can be local files, e.g.,
+`file://manifest.json`, local folders, e.g., `file:///var/metadata/`, or remote HTTPS URLs,
+e.g., `https://localhost:9000/metadata`
+- **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
+TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
 
 **The testtool can run the following commands/modes:**
 - **cacerts**: Retrieves the CA certificates from the EST server
