@@ -17,7 +17,7 @@ on a set of trusted CAs and signed metadata describing the software stack.
 ## Prerequisites
 
 - A Linux platform
-- For TPM attestation, access to ```/dev/tpm0```.
+- For TPM attestation, access to `/dev/tpm0`.
 - For AMD SEV-SNP an SNP-capable AMD server
 - Building the *cmcd* requires *go* (https://golang.org/doc/install)
 
