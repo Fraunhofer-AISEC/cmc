@@ -183,6 +183,7 @@ func initialize(c *config) (*cmc.Cmc, error) {
 		LogLevel:       "trace",
 		Storage:        c.Storage,
 		Cache:          c.Cache,
+		MeasurementLog: c.MeasurementLog,
 	}
 
 	return cmc.NewCmc(cmcConf)

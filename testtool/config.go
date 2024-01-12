@@ -61,26 +61,27 @@ type Api interface {
 }
 
 type config struct {
-	Mode         string   `json:"mode"`
-	Addr         []string `json:"addr"`
-	CmcAddr      string   `json:"cmc"`
-	ReportFile   string   `json:"report"`
-	ResultFile   string   `json:"result"`
-	NonceFile    string   `json:"nonce"`
-	CaFile       string   `json:"ca"`
-	Mtls         bool     `json:"mtls"`
-	Attest       string   `json:"attest"`
-	PoliciesFile string   `json:"policies"`
-	Api          string   `json:"api"`
-	Network      string   `json:"network"`
-	LogLevel     string   `json:"logLevel"`
-	Publish      string   `json:"publish"`
-	IntervalStr  string   `json:"interval"`
-	ProvAddr     string   `json:"provServerAddr"`
-	Metadata     []string `json:"metadata"`
-	Drivers      []string `json:"drivers"`
-	Storage      string   `json:"storage"`
-	Cache        string   `json:"cache"`
+	Mode           string   `json:"mode"`
+	Addr           []string `json:"addr"`
+	CmcAddr        string   `json:"cmc"`
+	ReportFile     string   `json:"report"`
+	ResultFile     string   `json:"result"`
+	NonceFile      string   `json:"nonce"`
+	CaFile         string   `json:"ca"`
+	Mtls           bool     `json:"mtls"`
+	Attest         string   `json:"attest"`
+	PoliciesFile   string   `json:"policies"`
+	Api            string   `json:"api"`
+	Network        string   `json:"network"`
+	LogLevel       string   `json:"logLevel"`
+	Publish        string   `json:"publish"`
+	IntervalStr    string   `json:"interval"`
+	ProvAddr       string   `json:"provServerAddr"`
+	Metadata       []string `json:"metadata"`
+	Drivers        []string `json:"drivers"`
+	Storage        string   `json:"storage"`
+	Cache          string   `json:"cache"`
+	MeasurementLog bool     `json:"measurementLog"`
 
 	ca       []byte
 	policies []byte
@@ -89,27 +90,28 @@ type config struct {
 }
 
 const (
-	configFlag   = "config"
-	modeFlag     = "mode"
-	addrFlag     = "addr"
-	cmcFlag      = "cmc"
-	reportFlag   = "report"
-	resultFlag   = "result"
-	nonceFlag    = "nonce"
-	caFlag       = "ca"
-	policiesFlag = "policies"
-	apiFlag      = "api"
-	networkFlag  = "network"
-	mtlsFlag     = "mtls"
-	attestFlag   = "attest"
-	logFlag      = "log"
-	publishFlag  = "publish"
-	intervalFlag = "interval"
-	provAddrFlag = "prov"
-	metadataFlag = "metadata"
-	driversFlag  = "drivers"
-	storageFlag  = "storage"
-	cacheFlag    = "cache"
+	configFlag         = "config"
+	modeFlag           = "mode"
+	addrFlag           = "addr"
+	cmcFlag            = "cmc"
+	reportFlag         = "report"
+	resultFlag         = "result"
+	nonceFlag          = "nonce"
+	caFlag             = "ca"
+	policiesFlag       = "policies"
+	apiFlag            = "api"
+	networkFlag        = "network"
+	mtlsFlag           = "mtls"
+	attestFlag         = "attest"
+	logFlag            = "log"
+	publishFlag        = "publish"
+	intervalFlag       = "interval"
+	provAddrFlag       = "prov"
+	metadataFlag       = "metadata"
+	driversFlag        = "drivers"
+	storageFlag        = "storage"
+	cacheFlag          = "cache"
+	measurementLogFlag = "measurementLog"
 )
 
 func getConfig() *config {
@@ -150,6 +152,7 @@ func getConfig() *config {
 		"Optional folder to store internal CMC data in (only for libapi)")
 	cache := flag.String(cacheFlag, "",
 		"Optional folder to cache metadata for offline backup (only for libapi)")
+	measurementLog := flag.Bool(measurementLogFlag, false, "Indicates whether to include measured events in measurement and validation report")
 
 	flag.Parse()
 
@@ -240,6 +243,9 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(cacheFlag) {
 		c.Cache = *cache
+	}
+	if internal.FlagPassed(measurementLogFlag) {
+		c.MeasurementLog = *measurementLog
 	}
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
@@ -343,16 +349,17 @@ func printConfig(c *config) {
 	log.Infof("Running testtool from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tMode         : %v", c.Mode)
-	log.Debugf("\tAddr         : %v", c.Addr)
-	log.Debugf("\tInterval     : %v", c.interval)
-	log.Debugf("\tCmcAddr      : %v", c.CmcAddr)
-	log.Debugf("\tReportFile   : %v", c.ReportFile)
-	log.Debugf("\tResultFile   : %v", c.ResultFile)
-	log.Debugf("\tNonceFile    : %v", c.NonceFile)
-	log.Debugf("\tCaFile       : %v", c.CaFile)
-	log.Debugf("\tMtls         : %v", c.Mtls)
-	log.Debugf("\tAttest       : %v", c.Attest)
+	log.Debugf("\tMode		 : %v", c.Mode)
+	log.Debugf("\tAddr        	 : %v", c.Addr)
+	log.Debugf("\tInterval    	 : %v", c.interval)
+	log.Debugf("\tCmcAddr     	 : %v", c.CmcAddr)
+	log.Debugf("\tReportFile  	 : %v", c.ReportFile)
+	log.Debugf("\tResultFile  	 : %v", c.ResultFile)
+	log.Debugf("\tNonceFile   	 : %v", c.NonceFile)
+	log.Debugf("\tCaFile      	 : %v", c.CaFile)
+	log.Debugf("\tMtls        	 : %v", c.Mtls)
+	log.Debugf("\tAttest      	 : %v", c.Attest)
+	log.Debugf("\tEvent Information  : %v", c.MeasurementLog)
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
 	}
