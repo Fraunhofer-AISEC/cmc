@@ -21,6 +21,7 @@ e.g., `https://localhost:9000/metadata`
 - **drivers**: Tells the *cmcd* prover which drivers to use, currently
 supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
 first provided driver is used for signing operations
+- **measurementLog**: Bool that indicates whether to include measured events in measurement and validation report.
 - **useIma**: Bool that indicates whether the Integrity Measurement Architecture (IMA) shall be used
 - **imaPcr**: TPM PCR where the IMA measurements are recorded (must match the kernel
 configuration). The linux kernel default is 10
@@ -94,6 +95,7 @@ internal data such as downloaded certificates or created key handles
 - **drivers**: Tells the *cmcd* prover which drivers to use, currently
 supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
 first provided driver is used for signing operations
+- **measurementLog**: Bool that indicates whether to include measured events in measurement and validation report.
 - **metadata**: A list of locations to fetch metadata from. This can be local files, e.g.,
 `file://manifest.json`, local folders, e.g., `file:///var/metadata/`, or remote HTTPS URLs,
 e.g., `https://localhost:9000/metadata`
