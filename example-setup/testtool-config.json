@@ -10,6 +10,7 @@
     "ca": "../../cmc-data/pki/ca.pem",
     "policies": "",
     "mtls": true,
+    "measuementLog": false,
     "api": "grpc",
     "logLevel": "trace",
     "interval": "5m30s"
