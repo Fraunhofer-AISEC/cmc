@@ -6,6 +6,7 @@
     "provServerAddr": "https://localhost:9000/",
     "drivers": [ "TPM" ],
     "useIma": false,
+    "measuementLog": false,
     "imaPcr": 10,
     "keyConfig": "EC256",
     "api": "grpc",
