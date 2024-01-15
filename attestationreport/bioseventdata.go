@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf16"
-
-	"github.com/sirupsen/logrus"
 )
 
 type address uint64
@@ -325,9 +323,9 @@ func bytesToString(uint8Array []uint8) string {
 }
 
 func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
-	uefiVariableData := new(UefiVariableData)
 
 	if buf.Len() >= 32 {
+		uefiVariableData := new(UefiVariableData)
 		var unicodeNameLength, variableDataLength uint64
 
 		//1. Part: read binary data into variables
@@ -339,7 +337,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 
 		if buf.Len() < 2*int(unicodeNameLength) {
 			// return output
-			log.Fatal("incomplete UEFI Variable Data field")
+			log.Error("incomplete UEFI Variable Data field")
 			return uefiVariableData
 		}
 
@@ -349,7 +347,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 
 		if buf.Len() < int(variableDataLength) {
 			//just stop reading
-			log.Fatal("incomplete UEFI Variable Data field")
+			log.Error("incomplete UEFI Variable Data field")
 			return uefiVariableData
 		}
 
@@ -394,7 +392,8 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 		}
 
 	}
-	return uefiVariableData
+
+	return nil
 }
 
 func parseEFILoadOption(buf *bytes.Buffer, i int) *EFILoadOption {
@@ -488,7 +487,7 @@ func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList 
 				binary.Read(buf, binary.LittleEndian, &filepathlist.SignaturType)
 
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 		case 2:
 			if length == 24 { //always 24 Bytes long
@@ -497,7 +496,7 @@ func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList 
 				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionStart)
 				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionSize)
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 		case 3:
 			if length >= 20 { //20 + n Bytes long
@@ -506,7 +505,7 @@ func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList 
 				filepathlist.VendorGUID = readGUID(buf)
 				filepathlist.VendorDefinedData = (buf.Next(int(length) - 20))
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 
 		case 4:
@@ -523,14 +522,14 @@ func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList 
 				filepathlist.Subtype = "Media Protocol"
 				filepathlist.ProtocolGUID = readGUID(buf)
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 		case 7:
 			if length >= 4 { //4 + n Bytes long
 				filepathlist.Subtype = "PIWG Firmware Volume"
 				filepathlist.VendorDefinedData = (buf.Next(int(length) - 4))
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 		case 9:
 			if length == 38 { //20 Bytes long
@@ -540,7 +539,7 @@ func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList 
 				filepathlist.DiskTypeGUID = readGUID(buf)
 				binary.Read(buf, binary.LittleEndian, &filepathlist.DiskInstance)
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 		}
 	case 5:
@@ -556,11 +555,11 @@ func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList 
 				filepathlist.DescriptionString = string(asciiString)
 
 			} else {
-				log.Fatalln("incompatible length of file path argument")
+				log.Error("incompatible length of file path argument")
 			}
 		}
 	default:
-		logrus.Printf("Type: %v, Subtype %v", fplType, fplSubtype)
+		log.Tracef("Type: %v, Subtype %v", fplType, fplSubtype)
 
 	}
 	return filepathlist
@@ -572,7 +571,7 @@ func parseSingleUint16(buf *bytes.Buffer) *uint16 {
 		binary.Read(buf, binary.LittleEndian, &out)
 		return &out
 	}
-	log.Fatal("incomplete Datafield")
+	log.Error("incomplete Datafield")
 	return nil
 }
 
@@ -582,7 +581,7 @@ func parseSingleUint32(buf *bytes.Buffer) *uint32 {
 		binary.Read(buf, binary.LittleEndian, &out)
 		return &out
 	}
-	log.Fatal("incomplete Datafield")
+	log.Error("incomplete Datafield")
 	return nil
 }
 
@@ -592,7 +591,7 @@ func parseEFIBootOrder(buf *bytes.Buffer, size int) []uint16 {
 		binary.Read(buf, binary.LittleEndian, &order)
 		return order
 	}
-	log.Fatal("incomplete Datafield")
+	log.Error("incomplete Datafield")
 	return nil
 }
 
@@ -652,7 +651,7 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 				hash.Hash = parseVariableDataHash_GUID(buf, SHA384_DIGEST_LEN)
 				hashes = append(hashes, hash)
 			default:
-				logrus.Print("Signature GUID " + sigdb.SignatureTypeGUID)
+				log.Tracef("Signature GUID %v", sigdb.SignatureTypeGUID)
 			}
 			//incomplete, to support more types: (Unified Extensible Firmware Interface Specification 2.10 p.1427)
 			counter++
@@ -676,7 +675,7 @@ func parseVariableDataX509_GUID(buf *bytes.Buffer, certsize int) X509CertExtract
 
 	cert, err := x509.ParseCertificate(certBuf)
 	if err != nil {
-		fmt.Println("Failed to parse certificate:", err)
+		log.Error("Failed to parse certificate:")
 	}
 
 	//extract the cert
@@ -761,11 +760,11 @@ func parsePCClientTaggedEvent(buf *bytes.Buffer) *PCClientTaggedEvent {
 		if buf.Len() >= int(taggedEventDataSize) {
 			taggedEvent.TaggedEventData = (buf.Next(int(taggedEventDataSize)))
 		} else {
-			log.Fatal("incomplete PCClientTaggedEvent data")
+			log.Error("incomplete PCClientTaggedEvent data")
 		}
 		return taggedEvent
 	}
-	log.Fatal("incomplete PCClientTaggedEvent data")
+	log.Error("incomplete PCClientTaggedEvent data")
 	return nil
 }
 
