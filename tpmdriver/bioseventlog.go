@@ -57,6 +57,7 @@ var (
 	EV_NONHOST_CONFIG          = uint32(16)
 	EV_NONHOST_INFO            = uint32(17)
 	EV_OMIT_BOOT_DEVICE_EVENTS = uint32(18)
+	EV_POST_CODE2              = uint32(19)
 
 	EV_EFI_EVENT_BASE                = uint32(0x80000000)
 	EV_EFI_VARIABLE_DRIVER_CONFIG    = uint32(0x80000001)
@@ -68,10 +69,18 @@ var (
 	EV_EFI_ACTION                    = uint32(0x80000007)
 	EV_EFI_PLATFORM_FIRMWARE_BLOB    = uint32(0x80000008)
 	EV_EFI_HANDOFF_TABLES            = uint32(0x80000009)
+	EV_EFI_PLATFORM_FIRMWARE_BLOB2   = uint32(0x8000000a)
+	EV_EFI_HANDOFF_TABLES2           = uint32(0x8000000b)
+	EV_EFI_VARIABLE_BOOT2            = uint32(0x8000000c)
+	EV_EFI_GPT_EVENT2                = uint32(0x8000000d)
 
 	EV_EFI_HCRTM_EVENT = uint32(0x80000010)
 
-	EV_EFI_VARIABLE_AUTHORITY = uint32(0x800000E0)
+	EV_EFI_VARIABLE_AUTHORITY    = uint32(0x800000E0)
+	EV_EFI_SPDM_FIRMWARE_BLOB    = uint32(0x800000e1)
+	EV_EFI_SPDM_FIRMWARE_CONFIG  = uint32(0x800000e2)
+	EV_EFI_SPDM_DEVICE_POLICY    = uint32(0x800000e3)
+	EV_EFI_SPDM_DEVICE_AUTHORITY = uint32(0x800000e4)
 )
 
 // TPM2B_EVENT is a TPM event as specified by the TPM specificatoin
@@ -134,10 +143,8 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 	event := TCG_EVENT{}
 	err := binary.Read(buf, binary.LittleEndian, &event)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read initial binary data: %w", err)
+		return nil, errors.New("failed to read initial binary data")
 	}
-
-	log.Tracef("Event type: %v", event.EventType)
 
 	// This means that the event log format version 2 is used
 	if event.EventType != EV_NO_ACTION {
@@ -170,7 +177,7 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 				return nil, err
 			}
 			if int(digestLength)+4 > buf.Len() {
-				return nil, fmt.Errorf("not enough remaining bytes in buffer: %w", err)
+				return nil, errors.New("not enough remaining bytes in buffer")
 			}
 			digest := make(ar.HexByte, digestLength)
 			binary.Read(buf, binary.LittleEndian, &digest)
@@ -182,11 +189,12 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 				sha384Digest = make(ar.HexByte, SHA384_DIGEST_LEN)
 				copy(sha384Digest, digest)
 			}
+			//other digest types will be implicitly skipped
 		}
 		var eventSize uint32
-		err = binary.Read(buf, binary.LittleEndian, &eventSize)
+		binary.Read(buf, binary.LittleEndian, &eventSize)
 		if int(eventSize) > buf.Len() {
-			return nil, fmt.Errorf("not enough remaining bytes in buffer: %w", err)
+			return nil, errors.New("not enough remaining bytes in buffer")
 		}
 
 		//data to include in the ReferenceValues
@@ -199,9 +207,14 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 
 		//either Sha256 or Sha384 must be present
 		if !(len(sha384Digest) == SHA384_DIGEST_LEN || len(sha256Digest) == SHA256_DIGEST_LEN) {
-			return nil, fmt.Errorf("no SHA256 or SHA384 in TCG event entry: %w", err)
+			return nil, errors.New("no SHA256 or SHA384 in TCG event entry")
 		}
 		pcrP := int(pcrIndex)
+
+		//skip event
+		if eventName == eventtypeToString(EV_NO_ACTION) {
+			continue
+		}
 
 		//add to extends
 		extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
@@ -253,6 +266,8 @@ func eventtypeToString(event_type uint32) string {
 		return "EV_NONHOST_INFO"
 	case EV_OMIT_BOOT_DEVICE_EVENTS:
 		return "EV_OMIT_BOOT_DEVICE_EVENTS"
+	case EV_POST_CODE2:
+		return "EV_POST_CODE2"
 	case EV_EFI_EVENT_BASE:
 		return "EV_EFI_HCRTM_EVENT"
 	case EV_EFI_VARIABLE_DRIVER_CONFIG:
@@ -273,10 +288,26 @@ func eventtypeToString(event_type uint32) string {
 		return "EV_EFI_PLATFORM_FIRMWARE_BLOB"
 	case EV_EFI_HANDOFF_TABLES:
 		return "EV_EFI_HANDOFF_TABLES"
+	case EV_EFI_PLATFORM_FIRMWARE_BLOB2:
+		return "EV_EFI_PLATFORM_FIRMWARE_BLOB2"
+	case EV_EFI_HANDOFF_TABLES2:
+		return "EV_EFI_HANDOFF_TABLES2"
+	case EV_EFI_VARIABLE_BOOT2:
+		return "EV_EFI_VARIABLE_BOOT2"
+	case EV_EFI_GPT_EVENT2:
+		return "EV_EFI_GPT_EVENT2"
 	case EV_EFI_HCRTM_EVENT:
 		return "EV_EFI_HCRTM_EVENT"
 	case EV_EFI_VARIABLE_AUTHORITY:
 		return "EV_EFI_VARIABLE_AUTHORITY"
+	case EV_EFI_SPDM_FIRMWARE_BLOB:
+		return "EV_EFI_SPDM_FIRMWARE_BLOB"
+	case EV_EFI_SPDM_FIRMWARE_CONFIG:
+		return "EV_EFI_SPDM_FIRMWARE_CONFIG"
+	case EV_EFI_SPDM_DEVICE_POLICY:
+		return "EV_EFI_SPDM_DEVICE_POLICY"
+	case EV_EFI_SPDM_DEVICE_AUTHORITY:
+		return "EV_EFI_SPDM_DEVICE_AUTHORITY"
 	default:
 		return "Unknown event type"
 	}
