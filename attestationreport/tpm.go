@@ -160,9 +160,16 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 		// reference values
 		if _, ok := calculatedPcrs[*ref.Pcr]; !ok {
 			calculatedPcrs[*ref.Pcr] = make([]byte, 32)
+			//first event could be a TPM_PCR_INIT_VALUE ()
+			if ref.Name == "TPM_PCR_INIT_VALUE" {
+				calculatedPcrs[*ref.Pcr] = ref.Sha256 //the Sha256 should contain the init value
+				continue                              //break the loop iteration and continue with the next event
+			}
 		}
+
 		calculatedPcrs[*ref.Pcr] = extendHash(calculatedPcrs[*ref.Pcr], ref.Sha256)
 		refResult := DigestResult{
+			// Type:	     "Reference Value",
 			Pcr:         ref.Pcr,
 			Name:        ref.Name,
 			Digest:      hex.EncodeToString(ref.Sha256),
@@ -179,7 +186,7 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					if bytes.Equal(sha256, ref.Sha256) {
 						found = true
 						refResult.Success = true
-						if hce.EventData != nil {
+						if hce.EventData != nil && len(hce.EventData) > i {
 							refResult.EventData = &hce.EventData[i]
 						}
 						break
@@ -218,6 +225,13 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 					// the final PCR value for comparison
 					measurement = make([]byte, 32)
 					for i, sha256 := range hce.Sha256 {
+						if i == 0 {
+							//if the first event is a TPM_PCR_INIT_VALUE
+							if hce.EventName != nil && len(hce.EventName) > i && hce.EventName[i] == "TPM_PCR_INIT_VALUE" {
+								measurement = sha256 //because the first element in the sha256 chain is the locality, (as part of the locality event)
+								continue             //continues with next element from the hash chain
+							}
+						}
 						measurement = extendHash(measurement, sha256)
 
 						// Check, if a reference value exists for the measured value
@@ -231,7 +245,11 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 								Type:    "Measurement",
 							}
 
-							if hce.EventData != nil {
+							if hce.EventName != nil && len(hce.EventName) > i {
+								measResult.Name = hce.EventName[i]
+							}
+
+							if hce.EventData != nil && len(hce.EventData) > i {
 								measResult.EventData = &hce.EventData[i]
 							}
 
@@ -306,8 +324,16 @@ func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (ma
 				// Measurement contains individual values which must be extended to result in
 				// the final PCR value for comparison
 				measurement = make([]byte, 32)
-				for _, sha256 := range hce.Sha256 {
-					measurement = extendHash(measurement, sha256)
+				for i, sha256 := range hce.Sha256 {
+					//first element is the TPM_PCR_INIT_VALUE
+					if i == 0 {
+						if hce.EventName[i] != "TPM_PCR_INIT_VALUE" {
+							log.Errorln("First event is not a TPM_PCR_INIT_VALUE")
+						}
+						measurement = sha256
+					} else {
+						measurement = extendHash(measurement, sha256)
+					}
 				}
 			}
 

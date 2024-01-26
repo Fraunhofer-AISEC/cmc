@@ -214,14 +214,18 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
 	for i, num := range t.Pcrs {
 		sha256 := make([]ar.HexByte, 0)
-		eventDataArray := make([]ar.EventData, 0) //to capture additional EventData
+		eventNameArray := make([]string, 0)
+		eventDataArray := make([]ar.EventData, 0)
 
 		if t.MeasurementLog {
 			for _, digest := range biosMeasurements {
 				if num == *digest.Pcr {
 					sha256 = append(sha256, digest.Sha256)
+					eventNameArray = append(eventNameArray, digest.Name)
 
-					if t.MeasurementLog {
+					if digest.Name == "TPM_PCR_INIT_VALUE" {
+						eventDataArray = append(eventDataArray, ar.EventData{})
+					} else {
 						eventDataArray = append(eventDataArray, *digest.EventData)
 					}
 				}
@@ -239,6 +243,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		//appending EventData
 		if t.MeasurementLog {
 			hashChain[i].EventData = eventDataArray
+			hashChain[i].EventName = eventNameArray
 		}
 	}
 
