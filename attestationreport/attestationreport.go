@@ -112,7 +112,8 @@ type HashChainElem struct {
 	Pcr       int32       `json:"pcr" cbor:"1,keyasint"`
 	Sha256    []HexByte   `json:"sha256" cbor:"2,keyasint"`
 	Summary   bool        `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final PCR value or single artifact
-	EventData []EventData `json:"eventdata,omitempty" cbor:"4,keyasint,omitempty"`
+	EventName []string    `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
+	EventData []EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // TpmMeasurement represents the attestation report

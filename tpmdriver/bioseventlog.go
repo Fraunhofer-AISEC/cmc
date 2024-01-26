@@ -38,6 +38,7 @@ const (
 
 // Constants
 var (
+	STARTUP_LOCALITY_SIGNATURE = [16]byte{0x53, 0x74, 0x61, 0x72, 0x74, 0x75, 0x70, 0x4C, 0x6F, 0x63, 0x61, 0x6C, 0x69, 0x74, 0x79, 0x0}
 	EV_PREBOOT_CERT            = uint32(0)
 	EV_POST_CODE               = uint32(1)
 	EV_UNUSED                  = uint32(2)
@@ -137,6 +138,7 @@ func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
 func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 
 	extends := make([]ar.ReferenceValue, 0)
+	initializedPCR := make([]bool, 24) //bool array track of what pcrs have been initialized
 	buf := bytes.NewBuffer(data)
 
 	// Read initial TCG Event to detect event log format
@@ -203,7 +205,29 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 		//bytes of the event should be added to the array
 		eventData := make([]uint8, eventSize)
 		binary.Read(buf, binary.LittleEndian, &eventData)
-		extendedeventData = ar.ParseEventData(eventData, eventName)
+
+		parseEvent := true
+
+		//checks for locality
+		if pcrIndex > 24 {
+			log.Errorf("Invalid PCR: %v", pcrIndex)
+		}
+		//pcr value has not been initialized
+		if !initializedPCR[pcrIndex] {
+			//generate the locality entry
+			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData)
+			if err != nil {
+				log.Trace(err)
+			} else {
+				extends = append(extends, entry)
+			}
+			parseEvent = !skipEvent
+			initializedPCR[pcrIndex] = true
+
+		}
+		if parseEvent {
+			extendedeventData = ar.ParseEventData(eventData, eventName)
+		}
 
 		//either Sha256 or Sha384 must be present
 		if !(len(sha384Digest) == SHA384_DIGEST_LEN || len(sha256Digest) == SHA256_DIGEST_LEN) {
@@ -223,6 +247,43 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 	}
 
 	return extends, nil
+}
+
+func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (ar.ReferenceValue, bool, error) {
+	var found_hcrtm bool
+	var locality byte
+	skipEvent := false
+	eventD := bytes.NewBuffer(eventData)
+
+	if pcrIndex == 0 {
+		if eventType == EV_EFI_HCRTM_EVENT {
+			found_hcrtm = true
+			locality = 0x04 //startup locality shall be set to 0x04 if a H-CRTM event was found
+		}
+
+		/* Handle StartupLocality in replay for PCR0 */
+		if !found_hcrtm && eventType == EV_NO_ACTION && pcrIndex == 0 {
+			if eventD.Len() < 17 { // sizeof(EV_NO_ACTION_STRUCT))
+				return ar.ReferenceValue{}, false, errors.New("eventsize is too small")
+			}
+
+			signature := eventD.Next(16)
+
+			if bytes.Equal(signature, STARTUP_LOCALITY_SIGNATURE[:]) {
+
+				locality = eventD.Next(1)[0]
+				skipEvent = true
+			}
+		}
+	}
+
+	digest := make([]byte, 32)
+	digest[31] = locality
+
+	entry := ar.ReferenceValue{Type: "INITVAL", Sha256: digest, Sha384: nil, Name: "TPM_PCR_INIT_VALUE", Pcr: &pcrIndex, Snp: nil, Description: "", EventData: nil}
+
+	//generate the Locality
+	return entry, skipEvent, nil
 }
 
 // switch for the event types
