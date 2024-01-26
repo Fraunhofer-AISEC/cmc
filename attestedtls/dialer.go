@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
 // Wraps tls.Dial
@@ -68,6 +71,14 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	// Check that selected API is implemented
 	if cc.CmcApi == nil {
 		return nil, fmt.Errorf("selected CMC API is not implemented")
+	}
+
+	if(cc.cmc == nil){
+		cc.cmc = &cmc.Cmc{}
+	}	
+	if(cc.cmc.Serializer == nil){
+		log.Trace("No Serializer defined: use as JsonSerializer as default")
+		cc.cmc.Serializer = ar.JsonSerializer{}
 	}
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,

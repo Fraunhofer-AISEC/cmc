@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
 const timeout = 10 * time.Second
@@ -121,6 +124,15 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 	// Check that selected API is implemented
 	if listener.CmcConfig.CmcApi == nil {
 		return listener, fmt.Errorf("selected CMC API is not implemented")
+	}
+
+
+	if(listener.cmc == nil){
+		listener.cmc = &cmc.Cmc{}
+	}	
+	if(listener.cmc.Serializer == nil){
+		log.Trace("No Serializer defined: use as JsonSerializer as default")
+		listener.cmc.Serializer = ar.JsonSerializer{}
 	}
 
 	// Listen

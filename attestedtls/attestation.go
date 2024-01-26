@@ -26,7 +26,17 @@ var id = "0000"
 
 var log = logrus.WithField("service", "atls")
 
+// wrapper structure for the attestation response
+type atlsPacket struct {
+	SelectionByte byte   `json:"selectionbyte" cbor:"0,keyasint"`
+	Response      []byte `json:"response,omitempty" cbor:"1,keyasint,omitempty"`
+}
+
 func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
+	//building the atls Message
+	response := atlsPacket{
+		SelectionByte: byte(cc.Attest),
+	}
 
 	//optional: attest Client
 	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
@@ -37,24 +47,40 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 			return fmt.Errorf("could not obtain dialer AR: %w", err)
 		}
 
+		//adding the attestation report
+		response.Response = resp
+		//marshalling the packet
+		marshalledResponse, err := cc.Cmc.Serializer.Marshal(response)
+		if err != nil {
+			log.Error("could not marshall atlsPacket")
+			return err
+		}
 		// Send created attestation report to listener
 		log.Tracef("Sending attestation report length %v to listener", len(resp))
 
-		err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
+		err = Write(marshalledResponse, conn)
+
 		if err != nil {
 			return fmt.Errorf("failed to send AR: %w", err)
 		}
 		log.Trace("Sent AR")
 	} else {
+		//marshalling the packet
+		marshalledResponse, err := cc.Cmc.Serializer.Marshal(response)
+		if err != nil {
+			log.Error("could not marshall atlsPacket")
+			return err
+		}
+
 		//if not sending attestation report, send the attestation mode
-		err := Write([]byte{byte(cc.Attest)}, conn)
+		err = Write(marshalledResponse, conn)
 		if err != nil {
 			return fmt.Errorf("failed to send skip client Attestation: %w", err)
 		}
 		log.Debug("Skipping client-side attestation")
 	}
 
-	readvalue, err := readValue(conn, cc.Attest, true)
+	readvalue, err := readValue(conn, cc.Attest, true, cc)
 	if err != nil {
 		return err
 	}
@@ -78,6 +104,11 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 }
 
 func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
+	//building the atls Message
+	response := atlsPacket{
+		SelectionByte: byte(cc.Attest),
+	}
+
 	// optional: attest server
 	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
 		// Obtain own attestation report from local cmcd
@@ -87,22 +118,36 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 			return fmt.Errorf("could not obtain AR of Listener : %w", err)
 		}
 
+		//adding the attestation report
+		response.Response = resp
+		//marshalling the packet
+		marshalledResponse, err := cc.Cmc.Serializer.Marshal(response)
+		if err != nil {
+			log.Error("could not marshall atlsPacket")
+			return err
+		}
 		// Send own attestation report to dialer
 		log.Trace("Sending own attestation report")
-		err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
+		err = Write(marshalledResponse, conn)
 		if err != nil {
 			return fmt.Errorf("failed to send AR: %w", err)
 		}
 	} else {
+		//marshalling the packet
+		marshalledResponse, err := cc.Cmc.Serializer.Marshal(response)
+		if err != nil {
+			log.Error("could not marshall atlsPacket")
+			return err
+		}
 		//if not sending attestation report, send the attestation mode
-		err := Write([]byte{byte(cc.Attest)}, conn)
+		err = Write(marshalledResponse, conn)
 		if err != nil {
 			return fmt.Errorf("failed to send skip client Attestation: %w", err)
 		}
 		log.Debug("Skipping server-side attestation")
 	}
 
-	report, err := readValue(conn, cc.Attest, false)
+	report, err := readValue(conn, cc.Attest, false, cc)
 	if err != nil {
 		return err
 	}
@@ -124,22 +169,27 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 	return nil
 }
 
-func readValue(conn *tls.Conn, selection AttestSelect, dialer bool) ([]byte, error) {
+func readValue(conn *tls.Conn, selection AttestSelect, dialer bool, cc CmcConfig) ([]byte, error) {
 	readvalue, err := Read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	packet := new(atlsPacket)
+	err = cc.Cmc.Serializer.Unmarshal(readvalue, packet)
+	if err != nil {
+		log.Errorf("could not unmarshal atls response: %v", err)
+		return nil, err
 	}
 
 	selectionStr, errS1 := selectionString(byte(selection))
 	if errS1 != nil {
 		return nil, errS1
 	}
-
-	// the first byte should always be the attestation mode
-	if readvalue[0] == byte(selection) {
+	if packet.SelectionByte == byte(selection) {
 		log.Debugf("Matching attestation mode: [%v]", selectionStr)
 	} else {
-		reportByte := readvalue[0]
+		reportByte := packet.SelectionByte
 		reportStr, errS1 := selectionString(reportByte)
 		if errS1 != nil {
 			return nil, errS1
@@ -147,7 +197,7 @@ func readValue(conn *tls.Conn, selection AttestSelect, dialer bool) ([]byte, err
 		return nil, fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]", selectionStr, reportStr)
 	}
 
-	return readvalue[1:], nil
+	return packet.Response, nil
 }
 
 func selectionString(selection byte) (string, error) {
