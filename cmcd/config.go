@@ -63,7 +63,7 @@ const (
 	logFlag            = "log"
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
-	measurementLogFlag = "measuementLog"
+	measurementLogFlag = "measurementLog"
 )
 
 func getConfig() (*cmc.Config, error) {
