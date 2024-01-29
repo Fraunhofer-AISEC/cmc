@@ -54,6 +54,10 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithCmcNetwork(c.Network),
 		atls.WithResult(verificationResult),
 		atls.WithCmc(cmc))
+
+	if (err != nil){
+		return err
+	}
 	// Publish the attestation result asynchronously if publishing address was specified and
 	// and attestation was performed
 	if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
