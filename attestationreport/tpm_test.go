@@ -28,7 +28,7 @@ import (
 
 func Test_verifyTpmMeasurements(t *testing.T) {
 	type args struct {
-		tpmM            *TpmMeasurement
+		tpmM            *Measurement
 		nonce           []byte
 		referenceValues []ReferenceValue
 		cas             []*x509.Certificate
@@ -36,15 +36,15 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 	tests := []struct {
 		name  string
 		args  args
-		want  *TpmMeasurementResult
+		want  *MeasurementResult
 		want1 bool
 	}{
 		{
 			name: "Valid TPM Measurement Summary",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: validSummaryHashChain,
@@ -59,9 +59,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Valid TPM Measurement",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: validHashChain,
@@ -76,9 +76,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: validSummaryHashChain,
@@ -93,9 +93,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
 					HashChain: validSummaryHashChain,
@@ -110,9 +110,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid HashChain Summary",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: invalidSummaryHashChain,
@@ -127,9 +127,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid HashChain",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: invalidHashChain,
@@ -144,9 +144,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Values",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
 					HashChain: validSummaryHashChain,
@@ -161,9 +161,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA SubjectKeyId",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					HashChain: validSummaryHashChain,
@@ -178,9 +178,9 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Cert Chain",
 			args: args{
-				tpmM: &TpmMeasurement{
+				tpmM: &Measurement{
 					Type:      "TPM Measurement",
-					Message:   validQuote,
+					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     invalidTpmCertChain,
 					HashChain: validSummaryHashChain,
@@ -198,7 +198,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpmMeasurements(tt.args.tpmM, tt.args.nonce, tt.args.referenceValues, tt.args.cas)
+			got, got1 := verifyTpmMeasurements(*tt.args.tpmM, tt.args.nonce, tt.args.referenceValues, tt.args.cas)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
@@ -652,23 +652,25 @@ var (
 		ExtensionsCheck: nil,
 	}
 
-	validTpmMeasurementResult = TpmMeasurementResult{
-		Summary: validResult,
-		PcrMatch: []PcrResult{
-			{
-				Pcr:        1,
-				Calculated: "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
-				Success:    true,
+	validTpmMeasurementResult = MeasurementResult{
+		Summary:   validResult,
+		Freshness: validResult,
+		Signature: validSignatureResult,
+		Artifacts: validArtifacts,
+		TpmResult: &TpmResult{
+			PcrMatch: []PcrResult{
+				{
+					Pcr:        1,
+					Calculated: "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
+					Success:    true,
+				},
+				{
+					Pcr:        4,
+					Calculated: "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
+					Success:    true,
+				},
 			},
-			{
-				Pcr:        4,
-				Calculated: "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
-				Success:    true,
-			},
+			AggPcrQuoteMatch: validResult,
 		},
-		AggPcrQuoteMatch: validResult,
-		QuoteFreshness:   validResult,
-		QuoteSignature:   validSignatureResult,
-		Artifacts:        validArtifacts,
 	}
 )

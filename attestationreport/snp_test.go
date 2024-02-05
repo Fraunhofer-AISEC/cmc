@@ -22,7 +22,7 @@ import (
 
 func Test_verifySnpMeasurements(t *testing.T) {
 	type args struct {
-		snpM  *SnpMeasurement
+		snpM  *Measurement
 		snpV  []ReferenceValue
 		nonce []byte
 	}
@@ -34,10 +34,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -59,10 +59,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: invalidReportSignature,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: invalidReportSignature,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -84,10 +84,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  invalidCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    invalidCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -109,10 +109,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid VCEK Certificate",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  invalidLeafCert,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    invalidLeafCert,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -134,10 +134,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: invalidReportData,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: invalidReportData,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -159,10 +159,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -184,10 +184,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Policy Parameter Debug",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -209,10 +209,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -234,10 +234,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Value Type",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -252,30 +252,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "No Reference Values Present",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
-				},
-				nonce: validNonce,
-			},
-			want: false,
-		},
-		{
-			name: "No Measurement Present",
-			args: args{
-				snpV: []ReferenceValue{
-					{
-						Type:   "SNP Reference Value",
-						Sha384: validMeasurement,
-						Snp: &SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
-					},
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				nonce: validNonce,
 			},
@@ -284,10 +264,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Firmware",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -309,10 +289,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid TCB",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -334,10 +314,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA KeyID",
 			args: args{
-				snpM: &SnpMeasurement{
-					Type:   "SNP Measurement",
-					Report: validReport,
-					Certs:  validCertChain,
+				snpM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
 				},
 				snpV: []ReferenceValue{
 					{
@@ -359,7 +339,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, got := verifySnpMeasurements(tt.args.snpM, tt.args.nonce, tt.args.snpV); got != tt.want {
+			if _, got := verifySnpMeasurements(*tt.args.snpM, tt.args.nonce, tt.args.snpV); got != tt.want {
 				t.Errorf("verifySnpMeasurements() = %v, want %v", got, tt.want)
 			}
 		})

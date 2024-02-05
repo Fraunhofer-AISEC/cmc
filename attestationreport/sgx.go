@@ -76,18 +76,16 @@ func DecodeSgxReport(report []byte) (SgxReport, error) {
 	return reportStruct, nil
 }
 
-func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string, referenceValues []ReferenceValue) (*SgxMeasurementResult, bool) {
+func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, referenceValues []ReferenceValue) (*MeasurementResult, bool) {
+
 	var err error
-	result := &SgxMeasurementResult{}
+	result := &MeasurementResult{
+		Type:      "SGX Result",
+		SgxResult: &SgxResult{},
+	}
 	ok := true
 
 	log.Trace("Verifying SGX measurements")
-
-	// If the attestationreport does contain neither SGX measurements, nor SGX Reference Values
-	// there is nothing to to
-	if sgxM == nil && len(referenceValues) == 0 {
-		return nil, true
-	}
 
 	if len(referenceValues) == 0 {
 		msg := "Could not find SGX Reference Value"
@@ -101,23 +99,8 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string
 	}
 	sgxReferenceValue := referenceValues[0]
 
-	// If the attestationreport contains SGX Reference Values, but no SGX measurement, the attestation must fail
-	if sgxM == nil {
-		for _, v := range referenceValues {
-			result.Artifacts = append(result.Artifacts,
-				DigestResult{
-					Name:    v.Name,
-					Digest:  hex.EncodeToString(v.Sha256),
-					Success: false,
-					Type:    "Reference Value",
-				})
-		}
-		result.Summary.Success = false
-		return result, false
-	}
-
 	// Validate Parameters:
-	if sgxM.Report == nil || len(sgxM.Report) < SGX_QUOTE_MIN_SIZE {
+	if sgxM.Evidence == nil || len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
 		msg := "Invalid SGX Report."
 		result.Summary.setFalse(&msg)
 		return result, false
@@ -139,7 +122,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string
 	var quoteType uint32 = sgxReferenceValue.Sgx.Collateral.TeeType
 	if quoteType == SGX_QUOTE_TYPE {
 		// extract the attestation report into the SGXReport data structure
-		sgxQuote, err = DecodeSgxReport(sgxM.Report)
+		sgxQuote, err = DecodeSgxReport(sgxM.Evidence)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to decode SGX report: %v", err)
 			result.Summary.setFalse(&msg)
@@ -235,7 +218,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	result.TcbInfoCheck = tcbInfoResult
+	result.SgxResult.TcbInfoCheck = tcbInfoResult
 
 	// Parse and verify QE Identity object
 	qeIdentity, err := parseQEIdentity(sgxReferenceValue.Sgx.Collateral.QeIdentity)
@@ -252,10 +235,10 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	result.QeIdentityCheck = qeIdentityResult
+	result.SgxResult.QeIdentityCheck = qeIdentityResult
 
 	// Verify Quote Signature
-	sig, ret := VerifyIntelQuoteSignature(sgxM.Report, sgxQuote.QuoteSignatureData,
+	sig, ret := VerifyIntelQuoteSignature(sgxM.Evidence, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), referenceCerts,
 		sgxReferenceValue.Sgx.CaFingerprint, intelCache, quoteType)
 	if !ret {
@@ -273,7 +256,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string
 	}
 
 	// Check version
-	result.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
+	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
 	if !ret {
 		return result, false
 	}
@@ -284,7 +267,7 @@ func verifySgxMeasurements(sgxM *SgxMeasurement, nonce []byte, intelCache string
 }
 
 func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
-	sgxExtensions *SGXExtensionsValue, sgxReferenceValue *ReferenceValue, result *SgxMeasurementResult) error {
+	sgxExtensions *SGXExtensionsValue, sgxReferenceValue *ReferenceValue, result *MeasurementResult) error {
 	if body == nil || tcbInfo == nil || sgxExtensions == nil || sgxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
@@ -349,7 +332,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 		}
 	}
 
-	result.SgxAttributesCheck = SgxAttributesCheck{
+	result.SgxResult.SgxAttributesCheck = SgxAttributesCheck{
 		Initted: BooleanMatch{
 			Success:  getBit(body.Attributes[:], 0) == sgxReferenceValue.Sgx.Attributes.Initted,
 			Claimed:  sgxReferenceValue.Sgx.Attributes.Initted,
@@ -392,24 +375,24 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 		},
 	}
 
-	ok := result.SgxAttributesCheck.Initted.Success &&
-		result.SgxAttributesCheck.Debug.Success &&
-		result.SgxAttributesCheck.Mode64Bit.Success &&
-		result.SgxAttributesCheck.ProvisionKey.Success &&
-		result.SgxAttributesCheck.EInitToken.Success &&
-		result.SgxAttributesCheck.Kss.Success &&
-		result.SgxAttributesCheck.Legacy.Success &&
-		result.SgxAttributesCheck.Avx.Success
+	ok := result.SgxResult.SgxAttributesCheck.Initted.Success &&
+		result.SgxResult.SgxAttributesCheck.Debug.Success &&
+		result.SgxResult.SgxAttributesCheck.Mode64Bit.Success &&
+		result.SgxResult.SgxAttributesCheck.ProvisionKey.Success &&
+		result.SgxResult.SgxAttributesCheck.EInitToken.Success &&
+		result.SgxResult.SgxAttributesCheck.Kss.Success &&
+		result.SgxResult.SgxAttributesCheck.Legacy.Success &&
+		result.SgxResult.SgxAttributesCheck.Avx.Success
 	if !ok {
 		return fmt.Errorf("SGXAttributesCheck failed: Initted: %v, Debug: %v, Mode64Bit: %v, ProvisionKey: %v, EInitToken: %v, Kss: %v, Legacy: %v, Avx: %v",
-			result.SgxAttributesCheck.Initted.Success,
-			result.SgxAttributesCheck.Debug.Success,
-			result.SgxAttributesCheck.Mode64Bit.Success,
-			result.SgxAttributesCheck.ProvisionKey.Success,
-			result.SgxAttributesCheck.EInitToken.Success,
-			result.SgxAttributesCheck.Kss.Success,
-			result.SgxAttributesCheck.Legacy.Success,
-			result.SgxAttributesCheck.Avx.Success,
+			result.SgxResult.SgxAttributesCheck.Initted.Success,
+			result.SgxResult.SgxAttributesCheck.Debug.Success,
+			result.SgxResult.SgxAttributesCheck.Mode64Bit.Success,
+			result.SgxResult.SgxAttributesCheck.ProvisionKey.Success,
+			result.SgxResult.SgxAttributesCheck.EInitToken.Success,
+			result.SgxResult.SgxAttributesCheck.Kss.Success,
+			result.SgxResult.SgxAttributesCheck.Legacy.Success,
+			result.SgxResult.SgxAttributesCheck.Avx.Success,
 		)
 	}
 

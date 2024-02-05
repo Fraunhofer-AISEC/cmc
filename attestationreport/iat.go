@@ -48,34 +48,14 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues []ReferenceValue,
+func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []ReferenceValue,
 	cas []*x509.Certificate,
-) (*IasMeasurementResult, bool) {
-	result := &IasMeasurementResult{}
+) (*MeasurementResult, bool) {
+
+	result := &MeasurementResult{
+		Type: "IAT Result",
+	}
 	ok := true
-
-	// If the attestationreport does contain neither IAS measurements, nor IAS Reference Values
-	// there is nothing to to
-	if iasM == nil && len(referenceValues) == 0 {
-		return nil, true
-	}
-
-	// If the attestationreport contains IAS Reference Values, but no IAS measurement, the
-	// attestation must fail
-	if iasM == nil {
-		for _, v := range referenceValues {
-			result.Artifacts = append(result.Artifacts,
-				DigestResult{
-					Name:    v.Name,
-					Digest:  hex.EncodeToString(v.Sha256),
-					Success: false,
-					Type:    "Reference Value",
-				})
-		}
-		msg := "IAS Measurement not present"
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
 
 	log.Tracef("Parsing %v certificates", len(iasM.Certs))
 	certs, err := internal.ParseCertsDer(iasM.Certs)
@@ -94,13 +74,13 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 
 	log.Trace("Verifying CBOR IAT")
 
-	iatresult, payload, ok := verifyIat(iasM.Report, certs[0])
+	iatresult, payload, ok := verifyIat(iasM.Evidence, certs[0])
 	if !ok {
 		msg := "IAS signature verification failed"
 		result.Summary.setFalse(&msg)
 		return result, false
 	}
-	result.IasSignature = iatresult
+	result.Signature = iatresult
 
 	log.Trace("Unmarshalling CBOR IAT")
 
@@ -116,10 +96,10 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 
 	// Verify nonce
 	if bytes.Equal(nonce, iat.AuthChallenge) {
-		result.FreshnessCheck.Success = true
+		result.Freshness.Success = true
 	} else {
 		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, IAT Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(iat.AuthChallenge))
-		result.FreshnessCheck.setFalse(&msg)
+		result.Freshness.setFalse(&msg)
 		ok = false
 	}
 
@@ -129,10 +109,10 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 	x509Chains, err := internal.VerifyCertChain(certs, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.IasSignature.CertChainCheck.setFalse(&msg)
+		result.Signature.CertChainCheck.setFalse(&msg)
 		ok = false
 	} else {
-		result.IasSignature.CertChainCheck.Success = true
+		result.Signature.CertChainCheck.Success = true
 	}
 
 	//Store details from (all) validated certificate chain(s) in the report
@@ -141,7 +121,7 @@ func verifyIasMeasurements(iasM *IasMeasurement, nonce []byte, referenceValues [
 		for _, cert := range chain {
 			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 		}
-		result.IasSignature.ValidatedCerts = append(result.IasSignature.ValidatedCerts, chainExtracted)
+		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
 	}
 
 	result.Summary.Success = ok

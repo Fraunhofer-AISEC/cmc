@@ -192,18 +192,16 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 	return nil
 }
 
-func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string, referenceValues []ReferenceValue) (*TdxMeasurementResult, bool) {
+func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, referenceValues []ReferenceValue) (*MeasurementResult, bool) {
+
 	var err error
-	result := &TdxMeasurementResult{}
+	result := &MeasurementResult{
+		Type:      "TDX Result",
+		TdxResult: &TdxResult{},
+	}
 	ok := true
 
 	log.Trace("Verifying TDX measurements")
-
-	// If the attestationreport does contain neither TDX measurements, nor TDX Reference Values
-	// there is nothing to to
-	if tdxM == nil && len(referenceValues) == 0 {
-		return nil, true
-	}
 
 	if len(referenceValues) == 0 {
 		msg := "Could not find TDX Reference Value"
@@ -229,7 +227,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string
 	}
 
 	// Currently only support for report version 4
-	tdxQuote, err := decodeTdxReportV4(tdxM.Report)
+	tdxQuote, err := decodeTdxReportV4(tdxM.Evidence)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode TDX report: %v", err)
 		result.Summary.setFalse(&msg)
@@ -290,7 +288,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string
 
 	tcbInfoResult, err := verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
-	result.TcbInfoCheck = tcbInfoResult
+	result.TdxResult.TcbInfoCheck = tcbInfoResult
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -307,7 +305,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string
 
 	qeIdentityResult, err := VerifyQEIdentity(&tdxQuote.QuoteSignatureData.QECertData.QEReport, &qeIdentity,
 		string(tdxReferenceValue.Tdx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, TDX_QUOTE_TYPE)
-	result.QeIdentityCheck = qeIdentityResult
+	result.TdxResult.QeIdentityCheck = qeIdentityResult
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
 		result.Summary.setFalse(&msg)
@@ -315,7 +313,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string
 	}
 
 	// Verify Quote Signature
-	sig, ret := VerifyIntelQuoteSignature(tdxM.Report, tdxQuote.QuoteSignatureData,
+	sig, ret := VerifyIntelQuoteSignature(tdxM.Evidence, tdxQuote.QuoteSignatureData,
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		tdxReferenceValue.Tdx.CaFingerprint, intelCache, TDX_QUOTE_TYPE)
 	if !ret {
@@ -333,7 +331,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string
 	}
 
 	// Check version
-	result.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
+	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
 	if !ret {
 		return result, false
 	}
@@ -342,7 +340,7 @@ func verifyTdxMeasurements(tdxM *TdxMeasurement, nonce []byte, intelCache string
 }
 
 func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
-	certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *TdxMeasurementResult) error {
+	certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *MeasurementResult) error {
 	if body == nil || tcbInfo == nil || certs == nil || tdxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
@@ -438,7 +436,7 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 	}
 	seamAttributesResult := bytes.Equal(tcbInfo.TcbInfo.TdxModule.Attributes, seamAttributesQuote[:])
 
-	result.TdAttributesCheck = TdAttributesCheck{
+	result.TdxResult.TdAttributesCheck = TdAttributesCheck{
 		Debug: BooleanMatch{
 			Success:  tdxReferenceValue.Tdx.TdAttributes.Debug == (body.TdAttributes[0] > 0),
 			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Debug,
@@ -460,35 +458,35 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 			Measured: getBit(body.TdAttributes[:], 31),
 		},
 	}
-	ok := result.TdAttributesCheck.Debug.Success &&
-		result.TdAttributesCheck.SeptVEDisable.Success &&
-		result.TdAttributesCheck.Pks.Success &&
-		result.TdAttributesCheck.Kl.Success
+	ok := result.TdxResult.TdAttributesCheck.Debug.Success &&
+		result.TdxResult.TdAttributesCheck.SeptVEDisable.Success &&
+		result.TdxResult.TdAttributesCheck.Pks.Success &&
+		result.TdxResult.TdAttributesCheck.Kl.Success
 
 	if !ok {
 		return fmt.Errorf("TDAttributesCheck failed: Debug: %v, SeptVEDisable: %v, Pks: %v, Kl: %v",
-			result.TdAttributesCheck.Debug.Success, result.TdAttributesCheck.SeptVEDisable.Success,
-			result.TdAttributesCheck.Pks, result.TdAttributesCheck.Kl)
+			result.TdxResult.TdAttributesCheck.Debug.Success, result.TdxResult.TdAttributesCheck.SeptVEDisable.Success,
+			result.TdxResult.TdAttributesCheck.Pks, result.TdxResult.TdAttributesCheck.Kl)
 	}
 
-	result.SeamAttributesCheck = AttributesCheck{
+	result.TdxResult.SeamAttributesCheck = AttributesCheck{
 		Success:  seamAttributesResult,
 		Claimed:  HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
 		Measured: HexByte(seamAttributesQuote[:]),
 	}
-	if !result.SeamAttributesCheck.Success {
+	if !result.TdxResult.SeamAttributesCheck.Success {
 		return fmt.Errorf("SeamAttributesCheck failed: Expected: %v, Measured: %v",
-			result.SeamAttributesCheck.Claimed, result.SeamAttributesCheck.Measured)
+			result.TdxResult.SeamAttributesCheck.Claimed, result.TdxResult.SeamAttributesCheck.Measured)
 	}
 
-	result.XfamCheck = AttributesCheck{
+	result.TdxResult.XfamCheck = AttributesCheck{
 		Success:  seamAttributesResult,
 		Claimed:  HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
 		Measured: HexByte(seamAttributesQuote[:]),
 	}
-	if !result.SeamAttributesCheck.Success {
+	if !result.TdxResult.SeamAttributesCheck.Success {
 		return fmt.Errorf("XfamCheck failed: Expected: %v, Measured: %v",
-			result.XfamCheck.Claimed, result.XfamCheck.Measured)
+			result.TdxResult.XfamCheck.Claimed, result.TdxResult.XfamCheck.Measured)
 	}
 
 	for _, v := range result.Artifacts {

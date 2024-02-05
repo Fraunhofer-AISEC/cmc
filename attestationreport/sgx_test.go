@@ -26,7 +26,7 @@ import (
 
 func Test_verifySgxMeasurements(t *testing.T) {
 	type args struct {
-		sgxM  *SgxMeasurement
+		sgxM  *Measurement
 		sgxV  []ReferenceValue
 		nonce []byte
 	}
@@ -38,10 +38,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -75,10 +75,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  invalidSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    invalidSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -112,10 +112,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: invalidSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: invalidSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -149,10 +149,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Tcb Info",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -186,10 +186,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid QE Identity",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -223,10 +223,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -260,10 +260,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -297,10 +297,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -334,10 +334,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MRSIGNER",
 			args: args{
-				sgxM: &SgxMeasurement{
-					Type:   "SGX Measurement",
-					Report: validSGXQuote,
-					Certs:  validSGXCertChain,
+				sgxM: &Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
 				},
 				sgxV: []ReferenceValue{
 					{
@@ -392,7 +392,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				tt.args.sgxV[0].Sgx.Collateral.QeIdentity = qeIdentitySgx
 				tt.args.sgxV[0].Sgx.Collateral.QeIdentitySize = uint32(len(qeIdentitySgx))
 			}
-			res, got := verifySgxMeasurements(tt.args.sgxM, tt.args.nonce, "", tt.args.sgxV)
+			res, got := verifySgxMeasurements(*tt.args.sgxM, tt.args.nonce, "", tt.args.sgxV)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("verifySgxMeasurements() got = %v, want %v", got, tt.want)
 			}

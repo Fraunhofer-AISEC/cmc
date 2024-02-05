@@ -101,7 +101,7 @@ func (s *Sw) GetCertChain() ([]*x509.Certificate, error) {
 }
 
 func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
-	return ar.SwMeasurement{}, errors.New("Measure method not implemented for SW driver")
+	return ar.Measurement{}, errors.New("Measure method not implemented for SW driver")
 }
 
 func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,

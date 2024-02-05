@@ -77,23 +77,23 @@ func fetchLatestQeIdentity(tdx bool) ([]byte, error) {
 
 func Test_verifyTdxMeasurements(t *testing.T) {
 	type args struct {
-		tdxM  *TdxMeasurement
+		tdxM  *Measurement
 		tdxV  []ReferenceValue
 		nonce []byte
 	}
 	tests := []struct {
 		name  string
 		args  args
-		want  *TdxMeasurementResult
+		want  *MeasurementResult
 		want1 bool
 	}{
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -135,10 +135,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: invalidTdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: invalidTdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -180,10 +180,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -225,10 +225,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  [][]byte{},
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    [][]byte{},
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -270,10 +270,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -315,10 +315,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -360,10 +360,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid TcbInfo",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -405,10 +405,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid QEIdentity",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -450,10 +450,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MrSeam",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -495,10 +495,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Missing HashChain Values",
 			args: args{
-				tdxM: &TdxMeasurement{
-					Type:   "TDX Measurement",
-					Report: tdxQuote,
-					Certs:  validTDXCertChain,
+				tdxM: &Measurement{
+					Type:     "TDX Measurement",
+					Evidence: tdxQuote,
+					Certs:    validTDXCertChain,
 				},
 				tdxV: []ReferenceValue{
 					{
@@ -557,7 +557,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				tt.args.tdxV[0].Tdx.Collateral.QeIdentity = qeIdentityTdx
 				tt.args.tdxV[0].Tdx.Collateral.QeIdentitySize = uint32(len(qeIdentityTdx))
 			}
-			res, got := verifyTdxMeasurements(tt.args.tdxM, tt.args.nonce, "", tt.args.tdxV)
+			res, got := verifyTdxMeasurements(*tt.args.tdxM, tt.args.nonce, "", tt.args.tdxV)
 			if got != tt.want1 {
 				t.Errorf("verifyTdxMeasurements() got = %v, want %v", got, tt.want1)
 			}

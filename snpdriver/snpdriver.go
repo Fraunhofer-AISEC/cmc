@@ -139,18 +139,18 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 
 	if snp == nil {
-		return ar.SnpMeasurement{}, errors.New("internal error: SNP object is nil")
+		return ar.Measurement{}, errors.New("internal error: SNP object is nil")
 	}
 
-	data, err := getSnpMeasurement(nonce)
+	data, err := getMeasurement(nonce)
 	if err != nil {
-		return ar.SnpMeasurement{}, fmt.Errorf("failed to get SNP Measurement: %w", err)
+		return ar.Measurement{}, fmt.Errorf("failed to get SNP Measurement: %w", err)
 	}
 
-	measurement := ar.SnpMeasurement{
-		Type:   "SNP Measurement",
-		Report: data,
-		Certs:  internal.WriteCertsDer(snp.snpCertChain),
+	measurement := ar.Measurement{
+		Type:     "SNP Measurement",
+		Evidence: data,
+		Certs:    internal.WriteCertsDer(snp.snpCertChain),
 	}
 
 	return measurement, nil
@@ -185,7 +185,7 @@ func (snp *Snp) GetCertChain() ([]*x509.Certificate, error) {
 	return snp.signingCertChain, nil
 }
 
-func getSnpMeasurement(nonce []byte) ([]byte, error) {
+func getMeasurement(nonce []byte) ([]byte, error) {
 
 	if len(nonce) > 64 {
 		return nil, errors.New("user Data must be at most 64 bytes")
@@ -272,7 +272,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 	// fetching an initial attestation report and request the VCEK from the
 	// Provisioning server. As soon as we can reliably get the correct TCB,
 	// the host should provide the VCEK
-	arRaw, err := getSnpMeasurement(make([]byte, 64))
+	arRaw, err := getMeasurement(make([]byte, 64))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}

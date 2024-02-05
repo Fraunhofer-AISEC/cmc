@@ -28,33 +28,14 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 
-func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues []ReferenceValue, cas []*x509.Certificate) (*TpmMeasurementResult, bool) {
-	result := &TpmMeasurementResult{}
+func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []ReferenceValue, cas []*x509.Certificate) (*MeasurementResult, bool) {
+
+	result := &MeasurementResult{
+		Type:      "TPM Result",
+		TpmResult: &TpmResult{},
+	}
 
 	log.Trace("Verifying TPM measurements")
-
-	// If the attestationreport does contain neither TPM measurements, nor TPM Reference Values
-	// there is nothing to do
-	if tpmM == nil && len(referenceValues) == 0 {
-		return nil, true
-	}
-
-	// If the attestationreport contains TPM Reference Values, but no TPM measurement, the
-	// attestation must fail
-	if tpmM == nil {
-		for _, v := range referenceValues {
-			result.Artifacts = append(result.Artifacts,
-				DigestResult{
-					Name:    v.Name,
-					Digest:  hex.EncodeToString(v.Sha256),
-					Success: false,
-					Type:    "Reference Value",
-				})
-		}
-		msg := "TPM Measurement not present"
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
 
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
@@ -63,11 +44,11 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	if !ok {
 		log.Trace("failed to recalculate PCRs")
 	}
-	result.PcrMatch = pcrResult
+	result.TpmResult.PcrMatch = pcrResult
 	result.Artifacts = artifacts
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
-	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Message)
+	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Evidence)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode TPM attestation data: %v", err)
 		result.Summary.setFalse(&msg)
@@ -76,11 +57,11 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
-		result.QuoteFreshness.Success = true
+		result.Freshness.Success = true
 	} else {
 		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
-		result.QuoteFreshness.setFalse(&msg)
+		result.Freshness.setFalse(&msg)
 		ok = false
 	}
 
@@ -97,35 +78,35 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	verPcr := sha256.Sum256(sum)
 	if bytes.Equal(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) {
 		log.Trace("Aggregated PCR matches quote PCR")
-		result.AggPcrQuoteMatch.Success = true
+		result.TpmResult.AggPcrQuoteMatch.Success = true
 	} else {
 		msg := fmt.Sprintf("Aggregated PCR does not match Quote PCR: %v vs. %v",
 			hex.EncodeToString(verPcr[:]),
 			hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
-		result.AggPcrQuoteMatch.setFalse(&msg)
+		result.TpmResult.AggPcrQuoteMatch.setFalse(&msg)
 		ok = false
 	}
 
 	mCerts, err := internal.ParseCertsDer(tpmM.Certs)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to load measurement certs: %v", err)
-		result.QuoteSignature.CertChainCheck.setFalse(&msg)
+		result.Signature.CertChainCheck.setFalse(&msg)
 		result.Summary.Success = false
 		return result, false
 	}
 
-	result.QuoteSignature.SignCheck = verifyTpmQuoteSignature(tpmM.Message, tpmM.Signature, mCerts[0])
-	if !result.QuoteSignature.SignCheck.Success {
+	result.Signature.SignCheck = verifyTpmQuoteSignature(tpmM.Evidence, tpmM.Signature, mCerts[0])
+	if !result.Signature.SignCheck.Success {
 		ok = false
 	}
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.QuoteSignature.CertChainCheck.setFalse(&msg)
+		result.Signature.CertChainCheck.setFalse(&msg)
 		ok = false
 	} else {
-		result.QuoteSignature.CertChainCheck.Success = true
+		result.Signature.CertChainCheck.Success = true
 	}
 
 	//Store details from (all) validated certificate chain(s) in the report
@@ -134,7 +115,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 		for _, cert := range chain {
 			chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 		}
-		result.QuoteSignature.ValidatedCerts = append(result.QuoteSignature.ValidatedCerts, chainExtracted)
+		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
 	}
 
 	result.Summary.Success = ok
@@ -142,7 +123,7 @@ func verifyTpmMeasurements(tpmM *TpmMeasurement, nonce []byte, referenceValues [
 	return result, ok
 }
 
-func recalculatePcrs(tpmM *TpmMeasurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, []DigestResult, bool) {
+func recalculatePcrs(tpmM Measurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, []DigestResult, bool) {
 	ok := true
 	pcrResult := make([]PcrResult, 0)
 	artifacts := make([]DigestResult, 0)

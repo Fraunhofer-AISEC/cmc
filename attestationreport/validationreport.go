@@ -26,22 +26,22 @@ import (
 // VerificationResult represents the results of all steps taken during
 // the validation of an attestation report.
 type VerificationResult struct {
-	Type            string            `json:"type"`
-	Success         bool              `json:"raSuccessful"`
-	Prover          string            `json:"prover,omitempty"`     // Name of the proving device the report was created for
-	Created         string            `json:"created,omitempty"`    // Timestamp the attestation verification was completed
-	SwCertLevel     int               `json:"swCertLevel"`          // Overall certification level for the software stack
-	FreshnessCheck  Result            `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
-	ReportSignature []SignatureResult `json:"reportSignatureCheck"` // Result for validation of the overall report signature
-	CompDescResult  *CompDescResult   `json:"companyValidation,omitempty"`
-	RtmResult       ManifestResult    `json:"rtmValidation"`
-	OsResult        ManifestResult    `json:"osValidation"`
-	AppResults      []ManifestResult  `json:"appValidation,omitempty"`
-	MeasResult      MeasurementResult `json:"measurementValidation"`
-	DevDescResult   DevDescResult     `json:"deviceDescValidation"`
-	PolicySuccess   bool              `json:"policySuccess,omitempty"`   // Result of custom policy validation (if utilized)
-	ProcessingError []string          `json:"processingError,omitempty"` // Documentation of processing errors (dependent from provided Attestation Report) which hindered a complete validation
-	InternalError   bool              `json:"internalError,omitempty"`
+	Type            string              `json:"type"`
+	Success         bool                `json:"raSuccessful"`
+	Prover          string              `json:"prover,omitempty"`     // Name of the proving device the report was created for
+	Created         string              `json:"created,omitempty"`    // Timestamp the attestation verification was completed
+	SwCertLevel     int                 `json:"swCertLevel"`          // Overall certification level for the software stack
+	FreshnessCheck  Result              `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
+	ReportSignature []SignatureResult   `json:"reportSignatureCheck"` // Result for validation of the overall report signature
+	CompDescResult  *CompDescResult     `json:"companyValidation,omitempty"`
+	RtmResult       ManifestResult      `json:"rtmValidation"`
+	OsResult        ManifestResult      `json:"osValidation"`
+	AppResults      []ManifestResult    `json:"appValidation,omitempty"`
+	Measurements    []MeasurementResult `json:"measurements"`
+	DevDescResult   DevDescResult       `json:"deviceDescValidation"`
+	PolicySuccess   bool                `json:"policySuccess,omitempty"`   // Result of custom policy validation (if utilized)
+	ProcessingError []string            `json:"processingError,omitempty"` // Documentation of processing errors (dependent from provided Attestation Report) which hindered a complete validation
+	InternalError   bool                `json:"internalError,omitempty"`
 }
 
 // CompDescResult represents the results of the validation of the
@@ -66,18 +66,6 @@ type ManifestResult struct {
 	Details        any               `json:"details,omitempty"`
 }
 
-// MeasurementResult represents the results of the comparison of
-// reference values and measurements. The used attributes depend on
-// the technologies used for calculating the measurements.
-type MeasurementResult struct {
-	TpmMeasResult *TpmMeasurementResult `json:"tpm,omitempty"`
-	SnpMeasResult *SnpMeasurementResult `json:"snp,omitempty"`
-	IasMeasResult *IasMeasurementResult `json:"ias,omitempty"`
-	SwMeasResult  []SwMeasurementResult `json:"sw,omitempty"`
-	SgxMeasResult *SgxMeasurementResult `json:"sgx,omitempty"`
-	TdxMeasResult *TdxMeasurementResult `json:"tdx,omitempty"`
-}
-
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report.
 type DevDescResult struct {
@@ -94,15 +82,50 @@ type DevDescResult struct {
 	SignatureCheck      []SignatureResult `json:"signatureValidation"`
 }
 
-// TpmMeasurementResults represents the results of the validation
-// of the provided TPM Quote and its comparison to the reference values in the manifests.
-type TpmMeasurementResult struct {
-	Summary          Result          `json:"resultSummary"`    // Summarizing value illustrating whether any issues were detected during validation of the TPM Measurement
-	PcrMatch         []PcrResult     `json:"pcrMatch"`         // Result for validation whether the measured PCR values match the provided reference values
-	AggPcrQuoteMatch Result          `json:"aggPcrQuoteMatch"` // Result for comparing the aggregated PCR values with the value in the TPM Quote
-	Artifacts        []DigestResult  `json:"artifacts"`        // Checks that every TPM Reference Value was part of the measurements and vice versa
-	QuoteFreshness   Result          `json:"quoteFreshness"`   // Result for comparison of the expected nonce to the one provided in the TPM Quote
-	QuoteSignature   SignatureResult `json:"quoteSignature"`   // Results for validation of the TPM Quote Signature and the used certificates
+type MeasurementResult struct {
+	Type      string          `json:"type"`
+	Summary   Result          `json:"summary"`
+	Freshness Result          `json:"freshness"`
+	Signature SignatureResult `json:"signature"`
+	Artifacts []DigestResult  `json:"artifacts"`
+	TpmResult *TpmResult      `json:"tpmResult,omitempty"`
+	SnpResult *SnpResult      `json:"snpResult,omitempty"`
+	SgxResult *SgxResult      `json:"sgxResult,omitempty"`
+	TdxResult *TdxResult      `json:"tdxResult,omitempty"`
+	SwResult  *SwResult       `json:"swResult,omitempty"`
+}
+
+type TpmResult struct {
+	PcrMatch         []PcrResult `json:"pcrMatch"`
+	AggPcrQuoteMatch Result      `json:"aggPcrQuoteMatch"`
+}
+
+type SnpResult struct {
+	VersionMatch Result       `json:"reportVersionMatch"`
+	FwCheck      VersionCheck `json:"fwCheck"`
+	TcbCheck     TcbCheck     `json:"tcbCheck"`
+	PolicyCheck  PolicyCheck  `json:"policyCheck"`
+}
+
+type SgxResult struct {
+	VersionMatch       Result             `json:"reportVersionMatch"`
+	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck"`
+	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck"`
+	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck"`
+}
+
+type TdxResult struct {
+	VersionMatch        Result            `json:"reportVersionMatch"`
+	TcbInfoCheck        TcbLevelResult    `json:"tcbInfoCheck"`
+	QeIdentityCheck     TcbLevelResult    `json:"qeIdentityCheck"`
+	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck"`
+	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck"`
+	XfamCheck           AttributesCheck   `json:"xfamCheck"`
+}
+
+type SwResult struct {
+	MeasName string `json:"measurementName"`    // Name associated with the measurement used for validation
+	VerName  string `json:"referenceValueName"` // Name of the reference value information used for validation
 }
 
 // PcrResult represents the results for the recalculation of a specific PCR.
@@ -123,14 +146,6 @@ type DigestResult struct {
 	Success     bool       `json:"success"`               // Indicates whether match was found
 	Type        string     `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
 	EventData   *EventData `json:"eventdata,omitempty"`   // data that was included from bioseventlog
-}
-
-// SwMeasurementResult represents the results for the reference values of
-// a software measurement (currently only used for app reference values).
-type SwMeasurementResult struct {
-	MeasName   string `json:"measurementName"`    // Name associated with the measurement used for validation
-	VerName    string `json:"referenceValueName"` // Name of the reference value information used for validation
-	Validation Result `json:"validation"`         //Result of the validation of the software measurement
 }
 
 type VersionCheck struct {
@@ -162,45 +177,6 @@ type PolicyCheck struct {
 	SingleSocket BooleanMatch `json:"singleSocket"`
 }
 
-// SnpMeasurementResult represents the results for the verification
-// of AMD SEV SNP measurements.
-type SnpMeasurementResult struct {
-	Summary      Result          `json:"resultSummary"`
-	Freshness    Result          `json:"freshness"`
-	Signature    SignatureResult `json:"signature"`
-	Artifacts    []DigestResult  `json:"artifacts"`
-	VersionMatch Result          `json:"reportVersionMatch"`
-	FwCheck      VersionCheck    `json:"fwCheck"`
-	TcbCheck     TcbCheck        `json:"tcbCheck"`
-	PolicyCheck  PolicyCheck     `json:"policyCheck"`
-}
-
-// IntelMeasurementResult represents the results for the verification
-// of Intel SGX or TDX measurements.
-type SgxMeasurementResult struct {
-	Summary            Result             `json:"resultSummary"`
-	Freshness          Result             `json:"freshness"`
-	Signature          SignatureResult    `json:"signature"`
-	Artifacts          []DigestResult     `json:"artifacts"`
-	VersionMatch       Result             `json:"reportVersionMatch"`
-	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck"`
-	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck"`
-	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck"`
-}
-
-type TdxMeasurementResult struct {
-	Summary             Result            `json:"resultSummary"`
-	Freshness           Result            `json:"freshness"`
-	Signature           SignatureResult   `json:"signature"`
-	Artifacts           []DigestResult    `json:"artifacts"`
-	VersionMatch        Result            `json:"reportVersionMatch"`
-	TcbInfoCheck        TcbLevelResult    `json:"tcbInfoCheck"`
-	QeIdentityCheck     TcbLevelResult    `json:"qeIdentityCheck"`
-	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck"`
-	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck"`
-	XfamCheck           AttributesCheck   `json:"xfamCheck"`
-}
-
 type AttributesCheck struct {
 	Success  bool    `json:"success"`
 	Claimed  HexByte `json:"claimed"`
@@ -229,15 +205,6 @@ type TdAttributesCheck struct {
 	SeptVEDisable BooleanMatch `json:"septVEDisable"`
 	Pks           BooleanMatch `json:"pks"`
 	Kl            BooleanMatch `json:"kl"`
-}
-
-// IasMeasurementResult represents the results for the verification
-// of ARM PSA Initial Attestation Service Token measurements.
-type IasMeasurementResult struct {
-	Summary        Result          `json:"resultSummary"`
-	FreshnessCheck Result          `json:"quoteFreshness"`
-	Artifacts      []DigestResult  `json:"artifacts"`
-	IasSignature   SignatureResult `json:"reportSignatureCheck"`
 }
 
 // SignatureResults represents the results for validation of
