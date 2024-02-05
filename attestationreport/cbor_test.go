@@ -27,7 +27,7 @@ import (
 
 func TestVerifyCbor(t *testing.T) {
 	type args struct {
-		ar ArPlain
+		ar AttestationReport
 	}
 	tests := []struct {
 		name string
@@ -37,7 +37,7 @@ func TestVerifyCbor(t *testing.T) {
 		{
 			name: "SignSuccess",
 			args: args{
-				ar: ArPlain{
+				ar: AttestationReport{
 					Type: "Attestation Report",
 				},
 			},

@@ -83,33 +83,14 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues []ReferenceValue,
-) (*SnpMeasurementResult, bool) {
-	result := &SnpMeasurementResult{}
+func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []ReferenceValue,
+) (*MeasurementResult, bool) {
+
+	result := &MeasurementResult{
+		Type:      "SNP Result",
+		SnpResult: &SnpResult{},
+	}
 	ok := true
-
-	// If the attestationreport does contain neither SNP measurements, nor SNP Reference Values
-	// there is nothing to to
-	if snpM == nil && len(referenceValues) == 0 {
-		return nil, true
-	}
-
-	// If the attestationreport contains SNP Reference Values, but no SNP measurement, the
-	// attestation must fail
-	if snpM == nil {
-		for _, v := range referenceValues {
-			result.Artifacts = append(result.Artifacts,
-				DigestResult{
-					Name:    v.Name,
-					Digest:  hex.EncodeToString(v.Sha256),
-					Success: false,
-					Type:    "Reference Value",
-				})
-		}
-		msg := "SNP Measurement not present"
-		result.Summary.setFalse(&msg)
-		return result, false
-	}
 
 	if len(referenceValues) == 0 {
 		msg := "Could not find SNP Reference Value"
@@ -135,7 +116,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Extract the SNP attestation report data structure
-	s, err := DecodeSnpReport(snpM.Report)
+	s, err := DecodeSnpReport(snpM.Evidence)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to decode SNP report: %v", err)
 		result.Summary.setFalse(&msg)
@@ -162,7 +143,7 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Report, s, certs, snpReferenceValue.Snp.CaFingerprint)
+	sig, ret := verifySnpSignature(snpM.Evidence, s, certs, snpReferenceValue.Snp.CaFingerprint)
 	if !ret {
 		ok = false
 	}
@@ -198,19 +179,19 @@ func verifySnpMeasurements(snpM *SnpMeasurement, nonce []byte, referenceValues [
 	}
 
 	// Compare SNP parameters
-	result.VersionMatch, ret = verifySnpVersion(s, snpReferenceValue.Snp.Version)
+	result.SnpResult.VersionMatch, ret = verifySnpVersion(s, snpReferenceValue.Snp.Version)
 	if !ret {
 		ok = false
 	}
-	result.PolicyCheck, ret = verifySnpPolicy(s, snpReferenceValue.Snp.Policy)
+	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s, snpReferenceValue.Snp.Policy)
 	if !ret {
 		ok = false
 	}
-	result.FwCheck, ret = verifySnpFw(s, snpReferenceValue.Snp.Fw)
+	result.SnpResult.FwCheck, ret = verifySnpFw(s, snpReferenceValue.Snp.Fw)
 	if !ret {
 		ok = false
 	}
-	result.TcbCheck, ret = verifySnpTcb(s, snpReferenceValue.Snp.Tcb)
+	result.SnpResult.TcbCheck, ret = verifySnpTcb(s, snpReferenceValue.Snp.Tcb)
 	if !ret {
 		ok = false
 	}

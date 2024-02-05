@@ -184,7 +184,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
 	if t == nil {
-		return ar.TpmMeasurement{}, fmt.Errorf("internal error: tpm object not initialized")
+		return ar.Measurement{}, fmt.Errorf("internal error: tpm object not initialized")
 	}
 	if len(t.Pcrs) == 0 {
 		log.Warn("TPM measurement based on reference values does not contain any PCRs")
@@ -192,9 +192,9 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
 	log.Trace("Collecting TPM Quote")
 
-	pcrValues, quote, err := GetTpmMeasurement(t, nonce, t.Pcrs)
+	pcrValues, quote, err := GetMeasurement(t, nonce, t.Pcrs)
 	if err != nil {
-		return ar.TpmMeasurement{}, fmt.Errorf("failed to get TPM Measurement: %w", err)
+		return ar.Measurement{}, fmt.Errorf("failed to get TPM Measurement: %w", err)
 	}
 
 	// For a more detailed measurement, try to read the kernel binary bios measurements
@@ -270,12 +270,12 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		}
 	}
 
-	tm := ar.TpmMeasurement{
+	tm := ar.Measurement{
 		Type:      "TPM Measurement",
-		HashChain: hashChain,
-		Message:   quote.Quote,
+		Evidence:  quote.Quote,
 		Signature: quote.Signature,
 		Certs:     internal.WriteCertsDer(t.MeasuringCerts),
+		HashChain: hashChain,
 	}
 
 	for _, elem := range tm.HashChain {
@@ -283,7 +283,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			log.Tracef("PCR%v: %v\n", elem.Pcr, hex.EncodeToString(sha))
 		}
 	}
-	log.Trace("Quote: ", hex.EncodeToString(tm.Message))
+	log.Trace("Quote: ", hex.EncodeToString(tm.Evidence))
 	log.Trace("Signature: ", hex.EncodeToString(tm.Signature))
 
 	return tm, nil
@@ -504,9 +504,9 @@ func GetAkQualifiedName() ([]byte, error) {
 	return qualifiedName, nil
 }
 
-// GetTpmMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
+// GetMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
 // and returns the TPM quote as well as the single PCR values
-func GetTpmMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
+func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quote, error) {
 
 	if TPM == nil {
 		return nil, nil, fmt.Errorf("TPM is not opened")

@@ -155,7 +155,7 @@ func (s *SwSigner) Init(c *DriverConfig) error {
 }
 
 func (s *SwSigner) Measure(nonce []byte) (Measurement, error) {
-	return nil, nil
+	return Measurement{}, nil
 }
 
 func (s *SwSigner) Lock() error {
@@ -239,7 +239,7 @@ func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
 
 func Test_collectReferenceValues(t *testing.T) {
 	type args struct {
-		ar *ArPlain
+		metadata *Metadata
 	}
 	tests := []struct {
 		name    string
@@ -250,7 +250,7 @@ func Test_collectReferenceValues(t *testing.T) {
 		{
 			name: "Success",
 			args: args{
-				ar: &ArPlain{
+				metadata: &Metadata{
 					RtmManifest:  rtmManifest,
 					OsManifest:   osManifest,
 					AppManifests: appManifests,
@@ -262,7 +262,7 @@ func Test_collectReferenceValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := collectReferenceValues(tt.args.ar)
+			got, err := collectReferenceValues(tt.args.metadata)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("collectReferenceValues() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -409,7 +409,7 @@ func TestVerify(t *testing.T) {
 			// Preparation: Generate a Sample Report
 			log.Trace("Generating a Sample Report")
 
-			ar := ArPacked{
+			ar := AttestationReport{
 				Type:  "Attestation Report",
 				Nonce: tt.args.nonce,
 			}

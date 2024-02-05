@@ -26,7 +26,7 @@ import (
 
 func Test_verifyIasMeasurements(t *testing.T) {
 	type args struct {
-		IasM            *IasMeasurement
+		IasM            *Measurement
 		nonce           []byte
 		referenceValues []ReferenceValue
 		ca              *x509.Certificate
@@ -39,10 +39,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid IAT",
 			args: args{
-				IasM: &IasMeasurement{
-					Type:   "IAS Measurement",
-					Report: invalidIat,
-					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
+				IasM: &Measurement{
+					Type:     "IAS Measurement",
+					Evidence: invalidIat,
+					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -56,10 +56,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Cert",
 			args: args{
-				IasM: &IasMeasurement{
-					Type:   "IAS Measurement",
-					Report: validIat,
-					Certs:  [][]byte{invalidIasCert.Raw, validIasCa.Raw},
+				IasM: &Measurement{
+					Type:     "IAS Measurement",
+					Evidence: validIat,
+					Certs:    [][]byte{invalidIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -73,10 +73,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA",
 			args: args{
-				IasM: &IasMeasurement{
-					Type:   "IAS Measurement",
-					Report: validIat,
-					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
+				IasM: &Measurement{
+					Type:     "IAS Measurement",
+					Evidence: validIat,
+					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -90,10 +90,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				IasM: &IasMeasurement{
-					Type:   "IAS Measurement",
-					Report: validIat,
-					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
+				IasM: &Measurement{
+					Type:     "IAS Measurement",
+					Evidence: validIat,
+					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: invalidIasNonce,
 				referenceValues: []ReferenceValue{
@@ -107,10 +107,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Value",
 			args: args{
-				IasM: &IasMeasurement{
-					Type:   "IAS Measurement",
-					Report: validIat,
-					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
+				IasM: &Measurement{
+					Type:     "IAS Measurement",
+					Evidence: validIat,
+					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -124,10 +124,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				IasM: &IasMeasurement{
-					Type:   "SNP Measurement",
-					Report: validIat,
-					Certs:  [][]byte{validIasCert.Raw, validIasCa.Raw},
+				IasM: &Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validIat,
+					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ReferenceValue{
@@ -143,7 +143,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifyIasMeasurements(tt.args.IasM, tt.args.nonce, tt.args.referenceValues, []*x509.Certificate{tt.args.ca})
+			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, tt.args.referenceValues, []*x509.Certificate{tt.args.ca})
 			if got != tt.want {
 				t.Errorf("verifyIasMeasurements() error = %v, wantErr %v", got, tt.want)
 				return

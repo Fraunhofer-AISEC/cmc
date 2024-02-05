@@ -35,10 +35,6 @@ import (
 
 var log = logrus.WithField("service", "ar")
 
-// Measurement is a generic interface for a Measurement, such as a TpmMeasurement
-// or SnpMeasurement
-type Measurement interface{}
-
 // Driver is an interface representing a driver for a hardware trust anchor,
 // capable of providing attestation evidence and signing data. This can be
 // e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
@@ -110,61 +106,24 @@ type Validity struct {
 // element of type 'Hash Chain' embedded in 'TPM Measurement'
 type HashChainElem struct {
 	Type      string      `json:"type" cbor:"0,keyasint"`
-	Pcr       int32       `json:"pcr" cbor:"1,keyasint"`
+	Pcr       int32       `json:"pcr,omitempty" cbor:"1,keyasint,omitempty"`
 	Sha256    []HexByte   `json:"sha256" cbor:"2,keyasint"`
-	Summary   bool        `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final PCR value or single artifact
+	Summary   bool        `json:"summary,omitempty" cbor:"3,keyasint,omitempty"` // Indicates if element represents final PCR value or single artifact
 	EventName []string    `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
 	EventData []EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // TpmMeasurement represents the attestation report
-// element of type 'TPM Measurement'
-type TpmMeasurement struct {
-	Type      string           `json:"type" cbor:"0,keyasint"`
-	Message   HexByte          `json:"message" cbor:"1,keyasint"`
-	Signature HexByte          `json:"signature" cbor:"2,keyasint"`
-	Certs     [][]byte         `json:"certs" cbor:"3,keyasint"`
-	HashChain []*HashChainElem `json:"hashChain" cbor:"4,keyasint"`
-}
-
-// SnpMeasurement represents the attestation report
-// element of type 'SNP Measurement' signed by the device
-type SnpMeasurement struct {
-	Type   string   `json:"type" cbor:"0,keyasint"`
-	Report []byte   `json:"blob" cbor:"1,keyasint"`
-	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
-}
-
-// IasMeasurement represents the attestation report
-// element of type 'IAS Measurement' signed by the device
-type IasMeasurement struct {
-	Type   string   `json:"type" cbor:"0,keyasint"`
-	Report []byte   `json:"blob" cbor:"1,keyasint"`
-	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
-}
-
-// SwMeasurement represents the attestation report
-// element of type 'Software Measurement'
-type SwMeasurement struct {
-	Type   string  `json:"type" cbor:"0,keyasint"`
-	Name   string  `json:"name" cbor:"1,keyasint"`
-	Sha256 HexByte `json:"sha256" cbor:"2,keyasint"`
-}
-
-// TdxMeasurement represents the attestation report
-// element of type 'TDX Measurement' signed by the device
-type TdxMeasurement struct {
-	Type   string   `json:"type" cbor:"0,keyasint"`
-	Report []byte   `json:"blob" cbor:"1,keyasint"`
-	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
-}
-
-// SgxMeasurement represents the attestation report
-// element of type 'SGX Measurement' signed by the device
-type SgxMeasurement struct {
-	Type   string   `json:"type" cbor:"0,keyasint"`
-	Report []byte   `json:"blob" cbor:"1,keyasint"`
-	Certs  [][]byte `json:"certs" cbor:"2,keyasint"`
+// elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
+// 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
+type Measurement struct {
+	Type        string           `json:"type" cbor:"0,keyasint"`
+	Evidence    []byte           `json:"evidence" cbor:"1,keyasint"`
+	Certs       [][]byte         `json:"certs" cbor:"3,keyasint"`
+	Signature   []byte           `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
+	HashChain   []*HashChainElem `json:"hashChain,omitempty" cbor:"4,keyasint,omitempty"`
+	Sha256      HexByte          `json:"sha256,omitempty" cbor:"5,keyasint,omitempty"`
+	Description string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
 }
 
 type SnpPolicy struct {
@@ -400,40 +359,26 @@ type Name struct {
 	Names              []interface{} `json:"names,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
-// ArPlain represents the attestation report with
-// its plain elements
-type ArPlain struct {
-	Type               string              `json:"type" cbor:"0,keyasint"`
-	TpmM               *TpmMeasurement     `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
-	SnpM               *SnpMeasurement     `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
-	TdxM               *TdxMeasurement     `json:"tdxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
-	SgxM               *SgxMeasurement     `json:"sgxMeasurement,omitempty" cbor:"12,keyasint,omitempty"`
-	IasM               *IasMeasurement     `cbor:"10,keyasint,omitempty"`
-	SWM                []SwMeasurement     `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
-	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"4,keyasint"`
-	OsManifest         OsManifest          `json:"osManifest" cbor:"5,keyasint"`
-	AppManifests       []AppManifest       `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
-	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
-	DeviceDescription  DeviceDescription   `json:"deviceDescription" cbor:"8,keyasint"`
-	Nonce              []byte              `json:"nonce" cbor:"9,keyasint"`
+// Metadata is an internal structure for manifests and descriptions
+type Metadata struct {
+	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"2,keyasint"`
+	OsManifest         OsManifest          `json:"osManifest" cbor:"3,keyasint"`
+	AppManifests       []AppManifest       `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
+	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`
+	DeviceDescription  DeviceDescription   `json:"deviceDescription" cbor:"6,keyasint"`
 }
 
-// ArPacked represents the attestation report in JWS/COSE format with its
+// AttestationReport represents the attestation report in JWS/COSE format with its
 // contents already in signed JWS/COSE format
-type ArPacked struct {
-	Type               string          `json:"type" cbor:"0,keyasint"`
-	TpmM               *TpmMeasurement `json:"tpmMeasurement,omitempty" cbor:"1,keyasint,omitempty"`
-	SnpM               *SnpMeasurement `json:"snpMeasurement,omitempty" cbor:"2,keyasint,omitempty"`
-	TdxM               *TdxMeasurement `json:"tdxMeasurement,omitempty" cbor:"11,keyasint,omitempty"`
-	SgxM               *SgxMeasurement `json:"sgxMeasurement,omitempty" cbor:"12,keyasint,omitempty"`
-	IasM               *IasMeasurement `cbor:"10,keyasint,omitempty"`
-	SWM                []SwMeasurement `json:"swMeasurements,omitempty" cbor:"3,keyasint,omitempty"`
-	RtmManifest        []byte          `json:"rtmManifests" cbor:"4,keyasint"`
-	OsManifest         []byte          `json:"osManifest" cbor:"5,keyasint"`
-	AppManifests       [][]byte        `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
-	CompanyDescription []byte          `json:"companyDescription,omitempty" cbor:"7,keyasint,omitempty"`
-	DeviceDescription  []byte          `json:"deviceDescription" cbor:"8,keyasint"`
-	Nonce              []byte          `json:"nonce" cbor:"9,keyasint"`
+type AttestationReport struct {
+	Type               string        `json:"type" cbor:"0,keyasint"`
+	Measurements       []Measurement `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
+	RtmManifest        []byte        `json:"rtmManifests" cbor:"2,keyasint"`
+	OsManifest         []byte        `json:"osManifest" cbor:"3,keyasint"`
+	AppManifests       [][]byte      `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
+	CompanyDescription []byte        `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`
+	DeviceDescription  []byte        `json:"deviceDescription" cbor:"6,keyasint"`
+	Nonce              []byte        `json:"nonce" cbor:"7,keyasint"`
 }
 
 // Generate generates an attestation report with the provided
@@ -449,7 +394,7 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
-	ar := ArPacked{
+	ar := AttestationReport{
 		Type: "Attestation Report",
 	}
 
@@ -515,24 +460,13 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 		// This actually collects the measurements. The methods are implemented
 		// in the respective module (e.g. tpm module)
 		log.Trace("Getting measurements from measurement interface..")
-		data, err := measurer.Measure(nonce)
+		measurement, err := measurer.Measure(nonce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get measurements: %v", err)
 		}
 
-		// Check the type of the measurements and add it to the attestation report
-		if tpmData, ok := data.(TpmMeasurement); ok {
-			log.Tracef("Added %v to attestation report", tpmData.Type)
-			ar.TpmM = &tpmData
-		} else if swData, ok := data.(SwMeasurement); ok {
-			log.Tracef("Added %v to attestation report", swData.Type)
-			ar.SWM = append(ar.SWM, swData)
-		} else if snpData, ok := data.(SnpMeasurement); ok {
-			log.Tracef("Added %v to attestation report", snpData.Type)
-			ar.SnpM = &snpData
-		} else {
-			log.Error("Error: Unsupported measurement interface type")
-		}
+		ar.Measurements = append(ar.Measurements, measurement)
+		log.Tracef("Added %v to attestation report", measurement.Type)
 	}
 
 	log.Trace("Finished attestation report generation")
@@ -584,9 +518,19 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		return result
 	}
 
-	// Verify all signatures and unpack plain AttestationReport
+	// Verify and unpack attestation report
 	ok, ar := verifyAr(arRaw, &result, cas, s)
 	if ar == nil {
+		result.InternalError = true
+	}
+	if !ok {
+		result.Success = false
+		return result
+	}
+
+	// Verify and unpack metadata from attestation report
+	ok, metadata := verifyMetadata(ar, &result, cas, s)
+	if metadata == nil {
 		result.InternalError = true
 	}
 	if !ok {
@@ -603,60 +547,71 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		result.FreshnessCheck.Success = true
 	}
 
-	referenceValues, err := collectReferenceValues(ar)
+	refVals, err := collectReferenceValues(metadata)
 	if err != nil {
 		result.ProcessingError = append(result.ProcessingError, err.Error())
 		result.Success = false
 	}
 
-	// If present, verify TPM measurements against provided TPM reference values
-	result.MeasResult.TpmMeasResult, ok = verifyTpmMeasurements(ar.TpmM, nonce,
-		referenceValues["TPM Reference Value"], cas)
-	if !ok {
-		result.Success = false
-	}
+	hwAttest := false
+	for _, m := range ar.Measurements {
 
-	// If present, verify AMD SEV SNP measurements against provided SNP reference values
-	result.MeasResult.SnpMeasResult, ok = verifySnpMeasurements(ar.SnpM, nonce,
-		referenceValues["SNP Reference Value"])
-	if !ok {
-		result.Success = false
-	}
+		switch mtype := m.Type; mtype {
 
-	// If present, verify Intel TDX measurements against provided TDX reference values
-	result.MeasResult.TdxMeasResult, ok = verifyTdxMeasurements(ar.TdxM, nonce, intelCache,
-		referenceValues["TDX Reference Value"])
-	if !ok {
-		result.Success = false
-	}
+		case "TPM Measurement":
+			r, ok := verifyTpmMeasurements(m, nonce, refVals["TPM Reference Value"], cas)
+			if !ok {
+				result.Success = false
+			}
+			result.Measurements = append(result.Measurements, *r)
+			hwAttest = true
 
-	// If present, verify Intel SGX measurements against provided SGX reference values
-	result.MeasResult.SgxMeasResult, ok = verifySgxMeasurements(ar.SgxM, nonce, intelCache,
-		referenceValues["SGX Reference Value"])
-	if !ok {
-		result.Success = false
-	}
+		case "SNP Measurement":
+			r, ok := verifySnpMeasurements(m, nonce, refVals["SNP Reference Value"])
+			if !ok {
+				result.Success = false
+			}
+			result.Measurements = append(result.Measurements, *r)
+			hwAttest = true
 
-	// If present, verify ARM PSA EAT measurements against provided PSA reference values
-	result.MeasResult.IasMeasResult, ok = verifyIasMeasurements(ar.IasM, nonce,
-		referenceValues["IAS Reference Value"], cas)
-	if !ok {
-		result.Success = false
-	}
+		case "TDX Measurement":
+			r, ok := verifyTdxMeasurements(m, nonce, intelCache, refVals["TDX Reference Value"])
+			if !ok {
+				result.Success = false
+			}
+			result.Measurements = append(result.Measurements, *r)
+			hwAttest = true
 
-	// If present, verify software measurements against provided software reference values
-	result.MeasResult.SwMeasResult, ok = verifySwMeasurements(ar.SWM,
-		referenceValues["SW Reference Value"])
-	if !ok {
-		result.Success = false
+		case "SGX Measurement":
+			r, ok := verifySgxMeasurements(m, nonce, intelCache, refVals["SGX Reference Value"])
+			if !ok {
+				result.Success = false
+			}
+			result.Measurements = append(result.Measurements, *r)
+			hwAttest = true
+
+		case "IAS Measurement":
+			r, ok := verifyIasMeasurements(m, nonce,
+				refVals["IAS Reference Value"], cas)
+			if !ok {
+				result.Success = false
+			}
+			result.Measurements = append(result.Measurements, *r)
+			hwAttest = true
+
+		default:
+			result.Success = false
+			msg := fmt.Sprintf("Unsupported measurement type '%v'", mtype)
+			result.ProcessingError = append(result.ProcessingError, msg)
+		}
 	}
 
 	// The lowest certification level of all components determines the certification
 	// level for the device's software stack
 	levels := make([]int, 0)
-	levels = append(levels, ar.RtmManifest.CertificationLevel)
-	levels = append(levels, ar.OsManifest.CertificationLevel)
-	for _, app := range ar.AppManifests {
+	levels = append(levels, metadata.RtmManifest.CertificationLevel)
+	levels = append(levels, metadata.OsManifest.CertificationLevel)
+	for _, app := range metadata.AppManifests {
 		levels = append(levels, app.CertificationLevel)
 	}
 	aggCertLevel := levels[0]
@@ -666,9 +621,9 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		}
 	}
 	// If no hardware trust anchor is present, the maximum certification level is 1
-	// If there are referenceValues with a higher trust level present, the remote attestation
+	// If there are reference values with a higher trust level present, the remote attestation
 	// must fail
-	if ar.TpmM == nil && ar.SnpM == nil && ar.TdxM == nil && ar.SgxM == nil && aggCertLevel > 1 {
+	if !hwAttest && aggCertLevel > 1 {
 		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ProcessingError = append(result.ProcessingError, msg)
 		result.Success = false
@@ -678,23 +633,23 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	// Verify the compatibility of the attestation report through verifying the
 	// compatibility of all components
 	appDescriptions := make([]string, 0)
-	for _, a := range ar.DeviceDescription.AppDescriptions {
+	for _, a := range metadata.DeviceDescription.AppDescriptions {
 		appDescriptions = append(appDescriptions, a.AppManifest)
 	}
 
 	// Check that the OS and RTM Manifest are specified in the Device Description
-	if ar.DeviceDescription.RtmManifest == ar.RtmManifest.Name {
+	if metadata.DeviceDescription.RtmManifest == metadata.RtmManifest.Name {
 		result.DevDescResult.CorrectRtm.Success = true
 	} else {
-		msg := fmt.Sprintf("Device Description listed wrong RTM Manifest: %v vs. %v", ar.DeviceDescription.RtmManifest, ar.RtmManifest.Name)
+		msg := fmt.Sprintf("Device Description listed wrong RTM Manifest: %v vs. %v", metadata.DeviceDescription.RtmManifest, metadata.RtmManifest.Name)
 		result.DevDescResult.CorrectRtm.setFalse(&msg)
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
 	}
-	if ar.DeviceDescription.OsManifest == ar.OsManifest.Name {
+	if metadata.DeviceDescription.OsManifest == metadata.OsManifest.Name {
 		result.DevDescResult.CorrectOs.Success = true
 	} else {
-		msg := fmt.Sprintf("Device Description listed wrong OS Manifest: %v vs. %v", ar.DeviceDescription.OsManifest, ar.OsManifest.Name)
+		msg := fmt.Sprintf("Device Description listed wrong OS Manifest: %v vs. %v", metadata.DeviceDescription.OsManifest, metadata.OsManifest.Name)
 		result.DevDescResult.CorrectOs.setFalse(&msg)
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
@@ -702,7 +657,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	// Check that every AppManifest has a corresponding AppDescription
 	result.DevDescResult.CorrectApps.Success = true
-	for _, a := range ar.AppManifests {
+	for _, a := range metadata.AppManifests {
 		if !contains(a.Name, appDescriptions) {
 			msg := fmt.Sprintf("Device Description does not list the following App Manifest: %v", a.Name)
 			result.DevDescResult.CorrectApps.setFalseMulti(&msg)
@@ -712,10 +667,10 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	}
 
 	// Check that the Rtm Manifest is compatible with the OS Manifest
-	if contains(ar.RtmManifest.Name, ar.OsManifest.Rtms) {
+	if contains(metadata.RtmManifest.Name, metadata.OsManifest.Rtms) {
 		result.DevDescResult.RtmOsCompatibility.Success = true
 	} else {
-		msg := fmt.Sprintf("RTM Manifest %v is not compatible with OS Manifest %v", ar.RtmManifest.Name, ar.OsManifest.Name)
+		msg := fmt.Sprintf("RTM Manifest %v is not compatible with OS Manifest %v", metadata.RtmManifest.Name, metadata.OsManifest.Name)
 		result.DevDescResult.RtmOsCompatibility.setFalse(&msg)
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
@@ -723,9 +678,9 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	// Check that the OS Manifest is compatible with all App Manifests
 	result.DevDescResult.OsAppsCompatibility.Success = true
-	for _, a := range ar.AppManifests {
-		if !contains(ar.OsManifest.Name, a.Oss) {
-			msg := fmt.Sprintf("OS Manifest %v is not compatible with App Manifest %v", ar.OsManifest.Name, a.Name)
+	for _, a := range metadata.AppManifests {
+		if !contains(metadata.OsManifest.Name, a.Oss) {
+			msg := fmt.Sprintf("OS Manifest %v is not compatible with App Manifest %v", metadata.OsManifest.Name, a.Name)
 			result.DevDescResult.OsAppsCompatibility.setFalseMulti(&msg)
 			result.DevDescResult.Summary.Success = false
 			result.Success = false
@@ -756,7 +711,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	}
 
 	// Add additional information
-	result.Prover = ar.DeviceDescription.Name
+	result.Prover = metadata.DeviceDescription.Name
 	result.Created = time.Now().Format(time.RFC3339)
 
 	log.Tracef("Verification Result: %v", result.Success)
@@ -782,14 +737,14 @@ func extendHash384(hash []byte, data []byte) []byte {
 
 func verifyAr(attestationReport []byte, result *VerificationResult,
 	cas []*x509.Certificate, s Serializer,
-) (bool, *ArPlain) {
+) (bool, *AttestationReport) {
 
 	if result == nil {
 		log.Warn("Provided Validation Result was nil")
 		return false, nil
 	}
 
-	ar := ArPlain{}
+	ar := AttestationReport{}
 
 	//Validate Attestation Report signature
 	tokenRes, payload, ok := s.VerifyToken(attestationReport, cas)
@@ -800,8 +755,7 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 		return false, &ar
 	}
 
-	var arPacked ArPacked
-	err := s.Unmarshal(payload, &arPacked)
+	err := s.Unmarshal(payload, &ar)
 	if err != nil {
 		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v", err)
 		result.ProcessingError = append(result.ProcessingError, msg)
@@ -810,32 +764,33 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 		return false, &ar
 	}
 
-	ar.Type = "ArPlain"
-	ar.TpmM = arPacked.TpmM
-	ar.SnpM = arPacked.SnpM
-	ar.SWM = arPacked.SWM
-	ar.TdxM = arPacked.TdxM
-	ar.SgxM = arPacked.SgxM
-	ar.Nonce = arPacked.Nonce
+	return true, &ar
+}
+
+func verifyMetadata(ar *AttestationReport, result *VerificationResult,
+	cas []*x509.Certificate, s Serializer,
+) (bool, *Metadata) {
+
+	metadata := Metadata{}
 
 	// Validate and unpack Rtm Manifest
-	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.RtmManifest), cas)
+	tokenRes, payload, ok := s.VerifyToken(ar.RtmManifest, cas)
 	result.RtmResult.Summary = tokenRes.Summary
 	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of RTM Manifest failed")
 		result.Success = false
 	} else {
-		err = s.Unmarshal(payload, &ar.RtmManifest)
+		err := s.Unmarshal(payload, &metadata.RtmManifest)
 		if err != nil {
 			msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v", err)
 			result.RtmResult.Summary.setFalseMulti(&msg)
 			result.Success = false
 		} else {
-			result.RtmResult.Name = ar.RtmManifest.Name
-			result.RtmResult.Version = ar.RtmManifest.Version
-			result.RtmResult.ValidityCheck = checkValidity(ar.RtmManifest.Validity)
-			result.RtmResult.Details = ar.RtmManifest.Details
+			result.RtmResult.Name = metadata.RtmManifest.Name
+			result.RtmResult.Version = metadata.RtmManifest.Version
+			result.RtmResult.ValidityCheck = checkValidity(metadata.RtmManifest.Validity)
+			result.RtmResult.Details = metadata.RtmManifest.Details
 			if !result.RtmResult.ValidityCheck.Success {
 				result.RtmResult.Summary.Success = false
 				result.Success = false
@@ -844,23 +799,23 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 	}
 
 	// Validate and unpack OS Manifest
-	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.OsManifest), cas)
+	tokenRes, payload, ok = s.VerifyToken(ar.OsManifest, cas)
 	result.OsResult.Summary = tokenRes.Summary
 	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of OS Manifest failed")
 		result.Success = false
 	} else {
-		err = s.Unmarshal(payload, &ar.OsManifest)
+		err := s.Unmarshal(payload, &metadata.OsManifest)
 		if err != nil {
 			msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v", err)
 			result.OsResult.Summary.setFalseMulti(&msg)
 			result.Success = false
 		} else {
-			result.OsResult.Name = ar.OsManifest.Name
-			result.OsResult.Version = ar.OsManifest.Version
-			result.OsResult.ValidityCheck = checkValidity(ar.OsManifest.Validity)
-			result.OsResult.Details = ar.OsManifest.Details
+			result.OsResult.Name = metadata.OsManifest.Name
+			result.OsResult.Version = metadata.OsManifest.Version
+			result.OsResult.ValidityCheck = checkValidity(metadata.OsManifest.Validity)
+			result.OsResult.Details = metadata.OsManifest.Details
 			if !result.OsResult.ValidityCheck.Success {
 				result.OsResult.Summary.Success = false
 				result.Success = false
@@ -869,10 +824,10 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 	}
 
 	// Validate and unpack App Manifests
-	for i, amSigned := range arPacked.AppManifests {
+	for i, amSigned := range ar.AppManifests {
 		result.AppResults = append(result.AppResults, ManifestResult{})
 
-		tokenRes, payload, ok = s.VerifyToken([]byte(amSigned), cas)
+		tokenRes, payload, ok = s.VerifyToken(amSigned, cas)
 		result.AppResults[i].Summary = tokenRes.Summary
 		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
@@ -880,13 +835,13 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 			result.Success = false
 		} else {
 			var am AppManifest
-			err = s.Unmarshal(payload, &am)
+			err := s.Unmarshal(payload, &am)
 			if err != nil {
 				msg := fmt.Sprintf("Unpacking of App Manifest failed: %v", err)
 				result.AppResults[i].Summary.setFalseMulti(&msg)
 				result.Success = false
 			} else {
-				ar.AppManifests = append(ar.AppManifests, am)
+				metadata.AppManifests = append(metadata.AppManifests, am)
 				result.AppResults[i].Name = am.Name
 				result.AppResults[i].Version = am.Version
 				result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
@@ -901,8 +856,8 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 	}
 
 	// Validate and unpack Company Description if present
-	if arPacked.CompanyDescription != nil {
-		tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.CompanyDescription), cas)
+	if ar.CompanyDescription != nil {
+		tokenRes, payload, ok = s.VerifyToken(ar.CompanyDescription, cas)
 		result.CompDescResult = &CompDescResult{}
 		result.CompDescResult.Summary = tokenRes.Summary
 		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
@@ -910,17 +865,17 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 			log.Trace("Validation of Company Description Signatures failed")
 			result.Success = false
 		} else {
-			err = s.Unmarshal(payload, &ar.CompanyDescription)
+			err := s.Unmarshal(payload, &metadata.CompanyDescription)
 			if err != nil {
 				msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
 				result.CompDescResult.Summary.setFalseMulti(&msg)
 				result.Success = false
 			} else {
-				result.CompDescResult.Name = ar.CompanyDescription.Name
-				result.CompDescResult.Version = ar.CompanyDescription.Version
-				result.CompDescResult.CompCertLevel = ar.CompanyDescription.CertificationLevel
+				result.CompDescResult.Name = metadata.CompanyDescription.Name
+				result.CompDescResult.Version = metadata.CompanyDescription.Version
+				result.CompDescResult.CompCertLevel = metadata.CompanyDescription.CertificationLevel
 
-				result.CompDescResult.ValidityCheck = checkValidity(ar.CompanyDescription.Validity)
+				result.CompDescResult.ValidityCheck = checkValidity(metadata.CompanyDescription.Validity)
 				if !result.CompDescResult.ValidityCheck.Success {
 					log.Trace("Company Description invalid")
 					result.CompDescResult.Summary.Success = false
@@ -931,26 +886,26 @@ func verifyAr(attestationReport []byte, result *VerificationResult,
 	}
 
 	// Validate and unpack Device Description
-	tokenRes, payload, ok = s.VerifyToken([]byte(arPacked.DeviceDescription), cas)
+	tokenRes, payload, ok = s.VerifyToken(ar.DeviceDescription, cas)
 	result.DevDescResult.Summary = tokenRes.Summary
 	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of Device Description failed")
 		result.Success = false
 	} else {
-		err = s.Unmarshal(payload, &ar.DeviceDescription)
+		err := s.Unmarshal(payload, &metadata.DeviceDescription)
 		if err != nil {
 			msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
 			result.DevDescResult.Summary.setFalseMulti(&msg)
 		} else {
-			result.DevDescResult.Name = ar.DeviceDescription.Name
-			result.DevDescResult.Version = ar.DeviceDescription.Version
-			result.DevDescResult.Description = ar.DeviceDescription.Description
-			result.DevDescResult.Location = ar.DeviceDescription.Location
+			result.DevDescResult.Name = metadata.DeviceDescription.Name
+			result.DevDescResult.Version = metadata.DeviceDescription.Version
+			result.DevDescResult.Description = metadata.DeviceDescription.Description
+			result.DevDescResult.Location = metadata.DeviceDescription.Location
 		}
 	}
 
-	return true, &ar
+	return true, &metadata
 }
 
 func checkValidity(val Validity) Result {
@@ -985,8 +940,8 @@ func checkValidity(val Validity) Result {
 }
 
 // Searches for a specific hash value in the reference values for RTM and OS
-func getReferenceValue(hash []byte, referenceValues []ReferenceValue) *ReferenceValue {
-	for _, ver := range referenceValues {
+func getReferenceValue(hash []byte, refVals []ReferenceValue) *ReferenceValue {
+	for _, ver := range refVals {
 		if bytes.Equal(ver.Sha256, hash) {
 			return &ver
 		}
@@ -994,59 +949,10 @@ func getReferenceValue(hash []byte, referenceValues []ReferenceValue) *Reference
 	return nil
 }
 
-func verifySwMeasurements(swMeasurements []SwMeasurement, referenceValues []ReferenceValue) ([]SwMeasurementResult, bool) {
-
-	swMeasurementResults := make([]SwMeasurementResult, 0)
-	ok := true
-
-	// Check that every reference value is reflected by a measurement
-	for _, v := range referenceValues {
-		swRes := SwMeasurementResult{}
-		swRes.Validation.Success = false
-		swRes.VerName = v.Name
-		found := false
-		for _, swm := range swMeasurements {
-			if bytes.Equal(swm.Sha256, v.Sha256) {
-				swRes.MeasName = swm.Name
-				swRes.Validation.Success = true
-				found = true
-				break
-			}
-		}
-		if !found {
-			msg := fmt.Sprintf("no SW Measurement found for SW Reference Value %v (hash: %v)", v.Name, v.Sha256)
-			swRes.Validation.setFalse(&msg)
-			ok = false
-		}
-		swMeasurementResults = append(swMeasurementResults, swRes)
-	}
-
-	// Check that every measurement is reflected by a reference value
-	for _, swM := range swMeasurements {
-		found := false
-		for _, swV := range referenceValues {
-			if bytes.Equal(swM.Sha256, swV.Sha256) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			swRes := SwMeasurementResult{}
-			swRes.MeasName = swM.Name
-			msg := fmt.Sprintf("no SW Reference Value found for SW Measurement: %v", swM.Sha256)
-			swRes.Validation.setFalse(&msg)
-			swMeasurementResults = append(swMeasurementResults, swRes)
-			ok = false
-		}
-	}
-
-	return swMeasurementResults, ok
-}
-
-func collectReferenceValues(ar *ArPlain) (map[string][]ReferenceValue, error) {
+func collectReferenceValues(metadata *Metadata) (map[string][]ReferenceValue, error) {
 	// Gather a list of all reference values independent of the type
-	verList := append(ar.RtmManifest.ReferenceValues, ar.OsManifest.ReferenceValues...)
-	for _, appManifest := range ar.AppManifests {
+	verList := append(metadata.RtmManifest.ReferenceValues, metadata.OsManifest.ReferenceValues...)
+	for _, appManifest := range metadata.AppManifests {
 		verList = append(verList, appManifest.ReferenceValues...)
 	}
 
