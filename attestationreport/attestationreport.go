@@ -787,8 +787,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 			result.RtmResult.Summary.setFalseMulti(&msg)
 			result.Success = false
 		} else {
-			result.RtmResult.Name = metadata.RtmManifest.Name
-			result.RtmResult.Version = metadata.RtmManifest.Version
+			result.RtmResult.MetaInfo = metadata.RtmManifest.MetaInfo
 			result.RtmResult.ValidityCheck = checkValidity(metadata.RtmManifest.Validity)
 			result.RtmResult.Details = metadata.RtmManifest.Details
 			if !result.RtmResult.ValidityCheck.Success {
@@ -812,8 +811,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 			result.OsResult.Summary.setFalseMulti(&msg)
 			result.Success = false
 		} else {
-			result.OsResult.Name = metadata.OsManifest.Name
-			result.OsResult.Version = metadata.OsManifest.Version
+			result.OsResult.MetaInfo = metadata.OsManifest.MetaInfo
 			result.OsResult.ValidityCheck = checkValidity(metadata.OsManifest.Validity)
 			result.OsResult.Details = metadata.OsManifest.Details
 			if !result.OsResult.ValidityCheck.Success {
@@ -842,8 +840,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 				result.Success = false
 			} else {
 				metadata.AppManifests = append(metadata.AppManifests, am)
-				result.AppResults[i].Name = am.Name
-				result.AppResults[i].Version = am.Version
+				result.AppResults[i].MetaInfo = am.MetaInfo
 				result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
 				if !result.AppResults[i].ValidityCheck.Success {
 					log.Trace("App Manifest invalid - " + am.Name)
@@ -871,8 +868,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 				result.CompDescResult.Summary.setFalseMulti(&msg)
 				result.Success = false
 			} else {
-				result.CompDescResult.Name = metadata.CompanyDescription.Name
-				result.CompDescResult.Version = metadata.CompanyDescription.Version
+				result.CompDescResult.MetaInfo = metadata.CompanyDescription.MetaInfo
 				result.CompDescResult.CompCertLevel = metadata.CompanyDescription.CertificationLevel
 
 				result.CompDescResult.ValidityCheck = checkValidity(metadata.CompanyDescription.Validity)
@@ -898,8 +894,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 			msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
 			result.DevDescResult.Summary.setFalseMulti(&msg)
 		} else {
-			result.DevDescResult.Name = metadata.DeviceDescription.Name
-			result.DevDescResult.Version = metadata.DeviceDescription.Version
+			result.DevDescResult.MetaInfo = metadata.DeviceDescription.MetaInfo
 			result.DevDescResult.Description = metadata.DeviceDescription.Description
 			result.DevDescResult.Location = metadata.DeviceDescription.Location
 		}
