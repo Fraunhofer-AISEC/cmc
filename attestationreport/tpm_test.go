@@ -653,6 +653,7 @@ var (
 	}
 
 	validTpmMeasurementResult = MeasurementResult{
+		Type:      "TPM Result",
 		Summary:   validResult,
 		Freshness: validResult,
 		Signature: validSignatureResult,

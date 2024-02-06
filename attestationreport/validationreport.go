@@ -47,8 +47,7 @@ type VerificationResult struct {
 // CompDescResult represents the results of the validation of the
 // Company Description and its mapping to the used device certificate.
 type CompDescResult struct {
-	Name           string            `json:"name"`
-	Version        string            `json:"version"`
+	MetaInfo
 	CompCertLevel  int               `json:"compCertLevel"`       // Certification level for the company operating the device
 	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Company Description
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
@@ -58,8 +57,7 @@ type CompDescResult struct {
 // ManifestResult represents the results of the validation of a
 // manifest provided in the Attestation Report.
 type ManifestResult struct {
-	Name           string            `json:"name"`
-	Version        string            `json:"version"`
+	MetaInfo
 	Summary        ResultMulti       `json:"resultSummary"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 	ValidityCheck  Result            `json:"validityCheck"`
@@ -69,8 +67,7 @@ type ManifestResult struct {
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report.
 type DevDescResult struct {
-	Name                string            `json:"name"`
-	Version             string            `json:"version"`
+	MetaInfo
 	Description         string            `json:"description"`
 	Location            string            `json:"location"`
 	Summary             ResultMulti       `json:"resultSummary"`
