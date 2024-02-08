@@ -719,7 +719,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	return result
 }
 
-func extendHash(hash []byte, data []byte) []byte {
+func extendSha256(hash []byte, data []byte) []byte {
 	concat := append(hash, data...)
 	h := sha256.Sum256(concat)
 	ret := make([]byte, 32)
@@ -727,7 +727,7 @@ func extendHash(hash []byte, data []byte) []byte {
 	return ret
 }
 
-func extendHash384(hash []byte, data []byte) []byte {
+func extendSha384(hash []byte, data []byte) []byte {
 	concat := append(hash, data...)
 	h := sha512.Sum384(concat)
 	ret := make([]byte, 48)

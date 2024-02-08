@@ -148,7 +148,7 @@ func recalculatePcrs(tpmM Measurement, referenceValues []ReferenceValue) (map[in
 			}
 		}
 
-		calculatedPcrs[*ref.Pcr] = extendHash(calculatedPcrs[*ref.Pcr], ref.Sha256)
+		calculatedPcrs[*ref.Pcr] = extendSha256(calculatedPcrs[*ref.Pcr], ref.Sha256)
 		refResult := DigestResult{
 			// Type:	     "Reference Value",
 			Pcr:         ref.Pcr,
@@ -213,7 +213,7 @@ func recalculatePcrs(tpmM Measurement, referenceValues []ReferenceValue) (map[in
 								continue             //continues with next element from the hash chain
 							}
 						}
-						measurement = extendHash(measurement, sha256)
+						measurement = extendSha256(measurement, sha256)
 
 						// Check, if a reference value exists for the measured value
 						v := getReferenceValue(sha256, referenceValues)
@@ -313,7 +313,7 @@ func recalculatePcrs(tpmM Measurement, referenceValues []ReferenceValue) (map[in
 						}
 						measurement = sha256
 					} else {
-						measurement = extendHash(measurement, sha256)
+						measurement = extendSha256(measurement, sha256)
 					}
 				}
 			}
