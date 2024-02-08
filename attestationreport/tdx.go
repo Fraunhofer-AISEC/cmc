@@ -510,7 +510,7 @@ func recalculateRtMr(rmtr HexByte, refHashes RtMrHashChainElem) bool {
 		calculatedMeas = refHashes.Hashes[0]
 	} else {
 		for _, ref := range refHashes.Hashes {
-			calculatedMeas = extendHash384(calculatedMeas, ref)
+			calculatedMeas = extendSha384(calculatedMeas, ref)
 		}
 	}
 
