@@ -28,16 +28,16 @@ import (
 type VerificationResult struct {
 	Type            string              `json:"type"`
 	Success         bool                `json:"raSuccessful"`
-	Prover          string              `json:"prover,omitempty"`     // Name of the proving device the report was created for
-	Created         string              `json:"created,omitempty"`    // Timestamp the attestation verification was completed
-	SwCertLevel     int                 `json:"swCertLevel"`          // Overall certification level for the software stack
-	FreshnessCheck  Result              `json:"freshnessCheck"`       // Result for comparison of the expected nonce to the one provided in the attestation report
+	Prover          string              `json:"prover,omitempty"`  // Name of the proving device the report was created for
+	Created         string              `json:"created,omitempty"` // Timestamp the attestation verification was completed
+	SwCertLevel     int                 `json:"swCertLevel"`       // Overall certification level for the software stack
+	FreshnessCheck  Result              `json:"freshnessCheck"`    // Result for comparison of the expected nonce to the one provided in the attestation report
+	Measurements    []MeasurementResult `json:"measurements"`
 	ReportSignature []SignatureResult   `json:"reportSignatureCheck"` // Result for validation of the overall report signature
 	CompDescResult  *CompDescResult     `json:"companyValidation,omitempty"`
 	RtmResult       ManifestResult      `json:"rtmValidation"`
 	OsResult        ManifestResult      `json:"osValidation"`
 	AppResults      []ManifestResult    `json:"appValidation,omitempty"`
-	Measurements    []MeasurementResult `json:"measurements"`
 	DevDescResult   DevDescResult       `json:"deviceDescValidation"`
 	PolicySuccess   bool                `json:"policySuccess,omitempty"`   // Result of custom policy validation (if utilized)
 	ProcessingError []string            `json:"processingError,omitempty"` // Documentation of processing errors (dependent from provided Attestation Report) which hindered a complete validation
