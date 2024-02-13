@@ -44,7 +44,7 @@ func loggingMiddleware(next mux.Handler) mux.Handler {
 	})
 }
 
-func serve(c *config) error {
+func serveHub(c *config) error {
 
 	conf = c
 

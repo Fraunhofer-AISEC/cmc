@@ -37,13 +37,13 @@ type GrpcApi struct{}
 
 func init() {
 	log.Trace("Adding gRPC API to APIs")
-	cmcApis[CmcApi_GRPC] = GrpcApi{}
+	CmcApis[CmcApi_GRPC] = GrpcApi{}
 }
 
 // Creates connection with cmcd at specified address
-func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
+func getCMCServiceConn(cc CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
-	conn, err := grpc.DialContext(ctx, cc.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(ctx, cc.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		log.Errorf("failed to connect: %v", err)
 		cancel()
@@ -54,10 +54,10 @@ func getCMCServiceConn(cc cmcConfig) (api.CMCServiceClient, *grpc.ClientConn, co
 }
 
 // Obtains attestation report from CMCd
-func (a GrpcApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
+func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 
 	// Get backend connection
-	log.Tracef("Obtaining AR from local cmcd on %v", cc.cmcAddr)
+	log.Tracef("Obtaining AR from local cmcd on %v", cc.CmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to obtain AR")
@@ -82,9 +82,9 @@ func (a GrpcApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
-func (a GrpcApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
+func (a GrpcApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 	// Get backend connection
-	log.Tracef("Verifying remote AR via local cmcd on %v", cc.cmcAddr)
+	log.Tracef("Verifying remote AR via local cmcd on %v", cc.CmcAddr)
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return errors.New("failed to establish connection to obtain attestation result")
@@ -97,8 +97,8 @@ func (a GrpcApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	req := api.VerificationRequest{
 		Nonce:             chbindings,
 		AttestationReport: report,
-		Ca:                cc.ca,
-		Policies:          cc.policies,
+		Ca:                cc.Ca,
+		Policies:          cc.Policies,
 	}
 	// Perform Verify request
 	resp, err := cmcClient.Verify(context.Background(), &req)
@@ -111,24 +111,24 @@ func (a GrpcApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	}
 
 	// Parse VerificationResult
-	if cc.result == nil {
-		cc.result = new(ar.VerificationResult)
+	if cc.Result == nil {
+		cc.Result = new(ar.VerificationResult)
 	}
-	err = json.Unmarshal(resp.GetVerificationResult(), cc.result)
+	err = json.Unmarshal(resp.GetVerificationResult(), cc.Result)
 	if err != nil {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
 	// check results
-	if !cc.result.Success {
+	if !cc.Result.Success {
 		return errors.New("attestation report verification failed")
 	}
 	return nil
 }
 
-func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// Get backend connection
-	log.Tracef("Fetching signature from local cmcd on %v", cc.cmcAddr)
+	log.Tracef("Fetching signature from local cmcd on %v", cc.CmcAddr)
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("connection failed. No signing performed")
@@ -167,9 +167,9 @@ func (a GrpcApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	return resp.GetSignedDigest(), nil
 }
 
-func (a GrpcApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
+func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	// Get backend connection
-	log.Tracef("Fetching certificates from local cmcd on %v", cc.cmcAddr)
+	log.Tracef("Fetching certificates from local cmcd on %v", cc.CmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to cmcd")

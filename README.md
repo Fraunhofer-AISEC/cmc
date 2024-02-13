@@ -86,6 +86,26 @@ be used to establish attested TLS connections:
 ./testtool -mode dial -addr localhost:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
 ```
 
+### Establish Attested HTTPS Connection
+
+The `testtool` can also perform user-specified attested HTTPS requests and act as an attested HTTPS demo server, respectively.
+
+```sh
+# Run two attested HTTPS servers
+./testtool -config $CMC_ROOT/testtool-config.json -addr 0.0.0.0:8081 -mode serve
+./testtool -config $CMC_ROOT/testtool-config.json -addr 0.0.0.0:8082 -mode serve
+
+# Perform multiple user-specified attested HTTPS requests to both servers. Each connection is attested, while multiple requests to the same server use the established attested TLS connections
+./testtool \
+    -config ../../cmc-data/testtool-lib-config.json \
+    -addr https://localhost:8081/post,https://localhost:8082/post \
+    -mode request \
+    -method POST \
+    -data "hello from attested HTTPS client" \
+    -header "Content-Type: text/plain"
+```
+
+
 **Note**: The *cmcd* TPM provisioning process includes the verification of the TPM's EK certificate
 chain. In the example setup, this verification is turned off, as the database might not contain
 the certificate chain for the TPM of the machine the *cmcd* is running on. Instead, simply a

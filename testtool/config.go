@@ -58,6 +58,8 @@ type Api interface {
 	listen(c *config)
 	iothub(c *config)
 	cacerts(c *config)
+	request(c *config)
+	serve(c *config)
 }
 
 type config struct {
@@ -82,6 +84,9 @@ type config struct {
 	Storage        string   `json:"storage"`
 	Cache          string   `json:"cache"`
 	MeasurementLog bool     `json:"measurementLog"`
+	Header         []string `json:"header"`
+	Method         string   `json:"method"`
+	Data           string   `json:"data"`
 
 	ca       []byte
 	policies []byte
@@ -112,6 +117,9 @@ const (
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
 	measurementLogFlag = "measurementLog"
+	headerFlag         = "header"
+	methodFlag         = "method"
+	dataFlag           = "data"
 )
 
 func getConfig() *config {
@@ -153,6 +161,9 @@ func getConfig() *config {
 	cache := flag.String(cacheFlag, "",
 		"Optional folder to cache metadata for offline backup (only for libapi)")
 	measurementLog := flag.Bool(measurementLogFlag, false, "Indicates whether to include measured events in measurement and validation report")
+	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
+	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
+	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
 
 	flag.Parse()
 
@@ -167,6 +178,7 @@ func getConfig() *config {
 		Api:         "grpc",
 		LogLevel:    "info",
 		IntervalStr: "0s",
+		Method:      "GET",
 	}
 
 	// Obtain custom configuration from file if specified
@@ -246,6 +258,15 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
+	}
+	if internal.FlagPassed(headerFlag) {
+		c.Header = strings.Split(*headers, ",")
+	}
+	if internal.FlagPassed(methodFlag) {
+		c.Method = *method
+	}
+	if internal.FlagPassed(dataFlag) {
+		c.Data = *data
 	}
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)

@@ -20,7 +20,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	"github.com/sirupsen/logrus"
 )
 
 type CmcApiSelect uint32
@@ -47,79 +46,108 @@ const (
 
 // Struct that holds information on cmc address and port
 // to be used by Listener and DialConfig
-type cmcConfig struct {
-	cmcAddr  string
-	cmcApi   CmcApi
-	network  string
-	ca       []byte
-	policies []byte
-	mtls     bool
-	attest   AttestSelect
-	result   *ar.VerificationResult
-	cmc      *cmc.Cmc
+type CmcConfig struct {
+	CmcAddr  string
+	CmcApi   CmcApi
+	Network  string
+	Ca       []byte
+	Policies []byte
+	Mtls     bool
+	Attest   AttestSelect
+	Result   *ar.VerificationResult
+	Cmc      *cmc.Cmc
 }
 
 type CmcApi interface {
-	obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error)
-	verifyAR(chbindings, report []byte, cc cmcConfig) error
-	fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
-	fetchCerts(cc cmcConfig) ([][]byte, error)
+	obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error)
+	verifyAR(chbindings, report []byte, cc CmcConfig) error
+	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
+	fetchCerts(cc CmcConfig) ([][]byte, error)
 }
 
-var cmcApis = map[CmcApiSelect]CmcApi{}
+var CmcApis = map[CmcApiSelect]CmcApi{}
 
 type ConnectionOption[T any] func(*T)
 
 // WithCmcAddress sets the address with which to contact the CMC.
 // If not specified, default is "localhost"
-func WithCmcAddr(address string) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.cmcAddr = address
+func WithCmcAddr(address string) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.CmcAddr = address
 	}
 }
 
 // WithCmcApi specifies the API to be used to connect to the cmcd
 // If not specified, default is grpc
-func WithCmcApi(api CmcApiSelect) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.cmcApi = cmcApis[api]
+func WithCmcApi(api CmcApiSelect) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.CmcApi = CmcApis[api]
 	}
 }
 
 // WithCmcNetwork specifies the network type to be used to connect
 // to the cmcd in case the socket API is selected
-func WithCmcNetwork(network string) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.network = network
+func WithCmcNetwork(network string) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Network = network
 	}
 }
 
 // WithCmcCa specifies the CA the attestation report should be verified against
 // in PEM format
-func WithCmcCa(pem []byte) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.ca = pem
+func WithCmcCa(pem []byte) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Ca = pem
 	}
 }
 
 // WithCmcPolicies specifies optional custom policies the attestation report should
 // be verified against
-func WithCmcPolicies(policies []byte) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.policies = policies
+func WithCmcPolicies(policies []byte) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Policies = policies
 	}
 }
 
 // WithMtls specifies whether to perform mutual TLS with mutual attestation
 // or server-side authentication and attestation only
-func WithMtls(mtls bool) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.mtls = mtls
+func WithMtls(mtls bool) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Mtls = mtls
 	}
 }
 
 // WithAttest specifies whether to perform mutual, dialer only, or listener only attestation
-func WithAttest(mAttest string) ConnectionOption[cmcConfig] {
+func WithAttest(mAttest string) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Attest = GetAttestMode(mAttest)
+	}
+}
+
+// WithResult takes an attestation result by reference as input parameter
+// and writes the attestation result
+func WithResult(result *ar.VerificationResult) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Result = result
+	}
+}
+
+// WithCmc takes a CMC object. This is only required for the Lib API, where
+// the CMC is integrated directly into binary (instead of using the cmcd)
+func WithCmc(cmc *cmc.Cmc) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.Cmc = cmc
+	}
+}
+
+// WithCmc specifies an entire CMC configuration
+func WithCmcConfig(cmcConfig *CmcConfig) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		*c = *cmcConfig
+	}
+}
+
+func GetAttestMode(mAttest string) AttestSelect {
 	var selection AttestSelect
 	switch mAttest {
 	case "mutual":
@@ -131,26 +159,8 @@ func WithAttest(mAttest string) ConnectionOption[cmcConfig] {
 	case "none":
 		selection = Attest_None
 	default:
-		logrus.Infoln("No mattest flag set, running default mutual attestation")
+		log.Info("No mattest flag set, running default mutual attestation")
 		selection = Attest_Mutual
 	}
-	return func(c *cmcConfig) {
-		c.attest = selection
-	}
-}
-
-// WithResult takes an attestation result by reference as input parameter
-// and writes the attestation result
-func WithResult(result *ar.VerificationResult) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.result = result
-	}
-}
-
-// WithCmc takes a CMC object. This is only required for the Lib API, where
-// the CMC is integrated directly into binary (instead of using the cmcd)
-func WithCmc(cmc *cmc.Cmc) ConnectionOption[cmcConfig] {
-	return func(c *cmcConfig) {
-		c.cmc = cmc
-	}
+	return selection
 }

@@ -18,16 +18,10 @@ package main
 // Install github packages with "go get [url]"
 import (
 	"bufio"
-	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -35,7 +29,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -61,9 +54,9 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		wg.Add(1)
 		defer wg.Wait()
 		go publishResultAsync(c.Publish, verificationResult, wg)
-		if err != nil {
-			return fmt.Errorf("failed to dial server: %v", err)
-		}
+	}
+	if err != nil {
+		return fmt.Errorf("failed to dial server: %v", err)
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
@@ -240,29 +233,6 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	}
 }
 
-func getCaCertsInternal(c *config) {
-	addr := ""
-	if len(c.Addr) > 0 {
-		addr = c.Addr[0]
-	}
-
-	log.Info("Retrieving CA certs")
-	client := est.NewClient(nil)
-	certs, err := client.CaCerts(addr)
-	if err != nil {
-		log.Fatalf("Failed to retrieve certificates: %v", err)
-	}
-	log.Debug("Received certs:")
-	for _, c := range certs {
-		log.Debugf("\t%v", c.Subject.CommonName)
-	}
-	// Store CA certificate
-	err = os.WriteFile(c.CaFile, internal.WriteCertPem(certs[len(certs)-1]), 0644)
-	if err != nil {
-		log.Fatalf("Failed to store CA certificate: %v", err)
-	}
-}
-
 // Simply acts as an echo server and returns the received string
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
@@ -279,99 +249,4 @@ func handleConnection(conn net.Conn) {
 	if err != nil {
 		log.Errorf("Failed to write: %v", err)
 	}
-}
-
-func publishResultAsync(addr string, result *ar.VerificationResult, wg *sync.WaitGroup) {
-	defer wg.Done()
-	publishResult(addr, result)
-}
-
-func publishResult(addr string, result *ar.VerificationResult) {
-
-	if result.Prover == "" {
-		log.Trace("Will not publish result: prover is empty (this happens if connection could not be established)")
-		return
-	}
-	if addr == "" {
-		log.Trace("Will not publish: no address specified")
-		return
-	}
-
-	log.Tracef("Publishing result to '%v'", addr)
-
-	data, err := json.Marshal(*result)
-	if err != nil {
-		log.Tracef("Failed to marshal result: %v", err)
-		return
-	}
-
-	err = publish(addr, data)
-	if err != nil {
-		log.Tracef("Failed to publish: %v", err)
-		return
-	}
-}
-
-func publish(addr string, result []byte) error {
-
-	if addr == "" {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, bytes.NewBuffer(result))
-	if err != nil {
-		return fmt.Errorf("failed to create new http request with context: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("http post request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != 201 {
-		return fmt.Errorf("failed to publish result: server responded with %v: %v",
-			resp.Status, string(data))
-	}
-
-	log.Tracef("Successfully published result: server responded with %v", resp.Status)
-
-	return nil
-}
-
-func saveResult(file, addr string, result []byte) error {
-
-	// Convert to human readable
-	var out bytes.Buffer
-	json.Indent(&out, result, "", "    ")
-
-	// Save the Attestation Result to file
-	if file != "" {
-		os.WriteFile(file, out.Bytes(), 0644)
-		fmt.Println("Wrote file ", file)
-	} else {
-		log.Debug("No config file specified: will not save attestation report")
-	}
-
-	// Publish the attestation result if publishing address was specified
-	if addr != "" {
-		err := publish(addr, result)
-		if err != nil {
-			log.Warnf("failed to publish result: %v", err)
-		}
-		log.Debug("Published attestation report")
-	} else {
-		log.Debug("No publish address specified: will not publish attestation report")
-	}
-
-	return nil
 }

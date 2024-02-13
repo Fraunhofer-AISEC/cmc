@@ -138,6 +138,14 @@ func (a SocketApi) listen(c *config) {
 	listenInternal(c, attestedtls.CmcApi_Socket, nil)
 }
 
+func (a SocketApi) request(c *config) {
+	requestInternal(c, attestedtls.CmcApi_Socket, nil)
+}
+
+func (a SocketApi) serve(c *config) {
+	serveInternal(c, attestedtls.CmcApi_Socket, nil)
+}
+
 func (a SocketApi) cacerts(c *config) {
 	getCaCertsInternal(c)
 }

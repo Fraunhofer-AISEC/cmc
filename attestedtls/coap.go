@@ -40,17 +40,17 @@ type CoapApi struct{}
 
 func init() {
 	log.Trace("Adding CoAP API to APIs")
-	cmcApis[CmcApi_COAP] = CoapApi{}
+	CmcApis[CmcApi_COAP] = CoapApi{}
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
+func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 
 	path := "/Attest"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
@@ -91,13 +91,13 @@ func (a CoapApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 }
 
 // Sends attestationreport to cmcd for verification
-func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
+func (a CoapApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 
 	path := "/Verify"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -108,8 +108,8 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	req := &api.VerificationRequest{
 		Nonce:             chbindings,
 		AttestationReport: report,
-		Ca:                cc.ca,
-		Policies:          cc.policies,
+		Ca:                cc.Ca,
+		Policies:          cc.Policies,
 	}
 	payload, err := cbor.Marshal(req)
 	if err != nil {
@@ -134,29 +134,29 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	}
 
 	// Parse VerificationResult
-	if cc.result == nil {
-		cc.result = new(ar.VerificationResult)
+	if cc.Result == nil {
+		cc.Result = new(ar.VerificationResult)
 	}
-	err = json.Unmarshal(verifyResp.VerificationResult, cc.result)
+	err = json.Unmarshal(verifyResp.VerificationResult, cc.Result)
 	if err != nil {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
 	// check results
-	if !cc.result.Success {
+	if !cc.Result.Success {
 		return errors.New("attestation report verification failed")
 	}
 
 	return nil
 }
 
-func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
 	path := "/TLSSign"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
@@ -204,13 +204,13 @@ func (a CoapApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerO
 	return signResp.SignedContent, nil
 }
 
-func (a CoapApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
+func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 
 	path := "/TLSCert"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.cmcAddr)
-	conn, err := udp.Dial(cc.cmcAddr)
+	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}

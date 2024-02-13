@@ -29,7 +29,7 @@ const timeout = 10 * time.Second
  * holds net.Listener and adds additional functionality to it */
 type Listener struct {
 	net.Listener // embedded interface
-	cmcConfig    // embedded struct
+	CmcConfig    // embedded struct
 	*tls.Config  // embedded struct
 }
 
@@ -74,7 +74,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
-	err = attestListener(tlsConn, chbindings, ln.cmcConfig)
+	err = attestListener(tlsConn, chbindings, ln.CmcConfig)
 	if err != nil {
 		return nil, fmt.Errorf("remote attestation failed: %w", err)
 	}
@@ -99,24 +99,24 @@ func (ln Listener) Addr() net.Addr {
 // Wrapper for tls.Listen
 // Returns custom Listener that will perform additional remote attestation
 // operations right after successful TLS connection establishment
-func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[cmcConfig]) (net.Listener, error) {
+func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (net.Listener, error) {
 
 	// Default listener
 	listener := Listener{
-		cmcConfig: cmcConfig{
-			cmcAddr: cmcAddrDefault,
-			cmcApi:  cmcApis[cmcApiSelectDefault],
-			attest:  attestDefault,
+		CmcConfig: CmcConfig{
+			CmcAddr: cmcAddrDefault,
+			CmcApi:  CmcApis[cmcApiSelectDefault],
+			Attest:  attestDefault,
 		},
 	}
 
 	// Apply all additional (CMC) configs
 	for _, c := range moreConfigs {
-		c(&listener.cmcConfig)
+		c(&listener.CmcConfig)
 	}
 
 	// Check that selected API is implemented
-	if listener.cmcConfig.cmcApi == nil {
+	if listener.CmcConfig.CmcApi == nil {
 		return listener, fmt.Errorf("selected CMC API is not implemented")
 	}
 

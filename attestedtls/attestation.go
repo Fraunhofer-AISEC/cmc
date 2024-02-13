@@ -26,13 +26,13 @@ var id = "0000"
 
 var log = logrus.WithField("service", "atls")
 
-func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
+func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 
 	//optional: attest Client
-	if cc.attest == Attest_Mutual || cc.attest == Attest_Client {
+	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
 		log.Debug("Attesting the Client")
 		// Obtain attestation report from local cmcd
-		resp, err := cc.cmcApi.obtainAR(cc, chbindings)
+		resp, err := cc.CmcApi.obtainAR(cc, chbindings)
 		if err != nil {
 			return fmt.Errorf("could not obtain dialer AR: %w", err)
 		}
@@ -40,31 +40,31 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 		// Send created attestation report to listener
 		log.Tracef("Sending attestation report length %v to listener", len(resp))
 
-		err = Write(append([]byte{byte(cc.attest)}, resp...), conn)
+		err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
 		if err != nil {
 			return fmt.Errorf("failed to send AR: %w", err)
 		}
 		log.Trace("Sent AR")
 	} else {
 		//if not sending attestation report, send the attestation mode
-		err := Write([]byte{byte(cc.attest)}, conn)
+		err := Write([]byte{byte(cc.Attest)}, conn)
 		if err != nil {
 			return fmt.Errorf("failed to send skip client Attestation: %w", err)
 		}
 		log.Debug("Skipping client-side attestation")
 	}
 
-	readvalue, err := readValue(conn, cc.attest, true)
+	readvalue, err := readValue(conn, cc.Attest, true)
 	if err != nil {
 		return err
 	}
 
 	//optional: Wait for attestation report from Server
-	if cc.attest == Attest_Mutual || cc.attest == Attest_Server {
+	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
 		report := readvalue
 		// Verify AR from listener with own channel bindings
 		log.Trace("Verifying attestation report from listener")
-		err = cc.cmcApi.verifyAR(chbindings, report, cc)
+		err = cc.CmcApi.verifyAR(chbindings, report, cc)
 		if err != nil {
 			return err
 		}
@@ -77,42 +77,42 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
 	return nil
 }
 
-func attestListener(conn *tls.Conn, chbindings []byte, cc cmcConfig) error {
+func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 	// optional: attest server
-	if cc.attest == Attest_Mutual || cc.attest == Attest_Server {
+	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
 		// Obtain own attestation report from local cmcd
 		log.Trace("Attesting the Server")
-		resp, err := cc.cmcApi.obtainAR(cc, chbindings)
+		resp, err := cc.CmcApi.obtainAR(cc, chbindings)
 		if err != nil {
 			return fmt.Errorf("could not obtain AR of Listener : %w", err)
 		}
 
 		// Send own attestation report to dialer
 		log.Trace("Sending own attestation report")
-		err = Write(append([]byte{byte(cc.attest)}, resp...), conn)
+		err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
 		if err != nil {
 			return fmt.Errorf("failed to send AR: %w", err)
 		}
 	} else {
 		//if not sending attestation report, send the attestation mode
-		err := Write([]byte{byte(cc.attest)}, conn)
+		err := Write([]byte{byte(cc.Attest)}, conn)
 		if err != nil {
 			return fmt.Errorf("failed to send skip client Attestation: %w", err)
 		}
 		log.Debug("Skipping server-side attestation")
 	}
 
-	readValue, err := readValue(conn, cc.attest, false)
+	readValue, err := readValue(conn, cc.Attest, false)
 	if err != nil {
 		return err
 	}
 
 	// optional: Wait for attestation report from client
-	if cc.attest == Attest_Mutual || cc.attest == Attest_Client {
+	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
 		report := readValue
 		// Verify AR from dialer with own channel bindings
 		log.Trace("Verifying attestation report from dialer...")
-		err = cc.cmcApi.verifyAR(chbindings, report, cc)
+		err = cc.CmcApi.verifyAR(chbindings, report, cc)
 		if err != nil {
 			return err
 		}

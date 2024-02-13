@@ -161,6 +161,32 @@ func (a LibApi) listen(c *config) {
 	listenInternal(c, attestedtls.CmcApi_Lib, a.cmc)
 }
 
+func (a LibApi) request(c *config) {
+	if a.cmc == nil {
+		cmc, err := initialize(c)
+		if err != nil {
+			log.Errorf("failed to initialize CMC: %v", err)
+			return
+		}
+		a.cmc = cmc
+	}
+
+	requestInternal(c, attestedtls.CmcApi_Lib, a.cmc)
+}
+
+func (a LibApi) serve(c *config) {
+	if a.cmc == nil {
+		cmc, err := initialize(c)
+		if err != nil {
+			log.Errorf("failed to initialize CMC: %v", err)
+			return
+		}
+		a.cmc = cmc
+	}
+
+	serveInternal(c, attestedtls.CmcApi_Lib, a.cmc)
+}
+
 func (a LibApi) iothub(c *config) {
 	log.Fatalf("IoT hub not implemented for lib API")
 }
