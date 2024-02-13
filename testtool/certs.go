@@ -16,37 +16,34 @@
 package main
 
 // Install github packages with "go get [url]"
+import (
+	"os"
 
-// local modules
+	// local modules
 
-func generate(c *config) {
-	c.api.generate(c)
-}
+	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+)
 
-func verify(c *config) {
-	c.api.verify(c)
-}
+func getCaCertsInternal(c *config) {
+	addr := ""
+	if len(c.Addr) > 0 {
+		addr = c.Addr[0]
+	}
 
-func dial(c *config) {
-	c.api.dial(c)
-}
-
-func listen(c *config) {
-	c.api.listen(c)
-}
-
-func request(c *config) {
-	c.api.request(c)
-}
-
-func serve(c *config) {
-	c.api.serve(c)
-}
-
-func getCaCerts(c *config) {
-	c.api.cacerts(c)
-}
-
-func iothub(c *config) {
-	c.api.iothub(c)
+	log.Info("Retrieving CA certs")
+	client := est.NewClient(nil)
+	certs, err := client.CaCerts(addr)
+	if err != nil {
+		log.Fatalf("Failed to retrieve certificates: %v", err)
+	}
+	log.Debug("Received certs:")
+	for _, c := range certs {
+		log.Debugf("\t%v", c.Subject.CommonName)
+	}
+	// Store CA certificate
+	err = os.WriteFile(c.CaFile, internal.WriteCertPem(certs[len(certs)-1]), 0644)
+	if err != nil {
+		log.Fatalf("Failed to store CA certificate: %v", err)
+	}
 }

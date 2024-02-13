@@ -142,6 +142,14 @@ func (a GrpcApi) listen(c *config) {
 	listenInternal(c, attestedtls.CmcApi_GRPC, nil)
 }
 
+func (a GrpcApi) request(c *config) {
+	requestInternal(c, attestedtls.CmcApi_GRPC, nil)
+}
+
+func (a GrpcApi) serve(c *config) {
+	serveInternal(c, attestedtls.CmcApi_GRPC, nil)
+}
+
 func (a GrpcApi) cacerts(c *config) {
 	getCaCertsInternal(c)
 }

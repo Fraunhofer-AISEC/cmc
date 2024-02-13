@@ -64,7 +64,7 @@ relevant if vcekOfflineCaching is set to true)
 
 ## Testtool Configuration
 
-- **mode**: The mode to run. Possible are generate, verify, dial, listen, cacerts and iothub
+- **mode**: The mode to run. Possible are generate, verify, dial, listen, request, serve, cacerts and iothub. See below for an explanation of these modes
 - **addr**: List of addresses to connect to in mode dial and anddress to serve in mode listen.
 - **cmc**: The address of the CMC server
 - **report**: The file to store the attestation report in (mode generate) or to retrieve
@@ -82,6 +82,9 @@ from (mode verify)
 The interval format has to be in accordance with the input format of Go's
 [`time.Duration`](https://pkg.go.dev/time#ParseDuration).
 - **publish**: Optional HTTP address to publish attestation results to
+-**header**: Only for mode `request`. One or multiple (comma-separated) HTTP headers can be specified in the format `key: value`, e.g. *Content-Type: application/json,Content-Transfer-Encoding: base64*
+-**method**: Only for mode `request`. Specifies the HTTP method. Possible are `GET`, `POST`, `PUT` and `HEADER`
+-**data**: Only for mode `request` with `POST` or `PUT` method. Specifies data to send to the demo server as a string
 
 Further configuration options are only relevant if the testtool is operated with the `lib` API,
 i.e., standalone without the *cmcd* running as a separate binary:
@@ -108,6 +111,8 @@ TPM or software keys. In case of the TPM, the TPM *Credential Activation* proces
 - **verify**: Verifies a previously generated attestation report
 - **dial**: Run attestedTLS client application
 - **listen**: Serve as a attestedTLS echo server
+- **request**: Performs one or multiple attested HTTPS requests (client)
+- **serve**: Run attested HTTPS demo server
 
 ## Platform Configuration
 

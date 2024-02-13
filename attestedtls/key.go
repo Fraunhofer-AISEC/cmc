@@ -28,17 +28,17 @@ import (
 // PrivateKey Wrapper Implementing crypto.Signer interface
 // Used to contact cmcd for signing operations
 type PrivateKey struct {
-	cmcConfig // embedded struct
+	CmcConfig // embedded struct
 	pubKey    crypto.PublicKey
 }
 
 // Implementation of Sign() in crypto.Signer iface
 // Contacts cmcd for sign operation and returns received signature
 func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-	if priv.cmcConfig.cmcApi == nil {
+	if priv.CmcConfig.CmcApi == nil {
 		return nil, errors.New("failed to get CMC API: nil")
 	}
-	return priv.cmcConfig.cmcApi.fetchSignature(priv.cmcConfig, digest, opts)
+	return priv.CmcConfig.CmcApi.fetchSignature(priv.CmcConfig, digest, opts)
 }
 
 func (priv PrivateKey) Public() crypto.PublicKey {
@@ -46,25 +46,25 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 }
 
 // Obtains Certificate for the Identity Key (IK) used for the connection from cmcd
-func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error) {
+func GetCert(moreConfigs ...ConnectionOption[CmcConfig]) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 
 	// Get cmc Config: start with defaults
-	cc := cmcConfig{
-		cmcAddr: cmcAddrDefault,
-		cmcApi:  cmcApis[cmcApiSelectDefault],
-		attest:  attestDefault,
+	cc := CmcConfig{
+		CmcAddr: cmcAddrDefault,
+		CmcApi:  CmcApis[cmcApiSelectDefault],
+		Attest:  attestDefault,
 	}
 	for _, c := range moreConfigs {
 		c(&cc)
 	}
 
 	// Check that selected API is implemented
-	if cc.cmcApi == nil {
+	if cc.CmcApi == nil {
 		return tls.Certificate{}, fmt.Errorf("selected CMC API is not implemented")
 	}
 
-	certs, err := cc.cmcApi.fetchCerts(cc)
+	certs, err := cc.CmcApi.fetchCerts(cc)
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to fetch certificate from cmc: %w", err)
 	}
@@ -100,7 +100,7 @@ func GetCert(moreConfigs ...ConnectionOption[cmcConfig]) (tls.Certificate, error
 	tlsCert.Leaf = x509Cert
 	tlsCert.PrivateKey = PrivateKey{
 		pubKey:    x509Cert.PublicKey,
-		cmcConfig: cc,
+		CmcConfig: cc,
 	}
 
 	// Return cert

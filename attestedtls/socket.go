@@ -36,15 +36,15 @@ type SocketApi struct{}
 
 func init() {
 	log.Trace("Adding Socket API to APIs")
-	cmcApis[CmcApi_Socket] = SocketApi{}
+	CmcApis[CmcApi_Socket] = SocketApi{}
 }
 
 // Obtains attestation report from cmcd
-func (a SocketApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
+func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
-	conn, err := net.Dial(cc.network, cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
+	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
@@ -82,11 +82,11 @@ func (a SocketApi) obtainAR(cc cmcConfig, chbindings []byte) ([]byte, error) {
 }
 
 // Sends attestationreport to cmcd for verification
-func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
+func (a SocketApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
-	conn, err := net.Dial(cc.network, cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
+	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -95,8 +95,8 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	req := &api.VerificationRequest{
 		Nonce:             chbindings,
 		AttestationReport: report,
-		Ca:                cc.ca,
-		Policies:          cc.policies,
+		Ca:                cc.Ca,
+		Policies:          cc.Policies,
 	}
 	payload, err := cbor.Marshal(req)
 	if err != nil {
@@ -123,26 +123,26 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc cmcConfig) error {
 	}
 
 	// Parse VerificationResult
-	if cc.result == nil {
-		cc.result = new(ar.VerificationResult)
+	if cc.Result == nil {
+		cc.Result = new(ar.VerificationResult)
 	}
-	err = json.Unmarshal(verifyResp.VerificationResult, cc.result)
+	err = json.Unmarshal(verifyResp.VerificationResult, cc.Result)
 	if err != nil {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
 	// Check results
-	if !cc.result.Success {
+	if !cc.Result.Success {
 		return errors.New("attestation report verification failed")
 	}
 	return nil
 }
 
-func (a SocketApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
-	conn, err := net.Dial(cc.network, cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
+	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
@@ -190,11 +190,11 @@ func (a SocketApi) fetchSignature(cc cmcConfig, digest []byte, opts crypto.Signe
 	return signResp.SignedContent, nil
 }
 
-func (a SocketApi) fetchCerts(cc cmcConfig) ([][]byte, error) {
+func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.network, cc.cmcAddr)
-	conn, err := net.Dial(cc.network, cc.cmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
+	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}

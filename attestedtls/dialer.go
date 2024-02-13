@@ -17,6 +17,7 @@ package attestedtls
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -25,7 +26,11 @@ import (
 // Wraps tls.Dial
 // Additionally performs remote attestation
 // before returning the established connection.
-func Dial(network string, addr string, config *tls.Config, moreConfigs ...ConnectionOption[cmcConfig]) (*tls.Conn, error) {
+func Dial(network string, addr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (*tls.Conn, error) {
+
+	if config == nil {
+		return nil, errors.New("failed to dial. TLS configuration not provided")
+	}
 
 	// Create TLS connection
 	var dialer net.Dialer
@@ -41,24 +46,27 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	}
 
 	cs := conn.ConnectionState()
-	log.Tracef("TLS Handshake Complete: %v, generating channel bindings", cs.HandshakeComplete)
+	if !cs.HandshakeComplete {
+		return nil, errors.New("internal error: handshake not complete")
+	}
+	log.Trace("TLS handshake complete, generating channel bindings")
 	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
 	}
 
 	// Get cmc Config: start with defaults
-	cc := cmcConfig{
-		cmcAddr: cmcAddrDefault,
-		cmcApi:  cmcApis[cmcApiSelectDefault],
-		attest:  attestDefault,
+	cc := CmcConfig{
+		CmcAddr: cmcAddrDefault,
+		CmcApi:  CmcApis[cmcApiSelectDefault],
+		Attest:  attestDefault,
 	}
 	for _, c := range moreConfigs {
 		c(&cc)
 	}
 
 	// Check that selected API is implemented
-	if cc.cmcApi == nil {
+	if cc.CmcApi == nil {
 		return nil, fmt.Errorf("selected CMC API is not implemented")
 	}
 
