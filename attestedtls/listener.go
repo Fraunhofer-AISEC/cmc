@@ -66,7 +66,10 @@ func (ln Listener) Accept() (net.Conn, error) {
 	}
 
 	cs := tlsConn.ConnectionState()
-	log.Tracef("TLS Handshake Complete: %v, generating channel bindings", cs.HandshakeComplete)
+	if !cs.HandshakeComplete {
+		return nil, errors.New("internal error: handshake not complete")
+	}
+	log.Trace("TLS handshake complete, generating channel bindings")
 	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)

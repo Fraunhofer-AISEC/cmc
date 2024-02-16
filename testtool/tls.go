@@ -35,7 +35,6 @@ import (
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging few a exemplary messages with it
 func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tls.Config, cmc *cmc.Cmc) error {
-	verificationResult := new(ar.VerificationResult)
 
 	conn, err := atls.Dial("tcp", addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
@@ -45,16 +44,17 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.Attest),
 		atls.WithCmcNetwork(c.Network),
-		atls.WithResult(verificationResult),
+		atls.WithResultCb(func(result *ar.VerificationResult) {
+			// Publish the attestation result asynchronously if publishing address was specified and
+			// and attestation was performed
+			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
+				wg := new(sync.WaitGroup)
+				wg.Add(1)
+				defer wg.Wait()
+				go publishResultAsync(c.Publish, result, wg)
+			}
+		}),
 		atls.WithCmc(cmc))
-	// Publish the attestation result asynchronously if publishing address was specified and
-	// and attestation was performed
-	if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
-		wg := new(sync.WaitGroup)
-		wg.Add(1)
-		defer wg.Wait()
-		go publishResultAsync(c.Publish, verificationResult, wg)
-	}
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
@@ -181,11 +181,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Renegotiation: tls.RenegotiateNever,
 	}
 
-	atls.WithAttest(c.Attest)
-
 	internal.PrintTlsConfig(tlsConf, c.ca)
-
-	verificationResult := new(ar.VerificationResult)
 
 	addr := ""
 	if len(c.Addr) > 0 {
@@ -201,7 +197,13 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.Attest),
 		atls.WithCmcNetwork(c.Network),
-		atls.WithResult(verificationResult),
+		atls.WithResultCb(func(result *ar.VerificationResult) {
+			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "client") {
+				// Publish the attestation result if publishing address was specified
+				// and result is not empty
+				go publishResult(c.Publish, result)
+			}
+		}),
 		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
@@ -213,23 +215,12 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		// Accept connection and perform remote attestation
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Errorf("Failed to establish connection: %v", err)
-			if c.Mtls {
-				// Publish the attestation result if publishing address was specified
-				// and result is not empty
-				go publishResult(c.Publish, verificationResult)
-			}
+			log.Warnf("Failed to establish connection: %v", err)
 			continue
 		}
 
 		// Handle established connections
 		go handleConnection(conn)
-
-		if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "client") {
-			// Publish the attestation result if publishing address was specified
-			// and result is not empty
-			go publishResult(c.Publish, verificationResult)
-		}
 	}
 }
 

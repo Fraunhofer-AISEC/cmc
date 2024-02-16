@@ -68,8 +68,11 @@ func (a LibApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 	log.Debug("Verifier: Verifying Attestation Report")
 	result := ar.Verify(report, chbindings, cc.Ca, nil, cc.Cmc.PolicyEngineSelect, cc.Cmc.IntelStorage)
 
-	if cc.Result != nil {
-		*cc.Result = result
+	// Return attestation result via callback if specified
+	if cc.ResultCb != nil {
+		cc.ResultCb(&result)
+	} else {
+		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
 	if !result.Success {

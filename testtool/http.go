@@ -24,10 +24,12 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	// local modules
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ahttp "github.com/Fraunhofer-AISEC/cmc/attestedhttp"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
@@ -101,6 +103,16 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		Cmc:         cmc,
 		Ca:          c.ca,
 		CmcPolicies: c.policies,
+		ResultCb: func(result *ar.VerificationResult) {
+			// Publish the attestation result asynchronously if publishing address was specified and
+			// and attestation was performed
+			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
+				wg := new(sync.WaitGroup)
+				wg.Add(1)
+				defer wg.Wait()
+				go publishResultAsync(c.Publish, result, wg)
+			}
+		},
 	}
 
 	// Create an attested HTTPS Client
@@ -214,6 +226,13 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Cmc:         cmc,
 		Ca:          c.ca,
 		CmcPolicies: c.policies,
+		ResultCb: func(result *ar.VerificationResult) {
+			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "client") {
+				// Publish the attestation result if publishing address was specified
+				// and result is not empty
+				go publishResult(c.Publish, result)
+			}
+		},
 	}
 
 	// Use the golang net/http module functions to configure the server

@@ -102,14 +102,13 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 		log.Debug("Skipping server-side attestation")
 	}
 
-	readValue, err := readValue(conn, cc.Attest, false)
+	report, err := readValue(conn, cc.Attest, false)
 	if err != nil {
 		return err
 	}
 
 	// optional: Wait for attestation report from client
 	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
-		report := readValue
 		// Verify AR from dialer with own channel bindings
 		log.Trace("Verifying attestation report from dialer...")
 		err = cc.CmcApi.verifyAR(chbindings, report, cc)

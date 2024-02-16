@@ -54,7 +54,7 @@ type CmcConfig struct {
 	Policies []byte
 	Mtls     bool
 	Attest   AttestSelect
-	Result   *ar.VerificationResult
+	ResultCb func(result *ar.VerificationResult)
 	Cmc      *cmc.Cmc
 }
 
@@ -124,11 +124,10 @@ func WithAttest(mAttest string) ConnectionOption[CmcConfig] {
 	}
 }
 
-// WithResult takes an attestation result by reference as input parameter
-// and writes the attestation result
-func WithResult(result *ar.VerificationResult) ConnectionOption[CmcConfig] {
+// WithResultCb is a callback for further processing of attestation results
+func WithResultCb(cb func(result *ar.VerificationResult)) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
-		c.Result = result
+		c.ResultCb = cb
 	}
 }
 
