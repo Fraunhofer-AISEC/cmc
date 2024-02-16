@@ -66,6 +66,7 @@ type Transport struct {
 	CmcPolicies []byte
 	Ca          []byte
 	ReadTimeout time.Duration
+	ResultCb    func(result *ar.VerificationResult)
 }
 
 // Wrapper for net/http Client
@@ -187,18 +188,15 @@ func prepareClient(c *Client) error {
 
 				log.Debugf("Dialing TLS address: %v", addr)
 
-				verificationResult := new(ar.VerificationResult)
-
 				conn, err := atls.Dial("tcp", addr, c.Transport.TLSClientConfig,
 					atls.WithCmcConfig(&cmcConfig),
-					atls.WithResult(verificationResult))
+					atls.WithResultCb(c.Transport.ResultCb))
 				if err != nil {
 					return nil, fmt.Errorf("failed to dial server: %w", err)
 				}
 				if c.Transport.ReadTimeout != 0 {
 					_ = conn.SetReadDeadline(time.Now().Add(c.Transport.ReadTimeout))
 				}
-				// TODO store verification result for retrieval
 
 				log.Debugf("aHTTPS connection established")
 

@@ -38,6 +38,10 @@ func publishResultAsync(addr string, result *ar.VerificationResult, wg *sync.Wai
 
 func publishResult(addr string, result *ar.VerificationResult) {
 
+	if result == nil {
+		log.Trace("Will not publish result: not present")
+		return
+	}
 	if result.Prover == "" {
 		log.Trace("Will not publish result: prover is empty (this happens if connection could not be established)")
 		return

@@ -123,16 +123,21 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 	}
 
 	// Parse VerificationResult
-	if cc.Result == nil {
-		cc.Result = new(ar.VerificationResult)
-	}
-	err = json.Unmarshal(verifyResp.VerificationResult, cc.Result)
+	result := new(ar.VerificationResult)
+	err = json.Unmarshal(verifyResp.VerificationResult, result)
 	if err != nil {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}
 
+	// Return attestation result via callback if specified
+	if cc.ResultCb != nil {
+		cc.ResultCb(result)
+	} else {
+		log.Tracef("Will not return attestation result: no callback specified")
+	}
+
 	// Check results
-	if !cc.Result.Success {
+	if !result.Success {
 		return errors.New("attestation report verification failed")
 	}
 	return nil

@@ -178,6 +178,7 @@ func getConfig() *config {
 		Api:         "grpc",
 		LogLevel:    "info",
 		IntervalStr: "0s",
+		Attest:      "mutual",
 		Method:      "GET",
 	}
 

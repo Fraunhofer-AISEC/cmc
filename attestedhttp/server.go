@@ -27,7 +27,7 @@ import (
 
 // Wrapper for http.Server
 type Server struct {
-	Server *http.Server
+	*http.Server
 
 	// Additional aTLS parameters
 	Attest      string
@@ -38,6 +38,7 @@ type Server struct {
 	Cmc         *cmc.Cmc
 	CmcPolicies []byte
 	Ca          []byte
+	ResultCb    func(result *ar.VerificationResult)
 }
 
 func (s *Server) ListenAndServe() error {
@@ -45,8 +46,6 @@ func (s *Server) ListenAndServe() error {
 	if s.Server.TLSConfig == nil {
 		return errors.New("failed to listen: no TLS config provided")
 	}
-
-	verificationResult := new(ar.VerificationResult)
 
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", s.Server.Addr, s.Server.TLSConfig,
@@ -57,14 +56,12 @@ func (s *Server) ListenAndServe() error {
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
 		atls.WithCmcNetwork(s.CmcNetwork),
-		atls.WithResult(verificationResult),
+		atls.WithResultCb(s.ResultCb),
 		atls.WithCmc(s.Cmc))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
 	defer ln.Close()
-
-	// TODO store verification result
 
 	log.Infof("Serving HTTPS under %v", s.Server.Addr)
 
