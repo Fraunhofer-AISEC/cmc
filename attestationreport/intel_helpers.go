@@ -25,13 +25,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -489,28 +489,28 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	switch quoteType {
 	case SGX_QUOTE_TYPE:
 		if uint32(len(reportRaw)-SGX_QUOTE_SIGNATURE_OFFSET) != quoteSignatureSize {
-			msg := fmt.Sprintf("parsed QuoteSignatureData size doesn't match QuoteSignatureDataLen. expected: %v, got: %v\n",
+			log.Tracef("parsed QuoteSignatureData size doesn't match QuoteSignatureDataLen. expected: %v, got: %v\n",
 				quoteSignatureSize, uint32(len(reportRaw)-signature_offset))
-			result.SignCheck.setFalse(&msg)
+			result.SignCheck.SetErr(SignatureLength)
 			return result, false
 		}
 	case TDX_QUOTE_TYPE:
 		if uint32(len(reportRaw)-TDX_QUOTE_SIGNATURE_OFFSET) != quoteSignatureSize {
-			msg := fmt.Sprintf("parsed QuoteSignatureData size doesn't match QuoteSignatureDataLen. expected: %v, got: %v\n",
+			log.Tracef("parsed QuoteSignatureData size doesn't match QuoteSignatureDataLen. expected: %v, got: %v\n",
 				quoteSignatureSize, uint32(len(reportRaw)-signature_offset))
-			result.SignCheck.setFalse(&msg)
+			result.SignCheck.SetErr(SignatureLength)
 			return result, false
 		}
 	default:
-		msg := fmt.Sprintf("Quote Type not supported %v", quoteType)
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Quote Type not supported %v", quoteType)
+		result.SignCheck.SetErr(EvidenceType)
 		return result, false
 	}
 
 	// for now only ECDSA_P_256 support
 	if quoteSignatureType != ECDSA_P_256 {
-		msg := fmt.Sprintf("Signature Algorithm %v not supported", quoteSignatureType)
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Signature Algorithm %v not supported", quoteSignatureType)
+		result.SignCheck.SetErr(UnsupportedAlgorithm)
 		return result, false
 	}
 
@@ -533,8 +533,8 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	}
 
 	if len(ak_pub) == 0 {
-		msg := "Failed to extract ECDSA public key from certificate"
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Failed to extract ECDSA public key from certificate")
+		result.SignCheck.SetErr(ExtractPubKey)
 		return result, false
 	}
 
@@ -553,8 +553,8 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	// Verify ECDSA Signature represented by r and s
 	ok := ecdsa.Verify(ecdsa_ak_pub, digest[:], r, s)
 	if !ok {
-		msg := "Failed to verify ISV Enclave report signature"
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Failed to verify ISV Enclave report signature")
+		result.SignCheck.SetErr(VerifySignature)
 		return result, false
 	}
 	log.Trace("Successfully verified ISV Enclave report signature")
@@ -579,16 +579,16 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	// Extract the PCK public key from the PCK certificate
 	pck_pub, ok := certs.PCKCert.PublicKey.(*ecdsa.PublicKey)
 	if pck_pub == nil || !ok {
-		msg := "Failed to extract PCK public key from certificate"
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Failed to extract PCK public key from certificate")
+		result.SignCheck.SetErr(ExtractPubKey)
 		return result, false
 	}
 
 	// Verify the ECDSA QEReportSignature
 	ok = ecdsa.Verify(pck_pub, digest[:], r, s)
 	if !ok {
-		msg := "Failed to verify QE report signature"
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Failed to verify QE report signature")
+		result.SignCheck.SetErr(VerifySignature)
 		return result, false
 	}
 
@@ -599,38 +599,38 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	reportDataRef := append(hash_ref[:], make([]byte, 32)...)
 
 	if !bytes.Equal(reportData[:], reportDataRef[:]) {
-		msg := fmt.Sprintf("invalid SHA256(ECDSA Attestation Key || QE Authentication Data) || 32*0x00) in QEReport.ReportData. expected: %v, got: %v\n", reportDataRef, reportData)
-		result.CertChainCheck.setFalse(&msg)
+		log.Tracef("invalid SHA256(ECDSA Attestation Key || QE Authentication Data) || 32*0x00) in QEReport.ReportData. expected: %v, got: %v\n", reportDataRef, reportData)
+		result.CertChainCheck.SetErr(VerifyCertChain)
 		return result, false
 	}
 
 	// Step 4: Parse and verify the entire PCK certificate chain
 	var x509Chains [][]*x509.Certificate
-
+	var code ErrorCode
 	switch quoteType {
 	case SGX_QUOTE_TYPE:
-		x509Chains, err = VerifyIntelCertChainFull(certs, CA_PROCESSOR, intelCache)
+		x509Chains, code = VerifyIntelCertChainFull(certs, CA_PROCESSOR, intelCache)
 	case TDX_QUOTE_TYPE:
-		x509Chains, err = VerifyIntelCertChainFull(certs, CA_PLATFORM, intelCache)
+		x509Chains, code = VerifyIntelCertChainFull(certs, CA_PLATFORM, intelCache)
 	}
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.CertChainCheck.setFalse(&msg)
+		log.Tracef("Failed to verify certificate chain: %v", err)
+		result.CertChainCheck.SetErr(code)
 		return result, false
 	}
 
 	// Step 5: Verify that the reference value fingerprint matches the certificate fingerprint
 	refFingerprint, err := hex.DecodeString(fingerprint)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode CA fingerprint %v: %v", fingerprint, err)
-		result.CertChainCheck.setFalse(&msg)
+		log.Tracef("Failed to decode CA fingerprint %v: %v", fingerprint, err)
+		result.CertChainCheck.SetErr(ParseCAFingerprint)
 		return result, false
 	}
 	caFingerprint := sha256.Sum256(certs.RootCACert.Raw)
 	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		msg := fmt.Sprintf("CA fingerprint %v does not match measurement CA fingerprint %v",
+		log.Tracef("CA fingerprint %v does not match measurement CA fingerprint %v",
 			fingerprint, hex.EncodeToString(caFingerprint[:]))
-		result.CertChainCheck.setFalse(&msg)
+		result.CertChainCheck.SetErr(CaFingerprint)
 		return result, false
 	}
 	result.CertChainCheck.Success = true
@@ -649,16 +649,20 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 
 // teeTcbSvn is only required for TDX (from TdxReportBody)
 func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Certificate,
-	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) (TcbLevelResult, error) {
+	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType uint32) TcbLevelResult {
 	var result TcbLevelResult
 
 	if tcbInfo == nil || tcbKeyCert == nil {
-		return result, fmt.Errorf("invalid function parameter (null pointer exception)")
+		log.Tracef("invalid function parameter (null pointer exception)")
+		result.Summary.SetErr(Internal)
+		return result
 	}
 
 	regex := regexp.MustCompile(`\s+`)
-	regex.ReplaceAllString(tcbInfoBodyRaw, "")                                       // remove whitespace
-	tcbInfoBodyRaw = tcbInfoBodyRaw[len(`{"tcbInfo":`) : len(tcbInfoBodyRaw)-128-16] // remove "{"tcbInfo":" from beginning and signature + rest from the end
+	// remove whitespaces
+	regex.ReplaceAllString(tcbInfoBodyRaw, "")
+	// remove "{"tcbInfo":" from beginning and signature + rest from the end
+	tcbInfoBodyRaw = tcbInfoBodyRaw[len(`{"tcbInfo":`) : len(tcbInfoBodyRaw)-128-16]
 
 	// get checksum of tcb info body
 	digest := sha256.Sum256([]byte(tcbInfoBodyRaw))
@@ -674,33 +678,32 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 	// verify signature
 	ok := ecdsa.Verify(pub_key, digest[:], r, s)
 	if !ok {
-		result.Summary.Success = false
-		result.Summary.Details = "failed to verify tcbInfo signature"
-		return result, fmt.Errorf("failed to verify tcbInfo signature")
+		log.Tracef("failed to verify tcbInfo signature")
+		result.Summary.SetErr(VerifyTcbInfo)
+		return result
 	}
 
 	now := time.Now()
 
 	if now.After(tcbInfo.TcbInfo.NextUpdate) {
-		result.Summary.Success = false
-		result.Summary.Details = fmt.Sprintf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
-		return result, fmt.Errorf("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
+		log.Tracef("tcbInfo has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
+		result.Summary.SetErr(TcbInfoExpired)
+		return result
 	}
 
 	if !bytes.Equal([]byte(tcbInfo.TcbInfo.Fmspc), sgxExtensions.Fmspc.Value) {
-		result.Summary.Success = false
-		result.Summary.Details = fmt.Sprintf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
+		log.Tracef("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
-		return result, fmt.Errorf("FMSPC value from TcbInfo (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
-			tcbInfo.TcbInfo.Fmspc, sgxExtensions.Fmspc.Value)
+		result.Summary.SetErr(SgxFmpcMismatch)
+		return result
+
 	}
 
 	if !bytes.Equal([]byte(tcbInfo.TcbInfo.PceId), sgxExtensions.PceId.Value) {
-		result.Summary.Success = false
-		result.Summary.Details = fmt.Sprintf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
+		log.Tracef("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
-		return result, fmt.Errorf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
-			tcbInfo.TcbInfo.PceId, sgxExtensions.PceId.Value)
+		result.Summary.SetErr(SgxPceidMismatch)
+		return result
 	}
 
 	// Checking tcb level
@@ -720,33 +723,31 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 			result.Summary.Success = true
 			result.TcbLevelDate = tcbLevel.TcbDate
 			result.TcbLevelStatus = tcbLevel.TcbStatus
-			return result, nil
+			return result
 		}
 
 		// Only TDX: Compare TEE TCB SVNs from TDX Report with TCB Level
 		if !compareTeeTcbSvns(teeTcbSvn, tcbLevel) || tcbLevel.Tcb.TdxTcbComponents[1].Svn != teeTcbSvn[1] {
-			result.Summary.Success = false
-			result.Summary.Details = "TCB Level rejected: unsupported"
-			return result, fmt.Errorf("TCB Level rejected: unsupported")
+			result.Summary.SetErr(TcbLevelUnsupported)
+			return result
 		}
 
 		// Only TDX: fail if Status == REVOKED
 		if tcbLevel.TcbStatus == string(Revoked) {
-			result.Summary.Success = false
 			result.TcbLevelStatus = string(Revoked)
 			result.TcbLevelDate = tcbLevel.TcbDate
-			return result, fmt.Errorf("TCB Level status: REVOKED")
+			result.Summary.SetErr(TcbLevelRevoked)
+			return result
 		}
 
 		result.Summary.Success = true
 		result.TcbLevelDate = tcbLevel.TcbDate
 		result.TcbLevelStatus = tcbLevel.TcbStatus
-		return result, nil
+		return result
 	}
 
-	result.Summary.Success = false
-	result.Summary.Details = "TCB Level not supported"
-	return result, fmt.Errorf("TCB Level not supported")
+	result.Summary.SetErr(TcbLevelUnsupported)
+	return result
 }
 
 // helper function for verifyTcbInfo
@@ -828,29 +829,47 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 
 	// check mrsigner
 	if !bytes.Equal([]byte(qeIdentity.EnclaveIdentity.Mrsigner), qeReportBody.MRSIGNER[:]) {
-		msg := fmt.Sprintf("MRSIGNER mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Mrsigner, qeReportBody.MRSIGNER)
-		result.Summary.Details = msg
+		log.Tracef("MRSIGNER mismatch. Expected: %v, Got: %v",
+			qeIdentity.EnclaveIdentity.Mrsigner, qeReportBody.MRSIGNER)
 		result.Summary.Success = false
+		result.MrSigner = Result{
+			Success:  false,
+			Expected: hex.EncodeToString(qeIdentity.EnclaveIdentity.Mrsigner),
+			Got:      hex.EncodeToString(qeReportBody.MRSIGNER[:]),
+		}
 		return result, nil
 	}
+	result.MrSigner = Result{Success: true}
 
 	// check isvProdId
 	if qeReportBody.ISVProdID != uint16(qeIdentity.EnclaveIdentity.IsvProdId) {
-		msg := fmt.Sprintf("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdId, qeReportBody.ISVProdID)
-		result.Summary.Details = msg
+		log.Tracef("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdId, qeReportBody.ISVProdID)
 		result.Summary.Success = false
+		result.IsvProdId = Result{
+			Success:  false,
+			Expected: strconv.FormatUint(uint64(qeIdentity.EnclaveIdentity.IsvProdId), 10),
+			Got:      strconv.FormatUint(uint64(qeReportBody.ISVProdID), 10),
+		}
 		return result, nil
 	}
+	result.IsvProdId = Result{Success: true}
 
 	// check miscselect
 	miscselectMask := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.MiscselectMask)
-	if binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.Miscselect) != (qeReportBody.MISCSELECT & miscselectMask) {
-		msg := fmt.Sprintf("miscSelect value from QEIdentity: %v does not match miscSelect value from QE Report: %v",
+	refMiscSelect := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.Miscselect)
+	reportMiscSelect := qeReportBody.MISCSELECT & miscselectMask
+	if refMiscSelect != reportMiscSelect {
+		log.Tracef("miscSelect value from QEIdentity: %v does not match miscSelect value from QE Report: %v",
 			qeIdentity.EnclaveIdentity.Miscselect, (qeReportBody.MISCSELECT & miscselectMask))
-		result.Summary.Details = msg
 		result.Summary.Success = false
+		result.MrSigner = Result{
+			Success:  false,
+			Expected: strconv.FormatUint(uint64(refMiscSelect), 10),
+			Got:      strconv.FormatUint(uint64(reportMiscSelect), 10),
+		}
 		return result, nil
 	}
+	result.MrSigner = Result{Success: true}
 
 	// check attributes
 	attributes_quote := qeReportBody.Attributes
@@ -861,11 +880,16 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 		}
 	}
 	if !bytes.Equal([]byte(qeIdentity.EnclaveIdentity.Attributes), attributes_quote[:]) {
-		msg := fmt.Sprintf("attributes mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Attributes, attributes_quote)
-		result.Summary.Details = msg
+		log.Tracef("attributes mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Attributes, attributes_quote)
 		result.Summary.Success = false
+		result.Attributes = Result{
+			Success:  false,
+			Expected: hex.EncodeToString(qeIdentity.EnclaveIdentity.Attributes),
+			Got:      hex.EncodeToString(attributes_quote[:]),
+		}
 		return result, nil
 	}
+	result.Attributes = Result{Success: true}
 
 	tcbStatus, tcbDate := getTcbStatusAndDateQE(qeIdentity, qeReportBody)
 	log.Tracef("TcbStatus for Enclave's Identity tcbLevel (isvSvn: %v): '%v'", qeReportBody.ISVSVN, tcbStatus)
@@ -874,7 +898,6 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	case Revoked:
 		fallthrough
 	case NotSupported:
-		result.Summary.Details = "invalid tcbStatus"
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
 		result.Summary.Success = false
@@ -1021,78 +1044,80 @@ func downloadCRL(uri string) (*x509.RevocationList, error) {
 }
 
 // Verifies a given SGX certificate chain, fetches CRLs and checks if the certs are outdated
-func VerifyIntelCertChainFull(quoteCerts SgxCertificates, ca string, intelCache string) ([][]*x509.Certificate, error) {
+func VerifyIntelCertChainFull(quoteCerts SgxCertificates, ca string, intelCache string) ([][]*x509.Certificate, ErrorCode) {
 	// verify PCK certificate chain
 	x509CertChains, err := internal.VerifyCertChain(
 		[]*x509.Certificate{quoteCerts.PCKCert, quoteCerts.IntermediateCert},
 		[]*x509.Certificate{quoteCerts.RootCACert})
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify pck certificate chain: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("Failed to verify pck certificate chain: %v", err)
+		return nil, VerifyPCKChain
 	}
 
 	// download CRLs from PCS
 	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME, "", intelCache)
 	if err != nil {
-		msg := fmt.Sprintf("downloading ROOT CA CRL from PCS failed: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("downloading ROOT CA CRL from PCS failed: %v", err)
+		return nil, DownloadRootCRL
 	}
 
 	pck_crl_uri := fmt.Sprintf(PCS_PCK_CERT_CRL_URI, ca)
 	pck_crl, err := fetchCRL(pck_crl_uri, PCK_CERT_CRL_NAME, ca, intelCache)
 	if err != nil {
-		msg := fmt.Sprintf("downloading PCK Cert CRL from PCS failed: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("downloading PCK Cert CRL from PCS failed: %v", err)
+		return nil, DownloadPCKCRL
 	}
 
 	// perform CRL checks (signature + values)
 	res, err := CrlCheck(root_ca_crl, quoteCerts.RootCACert, quoteCerts.RootCACert)
 	if !res || err != nil {
-		msg := fmt.Sprintf("CRL check on rootCert failed: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("CRL check on rootCert failed: %v", err)
+		return nil, CRLCheckRoot
 	}
 
 	res, err = CrlCheck(pck_crl, quoteCerts.PCKCert, quoteCerts.IntermediateCert)
 	if !res || err != nil {
-		msg := fmt.Sprintf("CRL check on pckCert failed: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("CRL check on pckCert failed: %v", err)
+		return nil, CRLCheckPCK
 	}
 
-	return x509CertChains, nil
+	return x509CertChains, NotSet
 }
 
 // Verifies the TCB signing cert chain
-func VerifyTCBSigningCertChain(quoteCerts SgxCertificates, intelCache string) ([][]*x509.Certificate, error) {
+func VerifyTCBSigningCertChain(quoteCerts SgxCertificates, intelCache string) ([][]*x509.Certificate, ErrorCode) {
 	tcbSigningCertChain, err := internal.VerifyCertChain(
 		[]*x509.Certificate{quoteCerts.TCBSigningCert},
 		[]*x509.Certificate{quoteCerts.RootCACert})
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TCB Signing certificate chain: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("Failed to verify TCB Signing certificate chain: %v", err)
+		return nil, VerifyTCBChain
 	}
 
 	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME, "", intelCache)
 	if err != nil {
-		msg := fmt.Sprintf("downloading Root CA CRL from PCS failed: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("downloading Root CA CRL from PCS failed: %v", err)
+		return nil, DownloadRootCRL
 	}
 
 	// perform CRL checks (signature + values)
 	res, err := CrlCheck(root_ca_crl, quoteCerts.TCBSigningCert, quoteCerts.RootCACert)
 	if !res || err != nil {
-		msg := fmt.Sprintf("CRL check on TcbSigningCert failed: %v", err)
-		return nil, errors.New(msg)
+		log.Tracef("CRL check on TcbSigningCert failed: %v", err)
+		return nil, CRLCheckSigningCert
 	}
 
-	return tcbSigningCertChain, nil
+	return tcbSigningCertChain, NotSet
 }
 
 func verifyQuoteVersion(quote QuoteHeader, version uint16) (Result, bool) {
 	r := Result{}
 	ok := quote.Version == version
 	if !ok {
-		msg := fmt.Sprintf("Quote version mismatch: Report = %v, supplied = %v", quote.Version, version)
-		r.setFalse(&msg)
+		log.Tracef("Quote version mismatch: Report = %v, supplied = %v", quote.Version, version)
+		r.Success = false
+		r.Expected = strconv.FormatUint(uint64(version), 10)
+		r.Got = strconv.FormatUint(uint64(quote.Version), 10)
 	} else {
 		r.Success = true
 	}

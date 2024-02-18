@@ -21,7 +21,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"fmt"
 	"sort"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -50,8 +49,8 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Evidence)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode TPM attestation data: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Warnf("Failed to decode TPM attestation data: %v", err)
+		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
 
@@ -59,9 +58,11 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
 		result.Freshness.Success = true
 	} else {
-		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
+		log.Warnf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
-		result.Freshness.setFalse(&msg)
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce)
+		result.Freshness.Got = hex.EncodeToString(tpmsAttest.ExtraData)
 		ok = false
 	}
 
@@ -80,17 +81,19 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 		log.Trace("Aggregated PCR matches quote PCR")
 		result.TpmResult.AggPcrQuoteMatch.Success = true
 	} else {
-		msg := fmt.Sprintf("Aggregated PCR does not match Quote PCR: %v vs. %v",
+		log.Warnf("Aggregated PCR does not match Quote PCR: %v vs. %v",
 			hex.EncodeToString(verPcr[:]),
 			hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
-		result.TpmResult.AggPcrQuoteMatch.setFalse(&msg)
+		result.TpmResult.AggPcrQuoteMatch.Success = false
+		result.TpmResult.AggPcrQuoteMatch.Expected = hex.EncodeToString(verPcr[:])
+		result.TpmResult.AggPcrQuoteMatch.Got = hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest)
 		ok = false
 	}
 
 	mCerts, err := internal.ParseCertsDer(tpmM.Certs)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to load measurement certs: %v", err)
-		result.Signature.CertChainCheck.setFalse(&msg)
+		log.Warnf("Failed to parse measurement certs: %v", err)
+		result.Signature.CertChainCheck.SetErr(ParseCert)
 		result.Summary.Success = false
 		return result, false
 	}
@@ -102,8 +105,8 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.Signature.CertChainCheck.setFalse(&msg)
+		log.Warnf("Failed to verify certificate chain: %v", err)
+		result.Signature.CertChainCheck.SetErr(VerifyCertChain)
 		ok = false
 	} else {
 		result.Signature.CertChainCheck.Success = true
@@ -333,45 +336,38 @@ func recalculatePcrs(tpmM Measurement, referenceValues []ReferenceValue) (map[in
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {
-	result := Result{}
-	result.Success = true
 
 	buf := new(bytes.Buffer)
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode TPM signature: %v", err)
-		result.setFalse(&msg)
-		return result
+		log.Warnf("Failed to decode TPM signature: %v", err)
+		return Result{Success: false, ErrorCode: Parse}
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
-		msg := fmt.Sprintf("Hash algorithm %v not supported", tpmtSig.Alg)
-		result.setFalse(&msg)
-		return result
+		log.Warnf("Hash algorithm %v not supported", tpmtSig.Alg)
+		return Result{Success: false, ErrorCode: UnsupportedAlgorithm}
 	}
 
 	// Extract public key from x509 certificate
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		msg := "Failed to extract public key from certificate"
-		result.setFalse(&msg)
-		return result
+		log.Warnf("Failed to extract public key from certificate")
+		return Result{Success: false, ErrorCode: ExtractPubKey}
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		msg := "Hash algorithm not supported"
-		result.setFalse(&msg)
-		return result
+		log.Warnf("Hash algorithm not supported")
+		return Result{Success: false, ErrorCode: UnsupportedAlgorithm}
 	}
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TPM quote signature: %v", err)
-		result.setFalse(&msg)
-		return result
+		log.Warnf("Failed to verify TPM quote signature: %v", err)
+		return Result{Success: false, ErrorCode: VerifySignature}
 	}
-	return result
+	return Result{Success: true}
 }

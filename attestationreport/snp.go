@@ -25,6 +25,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strconv"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -93,33 +94,33 @@ func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []Ref
 	ok := true
 
 	if len(referenceValues) == 0 {
-		msg := "Could not find SNP Reference Value"
-		result.Summary.setFalse(&msg)
+		log.Trace("Could not find SNP Reference Value")
+		result.Summary.SetErr(RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		msg := fmt.Sprintf("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
+		log.Tracef("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
 			len(referenceValues))
-		result.Summary.setFalse(&msg)
+		result.Summary.SetErr(RefValMultiple)
 		return result, false
 	}
 	snpReferenceValue := referenceValues[0]
 
 	if snpReferenceValue.Type != "SNP Reference Value" {
-		msg := fmt.Sprintf("SNP Reference Value invalid type %v", snpReferenceValue.Type)
-		result.Summary.setFalse(&msg)
+		log.Tracef("SNP Reference Value invalid type %v", snpReferenceValue.Type)
+		result.Summary.SetErr(RefValType)
 		return result, false
 	}
 	if snpReferenceValue.Snp == nil {
-		msg := "SNP Reference Value does not contain policy"
-		result.Summary.setFalse(&msg)
+		log.Trace("SNP Reference Value does not contain policy")
+		result.Summary.SetErr(DetailsNotPresent)
 		return result, false
 	}
 
 	// Extract the SNP attestation report data structure
 	s, err := DecodeSnpReport(snpM.Evidence)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode SNP report: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to decode SNP report: %v", err)
+		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
 
@@ -127,9 +128,11 @@ func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []Ref
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
+		log.Tracef("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
-		result.Freshness.setFalse(&msg)
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce)
+		result.Freshness.Got = hex.EncodeToString(s.ReportData[:])
 		ok = false
 	} else {
 		result.Freshness.Success = true
@@ -137,8 +140,8 @@ func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []Ref
 
 	certs, err := internal.ParseCertsDer(snpM.Certs)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse certificates: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse certificates: %v", err)
+		result.Summary.SetErr(ParseCert)
 		return result, false
 	}
 
@@ -215,8 +218,10 @@ func verifySnpVersion(s snpreport, version uint32) (Result, bool) {
 	r := Result{}
 	ok := s.Version == version
 	if !ok {
-		msg := fmt.Sprintf("SNP report version mismatch: Report = %v, supplied = %v", s.Version, version)
-		r.setFalse(&msg)
+		log.Tracef("SNP report version mismatch: Report = %v, supplied = %v", s.Version, version)
+		r.Success = false
+		r.Expected = strconv.FormatUint(uint64(version), 10)
+		r.Got = strconv.FormatUint(uint64(s.Version), 10)
 	} else {
 		r.Success = true
 	}
@@ -360,8 +365,8 @@ func verifySnpSignature(
 	result := SignatureResult{}
 
 	if len(reportRaw) < (header_offset + signature_offset) {
-		msg := "Internal Error: Report buffer too small"
-		result.SignCheck.setFalse(&msg)
+		log.Warn("Internal Error: Report buffer too small")
+		result.SignCheck.SetErr(Internal)
 		return result, false
 	}
 
@@ -386,32 +391,32 @@ func verifySnpSignature(
 	s.SetBytes(sRaw)
 
 	// Examine SNP x509 extensions
-	extensionResult, ok := verifySnpExtensions(certs[0], &report)
-	result.ExtensionsCheck = &extensionResult
+	extensionResults, ok := verifySnpExtensions(certs[0], &report)
+	result.ExtensionsCheck = extensionResults
 	if !ok {
 		return result, false
 	}
 
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
-		msg := fmt.Sprintf("Signature Algorithm %v not supported", report.SignatureAlgo)
-		result.SignCheck.setFalse(&msg)
+		log.Tracef("Signature Algorithm %v not supported", report.SignatureAlgo)
+		result.SignCheck.SetErr(UnsupportedAlgorithm)
 		return result, false
 	}
 
 	// Extract the public key from the certificate
 	pub, ok := certs[0].PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		msg := "Failed to extract ECDSA public key from certificate"
-		result.SignCheck.setFalse(&msg)
+		log.Trace("Failed to extract ECDSA public key from certificate")
+		result.SignCheck.SetErr(ExtractPubKey)
 		return result, false
 	}
 
 	// Verify ECDSA Signature represented by r and s
 	ok = ecdsa.Verify(pub, digest[:], r, s)
 	if !ok {
-		msg := "Failed to verify SNP report signature"
-		result.SignCheck.setFalse(&msg)
+		log.Trace("Failed to verify SNP report signature")
+		result.SignCheck.SetErr(VerifySignature)
 		return result, false
 	}
 	log.Trace("Successfully verified SNP report signature")
@@ -421,27 +426,29 @@ func verifySnpSignature(
 	ca := certs[len(certs)-1]
 	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.CertChainCheck.setFalse(&msg)
+		log.Tracef("Failed to verify certificate chain: %v", err)
+		result.CertChainCheck.SetErr(VerifyCertChain)
 		return result, false
 	}
 	// Verify that the reference value fingerprint matches the certificate fingerprint
 	if fingerprint == "" {
-		msg := "Reference value SNP CA fingerprint not present"
-		result.CertChainCheck.setFalse(&msg)
+		log.Trace("Reference value SNP CA fingerprint not present")
+		result.CertChainCheck.SetErr(NotPresent)
 		return result, false
 	}
 	refFingerprint, err := hex.DecodeString(fingerprint)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode CA fingerprint %v: %v", fingerprint, err)
-		result.CertChainCheck.setFalse(&msg)
+		log.Tracef("Failed to decode CA fingerprint %v: %v", fingerprint, err)
+		result.CertChainCheck.SetErr(ParseCAFingerprint)
 		return result, false
 	}
 	caFingerprint := sha256.Sum256(ca.Raw)
 	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		msg := fmt.Sprintf("Reference Values CA fingerprint '%v' does not match trusted CA fingerprint '%v'",
+		log.Tracef("Reference Values CA fingerprint '%v' does not match trusted CA fingerprint '%v'",
 			fingerprint, hex.EncodeToString(caFingerprint[:]))
-		result.CertChainCheck.setFalse(&msg)
+		result.CertChainCheck.Success = false
+		result.CertChainCheck.Expected = fingerprint
+		result.CertChainCheck.Got = hex.EncodeToString(caFingerprint[:])
 		return result, false
 	}
 	result.CertChainCheck.Success = true
@@ -458,44 +465,45 @@ func verifySnpSignature(
 	return result, true
 }
 
-func verifySnpExtensions(cert *x509.Certificate, report *snpreport) (ResultMulti, bool) {
-	result := ResultMulti{}
-	ok := true
+func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]Result, bool) {
+	success := true
+	var ok bool
+	var r Result
 	tcb := report.CurrentTcb
 
-	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.1", uint8(tcb)); err != nil {
-		msg := fmt.Sprintf("SEV BL Extension Check failed: %v", err)
-		result.setFalseMulti(&msg)
+	results := make([]Result, 0)
+
+	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.1", uint8(tcb)); !ok {
+		log.Tracef("SEV BL Extension Check failed:")
+		success = false
+	}
+	results = append(results, r)
+
+	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.2", uint8(tcb>>8)); !ok {
+		log.Tracef("SEV TEE Extension Check failed")
 		ok = false
 	}
+	results = append(results, r)
 
-	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.2", uint8(tcb>>8)); err != nil {
-		msg := fmt.Sprintf("SEV TEE Extension Check failed: %v", err)
-		result.setFalseMulti(&msg)
+	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.3", uint8(tcb>>48)); !ok {
+		log.Tracef("SEV SNP Extension Check failed")
 		ok = false
 	}
+	results = append(results, r)
 
-	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.3", uint8(tcb>>48)); err != nil {
-		msg := fmt.Sprintf("SEV SNP Extension Check failed: %v", err)
-		result.setFalseMulti(&msg)
+	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.8", uint8(tcb>>56)); !ok {
+		log.Tracef("SEV UCODE Extension Check failed")
 		ok = false
 	}
+	results = append(results, r)
 
-	if err := checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.8", uint8(tcb>>56)); err != nil {
-		msg := fmt.Sprintf("SEV UCODE Extension Check failed: %v", err)
-		result.setFalseMulti(&msg)
+	if r, ok = checkExtensionBuf(cert, "1.3.6.1.4.1.3704.1.4", report.ChipId[:]); !ok {
+		log.Tracef("Chip ID Extension Check failed")
 		ok = false
 	}
+	results = append(results, r)
 
-	if err := checkExtensionBuf(cert, "1.3.6.1.4.1.3704.1.4", report.ChipId[:]); err != nil {
-		msg := fmt.Sprintf("Chip ID Extension Check failed: %v", err)
-		result.setFalseMulti(&msg)
-		ok = false
-	}
-
-	result.Success = ok
-
-	return result, ok
+	return results, success
 }
 
 func min(v []uint8) uint8 {

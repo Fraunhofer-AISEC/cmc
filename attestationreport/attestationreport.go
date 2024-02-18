@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/fxamacker/cbor/v2"
@@ -413,7 +414,7 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 		// Extract plain payload (i.e. the manifest/description itself)
 		data, err := s.GetPayload(metadata[i])
 		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
+			log.Tracef("Failed to parse metadata object %v: %v", i, err)
 			continue
 		}
 
@@ -422,7 +423,7 @@ func Generate(nonce []byte, metadata [][]byte, measurers []Driver, s Serializer)
 		elem := new(MetaInfo)
 		err = s.Unmarshal(data, elem)
 		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object %v: %v", i, err)
+			log.Tracef("Failed to unmarshal data from metadata object %v: %v", i, err)
 			continue
 		}
 
@@ -497,9 +498,9 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	cas, err := internal.ParseCertsPem(casPem)
 	if err != nil {
+		log.Tracef("Failed to parse specified CA certificate(s): %v", err)
 		result.Success = false
-		result.ProcessingError = append(result.ProcessingError,
-			fmt.Sprintf("Failed to parse specified CA certificate(s): %v", err))
+		result.ErrorCode = ParseCA
 		return result
 	}
 
@@ -512,36 +513,34 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		log.Trace("Detected CBOR serialization")
 		s = CborSerializer{}
 	} else {
+		log.Trace("Unable to detect AR serialization format")
 		result.Success = false
-		result.ProcessingError = append(result.ProcessingError,
-			"Unable to detect AR serialization format")
+		result.ErrorCode = UnknownSerialization
 		return result
 	}
 
 	// Verify and unpack attestation report
-	ok, ar := verifyAr(arRaw, &result, cas, s)
-	if ar == nil {
-		result.InternalError = true
-	}
-	if !ok {
+	ar, tr, code := verifyAr(arRaw, cas, s)
+	result.ReportSignature = tr.SignatureCheck
+	if code != NotSet {
+		result.ErrorCode = code
 		result.Success = false
-		return result
 	}
 
 	// Verify and unpack metadata from attestation report
-	ok, metadata := verifyMetadata(ar, &result, cas, s)
-	if metadata == nil {
-		result.InternalError = true
-	}
+	metadata, mr, ok := verifyMetadata(ar, cas, s)
 	if !ok {
 		result.Success = false
-		return result
 	}
+	result.MetadataResult = *mr
 
 	// Verify nonce
 	if res := bytes.Compare(ar.Nonce, nonce); res != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: SuppliedNonce = %v, AttestationReport Nonce = %v", hex.EncodeToString(nonce), hex.EncodeToString(ar.Nonce))
-		result.FreshnessCheck.setFalse(&msg)
+		log.Tracef("Nonces mismatch: supplied nonce: %v, report nonce = %v",
+			hex.EncodeToString(nonce), hex.EncodeToString(ar.Nonce))
+		result.FreshnessCheck.Success = false
+		result.FreshnessCheck.Expected = hex.EncodeToString(ar.Nonce)
+		result.FreshnessCheck.Got = hex.EncodeToString(nonce)
 		result.Success = false
 	} else {
 		result.FreshnessCheck.Success = true
@@ -549,8 +548,9 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	refVals, err := collectReferenceValues(metadata)
 	if err != nil {
-		result.ProcessingError = append(result.ProcessingError, err.Error())
+		log.Tracef("Failed to collect reference values: %v", err)
 		result.Success = false
+		result.ErrorCode = RefValTypeNotSupported
 	}
 
 	hwAttest := false
@@ -600,9 +600,9 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 			hwAttest = true
 
 		default:
+			log.Tracef("Unsupported measurement type '%v'", mtype)
 			result.Success = false
-			msg := fmt.Sprintf("Unsupported measurement type '%v'", mtype)
-			result.ProcessingError = append(result.ProcessingError, msg)
+			result.ErrorCode = MeasurementTypeNotSupported
 		}
 	}
 
@@ -624,86 +624,105 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	// If there are reference values with a higher trust level present, the remote attestation
 	// must fail
 	if !hwAttest && aggCertLevel > 1 {
-		msg := fmt.Sprintf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
-		result.ProcessingError = append(result.ProcessingError, msg)
+		log.Tracef("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
+		result.ErrorCode = InvalidCertificationLevel
 		result.Success = false
 	}
 	result.SwCertLevel = aggCertLevel
 
 	// Verify the compatibility of the attestation report through verifying the
 	// compatibility of all components
-	appDescriptions := make([]string, 0)
-	for _, a := range metadata.DeviceDescription.AppDescriptions {
-		appDescriptions = append(appDescriptions, a.AppManifest)
-	}
 
 	// Check that the OS and RTM Manifest are specified in the Device Description
 	if metadata.DeviceDescription.RtmManifest == metadata.RtmManifest.Name {
 		result.DevDescResult.CorrectRtm.Success = true
 	} else {
-		msg := fmt.Sprintf("Device Description listed wrong RTM Manifest: %v vs. %v", metadata.DeviceDescription.RtmManifest, metadata.RtmManifest.Name)
-		result.DevDescResult.CorrectRtm.setFalse(&msg)
+		log.Tracef("Device Description listed wrong RTM Manifest: %v vs. %v",
+			metadata.DeviceDescription.RtmManifest, metadata.RtmManifest.Name)
+		result.DevDescResult.CorrectRtm.Success = false
+		result.DevDescResult.CorrectRtm.Expected = metadata.DeviceDescription.RtmManifest
+		result.DevDescResult.CorrectRtm.Got = metadata.RtmManifest.Name
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
 	}
 	if metadata.DeviceDescription.OsManifest == metadata.OsManifest.Name {
 		result.DevDescResult.CorrectOs.Success = true
 	} else {
-		msg := fmt.Sprintf("Device Description listed wrong OS Manifest: %v vs. %v", metadata.DeviceDescription.OsManifest, metadata.OsManifest.Name)
-		result.DevDescResult.CorrectOs.setFalse(&msg)
+		log.Tracef("Device Description listed wrong OS Manifest: %v vs. %v",
+			metadata.DeviceDescription.OsManifest, metadata.OsManifest.Name)
+		result.DevDescResult.CorrectOs.Success = false
+		result.DevDescResult.CorrectOs.Expected = metadata.DeviceDescription.OsManifest
+		result.DevDescResult.CorrectOs.Got = metadata.OsManifest.Name
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
 	}
 
 	// Check that every AppManifest has a corresponding AppDescription
-	result.DevDescResult.CorrectApps.Success = true
+	appDescriptions := make([]string, 0)
+	for _, a := range metadata.DeviceDescription.AppDescriptions {
+		appDescriptions = append(appDescriptions, a.AppManifest)
+	}
 	for _, a := range metadata.AppManifests {
+		r := Result{
+			Success:       true,
+			ExpectedOneOf: appDescriptions,
+			Got:           a.Name,
+		}
 		if !contains(a.Name, appDescriptions) {
-			msg := fmt.Sprintf("Device Description does not list the following App Manifest: %v", a.Name)
-			result.DevDescResult.CorrectApps.setFalseMulti(&msg)
+			log.Tracef("Device Description does not list the following App Manifest: %v", a.Name)
+			r.Success = false
 			result.DevDescResult.Summary.Success = false
 			result.Success = false
 		}
+		result.DevDescResult.CorrectApps = append(result.DevDescResult.CorrectApps, r)
 	}
 
 	// Check that the Rtm Manifest is compatible with the OS Manifest
 	if contains(metadata.RtmManifest.Name, metadata.OsManifest.Rtms) {
 		result.DevDescResult.RtmOsCompatibility.Success = true
 	} else {
-		msg := fmt.Sprintf("RTM Manifest %v is not compatible with OS Manifest %v", metadata.RtmManifest.Name, metadata.OsManifest.Name)
-		result.DevDescResult.RtmOsCompatibility.setFalse(&msg)
+		log.Tracef("RTM Manifest %v is not compatible with OS Manifest %v",
+			metadata.RtmManifest.Name, metadata.OsManifest.Name)
+		result.DevDescResult.RtmOsCompatibility.Success = false
+		result.DevDescResult.RtmOsCompatibility.ExpectedOneOf = metadata.OsManifest.Rtms
+		result.DevDescResult.RtmOsCompatibility.Got = metadata.RtmManifest.Name
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
 	}
 
 	// Check that the OS Manifest is compatible with all App Manifests
-	result.DevDescResult.OsAppsCompatibility.Success = true
 	for _, a := range metadata.AppManifests {
+		r := Result{
+			Success:       true,
+			ExpectedOneOf: a.Oss,
+			Got:           metadata.OsManifest.Name,
+		}
 		if !contains(metadata.OsManifest.Name, a.Oss) {
-			msg := fmt.Sprintf("OS Manifest %v is not compatible with App Manifest %v", metadata.OsManifest.Name, a.Name)
-			result.DevDescResult.OsAppsCompatibility.setFalseMulti(&msg)
+			log.Tracef("OS Manifest %v is not compatible with App Manifest %v", metadata.OsManifest.Name, a.Name)
+			r.Success = false
 			result.DevDescResult.Summary.Success = false
 			result.Success = false
 		}
+		result.DevDescResult.OsAppsCompatibility =
+			append(result.DevDescResult.OsAppsCompatibility, r)
 	}
 
 	// Validate policies if specified
+	result.PolicySuccess = true
 	if policies != nil {
-		result.PolicySuccess = true
-
 		p, ok := policyEngines[polEng]
 		if !ok {
-			msg := fmt.Sprintf("Internal error: policy engine %v not implemented", polEng)
-			result.ProcessingError = append(result.ProcessingError, msg)
-			log.Trace(msg)
+			log.Tracef("Internal error: policy engine %v not implemented", polEng)
 			result.Success = false
+			result.ErrorCode = PolicyEngineNotImplemented
+			result.PolicySuccess = false
 		} else {
 			ok = p.Validate(policies, result)
 			if !ok {
+				log.Trace("Custom policy validation failed")
 				result.Success = false
-				msg := "Custom policy validation failed"
-				result.ProcessingError = append(result.ProcessingError, msg)
-				log.Warnf(msg)
+				result.ErrorCode = VerifyPolicies
+				result.PolicySuccess = false
 			}
 		}
 	} else {
@@ -735,43 +754,33 @@ func extendSha384(hash []byte, data []byte) []byte {
 	return ret
 }
 
-func verifyAr(attestationReport []byte, result *VerificationResult,
-	cas []*x509.Certificate, s Serializer,
-) (bool, *AttestationReport) {
-
-	if result == nil {
-		log.Warn("Provided Validation Result was nil")
-		return false, nil
-	}
+func verifyAr(attestationReport []byte, cas []*x509.Certificate, s Serializer,
+) (*AttestationReport, TokenResult, ErrorCode) {
 
 	ar := AttestationReport{}
 
 	//Validate Attestation Report signature
-	tokenRes, payload, ok := s.VerifyToken(attestationReport, cas)
-	result.ReportSignature = tokenRes.SignatureCheck
+	result, payload, ok := s.VerifyToken(attestationReport, cas)
 	if !ok {
 		log.Trace("Validation of Attestation Report failed")
-		result.Success = false
-		return false, &ar
+		return nil, result, VerifyAR
 	}
 
 	err := s.Unmarshal(payload, &ar)
 	if err != nil {
-		msg := fmt.Sprintf("Parsing of Attestation Report failed: %v", err)
-		result.ProcessingError = append(result.ProcessingError, msg)
-		log.Trace(msg)
-		result.Success = false
-		return false, &ar
+		log.Tracef("Parsing of Attestation Report failed: %v", err)
+		return nil, result, ParseAR
 	}
 
-	return true, &ar
+	return &ar, result, NotSet
 }
 
-func verifyMetadata(ar *AttestationReport, result *VerificationResult,
-	cas []*x509.Certificate, s Serializer,
-) (bool, *Metadata) {
+func verifyMetadata(ar *AttestationReport, cas []*x509.Certificate, s Serializer,
+) (*Metadata, *MetadataResult, bool) {
 
-	metadata := Metadata{}
+	metadata := &Metadata{}
+	result := &MetadataResult{}
+	success := true
 
 	// Validate and unpack Rtm Manifest
 	tokenRes, payload, ok := s.VerifyToken(ar.RtmManifest, cas)
@@ -779,20 +788,21 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of RTM Manifest failed")
-		result.Success = false
+		success = false
 	} else {
 		err := s.Unmarshal(payload, &metadata.RtmManifest)
 		if err != nil {
-			msg := fmt.Sprintf("Unpacking of RTM Manifest failed: %v", err)
-			result.RtmResult.Summary.setFalseMulti(&msg)
-			result.Success = false
+			log.Tracef("Unpacking of RTM Manifest failed: %v", err)
+			result.RtmResult.Summary.Success = false
+			result.RtmResult.Summary.ErrorCode = ParseRTMManifest
+			success = false
 		} else {
 			result.RtmResult.MetaInfo = metadata.RtmManifest.MetaInfo
 			result.RtmResult.ValidityCheck = checkValidity(metadata.RtmManifest.Validity)
 			result.RtmResult.Details = metadata.RtmManifest.Details
 			if !result.RtmResult.ValidityCheck.Success {
 				result.RtmResult.Summary.Success = false
-				result.Success = false
+				success = false
 			}
 		}
 	}
@@ -803,20 +813,21 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of OS Manifest failed")
-		result.Success = false
+		success = false
 	} else {
 		err := s.Unmarshal(payload, &metadata.OsManifest)
 		if err != nil {
-			msg := fmt.Sprintf("Unpacking of OS Manifest failed: %v", err)
-			result.OsResult.Summary.setFalseMulti(&msg)
-			result.Success = false
+			log.Tracef("Unpacking of OS Manifest failed: %v", err)
+			result.OsResult.Summary.Success = false
+			result.OsResult.Summary.ErrorCode = ParseOSManifest
+			success = false
 		} else {
 			result.OsResult.MetaInfo = metadata.OsManifest.MetaInfo
 			result.OsResult.ValidityCheck = checkValidity(metadata.OsManifest.Validity)
 			result.OsResult.Details = metadata.OsManifest.Details
 			if !result.OsResult.ValidityCheck.Success {
 				result.OsResult.Summary.Success = false
-				result.Success = false
+				success = false
 			}
 		}
 	}
@@ -830,22 +841,23 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
 			log.Trace("Validation of App Manifest failed")
-			result.Success = false
+			success = false
 		} else {
 			var am AppManifest
 			err := s.Unmarshal(payload, &am)
 			if err != nil {
-				msg := fmt.Sprintf("Unpacking of App Manifest failed: %v", err)
-				result.AppResults[i].Summary.setFalseMulti(&msg)
-				result.Success = false
+				log.Tracef("Unpacking of App Manifest failed: %v", err)
+				result.AppResults[i].Summary.Success = false
+				result.AppResults[i].Summary.ErrorCode = Parse
+				success = false
 			} else {
 				metadata.AppManifests = append(metadata.AppManifests, am)
 				result.AppResults[i].MetaInfo = am.MetaInfo
 				result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
 				if !result.AppResults[i].ValidityCheck.Success {
-					log.Trace("App Manifest invalid - " + am.Name)
+					log.Tracef("App Manifest %v validity check failed", am.Name)
 					result.AppResults[i].Summary.Success = false
-					result.Success = false
+					success = false
 
 				}
 			}
@@ -860,13 +872,14 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
 		if !ok {
 			log.Trace("Validation of Company Description Signatures failed")
-			result.Success = false
+			success = false
 		} else {
 			err := s.Unmarshal(payload, &metadata.CompanyDescription)
 			if err != nil {
-				msg := fmt.Sprintf("Unpacking of Company Description failed: %v", err)
-				result.CompDescResult.Summary.setFalseMulti(&msg)
-				result.Success = false
+				log.Tracef("Unpacking of Company Description failed: %v", err)
+				result.CompDescResult.Summary.Success = false
+				result.CompDescResult.Summary.ErrorCode = Parse
+				success = false
 			} else {
 				result.CompDescResult.MetaInfo = metadata.CompanyDescription.MetaInfo
 				result.CompDescResult.CompCertLevel = metadata.CompanyDescription.CertificationLevel
@@ -875,7 +888,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 				if !result.CompDescResult.ValidityCheck.Success {
 					log.Trace("Company Description invalid")
 					result.CompDescResult.Summary.Success = false
-					result.Success = false
+					success = false
 				}
 			}
 		}
@@ -887,12 +900,14 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
 		log.Trace("Validation of Device Description failed")
-		result.Success = false
+		success = false
 	} else {
 		err := s.Unmarshal(payload, &metadata.DeviceDescription)
 		if err != nil {
-			msg := fmt.Sprintf("Unpacking of Device Description failed: %v", err)
-			result.DevDescResult.Summary.setFalseMulti(&msg)
+			log.Tracef("Unpacking of Device Description failed: %v", err)
+			result.DevDescResult.Summary.Success = false
+			result.DevDescResult.Summary.ErrorCode = Parse
+			success = false
 		} else {
 			result.DevDescResult.MetaInfo = metadata.DeviceDescription.MetaInfo
 			result.DevDescResult.Description = metadata.DeviceDescription.Description
@@ -900,7 +915,7 @@ func verifyMetadata(ar *AttestationReport, result *VerificationResult,
 		}
 	}
 
-	return true, &metadata
+	return metadata, result, success
 }
 
 func checkValidity(val Validity) Result {
@@ -909,26 +924,30 @@ func checkValidity(val Validity) Result {
 
 	notBefore, err := time.Parse(time.RFC3339, val.NotBefore)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse NotBefore time. Time.Parse returned %v", err)
-		result.setFalse(&msg)
+		log.Tracef("Failed to parse NotBefore time. Time.Parse returned %v", err)
+		result.Success = false
+		result.ErrorCode = ParseTime
 		return result
 	}
 	notAfter, err := time.Parse(time.RFC3339, val.NotAfter)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse NotAfter time. Time.Parse returned %v", err)
-		result.setFalse(&msg)
+		log.Tracef("Failed to parse NotAfter time. Time.Parse returned %v", err)
+		result.Success = false
+		result.ErrorCode = ParseTime
 		return result
 	}
 	currentTime := time.Now()
 
 	if notBefore.After(currentTime) {
-		msg := "Validity check failed: Artifact is not valid yet"
-		result.setFalse(&msg)
+		log.Trace("Validity check failed: Artifact is not valid yet")
+		result.Success = false
+		result.ErrorCode = NotYetValid
 	}
 
 	if currentTime.After(notAfter) {
-		msg := "Validity check failed: Artifact validity has expired"
-		result.setFalse(&msg)
+		log.Trace("Validity check failed: Artifact validity has expired")
+		result.Success = false
+		result.ErrorCode = Expired
 	}
 
 	return result
@@ -963,51 +982,77 @@ func collectReferenceValues(metadata *Metadata) (map[string][]ReferenceValue, er
 	return verMap, nil
 }
 
-func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) error {
+func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (Result, bool) {
 
 	for _, ext := range cert.Extensions {
 
 		if ext.Id.String() == oid {
 			if len(ext.Value) != 3 && len(ext.Value) != 4 {
-				return fmt.Errorf("extension %v value unexpected length %v (expected 3 or 4)", oid, len(ext.Value))
+				log.Tracef("extension %v value unexpected length %v (expected 3 or 4)",
+					oid, len(ext.Value))
+				return Result{Success: false, ErrorCode: OidLength}, false
 			}
 			if ext.Value[0] != 0x2 {
-				return fmt.Errorf("extension %v value[0] = %v does not match expected value 2 (tag Integer)", oid, ext.Value[0])
+				log.Tracef("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
+					oid, ext.Value[0])
+				return Result{Success: false, ErrorCode: OidTag}, false
 			}
 			if ext.Value[1] == 0x1 {
 				if ext.Value[2] != value {
-					return fmt.Errorf("extension %v value[2] = %v does not match expected value %v", oid, ext.Value[2], value)
+					log.Tracef("extension %v value[2]: %v does not match expected value %v",
+						oid, ext.Value[2], value)
+					return Result{
+						Success:  false,
+						Expected: strconv.FormatUint(uint64(value), 10),
+						Got:      strconv.FormatUint(uint64(ext.Value[2]), 10),
+					}, false
 				}
 			} else if ext.Value[1] == 0x2 {
 				// Due to openssl, the sign bit must remain zero for positive integers
 				// even though this field is defined as unsigned int in the AMD spec
 				// Thus, if the most significant bit is required, one byte of additional 0x00 padding is added
 				if ext.Value[2] != 0x00 || ext.Value[3] != value {
-					return fmt.Errorf("extension %v value = %v%v does not match expected value  %v", oid, ext.Value[2], ext.Value[3], value)
+					log.Tracef("extension %v value = %v%v does not match expected value  %v",
+						oid, ext.Value[2], ext.Value[3], value)
+					return Result{
+						Success:  false,
+						Expected: strconv.FormatUint(uint64(value), 10),
+						Got:      strconv.FormatUint(uint64(ext.Value[3]), 10),
+					}, false
 				}
 			} else {
-				return fmt.Errorf("extension %v value[1] = %v does not match expected value 1 or 2 (length of integer)", oid, ext.Value[1])
+				log.Tracef("extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
+					oid, ext.Value[1])
+				return Result{Success: false, ErrorCode: OidLength}, false
 			}
-			return nil
+			return Result{Success: true}, true
 		}
 	}
 
-	return fmt.Errorf("extension %v not present in certificate", oid)
+	log.Tracef("extension %v not present in certificate", oid)
+	return Result{Success: false, ErrorCode: OidNotPresent}, false
 }
 
-func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) error {
+func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (Result, bool) {
 
 	for _, ext := range cert.Extensions {
 
 		if ext.Id.String() == oid {
 			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
-				return fmt.Errorf("extension %v value %v does not match expected value %v", oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
+				log.Tracef("extension %v value %v does not match expected value %v",
+					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
+				return Result{
+					Success:  false,
+					Expected: hex.EncodeToString(buf),
+					Got:      hex.EncodeToString(ext.Value),
+				}, false
 			}
-			return nil
+			return Result{Success: false}, false
 		}
 	}
 
-	return fmt.Errorf("extension %v not present in certificate", oid)
+	log.Tracef("extension %v not present in certificate", oid)
+	return Result{Success: false, ErrorCode: OidNotPresent}, false
 }
 
 func contains(elem string, list []string) bool {
@@ -1017,20 +1062,4 @@ func contains(elem string, list []string) bool {
 		}
 	}
 	return false
-}
-
-func (r *Result) setFalse(msg *string) {
-	r.Success = false
-	if msg != nil {
-		r.Details = *msg
-		log.Trace(*msg)
-	}
-}
-
-func (r *ResultMulti) setFalseMulti(msg *string) {
-	r.Success = false
-	if msg != nil {
-		r.Details = append(r.Details, *msg)
-		log.Trace(*msg)
-	}
 }

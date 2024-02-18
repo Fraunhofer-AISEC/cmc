@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/hex"
-	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/veraison/go-cose"
@@ -60,14 +59,14 @@ func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []Ref
 	log.Tracef("Parsing %v certificates", len(iasM.Certs))
 	certs, err := internal.ParseCertsDer(iasM.Certs)
 	if err != nil {
-		msg := fmt.Sprintf("failed to parse IAS certificates: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("failed to parse IAS certificates: %v", err)
+		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
 
 	if len(referenceValues) == 0 {
-		msg := "Could not find IAS Reference Value"
-		result.Summary.setFalse(&msg)
+		log.Tracef("Could not find IAS Reference Value")
+		result.Summary.SetErr(RefValNotPresent)
 		return result, false
 	}
 	s := CborSerializer{}
@@ -76,19 +75,19 @@ func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []Ref
 
 	iatresult, payload, ok := verifyIat(iasM.Evidence, certs[0])
 	if !ok {
-		msg := "IAS signature verification failed"
-		result.Summary.setFalse(&msg)
+		log.Tracef("IAS signature verification failed")
+		result.Summary.SetErr(VerifySignature)
 		return result, false
 	}
-	result.Signature = iatresult
+	result.Signature.SignCheck = iatresult
 
 	log.Trace("Unmarshalling CBOR IAT")
 
 	iat := &Iat{}
 	err = s.Unmarshal(payload, iat)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to unmarshal IAT: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to unmarshal IAT: %v", err)
+		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
 
@@ -98,8 +97,10 @@ func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []Ref
 	if bytes.Equal(nonce, iat.AuthChallenge) {
 		result.Freshness.Success = true
 	} else {
-		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, IAT Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(iat.AuthChallenge))
-		result.Freshness.setFalse(&msg)
+		log.Tracef("Nonces mismatch: Supplied Nonce = %v, IAT Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(iat.AuthChallenge))
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce)
+		result.Freshness.Got = hex.EncodeToString(iat.AuthChallenge)
 		ok = false
 	}
 
@@ -108,8 +109,8 @@ func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []Ref
 	// Verify certificate chain
 	x509Chains, err := internal.VerifyCertChain(certs, cas)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-		result.Signature.CertChainCheck.setFalse(&msg)
+		log.Tracef("Failed to verify certificate chain: %v", err)
+		result.Signature.CertChainCheck.SetErr(VerifyCertChain)
 		ok = false
 	} else {
 		result.Signature.CertChainCheck.Success = true
@@ -132,8 +133,8 @@ func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []Ref
 	for _, ver := range referenceValues {
 		log.Tracef("Found reference value %v: %v", ver.Name, hex.EncodeToString(ver.Sha256))
 		if ver.Type != "IAS Reference Value" {
-			msg := fmt.Sprintf("IAS Reference Value invalid type %v", ver.Type)
-			result.Summary.setFalse(&msg)
+			log.Tracef("IAS Reference Value invalid type %v", ver.Type)
+			result.Summary.SetErr(RefValType)
 			return result, false
 		}
 		found := false
@@ -189,43 +190,34 @@ func verifyIasMeasurements(iasM Measurement, nonce []byte, referenceValues []Ref
 	return result, ok
 }
 
-func verifyIat(data []byte, cert *x509.Certificate) (SignatureResult, []byte, bool) {
-
-	result := SignatureResult{
-		CertChainCheck: Result{Success: true},
-	}
+func verifyIat(data []byte, cert *x509.Certificate) (Result, []byte, bool) {
 
 	// create a Sign1Message from a raw COSE_Sign payload
 	var msgToVerify cose.Sign1Message
 	err := msgToVerify.UnmarshalCBOR(data)
 	if err != nil {
-		log.Warnf("error unmarshalling cose: %v", err)
-		return result, nil, false
+		log.Tracef("error unmarshalling cose: %v", err)
+		return Result{Success: false, ErrorCode: ParseEvidence}, nil, false
 	}
 
 	publicKey, okKey := cert.PublicKey.(*ecdsa.PublicKey)
 	if !okKey {
-		msg := fmt.Sprintf("Failed to extract public key from certificate: %v", err)
-		result.SignCheck.setFalse(&msg)
-		return result, nil, false
+		log.Tracef("Failed to extract public key from certificate: %v", err)
+		return Result{Success: false, ErrorCode: ExtractPubKey}, nil, false
 	}
 
 	// create a verifier from a trusted private key
 	verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to create verifier: %v", err)
-		result.SignCheck.setFalse(&msg)
-		return result, nil, false
+		log.Tracef("Failed to create verifier: %v", err)
+		return Result{Success: false, ErrorCode: Internal}, nil, false
 	}
 
 	err = msgToVerify.Verify(nil, verifier)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify COSE token: %v", err)
-		result.SignCheck.setFalse(&msg)
-		return result, nil, false
+		log.Tracef("Failed to verify COSE token: %v", err)
+		return Result{Success: false, ErrorCode: VerifySignature}, nil, false
 	}
 
-	result.SignCheck.Success = true
-
-	return result, msgToVerify.Payload, true
+	return Result{Success: true}, msgToVerify.Payload, true
 }
