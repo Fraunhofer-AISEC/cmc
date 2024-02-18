@@ -164,8 +164,9 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		log.Debug("Using system certificate pool in absence of provided root certifcates")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
-			msg := "Failed to setup trusted cert pool with system certificate pool"
-			result.Summary.setFalseMulti(&msg)
+			log.Warnf("Failed to setup trusted cert pool with system certificate pool")
+			result.Summary.Success = false
+			result.Summary.ErrorCode = SetupSystemCA
 			return result, nil, false
 		}
 	} else {
@@ -182,14 +183,16 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 
 	jwsData, err := jose.ParseSigned(string(data))
 	if err != nil {
-		msg := fmt.Sprintf("Data could not be parsed: %v", err)
-		result.Summary.setFalseMulti(&msg)
+		log.Warnf("Data could not be parsed: %v", err)
+		result.Summary.Success = false
+		result.Summary.ErrorCode = ParseJSON
 		return result, nil, false
 	}
 
 	if len(jwsData.Signatures) == 0 {
-		msg := "JWS does not contain signatures"
-		result.Summary.setFalseMulti(&msg)
+		log.Warnf("JWS does not contain signatures")
+		result.Summary.Success = false
+		result.Summary.ErrorCode = JWSNoSignatures
 		return result, nil, false
 	}
 
@@ -200,8 +203,9 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 
 		certs, err := sig.Protected.Certificates(opts)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to verify certificate chain: %v", err)
-			result.SignatureCheck[i].CertChainCheck.setFalse(&msg)
+			log.Warnf("Failed to verify certificate chain: %v", err)
+			result.SignatureCheck[i].CertChainCheck.Success = false
+			result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
 			ok = false
 			continue
 		}
@@ -221,20 +225,23 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		if err == nil {
 			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
-			msg := fmt.Sprintf("Signature verification failed: %v", err)
-			result.SignatureCheck[i].SignCheck.setFalse(&msg)
+			log.Warnf("Signature verification failed: %v", err)
+			result.SignatureCheck[i].SignCheck.Success = false
+			result.SignatureCheck[i].SignCheck.ErrorCode = VerifySignature
 			ok = false
 		}
 
 		if index[i] != i {
-			msg := "order of signatures incorrect"
-			result.Summary.setFalseMulti(&msg)
+			log.Warn("order of signatures incorrect")
+			result.Summary.Success = false
+			result.Summary.ErrorCode = JWSSignatureOrder
 		}
 
 		if i > 0 {
 			if !bytes.Equal(payloads[i], payloads[i-1]) {
-				msg := "payloads differ for jws with multiple signatures"
-				result.Summary.setFalseMulti(&msg)
+				log.Warn("payloads differ for jws with multiple signatures")
+				result.Summary.Success = false
+				result.Summary.ErrorCode = JWSPayload
 			}
 		}
 	}

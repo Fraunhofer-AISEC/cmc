@@ -17,7 +17,9 @@ package attestationreport
 
 import (
 	"crypto/x509"
+	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -28,20 +30,23 @@ import (
 type VerificationResult struct {
 	Type            string              `json:"type"`
 	Success         bool                `json:"raSuccessful"`
-	Prover          string              `json:"prover,omitempty"`  // Name of the proving device the report was created for
-	Created         string              `json:"created,omitempty"` // Timestamp the attestation verification was completed
-	SwCertLevel     int                 `json:"swCertLevel"`       // Overall certification level for the software stack
-	FreshnessCheck  Result              `json:"freshnessCheck"`    // Result for comparison of the expected nonce to the one provided in the attestation report
+	ErrorCode       ErrorCode           `json:"errorCode,omitempty"` // Set in case of global errors
+	Prover          string              `json:"prover,omitempty"`    // Name of the proving device the report was created for
+	Created         string              `json:"created,omitempty"`   // Timestamp the attestation verification was completed
+	SwCertLevel     int                 `json:"swCertLevel"`         // Overall certification level for the software stack
+	FreshnessCheck  Result              `json:"freshnessCheck"`      // Result for comparison of the expected nonce to the one provided in the attestation report
 	Measurements    []MeasurementResult `json:"measurements"`
 	ReportSignature []SignatureResult   `json:"reportSignatureCheck"` // Result for validation of the overall report signature
-	CompDescResult  *CompDescResult     `json:"companyValidation,omitempty"`
-	RtmResult       ManifestResult      `json:"rtmValidation"`
-	OsResult        ManifestResult      `json:"osValidation"`
-	AppResults      []ManifestResult    `json:"appValidation,omitempty"`
-	DevDescResult   DevDescResult       `json:"deviceDescValidation"`
-	PolicySuccess   bool                `json:"policySuccess,omitempty"`   // Result of custom policy validation (if utilized)
-	ProcessingError []string            `json:"processingError,omitempty"` // Documentation of processing errors (dependent from provided Attestation Report) which hindered a complete validation
-	InternalError   bool                `json:"internalError,omitempty"`
+	MetadataResult
+	PolicySuccess bool `json:"policySuccess,omitempty"` // Result of custom policy validation (if utilized)
+}
+
+type MetadataResult struct {
+	CompDescResult *CompDescResult  `json:"companyValidation,omitempty"`
+	RtmResult      ManifestResult   `json:"rtmValidation"`
+	OsResult       ManifestResult   `json:"osValidation"`
+	AppResults     []ManifestResult `json:"appValidation,omitempty"`
+	DevDescResult  DevDescResult    `json:"deviceDescValidation"`
 }
 
 // CompDescResult represents the results of the validation of the
@@ -49,7 +54,7 @@ type VerificationResult struct {
 type CompDescResult struct {
 	MetaInfo
 	CompCertLevel  int               `json:"compCertLevel"`       // Certification level for the company operating the device
-	Summary        ResultMulti       `json:"resultSummary"`       // Summarizing value illustrating whether any issues were detected during validation of the Company Description
+	Summary        Result            `json:"result"`              // Summarizing value illustrating whether any issues were detected during validation of the Company Description
 	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
 	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the description
 }
@@ -58,7 +63,7 @@ type CompDescResult struct {
 // manifest provided in the Attestation Report.
 type ManifestResult struct {
 	MetaInfo
-	Summary        ResultMulti       `json:"resultSummary"`
+	Summary        Result            `json:"result"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
 	ValidityCheck  Result            `json:"validityCheck"`
 	Details        any               `json:"details,omitempty"`
@@ -70,12 +75,12 @@ type DevDescResult struct {
 	MetaInfo
 	Description         string            `json:"description"`
 	Location            string            `json:"location"`
-	Summary             ResultMulti       `json:"resultSummary"`
+	Summary             Result            `json:"result"`
 	CorrectRtm          Result            `json:"correctRtm"`
 	CorrectOs           Result            `json:"correctOs"`
-	CorrectApps         ResultMulti       `json:"correctApps"`
+	CorrectApps         []Result          `json:"correctApps"`
 	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`
-	OsAppsCompatibility ResultMulti       `json:"osAppCompatibility"`
+	OsAppsCompatibility []Result          `json:"osAppCompatibility"`
 	SignatureCheck      []SignatureResult `json:"signatureValidation"`
 }
 
@@ -158,7 +163,7 @@ type BooleanMatch struct {
 }
 
 type TcbCheck struct {
-	Summary Result       `json:"resultSummary"`
+	Summary Result       `json:"result"`
 	Bl      VersionCheck `json:"bl"`
 	Tee     VersionCheck `json:"tee"`
 	Snp     VersionCheck `json:"snp"`
@@ -166,7 +171,7 @@ type TcbCheck struct {
 }
 
 type PolicyCheck struct {
-	Summary      Result       `json:"resultSummary"`
+	Summary      Result       `json:"result"`
 	Abi          VersionCheck `json:"abi"`
 	Smt          BooleanMatch `json:"smt"`
 	Migration    BooleanMatch `json:"migration"`
@@ -182,6 +187,10 @@ type AttributesCheck struct {
 
 type TcbLevelResult struct {
 	Summary        Result    `json:"success"`
+	MrSigner       Result    `json:"mrsigner"`
+	IsvProdId      Result    `json:"isvProdId"`
+	MiscSelect     Result    `json:"miscSelect"`
+	Attributes     Result    `json:"attributes"`
 	TcbLevelStatus string    `json:"status"`
 	TcbLevelDate   time.Time `json:"date"`
 }
@@ -210,7 +219,7 @@ type SignatureResult struct {
 	ValidatedCerts  [][]X509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
 	CertChainCheck  Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
-	ExtensionsCheck *ResultMulti          `json:"extensionsCheck,omitempty"`
+	ExtensionsCheck []Result              `json:"extensionsCheck,omitempty"`
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
@@ -337,25 +346,90 @@ func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 	return res
 }
 
-// Result is a generic type for storing a boolean result value
-// and details on the validation (used in case of errors).
-type Result struct {
-	Success bool   `json:"success"`
-	Details string `json:"details,omitempty"`
-}
-
-// ResultMulti is a generic type for storing a boolean result value
-// and possibly multiple details on the validation (used in case of errors).
-type ResultMulti struct {
-	Success bool     `json:"success"`
-	Details []string `json:"details,omitempty"`
-}
-
 // TokenResult is a helper struct for the validation of JWS or COSE tokens focussing
 // on the validation of the provided signatures.
 type TokenResult struct {
-	Summary        ResultMulti       `json:"resultSummary"`
+	Summary        Result            `json:"result"`
 	SignatureCheck []SignatureResult `json:"signatureValidation"`
+}
+
+type ErrorCode int
+
+const (
+	NotSet ErrorCode = iota
+	CaFingerprint
+	CRLCheckRoot
+	CRLCheckPCK
+	CRLCheckSigningCert
+	DecodeCertChain
+	UnknownSerialization
+	DownloadRootCRL
+	DownloadPCKCRL
+	EvidenceLength
+	EvidenceType
+	Expired
+	ExtractPubKey
+	Internal
+	InvalidCertificationLevel
+	JWSNoSignatures
+	JWSSignatureOrder
+	JWSPayload
+	MeasurementNoMatch
+	MeasurementTypeNotSupported
+	NotPresent
+	NotYetValid
+	OidLength
+	OidNotPresent
+	OidTag
+	Parse
+	ParseAR
+	ParseX5C
+	ParseCA
+	ParseCAFingerprint
+	ParseCert
+	ParseTcbInfo
+	ParseJSON
+	ParseOSManifest
+	ParseEvidence
+	ParseExtensions
+	ParseQEIdentity
+	ParseRTMManifest
+	ParseTime
+	PolicyEngineNotImplemented
+	RefValTypeNotSupported
+	SetupSystemCA
+	SgxFmpcMismatch
+	SgxPceidMismatch
+	SignatureLength
+	DetailsNotPresent
+	RefValMultiple
+	RefValNotPresent
+	RefValType
+	RefValNoMatch
+	TcbInfoExpired
+	TcbLevelUnsupported
+	TcbLevelRevoked
+	UnsupportedAlgorithm
+	VerifyAR
+	VerifyCertChain
+	VerifyPCKChain
+	VerifyOSManifest
+	VerifyPolicies
+	VerifyQEIdentityErr
+	VerifyRTMManifest
+	VerifySignature
+	VerifyTCBChain
+	VerifyTcbInfo
+	ExtensionsCheck
+)
+
+type Result struct {
+	Success         bool      `json:"success"`
+	Got             string    `json:"got"`
+	Expected        string    `json:"expected,omitempty"`
+	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty"`   // Required for compatibility
+	ExpectedBetween []string  `json:"expectedBetween,omitempty"` // Required for validity
+	ErrorCode       ErrorCode `json:"errorCode"`
 }
 
 // ExtractX509Infos extracts relevant attributes from cert and transform some attribute
@@ -438,4 +512,280 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 	}
 
 	return certExtracted
+}
+
+func (e ErrorCode) String() string {
+	switch e {
+	case NotSet:
+		return fmt.Sprintf("%v (Error code not set)", int(e))
+	case CaFingerprint:
+		return fmt.Sprintf("%v (CA fingerprint error)", int(e))
+	case CRLCheckRoot:
+		return fmt.Sprintf("%v (CRL check root error)", int(e))
+	case CRLCheckPCK:
+		return fmt.Sprintf("%v (CRL check PCK error)", int(e))
+	case CRLCheckSigningCert:
+		return fmt.Sprintf("%v (CRL check signing certificate error)", int(e))
+	case DecodeCertChain:
+		return fmt.Sprintf("%v (Decode certificate chain error)", int(e))
+	case UnknownSerialization:
+		return fmt.Sprintf("%v (Unknown serialization error)", int(e))
+	case DownloadRootCRL:
+		return fmt.Sprintf("%v (Download root CRL error)", int(e))
+	case DownloadPCKCRL:
+		return fmt.Sprintf("%v (Download PCK CRL error)", int(e))
+	case EvidenceLength:
+		return fmt.Sprintf("%v (Evidence length error)", int(e))
+	case EvidenceType:
+		return fmt.Sprintf("%v (Evidence type error)", int(e))
+	case Expired:
+		return fmt.Sprintf("%v (Validity Expired error)", int(e))
+	case ExtractPubKey:
+		return fmt.Sprintf("%v (Extract public key error)", int(e))
+	case Internal:
+		return fmt.Sprintf("%v (Internal error)", int(e))
+	case InvalidCertificationLevel:
+		return fmt.Sprintf("%v (Invalid certification level error)", int(e))
+	case JWSNoSignatures:
+		return fmt.Sprintf("%v (JWS no signatures error)", int(e))
+	case JWSSignatureOrder:
+		return fmt.Sprintf("%v (JWS signature order error)", int(e))
+	case JWSPayload:
+		return fmt.Sprintf("%v (JWS payload error)", int(e))
+	case MeasurementNoMatch:
+		return fmt.Sprintf("%v (Measurement no match error)", int(e))
+	case MeasurementTypeNotSupported:
+		return fmt.Sprintf("%v (Measurement type not supported error)", int(e))
+	case NotPresent:
+		return fmt.Sprintf("%v (Not present error)", int(e))
+	case NotYetValid:
+		return fmt.Sprintf("%v (Not yet valid error)", int(e))
+	case OidLength:
+		return fmt.Sprintf("%v (OID length error)", int(e))
+	case OidNotPresent:
+		return fmt.Sprintf("%v (OID not present error)", int(e))
+	case OidTag:
+		return fmt.Sprintf("%v (OID tag error)", int(e))
+	case Parse:
+		return fmt.Sprintf("%v (Parse error)", int(e))
+	case ParseAR:
+		return fmt.Sprintf("%v (Parse AR error)", int(e))
+	case ParseX5C:
+		return fmt.Sprintf("%v (Parse X5C error)", int(e))
+	case ParseCA:
+		return fmt.Sprintf("%v (Parse CA error)", int(e))
+	case ParseCAFingerprint:
+		return fmt.Sprintf("%v (Parse CA fingerprint error)", int(e))
+	case ParseCert:
+		return fmt.Sprintf("%v (Parse certificate error)", int(e))
+	case ParseTcbInfo:
+		return fmt.Sprintf("%v (Parse TCB info error)", int(e))
+	case ParseJSON:
+		return fmt.Sprintf("%v (Parse JSON error)", int(e))
+	case ParseOSManifest:
+		return fmt.Sprintf("%v (Parse OS manifest error)", int(e))
+	case ParseEvidence:
+		return fmt.Sprintf("%v (Parse evidence error)", int(e))
+	case ParseExtensions:
+		return fmt.Sprintf("%v (Parse extensions error)", int(e))
+	case ParseQEIdentity:
+		return fmt.Sprintf("%v (Parse QE identity error)", int(e))
+	case ParseRTMManifest:
+		return fmt.Sprintf("%v (Parse RTM manifest error)", int(e))
+	case ParseTime:
+		return fmt.Sprintf("%v (Parse time error)", int(e))
+	case PolicyEngineNotImplemented:
+		return fmt.Sprintf("%v (Policy engine not implemented error)", int(e))
+	case RefValTypeNotSupported:
+		return fmt.Sprintf("%v (Reference value type not supported error)", int(e))
+	case SetupSystemCA:
+		return fmt.Sprintf("%v (Setup system CA error)", int(e))
+	case SgxFmpcMismatch:
+		return fmt.Sprintf("%v (SGX FMPC mismatch error)", int(e))
+	case SgxPceidMismatch:
+		return fmt.Sprintf("%v (SGX PCEID mismatch error)", int(e))
+	case SignatureLength:
+		return fmt.Sprintf("%v (Signature length error)", int(e))
+	case DetailsNotPresent:
+		return fmt.Sprintf("%v (Details not present error)", int(e))
+	case RefValMultiple:
+		return fmt.Sprintf("%v (Reference value multiple error)", int(e))
+	case RefValNotPresent:
+		return fmt.Sprintf("%v (Reference value not present error)", int(e))
+	case RefValType:
+		return fmt.Sprintf("%v (Reference value type error)", int(e))
+	case RefValNoMatch:
+		return fmt.Sprintf("%v (Reference value no match error)", int(e))
+	case TcbInfoExpired:
+		return fmt.Sprintf("%v (TCB info expired error)", int(e))
+	case TcbLevelUnsupported:
+		return fmt.Sprintf("%v (TCB level unsupported error)", int(e))
+	case TcbLevelRevoked:
+		return fmt.Sprintf("%v (TCB level revoked error)", int(e))
+	case UnsupportedAlgorithm:
+		return fmt.Sprintf("%v (Unsupported algorithm error)", int(e))
+	case VerifyAR:
+		return fmt.Sprintf("%v (Verify AR error)", int(e))
+	case VerifyCertChain:
+		return fmt.Sprintf("%v (Verify certificate chain error)", int(e))
+	case VerifyPCKChain:
+		return fmt.Sprintf("%v (Verify PCK chain error)", int(e))
+	case VerifyOSManifest:
+		return fmt.Sprintf("%v (Verify OS manifest error)", int(e))
+	case VerifyPolicies:
+		return fmt.Sprintf("%v (Verify policies error)", int(e))
+	case VerifyQEIdentityErr:
+		return fmt.Sprintf("%v (Verify QE identity error)", int(e))
+	case VerifyRTMManifest:
+		return fmt.Sprintf("%v (Verify RTM manifest error)", int(e))
+	case VerifySignature:
+		return fmt.Sprintf("%v (Verify signature error)", int(e))
+	case VerifyTCBChain:
+		return fmt.Sprintf("%v (Verify TCB chain error)", int(e))
+	case VerifyTcbInfo:
+		return fmt.Sprintf("%v (Verify TCB info error)", int(e))
+	case ExtensionsCheck:
+		return fmt.Sprintf("%v (Extensions check error)", int(e))
+	default:
+		return fmt.Sprintf("Unknown error code: %v", int(e))
+	}
+}
+
+func (r *Result) SetErr(e ErrorCode) {
+	r.Success = false
+	r.ErrorCode = e
+}
+
+func (r *Result) PrintErr(format string, args ...interface{}) {
+	if r.Success {
+		return
+	}
+	if r.ErrorCode == NotSet {
+		log.Warnf("%v failed", fmt.Sprintf(format, args...))
+	} else {
+		log.Warnf("%v failed with error code %v", fmt.Sprintf(format, args...), r.ErrorCode)
+	}
+	if r.Expected != "" {
+		log.Warnf("\tExpected: %v", r.Expected)
+		log.Warnf("\tGot     : %v", r.Got)
+	}
+	if len(r.ExpectedBetween) == 2 {
+		log.Warnf("\tExpected: %v - %v", r.ExpectedBetween[0], r.ExpectedBetween[1])
+		log.Warnf("\tGot     : %v", r.Got)
+	}
+	if len(r.ExpectedOneOf) > 0 {
+		log.Warnf("\tExpected: %v", strings.Join(r.ExpectedOneOf, ","))
+		log.Warnf("\tGot     : %v", r.Got)
+	}
+}
+
+func (r *SignatureResult) PrintErr(format string, args ...interface{}) {
+	r.SignCheck.PrintErr("%v signature check", fmt.Sprintf(format, args...))
+	r.CertChainCheck.PrintErr("%v cert chain check", fmt.Sprintf(format, args...))
+	for _, e := range r.ExtensionsCheck {
+		e.PrintErr("%v extension check", fmt.Sprintf(format, args...))
+	}
+}
+
+func (r *VerificationResult) PrintErr() {
+
+	if !r.Success {
+
+		if r.ErrorCode == NotSet {
+			log.Warn("Verification failed")
+		} else {
+			log.Warnf("Verification failed with error code: %v", r.ErrorCode)
+		}
+
+		r.FreshnessCheck.PrintErr("Report freshness check")
+
+		for _, m := range r.Measurements {
+			m.Summary.PrintErr("%v", m.Type)
+			m.Freshness.PrintErr("Measurement freshness check")
+			m.Signature.PrintErr("Measurement")
+			for _, a := range m.Artifacts {
+				if !a.Success {
+					details := ""
+					if a.Pcr != nil {
+						details = "PCR%v"
+					}
+					log.Warnf("%v Measurement %v: %v verification failed", details, a.Name, a.Digest)
+				}
+			}
+			if m.TpmResult != nil {
+				m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
+				for _, p := range m.TpmResult.PcrMatch {
+					if !p.Success {
+						log.Warnf("PCR%v calculated: %v, measured: %v", p.Pcr, p.Calculated,
+							p.Measured)
+					}
+				}
+			}
+			if m.SnpResult != nil {
+				m.SnpResult.VersionMatch.PrintErr("Version match")
+				// TODO
+				log.Warnf("Detailed SNP evaluation not yet implemented")
+			}
+			if m.SgxResult != nil {
+				m.SgxResult.VersionMatch.PrintErr("Version match")
+				// TODO
+				log.Warnf("Detailed SNP evaluation not yet implemented")
+			}
+			if m.TdxResult != nil {
+				m.TdxResult.VersionMatch.PrintErr("Version match")
+				// TODO
+				log.Warnf("Detailed SNP evaluation not yet implemented")
+			}
+		}
+
+		for _, s := range r.ReportSignature {
+			s.PrintErr("Report")
+		}
+
+		if r.CompDescResult != nil {
+			r.CompDescResult.Summary.PrintErr("Company description check")
+			for _, s := range r.CompDescResult.SignatureCheck {
+				s.PrintErr("Company Description")
+			}
+			r.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
+		}
+
+		r.OsResult.Summary.PrintErr("OS Manifest check")
+		for _, s := range r.OsResult.SignatureCheck {
+			s.PrintErr("OS Manifest")
+		}
+		r.OsResult.ValidityCheck.PrintErr("OS Manifest validity check")
+
+		r.RtmResult.Summary.PrintErr("RTM Manifest check")
+		for _, s := range r.RtmResult.SignatureCheck {
+			s.PrintErr("RTM Manifest")
+		}
+		r.RtmResult.ValidityCheck.PrintErr("RTM Manifest validity check")
+
+		for _, a := range r.AppResults {
+			a.Summary.PrintErr("App Manifest %v check", a.Name)
+			for _, s := range a.SignatureCheck {
+				s.PrintErr("App Manifest %v", a.Name)
+			}
+			a.ValidityCheck.PrintErr("App Manifest %v validity check", a.Name)
+		}
+
+		r.DevDescResult.Summary.PrintErr("Device Description check")
+		for _, s := range r.DevDescResult.SignatureCheck {
+			s.PrintErr("Device Description")
+		}
+		r.DevDescResult.CorrectRtm.PrintErr("Correct RTM check")
+		r.DevDescResult.CorrectOs.PrintErr("Correct OS check")
+		for _, a := range r.DevDescResult.CorrectApps {
+			a.PrintErr("Correct App check")
+		}
+		r.DevDescResult.RtmOsCompatibility.PrintErr("RTM OS compatibility")
+		for _, a := range r.DevDescResult.OsAppsCompatibility {
+			a.PrintErr("OS App compatibiltiy check")
+		}
+
+		if !r.PolicySuccess {
+			log.Warnf("Custom policy validation failed")
+		}
+	}
 }

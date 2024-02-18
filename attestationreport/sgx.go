@@ -88,33 +88,33 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	log.Trace("Verifying SGX measurements")
 
 	if len(referenceValues) == 0 {
-		msg := "Could not find SGX Reference Value"
-		result.Summary.setFalse(&msg)
+		log.Tracef("Could not find SGX Reference Value")
+		result.Summary.SetErr(RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		msg := fmt.Sprintf("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
+		log.Tracef("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
 			len(referenceValues))
-		result.Summary.setFalse(&msg)
+		result.Summary.SetErr(RefValMultiple)
 		return result, false
 	}
 	sgxReferenceValue := referenceValues[0]
 
 	// Validate Parameters:
 	if sgxM.Evidence == nil || len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
-		msg := "Invalid SGX Report."
-		result.Summary.setFalse(&msg)
+		log.Tracef("Invalid SGX Report")
+		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
 
 	if sgxReferenceValue.Type != "SGX Reference Value" {
-		msg := fmt.Sprintf("SGX Reference Value invalid type %v", sgxReferenceValue.Type)
-		result.Summary.setFalse(&msg)
+		log.Tracef("SGX Reference Value invalid type %v", sgxReferenceValue.Type)
+		result.Summary.SetErr(RefValType)
 		return result, false
 	}
 
 	if sgxReferenceValue.Sgx == nil {
-		msg := "SGX Reference Value is null"
-		result.Summary.setFalse(&msg)
+		log.Tracef("SGX Reference Value details not present")
+		result.Summary.SetErr(DetailsNotPresent)
 		return result, false
 	}
 
@@ -124,8 +124,8 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 		// extract the attestation report into the SGXReport data structure
 		sgxQuote, err = DecodeSgxReport(sgxM.Evidence)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to decode SGX report: %v", err)
-			result.Summary.setFalse(&msg)
+			log.Tracef("Failed to decode SGX report: %v", err)
+			result.Summary.SetErr(ParseEvidence)
 			return result, false
 		}
 	} else {
@@ -139,9 +139,12 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	copy(nonce64, nonce[:])
 
 	if cmp := bytes.Compare(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64); cmp != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: Plain Nonce: %v, Expected: %v, Got = %v",
-			nonce, hex.EncodeToString(nonce64), hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:]))
-		result.Freshness.setFalse(&msg)
+		log.Tracef("Nonces mismatch: Plain Nonce: %v, Expected: %v, Got = %v",
+			nonce, hex.EncodeToString(nonce64),
+			hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:]))
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce64)
+		result.Freshness.Got = hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:])
 		result.Summary.Success = false
 		return result, false
 	} else {
@@ -151,8 +154,8 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	// Parse certificate chain
 	referenceCerts, err := parseCertificates(sgxM.Certs, true)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse reference certificates: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse reference certificates: %v", err)
+		result.Summary.SetErr(ParseCert)
 		return result, false
 	}
 
@@ -161,20 +164,20 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	if sgxQuote.QuoteSignatureData.QECertDataType == 5 {
 		quoteCerts, err = parseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
 		if err != nil {
-			msg := fmt.Sprintf("Failed to parse certificate chain from QECertData: %v", err)
-			result.Summary.setFalse(&msg)
+			log.Tracef("Failed to parse certificate chain from QECertData: %v", err)
+			result.Summary.SetErr(ParseCert)
 			return result, false
 		}
 	} else {
-		msg := fmt.Sprintf("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
-		result.Summary.setFalse(&msg)
+		log.Tracef("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
+		result.Summary.SetErr(ParseCert)
 		return result, false
 	}
 
 	// Extract root CA from PCK cert chain in quote -> compare nullptr
 	if quoteCerts.RootCACert == nil {
-		msg := "root cert is null"
-		result.Summary.setFalse(&msg)
+		log.Tracef("root cert is null")
+		result.Summary.SetErr(ParseCA)
 		return result, false
 	}
 
@@ -190,49 +193,49 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	}
 
 	if !bytes.Equal(quotePublicKeyBytes, referencePublicKeyBytes) {
-		msg := "root cert public key didn't match"
-		result.Summary.setFalse(&msg)
+		log.Tracef("root cert public key didn't match")
+		result.Summary.SetErr(CaFingerprint)
 		return result, false
 	}
 
 	// Parse and verify PCK certificate extensions
 	sgxExtensions, err := parseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
-		msg := fmt.Sprintf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		result.Summary.SetErr(ParseExtensions)
 		return result, false
 	}
 
 	// Parse and verify TcbInfo object
 	tcbInfo, err := parseTcbInfo(sgxReferenceValue.Sgx.Collateral.TcbInfo)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse tcbInfo: %v", err)
+		result.Summary.SetErr(ParseTcbInfo)
 		return result, false
 	}
 
-	tcbInfoResult, err := verifyTcbInfo(&tcbInfo, string(sgxReferenceValue.Sgx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
-		sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE)
-	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
-		result.Summary.setFalse(&msg)
+	result.SgxResult.TcbInfoCheck = verifyTcbInfo(&tcbInfo,
+		string(sgxReferenceValue.Sgx.Collateral.TcbInfo),
+		referenceCerts.TCBSigningCert, sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE)
+	if !result.SgxResult.TcbInfoCheck.Summary.Success {
+		log.Tracef("Failed to verify TCB info structure: %v", err)
+		result.Summary.SetErr(VerifyTcbInfo)
 		return result, false
 	}
-	result.SgxResult.TcbInfoCheck = tcbInfoResult
 
 	// Parse and verify QE Identity object
 	qeIdentity, err := parseQEIdentity(sgxReferenceValue.Sgx.Collateral.QeIdentity)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse QE identity: %v", err)
+		result.Summary.SetErr(ParseQEIdentity)
 		return result, false
 	}
 
 	qeIdentityResult, err := VerifyQEIdentity(&sgxQuote.QuoteSignatureData.QEReport, &qeIdentity,
 		string(sgxReferenceValue.Sgx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, SGX_QUOTE_TYPE)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to verify QE Identity structure: %v", err)
+		result.Summary.SetErr(VerifyQEIdentityErr)
 		return result, false
 	}
 	result.SgxResult.QeIdentityCheck = qeIdentityResult
@@ -249,8 +252,8 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	// Verify Quote Body values
 	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &tcbInfo, &sgxExtensions, &sgxReferenceValue, result)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify SGX Report Body: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to verify SGX Report Body: %v", err)
+		result.Summary.SetErr(VerifySignature)
 		result.Summary.Success = false
 		return result, false
 	}

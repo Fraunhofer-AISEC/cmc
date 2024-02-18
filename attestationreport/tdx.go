@@ -204,33 +204,33 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	log.Trace("Verifying TDX measurements")
 
 	if len(referenceValues) == 0 {
-		msg := "Could not find TDX Reference Value"
-		result.Summary.setFalse(&msg)
+		log.Tracef("Could not find TDX Reference Value")
+		result.Summary.SetErr(RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		msg := fmt.Sprintf("Report contains %v reference values. Currently, only one TDX Reference Value is supported",
+		log.Tracef("Report contains %v reference values. Currently, only one TDX Reference Value is supported",
 			len(referenceValues))
-		result.Summary.setFalse(&msg)
+		result.Summary.SetErr(RefValMultiple)
 		return result, false
 	}
 	tdxReferenceValue := referenceValues[0]
 
 	if tdxReferenceValue.Type != "TDX Reference Value" {
-		msg := fmt.Sprintf("TDX Reference Value invalid type %v", tdxReferenceValue.Type)
-		result.Summary.setFalse(&msg)
+		log.Tracef("TDX Reference Value invalid type %v", tdxReferenceValue.Type)
+		result.Summary.SetErr(RefValType)
 		return result, false
 	}
 	if tdxReferenceValue.Tdx == nil {
-		msg := "TDX Reference Value does not contain policy"
-		result.Summary.setFalse(&msg)
+		log.Tracef("TDX Reference Value does not contain details")
+		result.Summary.SetErr(DetailsNotPresent)
 		return result, false
 	}
 
 	// Currently only support for report version 4
 	tdxQuote, err := decodeTdxReportV4(tdxM.Evidence)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to decode TDX report: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to decode TDX report: %v", err)
+		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
 
@@ -238,9 +238,11 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	if cmp := bytes.Compare(tdxQuote.QuoteBody.ReportData[:], nonce64); cmp != 0 {
-		msg := fmt.Sprintf("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
+		log.Tracef("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:]))
-		result.Freshness.setFalse(&msg)
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce)
+		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 		ok = false
 		return result, ok
 	} else {
@@ -250,56 +252,56 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertData.QECertData
 
 	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
-		msg := "incomplete certificate chain"
-		result.Summary.setFalse(&msg)
+		log.Tracef("incomplete certificate chain")
+		result.Summary.SetErr(VerifyCertChain)
 		return result, false
 	}
 
 	// parse reference cert chain (TCBSigningCert chain)
 	referenceCerts, err := parseCertificates(tdxM.Certs, true)
 	if err != nil || referenceCerts.TCBSigningCert == nil || referenceCerts.RootCACert == nil {
-		msg := fmt.Sprintf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
+		result.Summary.SetErr(ParseCert)
 		return result, false
 	}
 
-	_, err = VerifyTCBSigningCertChain(referenceCerts, intelCache)
-	if err != nil {
-		msg := err.Error()
-		result.Summary.setFalse(&msg)
+	_, code := VerifyTCBSigningCertChain(referenceCerts, intelCache)
+	if code != NotSet {
+		log.Tracef("%v", err.Error())
+		result.Summary.SetErr(code)
 		return result, false
 	}
 
 	// Parse and verify PCK certificate extensions
 	sgxExtensions, err := parseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
-		msg := fmt.Sprintf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		result.Summary.SetErr(ParseCert)
 		return result, false
 	}
 
 	// Parse and verify TcbInfo object
 	tcbInfo, err := parseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse tcbInfo: %v", err)
+		result.Summary.SetErr(ParseTcbInfo)
 		return result, false
 	}
 
-	tcbInfoResult, err := verifyTcbInfo(&tcbInfo, string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
+	result.TdxResult.TcbInfoCheck = verifyTcbInfo(&tcbInfo,
+		string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
-	result.TdxResult.TcbInfoCheck = tcbInfoResult
-	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TCB info structure: %v", err)
-		result.Summary.setFalse(&msg)
+	if !result.TdxResult.TcbInfoCheck.Summary.Success {
+		log.Tracef("Failed to verify TCB info structure: %v", err)
+		result.Summary.SetErr(VerifyTcbInfo)
 		return result, false
 	}
 
 	// Parse and verify QE Identity object
 	qeIdentity, err := parseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to parse tcbInfo: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to parse QE Identity: %v", err)
+		result.Summary.SetErr(ParseQEIdentity)
 		return result, false
 	}
 
@@ -307,8 +309,8 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 		string(tdxReferenceValue.Tdx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, TDX_QUOTE_TYPE)
 	result.TdxResult.QeIdentityCheck = qeIdentityResult
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify QE Identity structure: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to verify QE Identity structure: %v", err)
+		result.Summary.SetErr(VerifyQEIdentityErr)
 		return result, false
 	}
 
@@ -324,8 +326,8 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	// Verify Quote Body values
 	err = verifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to verify TDX Report Body: %v", err)
-		result.Summary.setFalse(&msg)
+		log.Tracef("Failed to verify TDX Report Body: %v", err)
+		result.Summary.SetErr(VerifySignature)
 		result.Summary.Success = false
 		return result, false
 	}

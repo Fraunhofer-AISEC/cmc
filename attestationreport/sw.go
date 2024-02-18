@@ -17,7 +17,6 @@ package attestationreport
 
 import (
 	"bytes"
-	"fmt"
 )
 
 func VerifySwMeasurements(swMeasurements []Measurement, refVals []ReferenceValue) ([]MeasurementResult, bool) {
@@ -40,8 +39,8 @@ func VerifySwMeasurements(swMeasurements []Measurement, refVals []ReferenceValue
 			}
 		}
 		if !found {
-			msg := fmt.Sprintf("no SW Measurement found for SW Reference Value %v (hash: %v)", v.Name, v.Sha256)
-			result.Summary.setFalse(&msg)
+			log.Tracef("no SW Measurement found for SW Reference Value %v (hash: %v)", v.Name, v.Sha256)
+			result.Summary.SetErr(RefValNoMatch)
 			ok = false
 		}
 		swMeasurementResults = append(swMeasurementResults, result)
@@ -59,8 +58,8 @@ func VerifySwMeasurements(swMeasurements []Measurement, refVals []ReferenceValue
 		if !found {
 			result := MeasurementResult{}
 			result.SwResult.MeasName = swM.Description
-			msg := fmt.Sprintf("no SW Reference Value found for SW Measurement: %v", swM.Sha256)
-			result.Summary.setFalse(&msg)
+			log.Tracef("no SW Reference Value found for SW Measurement: %v", swM.Sha256)
+			result.Summary.SetErr(MeasurementNoMatch)
 			swMeasurementResults = append(swMeasurementResults, result)
 			ok = false
 		}
