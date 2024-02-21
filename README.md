@@ -86,7 +86,7 @@ The tools can be configured via JSON configuration files and commandline flags. 
 each binary can be run with the `-help` flag. All configuration options are explained in the
 [Configuration Documentation](./doc/configuration.md).
 
-#### Detailed Setup
+### Detailed Setup
 
 For instructions on creating and signing the metadata with an arbitrary PKI yourself,
 see [Manual Setup](./doc/manual-setup.md)
