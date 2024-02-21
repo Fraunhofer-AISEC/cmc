@@ -80,10 +80,18 @@ __attestedtls:__
 The *attestedtls* package provides an exemplary protocol which shows how a connection between two
 parties can be performed using remote attestation. After a tls connection is established, additional
 steps are performed to obtain and verify the attestation reports from the respective communication
-partner. Only then is the connection provided to the server / client.
+partner. Only then is the connection provided to the server / client. For an example on how to
+integrate the library into own applications, the *testtool* with its modes *listen* and
+*dial* can serve as an exemplary application.
+
+__attestedhttp:__
+The *attestedhttp packages utilizes **attestedtls** to provide HTTPS client and server capabilities
+to applications. For an example on how to integrate the library into own applications, the
+*testtool* with its modes *listen* and *dial* can serve as an exemplary application.
 
 __testtool:__
-The *testtool* can generate and verify attestation reports and establish attested TLS connections.
-To estblish attestation TLS connections, the testtool makes use of the attested TLS package and thus
-services provided by the cmcd to create an attested TLS connection. The client can be configured to
-use one-sided or mutual attestation.
+The *testtool* can generate and verify attestation reports and establish attested TLS as well as
+attested HTTPS connections. For the latter, it makes use of the *attestedtls* and
+*attestedhttp* packages. The testtool can act as a standalone application, i.e., integrate
+all *cmc* functionality via their go API, or as a tool that interacts with the
+*cmcd* via a gRPC, CoAP or socket API for performing remote attestation.
