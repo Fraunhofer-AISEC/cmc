@@ -831,8 +831,9 @@ func ActivateCredential(
 
 func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 
-	var osMan ar.OsManifest
-	var rtmMan ar.RtmManifest
+	var osManifest ar.OsManifest
+	var rtmManifest ar.RtmManifest
+	appManifests := make([]ar.AppManifest, 0)
 
 	for i, m := range c.Metadata {
 
@@ -852,41 +853,60 @@ func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 		}
 
 		if info.Type == "RTM Manifest" {
-			err = c.Serializer.Unmarshal(payload, &rtmMan)
+			err = c.Serializer.Unmarshal(payload, &rtmManifest)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal data from RTM Manifest: %w", err)
 			}
 		} else if info.Type == "OS Manifest" {
-			err = c.Serializer.Unmarshal(payload, &osMan)
+			err = c.Serializer.Unmarshal(payload, &osManifest)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal data from OS Manifest: %w", err)
 			}
+		} else if info.Type == "App Manifest" {
+			var appManifest ar.AppManifest
+			err = c.Serializer.Unmarshal(payload, &appManifest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal data from App Manifest: %w", err)
+			}
+			appManifests = append(appManifests, appManifest)
 		}
 	}
 
 	// Check if manifests were found
-	if osMan.Type != "OS Manifest" || rtmMan.Type != "RTM Manifest" {
+	if osManifest.Type != "OS Manifest" || rtmManifest.Type != "RTM Manifest" {
 		return nil, errors.New("failed to find all manifests")
 	}
 
 	// Generate the list of PCRs to be included in the quote
 	pcrs := make([]int, 0)
-	log.Debugf("Parsing %v RTM Reference Values", len(rtmMan.ReferenceValues))
-	for _, ver := range rtmMan.ReferenceValues {
-		if ver.Type != "TPM Reference Value" || ver.Pcr == nil {
+	log.Debugf("Parsing %v RTM reference values", len(rtmManifest.ReferenceValues))
+	for _, ref := range rtmManifest.ReferenceValues {
+		if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
 			continue
 		}
-		if !exists(*ver.Pcr, pcrs) {
-			pcrs = append(pcrs, *ver.Pcr)
+		if !exists(*ref.Pcr, pcrs) {
+			pcrs = append(pcrs, *ref.Pcr)
 		}
 	}
-	log.Debugf("Parsing %v OS Reference Values", len(osMan.ReferenceValues))
-	for _, ver := range osMan.ReferenceValues {
-		if ver.Type != "TPM Reference Value" || ver.Pcr == nil {
+	log.Debugf("Parsing %v OS reference values", len(osManifest.ReferenceValues))
+	for _, ref := range osManifest.ReferenceValues {
+		if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
 			continue
 		}
-		if !exists(*ver.Pcr, pcrs) {
-			pcrs = append(pcrs, *ver.Pcr)
+		if !exists(*ref.Pcr, pcrs) {
+			pcrs = append(pcrs, *ref.Pcr)
+		}
+	}
+	log.Debugf("Parsing %v App Manifests", len(appManifests))
+	for _, appManifest := range appManifests {
+		log.Debugf("parsing %v App Manifest %v reference values", appManifest.Name, len(appManifest.ReferenceValues))
+		for _, ref := range appManifest.ReferenceValues {
+			if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
+				continue
+			}
+			if !exists(*ref.Pcr, pcrs) {
+				pcrs = append(pcrs, *ref.Pcr)
+			}
 		}
 	}
 
