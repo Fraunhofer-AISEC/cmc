@@ -72,6 +72,11 @@ type TLSCertResponse struct {
 	Certificate [][]byte `json:"certificate" cbor:"0,keyasint"`
 }
 
+const (
+	// Set maximum message length to 10 MB
+	MaxMsgLen = 1024 * 1024 * 10
+)
+
 type HashFunction int32
 
 const (
@@ -188,8 +193,17 @@ func SignerOptsToHash(opts crypto.SignerOpts) (HashFunction, error) {
 //	Type uint32 -> Type of the payload
 //	payload []byte -> CBOR-encoded payload
 func Receive(conn net.Conn) ([]byte, uint32, error) {
+
+	err := conn.(*net.UnixConn).SetReadBuffer(MaxMsgLen)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to socket write buffer size %v", err)
+	}
+
 	// Read header
 	buf := make([]byte, 8)
+
+	log.Tracef("Reading header length %v", len(buf))
+
 	n, err := conn.Read(buf)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read header: %w", err)
@@ -199,18 +213,25 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 	}
 
 	// Decode header to get length and type
-	len := binary.BigEndian.Uint32(buf[0:4])
+	payloadLen := binary.BigEndian.Uint32(buf[0:4])
 	msgType := binary.BigEndian.Uint32(buf[4:8])
 
+	if payloadLen > MaxMsgLen {
+		return nil, 0, fmt.Errorf("cannot receive: payload size %v exceeds maximum size %v",
+			payloadLen, MaxMsgLen)
+	}
+
+	log.Tracef("Decoded header. Expecting type %v, length %v", msgType, payloadLen)
+
 	// Read payload
-	payload := make([]byte, len)
+	payload := make([]byte, payloadLen)
 	n, err = conn.Read(payload)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read payload: %w", err)
 	}
-	if uint32(n) != len {
+	if uint32(n) != payloadLen {
 		return nil, 0, fmt.Errorf("failed to read payload (received %v, expected %v bytes)",
-			n, len)
+			n, payloadLen)
 	}
 
 	if msgType == TypeError {
@@ -232,9 +253,23 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 //	Type uint32 -> Type of the payload
 //	payload []byte -> CBOR-encoded payload
 func Send(conn net.Conn, payload []byte, t uint32) error {
+
+	if len(payload) > MaxMsgLen {
+		return fmt.Errorf("cannot send: payload size %v exceeds maximum size %v",
+			len(payload), MaxMsgLen)
+	}
+
+	err := conn.(*net.UnixConn).SetWriteBuffer(MaxMsgLen)
+	if err != nil {
+		return fmt.Errorf("failed to socket write buffer size %v", err)
+	}
+
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint32(buf[0:4], uint32(len(payload)))
 	binary.BigEndian.PutUint32(buf[4:8], t)
+
+	log.Tracef("Sending header length %v", len(buf))
+
 	n, err := conn.Write(buf)
 	if err != nil {
 		return fmt.Errorf("failed to send header: %w", err)
@@ -242,6 +277,9 @@ func Send(conn net.Conn, payload []byte, t uint32) error {
 	if n != len(buf) {
 		return fmt.Errorf("could only send %v of %v bytes", n, len(buf))
 	}
+
+	log.Tracef("Sending payload type %v length %v", t, uint32(len(payload)))
+
 	n, err = conn.Write(payload)
 	if err != nil {
 		return fmt.Errorf("failed to send response: %w", err)

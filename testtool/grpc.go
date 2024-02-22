@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"os"
 	"time"
 
@@ -45,6 +44,8 @@ func (a GrpcApi) generate(c *config) {
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
+
+	log.Tracef("Connecting via gRPC to %v", c.CmcAddr)
 
 	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
@@ -76,14 +77,14 @@ func (a GrpcApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	fmt.Println("Wrote attestation report: ", c.ReportFile)
+	log.Infof("Wrote attestation report: %v", c.ReportFile)
 
 	// Save the nonce for the verifier
 	os.WriteFile(c.NonceFile, nonce, 0644)
 	if err != nil {
 		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
 	}
-	fmt.Println("Wrote nonce: ", c.NonceFile)
+	log.Infof("Wrote nonce: %v", c.NonceFile)
 
 }
 
@@ -92,6 +93,8 @@ func (a GrpcApi) verify(c *config) {
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
+
+	log.Tracef("Connecting via gRPC to %v", c.CmcAddr)
 
 	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {

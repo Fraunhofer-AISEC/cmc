@@ -111,7 +111,7 @@ func saveResult(file, addr string, result []byte) error {
 	// Save the Attestation Result to file
 	if file != "" {
 		os.WriteFile(file, out.Bytes(), 0644)
-		fmt.Println("Wrote file ", file)
+		log.Infof("Wrote file %v", file)
 	} else {
 		log.Debug("No config file specified: will not save attestation report")
 	}
