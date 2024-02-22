@@ -44,6 +44,8 @@ func init() {
 
 func (a CoapApi) generate(c *config) {
 
+	log.Tracef("Connecting via CoAP to %v", c.CmcAddr)
+
 	// Establish connection
 	conn, err := udp.Dial(c.CmcAddr)
 	if err != nil {
@@ -96,14 +98,14 @@ func (a CoapApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	fmt.Println("Wrote attestation report: ", c.ReportFile)
+	log.Infof("Wrote attestation report: %v", c.ReportFile)
 
 	// Save the nonce for the verifier
 	os.WriteFile(c.NonceFile, nonce, 0644)
 	if err != nil {
 		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
 	}
-	fmt.Println("Wrote nonce: ", c.NonceFile)
+	log.Infof("Wrote nonce: %v", c.NonceFile)
 
 }
 
@@ -168,6 +170,9 @@ func (a CoapApi) iothub(c *config) {
 
 func verifyInternal(addr string, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
+
+	log.Tracef("Connecting via CoAP to %v", addr)
+
 	// Establish connection
 	conn, err := udp.Dial(addr)
 	if err != nil {

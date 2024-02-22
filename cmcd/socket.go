@@ -144,7 +144,10 @@ func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 		return
 	}
 
-	api.Send(conn, data, api.TypeAttest)
+	err = api.Send(conn, data, api.TypeAttest)
+	if err != nil {
+		api.SendError(conn, "failed to send: %v", err)
+	}
 
 	log.Debug("Prover: Finished")
 }
@@ -181,7 +184,10 @@ func verify(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 		return
 	}
 
-	api.Send(conn, data, api.TypeVerify)
+	err = api.Send(conn, data, api.TypeVerify)
+	if err != nil {
+		api.SendError(conn, "failed to send: %v", err)
+	}
 
 	log.Debug("Verifier: Finished")
 }
@@ -235,7 +241,10 @@ func tlssign(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 		return
 	}
 
-	api.Send(conn, data, api.TypeTLSSign)
+	err = api.Send(conn, data, api.TypeTLSSign)
+	if err != nil {
+		api.SendError(conn, "failed to send: %v", err)
+	}
 
 	log.Debug("Performed signing")
 }
@@ -276,7 +285,10 @@ func tlscert(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 		return
 	}
 
-	api.Send(conn, data, api.TypeTLSCert)
+	err = api.Send(conn, data, api.TypeTLSCert)
+	if err != nil {
+		api.SendError(conn, "failed to send: %v", err)
+	}
 
 	log.Debug("Obtained TLS cert")
 }

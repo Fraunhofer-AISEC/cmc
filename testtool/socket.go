@@ -40,6 +40,8 @@ func init() {
 
 func (a SocketApi) generate(c *config) {
 
+	log.Tracef("Connecting via %v socket to %v", c.Network, c.CmcAddr)
+
 	// Establish connection
 	conn, err := net.Dial(c.Network, c.CmcAddr)
 	if err != nil {
@@ -88,14 +90,14 @@ func (a SocketApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	fmt.Println("Wrote attestation report: ", c.ReportFile)
+	log.Infof("Wrote attestation report: %v", c.ReportFile)
 
 	// Save the nonce for the verifier
 	os.WriteFile(c.NonceFile, nonce, 0644)
 	if err != nil {
 		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
 	}
-	fmt.Println("Wrote nonce: ", c.NonceFile)
+	log.Infof("Wrote nonce: %v", c.NonceFile)
 
 }
 
@@ -156,6 +158,9 @@ func (a SocketApi) iothub(c *config) {
 
 func verifySocketRequest(network, addr string, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
+
+	log.Tracef("Connecting via %v socket to %v", network, addr)
+
 	// Establish connection
 	conn, err := net.Dial(network, addr)
 	if err != nil {
