@@ -29,7 +29,7 @@ import (
 // Wraps tls.Dial
 // Additionally performs remote attestation
 // before returning the established connection.
-func Dial(network string, addr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (*tls.Conn, error) {
+func Dial(network string, addr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (net.Conn, error) {
 
 	if config == nil {
 		return nil, errors.New("failed to dial. TLS configuration not provided")
@@ -73,12 +73,12 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 		return nil, fmt.Errorf("selected CMC API is not implemented")
 	}
 
-	if(cc.cmc == nil){
-		cc.cmc = &cmc.Cmc{}
-	}	
-	if(cc.cmc.Serializer == nil){
-		log.Trace("No Serializer defined: use as JsonSerializer as default")
-		cc.cmc.Serializer = ar.JsonSerializer{}
+	if cc.Cmc == nil {
+		cc.Cmc = &cmc.Cmc{}
+	}
+	if cc.Cmc.Serializer == nil {
+		log.Trace("No Serializer defined: use as CborSerializer as default")
+		cc.Cmc.Serializer = ar.CborSerializer{}
 	}
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
@@ -89,5 +89,20 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	}
 
 	log.Info("Client-side aTLS connection complete")
+
+	if cc.Reattest {
+		//use the reattest wrapper
+		connWrapper := NewConn(&cc, chbindings, true, conn)
+
+		//start the re-attestation timer
+		if cc.ReattestAfterTime.Seconds() > 0 {
+			err = connWrapper.StartReattestTimer()
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &connWrapper, nil
+	}
+
 	return conn, nil
 }

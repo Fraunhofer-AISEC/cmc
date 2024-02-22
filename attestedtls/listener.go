@@ -45,14 +45,6 @@ func (ln Listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to accept connection: %w", err)
 	}
-	err = conn.SetReadDeadline(time.Now().Add(timeout))
-	if err != nil {
-		return nil, fmt.Errorf("failed to set read deadline: %w", err)
-	}
-	err = conn.SetWriteDeadline(time.Now().Add(timeout))
-	if err != nil {
-		return nil, fmt.Errorf("failed to set write deadline: %w", err)
-	}
 
 	log.Trace("TLS established. Providing attestation report..")
 	tlsConn, ok := conn.(*tls.Conn)
@@ -87,6 +79,21 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 	log.Info("Server-side aTLS connection complete")
 
+	if ln.CmcConfig.Reattest {
+		//wrapping the tls.Conn into attestedtls.Conn, enables automatic reattestation
+		connWrapper := NewConn(&ln.CmcConfig, chbindings, false, conn)
+
+		//start the re-attestation timer
+		if ln.CmcConfig.ReattestAfterTime.Seconds() > 0 {
+			err = connWrapper.StartReattestTimer()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return &connWrapper, nil
+	}
+
 	return conn, nil
 }
 
@@ -105,7 +112,7 @@ func (ln Listener) Addr() net.Addr {
 // Wrapper for tls.Listen
 // Returns custom Listener that will perform additional remote attestation
 // operations right after successful TLS connection establishment
-func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (net.Listener, error) {
+func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (Listener, error) {
 
 	// Default listener
 	listener := Listener{
@@ -126,13 +133,12 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 		return listener, fmt.Errorf("selected CMC API is not implemented")
 	}
 
-
-	if(listener.cmc == nil){
-		listener.cmc = &cmc.Cmc{}
-	}	
-	if(listener.cmc.Serializer == nil){
-		log.Trace("No Serializer defined: use as JsonSerializer as default")
-		listener.cmc.Serializer = ar.JsonSerializer{}
+	if listener.Cmc == nil {
+		listener.Cmc = &cmc.Cmc{}
+	}
+	if listener.Cmc.Serializer == nil {
+		log.Trace("No Serializer defined: use as Cbor as default")
+		listener.Cmc.Serializer = ar.CborSerializer{}
 	}
 
 	// Listen
@@ -143,5 +149,5 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 	listener.Listener = ln
 	listener.Config = config
 
-	return net.Listener(listener), nil
+	return (listener), nil
 }
