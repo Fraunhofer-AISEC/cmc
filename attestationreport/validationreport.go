@@ -216,10 +216,10 @@ type TdAttributesCheck struct {
 // SignatureResults represents the results for validation of
 // a provided signature and the used certificates.
 type SignatureResult struct {
-	ValidatedCerts  [][]X509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
 	CertChainCheck  Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
 	ExtensionsCheck []Result              `json:"extensionsCheck,omitempty"`
+	ValidatedCerts  [][]X509CertExtracted `json:"validatedCerts"` //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
@@ -425,11 +425,11 @@ const (
 
 type Result struct {
 	Success         bool      `json:"success"`
-	Got             string    `json:"got"`
+	Got             string    `json:"got,omitempty"`
 	Expected        string    `json:"expected,omitempty"`
 	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty"`   // Required for compatibility
 	ExpectedBetween []string  `json:"expectedBetween,omitempty"` // Required for validity
-	ErrorCode       ErrorCode `json:"errorCode"`
+	ErrorCode       ErrorCode `json:"errorCode,omitempty"`
 }
 
 // ExtractX509Infos extracts relevant attributes from cert and transform some attribute

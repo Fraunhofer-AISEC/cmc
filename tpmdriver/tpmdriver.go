@@ -52,7 +52,7 @@ type Tpm struct {
 	SigningCerts   []*x509.Certificate
 	MeasuringCerts []*x509.Certificate
 	UseIma         bool
-	ImaPcr         int32
+	ImaPcr         int
 	MeasurementLog bool
 }
 
@@ -211,63 +211,62 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		}
 	}
 
-	hashChain := make([]*ar.HashChainElem, len(t.Pcrs))
+	hashChain := make([]ar.PcrMeasurement, len(t.Pcrs))
 	for i, num := range t.Pcrs {
-		sha256 := make([]ar.HexByte, 0)
-		eventNameArray := make([]string, 0)
-		eventDataArray := make([]ar.EventData, 0)
 
+		events := make([]ar.PcrEvent, 0)
+
+		// Collect detailed measurements from event logs if specified
 		if t.MeasurementLog {
 			for _, digest := range biosMeasurements {
 				if num == *digest.Pcr {
-					sha256 = append(sha256, digest.Sha256)
-					eventNameArray = append(eventNameArray, digest.Name)
-
-					if digest.Name == "TPM_PCR_INIT_VALUE" {
-						eventDataArray = append(eventDataArray, ar.EventData{})
-					} else {
-						eventDataArray = append(eventDataArray, *digest.EventData)
+					event := ar.PcrEvent{
+						Sha256:    digest.Sha256,
+						EventName: digest.Name,
 					}
+					if digest.Name == "TPM_PCR_INIT_VALUE" {
+						event.EventData = nil
+					} else {
+						event.EventData = digest.EventData
+					}
+					events = append(events, event)
 				}
 			}
-		} else {
-			sha256 = append(sha256, pcrValues[num].Digest)
 		}
 
-		hashChain[i] = &ar.HashChainElem{
-			Type:    "Hash Chain",
-			Pcr:     int32(num),
-			Sha256:  sha256,
-			Summary: !t.MeasurementLog,
+		pcrMeasurement := ar.PcrMeasurement{
+			Pcr: num,
 		}
-		//appending EventData
 		if t.MeasurementLog {
-			hashChain[i].EventData = eventDataArray
-			hashChain[i].EventName = eventNameArray
+			pcrMeasurement.Type = "PCR Eventlog"
+			pcrMeasurement.Events = events
+		} else {
+			pcrMeasurement.Type = "PCR Summary"
+			pcrMeasurement.Summary = pcrValues[num].Digest
 		}
+
+		hashChain[i] = pcrMeasurement
 	}
 
 	if t.UseIma {
 		// If the IMA is used, not the final PCR value is sent but instead
 		// a list of the kernel modules which are extended during verification
 		// to result in the final value
-		imaDigests, err := ima.GetImaRuntimeDigests()
+		imaEvents, err := ima.GetImaRuntimeDigests()
 		if err != nil {
-			log.Error("failed to get IMA runtime digests. Ignoring..")
-		}
-
-		imaDigestsHex := make([]ar.HexByte, 0)
-		for _, elem := range imaDigests {
-			imaDigestsHex = append(imaDigestsHex, elem[:])
+			log.Warnf("failed to get IMA runtime digests: %v", err)
 		}
 
 		// Find the IMA PCR in the TPM Measurement
-		for _, elem := range hashChain {
-			if elem.Pcr == t.ImaPcr {
-				elem.Sha256 = imaDigestsHex
-				elem.Summary = false
+		for i := range hashChain {
+			if hashChain[i].Pcr == t.ImaPcr {
+				log.Tracef("Adding %v IMA events to PCR%v measurement", len(imaEvents), hashChain[i].Pcr)
+				hashChain[i].Events = imaEvents
+				hashChain[i].Summary = nil
+				hashChain[i].Type = "PCR Eventlog"
 			}
 		}
+
 	}
 
 	tm := ar.Measurement{
@@ -275,12 +274,16 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		Evidence:  quote.Quote,
 		Signature: quote.Signature,
 		Certs:     internal.WriteCertsDer(t.MeasuringCerts),
-		HashChain: hashChain,
+		Pcrs:      hashChain,
 	}
 
-	for _, elem := range tm.HashChain {
-		for _, sha := range elem.Sha256 {
-			log.Tracef("PCR%v: %v\n", elem.Pcr, hex.EncodeToString(sha))
+	for _, elem := range tm.Pcrs {
+		if elem.Type == "PCR Summary" {
+			log.Tracef("PCR%v: %v", elem.Pcr, hex.EncodeToString(elem.Summary))
+		} else if elem.Type == "PCR Eventlog" {
+			for _, event := range elem.Events {
+				log.Tracef("PCR%v Measured Event: %v", elem.Pcr, hex.EncodeToString(event.Sha256))
+			}
 		}
 	}
 	log.Trace("Quote: ", hex.EncodeToString(tm.Evidence))
@@ -899,7 +902,7 @@ func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 	}
 	log.Debugf("Parsing %v App Manifests", len(appManifests))
 	for _, appManifest := range appManifests {
-		log.Debugf("parsing %v App Manifest %v reference values", appManifest.Name, len(appManifest.ReferenceValues))
+		log.Debugf("Parsing %v App Manifest '%v' reference values", len(appManifest.ReferenceValues), appManifest.Name)
 		for _, ref := range appManifest.ReferenceValues {
 			if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
 				continue

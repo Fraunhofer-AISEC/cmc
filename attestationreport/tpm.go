@@ -49,7 +49,7 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Evidence)
 	if err != nil {
-		log.Warnf("Failed to decode TPM attestation data: %v", err)
+		log.Tracef("Failed to decode TPM attestation data: %v", err)
 		result.Summary.SetErr(ParseEvidence)
 		return result, false
 	}
@@ -58,30 +58,31 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
 		result.Freshness.Success = true
 	} else {
-		log.Warnf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
+		log.Tracef("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
 		result.Freshness.Success = false
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(tpmsAttest.ExtraData)
 		ok = false
 	}
+	log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
 
 	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all reference values
 	// together then compare
 	sum := make([]byte, 0)
-	for i := range tpmM.HashChain {
-		_, ok := calculatedPcrs[int(tpmM.HashChain[i].Pcr)]
+	for i := range tpmM.Pcrs {
+		_, ok := calculatedPcrs[int(tpmM.Pcrs[i].Pcr)]
 		if !ok {
 			continue
 		}
-		sum = append(sum, calculatedPcrs[int(tpmM.HashChain[i].Pcr)]...)
+		sum = append(sum, calculatedPcrs[int(tpmM.Pcrs[i].Pcr)]...)
 	}
 	verPcr := sha256.Sum256(sum)
 	if bytes.Equal(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) {
 		log.Trace("Aggregated PCR matches quote PCR")
 		result.TpmResult.AggPcrQuoteMatch.Success = true
 	} else {
-		log.Warnf("Aggregated PCR does not match Quote PCR: %v vs. %v",
+		log.Tracef("Aggregated PCR does not match Quote PCR: %v vs. %v",
 			hex.EncodeToString(verPcr[:]),
 			hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
 		result.TpmResult.AggPcrQuoteMatch.Success = false
@@ -92,7 +93,7 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 
 	mCerts, err := internal.ParseCertsDer(tpmM.Certs)
 	if err != nil {
-		log.Warnf("Failed to parse measurement certs: %v", err)
+		log.Tracef("Failed to parse measurement certs: %v", err)
 		result.Signature.CertChainCheck.SetErr(ParseCert)
 		result.Summary.Success = false
 		return result, false
@@ -102,15 +103,17 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 	if !result.Signature.SignCheck.Success {
 		ok = false
 	}
+	log.Trace("Successfully verified TPM quote signature")
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
-		log.Warnf("Failed to verify certificate chain: %v", err)
+		log.Tracef("Failed to verify certificate chain: %v", err)
 		result.Signature.CertChainCheck.SetErr(VerifyCertChain)
 		ok = false
 	} else {
 		result.Signature.CertChainCheck.Success = true
 	}
+	log.Trace("Successfully verified TPM certificate chain")
 
 	//Store details from (all) validated certificate chain(s) in the report
 	for _, chain := range x509Chains {
@@ -126,213 +129,202 @@ func verifyTpmMeasurements(tpmM Measurement, nonce []byte, referenceValues []Ref
 	return result, ok
 }
 
-func recalculatePcrs(tpmM Measurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, []DigestResult, bool) {
+func recalculatePcrs(measurement Measurement, referenceValues []ReferenceValue) (map[int][]byte, []PcrResult, []DigestResult, bool) {
 	ok := true
-	pcrResult := make([]PcrResult, 0)
-	artifacts := make([]DigestResult, 0)
+	pcrResults := make([]PcrResult, 0)
+	detailedResults := make([]DigestResult, 0)
 	calculatedPcrs := make(map[int][]byte)
 
-	for _, ref := range referenceValues {
+	// Iterate over the provided measurement
+	for _, measuredPcr := range measurement.Pcrs {
 
-		if ref.Pcr == nil {
-			log.Warnf("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
-			ok = false
-			continue
+		pcrResult := PcrResult{
+			Pcr:     measuredPcr.Pcr,
+			Success: true,
 		}
 
 		// Initialize calculated PCR if not yet initialized, afterwards extend
 		// reference values
-		if _, ok := calculatedPcrs[*ref.Pcr]; !ok {
-			calculatedPcrs[*ref.Pcr] = make([]byte, 32)
-			//first event could be a TPM_PCR_INIT_VALUE ()
-			if ref.Name == "TPM_PCR_INIT_VALUE" {
-				calculatedPcrs[*ref.Pcr] = ref.Sha256 //the Sha256 should contain the init value
-				continue                              //break the loop iteration and continue with the next event
-			}
+		if _, ok := calculatedPcrs[int(measuredPcr.Pcr)]; !ok {
+			calculatedPcrs[int(measuredPcr.Pcr)] = make([]byte, 32)
 		}
 
-		calculatedPcrs[*ref.Pcr] = extendSha256(calculatedPcrs[*ref.Pcr], ref.Sha256)
-		refResult := DigestResult{
-			// Type:	     "Reference Value",
-			Pcr:         ref.Pcr,
-			Name:        ref.Name,
-			Digest:      hex.EncodeToString(ref.Sha256),
-			Description: ref.Description,
-		}
-
-		// Only if the measurement contains the hashes of the individual software artifacts,
-		// (e.g.,  provided through BIOS or IMA  measurement lists), we can check the
-		// reference values directly
-		for _, hce := range tpmM.HashChain {
-			if hce.Pcr == int32(*ref.Pcr) && !hce.Summary {
-				found := false
-				for i, sha256 := range hce.Sha256 {
-					if bytes.Equal(sha256, ref.Sha256) {
-						found = true
-						refResult.Success = true
-						if hce.EventData != nil && len(hce.EventData) > i {
-							refResult.EventData = &hce.EventData[i]
-						}
-						break
-					}
+		pcrNum := measuredPcr.Pcr
+		if measuredPcr.Type == "PCR Eventlog" {
+			// measurement contains a detailed measurement list (e.g. retrieved from bios
+			// measurement logs or ima runtime measurement logs)
+			measuredSummary := make([]byte, 32)
+			for _, event := range measuredPcr.Events {
+				//first event could be a TPM_PCR_INIT_VALUE ()
+				if event.EventName == "TPM_PCR_INIT_VALUE" {
+					calculatedPcrs[int(measuredPcr.Pcr)] = event.Sha256
+					measuredSummary = event.Sha256
+					continue
 				}
-				if !found {
-					log.Warnf("Failed to find reference value %v in measurements",
-						hex.EncodeToString(ref.Sha256))
+
+				// Extend measurement summary unconditionally...
+				measuredSummary = extendSha256(measuredSummary, event.Sha256)
+
+				// Check for every event that a corresponding reference value exists
+				ref := getReferenceValue(event.Sha256, measuredPcr.Pcr, referenceValues)
+				if ref == nil {
+					measResult := DigestResult{
+						Type:      "Measurement",
+						Pcr:       &pcrNum,
+						Digest:    hex.EncodeToString(event.Sha256),
+						Success:   false,
+						Name:      event.EventName,
+						EventData: event.EventData,
+					}
+					detailedResults = append(detailedResults, measResult)
+					log.Tracef("Failed to find measurement %v in reference values",
+						hex.EncodeToString(event.Sha256))
 					ok = false
-					refResult.Success = false
-					refResult.Type = "Reference Value"
+					pcrResult.Success = false
+					continue
 				}
+
+				// ...Extent calculated summary only if reference value was found
+				calculatedPcrs[measuredPcr.Pcr] = extendSha256(calculatedPcrs[measuredPcr.Pcr],
+					event.Sha256)
+
+				measResult := DigestResult{
+					Pcr:         &pcrNum,
+					Digest:      hex.EncodeToString(event.Sha256),
+					Success:     true,
+					Name:        ref.Name,
+					Description: ref.Description,
+				}
+				detailedResults = append(detailedResults, measResult)
 			}
-		}
+			pcrResult.Calculated = hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr])
+			if !bytes.Equal(measuredSummary, calculatedPcrs[measuredPcr.Pcr]) {
+				pcrResult.Measured = hex.EncodeToString(measuredSummary)
+			}
 
-		artifacts = append(artifacts, refResult)
-	}
-
-	// Compare the calculated pcr values from the reference values with the measurement list
-	// pcr values to provide a detailed report
-	for pcrNum, calculatedHash := range calculatedPcrs {
-		pcrRes := PcrResult{}
-		pcrRes.Pcr = int(pcrNum)
-		// Find PCR in measurements
-		found := false
-		for _, hce := range tpmM.HashChain {
-			if hce.Pcr == int32(pcrNum) {
-				found = true
-
-				var measurement []byte
-				if hce.Summary {
-					// Measurement contains only final PCR value, so we can simply compare
-					measurement = hce.Sha256[0]
-				} else {
-					// Measurement contains individual values which must be extended to result in
-					// the final PCR value for comparison
-					measurement = make([]byte, 32)
-					for i, sha256 := range hce.Sha256 {
-						if i == 0 {
-							//if the first event is a TPM_PCR_INIT_VALUE
-							if hce.EventName != nil && len(hce.EventName) > i && hce.EventName[i] == "TPM_PCR_INIT_VALUE" {
-								measurement = sha256 //because the first element in the sha256 chain is the locality, (as part of the locality event)
-								continue             //continues with next element from the hash chain
-							}
-						}
-						measurement = extendSha256(measurement, sha256)
-
-						// Check, if a reference value exists for the measured value
-						v := getReferenceValue(sha256, referenceValues)
-						if v == nil {
-							pcr := int(hce.Pcr)
-							measResult := DigestResult{
-								Pcr:     &pcr,
-								Digest:  hex.EncodeToString(sha256),
-								Success: false,
-								Type:    "Measurement",
-							}
-
-							if hce.EventName != nil && len(hce.EventName) > i {
-								measResult.Name = hce.EventName[i]
-							}
-
-							if hce.EventData != nil && len(hce.EventData) > i {
-								measResult.EventData = &hce.EventData[i]
-							}
-
-							artifacts = append(artifacts, measResult)
-							log.Warnf("Failed to find measurement %v in reference values",
-								hex.EncodeToString(sha256))
-							ok = false
-						}
-					}
-				}
-
-				// Compare the calculated hash for the current PCR with the measured hash
-				equal := bytes.Equal(calculatedHash, measurement)
-				if equal {
-					pcrRes.Success = true
-					pcrRes.Calculated = hex.EncodeToString(measurement)
-				} else {
-					log.Warnf("PCR%v mismatch: measured: %v, calculated: %v", pcrNum,
-						hex.EncodeToString(measurement), hex.EncodeToString(calculatedHash))
-					pcrRes.Success = false
-					pcrRes.Calculated = hex.EncodeToString(calculatedHash)
-					pcrRes.Measured = hex.EncodeToString(measurement)
+		} else if measuredPcr.Type == "PCR Summary" {
+			// measurement contains just the summary PCR value
+			// We therefore unconditionally extend every reference value for this PCR
+			for _, ref := range referenceValues {
+				if ref.Pcr == nil {
+					log.Tracef("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
 					ok = false
+					continue
 				}
-				// If the measurement only contains the final PCR value, set all reference values
-				// for this PCR to to the according value, as we cannot determine which ones
-				// were good or potentially failed
-				for i, elem := range artifacts {
-					if *elem.Pcr == pcrNum && hce.Summary {
-						artifacts[i].Success = equal
+				if *ref.Pcr == measuredPcr.Pcr {
+					if ref.Name == "TPM_PCR_INIT_VALUE" {
+						calculatedPcrs[measuredPcr.Pcr] = ref.Sha256 //the Sha256 should contain the init value
+						continue                                     //break the loop iteration and continue with the next event
 					}
+					calculatedPcrs[measuredPcr.Pcr] = extendSha256(calculatedPcrs[measuredPcr.Pcr], ref.Sha256)
+
+					// As we only have the PCR summary, we will later  set all reference values
+					// to true/false depending on whether the calculation matches the PCR summary
+					measResult := DigestResult{
+						Pcr:         &pcrNum,
+						Digest:      hex.EncodeToString(ref.Sha256),
+						Name:        ref.Name,
+						Description: ref.Description,
+					}
+					detailedResults = append(detailedResults, measResult)
 				}
 
-				pcrResult = append(pcrResult, pcrRes)
 			}
-		}
-		if !found {
-			// Set all reference values for this PCR to false, as the measurement did not
-			// contain this PCR
-			for i, elem := range artifacts {
-				if *elem.Pcr == pcrNum {
-					artifacts[i].Success = false
+			// Then we compare the calculated value with the PCR measurement summary
+			equal := bytes.Equal(calculatedPcrs[measuredPcr.Pcr], measuredPcr.Summary)
+			if equal {
+				pcrResult.Calculated = hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr])
+				pcrResult.Success = true
+			} else {
+				log.Tracef("PCR%v mismatch: measured: %v, calculated: %v", measuredPcr.Pcr,
+					hex.EncodeToString(measuredPcr.Summary),
+					hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr]))
+				pcrResult.Calculated = hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr])
+				pcrResult.Measured = hex.EncodeToString(measuredPcr.Summary)
+				pcrResult.Success = false
+				ok = false
+			}
+			// If the measurement only contains the final PCR value, set all reference values
+			// for this PCR to the according value, as we cannot determine which ones
+			// were good or potentially failed
+			for i, elem := range detailedResults {
+				if *elem.Pcr == measuredPcr.Pcr && measuredPcr.Type != "PCR Eventlog" {
+					detailedResults[i].Success = equal
 				}
 			}
-			log.Warnf("Measurement did not contain PCR%v", pcrNum)
+
+		} else {
 			ok = false
+			pcrResult.Success = false
+			log.Tracef("Unknown measurement PCR type %v", measuredPcr.Type)
 		}
+
+		pcrResults = append(pcrResults, pcrResult)
+
 	}
 
-	// Sort the PCRs in ascending order
-	sort.Slice(pcrResult, func(i, j int) bool {
-		return pcrResult[i].Pcr < pcrResult[j].Pcr
+	// Sort the results in ascending order
+	sort.Slice(pcrResults, func(i, j int) bool {
+		return pcrResults[i].Pcr < pcrResults[j].Pcr
 	})
 
-	// Finally, iterate over measurements to also include measured PCRs, that do not
-	// contain matching reference values in the report
-	for _, hce := range tpmM.HashChain {
-		found := false
-		for pcrNum := range calculatedPcrs {
-			if hce.Pcr == int32(pcrNum) {
-				found = true
-			}
-		}
-		if !found {
+	// Finally, iterate over the reference values to find reference values with no
+	// matching PCR or required reference values which are not present in the measurement
+	// in case of detailed measurement logs
+	for _, ref := range referenceValues {
 
-			// Calculate the measurement value for this PCR
-			var measurement []byte
-			if hce.Summary {
-				// Measurement contains only final PCR value, so we can simply compare
-				measurement = hce.Sha256[0]
+		// Check if measurement contains the reference value PCR
+		foundPcr := false
+		for _, measuredPcr := range measurement.Pcrs {
+			if measuredPcr.Pcr == *ref.Pcr {
+				foundPcr = true
 			} else {
-				// Measurement contains individual values which must be extended to result in
-				// the final PCR value for comparison
-				measurement = make([]byte, 32)
-				for i, sha256 := range hce.Sha256 {
-					//first element is the TPM_PCR_INIT_VALUE
-					if i == 0 {
-						if hce.EventName[i] != "TPM_PCR_INIT_VALUE" {
-							log.Errorln("First event is not a TPM_PCR_INIT_VALUE")
-						}
-						measurement = sha256
-					} else {
-						measurement = extendSha256(measurement, sha256)
+				continue
+			}
+
+			// Check if the reference value was present if required (only possible if detailed
+			// measurement logs were provided. In case of summary, every reference value was
+			// extended anyway)
+			if measuredPcr.Type != "PCR Summary" && !ref.Optional {
+				foundEvent := false
+				for _, event := range measuredPcr.Events {
+					if bytes.Equal(event.Sha256, ref.Sha256) {
+						foundEvent = true
 					}
 				}
+				if !foundEvent {
+					result := DigestResult{
+						Type:        "Reference Value",
+						Pcr:         ref.Pcr,
+						Success:     false,
+						Name:        ref.Name,
+						Digest:      hex.EncodeToString(ref.Sha256),
+						Description: ref.Description,
+					}
+					detailedResults = append(detailedResults, result)
+					ok = false
+					log.Tracef("Failed to find required PCR%v reference value %v: %v in measurements",
+						*ref.Pcr, ref.Name, hex.EncodeToString(ref.Sha256))
+					continue
+				}
 			}
-
-			pcrRes := PcrResult{
-				Pcr:      int(hce.Pcr),
-				Measured: hex.EncodeToString(measurement),
-				Success:  false,
+		}
+		if !foundPcr {
+			result := DigestResult{
+				Type:        "Reference Value",
+				Pcr:         ref.Pcr,
+				Success:     false,
+				Name:        ref.Name,
+				Digest:      hex.EncodeToString(ref.Sha256),
+				Description: ref.Description,
 			}
-
-			pcrResult = append(pcrResult, pcrRes)
+			detailedResults = append(detailedResults, result)
 			ok = false
+			continue
 		}
 	}
 
-	return calculatedPcrs, pcrResult, artifacts, ok
+	return calculatedPcrs, pcrResults, detailedResults, ok
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {
@@ -341,24 +333,24 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
-		log.Warnf("Failed to decode TPM signature: %v", err)
+		log.Tracef("Failed to decode TPM signature: %v", err)
 		return Result{Success: false, ErrorCode: Parse}
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
-		log.Warnf("Hash algorithm %v not supported", tpmtSig.Alg)
+		log.Tracef("Hash algorithm %v not supported", tpmtSig.Alg)
 		return Result{Success: false, ErrorCode: UnsupportedAlgorithm}
 	}
 
 	// Extract public key from x509 certificate
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		log.Warnf("Failed to extract public key from certificate")
+		log.Tracef("Failed to extract public key from certificate")
 		return Result{Success: false, ErrorCode: ExtractPubKey}
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		log.Warnf("Hash algorithm not supported")
+		log.Tracef("Hash algorithm not supported")
 		return Result{Success: false, ErrorCode: UnsupportedAlgorithm}
 	}
 
@@ -366,8 +358,18 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) Result {
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
-		log.Warnf("Failed to verify TPM quote signature: %v", err)
+		log.Tracef("Failed to verify TPM quote signature: %v", err)
 		return Result{Success: false, ErrorCode: VerifySignature}
 	}
 	return Result{Success: true}
+}
+
+// Searches for a specific hash value in the reference values for RTM and OS
+func getReferenceValue(hash []byte, pcr int, refVals []ReferenceValue) *ReferenceValue {
+	for _, ref := range refVals {
+		if *ref.Pcr == pcr && bytes.Equal(ref.Sha256, hash) {
+			return &ref
+		}
+	}
+	return nil
 }

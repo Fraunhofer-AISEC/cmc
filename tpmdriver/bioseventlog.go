@@ -124,7 +124,7 @@ type TPMT_HA struct {
 func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %v: %w", file, err)
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	digests, err := parseBiosMeasurements(data)

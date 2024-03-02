@@ -134,7 +134,7 @@ func getConfig() (*cmc.Config, error) {
 		c.UseIma = *ima
 	}
 	if internal.FlagPassed(imaPcrFlag) {
-		c.ImaPcr = int32(*pcr)
+		c.ImaPcr = *pcr
 	}
 	if internal.FlagPassed(keyConfigFlag) {
 		c.KeyConfig = *keyConfig

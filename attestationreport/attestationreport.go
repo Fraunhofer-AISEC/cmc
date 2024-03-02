@@ -59,7 +59,7 @@ type DriverConfig struct {
 	KeyConfig      string
 	Metadata       [][]byte
 	UseIma         bool
-	ImaPcr         int32
+	ImaPcr         int
 	Serializer     Serializer
 	MeasurementLog bool
 }
@@ -103,15 +103,21 @@ type Validity struct {
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
 
-// HashChainElem represents the attestation report
-// element of type 'Hash Chain' embedded in 'TPM Measurement'
-type HashChainElem struct {
-	Type      string      `json:"type" cbor:"0,keyasint"`
-	Pcr       int32       `json:"pcr,omitempty" cbor:"1,keyasint,omitempty"`
-	Sha256    []HexByte   `json:"sha256" cbor:"2,keyasint"`
-	Summary   bool        `json:"summary,omitempty" cbor:"3,keyasint,omitempty"` // Indicates if element represents final PCR value or single artifact
-	EventName []string    `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
-	EventData []EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
+// PcrMeasurement represents the measurements of a single PCR. If the type is 'PCR Summary',
+// Sha256 is the final PCR value. If the type is 'PCR Eventlog', Sha256 is a list of the
+// extends that leads to the final PCR value. The list is retrieved by the prover
+// e.g. from the TPM binary bios measurements list or the IMA runtime measurements list.
+type PcrMeasurement struct {
+	Type    string     `json:"type" cbor:"0,keyasint"`
+	Pcr     int        `json:"pcr" cbor:"1,keyasint"`
+	Summary HexByte    `json:"summary,omitempty" cbor:"2,keyasint,omitempty"`
+	Events  []PcrEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`
+}
+
+type PcrEvent struct {
+	Sha256    HexByte    `json:"sha256" cbor:"2,keyasint"`
+	EventName string     `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
+	EventData *EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // TpmMeasurement represents the attestation report
@@ -122,7 +128,7 @@ type Measurement struct {
 	Evidence    []byte           `json:"evidence" cbor:"1,keyasint"`
 	Certs       [][]byte         `json:"certs" cbor:"3,keyasint"`
 	Signature   []byte           `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
-	HashChain   []*HashChainElem `json:"hashChain,omitempty" cbor:"4,keyasint,omitempty"`
+	Pcrs        []PcrMeasurement `json:"pcrs,omitempty" cbor:"4,keyasint,omitempty"`
 	Sha256      HexByte          `json:"sha256,omitempty" cbor:"5,keyasint,omitempty"`
 	Description string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
 }
@@ -240,12 +246,13 @@ type ReferenceValue struct {
 	Sha256      HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
 	Sha384      HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
 	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
-	Pcr         *int        `json:"pcr,omitempty" cbor:"4,keyasint,omitempty"`
-	Snp         *SnpDetails `json:"snp,omitempty" cbor:"5,keyasint,omitempty"`
-	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"8,keyasint,omitempty"`
-	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"9,keyasint,omitempty"`
-	Description string      `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
-	EventData   *EventData  `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
+	Optional    bool        `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
+	Pcr         *int        `json:"pcr,omitempty" cbor:"5,keyasint,omitempty"`
+	Snp         *SnpDetails `json:"snp,omitempty" cbor:"6,keyasint,omitempty"`
+	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"7,keyasint,omitempty"`
+	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"8,keyasint,omitempty"`
+	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
+	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
 }
 
 // AppDescription represents the attestation report
@@ -951,16 +958,6 @@ func checkValidity(val Validity) Result {
 	}
 
 	return result
-}
-
-// Searches for a specific hash value in the reference values for RTM and OS
-func getReferenceValue(hash []byte, refVals []ReferenceValue) *ReferenceValue {
-	for _, ver := range refVals {
-		if bytes.Equal(ver.Sha256, hash) {
-			return &ver
-		}
-	}
-	return nil
 }
 
 func collectReferenceValues(metadata *Metadata) (map[string][]ReferenceValue, error) {

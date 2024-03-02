@@ -47,7 +47,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validSummaryHashChain,
+					Pcrs:      validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -64,7 +64,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validHashChain,
+					Pcrs:      validHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -81,7 +81,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validSummaryHashChain,
+					Pcrs:      validSummaryHashChain,
 				},
 				nonce:           invalidTpmNonce,
 				referenceValues: validReferenceValues,
@@ -98,7 +98,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validSummaryHashChain,
+					Pcrs:      validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -115,7 +115,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: invalidSummaryHashChain,
+					Pcrs:      invalidSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -132,7 +132,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: invalidHashChain,
+					Pcrs:      invalidHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -149,7 +149,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validSummaryHashChain,
+					Pcrs:      validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: invalidReferenceValues,
@@ -166,7 +166,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					HashChain: validSummaryHashChain,
+					Pcrs:      validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -183,7 +183,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     invalidTpmCertChain,
-					HashChain: validSummaryHashChain,
+					Pcrs:      validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -204,7 +204,14 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			}
 
 			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n\n--WANT = %v", got, tt.want)
+				// t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n\n--WANT = %v", got, tt.want)
+
+				if !reflect.DeepEqual(got.Artifacts, tt.want.Artifacts) {
+					t.Errorf("verifyTpmMeasurements ARTIFACTS \n---GOT = %v\n\n--WANT = %v", got.Artifacts, tt.want.Artifacts)
+				}
+				if !reflect.DeepEqual(got.TpmResult, tt.want.TpmResult) {
+					t.Errorf("verifyTpmMeasurements TPM \n---GOT = %v\n\n--WANT = %v", got.TpmResult, tt.want.TpmResult)
+				}
 			}
 		})
 	}
@@ -240,95 +247,87 @@ var (
 
 	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
 
-	validSummaryHashChain = []*HashChainElem{
+	validSummaryHashChain = []PcrMeasurement{
 		{
-			Type:    "Hash Chain",
+			Type:    "PCR Summary",
 			Pcr:     1,
-			Sha256:  []HexByte{dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
-			Summary: true,
+			Summary: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6"),
 		},
 		{
-			Type:    "Hash Chain",
+			Type:    "PCR Summary",
 			Pcr:     4,
-			Sha256:  []HexByte{dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")},
-			Summary: true,
+			Summary: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72"),
 		},
 	}
 
-	invalidSummaryHashChain = []*HashChainElem{
+	invalidSummaryHashChain = []PcrMeasurement{
 		{
-			Type:    "Hash Chain",
+			Type:    "PCR Summary",
 			Pcr:     1,
-			Sha256:  []HexByte{dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
-			Summary: true,
+			Summary: dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80"),
 		},
 		{
-			Type:    "Hash Chain",
+			Type:    "PCR Summary",
 			Pcr:     4,
-			Sha256:  []HexByte{dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
-			Summary: true,
+			Summary: dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9"),
 		},
 	}
 
-	validHashChain = []*HashChainElem{
+	validHashChain = []PcrMeasurement{
 		{
-			Type: "Hash Chain",
+			Type: "PCR Eventlog",
 			Pcr:  1,
-			Sha256: []HexByte{
-				dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
-				dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
-				dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
-				dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
-				dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
-				dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
-				dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
-				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
-				dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			Events: []PcrEvent{
+				{Sha256: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")},
+				{Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")},
+				{Sha256: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")},
+				{Sha256: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39")},
+				{Sha256: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69")},
+				{Sha256: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7")},
+				{Sha256: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8")},
+				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
+				{Sha256: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")},
 			},
-			Summary: false,
 		},
 		{
-			Type: "Hash Chain",
+			Type: "PCR Eventlog",
 			Pcr:  4,
-			Sha256: []HexByte{
-				dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
-				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
-				dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
-				dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
-				dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
+			Events: []PcrEvent{
+				{Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")},
+				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
+				{Sha256: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036")},
+				{Sha256: dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05")},
+				{Sha256: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025")},
 			},
-			Summary: false,
 		},
 	}
 
-	invalidHashChain = []*HashChainElem{
+	invalidHashChain = []PcrMeasurement{
 		{
-			Type: "Hash Chain",
+			Type: "PCR Eventlog",
 			Pcr:  1,
-			Sha256: []HexByte{
-				dec("ff5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
-				dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
-				dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
-				dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
-				dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
-				dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
-				dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
-				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
-				dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			Events: []PcrEvent{
+				{Sha256: dec("ff5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")},
+				{Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")},
+				{Sha256: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")},
+				{Sha256: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39")},
+				{Sha256: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69")},
+				{Sha256: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7")},
+				{Sha256: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8")},
+				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
+				{Sha256: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")},
 			},
-			Summary: false,
 		},
 		{
-			Type: "Hash Chain",
+			Type: "PCR Eventlog",
 			Pcr:  4,
-			Sha256: []HexByte{
-				dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
-				dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
-				dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
-				dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
-				dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
+			Events: []PcrEvent{
+				{Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")},
+				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
+				{Sha256: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036")},
+				{Sha256: dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05")},
+				{Sha256: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025")},
 			},
-			Summary: false,
 		},
 	}
 
