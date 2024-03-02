@@ -19,11 +19,13 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 var log = logrus.WithField("service", "ima")
@@ -51,48 +53,42 @@ type imaTemplate struct {
 
 // GetImaRuntimeDigests returns all hashes extended by the IMA into the TPM
 // IMA PCR as read from the sysfs
-func GetImaRuntimeDigests() ([][SHA256_DIGEST_LEN]byte, error) {
-	data, err := os.ReadFile("/sys/kernel/security/ima/binary_runtime_measurements")
+func GetImaRuntimeDigests() ([]ar.PcrEvent, error) {
+	file := "/sys/kernel/security/ima/binary_runtime_measurements"
+	data, err := os.ReadFile(file)
 	if err != nil {
-		log.Error("Failed to load IMA runtime measurements from /sys/kernel/security/ima/binary_runtime_measurements - ", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	digests, err := parseImaRuntimeDigests(data)
 	if err != nil {
-		log.Error("Failed to parse IMA runtime digests - ", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
 
 	return digests, nil
 }
 
-func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
+func parseImaRuntimeDigests(data []byte) ([]ar.PcrEvent, error) {
 
 	buf := bytes.NewBuffer(data)
-	digests := make([][SHA256_DIGEST_LEN]byte, 0)
+	events := make([]ar.PcrEvent, 0)
 
 	for buf.Len() > 0 {
 		header := header{}
 		err := binary.Read(buf, binary.LittleEndian, &header)
 		if err != nil {
-			log.Error("Error Reading binary data: ", err)
-			return nil, err
+			return nil, fmt.Errorf("error reading binary data: %w", err)
 		}
 
 		name := make([]byte, header.NameLen)
 		err = binary.Read(buf, binary.LittleEndian, name)
 		if err != nil {
-			log.Error("Error Reading binary data: ", err)
-			return nil, err
+			return nil, fmt.Errorf("error reading binary data: %w", err)
 		}
 
 		var template imaTemplate
 		template.header = header
 		copy(template.Name[:], name)
-
-		log.Trace("PCR: ", header.Pcr)
-		log.Trace("Name: ", string(template.Name[:]))
 
 		var len uint32
 		if strings.Compare(string(template.Name[:]), "ima") == 0 {
@@ -101,8 +97,7 @@ func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
 		} else {
 			err = binary.Read(buf, binary.LittleEndian, &template.DataLen)
 			if err != nil {
-				log.Error("Error Reading binary data: ", err)
-				return nil, err
+				return nil, fmt.Errorf("error reading binary data: %w", err)
 			}
 			len = template.DataLen
 		}
@@ -110,8 +105,7 @@ func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
 		template.Data = make([]byte, len)
 		err = binary.Read(buf, binary.LittleEndian, template.Data)
 		if err != nil {
-			log.Error("Error Reading binary data: ", err)
-			return nil, err
+			return nil, fmt.Errorf("error reading binary data: %w", err)
 		}
 
 		if strings.Compare(string(template.Name[:]), "ima") == 0 {
@@ -127,10 +121,17 @@ func parseImaRuntimeDigests(data []byte) ([][SHA256_DIGEST_LEN]byte, error) {
 		// SHA1 hash and cannot be used. Instead, the SHA256 hash of the
 		// template must be calculated manually
 		digest := sha256.Sum256(template.Data)
-		log.Trace("Sha256: ", hex.EncodeToString(digest[:]))
 
-		digests = append(digests, digest)
+		event := ar.PcrEvent{
+			Sha256: digest[:],
+			// TODO EventName: parseEventName(template.Data)
+			EventName: "",
+		}
+
+		log.Tracef("Parsed PCR%v IMA %v event", header.Pcr, string(template.Name[:]))
+
+		events = append(events, event)
 	}
 
-	return digests, nil
+	return events, nil
 }

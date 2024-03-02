@@ -41,7 +41,7 @@ type Config struct {
 	Metadata       []string `json:"metadata"`
 	Drivers        []string `json:"drivers"`                // TPM, SNP
 	UseIma         bool     `json:"useIma"`                 // TRUE, FALSE
-	ImaPcr         int32    `json:"imaPcr"`                 // 10-15
+	ImaPcr         int      `json:"imaPcr"`                 // 10-15
 	KeyConfig      string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
 	Api            string   `json:"api"`                    // gRPC, CoAP, Socket
 	Network        string   `json:"network,omitempty"`      // unix, socket

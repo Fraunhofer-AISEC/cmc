@@ -63,30 +63,34 @@ type Api interface {
 }
 
 type config struct {
-	Mode           string   `json:"mode"`
-	Addr           []string `json:"addr"`
-	CmcAddr        string   `json:"cmc"`
-	ReportFile     string   `json:"report"`
-	ResultFile     string   `json:"result"`
-	NonceFile      string   `json:"nonce"`
-	CaFile         string   `json:"ca"`
-	Mtls           bool     `json:"mtls"`
-	Attest         string   `json:"attest"`
-	PoliciesFile   string   `json:"policies"`
-	Api            string   `json:"api"`
-	Network        string   `json:"network"`
-	LogLevel       string   `json:"logLevel"`
-	Publish        string   `json:"publish"`
-	IntervalStr    string   `json:"interval"`
+	// Generic config
+	Mode         string   `json:"mode"`
+	Addr         []string `json:"addr"`
+	CmcAddr      string   `json:"cmc"`
+	ReportFile   string   `json:"report"`
+	ResultFile   string   `json:"result"`
+	NonceFile    string   `json:"nonce"`
+	CaFile       string   `json:"ca"`
+	Mtls         bool     `json:"mtls"`
+	Attest       string   `json:"attest"`
+	PoliciesFile string   `json:"policies"`
+	Api          string   `json:"api"`
+	Network      string   `json:"network"`
+	LogLevel     string   `json:"logLevel"`
+	Publish      string   `json:"publish"`
+	IntervalStr  string   `json:"interval"`
+	Header       []string `json:"header"`
+	Method       string   `json:"method"`
+	Data         string   `json:"data"`
+	// Only Lib API
 	ProvAddr       string   `json:"provServerAddr"`
 	Metadata       []string `json:"metadata"`
 	Drivers        []string `json:"drivers"`
 	Storage        string   `json:"storage"`
 	Cache          string   `json:"cache"`
 	MeasurementLog bool     `json:"measurementLog"`
-	Header         []string `json:"header"`
-	Method         string   `json:"method"`
-	Data           string   `json:"data"`
+	UseIma         bool     `json:"useIma"`
+	ImaPcr         int      `json:"imaPcr"`
 
 	ca       []byte
 	policies []byte
@@ -95,22 +99,24 @@ type config struct {
 }
 
 const (
-	configFlag         = "config"
-	modeFlag           = "mode"
-	addrFlag           = "addr"
-	cmcFlag            = "cmc"
-	reportFlag         = "report"
-	resultFlag         = "result"
-	nonceFlag          = "nonce"
-	caFlag             = "ca"
-	policiesFlag       = "policies"
-	apiFlag            = "api"
-	networkFlag        = "network"
-	mtlsFlag           = "mtls"
-	attestFlag         = "attest"
-	logFlag            = "log"
-	publishFlag        = "publish"
-	intervalFlag       = "interval"
+	// Generic flags
+	configFlag   = "config"
+	modeFlag     = "mode"
+	addrFlag     = "addr"
+	cmcFlag      = "cmc"
+	reportFlag   = "report"
+	resultFlag   = "result"
+	nonceFlag    = "nonce"
+	caFlag       = "ca"
+	policiesFlag = "policies"
+	apiFlag      = "api"
+	networkFlag  = "network"
+	mtlsFlag     = "mtls"
+	attestFlag   = "attest"
+	logFlag      = "log"
+	publishFlag  = "publish"
+	intervalFlag = "interval"
+	// Only lib API
 	provAddrFlag       = "prov"
 	metadataFlag       = "metadata"
 	driversFlag        = "drivers"
@@ -120,6 +126,8 @@ const (
 	headerFlag         = "header"
 	methodFlag         = "method"
 	dataFlag           = "data"
+	imaFlag            = "ima"
+	imaPcrFlag         = "pcr"
 )
 
 func getConfig() *config {
@@ -164,6 +172,9 @@ func getConfig() *config {
 	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
 	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
 	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
+	ima := flag.Bool(imaFlag, false,
+		"Indicates whether to use Integrity Measurement Architecture (IMA)")
+	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
 
 	flag.Parse()
 
@@ -269,6 +280,12 @@ func getConfig() *config {
 	if internal.FlagPassed(dataFlag) {
 		c.Data = *data
 	}
+	if internal.FlagPassed(imaFlag) {
+		c.UseIma = *ima
+	}
+	if internal.FlagPassed(imaPcrFlag) {
+		c.ImaPcr = *pcr
+	}
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
 	if err != nil {
@@ -371,24 +388,39 @@ func printConfig(c *config) {
 	log.Infof("Running testtool from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tMode		 : %v", c.Mode)
-	log.Debugf("\tAddr        	 : %v", c.Addr)
-	log.Debugf("\tInterval    	 : %v", c.interval)
-	log.Debugf("\tCmcAddr     	 : %v", c.CmcAddr)
-	log.Debugf("\tReportFile  	 : %v", c.ReportFile)
-	log.Debugf("\tResultFile  	 : %v", c.ResultFile)
-	log.Debugf("\tNonceFile   	 : %v", c.NonceFile)
-	log.Debugf("\tCaFile      	 : %v", c.CaFile)
-	log.Debugf("\tMtls        	 : %v", c.Mtls)
-	log.Debugf("\tAttest      	 : %v", c.Attest)
-	log.Debugf("\tEvent Information  : %v", c.MeasurementLog)
+	log.Debugf("\tMode		   : %v", c.Mode)
+	log.Debugf("\tAddr         : %v", c.Addr)
+	log.Debugf("\tInterval     : %v", c.interval)
+	log.Debugf("\tCmcAddr      : %v", c.CmcAddr)
+	log.Debugf("\tReportFile   : %v", c.ReportFile)
+	log.Debugf("\tResultFile   : %v", c.ResultFile)
+	log.Debugf("\tNonceFile    : %v", c.NonceFile)
+	log.Debugf("\tCaFile       : %v", c.CaFile)
+	log.Debugf("\tMtls         : %v", c.Mtls)
+	log.Debugf("\tLogLevel     : %v", c.LogLevel)
+	log.Debugf("\tAttest       : %v", c.Attest)
+	log.Debugf("\tPublish      : %v", c.Publish)
+	if strings.EqualFold(c.Mode, "request") {
+		log.Debugf("\tHTTP Data    : %v", c.Data)
+		log.Debugf("\tHTTP Header  : %v", c.Header)
+		log.Debugf("\tHTTP Method  : %v", c.Method)
+	}
 	if c.PoliciesFile != "" {
-		log.Debugf("\tPoliciesFile : %v", c.PoliciesFile)
+		log.Debugf("\tPoliciesFile: %v", c.PoliciesFile)
 	}
 	if strings.EqualFold(c.Api, "socket") {
 		log.Debugf("\tApi (Network): %v (%v)", c.Api, c.Network)
 	} else {
 		log.Debugf("\tApi          : %v", c.Api)
 	}
-	log.Debugf("\tLogLevel     : %v", c.LogLevel)
+	if strings.EqualFold(c.Api, "libapi") {
+		log.Debugf("\tProvAddr     : %v", c.ProvAddr)
+		log.Debugf("\tMetadata     : %v", c.Metadata)
+		log.Debugf("\tStorage      : %v", c.Storage)
+		log.Debugf("\tCache        : %v", c.Cache)
+		log.Debugf("\tEvent Info   : %v", c.MeasurementLog)
+		log.Debugf("\tDrivers      : %v", strings.Join(c.Drivers, ","))
+		log.Debugf("\tUse IMA      : %v", c.UseIma)
+		log.Debugf("\tIMA PCR      : %v", c.ImaPcr)
+	}
 }

@@ -230,6 +230,11 @@ func ParseEventData(eventBytes []uint8, eventName string) *EventData {
 	default:
 		exInfo.GenericData = (eventBytes)
 	}
+
+	if EmptyEventdata(exInfo) {
+		return nil
+	}
+
 	return exInfo
 
 }
