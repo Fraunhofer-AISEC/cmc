@@ -344,8 +344,14 @@ type CompanyDescription struct {
 // DeviceConfig contains the local device configuration parameters
 type DeviceConfig struct {
 	MetaInfo
-	AkCsr CsrParams `json:"akCsr" cbor:"3,keyasint"`
-	IkCsr CsrParams `json:"ikCsr" cbor:"4,keyasint"`
+	AkCsr     CsrParams `json:"akCsr" cbor:"3,keyasint"`
+	IkCsr     CsrParams `json:"ikCsr" cbor:"4,keyasint"`
+	SgxValues struct {
+		EncryptedPPID HexByte `json:"encryptedPPID" cbor:"5,keyasint"`
+		Pceid         HexByte `json:"pceid" cbor:"6,keyasint"`
+		Cpusvn        HexByte `json:"cpusvn" cbor:"7,keyasint"`
+		Pcesvn        HexByte `json:"pcesvn" cbor:"8,keyasint"`
+	}
 }
 
 // CsrParams contains certificate signing request parameters

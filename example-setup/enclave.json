@@ -1,0 +1,19 @@
+{
+ "exe": "testtool",
+ "key": "private.pem",
+ "debug": false,
+ "heapSize": 512,
+ "executableHeap": false,
+ "productID": 1,
+ "securityVersion": 1,
+ "mounts": [
+    {
+        "source": "../../cmc-data",
+        "target": "cmc-data",
+        "type": "hostfs",
+        "readOnly": false
+    }
+ ],
+ "env": null,
+ "files": null
+}

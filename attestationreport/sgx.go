@@ -199,7 +199,7 @@ func verifySgxMeasurements(sgxM Measurement, nonce []byte, intelCache string, re
 	}
 
 	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := parseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
 		log.Tracef("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.SetErr(ParseExtensions)
@@ -305,7 +305,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	result.Artifacts = append(result.Artifacts,
 		DigestResult{
 			Name:    "MrSigner",
-			Digest:  hex.EncodeToString(body.MRENCLAVE[:]),
+			Digest:  hex.EncodeToString(body.MRSIGNER[:]),
 			Success: strings.EqualFold(sgxReferenceValue.Sgx.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
 			Type:    "Measurement",
 		},
@@ -331,7 +331,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 
 	for _, v := range result.Artifacts {
 		if !v.Success {
-			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Got: %v)", v.Name, v.Digest)
+			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Got: %v)", v.Name, v.Digest)
 		}
 	}
 

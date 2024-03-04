@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/binary"
@@ -282,7 +283,7 @@ type Configuration struct {
 
 // ------------------------- end SGX Extensions -------------------------
 
-func parseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
+func ParseSGXExtensions(extensions []byte) (SGXExtensionsValue, error) {
 	var sgx_extensions SGXExtensionsValue
 
 	rest, err := asn1.Unmarshal(extensions, &sgx_extensions.Ppid)
@@ -464,7 +465,7 @@ func parseECDSASignature(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStruc
 		return fmt.Errorf("failed to parse QECertDataSize")
 	}
 	tmp = make([]byte, sig.QECertDataSize)
-	binary.Read(buf, binary.LittleEndian, &tmp)
+	err = binary.Read(buf, binary.LittleEndian, &tmp)
 	if err != nil {
 		return fmt.Errorf("failed to parse QECertData")
 	}
@@ -613,7 +614,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	case TDX_QUOTE_TYPE:
 		x509Chains, code = VerifyIntelCertChainFull(certs, CA_PLATFORM, intelCache)
 	}
-	if err != nil {
+	if code != NotSet {
 		log.Tracef("Failed to verify certificate chain: %v", err)
 		result.CertChainCheck.SetErr(code)
 		return result, false
@@ -658,12 +659,11 @@ func verifyTcbInfo(tcbInfo *TcbInfo, tcbInfoBodyRaw string, tcbKeyCert *x509.Cer
 		return result
 	}
 
-	regex := regexp.MustCompile(`\s+`)
-	// remove whitespaces
-	regex.ReplaceAllString(tcbInfoBodyRaw, "")
+	regex := regexp.MustCompile(`("(?:\\.|[^"])*")|\s+`)
+	// remove whitespaces from json while preserving strings
+	tcbInfoBodyRaw = regex.ReplaceAllString(tcbInfoBodyRaw, "$1")
 	// remove "{"tcbInfo":" from beginning and signature + rest from the end
 	tcbInfoBodyRaw = tcbInfoBodyRaw[len(`{"tcbInfo":`) : len(tcbInfoBodyRaw)-128-16]
-
 	// get checksum of tcb info body
 	digest := sha256.Sum256([]byte(tcbInfoBodyRaw))
 
@@ -783,7 +783,7 @@ func VerifyQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *QEIdentity, q
 	}
 
 	regex := regexp.MustCompile(`\s+`)
-	regex.ReplaceAllString(qeIdentityBodyRaw, "")                                                     // remove whitespace
+	qeIdentityBodyRaw = regex.ReplaceAllString(qeIdentityBodyRaw, "")                                 // remove whitespace
 	qeIdentityBodyRaw = qeIdentityBodyRaw[len(`{"enclaveIdentity":`) : len(qeIdentityBodyRaw)-128-16] // remove "{"enclaveIdentity":" from beginning and signature + rest from the end
 
 	// get checksum of qe identity body
@@ -1013,13 +1013,21 @@ func fetchCRL(uri string, name string, ca string, cache string) (*x509.Revocatio
 		if err != nil {
 			return nil, err
 		}
+		return crl, nil
 	}
 	return nil, err
 }
 
 // Download CRL from the Intel PCS
 func downloadCRL(uri string) (*x509.RevocationList, error) {
-	resp, err := http.Get(uri)
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %v", err)
+
+	}
+	tlsConfig := &tls.Config{InsecureSkipVerify: true}
+	client := http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1065,7 @@ func VerifyIntelCertChainFull(quoteCerts SgxCertificates, ca string, intelCache 
 	// download CRLs from PCS
 	root_ca_crl, err := fetchCRL(PCS_ROOT_CA_CRL_URI, ROOT_CA_CRL_NAME, "", intelCache)
 	if err != nil {
-		log.Tracef("downloading ROOT CA CRL from PCS failed: %v", err)
+		log.Tracef("downloading Root CA CRL from PCS failed: %v", err)
 		return nil, DownloadRootCRL
 	}
 
