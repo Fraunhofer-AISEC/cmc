@@ -275,7 +275,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	}
 
 	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := parseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
 		log.Tracef("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.SetErr(ParseCert)
