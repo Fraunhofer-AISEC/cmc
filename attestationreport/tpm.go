@@ -177,8 +177,8 @@ func recalculatePcrs(measurement Measurement, referenceValues []ReferenceValue) 
 						EventData: event.EventData,
 					}
 					detailedResults = append(detailedResults, measResult)
-					log.Tracef("Failed to find measurement %v in reference values",
-						hex.EncodeToString(event.Sha256))
+					log.Tracef("Failed to find PCR%v measurement %v: %v in reference values",
+						measuredPcr.Pcr, event.EventName, hex.EncodeToString(event.Sha256))
 					ok = false
 					pcrResult.Success = false
 					continue
