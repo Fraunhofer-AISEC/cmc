@@ -532,6 +532,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	if code != NotSet {
 		result.ErrorCode = code
 		result.Success = false
+		return result
 	}
 
 	// Verify and unpack metadata from attestation report
