@@ -90,19 +90,19 @@ func parseImaRuntimeDigests(data []byte) ([]ar.PcrEvent, error) {
 		template.header = header
 		copy(template.Name[:], name)
 
-		var len uint32
+		var length uint32
 		if strings.Compare(string(template.Name[:]), "ima") == 0 {
 			template.DataLen = SHA1_DIGEST_LEN + MAX_TCG_EVENT_LEN + 1
-			len = SHA1_DIGEST_LEN
+			length = SHA1_DIGEST_LEN
 		} else {
 			err = binary.Read(buf, binary.LittleEndian, &template.DataLen)
 			if err != nil {
 				return nil, fmt.Errorf("error reading binary data: %w", err)
 			}
-			len = template.DataLen
+			length = template.DataLen
 		}
 
-		template.Data = make([]byte, len)
+		template.Data = make([]byte, length)
 		err = binary.Read(buf, binary.LittleEndian, template.Data)
 		if err != nil {
 			return nil, fmt.Errorf("error reading binary data: %w", err)
@@ -122,16 +122,59 @@ func parseImaRuntimeDigests(data []byte) ([]ar.PcrEvent, error) {
 		// template must be calculated manually
 		digest := sha256.Sum256(template.Data)
 
-		event := ar.PcrEvent{
-			Sha256: digest[:],
-			// TODO EventName: parseEventName(template.Data)
-			EventName: "",
+		// Parse the template data to retrieve additional information
+		_, eventName, err := parseTemplateData(&template)
+		if err != nil {
+			log.Tracef("Failed to parse addtional template data: %v", err)
 		}
 
-		log.Tracef("Parsed PCR%v IMA %v event", header.Pcr, string(template.Name[:]))
+		event := ar.PcrEvent{
+			Sha256:    digest[:],
+			EventName: eventName,
+		}
+
+		log.Tracef("Parsed IMA PCR%v %v event %v", header.Pcr,
+			string(template.Name[:template.header.NameLen]), eventName)
 
 		events = append(events, event)
 	}
 
 	return events, nil
+}
+
+func parseTemplateData(tmpl *imaTemplate) ([]byte, string, error) {
+
+	if !bytes.Equal(tmpl.Name[:tmpl.header.NameLen], []byte("ima-ng")) &&
+		!bytes.Equal(tmpl.Name[:tmpl.header.NameLen], []byte("ima-sig")) {
+		return nil, "", fmt.Errorf("template %v parsing additional information not supported", tmpl.Name[:tmpl.header.NameLen])
+	}
+
+	var tmplDigestLen uint32
+	buf := bytes.NewBuffer(tmpl.Data)
+	err := binary.Read(buf, binary.LittleEndian, &tmplDigestLen)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read digest length from template: %w", err)
+	}
+
+	tmplDigest := make([]byte, tmplDigestLen)
+	err = binary.Read(buf, binary.LittleEndian, tmplDigest)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read digest from template: %w", err)
+	}
+
+	var tmplPathLen uint32
+	err = binary.Read(buf, binary.LittleEndian, &tmplPathLen)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read digest length from template: %w", err)
+	}
+
+	tmplPath := make([]byte, tmplPathLen)
+	err = binary.Read(buf, binary.LittleEndian, tmplPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read path from template: %w", err)
+	}
+	// Strip the path from the parsed \0 byte
+	tmplPath = tmplPath[:len(tmplPath)-1]
+
+	return tmplDigest, string(tmplPath), nil
 }
