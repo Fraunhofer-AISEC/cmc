@@ -1,76 +1,82 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-function abs_path() {
-  if [ -d "$(dirname "$1")" ]
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+export PATH=${PATH}:${HOME}/go/bin
+
+abs_path() {
+  if [[ -d "$(dirname "$1")" ]]
   then
-    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
   fi
 }
 
-if [ "$#" -ne 2 ]; then
+
+if [[ "$#" -ne 2 ]]; then
    echo "Usage: ./update-full-simple <data-folder> <cbor|json>"
    exit 1
 fi
 
-DATA="$(abs_path $1)"
-SER="$2"
+data=$(set -e; abs_path "${1}")
+input="${data}/metadata-raw"
+tmp="${data}/metadata-tmp"
+out="${data}/metadata-signed"
+ser="${2}"
 
-if [ ! -d "$DATA" ]; then
-  echo "Data directory $DATA does not exist. Did you run the setup-full-simple script? Abort.."
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-full-simple script? Abort.."
   exit 1
 fi
 
-echo "Using $DATA as directory for local data"
-
-export PATH=$PATH:$HOME/go/bin
+echo "Using ${data} as directory for local data"
 
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json -e)
 
-# Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
+# Replace existing reference values with new reference values in the RTM Manifest
+json=$(cat "${input}/rtm.manifest.json")
+json=$(echo "${json}" | jq 'del(.referenceValues[])')
+json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+printf "%s\n" "${json}" > "${input}/rtm.manifest.json"
 
-# Add new reference values
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/rtm.manifest.json | sponge $DATA/metadata-raw/rtm.manifest.json
+# Parse the values of the OS PCRs from the kernel's binary bios measurements as reference values
+referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json -e)
 
-# Do this for the OS manifest as well
-referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-jq 'del(.referenceValues[])' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $DATA/metadata-raw/os.manifest.json | sponge $DATA/metadata-raw/os.manifest.json
+# Replace existing reference values with new reference values in the RTM Manifest
+json=$(cat "${input}/os.manifest.json")
+json=$(echo "${json}" | jq 'del(.referenceValues[])')
+json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+printf "%s\n" "${json}" > "${input}/os.manifest.json"
 
 # Sign the metadata*
-IN=$DATA/metadata-raw
-TMP=$DATA/metadata-tmp
-OUT=$DATA/metadata-signed
-KEY=$DATA/pki/signing-cert-key.pem
-CHAIN=$DATA/pki/signing-cert.pem,$DATA/pki/ca.pem
+key="${data}/pki/signing-cert-key.pem"
+chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
 
-rm -rf $TMP
-rm -rf $OUT
+rm -rf "${tmp}"
+rm -rf "${out}"
 
-mkdir -p $TMP
-mkdir -p $OUT
+mkdir -p "${tmp}"
+mkdir -p "${out}"
 
-if [ "${SER,,}" = "json" ]; then
+if [[ "${ser,,}" = "json" ]]; then
   echo "using json serialization"
-  cp $IN/rtm.manifest.json        $TMP/rtm.manifest.json
-  cp $IN/os.manifest.json         $TMP/os.manifest.json
-  cp $IN/device.description.json  $TMP/device.description.json
-  cp $IN/device.config.json       $TMP/device.config.json
-elif [ "${SER,,}" = "cbor" ]; then
+  cp "${input}/rtm.manifest.json"        "${tmp}/rtm.manifest.json"
+  cp "${input}/os.manifest.json"         "${tmp}/os.manifest.json"
+  cp "${input}/device.description.json"  "${tmp}/device.description.json"
+  cp "${input}/device.config.json"       "${tmp}/device.config.json"
+elif [[ "${ser,,}" = "cbor" ]]; then
   echo "using cbor serialiation"
-  cmc-converter -in $IN/rtm.manifest.json        -out $TMP/rtm.manifest.cbor       -outform cbor
-  cmc-converter -in $IN/os.manifest.json         -out $TMP/os.manifest.cbor        -outform cbor
-  cmc-converter -in $IN/device.description.json  -out $TMP/device.description.cbor -outform cbor
-  cmc-converter -in $IN/device.config.json       -out $TMP/device.config.cbor      -outform cbor
+  cmc-converter -in "${input}/rtm.manifest.json"        -out "${tmp}/rtm.manifest.cbor"       -outform cbor
+  cmc-converter -in "${input}/os.manifest.json"         -out "${tmp}/os.manifest.cbor"        -outform cbor
+  cmc-converter -in "${input}/device.description.json"  -out "${tmp}/device.description.cbor" -outform cbor
+  cmc-converter -in "${input}/device.config.json"       -out "${tmp}/device.config.cbor"      -outform cbor
 else
-  echo "serialization format ${SER} is not supported"
+  echo "serialization format ${ser} is not supported"
   exit 1
 fi
 
-cmc-signing-tool -in $TMP/rtm.manifest."${SER}"        -out $OUT/rtm.manifest."${SER}"        -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $TMP/os.manifest."${SER}"         -out $OUT/os.manifest."${SER}"         -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $TMP/device.description."${SER}"  -out $OUT/device.description."${SER}"  -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $TMP/device.config."${SER}"       -out $OUT/device.config."${SER}"       -keys $KEY -x5cs $CHAIN
+cmc-signing-tool -in "${tmp}/rtm.manifest.${ser}"        -out "${out}/rtm.manifest.${ser}"        -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/os.manifest.${ser}"         -out "${out}/os.manifest.${ser}"         -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/device.description.${ser}"  -out "${out}/device.description.${ser}"  -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/device.config.${ser}"       -out "${out}/device.config.${ser}"       -keys "${key}" -x5cs "${chain}"
