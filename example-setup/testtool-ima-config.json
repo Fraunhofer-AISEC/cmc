@@ -9,6 +9,8 @@
     "ca": "../../cmc-data/pki/ca.pem",
     "policies": "",
     "mtls": true,
+    "useIma": true,
+    "imaPcr": 10,
     "api": "libapi",
     "logLevel": "trace",
     "cache": "../../cmc-data/testtool-cache",
