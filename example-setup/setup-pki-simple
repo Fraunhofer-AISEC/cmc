@@ -1,24 +1,25 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
-CMC_DIR="$DIR/.."
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
-IN="$CMC_DIR/example-setup"
-OUT="$DIR"
+cmc="${dir}/.."
+input="${cmc}/example-setup"
+out="${dir}"
 
 print_usage() {
-  printf "Usage: ./setup_simple_pki [-i <input-dir>] [-o <output-dir] [-h]\n"
+  printf "Usage: ./setup-pki-simple [-i <input-dir>] [-o <output-dir] [-h]\n"
 }
 
 while getopts 'i:o:h' flag; do
   case "${flag}" in
     i)
-        IN="${OPTARG}"
+        input="${OPTARG}"
         ;;
     o)
-        OUT="${OPTARG}"
+        out="${OPTARG}"
         ;;
     h)
         print_usage
@@ -29,27 +30,27 @@ while getopts 'i:o:h' flag; do
   esac
 done
 
-if [ ! -d "$IN" ]; then
-    echo "Input directory $IN does not exist"
+if [[ ! -d "${input}" ]]; then
+    echo "Input directory ${input} does not exist"
     exit 1
 fi
 
-echo "Using $IN as input directory"
-echo "Using $OUT as output directory"
+echo "Using ${input} as input directory"
+echo "Using ${out} as output directory"
 
-mkdir -p $OUT
+mkdir -p "${out}"
 
 # Set up root CA
-cfssl gencert -initca "$IN/cfssl-ca.json" | cfssljson -bare "$OUT/ca"
+cfssl gencert -initca "${input}/cfssl-ca.json" | cfssljson -bare "${out}/ca"
 
 # Generate key and CSR for metadata signing
-cfssl genkey -config "$IN/cfssl-ca-config.json" -profile leafcert "$IN/cfssl-leaf.json" | cfssljson -bare "$OUT/signing-cert"
+cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}/cfssl-leaf.json" | cfssljson -bare "${out}/signing-cert"
 
 # Sign CSR and generate certificate for metadata signing
-cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" -profile leafcert -config $IN/cfssl-ca-config.json "$OUT/signing-cert.csr" | cfssljson -bare "$OUT/signing-cert"
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/signing-cert.csr" | cfssljson -bare "${out}/signing-cert"
 
 # Generate key and CSR for EST server
-cfssl genkey -config "$IN/cfssl-ca-config.json" -profile leafcert "$IN/cfssl-est.json" | cfssljson -bare "$OUT/est"
+cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}/cfssl-est.json" | cfssljson -bare "${out}/est"
 
 # Sign CSR and generate certificate for EST server
-cfssl sign -ca "$OUT/ca.pem" -ca-key "$OUT/ca-key.pem" -profile leafcert -config $IN/cfssl-ca-config.json "$OUT/est.csr" | cfssljson -bare "$OUT/est"
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/est.csr" | cfssljson -bare "${out}/est"

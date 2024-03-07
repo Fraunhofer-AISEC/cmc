@@ -1,11 +1,14 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-function abs_path() {
-  if [ -d "$(dirname "$1")" ]
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+export PATH=${PATH}:${HOME}/go/bin
+
+abs_path() {
+  if [[ -d "$(dirname "$1")" ]]
   then
-    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
   fi
 }
 
@@ -18,56 +21,54 @@ extendarr() {
   json="$(echo "${json}" | jq ".${key} += [${param}]")"
 }
 
-if [ "$#" -ne 2 ]; then
-   echo "Usage: ./update-app-manifest <data-folder> <cbor|json>"
+if [[ "$#" -ne 2 ]]; then
+   echo "Usage: ./update-app-manifest-live <data-folder> <cbor|json>"
    exit 1
 fi
 
-data="$(abs_path $1)"
+data=$(set -e; abs_path "$1")
+input="${data}/metadata-raw"
+tmp="${data}/metadata-tmp"
+out="${data}/metadata-signed"
 ser="${2}"
 
-if [ ! -d "${data}" ]; then
+if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-full-simple script? Abort.."
   exit 1
 fi
 
 echo "Using ${data} as directory for local data"
 
-export PATH=$PATH:$HOME/go/bin
-
 # Parse the IMA measurement lists
 referenceValues=$(sudo parse-ima-log)
 
 # Delete existing reference values in manifest
-jq 'del(.referenceValues[])' ${data}/metadata-raw/app.manifest.json | sponge ${data}/metadata-raw/app.manifest.json
+jq 'del(.referenceValues[])' "${data}/metadata-raw/app.manifest.json" | sponge "${data}/metadata-raw/app.manifest.json"
 
 # Insert new reference values
 json=$(cat "${data}/metadata-raw/app.manifest.json")
 while IFS= read -r element; do
-    json=$(echo "$json" | jq --argjson element "$element" '.referenceValues += [$element]')
+    json=$(echo "${json}" | jq --argjson element "${element}" '.referenceValues += [$element]')
 done < <(echo "${referenceValues}" | jq -c '.[]')
 printf "%s\n" "${json}" > "${data}/metadata-raw/app.manifest.json"
 
 # Sign the metadata*
-input=${data}/metadata-raw
-tmp=${data}/metadata-tmp
-output=${data}/metadata-signed
-key=${data}/pki/signing-cert-key.pem
-chain=${data}/pki/signing-cert.pem,${data}/pki/ca.pem
+key="${data}/pki/signing-cert-key.pem"
+chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
 
-rm -rf ${tmp}/app.manifest.*
-rm -rf ${out}/app.manifest.*
+rm -rf "${tmp}"/app.manifest.*
+rm -rf "${out}"/app.manifest.*
 
 # Convert to CBOR if specified
-if [ "${ser,,}" = "json" ]; then
+if [[ "${ser,,}" = "json" ]]; then
   echo "using json serialization"
-  cp ${input}/app.manifest.json        ${tmp}/app.manifest.json
-elif [ "${ser,,}" = "cbor" ]; then
+  cp "${input}/app.manifest.json" "${tmp}/app.manifest.json"
+elif [[ "${ser,,}" = "cbor" ]]; then
   echo "using cbor serialiation"
-  cmc-converter -in ${input}/app.manifest.json -out ${tmp}/app.manifest.cbor -outform cbor
+  cmc-converter -in "${input}/app.manifest.json" -out "${tmp}/app.manifest.cbor" -outform cbor
 else
   echo "serialization format ${ser} is not supported"
   exit 1
 fi
 
-cmc-signing-tool -in ${tmp}/app.manifest."${ser}" -out ${output}/app.manifest."${ser}" -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/app.manifest.${ser}" -out "${out}/app.manifest.${ser}" -keys "${key}" -x5cs "${chain}"
