@@ -1,11 +1,19 @@
 {
 	"type" : "Device Description",
-	"name" : "test-device.test.de",
+	"name" : "nuc-02.aisec.fraunhofer.de",
 	"version" : "2023-04-10T20:00:00Z",
-	"description" : "PoC Demonstrator Device Description",
+	"description" : "Intel NUC TPM Demonstrator",
 	"location" : "Munich, Germany",
 	"rtmManifest" : "de.test.rtm",
 	"osManifest" : "de.test.os",
 	"appDescriptions": [
+		{
+			"type": "App Description",
+			"name": "de.test.app.description",
+			"version": "2024-02-22T15:36:34Z",
+			"appManifest": "de.test.app",
+			"externalConnections": []
+		}
+
 	]
 }
