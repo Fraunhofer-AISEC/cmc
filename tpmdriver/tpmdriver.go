@@ -28,6 +28,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
@@ -190,7 +191,8 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		log.Warn("TPM measurement based on reference values does not contain any PCRs")
 	}
 
-	log.Trace("Collecting TPM Quote")
+	log.Tracef("Collecting TPM Quote for PCRs %v",
+		strings.Trim(strings.Join(strings.Fields(fmt.Sprint(t.Pcrs)), ","), "[]"))
 
 	pcrValues, quote, err := GetMeasurement(t, nonce, t.Pcrs)
 	if err != nil {
