@@ -82,9 +82,12 @@ from (mode verify)
 The interval format has to be in accordance with the input format of Go's
 [`time.Duration`](https://pkg.go.dev/time#ParseDuration).
 - **publish**: Optional HTTP address to publish attestation results to
--**header**: Only for mode `request`. One or multiple (comma-separated) HTTP headers can be specified in the format `key: value`, e.g. *Content-Type: application/json,Content-Transfer-Encoding: base64*
--**method**: Only for mode `request`. Specifies the HTTP method. Possible are `GET`, `POST`, `PUT` and `HEADER`
--**data**: Only for mode `request` with `POST` or `PUT` method. Specifies data to send to the demo server as a string
+- **header**: Only for mode `request`. One or multiple (comma-separated) HTTP headers can be specified in the format `key: value`, e.g. *Content-Type: application/json,Content-Transfer-Encoding: base64*
+- **method**: Only for mode `request`. Specifies the HTTP method. Possible are `GET`, `POST`, `PUT` and `HEADER`
+- **data**: Only for mode `request` with `POST` or `PUT` method. Specifies data to send to the demo server as a string
+- **keepAlive**: keeps the atls connection alive after connection establishment.
+- **raInterval**: time interval in which the parties re-attest (requires *keepAlive*).
+- **raMessage**: re-attests the connection after specified number of messages (requires *keepAlive*).
 
 Further configuration options are only relevant if the testtool is operated with the `lib` API,
 i.e., standalone without the *cmcd* running as a separate binary:
