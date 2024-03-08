@@ -56,26 +56,64 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 			// Log errors if any
 			result.PrintErr()
 		}),
+		atls.WithReattest(c.raInterval, c.RaMessage),
 		atls.WithCmc(cmc))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
 
-	// Testing: write a hello string
+	if c.KeepAlive {
+		var wg sync.WaitGroup
+
+		ticker := time.NewTicker(time.Second)
+		quit := make(chan struct{})
+		log.Trace("define the go function")
+		wg.Add(1)
+		go func() error {
+			for {
+				select {
+				case <-ticker.C:
+					err = sendHello(conn)
+					if err != nil {
+						log.Error(err)
+						wg.Done()
+						return err
+					}
+				case <-quit:
+					log.Trace("quit signal")
+					ticker.Stop()
+					wg.Done()
+					return nil
+				}
+			}
+		}()
+		wg.Wait()
+	} else {
+		_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
+		err = sendHello(conn)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func sendHello(conn net.Conn) error {
+	//write a hello string
 	msg := "hello\n"
-	log.Infof("Sending to peer: %v", msg)
-	_, err = conn.Write([]byte(msg))
+	log.Infof("Sending to peer: %v, len %v", msg, len(msg))
+	_, err := conn.Write([]byte(msg))
 	if err != nil {
 		return fmt.Errorf("failed to write: %v", err)
 	}
 
-	// Testing: read the answer from the server and print
+	//read the answer from the server and print
 	buf := make([]byte, 100)
 	n, err := conn.Read(buf)
 	if err != nil {
-		return fmt.Errorf("failed to read. %v", err)
+		return fmt.Errorf("failed to read: %v", err)
 	}
 	log.Infof("Received from peer: %v", string(buf[:n-1]))
 
@@ -208,6 +246,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			// Log errors if any
 			result.PrintErr()
 		}),
+		atls.WithReattest(c.raInterval, c.RaMessage),
 		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
@@ -224,24 +263,59 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		}
 
 		// Handle established connections
-		go handleConnection(conn)
+		go handleConnection(conn, c.KeepAlive)
 	}
 }
 
 // Simply acts as an echo server and returns the received string
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, KeepAlive bool) {
 	defer conn.Close()
 	r := bufio.NewReader(conn)
 
+	if KeepAlive {
+		var wg sync.WaitGroup
+
+		ticker := time.NewTicker(time.Second)
+		quit := make(chan struct{})
+		wg.Add(1)
+		go func() error {
+			for {
+				select {
+				case <-ticker.C:
+					log.Trace("receive loop Hello")
+					err := receiveHello(conn, r)
+					if err != nil {
+						wg.Done()
+						return err
+					}
+				case <-quit:
+					ticker.Stop()
+					wg.Done()
+					return nil
+				}
+			}
+		}()
+
+		wg.Wait()
+	} else {
+		receiveHello(conn, r)
+	}
+}
+
+func receiveHello(conn net.Conn, r *bufio.Reader) error {
 	msg, err := r.ReadString('\n')
 	if err != nil {
 		log.Errorf("Failed to read: %v", err)
+		return err
 	}
-	log.Infof("Received from peer: %v", msg)
+	log.Infof("Received from peer: %v, len: %v", msg, len(msg))
 
 	log.Infof("Echoing: %v", msg)
 	_, err = conn.Write([]byte(msg + "\n"))
 	if err != nil {
 		log.Errorf("Failed to write: %v", err)
+		return err
 	}
+
+	return nil
 }
