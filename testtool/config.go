@@ -64,24 +64,27 @@ type Api interface {
 
 type config struct {
 	// Generic config
-	Mode         string   `json:"mode"`
-	Addr         []string `json:"addr"`
-	CmcAddr      string   `json:"cmc"`
-	ReportFile   string   `json:"report"`
-	ResultFile   string   `json:"result"`
-	NonceFile    string   `json:"nonce"`
-	CaFile       string   `json:"ca"`
-	Mtls         bool     `json:"mtls"`
-	Attest       string   `json:"attest"`
-	PoliciesFile string   `json:"policies"`
-	Api          string   `json:"api"`
-	Network      string   `json:"network"`
-	LogLevel     string   `json:"logLevel"`
-	Publish      string   `json:"publish"`
-	IntervalStr  string   `json:"interval"`
-	Header       []string `json:"header"`
-	Method       string   `json:"method"`
-	Data         string   `json:"data"`
+	Mode          string   `json:"mode"`
+	Addr          []string `json:"addr"`
+	CmcAddr       string   `json:"cmc"`
+	ReportFile    string   `json:"report"`
+	ResultFile    string   `json:"result"`
+	NonceFile     string   `json:"nonce"`
+	CaFile        string   `json:"ca"`
+	Mtls          bool     `json:"mtls"`
+	Attest        string   `json:"attest"`
+	PoliciesFile  string   `json:"policies"`
+	Api           string   `json:"api"`
+	Network       string   `json:"network"`
+	LogLevel      string   `json:"logLevel"`
+	Publish       string   `json:"publish"`
+	IntervalStr   string   `json:"interval"`
+	KeepAlive     bool     `json:"keepAlive"`
+	RaMessage     int      `json:"raMessage"`
+	RaIntervalStr string   `json:"raInterval"`
+	Header        []string `json:"header"`
+	Method        string   `json:"method"`
+	Data          string   `json:"data"`
 	// Only Lib API
 	ProvAddr       string   `json:"provServerAddr"`
 	Metadata       []string `json:"metadata"`
@@ -92,10 +95,11 @@ type config struct {
 	UseIma         bool     `json:"useIma"`
 	ImaPcr         int      `json:"imaPcr"`
 
-	ca       []byte
-	policies []byte
-	api      Api
-	interval time.Duration
+	ca         []byte
+	policies   []byte
+	api        Api
+	interval   time.Duration
+	raInterval time.Duration
 }
 
 const (
@@ -123,6 +127,9 @@ const (
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
 	measurementLogFlag = "measurementLog"
+	keepAliveFlag      = "keepAlive"
+	raIntervalFlag     = "raInterval"
+	raMessageFlag      = "raMessage"
 	headerFlag         = "header"
 	methodFlag         = "method"
 	dataFlag           = "data"
@@ -169,6 +176,9 @@ func getConfig() *config {
 	cache := flag.String(cacheFlag, "",
 		"Optional folder to cache metadata for offline backup (only for libapi)")
 	measurementLog := flag.Bool(measurementLogFlag, false, "Indicates whether to include measured events in measurement and validation report")
+	keepAlive := flag.Bool(keepAliveFlag, false, "keeps the TLS connection alive")
+	raIntervalStr := flag.String(raIntervalFlag, "0s", "time interval in which the parties reattest (need keepAlive)")
+	raMessage := flag.Int(raMessageFlag, 0, "messages after which the parties reattest (need keepAlive)")
 	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
 	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
 	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
@@ -271,6 +281,22 @@ func getConfig() *config {
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
 	}
+	if internal.FlagPassed(keepAliveFlag) {
+		c.KeepAlive = *keepAlive
+	}
+	if internal.FlagPassed(raMessageFlag) {
+		c.RaMessage = *raMessage
+	}
+
+	if internal.FlagPassed(raIntervalFlag) {
+		c.RaIntervalStr = *raIntervalStr
+	}
+	raIntervalDuration, err := time.ParseDuration(c.RaIntervalStr)
+	if err != nil {
+		log.Fatalf("Failed to parse reattestation interval: %v", err)
+	}
+	c.raInterval = raIntervalDuration
+
 	if internal.FlagPassed(headerFlag) {
 		c.Header = strings.Split(*headers, ",")
 	}
@@ -399,6 +425,9 @@ func printConfig(c *config) {
 	log.Debugf("\tMtls         : %v", c.Mtls)
 	log.Debugf("\tLogLevel     : %v", c.LogLevel)
 	log.Debugf("\tAttest       : %v", c.Attest)
+	log.Debugf("\tKeepAlive    : %v", c.KeepAlive)
+	log.Debugf("\tRaInterval   : %v", c.RaIntervalStr)
+	log.Debugf("\tRaMessage    : %v", c.RaMessage)
 	log.Debugf("\tPublish      : %v", c.Publish)
 	if strings.EqualFold(c.Mode, "request") {
 		log.Debugf("\tHTTP Data    : %v", c.Data)
