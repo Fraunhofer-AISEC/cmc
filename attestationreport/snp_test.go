@@ -18,9 +18,14 @@ package attestationreport
 import (
 	"encoding/hex"
 	"testing"
+
+	"github.com/sirupsen/logrus"
 )
 
 func Test_verifySnpMeasurements(t *testing.T) {
+
+	logrus.SetLevel(logrus.TraceLevel)
+
 	type args struct {
 		snpM  *Measurement
 		snpV  []ReferenceValue

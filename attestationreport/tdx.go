@@ -194,6 +194,8 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 
 func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, referenceValues []ReferenceValue) (*MeasurementResult, bool) {
 
+	log.Trace("Verifying TDX measurements")
+
 	var err error
 	result := &MeasurementResult{
 		Type:      "TDX Result",

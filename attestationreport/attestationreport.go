@@ -1045,7 +1045,7 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (Result, 
 					Got:      hex.EncodeToString(ext.Value),
 				}, false
 			}
-			return Result{Success: false}, false
+			return Result{Success: true}, true
 		}
 	}
 
