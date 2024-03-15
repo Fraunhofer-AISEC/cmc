@@ -21,6 +21,8 @@ import (
 
 func VerifySwMeasurements(swMeasurements []Measurement, refVals []ReferenceValue) ([]MeasurementResult, bool) {
 
+	log.Trace("Verifying SW measurements")
+
 	swMeasurementResults := make([]MeasurementResult, 0)
 	ok := true
 

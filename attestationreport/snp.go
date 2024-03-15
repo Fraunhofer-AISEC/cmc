@@ -87,6 +87,8 @@ const (
 func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []ReferenceValue,
 ) (*MeasurementResult, bool) {
 
+	log.Trace("Verifying SNP measurements")
+
 	result := &MeasurementResult{
 		Type:      "SNP Result",
 		SnpResult: &SnpResult{},
@@ -154,6 +156,7 @@ func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []Ref
 
 	// Compare Measurements
 	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
+		log.Trace("Failed to verify SNP reference value")
 		result.Artifacts = append(result.Artifacts,
 			DigestResult{
 				Name:    snpReferenceValue.Name,
@@ -171,6 +174,7 @@ func verifySnpMeasurements(snpM Measurement, nonce []byte, referenceValues []Ref
 
 		ok = false
 	} else {
+		log.Trace("Successfully verified SNP reference value")
 		// As we previously checked, that the attestation report contains exactly one
 		// SNP Reference Value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
@@ -481,25 +485,25 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]Result, b
 
 	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.2", uint8(tcb>>8)); !ok {
 		log.Tracef("SEV TEE Extension Check failed")
-		ok = false
+		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.3", uint8(tcb>>48)); !ok {
 		log.Tracef("SEV SNP Extension Check failed")
-		ok = false
+		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.8", uint8(tcb>>56)); !ok {
 		log.Tracef("SEV UCODE Extension Check failed")
-		ok = false
+		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionBuf(cert, "1.3.6.1.4.1.3704.1.4", report.ChipId[:]); !ok {
 		log.Tracef("Chip ID Extension Check failed")
-		ok = false
+		success = false
 	}
 	results = append(results, r)
 
