@@ -707,7 +707,7 @@ func (r *VerificationResult) PrintErr() {
 				if !a.Success {
 					details := ""
 					if a.Pcr != nil {
-						details = "PCR%v"
+						details = fmt.Sprintf("PCR%v", *a.Pcr)
 					}
 					log.Warnf("%v Measurement %v: %v verification failed", details, a.Name, a.Digest)
 				}
