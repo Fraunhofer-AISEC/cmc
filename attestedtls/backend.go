@@ -16,6 +16,7 @@
 package attestedtls
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -23,20 +24,36 @@ import (
 	"time"
 )
 
-// Writes byte array to provided channel by first sending length information, then data
+// Writes byte array to provided channel by first sending length information, then data.
 // Used for transmitting the attestation reports between peers
 func Write(msg []byte, c net.Conn) error {
+
+	length := len(msg)
 	lenbuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenbuf, uint32(len(msg)))
+	binary.BigEndian.PutUint32(lenbuf, uint32(length))
 
-	buf := append(lenbuf, msg...)
+	n, err := c.Write(lenbuf)
+	if err != nil {
+		return fmt.Errorf("failed to write length to %v: %w", c.RemoteAddr().String(), err)
+	}
+	if n != len(lenbuf) {
+		return fmt.Errorf("could only send %v of %v bytes to %v", n, len(lenbuf),
+			c.RemoteAddr().String())
+	}
 
-	_, err := c.Write(buf)
+	n, err = c.Write(msg)
+	if err != nil {
+		return fmt.Errorf("failed to write payload to %v: %w", c.RemoteAddr().String(), err)
+	}
+	if n != len(msg) {
+		return fmt.Errorf("could only send %v of %v bytes to %v", n, len(msg),
+			c.RemoteAddr().String())
+	}
 
 	return err
 }
 
-// Receives byte array from provided channel by first receiving length information, then data
+// Receives byte array from provided channel by first receiving length information, then data.
 // Used for transmitting the attestation reports between peers
 func Read(c net.Conn) ([]byte, error) {
 	start := time.Now()
@@ -48,30 +65,30 @@ func Read(c net.Conn) ([]byte, error) {
 		return nil, fmt.Errorf("failed to receive message: no length: %v", err)
 	}
 
-	len := binary.BigEndian.Uint32(lenbuf) // Max size of 4GB
-	log.Trace("TCP Message Length: ", len)
+	len := int(binary.BigEndian.Uint32(lenbuf)) // Max size of 4GB
+	log.Tracef("TCP Message to be received: %v", len)
 
 	if len == 0 {
 		return nil, errors.New("message length is zero")
 	}
 
-	// Receive data in chunks of 1024 bytes as the Read function receives a maxium of 65536 bytes
+	// Receive data in chunks of 1024 bytes as the Read function receives a maxium of 64K bytes
 	// and the buffer must be longer, then append it to the final buffer
-	tmpbuf := make([]byte, 1024)
-	buf := make([]byte, 0)
-	rcvlen := uint32(0)
+	buf := bytes.NewBuffer(nil)
+	received := 0
 
 	for {
-		n, err := c.Read(tmpbuf)
-		rcvlen += uint32(n)
+		chunk := make([]byte, 64*1024)
+		n, err := c.Read(chunk)
+		received += n
 		if err != nil {
 			return nil, fmt.Errorf("failed to receive message: %w", err)
 		}
-		buf = append(buf, tmpbuf[:n]...)
+		buf.Write(chunk[:n])
 
 		// Abort as soon as we have read the expected data as signaled in the first 4 bytes
 		// of the message
-		if rcvlen == len {
+		if received == len {
 			log.Trace("Received message")
 			break
 		}
@@ -81,5 +98,5 @@ func Read(c net.Conn) ([]byte, error) {
 			break
 		}
 	}
-	return buf, nil
+	return buf.Bytes(), nil
 }

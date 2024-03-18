@@ -27,6 +27,7 @@ var id = "0000"
 var log = logrus.WithField("service", "atls")
 
 func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
+	ch := make(chan error)
 
 	//optional: attest Client
 	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
@@ -38,13 +39,17 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 		}
 
 		// Send created attestation report to listener
-		log.Tracef("Sending attestation report length %v to listener", len(resp))
+		log.Tracef("Dialer: sending attestation report length %v to listener %v",
+			len(resp), conn.RemoteAddr().String())
 
-		err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
-		if err != nil {
-			return fmt.Errorf("failed to send AR: %w", err)
-		}
-		log.Trace("Sent AR")
+		go func() {
+			err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
+			if err != nil {
+				ch <- fmt.Errorf("failed to send AR to listener: %w", err)
+			}
+			log.Trace("Finished asynchronous sending of attestation report to listener")
+			ch <- nil
+		}()
 	} else {
 		//if not sending attestation report, send the attestation mode
 		err := Write([]byte{byte(cc.Attest)}, conn)
@@ -54,14 +59,14 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 		log.Debug("Skipping client-side attestation")
 	}
 
-	readvalue, err := readValue(conn, cc.Attest, true)
+	// Fetch attestation report from listener
+	report, err := readValue(conn, cc.Attest)
 	if err != nil {
 		return err
 	}
 
 	//optional: Wait for attestation report from Server
 	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
-		report := readvalue
 		// Verify AR from listener with own channel bindings
 		log.Trace("Verifying attestation report from listener")
 		err = cc.CmcApi.verifyAR(chbindings, report, cc)
@@ -72,12 +77,22 @@ func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 		log.Debug("Skipping client-side verification")
 	}
 
+	// Finally check if asynchronous sending succeeded
+	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
+		err = <-ch
+		if err != nil {
+			return fmt.Errorf("failed to write asynchronously: %w", err)
+		}
+	}
+
 	log.Trace("Attestation successful")
 
 	return nil
 }
 
 func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
+	ch := make(chan error)
+
 	// optional: attest server
 	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
 		// Obtain own attestation report from local cmcd
@@ -87,12 +102,19 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 			return fmt.Errorf("could not obtain AR of Listener : %w", err)
 		}
 
-		// Send own attestation report to dialer
-		log.Trace("Sending own attestation report")
-		err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
-		if err != nil {
-			return fmt.Errorf("failed to send AR: %w", err)
-		}
+		// Send own attestation report to dialer. This is done asynchronously to
+		// avoid blocking if each side sends a large report at the same time
+		log.Tracef("Listener: Sending attestation report length %v to dialer %v",
+			len(resp), conn.RemoteAddr().String())
+
+		go func() {
+			err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
+			if err != nil {
+				ch <- fmt.Errorf("failed to send AR to dialer: %w", err)
+			}
+			ch <- nil
+			log.Trace("Finished asynchronous sending of attestation report to dialer")
+		}()
 	} else {
 		//if not sending attestation report, send the attestation mode
 		err := Write([]byte{byte(cc.Attest)}, conn)
@@ -102,7 +124,7 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 		log.Debug("Skipping server-side attestation")
 	}
 
-	report, err := readValue(conn, cc.Attest, false)
+	report, err := readValue(conn, cc.Attest)
 	if err != nil {
 		return err
 	}
@@ -119,20 +141,28 @@ func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
 		log.Debug("Skipping server-side verification")
 	}
 
+	// Finally check if asynchronous sending succeeded
+	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
+		err = <-ch
+		if err != nil {
+			return fmt.Errorf("failed to write asynchronously: %w", err)
+		}
+	}
+
 	log.Trace("Attestation successful")
 
 	return nil
 }
 
-func readValue(conn *tls.Conn, selection AttestSelect, dialer bool) ([]byte, error) {
+func readValue(conn *tls.Conn, selection AttestSelect) ([]byte, error) {
 	readvalue, err := Read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	selectionStr, errS1 := selectionString(byte(selection))
-	if errS1 != nil {
-		return nil, errS1
+	selectionStr, err := selectionString(byte(selection))
+	if err != nil {
+		return nil, err
 	}
 
 	// the first byte should always be the attestation mode
@@ -140,9 +170,9 @@ func readValue(conn *tls.Conn, selection AttestSelect, dialer bool) ([]byte, err
 		log.Debugf("Matching attestation mode: [%v]", selectionStr)
 	} else {
 		reportByte := readvalue[0]
-		reportStr, errS1 := selectionString(reportByte)
-		if errS1 != nil {
-			return nil, errS1
+		reportStr, err := selectionString(reportByte)
+		if err != nil {
+			return nil, err
 		}
 		return nil, fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]", selectionStr, reportStr)
 	}
