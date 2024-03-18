@@ -1,0 +1,156 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+export PATH=${PATH}:${HOME}/go/bin
+
+abs_path() {
+  if [[ -d "$(dirname "$1")" ]]
+  then
+    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
+  fi
+}
+
+if [[ "$#" -ne 5 ]]; then
+   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json> <mrenclave> <mrsigner>"
+   exit
+fi
+
+
+cmc="$(abs_path "${1}")"
+data="$(abs_path "${2}")"
+ser="${3}"
+mrenclave="${4}" 
+mrsigner="${5}"
+
+if [[ ! -d "$cmc" ]]; then
+  echo "cmc directory does not exist. Did you clone the repository? Abort.."
+  exit 1
+fi
+
+if [[ ! -d "${data}" ]]; then 
+    mkdir -p "${data}"
+fi
+
+echo "Using cmc: ${cmc}"
+echo "Using $data as directory for local data"
+
+
+# Install dependencies
+sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq openssl
+
+# Build cmc
+cd "${cmc}"
+echo "Building cmc.."
+go build ./...
+
+# Install cmc to $GOPATH/bin
+echo "Installing cmc"
+go install ./...
+
+# Copy metadata templates
+cp -r "${cmc}/example-setup/"* "${data}"
+
+# Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
+"${data}/setup-pki-simple" -i "${data}" -o "${data}/pki"
+
+cd "${data}"
+
+# Retrieve values from PCKIDRetrievalTool
+sudo PCKIDRetrievalTool -f pckid_retrieval.csv
+pckid_retrieval="$(cat pckid_retrieval.csv)"
+encrypted_ppid="$(echo "${pckid_retrieval}" | cut -d ',' -f1)"
+pceid="$(echo "${pckid_retrieval}" | cut -d ',' -f2)"
+cpusvn="$(echo "${pckid_retrieval}" | cut -d ',' -f3)"
+pcesvn="$(echo "${pckid_retrieval}" | cut -d ',' -f4)"
+rm -f pckid_retrieval.csv
+
+# GET PCK Certificate and extract FMSPC
+pck_cert="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert?encrypted_ppid=$encrypted_ppid&cpusvn=$cpusvn&pceid=$pceid&pcesvn=$pcesvn")"
+FMSPC="$(openssl asn1parse -inform PEM -in <(echo -n "$pck_cert") -strparse 626 | grep -oP '427:d=2.*' | awk -F: '/HEX DUMP/{print $NF}')"
+
+# GET root CA certificate fingerprint
+cert_chain=$(curl -I -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert?encrypted_ppid=$encrypted_ppid&cpusvn=$cpusvn&pceid=$pceid&pcesvn=$pcesvn" | grep 'SGX-PCK-Certificate-Issuer-Chain')
+decoded=$(printf '%b' "$(echo "$cert_chain" | sed 's/SGX-PCK-Certificate-Issuer-Chain: //' | sed 's/+/ /g; s/%/\\x/g')")
+root_ca=$(echo -e "$decoded" | sed -n '/-----END CERTIFICATE-----/,$p' | sed '1d')
+ca_fingerprint=$(openssl x509 -in <(echo "$root_ca") -noout -sha256 -fingerprint | awk -F= '{print $2}' | tr -d ': ' | tr '[:upper:]' '[:lower:]')
+
+# GET TCB Info 
+tcb_info="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=$FMSPC" | jq -c .)"
+echo "$tcb_info" > "${data}/metadata-raw/tcb_info.json"
+
+# GET Quoting Enclave Identity
+qe_identity="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/qe/identity" | jq -c .)"
+echo "$qe_identity" > "${data}/metadata-raw/qe_identity.json"
+
+# Calculate the sizes in bytes
+tcb_info_size="$(echo -n "$tcb_info" | wc -c | jq 'tonumber')"
+qe_identity_size="$(echo -n "$qe_identity" | wc -c | jq 'tonumber')"
+
+jq --argjson tcb_info "$tcb_info" --argjson qe_identity "$qe_identity" --argjson tcb_info_size "$tcb_info_size" --argjson qe_identity_size "$qe_identity_size" '.referenceValues = [{
+  "type": "SGX Reference Value",
+  "sha256": "'"$mrenclave"'",
+  "sgx": {
+    "version": 3,
+    "collateral": {
+      "teeType": 0, 
+      "tcbInfo": $tcb_info,
+      "tcbInfoSize": $tcb_info_size,
+      "qeIdentity": $qe_identity,
+      "qeIdentitySize": $qe_identity_size
+    },
+    "caFingerprint": "'"$ca_fingerprint"'",
+    "attributes": {
+      "initted": true,
+      "mode64Bit": true,
+      "legacy": true
+    },
+    "isvProdId": 1,
+    "isvSvn": 1,
+    "mrSigner": "'"$mrsigner"'"
+  }
+}]' "$data/metadata-raw/rtm.manifest.json" | sponge "$data/metadata-raw/rtm.manifest.json"
+
+# Add PCKIDRetrievalTool values to device.config.json
+jq --arg encrypted_ppid "${encrypted_ppid}" --arg pceid "${pceid}" --arg cpusvn "${cpusvn}" --arg pcesvn "${pcesvn}" '.sgxValues = {
+      "encryptedPPID": $encrypted_ppid,
+      "pceid": $pceid,
+      "cpusvn": $cpusvn,
+      "pcesvn": $pcesvn
+      }' "$data/metadata-raw/device.config.json" | sponge "$data/metadata-raw/device.config.json"
+
+# Sign the metadata*
+input="${data}/metadata-raw"
+tmp="${data}/metadata-tmp"
+out="${data}/metadata-signed"
+key="${data}/pki/signing-cert-key.pem"
+chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
+
+rm -rf "${tmp}"
+rm -rf "${out}"
+
+mkdir -p "${tmp}"
+mkdir -p "${out}"
+
+if [[ "${ser,,}" = "json" ]]; then
+  echo "using json serialization"
+  cp "${input}/rtm.manifest.json"        "${tmp}/rtm.manifest.json"
+  cp "${input}/os.manifest.json"         "${tmp}/os.manifest.json"
+  cp "${input}/device.description.json"  "${tmp}/device.description.json"
+  cp "${input}/device.config.json"       "${tmp}/device.config.json"
+elif [[ "${ser,,}" = "cbor" ]]; then
+  echo "using cbor serialiation"
+  cmc-converter -in "${input}/rtm.manifest.json"        -out "${tmp}/rtm.manifest.cbor"       -outform cbor
+  cmc-converter -in "${input}/os.manifest.json"         -out "${tmp}/os.manifest.cbor"        -outform cbor
+  cmc-converter -in "${input}/device.description.json"  -out "${tmp}/device.description.cbor" -outform cbor
+  cmc-converter -in "${input}/device.config.json"       -out "${tmp}/device.config.cbor"      -outform cbor
+else
+  echo "serialization format ${ser} is not supported"
+  exit 1
+fi
+
+cmc-signing-tool -in "${tmp}/rtm.manifest.${ser}"        -out "${out}/rtm.manifest.${ser}"        -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/os.manifest.${ser}"         -out "${out}/os.manifest.${ser}"         -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/device.description.${ser}"  -out "${out}/device.description.${ser}"  -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/device.config.${ser}"       -out "${out}/device.config.${ser}"       -keys "${key}" -x5cs "${chain}"
