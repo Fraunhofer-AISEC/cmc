@@ -149,7 +149,10 @@ tbd
 
 ##### Intel SGX Reference Values
 
-tbs
+The reference values for Intel SGX consist of a fingerprint of the Intel Root CA certificate, the TCB Info and QE Identity structures, the enclave product ID (ISV Prod ID), the security version of the enclave (ISVSVN), expected enclave attributes (e.g. DEBUG, Mode64Bit, etc.), a hash of the enclave measurement (MRENCLAVE) and a hash of the enclave signing key (MRSIGNER).
+
+The Root CA certificate, TCB Info and QE Identity structures can be retrieved from the [Intel API](https://api.portal.trustedservices.intel.com/content/documentation.html). ISV SVN and ISV Prod ID are assigned by the enclave author. The EGo framework sets these values to 1 by default. 
+The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CLI tool with the commands ```ego uniqueid $ENCLAVE_PROGRAM``` and ```ego signerid $ENCLAVE_PROGRAM```. 
 
 ### 4. Sign the metadata
 
