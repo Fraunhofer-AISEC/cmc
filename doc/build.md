@@ -78,3 +78,18 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 cd grpcapi/
 make
 ```
+
+### SGX Build
+
+The SGX integration is build on top of the [EGo Framework](https://github.com/edgelesssys/ego) for the development of confidential apps in Go. 
+Since SGX enclaves are designed to execute only one process inside an isolated environment, the libapi implementation has to be used for the generation and verification of attestation reports. 
+
+Once you have developed your application and integrated the cmc library following the instructions provided in the [integration documentation](integration.md), compile, sign and run it like this: 
+```
+CGO_CFLAGS=-D_FORTIFY_SOURCE=0 ego-go build && ego sign $CMC_ROOT/cmc-data/enclave.json
+ego run testtool
+``` 
+
+Additional information for the enclave such as heapSize, mount points, security version (ISV SVN) and enclave product ID (ISV Prod ID) can be specified in the enclave.json file. 
+
+See https://docs.edgeless.systems/ego/reference/config for more information. 
