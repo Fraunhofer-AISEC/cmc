@@ -5,17 +5,28 @@ platform and run and test the tools. It was tested on Ubuntu 22.04 LTS.
 
 ## Install Prerequisites
 
+Install utilities for building and setting up the PKI:
 ```sh
-# Install utils
 sudo apt install moreutils golang-cfssl build-essential
+```
 
-# Install tpm-pcr-tools for calculating/parsing TPM PCR values for TPM-based attestation
+### TPM-specific Setup
+Install tpm-pcr-tools for calculating/parsing TPM PCR values for TPM-based attestation:
+```sh
 sudo apt install -y build-essential zlib1g-dev libssl-dev
 git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
 cd tpm-pcr-tools
 make
 sudo make install # Or launch from individual folders
 ```
+
+### Intel SGX-specific Setup
+
+Install the Intel SGX DCAP libraries and utilities according to the Intel
+[manual](https://www.intel.com/content/www/us/en/developer/articles/guide/intel-software-guard-extensions-data-center-attestation-primitives-quick-install-guide.html).
+
+Install the [EGo framework](https://github.com/edgelesssys/ego).
+
 
 ## Build and Install the CMC and Tools
 
@@ -151,8 +162,8 @@ tbd
 
 The reference values for Intel SGX consist of a fingerprint of the Intel Root CA certificate, the TCB Info and QE Identity structures, the enclave product ID (ISV Prod ID), the security version of the enclave (ISVSVN), expected enclave attributes (e.g. DEBUG, Mode64Bit, etc.), a hash of the enclave measurement (MRENCLAVE) and a hash of the enclave signing key (MRSIGNER).
 
-The Root CA certificate, TCB Info and QE Identity structures can be retrieved from the [Intel API](https://api.portal.trustedservices.intel.com/content/documentation.html). ISV SVN and ISV Prod ID are assigned by the enclave author. The EGo framework sets these values to 1 by default. 
-The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CLI tool with the commands ```ego uniqueid $ENCLAVE_PROGRAM``` and ```ego signerid $ENCLAVE_PROGRAM```. 
+The Root CA certificate, TCB Info and QE Identity structures can be retrieved from the [Intel API](https://api.portal.trustedservices.intel.com/content/documentation.html). ISV SVN and ISV Prod ID are assigned by the enclave author. The EGo framework sets these values to 1 by default.
+The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CLI tool with the commands ```ego uniqueid $ENCLAVE_PROGRAM``` and ```ego signerid $ENCLAVE_PROGRAM```.
 
 ### 4. Sign the metadata
 

@@ -57,23 +57,24 @@ Platform Configuration Registers (PCRs) during the *Measured Boot* and to genera
 which can be used to verify the platform state. Furthermore, the *tpmdriver* can use the *ima*
 package interfacing with the kernel's Integrity Measurement Architecture (IMA) for obtaining
 detailed measurement lists of the kernel modules, firmware and optionally further components
-running on the platform. The *tpmdriver* can therefore act as *Measurement* as well as as
-*Signer* interface.
+running on the platform.
 
 __snpdriver:__
 The *snpdriver* interfaces with the AMD SEV-SNP SP. It retrieves SNP measurements in the form of
 an SNP attestation report as well as the certificate chain for this attestation report from the
-respective AMD servers. Currently, it can only act as *Measurement* interface.
+respective AMD servers.
 
 __sgxdriver:__
-The *sgxdriver* interfaces with the Intel SGX CPU. It retrieves SGX measurements in the form of an SGX attestation report signed by the SGX quoting enclave. It implements a small caching mechanism to fetch and store the certificate chain used for report verification from the Intel SGX API. Currently, the driver only acts as a *Measurement* interface.
+The *sgxdriver* interfaces with the Intel SGX CPU. It retrieves SGX measurements in the form of an
+SGX attestation report signed by the SGX quoting enclave. It implements a small caching mechanism to
+fetch and store the certificate chain used for report verification from the Intel SGX API.
 
 __tdxdriver:__
 *Will be implemented as soon as Intel TDX hardware is available.*
 
 __swdriver:__
-The *swdriver* simply creates keys in software for testing purposes and can be used as *Signer*
-interface. **Note**: This should mainly be used for testing purposes.
+The *swdriver* simply creates keys in software for testing purposes. Currently, it does not implement
+a measurement functionality. **Note**: This should mainly be used for testing purposes.
 
 __estserver:__
 During provisioning, the cmcd requires interaction with a provisioning server (*estserver*). The
