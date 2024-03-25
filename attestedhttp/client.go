@@ -178,7 +178,7 @@ func prepareClient(c *Client) error {
 			MaxResponseHeaderBytes: c.Transport.MaxResponseHeaderBytes,
 			WriteBufferSize:        c.Transport.WriteBufferSize,
 			ReadBufferSize:         c.Transport.ReadBufferSize,
-			TLSClientConfig:        c.Transport.TLSClientConfig, // Ignored becuase of custom DialContext
+			TLSClientConfig:        c.Transport.TLSClientConfig, // Ignored because of custom DialContext
 			IdleConnTimeout:        c.Transport.IdleConnTimeout,
 			// Fixed custom TLS dial function to enforce aHTTPS
 			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {

@@ -781,7 +781,7 @@ func (r *VerificationResult) PrintErr() {
 		}
 		r.DevDescResult.RtmOsCompatibility.PrintErr("RTM OS compatibility")
 		for _, a := range r.DevDescResult.OsAppsCompatibility {
-			a.PrintErr("OS App compatibiltiy check")
+			a.PrintErr("OS App compatibility check")
 		}
 
 		if !r.PolicySuccess {
