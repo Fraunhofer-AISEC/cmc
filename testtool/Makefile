@@ -8,6 +8,6 @@ all:
 	go build
 
 egocmc: 
-	CGO_CFLAGS=-D_FORTIFY_SOURCE=0 ego-go build && ego sign testtool
+	CGO_CFLAGS=-D_FORTIFY_SOURCE=0 ego-go build && ego sign ../example-setup/enclave.json
 
 

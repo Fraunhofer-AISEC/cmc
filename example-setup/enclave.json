@@ -1,5 +1,5 @@
 {
- "exe": "testtool",
+ "exe": "../testtool/testtool",
  "key": "private.pem",
  "debug": false,
  "heapSize": 512,
