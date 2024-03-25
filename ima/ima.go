@@ -125,7 +125,7 @@ func parseImaRuntimeDigests(data []byte) ([]ar.PcrEvent, error) {
 		// Parse the template data to retrieve additional information
 		_, eventName, err := parseTemplateData(&template)
 		if err != nil {
-			log.Tracef("Failed to parse addtional template data: %v", err)
+			log.Tracef("Failed to parse additional template data: %v", err)
 		}
 
 		event := ar.PcrEvent{
