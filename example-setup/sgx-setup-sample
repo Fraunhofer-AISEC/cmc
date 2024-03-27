@@ -12,8 +12,8 @@ abs_path() {
   fi
 }
 
-if [[ "$#" -ne 5 ]]; then
-   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json> <mrenclave> <mrsigner>"
+if [[ "$#" -ne 3 ]]; then
+   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json>"
    exit
 fi
 
@@ -21,8 +21,6 @@ fi
 cmc="$(abs_path "${1}")"
 data="$(abs_path "${2}")"
 ser="${3}"
-mrenclave="${4}" 
-mrsigner="${5}"
 
 if [[ ! -d "$cmc" ]]; then
   echo "cmc directory does not exist. Did you clone the repository? Abort.."
@@ -36,7 +34,6 @@ fi
 echo "Using cmc: ${cmc}"
 echo "Using $data as directory for local data"
 
-
 # Install dependencies
 sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq openssl
 
@@ -48,6 +45,14 @@ go build ./...
 # Install cmc to $GOPATH/bin
 echo "Installing cmc"
 go install ./...
+
+# Build testtool enclave
+cd "${cmc}/testtool"
+make egocmc
+
+# Get MRENCLAVE and MRSIGNER
+mrenclave=$(echo "$(ego uniqueid testtool)" | awk 'NR==1')
+mrsigner=$(echo "$(ego signerid testtool)" | awk 'NR==1')
 
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
@@ -67,8 +72,7 @@ pcesvn="$(echo "${pckid_retrieval}" | cut -d ',' -f4)"
 rm -f pckid_retrieval.csv
 
 # GET PCK Certificate and extract FMSPC
-pck_cert="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert?encrypted_ppid=$encrypted_ppid&cpusvn=$cpusvn&pceid=$pceid&pcesvn=$pcesvn")"
-FMSPC="$(openssl asn1parse -inform PEM -in <(echo -n "$pck_cert") -strparse 626 | grep -oP '427:d=2.*' | awk -F: '/HEX DUMP/{print $NF}')"
+fmspc="$(fmspc-retrieval-tool -encrypted_ppid "${encrypted_ppid}" -pceid "${pceid}" -cpusvn "${cpusvn}" -pcesvn "${pcesvn}")"
 
 # GET root CA certificate fingerprint
 cert_chain=$(curl -I -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert?encrypted_ppid=$encrypted_ppid&cpusvn=$cpusvn&pceid=$pceid&pcesvn=$pcesvn" | grep 'SGX-PCK-Certificate-Issuer-Chain')
@@ -77,7 +81,7 @@ root_ca=$(echo -e "$decoded" | sed -n '/-----END CERTIFICATE-----/,$p' | sed '1d
 ca_fingerprint=$(openssl x509 -in <(echo "$root_ca") -noout -sha256 -fingerprint | awk -F= '{print $2}' | tr -d ': ' | tr '[:upper:]' '[:lower:]')
 
 # GET TCB Info 
-tcb_info="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=$FMSPC" | jq -c .)"
+tcb_info="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=$fmspc" | jq -c .)"
 echo "$tcb_info" > "${data}/metadata-raw/tcb_info.json"
 
 # GET Quoting Enclave Identity

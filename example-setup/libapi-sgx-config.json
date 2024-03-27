@@ -15,7 +15,7 @@
 	    "sgx"
     ],
     "metadata": [
-        "file://./cmc-data/metadata-signed"
+        "file://cmc-data/metadata-signed"
     ],
     "storage": "cmc-data/testtool-internal",
     "cache": "cmc-data/testtool-cache"
