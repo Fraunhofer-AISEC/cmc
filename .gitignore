@@ -11,6 +11,7 @@ est/estserver/estserver
 **/attestation-result.json
 tools/cmc-signing-tool/cmc-signing-tool
 tools/cmc-converter/cmc-converter
+tools/fmspc-retrieval-tool/fmspc-retrieval-tool
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor

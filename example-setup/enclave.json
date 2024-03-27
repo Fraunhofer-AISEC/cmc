@@ -1,6 +1,6 @@
 {
  "exe": "../testtool/testtool",
- "key": "private.pem",
+ "key": "../../cmc-data/private.pem",
  "debug": false,
  "heapSize": 512,
  "executableHeap": false,
