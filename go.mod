@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230623144130-44bece0a4cef
+	github.com/edgelesssys/ego v1.4.1
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/google/go-attestation v0.4.4-0.20230613144338-a9b6eb1eb888
 	github.com/google/go-tpm v0.9.0
@@ -21,7 +22,6 @@ require (
 
 require (
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
-	github.com/edgelesssys/ego v1.4.1 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/certificate-transparency-go v1.1.6 // indirect
 	github.com/google/go-tspi v0.3.0 // indirect
@@ -33,10 +33,10 @@ require (
 	github.com/pion/udp/v2 v2.0.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
