@@ -3,17 +3,12 @@
 set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
-abs_path() {
-  if [[ -d "$(dirname "$1")" ]]
-  then
-    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
-  fi
-}
-
-if [[ "$#" -ne 3 ]]; then
-   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json>"
+if [[ "$#" -ne 5 ]]; then
+   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json> <mrenclave> <mrsigner>"
    exit
 fi
 
@@ -21,13 +16,15 @@ fi
 cmc="$(abs_path "${1}")"
 data="$(abs_path "${2}")"
 ser="${3}"
+mrenclave="${4}"
+mrsigner="${5}"
 
 if [[ ! -d "$cmc" ]]; then
   echo "cmc directory does not exist. Did you clone the repository? Abort.."
   exit 1
 fi
 
-if [[ ! -d "${data}" ]]; then 
+if [[ ! -d "${data}" ]]; then
     mkdir -p "${data}"
 fi
 
@@ -80,7 +77,7 @@ decoded=$(printf '%b' "$(echo "$cert_chain" | sed 's/SGX-PCK-Certificate-Issuer-
 root_ca=$(echo -e "$decoded" | sed -n '/-----END CERTIFICATE-----/,$p' | sed '1d')
 ca_fingerprint=$(openssl x509 -in <(echo "$root_ca") -noout -sha256 -fingerprint | awk -F= '{print $2}' | tr -d ': ' | tr '[:upper:]' '[:lower:]')
 
-# GET TCB Info 
+# GET TCB Info
 tcb_info="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=$fmspc" | jq -c .)"
 echo "$tcb_info" > "${data}/metadata-raw/tcb_info.json"
 
@@ -98,7 +95,7 @@ jq --argjson tcb_info "$tcb_info" --argjson qe_identity "$qe_identity" --argjson
   "sgx": {
     "version": 3,
     "collateral": {
-      "teeType": 0, 
+      "teeType": 0,
       "tcbInfo": $tcb_info,
       "tcbInfoSize": $tcb_info_size,
       "qeIdentity": $qe_identity,

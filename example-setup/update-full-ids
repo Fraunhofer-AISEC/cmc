@@ -3,14 +3,9 @@
 set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
-
-function abs_path() {
-  if [[ -d "$(dirname "$1")" ]]
-  then
-    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
-  fi
-}
 
 if [[ "$#" -ne 2 ]]; then
    echo "Usage: ./update-full-ids <data-folder> <cbor|json>"

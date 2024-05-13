@@ -5,22 +5,6 @@ set -euo pipefail
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 export PATH=${PATH}:${HOME}/go/bin
 
-abs_path() {
-  if [[ -d "$(dirname "$1")" ]]
-  then
-    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
-  fi
-}
-
-extendarr() {
-	local key=$1
-	shift
-  local param=$1
-
-  # Add new value
-  json="$(echo "${json}" | jq ".${key} += [${param}]")"
-}
-
 if [[ "$#" -ne 2 ]]; then
    echo "Usage: ./update-app-manifest-live <data-folder> <cbor|json>"
    exit 1
