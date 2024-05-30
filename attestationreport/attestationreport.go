@@ -774,9 +774,16 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 
 	// Add additional information
 	result.Prover = metadata.DeviceDescription.Name
+	if result.Prover == "" {
+		result.Prover = "Unknown"
+	}
 	result.Created = time.Now().Format(time.RFC3339)
 
-	log.Tracef("Verification Result: %v", result.Success)
+	if result.Success {
+		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
+	} else {
+		log.Infof("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
+	}
 
 	return result
 }
