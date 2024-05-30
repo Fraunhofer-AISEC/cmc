@@ -671,11 +671,19 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		result.Success = false
 	}
 
-	// Check that every AppManifest has a corresponding AppDescription
+	// Extract app description names
 	appDescriptions := make([]string, 0)
 	for _, a := range metadata.DeviceDescription.AppDescriptions {
 		appDescriptions = append(appDescriptions, a.AppManifest)
 	}
+	// Extract app manifest names
+	appManifestNames := make([]string, 0)
+	for _, a := range metadata.AppManifests {
+		appManifestNames = append(appManifestNames, a.Name)
+	}
+
+	// Check that every AppManifest has a corresponding AppDescription
+	log.Tracef("Iterating app manifests length %v", len(metadata.AppManifests))
 	for _, a := range metadata.AppManifests {
 		r := Result{
 			Success:       true,
@@ -689,6 +697,27 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 			result.Success = false
 		}
 		result.DevDescResult.CorrectApps = append(result.DevDescResult.CorrectApps, r)
+	}
+
+	// Check that every App Description has a corresponding App Manifest
+	log.Tracef("Iterating app descriptions length %v", len(metadata.DeviceDescription.AppDescriptions))
+	for _, desc := range metadata.DeviceDescription.AppDescriptions {
+		found := false
+		for _, manifest := range metadata.AppManifests {
+			if desc.AppManifest == manifest.Name {
+				found = true
+			}
+		}
+		if !found {
+			log.Tracef("No app manifest for app description: %v", desc.AppManifest)
+			r := Result{
+				Success:       false,
+				Got:           desc.AppManifest,
+				ExpectedOneOf: appManifestNames,
+			}
+			result.DevDescResult.CorrectApps = append(result.DevDescResult.CorrectApps, r)
+			result.Success = false
+		}
 	}
 
 	// Check that the Rtm Manifest is compatible with the OS Manifest
