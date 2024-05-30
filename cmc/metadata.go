@@ -36,10 +36,9 @@ import (
 
 func GetMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) {
 
-	if paths == nil {
-		log.Trace("No metadata specified via config. Will only work as verifier")
-		var s ar.Serializer
-		return nil, s, nil
+	if len(paths) == 0 {
+		log.Info("No metadata specified via config. Using default serializer (JSON)")
+		return nil, ar.JsonSerializer{}, nil
 	}
 
 	metadata := make([][]byte, 0)
@@ -87,15 +86,15 @@ func GetMetadata(paths []string, cache string) ([][]byte, ar.Serializer, error) 
 	}
 
 	if len(metadata) == 0 {
-		var s ar.Serializer
-		return nil, s, errors.New("failed to retrieve any metadata")
+		return nil, ar.JsonSerializer{}, errors.New("failed to retrieve any metadata. Using default serializer (JSON)")
 	}
 
 	// Filter metadata: remove any duplicates through always choosing the
 	// newest version of duplicate metadata
 	metadata, s, err := filterMetadata(metadata)
 	if err != nil {
-		return nil, s, fmt.Errorf("failed to filter metadata: %v", err)
+		log.Warnf("Failed to filter metadata: %v", err)
+		return nil, ar.JsonSerializer{}, nil
 	}
 
 	// Cache metadata if cache is available
@@ -185,6 +184,7 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 	foundJson := false
 	foundCbor := false
 
+	// Iterate over input list, ignore invalid items
 	for _, elem := range inlist {
 
 		// Get serialization format
@@ -197,39 +197,41 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 			s = ar.CborSerializer{}
 			foundCbor = true
 		} else {
-			return nil, s, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
+			log.Warnf("Failed to detect serialization. Ignoring object..")
+			continue
 		}
 
 		// Extract plain payload (i.e. the manifest/description itself)
 		data, err := s.GetPayload(elem)
 		if err != nil {
-			log.Warnf("Failed to parse metadata object: %v", err)
+			log.Warnf("Failed to parse metadata object: %v. Ignoring object..", err)
 			continue
 		}
 
 		in := new(ar.MetaInfo)
 		err = s.Unmarshal(data, in)
 		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
+			log.Warnf("Failed to unmarshal data from metadata object: %v. Ignoring object..", err)
 			continue
 		}
 
 		// Verify that metadata has a version in RFC3339 format
 		_, err = time.Parse(time.RFC3339, in.Version)
 		if err != nil {
-			log.Warnf("metadata %v has incorrect version %v (must be RFC3339 format): %v",
+			log.Warnf("metadata %v has incorrect version %v (must be RFC3339 format): %v. Ignoring object..",
 				in.Name, in.Version, err)
 			continue
 		}
 
-		// Iterate through already present metadata and filter
+		// Iterate through already present metadata and filter. Errors found here
+		// are internal errors, as only valid items shall be added
 		done := false
 		for i := 0; i < len(outlist); i++ {
 
 			// Get info about item in outlist
 			data, err := s.GetPayload(outlist[i])
 			if err != nil {
-				return nil, s, fmt.Errorf("failed to parse metadata object %v: %v", i, err)
+				return nil, s, fmt.Errorf("internal error: failed to parse metadata object %v: %v", i, err)
 			}
 			out := new(ar.MetaInfo)
 			err = s.Unmarshal(data, out)

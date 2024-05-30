@@ -878,8 +878,11 @@ func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 	}
 
 	// Check if manifests were found
-	if osManifest.Type != "OS Manifest" || rtmManifest.Type != "RTM Manifest" {
-		return nil, errors.New("failed to find all manifests")
+	if osManifest.Type != "OS Manifest" {
+		log.Warnf("Failed to find OS Manifest for determining TPM PCRs")
+	}
+	if rtmManifest.Type != "RTM Manifest" {
+		log.Warnf("Failed to find RTM Manifest for determining TPM PCRs")
 	}
 
 	// Generate the list of PCRs to be included in the quote
@@ -916,6 +919,8 @@ func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
 	}
 
 	sort.Ints(pcrs)
+
+	log.Tracef("Using PCRs: %v", pcrs)
 
 	return pcrs, nil
 }
