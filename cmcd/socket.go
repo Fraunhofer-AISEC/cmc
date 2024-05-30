@@ -108,8 +108,7 @@ func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 	}
 
 	if cmc.Metadata == nil {
-		api.SendError(conn, "Metadata not specified. Can work only as verifier")
-		return
+		log.Warn("Generating AR without any metadata")
 	}
 
 	req := new(api.AttestationRequest)
