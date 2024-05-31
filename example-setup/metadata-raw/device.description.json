@@ -7,13 +7,5 @@
 	"rtmManifest" : "de.test.rtm",
 	"osManifest" : "de.test.os",
 	"appDescriptions": [
-		{
-			"type": "App Description",
-			"name": "de.test.app.description",
-			"version": "2024-02-22T15:36:34Z",
-			"appManifest": "de.test.app",
-			"externalConnections": []
-		}
-
 	]
 }

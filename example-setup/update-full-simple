@@ -35,7 +35,7 @@ json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues 
 printf "%s\n" "${json}" > "${input}/rtm.manifest.json"
 
 # Parse the values of the OS PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json -e)
+referenceValues=$(sudo parse-srtm-pcrs -p 8,9,12,13,14,15 -f json -e)
 
 # Replace existing reference values with new reference values in the RTM Manifest
 json=$(cat "${input}/os.manifest.json")
@@ -48,7 +48,6 @@ key="${data}/pki/signing-cert-key.pem"
 chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
 
 rm -rf "${tmp}"
-rm -rf "${out}"
 
 mkdir -p "${tmp}"
 mkdir -p "${out}"

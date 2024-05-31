@@ -18,6 +18,8 @@ tmp="${data}/metadata-tmp"
 output="${data}/metadata-signed"
 ser="${2}"
 
+name="de.test.host-apps"
+
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-full-simple script? Abort.."
   exit 1
@@ -28,11 +30,37 @@ echo "Using ${data} as directory for local data"
 # Calculate the IMA app reference values
 referenceValues=$(sudo calculate-ima-pcr -t 10 -i ima-ng -p /usr/bin)
 
-# Replace existing reference values with new reference values in the App Manifest
+# App Manifest: Replace existing reference values with new reference values
 json=$(cat "${input}/app.manifest.json")
 json=$(echo "${json}" | jq 'del(.referenceValues[])')
 json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
-printf "%s\n" "${json}" > "${input}/app.manifest.json"
+
+# App Manifest: Set name
+json=$(echo "${json}" | jq ".name = \"${name}\"")
+
+# App Manifest: Store
+echo "Writing ${input}/app.manifest.json"
+printf "%s\n" "${json}" > "${data}/metadata-raw/app.manifest.json"
+
+# App Description: Create corresponding app description
+appdesc=$(cat "${input}/app.description.json")
+appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
+appdesc=$(echo "${appdesc}" | jq ".appManifest = \"${name}\"")
+
+# Device Description: Add/replace app description to/in device description
+devdesc=$(cat "${input}/device.description.json")
+exists=$(echo "${devdesc}" | jq "any(.appDescriptions[]; .name == \"${name}.description\")")
+if [[ "${exists}" = false ]]; then
+  echo "Adding app description to device description"
+else
+  echo "Replacing existing app description"
+  devdesc=$(echo "$devdesc" | jq ".appDescriptions |= map(select(.name != \"${name}.description\"))")
+fi
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.appDescriptions += $desc')
+
+# Device Description: Store
+echo "Writing ${input}/device.description.json"
+printf "%s\n" "${devdesc}" > "${input}/device.description.json"
 
 # Sign the metadata*
 key="${data}/pki/signing-cert-key.pem"
