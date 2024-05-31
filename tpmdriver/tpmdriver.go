@@ -16,6 +16,7 @@
 package tpmdriver
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/sha256"
@@ -27,7 +28,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"sort"
 	"strings"
 	"sync"
 
@@ -98,13 +98,6 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		}
 	}
 
-	// Retrieve the TPM PCRs to be included in the attestation report from
-	// the manifest files
-	pcrs, err := getTpmPcrs(c)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve TPM PCRs: %w", err)
-	}
-
 	// Check if the TPM is provisioned. If provisioned, load the AK and IK key.
 	// Otherwise perform credential activation with provisioning server and then load the keys
 	provisioningRequired, err := IsTpmProvisioningRequired(c.StoragePath)
@@ -169,6 +162,13 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("failed to get AK qualified name: %w", err)
 	}
 	log.Debugf("Using AK with qualified name: %v", hex.EncodeToString(name))
+
+	// Determine if the system is an SRTM or DRTM system to include the
+	// respective PCRs into the TPM quote
+	pcrs, err := getQuotePcrs(t)
+	if err != nil {
+		return fmt.Errorf("failed to determine TPM Quote CRs: %w", err)
+	}
 
 	t.Pcrs = pcrs
 	t.UseIma = c.UseIma
@@ -834,91 +834,44 @@ func ActivateCredential(
 	return secret, nil
 }
 
-func getTpmPcrs(c *ar.DriverConfig) ([]int, error) {
+func getQuotePcrs(t *Tpm) ([]int, error) {
 
-	var osManifest ar.OsManifest
-	var rtmManifest ar.RtmManifest
-	appManifests := make([]ar.AppManifest, 0)
+	if TPM == nil {
+		return nil, fmt.Errorf("TPM is not opened")
+	}
+	if ak == nil {
+		return nil, fmt.Errorf("AK does not exist")
+	}
 
-	for i, m := range c.Metadata {
+	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
+	// one instance can have write access at the same time
+	t.Lock()
+	defer t.Unlock()
 
-		// Extract plain payload (i.e. the manifest/description itself)
-		payload, err := c.Serializer.GetPayload(m)
-		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
-			continue
-		}
+	log.Trace("Retrieving PCRs")
+	pcrValues, err := TPM.PCRs(attest.HashSHA256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
+	}
 
-		// Unmarshal the Type field of the metadata to determine the type
-		info := new(ar.MetaInfo)
-		err = c.Serializer.Unmarshal(payload, info)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
-			continue
-		}
+	// Assume an SRTM system by default and quote the static PCRs
+	pcrs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 
-		if info.Type == "RTM Manifest" {
-			err = c.Serializer.Unmarshal(payload, &rtmManifest)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal data from RTM Manifest: %w", err)
+	// Check if the system is a DRTM system
+	for _, pcr := range pcrValues {
+		if pcr.Index == 17 {
+			cmp := make([]byte, pcr.DigestAlg.Size())
+			for i := range cmp {
+				cmp[i] = 0xff
 			}
-		} else if info.Type == "OS Manifest" {
-			err = c.Serializer.Unmarshal(payload, &osManifest)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal data from OS Manifest: %w", err)
-			}
-		} else if info.Type == "App Manifest" {
-			var appManifest ar.AppManifest
-			err = c.Serializer.Unmarshal(payload, &appManifest)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal data from App Manifest: %w", err)
-			}
-			appManifests = append(appManifests, appManifest)
-		}
-	}
 
-	// Check if manifests were found
-	if osManifest.Type != "OS Manifest" {
-		log.Warnf("Failed to find OS Manifest for determining TPM PCRs")
-	}
-	if rtmManifest.Type != "RTM Manifest" {
-		log.Warnf("Failed to find RTM Manifest for determining TPM PCRs")
-	}
-
-	// Generate the list of PCRs to be included in the quote
-	pcrs := make([]int, 0)
-	log.Debugf("Parsing %v RTM reference values", len(rtmManifest.ReferenceValues))
-	for _, ref := range rtmManifest.ReferenceValues {
-		if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
-			continue
-		}
-		if !exists(*ref.Pcr, pcrs) {
-			pcrs = append(pcrs, *ref.Pcr)
-		}
-	}
-	log.Debugf("Parsing %v OS reference values", len(osManifest.ReferenceValues))
-	for _, ref := range osManifest.ReferenceValues {
-		if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
-			continue
-		}
-		if !exists(*ref.Pcr, pcrs) {
-			pcrs = append(pcrs, *ref.Pcr)
-		}
-	}
-	log.Debugf("Parsing %v App Manifests", len(appManifests))
-	for _, appManifest := range appManifests {
-		log.Debugf("Parsing %v App Manifest '%v' reference values", len(appManifest.ReferenceValues), appManifest.Name)
-		for _, ref := range appManifest.ReferenceValues {
-			if ref.Type != "TPM Reference Value" || ref.Pcr == nil {
-				continue
-			}
-			if !exists(*ref.Pcr, pcrs) {
-				pcrs = append(pcrs, *ref.Pcr)
+			// If PCR17 recorded measurements, this means the system is a DRTM systen,
+			// so the dynamic PCRs must be quoted
+			if !bytes.Equal(pcr.Digest, cmp) {
+				pcrs = []int{17, 18, 19, 20, 21, 22}
 			}
 		}
 	}
-
-	sort.Ints(pcrs)
 
 	log.Tracef("Using PCRs: %v", pcrs)
 
@@ -1040,13 +993,4 @@ func createIkCsr(ik *attest.Key, params ar.CsrParams) (*x509.CertificateRequest,
 	}
 
 	return csr, nil
-}
-
-func exists(i int, arr []int) bool {
-	for _, elem := range arr {
-		if elem == i {
-			return true
-		}
-	}
-	return false
 }
