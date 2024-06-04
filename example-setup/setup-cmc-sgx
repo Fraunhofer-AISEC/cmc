@@ -7,8 +7,8 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
-if [[ "$#" -ne 5 ]]; then
-   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json> <mrenclave> <mrsigner>"
+if [[ "$#" -ne 3 ]]; then
+   echo "Usage: ./setup-cmc-sgx <cmc-folder> <data-folder> <cbor|json>"
    exit
 fi
 
@@ -16,8 +16,6 @@ fi
 cmc="$(abs_path "${1}")"
 data="$(abs_path "${2}")"
 ser="${3}"
-mrenclave="${4}"
-mrsigner="${5}"
 
 if [[ ! -d "$cmc" ]]; then
   echo "cmc directory does not exist. Did you clone the repository? Abort.."
@@ -54,8 +52,8 @@ mrsigner=$(echo "$(ego signerid testtool)" | awk 'NR==1')
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
 
-# Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
-"${data}/setup-pki-simple" -i "${data}" -o "${data}/pki"
+# Generate a PKI
+"${data}/setup-pki" -i "${data}" -o "${data}/pki"
 
 cd "${data}"
 

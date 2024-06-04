@@ -8,7 +8,7 @@ source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
 if [[ "$#" -ne 3 ]]; then
-   echo "Usage: ./setup-full-ids <cmc-folder> <data-folder> <cbor|json>"
+   echo "Usage: ./setup-cmc-ids <cmc-folder> <data-folder> <cbor|json>"
    exit 1
 fi
 
@@ -57,6 +57,6 @@ cp -r "${cmc}/example-setup/"* "${data}"
 "${data}/setup-pki-ids" -i "${data}/pki-input-ids" -o "${data}/pki"
 
 # Update and sign metadata
-"${data}/update-full-ids" "${data}" "${ser}"
+"${data}/update-platform-ids" "${data}" "${ser}"
 
 

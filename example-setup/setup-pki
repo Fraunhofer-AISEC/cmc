@@ -10,7 +10,7 @@ input="${cmc}/example-setup"
 out="${dir}"
 
 print_usage() {
-  printf "Usage: ./setup-pki-simple [-i <input-dir>] [-o <output-dir] [-h]\n"
+  printf "Usage: ./setup-pki [-i <input-dir>] [-o <output-dir] [-h]\n"
 }
 
 while getopts 'i:o:h' flag; do

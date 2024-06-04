@@ -8,7 +8,7 @@ source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
 if [[ "$#" -ne 3 ]]; then
-   echo "Usage: ./setup-full-simple <cmc-folder> <data-folder> <cbor|json>"
+   echo "Usage: ./setup-cmc <cmc-folder> <data-folder> <cbor|json>"
    exit
 fi
 
@@ -53,8 +53,14 @@ go install ./...
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
 
-# Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
-"${data}/setup-pki-simple" -i "${data}" -o "${data}/pki"
+# Generate a PKI
+"${data}/setup-pki" -i "${data}" -o "${data}/pki"
 
-# Update and sign metadata
-"${data}/update-full-simple" "${data}" "${ser}"
+# Generate and sign platform (RTM and OS) metadata
+"${data}/update-platform" "${data}" "${ser}"
+
+# Generate example manifest for host apps
+"${data}/update-app-manifest-live" "${data}" "${ser}"
+
+# Generate container example manifest
+"${data}/update-container-manifest-live" docker.io/library/ubuntu:22.04 "${data}" "${cmc}" "${ser}"

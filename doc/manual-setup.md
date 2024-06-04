@@ -31,17 +31,14 @@ Install the [EGo framework](https://github.com/edgelesssys/ego).
 ## Build and Install the CMC and Tools
 
 ```sh
-# 1. Setup a folder for the cmc workspace (e.g. in your home directory)
-CMC_ROOT=$HOME/cmc-workspace
+# Clone the CMC repo
+git clone https://github.com/Fraunhofer-AISEC/cmc
 
-# 2. Clone the CMC repo
-git clone https://github.com/Fraunhofer-AISEC/cmc $CMC_ROOT/cmc
-
-# 3. Build CMC
-cd $CMC_ROOT/cmc
+# Build CMC
+cd cmc
 go build ./...
 
-# 4. Install CMC $GOPATH/bin (export PATH=$PATH:$HOME/go/bin -> .profile/.bashrc)
+# Install CMC $GOPATH/bin (export PATH=$PATH:$HOME/go/bin -> .profile/.bashrc)
 go install ./...
 ```
 
@@ -49,21 +46,25 @@ go install ./...
 
 ### 1. Create a folder for your CMC configuration
 
+Do this outside the repository:
 ```sh
-mkdir -p $CMC_ROOT/cmc-data
+mkdir -p cmc-data
 ```
 
 ### 2. Copy and adjust the example metadata templates
 For the example, it is sufficient to copy the templates. For information on how to adjust
 the metadata, see [Generating Metadata and Setup Alternatives](#generating-metadata-and-setup-alternatives)
 ```sh
-cp -r $CMC_ROOT/cmc/example-setup/* $CMC_ROOT/cmc-data
+cp -r cmc/example-setup/* cmc-data
 ```
 
+Generate a PKI suitable for your needs. A minimal PKI can be setup as follows:
 ```sh
-# 3. Generate a PKI suitable for your needs. You can use the simple PKI example-setup for testing:
-$CMC_ROOT/cmc-data/setup-simple-pki -i $CMC_ROOT/cmc-data -o $CMC_ROOT/cmc-data/pki
+# Generate example PKI
+./cmc-data/setup-pki -i ./cmc-data -o ./cmc-data/pki
 ```
+
+For a more complex PKI, have a look at the [IDS-Setup](./ids-example-setup.md).
 
 ### 3. Generate metadata
 
@@ -77,7 +78,9 @@ components
 - **app.manifest.json**: Contains the reference values for an app on the system
 - **company.description.json**: Optional, metadata describing the operater of the computing platform
 - **device.description.json**: Metadata describing the overall platform, contains links to
-RTM Manifest, OS Manifest and App Manifests
+RTM Manifest, OS Manifest
+- **app.description.json**: Metadata describing an application, links to an App Manifest. Must be
+embedded in to the `appDescriptions` property of the device description.
 - **device.config.json**: Signed local device configuration, contains e.g. the parameters for
 the Certificate Signing Requests for the attestation and identity keys
 
@@ -85,7 +88,7 @@ the Certificate Signing Requests for the attestation and identity keys
 
 The attestation report can be serialized to JSON and signed via JSON Web signatures (JWS), or to
 CBOR and signed via CBOR Object Signing and Encryption (COSE). This must be specified in the
-configuration of the *cmcd* (see [CMCD Configuration](#cmcd-configuration) and the
+configuration of the *cmcd* (see [CMCD Configuration](#cmcd-configuration)) and the
 provisioning server (see [Provisioning Server Configuration](#provisioning-server-configuration))
 
 As CBOR is a binary serialization format, the serialized data is not human-readable. Therefore, the
@@ -94,7 +97,7 @@ to CBOR before signing them. To convert a metadata file from JSON to CBOR:
 
 ```sh
 # Convert JSON to CBOR using the converter-tool
-$CMC_ROOT/cmc/tools/cmc-converter/cmc-converter -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
+cmc/tools/cmc-converter/cmc-converter -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
 ```
 
 #### Reference Values
@@ -113,42 +116,60 @@ within a build-system such as *Yocto* or *Buildroot*). Tools for parsing and cal
 are available as open source [tpm-pcr-tools]().
 
 **Parsing the reference values on a good reference platform and inserting them into the manifest**
-```sh
-# Parse the values of the RTM PCRs from the kernel's binary bios measurement log
-ements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json)
-# Delete existing reference values in the RTM Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-# Add new reference values to the RTM Manifest
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 
-# Parse the values of the OS PCRs from the kernel's binary bios measurement log
-referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json)
-# Delete existing reference values in the OS Manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
-# Add new reference values to the OS Manifest
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/os.manifest.json
+Parse the values of the RTM PCRs from the kernel's binary bios measurement log
+```sh
+sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json
 ```
+Then insert those values into the json `referenceValues` array in the RTM manifest.
+
+Parse the values of the OS PCRs from the kernel's binary bios measurement log:
+```sh
+sudo parse-srtm-pcrs -p 8,9,11,12,14,15 -f json
+```
+Then insert those values into the json `referenceValues` array in the OS manifest.
+
+For the host applications, if the kernel's Integrity Measurement Architecture (IMA) is activated:
+```sh
+sudo parse-ima-pcr
+```
+Then insert those values into the json `referenceValues` array in an app manifest.
 
 **Calculating the reference values based on software artifacts**
 
-This currently only works for QEMU VMs with OVMF and a Linux kernel
+This currently only works for QEMU VMs with OVMF and a Linux kernel. it is recommended to use
+the parsing alternative.
+
+Calculate the RTM Manifest reference values:
 ```sh
-# Calculate reference values for the RTM Manifest
-referenceValues=$($(calculate-srtm-pcrs \
+calculate-srtm-pcrs \
       --format json \
       --pcrs 0,1,2,3,6,7 \
       --eventlog \
       --kernel "linux-kernel.bzImage" \
       --ovmf "OVMF.fd" \
       --config "calculate-pcrs.cfg" \
-    )
-
-# Delete all existing reference values in the RTM manifest
-jq 'del(.referenceValues[])' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
-# Insert new reference values to the RTM Manifest
-jq --argjson ver "$referenceValues" '.referenceValues += $ver' $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json | sponge $CMC_ROOT/cmc-data/metadata-raw/rtm.manifest.json
 ```
+Then insert those values into the json `referenceValues` array in the RTM Manifest.
+
+Calculate the OS Manifest reference values:
+```sh
+calculate-srtm-pcrs \
+    --kernel "linux-kernel.bzImage" \
+    --cmdline "linux-commandline" \
+    --ovmf "OVMF.fd" \
+    --format json \
+    --pcrs "4,5,8,9,11,12,13,14,15" \
+    --eventlog \
+```
+Then insert those values into the json `referenceValues` array in the OS Manifest.
+
+For the host applications, if the kernel's Integrity Measurement Architecture (IMA) is activated:
+```sh
+# In this case, use PCR10 and the IMA ima-ng template for all folders containing binaries and libs
+sudo calculate-ima-pcr -t 10 -i ima-ng -p /usr/bin -p /usr/sbin -p /usr/lib
+```
+Then insert those values into an app manifest.
 
 ##### AMD SNP Reference Values
 
@@ -163,7 +184,7 @@ tbd
 The reference values for Intel SGX consist of a fingerprint of the Intel Root CA certificate, the TCB Info and QE Identity structures, the enclave product ID (ISV Prod ID), the security version of the enclave (ISVSVN), expected enclave attributes (e.g. DEBUG, Mode64Bit, etc.), a hash of the enclave measurement (MRENCLAVE) and a hash of the enclave signing key (MRSIGNER).
 
 The Root CA certificate, TCB Info and QE Identity structures can be retrieved from the [Intel API](https://api.portal.trustedservices.intel.com/content/documentation.html). ISV SVN and ISV Prod ID are assigned by the enclave author. The EGo framework sets these values to 1 by default.
-The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CLI tool with the commands ```ego uniqueid $ENCLAVE_PROGRAM``` and ```ego signerid $ENCLAVE_PROGRAM```.
+The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CLI tool with the commands `ego uniqueid $ENCLAVE_PROGRAM` and `ego signerid $ENCLAVE_PROGRAM`.
 
 ### 4. Sign the metadata
 
@@ -171,10 +192,10 @@ This example uses JSON/JWS as serialization format. For different formats
 see [Serialization Format](#serialization-format)
 
 ```sh
-IN=$CMC_ROOT/cmc-data/metadata-raw
-OUT=$CMC_ROOT/cmc-data/metadata-signed
-KEY=$CMC_ROOT/cmc-data/pki/signing-cert-key.pem
-CHAIN=$CMC_ROOT/cmc-data/pki/signing-cert.pem,$CMC_ROOT/cmc-data/pki/ca.pem
+IN=cmc-data/metadata-raw
+OUT=cmc-data/metadata-signed
+KEY=cmc-data/pki/signing-cert-key.pem
+CHAIN=cmc-data/pki/signing-cert.pem,cmc-data/pki/ca.pem
 
 mkdir -p $OUT
 
@@ -195,14 +216,14 @@ Adjust the configuration files for the tools as required according to
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-./estserver -config $CMC_ROOT/cmc-data/est-server-conf.json
+./estserver -config cmc-data/est-server-conf.json
 ```
 
 #### Run the cmcd
 
 ```sh
 # Build and run the cmcd
-./cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json
+./cmcd -config cmc-data/cmcd-conf.json
 ```
 
 #### Generate and Verify Attestation Reports
@@ -212,7 +233,7 @@ Adjust the configuration files for the tools as required according to
 ./testtool -mode generate
 
 # Run the testtool to verify the attestation report (stored in current folder unless otherwise specified)
-./testtool -mode verify -ca $CMC_ROOT/cmc-data/pki/ca.pem
+./testtool -mode verify -ca cmc-data/pki/ca.pem
 ```
 
 #### Establish Attested TLS Connections
@@ -220,17 +241,17 @@ Adjust the configuration files for the tools as required according to
 ```sh
 
 # Run an attested TLS server
-./testtool -mode listen -addr 0.0.0.0:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
+./testtool -mode listen -addr 0.0.0.0:4443 -ca cmc-data/pki/ca.pem -mtls
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-./testtool -mode dial -addr localhost:4443 -ca $CMC_ROOT/cmc-data/pki/ca.pem -mtls
+./testtool -mode dial -addr localhost:4443 -ca cmc-data/pki/ca.pem -mtls
 ```
 
 #### Establish Attested HTTPS Connections
 
 ```sh
 # Run two attested HTTPS servers
-./testtool -config $CMC_ROOT/testtool-config.json -addr 0.0.0.0:8081 -mode serve
+./testtool -config testtool-config.json -addr 0.0.0.0:8081 -mode serve
 
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections

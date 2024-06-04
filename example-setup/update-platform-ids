@@ -8,7 +8,7 @@ source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
 if [[ "$#" -ne 2 ]]; then
-   echo "Usage: ./update-full-ids <data-folder> <cbor|json>"
+   echo "Usage: ./update-platform-ids <data-folder> <cbor|json>"
    exit 1
 fi
 
@@ -19,7 +19,7 @@ out="${data}/metadata-signed"
 ser="$2"
 
 if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${data} does not exist. Did you run the setup-full-ids script? Abort.."
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc-ids script? Abort.."
   exit 1
 fi
 
