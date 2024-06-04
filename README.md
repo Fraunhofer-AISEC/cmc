@@ -37,7 +37,7 @@ git clone https://github.com/Fraunhofer-AISEC/cmc.git
 ```
 Create a demo PKI and all required metadata:
 ```
-./cmc/example-setup/setup-full-simple <cmc-folder> <metadata-folder> json
+./cmc/example-setup/setup-cmc <cmc-folder> <metadata-folder> json
 ```
 `<cmc-folder>` is the relative or absolute path to the cloned `cmc` repository.
 `<metadata-folder>` is an arbitrary folder that will be created and that will store metadata and

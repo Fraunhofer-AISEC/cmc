@@ -21,7 +21,7 @@ ser="${2}"
 name="de.test.host-apps"
 
 if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${data} does not exist. Did you run the setup-full-simple script? Abort.."
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
