@@ -64,6 +64,10 @@ const (
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
 	measurementLogFlag = "measurementLog"
+	ctrFlag            = "ctr"
+	ctrDriverFlag      = "ctrdriver"
+	ctrPcrFlag         = "ctrpcr"
+	ctrLogFlag         = "ctrlog"
 )
 
 func getConfig() (*cmc.Config, error) {
@@ -83,18 +87,25 @@ func getConfig() (*cmc.Config, error) {
 		fmt.Sprintf("Drivers (comma separated list). Possible: %v",
 			strings.Join(maps.Keys(cmc.GetDrivers()), ",")))
 	ima := flag.Bool(imaFlag, false,
-		"Indicates whether to use Integrity Measurement Architecture (IMA)")
+		"Specifies whether to use Integrity Measurement Architecture (IMA)")
 	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
 	keyConfig := flag.String(keyConfigFlag, "", "Key configuration")
-	api := flag.String(apiFlag, "", "API")
+	api := flag.String(apiFlag, "", "API to use. Possible: [coap grpc libapi socket]")
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine := flag.String(policyEngineFlag, "",
-		fmt.Sprintf("Possible policy engines: %v", strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")))
+		fmt.Sprintf("Possible policy engines: %v",
+			strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")))
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	storage := flag.String(storageFlag, "", "Optional folder to store internal CMC data in")
 	cache := flag.String(cacheFlag, "", "Optional folder to cache metadata for offline backup")
-	measurementLog := flag.Bool(measurementLogFlag, false, "Indicates whether to include measured events in measurement and validation report")
+	measurementLog := flag.Bool(measurementLogFlag, false,
+		"Specifies whether to include measured events in measurement and validation report")
+	ctr := flag.Bool(ctrFlag, false, "Specifies whether to conduct container measurements")
+	ctrDriver := flag.String(ctrDriverFlag, "",
+		"Specifies which driver to use for container measurements")
+	ctrPcr := flag.Int(ctrPcrFlag, 0, "Container PCR")
+	ctrLog := flag.String(ctrLogFlag, "", "Container runtime measurements path")
 	flag.Parse()
 
 	// Create default configuration
@@ -160,6 +171,18 @@ func getConfig() (*cmc.Config, error) {
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
 	}
+	if internal.FlagPassed(ctrFlag) {
+		c.UseCtr = *ctr
+	}
+	if internal.FlagPassed(ctrDriverFlag) {
+		c.CtrDriver = *ctrDriver
+	}
+	if internal.FlagPassed(ctrPcrFlag) {
+		c.CtrPcr = *ctrPcr
+	}
+	if internal.FlagPassed(ctrLogFlag) {
+		c.CtrLog = *ctrLog
+	}
 
 	// Configure the logger
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
@@ -224,7 +247,9 @@ func printConfig(c *cmc.Config) {
 	log.Debugf("\tProvisioning Server URL  : %v", c.ProvServerAddr)
 	log.Debugf("\tMetadata Locations       : %v", strings.Join(c.Metadata, ","))
 	log.Debugf("\tUse IMA                  : %v", c.UseIma)
-	log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
+	if c.UseIma {
+		log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
+	}
 	log.Debugf("\tAPI                      : %v", c.Api)
 	log.Debugf("\tNetwork                  : %v", c.Network)
 	log.Debugf("\tPolicy Engine            : %v", c.PolicyEngine)
@@ -232,6 +257,12 @@ func printConfig(c *cmc.Config) {
 	log.Debugf("\tLogging Level            : %v", c.LogLevel)
 	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))
 	log.Debugf("\tMeasurement Log          : %v", c.MeasurementLog)
+	log.Debugf("\tMeasure containers       : %v", c.UseCtr)
+	if c.UseCtr {
+		log.Debugf("\tContainer Driver         : %v", c.CtrDriver)
+		log.Debugf("\tContainer Measurements   : %v", c.CtrLog)
+		log.Debugf("\tContainer PCR            : %v", c.CtrPcr)
+	}
 	if c.Storage != "" {
 		log.Debugf("\tInternal storage path    : %v", c.Storage)
 	}
