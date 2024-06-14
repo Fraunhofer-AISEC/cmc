@@ -52,6 +52,7 @@ service CMCService {
     rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
     rpc Attest(AttestationRequest) returns (AttestationResponse) {}
     rpc Verify(VerificationRequest) returns (VerificationResponse) {}
+    rpc Measure(MeasureRequest) returns (MeasureResponse) {}
 }
 
 message PSSOptions {
@@ -100,4 +101,15 @@ message VerificationRequest {
 message VerificationResponse {
   Status status = 1;
   bytes verification_result = 2;
+}
+
+message MeasureRequest {
+  string name = 1;
+  bytes ConfigSha256 = 2;
+  bytes RootfsSha256 = 3;
+}
+
+message MeasureResponse {
+  Status status = 1;
+  bool success = 2;
 }
