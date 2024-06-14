@@ -37,7 +37,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "Valid Attestation Report",
+			name: "ValidAttestationReport",
 			args: args{
 				snpM: &Measurement{
 					Type:     "SNP Measurement",
