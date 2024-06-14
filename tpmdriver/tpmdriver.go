@@ -43,6 +43,7 @@ import (
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 // Tpm is a structure that implements the Measure method
@@ -55,6 +56,10 @@ type Tpm struct {
 	UseIma         bool
 	ImaPcr         int
 	MeasurementLog bool
+	UseCtr         bool
+	CtrPcr         int
+	CtrLog         string
+	Serializer     ar.Serializer
 }
 
 const (
@@ -176,6 +181,10 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	t.SigningCerts = ikchain
 	t.MeasuringCerts = akchain
 	t.MeasurementLog = c.MeasurementLog
+	t.Serializer = c.Serializer
+	t.UseCtr = c.UseCtr
+	t.CtrLog = c.CtrLog
+	t.CtrPcr = c.CtrPcr
 
 	return nil
 }
@@ -211,6 +220,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
 				err)
 		}
+		log.Tracef("Collected %v binary bios measurements", len(biosMeasurements))
 	}
 
 	hashChain := make([]ar.PcrMeasurement, len(t.Pcrs))
@@ -262,13 +272,55 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		// Find the IMA PCR in the TPM Measurement
 		for i := range hashChain {
 			if hashChain[i].Pcr == t.ImaPcr {
-				log.Tracef("Adding %v IMA events to PCR%v measurement", len(imaEvents), hashChain[i].Pcr)
+				log.Tracef("Adding %v IMA events to PCR%v measurement", len(imaEvents),
+					hashChain[i].Pcr)
 				hashChain[i].Events = imaEvents
 				hashChain[i].Summary = nil
 				hashChain[i].Type = "PCR Eventlog"
 			}
 		}
+	}
 
+	if t.UseCtr {
+		log.Tracef("Reading container measurements")
+		if _, err := os.Stat(t.CtrLog); err == nil {
+			// If CMC container measurements are used, add the list of executed containers
+			data, err := os.ReadFile(t.CtrLog)
+			if err != nil {
+				return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
+			}
+
+			var measureList []m.MeasureEntry
+			err = t.Serializer.Unmarshal(data, &measureList)
+			if err != nil {
+				return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
+			}
+
+			for i := range hashChain {
+				if hashChain[i].Pcr == t.CtrPcr {
+					log.Tracef("Adding %v container events to PCR%v measurement", len(measureList),
+						hashChain[i].Pcr)
+					hashChain[i].Summary = nil
+					hashChain[i].Type = "PCR Eventlog"
+					for _, ml := range measureList {
+						log.Tracef("Adding %v container measurement", ml.Name)
+						event := ar.PcrEvent{
+							Sha256:    ml.TemplateSha256,
+							EventName: ml.Name,
+							CtrData: &ar.CtrData{
+								ConfigSha256: ml.ConfigSha256,
+								RootfsSha256: ml.RootfsSha256,
+							},
+						}
+						hashChain[i].Events = append(hashChain[i].Events, event)
+					}
+				}
+			}
+		} else {
+			log.Trace("No container measurements to read")
+		}
+	} else {
+		log.Trace("Container measurements omitted")
 	}
 
 	tm := ar.Measurement{
