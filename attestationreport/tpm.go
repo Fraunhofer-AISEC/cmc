@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"sort"
+	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -188,11 +189,16 @@ func recalculatePcrs(measurement Measurement, referenceValues []ReferenceValue) 
 				calculatedPcrs[measuredPcr.Pcr] = extendSha256(calculatedPcrs[measuredPcr.Pcr],
 					event.Sha256)
 
+				nameInfo := ref.Name
+				if event.EventName != "" && !strings.EqualFold(ref.Name, event.EventName) {
+					nameInfo += ": " + event.EventName
+				}
+
 				measResult := DigestResult{
 					Pcr:         &pcrNum,
 					Digest:      hex.EncodeToString(event.Sha256),
 					Success:     true,
-					Name:        ref.Name,
+					Name:        nameInfo,
 					Description: ref.Description,
 				}
 				detailedResults = append(detailedResults, measResult)
@@ -273,9 +279,24 @@ func recalculatePcrs(measurement Measurement, referenceValues []ReferenceValue) 
 	// in case of detailed measurement logs
 	for _, ref := range referenceValues {
 
+		if ref.Pcr == nil {
+			result := DigestResult{
+				Type:        "Reference Value",
+				Success:     false,
+				Name:        ref.Name,
+				Digest:      hex.EncodeToString(ref.Sha256),
+				Description: ref.Description,
+			}
+			detailedResults = append(detailedResults, result)
+			ok = false
+			log.Tracef("Reference value %v does not contain PCR", ref.Name)
+			continue
+		}
+
 		// Check if measurement contains the reference value PCR
 		foundPcr := false
 		for _, measuredPcr := range measurement.Pcrs {
+
 			if measuredPcr.Pcr == *ref.Pcr {
 				foundPcr = true
 			} else {
