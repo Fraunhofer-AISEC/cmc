@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2024 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Contains the API definitions for the CoAP and unix domain socket API
+// Contains the API definitions for the CoAP and socket API.
 // The gRPC API is in a separate file
 package api
 
@@ -52,6 +52,16 @@ type VerificationRequest struct {
 
 type VerificationResponse struct {
 	VerificationResult []byte `json:"verificationResult" cbor:"0,keyasint"`
+}
+
+type MeasureRequest struct {
+	Name         string `json:"name,omitempty" cbor:"0,keyasint,omitempty"`
+	ConfigSha256 []byte `json:"configSha256,omitempty" cbor:"1,keyasint,omitempty"`
+	RootfsSha256 []byte `json:"rootfsSha256,omitempty" cbor:"2,keyasint,omitempty"`
+}
+
+type MeasureResponse struct {
+	Success bool `json:"success" cbor:"0,keyasint"`
 }
 
 type TLSSignRequest struct {
@@ -110,8 +120,9 @@ const (
 	TypeError   uint32 = 0
 	TypeAttest  uint32 = 1
 	TypeVerify  uint32 = 2
-	TypeTLSSign uint32 = 3
-	TypeTLSCert uint32 = 4
+	TypeMeasure uint32 = 3
+	TypeTLSSign uint32 = 4
+	TypeTLSCert uint32 = 5
 )
 
 // Converts Protobuf hashtype to crypto.SignerOpts
