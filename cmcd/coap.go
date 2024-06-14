@@ -37,6 +37,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 // CoapServer is the CoAP server structure
@@ -58,6 +59,7 @@ func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 	r.Use(loggingMiddleware)
 	r.Handle("/Attest", mux.HandlerFunc(Attest))
 	r.Handle("/Verify", mux.HandlerFunc(Verify))
+	r.Handle("/Measure", mux.HandlerFunc(Measure))
 	r.Handle("/TLSSign", mux.HandlerFunc(TlsSign))
 	r.Handle("/TLSCert", mux.HandlerFunc(TlsCert))
 
@@ -195,6 +197,49 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	SendCoapResponse(w, r, payload)
 
 	log.Debug("Verifier: Finished")
+}
+
+func Measure(w mux.ResponseWriter, r *mux.Message) {
+
+	log.Debug("Received Connection Request Type 'Measure Request'")
+
+	var req api.MeasureRequest
+	err := unmarshalCoapPayload(r, &req)
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to unmarshal CoAP payload: %v", err)
+		return
+	}
+
+	log.Debug("Measurer: Recording measurement")
+	var success bool
+	err = m.Measure(req.Name, req.ConfigSha256, req.RootfsSha256,
+		&m.MeasureConfig{
+			Serializer: Cmc.Serializer,
+			Pcr:        Cmc.CtrPcr,
+			LogFile:    Cmc.CtrLog,
+			Driver:     Cmc.CtrDriver,
+		})
+	if err != nil {
+		success = false
+	} else {
+		success = true
+	}
+
+	// Serialize CoAP payload
+	resp := api.MeasureResponse{
+		Success: success,
+	}
+	payload, err := cbor.Marshal(&resp)
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
+		return
+	}
+
+	// CoAP response
+	SendCoapResponse(w, r, payload)
+
+	log.Debug("Measurer: Finished")
 }
 
 func TlsSign(w mux.ResponseWriter, r *mux.Message) {

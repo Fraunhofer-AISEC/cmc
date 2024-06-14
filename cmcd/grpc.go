@@ -38,6 +38,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 type GrpcServerWrapper struct{}
@@ -146,6 +147,40 @@ func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*
 	}
 
 	log.Info("Verifier: Finished")
+
+	return response, nil
+}
+
+func (s *GrpcServer) Measure(ctx context.Context, in *api.MeasureRequest) (*api.MeasureResponse, error) {
+
+	var status api.Status
+	var success bool
+
+	log.Info("Received Connection Request Type 'Measure Request'")
+
+	log.Info("Measurer: Recording measurement")
+	err := m.Measure(in.Name, in.ConfigSha256, in.RootfsSha256,
+		&m.MeasureConfig{
+			Serializer: s.cmc.Serializer,
+			Pcr:        s.cmc.CtrPcr,
+			LogFile:    s.cmc.CtrLog,
+			Driver:     s.cmc.CtrDriver,
+		})
+	if err != nil {
+		log.Errorf("Failed to record measurement: %v", err)
+		success = false
+		status = api.Status_FAIL
+	} else {
+		success = true
+		status = api.Status_OK
+	}
+
+	response := &api.MeasureResponse{
+		Status:  status,
+		Success: success,
+	}
+
+	log.Info("Measure: Finished")
 
 	return response, nil
 }

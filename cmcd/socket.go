@@ -36,6 +36,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 // Server is the server structure
@@ -89,6 +90,8 @@ func handleIncoming(conn net.Conn, cmc *cmc.Cmc) {
 		attest(conn, payload, cmc)
 	case api.TypeVerify:
 		verify(conn, payload, cmc)
+	case api.TypeMeasure:
+		measure(conn, payload, cmc)
 	case api.TypeTLSCert:
 		tlscert(conn, payload, cmc)
 	case api.TypeTLSSign:
@@ -189,6 +192,50 @@ func verify(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
 	}
 
 	log.Debug("Verifier: Finished")
+}
+
+func measure(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
+
+	log.Debug("Received Connection Request Type 'Measure Request'")
+
+	req := new(api.MeasureRequest)
+	err := cbor.Unmarshal(payload, req)
+	if err != nil {
+		api.SendError(conn, "Failed to unmarshal measure request: %v", err)
+		return
+	}
+
+	log.Debug("Measurer: recording measurement")
+	var success bool
+	err = m.Measure(req.Name, req.ConfigSha256, req.RootfsSha256,
+		&m.MeasureConfig{
+			Serializer: cmc.Serializer,
+			Pcr:        cmc.CtrPcr,
+			LogFile:    cmc.CtrLog,
+			Driver:     cmc.CtrDriver,
+		})
+	if err != nil {
+		success = false
+	} else {
+		success = true
+	}
+
+	// Serialize payload
+	resp := api.MeasureResponse{
+		Success: success,
+	}
+	data, err := cbor.Marshal(&resp)
+	if err != nil {
+		api.SendError(conn, "failed to marshal message: %v", err)
+		return
+	}
+
+	err = api.Send(conn, data, api.TypeMeasure)
+	if err != nil {
+		api.SendError(conn, "failed to send: %v", err)
+	}
+
+	log.Debug("Measurer: Finished")
 }
 
 func tlssign(conn net.Conn, payload []byte, cmc *cmc.Cmc) {
