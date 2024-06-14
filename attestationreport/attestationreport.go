@@ -270,6 +270,7 @@ type AppDescription struct {
 	MetaInfo
 	AppManifest string              `json:"appManifest" cbor:"3,keyasint"` // Links to App Manifest.Name
 	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
+	Environment []Environment       `json:"environment,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // InternalConnection represents the attestation report
@@ -289,6 +290,13 @@ type ExternalInterface struct {
 	AppEndpoint string `json:"appEndpoint" cbor:"1,keyasint"` // Links to AppManifest.Endpoint
 	Interface   string `json:"interface" cbor:"2,keyasint"`   // Links to AppDescription.Name
 	Port        int    `json:"port" cbor:"3,keyasint"`        // Links to App Manifest.Endpoint
+}
+
+// Environment represents environment variables
+// for apps
+type Environment struct {
+	Key   string `json:"key" cbor:"0,keyasint"`
+	Value string `json:"value" cbor:"1,keyasint"`
 }
 
 // AppManifest represents the attestation report
