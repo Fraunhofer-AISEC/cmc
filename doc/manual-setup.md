@@ -135,6 +135,13 @@ sudo parse-ima-pcr
 ```
 Then insert those values into the json `referenceValues` array in an app manifest.
 
+For OCI containers, currently the `containerd` tool `ctr` is supported with the custom cmc
+runtime `cmc/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1`:
+```sh
+sudo ctr run --runtime ${runtime} -t --rm docker.io/library/ubuntu:22.04 CMC_GENERATE_APP_MANIFEST
+```
+the reference values are generated at `/tmp/container-refs` and must be put into an app manifest.
+
 **Calculating the reference values based on software artifacts**
 
 This currently only works for QEMU VMs with OVMF and a Linux kernel. it is recommended to use
@@ -170,6 +177,20 @@ For the host applications, if the kernel's Integrity Measurement Architecture (I
 sudo calculate-ima-pcr -t 10 -i ima-ng -p /usr/bin -p /usr/sbin -p /usr/lib
 ```
 Then insert those values into an app manifest.
+
+For OCI containers, the `buildah` and `umoci` tool can be used in combination with the custom
+`cmc/tools/measure-bundle/measure-bundle` tool can be used:
+
+```sh
+buildah pull ubuntu:22.04
+buildah push ubuntu:22.04 oci-archive:myimage-oci.tar:latest
+
+tar -xvf myimage-oci.tar
+(cd image ; umoci unpack --rootless --image ./:latest bundle)
+
+measure-bundle -config image/bundle/config.json" -rootfs image/bundle/rootfs)
+```
+Then, insert those reference values into an App Manifest.
 
 ##### AMD SNP Reference Values
 
