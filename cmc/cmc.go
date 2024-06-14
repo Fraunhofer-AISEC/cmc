@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 var (
@@ -39,17 +40,22 @@ type Config struct {
 	Addr           string   `json:"addr"`
 	ProvServerAddr string   `json:"provServerAddr"`
 	Metadata       []string `json:"metadata"`
-	Drivers        []string `json:"drivers"`                // TPM, SNP
-	UseIma         bool     `json:"useIma"`                 // TRUE, FALSE
-	ImaPcr         int      `json:"imaPcr"`                 // 10-15
-	KeyConfig      string   `json:"keyConfig,omitempty"`    // RSA2048 RSA4096 EC256 EC384 EC521
-	Api            string   `json:"api"`                    // gRPC, CoAP, Socket
-	Network        string   `json:"network,omitempty"`      // unix, socket
-	PolicyEngine   string   `json:"policyEngine,omitempty"` // JS, DUKTAPE
+	Drivers        []string `json:"drivers"`
+	UseIma         bool     `json:"useIma"`
+	ImaPcr         int      `json:"imaPcr"`
+	KeyConfig      string   `json:"keyConfig,omitempty"`
+	Api            string   `json:"api"`
+	Network        string   `json:"network,omitempty"`
+	PolicyEngine   string   `json:"policyEngine,omitempty"`
 	LogLevel       string   `json:"logLevel,omitempty"`
 	Storage        string   `json:"storage,omitempty"`
 	Cache          string   `json:"cache,omitempty"`
 	MeasurementLog bool     `json:"measurementLog,omitempty"`
+	// Only for container measurements
+	UseCtr    bool   `json:"useCtr,omitempty"`
+	CtrDriver string `json:"ctrDriver,omitempty"`
+	CtrPcr    int    `json:"ctrPcr,omitempty"`
+	CtrLog    string `json:"ctrLog"`
 }
 
 type Cmc struct {
@@ -59,6 +65,10 @@ type Cmc struct {
 	Serializer         ar.Serializer
 	Network            string
 	IntelStorage       string
+	UseCtr             bool
+	CtrDriver          string
+	CtrPcr             int
+	CtrLog             string
 }
 
 func GetDrivers() map[string]ar.Driver {
@@ -85,6 +95,9 @@ func NewCmc(c *Config) (*Cmc, error) {
 		ImaPcr:         c.ImaPcr,
 		MeasurementLog: c.MeasurementLog,
 		Serializer:     s,
+		CtrPcr:         c.CtrPcr,
+		CtrLog:         c.CtrLog,
+		UseCtr:         c.UseCtr,
 	}
 
 	// Get policy engine
@@ -107,6 +120,14 @@ func NewCmc(c *Config) (*Cmc, error) {
 		usedDrivers = append(usedDrivers, d)
 	}
 
+	// Check container driver
+	if c.UseCtr {
+		if !internal.Contains(c.CtrDriver, c.Drivers) {
+			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
+				c.CtrDriver)
+		}
+	}
+
 	cmc := &Cmc{
 		Metadata:           metadata,
 		PolicyEngineSelect: sel,
@@ -114,6 +135,10 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Serializer:         s,
 		Network:            c.Network,
 		IntelStorage:       c.Storage,
+		UseCtr:             c.UseCtr,
+		CtrDriver:          c.CtrDriver,
+		CtrPcr:             c.CtrPcr,
+		CtrLog:             c.CtrLog,
 	}
 
 	return cmc, nil
