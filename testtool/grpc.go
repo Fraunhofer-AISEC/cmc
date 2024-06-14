@@ -31,6 +31,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 type GrpcApi struct{}
@@ -135,6 +136,53 @@ func (a GrpcApi) verify(c *config) {
 	}
 
 	log.Debug("Finished verify")
+}
+
+func (a GrpcApi) measure(c *config) {
+
+	// Establish connection
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+
+	log.Tracef("Connecting via gRPC to %v", c.CmcAddr)
+
+	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("Failed to connect to cmcd: %v", err)
+	}
+	defer conn.Close()
+	client := api.NewCMCServiceClient(conn)
+
+	ctrConfig, err := os.ReadFile(c.CtrConfig)
+	if err != nil {
+		log.Fatalf("Failed to read container config: %v", err)
+	}
+
+	configHash, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
+	if err != nil {
+		log.Fatalf("Failed to measure config: %v", err)
+	}
+
+	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
+	if err != nil {
+		log.Fatalf("Failed to measure rootfs: %v", err)
+	}
+
+	req := &api.MeasureRequest{
+		Name:         c.CtrName,
+		ConfigSha256: configHash,
+		RootfsSha256: rootfsHash,
+	}
+
+	response, err := client.Measure(ctx, req)
+	if err != nil {
+		log.Fatalf("GRPC Measure Call failed: %v", err)
+	}
+	if response.GetStatus() != api.Status_OK {
+		log.Warnf("Failed to record measurement. Status %v", response.GetStatus())
+	}
+
+	log.Debug("Finished measure")
 }
 
 func (a GrpcApi) dial(c *config) {

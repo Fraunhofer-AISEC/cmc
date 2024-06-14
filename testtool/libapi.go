@@ -31,6 +31,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 type LibApi struct {
@@ -128,6 +129,45 @@ func (a LibApi) verify(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
+}
+
+func (a LibApi) measure(c *config) {
+	if a.cmc == nil {
+		cmc, err := initialize(c)
+		if err != nil {
+			log.Errorf("failed to initialize CMC: %v", err)
+			return
+		}
+		a.cmc = cmc
+	}
+
+	ctrConfig, err := os.ReadFile(c.CtrConfig)
+	if err != nil {
+		log.Fatalf("Failed to read config: %v", err)
+	}
+
+	configHash, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
+	if err != nil {
+		log.Fatalf("Failed to measure config: %v", err)
+	}
+
+	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
+	if err != nil {
+		log.Fatalf("Failed to measure rootfs: %v", err)
+	}
+
+	err = m.Measure(c.CtrName, configHash, rootfsHash,
+		&m.MeasureConfig{
+			Serializer: a.cmc.Serializer,
+			Pcr:        a.cmc.CtrPcr,
+			LogFile:    a.cmc.CtrLog,
+			Driver:     a.cmc.CtrDriver,
+		})
+	if err != nil {
+		log.Fatalf("Failed to record measurement: %v", err)
+	}
+
+	log.Debug("Measure: Recorded measurement")
 }
 
 func (a LibApi) cacerts(c *config) {
