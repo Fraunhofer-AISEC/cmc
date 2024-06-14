@@ -62,6 +62,9 @@ type DriverConfig struct {
 	ImaPcr         int
 	Serializer     Serializer
 	MeasurementLog bool
+	UseCtr         bool
+	CtrPcr         int
+	CtrLog         string
 }
 
 // Serializer is a generic interface providing methods for data serialization and
@@ -118,6 +121,12 @@ type PcrEvent struct {
 	Sha256    HexByte    `json:"sha256" cbor:"2,keyasint"`
 	EventName string     `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
 	EventData *EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
+	CtrData   *CtrData   `json:"ctrData,omitempty" cbor:"6,keyasint,omitempty"`
+}
+
+type CtrData struct {
+	ConfigSha256 HexByte `json:"configSha256" cbor:"0,keyasint"`
+	RootfsSha256 HexByte `json:"rootfsSha256" cbor:"1,keyasint"`
 }
 
 // TpmMeasurement represents the attestation report
