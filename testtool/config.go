@@ -52,14 +52,15 @@ var (
 )
 
 type Api interface {
+	cacerts(c *config)
 	generate(c *config)
 	verify(c *config)
+	measure(c *config)
 	dial(c *config)
 	listen(c *config)
-	iothub(c *config)
-	cacerts(c *config)
 	request(c *config)
 	serve(c *config)
+	iothub(c *config)
 }
 
 type config struct {
@@ -91,6 +92,11 @@ type config struct {
 	MeasurementLog bool     `json:"measurementLog"`
 	UseIma         bool     `json:"useIma"`
 	ImaPcr         int      `json:"imaPcr"`
+	// Only container measurements
+	CtrAlgo   string `json:"ctrAlgo"`
+	CtrName   string `json:"ctrName"`
+	CtrRootfs string `json:"ctrRootfs"`
+	CtrConfig string `json:"ctrConfig"`
 
 	ca       []byte
 	policies []byte
@@ -122,12 +128,16 @@ const (
 	driversFlag        = "drivers"
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
-	measurementLogFlag = "measurementLog"
+	measurementLogFlag = "measurementlog"
 	headerFlag         = "header"
 	methodFlag         = "method"
 	dataFlag           = "data"
 	imaFlag            = "ima"
 	imaPcrFlag         = "pcr"
+	// Only container image measure flags
+	ctrNameFlag   = "ctrname"
+	ctrRootfsFlag = "ctrrootfs"
+	ctrConfigFlag = "ctrconfig"
 )
 
 func getConfig() *config {
@@ -175,6 +185,10 @@ func getConfig() *config {
 	ima := flag.Bool(imaFlag, false,
 		"Indicates whether to use Integrity Measurement Architecture (IMA)")
 	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
+	// Container measurement flags
+	ctrName := flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
+	ctrRootfs := flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
+	ctrConfig := flag.String(ctrConfigFlag, "", "Specifies config path of the container to be measured")
 
 	flag.Parse()
 
@@ -286,6 +300,16 @@ func getConfig() *config {
 	if internal.FlagPassed(imaPcrFlag) {
 		c.ImaPcr = *pcr
 	}
+	// Container measurements
+	if internal.FlagPassed(ctrNameFlag) {
+		c.CtrName = *ctrName
+	}
+	if internal.FlagPassed(ctrRootfsFlag) {
+		c.CtrRootfs = *ctrRootfs
+	}
+	if internal.FlagPassed(ctrConfigFlag) {
+		c.CtrConfig = *ctrConfig
+	}
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
 	if err != nil {
@@ -308,7 +332,7 @@ func getConfig() *config {
 	printConfig(c)
 
 	// Get root CA certificate in PEM format if specified
-	if c.Mode != "generate" && c.Mode != "cacerts" {
+	if c.Mode != "generate" && c.Mode != "cacerts" && c.Mode != "measure" {
 		if c.CaFile != "" {
 			c.ca, err = os.ReadFile(c.CaFile)
 			if err != nil {

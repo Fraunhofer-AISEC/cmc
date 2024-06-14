@@ -34,6 +34,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 type CoapApi struct{}
@@ -140,6 +141,37 @@ func (a CoapApi) verify(c *config) {
 	}
 }
 
+func (a CoapApi) measure(c *config) {
+
+	ctrConfig, err := os.ReadFile(c.CtrConfig)
+	if err != nil {
+		log.Fatalf("Failed to read config: %v", err)
+	}
+
+	configHash, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
+	if err != nil {
+		log.Fatalf("Failed to measure config: %v", err)
+	}
+
+	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
+	if err != nil {
+		log.Fatalf("Failed to measure rootfs: %v", err)
+	}
+
+	req := &api.MeasureRequest{
+		Name:         c.CtrName,
+		ConfigSha256: configHash,
+		RootfsSha256: rootfsHash,
+	}
+
+	resp, err := measureInternal(c.CmcAddr, req)
+	if err != nil {
+		log.Fatalf("Failed to verify: %v", err)
+	}
+
+	log.Infof("Measure Result: %v", resp.Success)
+}
+
 func (a CoapApi) dial(c *config) {
 	dialInternal(c, attestedtls.CmcApi_COAP, nil)
 }
@@ -209,4 +241,47 @@ func verifyInternal(addr string, req *api.VerificationRequest,
 	}
 
 	return verifyResp, nil
+}
+
+func measureInternal(addr string, req *api.MeasureRequest,
+) (*api.MeasureResponse, error) {
+
+	log.Tracef("Connecting via CoAP to %v", addr)
+
+	// Establish connection
+	conn, err := udp.Dial(addr)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	path := "/Measure"
+
+	// Marshal CoAP payload
+	payload, err := cbor.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %v", err)
+	}
+
+	// Send CoAP POST request
+	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+
+	// Read CoAP reply body
+	payload, err = resp.ReadBody()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %v", err)
+	}
+
+	// Unmarshal attestation response
+	measureResp := new(api.MeasureResponse)
+	err = cbor.Unmarshal(payload, measureResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response")
+	}
+
+	return measureResp, nil
 }

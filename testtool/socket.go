@@ -27,6 +27,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 
 	// local modules
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
@@ -132,6 +133,37 @@ func (a SocketApi) verify(c *config) {
 	}
 }
 
+func (a SocketApi) measure(c *config) {
+
+	ctrConfig, err := os.ReadFile(c.CtrConfig)
+	if err != nil {
+		log.Fatalf("Failed to read config: %v", err)
+	}
+
+	configHash, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
+	if err != nil {
+		log.Fatalf("Failed to measure config: %v", err)
+	}
+
+	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
+	if err != nil {
+		log.Fatalf("Failed to measure rootfs: %v", err)
+	}
+
+	req := &api.MeasureRequest{
+		Name:         c.CtrName,
+		ConfigSha256: configHash,
+		RootfsSha256: rootfsHash,
+	}
+
+	resp, err := measureSocketRequest(c.Network, c.CmcAddr, req)
+	if err != nil {
+		log.Fatalf("Failed to measure: %v", err)
+	}
+
+	log.Debugf("Recorded measurement. Result: %v", resp.Success)
+}
+
 func (a SocketApi) dial(c *config) {
 	dialInternal(c, attestedtls.CmcApi_Socket, nil)
 }
@@ -193,4 +225,43 @@ func verifySocketRequest(network, addr string, req *api.VerificationRequest,
 	}
 
 	return verifyResp, nil
+}
+
+func measureSocketRequest(network, addr string, req *api.MeasureRequest,
+) (*api.MeasureResponse, error) {
+
+	log.Tracef("Connecting via %v socket to %v", network, addr)
+
+	// Establish connection
+	conn, err := net.Dial(network, addr)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing: %v", err)
+	}
+
+	// Marshal payload
+	payload, err := cbor.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %v", err)
+	}
+
+	// Send request
+	err = api.Send(conn, payload, api.TypeMeasure)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %v", err)
+	}
+
+	// Read reply
+	payload, _, err = api.Receive(conn)
+	if err != nil {
+		log.Fatalf("failed to receive: %v", err)
+	}
+
+	// Unmarshal attestation response
+	measureResp := new(api.MeasureResponse)
+	err = cbor.Unmarshal(payload, measureResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response")
+	}
+
+	return measureResp, nil
 }

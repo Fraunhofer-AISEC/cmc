@@ -27,6 +27,10 @@ func verify(c *config) {
 	c.api.verify(c)
 }
 
+func measure(c *config) {
+	c.api.measure(c)
+}
+
 func dial(c *config) {
 	c.api.dial(c)
 }
