@@ -24,6 +24,7 @@ require (
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/certificate-transparency-go v1.1.6 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-tspi v0.3.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
