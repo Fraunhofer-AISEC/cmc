@@ -81,7 +81,15 @@ type DevDescResult struct {
 	CorrectApps         []Result          `json:"correctApps"`
 	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`
 	OsAppsCompatibility []Result          `json:"osAppCompatibility"`
+	AppResults          []AppDescResult   `json:"appDescResults"`
 	SignatureCheck      []SignatureResult `json:"signatureValidation"`
+}
+
+type AppDescResult struct {
+	MetaInfo
+	AppManifest string              `json:"appManifest"`
+	Environment []Environment       `json:"environment,omitempty"`
+	External    []ExternalInterface `json:"external,omitempty"`
 }
 
 type MeasurementResult struct {
