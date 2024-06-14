@@ -980,6 +980,16 @@ func verifyMetadata(ar *AttestationReport, cas []*x509.Certificate, s Serializer
 			result.DevDescResult.Description = metadata.DeviceDescription.Description
 			result.DevDescResult.Location = metadata.DeviceDescription.Location
 		}
+		for _, appDesc := range metadata.DeviceDescription.AppDescriptions {
+			appResult := AppDescResult{
+				MetaInfo:    appDesc.MetaInfo,
+				AppManifest: appDesc.AppManifest,
+				External:    appDesc.External,
+				Environment: appDesc.Environment,
+			}
+			result.DevDescResult.AppResults = append(result.DevDescResult.AppResults,
+				appResult)
+		}
 	}
 
 	return metadata, result, success
