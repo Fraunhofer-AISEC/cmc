@@ -15,6 +15,7 @@ fi
 cmc=$(set -e; abs_path "$1")
 data=$(set -e; abs_path "$2")
 ser="${3}"
+client="docker"
 
 if [[ ! -d "${cmc}" ]]; then
   echo "CMC directory does not exist. Did you clone the repository? Abort.."
@@ -63,4 +64,4 @@ cp -r "${cmc}/example-setup/"* "${data}"
 "${data}/update-app-manifest-live" "${data}" "${ser}"
 
 # Generate container example manifest
-"${data}/update-container-manifest-live" docker.io/library/ubuntu:22.04 "${data}" "${cmc}" "${ser}"
+"${data}/update-container-manifest-live" docker.io/library/ubuntu:22.04 "${data}" "${cmc}" "${ser}" "${client}"
