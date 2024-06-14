@@ -12,6 +12,9 @@ est/estserver/estserver
 tools/cmc-signing-tool/cmc-signing-tool
 tools/cmc-converter/cmc-converter
 tools/fmspc-retrieval-tool/fmspc-retrieval-tool
+tools/measurefs/measurefs
+tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1
+tools/measure-bundle/measure-bundle
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
@@ -20,4 +23,4 @@ tpmdriver/test_encrypted_ak.json
 est/server/server
 attestationreport/cache/*
 testtool/private.pem
-testtool/public.pem 
+testtool/public.pem
