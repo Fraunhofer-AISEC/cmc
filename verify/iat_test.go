@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationreport
+package verify
 
 import (
 	"crypto/x509"
@@ -21,14 +21,15 @@ import (
 	"reflect"
 	"testing"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/sirupsen/logrus"
 )
 
 func Test_verifyIasMeasurements(t *testing.T) {
 	type args struct {
-		IasM            *Measurement
+		IasM            *ar.Measurement
 		nonce           []byte
-		referenceValues []ReferenceValue
+		referenceValues []ar.ReferenceValue
 		ca              *x509.Certificate
 	}
 	tests := []struct {
@@ -39,13 +40,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid IAT",
 			args: args{
-				IasM: &Measurement{
+				IasM: &ar.Measurement{
 					Type:     "IAS Measurement",
 					Evidence: invalidIat,
 					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ReferenceValue{
+				referenceValues: []ar.ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -56,13 +57,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Cert",
 			args: args{
-				IasM: &Measurement{
+				IasM: &ar.Measurement{
 					Type:     "IAS Measurement",
 					Evidence: validIat,
 					Certs:    [][]byte{invalidIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ReferenceValue{
+				referenceValues: []ar.ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -73,13 +74,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA",
 			args: args{
-				IasM: &Measurement{
+				IasM: &ar.Measurement{
 					Type:     "IAS Measurement",
 					Evidence: validIat,
 					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ReferenceValue{
+				referenceValues: []ar.ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -90,13 +91,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				IasM: &Measurement{
+				IasM: &ar.Measurement{
 					Type:     "IAS Measurement",
 					Evidence: validIat,
 					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: invalidIasNonce,
-				referenceValues: []ReferenceValue{
+				referenceValues: []ar.ReferenceValue{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -107,13 +108,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Value",
 			args: args{
-				IasM: &Measurement{
+				IasM: &ar.Measurement{
 					Type:     "IAS Measurement",
 					Evidence: validIat,
 					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ReferenceValue{
+				referenceValues: []ar.ReferenceValue{
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -124,13 +125,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				IasM: &Measurement{
+				IasM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validIat,
 					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ReferenceValue{
+				referenceValues: []ar.ReferenceValue{
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -178,19 +179,19 @@ var (
 
 	validNspeMeasurement, _ = hex.DecodeString("73deb833155c9c317d838b5368b6a63bd38706fa874e874c1b5affe4571b348b")
 
-	validSpeReferenceValue = ReferenceValue{
+	validSpeReferenceValue = ar.ReferenceValue{
 		Type:   "IAS Reference Value",
 		Name:   "SPE Measurement",
 		Sha256: validSpeMeasurement,
 	}
 
-	invalidSpeReferenceValue = ReferenceValue{
+	invalidSpeReferenceValue = ar.ReferenceValue{
 		Type:   "IAS Reference Value",
 		Name:   "SPE Measurement",
 		Sha256: invalidSpeMeasurement,
 	}
 
-	validNspeReferenceValue = ReferenceValue{
+	validNspeReferenceValue = ar.ReferenceValue{
 		Type:   "IAS Reference Value",
 		Name:   "NSPE Measurement",
 		Sha256: validNspeMeasurement,

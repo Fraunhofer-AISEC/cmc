@@ -13,28 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nodefaults || jspolicies
+//go:build !nodefaults || duktapepolicies
 
-package attestationreport
+package verify
 
 import (
 	"encoding/json"
 
-	"github.com/Fraunhofer-AISEC/cmc/attestationpolicies/jspolicies"
+	"github.com/Fraunhofer-AISEC/cmc/attestationpolicies/duktape"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-type JsPolicyEngine struct{}
+type DukTapePolicyEngine struct{}
 
 func init() {
-	policyEngines[PolicyEngineSelect_JS] = JsPolicyEngine{}
+	policyEngines[PolicyEngineSelect_DukTape] = DukTapePolicyEngine{}
 }
 
-func (p JsPolicyEngine) Validate(policies []byte, result VerificationResult) bool {
+func (p DukTapePolicyEngine) Validate(policies []byte, result ar.VerificationResult) bool {
 	vr, err := json.Marshal(result)
 	if err != nil {
 		log.Errorf("Failed to marshal verification result: %v", err)
 		return false
 	}
-	engine := jspolicies.NewJsPolicyEngine(policies)
+	engine := duktape.NewDukTapePolicyEngine(policies)
 	return engine.Validate(vr)
 }

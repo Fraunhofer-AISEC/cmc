@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationreport
+package verify
 
 import (
 	"encoding/hex"
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 func Test_verifySnpMeasurements(t *testing.T) {
@@ -27,8 +29,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	type args struct {
-		snpM  *Measurement
-		snpV  []ReferenceValue
+		snpM  *ar.Measurement
+		snpV  []ar.ReferenceValue
 		nonce []byte
 	}
 	tests := []struct {
@@ -39,16 +41,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "ValidAttestationReport",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -64,16 +66,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: invalidReportSignature,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -89,16 +91,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    invalidCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -114,16 +116,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid VCEK Certificate",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    invalidLeafCert,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -139,16 +141,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: invalidReportData,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -164,16 +166,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: invalidMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -189,16 +191,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Policy Parameter Debug",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        invalidSnpPolicy,
@@ -214,16 +216,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -239,12 +241,12 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Value Type",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "TPM Reference Value",
 						Sha256: validMeasurement,
@@ -257,7 +259,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "No Reference Values Present",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
@@ -269,16 +271,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Firmware",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -294,16 +296,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid TCB",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: validFingerprint,
 							Policy:        validSnpPolicy,
@@ -319,16 +321,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA KeyID",
 			args: args{
-				snpM: &Measurement{
+				snpM: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ReferenceValue{
+				snpV: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &SnpDetails{
+						Snp: &ar.SnpDetails{
 							Version:       validVersion,
 							CaFingerprint: invalidFingerprint,
 							Policy:        validSnpPolicy,
@@ -840,7 +842,7 @@ AFZEAwoKCQ==
 
 	invalidLeafCert = [][]byte{invalidVcek.Raw, askMilan.Raw, arkMilan.Raw}
 
-	validSnpPolicy = SnpPolicy{
+	validSnpPolicy = ar.SnpPolicy{
 		Type:         "SNP Policy",
 		SingleSocket: false,
 		Debug:        false,
@@ -850,7 +852,7 @@ AFZEAwoKCQ==
 		AbiMinor:     0,
 	}
 
-	invalidSnpPolicy = SnpPolicy{
+	invalidSnpPolicy = ar.SnpPolicy{
 		Type:         "SNP Policy",
 		SingleSocket: false,
 		Debug:        true,
@@ -862,26 +864,26 @@ AFZEAwoKCQ==
 
 	validVersion = uint32(2)
 
-	validFw = SnpFw{
+	validFw = ar.SnpFw{
 		Build: 3,
 		Major: 1,
 		Minor: 51,
 	}
 
-	invalidFw = SnpFw{
+	invalidFw = ar.SnpFw{
 		Build: 4,
 		Major: 1,
 		Minor: 51,
 	}
 
-	validTcb = SnpTcb{
+	validTcb = ar.SnpTcb{
 		Bl:    2,
 		Tee:   0,
 		Snp:   6,
 		Ucode: 67,
 	}
 
-	invalidTcb = SnpTcb{
+	invalidTcb = ar.SnpTcb{
 		Bl:    2,
 		Tee:   0,
 		Snp:   6,

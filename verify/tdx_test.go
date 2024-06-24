@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationreport
+package verify
 
 import (
 	"encoding/hex"
@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 func fetchLatestTcbInfo(tdx bool, fmspc string) ([]byte, error) {
@@ -77,31 +79,31 @@ func fetchLatestQeIdentity(tdx bool) ([]byte, error) {
 
 func Test_verifyTdxMeasurements(t *testing.T) {
 	type args struct {
-		tdxM  *Measurement
-		tdxV  []ReferenceValue
+		tdxM  *ar.Measurement
+		tdxV  []ar.ReferenceValue
 		nonce []byte
 	}
 	tests := []struct {
 		name  string
 		args  args
-		want  *MeasurementResult
+		want  *ar.MeasurementResult
 		want1 bool
 	}{
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -109,19 +111,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -135,18 +137,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: invalidTdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -154,19 +156,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -180,18 +182,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -199,19 +201,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -225,18 +227,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    [][]byte{},
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -244,19 +246,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -270,18 +272,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: []byte("12345"),
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -289,19 +291,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -315,18 +317,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -334,19 +336,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								Debug: true,
 							},
 							Xfam: validXFAM,
@@ -360,18 +362,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid TcbInfo",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte("0"),
 								TcbInfoSize:    1,
@@ -379,19 +381,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -405,18 +407,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid QEIdentity",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -424,19 +426,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 1,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
 								MrSeam: dec(validMrSeam),
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -450,18 +452,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MrSeam",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -469,19 +471,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{
+							TdMeas: ar.TDMeasurements{
 								RtMr0:  rtMr0HashChain,
 								RtMr1:  rtMr1HashChain,
 								RtMr2:  rtMr2HashChain,
 								RtMr3:  rtMr3HashChain,
-								MrSeam: HexByte{0x01},
+								MrSeam: ar.HexByte{0x01},
 							},
-							TdAttributes: TDAttributes{
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -495,18 +497,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Missing HashChain Values",
 			args: args{
-				tdxM: &Measurement{
+				tdxM: &ar.Measurement{
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 					Certs:    validTDXCertChain,
 				},
-				tdxV: []ReferenceValue{
+				tdxV: []ar.ReferenceValue{
 					{
 						Type:   "TDX Reference Value",
 						Sha256: validTDXMeasurement,
-						Tdx: &TDXDetails{
+						Tdx: &ar.TDXDetails{
 							Version: 0x04,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_tdx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -514,13 +516,13 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: tdxRootCAFingerprint,
-							TdId: TDId{
+							TdId: ar.TDId{
 								MrOwner:       mrOwner,
 								MrOwnerConfig: mrOwnerConfig,
 								MrConfigId:    mrConfigId,
 							},
-							TdMeas: TDMeasurements{},
-							TdAttributes: TDAttributes{
+							TdMeas: ar.TDMeasurements{},
+							TdAttributes: ar.TDAttributes{
 								SeptVEDisable: true,
 							},
 							Xfam: validXFAM,
@@ -1412,28 +1414,28 @@ var (
 	mrOwner          = [48]byte{} // 0x00s
 	mrOwnerConfig    = [48]byte{} // 0x00s
 	mrConfigId       = [48]byte{} // 0x00s
-	rtMr0HashChain   = RtMrHashChainElem{
+	rtMr0HashChain   = ar.RtMrHashChainElem{
 		Type:    "Runtime Measurement",
 		Name:    "RtMr0",
-		Hashes:  []HexByte{dec(rtMr0)},
+		Hashes:  []ar.HexByte{dec(rtMr0)},
 		Summary: true,
 	}
-	rtMr1HashChain = RtMrHashChainElem{
+	rtMr1HashChain = ar.RtMrHashChainElem{
 		Type:    "Runtime Measurement",
 		Name:    "RtMr1",
-		Hashes:  []HexByte{dec(rtMr1)},
+		Hashes:  []ar.HexByte{dec(rtMr1)},
 		Summary: true,
 	}
-	rtMr2HashChain = RtMrHashChainElem{
+	rtMr2HashChain = ar.RtMrHashChainElem{
 		Type:    "Runtime Measurement",
 		Name:    "RtMr2",
-		Hashes:  []HexByte{dec(rtMr2)},
+		Hashes:  []ar.HexByte{dec(rtMr2)},
 		Summary: true,
 	}
-	rtMr3HashChain = RtMrHashChainElem{
+	rtMr3HashChain = ar.RtMrHashChainElem{
 		Type:    "Runtime Measurement",
 		Name:    "RtMr3",
-		Hashes:  []HexByte{dec(rtMr3)},
+		Hashes:  []ar.HexByte{dec(rtMr3)},
 		Summary: true,
 	}
 	rtMr0       = "e1af75e61927410e42b54b39f6681cf9b0bfbae512b15e870e4c8d9d5a5cb385571b0e1dc2f70bf9ccef08560f0a2b58"

@@ -24,8 +24,9 @@ import (
 	"errors"
 	"fmt"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/generate"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 type LibApi struct{}
@@ -48,13 +49,13 @@ func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(chbindings))
 
-	report, err := ar.Generate(chbindings, cc.Cmc.Metadata, cc.Cmc.Drivers, cc.Cmc.Serializer)
+	report, err := generate.Generate(chbindings, cc.Cmc.Metadata, cc.Cmc.Drivers, cc.Cmc.Serializer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
 	log.Debug("Prover: Signing Attestation Report")
-	signedReport, err := ar.Sign(report, cc.Cmc.Drivers[0], cc.Cmc.Serializer)
+	signedReport, err := generate.Sign(report, cc.Cmc.Drivers[0], cc.Cmc.Serializer)
 	if err != nil {
 		return nil, errors.New("prover: failed to sign Attestion Report ")
 	}
@@ -66,7 +67,7 @@ func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 func (a LibApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 
 	log.Debug("Verifier: Verifying Attestation Report")
-	result := ar.Verify(report, chbindings, cc.Ca, nil, cc.Cmc.PolicyEngineSelect, cc.Cmc.IntelStorage)
+	result := verify.Verify(report, chbindings, cc.Ca, nil, cc.Cmc.PolicyEngineSelect, cc.Cmc.IntelStorage)
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {

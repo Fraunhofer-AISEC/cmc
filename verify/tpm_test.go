@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationreport
+package verify
 
 import (
 	"crypto/x509"
@@ -24,25 +24,27 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 func Test_verifyTpmMeasurements(t *testing.T) {
 	type args struct {
-		tpmM            *Measurement
+		tpmM            *ar.Measurement
 		nonce           []byte
-		referenceValues []ReferenceValue
+		referenceValues []ar.ReferenceValue
 		cas             []*x509.Certificate
 	}
 	tests := []struct {
 		name  string
 		args  args
-		want  *MeasurementResult
+		want  *ar.MeasurementResult
 		want1 bool
 	}{
 		{
 			name: "Valid TPM Measurement Summary",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -59,7 +61,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Valid TPM Measurement",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -76,7 +78,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -93,7 +95,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: invalidSignature,
@@ -110,7 +112,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid HashChain Summary",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -127,7 +129,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid HashChain",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -144,7 +146,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Values",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: invalidSignature,
@@ -161,7 +163,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA SubjectKeyId",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -178,7 +180,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Cert Chain",
 			args: args{
-				tpmM: &Measurement{
+				tpmM: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
@@ -247,7 +249,7 @@ var (
 
 	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
 
-	validSummaryHashChain = []PcrMeasurement{
+	validSummaryHashChain = []ar.PcrMeasurement{
 		{
 			Type:    "PCR Summary",
 			Pcr:     1,
@@ -260,7 +262,7 @@ var (
 		},
 	}
 
-	invalidSummaryHashChain = []PcrMeasurement{
+	invalidSummaryHashChain = []ar.PcrMeasurement{
 		{
 			Type:    "PCR Summary",
 			Pcr:     1,
@@ -273,11 +275,11 @@ var (
 		},
 	}
 
-	validHashChain = []PcrMeasurement{
+	validHashChain = []ar.PcrMeasurement{
 		{
 			Type: "PCR Eventlog",
 			Pcr:  1,
-			Events: []PcrEvent{
+			Events: []ar.PcrEvent{
 				{Sha256: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")},
 				{Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")},
 				{Sha256: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")},
@@ -292,7 +294,7 @@ var (
 		{
 			Type: "PCR Eventlog",
 			Pcr:  4,
-			Events: []PcrEvent{
+			Events: []ar.PcrEvent{
 				{Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")},
 				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
 				{Sha256: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036")},
@@ -302,11 +304,11 @@ var (
 		},
 	}
 
-	invalidHashChain = []PcrMeasurement{
+	invalidHashChain = []ar.PcrMeasurement{
 		{
 			Type: "PCR Eventlog",
 			Pcr:  1,
-			Events: []PcrEvent{
+			Events: []ar.PcrEvent{
 				{Sha256: dec("ff5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")},
 				{Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")},
 				{Sha256: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")},
@@ -321,7 +323,7 @@ var (
 		{
 			Type: "PCR Eventlog",
 			Pcr:  4,
-			Events: []PcrEvent{
+			Events: []ar.PcrEvent{
 				{Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")},
 				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
 				{Sha256: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036")},
@@ -346,7 +348,7 @@ var (
 
 	pcrs = [23]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
 
-	validReferenceValues = []ReferenceValue{
+	validReferenceValues = []ar.ReferenceValue{
 		{
 			Type:   "TPM Reference Value",
 			Sha256: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
@@ -433,7 +435,7 @@ var (
 		},
 	}
 
-	invalidReferenceValues = []ReferenceValue{
+	invalidReferenceValues = []ar.ReferenceValue{
 		{
 			Type:   "TPM Reference Value",
 			Sha256: dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
@@ -442,11 +444,11 @@ var (
 		},
 	}
 
-	validResult = Result{
+	validResult = ar.Result{
 		Success: true,
 	}
 
-	validArtifacts = []DigestResult{
+	validArtifacts = []ar.DigestResult{
 		{
 			Digest:  "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
 			Name:    "EV_CPU_MICROCODE",
@@ -536,20 +538,20 @@ var (
 	deviceCertserial, _ = new(big.Int).SetString("1", 10)
 	caCertserial, _     = new(big.Int).SetString("634815014411613577372985193537194269253199433648", 10)
 
-	validSignatureResult = SignatureResult{
-		ValidatedCerts: [][]X509CertExtracted{
+	validSignatureResult = ar.SignatureResult{
+		ValidatedCerts: [][]ar.X509CertExtracted{
 			{
 				{
 					Version:      3,
 					SerialNumber: deviceCertserial,
-					Issuer: X509Name{
+					Issuer: ar.X509Name{
 						Country:            []string{"DE"},
 						Organization:       []string{"Test Company"},
 						OrganizationalUnit: []string{"Root CA"},
 						Locality:           []string{"Test City"},
 						CommonName:         "Test Root CA",
 					},
-					Subject: X509Name{
+					Subject: ar.X509Name{
 						Country:            []string{"DE"},
 						Organization:       []string{"Test Organization"},
 						OrganizationalUnit: []string{"device"},
@@ -559,7 +561,7 @@ var (
 						PostalCode:         []string{"85748"},
 						CommonName:         "de.test.ak.device0",
 					},
-					Validity: Validity{
+					Validity: ar.Validity{
 						NotBefore: "2022-11-07 08:51:49 +0000 UTC",
 						NotAfter:  "2027-10-12 08:51:49 +0000 UTC",
 					},
@@ -567,7 +569,7 @@ var (
 					SignatureAlgorithm: "ECDSA-SHA256",
 					PublicKeyAlgorithm: "RSA",
 					PublicKey:          "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszEASVD7GIFw2t+k813q\nSyah+290gDAEdpcle1rQlw3bxq94gvHaBa4CWGkH3SHQieBakRNRyTGYAn8q9O2w\n4fWWFFB5bBcuYVyJdzaUoPc2T/922notV3tZonPHwy00yWytiAb22mMaCAhJNDIU\nAJBieZqluq9/w5LRQ/3e9RN4CcIoFEMA4pPcWOlSXrLrpu4CdTW7Uj03tcFR6bqd\nBKXD0rKauBdIbQe9ul7t/pxaY0kLZ0k53HGk3nbcWr0j2Iwg6L4rYNd+zDZKHG0i\nPQ0RbH7+Ao2Gx1WWfkSdhqtJ5/s3Xa0dNJmeXqhNa2dMYxpKY59rVuQSleC4z3FX\n1wIDAQAB\n-----END PUBLIC KEY-----\n",
-					Extensions: []PkixExtension{
+					Extensions: []ar.PkixExtension{
 						{
 							Id:       "2.5.29.15",
 							Critical: true,
@@ -598,21 +600,21 @@ var (
 				{
 					Version:      3,
 					SerialNumber: caCertserial,
-					Issuer: X509Name{
+					Issuer: ar.X509Name{
 						Country:            []string{"DE"},
 						Organization:       []string{"Test Company"},
 						OrganizationalUnit: []string{"Root CA"},
 						Locality:           []string{"Test City"},
 						CommonName:         "Test Root CA",
 					},
-					Subject: X509Name{
+					Subject: ar.X509Name{
 						Country:            []string{"DE"},
 						Organization:       []string{"Test Company"},
 						OrganizationalUnit: []string{"Root CA"},
 						Locality:           []string{"Test City"},
 						CommonName:         "Test Root CA",
 					},
-					Validity: Validity{
+					Validity: ar.Validity{
 						NotBefore: "2022-10-23 17:01:00 +0000 UTC",
 						NotAfter:  "2027-10-22 17:01:00 +0000 UTC",
 					},
@@ -620,7 +622,7 @@ var (
 					SignatureAlgorithm: "ECDSA-SHA256",
 					PublicKeyAlgorithm: "ECDSA",
 					PublicKey:          "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAESpo2j3WJNJJtz0EvWIhAhWlkt3zx\nEvkt8fXlJW6AnLjd3SN4T4oe2lADwWkC/FdAcmbfXPlXr6gsbgxB9Uc38Q==\n-----END PUBLIC KEY-----\n",
-					Extensions: []PkixExtension{
+					Extensions: []ar.PkixExtension{
 						{
 							Id:       "2.5.29.15",
 							Critical: true,
@@ -651,14 +653,14 @@ var (
 		ExtensionsCheck: nil,
 	}
 
-	validTpmMeasurementResult = MeasurementResult{
+	validTpmMeasurementResult = ar.MeasurementResult{
 		Type:      "TPM Result",
 		Summary:   validResult,
 		Freshness: validResult,
 		Signature: validSignatureResult,
 		Artifacts: validArtifacts,
-		TpmResult: &TpmResult{
-			PcrMatch: []PcrResult{
+		TpmResult: &ar.TpmResult{
+			PcrMatch: []ar.PcrResult{
 				{
 					Pcr:        1,
 					Calculated: "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",

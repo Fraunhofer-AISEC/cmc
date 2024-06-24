@@ -28,10 +28,11 @@ import (
 	"fmt"
 	"os"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	g "github.com/Fraunhofer-AISEC/cmc/generate"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	v "github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 type LibApi struct {
@@ -65,7 +66,7 @@ func (a LibApi) generate(c *config) {
 	}
 
 	// Generate attestation report
-	report, err := ar.Generate(nonce, a.cmc.Metadata, a.cmc.Drivers, a.cmc.Serializer)
+	report, err := g.Generate(nonce, a.cmc.Metadata, a.cmc.Drivers, a.cmc.Serializer)
 	if err != nil {
 		log.Errorf("Failed to generate attestation report: %v", err)
 		return
@@ -73,7 +74,7 @@ func (a LibApi) generate(c *config) {
 
 	// Sign attestation report
 	log.Debug("Prover: Signing Attestation Report")
-	r, err := ar.Sign(report, a.cmc.Drivers[0], a.cmc.Serializer)
+	r, err := g.Sign(report, a.cmc.Drivers[0], a.cmc.Serializer)
 	if err != nil {
 		log.Errorf("Failed to sign attestation report: %v", err)
 		return
@@ -116,7 +117,7 @@ func (a LibApi) verify(c *config) {
 	}
 
 	// Verify the attestation report
-	result := ar.Verify(report, nonce, c.ca, c.policies, a.cmc.PolicyEngineSelect, a.cmc.IntelStorage)
+	result := v.Verify(report, nonce, c.ca, c.policies, a.cmc.PolicyEngineSelect, a.cmc.IntelStorage)
 
 	log.Debug("Verifier: Marshaling Attestation Result")
 	r, err := json.Marshal(result)

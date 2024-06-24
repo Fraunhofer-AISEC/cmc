@@ -42,6 +42,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/verify"
 	"github.com/sirupsen/logrus"
 )
 
@@ -276,7 +277,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
-	s, err := ar.DecodeSnpReport(arRaw)
+	s, err := verify.DecodeSnpReport(arRaw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}

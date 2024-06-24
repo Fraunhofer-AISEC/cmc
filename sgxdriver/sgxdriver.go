@@ -36,6 +36,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	verify "github.com/Fraunhofer-AISEC/cmc/verify"
 	"github.com/edgelesssys/ego/enclave"
 	"github.com/sirupsen/logrus"
 
@@ -352,7 +353,7 @@ func downloadSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	resp.Body.Close()
 
 	// Extract FMSPC from PCK certificate SGX Extensions
-	sgxExtensions, err := ar.ParseSGXExtensions(pckCert.Extensions[ar.SGX_EXTENSION_INDEX].Value[4:])
+	sgxExtensions, err := verify.ParseSGXExtensions(pckCert.Extensions[verify.SGX_EXTENSION_INDEX].Value[4:])
 	if err != nil {
 		return certificates, err
 	}

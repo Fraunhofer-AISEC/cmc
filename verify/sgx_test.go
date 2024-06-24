@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationreport
+package verify
 
 import (
 	"encoding/hex"
@@ -22,12 +22,14 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 func Test_verifySgxMeasurements(t *testing.T) {
 	type args struct {
-		sgxM  *Measurement
-		sgxV  []ReferenceValue
+		sgxM  *ar.Measurement
+		sgxV  []ar.ReferenceValue
 		nonce []byte
 	}
 	tests := []struct {
@@ -38,18 +40,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -57,7 +59,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -75,18 +77,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    invalidSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -94,7 +96,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -112,18 +114,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: invalidSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -131,7 +133,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -149,18 +151,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Tcb Info",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        tcb_info_old,
 								TcbInfoSize:    tcb_info_size_old,
@@ -168,7 +170,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -186,18 +188,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid QE Identity",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -205,7 +207,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: qe_identity_size_old,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -223,18 +225,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: []byte{},
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -242,7 +244,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -260,18 +262,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -279,7 +281,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Debug:     true,
 								Mode64Bit: true,
@@ -297,18 +299,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -316,7 +318,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
@@ -334,18 +336,18 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MRSIGNER",
 			args: args{
-				sgxM: &Measurement{
+				sgxM: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ReferenceValue{
+				sgxV: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &SGXDetails{
+						Sgx: &ar.SGXDetails{
 							Version: validSGXVersion,
-							Collateral: IntelCollateral{
+							Collateral: ar.IntelCollateral{
 								TeeType:        tee_type_sgx,
 								TcbInfo:        []byte{},
 								TcbInfoSize:    0,
@@ -353,7 +355,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								QeIdentitySize: 0,
 							},
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: SGXAttributes{
+							Attributes: ar.SGXAttributes{
 								Initted:   true,
 								Mode64Bit: true,
 								Legacy:    true,
