@@ -9,6 +9,7 @@ require (
 	github.com/google/go-attestation v0.4.4-0.20230613144338-a9b6eb1eb888
 	github.com/google/go-tpm v0.9.0
 	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/plgd-dev/go-coap/v3 v3.1.2
 	github.com/robertkrimen/otto v0.2.1
 	github.com/sirupsen/logrus v1.9.3
