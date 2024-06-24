@@ -158,7 +158,7 @@ func (a GrpcApi) measure(c *config) {
 		log.Fatalf("Failed to read container config: %v", err)
 	}
 
-	configHash, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
+	configHash, _, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
 	if err != nil {
 		log.Fatalf("Failed to measure config: %v", err)
 	}

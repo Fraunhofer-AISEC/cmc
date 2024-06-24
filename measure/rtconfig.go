@@ -17,14 +17,32 @@ package measure
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
+
+	"github.com/opencontainers/runtime-spec/specs-go"
 
 	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
 )
 
-func GetConfigMeasurement(id string, configData []byte) ([]byte, []byte, error) {
+func GetConfigMeasurement(id string, configData []byte) ([]byte, []byte, string, error) {
+
+	normalizedConfig, rootfs, err := normalize(id, configData)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to normalize config: %w", err)
+	}
+
+	hasher := sha256.New()
+	hasher.Write(normalizedConfig)
+	hash := hasher.Sum(nil)
+
+	return hash, normalizedConfig, rootfs, nil
+}
+
+func normalize(id string, configData []byte) ([]byte, string, error) {
 
 	// The container id varies depending on the client. For ctr, this is a user-specified
 	// name. For docker, this is a random UUID which changes on different container invocations
@@ -34,46 +52,76 @@ func GetConfigMeasurement(id string, configData []byte) ([]byte, []byte, error) 
 		shortId = shortId[:12]
 	}
 	configString := string(configData)
+
+	// TODO check the security relevance of every manipulated OCI runtime config bundle property
+
+	// Replace container-ID which is a random UUID that varies between each start of the same container
 	configString = strings.ReplaceAll(configString, id, "<container-id>")
 	configString = strings.ReplaceAll(configString, shortId, "<container-id>")
 	reproducibleConfig := []byte(configString)
 
 	// Unmarshal the config for further modifications
-	var config map[string]interface{}
+	var config specs.Spec
 	err := json.Unmarshal(reproducibleConfig, &config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal OCI runtime config: %w", err)
+		return nil, "", fmt.Errorf("failed to unmarshal OCI runtime config: %w", err)
+	}
+
+	// Make the docker prestart hooks reproducible
+	// The prestart path (proc/<pid>/exe) is a symlink to the docker daemon
+	if config.Hooks != nil {
+		//lint:ignore SA1019 still needed for old configs
+		for i := range config.Hooks.Prestart {
+			//lint:ignore SA1019 still needed for old configs
+			config.Hooks.Prestart[i].Path, err = filepath.EvalSymlinks(config.Hooks.Prestart[i].Path)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to evaluate dockerd symlink: %w", err)
+			}
+
+			// TODO FIXME The docker network controller ID is generated randomly (// github.com/moby/moby/libnetwork/controller.go:New())
+			// and then the truncated daemon.netController.ID() is added as an argument in the prestart
+			// hooks (github.com/moby/moby/daemon/oci_linux.go:withLibnetwork()). This is a very hacky
+			// way to make it reproducible, ideally, the actual network ID controller ID should be
+			// retrieved and then replaced
+			//lint:ignore SA1019 still needed for old configs
+			for j := range config.Hooks.Prestart[i].Args {
+				//lint:ignore SA1019 still needed for old configs
+				if len(config.Hooks.Prestart[i].Args[j]) == 12 && isHex(config.Hooks.Prestart[i].Args[j]) {
+					//lint:ignore SA1019 still needed for old configs
+					config.Hooks.Prestart[i].Args[j] = "<docker-network-controller-id>"
+				}
+			}
+		}
 	}
 
 	// Some values from the config, which are not security relevant and may change
 	// on different container invocations will be ignored
-	delete(config, "annotations")
-	delete(config, "root")
-	delete(config, "hooks")
-	process, ok := config["process"].(map[string]interface{})
-	if ok {
-		delete(process, "terminal")
-		delete(process, "consoleSize")
-	}
-	linux, ok := config["linux"].(map[string]interface{})
-	if ok {
-		delete(linux, "cgroupsPath")
-	}
+	// TODO FIXME check all properties for security relevance , currently experimental
+	config.Annotations = nil
+	config.Process.Terminal = false
+	config.Process.ConsoleSize = nil
+
+	// TODO FIXME Some container engines such as docker store the rootfs in an non-reproducible
+	// path. Therefore we store the path and hash the rootfs at this path, but remove the
+	// path from the config.json. Check if this is secure
+	rootfs := config.Root.Path
+	config.Root = nil
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal config: %w", err)
+		return nil, "", fmt.Errorf("failed to marshal config: %w", err)
 	}
 
 	// Transform to RFC 8785 canonical JSON form for reproducible hashing
 	tbh, err := jcs.Transform(data)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to cannonicalize json: %w", err)
+		return nil, "", fmt.Errorf("failed to cannonicalize json: %w", err)
 	}
 
-	hasher := sha256.New()
-	hasher.Write(tbh)
-	hash := hasher.Sum(nil)
+	return tbh, rootfs, nil
+}
 
-	return hash, tbh, nil
+func isHex(s string) bool {
+	_, err := hex.DecodeString(s)
+	return err == nil
 }
