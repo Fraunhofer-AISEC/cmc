@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -24,6 +25,35 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
+
+type SwSigner struct {
+	certChain []*x509.Certificate
+	priv      crypto.PrivateKey
+}
+
+func (s *SwSigner) Init(c *DriverConfig) error {
+	return nil
+}
+
+func (s *SwSigner) Measure(nonce []byte) (Measurement, error) {
+	return Measurement{}, nil
+}
+
+func (s *SwSigner) Lock() error {
+	return nil
+}
+
+func (s *SwSigner) Unlock() error {
+	return nil
+}
+
+func (s *SwSigner) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
+}
+
+func (s *SwSigner) GetCertChain() ([]*x509.Certificate, error) {
+	return s.certChain, nil
+}
 
 func TestVerifyCbor(t *testing.T) {
 	type args struct {

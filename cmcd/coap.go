@@ -34,10 +34,11 @@ import (
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/generate"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	"github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 // CoapServer is the CoAP server structure
@@ -128,7 +129,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, err := ar.Generate(req.Nonce, Cmc.Metadata, Cmc.Drivers, Cmc.Serializer)
+	report, err := generate.Generate(req.Nonce, Cmc.Metadata, Cmc.Drivers, Cmc.Serializer)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
@@ -136,7 +137,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("Prover: Signing Attestation Report")
-	data, err := ar.Sign(report, Cmc.Drivers[0], Cmc.Serializer)
+	data, err := generate.Sign(report, Cmc.Drivers[0], Cmc.Serializer)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign attestation report: %v", err)
@@ -172,7 +173,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("Verifier: Verifying Attestation Report")
-	result := ar.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
+	result := verify.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
 		Cmc.PolicyEngineSelect, Cmc.IntelStorage)
 
 	log.Debug("Verifier: Marshaling Attestation Result")

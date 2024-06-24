@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 var (
@@ -47,7 +47,7 @@ func main() {
 		return
 	}
 
-	sgxExtensions, err := attestationreport.ParseSGXExtensions(cert[0].Extensions[attestationreport.SGX_EXTENSION_INDEX].Value[4:])
+	sgxExtensions, err := verify.ParseSGXExtensions(cert[0].Extensions[verify.SGX_EXTENSION_INDEX].Value[4:])
 	if err != nil {
 		fmt.Println("failed to parse SGX extensions")
 		return

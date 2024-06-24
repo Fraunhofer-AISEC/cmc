@@ -34,11 +34,12 @@ import (
 
 	// local modules
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/generate"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	"github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 type GrpcServerWrapper struct{}
@@ -97,7 +98,7 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(in.Nonce))
 
-	report, err := ar.Generate(in.Nonce, s.cmc.Metadata, s.cmc.Drivers, s.cmc.Serializer)
+	report, err := generate.Generate(in.Nonce, s.cmc.Metadata, s.cmc.Drivers, s.cmc.Serializer)
 	if err != nil {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
@@ -105,7 +106,7 @@ func (s *GrpcServer) Attest(ctx context.Context, in *api.AttestationRequest) (*a
 	}
 
 	log.Info("Prover: Signing Attestation Report")
-	data, err := ar.Sign(report, s.cmc.Drivers[0], s.cmc.Serializer)
+	data, err := generate.Sign(report, s.cmc.Drivers[0], s.cmc.Serializer)
 	if err != nil {
 		return &api.AttestationResponse{
 			Status: api.Status_FAIL,
@@ -129,7 +130,7 @@ func (s *GrpcServer) Verify(ctx context.Context, in *api.VerificationRequest) (*
 	log.Info("Received Connection Request Type 'Verification Request'")
 
 	log.Info("Verifier: Verifying Attestation Report")
-	result := ar.Verify(in.AttestationReport, in.Nonce, in.Ca, in.Policies,
+	result := verify.Verify(in.AttestationReport, in.Nonce, in.Ca, in.Policies,
 		s.cmc.PolicyEngineSelect, s.cmc.IntelStorage)
 
 	log.Info("Verifier: Marshaling Attestation Result")

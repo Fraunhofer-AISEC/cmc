@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package attestationreport
+package verify
 
 import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 // TDX Report V4
@@ -192,14 +194,14 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 	return nil
 }
 
-func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, referenceValues []ReferenceValue) (*MeasurementResult, bool) {
+func verifyTdxMeasurements(tdxM ar.Measurement, nonce []byte, intelCache string, referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
 
 	log.Trace("Verifying TDX measurements")
 
 	var err error
-	result := &MeasurementResult{
+	result := &ar.MeasurementResult{
 		Type:      "TDX Result",
-		TdxResult: &TdxResult{},
+		TdxResult: &ar.TdxResult{},
 	}
 	ok := true
 
@@ -207,24 +209,24 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 
 	if len(referenceValues) == 0 {
 		log.Tracef("Could not find TDX Reference Value")
-		result.Summary.SetErr(RefValNotPresent)
+		result.Summary.SetErr(ar.RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
 		log.Tracef("Report contains %v reference values. Currently, only one TDX Reference Value is supported",
 			len(referenceValues))
-		result.Summary.SetErr(RefValMultiple)
+		result.Summary.SetErr(ar.RefValMultiple)
 		return result, false
 	}
 	tdxReferenceValue := referenceValues[0]
 
 	if tdxReferenceValue.Type != "TDX Reference Value" {
 		log.Tracef("TDX Reference Value invalid type %v", tdxReferenceValue.Type)
-		result.Summary.SetErr(RefValType)
+		result.Summary.SetErr(ar.RefValType)
 		return result, false
 	}
 	if tdxReferenceValue.Tdx == nil {
 		log.Tracef("TDX Reference Value does not contain details")
-		result.Summary.SetErr(DetailsNotPresent)
+		result.Summary.SetErr(ar.DetailsNotPresent)
 		return result, false
 	}
 
@@ -232,7 +234,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	tdxQuote, err := decodeTdxReportV4(tdxM.Evidence)
 	if err != nil {
 		log.Tracef("Failed to decode TDX report: %v", err)
-		result.Summary.SetErr(ParseEvidence)
+		result.Summary.SetErr(ar.ParseEvidence)
 		return result, false
 	}
 
@@ -255,7 +257,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 
 	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
 		log.Tracef("incomplete certificate chain")
-		result.Summary.SetErr(VerifyCertChain)
+		result.Summary.SetErr(ar.VerifyCertChain)
 		return result, false
 	}
 
@@ -263,12 +265,12 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	referenceCerts, err := parseCertificates(tdxM.Certs, true)
 	if err != nil || referenceCerts.TCBSigningCert == nil || referenceCerts.RootCACert == nil {
 		log.Tracef("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
-		result.Summary.SetErr(ParseCert)
+		result.Summary.SetErr(ar.ParseCert)
 		return result, false
 	}
 
 	_, code := VerifyTCBSigningCertChain(referenceCerts, intelCache)
-	if code != NotSet {
+	if code != ar.NotSet {
 		log.Tracef("%v", err.Error())
 		result.Summary.SetErr(code)
 		return result, false
@@ -278,7 +280,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
 		log.Tracef("failed to parse SGX Extensions from PCK Certificate: %v", err)
-		result.Summary.SetErr(ParseCert)
+		result.Summary.SetErr(ar.ParseCert)
 		return result, false
 	}
 
@@ -286,7 +288,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	tcbInfo, err := parseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
 	if err != nil {
 		log.Tracef("Failed to parse tcbInfo: %v", err)
-		result.Summary.SetErr(ParseTcbInfo)
+		result.Summary.SetErr(ar.ParseTcbInfo)
 		return result, false
 	}
 
@@ -295,7 +297,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
 	if !result.TdxResult.TcbInfoCheck.Summary.Success {
 		log.Tracef("Failed to verify TCB info structure: %v", err)
-		result.Summary.SetErr(VerifyTcbInfo)
+		result.Summary.SetErr(ar.VerifyTcbInfo)
 		return result, false
 	}
 
@@ -303,7 +305,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	qeIdentity, err := parseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
 	if err != nil {
 		log.Tracef("Failed to parse QE Identity: %v", err)
-		result.Summary.SetErr(ParseQEIdentity)
+		result.Summary.SetErr(ar.ParseQEIdentity)
 		return result, false
 	}
 
@@ -312,7 +314,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	result.TdxResult.QeIdentityCheck = qeIdentityResult
 	if err != nil {
 		log.Tracef("Failed to verify QE Identity structure: %v", err)
-		result.Summary.SetErr(VerifyQEIdentityErr)
+		result.Summary.SetErr(ar.VerifyQEIdentityErr)
 		return result, false
 	}
 
@@ -329,7 +331,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 	err = verifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
 	if err != nil {
 		log.Tracef("Failed to verify TDX Report Body: %v", err)
-		result.Summary.SetErr(VerifySignature)
+		result.Summary.SetErr(ar.VerifySignature)
 		result.Summary.Success = false
 		return result, false
 	}
@@ -344,7 +346,7 @@ func verifyTdxMeasurements(tdxM Measurement, nonce []byte, intelCache string, re
 }
 
 func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
-	certs *SgxCertificates, tdxReferenceValue *ReferenceValue, result *MeasurementResult) error {
+	certs *SgxCertificates, tdxReferenceValue *ar.ReferenceValue, result *ar.MeasurementResult) error {
 	if body == nil || tcbInfo == nil || certs == nil || tdxReferenceValue == nil || result == nil {
 		return fmt.Errorf("invalid function parameter (null pointer exception)")
 	}
@@ -352,14 +354,14 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 	// check MrTd reference value (measurement of the initial contents of the TD)
 	if !bytes.Equal(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
-			DigestResult{
+			ar.DigestResult{
 				Name:    tdxReferenceValue.Name,
 				Digest:  hex.EncodeToString(tdxReferenceValue.Sha256),
 				Success: false,
 				Type:    "Reference Value",
 			})
 		result.Artifacts = append(result.Artifacts,
-			DigestResult{
+			ar.DigestResult{
 				Name:    tdxReferenceValue.Name,
 				Digest:  hex.EncodeToString(body.MrTd[:]),
 				Success: false,
@@ -368,7 +370,7 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 		return fmt.Errorf("MrTd mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
 	} else {
 		result.Artifacts = append(result.Artifacts,
-			DigestResult{
+			ar.DigestResult{
 				Name:    tdxReferenceValue.Name,
 				Digest:  hex.EncodeToString(body.MrTd[:]),
 				Success: true,
@@ -376,55 +378,55 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 	}
 
 	result.Artifacts = append(result.Artifacts,
-		DigestResult{
+		ar.DigestResult{
 			Name:    "MrSignerSeam",
 			Digest:  hex.EncodeToString(body.MrSignerSeam[:]),
 			Success: bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner[:], body.MrSignerSeam[:]),
 			Type:    "Measurement",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "MrSeam",
 			Digest:  hex.EncodeToString(body.MrSeam[:]),
 			Success: bytes.Equal(body.MrSeam[:], tdxReferenceValue.Tdx.TdMeas.MrSeam),
 			Type:    "Measurement",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "RtMr0",
 			Digest:  hex.EncodeToString(body.RtMr0[:]),
 			Success: recalculateRtMr(body.RtMr0[:], tdxReferenceValue.Tdx.TdMeas.RtMr0),
 			Type:    "Firmware Measurement",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "RtMr1",
 			Digest:  hex.EncodeToString(body.RtMr1[:]),
 			Success: recalculateRtMr(body.RtMr1[:], tdxReferenceValue.Tdx.TdMeas.RtMr1),
 			Type:    "BIOS Measurement",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "RtMr2",
 			Digest:  hex.EncodeToString(body.RtMr2[:]),
 			Success: recalculateRtMr(body.RtMr2[:], tdxReferenceValue.Tdx.TdMeas.RtMr2),
 			Type:    "OS Measurement",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "RtMr3",
 			Digest:  hex.EncodeToString(body.RtMr3[:]),
 			Success: recalculateRtMr(body.RtMr3[:], tdxReferenceValue.Tdx.TdMeas.RtMr3),
 			Type:    "Runtime Measurement",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "MrOwner",
 			Digest:  hex.EncodeToString(body.MrOwner[:]),
 			Success: bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]),
 			Type:    "Software-defined ID",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "MrOwnerConfig",
 			Digest:  hex.EncodeToString(body.MrOwnerConfig[:]),
 			Success: bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwnerConfig[:], body.MrOwnerConfig[:]),
 			Type:    "Software-defined ID",
 		},
-		DigestResult{
+		ar.DigestResult{
 			Name:    "MrConfigId",
 			Digest:  hex.EncodeToString(body.MrConfigId[:]),
 			Success: bytes.Equal(tdxReferenceValue.Tdx.TdId.MrConfigId[:], body.MrConfigId[:]),
@@ -440,23 +442,23 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 	}
 	seamAttributesResult := bytes.Equal(tcbInfo.TcbInfo.TdxModule.Attributes, seamAttributesQuote[:])
 
-	result.TdxResult.TdAttributesCheck = TdAttributesCheck{
-		Debug: BooleanMatch{
+	result.TdxResult.TdAttributesCheck = ar.TdAttributesCheck{
+		Debug: ar.BooleanMatch{
 			Success:  tdxReferenceValue.Tdx.TdAttributes.Debug == (body.TdAttributes[0] > 0),
 			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Debug,
 			Measured: body.TdAttributes[0] > 0,
 		},
-		SeptVEDisable: BooleanMatch{
+		SeptVEDisable: ar.BooleanMatch{
 			Success:  tdxReferenceValue.Tdx.TdAttributes.SeptVEDisable == getBit(body.TdAttributes[:], 28),
 			Claimed:  tdxReferenceValue.Tdx.TdAttributes.SeptVEDisable,
 			Measured: getBit(body.TdAttributes[:], 28),
 		},
-		Pks: BooleanMatch{
+		Pks: ar.BooleanMatch{
 			Success:  tdxReferenceValue.Tdx.TdAttributes.Pks == getBit(body.TdAttributes[:], 30),
 			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Pks,
 			Measured: getBit(body.TdAttributes[:], 30),
 		},
-		Kl: BooleanMatch{
+		Kl: ar.BooleanMatch{
 			Success:  tdxReferenceValue.Tdx.TdAttributes.Kl == getBit(body.TdAttributes[:], 31),
 			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Kl,
 			Measured: getBit(body.TdAttributes[:], 31),
@@ -473,20 +475,20 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 			result.TdxResult.TdAttributesCheck.Pks, result.TdxResult.TdAttributesCheck.Kl)
 	}
 
-	result.TdxResult.SeamAttributesCheck = AttributesCheck{
+	result.TdxResult.SeamAttributesCheck = ar.AttributesCheck{
 		Success:  seamAttributesResult,
-		Claimed:  HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
-		Measured: HexByte(seamAttributesQuote[:]),
+		Claimed:  ar.HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
+		Measured: ar.HexByte(seamAttributesQuote[:]),
 	}
 	if !result.TdxResult.SeamAttributesCheck.Success {
 		return fmt.Errorf("SeamAttributesCheck failed: Expected: %v, Measured: %v",
 			result.TdxResult.SeamAttributesCheck.Claimed, result.TdxResult.SeamAttributesCheck.Measured)
 	}
 
-	result.TdxResult.XfamCheck = AttributesCheck{
+	result.TdxResult.XfamCheck = ar.AttributesCheck{
 		Success:  seamAttributesResult,
-		Claimed:  HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
-		Measured: HexByte(seamAttributesQuote[:]),
+		Claimed:  ar.HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
+		Measured: ar.HexByte(seamAttributesQuote[:]),
 	}
 	if !result.TdxResult.SeamAttributesCheck.Success {
 		return fmt.Errorf("XfamCheck failed: Expected: %v, Measured: %v",
@@ -504,7 +506,7 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 
 // calculation of rtmrs according to Intel TDX Module 1.5 base architecture specification:
 // chapter 12.1.2. RTMR: Run-Time Measurement Registers
-func recalculateRtMr(rmtr HexByte, refHashes RtMrHashChainElem) bool {
+func recalculateRtMr(rmtr ar.HexByte, refHashes ar.RtMrHashChainElem) bool {
 	if len(refHashes.Hashes) == 0 {
 		log.Tracef("no reference hash values found")
 		return false
