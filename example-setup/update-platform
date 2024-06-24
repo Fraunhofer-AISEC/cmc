@@ -25,6 +25,12 @@ fi
 
 echo "Using ${data} as directory for local data"
 
+# Replace existing app description in the device description (will be added through
+# update-app-manifest scripts)
+json=$(cat "${input}/device.description.json")
+json=$(echo "${json}" | jq 'del(.appDescriptions[])')
+printf "%s\n" "${json}" > "${input}/device.description.json"
+
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json -e)
 
@@ -48,6 +54,7 @@ key="${data}/pki/signing-cert-key.pem"
 chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
 
 rm -rf "${tmp}"
+rm -rf "${out}"
 
 mkdir -p "${tmp}"
 mkdir -p "${out}"

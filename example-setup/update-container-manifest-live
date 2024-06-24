@@ -47,7 +47,7 @@ runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
 container="${container%/}"
 container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
 
-echo "Creating reference values for container: ${container} with args ${args} and runtime ${runtime}"
+echo "Creating reference values for container: ${container} with args ${args}"
 echo "Using ${data} as directory for local data"
 
 # Delete temporary manifests
@@ -58,6 +58,13 @@ sudo rm -f /tmp/container-refs
 
 echo "Generating reference values for ${client} client"
 if  [[ "${client}" == "ctr" ]]; then
+    sudo ctr image pull ${container}
+    set +e
+    sudo ctr run --detach ${args} ${container} REF_CONTAINER
+    sudo ctr task kill -s SIGKILL REF_CONTAINER
+    sudo ctr container delete REF_CONTAINER
+    set -e
+elif  [[ "${client}" == "shim" ]]; then
     sudo ctr image pull ${container}
     set +e
     sudo ctr run --runtime ${runtime} -t --rm ${args} ${container} CMC_GENERATE_APP_MANIFEST
