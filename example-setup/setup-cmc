@@ -35,6 +35,7 @@ mkdir -p "${data}"
 
 # Install dependencies
 sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq
+sudo snap install yq
 
 # Intall tpm-pcr-tools
 git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${data}/tpm-pcr-tools"
