@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -78,7 +79,7 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 				return nil, "", fmt.Errorf("failed to evaluate dockerd symlink: %w", err)
 			}
 
-			// TODO FIXME The docker network controller ID is generated randomly (// github.com/moby/moby/libnetwork/controller.go:New())
+			// TODO FIXME The docker network controller ID is generated randomly (github.com/moby/moby/libnetwork/controller.go:New())
 			// and then the truncated daemon.netController.ID() is added as an argument in the prestart
 			// hooks (github.com/moby/moby/daemon/oci_linux.go:withLibnetwork()). This is a very hacky
 			// way to make it reproducible, ideally, the actual network ID controller ID should be
@@ -106,6 +107,9 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 	// path from the config.json. Check if this is secure
 	rootfs := config.Root.Path
 	config.Root = nil
+
+	// List environment variables alphabetically to guarantee reproducibility
+	slices.Sort(config.Process.Env)
 
 	data, err := json.Marshal(config)
 	if err != nil {
