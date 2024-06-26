@@ -8,8 +8,12 @@ source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
 if [[ "$#" -lt 5 ]]; then
-   echo "Usage: ./update-container-manifest-live <container-name> <data-folder> <cmc-folder> <cbor|json> <container-client> [<container arguments>]"
-   exit 1
+  # The target depends on the client, examples:
+  # docker/ctr:     docker.io/library/ubuntu:22.04
+  # docker compose: docker-compose.yaml
+  # runc:           /path/to/runtime-bundle
+  echo "Usage: ./update-container-manifest-live <target> <data-folder> <cmc-folder> <cbor|json> <container-client> [<container arguments>]"
+  exit 1
 fi
 
 # Extract the -env parameters
@@ -28,7 +32,7 @@ for arg in "$@"; do
 done
 
 # Set all parameters
-container="$1"
+target="$1"
 shift
 data=$(set -e; abs_path "$1")
 shift
@@ -44,105 +48,134 @@ input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 output="${data}/metadata-signed"
 runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
-container="${container%/}"
-container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
+target="${target%/}"
 
-echo "Creating reference values for container: ${container} with args ${args}"
+
+echo "Creating reference values for container: ${target} with args ${args}"
 echo "Using ${data} as directory for local data"
 
 # Delete temporary manifests
-rm -rf "${tmp}"/${container_name}.manifest.*
+rm -rf "${tmp}"/*
 
 # Calculate the container reference values
 sudo rm -f /tmp/container-refs
 
 echo "Generating reference values for ${client} client"
 if  [[ "${client}" == "ctr" ]]; then
-    sudo ctr image pull ${container}
+    containers=("${target}")
+    sudo ctr image pull ${target}
     set +e
-    sudo ctr run --detach ${args} ${container} REF_CONTAINER
+    sudo ctr run --detach ${args} ${target} REF_CONTAINER
     sudo ctr task kill -s SIGKILL REF_CONTAINER
     sudo ctr container delete REF_CONTAINER
     set -e
 elif  [[ "${client}" == "shim" ]]; then
-    sudo ctr image pull ${container}
+    containers=("${target}")
+    sudo ctr image pull ${target}
     set +e
-    sudo ctr run --runtime ${runtime} -t --rm ${args} ${container} CMC_GENERATE_APP_MANIFEST
+    sudo ctr run --runtime ${runtime} -t --rm ${args} ${target} CMC_GENERATE_APP_MANIFEST
     set -e
 elif [[ "${client}" == "docker" ]]; then
-    sudo docker run ${args} ${container}
+    containers=("${target}")
+    sudo docker run ${args} ${target}
+elif [[ "${client}" == "docker-compose" ]]; then
+    containers=($(yq eval '.services | keys | .[]' "${target}"))
+    set +e
+    docker compose -f "${target}" up &
+    echo "Sleeping for 10s to enable container start"
+    sleep 10
+    echo "Stopping containers"
+    docker compose -f "${target}" stop
+    sleep 3
+    set -e
 elif [[ "${client}" == "runc" ]]; then
-    cd ${container}
+    containers=("${target}")
+    cd ${target}
     sudo runc create references
     sudo runc delete references
     cd -
 else
-    echo "Client ${client} not supported. Only 'docker', 'ctr' and 'runc' supported for now."
+    echo "Client ${client} not supported. Only 'docker', 'docker-compose', 'ctr' and 'runc' supported for now."
     exit
 fi
 
 refvals=$(cat /tmp/container-refs)
 
-# App Manifest: Replace existing reference values with new reference values in the App Manifest
-json=$(cat "${input}/app.manifest.json")
-json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(echo "${json}" | jq --argjson ver "${refvals}" '.referenceValues += $ver')
+# if containers not set, set it to the single container
 
-# App Manifest: Extract the reference value and add it to the file name to not overwrite the same
-# container with different arguments such as environment variables
-refval=$(echo "${json}" | jq -r '.referenceValues[0].sha256')
+# In some scenarios, e.g. docker-compose, we have more than one container and have to iterate over all
+num_containers=$(echo "${refvals}" | jq length)
+for ((i = 0; i < num_containers; i++)); do
+    echo "Creating manifest for container $i"
 
-# App Manifest: Set name and reference value name
-json=$(echo "${json}" | jq ".name = \"${container}-${refval}\"")
-json=$(echo "${json}" | jq ".referenceValues[0].name += \": ${container}\"")
+    container=${containers[$i]}
+    container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
 
-# App Manifest: Store
-echo "Writing ${input}/${container_name}-${refval}.manifest.json"
-printf "%s\n" "${json}" > "${input}/${container_name}-${refval}.manifest.json"
+    refval=$(echo "${refvals}" | jq -r ".[$i]")
 
-# App Description: Create corresponding app description
-appdesc=$(cat "${input}/app.description.json")
-appdesc=$(echo "${appdesc}" | jq ".name = \"${container}-${refval}.description\"")
-appdesc=$(echo "${appdesc}" | jq ".appManifest = \"${container}-${refval}\"")
-echo "Adding environment variables"
-for i in "${!keys[@]}"; do
-    envs="{\"key\": \"${keys[$i]}\", \"value\": \"${values[$i]}\"}"
-    echo "Adding $envs"
-    appdesc=$(echo "${appdesc}" | jq --argjson envs "${envs}" '.environment += [$envs]')
+    # App Manifest: Replace existing reference values with new reference values in the App Manifest
+    json=$(cat "${input}/app.manifest.json")
+    json=$(echo "${json}" | jq 'del(.referenceValues[])')
+    json=$(echo "${json}" | jq --argjson ver "[${refval}]" '.referenceValues += $ver')
+
+    # App Manifest: Extract the reference value sha256 and add it to the file name to not overwrite the same
+    # container with different arguments such as environment variables
+    sha256=$(echo "${json}" | jq -r '.referenceValues[0].sha256')
+
+    echo "Refval sha256: ${sha256}"
+
+    # App Manifest: Set name and reference value name
+    json=$(echo "${json}" | jq ".name = \"${container}-${sha256}\"")
+    json=$(echo "${json}" | jq ".referenceValues[0].name += \": ${container}\"")
+
+    # App Manifest: Store
+    echo "Writing ${input}/${container_name}-${sha256}.manifest.json"
+    printf "%s\n" "${json}" > "${input}/${container_name}-${sha256}.manifest.json"
+
+    # App Description: Create corresponding app description
+    appdesc=$(cat "${input}/app.description.json")
+    appdesc=$(echo "${appdesc}" | jq ".name = \"${container}-${sha256}.description\"")
+    appdesc=$(echo "${appdesc}" | jq ".appManifest = \"${container}-${sha256}\"")
+    echo "Adding environment variables"
+    for i in "${!keys[@]}"; do
+        envs="{\"key\": \"${keys[$i]}\", \"value\": \"${values[$i]}\"}"
+        echo "Adding $envs"
+        appdesc=$(echo "${appdesc}" | jq --argjson envs "${envs}" '.environment += [$envs]')
+    done
+
+    # Device Description: Add/replace app description to/in device description
+    devdesc=$(cat "${input}/device.description.json")
+    exists=$(echo "${devdesc}" | jq "any(.appDescriptions[]; .name == \"${container}-${sha256}.description\")")
+    if [[ "${exists}" = false ]]; then
+      echo "Adding app description to device description"
+    else
+      echo "Replacing existing app description"
+      devdesc=$(echo "$devdesc" | jq ".appDescriptions |= map(select(.name != \"${container}-${sha256}.description\"))")
+    fi
+    devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.appDescriptions += $desc')
+
+    # Device Description: Store
+    echo "Writing ${input}/device.description.json"
+    printf "%s\n" "${devdesc}" > "${input}/device.description.json"
+
+    # Sign the metadata*
+    key="${data}/pki/signing-cert-key.pem"
+    chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
+
+    # Convert to CBOR if specified
+    if [[ "${ser,,}" = "json" ]]; then
+      echo "using json serialization"
+      cp "${input}/${container_name}-${sha256}.manifest.json" "${tmp}/${container_name}-${sha256}.manifest.json"
+      cp "${input}/device.description.json" "${tmp}/device.description.json"
+    elif [[ "${ser,,}" = "cbor" ]]; then
+      echo "using cbor serialiation"
+      cmc-converter -in "${input}/${container_name}-${sha256}.manifest.json" -out "${tmp}/${container_name}-${sha256}.manifest.cbor" -outform cbor
+      cmc-converter -in "${input}/device.description.json" -out "${tmp}/device.description.cbor" -outform cbor
+    else
+      echo "serialization format ${ser} is not supported"
+      exit 1
+    fi
+
+    cmc-signing-tool -in "${tmp}/${container_name}-${sha256}.manifest.${ser}" -out "${output}/${container_name}-${sha256}.manifest.${ser}" -keys "${key}" -x5cs "${chain}"
+    cmc-signing-tool -in "${tmp}/device.description.${ser}" -out "${output}/device.description.${ser}" -keys "${key}" -x5cs "${chain}"
 done
-
-# Device Description: Add/replace app description to/in device description
-devdesc=$(cat "${input}/device.description.json")
-exists=$(echo "${devdesc}" | jq "any(.appDescriptions[]; .name == \"${container}-${refval}.description\")")
-if [[ "${exists}" = false ]]; then
-  echo "Adding app description to device description"
-else
-  echo "Replacing existing app description"
-  devdesc=$(echo "$devdesc" | jq ".appDescriptions |= map(select(.name != \"${container}-${refval}.description\"))")
-fi
-devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.appDescriptions += $desc')
-
-# Device Description: Store
-echo "Writing ${input}/device.description.json"
-printf "%s\n" "${devdesc}" > "${input}/device.description.json"
-
-# Sign the metadata*
-key="${data}/pki/signing-cert-key.pem"
-chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
-
-# Convert to CBOR if specified
-if [[ "${ser,,}" = "json" ]]; then
-  echo "using json serialization"
-  cp "${input}/${container_name}-${refval}.manifest.json" "${tmp}/${container_name}-${refval}.manifest.json"
-  cp "${input}/device.description.json" "${tmp}/device.description.json"
-elif [[ "${ser,,}" = "cbor" ]]; then
-  echo "using cbor serialiation"
-  cmc-converter -in "${input}/${container_name}-${refval}.manifest.json" -out "${tmp}/${container_name}-${refval}.manifest.cbor" -outform cbor
-  cmc-converter -in "${input}/device.description.json" -out "${tmp}/device.description.cbor" -outform cbor
-else
-  echo "serialization format ${ser} is not supported"
-  exit 1
-fi
-
-cmc-signing-tool -in "${tmp}/${container_name}-${refval}.manifest.${ser}" -out "${output}/${container_name}-${refval}.manifest.${ser}" -keys "${key}" -x5cs "${chain}"
-cmc-signing-tool -in "${tmp}/device.description.${ser}" -out "${output}/device.description.${ser}" -keys "${key}" -x5cs "${chain}"
