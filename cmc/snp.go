@@ -20,6 +20,5 @@ package cmc
 import "github.com/Fraunhofer-AISEC/cmc/snpdriver"
 
 func init() {
-	log.Info("Adding SNP driver to supported drivers")
 	drivers["snp"] = &snpdriver.Snp{}
 }

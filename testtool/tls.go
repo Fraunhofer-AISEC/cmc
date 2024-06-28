@@ -235,7 +235,8 @@ func handleConnection(conn net.Conn) {
 
 	msg, err := r.ReadString('\n')
 	if err != nil {
-		log.Errorf("Failed to read: %v", err)
+		log.Warnf("Failed to read: %v", err)
+		return
 	}
 	log.Infof("Received from peer: %v", msg)
 
