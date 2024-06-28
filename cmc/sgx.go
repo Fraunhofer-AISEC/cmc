@@ -20,6 +20,5 @@ package cmc
 import "github.com/Fraunhofer-AISEC/cmc/sgxdriver"
 
 func init() {
-	log.Info("Adding SGX driver to supported drivers")
 	drivers["sgx"] = &sgxdriver.Sgx{}
 }

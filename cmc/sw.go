@@ -20,6 +20,5 @@ package cmc
 import "github.com/Fraunhofer-AISEC/cmc/swdriver"
 
 func init() {
-	log.Info("Adding SW driver to supported drivers")
 	drivers["sw"] = &swdriver.Sw{}
 }
