@@ -82,14 +82,14 @@ type Validity struct {
 }
 
 // PcrMeasurement represents the measurements of a single PCR. If the type is 'PCR Summary',
-// Sha256 is the final PCR value. If the type is 'PCR Eventlog', Sha256 is a list of the
-// extends that leads to the final PCR value. The list is retrieved by the prover
+// Summary is the final PCR value. If the type is 'PCR Eventlog', Events contains a list of the
+// extends that lead to the final PCR value. The list is retrieved by the prover
 // e.g. from the TPM binary bios measurements list or the IMA runtime measurements list.
 type PcrMeasurement struct {
-	Type    string     `json:"type" cbor:"0,keyasint"`
+	Type    string     `json:"type" cbor:"0,keyasint"` // PCR Summary or PCR Eventlog
 	Pcr     int        `json:"pcr" cbor:"1,keyasint"`
-	Summary HexByte    `json:"summary,omitempty" cbor:"2,keyasint,omitempty"`
-	Events  []PcrEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`
+	Summary HexByte    `json:"summary,omitempty" cbor:"2,keyasint,omitempty"` // Either summary
+	Events  []PcrEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`  // Or Events
 }
 
 type PcrEvent struct {
@@ -104,7 +104,7 @@ type CtrData struct {
 	RootfsSha256 HexByte `json:"rootfsSha256" cbor:"1,keyasint"`
 }
 
-// TpmMeasurement represents the attestation report
+// Measurement represents the attestation report
 // elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
 // 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
 type Measurement struct {
