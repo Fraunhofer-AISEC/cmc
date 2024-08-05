@@ -21,11 +21,16 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,8 +41,12 @@ var (
 // Sw is a struct required for implementing the signer and measurer interfaces
 // of the attestation report to perform software measurements and signing
 type Sw struct {
-	certChain []*x509.Certificate
-	priv      crypto.PrivateKey
+	certChain  []*x509.Certificate
+	priv       crypto.PrivateKey
+	useCtr     bool
+	ctrPcr     int
+	ctrLog     string
+	serializer ar.Serializer
 }
 
 // Init a new object for software-based signing
@@ -67,6 +76,11 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
+
+	s.useCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "sw")
+	s.ctrLog = c.CtrLog
+	s.ctrPcr = c.CtrPcr
+	s.serializer = c.Serializer
 
 	return nil
 }
@@ -101,7 +115,64 @@ func (s *Sw) GetCertChain() ([]*x509.Certificate, error) {
 }
 
 func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
-	return ar.Measurement{}, errors.New("Measure method not implemented for SW driver")
+
+	log.Trace("Collecting SW measurements")
+
+	if !s.useCtr {
+		return ar.Measurement{}, errors.New("sw driver specified but use containers equals false")
+	}
+
+	// For the swdriver, the evidence is simply the signed nonce
+	evidence, err := s.serializer.Sign(nonce, s)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to sign sw evidence: %w", err)
+	}
+
+	log.Tracef("Reading container measurements")
+	if _, err := os.Stat(s.ctrLog); err != nil {
+		log.Trace("No container measurements to read")
+		return ar.Measurement{Type: "SW Measurement"}, nil
+	}
+
+	// If CMC container measurements are used, add the list of executed containers
+	data, err := os.ReadFile(s.ctrLog)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
+	}
+
+	var measureList []m.MeasureEntry
+	err = s.serializer.Unmarshal(data, &measureList)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
+	}
+
+	dm := ar.DetailedMeasurement{
+		Type: "SW Eventlog",
+	}
+
+	for _, ml := range measureList {
+		log.Tracef("Adding %v container measurement", ml.Name)
+		event := ar.MeasureEvent{
+			Sha256:    ml.TemplateSha256,
+			EventName: ml.Name,
+			CtrData: &ar.CtrData{
+				ConfigSha256: ml.ConfigSha256,
+				RootfsSha256: ml.RootfsSha256,
+			},
+		}
+		dm.Events = append(dm.Events, event)
+	}
+
+	m := ar.Measurement{
+		Type:     "SW Measurement",
+		Evidence: evidence,
+		Details:  []ar.DetailedMeasurement{dm},
+		Certs:    internal.WriteCertsDer(s.certChain),
+	}
+
+	log.Warnf("EVI: %v", base64.StdEncoding.EncodeToString(evidence))
+
+	return m, nil
 }
 
 func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,

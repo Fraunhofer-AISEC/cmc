@@ -182,7 +182,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	t.MeasuringCerts = akchain
 	t.MeasurementLog = c.MeasurementLog
 	t.Serializer = c.Serializer
-	t.UseCtr = c.UseCtr
+	t.UseCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "tpm")
 	t.CtrLog = c.CtrLog
 	t.CtrPcr = c.CtrPcr
 
@@ -192,6 +192,8 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
 func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
+
+	log.Trace("Collecting TPM measurements")
 
 	if t == nil {
 		return ar.Measurement{}, fmt.Errorf("internal error: tpm object not initialized")

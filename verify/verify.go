@@ -100,18 +100,6 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	}
 	result.MetadataResult = *mr
 
-	// Verify nonce
-	if res := bytes.Compare(report.Nonce, nonce); res != 0 {
-		log.Tracef("Nonces mismatch: supplied nonce: %v, report nonce = %v",
-			hex.EncodeToString(nonce), hex.EncodeToString(report.Nonce))
-		result.FreshnessCheck.Success = false
-		result.FreshnessCheck.Expected = hex.EncodeToString(report.Nonce)
-		result.FreshnessCheck.Got = hex.EncodeToString(nonce)
-		result.Success = false
-	} else {
-		result.FreshnessCheck.Success = true
-	}
-
 	refVals, err := collectReferenceValues(metadata)
 	if err != nil {
 		log.Tracef("Failed to collect reference values: %v", err)
@@ -125,7 +113,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		switch mtype := m.Type; mtype {
 
 		case "TPM Measurement":
-			r, ok := verifyTpmMeasurements(m, nonce, refVals["TPM Reference Value"], cas)
+			r, ok := verifyTpmMeasurements(m, nonce, cas, refVals["TPM Reference Value"])
 			if !ok {
 				result.Success = false
 			}
@@ -157,13 +145,19 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 			hwAttest = true
 
 		case "IAS Measurement":
-			r, ok := verifyIasMeasurements(m, nonce,
-				refVals["IAS Reference Value"], cas)
+			r, ok := verifyIasMeasurements(m, nonce, cas, refVals["IAS Reference Value"])
 			if !ok {
 				result.Success = false
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
+
+		case "SW Measurement":
+			r, ok := verifySwMeasurements(m, nonce, cas, s, refVals["SW Reference Value"])
+			if !ok {
+				result.Success = false
+			}
+			result.Measurements = append(result.Measurements, *r)
 
 		default:
 			log.Tracef("Unsupported measurement type '%v'", mtype)

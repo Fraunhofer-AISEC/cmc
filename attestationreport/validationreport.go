@@ -34,7 +34,6 @@ type VerificationResult struct {
 	Prover          string              `json:"prover,omitempty"`    // Name of the proving device the report was created for
 	Created         string              `json:"created,omitempty"`   // Timestamp the attestation verification was completed
 	SwCertLevel     int                 `json:"swCertLevel"`         // Overall certification level for the software stack
-	FreshnessCheck  Result              `json:"freshnessCheck"`      // Result for comparison of the expected nonce to the one provided in the attestation report
 	Measurements    []MeasurementResult `json:"measurements"`
 	ReportSignature []SignatureResult   `json:"reportSignatureCheck"` // Result for validation of the overall report signature
 	MetadataResult
@@ -102,7 +101,6 @@ type MeasurementResult struct {
 	SnpResult *SnpResult      `json:"snpResult,omitempty"`
 	SgxResult *SgxResult      `json:"sgxResult,omitempty"`
 	TdxResult *TdxResult      `json:"tdxResult,omitempty"`
-	SwResult  *SwResult       `json:"swResult,omitempty"`
 }
 
 type TpmResult struct {
@@ -131,11 +129,6 @@ type TdxResult struct {
 	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck"`
 	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck"`
 	XfamCheck           AttributesCheck   `json:"xfamCheck"`
-}
-
-type SwResult struct {
-	MeasName string `json:"measurementName"`    // Name associated with the measurement used for validation
-	VerName  string `json:"referenceValueName"` // Name of the reference value information used for validation
 }
 
 // DigestResult represents a generic result for a digest that was processed
@@ -697,8 +690,6 @@ func (r *VerificationResult) PrintErr() {
 		} else {
 			log.Warnf("Verification failed with error code: %v", r.ErrorCode)
 		}
-
-		r.FreshnessCheck.PrintErr("Report freshness check")
 
 		for _, m := range r.Measurements {
 			m.Summary.PrintErr("%v", m.Type)

@@ -83,10 +83,10 @@ func (s JsonSerializer) Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-// Sign signs the attestation report with the specified signer 'signer'
-func (s JsonSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
+// Sign signs data with the specified driver 'signer' (to enale hardware-based signatures)
+func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 
-	log.Trace("Signing attestation report")
+	log.Trace("Signing data length %v", len(data))
 
 	// This allows the signer to ensure mutual access for signing, if required
 	signer.Lock()
@@ -135,16 +135,16 @@ func (s JsonSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 	var joseSigner jose.Signer
 	joseSigner, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
 	if err != nil {
-		return nil, fmt.Errorf("failed to setup signer for the Attestation Report: %w", err)
+		return nil, fmt.Errorf("failed to setup signer : %w", err)
 	}
 
 	// sign
 	log.Trace("Performing Sign operation")
-	obj, err := joseSigner.Sign(report)
+	obj, err := joseSigner.Sign(data)
 	if err != nil {
 		return nil, err
 	}
-	log.Trace("Signed attestation report")
+	log.Trace("Signing finished")
 
 	// return signature in bytes
 	msg := obj.FullSerialize()
@@ -210,7 +210,7 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 			continue
 		}
 
-		//Store details from (all) validated certificate chain(s) in the report
+		//Store details from (all) validated certificate chain(s)
 		for _, chain := range certs {
 			chainExtracted := []X509CertExtracted{}
 			for _, cert := range chain {
@@ -282,8 +282,8 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 	}
 }
 
-// Used for the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
+// Used for the JOSE Opaque Signer Interface. This enables signing with
+// hardware-based keys (such as TPM-based keys)
 type hwSigner struct {
 	pk     *jose.JSONWebKey
 	signer crypto.PrivateKey
@@ -291,19 +291,19 @@ type hwSigner struct {
 }
 
 // Implements the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
+// with hardware-based keys (such as TPM-based keys)
 func (hws *hwSigner) Public() *jose.JSONWebKey {
 	return hws.pk
 }
 
 // Implements the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
+// with hardware-based keys (such as TPM-based keys)
 func (hws *hwSigner) Algs() []jose.SignatureAlgorithm {
 	return []jose.SignatureAlgorithm{hws.alg}
 }
 
 // Implements the JOSE Opaque Signer Interface. This enables signing
-// the attestation report with hardware-based keys (such as TPM-based keys)
+// with hardware-based keys (such as TPM-based keys)
 func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([]byte, error) {
 	// EC-specific: key size in byte for later padding
 	var keySize int
@@ -345,7 +345,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		asn1Sig, err := hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
 		if err != nil {
 			return nil, fmt.Errorf("signing failed: %w. Additional info: "+
-				"opts: %v, keySize: %v, len(report): %v, len(hash): %v",
+				"opts: %v, keySize: %v, len(data): %v, len(hash): %v",
 				err, opts, keySize, n, len(hashed))
 		}
 		// Convert from asn1 format (as specified in crypto) to concatenated and padded format for go-jose

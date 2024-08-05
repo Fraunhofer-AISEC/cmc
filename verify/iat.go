@@ -48,8 +48,8 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, referenceValues []ar.ReferenceValue,
-	cas []*x509.Certificate,
+func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certificate,
+	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{

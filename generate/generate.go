@@ -45,7 +45,6 @@ func Generate(nonce []byte, metadata [][]byte, measurers []ar.Driver, s ar.Seria
 	if len(nonce) > 32 {
 		return nil, fmt.Errorf("nonce exceeds maximum length of 32 bytes")
 	}
-	report.Nonce = nonce
 
 	log.Debug("Adding manifests and descriptions to Attestation Report..")
 
@@ -98,19 +97,19 @@ func Generate(nonce []byte, metadata [][]byte, measurers []ar.Driver, s ar.Seria
 		log.Debug("Added ", numManifests, " manifests to attestation report")
 	}
 
-	log.Tracef("Retrieving measurements from %v measurers", len(measurers))
+	log.Debugf("Retrieving measurements from %v measurers", len(measurers))
 	for _, measurer := range measurers {
 
-		// This actually collects the measurements. The methods are implemented
-		// in the respective module (e.g. tpm module)
-		log.Trace("Getting measurements from measurement interface..")
+		// Collect the measurements/evidence with the specified nonce from hardware/software.
+		// The methods are implemented in the respective driver (TPM, SNP, ...)
+		log.Debugf("Getting measurements from measurement interface..")
 		measurement, err := measurer.Measure(nonce)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get measurements: %v", err)
 		}
 
 		report.Measurements = append(report.Measurements, measurement)
-		log.Tracef("Added %v to attestation report", measurement.Type)
+		log.Debugf("Added %v to attestation report", measurement.Type)
 	}
 
 	log.Trace("Finished attestation report generation")

@@ -55,7 +55,7 @@ func (s CborSerializer) Unmarshal(data []byte, v any) error {
 	return cbor.Unmarshal(data, v)
 }
 
-func (s CborSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
+func (s CborSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 
 	private, _, err := signer.GetSigningKeys()
 	if err != nil {
@@ -90,7 +90,7 @@ func (s CborSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 	sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChainRaw
 
 	msgToSign := cose.NewSignMessage()
-	msgToSign.Payload = report
+	msgToSign.Payload = data
 	msgToSign.Signatures = append(msgToSign.Signatures, sigHolder)
 
 	// This allows the signer to ensure mutual access for signing, if required
@@ -99,7 +99,7 @@ func (s CborSerializer) Sign(report []byte, signer Driver) ([]byte, error) {
 
 	err = msgToSign.Sign(rand.Reader, nil, coseSigner)
 	if err != nil {
-		return nil, fmt.Errorf("signing failed: %w. len(report): %v", err, len(report))
+		return nil, fmt.Errorf("signing failed: %w. len(data): %v", err, len(data))
 	}
 
 	// sign and marshal message
@@ -183,7 +183,7 @@ func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 			continue
 		}
 
-		//Store details from (all) validated certificate chain(s) in the report
+		//Store details from (all) validated certificate chain(s)
 		for _, chain := range x509Chains {
 			chainExtracted := []X509CertExtracted{}
 			for _, cert := range chain {
