@@ -67,11 +67,14 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 
 	// Generate config entry
 	entry := MeasureEntry{
-		Pcr:            mc.Pcr,
 		TemplateSha256: hash,
 		Name:           name,
 		ConfigSha256:   configSha256,
 		RootfsSha256:   rootfsSha256,
+	}
+
+	if strings.EqualFold(mc.Driver, "tpm") {
+		entry.Pcr = mc.Pcr
 	}
 
 	log.Tracef("Recording measurement %v: %v", name, hex.EncodeToString(entry.TemplateSha256))
@@ -119,6 +122,7 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 		return fmt.Errorf("failed to write measurement list: %w", err)
 	}
 
+	// Write the entry to the specified driver, if any
 	if strings.EqualFold(mc.Driver, "tpm") {
 		addr, err := getTpmAddr()
 		if err != nil {
@@ -137,6 +141,10 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 		}
 
 		log.Tracef("Recorded measurement %v into PCR%v", name, mc.Pcr)
+	} else if strings.EqualFold(mc.Driver, "sw") {
+		log.Tracef("Nothing to do for SW driver")
+	} else {
+		return fmt.Errorf("unknown driver '%v'", mc.Driver)
 	}
 
 	return nil
