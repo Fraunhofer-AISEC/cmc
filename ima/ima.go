@@ -53,7 +53,7 @@ type imaTemplate struct {
 
 // GetImaRuntimeDigests returns all hashes extended by the IMA into the TPM
 // IMA PCR as read from the sysfs
-func GetImaRuntimeDigests() ([]ar.PcrEvent, error) {
+func GetImaRuntimeDigests() ([]ar.MeasureEvent, error) {
 	file := "/sys/kernel/security/ima/binary_runtime_measurements"
 	data, err := os.ReadFile(file)
 	if err != nil {
@@ -68,10 +68,10 @@ func GetImaRuntimeDigests() ([]ar.PcrEvent, error) {
 	return digests, nil
 }
 
-func parseImaRuntimeDigests(data []byte) ([]ar.PcrEvent, error) {
+func parseImaRuntimeDigests(data []byte) ([]ar.MeasureEvent, error) {
 
 	buf := bytes.NewBuffer(data)
-	events := make([]ar.PcrEvent, 0)
+	events := make([]ar.MeasureEvent, 0)
 
 	for buf.Len() > 0 {
 		header := header{}
@@ -128,7 +128,7 @@ func parseImaRuntimeDigests(data []byte) ([]ar.PcrEvent, error) {
 			log.Tracef("Failed to parse additional template data: %v", err)
 		}
 
-		event := ar.PcrEvent{
+		event := ar.MeasureEvent{
 			Sha256:    digest[:],
 			EventName: eventName,
 		}
