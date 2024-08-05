@@ -135,7 +135,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte, intelCache string,
 		return result, false
 	}
 
-	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
+	// Compare nonce for freshness (called report data in the SNP attestation report structure)
 	// ReportData contains: nonce in ReportData field
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce[:])

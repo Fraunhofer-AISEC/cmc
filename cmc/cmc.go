@@ -98,6 +98,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Serializer:     s,
 		CtrPcr:         c.CtrPcr,
 		CtrLog:         c.CtrLog,
+		CtrDriver:      c.CtrDriver,
 		UseCtr:         c.UseCtr,
 	}
 

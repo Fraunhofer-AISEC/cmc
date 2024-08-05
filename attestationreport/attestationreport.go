@@ -54,6 +54,7 @@ type DriverConfig struct {
 	UseCtr         bool
 	CtrPcr         int
 	CtrLog         string
+	CtrDriver      string
 }
 
 // Serializer is a generic interface providing methods for data serialization and
@@ -63,7 +64,7 @@ type Serializer interface {
 	GetPayload(raw []byte) ([]byte, error)
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
-	Sign(report []byte, signer Driver) ([]byte, error)
+	Sign(data []byte, signer Driver) ([]byte, error)
 	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
 }
 
@@ -388,5 +389,4 @@ type AttestationReport struct {
 	AppManifests       [][]byte      `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
 	CompanyDescription []byte        `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`
 	DeviceDescription  []byte        `json:"deviceDescription" cbor:"6,keyasint"`
-	Nonce              []byte        `json:"nonce" cbor:"7,keyasint"`
 }

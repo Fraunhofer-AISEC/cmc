@@ -127,7 +127,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 		return result, false
 	}
 
-	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
+	// Compare nonce for freshness (called report data in the SNP attestation report structure)
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {

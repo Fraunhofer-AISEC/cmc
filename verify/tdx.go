@@ -238,7 +238,7 @@ func verifyTdxMeasurements(tdxM ar.Measurement, nonce []byte, intelCache string,
 		return result, false
 	}
 
-	// Compare Nonce for Freshness (called Report Data in the SNP Attestation Report Structure)
+	// Compare nonce for freshness (called report data in the TDX attestation report structure)
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	if cmp := bytes.Compare(tdxQuote.QuoteBody.ReportData[:], nonce64); cmp != 0 {

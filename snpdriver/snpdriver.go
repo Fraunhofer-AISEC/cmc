@@ -139,6 +139,8 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 // as a plugin during attestation report generation
 func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 
+	log.Trace("Collecting SNP measurements")
+
 	if snp == nil {
 		return ar.Measurement{}, errors.New("internal error: SNP object is nil")
 	}

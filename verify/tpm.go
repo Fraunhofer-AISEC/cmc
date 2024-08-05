@@ -29,7 +29,7 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 
-func verifyTpmMeasurements(tpmM ar.Measurement, nonce []byte, referenceValues []ar.ReferenceValue, cas []*x509.Certificate) (*ar.MeasurementResult, bool) {
+func verifyTpmMeasurements(tpmM ar.Measurement, nonce []byte, cas []*x509.Certificate, referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{
 		Type:      "TPM Result",

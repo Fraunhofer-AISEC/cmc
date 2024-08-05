@@ -107,6 +107,8 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 // as a plugin during attestation report generation
 func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
 
+	log.Trace("Collecting SGX measurements")
+
 	if sgx == nil {
 		return ar.Measurement{}, errors.New("internal error: SGX object is nil")
 	}
