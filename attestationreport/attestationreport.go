@@ -81,18 +81,24 @@ type Validity struct {
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
 
-// PcrMeasurement represents the measurements of a single PCR. If the type is 'PCR Summary',
-// Summary is the final PCR value. If the type is 'PCR Eventlog', Events contains a list of the
-// extends that lead to the final PCR value. The list is retrieved by the prover
-// e.g. from the TPM binary bios measurements list or the IMA runtime measurements list.
-type PcrMeasurement struct {
-	Type    string     `json:"type" cbor:"0,keyasint"` // PCR Summary or PCR Eventlog
-	Pcr     int        `json:"pcr" cbor:"1,keyasint"`
-	Summary HexByte    `json:"summary,omitempty" cbor:"2,keyasint,omitempty"` // Either summary
-	Events  []PcrEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`  // Or Events
+// DetailedMeasurement represents the digests of a measurement, e.g., of a single PCR.
+//
+//		If the type is 'PCR Summary', Summary is the final PCR value.
+//
+//		If the type is 'PCR Eventlog', Events contains a list of the extends that lead to the final
+//		PCR value. The list is retrieved by the prover, e.g., from the TPM binary bios measurements
+//	    list or the IMA runtime measurements list.
+//
+//		If the type is 'SW Eventlog', Events contains a list of digests that have been recorded as
+//		SW measurements
+type DetailedMeasurement struct {
+	Type    string         `json:"type" cbor:"0,keyasint"` // PCR Summary, PCR Eventlog, SW Eventlog
+	Pcr     *int           `json:"pcr,omitempty" cbor:"1,keyasint"`
+	Summary HexByte        `json:"summary,omitempty" cbor:"2,keyasint,omitempty"` // Either summary
+	Events  []MeasureEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`  // Or Events
 }
 
-type PcrEvent struct {
+type MeasureEvent struct {
 	Sha256    HexByte    `json:"sha256" cbor:"2,keyasint"`
 	EventName string     `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
 	EventData *EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
@@ -108,13 +114,11 @@ type CtrData struct {
 // elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
 // 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
 type Measurement struct {
-	Type        string           `json:"type" cbor:"0,keyasint"`
-	Evidence    []byte           `json:"evidence" cbor:"1,keyasint"`
-	Certs       [][]byte         `json:"certs" cbor:"3,keyasint"`
-	Signature   []byte           `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
-	Pcrs        []PcrMeasurement `json:"pcrs,omitempty" cbor:"4,keyasint,omitempty"`
-	Sha256      HexByte          `json:"sha256,omitempty" cbor:"5,keyasint,omitempty"`
-	Description string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	Type      string                `json:"type" cbor:"0,keyasint"`
+	Evidence  []byte                `json:"evidence,omitempty" cbor:"1,keyasint"`
+	Certs     [][]byte              `json:"certs,omitempty" cbor:"3,keyasint"`
+	Signature []byte                `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
+	Details   []DetailedMeasurement `json:"details,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type SnpPolicy struct {
@@ -379,7 +383,7 @@ type Metadata struct {
 type AttestationReport struct {
 	Type               string        `json:"type" cbor:"0,keyasint"`
 	Measurements       []Measurement `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
-	RtmManifest        []byte        `json:"rtmManifests" cbor:"2,keyasint"`
+	RtmManifest        []byte        `json:"rtmManifest" cbor:"2,keyasint"`
 	OsManifest         []byte        `json:"osManifest" cbor:"3,keyasint"`
 	AppManifests       [][]byte      `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
 	CompanyDescription []byte        `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`

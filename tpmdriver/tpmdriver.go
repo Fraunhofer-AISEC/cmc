@@ -223,16 +223,16 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		log.Tracef("Collected %v binary bios measurements", len(biosMeasurements))
 	}
 
-	hashChain := make([]ar.PcrMeasurement, len(t.Pcrs))
+	hashChain := make([]ar.DetailedMeasurement, len(t.Pcrs))
 	for i, num := range t.Pcrs {
 
-		events := make([]ar.PcrEvent, 0)
+		events := make([]ar.MeasureEvent, 0)
 
 		// Collect detailed measurements from event logs if specified
 		if t.MeasurementLog {
 			for _, digest := range biosMeasurements {
 				if num == *digest.Pcr {
-					event := ar.PcrEvent{
+					event := ar.MeasureEvent{
 						Sha256:    digest.Sha256,
 						EventName: digest.Name,
 					}
@@ -246,9 +246,10 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			}
 		}
 
-		pcrMeasurement := ar.PcrMeasurement{
-			Pcr: num,
-		}
+		pcrMeasurement := ar.DetailedMeasurement{}
+		pcrMeasurement.Pcr = new(int)
+		*pcrMeasurement.Pcr = num
+
 		if t.MeasurementLog {
 			pcrMeasurement.Type = "PCR Eventlog"
 			pcrMeasurement.Events = events
@@ -271,9 +272,12 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
 		// Find the IMA PCR in the TPM Measurement
 		for i := range hashChain {
-			if hashChain[i].Pcr == t.ImaPcr {
+			if hashChain[i].Pcr == nil {
+				return ar.Measurement{}, errors.New("internal error: pcr is nil")
+			}
+			if *hashChain[i].Pcr == t.ImaPcr {
 				log.Tracef("Adding %v IMA events to PCR%v measurement", len(imaEvents),
-					hashChain[i].Pcr)
+					*hashChain[i].Pcr)
 				hashChain[i].Events = imaEvents
 				hashChain[i].Summary = nil
 				hashChain[i].Type = "PCR Eventlog"
@@ -297,14 +301,17 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			}
 
 			for i := range hashChain {
-				if hashChain[i].Pcr == t.CtrPcr {
+				if hashChain[i].Pcr == nil {
+					return ar.Measurement{}, errors.New("internal error: pcr is nil")
+				}
+				if *hashChain[i].Pcr == t.CtrPcr {
 					log.Tracef("Adding %v container events to PCR%v measurement", len(measureList),
-						hashChain[i].Pcr)
+						*hashChain[i].Pcr)
 					hashChain[i].Summary = nil
 					hashChain[i].Type = "PCR Eventlog"
 					for _, ml := range measureList {
 						log.Tracef("Adding %v container measurement", ml.Name)
-						event := ar.PcrEvent{
+						event := ar.MeasureEvent{
 							Sha256:    ml.TemplateSha256,
 							EventName: ml.Name,
 							CtrData: &ar.CtrData{
@@ -328,15 +335,15 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		Evidence:  quote.Quote,
 		Signature: quote.Signature,
 		Certs:     internal.WriteCertsDer(t.MeasuringCerts),
-		Pcrs:      hashChain,
+		Details:   hashChain,
 	}
 
-	for _, elem := range tm.Pcrs {
+	for _, elem := range tm.Details {
 		if elem.Type == "PCR Summary" {
-			log.Tracef("PCR%v: %v", elem.Pcr, hex.EncodeToString(elem.Summary))
+			log.Tracef("PCR%v: %v", *elem.Pcr, hex.EncodeToString(elem.Summary))
 		} else if elem.Type == "PCR Eventlog" {
 			for _, event := range elem.Events {
-				log.Tracef("PCR%v Measured Event: %v", elem.Pcr, hex.EncodeToString(event.Sha256))
+				log.Tracef("PCR%v Measured Event: %v", *elem.Pcr, hex.EncodeToString(event.Sha256))
 			}
 		}
 	}

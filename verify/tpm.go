@@ -70,14 +70,21 @@ func verifyTpmMeasurements(tpmM ar.Measurement, nonce []byte, referenceValues []
 	log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
 
 	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all reference values
+
 	// together then compare
 	sum := make([]byte, 0)
-	for i := range tpmM.Pcrs {
-		_, ok := calculatedPcrs[int(tpmM.Pcrs[i].Pcr)]
+	for i := range tpmM.Details {
+		if tpmM.Details[i].Pcr == nil {
+			log.Tracef("PCR not specified")
+			result.Summary.SetErr(ar.PcrNotSpecified)
+			return result, false
+		}
+		pcr := *tpmM.Details[i].Pcr
+		_, ok := calculatedPcrs[pcr]
 		if !ok {
 			continue
 		}
-		sum = append(sum, calculatedPcrs[int(tpmM.Pcrs[i].Pcr)]...)
+		sum = append(sum, calculatedPcrs[pcr]...)
 	}
 	verPcr := sha256.Sum256(sum)
 	if bytes.Equal(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) {
@@ -131,27 +138,34 @@ func verifyTpmMeasurements(tpmM ar.Measurement, nonce []byte, referenceValues []
 	return result, ok
 }
 
-func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceValue) (map[int][]byte, []ar.PcrResult, []ar.DigestResult, bool) {
+func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceValue) (map[int][]byte, []ar.DigestResult, []ar.DigestResult, bool) {
 	ok := true
-	pcrResults := make([]ar.PcrResult, 0)
+	pcrResults := make([]ar.DigestResult, 0)
 	detailedResults := make([]ar.DigestResult, 0)
 	calculatedPcrs := make(map[int][]byte)
 
 	// Iterate over the provided measurement
-	for _, measuredPcr := range measurement.Pcrs {
+	for _, measuredPcr := range measurement.Details {
 
-		pcrResult := ar.PcrResult{
+		pcrResult := ar.DigestResult{
 			Pcr:     measuredPcr.Pcr,
 			Success: true,
 		}
 
+		if measuredPcr.Pcr == nil {
+			log.Trace("PCR not specified")
+			ok = false
+			pcrResult.Success = false
+			continue
+		}
+		pcr := *measuredPcr.Pcr
+
 		// Initialize calculated PCR if not yet initialized, afterwards extend
 		// reference values
-		if _, ok := calculatedPcrs[int(measuredPcr.Pcr)]; !ok {
-			calculatedPcrs[int(measuredPcr.Pcr)] = make([]byte, 32)
+		if _, ok := calculatedPcrs[pcr]; !ok {
+			calculatedPcrs[pcr] = make([]byte, 32)
 		}
 
-		pcrNum := measuredPcr.Pcr
 		if measuredPcr.Type == "PCR Eventlog" {
 			// measurement contains a detailed measurement list (e.g. retrieved from bios
 			// measurement logs or ima runtime measurement logs)
@@ -159,7 +173,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 			for _, event := range measuredPcr.Events {
 				//first event could be a TPM_PCR_INIT_VALUE ()
 				if event.EventName == "TPM_PCR_INIT_VALUE" {
-					calculatedPcrs[int(measuredPcr.Pcr)] = event.Sha256
+					calculatedPcrs[pcr] = event.Sha256
 					measuredSummary = event.Sha256
 					continue
 				}
@@ -168,11 +182,11 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 				measuredSummary = extendSha256(measuredSummary, event.Sha256)
 
 				// Check for every event that a corresponding reference value exists
-				ref := getReferenceValue(event.Sha256, measuredPcr.Pcr, referenceValues)
+				ref := getReferenceValue(event.Sha256, pcr, referenceValues)
 				if ref == nil {
 					measResult := ar.DigestResult{
 						Type:      "Measurement",
-						Pcr:       &pcrNum,
+						Pcr:       &pcr,
 						Digest:    hex.EncodeToString(event.Sha256),
 						Success:   false,
 						Name:      event.EventName,
@@ -180,14 +194,14 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Tracef("Failed to find PCR%v measurement %v: %v in reference values",
-						measuredPcr.Pcr, event.EventName, hex.EncodeToString(event.Sha256))
+						*measuredPcr.Pcr, event.EventName, hex.EncodeToString(event.Sha256))
 					ok = false
 					pcrResult.Success = false
 					continue
 				}
 
 				// ...Extent calculated summary only if reference value was found
-				calculatedPcrs[measuredPcr.Pcr] = extendSha256(calculatedPcrs[measuredPcr.Pcr],
+				calculatedPcrs[pcr] = extendSha256(calculatedPcrs[pcr],
 					event.Sha256)
 
 				nameInfo := ref.Name
@@ -196,7 +210,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 				}
 
 				measResult := ar.DigestResult{
-					Pcr:         &pcrNum,
+					Pcr:         &pcr,
 					Digest:      hex.EncodeToString(event.Sha256),
 					Success:     true,
 					Name:        nameInfo,
@@ -204,9 +218,9 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 				}
 				detailedResults = append(detailedResults, measResult)
 			}
-			pcrResult.Calculated = hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr])
-			if !bytes.Equal(measuredSummary, calculatedPcrs[measuredPcr.Pcr]) {
-				pcrResult.Measured = hex.EncodeToString(measuredSummary)
+			pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
+			if !bytes.Equal(measuredSummary, calculatedPcrs[pcr]) {
+				pcrResult.Description = hex.EncodeToString(measuredSummary)
 			}
 
 		} else if measuredPcr.Type == "PCR Summary" {
@@ -218,17 +232,17 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 					ok = false
 					continue
 				}
-				if *ref.Pcr == measuredPcr.Pcr {
+				if *ref.Pcr == pcr {
 					if ref.Name == "TPM_PCR_INIT_VALUE" {
-						calculatedPcrs[measuredPcr.Pcr] = ref.Sha256 //the Sha256 should contain the init value
-						continue                                     //break the loop iteration and continue with the next event
+						calculatedPcrs[pcr] = ref.Sha256 //the Sha256 should contain the init value
+						continue                         //break the loop iteration and continue with the next event
 					}
-					calculatedPcrs[measuredPcr.Pcr] = extendSha256(calculatedPcrs[measuredPcr.Pcr], ref.Sha256)
+					calculatedPcrs[pcr] = extendSha256(calculatedPcrs[pcr], ref.Sha256)
 
 					// As we only have the PCR summary, we will later  set all reference values
 					// to true/false depending on whether the calculation matches the PCR summary
 					measResult := ar.DigestResult{
-						Pcr:         &pcrNum,
+						Pcr:         &pcr,
 						Digest:      hex.EncodeToString(ref.Sha256),
 						Name:        ref.Name,
 						Description: ref.Description,
@@ -238,16 +252,16 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 
 			}
 			// Then we compare the calculated value with the PCR measurement summary
-			equal := bytes.Equal(calculatedPcrs[measuredPcr.Pcr], measuredPcr.Summary)
+			equal := bytes.Equal(calculatedPcrs[pcr], measuredPcr.Summary)
 			if equal {
-				pcrResult.Calculated = hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr])
+				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 				pcrResult.Success = true
 			} else {
-				log.Tracef("PCR%v mismatch: measured: %v, calculated: %v", measuredPcr.Pcr,
+				log.Tracef("PCR%v mismatch: measured: %v, calculated: %v", pcr,
 					hex.EncodeToString(measuredPcr.Summary),
-					hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr]))
-				pcrResult.Calculated = hex.EncodeToString(calculatedPcrs[measuredPcr.Pcr])
-				pcrResult.Measured = hex.EncodeToString(measuredPcr.Summary)
+					hex.EncodeToString(calculatedPcrs[pcr]))
+				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
+				pcrResult.Description = hex.EncodeToString(measuredPcr.Summary)
 				pcrResult.Success = false
 				ok = false
 			}
@@ -255,7 +269,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 			// for this PCR to the according value, as we cannot determine which ones
 			// were good or potentially failed
 			for i, elem := range detailedResults {
-				if *elem.Pcr == measuredPcr.Pcr && measuredPcr.Type != "PCR Eventlog" {
+				if *elem.Pcr == pcr && measuredPcr.Type != "PCR Eventlog" {
 					detailedResults[i].Success = equal
 				}
 			}
@@ -272,7 +286,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 
 	// Sort the results in ascending order
 	sort.Slice(pcrResults, func(i, j int) bool {
-		return pcrResults[i].Pcr < pcrResults[j].Pcr
+		return *pcrResults[i].Pcr < *pcrResults[j].Pcr
 	})
 
 	// Finally, iterate over the reference values to find reference values with no
@@ -296,9 +310,15 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 
 		// Check if measurement contains the reference value PCR
 		foundPcr := false
-		for _, measuredPcr := range measurement.Pcrs {
+		for _, measuredPcr := range measurement.Details {
 
-			if measuredPcr.Pcr == *ref.Pcr {
+			if measuredPcr.Pcr == nil {
+				log.Trace("PCR not specified")
+				ok = false
+				continue
+			}
+
+			if *measuredPcr.Pcr == *ref.Pcr {
 				foundPcr = true
 			} else {
 				continue

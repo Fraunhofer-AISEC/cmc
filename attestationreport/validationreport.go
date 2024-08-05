@@ -106,8 +106,8 @@ type MeasurementResult struct {
 }
 
 type TpmResult struct {
-	PcrMatch         []PcrResult `json:"pcrMatch"`
-	AggPcrQuoteMatch Result      `json:"aggPcrQuoteMatch"`
+	PcrMatch         []DigestResult `json:"pcrMatch"`
+	AggPcrQuoteMatch Result         `json:"aggPcrQuoteMatch"`
 }
 
 type SnpResult struct {
@@ -138,21 +138,13 @@ type SwResult struct {
 	VerName  string `json:"referenceValueName"` // Name of the reference value information used for validation
 }
 
-// PcrResult represents the results for the recalculation of a specific PCR.
-type PcrResult struct {
-	Pcr        int    `json:"pcr"`                  // Number for the PCR which was validated
-	Calculated string `json:"calculated,omitempty"` // PCR Digest that was recalculated
-	Measured   string `json:"measured,omitempty"`   // PCR Digest from the measurement
-	Success    bool   `json:"success"`
-}
-
 // DigestResult represents a generic result for a digest that was processed
-// during attestation
+// during attestation or for an entire PCR
 type DigestResult struct {
 	Pcr         *int       `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
 	Name        string     `json:"name,omitempty"`        // Name of the software artifact
-	Digest      string     `json:"digest"`                // Digest that was processed
-	Description string     `json:"description,omitempty"` // Optional description
+	Digest      string     `json:"digest,omitempty"`      // Reference Digest
+	Description string     `json:"description,omitempty"` // Optional description, measured PCR in case of PCR result
 	Success     bool       `json:"success"`               // Indicates whether match was found
 	Type        string     `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
 	EventData   *EventData `json:"eventdata,omitempty"`   // data that was included from bioseventlog
@@ -429,6 +421,7 @@ const (
 	VerifyTCBChain
 	VerifyTcbInfo
 	ExtensionsCheck
+	PcrNotSpecified
 )
 
 type Result struct {
@@ -724,8 +717,8 @@ func (r *VerificationResult) PrintErr() {
 				m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
 				for _, p := range m.TpmResult.PcrMatch {
 					if !p.Success {
-						log.Warnf("PCR%v calculated: %v, measured: %v", p.Pcr, p.Calculated,
-							p.Measured)
+						log.Warnf("PCR%v calculated: %v, measured: %v", *p.Pcr, p.Digest,
+							p.Description)
 					}
 				}
 			}
