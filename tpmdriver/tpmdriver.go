@@ -225,7 +225,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		log.Tracef("Collected %v binary bios measurements", len(biosMeasurements))
 	}
 
-	hashChain := make([]ar.DetailedMeasurement, len(t.Pcrs))
+	hashChain := make([]ar.Artifact, len(t.Pcrs))
 	for i, num := range t.Pcrs {
 
 		events := make([]ar.MeasureEvent, 0)
@@ -248,7 +248,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			}
 		}
 
-		pcrMeasurement := ar.DetailedMeasurement{}
+		pcrMeasurement := ar.Artifact{}
 		pcrMeasurement.Pcr = new(int)
 		*pcrMeasurement.Pcr = num
 
@@ -337,10 +337,10 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		Evidence:  quote.Quote,
 		Signature: quote.Signature,
 		Certs:     internal.WriteCertsDer(t.MeasuringCerts),
-		Details:   hashChain,
+		Artifacts: hashChain,
 	}
 
-	for _, elem := range tm.Details {
+	for _, elem := range tm.Artifacts {
 		if elem.Type == "PCR Summary" {
 			log.Tracef("PCR%v: %v", *elem.Pcr, hex.EncodeToString(elem.Summary))
 		} else if elem.Type == "PCR Eventlog" {

@@ -82,17 +82,14 @@ type Validity struct {
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
 
-// DetailedMeasurement represents the digests of a measurement, e.g., of a single PCR.
-//
-//		If the type is 'PCR Summary', Summary is the final PCR value.
-//
-//		If the type is 'PCR Eventlog', Events contains a list of the extends that lead to the final
-//		PCR value. The list is retrieved by the prover, e.g., from the TPM binary bios measurements
-//	    list or the IMA runtime measurements list.
-//
-//		If the type is 'SW Eventlog', Events contains a list of digests that have been recorded as
-//		SW measurements
-type DetailedMeasurement struct {
+// Artifact represents the digests of a measurement, e.g., of a single PCR.
+// If the type is 'PCR Summary', Summary is the final PCR value.
+// If the type is 'PCR Eventlog', Events contains a list of the extends that lead to the final
+// PCR value. The list is retrieved by the prover, e.g., from the TPM binary bios measurements
+// list or the IMA runtime measurements list.
+// If the type is 'SW Eventlog', Events contains a list of digests that have been recorded as
+// SW measurements
+type Artifact struct {
 	Type    string         `json:"type" cbor:"0,keyasint"` // PCR Summary, PCR Eventlog, SW Eventlog
 	Pcr     *int           `json:"pcr,omitempty" cbor:"1,keyasint"`
 	Summary HexByte        `json:"summary,omitempty" cbor:"2,keyasint,omitempty"` // Either summary
@@ -115,11 +112,11 @@ type CtrData struct {
 // elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
 // 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
 type Measurement struct {
-	Type      string                `json:"type" cbor:"0,keyasint"`
-	Evidence  []byte                `json:"evidence,omitempty" cbor:"1,keyasint"`
-	Certs     [][]byte              `json:"certs,omitempty" cbor:"3,keyasint"`
-	Signature []byte                `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
-	Details   []DetailedMeasurement `json:"details,omitempty" cbor:"4,keyasint,omitempty"`
+	Type      string     `json:"type" cbor:"0,keyasint"`
+	Evidence  []byte     `json:"evidence,omitempty" cbor:"1,keyasint"`
+	Certs     [][]byte   `json:"certs,omitempty" cbor:"3,keyasint"`
+	Signature []byte     `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
+	Artifacts []Artifact `json:"details,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type SnpPolicy struct {

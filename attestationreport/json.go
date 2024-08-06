@@ -86,7 +86,7 @@ func (s JsonSerializer) Unmarshal(data []byte, v any) error {
 // Sign signs data with the specified driver 'signer' (to enale hardware-based signatures)
 func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 
-	log.Trace("Signing data length %v", len(data))
+	log.Tracef("Signing data length %v", len(data))
 
 	// This allows the signer to ensure mutual access for signing, if required
 	signer.Lock()

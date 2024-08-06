@@ -49,7 +49,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Details:   validSummaryHashChain,
+					Artifacts: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -66,7 +66,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Details:   validHashChain,
+					Artifacts: validHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -83,7 +83,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Details:   validSummaryHashChain,
+					Artifacts: validSummaryHashChain,
 				},
 				nonce:           invalidTpmNonce,
 				referenceValues: validReferenceValues,
@@ -100,7 +100,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					Details:   validSummaryHashChain,
+					Artifacts: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -117,7 +117,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Details:   invalidSummaryHashChain,
+					Artifacts: invalidSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -134,7 +134,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Details:   invalidHashChain,
+					Artifacts: invalidHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -151,7 +151,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					Details:   validSummaryHashChain,
+					Artifacts: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: invalidReferenceValues,
@@ -168,7 +168,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Details:   validSummaryHashChain,
+					Artifacts: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -185,7 +185,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     invalidTpmCertChain,
-					Details:   validSummaryHashChain,
+					Artifacts: validSummaryHashChain,
 				},
 				nonce:           validTpmNonce,
 				referenceValues: validReferenceValues,
@@ -200,7 +200,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpmMeasurements(*tt.args.tpmM, tt.args.nonce, tt.args.referenceValues, tt.args.cas)
+			got, got1 := verifyTpmMeasurements(*tt.args.tpmM, tt.args.nonce, tt.args.cas, tt.args.referenceValues)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
@@ -249,7 +249,7 @@ var (
 
 	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
 
-	validSummaryHashChain = []ar.DetailedMeasurement{
+	validSummaryHashChain = []ar.Artifact{
 		{
 			Type:    "PCR Summary",
 			Pcr:     ptr(1),
@@ -262,7 +262,7 @@ var (
 		},
 	}
 
-	invalidSummaryHashChain = []ar.DetailedMeasurement{
+	invalidSummaryHashChain = []ar.Artifact{
 		{
 			Type:    "PCR Summary",
 			Pcr:     ptr(1),
@@ -275,7 +275,7 @@ var (
 		},
 	}
 
-	validHashChain = []ar.DetailedMeasurement{
+	validHashChain = []ar.Artifact{
 		{
 			Type: "PCR Eventlog",
 			Pcr:  ptr(1),
@@ -304,7 +304,7 @@ var (
 		},
 	}
 
-	invalidHashChain = []ar.DetailedMeasurement{
+	invalidHashChain = []ar.Artifact{
 		{
 			Type: "PCR Eventlog",
 			Pcr:  ptr(1),

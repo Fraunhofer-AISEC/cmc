@@ -146,7 +146,7 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 	}
 
-	dm := ar.DetailedMeasurement{
+	dm := ar.Artifact{
 		Type: "SW Eventlog",
 	}
 
@@ -164,10 +164,10 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	}
 
 	m := ar.Measurement{
-		Type:     "SW Measurement",
-		Evidence: evidence,
-		Details:  []ar.DetailedMeasurement{dm},
-		Certs:    internal.WriteCertsDer(s.certChain),
+		Type:      "SW Measurement",
+		Evidence:  evidence,
+		Artifacts: []ar.Artifact{dm},
+		Certs:     internal.WriteCertsDer(s.certChain),
 	}
 
 	log.Warnf("EVI: %v", base64.StdEncoding.EncodeToString(evidence))
