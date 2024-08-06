@@ -59,7 +59,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	// Check that reference values are reflected by mandatory measurements
 	for _, v := range refVals {
 		found := false
-		for _, swm := range swMeasurement.Details {
+		for _, swm := range swMeasurement.Artifacts {
 			for _, event := range swm.Events {
 				if bytes.Equal(event.Sha256, v.Sha256) {
 					found = true
@@ -84,7 +84,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	}
 
 	// Check that every measurement is reflected by a reference value
-	for _, swm := range swMeasurement.Details {
+	for _, swm := range swMeasurement.Artifacts {
 		for _, event := range swm.Events {
 			found := false
 			for _, ref := range refVals {

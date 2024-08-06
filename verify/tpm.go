@@ -73,13 +73,13 @@ func verifyTpmMeasurements(tpmM ar.Measurement, nonce []byte, cas []*x509.Certif
 
 	// together then compare
 	sum := make([]byte, 0)
-	for i := range tpmM.Details {
-		if tpmM.Details[i].Pcr == nil {
+	for i := range tpmM.Artifacts {
+		if tpmM.Artifacts[i].Pcr == nil {
 			log.Tracef("PCR not specified")
 			result.Summary.SetErr(ar.PcrNotSpecified)
 			return result, false
 		}
-		pcr := *tpmM.Details[i].Pcr
+		pcr := *tpmM.Artifacts[i].Pcr
 		_, ok := calculatedPcrs[pcr]
 		if !ok {
 			continue
@@ -145,7 +145,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 	calculatedPcrs := make(map[int][]byte)
 
 	// Iterate over the provided measurement
-	for _, measuredPcr := range measurement.Details {
+	for _, measuredPcr := range measurement.Artifacts {
 
 		pcrResult := ar.DigestResult{
 			Pcr:     measuredPcr.Pcr,
@@ -310,7 +310,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 
 		// Check if measurement contains the reference value PCR
 		foundPcr := false
-		for _, measuredPcr := range measurement.Details {
+		for _, measuredPcr := range measurement.Artifacts {
 
 			if measuredPcr.Pcr == nil {
 				log.Trace("PCR not specified")

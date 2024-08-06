@@ -314,17 +314,6 @@ func TestVerify(t *testing.T) {
 			want: ar.VerificationResult{Success: true},
 		},
 		{
-			name: "Nonce mismatch",
-			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             []byte{},
-			},
-			want: ar.VerificationResult{Success: false},
-		},
-		{
 			// expected aggregated CertificationLevel in Manifests for
 			// empty measurement is max. 1 (here CertificationLevel = 3)
 			name: "Invalid Certification Level",
@@ -412,8 +401,7 @@ func TestVerify(t *testing.T) {
 			log.Trace("Generating a Sample Report")
 
 			ar := ar.AttestationReport{
-				Type:  "Attestation Report",
-				Nonce: tt.args.nonce,
+				Type: "Attestation Report",
 			}
 
 			// Preparation: create signed manifests and deviceDescription

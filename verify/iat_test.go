@@ -144,7 +144,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, tt.args.referenceValues, []*x509.Certificate{tt.args.ca})
+			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, []*x509.Certificate{tt.args.ca}, tt.args.referenceValues)
 			if got != tt.want {
 				t.Errorf("verifyIasMeasurements() error = %v, wantErr %v", got, tt.want)
 				return
