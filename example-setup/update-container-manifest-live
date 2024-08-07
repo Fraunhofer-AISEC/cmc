@@ -48,6 +48,7 @@ input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 output="${data}/metadata-signed"
 runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
+runc_config="/etc/runc.json"
 target="${target%/}"
 
 
@@ -56,6 +57,18 @@ echo "Using ${data} as directory for local data"
 
 # Delete temporary manifests
 rm -rf "${tmp}"/*
+
+# Temporarily configure runc to generate reference values
+if [ ! -f "${runc_config}" ]; then
+    exists=false
+    sudo printf "{\"generateRefVals\":\"true\"}" > "${runc_config}"
+else
+  exists=true
+  json=$(cat "${runc_config}")
+  original_json=${json}
+  json=$(echo "$json" | jq '.generateRefVals = true')
+  echo "${json}" | sudo tee "${runc_config}"
+fi
 
 # Calculate the container reference values
 sudo rm -f /tmp/container-refs
@@ -98,6 +111,17 @@ else
     echo "Client ${client} not supported. Only 'docker', 'docker-compose', 'ctr' and 'runc' supported for now."
     exit
 fi
+
+# Restore the original runc config
+if [ "${exists}" = true ] ; then
+ echo "WRITING BACK ${original_json}"
+ echo "${original_json}" | sudo tee "${runc_config}"
+else
+  sudo rm "${runc_config}"
+fi
+
+echo "RESTORED"
+jq . "${runc_config}"
 
 refvals=$(cat /tmp/container-refs)
 
