@@ -114,14 +114,10 @@ fi
 
 # Restore the original runc config
 if [ "${exists}" = true ] ; then
- echo "WRITING BACK ${original_json}"
  echo "${original_json}" | sudo tee "${runc_config}"
 else
   sudo rm "${runc_config}"
 fi
-
-echo "RESTORED"
-jq . "${runc_config}"
 
 refvals=$(cat /tmp/container-refs)
 
