@@ -21,7 +21,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -128,51 +127,51 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, fmt.Errorf("failed to sign sw evidence: %w", err)
 	}
 
+	measurement := ar.Measurement{
+		Type:     "SW Measurement",
+		Evidence: evidence,
+		Certs:    internal.WriteCertsDer(s.certChain),
+	}
+
 	log.Tracef("Reading container measurements")
-	if _, err := os.Stat(s.ctrLog); err != nil {
-		log.Trace("No container measurements to read")
-		return ar.Measurement{Type: "SW Measurement"}, nil
-	}
+	if _, err := os.Stat(s.ctrLog); err == nil {
 
-	// If CMC container measurements are used, add the list of executed containers
-	data, err := os.ReadFile(s.ctrLog)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
-	}
-
-	var measureList []m.MeasureEntry
-	err = s.serializer.Unmarshal(data, &measureList)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
-	}
-
-	dm := ar.Artifact{
-		Type: "SW Eventlog",
-	}
-
-	for _, ml := range measureList {
-		log.Tracef("Adding %v container measurement", ml.Name)
-		event := ar.MeasureEvent{
-			Sha256:    ml.TemplateSha256,
-			EventName: ml.Name,
-			CtrData: &ar.CtrData{
-				ConfigSha256: ml.ConfigSha256,
-				RootfsSha256: ml.RootfsSha256,
-			},
+		// If CMC container measurements are used, add the list of executed containers
+		data, err := os.ReadFile(s.ctrLog)
+		if err != nil {
+			return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
 		}
-		dm.Events = append(dm.Events, event)
+
+		var measureList []m.MeasureEntry
+		err = s.serializer.Unmarshal(data, &measureList)
+		if err != nil {
+			return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
+		}
+
+		artifact := ar.Artifact{
+			Type: "SW Eventlog",
+		}
+
+		for _, ml := range measureList {
+			log.Tracef("Adding %v container measurement", ml.Name)
+			event := ar.MeasureEvent{
+				Sha256:    ml.TemplateSha256,
+				EventName: ml.Name,
+				CtrData: &ar.CtrData{
+					ConfigSha256: ml.ConfigSha256,
+					RootfsSha256: ml.RootfsSha256,
+				},
+			}
+			artifact.Events = append(artifact.Events, event)
+		}
+
+		measurement.Artifacts = []ar.Artifact{artifact}
+
+	} else {
+		log.Trace("No container measurements to read")
 	}
 
-	m := ar.Measurement{
-		Type:      "SW Measurement",
-		Evidence:  evidence,
-		Artifacts: []ar.Artifact{dm},
-		Certs:     internal.WriteCertsDer(s.certChain),
-	}
-
-	log.Warnf("EVI: %v", base64.StdEncoding.EncodeToString(evidence))
-
-	return m, nil
+	return measurement, nil
 }
 
 func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,

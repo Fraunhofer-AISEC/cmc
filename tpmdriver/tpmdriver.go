@@ -329,7 +329,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			log.Trace("No container measurements to read")
 		}
 	} else {
-		log.Trace("Container measurements omitted")
+		log.Trace("TPM PCR Container measurements omitted: not configured")
 	}
 
 	tm := ar.Measurement{
