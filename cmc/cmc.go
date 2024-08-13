@@ -113,7 +113,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	for _, driver := range c.Drivers {
 		d, ok := drivers[strings.ToLower(driver)]
 		if !ok {
-			return nil, fmt.Errorf("driver %v not implemented", c.Drivers)
+			return nil, fmt.Errorf("driver %v not implemented", driver)
 		}
 		err = d.Init(driverConf)
 		if err != nil {
