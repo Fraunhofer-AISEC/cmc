@@ -108,10 +108,19 @@ func saveResult(file, addr string, result []byte) error {
 	var out bytes.Buffer
 	json.Indent(&out, result, "", "    ")
 
+	// Log the result
+	r := new(ar.VerificationResult)
+	json.Unmarshal(result, r)
+	if r.Success {
+		log.Infof("SUCCESS: Verification for Prover %v (%v)", r.Prover, r.Created)
+	} else {
+		log.Infof("FAILED: Verification for Prover %v (%v)", r.Prover, r.Created)
+	}
+
 	// Save the Attestation Result to file
 	if file != "" {
 		os.WriteFile(file, out.Bytes(), 0644)
-		log.Infof("Wrote file %v", file)
+		log.Debugf("Wrote file %v", file)
 	} else {
 		log.Debug("No config file specified: will not save attestation report")
 	}
