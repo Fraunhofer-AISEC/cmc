@@ -57,11 +57,11 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	}
 
 	// Check that reference values are reflected by mandatory measurements
-	for _, v := range refVals {
+	for _, r := range refVals {
 		found := false
 		for _, swm := range swMeasurement.Artifacts {
 			for _, event := range swm.Events {
-				if bytes.Equal(event.Sha256, v.Sha256) {
+				if bytes.Equal(event.Sha256, r.Sha256) {
 					found = true
 					break
 				}
@@ -70,13 +70,13 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 				break
 			}
 		}
-		if !found && !v.Optional {
-			log.Tracef("no SW Measurement found for SW Reference Value %v (hash: %v)", v.Name, hex.EncodeToString(v.Sha256))
+		if !found && !r.Optional {
+			log.Tracef("no SW Measurement found for SW Reference Value %v (hash: %v)", r.Name, hex.EncodeToString(r.Sha256))
 			r := ar.DigestResult{
 				Type:    "Reference Value",
 				Success: false,
-				Name:    v.Name,
-				Digest:  hex.EncodeToString(v.Sha256),
+				Name:    r.Name,
+				Digest:  hex.EncodeToString(r.Sha256),
 			}
 			result.Artifacts = append(result.Artifacts, r)
 			ok = false
