@@ -29,7 +29,7 @@ import (
 	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
 )
 
-func GetConfigMeasurement(id string, configData []byte) ([]byte, []byte, string, error) {
+func GetSpecMeasurement(id string, configData []byte) ([]byte, []byte, string, error) {
 
 	normalizedConfig, rootfs, err := normalize(id, configData)
 	if err != nil {
