@@ -70,7 +70,6 @@ func verifyTpmMeasurements(tpmM ar.Measurement, nonce []byte, cas []*x509.Certif
 	log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
 
 	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all reference values
-
 	// together then compare
 	sum := make([]byte, 0)
 	for i := range tpmM.Artifacts {
@@ -191,6 +190,7 @@ func recalculatePcrs(measurement ar.Measurement, referenceValues []ar.ReferenceV
 						Success:   false,
 						Name:      event.EventName,
 						EventData: event.EventData,
+						CtrData:   event.CtrData,
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Tracef("Failed to find PCR%v measurement %v: %v in reference values",
