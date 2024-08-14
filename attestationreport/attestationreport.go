@@ -239,6 +239,8 @@ type ReferenceValue struct {
 	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"8,keyasint,omitempty"`
 	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
 	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
+
+	manifest Manifest
 }
 
 // AppDescription represents the attestation report
@@ -275,6 +277,9 @@ type Environment struct {
 	Key   string `json:"key" cbor:"0,keyasint"`
 	Value string `json:"value" cbor:"1,keyasint"`
 }
+
+// Generic manifest
+type Manifest interface{}
 
 // AppManifest represents the attestation report
 // element of type 'App Manifest'
@@ -386,4 +391,12 @@ type AttestationReport struct {
 	AppManifests       [][]byte      `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
 	CompanyDescription []byte        `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`
 	DeviceDescription  []byte        `json:"deviceDescription" cbor:"6,keyasint"`
+}
+
+func (r *ReferenceValue) GetManifest() Manifest {
+	return r.manifest
+}
+
+func (r *ReferenceValue) SetManifest(m Manifest) {
+	r.manifest = m
 }

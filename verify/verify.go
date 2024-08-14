@@ -560,6 +560,20 @@ func checkValidity(val ar.Validity) ar.Result {
 }
 
 func collectReferenceValues(metadata *ar.Metadata) (map[string][]ar.ReferenceValue, error) {
+
+	// Add a reference to the corresponding manifest to each reference value
+	for i := range metadata.RtmManifest.ReferenceValues {
+		metadata.RtmManifest.ReferenceValues[i].SetManifest(metadata.RtmManifest)
+	}
+	for i := range metadata.OsManifest.ReferenceValues {
+		metadata.OsManifest.ReferenceValues[i].SetManifest(metadata.OsManifest)
+	}
+	for i := range metadata.AppManifests {
+		for j := range metadata.AppManifests[i].ReferenceValues {
+			metadata.AppManifests[i].ReferenceValues[j].SetManifest(metadata.AppManifests[i])
+		}
+	}
+
 	// Gather a list of all reference values independent of the type
 	refvals := append(metadata.RtmManifest.ReferenceValues, metadata.OsManifest.ReferenceValues...)
 	for _, appManifest := range metadata.AppManifests {
