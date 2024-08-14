@@ -105,10 +105,12 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:    "Measurement",
-					Success: false,
-					Name:    event.EventName,
-					Digest:  hex.EncodeToString(event.Sha256),
+					Type:      "Measurement",
+					Success:   false,
+					Name:      event.EventName,
+					Digest:    hex.EncodeToString(event.Sha256),
+					EventData: event.EventData,
+					CtrData:   event.CtrData,
 				}
 				result.Artifacts = append(result.Artifacts, r)
 				log.Tracef("no SW Reference Value found for SW Measurement: %v", hex.EncodeToString(event.Sha256))

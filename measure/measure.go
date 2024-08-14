@@ -55,9 +55,6 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 	}
 
 	// Hash config entry
-	// TODO discuss if name is required
-	// tbh := []byte(name)
-	// tbh = append(tbh, configSha256...)
 	tbh := []byte(configSha256)
 	tbh = append(tbh, rootfsSha256...)
 

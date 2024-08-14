@@ -140,7 +140,8 @@ type DigestResult struct {
 	Description string     `json:"description,omitempty"` // Optional description, measured PCR in case of PCR result
 	Success     bool       `json:"success"`               // Indicates whether match was found
 	Type        string     `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
-	EventData   *EventData `json:"eventdata,omitempty"`   // data that was included from bioseventlog
+	EventData   *EventData `json:"eventData,omitempty"`   // data that was included from bioseventlog
+	CtrData     *CtrData   `json:"ctrData,omitempty"`     // data that was included from container log
 }
 
 type VersionCheck struct {
