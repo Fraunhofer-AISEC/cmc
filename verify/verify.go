@@ -561,21 +561,25 @@ func checkValidity(val ar.Validity) ar.Result {
 
 func collectReferenceValues(metadata *ar.Metadata) (map[string][]ar.ReferenceValue, error) {
 	// Gather a list of all reference values independent of the type
-	verList := append(metadata.RtmManifest.ReferenceValues, metadata.OsManifest.ReferenceValues...)
+	refvals := append(metadata.RtmManifest.ReferenceValues, metadata.OsManifest.ReferenceValues...)
 	for _, appManifest := range metadata.AppManifests {
-		verList = append(verList, appManifest.ReferenceValues...)
+		refvals = append(refvals, appManifest.ReferenceValues...)
 	}
 
-	verMap := make(map[string][]ar.ReferenceValue)
+	refmap := make(map[string][]ar.ReferenceValue)
 
 	// Iterate through the reference values and sort them into the different types
-	for _, v := range verList {
-		if v.Type != "SNP Reference Value" && v.Type != "SW Reference Value" && v.Type != "TPM Reference Value" && v.Type != "TDX Reference Value" && v.Type != "SGX Reference Value" {
-			return nil, fmt.Errorf("reference value of type %v is not supported", v.Type)
+	for _, r := range refvals {
+		if r.Type != "SNP Reference Value" &&
+			r.Type != "SW Reference Value" &&
+			r.Type != "TPM Reference Value" &&
+			r.Type != "TDX Reference Value" &&
+			r.Type != "SGX Reference Value" {
+			return nil, fmt.Errorf("reference value of type %v is not supported", r.Type)
 		}
-		verMap[v.Type] = append(verMap[v.Type], v)
+		refmap[r.Type] = append(refmap[r.Type], r)
 	}
-	return verMap, nil
+	return refmap, nil
 }
 
 func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Result, bool) {

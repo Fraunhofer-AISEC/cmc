@@ -148,7 +148,7 @@ func (a CoapApi) measure(c *config) {
 		log.Fatalf("Failed to read config: %v", err)
 	}
 
-	configHash, _, _, err := m.GetConfigMeasurement("mycontainer", ctrConfig)
+	configHash, _, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)
 	if err != nil {
 		log.Fatalf("Failed to measure config: %v", err)
 	}
