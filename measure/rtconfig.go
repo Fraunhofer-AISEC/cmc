@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -110,6 +111,14 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 
 	// List environment variables alphabetically to guarantee reproducibility
 	slices.Sort(config.Process.Env)
+
+	// List mounts alphabetically to guarantee reproducibility
+	sort.Slice(config.Mounts, func(i, j int) bool {
+		if config.Mounts[i].Source == config.Mounts[j].Source {
+			return config.Mounts[i].Destination < config.Mounts[j].Destination
+		}
+		return config.Mounts[i].Source < config.Mounts[j].Source
+	})
 
 	data, err := json.Marshal(config)
 	if err != nil {
