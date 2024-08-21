@@ -56,12 +56,12 @@ echo "Creating reference values for container: ${target} with args ${args}"
 echo "Using ${data} as directory for local data"
 
 # Delete temporary manifests
-rm -rf "${tmp}"/*
+rm -rf "${tmp:?}"/*
 
 # Temporarily configure runc to generate reference values
 if [ ! -f "${runc_config}" ]; then
     exists=false
-    sudo printf "{\"generateRefVals\":\"true\"}" > "${runc_config}"
+    echo "{\"generateRefVals\":\"true\"}" | tee "${runc_config}"
 else
   exists=true
   json=$(cat "${runc_config}")
@@ -76,21 +76,21 @@ sudo rm -f /tmp/container-refs
 echo "Generating reference values for ${client} client"
 if  [[ "${client}" == "ctr" ]]; then
     containers=("${target}")
-    sudo ctr image pull ${target}
+    sudo ctr image pull "${target}"
     set +e
-    sudo ctr run --detach ${args} ${target} REF_CONTAINER
+    sudo ctr run --detach ${args} "${target}" REF_CONTAINER
     sudo ctr task kill -s SIGKILL REF_CONTAINER
     sudo ctr container delete REF_CONTAINER
     set -e
 elif  [[ "${client}" == "shim" ]]; then
     containers=("${target}")
-    sudo ctr image pull ${target}
+    sudo ctr image pull "${target}"
     set +e
-    sudo ctr run --runtime ${runtime} -t --rm ${args} ${target} CMC_GENERATE_APP_MANIFEST
+    sudo ctr run --runtime "${runtime}" -t --rm ${args} "${target}" CMC_GENERATE_APP_MANIFEST
     set -e
 elif [[ "${client}" == "docker" ]]; then
     containers=("${target}")
-    sudo docker run ${args} ${target}
+    sudo docker run ${args} "${target}"
 elif [[ "${client}" == "docker-compose" ]]; then
     containers=($(yq eval '.services | keys | .[]' "${target}"))
     set +e
@@ -103,7 +103,7 @@ elif [[ "${client}" == "docker-compose" ]]; then
     set -e
 elif [[ "${client}" == "runc" ]]; then
     containers=("${target}")
-    cd ${target}
+    cd "${target}"
     sudo runc create references
     sudo runc delete references
     cd -
@@ -157,8 +157,8 @@ for ((i = 0; i < num_containers; i++)); do
     appdesc=$(echo "${appdesc}" | jq ".name = \"${container}-${sha256}.description\"")
     appdesc=$(echo "${appdesc}" | jq ".appManifest = \"${container}-${sha256}\"")
     echo "Adding environment variables"
-    for i in "${!keys[@]}"; do
-        envs="{\"key\": \"${keys[$i]}\", \"value\": \"${values[$i]}\"}"
+    for j in "${!keys[@]}"; do
+        envs="{\"key\": \"${keys[${j}]}\", \"value\": \"${values[${j}]}\"}"
         echo "Adding $envs"
         appdesc=$(echo "${appdesc}" | jq --argjson envs "${envs}" '.environment += [$envs]')
     done
