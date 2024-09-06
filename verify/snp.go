@@ -46,7 +46,7 @@ type snpreport struct {
 	SignatureAlgo   uint32
 	CurrentTcb      uint64 // platform_version
 	PlatformInfo    uint64
-	AuthorKeyEn     uint32
+	KeySelection    uint32
 	Reserved1       uint32
 	ReportData      [64]byte
 	Measurement     [48]byte

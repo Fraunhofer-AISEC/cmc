@@ -23,7 +23,7 @@
 #include <inttypes.h>
 #include <sys/ioctl.h>
 
-#include "ioctl.h"
+#include "snp.h"
 
 #define __packed __attribute__ ((__packed__))
 
