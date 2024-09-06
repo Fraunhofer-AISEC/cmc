@@ -1,0 +1,124 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
+export PATH=${PATH}:${HOME}/go/bin
+
+if [[ "$#" -ne 2 ]]; then
+   echo "Usage: ./update-platform <data-folder> <ovmf-image> <cbor|json>"
+   exit 1
+fi
+
+data=$(set -e; abs_path "${1}")
+input="${data}/metadata-raw"
+tmp="${data}/metadata-tmp"
+out="${data}/metadata-signed"
+ovmf="${2}"
+ser="${3}"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+echo "Using ${data} as directory for local data"
+
+# Retrieve high level details
+set +e
+firmware="unknown"
+bootloader=$(grub-install --version)
+kernel=$(uname -r)
+os=$(lsb_release -sd 2>/dev/null)
+set -e
+
+# Replace existing app description in the device description (will be added through
+# update-app-manifest scripts)
+json=$(cat "${input}/device.description.json")
+json=$(echo "${json}" | jq 'del(.appDescriptions[])')
+printf "%s\n" "${json}" > "${input}/device.description.json"
+
+# Load RTM manifest
+manifestjson=$(cat "${input}/rtm.manifest.json")
+
+# Insert high-level details
+manifestjson=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
+manifestjson=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
+
+json=$(cat "${dir}/metadata-raw/snp.referencevalue.template")
+
+# TODO parameters vor vcpus and vmm-type
+ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus=2 --vmm-type=ec2 --ovmf="${ovmf}")
+
+fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+
+# Insert reference values
+setjson "sha384" "${ref}"
+setjson "snp.version" 2
+setjson "snp.caFingerprint" "${fingerprint}"
+setjson "snp.policy.SingleSocket" false
+setjson "snp.policy.Debug" false
+setjson "snp.policy.Migration" false
+setjson "snp.policy.Smt" true
+setjson "snp.policy.AbiMajor" 0
+setjson "snp.policy.AbiMinor" 0
+setjson "snp.fw.build" 3
+setjson "snp.fw.major" 1
+setjson "snp.fw.minor" 49
+setjson "snp.tcb.bl" 2
+setjson "snp.tcb.tee" 0
+setjson "snp.tcb.snp" 5
+setjson "snp.tcb.ucode" 55
+
+refval="${json}"
+json="${manifestjson}"
+
+extendarr "referenceValues" "${refval}"
+
+# Save the RTM manifest
+printf "%s\n" "${json}" > "${input}/rtm.manifest.json"
+
+# Load OS manifest
+json=$(cat "${input}/os.manifest.json")
+
+# Insert high-level details
+json=$(echo "${json}" | jq ".details.kernel = \"${kernel}\"")
+json=$(echo "${json}" | jq ".details.os = \"${os}\"")
+
+# Replace existing reference values with new reference values in the OS Manifest
+json=$(echo "${json}" | jq 'del(.referenceValues[])')
+printf "%s\n" "${json}" > "${input}/os.manifest.json"
+
+# Sign the metadata*
+key="${data}/pki/signing-cert-key.pem"
+chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
+
+rm -rf "${tmp}"
+rm -rf "${out}"
+
+mkdir -p "${tmp}"
+mkdir -p "${out}"
+
+if [[ "${ser,,}" = "json" ]]; then
+  echo "using json serialization"
+  cp "${input}/rtm.manifest.json"        "${tmp}/rtm.manifest.json"
+  cp "${input}/os.manifest.json"         "${tmp}/os.manifest.json"
+  cp "${input}/device.description.json"  "${tmp}/device.description.json"
+  cp "${input}/device.config.json"       "${tmp}/device.config.json"
+elif [[ "${ser,,}" = "cbor" ]]; then
+  echo "using cbor serialiation"
+  cmc-converter -in "${input}/rtm.manifest.json"        -out "${tmp}/rtm.manifest.cbor"       -outform cbor
+  cmc-converter -in "${input}/os.manifest.json"         -out "${tmp}/os.manifest.cbor"        -outform cbor
+  cmc-converter -in "${input}/device.description.json"  -out "${tmp}/device.description.cbor" -outform cbor
+  cmc-converter -in "${input}/device.config.json"       -out "${tmp}/device.config.cbor"      -outform cbor
+else
+  echo "serialization format ${ser} is not supported"
+  exit 1
+fi
+
+cmc-signing-tool -in "${tmp}/rtm.manifest.${ser}"        -out "${out}/rtm.manifest.${ser}"        -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/os.manifest.${ser}"         -out "${out}/os.manifest.${ser}"         -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/device.description.${ser}"  -out "${out}/device.description.${ser}"  -keys "${key}" -x5cs "${chain}"
+cmc-signing-tool -in "${tmp}/device.config.${ser}"       -out "${out}/device.config.${ser}"       -keys "${key}" -x5cs "${chain}"

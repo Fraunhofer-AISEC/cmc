@@ -1,0 +1,28 @@
+{
+    "type": "SNP Reference Value",
+    "sha384": "",
+    "snp": {
+        "version": 0,
+        "caFingerprint": "",
+        "policy": {
+            "type": "SNP Policy",
+            "SingleSocket": false,
+            "Debug":        false,
+            "Migration":    false,
+            "Smt":          false,
+            "AbiMajor":     0,
+            "AbiMinor":     0
+        },
+        "fw": {
+            "build": 0,
+            "major": 0,
+            "minor": 0
+        },
+        "tcb": {
+            "bl": 0,
+            "tee": 0,
+            "snp": 0,
+            "ucode": 0
+        }
+    }
+}
