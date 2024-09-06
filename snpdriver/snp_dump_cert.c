@@ -64,6 +64,7 @@ snp_dump_cert(uint8_t *buf, size_t size)
 
 	if (req.certs_len == 0) {
 		fprintf(stderr, "No certificates stored\n");
+		ret = -1;
 		goto out;
 	}
 
@@ -92,12 +93,16 @@ snp_dump_cert(uint8_t *buf, size_t size)
 	}
 
 	if (size < req.certs_len) {
-		fprintf(stderr, "buffer not large enough to store VLEK (%ld, must be %d)", size, req.certs_len);
+		fprintf(stderr, "buffer not large enough to store VLEK (%ld, must be %d)\n", size, req.certs_len);
+		ret = -1;
+		goto out;
 	}
 
 	// Dump only certificate
 	certs = (uint8_t *)cert_table.entry;
 	memcpy(buf, certs + cert_table.entry->offset, cert_table.entry->length);
+
+	ret = 0;
 
 out:
 	close(fd);
