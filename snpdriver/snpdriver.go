@@ -19,7 +19,7 @@ package snpdriver
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include "ioctl.h"
+#include "snp.h"
 */
 import "C"
 import (
@@ -48,9 +48,18 @@ import (
 
 var log = logrus.WithField("service", "snpdriver")
 
+type certFormat int
+
 const (
 	PEM = iota
-	DER = iota
+	DER
+)
+
+type SigningKey int
+
+const (
+	VCEK = iota
+	VLEK
 )
 const (
 	snpChainFile     = "akchain.pem"
@@ -58,11 +67,9 @@ const (
 	snpPrivFile      = "ikpriv.key"
 )
 
-type certFormat int
-
 var (
-	vcekUrlPrefix = "https://kdsintf.amd.com/vcek/v1/Milan/"
-	milanUrl      = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
+	milanUrlVcek = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
+	milanUrlVlek = "https://kdsintf.amd.com/vlek/v1/Milan/cert_chain"
 )
 
 // Snp is a structure required for implementing the Measure method
@@ -113,7 +120,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 			return fmt.Errorf("failed to get signing cert chain: %w", err)
 		}
 
-		// Fetch SNP certificate chain for VCEK (AK)
+		// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
 		snp.snpCertChain, err = getSnpCertChain(c.ServerAddr)
 		if err != nil {
 			return fmt.Errorf("failed to get SNP cert chain: %w", err)
@@ -217,6 +224,29 @@ func getMeasurement(nonce []byte) ([]byte, error) {
 	return buf, nil
 }
 
+func getVlek() ([]byte, error) {
+
+	log.Trace("Fetching VLEK via extended attestation report request")
+
+	buf := make([]byte, 4000)
+	cBuf := (*C.uint8_t)(unsafe.Pointer(&buf[0]))
+	cLen := C.size_t(4000)
+
+	cRes, err := C.snp_dump_cert(cBuf, cLen)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve SNP AR: %w", err)
+	}
+
+	res := int(cRes)
+	if res != 0 {
+		return nil, fmt.Errorf("failed to retrieve SNP extended AR. C.snp_dump_cert returned %v", res)
+	}
+
+	log.Trace("Generated extended SNP attestation report")
+
+	return buf, nil
+}
+
 func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 
 	log.Tracef("Requesting Cert from %v", url)
@@ -261,20 +291,10 @@ func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 }
 
 func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
-	ca, _, err := getCerts(milanUrl, PEM)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP certificate chain: %w", err)
-	}
-	if len(ca) != 2 {
-		return nil,
-			fmt.Errorf("failed to get SNP certificate chain. Expected 2 certificates, got %v",
-				len(ca))
-	}
 
-	// Fetch the VCEK. TODO as a workaround, we get the parameters through
-	// fetching an initial attestation report and request the VCEK from the
-	// Provisioning server. As soon as we can reliably get the correct TCB,
-	// the host should provide the VCEK
+	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
+	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
+	// Fetch an initial attestation report to determine which key is used.
 	arRaw, err := getMeasurement(make([]byte, 64))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
@@ -284,17 +304,61 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
+	arkey := (s.KeySelection >> 2) & 0x7
+	var signingKey SigningKey
+	if arkey == 0 {
+		log.Trace("VCEK is used to sign attestation report")
+		signingKey = VCEK
+	} else if arkey == 1 {
+		log.Trace("VLEK is used to sign attestation report")
+		signingKey = VLEK
+	} else {
+		return nil, fmt.Errorf("could not determine SNP attestation report signing key")
+	}
+
 	// TODO mandate server authentication in the future, otherwise
 	// this step has to happen in a secure environment
 	log.Warn("Creating new EST client without server authentication")
 	client := est.NewClient(nil)
 
-	vcek, err := client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to enroll SNP: %w", err)
+	var signingCert *x509.Certificate
+	var caUrl string
+	if signingKey == VCEK {
+		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
+		log.Trace("Enrolling VCEK via EST")
+		signingCert, err = client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
+		if err != nil {
+			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
+		}
+		caUrl = milanUrlVcek
+	} else if signingKey == VLEK {
+		// VLEK is used, in this case we fetch the VLEK from the host
+		vlek, err := getVlek()
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch VLEK: %w", err)
+		}
+		log.Trace("Parsing VLEK")
+		signingCert, err = x509.ParseCertificate(vlek)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse VLEK")
+		}
+		caUrl = milanUrlVlek
+	} else {
+		return nil, fmt.Errorf("internal error: signing cert not initialized")
 	}
 
-	return append([]*x509.Certificate{vcek}, ca...), nil
+	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
+	ca, _, err := getCerts(caUrl, PEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SNP certificate chain: %w", err)
+	}
+	if len(ca) != 2 {
+		return nil,
+			fmt.Errorf("failed to get SNP certificate chain. Expected 2 certificates, got %v",
+				len(ca))
+	}
+
+	return append([]*x509.Certificate{signingCert}, ca...), nil
 }
 
 func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,

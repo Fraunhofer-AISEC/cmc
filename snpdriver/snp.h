@@ -15,6 +15,8 @@
 
 #pragma once
 
+typedef unsigned char uuid_t[16];
+
 struct snp_report_req {
 	uint8_t user_data[64];
 	uint32_t vmpl;
@@ -32,6 +34,21 @@ struct snp_guest_req_ioctl {
 	uint64_t fw_err;
 };
 
+struct snp_ext_report_req {
+	struct snp_report_req data;
+	uint64_t certs_address;
+	uint32_t certs_len;
+};
+
+// GHCB spec v2
+struct snp_cert_table {
+	struct cert_table_entry {
+		uuid_t   guid;
+		uint32_t offset;
+		uint32_t length;
+	} *entry;
+};
+
 #define SNP_GUEST_REQ_IOC_TYPE	'S'
 
 #define SNP_GET_REPORT _IOWR(SNP_GUEST_REQ_IOC_TYPE, 0x0, struct snp_guest_req_ioctl)
@@ -40,3 +57,6 @@ struct snp_guest_req_ioctl {
 
 int
 snp_dump_ar(uint8_t *buf, size_t size, uint8_t *user_data, size_t user_data_size);
+
+int
+snp_dump_cert(uint8_t *buf, size_t size);
