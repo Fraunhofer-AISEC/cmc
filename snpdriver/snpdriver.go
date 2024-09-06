@@ -228,9 +228,9 @@ func getVlek() ([]byte, error) {
 
 	log.Trace("Fetching VLEK via extended attestation report request")
 
-	buf := make([]byte, 4000)
+	buf := make([]byte, 8192)
 	cBuf := (*C.uint8_t)(unsafe.Pointer(&buf[0]))
-	cLen := C.size_t(4000)
+	cLen := C.size_t(8192)
 
 	cRes, err := C.snp_dump_cert(cBuf, cLen)
 	if err != nil {
