@@ -63,6 +63,8 @@ func (s *Server) unlockVcekMutex() {
 // in DER format from the cache or downloads it from the AMD server if not present
 func (s *Server) getVcek(chipId []byte, tcb uint64) (*x509.Certificate, error) {
 
+	log.Tracef("Fetching VCEK for chip ID %v, TCB %x", hex.EncodeToString(chipId), tcb)
+
 	// Allow only one download and caching of the VCEK certificate in parallel
 	// as the AMD KDF server allows only one request in 10s
 	s.lockVcekMutex()
