@@ -1,0 +1,58 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
+export PATH=${PATH}:${HOME}/go/bin
+
+if [[ "$#" -ne 3 ]]; then
+   echo "Usage: ./setup-cmc <cmc-folder> <data-folder> <cbor|json>"
+   exit
+fi
+
+cmc=$(set -e; abs_path "$1")
+data=$(set -e; abs_path "$2")
+ser="${3}"
+client="docker"
+
+if [[ ! -d "${cmc}" ]]; then
+  echo "CMC directory does not exist. Did you clone the repository? Abort.."
+  exit 1
+fi
+
+if [[ -d "${data}" ]]; then
+  echo "Data directory does already exist. Please choose a new directory. Abort.."
+  exit 1
+fi
+
+echo "Using CMC: ${cmc}"
+echo "Using ${data} as directory for local data"
+
+# Create a folder for the cmc configuration and metadata
+mkdir -p "${data}"
+
+# Install dependencies
+sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq
+
+# Install virtee sev-snp measure tools
+git clone https://github.com/virtee/sev-snp-measure "${data}/"
+
+# Build CMC
+cd "${cmc}"
+echo "Building CMC.."
+go build ./...
+
+# Install CMC to $GOPATH/bin
+echo "Installing CMC"
+go install ./...
+
+# Copy metadata templates
+cp -r "${cmc}/example-setup/"* "${data}"
+
+# Generate a PKI
+"${data}/setup-pki" -i "${data}" -o "${data}/pki"
+
+# Generate and sign platform (RTM and OS) metadata
+"${data}/update-platform-snp" "${data}" "${ser}"
