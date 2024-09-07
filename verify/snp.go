@@ -32,10 +32,6 @@ import (
 )
 
 type snpreport struct {
-	// Table 24 @ https://www.amd.com/system/files/TechDocs/56860.pdf
-	Status     uint32
-	ReportSize uint32
-	Reserved0  [24]byte
 	// Table 21 @ https://www.amd.com/system/files/TechDocs/56860.pdf
 	Version         uint32
 	GuestSvn        uint32
@@ -70,7 +66,7 @@ type snpreport struct {
 	Reserved3b     uint8
 	LaunchTcb      uint64
 	Reserved3c     [168]byte
-	// Table 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf
+	// Table 119 @ https://www.amd.com/system/files/TechDocs/56860.pdf
 	SignatureR [72]byte
 	SignatureS [72]byte
 	Reserved4  [368]byte
@@ -81,7 +77,6 @@ const (
 )
 
 const (
-	header_offset    = 0x20
 	signature_offset = 0x2A0
 )
 
@@ -369,15 +364,15 @@ func verifySnpSignature(
 
 	result := ar.SignatureResult{}
 
-	if len(reportRaw) < (header_offset + signature_offset) {
+	if len(reportRaw) < signature_offset {
 		log.Warn("Internal Error: Report buffer too small")
 		result.SignCheck.SetErr(ar.Internal)
 		return result, false
 	}
 
-	// Strip the header and the signature from the report and hash for signature verification
-	// Table 21, 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf
-	digest := sha512.Sum384(reportRaw[0x20 : 0x20+0x2A0])
+	// Strip the signature from the report and hash for signature verification
+	// Table 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf: signature 0x2A0 - 0x49F
+	digest := sha512.Sum384(reportRaw[:signature_offset])
 
 	// Golang SetBytes expects BigEndian byte array, but SNP values are little endian
 	rRaw := report.SignatureR[:]

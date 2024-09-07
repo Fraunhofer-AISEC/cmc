@@ -15,19 +15,14 @@
 
 package snpdriver
 
-/*
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include "snp.h"
-*/
-import "C"
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -37,12 +32,12 @@ import (
 	"path"
 
 	"net/http"
-	"unsafe"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verify"
+	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -70,6 +65,8 @@ const (
 var (
 	milanUrlVcek = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
 	milanUrlVlek = "https://kdsintf.amd.com/vlek/v1/Milan/cert_chain"
+
+	vlekUuid = []byte{0xa8, 0x07, 0x4b, 0xc2, 0xa2, 0x5a, 0x48, 0x3e, 0xaa, 0xe6, 0x39, 0xc0, 0x45, 0xa0, 0xb8, 0xa1}
 )
 
 // Snp is a structure required for implementing the Measure method
@@ -78,6 +75,12 @@ type Snp struct {
 	snpCertChain     []*x509.Certificate
 	signingCertChain []*x509.Certificate
 	priv             crypto.PrivateKey
+}
+
+type SnpCertTableEntry struct {
+	Uuid   [16]byte
+	Offset uint32
+	Length uint32
 }
 
 // Init initializaes the SNP driver with the specifified configuration
@@ -203,20 +206,18 @@ func getMeasurement(nonce []byte) ([]byte, error) {
 
 	log.Tracef("Generating SNP attestation report with nonce: %v", hex.EncodeToString(nonce))
 
-	buf := make([]byte, 4000)
-	cBuf := (*C.uint8_t)(unsafe.Pointer(&buf[0]))
-	cLen := C.size_t(4000)
-	cUserData := (*C.uint8_t)(unsafe.Pointer(&nonce[0]))
-	cUserDataLen := C.size_t(len(nonce))
-
-	cRes, err := C.snp_dump_ar(cBuf, cLen, cUserData, cUserDataLen)
+	d, err := client.OpenDevice()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve SNP AR: %w", err)
+		return nil, fmt.Errorf("failed to open /dev/sev-guest")
 	}
+	defer d.Close()
 
-	res := int(cRes)
-	if res != 0 {
-		return nil, fmt.Errorf("failed to retrieve SNP AR. C.snp_dump_ar returned %v", res)
+	var ud [64]byte
+	copy(ud[:], nonce)
+	//lint:ignore SA1019 will be updated later
+	buf, err := client.GetRawReport(d, ud)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
 
 	log.Trace("Generated SNP attestation report")
@@ -228,23 +229,43 @@ func getVlek() ([]byte, error) {
 
 	log.Trace("Fetching VLEK via extended attestation report request")
 
-	buf := make([]byte, 8192)
-	cBuf := (*C.uint8_t)(unsafe.Pointer(&buf[0]))
-	cLen := C.size_t(8192)
-
-	cRes, err := C.snp_dump_cert(cBuf, cLen)
+	d, err := client.OpenDevice()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve SNP AR: %w", err)
+		return nil, fmt.Errorf("failed to open /dev/sev-guest")
+	}
+	defer d.Close()
+
+	//lint:ignore SA1019 will be updated later
+	_, certs, err := client.GetRawExtendedReport(d, [64]byte{0})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
 
-	res := int(cRes)
-	if res != 0 {
-		return nil, fmt.Errorf("failed to retrieve SNP extended AR. C.snp_dump_cert returned %v", res)
+	log.Tracef("Fetched extended SNP attestation report with certs length %v", len(certs))
+
+	b := bytes.NewBuffer(certs)
+	for {
+		log.Trace("Parsing cert table entry..")
+		var entry SnpCertTableEntry
+		err = binary.Read(b, binary.LittleEndian, &entry)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode cert table entry: %w", err)
+		}
+
+		if entry == (SnpCertTableEntry{}) {
+			log.Tracef("Reached last (zero) SNP cert table entry")
+			break
+		}
+
+		log.Tracef("Found cert table entry with UUID %v", hex.EncodeToString(entry.Uuid[:]))
+
+		if bytes.Equal(entry.Uuid[:], vlekUuid) {
+			log.Tracef("Found VLEK offset %v length %v", entry.Offset, entry.Length)
+			return certs[entry.Offset : entry.Offset+entry.Length], nil
+		}
 	}
 
-	log.Trace("Generated extended SNP attestation report")
-
-	return buf, nil
+	return nil, errors.New("could not find VLEK in certificates")
 }
 
 func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
@@ -342,6 +363,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse VLEK")
 		}
+		log.Tracef("Successfully parsed VLEK CN=%v", signingCert.Subject.CommonName)
 		caUrl = milanUrlVlek
 	} else {
 		return nil, fmt.Errorf("internal error: signing cert not initialized")

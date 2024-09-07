@@ -598,12 +598,7 @@ func collectReferenceValues(metadata *ar.Metadata) (map[string][]ar.ReferenceVal
 
 func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Result, bool) {
 
-	pem := internal.WriteCertPem(cert)
-	log.Warnf("%v", string(pem))
-
 	for _, ext := range cert.Extensions {
-
-		log.Tracef("OID: %v", ext.Id.String())
 
 		if ext.Id.String() == oid {
 			log.Tracef("Found %v, length %v, values %v", oid, len(ext.Value), ext.Value)
