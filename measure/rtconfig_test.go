@@ -39,23 +39,23 @@ func TestGetConfigMeasurement(t *testing.T) {
 				configData: configData,
 			},
 			want: []byte{
-				0xaf, 0xd6, 0xa3, 0x51, 0xca, 0x87, 0xb4, 0x1c,
-				0x84, 0x82, 0x5d, 0x76, 0x7a, 0x71, 0x91, 0x80,
-				0x3d, 0x08, 0x77, 0xc3, 0x33, 0xf1, 0xf1, 0xee,
-				0xaa, 0xd0, 0xa5, 0x9a, 0xf5, 0x01, 0x11, 0x0e,
+				0x54, 0x96, 0xca, 0x7d, 0x37, 0x8e, 0x44, 0xb3,
+				0x70, 0x47, 0x8e, 0x8d, 0xf4, 0x79, 0xdd, 0x99,
+				0x71, 0x65, 0x11, 0x66, 0xe9, 0x93, 0x3f, 0x7f,
+				0x48, 0x6e, 0x44, 0x88, 0x75, 0xea, 0xe9, 0x2e,
 			},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, _, err := GetConfigMeasurement(tt.args.id, tt.args.configData)
+			got, _, _, err := GetSpecMeasurement(tt.args.id, tt.args.configData)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetConfigMeasurement() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetSpecMeasurement() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetConfigMeasurement() = %v, want %v", hex.EncodeToString(got), hex.EncodeToString(tt.want))
+				t.Errorf("GetSpecMeasurement() = %v, want %v", hex.EncodeToString(got), hex.EncodeToString(tt.want))
 			}
 		})
 	}

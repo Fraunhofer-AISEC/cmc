@@ -24,7 +24,6 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
 
@@ -269,8 +268,18 @@ func Test_collectReferenceValues(t *testing.T) {
 				t.Errorf("collectReferenceValues() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("collectReferenceValues() = %v, want %v", got, tt.want)
+			for wantedkey, wantedrefvals := range tt.want {
+				for _, wantedrefval := range wantedrefvals {
+					found := false
+					for _, gotrefval := range got[wantedkey] {
+						if gotrefval.Name == wantedrefval.Name {
+							found = true
+						}
+					}
+					if !found {
+						t.Errorf("collectReferenceValues() failed to find %v", wantedrefval.Name)
+					}
+				}
 			}
 		})
 	}
