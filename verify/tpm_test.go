@@ -648,9 +648,8 @@ var (
 				},
 			},
 		},
-		SignCheck:       validResult,
-		CertChainCheck:  validResult,
-		ExtensionsCheck: nil,
+		SignCheck:      validResult,
+		CertChainCheck: validResult,
 	}
 
 	validTpmMeasurementResult = ar.MeasurementResult{

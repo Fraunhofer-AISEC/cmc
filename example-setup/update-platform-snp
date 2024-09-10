@@ -8,7 +8,7 @@ source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
 if [[ "$#" -ne 2 ]]; then
-   echo "Usage: ./update-platform <data-folder> <ovmf-image> <cbor|json>"
+   echo "Usage: ./update-platform <data-folder> <cbor|json>"
    exit 1
 fi
 
@@ -16,8 +16,9 @@ data=$(set -e; abs_path "${1}")
 input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 out="${data}/metadata-signed"
-ovmf="${2}"
-ser="${3}"
+ser="${2}"
+
+ovmf="${data}/uefi/result/ovmf_img.fd"
 
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
@@ -44,13 +45,17 @@ printf "%s\n" "${json}" > "${input}/device.description.json"
 manifestjson=$(cat "${input}/rtm.manifest.json")
 
 # Insert high-level details
-manifestjson=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
-manifestjson=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
+manifestjson=$(echo "${manifestjson}" | jq ".details.firmware = \"${firmware}\"")
+manifestjson=$(echo "${manifestjson}" | jq ".details.bootloader = \"${bootloader}\"")
 
 json=$(cat "${dir}/metadata-raw/snp.referencevalue.template")
 
 # TODO parameters vor vcpus and vmm-type
 ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus=2 --vmm-type=ec2 --ovmf="${ovmf}")
+
+# Get AMD cert chain for milan
+wget -O "${dir}/cert_chain" https://kdsintf.amd.com/vlek/v1/Milan/cert_chain
+awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${dir}/cert_chain" > "${dir}/ark_milan.pem"
 
 fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
 

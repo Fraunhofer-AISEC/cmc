@@ -37,7 +37,15 @@ mkdir -p "${data}"
 sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq
 
 # Install virtee sev-snp measure tools
-git clone https://github.com/virtee/sev-snp-measure "${data}/"
+echo "Clone virtee/sev-snp-measure tools"
+git clone https://github.com/virtee/sev-snp-measure.git "${data}/sev-snp-measure"
+
+# Clone OVMF with AWS patches
+echo "Cloning AWS OVMF.."
+git clone https://github.com/aws/uefi.git "${data}/uefi"
+cd "${data}/uefi"
+echo "Building AWS OVMF.."
+nix-build --pure
 
 # Build CMC
 cd "${cmc}"

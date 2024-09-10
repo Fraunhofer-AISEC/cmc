@@ -618,7 +618,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 						oid, ext.Value[2], value)
 					return ar.Result{
 						Success:  false,
-						Expected: strconv.FormatUint(uint64(value), 10),
+						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
 						Got:      strconv.FormatUint(uint64(ext.Value[2]), 10),
 					}, false
 				}
@@ -631,7 +631,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 						oid, ext.Value[2], ext.Value[3], value)
 					return ar.Result{
 						Success:  false,
-						Expected: strconv.FormatUint(uint64(value), 10),
+						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
 						Got:      strconv.FormatUint(uint64(ext.Value[3]), 10),
 					}, false
 				}
@@ -640,7 +640,10 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 					oid, ext.Value[1])
 				return ar.Result{Success: false, ErrorCode: ar.OidLength}, false
 			}
-			return ar.Result{Success: true}, true
+			return ar.Result{
+				Success: true,
+				Got:     fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
+			}, true
 		}
 	}
 
@@ -658,16 +661,30 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
 				return ar.Result{
 					Success:  false,
-					Expected: hex.EncodeToString(buf),
+					Expected: fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(buf)),
 					Got:      hex.EncodeToString(ext.Value),
 				}, false
 			}
-			return ar.Result{Success: true}, true
+			return ar.Result{
+				Success: true,
+				Got:     fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(ext.Value)),
+			}, true
 		}
 	}
 
 	log.Tracef("extension %v not present in certificate", oid)
 	return ar.Result{Success: false, ErrorCode: ar.OidNotPresent}, false
+}
+
+func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
+
+	for _, ext := range cert.Extensions {
+		if ext.Id.String() == oid {
+			return string(ext.Value), true
+		}
+	}
+	log.Tracef("extension %v: %v not present in certificate", oid, oidDesc(oid))
+	return "", false
 }
 
 func contains(elem string, list []string) bool {

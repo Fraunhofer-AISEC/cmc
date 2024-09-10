@@ -17,9 +17,11 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 ## Prerequisites
 
 - A Linux platform
-- For TPM attestation, access to `/dev/tpm0`.
-- For AMD SEV-SNP an SNP-capable AMD server
+- For TPM attestation, access to `/dev/tpmrm0` or `/dev/tpm0`.
+- For AMD SEV-SNP an SNP-capable AMD server and an SNP VM with access to `/dev/sev-guest`
 - Building the *cmcd* requires *go* (https://golang.org/doc/install)
+- Building AWS Firmware (OVMF) for running the CMC within AWS AMD SEV-SNP virtual machines
+requires [Nix](https://nixos.org/download/)
 
 ## Quick Start
 
