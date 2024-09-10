@@ -80,6 +80,14 @@ const (
 	signature_offset = 0x2A0
 )
 
+type AkType int
+
+const (
+	UNKNOWN = iota
+	VCEK
+	VLEK
+)
+
 func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -181,20 +189,28 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 			})
 	}
 
-	// Compare SNP parameters
-	result.SnpResult.VersionMatch, ret = verifySnpVersion(s, snpReferenceValue.Snp.Version)
+	// Verify the SNP report version
+	result.SnpResult.VersionMatch, ret = verifySnpVersion(s.Version, snpReferenceValue.Snp.Version)
 	if !ret {
 		ok = false
 	}
-	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s, snpReferenceValue.Snp.Policy)
+	// Verify SNP VM configuration
+	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, snpReferenceValue.Snp.Policy)
 	if !ret {
 		ok = false
 	}
+	// Verify the SNP firmware version
 	result.SnpResult.FwCheck, ret = verifySnpFw(s, snpReferenceValue.Snp.Fw)
 	if !ret {
 		ok = false
 	}
+	// Verify the SNP TCB against the specified minimum versions
 	result.SnpResult.TcbCheck, ret = verifySnpTcb(s, snpReferenceValue.Snp.Tcb)
+	if !ret {
+		ok = false
+	}
+	// Examine SNP x509 extensions
+	result.SnpResult.ExtensionsCheck, ret = verifySnpExtensions(certs[0], &s)
 	if !ret {
 		ok = false
 	}
@@ -204,38 +220,28 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	return result, ok
 }
 
-func DecodeSnpReport(report []byte) (snpreport, error) {
-	var s snpreport
-	b := bytes.NewBuffer(report)
-	err := binary.Read(b, binary.LittleEndian, &s)
-	if err != nil {
-		return snpreport{}, fmt.Errorf("failed to decode SNP report: %w", err)
-	}
-	return s, nil
-}
-
-func verifySnpVersion(s snpreport, version uint32) (ar.Result, bool) {
+func verifySnpVersion(expected, got uint32) (ar.Result, bool) {
 	r := ar.Result{}
-	ok := s.Version == version
+	ok := expected == got
 	if !ok {
-		log.Tracef("SNP report version mismatch: Report = %v, supplied = %v", s.Version, version)
+		log.Tracef("SNP report version mismatch: Report = %v, supplied = %v", got, expected)
 		r.Success = false
-		r.Expected = strconv.FormatUint(uint64(version), 10)
-		r.Got = strconv.FormatUint(uint64(s.Version), 10)
+		r.Expected = strconv.FormatUint(uint64(expected), 10)
+		r.Got = strconv.FormatUint(uint64(got), 10)
 	} else {
 		r.Success = true
 	}
 	return r, ok
 }
 
-func verifySnpPolicy(s snpreport, v ar.SnpPolicy) (ar.PolicyCheck, bool) {
+func verifySnpPolicy(policy uint64, v ar.SnpPolicy) (ar.PolicyCheck, bool) {
 
-	abiMajor := uint8(s.Policy & 0xFF)
-	abiMinor := uint8((s.Policy >> 8) & 0xFF)
-	smt := (s.Policy & (1 << 16)) != 0
-	migration := (s.Policy & (1 << 18)) != 0
-	debug := (s.Policy & (1 << 19)) != 0
-	singleSocket := (s.Policy & (1 << 20)) != 0
+	abiMajor := uint8(policy & 0xFF)
+	abiMinor := uint8((policy >> 8) & 0xFF)
+	smt := (policy & (1 << 16)) != 0
+	migration := (policy & (1 << 18)) != 0
+	debug := (policy & (1 << 19)) != 0
+	singleSocket := (policy & (1 << 20)) != 0
 
 	// Convert to int, as json.Marshal otherwise interprets the values as strings
 	r := ar.PolicyCheck{
@@ -302,6 +308,8 @@ func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
 
 func verifySnpTcb(s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
 
+	// TODO refactor into function and use it also in
+	// extention function
 	currBl := uint8(s.CurrentTcb & 0xFF)
 	commBl := uint8(s.CommittedTcb & 0xFF)
 	launBl := uint8(s.LaunchTcb & 0xFF)
@@ -390,13 +398,6 @@ func verifySnpSignature(
 	s := new(big.Int)
 	s.SetBytes(sRaw)
 
-	// Examine SNP x509 extensions
-	extensionResults, ok := verifySnpExtensions(certs[0], &report)
-	result.ExtensionsCheck = extensionResults
-	if !ok {
-		return result, false
-	}
-
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
 		log.Tracef("Signature Algorithm %v not supported", report.SignatureAlgo)
@@ -465,45 +466,107 @@ func verifySnpSignature(
 	return result, true
 }
 
+const (
+	oidBl     = "1.3.6.1.4.1.3704.1.3.1"
+	oidTee    = "1.3.6.1.4.1.3704.1.3.2"
+	oidSnp    = "1.3.6.1.4.1.3704.1.3.3"
+	oidUcode  = "1.3.6.1.4.1.3704.1.3.8"
+	oidChipId = "1.3.6.1.4.1.3704.1.4"
+	oidCspId  = "1.3.6.1.4.1.3704.1.5"
+)
+
+func oidDesc(oid string) string {
+	switch oid {
+	case oidBl:
+		return "OID BL SPL"
+	case oidTee:
+		return "OID TEE SPL"
+	case oidSnp:
+		return "OID SNP SPL"
+	case oidUcode:
+		return "OID uCode SPL"
+	case oidChipId:
+		return "OID CHIP ID"
+	case oidCspId:
+		return "OID CSP ID"
+	default:
+		return "OID UNKNOWN"
+	}
+}
+
 func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result, bool) {
 	success := true
 	var ok bool
 	var r ar.Result
-	tcb := report.CurrentTcb
+
+	// Checked extensions depend on the key type
+	akType, err := GetAkType(report.KeySelection)
+	if err != nil {
+		log.Tracef("Could not determine SNP attestation report attestation key type")
+		success = false
+	}
+
+	// The x509 extensions must match the reported TCB
+	tcb := report.ReportedTcb
 
 	results := make([]ar.Result, 0)
 
-	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.1", uint8(tcb)); !ok {
-		log.Tracef("SEV BL Extension Check failed:")
+	if r, ok = checkExtensionUint8(cert, oidBl, uint8(tcb)); !ok {
+		log.Tracef("SEV BL extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.2", uint8(tcb>>8)); !ok {
-		log.Tracef("SEV TEE Extension Check failed")
+	if r, ok = checkExtensionUint8(cert, oidTee, uint8(tcb>>8)); !ok {
+		log.Tracef("SEV TEE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.3", uint8(tcb>>48)); !ok {
-		log.Tracef("SEV SNP Extension Check failed")
+	if r, ok = checkExtensionUint8(cert, oidSnp, uint8(tcb>>48)); !ok {
+		log.Tracef("SEV SNP extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, "1.3.6.1.4.1.3704.1.3.8", uint8(tcb>>56)); !ok {
-		log.Tracef("SEV UCODE Extension Check failed")
+	if r, ok = checkExtensionUint8(cert, oidUcode, uint8(tcb>>56)); !ok {
+		log.Tracef("SEV UCODE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionBuf(cert, "1.3.6.1.4.1.3704.1.4", report.ChipId[:]); !ok {
-		log.Tracef("Chip ID Extension Check failed")
-		success = false
+	if akType == VCEK {
+		// If the VCEK was used, we must compare the reported Chip ID against the extension Chip ID
+		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:]); !ok {
+			log.Tracef("Chip ID extension check failed")
+			success = false
+		}
+		results = append(results, r)
 	}
-	results = append(results, r)
+
+	if akType == VLEK {
+		// If the VLEK was used, the CSP extensions must be present
+		// TODO currently we simply accept all CSPs, discuss if we need to match here
+		csp, ok := getExtensionString(cert, oidCspId)
+		if !ok {
+			log.Trace("CSP ID extension check failed")
+			success = false
+		}
+		log.Tracef("CSP ID extension present: %v", csp)
+		results = append(results, ar.Result{Success: ok, Got: csp})
+	}
 
 	return results, success
+}
+
+func DecodeSnpReport(report []byte) (snpreport, error) {
+	var s snpreport
+	b := bytes.NewBuffer(report)
+	err := binary.Read(b, binary.LittleEndian, &s)
+	if err != nil {
+		return snpreport{}, fmt.Errorf("failed to decode SNP report: %w", err)
+	}
+	return s, nil
 }
 
 func min(v []uint8) uint8 {
@@ -532,4 +595,16 @@ func checkMinVersion(version []uint8, ref []uint8) bool {
 		}
 	}
 	return true
+}
+
+func GetAkType(keySelection uint32) (AkType, error) {
+	arkey := (keySelection >> 2) & 0x7
+	if arkey == 0 {
+		log.Trace("VCEK is used to sign attestation report")
+		return VCEK, nil
+	} else if arkey == 1 {
+		log.Trace("VLEK is used to sign attestation report")
+		return VLEK, nil
+	}
+	return UNKNOWN, fmt.Errorf("unknown AK type %v", arkey)
 }

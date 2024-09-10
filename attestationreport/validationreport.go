@@ -109,10 +109,11 @@ type TpmResult struct {
 }
 
 type SnpResult struct {
-	VersionMatch Result       `json:"reportVersionMatch"`
-	FwCheck      VersionCheck `json:"fwCheck"`
-	TcbCheck     TcbCheck     `json:"tcbCheck"`
-	PolicyCheck  PolicyCheck  `json:"policyCheck"`
+	VersionMatch    Result       `json:"reportVersionMatch"`
+	FwCheck         VersionCheck `json:"fwCheck"`
+	TcbCheck        TcbCheck     `json:"tcbCheck"`
+	PolicyCheck     PolicyCheck  `json:"policyCheck"`
+	ExtensionsCheck []Result     `json:"extensionsCheck"`
 }
 
 type SgxResult struct {
@@ -210,10 +211,9 @@ type TdAttributesCheck struct {
 // SignatureResults represents the results for validation of
 // a provided signature and the used certificates.
 type SignatureResult struct {
-	SignCheck       Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
-	CertChainCheck  Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
-	ExtensionsCheck []Result              `json:"extensionsCheck,omitempty"`
-	ValidatedCerts  [][]X509CertExtracted `json:"validatedCerts"` //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
+	SignCheck      Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
+	CertChainCheck Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
+	ValidatedCerts [][]X509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
@@ -677,9 +677,6 @@ func (r *Result) PrintErr(format string, args ...interface{}) {
 func (r *SignatureResult) PrintErr(format string, args ...interface{}) {
 	r.SignCheck.PrintErr("%v signature check", fmt.Sprintf(format, args...))
 	r.CertChainCheck.PrintErr("%v cert chain check", fmt.Sprintf(format, args...))
-	for _, e := range r.ExtensionsCheck {
-		e.PrintErr("%v extension check", fmt.Sprintf(format, args...))
-	}
 }
 
 func (r *VerificationResult) PrintErr() {

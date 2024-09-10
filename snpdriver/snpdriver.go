@@ -50,12 +50,6 @@ const (
 	DER
 )
 
-type SigningKey int
-
-const (
-	VCEK = iota
-	VLEK
-)
 const (
 	snpChainFile     = "akchain.pem"
 	signingChainFile = "ikchain.pem"
@@ -325,16 +319,9 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
-	arkey := (s.KeySelection >> 2) & 0x7
-	var signingKey SigningKey
-	if arkey == 0 {
-		log.Trace("VCEK is used to sign attestation report")
-		signingKey = VCEK
-	} else if arkey == 1 {
-		log.Trace("VLEK is used to sign attestation report")
-		signingKey = VLEK
-	} else {
-		return nil, fmt.Errorf("could not determine SNP attestation report signing key")
+	akType, err := verify.GetAkType(s.KeySelection)
+	if err != nil {
+		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
 	// TODO mandate server authentication in the future, otherwise
@@ -344,7 +331,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 
 	var signingCert *x509.Certificate
 	var caUrl string
-	if signingKey == VCEK {
+	if akType == verify.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Trace("Enrolling VCEK via EST")
 		signingCert, err = client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
@@ -352,7 +339,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
 		caUrl = milanUrlVcek
-	} else if signingKey == VLEK {
+	} else if akType == verify.VLEK {
 		// VLEK is used, in this case we fetch the VLEK from the host
 		vlek, err := getVlek()
 		if err != nil {
