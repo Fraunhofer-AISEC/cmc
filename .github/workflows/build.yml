@@ -42,22 +42,22 @@ jobs:
       - name: Test
         run: go test ./...
       - name: "Upload cmcd"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: cmcd
           path: cmcd/cmcd
       - name: "Upload testtool"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: testtool
           path: testtool/testtool
       - name: "Upload cmc-converter"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: cmc-converter
           path: tools/cmc-conveter/cmc-converter
       - name: "Upload cmc-signing-tool"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: cmc-signing-tool
           path: tools/signing-tool/signing-tool
