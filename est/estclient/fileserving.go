@@ -54,20 +54,21 @@ func FetchMetadata(addr string) ([][]byte, error) {
 
 	content, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
+		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
 	}
 
 	// Parse root directory
 	var pre Pre
 	err = xml.Unmarshal(content, &pre)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal HTTP response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal HTTP response: %w. Response: %v",
+			err, string(content))
 	}
 
 	// Parse subdirectories recursively and save files
 	data, err := fetchDataRecursively(client, pre, addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch recursively: %v", err)
+		return nil, fmt.Errorf("failed to fetch recursively: %w", err)
 	}
 
 	return data, nil
@@ -110,19 +111,19 @@ func fetchDataRecursively(client *Client, pre Pre, addr string) ([][]byte, error
 			var pre Pre
 			err = xml.Unmarshal(content, &pre)
 			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal HTTP response: %v", err)
+				return nil, fmt.Errorf("failed to unmarshal HTTP response: %w", err)
 			}
 			d, err := fetchDataRecursively(client, pre, subpath)
 			metadata = append(metadata, d...)
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch recursively: %v", err)
+				return nil, fmt.Errorf("failed to fetch recursively: %w", err)
 			}
 		} else {
 
 			// Content is a file, gather content
 			d, err := io.ReadAll(resp.Body)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read HTTP response body: %v", err)
+				return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
 			}
 
 			metadata = append(metadata, d)
