@@ -445,9 +445,17 @@ func httpHandleMetadata(folder string) error {
 			return fmt.Errorf("path %v does not exist", abs)
 		}
 		fs := http.FileServer(http.Dir(path))
-		http.Handle("/"+d+"/", http.StripPrefix("/"+d, fs))
+		// http.Handle("/"+d+"/", http.StripPrefix("/"+d, fs))
+		http.Handle("/"+d+"/", logRequest(http.StripPrefix("/"+d, fs)))
 	}
 	return nil
+}
+
+func logRequest(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Tracef("Received request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		h.ServeHTTP(w, r)
+	})
 }
 
 func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, payload []byte,
