@@ -57,9 +57,20 @@ func FetchMetadata(addr string) ([][]byte, error) {
 		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
 	}
 
+	// Extract relevant content, avoiding xml errors of irrelevant sections
+	scontent := string(content)
+	startTag := "<pre>"
+	endTag := "</pre>"
+	startIdx := strings.Index(scontent, startTag)
+	endIdx := (strings.Index(scontent, endTag))
+	if startIdx == -1 || endIdx == -1 {
+		return nil, fmt.Errorf("failed to extract xml from content: %v", scontent)
+	}
+	extracted := []byte(scontent[startIdx : endIdx+len(endTag)])
+
 	// Parse root directory
 	var pre Pre
-	err = xml.Unmarshal(content, &pre)
+	err = xml.Unmarshal(extracted, &pre)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal HTTP response: %w. Response: %v",
 			err, string(content))
