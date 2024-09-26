@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/fxamacker/cbor/v2"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -203,7 +202,7 @@ func SignerOptsToHash(opts crypto.SignerOpts) (HashFunction, error) {
 //
 //	Len uint32 -> Length of the payload to be sent
 //	Type uint32 -> Type of the payload
-//	payload []byte -> CBOR-encoded payload
+//	payload []byte -> encoded payload
 func Receive(conn net.Conn) ([]byte, uint32, error) {
 
 	// If unix domain sockets are used, set the write buffer size
@@ -260,16 +259,6 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 
 	log.Tracef("Received payload length %v", payloadLen)
 
-	if msgType == TypeError {
-		resp := new(SocketError)
-		err = cbor.Unmarshal(payload.Bytes(), resp)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to unmarshal error response")
-		} else {
-			return nil, 0, fmt.Errorf("server responded with error: %v", resp.Msg)
-		}
-	}
-
 	return payload.Bytes(), msgType, nil
 }
 
@@ -277,7 +266,7 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 //
 //	Len uint32 -> Length of the payload to be sent
 //	Type uint32 -> Type of the payload
-//	payload []byte -> CBOR-encoded payload
+//	payload []byte -> encoded payload
 func Send(conn net.Conn, payload []byte, t uint32) error {
 
 	if len(payload) > MaxMsgLen {
@@ -319,18 +308,4 @@ func Send(conn net.Conn, payload []byte, t uint32) error {
 	}
 
 	return nil
-}
-
-func SendError(conn net.Conn, format string, args ...interface{}) error {
-	msg := fmt.Sprintf(format, args...)
-	log.Warn(msg)
-	resp := &SocketError{
-		Msg: msg,
-	}
-	payload, err := cbor.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal error response: %v", err)
-	}
-
-	return Send(conn, payload, TypeError)
 }

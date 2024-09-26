@@ -24,9 +24,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/fxamacker/cbor/v2"
-
 	// local modules
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -62,7 +61,7 @@ func (a SocketApi) generate(c *config) {
 	}
 
 	// Marshal payload
-	payload, err := cbor.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		log.Fatalf("failed to marshal payload: %v", err)
 	}
@@ -74,14 +73,15 @@ func (a SocketApi) generate(c *config) {
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, msgType, err := api.Receive(conn)
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
 	}
+	checkError(msgType, payload, c.serializer)
 
 	// Unmarshal attestation response
 	var attestationResp api.AttestationResponse
-	err = cbor.Unmarshal(payload, &attestationResp)
+	err = c.serializer.Unmarshal(payload, &attestationResp)
 	if err != nil {
 		log.Fatalf("failed to unmarshal response")
 	}
@@ -122,7 +122,7 @@ func (a SocketApi) verify(c *config) {
 		Policies:          c.policies,
 	}
 
-	resp, err := verifySocketRequest(c.Network, c.CmcAddr, req)
+	resp, err := verifySocketRequest(c, req)
 	if err != nil {
 		log.Fatalf("Failed to verify: %v", err)
 	}
@@ -156,7 +156,7 @@ func (a SocketApi) measure(c *config) {
 		RootfsSha256: rootfsHash,
 	}
 
-	resp, err := measureSocketRequest(c.Network, c.CmcAddr, req)
+	resp, err := measureSocketRequest(c, req)
 	if err != nil {
 		log.Fatalf("Failed to measure: %v", err)
 	}
@@ -188,19 +188,19 @@ func (a SocketApi) iothub(c *config) {
 	log.Fatalf("IoT hub not implemented for sockets API")
 }
 
-func verifySocketRequest(network, addr string, req *api.VerificationRequest,
+func verifySocketRequest(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
-	log.Tracef("Connecting via %v socket to %v", network, addr)
+	log.Tracef("Connecting via %v socket to %v", c.Network, c.CmcAddr)
 
 	// Establish connection
-	conn, err := net.Dial(network, addr)
+	conn, err := net.Dial(c.Network, c.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}
 
 	// Marshal payload
-	payload, err := cbor.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
@@ -212,14 +212,15 @@ func verifySocketRequest(network, addr string, req *api.VerificationRequest,
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, msgType, err := api.Receive(conn)
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
 	}
+	checkError(msgType, payload, c.serializer)
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
-	err = cbor.Unmarshal(payload, verifyResp)
+	err = c.serializer.Unmarshal(payload, verifyResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
@@ -227,19 +228,19 @@ func verifySocketRequest(network, addr string, req *api.VerificationRequest,
 	return verifyResp, nil
 }
 
-func measureSocketRequest(network, addr string, req *api.MeasureRequest,
+func measureSocketRequest(c *config, req *api.MeasureRequest,
 ) (*api.MeasureResponse, error) {
 
-	log.Tracef("Connecting via %v socket to %v", network, addr)
+	log.Tracef("Connecting via %v socket to %v", c.Network, c.CmcAddr)
 
 	// Establish connection
-	conn, err := net.Dial(network, addr)
+	conn, err := net.Dial(c.Network, c.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}
 
 	// Marshal payload
-	payload, err := cbor.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
@@ -251,17 +252,30 @@ func measureSocketRequest(network, addr string, req *api.MeasureRequest,
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, msgType, err := api.Receive(conn)
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
 	}
+	checkError(msgType, payload, c.serializer)
 
 	// Unmarshal attestation response
 	measureResp := new(api.MeasureResponse)
-	err = cbor.Unmarshal(payload, measureResp)
+	err = c.serializer.Unmarshal(payload, measureResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
 
 	return measureResp, nil
+}
+
+func checkError(t uint32, payload []byte, s ar.Serializer) {
+	if t == api.TypeError {
+		resp := new(api.SocketError)
+		err := s.Unmarshal(payload, resp)
+		if err != nil {
+			log.Fatal("failed to unmarshal error response")
+		} else {
+			log.Fatalf("server responded with error: %v", resp.Msg)
+		}
+	}
 }
