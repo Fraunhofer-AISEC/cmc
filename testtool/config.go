@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
@@ -37,6 +38,11 @@ const (
 
 var (
 	apis = map[string]Api{}
+
+	serializers = map[string]ar.Serializer{
+		"json": ar.JsonSerializer{},
+		"cbor": ar.CborSerializer{},
+	}
 
 	logLevels = map[string]logrus.Level{
 		"panic": logrus.PanicLevel,
@@ -83,6 +89,7 @@ type config struct {
 	Header       []string `json:"header"`
 	Method       string   `json:"method"`
 	Data         string   `json:"data"`
+	Serializer   string   `json:"socketApiSerializer"`
 	// Only Lib API
 	ProvAddr       string   `json:"provServerAddr"`
 	Metadata       []string `json:"metadata"`
@@ -98,30 +105,32 @@ type config struct {
 	CtrRootfs string `json:"ctrRootfs"`
 	CtrConfig string `json:"ctrConfig"`
 
-	ca       []byte
-	policies []byte
-	api      Api
-	interval time.Duration
+	ca         []byte
+	policies   []byte
+	api        Api
+	interval   time.Duration
+	serializer ar.Serializer
 }
 
 const (
 	// Generic flags
-	configFlag   = "config"
-	modeFlag     = "mode"
-	addrFlag     = "addr"
-	cmcFlag      = "cmc"
-	reportFlag   = "report"
-	resultFlag   = "result"
-	nonceFlag    = "nonce"
-	caFlag       = "ca"
-	policiesFlag = "policies"
-	apiFlag      = "api"
-	networkFlag  = "network"
-	mtlsFlag     = "mtls"
-	attestFlag   = "attest"
-	logFlag      = "log"
-	publishFlag  = "publish"
-	intervalFlag = "interval"
+	configFlag     = "config"
+	modeFlag       = "mode"
+	addrFlag       = "addr"
+	cmcFlag        = "cmc"
+	reportFlag     = "report"
+	resultFlag     = "result"
+	nonceFlag      = "nonce"
+	caFlag         = "ca"
+	policiesFlag   = "policies"
+	apiFlag        = "api"
+	networkFlag    = "network"
+	mtlsFlag       = "mtls"
+	attestFlag     = "attest"
+	logFlag        = "log"
+	publishFlag    = "publish"
+	intervalFlag   = "interval"
+	serializerFlag = "serializer"
 	// Only lib API
 	provAddrFlag       = "prov"
 	metadataFlag       = "metadata"
@@ -165,6 +174,7 @@ func getConfig() *config {
 	interval := flag.String(intervalFlag, "",
 		"Interval at which connectors will be attested. If set to <=0, attestation will only be"+
 			" done once")
+	serializer := flag.String(serializerFlag, "", "Serializer to be used for socket API (JSON or CBOR)")
 	// Lib API flags
 	provAddr := flag.String(provAddrFlag, "",
 		"Address of the provisioning server (only for libapi)")
@@ -205,6 +215,7 @@ func getConfig() *config {
 		IntervalStr: "0s",
 		Attest:      "mutual",
 		Method:      "GET",
+		Serializer:  "cbor",
 	}
 
 	// Obtain custom configuration from file if specified
@@ -265,6 +276,9 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(intervalFlag) {
 		c.IntervalStr = *interval
+	}
+	if internal.FlagPassed(serializerFlag) {
+		c.Serializer = *serializer
 	}
 	// Lib API flags
 	if internal.FlagPassed(provAddrFlag) {
@@ -356,11 +370,19 @@ func getConfig() *config {
 		}
 	}
 
+	// Get Serializer
+	log.Tracef("Getting serializer %v", c.Serializer)
+	c.serializer, ok = serializers[strings.ToLower(c.Serializer)]
+	if !ok {
+		flag.Usage()
+		log.Fatalf("Serializer %v is not implemented", c.Serializer)
+	}
+
 	// Get API
 	c.api, ok = apis[strings.ToLower(c.Api)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("API %v is not implemented\n", c.Api)
+		log.Fatalf("API %v is not implemented", c.Api)
 	}
 
 	return c
@@ -433,7 +455,7 @@ func printConfig(c *config) {
 		log.Debugf("\tPoliciesFile: %v", c.PoliciesFile)
 	}
 	if strings.EqualFold(c.Api, "socket") {
-		log.Debugf("\tApi (Network): %v (%v)", c.Api, c.Network)
+		log.Debugf("\tApi (Network): %v (%v, %v)", c.Api, c.Network, c.Serializer)
 	} else {
 		log.Debugf("\tApi          : %v", c.Api)
 	}
