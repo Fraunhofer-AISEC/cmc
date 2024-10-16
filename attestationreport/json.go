@@ -338,7 +338,7 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 	}
 	hashed := hasher.Sum(nil)
 
-	// sign payload
+	// Sign payload
 	switch alg {
 	case jose.ES256, jose.ES384, jose.ES512:
 		// Obtain signature

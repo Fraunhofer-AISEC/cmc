@@ -57,7 +57,7 @@ func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 	log.Debug("Prover: Signing Attestation Report")
 	signedReport, err := generate.Sign(report, cc.Cmc.Drivers[0], cc.Cmc.Serializer)
 	if err != nil {
-		return nil, errors.New("prover: failed to sign Attestion Report ")
+		return nil, fmt.Errorf("prover: failed to sign attestation reoprt: %w", err)
 	}
 
 	return signedReport, nil

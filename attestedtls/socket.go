@@ -43,10 +43,10 @@ func init() {
 func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
+	log.Tracef("Sending attestation request to cmcd via %v on %v", cc.Network, cc.CmcAddr)
 	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("error dialing: %w", err)
+		return nil, fmt.Errorf("error dialing cmcd: %w", err)
 	}
 
 	req := &api.AttestationRequest{
@@ -63,19 +63,30 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 	// Send request
 	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to send request to cmcd: %w", err)
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return nil, fmt.Errorf("failed to receive from cmcd: %w", err)
+	}
+
+	if mtype == api.TypeError {
+		resp := new(api.SocketError)
+		err = cbor.Unmarshal(payload, resp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+		}
+		return nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
+	} else if mtype != api.TypeAttest {
+		return nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	resp := new(api.AttestationResponse)
 	err = cbor.Unmarshal(payload, resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
 	}
 
 	return resp.AttestationReport, nil
@@ -85,7 +96,7 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
 func (a SocketApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
+	log.Tracef("Sending verification request to cmcd via %v on %v", cc.Network, cc.CmcAddr)
 	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
@@ -106,20 +117,31 @@ func (a SocketApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 	// Perform Verify request
 	err = api.Send(conn, payload, api.TypeVerify)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("failed to send request to cmcd: %w", err)
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return fmt.Errorf("failed to receive from cmcd: %v", err)
+	}
+
+	if mtype == api.TypeError {
+		resp := new(api.SocketError)
+		err = cbor.Unmarshal(payload, resp)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+		}
+		return fmt.Errorf("received error from cmcd: %v", resp.Msg)
+	} else if mtype != api.TypeVerify {
+		return fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	// Unmarshal verify response
 	var verifyResp api.VerificationResponse
 	err = cbor.Unmarshal(payload, &verifyResp)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal response: %w", err)
+		return fmt.Errorf("failed to unmarshal cmcd verify response: %w", err)
 	}
 
 	// Parse VerificationResult
@@ -180,9 +202,20 @@ func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.Signe
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, mtype, err := api.Receive(conn)
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
+	}
+
+	if mtype == api.TypeError {
+		resp := new(api.SocketError)
+		err = cbor.Unmarshal(payload, resp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+		}
+		return nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
+	} else if mtype != api.TypeTLSSign {
+		return nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	// Unmarshal sign response
@@ -223,9 +256,20 @@ func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 
 	// Read reply
-	payload, _, err = api.Receive(conn)
+	payload, mtype, err := api.Receive(conn)
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
+	}
+
+	if mtype == api.TypeError {
+		resp := new(api.SocketError)
+		err = cbor.Unmarshal(payload, resp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+		}
+		return nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
+	} else if mtype != api.TypeTLSCert {
+		return nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	// Unmarshal cert response

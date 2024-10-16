@@ -124,6 +124,25 @@ const (
 	TypeTLSCert uint32 = 5
 )
 
+func TypeToString(t uint32) string {
+	switch t {
+	case TypeError:
+		return "Error"
+	case TypeAttest:
+		return "Attest"
+	case TypeVerify:
+		return "Verify"
+	case TypeMeasure:
+		return "Measure"
+	case TypeTLSSign:
+		return "TLSSign"
+	case TypeTLSCert:
+		return "TLSCert"
+	default:
+		return "Unknown"
+	}
+}
+
 // Converts Protobuf hashtype to crypto.SignerOpts
 func HashToSignerOpts(hashtype HashFunction, pssOpts *PSSOptions) (crypto.SignerOpts, error) {
 	var hash crypto.Hash
@@ -236,7 +255,7 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 			payloadLen, MaxMsgLen)
 	}
 
-	log.Tracef("Decoded header. Expecting type %v, length %v", msgType, payloadLen)
+	log.Tracef("Decoded header. Type %v, length %v", TypeToString(msgType), payloadLen)
 
 	// Read payload
 	payload := bytes.NewBuffer(nil)
@@ -297,7 +316,7 @@ func Send(conn net.Conn, payload []byte, t uint32) error {
 		return fmt.Errorf("could only send %v of %v bytes", n, len(buf))
 	}
 
-	log.Tracef("Sending payload type %v length %v", t, uint32(len(payload)))
+	log.Tracef("Sending payload type %v length %v", TypeToString(t), uint32(len(payload)))
 
 	n, err = conn.Write(payload)
 	if err != nil {
