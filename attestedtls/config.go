@@ -23,18 +23,28 @@ import (
 )
 
 type CmcApiSelect uint32
-type AttestSelect byte
 
 const (
 	CmcApi_GRPC   CmcApiSelect = 0
 	CmcApi_COAP   CmcApiSelect = 1
 	CmcApi_Socket CmcApiSelect = 2
 	CmcApi_Lib    CmcApiSelect = 3
+)
 
+type AttestSelect uint32
+
+const (
 	Attest_Mutual AttestSelect = 0
 	Attest_Client AttestSelect = 1
 	Attest_Server AttestSelect = 2
 	Attest_None   AttestSelect = 3
+)
+
+type Endpoint uint32
+
+const (
+	Endpoint_Client = 0
+	Endpoint_Server = 1
 )
 
 const (
@@ -59,7 +69,7 @@ type CmcConfig struct {
 }
 
 type CmcApi interface {
-	obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error)
+	obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error)
 	verifyAR(chbindings, report []byte, cc CmcConfig) error
 	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc CmcConfig) ([][]byte, error)
@@ -118,9 +128,9 @@ func WithMtls(mtls bool) ConnectionOption[CmcConfig] {
 }
 
 // WithAttest specifies whether to perform mutual, dialer only, or listener only attestation
-func WithAttest(mAttest string) ConnectionOption[CmcConfig] {
+func WithAttest(attest AttestSelect) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
-		c.Attest = GetAttestMode(mAttest)
+		c.Attest = attest
 	}
 }
 
@@ -146,20 +156,17 @@ func WithCmcConfig(cmcConfig *CmcConfig) ConnectionOption[CmcConfig] {
 	}
 }
 
-func GetAttestMode(mAttest string) AttestSelect {
-	var selection AttestSelect
-	switch mAttest {
-	case "mutual":
-		selection = Attest_Mutual
-	case "server":
-		selection = Attest_Server
-	case "client":
-		selection = Attest_Client
-	case "none":
-		selection = Attest_None
+func (s AttestSelect) String() string {
+	switch s {
+	case Attest_Mutual:
+		return "mutual"
+	case Attest_Client:
+		return "client"
+	case Attest_Server:
+		return "server"
+	case Attest_None:
+		return "none"
 	default:
-		log.Info("No mattest flag set, running default mutual attestation")
-		selection = Attest_Mutual
+		return "unknown"
 	}
-	return selection
 }

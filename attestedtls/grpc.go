@@ -54,7 +54,7 @@ func getCMCServiceConn(cc CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, co
 }
 
 // Obtains attestation report from CMCd
-func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
+func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error) {
 
 	// Get backend connection
 	log.Tracef("Obtaining AR from local cmcd on %v", cc.CmcAddr)

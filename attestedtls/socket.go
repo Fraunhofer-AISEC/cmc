@@ -40,7 +40,7 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
+func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error) {
 
 	// Establish connection
 	log.Tracef("Sending attestation request to cmcd via %v on %v", cc.Network, cc.CmcAddr)

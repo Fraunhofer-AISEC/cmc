@@ -79,6 +79,8 @@ func (s SocketServer) Serve(addr string, cmc *cmc.Cmc) error {
 func handleIncoming(conn net.Conn, cmc *cmc.Cmc) {
 	defer conn.Close()
 
+	log.Infof("Received request from %v", conn.RemoteAddr().String())
+
 	payload, reqType, err := api.Receive(conn)
 	if err != nil {
 		s, err := detectSerialization(payload)
@@ -164,7 +166,7 @@ func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 
 func validate(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 
-	log.Debug("Received Connection Request Type 'Verification Request'")
+	log.Debug("Received verification request")
 
 	req := new(api.VerificationRequest)
 	err := s.Unmarshal(payload, req)

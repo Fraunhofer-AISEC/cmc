@@ -26,6 +26,7 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
@@ -110,6 +111,7 @@ type config struct {
 	api        Api
 	interval   time.Duration
 	serializer ar.Serializer
+	attest     atls.AttestSelect
 }
 
 const (
@@ -167,14 +169,14 @@ func getConfig() *config {
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest := flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
-		"client only, or none [mutual, server, client, none]")
+		"client only, or none [mutual, client, server, none]")
 	logLevel := flag.String(logFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	publish := flag.String(publishFlag, "", "HTTP address to publish attestation results to")
 	interval := flag.String(intervalFlag, "",
 		"Interval at which connectors will be attested. If set to <=0, attestation will only be"+
 			" done once")
-	serializer := flag.String(serializerFlag, "", "Serializer to be used for socket API (JSON or CBOR)")
+	serializer := flag.String(serializerFlag, "", "Serializer to be used for socket API and aTLS (JSON or CBOR)")
 	// Lib API flags
 	provAddr := flag.String(provAddrFlag, "",
 		"Address of the provisioning server (only for libapi)")
@@ -385,6 +387,12 @@ func getConfig() *config {
 		log.Fatalf("API %v is not implemented", c.Api)
 	}
 
+	// Get attestation mode
+	c.attest, err = GetAttestMode(c.Attest)
+	if err != nil {
+		log.Fatalf("failed to get attestation mode: %v", err)
+	}
+
 	return c
 }
 
@@ -424,6 +432,23 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
 		}
 	}
+}
+
+func GetAttestMode(attest string) (atls.AttestSelect, error) {
+	var selection atls.AttestSelect
+	switch attest {
+	case "mutual":
+		selection = atls.Attest_Mutual
+	case "client":
+		selection = atls.Attest_Client
+	case "server":
+		selection = atls.Attest_Server
+	case "none":
+		selection = atls.Attest_None
+	default:
+		return 0, fmt.Errorf("unknown mode %v", attest)
+	}
+	return selection, nil
 }
 
 func printConfig(c *config) {

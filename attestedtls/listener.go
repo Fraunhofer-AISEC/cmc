@@ -77,9 +77,10 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
-	err = attestListener(tlsConn, chbindings, ln.CmcConfig)
+	err = atlsHandshakeStart(tlsConn, chbindings, ln.CmcConfig, Endpoint_Server)
+	err = aTlsHandshakeComplete(tlsConn, err)
 	if err != nil {
-		return nil, fmt.Errorf("remote attestation failed: %w", err)
+		return nil, fmt.Errorf("atls handshake failed: %w", err)
 	}
 
 	log.Info("Server-side aTLS connection complete")

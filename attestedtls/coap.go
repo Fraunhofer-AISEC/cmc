@@ -44,7 +44,7 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
+func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error) {
 
 	path := "/Attest"
 
