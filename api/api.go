@@ -255,7 +255,7 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 			payloadLen, MaxMsgLen)
 	}
 
-	log.Tracef("Decoded header. Type %v, length %v", TypeToString(msgType), payloadLen)
+	log.Tracef("Received header type %v. Receiving payload length %v", TypeToString(msgType), payloadLen)
 
 	// Read payload
 	payload := bytes.NewBuffer(nil)
@@ -268,8 +268,6 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 		}
 		received += n
 		payload.Write(chunk[:n])
-
-		log.Tracef("Received chunk of %v bytes\n", n)
 
 		if received == payloadLen {
 			break

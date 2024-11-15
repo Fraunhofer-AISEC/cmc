@@ -95,7 +95,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		IdleConnTimeout: 60 * time.Second,
 		TLSClientConfig: tlsConfig,
 
-		Attest:      c.Attest,
+		Attest:      c.attest,
 		MutualTls:   c.Mtls,
 		CmcAddr:     c.CmcAddr,
 		CmcApi:      api,
@@ -106,7 +106,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
-			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
+			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server) {
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
@@ -218,7 +218,7 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			Addr:      addr,
 			TLSConfig: tlsConfig,
 		},
-		Attest:      c.Attest,
+		Attest:      c.attest,
 		MutualTls:   c.Mtls,
 		CmcAddr:     c.CmcAddr,
 		CmcApi:      api,
@@ -227,7 +227,7 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Ca:          c.ca,
 		CmcPolicies: c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
-			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "client") {
+			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client) {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
 				go publishResult(c.Publish, result)

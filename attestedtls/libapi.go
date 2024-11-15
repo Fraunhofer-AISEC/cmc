@@ -37,7 +37,7 @@ func init() {
 }
 
 // Obtains attestation report from CMCd
-func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte) ([]byte, error) {
+func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error) {
 
 	if cc.Cmc == nil {
 		return nil, errors.New("internal error: cmc is nil")

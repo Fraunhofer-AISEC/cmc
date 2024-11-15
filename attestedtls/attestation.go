@@ -20,177 +20,323 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
+
+type AtlsHandshakeRequest struct {
+	Attest         AttestSelect `json:"attest" cbor:"0,keyasint"`
+	ExtendedReport bool         `json:"extendedReport" cbor:"1,keyasint"`
+	CachedMetadata [][]byte     `json:"cachedMetadata" cbor:"2,keyasint"`
+}
+
+type AtlsHandshakeResponse struct {
+	Attest AttestSelect `json:"attest" cbor:"0,keyasint"`
+	Error  string       `json:"error" cbor:"1,keyasint"`
+	Report []byte       `json:"report" cbor:"2,keyasint"`
+}
+
+type AtlsHandshakeComplete struct {
+	Success bool   `json:"success" cbor:"0,keyasint"`
+	Error   string `json:"error" cbor:"1,keyasint"`
+}
 
 var id = "0000"
 
 var log = logrus.WithField("service", "atls")
 
-func attestDialer(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
-	ch := make(chan error)
+func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, cc CmcConfig, endpoint Endpoint) error {
+	var err error
+	var ownReport []byte
+	var reportErr string
 
-	//optional: attest Client
-	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
-		log.Debug("Attesting the Client")
+	ownAddr := conn.LocalAddr().String()
+	peerAddr := conn.RemoteAddr().String()
+
+	attestSelf, attestPeer := convertAttestMode(cc.Attest, endpoint)
+
+	// Send attestation request
+	log.Debugf("Verifier %v: sending atls handshake request mode %v to %v",
+		ownAddr, cc.Attest.String(), peerAddr)
+	err = sendAtlsRequest(conn, cc.Attest)
+	if err != nil {
+		return fmt.Errorf("verifer %v: failed to send atls handshake request to %v: %w",
+			ownAddr, peerAddr, err)
+	}
+
+	// Wait for attestation request to be received
+	req, err := receiveAtlsRequest(conn)
+	if err != nil {
+		return fmt.Errorf("prover %v: failed to receive attestation request from %v: %w",
+			ownAddr, peerAddr, err)
+	}
+	log.Debugf("Prover %v: received atls handshake request mode %v from %v",
+		ownAddr, req.Attest.String(), peerAddr)
+
+	// Check that configured attestation mode matches peers attestation mode
+	err = checkAttestationMode(cc.Attest, req.Attest)
+	if err != nil {
+		return err
+	}
+
+	// Generate attestation report of own endpoint if configured
+	if attestSelf {
+		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
 		// Obtain attestation report from local cmcd
-		resp, err := cc.CmcApi.obtainAR(cc, chbindings)
+		ownReport, err = cc.CmcApi.obtainAR(cc, chbindings, req)
 		if err != nil {
-			return fmt.Errorf("could not obtain dialer AR: %w", err)
+			reportErr = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
 		}
-
-		// Send created attestation report to listener
-		log.Tracef("Dialer: sending attestation report length %v to listener %v",
-			len(resp), conn.RemoteAddr().String())
-
-		go func() {
-			err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
-			if err != nil {
-				ch <- fmt.Errorf("failed to send AR to listener: %w", err)
-			}
-			log.Trace("Finished asynchronous sending of attestation report to listener")
-			ch <- nil
-		}()
+		log.Tracef("Prover %v: Created report length %v", ownAddr, len(ownReport))
 	} else {
-		//if not sending attestation report, send the attestation mode
-		err := Write([]byte{byte(cc.Attest)}, conn)
-		if err != nil {
-			return fmt.Errorf("failed to send skip client Attestation: %w", err)
-		}
-		log.Debug("Skipping client-side attestation: no attestation report generation required")
+		log.Debugf("Prover %v: Skipping own attestation", ownAddr)
 	}
 
-	// Fetch attestation report from listener
-	report, err := readValue(conn, cc.Attest)
+	report := AtlsHandshakeResponse{
+		Attest: cc.Attest,
+		Report: ownReport,
+		Error:  reportErr,
+	}
+
+	// Send created atls handshake response to listener
+	log.Debugf("Prover %v: sending atls handshake response with report length %v to %v",
+		ownAddr, len(ownReport), peerAddr)
+
+	err = sendAtlsResponse(conn, report)
+	if err != nil {
+		return fmt.Errorf("prover %v: failed to send AR to %v: %w", ownAddr, peerAddr, err)
+	}
+	log.Debugf("Prover %v: finished sending atls handshake response to %v",
+		ownAddr, peerAddr)
+
+	log.Debugf("Verifier %v: waiting for atls handshake response from %v", ownAddr, peerAddr)
+	resp, err := receiveAtlsResponse(conn)
+	if err != nil {
+		return fmt.Errorf("verifier: failed to receive atls handshake response from %v: %w",
+			peerAddr, err)
+	}
+	// Check error message from peer
+	if resp.Error != "" {
+		return fmt.Errorf("atls response returned error: %v", resp.Error)
+	}
+	log.Debugf("Verifier %v: received atls handshake response mode %v from %v",
+		ownAddr, resp.Attest.String(), peerAddr)
+
+	// Check that configured attestation mode matches peers attestation mode
+	err = checkAttestationMode(cc.Attest, req.Attest)
 	if err != nil {
 		return err
 	}
 
-	//optional: Wait for attestation report from Server
-	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
+	// Verify attestation report from peer if configured
+	if attestPeer {
 		// Verify AR from listener with own channel bindings
-		log.Trace("Verifying attestation report from listener")
-		err = cc.CmcApi.verifyAR(chbindings, report, cc)
+		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
+		err = cc.CmcApi.verifyAR(chbindings, resp.Report, cc)
 		if err != nil {
-			return err
+			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}
+		log.Debugf("Verifier %v: attestation report verification from %v successful", ownAddr, peerAddr)
 	} else {
-		log.Debug("Skipping client-side verification")
+		log.Debugf("Verifier %v: skipping peer verification", ownAddr)
 	}
-
-	// Finally check if asynchronous sending succeeded
-	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
-		err = <-ch
-		if err != nil {
-			return fmt.Errorf("failed to write asynchronously: %w", err)
-		}
-	}
-
-	log.Trace("Attestation successful")
 
 	return nil
 }
 
-func attestListener(conn *tls.Conn, chbindings []byte, cc CmcConfig) error {
-	ch := make(chan error)
-
-	// optional: attest server
-	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
-		// Obtain own attestation report from local cmcd
-		log.Trace("Listener: Fetching attestation report from cmcd")
-		resp, err := cc.CmcApi.obtainAR(cc, chbindings)
-		if err != nil {
-			return fmt.Errorf("could not obtain listener attestation report: %w", err)
-		}
-
-		// Send own attestation report to dialer. This is done asynchronously to
-		// avoid blocking if each side sends a large report at the same time
-		log.Tracef("Listener: Sending attestation report length %v to dialer %v",
-			len(resp), conn.RemoteAddr().String())
-
-		go func() {
-			err = Write(append([]byte{byte(cc.Attest)}, resp...), conn)
-			if err != nil {
-				ch <- fmt.Errorf("failed to send AR to dialer: %w", err)
-			}
-			ch <- nil
-			log.Trace("Finished asynchronous sending of attestation report to dialer")
-		}()
-	} else {
-		//if not sending attestation report, send the attestation mode
-		err := Write([]byte{byte(cc.Attest)}, conn)
-		if err != nil {
-			return fmt.Errorf("failed to send skip client Attestation: %w", err)
-		}
-		log.Debug("Skipping server-side attestation")
+func aTlsHandshakeComplete(conn *tls.Conn, handshakeError error) error {
+	// Finally send and receive handshake complete
+	complete := AtlsHandshakeComplete{
+		Success: handshakeError == nil,
 	}
-
-	report, err := readValue(conn, cc.Attest)
+	if handshakeError != nil {
+		complete.Error = handshakeError.Error()
+	}
+	err := sendAtlsComplete(conn, complete)
 	if err != nil {
-		return err
+		return fmt.Errorf("%v: failed to send handshake complete to %v: %w",
+			conn.LocalAddr().String(), conn.RemoteAddr().String(), err)
 	}
 
-	// optional: Wait for attestation report from client
-	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Client {
-		// Verify AR from dialer with own channel bindings
-		log.Trace("Listener: Verifying attestation report from dialer...")
-		err = cc.CmcApi.verifyAR(chbindings, report, cc)
-		if err != nil {
-			return err
-		}
+	resp, err := receiveAtlsComplete(conn)
+	if err != nil {
+		return fmt.Errorf("%v: failed to receive handshake complete from %v: %w",
+			conn.LocalAddr().String(), conn.RemoteAddr().String(), err)
+	}
+
+	if handshakeError == nil && resp.Success {
+		log.Debug("atls handshake successful")
 	} else {
-		log.Debug("Skipping server-side verification")
-	}
-
-	// Finally check if asynchronous sending succeeded
-	if cc.Attest == Attest_Mutual || cc.Attest == Attest_Server {
-		err = <-ch
-		if err != nil {
-			return fmt.Errorf("failed to write asynchronously: %w", err)
+		if handshakeError != nil {
+			return fmt.Errorf("%v: attestation with peer %v failed: %v", conn.LocalAddr().String(),
+				conn.RemoteAddr().String(), handshakeError.Error())
+		}
+		if !resp.Success {
+			return fmt.Errorf("%v: peer %v reports failed attestation: %v", conn.LocalAddr().String(),
+				conn.RemoteAddr().String(), resp.Error)
 		}
 	}
-
-	log.Trace("Attestation successful")
 
 	return nil
 }
 
-func readValue(conn *tls.Conn, selection AttestSelect) ([]byte, error) {
-	readvalue, err := Read(conn)
+func receiveAtlsResponse(conn *tls.Conn) (*AtlsHandshakeResponse, error) {
+
+	s := ar.CborSerializer{}
+
+	// Receive data
+	data, err := Read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	selectionStr, err := selectionString(byte(selection))
+	// Unmarshal handshake response
+	resp := new(AtlsHandshakeResponse)
+	err = s.Unmarshal(data, resp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal ATLS handshake response: %w", err)
 	}
 
-	// the first byte should always be the attestation mode
-	if readvalue[0] == byte(selection) {
-		log.Debugf("Matching attestation mode: [%v]", selectionStr)
-	} else {
-		reportByte := readvalue[0]
-		reportStr, err := selectionString(reportByte)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]", selectionStr, reportStr)
-	}
-
-	return readvalue[1:], nil
+	return resp, nil
 }
 
-func selectionString(selection byte) (string, error) {
-	switch selection {
-	case 0:
-		return "mutual", nil
-	case 1:
-		return "client", nil
-	case 2:
-		return "server", nil
-	case 3:
-		return "none", nil
-	default:
-		return "", fmt.Errorf("unknown attestation mode")
+func receiveAtlsRequest(conn *tls.Conn) (*AtlsHandshakeRequest, error) {
+
+	s := ar.CborSerializer{}
+
+	// Receive data
+	data, err := Read(conn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
+
+	// Unmarshal handshake request
+	req := new(AtlsHandshakeRequest)
+	err = s.Unmarshal(data, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal ATLS handshake response: %w", err)
+	}
+
+	return req, nil
+}
+
+func checkAttestationMode(own, peer AttestSelect) error {
+	if own == peer {
+		log.Tracef("Matching attestation mode: [%v]", own.String())
+	} else {
+		return fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]",
+			own.String(), peer.String())
+	}
+	return nil
+}
+
+func receiveAtlsComplete(conn *tls.Conn) (*AtlsHandshakeComplete, error) {
+
+	s := ar.CborSerializer{}
+
+	// Receive data
+	data, err := Read(conn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read handshake complete: %w", err)
+	}
+
+	// Unmarshal handshake request
+	complete := new(AtlsHandshakeComplete)
+	err = s.Unmarshal(data, complete)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal atls handshake complete: %w", err)
+	}
+
+	return complete, nil
+}
+
+func sendAtlsRequest(conn *tls.Conn, attest AttestSelect) error {
+
+	s := ar.CborSerializer{}
+
+	// Create request
+	// TODO Extended report and cached metadata configuration
+	req := &AtlsHandshakeRequest{
+		Attest:         attest,
+		ExtendedReport: false,
+		CachedMetadata: nil,
+	}
+
+	// Marshal payload
+	payload, err := s.Marshal(&req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal atls handshake request: %w", err)
+	}
+
+	// Send payload to peer
+	err = Write(payload, conn)
+	if err != nil {
+		return fmt.Errorf("failed to send: %w", err)
+	}
+
+	return nil
+}
+
+func sendAtlsResponse(conn *tls.Conn, resp AtlsHandshakeResponse) error {
+
+	s := ar.CborSerializer{}
+
+	// Marshal payload
+	payload, err := s.Marshal(&resp)
+	if err != nil {
+		return fmt.Errorf("internal error: failed to marshal atls handshake request: %w", err)
+	}
+
+	// Send payload to peer
+	err = Write(payload, conn)
+	if err != nil {
+		return fmt.Errorf("failed to send: %w", err)
+	}
+
+	return nil
+}
+
+func sendAtlsComplete(conn *tls.Conn, complete AtlsHandshakeComplete) error {
+
+	s := ar.CborSerializer{}
+
+	// Marshal payload
+	payload, err := s.Marshal(&complete)
+	if err != nil {
+		return fmt.Errorf("internal error: failed to marshal atls handshake request: %w", err)
+	}
+
+	// Send payload to peer
+	err = Write(payload, conn)
+	if err != nil {
+		return fmt.Errorf("failed to send: %w", err)
+	}
+
+	return nil
+}
+
+func convertAttestMode(attest AttestSelect, endpoint Endpoint) (bool, bool) {
+	attestSelf := true
+	attestPeer := true
+	if attest == Attest_None {
+		attestSelf = false
+		attestPeer = false
+	}
+	if endpoint == Endpoint_Server {
+		if attest == Attest_Server {
+			attestPeer = false
+		}
+		if attest == Attest_Client {
+			attestSelf = false
+		}
+	}
+	if endpoint == Endpoint_Client {
+		if attest == Attest_Server {
+			attestSelf = false
+		}
+		if attest == Attest_Client {
+			attestPeer = false
+		}
+	}
+	return attestSelf, attestPeer
 }

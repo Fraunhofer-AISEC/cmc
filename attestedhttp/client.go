@@ -57,7 +57,7 @@ type Transport struct {
 	// as we enforce aTLS as the underlying transport protocol
 
 	// Additional aTLS parameters
-	Attest      string
+	Attest      atls.AttestSelect
 	MutualTls   bool
 	CmcAddr     string
 	CmcApi      atls.CmcApiSelect
@@ -154,7 +154,7 @@ func prepareClient(c *Client) error {
 	if c.client == nil {
 
 		// Store aTLS and CMC configuration
-		cmcConfig.Attest = atls.GetAttestMode(c.Transport.Attest)
+		cmcConfig.Attest = c.Transport.Attest
 		cmcConfig.Ca = c.Transport.Ca
 		cmcConfig.Cmc = c.Transport.Cmc
 		cmcConfig.CmcAddr = c.Transport.CmcAddr

@@ -30,7 +30,7 @@ type Server struct {
 	*http.Server
 
 	// Additional aTLS parameters
-	Attest      string
+	Attest      atls.AttestSelect
 	MutualTls   bool
 	CmcAddr     string
 	CmcApi      atls.CmcApiSelect

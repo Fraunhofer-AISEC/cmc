@@ -42,12 +42,12 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
-		atls.WithAttest(c.Attest),
+		atls.WithAttest(c.attest),
 		atls.WithCmcNetwork(c.Network),
 		atls.WithResultCb(func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
-			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "server") {
+			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server) {
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
@@ -116,8 +116,6 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			Renegotiation: tls.RenegotiateNever,
 		}
 	}
-
-	atls.WithAttest(c.Attest)
 
 	internal.PrintTlsConfig(tlsConf, c.ca)
 
@@ -197,10 +195,10 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
-		atls.WithAttest(c.Attest),
+		atls.WithAttest(c.attest),
 		atls.WithCmcNetwork(c.Network),
 		atls.WithResultCb(func(result *ar.VerificationResult) {
-			if c.Publish != "" && (c.Attest == "mutual" || c.Attest == "client") {
+			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client) {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
 				go publishResult(c.Publish, result)
@@ -214,8 +212,9 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	}
 	defer ln.Close()
 
+	log.Infof("Serving under %v", addr)
+
 	for {
-		log.Infof("serving under %v", addr)
 		// Accept connection and perform remote attestation
 		conn, err := ln.Accept()
 		if err != nil {
