@@ -107,6 +107,7 @@ message MeasureRequest {
   string name = 1;
   bytes ConfigSha256 = 2;
   bytes RootfsSha256 = 3;
+  bytes OciSpec = 4;
 }
 
 message MeasureResponse {

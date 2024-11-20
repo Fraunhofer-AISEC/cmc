@@ -57,6 +57,7 @@ type MeasureRequest struct {
 	Name         string `json:"name,omitempty" cbor:"0,keyasint,omitempty"`
 	ConfigSha256 []byte `json:"configSha256,omitempty" cbor:"1,keyasint,omitempty"`
 	RootfsSha256 []byte `json:"rootfsSha256,omitempty" cbor:"2,keyasint,omitempty"`
+	OciSpec      []byte `json:"ociSpec,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type MeasureResponse struct {
