@@ -34,6 +34,7 @@ import (
 
 	// local modules
 
+	cmcapi "github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/generate"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
@@ -159,8 +160,16 @@ func (s *GrpcServer) Measure(ctx context.Context, in *api.MeasureRequest) (*api.
 
 	log.Info("Received Connection Request Type 'Measure Request'")
 
+	// TODO better solution? (different but same datatype cmcapi.MeasureRequest and api.MeasureRequest)
+	req := &cmcapi.MeasureRequest{
+		Name:         in.Name,
+		ConfigSha256: in.ConfigSha256,
+		RootfsSha256: in.RootfsSha256,
+		OciSpec:      in.OciSpec,
+	}
+
 	log.Info("Measurer: Recording measurement")
-	err := m.Measure(in.Name, in.ConfigSha256, in.RootfsSha256,
+	err := m.Measure(req,
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,

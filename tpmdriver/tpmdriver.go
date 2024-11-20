@@ -43,7 +43,6 @@ import (
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
 // Tpm is a structure that implements the Measure method
@@ -296,7 +295,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 				return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
 			}
 
-			var measureList []m.MeasureEntry
+			var measureList []ar.MeasureEvent
 			err = t.Serializer.Unmarshal(data, &measureList)
 			if err != nil {
 				return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
@@ -311,18 +310,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 						*hashChain[i].Pcr)
 					hashChain[i].Summary = nil
 					hashChain[i].Type = "PCR Eventlog"
-					for _, ml := range measureList {
-						log.Tracef("Adding %v container measurement", ml.Name)
-						event := ar.MeasureEvent{
-							Sha256:    ml.TemplateSha256,
-							EventName: ml.Name,
-							CtrData: &ar.CtrData{
-								ConfigSha256: ml.ConfigSha256,
-								RootfsSha256: ml.RootfsSha256,
-							},
-						}
-						hashChain[i].Events = append(hashChain[i].Events, event)
-					}
+					hashChain[i].Events = measureList
 				}
 			}
 		} else {

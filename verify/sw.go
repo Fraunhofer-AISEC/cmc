@@ -70,16 +70,23 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 				break
 			}
 		}
-		if !found && !r.Optional {
-			log.Tracef("no SW Measurement found for SW Reference Value %v (hash: %v)", r.Name, hex.EncodeToString(r.Sha256))
-			r := ar.DigestResult{
-				Type:    "Reference Value",
-				Success: false,
-				Name:    r.Name,
-				Digest:  hex.EncodeToString(r.Sha256),
+		if !found {
+
+			res := ar.DigestResult{
+				Type:       "Reference Value",
+				Success:    r.Optional, // Only fail attestation if component is mandatory
+				Launched:   false,
+				Name:       r.Name,
+				Digest:     hex.EncodeToString(r.Sha256),
+				CtrDetails: ar.GetCtrDetailsFromRefVal(&r, s),
 			}
-			result.Artifacts = append(result.Artifacts, r)
-			ok = false
+			result.Artifacts = append(result.Artifacts, res)
+
+			// Only fail attestation if component is mandatory
+			if !r.Optional {
+				log.Tracef("no SW Measurement found for mandatory SW reference value %v (hash: %v)", r.Name, hex.EncodeToString(r.Sha256))
+				ok = false
+			}
 		}
 	}
 
@@ -95,9 +102,11 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 						nameInfo += ": " + event.EventName
 					}
 					r := ar.DigestResult{
-						Success: true,
-						Name:    nameInfo,
-						Digest:  hex.EncodeToString(event.Sha256),
+						Success:    true,
+						Launched:   true,
+						Name:       nameInfo,
+						Digest:     hex.EncodeToString(event.Sha256),
+						CtrDetails: ar.GetCtrDetailsFromMeasureEvent(&event, s),
 					}
 					result.Artifacts = append(result.Artifacts, r)
 					break
@@ -105,15 +114,15 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:      "Measurement",
-					Success:   false,
-					Name:      event.EventName,
-					Digest:    hex.EncodeToString(event.Sha256),
-					EventData: event.EventData,
-					CtrData:   event.CtrData,
+					Type:       "Measurement",
+					Success:    false,
+					Launched:   true,
+					Name:       event.EventName,
+					Digest:     hex.EncodeToString(event.Sha256),
+					CtrDetails: ar.GetCtrDetailsFromMeasureEvent(&event, s),
 				}
 				result.Artifacts = append(result.Artifacts, r)
-				log.Tracef("no SW Reference Value found for SW Measurement: %v", hex.EncodeToString(event.Sha256))
+				log.Tracef("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.Sha256))
 				ok = false
 			}
 		}

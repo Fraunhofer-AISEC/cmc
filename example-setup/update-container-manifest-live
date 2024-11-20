@@ -48,7 +48,7 @@ input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 output="${data}/metadata-signed"
 runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
-runc_config="/etc/runc.json"
+runc_config="/etc/runc-measure-conf.json"
 target="${target%/}"
 
 
@@ -131,12 +131,14 @@ for ((i = 0; i < num_containers; i++)); do
     container=${containers[$i]}
     container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
 
-    refval=$(echo "${refvals}" | jq -r ".[$i]")
+    refval=$(echo "${refvals}" | jq -r ".[$i].referenceValue")
+    config=$(echo "${refvals}" | jq -r ".[$i].ociSpec")
 
-    # App Manifest: Replace existing reference values with new reference values in the App Manifest
+    # App Manifest: Replace existing reference values and OCI config with new reference values in the App Manifest
     json=$(cat "${input}/app.manifest.json")
     json=$(echo "${json}" | jq 'del(.referenceValues[])')
     json=$(echo "${json}" | jq --argjson ver "[${refval}]" '.referenceValues += $ver')
+    json=$(echo "${json}" | jq --argjson cfg "${config}" '.ociSpec = $cfg')
 
     # App Manifest: Extract the reference value sha256 and add it to the file name to not overwrite the same
     # container with different arguments such as environment variables

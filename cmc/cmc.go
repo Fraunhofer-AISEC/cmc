@@ -57,6 +57,7 @@ type Config struct {
 	CtrDriver string `json:"ctrDriver,omitempty"`
 	CtrPcr    int    `json:"ctrPcr,omitempty"`
 	CtrLog    string `json:"ctrLog"`
+	ExtCtrLog bool   `json:"extendedCtrLog"`
 }
 
 type Cmc struct {
@@ -70,6 +71,7 @@ type Cmc struct {
 	CtrDriver          string
 	CtrPcr             int
 	CtrLog             string
+	ExtCtrLog          bool
 }
 
 func GetDrivers() map[string]ar.Driver {
@@ -98,6 +100,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Serializer:     s,
 		CtrPcr:         c.CtrPcr,
 		CtrLog:         c.CtrLog,
+		ExtCtrLog:      c.ExtCtrLog,
 		CtrDriver:      c.CtrDriver,
 		UseCtr:         c.UseCtr,
 	}
@@ -141,6 +144,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		CtrDriver:          c.CtrDriver,
 		CtrPcr:             c.CtrPcr,
 		CtrLog:             c.CtrLog,
+		ExtCtrLog:          c.ExtCtrLog,
 	}
 
 	return cmc, nil

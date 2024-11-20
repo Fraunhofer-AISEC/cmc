@@ -68,6 +68,7 @@ const (
 	ctrDriverFlag      = "ctrdriver"
 	ctrPcrFlag         = "ctrpcr"
 	ctrLogFlag         = "ctrlog"
+	extCtrLogFlag      = "extCtrLog"
 )
 
 func getConfig() (*cmc.Config, error) {
@@ -106,6 +107,8 @@ func getConfig() (*cmc.Config, error) {
 		"Specifies which driver to use for container measurements")
 	ctrPcr := flag.Int(ctrPcrFlag, 0, "Container PCR")
 	ctrLog := flag.String(ctrLogFlag, "", "Container runtime measurements path")
+	extCtrLog := flag.Bool(extCtrLogFlag, false,
+		"specifies whether to store extended container logs with OCI runtime specs")
 	flag.Parse()
 
 	// Create default configuration
@@ -183,6 +186,9 @@ func getConfig() (*cmc.Config, error) {
 	if internal.FlagPassed(ctrLogFlag) {
 		c.CtrLog = *ctrLog
 	}
+	if internal.FlagPassed(extCtrLogFlag) {
+		c.ExtCtrLog = *extCtrLog
+	}
 
 	// Configure the logger
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
@@ -243,24 +249,25 @@ func printConfig(c *cmc.Config) {
 	log.Infof("Running cmcd from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tCMC Listen Address       : %v", c.Addr)
-	log.Debugf("\tProvisioning Server URL  : %v", c.ProvServerAddr)
-	log.Debugf("\tMetadata Locations       : %v", strings.Join(c.Metadata, ","))
+	log.Debugf("\tCMC listen address       : %v", c.Addr)
+	log.Debugf("\tProvisioning server URL  : %v", c.ProvServerAddr)
+	log.Debugf("\tMetadata locations       : %v", strings.Join(c.Metadata, ","))
 	log.Debugf("\tUse IMA                  : %v", c.UseIma)
 	if c.UseIma {
 		log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
 	}
 	log.Debugf("\tAPI                      : %v", c.Api)
 	log.Debugf("\tNetwork                  : %v", c.Network)
-	log.Debugf("\tPolicy Engine            : %v", c.PolicyEngine)
-	log.Debugf("\tKey Config               : %v", c.KeyConfig)
-	log.Debugf("\tLogging Level            : %v", c.LogLevel)
+	log.Debugf("\tPolicy engine            : %v", c.PolicyEngine)
+	log.Debugf("\tKey config               : %v", c.KeyConfig)
+	log.Debugf("\tLogging level            : %v", c.LogLevel)
 	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))
-	log.Debugf("\tMeasurement Log          : %v", c.MeasurementLog)
+	log.Debugf("\tMeasurement log          : %v", c.MeasurementLog)
 	log.Debugf("\tMeasure containers       : %v", c.UseCtr)
 	if c.UseCtr {
-		log.Debugf("\tContainer Driver         : %v", c.CtrDriver)
-		log.Debugf("\tContainer Measurements   : %v", c.CtrLog)
+		log.Debugf("\tContainer driver         : %v", c.CtrDriver)
+		log.Debugf("\tContainer measurements   : %v", c.CtrLog)
+		log.Debugf("\tContainer extended log   : %v", c.ExtCtrLog)
 		log.Debugf("\tContainer PCR            : %v", c.CtrPcr)
 	}
 	if c.Storage != "" {
