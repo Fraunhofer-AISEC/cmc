@@ -163,17 +163,19 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 		log.Trace("Failed to verify SNP reference value")
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:    snpReferenceValue.Name,
-				Digest:  hex.EncodeToString(snpReferenceValue.Sha384),
-				Success: false,
-				Type:    "Reference Value",
+				Name:     snpReferenceValue.Name,
+				Digest:   hex.EncodeToString(snpReferenceValue.Sha384),
+				Success:  false,
+				Launched: false,
+				Type:     "Reference Value",
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:    snpReferenceValue.Name,
-				Digest:  hex.EncodeToString(s.Measurement[:]),
-				Success: false,
-				Type:    "Measurement",
+				Name:     snpReferenceValue.Name,
+				Digest:   hex.EncodeToString(s.Measurement[:]),
+				Success:  false,
+				Launched: true,
+				Type:     "Measurement",
 			})
 
 		ok = false
@@ -183,9 +185,10 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 		// SNP Reference Value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:    snpReferenceValue.Name,
-				Digest:  hex.EncodeToString(s.Measurement[:]),
-				Success: true,
+				Name:     snpReferenceValue.Name,
+				Digest:   hex.EncodeToString(s.Measurement[:]),
+				Success:  true,
+				Launched: true,
 			})
 	}
 

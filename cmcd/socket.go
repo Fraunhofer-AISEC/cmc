@@ -217,7 +217,7 @@ func measure(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 
 	log.Debug("Measurer: recording measurement")
 	var success bool
-	err = m.Measure(req.Name, req.ConfigSha256, req.RootfsSha256,
+	err = m.Measure(req,
 		&m.MeasureConfig{
 			Serializer: cmc.Serializer,
 			Pcr:        cmc.CtrPcr,

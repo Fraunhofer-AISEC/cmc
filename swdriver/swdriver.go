@@ -29,7 +29,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,6 +44,7 @@ type Sw struct {
 	useCtr     bool
 	ctrPcr     int
 	ctrLog     string
+	extCtrLog  bool
 	serializer ar.Serializer
 }
 
@@ -78,6 +78,7 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 
 	s.useCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "sw")
 	s.ctrLog = c.CtrLog
+	s.extCtrLog = c.ExtCtrLog
 	s.ctrPcr = c.CtrPcr
 	s.serializer = c.Serializer
 
@@ -142,27 +143,15 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 			return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
 		}
 
-		var measureList []m.MeasureEntry
+		var measureList []ar.MeasureEvent
 		err = s.serializer.Unmarshal(data, &measureList)
 		if err != nil {
 			return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 		}
 
 		artifact := ar.Artifact{
-			Type: "SW Eventlog",
-		}
-
-		for _, ml := range measureList {
-			log.Tracef("Adding %v container measurement", ml.Name)
-			event := ar.MeasureEvent{
-				Sha256:    ml.TemplateSha256,
-				EventName: ml.Name,
-				CtrData: &ar.CtrData{
-					ConfigSha256: ml.ConfigSha256,
-					RootfsSha256: ml.RootfsSha256,
-				},
-			}
-			artifact.Events = append(artifact.Events, event)
+			Type:   "SW Eventlog",
+			Events: measureList,
 		}
 
 		measurement.Artifacts = []ar.Artifact{artifact}

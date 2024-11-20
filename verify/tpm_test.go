@@ -200,7 +200,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpmMeasurements(*tt.args.tpmM, tt.args.nonce, tt.args.cas, tt.args.referenceValues)
+			got, got1 := verifyTpmMeasurements(*tt.args.tpmM, tt.args.nonce, tt.args.cas, ar.JsonSerializer{}, tt.args.referenceValues)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
@@ -659,14 +659,14 @@ var (
 		Signature: validSignatureResult,
 		Artifacts: validArtifacts,
 		TpmResult: &ar.TpmResult{
-			PcrMatch: []ar.DigestResult{
+			PcrMatch: []ar.PcrResult{
 				{
-					Pcr:     ptr(1),
+					Pcr:     1,
 					Digest:  "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
 					Success: true,
 				},
 				{
-					Pcr:     ptr(4),
+					Pcr:     4,
 					Digest:  "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
 					Success: true,
 				},

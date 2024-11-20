@@ -1,5 +1,6 @@
 *.o
 *.bkp
+*.swp
 .vscode/
 
 cmcd/cmcd

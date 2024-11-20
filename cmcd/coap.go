@@ -214,11 +214,12 @@ func Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Measurer: Recording measurement")
 	var success bool
-	err = m.Measure(req.Name, req.ConfigSha256, req.RootfsSha256,
+	err = m.Measure(&req,
 		&m.MeasureConfig{
 			Serializer: Cmc.Serializer,
 			Pcr:        Cmc.CtrPcr,
 			LogFile:    Cmc.CtrLog,
+			ExtLog:     Cmc.ExtCtrLog,
 			Driver:     Cmc.CtrDriver,
 		})
 	if err != nil {

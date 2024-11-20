@@ -113,7 +113,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 		switch mtype := m.Type; mtype {
 
 		case "TPM Measurement":
-			r, ok := verifyTpmMeasurements(m, nonce, cas, refVals["TPM Reference Value"])
+			r, ok := verifyTpmMeasurements(m, nonce, cas, s, refVals["TPM Reference Value"])
 			if !ok {
 				result.Success = false
 			}

@@ -281,53 +281,60 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	if !bytes.Equal(body.MRENCLAVE[:], []byte(sgxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:    sgxReferenceValue.Name,
-				Digest:  hex.EncodeToString(sgxReferenceValue.Sha256[:]),
-				Success: false,
-				Type:    "Reference Value",
+				Name:     sgxReferenceValue.Name,
+				Digest:   hex.EncodeToString(sgxReferenceValue.Sha256[:]),
+				Success:  false,
+				Launched: false,
+				Type:     "Reference Value",
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:    sgxReferenceValue.Name,
-				Digest:  hex.EncodeToString(body.MRENCLAVE[:]),
-				Success: false,
-				Type:    "Measurement",
+				Name:     sgxReferenceValue.Name,
+				Digest:   hex.EncodeToString(body.MRENCLAVE[:]),
+				Success:  false,
+				Launched: false,
+				Type:     "Measurement",
 			})
 		return fmt.Errorf("MRENCLAVE mismatch. Expected: %v, Got. %v", sgxReferenceValue.Sha256, body.MRENCLAVE)
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:    sgxReferenceValue.Name,
-				Digest:  hex.EncodeToString(body.MRENCLAVE[:]),
-				Success: true,
-				Type:    "Measurement",
+				Name:     sgxReferenceValue.Name,
+				Digest:   hex.EncodeToString(body.MRENCLAVE[:]),
+				Success:  true,
+				Launched: true,
+				Type:     "Measurement",
 			})
 	}
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Name:    "MrSigner",
-			Digest:  hex.EncodeToString(body.MRSIGNER[:]),
-			Success: strings.EqualFold(sgxReferenceValue.Sgx.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
-			Type:    "Measurement",
+			Name:     "MrSigner",
+			Digest:   hex.EncodeToString(body.MRSIGNER[:]),
+			Success:  strings.EqualFold(sgxReferenceValue.Sgx.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
+			Launched: true,
+			Type:     "Measurement",
 		},
 		ar.DigestResult{
-			Name:    "CpuSvn",
-			Digest:  hex.EncodeToString(body.CPUSVN[:]),
-			Success: bytes.Compare(sgxExtensions.Tcb.Value.CpuSvn.Value, body.CPUSVN[:]) <= 0,
-			Type:    "Security Version",
+			Name:     "CpuSvn",
+			Digest:   hex.EncodeToString(body.CPUSVN[:]),
+			Success:  bytes.Compare(sgxExtensions.Tcb.Value.CpuSvn.Value, body.CPUSVN[:]) <= 0,
+			Launched: true,
+			Type:     "Security Version",
 		},
 		ar.DigestResult{
-			Name:    "IsvProdId",
-			Digest:  strconv.Itoa(int(body.ISVProdID)),
-			Success: sgxReferenceValue.Sgx.IsvProdId == body.ISVProdID,
-			Type:    "Product ID",
+			Name:     "IsvProdId",
+			Digest:   strconv.Itoa(int(body.ISVProdID)),
+			Success:  sgxReferenceValue.Sgx.IsvProdId == body.ISVProdID,
+			Launched: true,
+			Type:     "Product ID",
 		},
 		ar.DigestResult{
-			Name:    "IsvSvn",
-			Digest:  strconv.Itoa(int(body.ISVSVN)),
-			Success: sgxReferenceValue.Sgx.IsvSvn == body.ISVSVN,
-			Type:    "Security Version",
+			Name:     "IsvSvn",
+			Digest:   strconv.Itoa(int(body.ISVSVN)),
+			Success:  sgxReferenceValue.Sgx.IsvSvn == body.ISVSVN,
+			Launched: true,
+			Type:     "Security Version",
 		},
 	)
 

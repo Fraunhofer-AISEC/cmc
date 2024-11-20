@@ -24,6 +24,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -33,51 +34,43 @@ import (
 
 var log = logrus.WithField("service", "measure")
 
-type MeasureEntry struct {
-	Pcr            int        `json:"pcr,omitempty" cbor:"0,keyasint,omitempty"`
-	TemplateSha256 ar.HexByte `json:"templateSha256,omitempty" cbor:"1,keyasint,omitempty"`
-	Name           string     `json:"name,omitempty" cbor:"2,keyasint,omitempty"`
-	ConfigSha256   ar.HexByte `json:"configSha256,omitempty" cbor:"3,keyasint,omitempty"`
-	RootfsSha256   ar.HexByte `json:"rootfsSha256,omitempty" cbor:"4,keyasint,omitempty"`
-}
-
 type MeasureConfig struct {
 	Serializer ar.Serializer
 	Pcr        int
 	LogFile    string
+	ExtLog     bool
 	Driver     string
 }
 
-func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) error {
+func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 
 	if mc == nil {
 		return errors.New("internal error: measure config is nil")
 	}
 
 	// Hash config entry
-	tbh := []byte(configSha256)
-	tbh = append(tbh, rootfsSha256...)
+	tbh := []byte(req.ConfigSha256)
+	tbh = append(tbh, req.RootfsSha256...)
 
 	hasher := sha256.New()
 	hasher.Write(tbh)
-	hash := hasher.Sum(nil)
+	templateHash := hasher.Sum(nil)
 
 	// Generate config entry
-	entry := MeasureEntry{
-		TemplateSha256: hash,
-		Name:           name,
-		ConfigSha256:   configSha256,
-		RootfsSha256:   rootfsSha256,
+	entry := ar.MeasureEvent{
+		Sha256:    templateHash,
+		EventName: req.Name,
+		CtrData: &ar.CtrData{
+			ConfigSha256: req.ConfigSha256,
+			RootfsSha256: req.RootfsSha256,
+			OciSpec:      req.OciSpec,
+		},
 	}
 
-	if strings.EqualFold(mc.Driver, "tpm") {
-		entry.Pcr = mc.Pcr
-	}
-
-	log.Tracef("Recording measurement %v: %v", name, hex.EncodeToString(entry.TemplateSha256))
+	log.Tracef("Recording measurement %v: %v", req.Name, hex.EncodeToString(entry.Sha256))
 
 	// Read the existing measurement list if it already exists
-	var measureList []MeasureEntry
+	var measureList []ar.MeasureEvent
 	if _, err := os.Stat(mc.LogFile); err == nil {
 		data, err := os.ReadFile(mc.LogFile)
 		if err != nil {
@@ -93,7 +86,7 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 	// Search the existing measurement list..
 	found := false
 	for _, e := range measureList {
-		if bytes.Equal(e.TemplateSha256, entry.TemplateSha256) {
+		if bytes.Equal(e.Sha256, entry.Sha256) {
 			found = true
 			break
 		}
@@ -101,13 +94,13 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 
 	// ..if the container was already measured, exit
 	if found {
-		log.Tracef("Measurement %v already exists, nothing to do", name)
+		log.Tracef("Measurement %v already exists, nothing to do", req.Name)
 		return nil
 	}
 
 	// ..otherwise append it to the measurement list and record the measurement
 	measureList = append(measureList, entry)
-	log.Tracef("Recorded measurement %v into measurement list", name)
+	log.Tracef("Recorded measurement %v into measurement list", req.Name)
 
 	data, err := mc.Serializer.Marshal(measureList)
 	if err != nil {
@@ -132,12 +125,12 @@ func Measure(name string, configSha256, rootfsSha256 []byte, mc *MeasureConfig) 
 		}
 		defer rwc.Close()
 
-		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, entry.TemplateSha256, "")
+		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, entry.Sha256, "")
 		if err != nil {
 			return fmt.Errorf("failed to extend PCR%v: %w", mc.Pcr, err)
 		}
 
-		log.Tracef("Recorded measurement %v into PCR%v", name, mc.Pcr)
+		log.Tracef("Recorded measurement %v into PCR%v", req.Name, mc.Pcr)
 	} else if strings.EqualFold(mc.Driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {

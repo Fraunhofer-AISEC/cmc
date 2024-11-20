@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	g "github.com/Fraunhofer-AISEC/cmc/generate"
@@ -157,7 +158,14 @@ func (a LibApi) measure(c *config) {
 		log.Fatalf("Failed to measure rootfs: %v", err)
 	}
 
-	err = m.Measure(c.CtrName, configHash, rootfsHash,
+	req := &api.MeasureRequest{
+		Name:         c.CtrName,
+		ConfigSha256: configHash,
+		RootfsSha256: rootfsHash,
+		OciSpec:      ctrConfig,
+	}
+
+	err = m.Measure(req,
 		&m.MeasureConfig{
 			Serializer: a.cmc.Serializer,
 			Pcr:        a.cmc.CtrPcr,

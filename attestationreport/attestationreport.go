@@ -54,6 +54,7 @@ type DriverConfig struct {
 	UseCtr         bool
 	CtrPcr         int
 	CtrLog         string
+	ExtCtrLog      bool
 	CtrDriver      string
 }
 
@@ -106,6 +107,7 @@ type MeasureEvent struct {
 type CtrData struct {
 	ConfigSha256 HexByte `json:"configSha256" cbor:"0,keyasint"`
 	RootfsSha256 HexByte `json:"rootfsSha256" cbor:"1,keyasint"`
+	OciSpec      []byte  `json:"ociSpec" cbor:"2,keyasint"`
 }
 
 // Measurement represents the attestation report
@@ -116,7 +118,7 @@ type Measurement struct {
 	Evidence  []byte     `json:"evidence,omitempty" cbor:"1,keyasint"`
 	Certs     [][]byte   `json:"certs,omitempty" cbor:"3,keyasint"`
 	Signature []byte     `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
-	Artifacts []Artifact `json:"details,omitempty" cbor:"4,keyasint,omitempty"`
+	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type SnpPolicy struct {
@@ -291,6 +293,7 @@ type AppManifest struct {
 	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
 	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
 	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
+	OciSpec            any              `json:"ociSpec" cbor:"9,keyasint"`
 }
 
 // OsManifest represents the attestation report
