@@ -63,6 +63,7 @@ const (
 	logFlag            = "log"
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
+	peerCacheFlag      = "peercache"
 	measurementLogFlag = "measurementLog"
 	ctrFlag            = "ctr"
 	ctrDriverFlag      = "ctrdriver"
@@ -100,6 +101,8 @@ func getConfig() (*cmc.Config, error) {
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	storage := flag.String(storageFlag, "", "Optional folder to store internal CMC data in")
 	cache := flag.String(cacheFlag, "", "Optional folder to cache metadata for offline backup")
+	peerCache := flag.String(peerCacheFlag, "",
+		"Optional folder to cache peer metadata to reduce attestation report size")
 	measurementLog := flag.Bool(measurementLogFlag, false,
 		"Specifies whether to include measured events in measurement and validation report")
 	ctr := flag.Bool(ctrFlag, false, "Specifies whether to conduct container measurements")
@@ -171,6 +174,9 @@ func getConfig() (*cmc.Config, error) {
 	if internal.FlagPassed(cacheFlag) {
 		c.Cache = *cache
 	}
+	if internal.FlagPassed(peerCacheFlag) {
+		c.PeerCache = *peerCache
+	}
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
 	}
@@ -227,6 +233,12 @@ func pathsToAbs(c *cmc.Config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
 		}
 	}
+	if c.PeerCache != "" {
+		c.PeerCache, err = filepath.Abs(c.PeerCache)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
+		}
+	}
 	for i := 0; i < len(c.Metadata); i++ {
 		if strings.HasPrefix(c.Metadata[i], "file://") {
 			f := strings.TrimPrefix(c.Metadata[i], "file://")
@@ -275,6 +287,9 @@ func printConfig(c *cmc.Config) {
 	}
 	if c.Cache != "" {
 		log.Debugf("\tMetadata cache path      : %v", c.Cache)
+	}
+	if c.PeerCache != "" {
+		log.Debugf("\tPeer cache path          : %v", c.PeerCache)
 	}
 }
 

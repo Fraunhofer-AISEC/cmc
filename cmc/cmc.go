@@ -51,6 +51,7 @@ type Config struct {
 	LogLevel       string   `json:"logLevel,omitempty"`
 	Storage        string   `json:"storage,omitempty"`
 	Cache          string   `json:"cache,omitempty"`
+	PeerCache      string   `json:"peerCache,omitempty"`
 	MeasurementLog bool     `json:"measurementLog,omitempty"`
 	// Only for container measurements
 	UseCtr    bool   `json:"useCtr,omitempty"`
