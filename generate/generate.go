@@ -16,6 +16,7 @@
 package generate
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -30,7 +31,7 @@ var log = logrus.WithField("service", "ar")
 // must be either raw JWS tokens in the JWS JSON full serialization
 // format or CBOR COSE tokens. Takes a list of measurers providing a method
 // for collecting  the measurements from a hardware or software interface
-func Generate(nonce []byte, metadata [][]byte, measurers []ar.Driver, s ar.Serializer) ([]byte, error) {
+func Generate(nonce []byte, metadata map[[32]byte][]byte, measurers []ar.Driver, s ar.Serializer) ([]byte, error) {
 
 	if s == nil {
 		return nil, errors.New("serializer not specified")
@@ -51,12 +52,13 @@ func Generate(nonce []byte, metadata [][]byte, measurers []ar.Driver, s ar.Seria
 	// Retrieve the manifests and descriptions
 	log.Trace("Parsing ", len(metadata), " meta-data objects..")
 	numManifests := 0
-	for i := 0; i < len(metadata); i++ {
+
+	for hash, m := range metadata {
 
 		// Extract plain payload (i.e. the manifest/description itself)
-		data, err := s.GetPayload(metadata[i])
+		data, err := s.GetPayload(m)
 		if err != nil {
-			log.Tracef("Failed to parse metadata object %v: %v", i, err)
+			log.Tracef("Failed to parse metadata object %v: %v", hex.EncodeToString(hash[:]), err)
 			continue
 		}
 
@@ -65,29 +67,29 @@ func Generate(nonce []byte, metadata [][]byte, measurers []ar.Driver, s ar.Seria
 		elem := new(ar.MetaInfo)
 		err = s.Unmarshal(data, elem)
 		if err != nil {
-			log.Tracef("Failed to unmarshal data from metadata object %v: %v", i, err)
+			log.Tracef("Failed to unmarshal data from metadata object %v: %v", hex.EncodeToString(hash[:]), err)
 			continue
 		}
 
 		switch elem.Type {
 		case "App Manifest":
 			log.Debug("Adding App Manifest")
-			report.AppManifests = append(report.AppManifests, metadata[i])
+			report.AppManifests = append(report.AppManifests, m)
 			numManifests++
 		case "OS Manifest":
 			log.Debug("Adding OS Manifest")
-			report.OsManifest = metadata[i]
+			report.OsManifest = m
 			numManifests++
 		case "RTM Manifest":
 			log.Debug("Adding RTM Manifest")
-			report.RtmManifest = metadata[i]
+			report.RtmManifest = m
 			numManifests++
 		case "Device Description":
 			log.Debug("Adding Device Description")
-			report.DeviceDescription = metadata[i]
+			report.DeviceDescription = m
 		case "Company Description":
 			log.Debug("Adding Company Description")
-			report.CompanyDescription = metadata[i]
+			report.CompanyDescription = m
 		}
 	}
 

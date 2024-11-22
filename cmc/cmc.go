@@ -62,7 +62,7 @@ type Config struct {
 }
 
 type Cmc struct {
-	Metadata           [][]byte
+	Metadata           map[[32]byte][]byte
 	PolicyEngineSelect verify.PolicyEngineSelect
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
