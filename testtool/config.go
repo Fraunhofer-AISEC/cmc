@@ -97,6 +97,7 @@ type config struct {
 	Drivers        []string `json:"drivers"`
 	Storage        string   `json:"storage"`
 	Cache          string   `json:"cache"`
+	PeerCache      string   `json:"peerCache"`
 	MeasurementLog bool     `json:"measurementLog"`
 	UseIma         bool     `json:"useIma"`
 	ImaPcr         int      `json:"imaPcr"`
@@ -139,6 +140,7 @@ const (
 	driversFlag        = "drivers"
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
+	peerCacheFlag      = "peercache"
 	measurementLogFlag = "measurementlog"
 	headerFlag         = "header"
 	methodFlag         = "method"
@@ -190,7 +192,10 @@ func getConfig() *config {
 		"Optional folder to store internal CMC data in (only for libapi)")
 	cache := flag.String(cacheFlag, "",
 		"Optional folder to cache metadata for offline backup (only for libapi)")
-	measurementLog := flag.Bool(measurementLogFlag, false, "Indicates whether to include measured events in measurement and validation report")
+	peerCache := flag.String(peerCacheFlag, "",
+		"Optional folder to cache peer metadata for smaller attestation reports (only for libapi)")
+	measurementLog := flag.Bool(measurementLogFlag, false,
+		"Indicates whether to include measured events in measurement and validation report")
 	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
 	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
 	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
@@ -297,6 +302,9 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(cacheFlag) {
 		c.Cache = *cache
+	}
+	if internal.FlagPassed(peerCacheFlag) {
+		c.PeerCache = *peerCache
 	}
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
@@ -432,6 +440,27 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
 		}
 	}
+
+	if c.Storage != "" {
+		c.Storage, err = filepath.Abs(c.Storage)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Storage, err)
+		}
+	}
+
+	if c.Cache != "" {
+		c.Cache, err = filepath.Abs(c.Cache)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
+		}
+	}
+
+	if c.PeerCache != "" {
+		c.PeerCache, err = filepath.Abs(c.PeerCache)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.PeerCache, err)
+		}
+	}
 }
 
 func GetAttestMode(attest string) (atls.AttestSelect, error) {
@@ -489,6 +518,7 @@ func printConfig(c *config) {
 		log.Debugf("\tMetadata     : %v", c.Metadata)
 		log.Debugf("\tStorage      : %v", c.Storage)
 		log.Debugf("\tCache        : %v", c.Cache)
+		log.Debugf("\tCache        : %v", c.PeerCache)
 		log.Debugf("\tEvent Info   : %v", c.MeasurementLog)
 		log.Debugf("\tDrivers      : %v", strings.Join(c.Drivers, ","))
 		log.Debugf("\tUse IMA      : %v", c.UseIma)
