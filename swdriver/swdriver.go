@@ -163,7 +163,7 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	return measurement, nil
 }
 
-func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,
+func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[[32]byte][]byte,
 	addr string,
 ) ([]*x509.Certificate, error) {
 

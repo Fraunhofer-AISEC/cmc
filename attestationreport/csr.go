@@ -21,18 +21,19 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"errors"
 	"fmt"
 )
 
-func CreateCsr(priv crypto.PrivateKey, s Serializer, metadata [][]byte) (*x509.CertificateRequest, error) {
+func CreateCsr(priv crypto.PrivateKey, s Serializer, metadata map[[32]byte][]byte) (*x509.CertificateRequest, error) {
 
 	for i, m := range metadata {
 
 		// Extract plain payload (i.e. the manifest/description itself)
 		payload, err := s.GetPayload(m)
 		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
+			log.Warnf("Failed to parse metadata object %v: %v", hex.EncodeToString(i[:]), err)
 			continue
 		}
 

@@ -370,7 +370,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 	return append([]*x509.Certificate{signingCert}, ca...), nil
 }
 
-func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata [][]byte,
+func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[[32]byte][]byte,
 	addr string,
 ) ([]*x509.Certificate, error) {
 
