@@ -31,7 +31,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"gopkg.in/square/go-jose.v2"
+	"github.com/go-jose/go-jose/v4"
 )
 
 // Custom type for JSON unmarshaller as byte arrays are
@@ -66,7 +66,13 @@ type JsonSerializer struct{}
 
 func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 	// Extract plain payload out of base64-encoded JSON Web Signature
-	jws, err := jose.ParseSigned(string(raw))
+	jws, err := jose.ParseSigned(string(raw), []jose.SignatureAlgorithm{
+		jose.RS256,
+		jose.RS512,
+		jose.ES256,
+		jose.ES384,
+		jose.ES512,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse jws object: %v", err)
 	}
@@ -181,7 +187,13 @@ func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (Tok
 		Roots:     rootpool,
 	}
 
-	jwsData, err := jose.ParseSigned(string(data))
+	jwsData, err := jose.ParseSigned(string(data), []jose.SignatureAlgorithm{
+		jose.RS256,
+		jose.RS512,
+		jose.ES256,
+		jose.ES384,
+		jose.ES512,
+	})
 	if err != nil {
 		log.Warnf("Data could not be parsed: %v", err)
 		result.Summary.Success = false
