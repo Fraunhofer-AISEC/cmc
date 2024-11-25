@@ -23,8 +23,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/go-jose/go-jose/v4"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/square/go-jose.v2"
 )
 
 type JsonSerializer struct{}
