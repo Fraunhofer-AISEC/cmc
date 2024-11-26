@@ -1,18 +1,24 @@
 {
     "addr": "localhost:9955",
+    "provServerAddr": "https://localhost:9000/",
     "metadata": [
         "file://../../cmc-data/metadata-signed"
     ],
-    "provServerAddr": "https://localhost:9000/",
-    "drivers": [ "TPM" ],
-    "useIma": false,
-    "measuementLog": false,
+    "drivers": [ "tpm", "sw" ],
+    "useIma": true,
     "imaPcr": 10,
     "keyConfig": "EC256",
-    "api": "grpc",
-    "network": "unix",
+    "api": "socket",
+    "network": "tcp",
     "policyEngine": "js",
     "logLevel": "trace",
     "storage": "../../cmc-data/cmc-internal/",
-    "cache": "../../cmc-data/cmc-cache/"
+    "cache": "../../cmc-data/cmc-cache/",
+    "peerCache": "../../cmc-data/cmc-peer-cache",
+    "measurementLog": true,
+    "useCtr": true,
+    "ctrDriver": "sw",
+    "ctrLog": "/tmp/container_measurements",
+    "ctrPcr": 11,
+    "extendedCtrLog": true
 }

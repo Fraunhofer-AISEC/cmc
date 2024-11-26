@@ -7,7 +7,6 @@
     "result": "attestation-result.json",
     "nonce": "nonce",
     "ca": "../../cmc-data/pki/ca.pem",
-    "policies": "",
     "mtls": true,
     "useIma": true,
     "imaPcr": 10,
