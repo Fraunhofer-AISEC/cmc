@@ -83,6 +83,7 @@ message TLSCertResponse {
 message AttestationRequest {
   string id = 1;
   bytes nonce = 2;
+  repeated bytes cached = 3;
 }
 
 message AttestationResponse {
