@@ -267,13 +267,13 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	}
 
 	// Check that the Rtm Manifest is compatible with the OS Manifest
-	if contains(metadata.RtmManifest.Name, metadata.OsManifest.Rtms) {
+	if contains(metadata.RtmManifest.Name, metadata.OsManifest.BaseLayers) {
 		result.DevDescResult.RtmOsCompatibility.Success = true
 	} else {
-		log.Tracef("RTM Manifest %v is not compatible with OS Manifest %v",
-			metadata.RtmManifest.Name, metadata.OsManifest.Name)
+		log.Tracef("OS Manifest %v is not compatible with RTM Manifest %v",
+			metadata.OsManifest.Name, metadata.RtmManifest.Name)
 		result.DevDescResult.RtmOsCompatibility.Success = false
-		result.DevDescResult.RtmOsCompatibility.ExpectedOneOf = metadata.OsManifest.Rtms
+		result.DevDescResult.RtmOsCompatibility.ExpectedOneOf = metadata.OsManifest.BaseLayers
 		result.DevDescResult.RtmOsCompatibility.Got = metadata.RtmManifest.Name
 		result.DevDescResult.Summary.Success = false
 		result.Success = false
@@ -283,11 +283,11 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	for _, a := range metadata.AppManifests {
 		r := ar.Result{
 			Success:       true,
-			ExpectedOneOf: a.Oss,
+			ExpectedOneOf: a.BaseLayers,
 			Got:           metadata.OsManifest.Name,
 		}
-		if !contains(metadata.OsManifest.Name, a.Oss) {
-			log.Tracef("OS Manifest %v is not compatible with App Manifest %v", metadata.OsManifest.Name, a.Name)
+		if !contains(metadata.OsManifest.Name, a.BaseLayers) {
+			log.Tracef("App Manifest %v is not compatible with OS Manifest %v", a.Name, metadata.OsManifest.Name)
 			r.Success = false
 			result.DevDescResult.Summary.Success = false
 			result.Success = false
@@ -439,7 +439,7 @@ func verifyMetadata(report *ar.AttestationReport, cas []*x509.Certificate, s ar.
 			log.Trace("Validation of App Manifest failed")
 			success = false
 		} else {
-			var am ar.AppManifest
+			var am ar.Manifest
 			err := s.Unmarshal(payload, &am)
 			if err != nil {
 				log.Tracef("Unpacking of App Manifest failed: %v", err)
@@ -563,14 +563,14 @@ func collectReferenceValues(metadata *ar.Metadata) (map[string][]ar.ReferenceVal
 
 	// Add a reference to the corresponding manifest to each reference value
 	for i := range metadata.RtmManifest.ReferenceValues {
-		metadata.RtmManifest.ReferenceValues[i].SetManifest(metadata.RtmManifest)
+		metadata.RtmManifest.ReferenceValues[i].SetManifest(&metadata.RtmManifest)
 	}
 	for i := range metadata.OsManifest.ReferenceValues {
-		metadata.OsManifest.ReferenceValues[i].SetManifest(metadata.OsManifest)
+		metadata.OsManifest.ReferenceValues[i].SetManifest(&metadata.OsManifest)
 	}
 	for i := range metadata.AppManifests {
 		for j := range metadata.AppManifests[i].ReferenceValues {
-			metadata.AppManifests[i].ReferenceValues[j].SetManifest(metadata.AppManifests[i])
+			metadata.AppManifests[i].ReferenceValues[j].SetManifest(&metadata.AppManifests[i])
 		}
 	}
 

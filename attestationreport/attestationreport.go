@@ -242,7 +242,7 @@ type ReferenceValue struct {
 	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
 	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
 
-	manifest Manifest
+	manifest *Manifest
 }
 
 // AppDescription represents the attestation report
@@ -280,45 +280,18 @@ type Environment struct {
 	Value string `json:"value" cbor:"1,keyasint"`
 }
 
-// Generic manifest
-type Manifest interface{}
-
-// AppManifest represents the attestation report
-// element of type 'App Manifest'
-type AppManifest struct {
+// Manifest represents attestation report
+// elements of type 'RTM Manifest', 'OS Manifest' and 'App Manifest'
+type Manifest struct {
 	MetaInfo
 	DevCommonName      string           `json:"developerCommonName"  cbor:"3,keyasint"`
-	Oss                []string         `json:"oss" cbor:"4,keyasint"` // Links to OsManifest.Name
+	BaseLayers         []string         `json:"baseLayers" cbor:"4,keyasint"` // Links to RtmManifest.Name or OsManifest.Name
 	Description        string           `json:"description" cbor:"5,keyasint"`
 	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
 	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
 	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
-	OciSpec            any              `json:"ociSpec" cbor:"9,keyasint"`
-}
-
-// OsManifest represents the attestation report
-// element of type 'OsManifest'
-type OsManifest struct {
-	MetaInfo
-	DevCommonName      string           `json:"developerCommonName" cbor:"3,keyasint"`
-	Rtms               []string         `json:"rtms" cbor:"4,keyasint"` // Links to Type RtmManifest.Name
-	Description        string           `json:"description" cbor:"5,keyasint"`
-	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
-	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
-	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
+	OciSpec            any              `json:"ociSpec,omitempty" cbor:"9,keyasint,omitempty"` // TODO move to app description
 	Details            any              `json:"details,omitempty" cbor:"9,keyasint,omitempty"`
-}
-
-// RtmManifest represents the attestation report
-// element of type 'RTM Manifest'
-type RtmManifest struct {
-	MetaInfo
-	DevCommonName      string           `json:"developerCommonName" cbor:"3,keyasint"`
-	Description        string           `json:"description" cbor:"4,keyasint"`
-	CertificationLevel int              `json:"certificationLevel" cbor:"5,keyasint"`
-	Validity           Validity         `json:"validity" cbor:"6,keyasint"`
-	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"7,keyasint"`
-	Details            any              `json:"details,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 // DeviceDescription represents the attestation report
@@ -377,11 +350,11 @@ type Name struct {
 
 // Metadata is an internal structure for manifests and descriptions
 type Metadata struct {
-	RtmManifest        RtmManifest         `json:"rtmManifest" cbor:"2,keyasint"`
-	OsManifest         OsManifest          `json:"osManifest" cbor:"3,keyasint"`
-	AppManifests       []AppManifest       `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
-	CompanyDescription *CompanyDescription `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`
-	DeviceDescription  DeviceDescription   `json:"deviceDescription" cbor:"6,keyasint"`
+	RtmManifest        Manifest
+	OsManifest         Manifest
+	AppManifests       []Manifest
+	CompanyDescription *CompanyDescription
+	DeviceDescription  DeviceDescription
 }
 
 // AttestationReport represents the attestation report in JWS/COSE format with its
@@ -396,10 +369,10 @@ type AttestationReport struct {
 	DeviceDescription  []byte        `json:"deviceDescription" cbor:"6,keyasint"`
 }
 
-func (r *ReferenceValue) GetManifest() Manifest {
+func (r *ReferenceValue) GetManifest() *Manifest {
 	return r.manifest
 }
 
-func (r *ReferenceValue) SetManifest(m Manifest) {
+func (r *ReferenceValue) SetManifest(m *Manifest) {
 	r.manifest = m
 }

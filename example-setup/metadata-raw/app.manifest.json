@@ -7,7 +7,7 @@
 		"notBefore": "2023-04-10T20:00:00Z",
 		"notAfter": "2026-04-10T20:00:00Z"
 	},
-	"oss" : [ "de.test.os"
+	"baseLayers" : [ "de.test.os"
 	],
 	"description" : "Test App",
 	"certificationLevel" : 1,
