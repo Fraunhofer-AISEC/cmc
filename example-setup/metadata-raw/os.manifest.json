@@ -9,7 +9,7 @@
 	},
     "description": "PoC Demonstrator OS Manifest",
     "certificationLevel" : 3,
-    "rtms": [
+    "baseLayers": [
         "de.test.rtm"
     ],
     "referenceValues": [

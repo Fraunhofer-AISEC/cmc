@@ -803,11 +803,7 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrDetails {
 	}
 
 	// Get OCI runtime config from manifest
-	m, specOk := r.GetManifest().(AppManifest)
-	if !specOk {
-		log.Warnf("internal error: failed to get manifest from reference value")
-		return nil
-	}
+	m := r.GetManifest()
 
 	ociSpecRaw, err := s.Marshal(m.OciSpec)
 	if err != nil {

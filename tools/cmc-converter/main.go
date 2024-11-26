@@ -105,14 +105,14 @@ func convert(data []byte, outform string) ([]byte, error) {
 	switch info.Type {
 	case "App Manifest":
 		log.Debug("Found App Manifest")
-		var m ar.AppManifest
+		var m ar.Manifest
 		raw, err = convertInternal(data, &m, si, so)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert: %w", err)
 		}
 	case "OS Manifest":
 		log.Debug("Found OS Manifest")
-		var m ar.OsManifest
+		var m ar.Manifest
 		raw, err = convertInternal(data, &m, si, so)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert: %w", err)
@@ -120,7 +120,7 @@ func convert(data []byte, outform string) ([]byte, error) {
 
 	case "RTM Manifest":
 		log.Debug("Found RTM Manifest")
-		var m ar.RtmManifest
+		var m ar.Manifest
 		raw, err = convertInternal(data, &m, si, so)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert: %w", err)
