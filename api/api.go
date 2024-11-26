@@ -34,8 +34,9 @@ type SocketError struct {
 }
 
 type AttestationRequest struct {
-	Id    string `json:"id" cbor:"0,keyasint"`
-	Nonce []byte `json:"nonce" nonce:"1,keyasint"`
+	Id     string   `json:"id" cbor:"0,keyasint"`
+	Nonce  []byte   `json:"nonce" nonce:"1,keyasint"`
+	Cached [][]byte `json:"cached,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type AttestationResponse struct {
@@ -46,7 +47,7 @@ type VerificationRequest struct {
 	Nonce             []byte `json:"nonce" cbor:"0,keyasint"`
 	AttestationReport []byte `json:"attestationReport" cbor:"1,keyasint"`
 	Ca                []byte `json:"ca" cbor:"2,keyasint"`
-	Policies          []byte `json:"policies" cbor:"3,keyasint"`
+	Policies          []byte `json:"policies,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type VerificationResponse struct {
