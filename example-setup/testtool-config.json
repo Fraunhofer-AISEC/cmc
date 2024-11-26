@@ -3,15 +3,17 @@
     "addr": [
         "localhost:4443"
     ],
-    "cmc": "localhost:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
     "ca": "../../cmc-data/pki/ca.pem",
-    "policies": "",
     "mtls": true,
-    "measuementLog": false,
-    "api": "grpc",
-    "logLevel": "trace",
-    "interval": "5m30s"
+    "attest": "mutual",
+    "measurementLog": false,
+    "socketApiSerializer": "json",
+    "publish": "http://localhost:8081/results",
+    "logLevel": "debug",
+    "api": "socket",
+    "network": "tcp",
+    "cmc": "localhost:9955"
 }

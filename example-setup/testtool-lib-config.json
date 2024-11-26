@@ -7,16 +7,28 @@
     "result": "attestation-result.json",
     "nonce": "nonce",
     "ca": "../../cmc-data/pki/ca.pem",
-    "policies": "",
     "mtls": true,
+    "attest": "mutual",
     "api": "libapi",
     "logLevel": "trace",
-    "cache": "../../cmc-data/testtool-cache",
-    "storage": "../../cmc-data/testtool-storage",
-    "drivers": [ "tpm" ],
-    "metadata": [
-	"file://../../cmc-data/metadata-signed"
-    ],
+    "publish": "http://localhost:8081/results",
+    "socketApiSerializer": "json",
+
     "provServerAddr": "https://localhost:9000/",
-    "measurementLog": true
+    "metadata": [
+        "file://../../cmc-data/metadata-signed"
+    ],
+    "drivers": [ "tpm", "sw" ],
+    "useIma": true,
+    "imaPcr": 10,
+    "keyConfig": "EC256",
+    "storage": "../../cmc-data/testtool-storage",
+    "cache": "../../cmc-data/testtool-cache",
+    "peerCache": "../../cmc-data/testtool-peer-cache",
+    "measurementLog": true,
+    "useCtr": true,
+    "ctrDriver": "sw",
+    "ctrLog": "/tmp/container_measurements",
+    "ctrPcr": 11,
+    "extendedCtrLog": true
 }

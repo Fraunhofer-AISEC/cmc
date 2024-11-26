@@ -92,17 +92,8 @@ type config struct {
 	Data         string   `json:"data"`
 	Serializer   string   `json:"socketApiSerializer"`
 	// Only Lib API
-	ProvAddr       string   `json:"provServerAddr"`
-	Metadata       []string `json:"metadata"`
-	Drivers        []string `json:"drivers"`
-	Storage        string   `json:"storage"`
-	Cache          string   `json:"cache"`
-	PeerCache      string   `json:"peerCache"`
-	MeasurementLog bool     `json:"measurementLog"`
-	UseIma         bool     `json:"useIma"`
-	ImaPcr         int      `json:"imaPcr"`
-	// Only container measurements
-	CtrAlgo   string `json:"ctrAlgo"`
+	cmc.Config
+	// Only to test cmcd measure API
 	CtrName   string `json:"ctrName"`
 	CtrRootfs string `json:"ctrRootfs"`
 	CtrConfig string `json:"ctrConfig"`
@@ -134,20 +125,29 @@ const (
 	publishFlag    = "publish"
 	intervalFlag   = "interval"
 	serializerFlag = "serializer"
-	// Only lib API
-	provAddrFlag       = "prov"
+	headerFlag     = "header"
+	methodFlag     = "method"
+	dataFlag       = "data"
+	// Only lib API, reflects cmcd config
+	cmcAddrFlag        = "cmc"
+	provServerAddrFlag = "prov"
 	metadataFlag       = "metadata"
 	driversFlag        = "drivers"
+	useImaFlag         = "ima"
+	imaPcrFlag         = "pcr"
+	keyConfigFlag      = "algo"
+	policyEngineFlag   = "policyengine"
+	logLevelFlag       = "log"
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
 	peerCacheFlag      = "peercache"
 	measurementLogFlag = "measurementlog"
-	headerFlag         = "header"
-	methodFlag         = "method"
-	dataFlag           = "data"
-	imaFlag            = "ima"
-	imaPcrFlag         = "pcr"
-	// Only container image measure flags
+	useCtrFlag         = "ctr"
+	ctrDriverFlag      = "ctrdriver"
+	ctrPcrFlag         = "ctrpcr"
+	ctrLogFlag         = "ctrlog"
+	extCtrLogFlag      = "extctrlog"
+	// Only to test cmcd measure API
 	ctrNameFlag   = "ctrname"
 	ctrRootfsFlag = "ctrrootfs"
 	ctrConfigFlag = "ctrconfig"
@@ -179,8 +179,11 @@ func getConfig() *config {
 		"Interval at which connectors will be attested. If set to <=0, attestation will only be"+
 			" done once")
 	serializer := flag.String(serializerFlag, "", "Serializer to be used for socket API and aTLS (JSON or CBOR)")
+	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
+	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
+	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
 	// Lib API flags
-	provAddr := flag.String(provAddrFlag, "",
+	provServerAddr := flag.String(provServerAddrFlag, "",
 		"Address of the provisioning server (only for libapi)")
 	metadata := flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
 		"with file:// for local locations or https:// for remote locations (can be mixed)"+
@@ -188,6 +191,13 @@ func getConfig() *config {
 	driversList := flag.String(driversFlag, "",
 		fmt.Sprintf("Drivers (comma separated list). Only for libapi. Possible: %v",
 			strings.Join(maps.Keys(cmc.GetDrivers()), ",")))
+	useIma := flag.Bool(useImaFlag, false,
+		"Indicates whether to use Integrity Measurement Architecture (IMA)")
+	imaPcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
+	keyConfig := flag.String(keyConfigFlag, "", "Key configuration")
+	policyEngine := flag.String(policyEngineFlag, "",
+		fmt.Sprintf("Possible policy engines: %v",
+			strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")))
 	storage := flag.String(storageFlag, "",
 		"Optional folder to store internal CMC data in (only for libapi)")
 	cache := flag.String(cacheFlag, "",
@@ -196,13 +206,14 @@ func getConfig() *config {
 		"Optional folder to cache peer metadata for smaller attestation reports (only for libapi)")
 	measurementLog := flag.Bool(measurementLogFlag, false,
 		"Indicates whether to include measured events in measurement and validation report")
-	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
-	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
-	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
-	ima := flag.Bool(imaFlag, false,
-		"Indicates whether to use Integrity Measurement Architecture (IMA)")
-	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
-	// Container measurement flags
+	useCtr := flag.Bool(useCtrFlag, false, "Specifies whether to conduct container measurements")
+	ctrDriver := flag.String(ctrDriverFlag, "",
+		"Specifies which driver to use for container measurements")
+	ctrPcr := flag.Int(ctrPcrFlag, 0, "Container PCR")
+	ctrLog := flag.String(ctrLogFlag, "", "Container runtime measurements path")
+	extCtrLog := flag.Bool(extCtrLogFlag, false,
+		"specifies whether to store extended container logs with OCI runtime specs")
+	//  Only to test cmcd measure API
 	ctrName := flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
 	ctrRootfs := flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
 	ctrConfig := flag.String(ctrConfigFlag, "", "Specifies config path of the container to be measured")
@@ -223,6 +234,9 @@ func getConfig() *config {
 		Attest:      "mutual",
 		Method:      "GET",
 		Serializer:  "cbor",
+		Config: cmc.Config{
+			KeyConfig: "EC256",
+		},
 	}
 
 	// Obtain custom configuration from file if specified
@@ -287,15 +301,36 @@ func getConfig() *config {
 	if internal.FlagPassed(serializerFlag) {
 		c.Serializer = *serializer
 	}
+	if internal.FlagPassed(headerFlag) {
+		c.Header = strings.Split(*headers, ",")
+	}
+	if internal.FlagPassed(methodFlag) {
+		c.Method = *method
+	}
+	if internal.FlagPassed(dataFlag) {
+		c.Data = *data
+	}
 	// Lib API flags
-	if internal.FlagPassed(provAddrFlag) {
-		c.ProvAddr = *provAddr
+	if internal.FlagPassed(provServerAddrFlag) {
+		c.ProvServerAddr = *provServerAddr
 	}
 	if internal.FlagPassed(metadataFlag) {
 		c.Metadata = strings.Split(*metadata, ",")
 	}
 	if internal.FlagPassed(driversFlag) {
 		c.Drivers = strings.Split(*driversList, ",")
+	}
+	if internal.FlagPassed(useImaFlag) {
+		c.UseIma = *useIma
+	}
+	if internal.FlagPassed(imaPcrFlag) {
+		c.ImaPcr = *imaPcr
+	}
+	if internal.FlagPassed(keyConfigFlag) {
+		c.KeyConfig = *keyConfig
+	}
+	if internal.FlagPassed(policyEngineFlag) {
+		c.PolicyEngine = *policyEngine
 	}
 	if internal.FlagPassed(storageFlag) {
 		c.Storage = *storage
@@ -309,22 +344,22 @@ func getConfig() *config {
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
 	}
-	if internal.FlagPassed(headerFlag) {
-		c.Header = strings.Split(*headers, ",")
+	if internal.FlagPassed(useCtrFlag) {
+		c.UseCtr = *useCtr
 	}
-	if internal.FlagPassed(methodFlag) {
-		c.Method = *method
+	if internal.FlagPassed(ctrDriverFlag) {
+		c.CtrDriver = *ctrDriver
 	}
-	if internal.FlagPassed(dataFlag) {
-		c.Data = *data
+	if internal.FlagPassed(ctrPcrFlag) {
+		c.CtrPcr = *ctrPcr
 	}
-	if internal.FlagPassed(imaFlag) {
-		c.UseIma = *ima
+	if internal.FlagPassed(ctrLogFlag) {
+		c.CtrLog = *ctrLog
 	}
-	if internal.FlagPassed(imaPcrFlag) {
-		c.ImaPcr = *pcr
+	if internal.FlagPassed(extCtrLogFlag) {
+		c.ExtCtrLog = *extCtrLog
 	}
-	// Container measurements
+	//  Only to test cmcd measure API
 	if internal.FlagPassed(ctrNameFlag) {
 		c.CtrName = *ctrName
 	}
@@ -488,40 +523,40 @@ func printConfig(c *config) {
 	log.Infof("Running testtool from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tMode		   : %v", c.Mode)
-	log.Debugf("\tAddr         : %v", c.Addr)
-	log.Debugf("\tInterval     : %v", c.interval)
-	log.Debugf("\tCmcAddr      : %v", c.CmcAddr)
-	log.Debugf("\tReportFile   : %v", c.ReportFile)
-	log.Debugf("\tResultFile   : %v", c.ResultFile)
-	log.Debugf("\tNonceFile    : %v", c.NonceFile)
-	log.Debugf("\tCaFile       : %v", c.CaFile)
-	log.Debugf("\tMtls         : %v", c.Mtls)
-	log.Debugf("\tLogLevel     : %v", c.LogLevel)
-	log.Debugf("\tAttest       : %v", c.Attest)
-	log.Debugf("\tPublish      : %v", c.Publish)
+	log.Debugf("\tMode		     : %v", c.Mode)
+	log.Debugf("\tAddr           : %v", c.Addr)
+	log.Debugf("\tInterval       : %v", c.interval)
+	log.Debugf("\tCmcAddr        : %v", c.CmcAddr)
+	log.Debugf("\tReportFile     : %v", c.ReportFile)
+	log.Debugf("\tResultFile     : %v", c.ResultFile)
+	log.Debugf("\tNonceFile      : %v", c.NonceFile)
+	log.Debugf("\tCaFile         : %v", c.CaFile)
+	log.Debugf("\tMtls           : %v", c.Mtls)
+	log.Debugf("\tLogLevel       : %v", c.LogLevel)
+	log.Debugf("\tAttest         : %v", c.Attest)
+	log.Debugf("\tPublish        : %v", c.Publish)
 	if strings.EqualFold(c.Mode, "request") {
-		log.Debugf("\tHTTP Data    : %v", c.Data)
-		log.Debugf("\tHTTP Header  : %v", c.Header)
-		log.Debugf("\tHTTP Method  : %v", c.Method)
+		log.Debugf("\tHTTP Data      : %v", c.Data)
+		log.Debugf("\tHTTP Header    : %v", c.Header)
+		log.Debugf("\tHTTP Method    : %v", c.Method)
 	}
 	if c.PoliciesFile != "" {
-		log.Debugf("\tPoliciesFile: %v", c.PoliciesFile)
+		log.Debugf("\tPoliciesFile  : %v", c.PoliciesFile)
 	}
 	if strings.EqualFold(c.Api, "socket") {
-		log.Debugf("\tApi (Network): %v (%v, %v)", c.Api, c.Network, c.Serializer)
+		log.Debugf("\tApi (Network)  : %v (%v, %v)", c.Api, c.Network, c.Serializer)
 	} else {
-		log.Debugf("\tApi          : %v", c.Api)
+		log.Debugf("\tApi            : %v", c.Api)
 	}
 	if strings.EqualFold(c.Api, "libapi") {
-		log.Debugf("\tProvAddr     : %v", c.ProvAddr)
-		log.Debugf("\tMetadata     : %v", c.Metadata)
-		log.Debugf("\tStorage      : %v", c.Storage)
-		log.Debugf("\tCache        : %v", c.Cache)
-		log.Debugf("\tCache        : %v", c.PeerCache)
-		log.Debugf("\tEvent Info   : %v", c.MeasurementLog)
-		log.Debugf("\tDrivers      : %v", strings.Join(c.Drivers, ","))
-		log.Debugf("\tUse IMA      : %v", c.UseIma)
-		log.Debugf("\tIMA PCR      : %v", c.ImaPcr)
+		log.Debugf("\tProvServerAddr : %v", c.ProvServerAddr)
+		log.Debugf("\tMetadata       : %v", c.Metadata)
+		log.Debugf("\tStorage        : %v", c.Storage)
+		log.Debugf("\tCache          : %v", c.Cache)
+		log.Debugf("\tPeer Cache     : %v", c.PeerCache)
+		log.Debugf("\tMeasurement Log: %v", c.MeasurementLog)
+		log.Debugf("\tDrivers        : %v", strings.Join(c.Drivers, ","))
+		log.Debugf("\tUse IMA        : %v", c.UseIma)
+		log.Debugf("\tIMA PCR        : %v", c.ImaPcr)
 	}
 }

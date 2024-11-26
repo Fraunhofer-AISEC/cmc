@@ -38,7 +38,7 @@ var (
 )
 
 type Config struct {
-	Addr           string   `json:"addr"`
+	Addr           string   `json:"addr,omitempty"`
 	ProvServerAddr string   `json:"provServerAddr"`
 	Metadata       []string `json:"metadata"`
 	Drivers        []string `json:"drivers"`

@@ -50,26 +50,26 @@ var (
 
 const (
 	configFlag         = "config"
-	metadataFlag       = "metadata"
 	cmcAddrFlag        = "cmc"
-	provAddrFlag       = "prov"
+	provServerAddrFlag = "prov"
+	metadataFlag       = "metadata"
 	driversFlag        = "drivers"
-	imaFlag            = "ima"
+	useImaFlag         = "ima"
 	imaPcrFlag         = "pcr"
 	keyConfigFlag      = "algo"
 	apiFlag            = "api"
 	networkFlag        = "network"
-	policyEngineFlag   = "policies"
-	logFlag            = "log"
+	policyEngineFlag   = "policyengine"
+	logLevelFlag       = "log"
 	storageFlag        = "storage"
 	cacheFlag          = "cache"
 	peerCacheFlag      = "peercache"
-	measurementLogFlag = "measurementLog"
-	ctrFlag            = "ctr"
+	measurementLogFlag = "measurementlog"
+	useCtrFlag         = "ctr"
 	ctrDriverFlag      = "ctrdriver"
 	ctrPcrFlag         = "ctrpcr"
 	ctrLogFlag         = "ctrlog"
-	extCtrLogFlag      = "extCtrLog"
+	extCtrLogFlag      = "extctrlog"
 )
 
 func getConfig() (*cmc.Config, error) {
@@ -81,23 +81,23 @@ func getConfig() (*cmc.Config, error) {
 
 	// Parse given command line flags
 	configFile := flag.String(configFlag, "", "configuration file")
+	cmcAddr := flag.String(cmcAddrFlag, "", "Address the CMC is serving under")
+	provServerAddr := flag.String(provServerAddrFlag, "", "Address of the provisioning server")
 	metadata := flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
 		"with file:// for local locations or https:// for remote locations (can be mixed)")
-	cmcAddr := flag.String(cmcAddrFlag, "", "Address the CMC is serving under")
-	provAddr := flag.String(provAddrFlag, "", "Address of the provisioning server")
 	driversList := flag.String(driversFlag, "",
 		fmt.Sprintf("Drivers (comma separated list). Possible: %v",
 			strings.Join(maps.Keys(cmc.GetDrivers()), ",")))
-	ima := flag.Bool(imaFlag, false,
+	useIma := flag.Bool(useImaFlag, false,
 		"Specifies whether to use Integrity Measurement Architecture (IMA)")
-	pcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
+	imaPcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
 	keyConfig := flag.String(keyConfigFlag, "", "Key configuration")
 	api := flag.String(apiFlag, "", "API to use. Possible: [coap grpc libapi socket]")
 	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine := flag.String(policyEngineFlag, "",
 		fmt.Sprintf("Possible policy engines: %v",
 			strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")))
-	logLevel := flag.String(logFlag, "",
+	logLevel := flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	storage := flag.String(storageFlag, "", "Optional folder to store internal CMC data in")
 	cache := flag.String(cacheFlag, "", "Optional folder to cache metadata for offline backup")
@@ -105,7 +105,7 @@ func getConfig() (*cmc.Config, error) {
 		"Optional folder to cache peer metadata to reduce attestation report size")
 	measurementLog := flag.Bool(measurementLogFlag, false,
 		"Specifies whether to include measured events in measurement and validation report")
-	ctr := flag.Bool(ctrFlag, false, "Specifies whether to conduct container measurements")
+	useCtr := flag.Bool(useCtrFlag, false, "Specifies whether to conduct container measurements")
 	ctrDriver := flag.String(ctrDriverFlag, "",
 		"Specifies which driver to use for container measurements")
 	ctrPcr := flag.Int(ctrPcrFlag, 0, "Container PCR")
@@ -135,23 +135,23 @@ func getConfig() (*cmc.Config, error) {
 	}
 
 	// Overwrite config file configuration with given command line arguments
-	if internal.FlagPassed(metadataFlag) {
-		c.Metadata = strings.Split(*metadata, ",")
-	}
 	if internal.FlagPassed(cmcAddrFlag) {
 		c.Addr = *cmcAddr
 	}
-	if internal.FlagPassed(provAddrFlag) {
-		c.ProvServerAddr = *provAddr
+	if internal.FlagPassed(provServerAddrFlag) {
+		c.ProvServerAddr = *provServerAddr
+	}
+	if internal.FlagPassed(metadataFlag) {
+		c.Metadata = strings.Split(*metadata, ",")
 	}
 	if internal.FlagPassed(driversFlag) {
 		c.Drivers = strings.Split(*driversList, ",")
 	}
-	if internal.FlagPassed(imaFlag) {
-		c.UseIma = *ima
+	if internal.FlagPassed(useImaFlag) {
+		c.UseIma = *useIma
 	}
 	if internal.FlagPassed(imaPcrFlag) {
-		c.ImaPcr = *pcr
+		c.ImaPcr = *imaPcr
 	}
 	if internal.FlagPassed(keyConfigFlag) {
 		c.KeyConfig = *keyConfig
@@ -165,7 +165,7 @@ func getConfig() (*cmc.Config, error) {
 	if internal.FlagPassed(policyEngineFlag) {
 		c.PolicyEngine = *policyEngine
 	}
-	if internal.FlagPassed(logFlag) {
+	if internal.FlagPassed(logLevelFlag) {
 		c.LogLevel = *logLevel
 	}
 	if internal.FlagPassed(storageFlag) {
@@ -180,8 +180,8 @@ func getConfig() (*cmc.Config, error) {
 	if internal.FlagPassed(measurementLogFlag) {
 		c.MeasurementLog = *measurementLog
 	}
-	if internal.FlagPassed(ctrFlag) {
-		c.UseCtr = *ctr
+	if internal.FlagPassed(useCtrFlag) {
+		c.UseCtr = *useCtr
 	}
 	if internal.FlagPassed(ctrDriverFlag) {
 		c.CtrDriver = *ctrDriver
