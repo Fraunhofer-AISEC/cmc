@@ -27,6 +27,7 @@ type CMCServiceClient interface {
 	TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error)
 	Attest(ctx context.Context, in *AttestationRequest, opts ...grpc.CallOption) (*AttestationResponse, error)
 	Verify(ctx context.Context, in *VerificationRequest, opts ...grpc.CallOption) (*VerificationResponse, error)
+	PeerCache(ctx context.Context, in *PeerCacheRequest, opts ...grpc.CallOption) (*PeerCacheResponse, error)
 	Measure(ctx context.Context, in *MeasureRequest, opts ...grpc.CallOption) (*MeasureResponse, error)
 }
 
@@ -74,6 +75,15 @@ func (c *cMCServiceClient) Verify(ctx context.Context, in *VerificationRequest, 
 	return out, nil
 }
 
+func (c *cMCServiceClient) PeerCache(ctx context.Context, in *PeerCacheRequest, opts ...grpc.CallOption) (*PeerCacheResponse, error) {
+	out := new(PeerCacheResponse)
+	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/PeerCache", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *cMCServiceClient) Measure(ctx context.Context, in *MeasureRequest, opts ...grpc.CallOption) (*MeasureResponse, error) {
 	out := new(MeasureResponse)
 	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/Measure", in, out, opts...)
@@ -92,6 +102,7 @@ type CMCServiceServer interface {
 	TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error)
 	Attest(context.Context, *AttestationRequest) (*AttestationResponse, error)
 	Verify(context.Context, *VerificationRequest) (*VerificationResponse, error)
+	PeerCache(context.Context, *PeerCacheRequest) (*PeerCacheResponse, error)
 	Measure(context.Context, *MeasureRequest) (*MeasureResponse, error)
 	mustEmbedUnimplementedCMCServiceServer()
 }
@@ -111,6 +122,9 @@ func (UnimplementedCMCServiceServer) Attest(context.Context, *AttestationRequest
 }
 func (UnimplementedCMCServiceServer) Verify(context.Context, *VerificationRequest) (*VerificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Verify not implemented")
+}
+func (UnimplementedCMCServiceServer) PeerCache(context.Context, *PeerCacheRequest) (*PeerCacheResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PeerCache not implemented")
 }
 func (UnimplementedCMCServiceServer) Measure(context.Context, *MeasureRequest) (*MeasureResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Measure not implemented")
@@ -200,6 +214,24 @@ func _CMCService_Verify_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CMCService_PeerCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PeerCacheRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CMCServiceServer).PeerCache(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpcapi.CMCService/PeerCache",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CMCServiceServer).PeerCache(ctx, req.(*PeerCacheRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CMCService_Measure_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MeasureRequest)
 	if err := dec(in); err != nil {
@@ -240,6 +272,10 @@ var CMCService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Verify",
 			Handler:    _CMCService_Verify_Handler,
+		},
+		{
+			MethodName: "PeerCache",
+			Handler:    _CMCService_PeerCache_Handler,
 		},
 		{
 			MethodName: "Measure",

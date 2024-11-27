@@ -46,7 +46,7 @@ type DriverConfig struct {
 	StoragePath    string
 	ServerAddr     string
 	KeyConfig      string
-	Metadata       map[[32]byte][]byte
+	Metadata       map[string][]byte
 	UseIma         bool
 	ImaPcr         int
 	Serializer     Serializer
@@ -294,6 +294,13 @@ type Manifest struct {
 	Details            any              `json:"details,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
+// MetadataDigest represents attestation report
+// elements of type 'RTM Manifest Digest', 'OS Manifest Digest' and 'App Manifest Digest'
+type MetadataDigest struct {
+	Type   string  `json:"type" cbor:"0,keyasint"`
+	Digest HexByte `json:"digest" cbor:"1,keyasint"`
+}
+
 // DeviceDescription represents the attestation report
 // element of type 'Device Description'
 type DeviceDescription struct {
@@ -360,13 +367,17 @@ type Metadata struct {
 // AttestationReport represents the attestation report in JWS/COSE format with its
 // contents already in signed JWS/COSE format
 type AttestationReport struct {
-	Type               string        `json:"type" cbor:"0,keyasint"`
-	Measurements       []Measurement `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
-	RtmManifest        []byte        `json:"rtmManifest" cbor:"2,keyasint"`
-	OsManifest         []byte        `json:"osManifest" cbor:"3,keyasint"`
-	AppManifests       [][]byte      `json:"appManifests,omitempty" cbor:"4,keyasint,omitempty"`
-	CompanyDescription []byte        `json:"companyDescription,omitempty" cbor:"5,keyasint,omitempty"`
-	DeviceDescription  []byte        `json:"deviceDescription" cbor:"6,keyasint"`
+	Type                     string           `json:"type" cbor:"0,keyasint"`
+	Measurements             []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
+	RtmManifest              []byte           `json:"rtmManifest,omitempty" cbor:"2,keyasint"`
+	RtmManifestDigest        MetadataDigest   `json:"rtmManifestDigest,omitempty" cbor:"3,keyasint,omitempty"`
+	OsManifest               []byte           `json:"osManifest,omitempty" cbor:"4,keyasint,omitempty"`
+	OsManifestDigest         MetadataDigest   `json:"osManifestDigest,omitempty" cbor:"5,keyasint,omitempty"`
+	AppManifests             [][]byte         `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
+	AppManifestDigests       []MetadataDigest `json:"appManifestDigests,omitempty" cbor:"7,keyasint,omitempty"`
+	CompanyDescription       []byte           `json:"companyDescription,omitempty" cbor:"8,keyasint,omitempty"`
+	CompanyDescriptionDigest MetadataDigest   `json:"companyDescriptionDigest,omitempty" cbor:"9,keyasint,omitempty"`
+	DeviceDescription        []byte           `json:"deviceDescription,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
 func (r *ReferenceValue) GetManifest() *Manifest {

@@ -16,7 +16,9 @@
 package attestedtls
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -75,9 +77,17 @@ func (ln Listener) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
 	}
 
+	// Retrieve peer's TLS leaf certificate fingerprint to be used as peer ID for peer cache
+	log.Trace("Retrieving TLS certificate fingerprint as peer ID")
+	var fingerprint string
+	if len(cs.PeerCertificates) > 0 {
+		f := sha256.Sum256(cs.PeerCertificates[0].Raw)
+		fingerprint = hex.EncodeToString(f[:])
+	}
+
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
-	err = atlsHandshakeStart(tlsConn, chbindings, ln.CmcConfig, Endpoint_Server)
+	err = atlsHandshakeStart(tlsConn, chbindings, fingerprint, ln.CmcConfig, Endpoint_Server)
 	err = aTlsHandshakeComplete(tlsConn, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)

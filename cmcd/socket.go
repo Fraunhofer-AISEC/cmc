@@ -32,12 +32,11 @@ import (
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	"github.com/Fraunhofer-AISEC/cmc/generate"
+	c "github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
-	"github.com/Fraunhofer-AISEC/cmc/verify"
 	"github.com/fxamacker/cbor/v2"
+	"golang.org/x/exp/maps"
 )
 
 // Server is the server structure
@@ -48,7 +47,7 @@ func init() {
 	servers["socket"] = SocketServer{}
 }
 
-func (s SocketServer) Serve(addr string, cmc *cmc.Cmc) error {
+func (s SocketServer) Serve(addr string, cmc *c.Cmc) error {
 
 	log.Infof("Waiting for requests on %v (%v)", addr, cmc.Network)
 
@@ -76,7 +75,7 @@ func (s SocketServer) Serve(addr string, cmc *cmc.Cmc) error {
 	}
 }
 
-func handleIncoming(conn net.Conn, cmc *cmc.Cmc) {
+func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 	defer conn.Close()
 
 	log.Infof("Received request from %v", conn.RemoteAddr().String())
@@ -106,12 +105,14 @@ func handleIncoming(conn net.Conn, cmc *cmc.Cmc) {
 		tlscert(conn, payload, cmc, s)
 	case api.TypeTLSSign:
 		tlssign(conn, payload, cmc, s)
+	case api.TypePeerCache:
+		fetchPeerCache(conn, payload, cmc, s)
 	default:
 		sendError(conn, s, "Invalid Type: %v", reqType)
 	}
 }
 
-func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
+func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Prover: Received socket attestation request")
 
@@ -133,22 +134,16 @@ func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 
 	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
 
-	report, err := generate.Generate(req.Nonce, cmc.Metadata, cmc.Drivers, cmc.Serializer)
+	report, misses, err := c.Generate(req, cmc)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
 	}
 
-	log.Debug("Prover: Signing Attestation Report")
-	r, err := generate.Sign(report, cmc.Drivers[0], cmc.Serializer)
-	if err != nil {
-		sendError(conn, s, "Failed to sign attestation report: %v", err)
-		return
-	}
-
 	// Serialize payload
 	resp := &api.AttestationResponse{
-		AttestationReport: r,
+		AttestationReport: report,
+		CacheMisses:       misses,
 	}
 	data, err := s.Marshal(resp)
 	if err != nil {
@@ -164,7 +159,7 @@ func attest(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 	log.Debug("Prover: Finished")
 }
 
-func validate(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
+func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Received verification request")
 
@@ -175,20 +170,16 @@ func validate(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 		return
 	}
 
-	log.Debug("Verifier: Verifying Attestation Report")
-	result := verify.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
-		cmc.PolicyEngineSelect, cmc.IntelStorage)
-
-	log.Debug("Verifier: Marshaling Attestation Result")
-	r, err := json.Marshal(result)
+	log.Debug("Verifier: verifying attestation report")
+	result, err := c.Verify(req, cmc)
 	if err != nil {
-		sendError(conn, s, "Verifier: failed to marshal Attestation Result: %v", err)
+		sendError(conn, s, "Verifier: failed to verify: %v", err)
 		return
 	}
 
 	// Serialize payload
 	resp := api.VerificationResponse{
-		VerificationResult: r,
+		VerificationResult: result,
 	}
 	data, err := s.Marshal(&resp)
 	if err != nil {
@@ -204,7 +195,7 @@ func validate(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 	log.Debug("Verifier: Finished")
 }
 
-func measure(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
+func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Received Connection Request Type 'Measure Request'")
 
@@ -248,7 +239,7 @@ func measure(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 	log.Debug("Measurer: Finished")
 }
 
-func tlssign(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
+func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Received TLS sign request")
 
@@ -305,7 +296,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 	log.Debug("Performed signing")
 }
 
-func tlscert(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
+func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Received TLS cert request")
 
@@ -347,6 +338,40 @@ func tlscert(conn net.Conn, payload []byte, cmc *cmc.Cmc, s ar.Serializer) {
 	}
 
 	log.Debug("Obtained TLS cert")
+}
+
+func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
+
+	log.Debug("Received Connection Request Type 'Peer Cache'")
+
+	req := new(api.PeerCacheRequest)
+	err := s.Unmarshal(payload, req)
+	if err != nil {
+		sendError(conn, s, "Failed to unmarshal peer cache request: %v", err)
+		return
+	}
+
+	log.Debug("Collecting peer cache")
+	resp := api.PeerCacheResponse{}
+	c, ok := cmc.CachedPeerMetadata[req.Peer]
+	if ok {
+		resp.Cache = maps.Keys(c)
+	}
+
+	log.Tracef("Collected peer cache with %v elements", len(cmc.CachedPeerMetadata[req.Peer]))
+
+	data, err := s.Marshal(&resp)
+	if err != nil {
+		sendError(conn, s, "failed to marshal message: %v", err)
+		return
+	}
+
+	err = api.Send(conn, data, api.TypePeerCache)
+	if err != nil {
+		sendError(conn, s, "failed to send: %v", err)
+	}
+
+	log.Debug("Peer cache: Finished")
 }
 
 func sendError(conn net.Conn, s ar.Serializer, format string, args ...interface{}) error {

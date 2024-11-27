@@ -27,13 +27,14 @@ import (
 type AtlsHandshakeRequest struct {
 	Attest         AttestSelect `json:"attest" cbor:"0,keyasint"`
 	ExtendedReport bool         `json:"extendedReport" cbor:"1,keyasint"`
-	CachedMetadata [][]byte     `json:"cachedMetadata" cbor:"2,keyasint"`
+	Cached         []string     `json:"cached" cbor:"2,keyasint"`
 }
 
 type AtlsHandshakeResponse struct {
-	Attest AttestSelect `json:"attest" cbor:"0,keyasint"`
-	Error  string       `json:"error" cbor:"1,keyasint"`
-	Report []byte       `json:"report" cbor:"2,keyasint"`
+	Attest      AttestSelect `json:"attest" cbor:"0,keyasint"`
+	Error       string       `json:"error" cbor:"1,keyasint"`
+	Report      []byte       `json:"report" cbor:"2,keyasint"`
+	CacheMisses []string     `json:"cacheMisses,omitempty" cbor:"3,keyasint"`
 }
 
 type AtlsHandshakeComplete struct {
@@ -45,9 +46,11 @@ var id = "0000"
 
 var log = logrus.WithField("service", "atls")
 
-func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, cc CmcConfig, endpoint Endpoint) error {
+func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc CmcConfig, endpoint Endpoint) error {
 	var err error
 	var ownReport []byte
+	var cache []string
+	var misses []string
 	var reportErr string
 
 	ownAddr := conn.LocalAddr().String()
@@ -55,10 +58,21 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, cc CmcConfig, endpoin
 
 	attestSelf, attestPeer := convertAttestMode(cc.Attest, endpoint)
 
+	if attestPeer {
+		if fingerprint == "" {
+			return fmt.Errorf("internal error: TLS peer cert fingerprint is nil")
+		}
+
+		cache, err = cc.CmcApi.fetchPeerCache(cc, fingerprint)
+		if err != nil {
+			return fmt.Errorf("failed to fetch peer cache: %w", err)
+		}
+	}
+
 	// Send attestation request
 	log.Debugf("Verifier %v: sending atls handshake request mode %v to %v",
 		ownAddr, cc.Attest.String(), peerAddr)
-	err = sendAtlsRequest(conn, cc.Attest)
+	err = sendAtlsRequest(conn, cc.Attest, cache)
 	if err != nil {
 		return fmt.Errorf("verifer %v: failed to send atls handshake request to %v: %w",
 			ownAddr, peerAddr, err)
@@ -85,7 +99,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, cc CmcConfig, endpoin
 	if attestSelf {
 		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
 		// Obtain attestation report from local cmcd
-		ownReport, err = cc.CmcApi.obtainAR(cc, chbindings, req)
+		ownReport, misses, err = cc.CmcApi.obtainAR(cc, chbindings, req)
 		if err != nil {
 			reportErr = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
 		}
@@ -95,9 +109,10 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, cc CmcConfig, endpoin
 	}
 
 	report := AtlsHandshakeResponse{
-		Attest: cc.Attest,
-		Report: ownReport,
-		Error:  reportErr,
+		Attest:      cc.Attest,
+		Report:      ownReport,
+		CacheMisses: misses,
+		Error:       reportErr,
 	}
 
 	// Send created atls handshake response to listener asynchronously to avoid TCP deadlock
@@ -142,7 +157,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, cc CmcConfig, endpoin
 	if attestPeer {
 		// Verify AR from listener with own channel bindings
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
-		err = cc.CmcApi.verifyAR(chbindings, resp.Report, cc)
+		err = cc.CmcApi.verifyAR(chbindings, resp.Report, fingerprint, resp.CacheMisses, cc)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}
@@ -235,16 +250,6 @@ func receiveAtlsRequest(conn *tls.Conn) (*AtlsHandshakeRequest, error) {
 	return req, nil
 }
 
-func checkAttestationMode(own, peer AttestSelect) error {
-	if own == peer {
-		log.Tracef("Matching attestation mode: [%v]", own.String())
-	} else {
-		return fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]",
-			own.String(), peer.String())
-	}
-	return nil
-}
-
 func receiveAtlsComplete(conn *tls.Conn) (*AtlsHandshakeComplete, error) {
 
 	s := ar.CborSerializer{}
@@ -265,7 +270,7 @@ func receiveAtlsComplete(conn *tls.Conn) (*AtlsHandshakeComplete, error) {
 	return complete, nil
 }
 
-func sendAtlsRequest(conn *tls.Conn, attest AttestSelect) error {
+func sendAtlsRequest(conn *tls.Conn, attest AttestSelect, cache []string) error {
 
 	s := ar.CborSerializer{}
 
@@ -274,7 +279,7 @@ func sendAtlsRequest(conn *tls.Conn, attest AttestSelect) error {
 	req := &AtlsHandshakeRequest{
 		Attest:         attest,
 		ExtendedReport: false,
-		CachedMetadata: nil,
+		Cached:         cache,
 	}
 
 	// Marshal payload
@@ -354,4 +359,14 @@ func convertAttestMode(attest AttestSelect, endpoint Endpoint) (bool, bool) {
 		}
 	}
 	return attestSelf, attestPeer
+}
+
+func checkAttestationMode(own, peer AttestSelect) error {
+	if own == peer {
+		log.Tracef("Matching attestation mode: [%v]", own.String())
+	} else {
+		return fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]",
+			own.String(), peer.String())
+	}
+	return nil
 }

@@ -69,10 +69,11 @@ type CmcConfig struct {
 }
 
 type CmcApi interface {
-	obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error)
-	verifyAR(chbindings, report []byte, cc CmcConfig) error
+	obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, []string, error)
+	verifyAR(chbindings, report []byte, peer string, cacheMisses []string, cc CmcConfig) error
 	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc CmcConfig) ([][]byte, error)
+	fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error)
 }
 
 var CmcApis = map[CmcApiSelect]CmcApi{}

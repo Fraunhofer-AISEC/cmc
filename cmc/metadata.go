@@ -34,7 +34,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-func GetMetadata(paths []string, cache string) (map[[32]byte][]byte, ar.Serializer, error) {
+func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer, error) {
 
 	if len(paths) == 0 {
 		log.Info("No metadata specified via config. Using default serializer (JSON)")
@@ -107,10 +107,10 @@ func GetMetadata(paths []string, cache string) (map[[32]byte][]byte, ar.Serializ
 	log.Debugf("Loaded %v metadata objects", len(metadata))
 
 	// Convert metadata for faster retrieval
-	metamap := make(map[[32]byte][]byte)
+	metamap := make(map[string][]byte)
 	for _, m := range metadata {
 		hash := sha256.Sum256(m)
-		metamap[hash] = m
+		metamap[hex.EncodeToString(hash[:])] = m
 	}
 
 	return metamap, s, nil

@@ -23,7 +23,6 @@ import (
 	// local modules
 
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -31,9 +30,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	g "github.com/Fraunhofer-AISEC/cmc/generate"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
-	v "github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 type LibApi struct {
@@ -67,26 +64,18 @@ func (a LibApi) generate(c *config) {
 	}
 
 	// Generate attestation report
-	report, err := g.Generate(nonce, a.cmc.Metadata, a.cmc.Drivers, a.cmc.Serializer)
+	report, _, err := cmc.Generate(&api.AttestationRequest{Nonce: nonce}, a.cmc)
 	if err != nil {
 		log.Errorf("Failed to generate attestation report: %v", err)
 		return
 	}
 
-	// Sign attestation report
-	log.Debug("Prover: Signing Attestation Report")
-	r, err := g.Sign(report, a.cmc.Drivers[0], a.cmc.Serializer)
-	if err != nil {
-		log.Errorf("Failed to sign attestation report: %v", err)
-		return
-	}
-
 	// Save the attestation report for the verifier
-	err = os.WriteFile(c.ReportFile, r, 0644)
+	err = os.WriteFile(c.ReportFile, report, 0644)
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	fmt.Println("Wrote attestation report: ", c.ReportFile)
+	log.Infof("Wrote attestation report length %v: %v", len(report), c.ReportFile)
 
 	// Save the nonce for the verifier
 	os.WriteFile(c.NonceFile, nonce, 0644)
@@ -118,16 +107,19 @@ func (a LibApi) verify(c *config) {
 	}
 
 	// Verify the attestation report
-	result := v.Verify(report, nonce, c.ca, c.policies, a.cmc.PolicyEngineSelect, a.cmc.IntelStorage)
-
-	log.Debug("Verifier: Marshaling Attestation Result")
-	r, err := json.Marshal(result)
+	log.Debug("Verifier: verifying attestation report")
+	result, err := cmc.Verify(&api.VerificationRequest{
+		Nonce:             nonce,
+		AttestationReport: report,
+		Ca:                c.ca,
+		Policies:          c.policies,
+	}, a.cmc)
 	if err != nil {
-		log.Errorf("Verifier: failed to marshal Attestation Result: %v", err)
+		log.Errorf("Verifier: failed to verify: %v", err)
 		return
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, r)
+	err = saveResult(c.ResultFile, c.Publish, result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}

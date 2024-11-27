@@ -155,7 +155,7 @@ func (sgx *Sgx) GetCertChain() ([]*x509.Certificate, error) {
 	return sgx.signingCertChain, nil
 }
 
-func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[[32]byte][]byte,
+func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]byte,
 	addr string,
 ) ([]*x509.Certificate, error) {
 

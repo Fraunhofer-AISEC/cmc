@@ -99,7 +99,7 @@ func (a CoapApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	log.Infof("Wrote attestation report: %v", c.ReportFile)
+	log.Infof("Wrote attestation report length %v: %v", len(attestationResp.AttestationReport), c.ReportFile)
 
 	// Save the nonce for the verifier
 	os.WriteFile(c.NonceFile, nonce, 0644)

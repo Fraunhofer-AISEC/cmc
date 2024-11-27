@@ -44,7 +44,7 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, error) {
+func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, []string, error) {
 
 	path := "/Attest"
 
@@ -52,46 +52,47 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshake
 	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("error dialing: %w", err)
+		return nil, nil, fmt.Errorf("error dialing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	req := &api.AttestationRequest{
-		Id:    id,
-		Nonce: chbindings,
+		Id:     id,
+		Nonce:  chbindings,
+		Cached: params.Cached,
 	}
 
 	// Marshal request
 	payload, err := cbor.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
 	coapResp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read CoAP reply body
 	body, err := coapResp.ReadBody()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		return nil, nil, fmt.Errorf("failed to read body: %w", err)
 	}
 
 	// Unmarshal response
 	resp := new(api.AttestationResponse)
 	err = cbor.Unmarshal(body, resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal body: %w", err)
 	}
 
-	return resp.AttestationReport, nil
+	return resp.AttestationReport, resp.CacheMisses, nil
 }
 
 // Sends attestationreport to cmcd for verification
-func (a CoapApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
+func (a CoapApi) verifyAR(chbindings, report []byte, peer string, cacheMisses []string, cc CmcConfig) error {
 
 	path := "/Verify"
 
@@ -109,6 +110,8 @@ func (a CoapApi) verifyAR(chbindings, report []byte, cc CmcConfig) error {
 		Nonce:             chbindings,
 		AttestationReport: report,
 		Ca:                cc.Ca,
+		Peer:              peer,
+		CacheMisses:       cacheMisses,
 		Policies:          cc.Policies,
 	}
 	payload, err := cbor.Marshal(req)
@@ -252,4 +255,50 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 
 	return certResp.Certificate, nil
+}
+
+// Fetches the peer cache from the cmcd
+func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
+
+	path := "/PeerCache"
+
+	// Establish connection
+	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	conn, err := udp.Dial(cc.CmcAddr)
+	if err != nil {
+		return nil, fmt.Errorf("error dialing: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req := &api.PeerCacheRequest{
+		Peer: fingerprint,
+	}
+
+	// Marshal request
+	payload, err := cbor.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Send CoAP POST request
+	coapResp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Read CoAP reply body
+	body, err := coapResp.ReadBody()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %w", err)
+	}
+
+	// Unmarshal response
+	resp := new(api.PeerCacheResponse)
+	err = cbor.Unmarshal(body, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+	}
+
+	return resp.Cache, nil
 }
