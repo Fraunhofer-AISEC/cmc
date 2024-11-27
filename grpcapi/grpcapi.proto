@@ -18,10 +18,14 @@ syntax = "proto3";
 package grpcapi;
 option go_package = "./;grpcapi";
 
-enum Status {
-  OK = 0;
-  FAIL = 1;
-  NOT_IMPLEMENTED = 2;
+service CMCService {
+    // Signs content of request with key that belongs to ID of requester
+    rpc TLSSign(TLSSignRequest) returns (TLSSignResponse) {}
+    rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
+    rpc Attest(AttestationRequest) returns (AttestationResponse) {}
+    rpc Verify(VerificationRequest) returns (VerificationResponse) {}
+    rpc PeerCache(PeerCacheRequest) returns (PeerCacheResponse) {}
+    rpc Measure(MeasureRequest) returns (MeasureResponse) {}
 }
 
 enum HashFunction {
@@ -46,29 +50,53 @@ enum HashFunction {
 	  BLAKE2b_512 = 18;
 }
 
-service CMCService {
-    // Signs content of request with key that belongs to ID of requester
-    rpc TLSSign(TLSSignRequest) returns (TLSSignResponse) {}
-    rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
-    rpc Attest(AttestationRequest) returns (AttestationResponse) {}
-    rpc Verify(VerificationRequest) returns (VerificationResponse) {}
-    rpc Measure(MeasureRequest) returns (MeasureResponse) {}
+
+message AttestationRequest {
+  string id = 1;
+  bytes nonce = 2;
+  repeated string cached = 3;
 }
 
-message PSSOptions {
-  int32 salt_length = 1;
+message AttestationResponse {
+  bytes attestation_report = 2;
+  repeated string cache_misses = 3;
+}
+
+message VerificationRequest {
+  bytes nonce = 1;
+  bytes attestation_report = 2;
+  bytes ca = 3;
+  string peer = 4;
+  repeated string cache_misses = 5;
+  bytes policies = 6;
+
+}
+
+message VerificationResponse {
+  bytes verification_result = 2;
+  repeated bytes updated_cache = 3;
+}
+
+message MeasureRequest {
+  string name = 1;
+  bytes config_sha256 = 2;
+  bytes rootfs_sha256 = 3;
+  bytes oci_spec = 4;
+}
+
+message MeasureResponse {
+  bool success = 2;
 }
 
 message TLSSignRequest {
   string id = 1;
-  bytes digest = 2;
+  bytes content = 2;
   HashFunction hashtype = 3;
   PSSOptions pssOpts = 4;
 }
 
 message TLSSignResponse {
-  Status status = 1;
-  bytes signed_digest = 2;
+  bytes signed_content = 2;
 }
 
 message TLSCertRequest {
@@ -76,42 +104,17 @@ message TLSCertRequest {
 }
 
 message TLSCertResponse {
-  Status status = 1;
   repeated bytes certificate = 2; // PEM encoded, separated by line
 }
 
-message AttestationRequest {
-  string id = 1;
-  bytes nonce = 2;
-  repeated bytes cached = 3;
+message PeerCacheRequest {
+  string peer = 1;
 }
 
-message AttestationResponse {
-  Status status = 1;
-  bytes attestation_report = 2;
+message PeerCacheResponse {
+  repeated string cache = 1;
 }
 
-message VerificationRequest {
-  bytes nonce = 1;
-  bytes attestation_report = 2;
-  bytes ca = 3;
-  bytes policies = 4;
-
-}
-
-message VerificationResponse {
-  Status status = 1;
-  bytes verification_result = 2;
-}
-
-message MeasureRequest {
-  string name = 1;
-  bytes ConfigSha256 = 2;
-  bytes RootfsSha256 = 3;
-  bytes OciSpec = 4;
-}
-
-message MeasureResponse {
-  Status status = 1;
-  bool success = 2;
+message PSSOptions {
+  int32 salt_length = 1;
 }

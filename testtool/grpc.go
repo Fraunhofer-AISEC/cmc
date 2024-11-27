@@ -69,16 +69,13 @@ func (a GrpcApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("GRPC Attest Call failed: %v", err)
 	}
-	if response.GetStatus() != api.Status_OK {
-		log.Fatalf("Failed to generate attestation report. Status %v", response.GetStatus())
-	}
 
 	// Save the Attestation Report for the verifier
 	err = os.WriteFile(c.ReportFile, response.GetAttestationReport(), 0644)
 	if err != nil {
 		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
 	}
-	log.Infof("Wrote attestation report: %v", c.ReportFile)
+	log.Infof("Wrote attestation report length %v: %v", len(response.GetAttestationReport()), c.ReportFile)
 
 	// Save the nonce for the verifier
 	os.WriteFile(c.NonceFile, nonce, 0644)
@@ -125,9 +122,6 @@ func (a GrpcApi) verify(c *config) {
 	response, err := client.Verify(ctx, &request)
 	if err != nil {
 		log.Fatalf("GRPC Verify Call failed: %v", err)
-	}
-	if response.GetStatus() != api.Status_OK {
-		log.Warnf("Failed to verify attestation report. Status %v", response.GetStatus())
 	}
 
 	err = saveResult(c.ResultFile, c.Publish, response.GetVerificationResult())
@@ -178,8 +172,8 @@ func (a GrpcApi) measure(c *config) {
 	if err != nil {
 		log.Fatalf("GRPC Measure Call failed: %v", err)
 	}
-	if response.GetStatus() != api.Status_OK {
-		log.Warnf("Failed to record measurement. Status %v", response.GetStatus())
+	if !response.Success {
+		log.Warn("Failed to record measurement")
 	}
 
 	log.Debug("Finished measure")

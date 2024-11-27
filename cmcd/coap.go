@@ -24,21 +24,19 @@ import (
 	"fmt"
 
 	"encoding/hex"
-	"encoding/json"
 
 	"github.com/fxamacker/cbor/v2"
 	coap "github.com/plgd-dev/go-coap/v3"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
+	"golang.org/x/exp/maps"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	"github.com/Fraunhofer-AISEC/cmc/generate"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
-	"github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 // CoapServer is the CoAP server structure
@@ -63,6 +61,7 @@ func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 	r.Handle("/Measure", mux.HandlerFunc(Measure))
 	r.Handle("/TLSSign", mux.HandlerFunc(TlsSign))
 	r.Handle("/TLSCert", mux.HandlerFunc(TlsCert))
+	r.Handle("/PeerCache", mux.HandlerFunc(PeerCache))
 
 	log.Infof("Waiting for requests on %v", addr)
 
@@ -112,8 +111,8 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	var req api.AttestationRequest
-	err := unmarshalCoapPayload(r, &req)
+	var req *api.AttestationRequest
+	err := unmarshalCoapPayload(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to unmarshal CoAP payload: %v",
 			err)
@@ -129,26 +128,19 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, err := generate.Generate(req.Nonce, Cmc.Metadata, Cmc.Drivers, Cmc.Serializer)
+	report, misses, err := cmc.Generate(req, Cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
 		return
 	}
 
-	log.Debug("Prover: Signing Attestation Report")
-	data, err := generate.Sign(report, Cmc.Drivers[0], Cmc.Serializer)
-	if err != nil {
-		sendCoapError(w, r, codes.InternalServerError,
-			"Failed to sign attestation report: %v", err)
-		return
-	}
-
 	// Serialize CoAP payload
-	resp := api.AttestationResponse{
-		AttestationReport: data,
+	resp := &api.AttestationResponse{
+		AttestationReport: report,
+		CacheMisses:       misses,
 	}
-	payload, err := cbor.Marshal(&resp)
+	payload, err := cbor.Marshal(resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -162,31 +154,26 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 func Verify(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received Connection Request Type 'Verification Request'")
+	log.Debug("Received connection request type 'Verification Request'")
 
-	var req api.VerificationRequest
-	err := unmarshalCoapPayload(r, &req)
+	var req *api.VerificationRequest
+	err := unmarshalCoapPayload(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
 		return
 	}
 
-	log.Debug("Verifier: Verifying Attestation Report")
-	result := verify.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies,
-		Cmc.PolicyEngineSelect, Cmc.IntelStorage)
-
-	log.Debug("Verifier: Marshaling Attestation Result")
-	data, err := json.Marshal(result)
+	log.Debug("Verifier: verifying attestation report")
+	result, err := cmc.Verify(req, Cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
-			"Verifier: failed to marshal Attestation Result: %v", err)
+			"Verifier: failed to verify: %v", err)
 		return
 	}
 
-	// Serialize CoAP payload
 	resp := api.VerificationResponse{
-		VerificationResult: data,
+		VerificationResult: result,
 	}
 	payload, err := cbor.Marshal(&resp)
 	if err != nil {
@@ -194,7 +181,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	// CoAP response
+	log.Debug("Verifier: sending attestation response")
 	SendCoapResponse(w, r, payload)
 
 	log.Debug("Verifier: Finished")
@@ -345,6 +332,35 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	SendCoapResponse(w, r, payload)
 
 	log.Debug("Obtained TLS cert")
+}
+
+func PeerCache(w mux.ResponseWriter, r *mux.Message) {
+
+	log.Debug("Received connection request type 'Peer Cache'")
+
+	var req api.PeerCacheRequest
+	err := unmarshalCoapPayload(r, &req)
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to unmarshal CoAP payload: %v", err)
+		return
+	}
+
+	log.Debug("Collecting peer cache")
+	resp := api.PeerCacheResponse{}
+	c, ok := Cmc.CachedPeerMetadata[req.Peer]
+	if ok {
+		resp.Cache = maps.Keys(c)
+	}
+
+	payload, err := cbor.Marshal(&resp)
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
+		return
+	}
+
+	log.Debug("sending peer cache response")
+	SendCoapResponse(w, r, payload)
 }
 
 func loggingMiddleware(next mux.Handler) mux.Handler {

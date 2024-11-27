@@ -29,29 +29,53 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type SocketError struct {
-	Msg string `json:"msg" cbor:"0,keyasint"`
-}
+type HashFunction int32
+
+const (
+	HashFunction_SHA1        HashFunction = 0
+	HashFunction_SHA224      HashFunction = 1
+	HashFunction_SHA256      HashFunction = 2
+	HashFunction_SHA384      HashFunction = 3
+	HashFunction_SHA512      HashFunction = 4
+	HashFunction_MD4         HashFunction = 5
+	HashFunction_MD5         HashFunction = 6
+	HashFunction_MD5SHA1     HashFunction = 7
+	HashFunction_RIPEMD160   HashFunction = 8
+	HashFunction_SHA3_224    HashFunction = 9
+	HashFunction_SHA3_256    HashFunction = 10
+	HashFunction_SHA3_384    HashFunction = 11
+	HashFunction_SHA3_512    HashFunction = 12
+	HashFunction_SHA512_224  HashFunction = 13
+	HashFunction_SHA512_256  HashFunction = 14
+	HashFunction_BLAKE2s_256 HashFunction = 15
+	HashFunction_BLAKE2b_256 HashFunction = 16
+	HashFunction_BLAKE2b_384 HashFunction = 17
+	HashFunction_BLAKE2b_512 HashFunction = 18
+)
 
 type AttestationRequest struct {
 	Id     string   `json:"id" cbor:"0,keyasint"`
 	Nonce  []byte   `json:"nonce" nonce:"1,keyasint"`
-	Cached [][]byte `json:"cached,omitempty" cbor:"4,keyasint,omitempty"`
+	Cached []string `json:"cached,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type AttestationResponse struct {
-	AttestationReport []byte `json:"attestationReport" cbor:"0,keyasint"`
+	AttestationReport []byte   `json:"attestationReport" cbor:"0,keyasint"`
+	CacheMisses       []string `json:"cacheMisses,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
 type VerificationRequest struct {
-	Nonce             []byte `json:"nonce" cbor:"0,keyasint"`
-	AttestationReport []byte `json:"attestationReport" cbor:"1,keyasint"`
-	Ca                []byte `json:"ca" cbor:"2,keyasint"`
-	Policies          []byte `json:"policies,omitempty" cbor:"3,keyasint,omitempty"`
+	Nonce             []byte   `json:"nonce" cbor:"0,keyasint"`
+	AttestationReport []byte   `json:"attestationReport" cbor:"1,keyasint"`
+	Ca                []byte   `json:"ca" cbor:"2,keyasint"`
+	Peer              string   `json:"peer,omitempty" cbor:"3,keyasint,omitempty"`
+	CacheMisses       []string `json:"cacheMisses,omitempty" cbor:"4,keyasint,omitempty"`
+	Policies          []byte   `json:"policies,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 type VerificationResponse struct {
-	VerificationResult []byte `json:"verificationResult" cbor:"0,keyasint"`
+	VerificationResult []byte   `json:"verificationResult" cbor:"0,keyasint"`
+	UpdatedCache       [][]byte `json:"updatedCache,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
 type MeasureRequest struct {
@@ -84,33 +108,21 @@ type TLSCertResponse struct {
 	Certificate [][]byte `json:"certificate" cbor:"0,keyasint"`
 }
 
+type PeerCacheRequest struct {
+	Peer string `json:"peer" cbor:"0,keyasint"`
+}
+
+type PeerCacheResponse struct {
+	Cache []string `json:"cache" cbor:"0,keyasint"`
+}
+
+type SocketError struct {
+	Msg string `json:"msg" cbor:"0,keyasint"`
+}
+
 const (
 	// Set maximum message length to 10 MB
 	MaxMsgLen = 1024 * 1024 * 10
-)
-
-type HashFunction int32
-
-const (
-	HashFunction_SHA1        HashFunction = 0
-	HashFunction_SHA224      HashFunction = 1
-	HashFunction_SHA256      HashFunction = 2
-	HashFunction_SHA384      HashFunction = 3
-	HashFunction_SHA512      HashFunction = 4
-	HashFunction_MD4         HashFunction = 5
-	HashFunction_MD5         HashFunction = 6
-	HashFunction_MD5SHA1     HashFunction = 7
-	HashFunction_RIPEMD160   HashFunction = 8
-	HashFunction_SHA3_224    HashFunction = 9
-	HashFunction_SHA3_256    HashFunction = 10
-	HashFunction_SHA3_384    HashFunction = 11
-	HashFunction_SHA3_512    HashFunction = 12
-	HashFunction_SHA512_224  HashFunction = 13
-	HashFunction_SHA512_256  HashFunction = 14
-	HashFunction_BLAKE2s_256 HashFunction = 15
-	HashFunction_BLAKE2b_256 HashFunction = 16
-	HashFunction_BLAKE2b_384 HashFunction = 17
-	HashFunction_BLAKE2b_512 HashFunction = 18
 )
 
 type PSSOptions struct {
@@ -118,12 +130,13 @@ type PSSOptions struct {
 }
 
 const (
-	TypeError   uint32 = 0
-	TypeAttest  uint32 = 1
-	TypeVerify  uint32 = 2
-	TypeMeasure uint32 = 3
-	TypeTLSSign uint32 = 4
-	TypeTLSCert uint32 = 5
+	TypeError     uint32 = 0
+	TypeAttest    uint32 = 1
+	TypeVerify    uint32 = 2
+	TypeMeasure   uint32 = 3
+	TypeTLSSign   uint32 = 4
+	TypeTLSCert   uint32 = 5
+	TypePeerCache uint32 = 6
 )
 
 func TypeToString(t uint32) string {
@@ -140,6 +153,8 @@ func TypeToString(t uint32) string {
 		return "TLSSign"
 	case TypeTLSCert:
 		return "TLSCert"
+	case TypePeerCache:
+		return "PeerCache"
 	default:
 		return "Unknown"
 	}

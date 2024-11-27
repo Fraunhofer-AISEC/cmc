@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,7 +32,8 @@ var log = logrus.WithField("service", "ar")
 // must be either raw JWS tokens in the JWS JSON full serialization
 // format or CBOR COSE tokens. Takes a list of measurers providing a method
 // for collecting  the measurements from a hardware or software interface
-func Generate(nonce []byte, metadata map[[32]byte][]byte, measurers []ar.Driver, s ar.Serializer) ([]byte, error) {
+func Generate(nonce []byte, cached []string, metadata map[string][]byte, measurers []ar.Driver, s ar.Serializer,
+) (*ar.AttestationReport, error) {
 
 	if s == nil {
 		return nil, errors.New("serializer not specified")
@@ -39,7 +41,7 @@ func Generate(nonce []byte, metadata map[[32]byte][]byte, measurers []ar.Driver,
 
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
-	report := ar.AttestationReport{
+	report := &ar.AttestationReport{
 		Type: "Attestation Report",
 	}
 
@@ -51,53 +53,91 @@ func Generate(nonce []byte, metadata map[[32]byte][]byte, measurers []ar.Driver,
 
 	// Retrieve the manifests and descriptions
 	log.Trace("Parsing ", len(metadata), " meta-data objects..")
-	numManifests := 0
+	numMetadata := 0
+	numDigests := 0
 
 	for hash, m := range metadata {
 
 		// Extract plain payload (i.e. the manifest/description itself)
 		data, err := s.GetPayload(m)
 		if err != nil {
-			log.Tracef("Failed to parse metadata object %v: %v", hex.EncodeToString(hash[:]), err)
+			log.Tracef("Failed to parse metadata object %v: %v", hash, err)
 			continue
 		}
 
 		// Unmarshal the Type field of the JSON file to determine the type for
 		// later processing
-		elem := new(ar.MetaInfo)
-		err = s.Unmarshal(data, elem)
+		header := new(ar.MetaInfo)
+		err = s.Unmarshal(data, header)
 		if err != nil {
-			log.Tracef("Failed to unmarshal data from metadata object %v: %v", hex.EncodeToString(hash[:]), err)
+			log.Tracef("Failed to unmarshal data from metadata object %v: %v", hash, err)
 			continue
 		}
+		headerType := header.Type
 
-		switch elem.Type {
+		// Check if verifier has metadata item cached so it does not need to be sent
+		var metadataDigest ar.MetadataDigest
+		if internal.Contains(hash, cached) {
+			log.Tracef("Metadata %v cached by verifier, do not add", hash)
+			digest, err := hex.DecodeString(hash)
+			if err != nil {
+				log.Tracef("Failed to decode cached hash string: %v", err)
+			} else {
+				metadataDigest = ar.MetadataDigest{
+					Type:   fmt.Sprintf("%v Digest", header.Type),
+					Digest: digest,
+				}
+				headerType = metadataDigest.Type
+			}
+		}
+
+		switch headerType {
 		case "App Manifest":
 			log.Debug("Adding App Manifest")
 			report.AppManifests = append(report.AppManifests, m)
-			numManifests++
+			numMetadata++
+		case "App Manifest Digest":
+			log.Debug("Adding App Manifest digest")
+			report.AppManifestDigests = append(report.AppManifestDigests, metadataDigest)
+			numDigests++
 		case "OS Manifest":
 			log.Debug("Adding OS Manifest")
 			report.OsManifest = m
-			numManifests++
+			numMetadata++
+		case "OS Manifest Digest":
+			log.Debug("Addign OS Manifest digest")
+			report.OsManifestDigest = metadataDigest
+			numDigests++
 		case "RTM Manifest":
 			log.Debug("Adding RTM Manifest")
 			report.RtmManifest = m
-			numManifests++
+			numMetadata++
+		case "RTM Manifest Digest":
+			log.Debug("Adding RTM Manifest digest")
+			report.RtmManifestDigest = metadataDigest
+			numDigests++
 		case "Device Description":
 			log.Debug("Adding Device Description")
 			report.DeviceDescription = m
+			numMetadata++
 		case "Company Description":
 			log.Debug("Adding Company Description")
 			report.CompanyDescription = m
+			numMetadata++
+		case "Company Description Digest":
+			log.Debug("Adding Company Description digest")
+			report.CompanyDescriptionDigest = metadataDigest
+			numDigests++
 		}
 	}
 
-	if numManifests == 0 {
-		log.Warn("Did not find any manifests for the attestation report")
+	if numMetadata == 0 {
+		log.Warn("Did not find any metadata items for the attestation report")
 	} else {
-		log.Debug("Added ", numManifests, " manifests to attestation report")
+		log.Debugf("Added %v metadata items to attestation report", numMetadata)
 	}
+
+	log.Debugf("Added %v metadata digests to attestation report", numDigests)
 
 	log.Debugf("Retrieving measurements from %v measurers", len(measurers))
 	for _, measurer := range measurers {
@@ -116,13 +156,7 @@ func Generate(nonce []byte, metadata map[[32]byte][]byte, measurers []ar.Driver,
 
 	log.Trace("Finished attestation report generation")
 
-	// Marshal data to bytes
-	data, err := s.Marshal(report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
-	}
-
-	return data, nil
+	return report, nil
 }
 
 // Sign signs the attestation report with the specified signer 'signer'

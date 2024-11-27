@@ -23,15 +23,15 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	verify "github.com/Fraunhofer-AISEC/cmc/verify"
+	v "github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
 var (
 	log = logrus.WithField("service", "cmc")
 
-	policyEngines = map[string]verify.PolicyEngineSelect{
-		"js":      verify.PolicyEngineSelect_JS,
-		"duktape": verify.PolicyEngineSelect_DukTape,
+	policyEngines = map[string]v.PolicyEngineSelect{
+		"js":      v.PolicyEngineSelect_JS,
+		"duktape": v.PolicyEngineSelect_DukTape,
 	}
 
 	drivers = map[string]ar.Driver{}
@@ -62,12 +62,14 @@ type Config struct {
 }
 
 type Cmc struct {
-	Metadata           map[[32]byte][]byte
-	PolicyEngineSelect verify.PolicyEngineSelect
+	Metadata           map[string][]byte
+	CachedPeerMetadata map[string]map[string][]byte
+	PolicyEngineSelect v.PolicyEngineSelect
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
 	Network            string
 	IntelStorage       string
+	PeerCache          string
 	UseCtr             bool
 	CtrDriver          string
 	CtrPcr             int
@@ -79,7 +81,7 @@ func GetDrivers() map[string]ar.Driver {
 	return drivers
 }
 
-func GetPolicyEngines() map[string]verify.PolicyEngineSelect {
+func GetPolicyEngines() map[string]v.PolicyEngineSelect {
 	return policyEngines
 }
 
@@ -134,6 +136,11 @@ func NewCmc(c *Config) (*Cmc, error) {
 		}
 	}
 
+	cachedPeerMetadata, err := LoadCacheMetadata(c.PeerCache)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load peer cache: %w", err)
+	}
+
 	cmc := &Cmc{
 		Metadata:           metadata,
 		PolicyEngineSelect: sel,
@@ -141,6 +148,8 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Serializer:         s,
 		Network:            c.Network,
 		IntelStorage:       c.Storage,
+		PeerCache:          c.PeerCache,
+		CachedPeerMetadata: cachedPeerMetadata,
 		UseCtr:             c.UseCtr,
 		CtrDriver:          c.CtrDriver,
 		CtrPcr:             c.CtrPcr,

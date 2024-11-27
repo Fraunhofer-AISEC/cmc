@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -49,13 +50,22 @@ var (
 	log = logrus.WithField("service", "ar")
 
 	policyEngines = map[PolicyEngineSelect]PolicyValidator{}
+
+	peerCacheMutex sync.Mutex
 )
 
 // Verify verifies an attestation report in full serialized JWS
 // format against the supplied nonce and CA certificate. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the reference values and the compatibility of software artefacts.
-func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSelect, intelCache string) ar.VerificationResult {
+func Verify(
+	arRaw, nonce, casPem, policies []byte,
+	peer string,
+	polEng PolicyEngineSelect,
+	cached map[string]map[string][]byte,
+	peerCache, intelCache string,
+) ar.VerificationResult {
+
 	result := ar.VerificationResult{
 		Type:        "Verification Result",
 		Success:     true,
@@ -94,7 +104,7 @@ func Verify(arRaw, nonce, casPem []byte, policies []byte, polEng PolicyEngineSel
 	}
 
 	// Verify and unpack metadata from attestation report
-	metadata, mr, ok := verifyMetadata(report, cas, s)
+	metadata, mr, ok := verifyMetadata(report, cas, s, peer, cached, peerCache)
 	if !ok {
 		result.Success = false
 	}
@@ -372,14 +382,100 @@ func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer
 }
 
 func verifyMetadata(report *ar.AttestationReport, cas []*x509.Certificate, s ar.Serializer,
+	peer string, cached map[string]map[string][]byte, peerCache string,
 ) (*ar.Metadata, *ar.MetadataResult, bool) {
 
 	metadata := &ar.Metadata{}
 	result := &ar.MetadataResult{}
 	success := true
 
-	// Validate and unpack Rtm Manifest
-	tokenRes, payload, ok := s.VerifyToken(report.RtmManifest, cas)
+	// Validate and unpack Device Description
+	tokenRes, payload, ok := s.VerifyToken(report.DeviceDescription, cas)
+	result.DevDescResult.Summary = tokenRes.Summary
+	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
+	if !ok {
+		log.Trace("Validation of Device Description failed")
+		success = false
+	} else {
+		err := s.Unmarshal(payload, &metadata.DeviceDescription)
+		if err != nil {
+			log.Tracef("Unpacking of Device Description failed: %v", err)
+			result.DevDescResult.Summary.Success = false
+			result.DevDescResult.Summary.ErrorCode = ar.Parse
+			success = false
+		} else {
+			result.DevDescResult.MetaInfo = metadata.DeviceDescription.MetaInfo
+			result.DevDescResult.Description = metadata.DeviceDescription.Description
+			result.DevDescResult.Location = metadata.DeviceDescription.Location
+		}
+		for _, appDesc := range metadata.DeviceDescription.AppDescriptions {
+			appResult := ar.AppDescResult{
+				MetaInfo:    appDesc.MetaInfo,
+				AppManifest: appDesc.AppManifest,
+				External:    appDesc.External,
+				Environment: appDesc.Environment,
+			}
+			result.DevDescResult.AppResults = append(result.DevDescResult.AppResults,
+				appResult)
+		}
+	}
+
+	// Validate and unpack company description if present
+	if report.CompanyDescription == nil && report.CompanyDescriptionDigest.Digest != nil &&
+		len(report.CompanyDescriptionDigest.Digest) == 32 {
+		// Try to load company description from cache
+		desc, ok := cached[peer][hex.EncodeToString(report.CompanyDescriptionDigest.Digest)]
+		if ok {
+			report.CompanyDescription = desc
+		}
+	}
+	if report.CompanyDescription != nil {
+		tokenRes, payload, ok = s.VerifyToken(report.CompanyDescription, cas)
+		result.CompDescResult = &ar.CompDescResult{}
+		result.CompDescResult.Summary = tokenRes.Summary
+		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
+		if !ok {
+			log.Trace("Validation of Company Description Signatures failed")
+			success = false
+		} else {
+			err := s.Unmarshal(payload, &metadata.CompanyDescription)
+			if err != nil {
+				log.Tracef("Unpacking of Company Description failed: %v", err)
+				result.CompDescResult.Summary.Success = false
+				result.CompDescResult.Summary.ErrorCode = ar.Parse
+				success = false
+			} else {
+				result.CompDescResult.MetaInfo = metadata.CompanyDescription.MetaInfo
+				result.CompDescResult.CompCertLevel = metadata.CompanyDescription.CertificationLevel
+
+				result.CompDescResult.ValidityCheck = checkValidity(metadata.CompanyDescription.Validity)
+				if !result.CompDescResult.ValidityCheck.Success {
+					log.Trace("Company Description invalid")
+					result.CompDescResult.Summary.Success = false
+					success = false
+				}
+			}
+		}
+	}
+	// Cache Company Description
+	if result.CompDescResult != nil && result.CompDescResult.Summary.Success {
+		hash := sha256.Sum256(report.CompanyDescription)
+		if _, exists := cached[peer]; !exists {
+			createCache(cached, peer)
+		}
+		updateCache(cached, peer, hex.EncodeToString(hash[:]), report.CompanyDescription)
+	}
+
+	// Validate and unpack RTM Manifest
+	if report.RtmManifest == nil && report.RtmManifestDigest.Digest != nil &&
+		len(report.RtmManifestDigest.Digest) == 32 {
+		// Try to load RTM Manifest from cache
+		desc, ok := cached[peer][hex.EncodeToString(report.RtmManifestDigest.Digest)]
+		if ok {
+			report.RtmManifest = desc
+		}
+	}
+	tokenRes, payload, ok = s.VerifyToken(report.RtmManifest, cas)
 	result.RtmResult.Summary = tokenRes.Summary
 	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
 	if !ok {
@@ -402,8 +498,24 @@ func verifyMetadata(report *ar.AttestationReport, cas []*x509.Certificate, s ar.
 			}
 		}
 	}
+	// Cache RTM Manifest
+	if result.RtmResult.Summary.Success {
+		hash := sha256.Sum256(report.RtmManifest)
+		if _, exists := cached[peer]; !exists {
+			createCache(cached, peer)
+		}
+		updateCache(cached, peer, hex.EncodeToString(hash[:]), report.RtmManifest)
+	}
 
 	// Validate and unpack OS Manifest
+	if report.OsManifest == nil && report.OsManifestDigest.Digest != nil &&
+		len(report.OsManifestDigest.Digest) == 32 {
+		// Try to load OS Manifest from cache
+		desc, ok := cached[peer][hex.EncodeToString(report.OsManifestDigest.Digest)]
+		if ok {
+			report.OsManifest = desc
+		}
+	}
 	tokenRes, payload, ok = s.VerifyToken(report.OsManifest, cas)
 	result.OsResult.Summary = tokenRes.Summary
 	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
@@ -427,8 +539,26 @@ func verifyMetadata(report *ar.AttestationReport, cas []*x509.Certificate, s ar.
 			}
 		}
 	}
+	// Cache OS Manifest
+	if result.OsResult.Summary.Success {
+		hash := sha256.Sum256(report.OsManifest)
+		if _, exists := cached[peer]; !exists {
+			createCache(cached, peer)
+		}
+		updateCache(cached, peer, hex.EncodeToString(hash[:]), report.OsManifest)
+	}
 
-	// Validate and unpack App Manifests
+	// Validate and unpack app manifests as well as cached app manifests
+	for _, amd := range report.AppManifestDigests {
+		if amd.Digest != nil && len(amd.Digest) == 32 {
+			m, ok := cached[peer][hex.EncodeToString(amd.Digest)]
+			if ok {
+				report.AppManifests = append(report.AppManifests, m)
+			} else {
+				log.Tracef("Failed to find cached app manifest digest %v", hex.EncodeToString(amd.Digest))
+			}
+		}
+	}
 	for i, amSigned := range report.AppManifests {
 		result.AppResults = append(result.AppResults, ar.ManifestResult{})
 
@@ -458,66 +588,13 @@ func verifyMetadata(report *ar.AttestationReport, cas []*x509.Certificate, s ar.
 				}
 			}
 		}
-	}
-
-	// Validate and unpack Company Description if present
-	if report.CompanyDescription != nil {
-		tokenRes, payload, ok = s.VerifyToken(report.CompanyDescription, cas)
-		result.CompDescResult = &ar.CompDescResult{}
-		result.CompDescResult.Summary = tokenRes.Summary
-		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
-		if !ok {
-			log.Trace("Validation of Company Description Signatures failed")
-			success = false
-		} else {
-			err := s.Unmarshal(payload, &metadata.CompanyDescription)
-			if err != nil {
-				log.Tracef("Unpacking of Company Description failed: %v", err)
-				result.CompDescResult.Summary.Success = false
-				result.CompDescResult.Summary.ErrorCode = ar.Parse
-				success = false
-			} else {
-				result.CompDescResult.MetaInfo = metadata.CompanyDescription.MetaInfo
-				result.CompDescResult.CompCertLevel = metadata.CompanyDescription.CertificationLevel
-
-				result.CompDescResult.ValidityCheck = checkValidity(metadata.CompanyDescription.Validity)
-				if !result.CompDescResult.ValidityCheck.Success {
-					log.Trace("Company Description invalid")
-					result.CompDescResult.Summary.Success = false
-					success = false
-				}
+		// Cache App Manifest
+		if result.AppResults[i].Summary.Success {
+			hash := sha256.Sum256(amSigned)
+			if _, exists := cached[peer]; !exists {
+				createCache(cached, peer)
 			}
-		}
-	}
-
-	// Validate and unpack Device Description
-	tokenRes, payload, ok = s.VerifyToken(report.DeviceDescription, cas)
-	result.DevDescResult.Summary = tokenRes.Summary
-	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
-	if !ok {
-		log.Trace("Validation of Device Description failed")
-		success = false
-	} else {
-		err := s.Unmarshal(payload, &metadata.DeviceDescription)
-		if err != nil {
-			log.Tracef("Unpacking of Device Description failed: %v", err)
-			result.DevDescResult.Summary.Success = false
-			result.DevDescResult.Summary.ErrorCode = ar.Parse
-			success = false
-		} else {
-			result.DevDescResult.MetaInfo = metadata.DeviceDescription.MetaInfo
-			result.DevDescResult.Description = metadata.DeviceDescription.Description
-			result.DevDescResult.Location = metadata.DeviceDescription.Location
-		}
-		for _, appDesc := range metadata.DeviceDescription.AppDescriptions {
-			appResult := ar.AppDescResult{
-				MetaInfo:    appDesc.MetaInfo,
-				AppManifest: appDesc.AppManifest,
-				External:    appDesc.External,
-				Environment: appDesc.Environment,
-			}
-			result.DevDescResult.AppResults = append(result.DevDescResult.AppResults,
-				appResult)
+			updateCache(cached, peer, hex.EncodeToString(hash[:]), amSigned)
 		}
 	}
 
@@ -694,4 +771,16 @@ func contains(elem string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func createCache(cache map[string]map[string][]byte, peer string) {
+	peerCacheMutex.Lock()
+	cache[peer] = map[string][]byte{}
+	peerCacheMutex.Unlock()
+}
+
+func updateCache(cache map[string]map[string][]byte, peer, digest string, value []byte) {
+	peerCacheMutex.Lock()
+	cache[peer][digest] = value
+	peerCacheMutex.Unlock()
 }
