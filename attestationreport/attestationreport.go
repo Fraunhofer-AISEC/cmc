@@ -25,48 +25,115 @@ import (
 
 var log = logrus.WithField("service", "ar")
 
-// Driver is an interface representing a driver for a hardware trust anchor,
-// capable of providing attestation evidence and signing data. This can be
-// e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
-// Initial Attestation Service (IAS). The driver must be capable of
-// performing measurements, i.e. retrieving attestation evidence such as
-// a TPM Quote or an SNP attestation report and providing handles to
-// signing keys and their certificate chains
-type Driver interface {
-	Init(c *DriverConfig) error                                   // Initializes the driver
-	Measure(nonce []byte) (Measurement, error)                    // Retrieves measurements
-	Lock() error                                                  // For sync, if required
-	Unlock() error                                                // For sync, if required
-	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) // Get Signing key handles
-	GetCertChain() ([]*x509.Certificate, error)                   // Get cert chain for signing key
+// AttestationReport represents the attestation report in JWS/COSE format with its
+// contents already in signed JWS/COSE format
+type AttestationReport struct {
+	Type                     string           `json:"type" cbor:"0,keyasint"`
+	Measurements             []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
+	RtmManifest              []byte           `json:"rtmManifest,omitempty" cbor:"2,keyasint"`
+	RtmManifestDigest        MetadataDigest   `json:"rtmManifestDigest,omitempty" cbor:"3,keyasint,omitempty"`
+	OsManifest               []byte           `json:"osManifest,omitempty" cbor:"4,keyasint,omitempty"`
+	OsManifestDigest         MetadataDigest   `json:"osManifestDigest,omitempty" cbor:"5,keyasint,omitempty"`
+	AppManifests             [][]byte         `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
+	AppManifestDigests       []MetadataDigest `json:"appManifestDigests,omitempty" cbor:"7,keyasint,omitempty"`
+	CompanyDescription       []byte           `json:"companyDescription,omitempty" cbor:"8,keyasint,omitempty"`
+	CompanyDescriptionDigest MetadataDigest   `json:"companyDescriptionDigest,omitempty" cbor:"9,keyasint,omitempty"`
+	DeviceDescription        []byte           `json:"deviceDescription,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
-// DriverConfig contains all configuration values required for the different drivers
-type DriverConfig struct {
-	StoragePath    string
-	ServerAddr     string
-	KeyConfig      string
-	Metadata       map[string][]byte
-	UseIma         bool
-	ImaPcr         int
-	Serializer     Serializer
-	MeasurementLog bool
-	UseCtr         bool
-	CtrPcr         int
-	CtrLog         string
-	ExtCtrLog      bool
-	CtrDriver      string
+// Measurement represents the attestation report
+// elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
+// 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
+type Measurement struct {
+	Type      string     `json:"type" cbor:"0,keyasint"`
+	Evidence  []byte     `json:"evidence,omitempty" cbor:"1,keyasint"`
+	Certs     [][]byte   `json:"certs,omitempty" cbor:"3,keyasint"`
+	Signature []byte     `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
+	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
-// Serializer is a generic interface providing methods for data serialization and
-// de-serialization. This enables to generate and verify attestation reports in
-// different formats, such as JSON/JWS or CBOR/COSE
-type Serializer interface {
-	GetPayload(raw []byte) ([]byte, error)
-	Marshal(v any) ([]byte, error)
-	Unmarshal(data []byte, v any) error
-	Sign(data []byte, signer Driver) ([]byte, error)
-	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
+// MetadataDigest represents attestation report
+// elements of type 'RTM Manifest Digest', 'OS Manifest Digest' and 'App Manifest Digest'
+type MetadataDigest struct {
+	Type   string  `json:"type" cbor:"0,keyasint"`
+	Digest HexByte `json:"digest" cbor:"1,keyasint"`
+}
+
+// Manifest represents attestation report
+// elements of type 'RTM Manifest', 'OS Manifest' and 'App Manifest'
+type Manifest struct {
+	MetaInfo
+	DevCommonName      string           `json:"developerCommonName"  cbor:"3,keyasint"`
+	BaseLayers         []string         `json:"baseLayers" cbor:"4,keyasint"` // Links to RtmManifest.Name or OsManifest.Name
+	Description        string           `json:"description" cbor:"5,keyasint"`
+	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
+	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
+	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
+	OciSpec            any              `json:"ociSpec,omitempty" cbor:"9,keyasint,omitempty"` // TODO move to app description
+	Details            any              `json:"details,omitempty" cbor:"9,keyasint,omitempty"`
+}
+
+// DeviceDescription represents the attestation report
+// element of type 'Device Description'
+type DeviceDescription struct {
+	MetaInfo
+	Description     string               `json:"description" cbor:"3,keyasint"`
+	Location        string               `json:"location" cbor:"4,keyasint"`
+	RtmManifest     string               `json:"rtmManifest" cbor:"5,keyasint"`
+	OsManifest      string               `json:"osManifest" cbor:"6,keyasint"`
+	AppDescriptions []AppDescription     `json:"appDescriptions" cbor:"7,keyasint"`
+	Internal        []InternalConnection `json:"internalConnections" cbor:"8,keyasint"`
+	External        []ExternalInterface  `json:"externalEndpoints" cbor:"9,keyasint"`
+}
+
+// CompanyDescription represents the attestation report
+// element of type 'Company Description'
+type CompanyDescription struct {
+	MetaInfo
+	CertificationLevel int      `json:"certificationLevel" cbor:"3,keyasint"`
+	Description        string   `json:"description" cbor:"4,keyasint"`
+	Validity           Validity `json:"validity" cbor:"5,keyasint"`
+}
+
+// AppDescription represents the attestation report
+// element of type 'App Description'
+type AppDescription struct {
+	MetaInfo
+	AppManifest string              `json:"appManifest" cbor:"3,keyasint"` // Links to App Manifest.Name
+	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
+	Environment []Environment       `json:"environment,omitempty" cbor:"5,keyasint,omitempty"`
+}
+
+// DeviceConfig contains the local device configuration parameters
+type DeviceConfig struct {
+	MetaInfo
+	AkCsr     CsrParams `json:"akCsr" cbor:"3,keyasint"`
+	IkCsr     CsrParams `json:"ikCsr" cbor:"4,keyasint"`
+	SgxValues struct {
+		EncryptedPPID HexByte `json:"encryptedPPID" cbor:"5,keyasint"`
+		Pceid         HexByte `json:"pceid" cbor:"6,keyasint"`
+		Cpusvn        HexByte `json:"cpusvn" cbor:"7,keyasint"`
+		Pcesvn        HexByte `json:"pcesvn" cbor:"8,keyasint"`
+	}
+}
+
+// ReferenceValue represents the attestation report
+// element of types 'SNP Reference Value', 'TPM Reference Value', 'TDX Reference Value', 'SGX Reference Value'
+// and 'SW Reference Value'
+type ReferenceValue struct {
+	Type        string      `json:"type" cbor:"0,keyasint"`
+	Sha256      HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
+	Sha384      HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
+	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
+	Optional    bool        `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
+	Pcr         *int        `json:"pcr,omitempty" cbor:"5,keyasint,omitempty"`
+	Snp         *SnpDetails `json:"snp,omitempty" cbor:"6,keyasint,omitempty"`
+	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"7,keyasint,omitempty"`
+	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"8,keyasint,omitempty"`
+	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
+	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
+
+	manifest *Manifest
 }
 
 // MetaInfo is a helper struct for generic info
@@ -108,17 +175,6 @@ type CtrData struct {
 	ConfigSha256 HexByte `json:"configSha256" cbor:"0,keyasint"`
 	RootfsSha256 HexByte `json:"rootfsSha256" cbor:"1,keyasint"`
 	OciSpec      []byte  `json:"ociSpec" cbor:"2,keyasint"`
-}
-
-// Measurement represents the attestation report
-// elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
-// 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
-type Measurement struct {
-	Type      string     `json:"type" cbor:"0,keyasint"`
-	Evidence  []byte     `json:"evidence,omitempty" cbor:"1,keyasint"`
-	Certs     [][]byte   `json:"certs,omitempty" cbor:"3,keyasint"`
-	Signature []byte     `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
-	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type SnpPolicy struct {
@@ -226,34 +282,6 @@ type TDId struct {
 	MrConfigId    [48]byte `json:"mrConfigId" cbor:"2,keyasint"`
 }
 
-// ReferenceValue represents the attestation report
-// element of types 'SNP Reference Value', 'TPM Reference Value', 'TDX Reference Value', 'SGX Reference Value'
-// and 'SW Reference Value'
-type ReferenceValue struct {
-	Type        string      `json:"type" cbor:"0,keyasint"`
-	Sha256      HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
-	Sha384      HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
-	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
-	Optional    bool        `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
-	Pcr         *int        `json:"pcr,omitempty" cbor:"5,keyasint,omitempty"`
-	Snp         *SnpDetails `json:"snp,omitempty" cbor:"6,keyasint,omitempty"`
-	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"7,keyasint,omitempty"`
-	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"8,keyasint,omitempty"`
-	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
-	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
-
-	manifest *Manifest
-}
-
-// AppDescription represents the attestation report
-// element of type 'App Description'
-type AppDescription struct {
-	MetaInfo
-	AppManifest string              `json:"appManifest" cbor:"3,keyasint"` // Links to App Manifest.Name
-	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
-	Environment []Environment       `json:"environment,omitempty" cbor:"5,keyasint,omitempty"`
-}
-
 // InternalConnection represents the attestation report
 // element of type 'Internal Connection'
 type InternalConnection struct {
@@ -278,62 +306,6 @@ type ExternalInterface struct {
 type Environment struct {
 	Key   string `json:"key" cbor:"0,keyasint"`
 	Value string `json:"value" cbor:"1,keyasint"`
-}
-
-// Manifest represents attestation report
-// elements of type 'RTM Manifest', 'OS Manifest' and 'App Manifest'
-type Manifest struct {
-	MetaInfo
-	DevCommonName      string           `json:"developerCommonName"  cbor:"3,keyasint"`
-	BaseLayers         []string         `json:"baseLayers" cbor:"4,keyasint"` // Links to RtmManifest.Name or OsManifest.Name
-	Description        string           `json:"description" cbor:"5,keyasint"`
-	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
-	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
-	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
-	OciSpec            any              `json:"ociSpec,omitempty" cbor:"9,keyasint,omitempty"` // TODO move to app description
-	Details            any              `json:"details,omitempty" cbor:"9,keyasint,omitempty"`
-}
-
-// MetadataDigest represents attestation report
-// elements of type 'RTM Manifest Digest', 'OS Manifest Digest' and 'App Manifest Digest'
-type MetadataDigest struct {
-	Type   string  `json:"type" cbor:"0,keyasint"`
-	Digest HexByte `json:"digest" cbor:"1,keyasint"`
-}
-
-// DeviceDescription represents the attestation report
-// element of type 'Device Description'
-type DeviceDescription struct {
-	MetaInfo
-	Description     string               `json:"description" cbor:"3,keyasint"`
-	Location        string               `json:"location" cbor:"4,keyasint"`
-	RtmManifest     string               `json:"rtmManifest" cbor:"5,keyasint"`
-	OsManifest      string               `json:"osManifest" cbor:"6,keyasint"`
-	AppDescriptions []AppDescription     `json:"appDescriptions" cbor:"7,keyasint"`
-	Internal        []InternalConnection `json:"internalConnections" cbor:"8,keyasint"`
-	External        []ExternalInterface  `json:"externalEndpoints" cbor:"9,keyasint"`
-}
-
-// CompanyDescription represents the attestation report
-// element of type 'Company Description'
-type CompanyDescription struct {
-	MetaInfo
-	CertificationLevel int      `json:"certificationLevel" cbor:"3,keyasint"`
-	Description        string   `json:"description" cbor:"4,keyasint"`
-	Validity           Validity `json:"validity" cbor:"5,keyasint"`
-}
-
-// DeviceConfig contains the local device configuration parameters
-type DeviceConfig struct {
-	MetaInfo
-	AkCsr     CsrParams `json:"akCsr" cbor:"3,keyasint"`
-	IkCsr     CsrParams `json:"ikCsr" cbor:"4,keyasint"`
-	SgxValues struct {
-		EncryptedPPID HexByte `json:"encryptedPPID" cbor:"5,keyasint"`
-		Pceid         HexByte `json:"pceid" cbor:"6,keyasint"`
-		Cpusvn        HexByte `json:"cpusvn" cbor:"7,keyasint"`
-		Pcesvn        HexByte `json:"pcesvn" cbor:"8,keyasint"`
-	}
 }
 
 // CsrParams contains certificate signing request parameters
@@ -364,20 +336,48 @@ type Metadata struct {
 	DeviceDescription  DeviceDescription
 }
 
-// AttestationReport represents the attestation report in JWS/COSE format with its
-// contents already in signed JWS/COSE format
-type AttestationReport struct {
-	Type                     string           `json:"type" cbor:"0,keyasint"`
-	Measurements             []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
-	RtmManifest              []byte           `json:"rtmManifest,omitempty" cbor:"2,keyasint"`
-	RtmManifestDigest        MetadataDigest   `json:"rtmManifestDigest,omitempty" cbor:"3,keyasint,omitempty"`
-	OsManifest               []byte           `json:"osManifest,omitempty" cbor:"4,keyasint,omitempty"`
-	OsManifestDigest         MetadataDigest   `json:"osManifestDigest,omitempty" cbor:"5,keyasint,omitempty"`
-	AppManifests             [][]byte         `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
-	AppManifestDigests       []MetadataDigest `json:"appManifestDigests,omitempty" cbor:"7,keyasint,omitempty"`
-	CompanyDescription       []byte           `json:"companyDescription,omitempty" cbor:"8,keyasint,omitempty"`
-	CompanyDescriptionDigest MetadataDigest   `json:"companyDescriptionDigest,omitempty" cbor:"9,keyasint,omitempty"`
-	DeviceDescription        []byte           `json:"deviceDescription,omitempty" cbor:"9,keyasint,omitempty"`
+// Driver is an interface representing a driver for a hardware trust anchor,
+// capable of providing attestation evidence and signing data. This can be
+// e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
+// Initial Attestation Service (IAS). The driver must be capable of
+// performing measurements, i.e. retrieving attestation evidence such as
+// a TPM Quote or an SNP attestation report and providing handles to
+// signing keys and their certificate chains
+type Driver interface {
+	Init(c *DriverConfig) error                                   // Initializes the driver
+	Measure(nonce []byte) (Measurement, error)                    // Retrieves measurements
+	Lock() error                                                  // For sync, if required
+	Unlock() error                                                // For sync, if required
+	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) // Get Signing key handles
+	GetCertChain() ([]*x509.Certificate, error)                   // Get cert chain for signing key
+}
+
+// DriverConfig contains all configuration values required for the different drivers
+type DriverConfig struct {
+	StoragePath    string
+	ServerAddr     string
+	KeyConfig      string
+	Metadata       map[string][]byte
+	UseIma         bool
+	ImaPcr         int
+	Serializer     Serializer
+	MeasurementLog bool
+	UseCtr         bool
+	CtrPcr         int
+	CtrLog         string
+	ExtCtrLog      bool
+	CtrDriver      string
+}
+
+// Serializer is a generic interface providing methods for data serialization and
+// de-serialization. This enables to generate and verify attestation reports in
+// different formats, such as JSON/JWS or CBOR/COSE
+type Serializer interface {
+	GetPayload(raw []byte) ([]byte, error)
+	Marshal(v any) ([]byte, error)
+	Unmarshal(data []byte, v any) error
+	Sign(data []byte, signer Driver) ([]byte, error)
+	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
 }
 
 func (r *ReferenceValue) GetManifest() *Manifest {
