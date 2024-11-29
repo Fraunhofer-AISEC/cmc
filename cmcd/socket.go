@@ -312,8 +312,8 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to unmarshal payload: %v", err)
 		return
 	}
-	// TODO ID is currently not used
-	log.Tracef("Received TLS cert request with ID %v", req.Id)
+
+	log.Tracef("Received TLS cert request")
 
 	// Retrieve certificates
 	certChain, err := cmc.Drivers[0].GetCertChain()

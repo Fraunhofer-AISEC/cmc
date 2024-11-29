@@ -67,7 +67,6 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshake
 	log.Trace("Contacting backend to obtain AR.")
 
 	req := &api.AttestationRequest{
-		Id:     id,
 		Nonce:  chbindings,
 		Cached: params.Cached,
 	}
@@ -147,7 +146,6 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 		return nil, fmt.Errorf("sign request creation failed: %w", err)
 	}
 	req := api.TLSSignRequest{
-		Id:       id,
 		Content:  digest,
 		Hashtype: hash,
 	}
@@ -178,9 +176,7 @@ func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	defer cancel()
 
 	// Create TLSCert request
-	req := api.TLSCertRequest{
-		Id: id,
-	}
+	req := api.TLSCertRequest{}
 
 	// Call TLSCert request
 	resp, err := cmcClient.TLSCert(context.Background(), &req)

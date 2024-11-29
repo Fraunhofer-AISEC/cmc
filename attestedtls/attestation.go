@@ -42,8 +42,6 @@ type AtlsHandshakeComplete struct {
 	Error   string `json:"error" cbor:"1,keyasint"`
 }
 
-var id = "0000"
-
 var log = logrus.WithField("service", "atls")
 
 func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc CmcConfig, endpoint Endpoint) error {

@@ -245,7 +245,6 @@ func convertHash(hashtype grpcapi.HashFunction, pssOpts *grpcapi.PSSOptions) (cr
 
 func convertAttestationRequest(req *grpcapi.AttestationRequest) *api.AttestationRequest {
 	return &api.AttestationRequest{
-		Id:     req.Id,
 		Nonce:  req.Nonce,
 		Cached: req.Cached,
 	}
