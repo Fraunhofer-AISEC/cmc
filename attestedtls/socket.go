@@ -50,7 +50,6 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandsha
 	}
 
 	req := &api.AttestationRequest{
-		Id:     id,
 		Nonce:  chbindings,
 		Cached: params.Cached,
 	}
@@ -241,10 +240,7 @@ func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 
 	// Create TLS certificate request
-	req := api.TLSCertRequest{
-		// TODO ID currently not used
-		Id: "",
-	}
+	req := api.TLSCertRequest{}
 
 	// Marshal payload
 	payload, err := cbor.Marshal(req)

@@ -52,7 +52,6 @@ enum HashFunction {
 
 
 message AttestationRequest {
-  string id = 1;
   bytes nonce = 2;
   repeated string cached = 3;
 }
@@ -89,7 +88,6 @@ message MeasureResponse {
 }
 
 message TLSSignRequest {
-  string id = 1;
   bytes content = 2;
   HashFunction hashtype = 3;
   PSSOptions pssOpts = 4;
@@ -100,7 +98,6 @@ message TLSSignResponse {
 }
 
 message TLSCertRequest {
-  string id = 1;
 }
 
 message TLSCertResponse {

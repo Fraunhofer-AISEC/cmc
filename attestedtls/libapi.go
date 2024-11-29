@@ -52,7 +52,6 @@ func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeR
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(chbindings))
 
 	report, misses, err := cmc.Generate(&api.AttestationRequest{
-		Id:     "",
 		Nonce:  chbindings,
 		Cached: params.Cached,
 	}, cc.Cmc)

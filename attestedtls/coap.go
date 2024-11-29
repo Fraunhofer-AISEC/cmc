@@ -58,7 +58,6 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshake
 	defer cancel()
 
 	req := &api.AttestationRequest{
-		Id:     id,
 		Nonce:  chbindings,
 		Cached: params.Cached,
 	}
@@ -226,10 +225,7 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	defer cancel()
 
 	// Create TLS certificate request
-	req := api.TLSCertRequest{
-		// TODO ID currently not used
-		Id: "",
-	}
+	req := api.TLSCertRequest{}
 
 	// Marshal payload
 	payload, err := cbor.Marshal(req)

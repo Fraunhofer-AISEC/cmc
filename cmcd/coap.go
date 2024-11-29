@@ -308,8 +308,8 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 			"failed to unmarshal CoAP payload: %v", err)
 		return
 	}
-	// TODO ID is currently not used
-	log.Tracef("Received COAP TLS cert request with ID %v", req.Id)
+
+	log.Trace("Received COAP TLS cert request")
 
 	// Retrieve certificates
 	certChain, err := Cmc.Drivers[0].GetCertChain()
