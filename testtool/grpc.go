@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"os"
 	"time"
 
@@ -29,8 +30,9 @@ import (
 
 	// local modules
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
@@ -53,7 +55,7 @@ func (a GrpcApi) generate(c *config) {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
 	defer conn.Close()
-	client := api.NewCMCServiceClient(conn)
+	client := grpcapi.NewCMCServiceClient(conn)
 
 	// Generate random nonce
 	nonce := make([]byte, 8)
@@ -62,7 +64,7 @@ func (a GrpcApi) generate(c *config) {
 		log.Fatalf("Failed to read random bytes: %v", err)
 	}
 
-	request := api.AttestationRequest{
+	request := grpcapi.AttestationRequest{
 		Nonce: nonce,
 	}
 	response, err := client.Attest(ctx, &request)
@@ -70,19 +72,17 @@ func (a GrpcApi) generate(c *config) {
 		log.Fatalf("GRPC Attest Call failed: %v", err)
 	}
 
-	// Save the Attestation Report for the verifier
-	err = os.WriteFile(c.ReportFile, response.GetAttestationReport(), 0644)
+	// gRPC only: Marshal response as JSON for saving it to the file system
+	data, err := json.Marshal(api.ConvertAttestationResponse(response))
 	if err != nil {
-		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
+		log.Fatalf("Failed to marshal attestation response: %v", err)
 	}
-	log.Infof("Wrote attestation report length %v: %v", len(response.GetAttestationReport()), c.ReportFile)
 
-	// Save the nonce for the verifier
-	os.WriteFile(c.NonceFile, nonce, 0644)
+	// Save the attestation report for the verifier
+	err = saveReport(c, data, nonce)
 	if err != nil {
-		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
+		log.Fatalf("failed to save report: %v", err)
 	}
-	log.Infof("Wrote nonce: %v", c.NonceFile)
 
 }
 
@@ -99,24 +99,20 @@ func (a GrpcApi) verify(c *config) {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
 	defer conn.Close()
-	client := api.NewCMCServiceClient(conn)
+	client := grpcapi.NewCMCServiceClient(conn)
 
-	// Read the attestation report, CA and the nonce previously stored
-	data, err := os.ReadFile(c.ReportFile)
+	// Read the attestation report and the nonce previously stored
+	report, nonce, err := loadReport(c)
 	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
+		log.Fatalf("Failed to load report: %v", err)
 	}
 
-	nonce, err := os.ReadFile(c.NonceFile)
-	if err != nil {
-		log.Fatalf("Failed to read nonce: %v", err)
-	}
-
-	request := api.VerificationRequest{
-		Nonce:             nonce,
-		AttestationReport: data,
-		Ca:                c.ca,
-		Policies:          c.policies,
+	request := grpcapi.VerificationRequest{
+		Nonce:    nonce,
+		Report:   report.Report,
+		Metadata: report.Metadata,
+		Ca:       c.ca,
+		Policies: c.policies,
 	}
 
 	response, err := client.Verify(ctx, &request)
@@ -145,7 +141,7 @@ func (a GrpcApi) measure(c *config) {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
 	defer conn.Close()
-	client := api.NewCMCServiceClient(conn)
+	client := grpcapi.NewCMCServiceClient(conn)
 
 	ctrConfig, err := os.ReadFile(c.CtrConfig)
 	if err != nil {
@@ -162,7 +158,7 @@ func (a GrpcApi) measure(c *config) {
 		log.Fatalf("Failed to measure rootfs: %v", err)
 	}
 
-	req := &api.MeasureRequest{
+	req := &grpcapi.MeasureRequest{
 		Name:         c.CtrName,
 		ConfigSha256: configHash,
 		RootfsSha256: rootfsHash,

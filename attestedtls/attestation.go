@@ -21,20 +21,22 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 type AtlsHandshakeRequest struct {
 	Attest         AttestSelect `json:"attest" cbor:"0,keyasint"`
-	ExtendedReport bool         `json:"extendedReport" cbor:"1,keyasint"`
-	Cached         []string     `json:"cached" cbor:"2,keyasint"`
+	Cached         []string     `json:"cached" cbor:"1,keyasint"`
+	ExtendedReport bool         `json:"extendedReport" cbor:"2,keyasint"`
 }
 
 type AtlsHandshakeResponse struct {
-	Attest      AttestSelect `json:"attest" cbor:"0,keyasint"`
-	Error       string       `json:"error" cbor:"1,keyasint"`
-	Report      []byte       `json:"report" cbor:"2,keyasint"`
-	CacheMisses []string     `json:"cacheMisses,omitempty" cbor:"3,keyasint"`
+	Attest      AttestSelect      `json:"attest" cbor:"0,keyasint"`
+	Error       string            `json:"error" cbor:"1,keyasint"`
+	Report      []byte            `json:"report" cbor:"2,keyasint"`
+	Metadata    map[string][]byte `json:"metadata" cbor:"3,keyasint"`
+	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"4,keyasint"`
 }
 
 type AtlsHandshakeComplete struct {
@@ -46,9 +48,8 @@ var log = logrus.WithField("service", "atls")
 
 func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc CmcConfig, endpoint Endpoint) error {
 	var err error
-	var ownReport []byte
+	var attestResp *api.AttestationResponse
 	var cache []string
-	var misses []string
 	var reportErr string
 
 	ownAddr := conn.LocalAddr().String()
@@ -97,25 +98,31 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	if attestSelf {
 		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
 		// Obtain attestation report from local cmcd
-		ownReport, misses, err = cc.CmcApi.obtainAR(cc, chbindings, req)
+		attestResp, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
 		if err != nil {
 			reportErr = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
+			log.Warn(reportErr)
+		} else {
+			log.Debugf("Prover %v: Created report length %v, metadata items %v, cache misses %v",
+				ownAddr, len(attestResp.Report), len(attestResp.Metadata), len(attestResp.CacheMisses))
 		}
-		log.Tracef("Prover %v: Created report length %v", ownAddr, len(ownReport))
 	} else {
 		log.Debugf("Prover %v: Skipping own attestation", ownAddr)
 	}
 
 	report := AtlsHandshakeResponse{
-		Attest:      cc.Attest,
-		Report:      ownReport,
-		CacheMisses: misses,
-		Error:       reportErr,
+		Attest: cc.Attest,
+		Error:  reportErr,
+	}
+	if attestResp != nil {
+		report.Report = attestResp.Report
+		report.CacheMisses = attestResp.CacheMisses
+		report.Metadata = attestResp.Metadata
 	}
 
 	// Send created atls handshake response to listener asynchronously to avoid TCP deadlock
 	log.Debugf("Prover %v: sending atls handshake response with report length %v to %v",
-		ownAddr, len(ownReport), peerAddr)
+		ownAddr, len(report.Report), peerAddr)
 	errChan := make(chan error)
 	go func() {
 		err := sendAtlsResponse(conn, report)
@@ -155,7 +162,16 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	if attestPeer {
 		// Verify AR from listener with own channel bindings
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
-		err = cc.CmcApi.verifyAR(chbindings, resp.Report, fingerprint, resp.CacheMisses, cc)
+		req := &api.VerificationRequest{
+			Nonce:       chbindings,
+			Report:      resp.Report,
+			Metadata:    resp.Metadata,
+			Ca:          cc.Ca,
+			Peer:        fingerprint,
+			CacheMisses: resp.CacheMisses,
+			Policies:    cc.Policies,
+		}
+		err = cc.CmcApi.verifyAR(cc, req)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}
@@ -304,6 +320,8 @@ func sendAtlsResponse(conn *tls.Conn, resp AtlsHandshakeResponse) error {
 	if err != nil {
 		return fmt.Errorf("internal error: failed to marshal atls handshake request: %w", err)
 	}
+
+	log.Debugf("Sending atls handshake response length %v", len(payload))
 
 	// Send payload to peer
 	err = Write(payload, conn)

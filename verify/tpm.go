@@ -224,6 +224,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 					Launched:    true,
 					Name:        nameInfo,
 					Description: ref.Description,
+					CtrDetails:  ar.GetCtrDetailsFromMeasureEvent(&event, s),
 				}
 				detailedResults = append(detailedResults, measResult)
 			}
@@ -312,6 +313,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				Name:        ref.Name,
 				Digest:      hex.EncodeToString(ref.Sha256),
 				Description: ref.Description,
+				CtrDetails:  ar.GetCtrDetailsFromRefVal(&ref, s),
 			}
 			detailedResults = append(detailedResults, result)
 			ok = false
@@ -354,6 +356,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 						Name:        ref.Name,
 						Digest:      hex.EncodeToString(ref.Sha256),
 						Description: ref.Description,
+						CtrDetails:  ar.GetCtrDetailsFromRefVal(&ref, s),
 					}
 					detailedResults = append(detailedResults, result)
 					if !ref.Optional {

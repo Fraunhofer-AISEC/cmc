@@ -33,7 +33,7 @@ import (
 
 	// local modules
 
-	api "github.com/Fraunhofer-AISEC/cmc/api"
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -92,19 +92,14 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 
 	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, misses, err := cmc.Generate(convertAttestationRequest(req), Cmc)
+	resp, err := cmc.Generate(api.ConvertAttestationRequest(req), Cmc)
 	if err != nil {
 		return &grpcapi.AttestationResponse{}, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	response := &grpcapi.AttestationResponse{
-		AttestationReport: report,
-		CacheMisses:       misses,
-	}
-
 	log.Info("Prover: Finished")
 
-	return response, nil
+	return resp.Convert(), nil
 }
 
 func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationRequest) (*grpcapi.VerificationResponse, error) {
@@ -112,7 +107,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationReques
 	log.Info("Received Cconnection request type 'Verification Request'")
 
 	log.Debug("Verifier: verifying attestation report")
-	result, err := cmc.Verify(convertVerificationRequest(req), s.cmc)
+	result, err := cmc.Verify(api.ConvertVerificationRequest(req), s.cmc)
 	if err != nil {
 		log.Errorf("verifier: failed to verify: %v", err)
 	}
@@ -133,7 +128,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 	log.Info("Received Connection Request Type 'Measure Request'")
 
 	log.Info("Measurer: Recording measurement")
-	err := m.Measure(convertMeasureRequest(req),
+	err := m.Measure(api.ConvertMeasureRequest(req),
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,
@@ -241,31 +236,4 @@ func convertHash(hashtype grpcapi.HashFunction, pssOpts *grpcapi.PSSOptions) (cr
 		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
 	}
 	return hash, nil
-}
-
-func convertAttestationRequest(req *grpcapi.AttestationRequest) *api.AttestationRequest {
-	return &api.AttestationRequest{
-		Nonce:  req.Nonce,
-		Cached: req.Cached,
-	}
-}
-
-func convertVerificationRequest(req *grpcapi.VerificationRequest) *api.VerificationRequest {
-	return &api.VerificationRequest{
-		Nonce:             req.Nonce,
-		AttestationReport: req.AttestationReport,
-		Ca:                req.Ca,
-		Peer:              req.Peer,
-		CacheMisses:       req.CacheMisses,
-		Policies:          req.Policies,
-	}
-}
-
-func convertMeasureRequest(req *grpcapi.MeasureRequest) *api.MeasureRequest {
-	return &api.MeasureRequest{
-		Name:         req.Name,
-		ConfigSha256: req.ConfigSha256,
-		RootfsSha256: req.RootfsSha256,
-		OciSpec:      req.OciSpec,
-	}
 }

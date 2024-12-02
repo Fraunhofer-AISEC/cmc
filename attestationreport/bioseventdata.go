@@ -389,7 +389,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 		default:
 			//if string is of type BootXXXX
 			if (strings.Contains(unicodeName, "Boot")) || strings.Contains(unicodeName, "PlatformRecovery") || strings.Contains(unicodeName, "Driver") { //for BootXXXX, PlatformRecoveryXXXX, and DriverXXXX entries
-				uefiVariableData.EFILoadOption = parseEFILoadOption(buf, int(variableDataLength))
+				uefiVariableData.EFILoadOption = parseEFILoadOption(buf)
 			} else {
 				hexString := (buf.Next(int(variableDataLength)))
 				uefiVariableData.VariableData = hexString
@@ -401,7 +401,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 	return nil
 }
 
-func parseEFILoadOption(buf *bytes.Buffer, i int) *EFILoadOption {
+func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
 	efiloadoption := new(EFILoadOption)
 	var filePathListLength uint16
 
@@ -421,7 +421,7 @@ func parseEFILoadOption(buf *bytes.Buffer, i int) *EFILoadOption {
 	bufferLengthPreParsing := buf.Len()
 	parsedBytes := 0
 	for parsedBytes < int(filePathListLength) {
-		fpl := parseFilePathList(buf, int(filePathListLength))
+		fpl := parseFilePathList(buf)
 		if fpl != nil {
 			efiloadoption.FilepathList = append(efiloadoption.FilepathList, *fpl)
 			break
@@ -439,7 +439,7 @@ func parseEFILoadOption(buf *bytes.Buffer, i int) *EFILoadOption {
 	return efiloadoption
 }
 
-func parseFilePathList(buf *bytes.Buffer, filepathlistlength int) *FilePathList {
+func parseFilePathList(buf *bytes.Buffer) *FilePathList {
 	filepathlist := new(FilePathList)
 	var fplType, fplSubtype byte
 	var length uint16
@@ -781,7 +781,7 @@ func parseImageLoadEvent(buf *bytes.Buffer) *ImageLoadEvent {
 		binary.Read(buf, binary.LittleEndian, &imagelevent.ImageLinkTimeAddress)
 		var lengthOfDevicePath uint64
 		binary.Read(buf, binary.LittleEndian, &lengthOfDevicePath)
-		imagelevent.UefiDevicePath = parseFilePathList(buf, int(lengthOfDevicePath))
+		imagelevent.UefiDevicePath = parseFilePathList(buf)
 		return imagelevent
 	}
 	return nil

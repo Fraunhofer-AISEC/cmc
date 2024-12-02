@@ -17,9 +17,15 @@ package cmc
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
+)
+
+var (
+	peerCacheMutex sync.Mutex
 )
 
 func LoadCacheMetadata(path string) (map[string]map[string][]byte, error) {
@@ -84,13 +90,39 @@ func GetCacheMisses(cached []string, metadata map[string][]byte) []string {
 	return misses
 }
 
+func UpdateCacheMetadata(peer string, cmcCache map[string]map[string][]byte, reqCache map[string][]byte, misses []string) {
+
+	// Remove cache misses
+	if _, exists := cmcCache[peer]; exists {
+		for _, miss := range misses {
+			delete(cmcCache[peer], miss)
+		}
+	}
+
+	// Add newly received metadata
+	peerCacheMutex.Lock()
+	if _, exists := cmcCache[peer]; !exists {
+		cmcCache[peer] = map[string][]byte{}
+	}
+	maps.Copy(cmcCache[peer], reqCache)
+	peerCacheMutex.Unlock()
+}
+
 func StoreCacheMetadata(peerCache, prover string, cached map[string][]byte, misses []string) error {
+
+	log.Tracef("Updating peer cache for peer %v", prover)
 
 	// Return if peer cache is not configured
 	if peerCache == "" {
 		log.Tracef("No peer cache configured. Do not store persistently")
 		return nil
 	}
+	if prover == "" {
+		log.Tracef("No prover configured. Do not store peer cache")
+		return nil
+	}
+
+	peerCacheMutex.Lock()
 
 	// Create cache folder if not existing
 	if _, err := os.Stat(peerCache); err != nil {
@@ -107,9 +139,12 @@ func StoreCacheMetadata(peerCache, prover string, cached map[string][]byte, miss
 		}
 	}
 
-	// Add newly received metadata
+	// Add newly received metadata if it does not yet exist
 	for hash, data := range cached {
 		f := path.Join(peerCacheProver, hash)
+		if _, err := os.Stat(f); err == nil {
+			continue
+		}
 		log.Tracef("Caching metadata file %v", f)
 		err := os.WriteFile(f, data, 0644)
 		if err != nil {
@@ -120,13 +155,18 @@ func StoreCacheMetadata(peerCache, prover string, cached map[string][]byte, miss
 	// Remove cache misses
 	for _, miss := range misses {
 		f := path.Join(peerCacheProver, miss)
-		err := os.Remove(f)
+		if _, err := os.Stat(f); err != nil {
+			continue
+		}
 		log.Tracef("Removing cache miss file %v", f)
+		err := os.Remove(f)
 		if err != nil {
-			log.Warnf("Failed to remove cache miss %v: %v", f, err)
+			log.Warnf("Failed to remove cache miss: %v", err)
 			continue
 		}
 	}
+
+	peerCacheMutex.Unlock()
 
 	return nil
 }

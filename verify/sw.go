@@ -71,7 +71,6 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 			}
 		}
 		if !found {
-
 			res := ar.DigestResult{
 				Type:       "Reference Value",
 				Success:    r.Optional, // Only fail attestation if component is mandatory
@@ -129,6 +128,8 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	}
 
 	result.Summary.Success = ok
+
+	log.Tracef("Finished verifying SW measurements. Success: %v", ok)
 
 	return result, ok
 }

@@ -25,16 +25,19 @@ import (
 	v "github.com/Fraunhofer-AISEC/cmc/verify"
 )
 
-func Generate(req *api.AttestationRequest, cmc *Cmc) ([]byte, []string, error) {
+func Generate(req *api.AttestationRequest, cmc *Cmc) (*api.AttestationResponse, error) {
 
 	if req == nil {
-		return nil, nil, fmt.Errorf("internal error: attestation request is nil")
+		return nil, fmt.Errorf("internal error: attestation request is nil")
+	}
+	if cmc == nil {
+		return nil, fmt.Errorf("internal errro: cmc is nil")
 	}
 
 	// Generate attestation report
-	report, err := g.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers, cmc.Serializer)
+	report, metadata, err := g.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers, cmc.Serializer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate: %w", err)
+		return nil, fmt.Errorf("failed to generate: %w", err)
 	}
 
 	// Return cache misses, so that verifier can discard obsolete metadata
@@ -43,17 +46,21 @@ func Generate(req *api.AttestationRequest, cmc *Cmc) ([]byte, []string, error) {
 	// Marshal data to bytes
 	r, err := cmc.Serializer.Marshal(report)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
 	}
 
 	// Sign attestation report
 	log.Debug("Prover: Signing Attestation Report")
 	data, err := g.Sign(r, cmc.Drivers[0], cmc.Serializer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to sign attestation report: %w", err)
+		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
 	}
 
-	return data, cacheMisses, nil
+	return &api.AttestationResponse{
+		Report:      data,
+		Metadata:    metadata,
+		CacheMisses: cacheMisses,
+	}, nil
 }
 
 func Verify(req *api.VerificationRequest, cmc *Cmc) ([]byte, error) {
@@ -84,11 +91,14 @@ func VerifyInternal(req *api.VerificationRequest, cmc *Cmc) ar.VerificationResul
 		return ar.VerificationResult{}
 	}
 
-	// Verify attetation report
-	result := v.Verify(req.AttestationReport, req.Nonce, req.Ca, req.Policies, req.Peer,
-		cmc.PolicyEngineSelect, cmc.CachedPeerMetadata, cmc.PeerCache, cmc.IntelStorage)
+	// Update volatile peer cache
+	UpdateCacheMetadata(req.Peer, cmc.CachedPeerMetadata, req.Metadata, req.CacheMisses)
 
-	// Persistently cache peer metadata
+	// Verify attetation report
+	result := v.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer,
+		cmc.PolicyEngineSelect, cmc.CachedPeerMetadata[req.Peer], cmc.IntelStorage)
+
+	// Update persistent peer cache
 	err := StoreCacheMetadata(cmc.PeerCache, req.Peer, cmc.CachedPeerMetadata[req.Peer], req.CacheMisses)
 	if err != nil {
 		log.Warnf("Internal error: failed to cache metadata: %v", err)

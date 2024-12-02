@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -59,22 +60,23 @@ type AttestationRequest struct {
 }
 
 type AttestationResponse struct {
-	AttestationReport []byte   `json:"attestationReport" cbor:"0,keyasint"`
-	CacheMisses       []string `json:"cacheMisses,omitempty" cbor:"1,keyasint,omitempty"`
+	Report      []byte            `json:"report" cbor:"0,keyasint"`
+	Metadata    map[string][]byte `json:"metadata" cbor:"1,keyasint"`
+	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type VerificationRequest struct {
-	Nonce             []byte   `json:"nonce" cbor:"0,keyasint"`
-	AttestationReport []byte   `json:"attestationReport" cbor:"1,keyasint"`
-	Ca                []byte   `json:"ca" cbor:"2,keyasint"`
-	Peer              string   `json:"peer,omitempty" cbor:"3,keyasint,omitempty"`
-	CacheMisses       []string `json:"cacheMisses,omitempty" cbor:"4,keyasint,omitempty"`
-	Policies          []byte   `json:"policies,omitempty" cbor:"5,keyasint,omitempty"`
+	Nonce       []byte            `json:"nonce" cbor:"0,keyasint"`
+	Report      []byte            `json:"report" cbor:"1,keyasint"`
+	Metadata    map[string][]byte `json:"metadata" cbor:"2,keyasint"`
+	Ca          []byte            `json:"ca" cbor:"3,keyasint"`
+	Peer        string            `json:"peer,omitempty" cbor:"4,keyasint,omitempty"`
+	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"5,keyasint,omitempty"`
+	Policies    []byte            `json:"policies,omitempty" cbor:"6,keyasint,omitempty"`
 }
 
 type VerificationResponse struct {
-	VerificationResult []byte   `json:"verificationResult" cbor:"0,keyasint"`
-	UpdatedCache       [][]byte `json:"updatedCache,omitempty" cbor:"1,keyasint,omitempty"`
+	VerificationResult []byte `json:"verificationResult" cbor:"0,keyasint"`
 }
 
 type MeasureRequest struct {
@@ -339,4 +341,60 @@ func Send(conn net.Conn, payload []byte, t uint32) error {
 	}
 
 	return nil
+}
+
+func (req *AttestationResponse) Convert() *grpcapi.AttestationResponse {
+	return &grpcapi.AttestationResponse{
+		Report:      req.Report,
+		Metadata:    req.Metadata,
+		CacheMisses: req.CacheMisses,
+	}
+}
+
+func (req *VerificationRequest) Convert() *grpcapi.VerificationRequest {
+	return &grpcapi.VerificationRequest{
+		Nonce:       req.Nonce,
+		Report:      req.Report,
+		Metadata:    req.Metadata,
+		Ca:          req.Ca,
+		Peer:        req.Peer,
+		CacheMisses: req.CacheMisses,
+		Policies:    req.Policies,
+	}
+}
+
+func ConvertAttestationRequest(req *grpcapi.AttestationRequest) *AttestationRequest {
+	return &AttestationRequest{
+		Nonce:  req.Nonce,
+		Cached: req.Cached,
+	}
+}
+
+func ConvertAttestationResponse(resp *grpcapi.AttestationResponse) *AttestationResponse {
+	return &AttestationResponse{
+		Report:      resp.Report,
+		Metadata:    resp.Metadata,
+		CacheMisses: resp.CacheMisses,
+	}
+}
+
+func ConvertVerificationRequest(req *grpcapi.VerificationRequest) *VerificationRequest {
+	return &VerificationRequest{
+		Nonce:       req.Nonce,
+		Report:      req.Report,
+		Metadata:    req.Metadata,
+		Ca:          req.Ca,
+		Peer:        req.Peer,
+		CacheMisses: req.CacheMisses,
+		Policies:    req.Policies,
+	}
+}
+
+func ConvertMeasureRequest(req *grpcapi.MeasureRequest) *MeasureRequest {
+	return &MeasureRequest{
+		Name:         req.Name,
+		ConfigSha256: req.ConfigSha256,
+		RootfsSha256: req.RootfsSha256,
+		OciSpec:      req.OciSpec,
+	}
 }

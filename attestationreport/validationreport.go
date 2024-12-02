@@ -30,66 +30,45 @@ import (
 // the validation of an attestation report.
 type VerificationResult struct {
 	Type            string              `json:"type"`
-	Success         bool                `json:"raSuccessful"`
+	Success         bool                `json:"success"`
 	ErrorCode       ErrorCode           `json:"errorCode,omitempty"` // Set in case of global errors
 	Prover          string              `json:"prover,omitempty"`    // Name of the proving device the report was created for
 	Created         string              `json:"created,omitempty"`   // Timestamp the attestation verification was completed
-	SwCertLevel     int                 `json:"swCertLevel"`         // Overall certification level for the software stack
+	CertLevel       int                 `json:"certLevel"`           // Overall certification level
 	Measurements    []MeasurementResult `json:"measurements"`
-	ReportSignature []SignatureResult   `json:"reportSignatureCheck"` // Result for validation of the overall report signature
-	MetadataResult
-	PolicySuccess bool `json:"policySuccess,omitempty"` // Result of custom policy validation (if utilized)
+	Metadata        MetadataSummary     `json:"metadata"`
+	PolicySuccess   bool                `json:"policySuccess,omitempty"` // Result of custom policy validation (if utilized)
+	ReportSignature []SignatureResult   `json:"reportSignatureCheck"`    // Result for validation of the overall report signature
+}
+
+type MetadataSummary struct {
+	DevDescResult  MetadataResult   `json:"deviceDescValidation"`
+	RtmResult      MetadataResult   `json:"rtmValidation"`
+	OsResult       MetadataResult   `json:"osValidation"`
+	AppResults     []MetadataResult `json:"appValidation,omitempty"`
+	CompDescResult *MetadataResult  `json:"companyValidation,omitempty"`
 }
 
 type MetadataResult struct {
-	CompDescResult *CompDescResult  `json:"companyValidation,omitempty"`
-	RtmResult      ManifestResult   `json:"rtmValidation"`
-	OsResult       ManifestResult   `json:"osValidation"`
-	AppResults     []ManifestResult `json:"appValidation,omitempty"`
-	DevDescResult  DevDescResult    `json:"deviceDescValidation"`
-}
-
-// CompDescResult represents the results of the validation of the
-// Company Description and its mapping to the used device certificate.
-type CompDescResult struct {
-	MetaInfo
-	CompCertLevel  int               `json:"compCertLevel"`       // Certification level for the company operating the device
-	Summary        Result            `json:"result"`              // Summarizing value illustrating whether any issues were detected during validation of the Company Description
-	SignatureCheck []SignatureResult `json:"signatureValidation"` // Results for validation of the Description Signatures and the used certificates
-	ValidityCheck  Result            `json:"validityCheck"`       // Result from checking the validity of the description
-}
-
-// ManifestResult represents the results of the validation of a
-// manifest provided in the Attestation Report.
-type ManifestResult struct {
 	MetaInfo
 	Summary        Result            `json:"result"`
-	SignatureCheck []SignatureResult `json:"signatureValidation"`
-	ValidityCheck  Result            `json:"validityCheck"`
+	ValidityCheck  Result            `json:"validityCheck,omitempty"`
+	CertLevel      int               `json:"certLevel,omitempty"`
+	Description    string            `json:"description,omitempty"`
+	Location       string            `json:"location,omitempty"`
 	Details        any               `json:"details,omitempty"`
+	DevDescResult                    // For device descriptions only
+	SignatureCheck []SignatureResult `json:"signatureValidation"`
 }
 
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report.
 type DevDescResult struct {
-	MetaInfo
-	Description         string            `json:"description"`
-	Location            string            `json:"location"`
-	Summary             Result            `json:"result"`
-	CorrectRtm          Result            `json:"correctRtm"`
-	CorrectOs           Result            `json:"correctOs"`
-	CorrectApps         []Result          `json:"correctApps"`
-	RtmOsCompatibility  Result            `json:"rtmOsCompatibility"`
-	OsAppsCompatibility []Result          `json:"osAppCompatibility"`
-	AppResults          []AppDescResult   `json:"appDescResults"`
-	SignatureCheck      []SignatureResult `json:"signatureValidation"`
-}
-
-type AppDescResult struct {
-	MetaInfo
-	AppManifest string              `json:"appManifest"`
-	Environment []Environment       `json:"environment,omitempty"`
-	External    []ExternalInterface `json:"external,omitempty"`
+	CorrectRtm          *Result  `json:"correctRtm,omitempty"`
+	CorrectOs           *Result  `json:"correctOs,omitempty"`
+	CorrectApps         []Result `json:"correctApps,omitempty"`
+	RtmOsCompatibility  *Result  `json:"rtmOsCompatibility,omitempty"`
+	OsAppsCompatibility []Result `json:"osAppCompatibility,omitempty"`
 }
 
 type MeasurementResult struct {
@@ -355,13 +334,6 @@ func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 	return res
 }
 
-// TokenResult is a helper struct for the validation of JWS or COSE tokens focussing
-// on the validation of the provided signatures.
-type TokenResult struct {
-	Summary        Result            `json:"result"`
-	SignatureCheck []SignatureResult `json:"signatureValidation"`
-}
-
 type ErrorCode int
 
 const (
@@ -431,6 +403,8 @@ const (
 	VerifyTcbInfo
 	ExtensionsCheck
 	PcrNotSpecified
+	DeviceDescriptionNotPresent
+	UnknownMetadata
 )
 
 type Result struct {
@@ -656,6 +630,10 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Verify TCB info error)", int(e))
 	case ExtensionsCheck:
 		return fmt.Sprintf("%v (Extensions check error)", int(e))
+	case DeviceDescriptionNotPresent:
+		return fmt.Sprintf("%v (Device description not present)", int(e))
+	case UnknownMetadata:
+		return fmt.Sprintf("%v (Unknown metadata)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -667,6 +645,10 @@ func (r *Result) SetErr(e ErrorCode) {
 }
 
 func (r *Result) PrintErr(format string, args ...interface{}) {
+	if r == nil {
+		log.Warnf("%v is nil", fmt.Sprintf(format, args...))
+		return
+	}
 	if r.Success {
 		return
 	}
@@ -747,27 +729,27 @@ func (r *VerificationResult) PrintErr() {
 			s.PrintErr("Report")
 		}
 
-		if r.CompDescResult != nil {
-			r.CompDescResult.Summary.PrintErr("Company description check")
-			for _, s := range r.CompDescResult.SignatureCheck {
+		if r.Metadata.CompDescResult != nil {
+			r.Metadata.CompDescResult.Summary.PrintErr("Company description check")
+			for _, s := range r.Metadata.CompDescResult.SignatureCheck {
 				s.PrintErr("Company Description")
 			}
-			r.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
+			r.Metadata.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
 		}
 
-		r.OsResult.Summary.PrintErr("OS Manifest check")
-		for _, s := range r.OsResult.SignatureCheck {
+		r.Metadata.OsResult.Summary.PrintErr("OS Manifest check")
+		for _, s := range r.Metadata.OsResult.SignatureCheck {
 			s.PrintErr("OS Manifest")
 		}
-		r.OsResult.ValidityCheck.PrintErr("OS Manifest validity check")
+		r.Metadata.OsResult.ValidityCheck.PrintErr("OS Manifest validity check")
 
-		r.RtmResult.Summary.PrintErr("RTM Manifest check")
-		for _, s := range r.RtmResult.SignatureCheck {
+		r.Metadata.RtmResult.Summary.PrintErr("RTM Manifest check")
+		for _, s := range r.Metadata.RtmResult.SignatureCheck {
 			s.PrintErr("RTM Manifest")
 		}
-		r.RtmResult.ValidityCheck.PrintErr("RTM Manifest validity check")
+		r.Metadata.RtmResult.ValidityCheck.PrintErr("RTM Manifest validity check")
 
-		for _, a := range r.AppResults {
+		for _, a := range r.Metadata.AppResults {
 			a.Summary.PrintErr("App Manifest %v check", a.Name)
 			for _, s := range a.SignatureCheck {
 				s.PrintErr("App Manifest %v", a.Name)
@@ -775,18 +757,22 @@ func (r *VerificationResult) PrintErr() {
 			a.ValidityCheck.PrintErr("App Manifest %v validity check", a.Name)
 		}
 
-		r.DevDescResult.Summary.PrintErr("Device Description check")
-		for _, s := range r.DevDescResult.SignatureCheck {
+		r.Metadata.DevDescResult.Summary.PrintErr("Device Description check")
+		for _, s := range r.Metadata.DevDescResult.SignatureCheck {
 			s.PrintErr("Device Description")
 		}
-		r.DevDescResult.CorrectRtm.PrintErr("Correct RTM check")
-		r.DevDescResult.CorrectOs.PrintErr("Correct OS check")
-		for _, a := range r.DevDescResult.CorrectApps {
+		r.Metadata.DevDescResult.CorrectRtm.PrintErr("Correct RTM check")
+		r.Metadata.DevDescResult.CorrectOs.PrintErr("Correct OS check")
+		for _, a := range r.Metadata.DevDescResult.CorrectApps {
 			a.PrintErr("Correct App check")
 		}
-		r.DevDescResult.RtmOsCompatibility.PrintErr("RTM OS compatibility")
-		for _, a := range r.DevDescResult.OsAppsCompatibility {
+		r.Metadata.DevDescResult.RtmOsCompatibility.PrintErr("RTM OS compatibility")
+		for _, a := range r.Metadata.DevDescResult.OsAppsCompatibility {
 			a.PrintErr("OS App compatibility check")
+		}
+
+		if !r.PolicySuccess {
+			log.Warnf("Custom policy validation failed")
 		}
 
 		if !r.PolicySuccess {
@@ -803,7 +789,11 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrDetails {
 	}
 
 	// Get OCI runtime config from manifest
-	m := r.GetManifest()
+	m, err := r.GetManifest()
+	if err != nil {
+		log.Warnf("%v: %v: %v", r.Type, r.Name, err)
+		return nil
+	}
 
 	ociSpecRaw, err := s.Marshal(m.OciSpec)
 	if err != nil {

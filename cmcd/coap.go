@@ -128,7 +128,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	report, misses, err := cmc.Generate(req, Cmc)
+	resp, err := cmc.Generate(req, Cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
@@ -136,10 +136,6 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Serialize CoAP payload
-	resp := &api.AttestationResponse{
-		AttestationReport: report,
-		CacheMisses:       misses,
-	}
 	payload, err := cbor.Marshal(resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)

@@ -18,6 +18,7 @@ package attestedtls
 import (
 	"crypto"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
@@ -69,8 +70,8 @@ type CmcConfig struct {
 }
 
 type CmcApi interface {
-	obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, []string, error)
-	verifyAR(chbindings, report []byte, peer string, cacheMisses []string, cc CmcConfig) error
+	obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error)
+	verifyAR(cc CmcConfig, req *api.VerificationRequest) error
 	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc CmcConfig) ([][]byte, error)
 	fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error)

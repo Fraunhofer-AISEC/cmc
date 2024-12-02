@@ -39,45 +39,38 @@ func init() {
 }
 
 // Obtains attestation report from CMCd
-func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, []string, error) {
+func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error) {
 
 	if cc.Cmc == nil {
-		return nil, nil, errors.New("internal error: cmc is nil")
+		return nil, errors.New("internal error: cmc is nil")
 	}
 
 	if len(cc.Cmc.Drivers) == 0 {
-		return nil, nil, errors.New("no drivers configured")
+		return nil, errors.New("no drivers configured")
 	}
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(chbindings))
 
-	report, misses, err := cmc.Generate(&api.AttestationRequest{
+	resp, err := cmc.Generate(&api.AttestationRequest{
 		Nonce:  chbindings,
-		Cached: params.Cached,
+		Cached: cached,
 	}, cc.Cmc)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	return report, misses, nil
+	return resp, nil
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
-func (a LibApi) verifyAR(chbindings, report []byte, peer string, cacheMisses []string, cc CmcConfig) error {
+func (a LibApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 
 	if cc.Cmc == nil {
 		return errors.New("internal error: cmc is nil")
 	}
 
 	log.Debug("Verifier: verifying attestation report")
-	// TODO policies
-	result := cmc.VerifyInternal(&api.VerificationRequest{
-		Nonce:             chbindings,
-		AttestationReport: report,
-		Ca:                cc.Ca,
-		Peer:              peer,
-		CacheMisses:       cacheMisses,
-	}, cc.Cmc)
+	result := cmc.VerifyInternal(req, cc.Cmc)
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {

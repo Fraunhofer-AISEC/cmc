@@ -111,10 +111,9 @@ func (s CborSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	return coseRaw, nil
 }
 
-func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool) {
+func (s CborSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool) {
 
-	// TODO TokenResult (Naming)
-	result := TokenResult{}
+	result := MetadataResult{}
 	ok := true
 
 	if len(roots) == 0 {

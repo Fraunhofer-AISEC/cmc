@@ -202,6 +202,7 @@ func getConfig() (*cmc.Config, error) {
 		flag.Usage()
 		log.Fatalf("LogLevel %v does not exist", c.LogLevel)
 	}
+	log.Infof("Configuring logger for log level %v", c.LogLevel)
 	logrus.SetLevel(l)
 
 	// Convert all paths to absolute paths

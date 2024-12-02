@@ -20,8 +20,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"testing"
@@ -49,98 +51,124 @@ var (
 		"SW Reference Value":  vers[3:],
 	}
 
-	rtmManifest = ar.RtmManifest{
-		ReferenceValues: []ar.ReferenceValue{
-			vers[0],
-			vers[2],
+	rtmManifest = ar.Metadata{
+		Manifest: ar.Manifest{
+			ReferenceValues: []ar.ReferenceValue{
+				vers[0],
+				vers[2],
+			},
 		},
 	}
 
-	osManifest = ar.OsManifest{
-		ReferenceValues: []ar.ReferenceValue{
-			vers[1],
+	osManifest = ar.Metadata{
+		Manifest: ar.Manifest{
+			ReferenceValues: []ar.ReferenceValue{
+				vers[1],
+			},
 		},
 	}
 
-	appManifests = []ar.AppManifest{
-		{ReferenceValues: []ar.ReferenceValue{vers[3]}},
-		{ReferenceValues: []ar.ReferenceValue{vers[4]}},
+	appManifest1 = ar.Metadata{
+		Manifest: ar.Manifest{
+			ReferenceValues: []ar.ReferenceValue{vers[3]},
+		},
+	}
+
+	appManifest2 = ar.Metadata{
+		Manifest: ar.Manifest{
+			ReferenceValues: []ar.ReferenceValue{vers[4]},
+		},
 	}
 )
 
 // variables for TestVerify
 var (
-	validRtmManifest = ar.RtmManifest{
+	validRtmManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
 			Type:    "RTM Manifest",
 			Name:    "de.test.rtm",
 			Version: "2023-04-10T20:00:00Z",
 		},
-		DevCommonName: "Test Developer",
+		Manifest: ar.Manifest{
+			DevCommonName: "Test Developer",
+		},
 		Validity: ar.Validity{
 			NotBefore: "2023-04-10T20:00:00Z",
 			NotAfter:  "2030-04-10T20:00:00Z",
 		},
-		Description:        "de.test.rtm",
-		CertificationLevel: 1,
+		Description: "de.test.rtm",
+		CertLevel:   1,
 	}
 
-	validOsManifest = ar.OsManifest{
+	validOsManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
 			Type:    "OS Manifest",
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
 		},
-		DevCommonName: "Test Developer",
+		Manifest: ar.Manifest{
+			DevCommonName: "Test Developer",
+			BaseLayers: []string{
+				"de.test.rtm",
+			},
+		},
 		Validity: ar.Validity{
 			NotBefore: "2023-04-10T20:00:00Z",
 			NotAfter:  "2030-04-10T20:00:00Z",
 		},
-		Description:        "PoC Fraunhofer AISEC Sample Report",
-		CertificationLevel: 1,
-		Rtms: []string{
-			"de.test.rtm",
-		},
+		Description: "PoC Fraunhofer AISEC Sample Report",
+		CertLevel:   1,
 	}
 
-	incompatibleOsManifest = ar.OsManifest{
+	incompatibleOsManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
 			Type:    "OS Manifest",
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
 		},
-		DevCommonName: "Test Developer",
+		Manifest: ar.Manifest{
+			DevCommonName: "Test Developer",
+			BaseLayers: []string{
+				"INVALID",
+			},
+		},
 		Validity: ar.Validity{
 			NotBefore: "2023-04-10T20:00:00Z",
 			NotAfter:  "2030-04-10T20:00:00Z",
 		},
-		Description:        "PoC Fraunhofer AISEC Sample Report",
-		CertificationLevel: 1,
-		Rtms: []string{
-			"INVALID",
-		},
+		Description: "PoC Fraunhofer AISEC Sample Report",
+		CertLevel:   1,
 	}
 
-	validDeviceDescription = ar.DeviceDescription{
+	validDeviceDescription = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
 			Type:    "Device Description",
 			Name:    "test-device.test.de",
 			Version: "2023-04-10T20:00:00Z",
 		},
-		Location:    "Munich, Germany",
-		RtmManifest: "de.test.rtm",
-		OsManifest:  "de.test.os",
+		DeviceDescription: ar.DeviceDescription{
+			Location:    "Munich, Germany",
+			RtmManifest: "de.test.rtm",
+			OsManifest:  "de.test.os",
+		},
+		Validity: ar.Validity{
+			NotBefore: "2023-04-10T20:00:00Z",
+			NotAfter:  "2030-04-10T20:00:00Z",
+		},
+		CertLevel: 3,
 	}
 
-	invalidDeviceDescription = ar.DeviceDescription{
+	invalidDeviceDescription = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
 			Type:    "Device Description",
 			Name:    "test-device.test.de",
 			Version: "2023-04-10T20:00:00Z",
 		},
-		Location:    "Munich, Germany",
-		RtmManifest: "INVALID",
-		OsManifest:  "INVALID",
+		DeviceDescription: ar.DeviceDescription{
+			Location:    "Munich, Germany",
+			RtmManifest: "INVALID",
+			OsManifest:  "INVALID",
+		},
 	}
 
 	nonce = []byte{0x01, 0x02, 0x03}
@@ -240,7 +268,7 @@ func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
 
 func Test_collectReferenceValues(t *testing.T) {
 	type args struct {
-		metadata *ar.Metadata
+		metadata map[string]ar.Metadata
 	}
 	tests := []struct {
 		name    string
@@ -251,10 +279,11 @@ func Test_collectReferenceValues(t *testing.T) {
 		{
 			name: "Success",
 			args: args{
-				metadata: &ar.Metadata{
-					RtmManifest:  rtmManifest,
-					OsManifest:   osManifest,
-					AppManifests: appManifests,
+				metadata: map[string]ar.Metadata{
+					"abc": rtmManifest,
+					"def": osManifest,
+					"ghi": appManifest1,
+					"jkl": appManifest2,
 				},
 			},
 			want:    verMap,
@@ -290,9 +319,9 @@ func TestVerify(t *testing.T) {
 
 	type args struct {
 		serializer        ar.Serializer
-		rtmManifest       ar.RtmManifest
-		osManifest        ar.OsManifest
-		deviceDescription ar.DeviceDescription
+		rtmManifest       ar.Metadata
+		osManifest        ar.Metadata
+		deviceDescription ar.Metadata
 		nonce             []byte
 	}
 	tests := []struct {
@@ -328,37 +357,41 @@ func TestVerify(t *testing.T) {
 			name: "Invalid Certification Level",
 			args: args{
 				serializer: ar.JsonSerializer{},
-				rtmManifest: ar.RtmManifest{
+				rtmManifest: ar.Metadata{
 					MetaInfo: ar.MetaInfo{
 						Type:    "RTM Manifest",
 						Name:    "de.test.rtm",
 						Version: "2023-04-10T20:00:00Z",
 					},
-					DevCommonName: "Test Developer",
+					Manifest: ar.Manifest{
+						DevCommonName:   "Test Developer",
+						ReferenceValues: []ar.ReferenceValue{},
+					},
 					Validity: ar.Validity{
 						NotBefore: "2023-04-10T20:00:00Z",
 						NotAfter:  "2026-04-10T20:00:00Z",
 					},
-					Description:        "de.test.rtm",
-					CertificationLevel: 3,
-					ReferenceValues:    []ar.ReferenceValue{},
+					Description: "de.test.rtm",
+					CertLevel:   3,
 				},
-				osManifest: ar.OsManifest{
+				osManifest: ar.Metadata{
 					MetaInfo: ar.MetaInfo{
 						Type:    "OS Manifest",
 						Name:    "de.test.os",
 						Version: "2023-04-10T20:00:00Z",
 					},
-					DevCommonName: "Test Developer",
+					Manifest: ar.Manifest{
+						DevCommonName: "Test Developer",
+						BaseLayers: []string{
+							"de.test.rtm",
+						},
+					},
 					Validity: ar.Validity{
 						NotBefore: "2023-04-10T20:00:00Z",
 						NotAfter:  "2026-04-10T20:00:00Z",
 					},
-					Description:        "PoC Fraunhofer AISEC Sample Report",
-					CertificationLevel: 3,
-					Rtms: []string{
-						"de.test.rtm",
-					},
+					Description: "PoC Fraunhofer AISEC Sample Report",
+					CertLevel:   3,
 				},
 				deviceDescription: validDeviceDescription,
 				nonce:             nonce,
@@ -409,10 +442,6 @@ func TestVerify(t *testing.T) {
 			// Preparation: Generate a Sample Report
 			log.Trace("Generating a Sample Report")
 
-			ar := ar.AttestationReport{
-				Type: "Attestation Report",
-			}
-
 			// Preparation: create signed manifests and deviceDescription
 			rtmManifest, err := s.Marshal(tt.args.rtmManifest)
 			if err != nil {
@@ -426,17 +455,49 @@ func TestVerify(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to marshal the DeviceDescription: %v", err)
 			}
-			ar.RtmManifest, err = generate.Sign(rtmManifest, swSigner, s)
+
+			rtmManifest, err = generate.Sign(rtmManifest, swSigner, s)
 			if err != nil {
 				t.Errorf("failed to sign the RtmManifest: %v", err)
 			}
-			ar.OsManifest, err = generate.Sign(osManifest, swSigner, s)
+			osManifest, err = generate.Sign(osManifest, swSigner, s)
 			if err != nil {
 				t.Errorf("failed to sign the OsManifest: %v", err)
 			}
-			ar.DeviceDescription, err = generate.Sign(deviceDescription, swSigner, s)
+			deviceDescription, err = generate.Sign(deviceDescription, swSigner, s)
 			if err != nil {
 				t.Errorf("failed to sign the DeviceDescription: %v", err)
+			}
+
+			rtmDigest := sha256.Sum256(rtmManifest)
+			rtmManifestDigest := ar.MetadataDigest{
+				Type:   "RTM Manifest",
+				Digest: rtmDigest[:],
+			}
+
+			osDigest := sha256.Sum256(osManifest)
+			osManifestDigest := ar.MetadataDigest{
+				Type:   "RTM Manifest",
+				Digest: osDigest[:],
+			}
+
+			deviceDigest := sha256.Sum256(deviceDescription)
+			deviceDescriptionDigest := ar.MetadataDigest{
+				Type:   "RTM Manifest",
+				Digest: deviceDigest[:],
+			}
+
+			ar := ar.AttestationReport{
+				Type: "Attestation Report",
+				Metadata: []ar.MetadataDigest{
+					rtmManifestDigest, osManifestDigest, deviceDescriptionDigest,
+				},
+			}
+
+			metadata := map[string][]byte{
+				hex.EncodeToString(rtmDigest[:]):    rtmManifest,
+				hex.EncodeToString(osDigest[:]):     osManifest,
+				hex.EncodeToString(deviceDigest[:]): deviceDescription,
 			}
 
 			report, err := s.Marshal(ar)
@@ -452,9 +513,11 @@ func TestVerify(t *testing.T) {
 
 			// Run FUT
 			got := Verify(
-				arSigned, nonce,
-				internal.WriteCertPem(certchain[len(certchain)-1]),
-				nil, 0, "")
+				arSigned, nonce, internal.WriteCertPem(certchain[len(certchain)-1]), nil,
+				"",
+				PolicyEngineSelect_None,
+				metadata,
+				"")
 			if got.Success != tt.want.Success {
 				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
 			}
