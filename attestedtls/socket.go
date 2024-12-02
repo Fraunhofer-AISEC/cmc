@@ -40,60 +40,60 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, params *AtlsHandshakeRequest) ([]byte, []string, error) {
+func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error) {
 
 	// Establish connection
 	log.Tracef("Sending attestation request to cmcd via %v on %v", cc.Network, cc.CmcAddr)
 	conn, err := net.Dial(cc.Network, cc.CmcAddr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error dialing cmcd: %w", err)
+		return nil, fmt.Errorf("error dialing cmcd: %w", err)
 	}
 
 	req := &api.AttestationRequest{
 		Nonce:  chbindings,
-		Cached: params.Cached,
+		Cached: cached,
 	}
 
 	// Marshal request
 	payload, err := cbor.Marshal(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to send request to cmcd: %w", err)
+		return nil, fmt.Errorf("failed to send request to cmcd: %w", err)
 	}
 
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to receive from cmcd: %w", err)
+		return nil, fmt.Errorf("failed to receive from cmcd: %w", err)
 	}
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
 		err = cbor.Unmarshal(payload, resp)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
-		return nil, nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
+		return nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
 	} else if mtype != api.TypeAttest {
-		return nil, nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
+		return nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	resp := new(api.AttestationResponse)
 	err = cbor.Unmarshal(payload, resp)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
 	}
 
-	return resp.AttestationReport, resp.CacheMisses, nil
+	return resp, nil
 }
 
-// Sends attestationreport to cmcd for verification
-func (a SocketApi) verifyAR(chbindings, report []byte, peer string, cacheMisses []string, cc CmcConfig) error {
+// Sends attestation report to cmcd for verification
+func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 
 	// Establish connection
 	log.Tracef("Sending verification request to cmcd via %v on %v", cc.Network, cc.CmcAddr)
@@ -102,21 +102,13 @@ func (a SocketApi) verifyAR(chbindings, report []byte, peer string, cacheMisses 
 		return fmt.Errorf("error dialing: %w", err)
 	}
 
-	// Create Verification request
-	req := &api.VerificationRequest{
-		Nonce:             chbindings,
-		AttestationReport: report,
-		Ca:                cc.Ca,
-		Peer:              peer,
-		CacheMisses:       cacheMisses,
-		Policies:          cc.Policies,
-	}
+	// Marshal Verification request
 	payload, err := cbor.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Perform Verify request
+	// Perform verification request
 	err = api.Send(conn, payload, api.TypeVerify)
 	if err != nil {
 		return fmt.Errorf("failed to send request to cmcd: %w", err)

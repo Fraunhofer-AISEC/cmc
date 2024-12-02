@@ -23,8 +23,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
-	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -50,8 +50,6 @@ var (
 	log = logrus.WithField("service", "ar")
 
 	policyEngines = map[PolicyEngineSelect]PolicyValidator{}
-
-	peerCacheMutex sync.Mutex
 )
 
 // Verify verifies an attestation report in full serialized JWS
@@ -62,14 +60,18 @@ func Verify(
 	arRaw, nonce, casPem, policies []byte,
 	peer string,
 	polEng PolicyEngineSelect,
-	cached map[string]map[string][]byte,
-	peerCache, intelCache string,
+	metadatamap map[string][]byte,
+	intelCache string,
 ) ar.VerificationResult {
 
+	if len(metadatamap) == 0 {
+		log.Warnf("No metadata specified")
+	}
+
 	result := ar.VerificationResult{
-		Type:        "Verification Result",
-		Success:     true,
-		SwCertLevel: 0}
+		Type:      "Verification Result",
+		Success:   true,
+		CertLevel: 0}
 
 	cas, err := internal.ParseCertsPem(casPem)
 	if err != nil {
@@ -104,11 +106,12 @@ func Verify(
 	}
 
 	// Verify and unpack metadata from attestation report
-	metadata, mr, ok := verifyMetadata(report, cas, s, peer, cached, peerCache)
+	devDescName, metadata, metaResults, ec, ok := verifyMetadata(cas, s, metadatamap)
 	if !ok {
 		result.Success = false
+		result.ErrorCode = ec
 	}
-	result.MetadataResult = *mr
+	result.Metadata = metaResults
 
 	refVals, err := collectReferenceValues(metadata)
 	if err != nil {
@@ -178,133 +181,25 @@ func Verify(
 
 	// The lowest certification level of all components determines the certification
 	// level for the device's software stack
+	aggCertLevel := 0
 	levels := make([]int, 0)
-	levels = append(levels, metadata.RtmManifest.CertificationLevel)
-	levels = append(levels, metadata.OsManifest.CertificationLevel)
-	for _, app := range metadata.AppManifests {
-		levels = append(levels, app.CertificationLevel)
+	for _, m := range metadata {
+		levels = append(levels, m.CertLevel)
 	}
-	aggCertLevel := levels[0]
-	for _, l := range levels {
-		if l < aggCertLevel {
-			aggCertLevel = l
-		}
+	if len(levels) > 0 {
+		aggCertLevel = slices.Min(levels)
 	}
+	log.Tracef("Aggregated cert level: %v", aggCertLevel)
 	// If no hardware trust anchor is present, the maximum certification level is 1
 	// If there are reference values with a higher trust level present, the remote attestation
 	// must fail
+	log.Warnf("aggCertLevel: %v", aggCertLevel)
 	if !hwAttest && aggCertLevel > 1 {
 		log.Tracef("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ErrorCode = ar.InvalidCertificationLevel
 		result.Success = false
 	}
-	result.SwCertLevel = aggCertLevel
-
-	// Verify the compatibility of the attestation report through verifying the
-	// compatibility of all components
-
-	// Check that the OS and RTM Manifest are specified in the Device Description
-	if metadata.DeviceDescription.RtmManifest == metadata.RtmManifest.Name {
-		result.DevDescResult.CorrectRtm.Success = true
-	} else {
-		log.Tracef("Device Description listed wrong RTM Manifest: %v vs. %v",
-			metadata.DeviceDescription.RtmManifest, metadata.RtmManifest.Name)
-		result.DevDescResult.CorrectRtm.Success = false
-		result.DevDescResult.CorrectRtm.Expected = metadata.DeviceDescription.RtmManifest
-		result.DevDescResult.CorrectRtm.Got = metadata.RtmManifest.Name
-		result.DevDescResult.Summary.Success = false
-		result.Success = false
-	}
-	if metadata.DeviceDescription.OsManifest == metadata.OsManifest.Name {
-		result.DevDescResult.CorrectOs.Success = true
-	} else {
-		log.Tracef("Device Description listed wrong OS Manifest: %v vs. %v",
-			metadata.DeviceDescription.OsManifest, metadata.OsManifest.Name)
-		result.DevDescResult.CorrectOs.Success = false
-		result.DevDescResult.CorrectOs.Expected = metadata.DeviceDescription.OsManifest
-		result.DevDescResult.CorrectOs.Got = metadata.OsManifest.Name
-		result.DevDescResult.Summary.Success = false
-		result.Success = false
-	}
-
-	// Extract app description names
-	appDescriptions := make([]string, 0)
-	for _, a := range metadata.DeviceDescription.AppDescriptions {
-		appDescriptions = append(appDescriptions, a.AppManifest)
-	}
-	// Extract app manifest names
-	appManifestNames := make([]string, 0)
-	for _, a := range metadata.AppManifests {
-		appManifestNames = append(appManifestNames, a.Name)
-	}
-
-	// Check that every AppManifest has a corresponding AppDescription
-	log.Tracef("Iterating app manifests length %v", len(metadata.AppManifests))
-	for _, a := range metadata.AppManifests {
-		r := ar.Result{
-			Success:       true,
-			ExpectedOneOf: appDescriptions,
-			Got:           a.Name,
-		}
-		if !contains(a.Name, appDescriptions) {
-			log.Tracef("Device Description does not list the following App Manifest: %v", a.Name)
-			r.Success = false
-			result.DevDescResult.Summary.Success = false
-			result.Success = false
-		}
-		result.DevDescResult.CorrectApps = append(result.DevDescResult.CorrectApps, r)
-	}
-
-	// Check that every App Description has a corresponding App Manifest
-	log.Tracef("Iterating app descriptions length %v", len(metadata.DeviceDescription.AppDescriptions))
-	for _, desc := range metadata.DeviceDescription.AppDescriptions {
-		found := false
-		for _, manifest := range metadata.AppManifests {
-			if desc.AppManifest == manifest.Name {
-				found = true
-			}
-		}
-		if !found {
-			log.Tracef("No app manifest for app description: %v", desc.AppManifest)
-			r := ar.Result{
-				Success:       false,
-				Got:           desc.AppManifest,
-				ExpectedOneOf: appManifestNames,
-			}
-			result.DevDescResult.CorrectApps = append(result.DevDescResult.CorrectApps, r)
-			result.Success = false
-		}
-	}
-
-	// Check that the Rtm Manifest is compatible with the OS Manifest
-	if contains(metadata.RtmManifest.Name, metadata.OsManifest.BaseLayers) {
-		result.DevDescResult.RtmOsCompatibility.Success = true
-	} else {
-		log.Tracef("OS Manifest %v is not compatible with RTM Manifest %v",
-			metadata.OsManifest.Name, metadata.RtmManifest.Name)
-		result.DevDescResult.RtmOsCompatibility.Success = false
-		result.DevDescResult.RtmOsCompatibility.ExpectedOneOf = metadata.OsManifest.BaseLayers
-		result.DevDescResult.RtmOsCompatibility.Got = metadata.RtmManifest.Name
-		result.DevDescResult.Summary.Success = false
-		result.Success = false
-	}
-
-	// Check that the OS Manifest is compatible with all App Manifests
-	for _, a := range metadata.AppManifests {
-		r := ar.Result{
-			Success:       true,
-			ExpectedOneOf: a.BaseLayers,
-			Got:           metadata.OsManifest.Name,
-		}
-		if !contains(metadata.OsManifest.Name, a.BaseLayers) {
-			log.Tracef("App Manifest %v is not compatible with OS Manifest %v", a.Name, metadata.OsManifest.Name)
-			r.Success = false
-			result.DevDescResult.Summary.Success = false
-			result.Success = false
-		}
-		result.DevDescResult.OsAppsCompatibility =
-			append(result.DevDescResult.OsAppsCompatibility, r)
-	}
+	result.CertLevel = aggCertLevel
 
 	// Validate policies if specified
 	result.PolicySuccess = true
@@ -329,7 +224,7 @@ func Verify(
 	}
 
 	// Add additional information
-	result.Prover = metadata.DeviceDescription.Name
+	result.Prover = devDescName
 	if result.Prover == "" {
 		result.Prover = "Unknown"
 	}
@@ -344,24 +239,8 @@ func Verify(
 	return result
 }
 
-func extendSha256(hash []byte, data []byte) []byte {
-	concat := append(hash, data...)
-	h := sha256.Sum256(concat)
-	ret := make([]byte, 32)
-	copy(ret, h[:])
-	return ret
-}
-
-func extendSha384(hash []byte, data []byte) []byte {
-	concat := append(hash, data...)
-	h := sha512.Sum384(concat)
-	ret := make([]byte, 48)
-	copy(ret, h[:])
-	return ret
-}
-
 func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer,
-) (*ar.AttestationReport, ar.TokenResult, ar.ErrorCode) {
+) (*ar.AttestationReport, ar.MetadataResult, ar.ErrorCode) {
 
 	report := ar.AttestationReport{}
 
@@ -381,224 +260,182 @@ func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer
 	return &report, result, ar.NotSet
 }
 
-func verifyMetadata(report *ar.AttestationReport, cas []*x509.Certificate, s ar.Serializer,
-	peer string, cached map[string]map[string][]byte, peerCache string,
-) (*ar.Metadata, *ar.MetadataResult, bool) {
+func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[string][]byte,
+) (string, map[string]ar.Metadata, ar.MetadataSummary, ar.ErrorCode, bool) {
 
-	metadata := &ar.Metadata{}
-	result := &ar.MetadataResult{}
+	devDescName := ""
+	metadata := map[string]ar.Metadata{}
+	results := ar.MetadataSummary{}
+	errCode := ar.NotSet
 	success := true
 
-	// Validate and unpack Device Description
-	tokenRes, payload, ok := s.VerifyToken(report.DeviceDescription, cas)
-	result.DevDescResult.Summary = tokenRes.Summary
-	result.DevDescResult.SignatureCheck = tokenRes.SignatureCheck
-	if !ok {
-		log.Trace("Validation of Device Description failed")
-		success = false
-	} else {
-		err := s.Unmarshal(payload, &metadata.DeviceDescription)
-		if err != nil {
-			log.Tracef("Unpacking of Device Description failed: %v", err)
-			result.DevDescResult.Summary.Success = false
-			result.DevDescResult.Summary.ErrorCode = ar.Parse
-			success = false
-		} else {
-			result.DevDescResult.MetaInfo = metadata.DeviceDescription.MetaInfo
-			result.DevDescResult.Description = metadata.DeviceDescription.Description
-			result.DevDescResult.Location = metadata.DeviceDescription.Location
-		}
-		for _, appDesc := range metadata.DeviceDescription.AppDescriptions {
-			appResult := ar.AppDescResult{
-				MetaInfo:    appDesc.MetaInfo,
-				AppManifest: appDesc.AppManifest,
-				External:    appDesc.External,
-				Environment: appDesc.Environment,
-			}
-			result.DevDescResult.AppResults = append(result.DevDescResult.AppResults,
-				appResult)
-		}
-	}
+	for hash, meta := range metadatamap {
 
-	// Validate and unpack company description if present
-	if report.CompanyDescription == nil && report.CompanyDescriptionDigest.Digest != nil &&
-		len(report.CompanyDescriptionDigest.Digest) == 32 {
-		// Try to load company description from cache
-		desc, ok := cached[peer][hex.EncodeToString(report.CompanyDescriptionDigest.Digest)]
-		if ok {
-			report.CompanyDescription = desc
-		}
-	}
-	if report.CompanyDescription != nil {
-		tokenRes, payload, ok = s.VerifyToken(report.CompanyDescription, cas)
-		result.CompDescResult = &ar.CompDescResult{}
-		result.CompDescResult.Summary = tokenRes.Summary
-		result.CompDescResult.SignatureCheck = tokenRes.SignatureCheck
+		result, payload, ok := s.VerifyToken(meta, cas)
 		if !ok {
-			log.Trace("Validation of Company Description Signatures failed")
+			log.Tracef("Validation of metadata item %v failed", hash)
+			success = false
+		}
+
+		m := new(ar.Metadata)
+		err := s.Unmarshal(payload, m)
+		if err != nil {
+			log.Tracef("Unpacking of %v failed: %v", hash, err)
+			result.Summary.Success = false
+			result.Summary.ErrorCode = ar.Parse
+			success = false
+		}
+
+		result.MetaInfo = m.MetaInfo
+		result.Description = m.Description
+		result.Location = m.Location
+		result.CertLevel = m.CertLevel
+		result.Details = m.Details
+		result.ValidityCheck = checkValidity(m.Validity)
+		if !result.ValidityCheck.Success {
+			log.Tracef("%v: %v expired (NotBefore: %v, NotAfter: %v)", m.Type, m.Name, m.Validity.NotBefore, m.Validity.NotAfter)
+			result.Summary.Success = false
 			success = false
 		} else {
-			err := s.Unmarshal(payload, &metadata.CompanyDescription)
-			if err != nil {
-				log.Tracef("Unpacking of Company Description failed: %v", err)
-				result.CompDescResult.Summary.Success = false
-				result.CompDescResult.Summary.ErrorCode = ar.Parse
-				success = false
-			} else {
-				result.CompDescResult.MetaInfo = metadata.CompanyDescription.MetaInfo
-				result.CompDescResult.CompCertLevel = metadata.CompanyDescription.CertificationLevel
+			log.Tracef("Checking validity of %v: %v successful", m.Type, m.Name)
+		}
 
-				result.CompDescResult.ValidityCheck = checkValidity(metadata.CompanyDescription.Validity)
-				if !result.CompDescResult.ValidityCheck.Success {
-					log.Trace("Company Description invalid")
-					result.CompDescResult.Summary.Success = false
+		metadata[m.Name] = *m
+
+		switch m.Type {
+
+		case "Device Description":
+			devDescName = m.Name
+			results.DevDescResult = result
+		case "Company Description":
+			results.CompDescResult = &result
+		case "RTM Manifest":
+			results.RtmResult = result
+		case "OS Manifest":
+			results.OsResult = result
+		case "App Manifest":
+			results.AppResults = append(results.AppResults, result)
+		default:
+			log.Tracef("Unknown manifest type %v", m.Type)
+			success = false
+			errCode = ar.UnknownSerialization
+		}
+
+	}
+
+	// Check metadata compatibility and update device description result
+	_, ok := metadata[devDescName]
+	if !ok {
+		log.Tracef("Device description not present")
+		success = false
+		errCode = ar.DeviceDescriptionNotPresent
+	} else {
+		r, ok := checkMetadataCompatibility(devDescName, metadata)
+		if !ok {
+			success = false
+		}
+		results.DevDescResult.DevDescResult = *r
+	}
+
+	return devDescName, metadata, results, errCode, success
+}
+
+func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metadata) (*ar.DevDescResult, bool) {
+
+	DevDescResult := &ar.DevDescResult{
+		CorrectRtm:         &ar.Result{},
+		CorrectOs:          &ar.Result{},
+		RtmOsCompatibility: &ar.Result{},
+	}
+	success := true
+
+	// Fail silently as the error is already logged in the calling function
+	deviceDescription, ok := metadata[devDescName]
+	if !ok {
+		return nil, false
+	}
+
+	// Check that the OS and RTM Manifest are specified in the Device Description
+	if _, ok := metadata[deviceDescription.RtmManifest]; ok {
+		DevDescResult.CorrectRtm.Success = true
+	} else {
+		log.Tracef("Device Description listed wrong RTM Manifest: %v", deviceDescription.RtmManifest)
+		DevDescResult.CorrectRtm.Success = false
+		DevDescResult.CorrectRtm.Expected = deviceDescription.RtmManifest
+		success = false
+	}
+	if _, ok := metadata[deviceDescription.OsManifest]; ok {
+		DevDescResult.CorrectOs.Success = true
+	} else {
+		log.Tracef("Device Description listed wrong OS Manifest: %v", deviceDescription.OsManifest)
+		DevDescResult.CorrectOs.Success = false
+		DevDescResult.CorrectOs.Expected = deviceDescription.OsManifest
+		success = false
+	}
+
+	// Extract app manifest names
+	appManifestNames := make([]string, 0)
+	for _, m := range metadata {
+		if m.Type == "App Description" {
+			appManifestNames = append(appManifestNames, m.Name)
+		}
+	}
+
+	// Check that every App Description has a corresponding App Manifest
+	log.Tracef("Iterating app descriptions length %v", len(deviceDescription.AppDescriptions))
+	for _, desc := range deviceDescription.AppDescriptions {
+
+		_, ok := metadata[desc.AppManifest]
+		if !ok {
+			log.Tracef("No app manifest for app description: %v", desc.AppManifest)
+		}
+
+		r := ar.Result{
+			Success:       ok,
+			Got:           desc.AppManifest,
+			ExpectedOneOf: appManifestNames,
+		}
+		DevDescResult.CorrectApps = append(DevDescResult.CorrectApps, r)
+
+	}
+
+	// Check that the Rtm Manifest is compatible with the OS Manifest
+	if rtm, ok := metadata[deviceDescription.RtmManifest]; ok {
+		if os, ok := metadata[deviceDescription.OsManifest]; ok {
+			if contains(rtm.Name, os.BaseLayers) {
+				DevDescResult.RtmOsCompatibility.Success = true
+			} else {
+				log.Tracef("OS Manifest %v is not compatible with RTM Manifest %v",
+					rtm.Name, os.Name)
+				DevDescResult.RtmOsCompatibility.Success = false
+				DevDescResult.RtmOsCompatibility.ExpectedOneOf = os.BaseLayers
+				DevDescResult.RtmOsCompatibility.Got = rtm.Name
+				success = false
+			}
+		}
+	}
+
+	// Check that the OS Manifest is compatible with all App Manifests
+	if os, ok := metadata[deviceDescription.OsManifest]; ok {
+		for _, a := range metadata {
+			if a.Type == "App Manifest" {
+				r := ar.Result{
+					Success:       true,
+					ExpectedOneOf: a.BaseLayers,
+					Got:           os.Name,
+				}
+				if !contains(os.Name, a.BaseLayers) {
+					log.Tracef("App Manifest %v is not compatible with OS Manifest %v", a.Name, os.Name)
+					r.Success = false
 					success = false
 				}
+				DevDescResult.OsAppsCompatibility =
+					append(DevDescResult.OsAppsCompatibility, r)
 			}
 		}
 	}
-	// Cache Company Description
-	if result.CompDescResult != nil && result.CompDescResult.Summary.Success {
-		hash := sha256.Sum256(report.CompanyDescription)
-		if _, exists := cached[peer]; !exists {
-			createCache(cached, peer)
-		}
-		updateCache(cached, peer, hex.EncodeToString(hash[:]), report.CompanyDescription)
-	}
 
-	// Validate and unpack RTM Manifest
-	if report.RtmManifest == nil && report.RtmManifestDigest.Digest != nil &&
-		len(report.RtmManifestDigest.Digest) == 32 {
-		// Try to load RTM Manifest from cache
-		desc, ok := cached[peer][hex.EncodeToString(report.RtmManifestDigest.Digest)]
-		if ok {
-			report.RtmManifest = desc
-		}
-	}
-	tokenRes, payload, ok = s.VerifyToken(report.RtmManifest, cas)
-	result.RtmResult.Summary = tokenRes.Summary
-	result.RtmResult.SignatureCheck = tokenRes.SignatureCheck
-	if !ok {
-		log.Trace("Validation of RTM Manifest failed")
-		success = false
-	} else {
-		err := s.Unmarshal(payload, &metadata.RtmManifest)
-		if err != nil {
-			log.Tracef("Unpacking of RTM Manifest failed: %v", err)
-			result.RtmResult.Summary.Success = false
-			result.RtmResult.Summary.ErrorCode = ar.ParseRTMManifest
-			success = false
-		} else {
-			result.RtmResult.MetaInfo = metadata.RtmManifest.MetaInfo
-			result.RtmResult.ValidityCheck = checkValidity(metadata.RtmManifest.Validity)
-			result.RtmResult.Details = metadata.RtmManifest.Details
-			if !result.RtmResult.ValidityCheck.Success {
-				result.RtmResult.Summary.Success = false
-				success = false
-			}
-		}
-	}
-	// Cache RTM Manifest
-	if result.RtmResult.Summary.Success {
-		hash := sha256.Sum256(report.RtmManifest)
-		if _, exists := cached[peer]; !exists {
-			createCache(cached, peer)
-		}
-		updateCache(cached, peer, hex.EncodeToString(hash[:]), report.RtmManifest)
-	}
-
-	// Validate and unpack OS Manifest
-	if report.OsManifest == nil && report.OsManifestDigest.Digest != nil &&
-		len(report.OsManifestDigest.Digest) == 32 {
-		// Try to load OS Manifest from cache
-		desc, ok := cached[peer][hex.EncodeToString(report.OsManifestDigest.Digest)]
-		if ok {
-			report.OsManifest = desc
-		}
-	}
-	tokenRes, payload, ok = s.VerifyToken(report.OsManifest, cas)
-	result.OsResult.Summary = tokenRes.Summary
-	result.OsResult.SignatureCheck = tokenRes.SignatureCheck
-	if !ok {
-		log.Trace("Validation of OS Manifest failed")
-		success = false
-	} else {
-		err := s.Unmarshal(payload, &metadata.OsManifest)
-		if err != nil {
-			log.Tracef("Unpacking of OS Manifest failed: %v", err)
-			result.OsResult.Summary.Success = false
-			result.OsResult.Summary.ErrorCode = ar.ParseOSManifest
-			success = false
-		} else {
-			result.OsResult.MetaInfo = metadata.OsManifest.MetaInfo
-			result.OsResult.ValidityCheck = checkValidity(metadata.OsManifest.Validity)
-			result.OsResult.Details = metadata.OsManifest.Details
-			if !result.OsResult.ValidityCheck.Success {
-				result.OsResult.Summary.Success = false
-				success = false
-			}
-		}
-	}
-	// Cache OS Manifest
-	if result.OsResult.Summary.Success {
-		hash := sha256.Sum256(report.OsManifest)
-		if _, exists := cached[peer]; !exists {
-			createCache(cached, peer)
-		}
-		updateCache(cached, peer, hex.EncodeToString(hash[:]), report.OsManifest)
-	}
-
-	// Validate and unpack app manifests as well as cached app manifests
-	for _, amd := range report.AppManifestDigests {
-		if amd.Digest != nil && len(amd.Digest) == 32 {
-			m, ok := cached[peer][hex.EncodeToString(amd.Digest)]
-			if ok {
-				report.AppManifests = append(report.AppManifests, m)
-			} else {
-				log.Tracef("Failed to find cached app manifest digest %v", hex.EncodeToString(amd.Digest))
-			}
-		}
-	}
-	for i, amSigned := range report.AppManifests {
-		result.AppResults = append(result.AppResults, ar.ManifestResult{})
-
-		tokenRes, payload, ok = s.VerifyToken(amSigned, cas)
-		result.AppResults[i].Summary = tokenRes.Summary
-		result.AppResults[i].SignatureCheck = tokenRes.SignatureCheck
-		if !ok {
-			log.Trace("Validation of App Manifest failed")
-			success = false
-		} else {
-			var am ar.Manifest
-			err := s.Unmarshal(payload, &am)
-			if err != nil {
-				log.Tracef("Unpacking of App Manifest failed: %v", err)
-				result.AppResults[i].Summary.Success = false
-				result.AppResults[i].Summary.ErrorCode = ar.Parse
-				success = false
-			} else {
-				metadata.AppManifests = append(metadata.AppManifests, am)
-				result.AppResults[i].MetaInfo = am.MetaInfo
-				result.AppResults[i].ValidityCheck = checkValidity(am.Validity)
-				if !result.AppResults[i].ValidityCheck.Success {
-					log.Tracef("App Manifest %v validity check failed", am.Name)
-					result.AppResults[i].Summary.Success = false
-					success = false
-
-				}
-			}
-		}
-		// Cache App Manifest
-		if result.AppResults[i].Summary.Success {
-			hash := sha256.Sum256(amSigned)
-			if _, exists := cached[peer]; !exists {
-				createCache(cached, peer)
-			}
-			updateCache(cached, peer, hex.EncodeToString(hash[:]), amSigned)
-		}
-	}
-
-	return metadata, result, success
+	return DevDescResult, success
 }
 
 func checkValidity(val ar.Validity) ar.Result {
@@ -636,40 +473,29 @@ func checkValidity(val ar.Validity) ar.Result {
 	return result
 }
 
-func collectReferenceValues(metadata *ar.Metadata) (map[string][]ar.ReferenceValue, error) {
-
-	// Add a reference to the corresponding manifest to each reference value
-	for i := range metadata.RtmManifest.ReferenceValues {
-		metadata.RtmManifest.ReferenceValues[i].SetManifest(&metadata.RtmManifest)
-	}
-	for i := range metadata.OsManifest.ReferenceValues {
-		metadata.OsManifest.ReferenceValues[i].SetManifest(&metadata.OsManifest)
-	}
-	for i := range metadata.AppManifests {
-		for j := range metadata.AppManifests[i].ReferenceValues {
-			metadata.AppManifests[i].ReferenceValues[j].SetManifest(&metadata.AppManifests[i])
-		}
-	}
-
-	// Gather a list of all reference values independent of the type
-	refvals := append(metadata.RtmManifest.ReferenceValues, metadata.OsManifest.ReferenceValues...)
-	for _, appManifest := range metadata.AppManifests {
-		refvals = append(refvals, appManifest.ReferenceValues...)
-	}
+func collectReferenceValues(metadata map[string]ar.Metadata) (map[string][]ar.ReferenceValue, error) {
 
 	refmap := make(map[string][]ar.ReferenceValue)
+	// Iterate over all manifests
+	for _, m := range metadata {
+		for _, r := range m.ReferenceValues {
+			// Check reference value type
+			if r.Type != "SNP Reference Value" &&
+				r.Type != "SW Reference Value" &&
+				r.Type != "TPM Reference Value" &&
+				r.Type != "TDX Reference Value" &&
+				r.Type != "SGX Reference Value" {
+				return nil, fmt.Errorf("reference value of type %v is not supported", r.Type)
+			}
 
-	// Iterate through the reference values and sort them into the different types
-	for _, r := range refvals {
-		if r.Type != "SNP Reference Value" &&
-			r.Type != "SW Reference Value" &&
-			r.Type != "TPM Reference Value" &&
-			r.Type != "TDX Reference Value" &&
-			r.Type != "SGX Reference Value" {
-			return nil, fmt.Errorf("reference value of type %v is not supported", r.Type)
+			// Add a reference to the corresponding manifest to each reference value
+			r.SetManifest(&m)
+
+			// Collect all reference values, depending on type, independent of the manifest
+			refmap[r.Type] = append(refmap[r.Type], r)
 		}
-		refmap[r.Type] = append(refmap[r.Type], r)
 	}
+
 	return refmap, nil
 }
 
@@ -773,14 +599,18 @@ func contains(elem string, list []string) bool {
 	return false
 }
 
-func createCache(cache map[string]map[string][]byte, peer string) {
-	peerCacheMutex.Lock()
-	cache[peer] = map[string][]byte{}
-	peerCacheMutex.Unlock()
+func extendSha256(hash []byte, data []byte) []byte {
+	concat := append(hash, data...)
+	h := sha256.Sum256(concat)
+	ret := make([]byte, 32)
+	copy(ret, h[:])
+	return ret
 }
 
-func updateCache(cache map[string]map[string][]byte, peer, digest string, value []byte) {
-	peerCacheMutex.Lock()
-	cache[peer][digest] = value
-	peerCacheMutex.Unlock()
+func extendSha384(hash []byte, data []byte) []byte {
+	concat := append(hash, data...)
+	h := sha512.Sum384(concat)
+	ret := make([]byte, 48)
+	copy(ret, h[:])
+	return ret
 }

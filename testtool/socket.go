@@ -79,47 +79,28 @@ func (a SocketApi) generate(c *config) {
 	}
 	checkError(msgType, payload, c.serializer)
 
-	// Unmarshal attestation response
-	var attestationResp api.AttestationResponse
-	err = c.serializer.Unmarshal(payload, &attestationResp)
-	if err != nil {
-		log.Fatalf("failed to unmarshal response")
-	}
-
 	// Save the attestation report for the verifier
-	err = os.WriteFile(c.ReportFile, attestationResp.AttestationReport, 0644)
+	err = saveReport(c, payload, nonce)
 	if err != nil {
-		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
+		log.Fatalf("failed to save report: %v", err)
 	}
-	log.Infof("Wrote attestation report length %v: %v", len(attestationResp.AttestationReport), c.ReportFile)
-
-	// Save the nonce for the verifier
-	os.WriteFile(c.NonceFile, nonce, 0644)
-	if err != nil {
-		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
-	}
-	log.Infof("Wrote nonce: %v", c.NonceFile)
 
 }
 
 func (a SocketApi) verify(c *config) {
 
-	// Read the attestation report, CA and the nonce previously stored
-	data, err := os.ReadFile(c.ReportFile)
+	report, nonce, err := loadReport(c)
 	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
-	}
-
-	nonce, err := os.ReadFile(c.NonceFile)
-	if err != nil {
-		log.Fatalf("Failed to read nonce: %v", err)
+		log.Fatalf("Failed to load report: %v", err)
 	}
 
 	req := &api.VerificationRequest{
-		Nonce:             nonce,
-		AttestationReport: data,
-		Ca:                c.ca,
-		Policies:          c.policies,
+		Nonce:       nonce,
+		Report:      report.Report,
+		Metadata:    report.Metadata,
+		CacheMisses: report.CacheMisses,
+		Ca:          c.ca,
+		Policies:    c.policies,
 	}
 
 	resp, err := verifySocketRequest(c, req)

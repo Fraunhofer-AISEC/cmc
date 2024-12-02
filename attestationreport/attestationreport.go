@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 )
@@ -28,17 +29,17 @@ var log = logrus.WithField("service", "ar")
 // AttestationReport represents the attestation report in JWS/COSE format with its
 // contents already in signed JWS/COSE format
 type AttestationReport struct {
-	Type                     string           `json:"type" cbor:"0,keyasint"`
-	Measurements             []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
-	RtmManifest              []byte           `json:"rtmManifest,omitempty" cbor:"2,keyasint"`
-	RtmManifestDigest        MetadataDigest   `json:"rtmManifestDigest,omitempty" cbor:"3,keyasint,omitempty"`
-	OsManifest               []byte           `json:"osManifest,omitempty" cbor:"4,keyasint,omitempty"`
-	OsManifestDigest         MetadataDigest   `json:"osManifestDigest,omitempty" cbor:"5,keyasint,omitempty"`
-	AppManifests             [][]byte         `json:"appManifests,omitempty" cbor:"6,keyasint,omitempty"`
-	AppManifestDigests       []MetadataDigest `json:"appManifestDigests,omitempty" cbor:"7,keyasint,omitempty"`
-	CompanyDescription       []byte           `json:"companyDescription,omitempty" cbor:"8,keyasint,omitempty"`
-	CompanyDescriptionDigest MetadataDigest   `json:"companyDescriptionDigest,omitempty" cbor:"9,keyasint,omitempty"`
-	DeviceDescription        []byte           `json:"deviceDescription,omitempty" cbor:"9,keyasint,omitempty"`
+	Type         string           `json:"type" cbor:"0,keyasint"`
+	Measurements []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
+	Metadata     []MetadataDigest `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
+}
+
+// MetadataDigest represents attestation report
+// elements of type 'RTM Manifest', 'OS Manifest', 'App Manifest'
+// 'Device Description' and 'Company Description'
+type MetadataDigest struct {
+	Type   string  `json:"type" cbor:"0,keyasint"`
+	Digest HexByte `json:"digest" cbor:"1,keyasint"`
 }
 
 // Measurement represents the attestation report
@@ -52,56 +53,40 @@ type Measurement struct {
 	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
-// MetadataDigest represents attestation report
-// elements of type 'RTM Manifest Digest', 'OS Manifest Digest' and 'App Manifest Digest'
-type MetadataDigest struct {
-	Type   string  `json:"type" cbor:"0,keyasint"`
-	Digest HexByte `json:"digest" cbor:"1,keyasint"`
+// Metadata represents attestation report elements of type 'RTM Manifest', 'OS Manifest',
+// 'App Manifest', 'Device Description' and 'Company Description'
+type Metadata struct {
+	MetaInfo
+	Description string   `json:"description" cbor:"3,keyasint"`
+	CertLevel   int      `json:"certLevel" cbor:"4,keyasint"`
+	Validity    Validity `json:"validity" cbor:"5,keyasint"`
+	Manifest
+	DeviceDescription
 }
 
-// Manifest represents attestation report
-// elements of type 'RTM Manifest', 'OS Manifest' and 'App Manifest'
 type Manifest struct {
-	MetaInfo
-	DevCommonName      string           `json:"developerCommonName"  cbor:"3,keyasint"`
-	BaseLayers         []string         `json:"baseLayers" cbor:"4,keyasint"` // Links to RtmManifest.Name or OsManifest.Name
-	Description        string           `json:"description" cbor:"5,keyasint"`
-	CertificationLevel int              `json:"certificationLevel" cbor:"6,keyasint"`
-	Validity           Validity         `json:"validity" cbor:"7,keyasint"`
-	ReferenceValues    []ReferenceValue `json:"referenceValues" cbor:"8,keyasint"`
-	OciSpec            any              `json:"ociSpec,omitempty" cbor:"9,keyasint,omitempty"` // TODO move to app description
-	Details            any              `json:"details,omitempty" cbor:"9,keyasint,omitempty"`
+	ReferenceValues []ReferenceValue `json:"referenceValues,omitempty" cbor:"6,keyasint,omitempty"`
+	OciSpec         any              `json:"ociSpec,omitempty" cbor:"7,keyasint,omitempty"` // TODO move to app description
+	Details         any              `json:"details,omitempty" cbor:"8,keyasint,omitempty"`
+	DevCommonName   string           `json:"developerCommonName,omitempty"  cbor:"9,keyasint,omitempty"`
+	BaseLayers      []string         `json:"baseLayers,omitempty" cbor:"10,keyasint,omitempty"` // Links to RtmManifest.Name or OsManifest.Name
 }
 
 // DeviceDescription represents the attestation report
 // element of type 'Device Description'
 type DeviceDescription struct {
-	MetaInfo
-	Description     string               `json:"description" cbor:"3,keyasint"`
-	Location        string               `json:"location" cbor:"4,keyasint"`
-	RtmManifest     string               `json:"rtmManifest" cbor:"5,keyasint"`
-	OsManifest      string               `json:"osManifest" cbor:"6,keyasint"`
-	AppDescriptions []AppDescription     `json:"appDescriptions" cbor:"7,keyasint"`
-	Internal        []InternalConnection `json:"internalConnections" cbor:"8,keyasint"`
-	External        []ExternalInterface  `json:"externalEndpoints" cbor:"9,keyasint"`
-}
-
-// CompanyDescription represents the attestation report
-// element of type 'Company Description'
-type CompanyDescription struct {
-	MetaInfo
-	CertificationLevel int      `json:"certificationLevel" cbor:"3,keyasint"`
-	Description        string   `json:"description" cbor:"4,keyasint"`
-	Validity           Validity `json:"validity" cbor:"5,keyasint"`
+	Location        string           `json:"location,omitempty" cbor:"11,keyasint,omitempty"`
+	RtmManifest     string           `json:"rtmManifest,omitempty" cbor:"12,keyasint,omitempty"`
+	OsManifest      string           `json:"osManifest,omitempty" cbor:"13,keyasint,omitempty"`
+	AppDescriptions []AppDescription `json:"appDescriptions,omitempty" cbor:"14,keyasint,omitempty"`
 }
 
 // AppDescription represents the attestation report
 // element of type 'App Description'
 type AppDescription struct {
-	MetaInfo
-	AppManifest string              `json:"appManifest" cbor:"3,keyasint"` // Links to App Manifest.Name
-	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
-	Environment []Environment       `json:"environment,omitempty" cbor:"5,keyasint,omitempty"`
+	AppManifest string              `json:"appManifest,omitempty" cbor:"0,keyasint,omitempty"` // Links to App Manifest.Name
+	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"1,keyasint,omitempty"`
+	Environment []Environment       `json:"environment,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 // DeviceConfig contains the local device configuration parameters
@@ -133,7 +118,7 @@ type ReferenceValue struct {
 	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
 	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
 
-	manifest *Manifest
+	manifest *Metadata
 }
 
 // MetaInfo is a helper struct for generic info
@@ -327,15 +312,6 @@ type Name struct {
 	Names              []interface{} `json:"names,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
-// Metadata is an internal structure for manifests and descriptions
-type Metadata struct {
-	RtmManifest        Manifest
-	OsManifest         Manifest
-	AppManifests       []Manifest
-	CompanyDescription *CompanyDescription
-	DeviceDescription  DeviceDescription
-}
-
 // Driver is an interface representing a driver for a hardware trust anchor,
 // capable of providing attestation evidence and signing data. This can be
 // e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
@@ -377,13 +353,16 @@ type Serializer interface {
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
 	Sign(data []byte, signer Driver) ([]byte, error)
-	VerifyToken(data []byte, roots []*x509.Certificate) (TokenResult, []byte, bool)
+	VerifyToken(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
 }
 
-func (r *ReferenceValue) GetManifest() *Manifest {
-	return r.manifest
+func (r *ReferenceValue) GetManifest() (*Metadata, error) {
+	if r.manifest == nil {
+		return nil, fmt.Errorf("internal error: failed to retrieve manifest")
+	}
+	return r.manifest, nil
 }
 
-func (r *ReferenceValue) SetManifest(m *Manifest) {
+func (r *ReferenceValue) SetManifest(m *Metadata) {
 	r.manifest = m
 }

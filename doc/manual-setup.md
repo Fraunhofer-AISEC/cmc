@@ -277,7 +277,7 @@ Adjust the configuration files for the tools as required according to
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections
 ./testtool \
-    -config ../../cmc-data/testtool-lib-config.json \
+    -config ../../cmc-data/testtool-config.json \
     -addr https://localhost:8081/post,https://localhost:8082/post \
     -mode request \
     -method POST \

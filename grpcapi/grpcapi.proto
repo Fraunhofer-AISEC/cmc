@@ -52,28 +52,29 @@ enum HashFunction {
 
 
 message AttestationRequest {
-  bytes nonce = 2;
-  repeated string cached = 3;
+  bytes nonce = 1;
+  repeated string cached = 2;
 }
 
 message AttestationResponse {
-  bytes attestation_report = 2;
+  bytes report = 1;
+  map<string, bytes> metadata = 2;
   repeated string cache_misses = 3;
 }
 
 message VerificationRequest {
   bytes nonce = 1;
-  bytes attestation_report = 2;
-  bytes ca = 3;
-  string peer = 4;
-  repeated string cache_misses = 5;
-  bytes policies = 6;
+  bytes report = 2;
+  map<string, bytes> metadata = 3;
+  bytes ca = 4;
+  string peer = 5;
+  repeated string cache_misses = 6;
+  bytes policies = 7;
 
 }
 
 message VerificationResponse {
   bytes verification_result = 2;
-  repeated bytes updated_cache = 3;
 }
 
 message MeasureRequest {

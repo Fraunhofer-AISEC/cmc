@@ -26,7 +26,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/udp"
 
@@ -70,7 +69,7 @@ func (a CoapApi) generate(c *config) {
 	}
 
 	// Marshal CoAP payload
-	payload, err := cbor.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		log.Fatalf("failed to marshal payload: %v", err)
 	}
@@ -87,50 +86,31 @@ func (a CoapApi) generate(c *config) {
 		log.Fatalf("failed to read body: %v", err)
 	}
 
-	// Unmarshal attestation response
-	var attestationResp api.AttestationResponse
-	err = cbor.Unmarshal(payload, &attestationResp)
-	if err != nil {
-		log.Fatalf("failed to unmarshal response")
-	}
-
 	// Save the attestation report for the verifier
-	err = os.WriteFile(c.ReportFile, attestationResp.AttestationReport, 0644)
+	err = saveReport(c, payload, nonce)
 	if err != nil {
-		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
+		log.Fatalf("failed to save report: %v", err)
 	}
-	log.Infof("Wrote attestation report length %v: %v", len(attestationResp.AttestationReport), c.ReportFile)
-
-	// Save the nonce for the verifier
-	os.WriteFile(c.NonceFile, nonce, 0644)
-	if err != nil {
-		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
-	}
-	log.Infof("Wrote nonce: %v", c.NonceFile)
 
 }
 
 func (a CoapApi) verify(c *config) {
 
-	// Read the attestation report, CA and the nonce previously stored
-	data, err := os.ReadFile(c.ReportFile)
+	// Read the attestation report and the nonce previously stored
+	report, nonce, err := loadReport(c)
 	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
-	}
-
-	nonce, err := os.ReadFile(c.NonceFile)
-	if err != nil {
-		log.Fatalf("Failed to read nonce: %v", err)
+		log.Fatalf("Failed to load report: %v", err)
 	}
 
 	req := &api.VerificationRequest{
-		Nonce:             nonce,
-		AttestationReport: data,
-		Ca:                c.ca,
-		Policies:          c.policies,
+		Nonce:    nonce,
+		Report:   report.Report,
+		Metadata: report.Metadata,
+		Ca:       c.ca,
+		Policies: c.policies,
 	}
 
-	resp, err := verifyInternal(c.CmcAddr, req)
+	resp, err := verifyInternal(c, req)
 	if err != nil {
 		log.Fatalf("Failed to verify: %v", err)
 	}
@@ -164,7 +144,7 @@ func (a CoapApi) measure(c *config) {
 		RootfsSha256: rootfsHash,
 	}
 
-	resp, err := measureInternal(c.CmcAddr, req)
+	resp, err := measureInternal(c, req)
 	if err != nil {
 		log.Fatalf("Failed to verify: %v", err)
 	}
@@ -200,13 +180,13 @@ func (a CoapApi) iothub(c *config) {
 	}
 }
 
-func verifyInternal(addr string, req *api.VerificationRequest,
+func verifyInternal(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
-	log.Tracef("Connecting via CoAP to %v", addr)
+	log.Tracef("Connecting via CoAP to %v", c.CmcAddr)
 
 	// Establish connection
-	conn, err := udp.Dial(addr)
+	conn, err := udp.Dial(c.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}
@@ -216,7 +196,7 @@ func verifyInternal(addr string, req *api.VerificationRequest,
 	path := "/Verify"
 
 	// Marshal CoAP payload
-	payload, err := cbor.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
@@ -235,7 +215,7 @@ func verifyInternal(addr string, req *api.VerificationRequest,
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
-	err = cbor.Unmarshal(payload, verifyResp)
+	err = c.serializer.Unmarshal(payload, verifyResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
@@ -243,13 +223,13 @@ func verifyInternal(addr string, req *api.VerificationRequest,
 	return verifyResp, nil
 }
 
-func measureInternal(addr string, req *api.MeasureRequest,
+func measureInternal(c *config, req *api.MeasureRequest,
 ) (*api.MeasureResponse, error) {
 
-	log.Tracef("Connecting via CoAP to %v", addr)
+	log.Tracef("Connecting via CoAP to %v", c.CmcAddr)
 
 	// Establish connection
-	conn, err := udp.Dial(addr)
+	conn, err := udp.Dial(c.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}
@@ -259,7 +239,7 @@ func measureInternal(addr string, req *api.MeasureRequest,
 	path := "/Measure"
 
 	// Marshal CoAP payload
-	payload, err := cbor.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
@@ -278,7 +258,7 @@ func measureInternal(addr string, req *api.MeasureRequest,
 
 	// Unmarshal attestation response
 	measureResp := new(api.MeasureResponse)
-	err = cbor.Unmarshal(payload, measureResp)
+	err = c.serializer.Unmarshal(payload, measureResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}

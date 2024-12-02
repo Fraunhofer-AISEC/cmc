@@ -103,9 +103,9 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 	config.Process.Terminal = false
 	config.Process.ConsoleSize = nil
 
-	// TODO FIXME Some container engines such as docker store the rootfs in an non-reproducible
+	// Some container engines such as docker store the rootfs in an non-reproducible
 	// path. Therefore we store the path and hash the rootfs at this path, but remove the
-	// path from the config.json. Check if this is secure
+	// path from the config.json.
 	rootfs := config.Root.Path
 	config.Root = nil
 

@@ -18,6 +18,7 @@ package verify
 import (
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"reflect"
@@ -206,13 +207,14 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			}
 
 			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
-				// t.Errorf("verifyTpmMeasurements() \n---GOT = %v\n\n--WANT = %v", got, tt.want)
-
 				if !reflect.DeepEqual(got.Artifacts, tt.want.Artifacts) {
-					t.Errorf("verifyTpmMeasurements ARTIFACTS \n---GOT = %v\n\n--WANT = %v", got.Artifacts, tt.want.Artifacts)
+					// Output result as json to make it easier to compare
+					g, _ := json.Marshal(got.Artifacts)
+					w, _ := json.Marshal(tt.want.Artifacts)
+					t.Errorf("verifyTpmMeasurements ARTIFACTS Mismatch \n---GOT = %v\n\n--WANT = %v", string(g), string(w))
 				}
 				if !reflect.DeepEqual(got.TpmResult, tt.want.TpmResult) {
-					t.Errorf("verifyTpmMeasurements TPM \n---GOT = %v\n\n--WANT = %v", got.TpmResult, tt.want.TpmResult)
+					t.Errorf("verifyTpmMeasurements TPMResult Mismatch \n---GOT = %v\n\n--WANT = %v", got.TpmResult, tt.want.TpmResult)
 				}
 			}
 		})
@@ -450,88 +452,102 @@ var (
 
 	validArtifacts = []ar.DigestResult{
 		{
-			Digest:  "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
-			Name:    "EV_CPU_MICROCODE",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
+			Name:     "EV_CPU_MICROCODE",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
-			Name:    "Unknown Event Type",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
+			Name:     "Unknown Event Type",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
-			Name:    "EV_NONHOST_CONFIG",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
+			Name:     "EV_NONHOST_CONFIG",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
-			Name:    "EV_EFI_VARIABLE_BOOT",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
+			Name:     "EV_EFI_VARIABLE_BOOT",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
-			Name:    "EV_EFI_VARIABLE_BOOT",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
+			Name:     "EV_EFI_VARIABLE_BOOT",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
-			Name:    "EV_EFI_VARIABLE_BOOT",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
+			Name:     "EV_EFI_VARIABLE_BOOT",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
-			Name:    "EV_EFI_VARIABLE_BOOT",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
+			Name:     "EV_EFI_VARIABLE_BOOT",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-			Name:    "EV_SEPARATOR",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+			Name:     "EV_SEPARATOR",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
-			Name:    "EV_PLATFORM_CONFIG_FLAGS",
-			Pcr:     ptr(1),
-			Success: true,
+			Digest:   "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
+			Name:     "EV_PLATFORM_CONFIG_FLAGS",
+			Pcr:      ptr(1),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
-			Name:    "EV_EFI_ACTION",
-			Pcr:     ptr(4),
-			Success: true,
+			Digest:   "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
+			Name:     "EV_EFI_ACTION",
+			Pcr:      ptr(4),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-			Name:    "EV_SEPARATOR",
-			Pcr:     ptr(4),
-			Success: true,
+			Digest:   "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
+			Name:     "EV_SEPARATOR",
+			Pcr:      ptr(4),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
-			Name:    "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:     ptr(4),
-			Success: true,
+			Digest:   "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
+			Name:     "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:      ptr(4),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
-			Name:    "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:     ptr(4),
-			Success: true,
+			Digest:   "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
+			Name:     "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:      ptr(4),
+			Success:  true,
+			Launched: true,
 		},
 		{
-			Digest:  "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
-			Name:    "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:     ptr(4),
-			Success: true,
+			Digest:   "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
+			Name:     "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Pcr:      ptr(4),
+			Success:  true,
+			Launched: true,
 		},
 	}
 

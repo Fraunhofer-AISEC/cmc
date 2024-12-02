@@ -33,10 +33,12 @@ var log = logrus.WithField("service", "ar")
 // format or CBOR COSE tokens. Takes a list of measurers providing a method
 // for collecting  the measurements from a hardware or software interface
 func Generate(nonce []byte, cached []string, metadata map[string][]byte, measurers []ar.Driver, s ar.Serializer,
-) (*ar.AttestationReport, error) {
+) (*ar.AttestationReport, map[string][]byte, error) {
+
+	metadataReturn := map[string][]byte{}
 
 	if s == nil {
-		return nil, errors.New("serializer not specified")
+		return nil, nil, errors.New("serializer not specified")
 	}
 
 	// Create attestation report object which will be filled with the attestation
@@ -46,15 +48,14 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, measure
 	}
 
 	if len(nonce) > 32 {
-		return nil, fmt.Errorf("nonce exceeds maximum length of 32 bytes")
+		return nil, nil, fmt.Errorf("nonce exceeds maximum length of 32 bytes")
 	}
 
 	log.Debug("Adding manifests and descriptions to Attestation Report..")
 
-	// Retrieve the manifests and descriptions
+	// Step 1: Retrieve manifests and descriptions
 	log.Trace("Parsing ", len(metadata), " meta-data objects..")
-	numMetadata := 0
-	numDigests := 0
+	num := 0
 
 	for hash, m := range metadata {
 
@@ -73,72 +74,42 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, measure
 			log.Tracef("Failed to unmarshal data from metadata object %v: %v", hash, err)
 			continue
 		}
-		headerType := header.Type
+
+		// Not all metadata needs to be sent
+		if header.Type == "Device Config" {
+			continue
+		}
+
+		digest, err := hex.DecodeString(hash)
+		if err != nil {
+			log.Tracef("Failed to decode cached hash string: %v", err)
+			continue
+		}
+		metadataDigest := ar.MetadataDigest{
+			Type:   header.Type,
+			Digest: digest,
+		}
 
 		// Check if verifier has metadata item cached so it does not need to be sent
-		var metadataDigest ar.MetadataDigest
 		if internal.Contains(hash, cached) {
 			log.Tracef("Metadata %v cached by verifier, do not add", hash)
-			digest, err := hex.DecodeString(hash)
-			if err != nil {
-				log.Tracef("Failed to decode cached hash string: %v", err)
-			} else {
-				metadataDigest = ar.MetadataDigest{
-					Type:   fmt.Sprintf("%v Digest", header.Type),
-					Digest: digest,
-				}
-				headerType = metadataDigest.Type
-			}
+		} else {
+			log.Tracef("Add metadata item %v", hash)
+			metadataReturn[hash] = m
 		}
 
-		switch headerType {
-		case "App Manifest":
-			log.Debug("Adding App Manifest")
-			report.AppManifests = append(report.AppManifests, m)
-			numMetadata++
-		case "App Manifest Digest":
-			log.Debug("Adding App Manifest digest")
-			report.AppManifestDigests = append(report.AppManifestDigests, metadataDigest)
-			numDigests++
-		case "OS Manifest":
-			log.Debug("Adding OS Manifest")
-			report.OsManifest = m
-			numMetadata++
-		case "OS Manifest Digest":
-			log.Debug("Addign OS Manifest digest")
-			report.OsManifestDigest = metadataDigest
-			numDigests++
-		case "RTM Manifest":
-			log.Debug("Adding RTM Manifest")
-			report.RtmManifest = m
-			numMetadata++
-		case "RTM Manifest Digest":
-			log.Debug("Adding RTM Manifest digest")
-			report.RtmManifestDigest = metadataDigest
-			numDigests++
-		case "Device Description":
-			log.Debug("Adding Device Description")
-			report.DeviceDescription = m
-			numMetadata++
-		case "Company Description":
-			log.Debug("Adding Company Description")
-			report.CompanyDescription = m
-			numMetadata++
-		case "Company Description Digest":
-			log.Debug("Adding Company Description digest")
-			report.CompanyDescriptionDigest = metadataDigest
-			numDigests++
-		}
+		log.Debugf("Adding %v", metadataDigest.Type)
+		report.Metadata = append(report.Metadata, metadataDigest)
+		num++
 	}
 
-	if numMetadata == 0 {
+	if num == 0 {
 		log.Warn("Did not find any metadata items for the attestation report")
 	} else {
-		log.Debugf("Added %v metadata items to attestation report", numMetadata)
+		log.Debugf("Added %v metadata ids to attestation report", num)
 	}
 
-	log.Debugf("Added %v metadata digests to attestation report", numDigests)
-
+	// Step 2: Retrieve measurements
 	log.Debugf("Retrieving measurements from %v measurers", len(measurers))
 	for _, measurer := range measurers {
 
@@ -147,7 +118,7 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, measure
 		log.Debugf("Getting measurements from measurement interface..")
 		measurement, err := measurer.Measure(nonce)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get measurements: %v", err)
+			return nil, nil, fmt.Errorf("failed to get measurements: %v", err)
 		}
 
 		report.Measurements = append(report.Measurements, measurement)
@@ -156,7 +127,7 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, measure
 
 	log.Trace("Finished attestation report generation")
 
-	return report, nil
+	return report, metadataReturn, nil
 }
 
 // Sign signs the attestation report with the specified signer 'signer'

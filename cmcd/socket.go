@@ -43,7 +43,7 @@ import (
 type SocketServer struct{}
 
 func init() {
-	log.Info("Adding unix domain socket server to supported servers")
+	log.Info("Adding socket server to supported servers (TCP, Unix Domain Socket)")
 	servers["socket"] = SocketServer{}
 }
 
@@ -134,17 +134,13 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
 
-	report, misses, err := c.Generate(req, cmc)
+	resp, err := c.Generate(req, cmc)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
 	}
 
 	// Serialize payload
-	resp := &api.AttestationResponse{
-		AttestationReport: report,
-		CacheMisses:       misses,
-	}
 	data, err := s.Marshal(resp)
 	if err != nil {
 		sendError(conn, s, "failed to marshal message: %v", err)

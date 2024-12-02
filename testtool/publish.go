@@ -28,6 +28,8 @@ import (
 	"time"
 
 	// local modules
+
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
@@ -131,10 +133,48 @@ func saveResult(file, addr string, result []byte) error {
 		if err != nil {
 			log.Warnf("failed to publish result: %v", err)
 		}
-		log.Debug("Published attestation report")
+		log.Debugf("Published attestation report to %v", addr)
 	} else {
 		log.Debug("No publish address specified: will not publish attestation report")
 	}
 
 	return nil
+}
+
+func saveReport(c *config, report []byte, nonce []byte) error {
+
+	err := os.WriteFile(c.ReportFile, report, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file %v: %v", c.ReportFile, err)
+	}
+	log.Infof("Wrote attestation response length %v: %v", len(report), c.ReportFile)
+
+	// Save the nonce for the verifier
+	err = os.WriteFile(c.NonceFile, nonce, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file %v: %v", c.NonceFile, err)
+	}
+	log.Infof("Wrote nonce: %v", c.NonceFile)
+
+	return nil
+}
+
+func loadReport(c *config) (*api.AttestationResponse, []byte, error) {
+	nonce, err := os.ReadFile(c.NonceFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read faile %v: %w", c.NonceFile, err)
+	}
+
+	data, err := os.ReadFile(c.ReportFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file %v: %w", c.ReportFile, err)
+	}
+
+	resp := new(api.AttestationResponse)
+	err = json.Unmarshal(data, resp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	return resp, nonce, nil
 }

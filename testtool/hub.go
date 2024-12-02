@@ -34,7 +34,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-// TODO better solution
 var conf *config
 
 func loggingMiddleware(next mux.Handler) mux.Handler {
@@ -83,13 +82,13 @@ func attest(w mux.ResponseWriter, r *mux.Message) {
 	// Send attestation report to cmcd
 	req := &api.VerificationRequest{
 		// TODO COAP GET
-		Nonce:             []byte{0xde, 0xad},
-		AttestationReport: body,
-		Ca:                conf.ca,
-		Policies:          conf.policies,
+		Nonce:    []byte{0xde, 0xad},
+		Report:   body, // TODO metadata
+		Ca:       conf.ca,
+		Policies: conf.policies,
 	}
 
-	resp, err := verifyInternal(conf.CmcAddr, req)
+	resp, err := verifyInternal(conf, req)
 	if err != nil {
 		log.Fatalf("Failed to verify: %v", err)
 	}

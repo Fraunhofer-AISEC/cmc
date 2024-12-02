@@ -442,7 +442,6 @@ func IsTpmProvisioningRequired(storagePath string) (bool, error) {
 }
 
 func getTpmAddr() (string, error) {
-	// TODO more robust
 	if _, err := os.Stat("/dev/tpmrm0"); err == nil {
 		return "/dev/tpmrm0", nil
 	} else if _, err := os.Stat("/dev/tpm0"); err == nil {

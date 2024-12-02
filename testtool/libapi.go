@@ -23,8 +23,8 @@ import (
 	// local modules
 
 	"crypto/rand"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -64,25 +64,23 @@ func (a LibApi) generate(c *config) {
 	}
 
 	// Generate attestation report
-	report, _, err := cmc.Generate(&api.AttestationRequest{Nonce: nonce}, a.cmc)
+	resp, err := cmc.Generate(&api.AttestationRequest{Nonce: nonce}, a.cmc)
 	if err != nil {
 		log.Errorf("Failed to generate attestation report: %v", err)
 		return
 	}
 
-	// Save the attestation report for the verifier
-	err = os.WriteFile(c.ReportFile, report, 0644)
+	// Marshal the attestation response as JSON for saving it to the file system
+	data, err := json.Marshal(resp)
 	if err != nil {
-		log.Fatalf("Failed to save attestation report as %v: %v", c.ReportFile, err)
+		log.Fatalf("Failed to marshal attestation response: %v", err)
 	}
-	log.Infof("Wrote attestation report length %v: %v", len(report), c.ReportFile)
 
-	// Save the nonce for the verifier
-	os.WriteFile(c.NonceFile, nonce, 0644)
+	// Save the attestation report for the verifier
+	err = saveReport(c, data, nonce)
 	if err != nil {
-		log.Fatalf("Failed to save nonce as %v: %v", c.NonceFile, err)
+		log.Fatalf("failed to save report: %v", err)
 	}
-	fmt.Println("Wrote nonce: ", c.NonceFile)
 }
 
 func (a LibApi) verify(c *config) {
@@ -95,24 +93,20 @@ func (a LibApi) verify(c *config) {
 		a.cmc = cmc
 	}
 
-	// Read the attestation report, CA and the nonce previously stored
-	report, err := os.ReadFile(c.ReportFile)
+	// Read the attestation report and the nonce previously stored
+	report, nonce, err := loadReport(c)
 	if err != nil {
-		log.Fatalf("Failed to read file %v: %v", c.ReportFile, err)
-	}
-
-	nonce, err := os.ReadFile(c.NonceFile)
-	if err != nil {
-		log.Fatalf("Failed to read nonce: %v", err)
+		log.Fatalf("Failed to load report: %v", err)
 	}
 
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
 	result, err := cmc.Verify(&api.VerificationRequest{
-		Nonce:             nonce,
-		AttestationReport: report,
-		Ca:                c.ca,
-		Policies:          c.policies,
+		Nonce:    nonce,
+		Report:   report.Report,
+		Metadata: report.Metadata,
+		Ca:       c.ca,
+		Policies: c.policies,
 	}, a.cmc)
 	if err != nil {
 		log.Errorf("Verifier: failed to verify: %v", err)

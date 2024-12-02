@@ -312,7 +312,7 @@ func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
 func verifySnpTcb(s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
 
 	// TODO refactor into function and use it also in
-	// extention function
+	// extension function
 	currBl := uint8(s.CurrentTcb & 0xFF)
 	commBl := uint8(s.CommittedTcb & 0xFF)
 	launBl := uint8(s.LaunchTcb & 0xFF)

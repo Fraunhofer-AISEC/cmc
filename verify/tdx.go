@@ -271,7 +271,7 @@ func verifyTdxMeasurements(tdxM ar.Measurement, nonce []byte, intelCache string,
 
 	_, code := VerifyTCBSigningCertChain(referenceCerts, intelCache)
 	if code != ar.NotSet {
-		log.Tracef("%v", err.Error())
+		log.Trace("failed to verify TCB signing cert chain")
 		result.Summary.SetErr(code)
 		return result, false
 	}
