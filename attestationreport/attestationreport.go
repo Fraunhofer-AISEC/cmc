@@ -353,7 +353,7 @@ type Serializer interface {
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
 	Sign(data []byte, signer Driver) ([]byte, error)
-	VerifyToken(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
+	Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
 }
 
 func (r *ReferenceValue) GetManifest() (*Metadata, error) {
