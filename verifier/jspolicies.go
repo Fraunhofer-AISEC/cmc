@@ -15,7 +15,7 @@
 
 //go:build !nodefaults || jspolicies
 
-package verify
+package verifier
 
 import (
 	"encoding/json"

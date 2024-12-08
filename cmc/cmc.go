@@ -23,15 +23,15 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	v "github.com/Fraunhofer-AISEC/cmc/verify"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 var (
 	log = logrus.WithField("service", "cmc")
 
-	policyEngines = map[string]v.PolicyEngineSelect{
-		"js":      v.PolicyEngineSelect_JS,
-		"duktape": v.PolicyEngineSelect_DukTape,
+	policyEngines = map[string]verifier.PolicyEngineSelect{
+		"js":      verifier.PolicyEngineSelect_JS,
+		"duktape": verifier.PolicyEngineSelect_DukTape,
 	}
 
 	drivers = map[string]ar.Driver{}
@@ -64,7 +64,7 @@ type Config struct {
 type Cmc struct {
 	Metadata           map[string][]byte
 	CachedPeerMetadata map[string]map[string][]byte
-	PolicyEngineSelect v.PolicyEngineSelect
+	PolicyEngineSelect verifier.PolicyEngineSelect
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
 	Network            string
@@ -81,7 +81,7 @@ func GetDrivers() map[string]ar.Driver {
 	return drivers
 }
 
-func GetPolicyEngines() map[string]v.PolicyEngineSelect {
+func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 	return policyEngines
 }
 

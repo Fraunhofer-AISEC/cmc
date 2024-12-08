@@ -36,7 +36,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/verify"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
 )
@@ -314,12 +314,12 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
-	s, err := verify.DecodeSnpReport(arRaw)
+	s, err := verifier.DecodeSnpReport(arRaw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
-	akType, err := verify.GetAkType(s.KeySelection)
+	akType, err := verifier.GetAkType(s.KeySelection)
 	if err != nil {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
@@ -331,7 +331,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 
 	var signingCert *x509.Certificate
 	var caUrl string
-	if akType == verify.VCEK {
+	if akType == verifier.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Trace("Enrolling VCEK via EST")
 		signingCert, err = client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
@@ -339,7 +339,7 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
 		caUrl = milanUrlVcek
-	} else if akType == verify.VLEK {
+	} else if akType == verifier.VLEK {
 		// VLEK is used, in this case we fetch the VLEK from the host
 		vlek, err := getVlek()
 		if err != nil {
