@@ -15,7 +15,7 @@
 
 //go:build !nodefaults || duktapepolicies
 
-package verify
+package verifier
 
 import (
 	"encoding/json"

@@ -21,8 +21,8 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	g "github.com/Fraunhofer-AISEC/cmc/generate"
-	v "github.com/Fraunhofer-AISEC/cmc/verify"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 func Generate(req *api.AttestationRequest, cmc *Cmc) (*api.AttestationResponse, error) {
@@ -35,7 +35,7 @@ func Generate(req *api.AttestationRequest, cmc *Cmc) (*api.AttestationResponse, 
 	}
 
 	// Generate attestation report
-	report, metadata, err := g.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers, cmc.Serializer)
+	report, metadata, err := prover.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers, cmc.Serializer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate: %w", err)
 	}
@@ -51,7 +51,7 @@ func Generate(req *api.AttestationRequest, cmc *Cmc) (*api.AttestationResponse, 
 
 	// Sign attestation report
 	log.Debug("Prover: Signing Attestation Report")
-	data, err := g.Sign(r, cmc.Drivers[0], cmc.Serializer)
+	data, err := prover.Sign(r, cmc.Drivers[0], cmc.Serializer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
 	}
@@ -95,7 +95,7 @@ func VerifyInternal(req *api.VerificationRequest, cmc *Cmc) ar.VerificationResul
 	UpdateCacheMetadata(req.Peer, cmc.CachedPeerMetadata, req.Metadata, req.CacheMisses)
 
 	// Verify attetation report
-	result := v.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer,
+	result := verifier.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer,
 		cmc.PolicyEngineSelect, cmc.CachedPeerMetadata[req.Peer], cmc.IntelStorage)
 
 	// Update persistent peer cache

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package verify
+package verifier
 
 import (
 	"crypto"
@@ -30,8 +30,8 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/generate"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	generate "github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/sirupsen/logrus"
 )
 
