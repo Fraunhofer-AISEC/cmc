@@ -36,7 +36,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	ok := true
 
 	// Verify signature and extract evidence, which is just the nonce for the sw driver
-	tr, evidenceNonce, ok := s.VerifyToken(swMeasurement.Evidence, cas)
+	tr, evidenceNonce, ok := s.Verify(swMeasurement.Evidence, cas)
 	if !ok {
 		log.Tracef("Failed to verify sw evidence")
 		result.Summary.SetErr(ar.ParseEvidence)

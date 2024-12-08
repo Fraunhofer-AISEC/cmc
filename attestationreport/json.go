@@ -158,8 +158,8 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	return []byte(msg), nil
 }
 
-// VerifyToken verifies signatures and certificate chains for JWS tokens
-func (s JsonSerializer) VerifyToken(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool) {
+// Verify verifies signatures and certificate chains for JWS tokens
+func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool) {
 
 	var rootpool *x509.CertPool
 	var err error

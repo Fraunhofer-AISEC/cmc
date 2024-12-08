@@ -104,7 +104,7 @@ func TestVerifyCbor(t *testing.T) {
 			}
 
 			// Verify attestation report
-			_, _, got := s.VerifyToken(coseRaw, []*x509.Certificate{certChain[len(certChain)-1]})
+			_, _, got := s.Verify(coseRaw, []*x509.Certificate{certChain[len(certChain)-1]})
 			if got != tt.want {
 				t.Errorf("Result.Success = %v, want %v", got, tt.want)
 			}
