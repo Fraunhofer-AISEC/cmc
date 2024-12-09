@@ -98,18 +98,19 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	signer.Lock()
 	defer signer.Unlock()
 
-	// create list of all certificates in the correct order
+	// Create list of all certificates in the correct order
 	certs, err := signer.GetCertChain()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}
 
-	// certificate chain in base64 encoding
+	// Certificate chain in base64 encoding
 	certsb64 := make([]string, 0)
 	for _, cert := range certs {
 		certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
 	}
 
+	// Fetch signing keys from driver
 	priv, pub, err := signer.GetSigningKeys()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signing keys: %w", err)
@@ -117,7 +118,6 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 
 	// Get jose.SignatureAlgorithm
 	// Saltlength and further algorithms are set to the recommended default by x509
-	// we assume these defaults are correct
 	var alg jose.SignatureAlgorithm
 	alg, err = algFromKeyType(pub)
 	if err != nil {
@@ -125,7 +125,7 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	}
 	log.Trace("Chosen signature algorithm: ", alg)
 
-	// create jose.OpaqueSigner with hwSigner wrapper (tpm key)
+	// create jose signer with hwSigner wrapper for hardware-based keys
 	var hws *hwSigner
 	var opaqueSigner jose.OpaqueSigner
 	hws = &hwSigner{
@@ -145,7 +145,7 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	}
 
 	// sign
-	log.Trace("Performing Sign operation")
+	log.Tracef("Performing Sign operation using %v", signer.Name())
 	obj, err := joseSigner.Sign(data)
 	if err != nil {
 		return nil, err

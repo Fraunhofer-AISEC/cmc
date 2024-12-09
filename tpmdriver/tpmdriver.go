@@ -77,6 +77,11 @@ var (
 
 var log = logrus.WithField("service", "tpmdriver")
 
+// Name returns the name of the driver
+func (t *Tpm) Name() string {
+	return "TPM driver"
+}
+
 // Init opens and initializes a TPM object, checks if provosioning is
 // required and if so, provisions the TPM
 func (t *Tpm) Init(c *ar.DriverConfig) error {
@@ -125,13 +130,11 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		}
 
 		// Load relevant parameters from the metadata files
+		log.Tracef("Creating CSRs..")
 		akCsr, ikCsr, err := createCsrs(c, ak, ik)
 		if err != nil {
 			return fmt.Errorf("failed to create CSRs: %w", err)
 		}
-
-		log.Tracef("Created AK CSR: %v", akCsr.Subject.CommonName)
-		log.Tracef("Created IK CSR: %v", ikCsr.Subject.CommonName)
 
 		akchain, ikchain, err = provisionTpm(c.ServerAddr, akCsr, ikCsr)
 		if err != nil {
@@ -644,7 +647,7 @@ func provisionTpm(
 		log.Tracef("EK not present. Using EK URL %v", ek[0].CertificateURL)
 	}
 
-	log.Info("Performing TPM AK Enroll")
+	log.Infof("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
 	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
 		provServerURL, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
@@ -656,6 +659,7 @@ func provisionTpm(
 		return nil, nil, fmt.Errorf("failed to enroll AK: %w", err)
 	}
 
+	log.Tracef("Performing credential activation")
 	secret, err := ActivateCredential(TPM, ak, encCredential, encSecret)
 	if err != nil {
 		return nil, nil, fmt.Errorf("request activate credential failed: %w", err)
@@ -679,7 +683,7 @@ func provisionTpm(
 
 	log.Tracef("Created new AK Cert: %v", akCert.Subject.CommonName)
 
-	log.Info("Performing TPM IK Enroll")
+	log.Infof("Performing TPM IK Enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikParams := ik.CertificationParameters()
 
 	ikCert, err := client.TpmCertifyEnroll(
@@ -971,7 +975,7 @@ func createCsrs(c *ar.DriverConfig, ak *attest.AK, ik *attest.Key,
 
 func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, error) {
 
-	log.Tracef("Creating AK CSR..")
+	log.Debugf("Creating CSR with CN=%v", params.Subject.CommonName)
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{
@@ -1005,7 +1009,7 @@ func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, 
 
 func createIkCsr(ik *attest.Key, params ar.CsrParams) (*x509.CertificateRequest, error) {
 
-	log.Tracef("Creating IK CSR..")
+	log.Debugf("Creating CSR with CN=%v", params.Subject.CommonName)
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{

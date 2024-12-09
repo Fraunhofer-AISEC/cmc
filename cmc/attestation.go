@@ -50,7 +50,10 @@ func Generate(req *api.AttestationRequest, cmc *Cmc) (*api.AttestationResponse, 
 	}
 
 	// Sign attestation report
-	log.Debug("Prover: Signing Attestation Report")
+	if len(cmc.Drivers) == 0 {
+		return nil, fmt.Errorf("internal error: failed to sign: no driver configured")
+	}
+	log.Debugf("Prover: Signing attestation report using %v", cmc.Drivers[0].Name())
 	data, err := prover.Sign(r, cmc.Drivers[0], cmc.Serializer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign attestation report: %w", err)

@@ -193,7 +193,6 @@ func Verify(
 	// If no hardware trust anchor is present, the maximum certification level is 1
 	// If there are reference values with a higher trust level present, the remote attestation
 	// must fail
-	log.Warnf("aggCertLevel: %v", aggCertLevel)
 	if !hwAttest && aggCertLevel > 1 {
 		log.Tracef("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ErrorCode = ar.InvalidCertificationLevel

@@ -62,6 +62,11 @@ type Sgx struct {
 	priv             crypto.PrivateKey
 }
 
+// Name returns the name of the driver
+func (s *Sgx) Name() string {
+	return "SGX driver"
+}
+
 // Init initializes the SGX driver with the specifified configuration
 func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 

@@ -243,6 +243,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "no valid signers configured")
 		return
 	}
+	d := cmc.Drivers[0]
 
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSSignRequest)
@@ -260,14 +261,14 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := cmc.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err := d.GetSigningKeys()
 	if err != nil {
 		sendError(conn, s, "failed to get IK: %v", err)
 		return
 	}
 
 	// Sign
-	log.Trace("TLSSign using opts: ", opts)
+	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
 	if err != nil {
 		sendError(conn, s, "failed to sign: %v", err)
@@ -300,6 +301,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "no valid signers configured")
 		return
 	}
+	d := cmc.Drivers[0]
 
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSSignRequest)
@@ -312,7 +314,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Tracef("Received TLS cert request")
 
 	// Retrieve certificates
-	certChain, err := cmc.Drivers[0].GetCertChain()
+	certChain, err := d.GetCertChain()
 	if err != nil {
 		sendError(conn, s, "failed to get certchain: %v", err)
 		return
@@ -333,7 +335,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debug("Obtained TLS cert")
+	log.Debugf("Obtained TLS cert from %v", d.Name())
 }
 
 func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {

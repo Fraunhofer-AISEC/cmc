@@ -65,6 +65,7 @@ func verifyTpmMeasurements(
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
 		result.Freshness.Success = true
+		log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
 	} else {
 		log.Tracef("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
@@ -73,7 +74,6 @@ func verifyTpmMeasurements(
 		result.Freshness.Got = hex.EncodeToString(tpmsAttest.ExtraData)
 		ok = false
 	}
-	log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
 
 	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all reference values
 	// together then compare

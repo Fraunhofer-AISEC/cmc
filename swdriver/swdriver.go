@@ -48,6 +48,11 @@ type Sw struct {
 	serializer ar.Serializer
 }
 
+// Name returns the name of the driver
+func (s *Sw) Name() string {
+	return "SW driver"
+}
+
 // Init a new object for software-based signing
 func (s *Sw) Init(c *ar.DriverConfig) error {
 
@@ -71,7 +76,7 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 	s.priv = priv
 
 	// Create CSR and fetch new certificate including its chain from EST server
-	s.certChain, err = getSigningCertChain(priv, c.Serializer, c.Metadata, c.ServerAddr)
+	s.certChain, err = provision(priv, c.Serializer, c.Metadata, c.ServerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -163,14 +168,9 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	return measurement, nil
 }
 
-func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]byte,
+func provision(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]byte,
 	addr string,
 ) ([]*x509.Certificate, error) {
-
-	csr, err := ar.CreateCsr(priv, s, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CSRs: %w", err)
-	}
 
 	// Get CA certificates and enroll newly created CSR
 	// TODO provision EST server certificate with a different mechanism,
@@ -192,16 +192,24 @@ func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[s
 		return nil, fmt.Errorf("no certs provided")
 	}
 
+	csr, err := ar.CreateCsr(priv, s, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CSRs: %w", err)
+	}
+
 	log.Warn("Setting retrieved cert for future authentication")
 	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
 		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
+	log.Infof("Performing simple IK enroll for CN=%v", csr.Subject.CommonName)
 	cert, err := client.SimpleEnroll(addr, csr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll cert: %w", err)
 	}
+
+	log.Debugf("Received certificate CN=%v", cert.Subject.CommonName)
 
 	return append([]*x509.Certificate{cert}, caCerts...), nil
 }
