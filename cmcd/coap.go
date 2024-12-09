@@ -34,6 +34,7 @@ import (
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
@@ -257,7 +258,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := d.GetSigningKeys()
+	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get IK: %v", err)
 		return
@@ -310,7 +311,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	log.Trace("Received COAP TLS cert request")
 
 	// Retrieve certificates
-	certChain, err := d.GetCertChain()
+	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return

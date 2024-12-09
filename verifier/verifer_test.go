@@ -31,7 +31,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	generate "github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/sirupsen/logrus"
 )
 
@@ -195,12 +195,16 @@ func (s *SwSigner) Unlock() error {
 	return nil
 }
 
-func (s *SwSigner) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+func (s *SwSigner) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
-func (s *SwSigner) GetCertChain() ([]*x509.Certificate, error) {
+func (s *SwSigner) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return s.certChain, nil
+}
+
+func (s *SwSigner) Name() string {
+	return "SW Driver"
 }
 
 func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
@@ -456,15 +460,15 @@ func TestVerify(t *testing.T) {
 				t.Errorf("failed to marshal the DeviceDescription: %v", err)
 			}
 
-			rtmManifest, err = generate.Sign(rtmManifest, swSigner, s)
+			rtmManifest, err = prover.Sign(rtmManifest, swSigner, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the RtmManifest: %v", err)
 			}
-			osManifest, err = generate.Sign(osManifest, swSigner, s)
+			osManifest, err = prover.Sign(osManifest, swSigner, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the OsManifest: %v", err)
 			}
-			deviceDescription, err = generate.Sign(deviceDescription, swSigner, s)
+			deviceDescription, err = prover.Sign(deviceDescription, swSigner, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the DeviceDescription: %v", err)
 			}
@@ -487,7 +491,7 @@ func TestVerify(t *testing.T) {
 				Digest: deviceDigest[:],
 			}
 
-			ar := ar.AttestationReport{
+			report := ar.AttestationReport{
 				Type: "Attestation Report",
 				Metadata: []ar.MetadataDigest{
 					rtmManifestDigest, osManifestDigest, deviceDescriptionDigest,
@@ -500,13 +504,13 @@ func TestVerify(t *testing.T) {
 				hex.EncodeToString(deviceDigest[:]): deviceDescription,
 			}
 
-			report, err := s.Marshal(ar)
+			data, err := s.Marshal(report)
 			if err != nil {
 				t.Errorf("failed to marshal the Attestation Report: %v", err)
 			}
 
 			// Preparation: Sign the report
-			arSigned, err := generate.Sign(report, swSigner, s)
+			arSigned, err := prover.Sign(data, swSigner, s, ar.IK)
 			if err != nil {
 				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
 			}

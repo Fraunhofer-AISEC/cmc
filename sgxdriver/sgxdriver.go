@@ -57,9 +57,9 @@ var (
 // Sgx is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
 type Sgx struct {
-	sgxCertChain     []*x509.Certificate
-	signingCertChain []*x509.Certificate
-	priv             crypto.PrivateKey
+	akChain []*x509.Certificate
+	ikChain []*x509.Certificate
+	ikPriv  crypto.PrivateKey
 }
 
 // Name returns the name of the driver
@@ -86,23 +86,16 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 	}
 
 	// Create new private key for signing
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	ikPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return fmt.Errorf("failed to generate private key: %w", err)
 	}
-	sgx.priv = priv
+	sgx.ikPriv = ikPriv
 
-	// Create IK CSR and fetch new certificate including its chain from EST server
-	sgx.signingCertChain, err = getSigningCertChain(priv, c.Serializer, c.Metadata,
-		c.ServerAddr)
+	// Create CSRs and fetch IK and AK certificates
+	sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c, c.ServerAddr)
 	if err != nil {
-		return fmt.Errorf("failed to get signing cert chain: %w", err)
-	}
-
-	// Fetch SGX certificate chain
-	sgx.sgxCertChain, err = getSgxCertChain(c)
-	if err != nil {
-		return fmt.Errorf("failed to get SGX cert chain: %w", err)
+		return fmt.Errorf("failed to provision sgx driver: %w", err)
 	}
 
 	return nil
@@ -126,7 +119,7 @@ func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
 	measurement := ar.Measurement{
 		Type:     "SGX Measurement",
 		Evidence: data[16:],
-		Certs:    internal.WriteCertsDer(sgx.sgxCertChain),
+		Certs:    internal.WriteCertsDer(sgx.akChain),
 	}
 
 	return measurement, nil
@@ -144,30 +137,43 @@ func (sgx *Sgx) Unlock() error {
 	return nil
 }
 
-// GetSigningKeys returns the TLS private and public key as a generic crypto interface
-func (sgx *Sgx) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+// GetKeyHandles returns private and public key handles as a generic crypto interface
+func (sgx *Sgx) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	if sgx == nil {
 		return nil, nil, errors.New("internal error: SW object is nil")
 	}
-	return sgx.priv, &sgx.priv.(*ecdsa.PrivateKey).PublicKey, nil
+
+	if sel == ar.AK {
+		if len(sgx.akChain) == 0 {
+			return nil, nil, fmt.Errorf("internal error: SGX AK certificate not present")
+		}
+		// Only return the public key, as the SGX signing key is not directly accessible
+		return nil, sgx.akChain[0].PublicKey, nil
+	} else if sel == ar.IK {
+		return sgx.ikPriv, &sgx.ikPriv.(*ecdsa.PrivateKey).PublicKey, nil
+	}
+	return nil, nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (sgx *Sgx) GetCertChain() ([]*x509.Certificate, error) {
+// GetCertChain returns the certificate chain for the specified key
+func (sgx *Sgx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	if sgx == nil {
 		return nil, errors.New("internal error: SW object is nil")
 	}
-	log.Tracef("Returning %v certificates", len(sgx.signingCertChain))
-	return sgx.signingCertChain, nil
+
+	if sel == ar.AK {
+		log.Tracef("Returning %v AK certificates", len(sgx.akChain))
+		return sgx.akChain, nil
+	} else if sel == ar.IK {
+		log.Tracef("Returning %v IK certificates", len(sgx.ikChain))
+		return sgx.ikChain, nil
+
+	}
+	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]byte,
-	addr string,
-) ([]*x509.Certificate, error) {
-
-	csr, err := ar.CreateCsr(priv, s, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CSRs: %w", err)
-	}
+func provisionSgx(ik crypto.PrivateKey, c *ar.DriverConfig, addr string,
+) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Get CA certificates and enroll newly created CSR
 	// TODO provision EST server certificate with a different mechanism,
@@ -179,28 +185,42 @@ func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[s
 	log.Info("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
+		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 	log.Debug("Received certs:")
 	for _, c := range caCerts {
 		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 	if len(caCerts) == 0 {
-		return nil, fmt.Errorf("no certs provided")
+		return nil, nil, fmt.Errorf("no certs provided")
 	}
 
 	log.Warn("Setting retrieved cert for future authentication")
 	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
-		return nil, fmt.Errorf("failed to set EST CA: %w", err)
+		return nil, nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
-	cert, err := client.SimpleEnroll(addr, csr)
+	// Perform IK EST enrollment
+	ikCsr, err := ar.CreateCsr(ik, c.DeviceConfig.Sgx.IkCsr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll cert: %w", err)
+		return nil, nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
-	return append([]*x509.Certificate{cert}, caCerts...), nil
+	log.Infof("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
+	ikCert, err := client.SimpleEnroll(addr, ikCsr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)
+	}
+	ikChain := append([]*x509.Certificate{ikCert}, caCerts...)
+
+	// Fetch SGX AK certificate chain
+	akChain, err := getSgxCertChain(c)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get SGX cert chain: %w", err)
+	}
+
+	return akChain, ikChain, nil
 }
 
 func readCertFromFile(filePath string) (*x509.Certificate, error) {
@@ -211,11 +231,11 @@ func readCertFromFile(filePath string) (*x509.Certificate, error) {
 	}
 
 	// Parse Certificate
-	cert, err := x509.ParseCertificate(cert_raw)
+	ikCert, err := x509.ParseCertificate(cert_raw)
 	if err != nil {
 		return nil, err
 	}
-	return cert, nil
+	return ikCert, nil
 }
 
 func isCertValid(cert *x509.Certificate) bool {
@@ -227,7 +247,7 @@ func isCertValid(cert *x509.Certificate) bool {
 func getSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	if c.StoragePath == "" {
 		log.Traceln("No cache storage available, downloading cert chain")
-		return downloadSgxCertChain(c)
+		return downloadSgxCertChain(&c.DeviceConfig)
 	}
 
 	fileNames := []string{PCK_CERT_NAME, INTERMEDIATE_CERT_NAME, ROOT_CA_CERT_NAME, TCB_SIGNING_CERT_NAME}
@@ -263,7 +283,7 @@ func getSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 }
 
 func downloadAndCacheCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
-	certs, err := downloadSgxCertChain(c)
+	certs, err := downloadSgxCertChain(&c.DeviceConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -280,14 +300,9 @@ func downloadAndCacheCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) 
 }
 
 // download PCK Certificate Chain + TCB Signing Cert from Intel API
-func downloadSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
-	certificates := []*x509.Certificate{}
+func downloadSgxCertChain(config *ar.DeviceConfig) ([]*x509.Certificate, error) {
 
-	// Get sgx values from device.config.json
-	config, err := extractDeviceConfig(c)
-	if err != nil {
-		return certificates, err
-	}
+	certificates := []*x509.Certificate{}
 	encrypted_ppid := hex.EncodeToString(config.SgxValues.EncryptedPPID)
 	cpusvn := hex.EncodeToString(config.SgxValues.Cpusvn)
 	pceid := hex.EncodeToString(config.SgxValues.Pceid)
@@ -408,36 +423,4 @@ func downloadSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	resp.Body.Close()
 
 	return certificates, nil
-}
-
-func extractDeviceConfig(c *ar.DriverConfig) (*ar.DeviceConfig, error) {
-	// Get device configuration from metadata
-	for i, m := range c.Metadata {
-		// Extract plain payload of metadata
-		payload, err := c.Serializer.GetPayload(m)
-		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
-			continue
-		}
-
-		// Unmarshal the Type field of the metadata file to determine the type
-		info := new(ar.MetaInfo)
-		err = c.Serializer.Unmarshal(payload, info)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
-			continue
-		}
-
-		if info.Type == "Device Config" {
-			log.Tracef("Found Device Config")
-			var deviceConfig ar.DeviceConfig
-			err = c.Serializer.Unmarshal(payload, &deviceConfig)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal DeviceConfig: %w", err)
-			}
-
-			return &deviceConfig, nil
-		}
-	}
-	return nil, errors.New("failed to find device configuration")
 }

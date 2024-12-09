@@ -39,8 +39,10 @@ var (
 // Sw is a struct required for implementing the signer and measurer interfaces
 // of the attestation report to perform software measurements and signing
 type Sw struct {
-	certChain  []*x509.Certificate
-	priv       crypto.PrivateKey
+	akChain    []*x509.Certificate
+	ikChain    []*x509.Certificate
+	akPriv     crypto.PrivateKey
+	ikPriv     crypto.PrivateKey
 	useCtr     bool
 	ctrPcr     int
 	ctrLog     string
@@ -68,17 +70,24 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
-	// Create new private key for signing
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	// Create new IK private key
+	akPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return fmt.Errorf("failed to generate private key: %w", err)
+		return fmt.Errorf("failed to generate AK private key: %w", err)
 	}
-	s.priv = priv
+	s.akPriv = akPriv
+
+	// Create new AK private key
+	ikPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to generate IK private key: %w", err)
+	}
+	s.ikPriv = ikPriv
 
 	// Create CSR and fetch new certificate including its chain from EST server
-	s.certChain, err = provision(priv, c.Serializer, c.Metadata, c.ServerAddr)
+	s.akChain, s.ikChain, err = provisionSw(akPriv, ikPriv, c.DeviceConfig, c.ServerAddr)
 	if err != nil {
-		return fmt.Errorf("failed to get signing cert chain: %w", err)
+		return fmt.Errorf("failed to provision sw driver: %w", err)
 	}
 
 	s.useCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "sw")
@@ -102,21 +111,32 @@ func (s *Sw) Unlock() error {
 	return nil
 }
 
-// GetSigningKeys returns the TLS private and public key as a generic
-// crypto interface
-func (s *Sw) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+// GetKeyHandles returns private and public key handles as a generic crypto interface
+func (s *Sw) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	if s == nil {
 		return nil, nil, errors.New("internal error: SW object is nil")
 	}
-	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
+	if sel == ar.AK {
+		return s.akPriv, &s.akPriv.(*ecdsa.PrivateKey).PublicKey, nil
+	} else if sel == ar.IK {
+		return s.ikPriv, &s.ikPriv.(*ecdsa.PrivateKey).PublicKey, nil
+	}
+	return nil, nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (s *Sw) GetCertChain() ([]*x509.Certificate, error) {
+// GetCertChain returns the certificate chain for the specified key
+func (s *Sw) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	if s == nil {
 		return nil, errors.New("internal error: SW object is nil")
 	}
-	log.Tracef("Returning %v certificates", len(s.certChain))
-	return s.certChain, nil
+	if sel == ar.AK {
+		log.Tracef("Returning %v AK certificates", len(s.akChain))
+		return s.akChain, nil
+	} else if sel == ar.IK {
+		log.Tracef("Returning %v IK certificates", len(s.ikChain))
+		return s.ikChain, nil
+	}
+	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
 func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
@@ -128,7 +148,7 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	}
 
 	// For the swdriver, the evidence is simply the signed nonce
-	evidence, err := s.serializer.Sign(nonce, s)
+	evidence, err := s.serializer.Sign(nonce, s, ar.AK)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to sign sw evidence: %w", err)
 	}
@@ -136,7 +156,7 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	measurement := ar.Measurement{
 		Type:     "SW Measurement",
 		Evidence: evidence,
-		Certs:    internal.WriteCertsDer(s.certChain),
+		Certs:    internal.WriteCertsDer(s.akChain),
 	}
 
 	log.Tracef("Reading container measurements")
@@ -168,9 +188,8 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	return measurement, nil
 }
 
-func provision(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]byte,
-	addr string,
-) ([]*x509.Certificate, error) {
+func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Get CA certificates and enroll newly created CSR
 	// TODO provision EST server certificate with a different mechanism,
@@ -182,34 +201,51 @@ func provision(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]by
 	log.Info("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
+		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 	log.Debug("Received certs:")
 	for _, c := range caCerts {
 		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 	if len(caCerts) == 0 {
-		return nil, fmt.Errorf("no certs provided")
-	}
-
-	csr, err := ar.CreateCsr(priv, s, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CSRs: %w", err)
+		return nil, nil, fmt.Errorf("no certs provided")
 	}
 
 	log.Warn("Setting retrieved cert for future authentication")
 	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
-		return nil, fmt.Errorf("failed to set EST CA: %w", err)
+		return nil, nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
-	log.Infof("Performing simple IK enroll for CN=%v", csr.Subject.CommonName)
-	cert, err := client.SimpleEnroll(addr, csr)
+	// Perform AK EST enrollment
+	akCsr, err := ar.CreateCsr(ak, devConf.Sw.AkCsr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll cert: %w", err)
+		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
-	log.Debugf("Received certificate CN=%v", cert.Subject.CommonName)
+	log.Infof("Performing simple AK enroll for CN=%v", akCsr.Subject.CommonName)
+	akCert, err := client.SimpleEnroll(addr, akCsr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to enroll AK cert: %w", err)
+	}
+	akChain := append([]*x509.Certificate{akCert}, caCerts...)
 
-	return append([]*x509.Certificate{cert}, caCerts...), nil
+	log.Debugf("Received certificate CN=%v", akCert.Subject.CommonName)
+
+	// Perform IK EST enrollment
+	ikCsr, err := ar.CreateCsr(ik, devConf.Sw.IkCsr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
+	}
+
+	log.Infof("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
+	ikCert, err := client.SimpleEnroll(addr, ikCsr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)
+	}
+	ikChain := append([]*x509.Certificate{ikCert}, caCerts...)
+
+	log.Debugf("Received certificate CN=%v", ikCert.Subject.CommonName)
+
+	return akChain, ikChain, nil
 }

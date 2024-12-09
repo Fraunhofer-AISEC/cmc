@@ -27,6 +27,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -97,7 +98,7 @@ func (a LibApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOp
 	d := cc.Cmc.Drivers[0]
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := d.GetSigningKeys()
+	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IK: %w", err)
 	}
@@ -123,7 +124,7 @@ func (a LibApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 	d := cc.Cmc.Drivers[0]
 
-	certChain, err := d.GetCertChain()
+	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}

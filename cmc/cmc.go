@@ -86,9 +86,15 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 }
 
 func NewCmc(c *Config) (*Cmc, error) {
+
+	// Read metadata and device config from the file system
 	metadata, s, err := GetMetadata(c.Metadata, c.Cache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
+	}
+	deviceConfig, err := ar.GetDeviceConfig(s, metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get signed device config: %v", err)
 	}
 
 	// Create driver configuration
@@ -96,7 +102,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		StoragePath:    c.Storage,
 		ServerAddr:     c.ProvServerAddr,
 		KeyConfig:      c.KeyConfig,
-		Metadata:       metadata,
+		DeviceConfig:   *deviceConfig,
 		UseIma:         c.UseIma,
 		ImaPcr:         c.ImaPcr,
 		MeasurementLog: c.MeasurementLog,
@@ -106,12 +112,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 		ExtCtrLog:      c.ExtCtrLog,
 		CtrDriver:      c.CtrDriver,
 		UseCtr:         c.UseCtr,
-	}
-
-	// Get policy engine
-	sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
-	if !ok {
-		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
 	}
 
 	// Initialize drivers
@@ -136,6 +136,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 		}
 	}
 
+	// Get policy engine
+	sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
+	if !ok {
+		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
+	}
+
+	// Load cached metadata from known peers
 	cachedPeerMetadata, err := LoadCacheMetadata(c.PeerCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load peer cache: %w", err)

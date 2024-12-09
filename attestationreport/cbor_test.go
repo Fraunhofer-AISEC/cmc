@@ -51,11 +51,11 @@ func (s *SwSigner) Unlock() error {
 	return nil
 }
 
-func (s *SwSigner) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+func (s *SwSigner) GetKeyHandles(sel KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
-func (s *SwSigner) GetCertChain() ([]*x509.Certificate, error) {
+func (s *SwSigner) GetCertChain(sel KeySelection) ([]*x509.Certificate, error) {
 	return s.certChain, nil
 }
 
@@ -102,7 +102,7 @@ func TestVerifyCbor(t *testing.T) {
 				t.Errorf("Failed to setup test. Marshal failed")
 			}
 
-			coseRaw, err := s.Sign(report, signer)
+			coseRaw, err := s.Sign(report, signer, IK)
 			if err != nil {
 				t.Errorf("Failed to setup test. Sign failed: %v", err)
 			}
