@@ -261,7 +261,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := d.GetSigningKeys()
+	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
 	if err != nil {
 		sendError(conn, s, "failed to get IK: %v", err)
 		return
@@ -314,7 +314,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Tracef("Received TLS cert request")
 
 	// Retrieve certificates
-	certChain, err := d.GetCertChain()
+	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
 		sendError(conn, s, "failed to get certchain: %v", err)
 		return

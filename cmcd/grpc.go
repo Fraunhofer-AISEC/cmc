@@ -34,6 +34,7 @@ import (
 	// local modules
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -169,7 +170,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *grpcapi.TLSSignRequest) (*
 		return &grpcapi.TLSSignResponse{}, fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
 	// get key
-	tlsKeyPriv, _, err = d.GetSigningKeys()
+	tlsKeyPriv, _, err = d.GetKeyHandles(ar.IK)
 	if err != nil {
 		return &grpcapi.TLSSignResponse{},
 			fmt.Errorf("failed to get IK: %w", err)
@@ -200,7 +201,7 @@ func (s *GrpcServer) TLSCert(ctx context.Context, in *grpcapi.TLSCertRequest) (*
 	d := s.cmc.Drivers[0]
 
 	// provide TLS certificate chain
-	certChain, err := d.GetCertChain()
+	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
 		return &grpcapi.TLSCertResponse{},
 			fmt.Errorf("failed to get cert chain: %w", err)

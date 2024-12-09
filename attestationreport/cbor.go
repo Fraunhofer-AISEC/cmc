@@ -55,14 +55,14 @@ func (s CborSerializer) Unmarshal(data []byte, v any) error {
 	return cbor.Unmarshal(data, v)
 }
 
-func (s CborSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
+func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]byte, error) {
 
-	private, _, err := signer.GetSigningKeys()
+	private, _, err := signer.GetKeyHandles(sel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signing keys: %w", err)
 	}
 
-	certChain, err := signer.GetCertChain()
+	certChain, err := signer.GetCertChain(sel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}

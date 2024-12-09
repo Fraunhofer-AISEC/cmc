@@ -50,8 +50,8 @@ import (
 type Tpm struct {
 	Mu             sync.Mutex
 	Pcrs           []int
-	SigningCerts   []*x509.Certificate
-	MeasuringCerts []*x509.Certificate
+	IkChain        []*x509.Certificate
+	AkChain        []*x509.Certificate
 	UseIma         bool
 	ImaPcr         int
 	MeasurementLog bool
@@ -129,14 +129,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 			return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 		}
 
-		// Load relevant parameters from the metadata files
-		log.Tracef("Creating CSRs..")
-		akCsr, ikCsr, err := createCsrs(c, ak, ik)
-		if err != nil {
-			return fmt.Errorf("failed to create CSRs: %w", err)
-		}
-
-		akchain, ikchain, err = provisionTpm(c.ServerAddr, akCsr, ikCsr)
+		akchain, ikchain, err = provisionTpm(ak, ik, c.DeviceConfig, c.ServerAddr)
 		if err != nil {
 			return fmt.Errorf("failed to provision TPM: %w", err)
 		}
@@ -180,8 +173,8 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	t.Pcrs = pcrs
 	t.UseIma = c.UseIma
 	t.ImaPcr = c.ImaPcr
-	t.SigningCerts = ikchain
-	t.MeasuringCerts = akchain
+	t.IkChain = ikchain
+	t.AkChain = akchain
 	t.MeasurementLog = c.MeasurementLog
 	t.Serializer = c.Serializer
 	t.UseCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "tpm")
@@ -327,7 +320,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		Type:      "TPM Measurement",
 		Evidence:  quote.Quote,
 		Signature: quote.Signature,
-		Certs:     internal.WriteCertsDer(t.MeasuringCerts),
+		Certs:     internal.WriteCertsDer(t.AkChain),
 		Artifacts: hashChain,
 	}
 
@@ -366,30 +359,45 @@ func (t *Tpm) Unlock() error {
 	return nil
 }
 
-// GetSigningKeys returns the IK private and public key as a generic
-// crypto interface
-func (t *Tpm) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+// GetKeyHandles returns private and public key handles as a generic crypto interface
+func (t *Tpm) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 
 	if t == nil {
 		return nil, nil, errors.New("internal error: TPM object is nil")
 	}
-	if ik == nil {
-		return nil, nil, fmt.Errorf("failed to get IK Signer: not initialized")
-	}
-	priv, err := ik.Private(ik.Public())
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get IK Private")
-	}
 
-	return priv, ik.Public(), nil
+	if sel == ar.AK {
+		if ak == nil {
+			return nil, nil, fmt.Errorf("failed to get AK: not initialized")
+		}
+		return ak.Private(), ak.Public(), nil
+	} else if sel == ar.IK {
+		if ik == nil {
+			return nil, nil, fmt.Errorf("failed to get IK: not initialized")
+		}
+		priv, err := ik.Private(ik.Public())
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get IK Private")
+		}
+		return priv, ik.Public(), nil
+	}
+	return nil, nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (t *Tpm) GetCertChain() ([]*x509.Certificate, error) {
+// GetCertChain returns the certificate chain for the specified key
+func (t *Tpm) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	if t == nil {
 		return nil, errors.New("internal error: TPM object is nil")
 	}
-	log.Tracef("Returning %v certificates", len(t.SigningCerts))
-	return t.SigningCerts, nil
+
+	if sel == ar.AK {
+		log.Tracef("Returning %v AK certificates", len(t.AkChain))
+		return t.AkChain, nil
+	} else if sel == ar.IK {
+		log.Tracef("Returning %v IK certificates", len(t.IkChain))
+		return t.IkChain, nil
+	}
+	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
 // IsTpmProvisioningRequired checks if the Storage Root Key (SRK) is persisted
@@ -592,8 +600,7 @@ func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quo
 	return pcrValues, quote, nil
 }
 
-func provisionTpm(
-	provServerURL string, akCsr, ikCsr *x509.CertificateRequest,
+func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr string,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 	log.Debug("Performing TPM credential activation..")
 
@@ -616,7 +623,7 @@ func provisionTpm(
 	client := est.NewClient(nil)
 
 	log.Info("Retrieving CA certs")
-	caCerts, err := client.CaCerts(provServerURL)
+	caCerts, err := client.CaCerts(addr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certificates: %w", err)
 	}
@@ -647,9 +654,15 @@ func provisionTpm(
 		log.Tracef("EK not present. Using EK URL %v", ek[0].CertificateURL)
 	}
 
+	// Create AK CSR and perform EST enrollment with TPM credential activation
+	akCsr, err := createAkCsr(ak, devConf.Tpm.AkCsr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
+	}
+
 	log.Infof("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
 	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
-		provServerURL, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
+		addr, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
 		akParams.Public, akParams.CreateData, akParams.CreateAttestation, akParams.CreateSignature,
@@ -683,11 +696,22 @@ func provisionTpm(
 
 	log.Tracef("Created new AK Cert: %v", akCert.Subject.CommonName)
 
+	// Create IK CSR and perform EST enrollment with TPM certification
+	ikPriv, err := ik.Private(ik.Public())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
+	}
+
+	ikCsr, err := ar.CreateCsr(ikPriv, devConf.Tpm.IkCsr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
+	}
+
 	log.Infof("Performing TPM IK Enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikParams := ik.CertificationParameters()
 
 	ikCert, err := client.TpmCertifyEnroll(
-		provServerURL,
+		addr,
 		ikCsr,
 		ikParams.Public, ikParams.CreateData, ikParams.CreateAttestation, ikParams.CreateSignature,
 		akParams.Public,
@@ -930,52 +954,11 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 	return pcrs, nil
 }
 
-func createCsrs(c *ar.DriverConfig, ak *attest.AK, ik *attest.Key,
-) (akCsr, ikCsr *x509.CertificateRequest, err error) {
-
-	// Get device configuration from metadata
-	for i, m := range c.Metadata {
-
-		// Extract plain payload of metadata
-		payload, err := c.Serializer.GetPayload(m)
-		if err != nil {
-			log.Warnf("Failed to parse metadata object %v: %v", i, err)
-			continue
-		}
-
-		// Unmarshal the Type field of the metadata file to determine the type
-		info := new(ar.MetaInfo)
-		err = c.Serializer.Unmarshal(payload, info)
-		if err != nil {
-			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
-			continue
-		}
-
-		if info.Type == "Device Config" {
-			log.Tracef("Found Device Config")
-			var deviceConfig ar.DeviceConfig
-			err = c.Serializer.Unmarshal(payload, &deviceConfig)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to unmarshal DeviceConfig: %w", err)
-			}
-			akCsr, err = createAkCsr(ak, deviceConfig.AkCsr)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
-			}
-			ikCsr, err = createIkCsr(ik, deviceConfig.IkCsr)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
-			}
-			return akCsr, ikCsr, nil
-		}
-	}
-
-	return nil, nil, errors.New("failed to find device configuration")
-}
-
+// This function calls the modified version of x509.CreateCertificateRequest which does not
+// perform hashing and can therefore be used to create CSRs for restricted tpm keys
 func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, error) {
 
-	log.Debugf("Creating CSR with CN=%v", params.Subject.CommonName)
+	log.Tracef("Creating AK CSR..")
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{
@@ -990,47 +973,9 @@ func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, 
 		},
 	}
 
+	// NOTE does not call x509.CreateCertificateRequest but instead a local
+	// modified version
 	der, err := CreateCertificateRequest(rand.Reader, &tmpl, ak.Private())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate request: %w", err)
-	}
-
-	csr, err := x509.ParseCertificateRequest(der)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse created CSR: %w", err)
-	}
-	err = csr.CheckSignature()
-	if err != nil {
-		return nil, fmt.Errorf("failed to check signature of created CSR: %w", err)
-	}
-
-	return csr, nil
-}
-
-func createIkCsr(ik *attest.Key, params ar.CsrParams) (*x509.CertificateRequest, error) {
-
-	log.Debugf("Creating CSR with CN=%v", params.Subject.CommonName)
-
-	tmpl := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:         params.Subject.CommonName,
-			Country:            []string{params.Subject.Country},
-			Province:           []string{params.Subject.Province},
-			Locality:           []string{params.Subject.Locality},
-			Organization:       []string{params.Subject.Organization},
-			OrganizationalUnit: []string{params.Subject.OrganizationalUnit},
-			StreetAddress:      []string{params.Subject.StreetAddress},
-			PostalCode:         []string{params.Subject.PostalCode},
-		},
-		DNSNames: params.SANs,
-	}
-
-	priv, err := ik.Private(ik.Public())
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
-	}
-
-	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate request: %w", err)
 	}

@@ -66,9 +66,9 @@ var (
 // Snp is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
 type Snp struct {
-	snpCertChain     []*x509.Certificate
-	signingCertChain []*x509.Certificate
-	priv             crypto.PrivateKey
+	akChain []*x509.Certificate // SNP VCEK / VLEK certificate chain
+	ikChain []*x509.Certificate
+	ikPriv  crypto.PrivateKey
 }
 
 type SnpCertTableEntry struct {
@@ -113,19 +113,11 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 		if err != nil {
 			return fmt.Errorf("failed to generate private key: %w", err)
 		}
-		snp.priv = priv
+		snp.ikPriv = priv
 
-		// Create IK CSR and fetch new certificate including its chain from EST server
-		snp.signingCertChain, err = getSigningCertChain(priv, c.Serializer, c.Metadata,
-			c.ServerAddr)
+		snp.akChain, snp.ikChain, err = provisionSnp(priv, c.DeviceConfig, c.ServerAddr)
 		if err != nil {
-			return fmt.Errorf("failed to get signing cert chain: %w", err)
-		}
-
-		// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-		snp.snpCertChain, err = getSnpCertChain(c.ServerAddr)
-		if err != nil {
-			return fmt.Errorf("failed to get SNP cert chain: %w", err)
+			return fmt.Errorf("failed to provision snp driver: %w", err)
 		}
 
 		if c.StoragePath != "" {
@@ -135,7 +127,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 			}
 		}
 	} else {
-		snp.snpCertChain, snp.signingCertChain, snp.priv, err = loadCredentials(c.StoragePath)
+		snp.akChain, snp.ikChain, snp.ikPriv, err = loadCredentials(c.StoragePath)
 		if err != nil {
 			return fmt.Errorf("failed to load SNP credentials: %w", err)
 		}
@@ -162,7 +154,7 @@ func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 	measurement := ar.Measurement{
 		Type:     "SNP Measurement",
 		Evidence: data,
-		Certs:    internal.WriteCertsDer(snp.snpCertChain),
+		Certs:    internal.WriteCertsDer(snp.akChain),
 	}
 
 	return measurement, nil
@@ -180,21 +172,38 @@ func (snp *Snp) Unlock() error {
 	return nil
 }
 
-// GetSigningKeys returns the TLS private and public key as a generic
-// crypto interface
-func (snp *Snp) GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) {
+// GetKeyHandles returns private and public key handles as a generic crypto interface
+func (snp *Snp) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	if snp == nil {
 		return nil, nil, errors.New("internal error: SW object is nil")
 	}
-	return snp.priv, &snp.priv.(*ecdsa.PrivateKey).PublicKey, nil
+
+	if sel == ar.AK {
+		if len(snp.akChain) == 0 {
+			return nil, nil, fmt.Errorf("internal error: SNP AK certificate not present")
+		}
+		// Only return the public key, as the VCEK / VLEK is not directly accessible
+		return nil, snp.akChain[0].PublicKey, nil
+	} else if sel == ar.IK {
+		return snp.ikPriv, &snp.ikPriv.(*ecdsa.PrivateKey).PublicKey, nil
+	}
+	return nil, nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (snp *Snp) GetCertChain() ([]*x509.Certificate, error) {
+// GetCertChain returns the certificate chain for the specified key
+func (snp *Snp) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	if snp == nil {
 		return nil, errors.New("internal error: SW object is nil")
 	}
-	log.Tracef("Returning %v certificates", len(snp.signingCertChain))
-	return snp.signingCertChain, nil
+
+	if sel == ar.AK {
+		log.Tracef("Returning %v AK certificates", len(snp.akChain))
+		return snp.akChain, nil
+	} else if sel == ar.IK {
+		log.Tracef("Returning %v IK certificates", len(snp.ikChain))
+		return snp.ikChain, nil
+	}
+	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
 func getMeasurement(nonce []byte) ([]byte, error) {
@@ -310,7 +319,25 @@ func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 	return certs, resp.StatusCode, nil
 }
 
-func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
+func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+) ([]*x509.Certificate, []*x509.Certificate, error) {
+
+	// Create IK CSR and fetch new certificate including its chain from EST server
+	ikchain, err := provisionIk(priv, devConf, addr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
+	}
+
+	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
+	akchain, err := fetchAk(addr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get SNP cert chain: %w", err)
+	}
+
+	return akchain, ikchain, nil
+}
+
+func fetchAk(addr string) ([]*x509.Certificate, error) {
 
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
@@ -375,14 +402,8 @@ func getSnpCertChain(addr string) ([]*x509.Certificate, error) {
 	return append([]*x509.Certificate{signingCert}, ca...), nil
 }
 
-func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[string][]byte,
-	addr string,
+func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 ) ([]*x509.Certificate, error) {
-
-	csr, err := ar.CreateCsr(priv, s, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CSRs: %w", err)
-	}
 
 	// Get CA certificates and enroll newly created CSR
 	// TODO provision EST server certificate with a different mechanism,
@@ -410,9 +431,16 @@ func getSigningCertChain(priv crypto.PrivateKey, s ar.Serializer, metadata map[s
 		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
+	// Create IK CSR for authentication
+	csr, err := ar.CreateCsr(priv, devConf.Snp.IkCsr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CSRs: %w", err)
+	}
+
+	// Request IK certificate from EST server
 	cert, err := client.SimpleEnroll(addr, csr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll cert: %w", err)
+		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
 	return append([]*x509.Certificate{cert}, caCerts...), nil
@@ -481,7 +509,7 @@ func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
 
 func saveCredentials(p string, snp *Snp) error {
 	akchainPem := make([]byte, 0)
-	for _, cert := range snp.snpCertChain {
+	for _, cert := range snp.akChain {
 		c := internal.WriteCertPem(cert)
 		akchainPem = append(akchainPem, c...)
 	}
@@ -490,7 +518,7 @@ func saveCredentials(p string, snp *Snp) error {
 	}
 
 	ikchainPem := make([]byte, 0)
-	for _, cert := range snp.signingCertChain {
+	for _, cert := range snp.ikChain {
 		c := internal.WriteCertPem(cert)
 		ikchainPem = append(ikchainPem, c...)
 	}
@@ -498,7 +526,7 @@ func saveCredentials(p string, snp *Snp) error {
 		return fmt.Errorf("failed to write  %v: %w", path.Join(p, signingChainFile), err)
 	}
 
-	key, err := x509.MarshalPKCS8PrivateKey(snp.priv)
+	key, err := x509.MarshalPKCS8PrivateKey(snp.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}

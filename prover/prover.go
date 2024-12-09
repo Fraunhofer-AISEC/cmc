@@ -131,6 +131,6 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 }
 
 // Sign signs the attestation report with the specified signer 'signer'
-func Sign(report []byte, signer ar.Driver, s ar.Serializer) ([]byte, error) {
-	return s.Sign(report, signer)
+func Sign(report []byte, signer ar.Driver, s ar.Serializer, sel ar.KeySelection) ([]byte, error) {
+	return s.Sign(report, signer, sel)
 }

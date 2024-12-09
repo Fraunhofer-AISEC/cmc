@@ -89,16 +89,24 @@ type AppDescription struct {
 	Environment []Environment       `json:"environment,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
+// CertConfig contains the subject parameters for CSRs/Certs
+type CertConfig struct {
+	AkCsr CsrParams `json:"akCsr" cbor:"3,keyasint"`
+	IkCsr CsrParams `json:"ikCsr" cbor:"4,keyasint"`
+}
+
 // DeviceConfig contains the local device configuration parameters
 type DeviceConfig struct {
 	MetaInfo
-	AkCsr     CsrParams `json:"akCsr" cbor:"3,keyasint"`
-	IkCsr     CsrParams `json:"ikCsr" cbor:"4,keyasint"`
+	Tpm       CertConfig `json:"tpm" cbor:"3,keyasint"`
+	Snp       CertConfig `json:"snp" cbor:"4,keyasint"`
+	Sgx       CertConfig `json:"sgx" cbor:"5,keyasint"`
+	Sw        CertConfig `json:"sw" cbor:"6,keyasint"`
 	SgxValues struct {
-		EncryptedPPID HexByte `json:"encryptedPPID" cbor:"5,keyasint"`
-		Pceid         HexByte `json:"pceid" cbor:"6,keyasint"`
-		Cpusvn        HexByte `json:"cpusvn" cbor:"7,keyasint"`
-		Pcesvn        HexByte `json:"pcesvn" cbor:"8,keyasint"`
+		EncryptedPPID HexByte `json:"encryptedPPID" cbor:"7,keyasint"`
+		Pceid         HexByte `json:"pceid" cbor:"8,keyasint"`
+		Cpusvn        HexByte `json:"cpusvn" cbor:"9,keyasint"`
+		Pcesvn        HexByte `json:"pcesvn" cbor:"10,keyasint"`
 	}
 }
 
@@ -316,17 +324,18 @@ type Name struct {
 // capable of providing attestation evidence and signing data. This can be
 // e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
 // Initial Attestation Service (IAS). The driver must be capable of
-// performing measurements, i.e. retrieving attestation evidence such as
-// a TPM Quote or an SNP attestation report and providing handles to
-// signing keys and their certificate chains
+// performing measurements, i.e. retrieving attestation evidence, such as
+// a TPM Quote or an SNP attestation report, as well as signing data.
+// For measurements, the driver must provide handles for attestation keys.
+// For signing, the driver provides handles for identity keys.
 type Driver interface {
-	Init(c *DriverConfig) error                                   // Initializes the driver
-	Measure(nonce []byte) (Measurement, error)                    // Retrieves measurements
-	Lock() error                                                  // For sync, if required
-	Unlock() error                                                // For sync, if required
-	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) // Get Signing key handles
-	GetCertChain() ([]*x509.Certificate, error)                   // Get cert chain for signing key
-	Name() string                                                 // Returns the driver name
+	Init(c *DriverConfig) error
+	Measure(nonce []byte) (Measurement, error)
+	Lock() error
+	Unlock() error
+	GetKeyHandles(keyType KeySelection) (crypto.PrivateKey, crypto.PublicKey, error)
+	GetCertChain(keyType KeySelection) ([]*x509.Certificate, error)
+	Name() string
 }
 
 // DriverConfig contains all configuration values required for the different drivers
@@ -334,7 +343,6 @@ type DriverConfig struct {
 	StoragePath    string
 	ServerAddr     string
 	KeyConfig      string
-	Metadata       map[string][]byte
 	UseIma         bool
 	ImaPcr         int
 	Serializer     Serializer
@@ -344,6 +352,20 @@ type DriverConfig struct {
 	CtrLog         string
 	ExtCtrLog      bool
 	CtrDriver      string
+	DeviceConfig   DeviceConfig
+}
+
+type KeySelection int
+
+const (
+	UNKNOWN = iota
+	AK
+	IK
+)
+
+// SignConfig allows to specify options for signing with the specified serializer
+type SignConfig struct {
+	UseAk bool // Use the AK instead of the IK for signing
 }
 
 // Serializer is a generic interface providing methods for data serialization and
@@ -353,7 +375,7 @@ type Serializer interface {
 	GetPayload(raw []byte) ([]byte, error)
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
-	Sign(data []byte, signer Driver) ([]byte, error)
+	Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error)
 	Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
 }
 

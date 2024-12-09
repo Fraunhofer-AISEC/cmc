@@ -25,7 +25,7 @@ import (
 	"fmt"
 )
 
-func CreateCsr(priv crypto.PrivateKey, s Serializer, metadata map[string][]byte) (*x509.CertificateRequest, error) {
+func GetDeviceConfig(s Serializer, metadata map[string][]byte) (*DeviceConfig, error) {
 
 	for i, m := range metadata {
 
@@ -45,23 +45,19 @@ func CreateCsr(priv crypto.PrivateKey, s Serializer, metadata map[string][]byte)
 		}
 
 		if info.Type == "Device Config" {
-			var deviceConfig DeviceConfig
-			err = s.Unmarshal(payload, &deviceConfig)
+			deviceConfig := new(DeviceConfig)
+			err = s.Unmarshal(payload, deviceConfig)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal DeviceConfig: %w", err)
 			}
-			csr, err := createCsrFromParams(priv, deviceConfig.IkCsr)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create CSR: %w", err)
-			}
-			return csr, nil
+			return deviceConfig, nil
 		}
 	}
 
 	return nil, errors.New("failed to find device config for creating CSRs")
 }
 
-func createCsrFromParams(priv crypto.PrivateKey, params CsrParams,
+func CreateCsr(priv crypto.PrivateKey, params CsrParams,
 ) (*x509.CertificateRequest, error) {
 
 	tmpl := x509.CertificateRequest{

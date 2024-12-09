@@ -89,17 +89,17 @@ func (s JsonSerializer) Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-// Sign signs data with the specified driver 'signer' (to enale hardware-based signatures)
-func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
+// Sign signs data with the specified driver (to enable hardware-based signatures)
+func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error) {
 
 	log.Tracef("Signing data length %v", len(data))
 
 	// This allows the signer to ensure mutual access for signing, if required
-	signer.Lock()
-	defer signer.Unlock()
+	driver.Lock()
+	defer driver.Unlock()
 
 	// Create list of all certificates in the correct order
-	certs, err := signer.GetCertChain()
+	certs, err := driver.GetCertChain(sel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}
@@ -111,7 +111,7 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	}
 
 	// Fetch signing keys from driver
-	priv, pub, err := signer.GetSigningKeys()
+	priv, pub, err := driver.GetKeyHandles(sel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signing keys: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s JsonSerializer) Sign(data []byte, signer Driver) ([]byte, error) {
 	}
 
 	// sign
-	log.Tracef("Performing Sign operation using %v", signer.Name())
+	log.Tracef("Performing Sign operation using %v", driver.Name())
 	obj, err := joseSigner.Sign(data)
 	if err != nil {
 		return nil, err
