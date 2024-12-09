@@ -236,6 +236,7 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 			"Failed to sign: No valid drivers specified in config")
 		return
 	}
+	d := Cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSSignRequest
@@ -256,14 +257,14 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := Cmc.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err := d.GetSigningKeys()
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get IK: %v", err)
 		return
 	}
 
 	// Sign
-	log.Trace("TLSSign using opts: ", opts)
+	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to sign: %v", err)
@@ -295,6 +296,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 			"Failed to sign: No valid drivers specified in config")
 		return
 	}
+	d := Cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSCertRequest
@@ -308,7 +310,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	log.Trace("Received COAP TLS cert request")
 
 	// Retrieve certificates
-	certChain, err := Cmc.Drivers[0].GetCertChain()
+	certChain, err := d.GetCertChain()
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return
@@ -327,7 +329,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Debug("Obtained TLS cert")
+	log.Debugf("Obtained TLS cert from %v", d.Name())
 }
 
 func PeerCache(w mux.ResponseWriter, r *mux.Message) {

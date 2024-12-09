@@ -94,15 +94,16 @@ func (a LibApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOp
 	if len(cc.Cmc.Drivers) == 0 {
 		return nil, errors.New("no drivers configured")
 	}
+	d := cc.Cmc.Drivers[0]
 
 	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := cc.Cmc.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err := d.GetSigningKeys()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IK: %w", err)
 	}
 
 	// Sign
-	log.Trace("TLSSign using opts: ", opts)
+	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, digest, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign: %w", err)
@@ -120,11 +121,14 @@ func (a LibApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	if len(cc.Cmc.Drivers) == 0 {
 		return nil, errors.New("no drivers configured")
 	}
+	d := cc.Cmc.Drivers[0]
 
-	certChain, err := cc.Cmc.Drivers[0].GetCertChain()
+	certChain, err := d.GetCertChain()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}
+
+	log.Debugf("Obtained TLS cert from %v", d.Name())
 
 	return internal.WriteCertsPem(certChain), nil
 }

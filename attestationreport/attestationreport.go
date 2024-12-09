@@ -326,6 +326,7 @@ type Driver interface {
 	Unlock() error                                                // For sync, if required
 	GetSigningKeys() (crypto.PrivateKey, crypto.PublicKey, error) // Get Signing key handles
 	GetCertChain() ([]*x509.Certificate, error)                   // Get cert chain for signing key
+	Name() string                                                 // Returns the driver name
 }
 
 // DriverConfig contains all configuration values required for the different drivers

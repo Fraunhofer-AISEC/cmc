@@ -31,6 +31,10 @@ type SwSigner struct {
 	priv      crypto.PrivateKey
 }
 
+func (s *SwSigner) Name() string {
+	return "SW Driver"
+}
+
 func (s *SwSigner) Init(c *DriverConfig) error {
 	return nil
 }

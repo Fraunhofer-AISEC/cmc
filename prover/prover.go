@@ -30,9 +30,9 @@ var log = logrus.WithField("service", "ar")
 // Generate generates an attestation report with the provided
 // nonce and manifests and descriptions metadata. The manifests and descriptions
 // must be either raw JWS tokens in the JWS JSON full serialization
-// format or CBOR COSE tokens. Takes a list of measurers providing a method
+// format or CBOR COSE tokens. Takes a list of drivers providing a method
 // for collecting  the measurements from a hardware or software interface
-func Generate(nonce []byte, cached []string, metadata map[string][]byte, measurers []ar.Driver, s ar.Serializer,
+func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []ar.Driver, s ar.Serializer,
 ) (*ar.AttestationReport, map[string][]byte, error) {
 
 	metadataReturn := map[string][]byte{}
@@ -110,13 +110,13 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, measure
 	}
 
 	// Step 2: Retrieve measurements
-	log.Debugf("Retrieving measurements from %v measurers", len(measurers))
-	for _, measurer := range measurers {
+	log.Debugf("Retrieving measurements from %v measurers", len(drivers))
+	for _, driver := range drivers {
 
 		// Collect the measurements/evidence with the specified nonce from hardware/software.
 		// The methods are implemented in the respective driver (TPM, SNP, ...)
 		log.Debugf("Getting measurements from measurement interface..")
-		measurement, err := measurer.Measure(nonce)
+		measurement, err := driver.Measure(nonce)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get measurements: %v", err)
 		}

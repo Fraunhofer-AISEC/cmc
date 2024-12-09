@@ -161,6 +161,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *grpcapi.TLSSignRequest) (*
 	if len(s.cmc.Drivers) == 0 {
 		return &grpcapi.TLSSignResponse{}, errors.New("no valid signers configured")
 	}
+	d := s.cmc.Drivers[0]
 
 	// get sign opts
 	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
@@ -168,14 +169,13 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *grpcapi.TLSSignRequest) (*
 		return &grpcapi.TLSSignResponse{}, fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
 	// get key
-	tlsKeyPriv, _, err = s.cmc.Drivers[0].GetSigningKeys()
+	tlsKeyPriv, _, err = d.GetSigningKeys()
 	if err != nil {
 		return &grpcapi.TLSSignResponse{},
 			fmt.Errorf("failed to get IK: %w", err)
 	}
 	// Sign
-	// Convert crypto.PrivateKey to crypto.Signer
-	log.Trace("TLSSign using opts: ", opts)
+	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
 	if err != nil {
 		return &grpcapi.TLSSignResponse{},
@@ -197,15 +197,16 @@ func (s *GrpcServer) TLSCert(ctx context.Context, in *grpcapi.TLSCertRequest) (*
 	if len(s.cmc.Drivers) == 0 {
 		return &grpcapi.TLSCertResponse{}, errors.New("no valid signers configured")
 	}
+	d := s.cmc.Drivers[0]
 
 	// provide TLS certificate chain
-	certChain, err := s.cmc.Drivers[0].GetCertChain()
+	certChain, err := d.GetCertChain()
 	if err != nil {
 		return &grpcapi.TLSCertResponse{},
 			fmt.Errorf("failed to get cert chain: %w", err)
 	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
-	log.Infof("Prover: Sending back %v TLS Cert(s)", len(resp.Certificate))
+	log.Infof("Prover: Sending back %v TLS Cert(s) from %v", len(resp.Certificate), d.Name())
 	return resp, nil
 }
 

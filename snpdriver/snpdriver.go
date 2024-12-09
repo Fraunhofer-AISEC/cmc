@@ -77,6 +77,11 @@ type SnpCertTableEntry struct {
 	Length uint32
 }
 
+// Name returns the name of the driver
+func (s *Snp) Name() string {
+	return "SNP driver"
+}
+
 // Init initializaes the SNP driver with the specifified configuration
 func (snp *Snp) Init(c *ar.DriverConfig) error {
 	var err error

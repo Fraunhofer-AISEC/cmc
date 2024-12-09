@@ -43,6 +43,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 		return result, false
 	}
 	result.Signature = tr.SignatureCheck[0]
+	log.Trace("Successfully verified SW measurement signature")
 
 	// Verify nonce
 	if res := bytes.Compare(evidenceNonce, nonce); res != 0 {
@@ -54,6 +55,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	} else {
 		result.Freshness.Success = true
+		log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
 	}
 
 	// Check that reference values are reflected by mandatory measurements
