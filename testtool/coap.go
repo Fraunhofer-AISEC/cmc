@@ -51,7 +51,7 @@ func (a CoapApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("Error dialing: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	path := "/Attest"
