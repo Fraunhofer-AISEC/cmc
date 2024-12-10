@@ -79,7 +79,7 @@ func (a SocketApi) generate(c *config) {
 	}
 	checkError(msgType, payload, c.serializer)
 
-	// Save the attestation report for the verifier
+	// Save the attestation response for the verifier
 	err = saveReport(c, payload, nonce)
 	if err != nil {
 		log.Fatalf("failed to save report: %v", err)
