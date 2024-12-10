@@ -52,7 +52,7 @@ const (
 )
 
 // Creates an attested HTTPS connection and performs the specified requests
-func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
+func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	// Add root CA
 	roots := x509.NewCertPool()
@@ -129,7 +129,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		}
 		req, err := http.NewRequest(c.Method, addr, body)
 		if err != nil {
-			return fmt.Errorf("failed to make new HTTP request: %w", err)
+			log.Fatalf("failed to make new HTTP request: %v", err)
 		}
 
 		// Set the user specified HTTP headers
@@ -137,7 +137,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		for _, h := range c.Header {
 			s := strings.SplitN(h, ":", 2)
 			if len(s) != 2 {
-				return fmt.Errorf("invalid header %v", h)
+				log.Fatalf("invalid header %v", h)
 			}
 			log.Tracef("Setting header '%v: %v'", s[0], s[1])
 			req.Header.Set(s[0], s[1])
@@ -146,7 +146,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		// Perform the actual, user specified request
 		resp, err := client.Do(req)
 		if err != nil {
-			return fmt.Errorf("HTTP %v failed: %w", c.Method, err)
+			log.Fatalf("HTTP %v failed: %v", c.Method, err)
 		}
 		defer resp.Body.Close()
 
@@ -159,10 +159,8 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		if err != nil {
 			log.Warn("Failed to read response")
 		}
-		log.Trace("Content: ", string(content))
+		log.Infof("Received from server: '%v'", string(content))
 	}
-
-	return nil
 }
 
 func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
@@ -307,7 +305,7 @@ func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Tracef("Received from client: %v", string(payload))
+	log.Infof("Received from client: '%v'", string(payload))
 
 	payload = []byte(`{"test": "hello from json"}`)
 
