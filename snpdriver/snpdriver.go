@@ -51,9 +51,9 @@ const (
 )
 
 const (
-	snpChainFile     = "akchain.pem"
-	signingChainFile = "ikchain.pem"
-	snpPrivFile      = "ikpriv.key"
+	snpChainFile     = "snp_ak_chain.pem"
+	signingChainFile = "snp_ik_chain.pem"
+	snpPrivFile      = "snp_ik_private.key"
 )
 
 var (
