@@ -27,7 +27,6 @@ import (
 	"syscall"
 
 	"encoding/hex"
-	"encoding/json"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -35,7 +34,6 @@ import (
 	c "github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
-	"github.com/fxamacker/cbor/v2"
 	"golang.org/x/exp/maps"
 )
 
@@ -82,12 +80,12 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 
 	payload, reqType, err := api.Receive(conn)
 	if err != nil {
-		s, err := detectSerialization(payload)
+		s, err := ar.DetectSerialization(payload)
 		sendError(conn, s, "Failed to receive: %v", err)
 		return
 	}
 
-	s, err := detectSerialization(payload)
+	s, err := ar.DetectSerialization(payload)
 	if err != nil {
 		log.Errorf("Failed to detect serialization of request: %v", err)
 		return
@@ -384,18 +382,4 @@ func sendError(conn net.Conn, s ar.Serializer, format string, args ...interface{
 	}
 
 	return api.Send(conn, payload, api.TypeError)
-}
-
-func detectSerialization(payload []byte) (ar.Serializer, error) {
-	log.Trace("Detecting serialization of request..")
-	if json.Valid(payload) {
-		log.Trace("Detected JSON serialization")
-		return ar.JsonSerializer{}, nil
-	} else if err := cbor.Valid(payload); err == nil {
-		log.Trace("Detected CBOR serialization")
-		return ar.CborSerializer{}, nil
-	} else {
-		log.Trace("Unable to detect AR serialization format")
-		return nil, fmt.Errorf("failed to detect request serialization")
-	}
 }

@@ -12,7 +12,7 @@
     "api": "libapi",
     "logLevel": "trace",
     "publish": "http://localhost:8081/results",
-    "socketApiSerializer": "json",
+    "apiSerializer": "json",
 
     "provServerAddr": "https://localhost:9000/",
     "metadata": [

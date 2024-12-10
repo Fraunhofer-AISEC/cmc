@@ -10,7 +10,7 @@
     "mtls": true,
     "attest": "mutual",
     "measurementLog": false,
-    "socketApiSerializer": "json",
+    "apiSerializer": "json",
     "publish": "http://localhost:8081/results",
     "logLevel": "debug",
     "api": "socket",

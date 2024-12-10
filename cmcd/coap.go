@@ -25,7 +25,6 @@ import (
 
 	"encoding/hex"
 
-	"github.com/fxamacker/cbor/v2"
 	coap "github.com/plgd-dev/go-coap/v3"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -115,7 +114,7 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	req := new(api.AttestationRequest)
-	err := unmarshalCoapPayload(r, req)
+	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to unmarshal CoAP payload: %v",
 			err)
@@ -139,7 +138,7 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Serialize CoAP payload
-	payload, err := cbor.Marshal(resp)
+	payload, err := ser.Marshal(resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -156,7 +155,7 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Received connection request type 'Verification Request'")
 
 	var req *api.VerificationRequest
-	err := unmarshalCoapPayload(r, req)
+	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -174,7 +173,7 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	resp := api.VerificationResponse{
 		VerificationResult: result,
 	}
-	payload, err := cbor.Marshal(&resp)
+	payload, err := ser.Marshal(&resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -191,7 +190,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Received Connection Request Type 'Measure Request'")
 
 	var req api.MeasureRequest
-	err := unmarshalCoapPayload(r, &req)
+	ser, err := unmarshal(r, &req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -218,7 +217,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 	resp := api.MeasureResponse{
 		Success: success,
 	}
-	payload, err := cbor.Marshal(&resp)
+	payload, err := ser.Marshal(&resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -243,7 +242,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSSignRequest
-	err := unmarshalCoapPayload(r, &req)
+	ser, err := unmarshal(r, &req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -278,7 +277,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	resp := &api.TLSSignResponse{
 		SignedContent: signature,
 	}
-	payload, err := cbor.Marshal(&resp)
+	payload, err := ser.Marshal(&resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -303,7 +302,7 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSCertRequest
-	err := unmarshalCoapPayload(r, &req)
+	ser, err := unmarshal(r, &req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -323,7 +322,7 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	resp := &api.TLSCertResponse{
 		Certificate: internal.WriteCertsPem(certChain),
 	}
-	payload, err := cbor.Marshal(&resp)
+	payload, err := ser.Marshal(&resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -340,7 +339,7 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Received connection request type 'Peer Cache'")
 
 	var req api.PeerCacheRequest
-	err := unmarshalCoapPayload(r, &req)
+	ser, err := unmarshal(r, &req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -354,7 +353,7 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 		resp.Cache = maps.Keys(c)
 	}
 
-	payload, err := cbor.Marshal(&resp)
+	payload, err := ser.Marshal(&resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
 		return
@@ -371,16 +370,23 @@ func loggingMiddleware(next mux.Handler) mux.Handler {
 	})
 }
 
-func unmarshalCoapPayload(r *mux.Message, payload interface{}) error {
+func unmarshal(r *mux.Message, payload interface{}) (ar.Serializer, error) {
 	// Read CoAP message body
 	body, err := r.Message.ReadBody()
 	if err != nil {
-		return fmt.Errorf("failed to read CoAP message body: %v", err)
+		return nil, fmt.Errorf("failed to read CoAP message body: %v", err)
 	}
 
-	err = cbor.Unmarshal(body, payload)
+	// Detect serialization
+	s, err := ar.DetectSerialization(body)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal CoAP message body: %v", err)
+		return nil, fmt.Errorf("failed to detect serializationt: %v", err)
 	}
-	return nil
+
+	err = s.Unmarshal(body, payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %v", err)
+	}
+
+	return s, nil
 }
