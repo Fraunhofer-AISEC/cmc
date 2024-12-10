@@ -227,7 +227,7 @@ func Verify(
 	if result.Prover == "" {
 		result.Prover = "Unknown"
 	}
-	result.Created = time.Now().Format(time.RFC3339)
+	result.Created = time.Now().Format(time.RFC3339Nano)
 
 	if result.Success {
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
