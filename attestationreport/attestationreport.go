@@ -363,22 +363,6 @@ const (
 	IK
 )
 
-// SignConfig allows to specify options for signing with the specified serializer
-type SignConfig struct {
-	UseAk bool // Use the AK instead of the IK for signing
-}
-
-// Serializer is a generic interface providing methods for data serialization and
-// de-serialization. This enables to generate and verify attestation reports in
-// different formats, such as JSON/JWS or CBOR/COSE
-type Serializer interface {
-	GetPayload(raw []byte) ([]byte, error)
-	Marshal(v any) ([]byte, error)
-	Unmarshal(data []byte, v any) error
-	Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error)
-	Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
-}
-
 func (r *ReferenceValue) GetManifest() (*Metadata, error) {
 	if r.manifest == nil {
 		return nil, fmt.Errorf("internal error: failed to retrieve manifest")

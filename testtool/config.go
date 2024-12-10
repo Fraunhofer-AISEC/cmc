@@ -72,25 +72,25 @@ type Api interface {
 
 type config struct {
 	// Generic config
-	Mode         string   `json:"mode"`
-	Addr         []string `json:"addr"`
-	CmcAddr      string   `json:"cmc"`
-	ReportFile   string   `json:"report"`
-	ResultFile   string   `json:"result"`
-	NonceFile    string   `json:"nonce"`
-	CaFile       string   `json:"ca"`
-	Mtls         bool     `json:"mtls"`
-	Attest       string   `json:"attest"`
-	PoliciesFile string   `json:"policies"`
-	Api          string   `json:"api"`
-	Network      string   `json:"network"`
-	LogLevel     string   `json:"logLevel"`
-	Publish      string   `json:"publish"`
-	IntervalStr  string   `json:"interval"`
-	Header       []string `json:"header"`
-	Method       string   `json:"method"`
-	Data         string   `json:"data"`
-	Serializer   string   `json:"socketApiSerializer"`
+	Mode          string   `json:"mode"`
+	Addr          []string `json:"addr"`
+	CmcAddr       string   `json:"cmc"`
+	ReportFile    string   `json:"report"`
+	ResultFile    string   `json:"result"`
+	NonceFile     string   `json:"nonce"`
+	CaFile        string   `json:"ca"`
+	Mtls          bool     `json:"mtls"`
+	Attest        string   `json:"attest"`
+	PoliciesFile  string   `json:"policies"`
+	Api           string   `json:"api"`
+	Network       string   `json:"network"`
+	LogLevel      string   `json:"logLevel"`
+	Publish       string   `json:"publish"`
+	IntervalStr   string   `json:"interval"`
+	Header        []string `json:"header"`
+	Method        string   `json:"method"`
+	Data          string   `json:"data"`
+	ApiSerializer string   `json:"apiSerializer"`
 	// Only Lib API
 	cmc.Config
 	// Only to test cmcd measure API
@@ -98,36 +98,36 @@ type config struct {
 	CtrRootfs string `json:"ctrRootfs"`
 	CtrConfig string `json:"ctrConfig"`
 
-	ca         []byte
-	policies   []byte
-	api        Api
-	interval   time.Duration
-	serializer ar.Serializer
-	attest     atls.AttestSelect
+	ca            []byte
+	policies      []byte
+	api           Api
+	interval      time.Duration
+	apiSerializer ar.Serializer
+	attest        atls.AttestSelect
 }
 
 const (
 	// Generic flags
-	configFlag     = "config"
-	modeFlag       = "mode"
-	addrFlag       = "addr"
-	cmcFlag        = "cmc"
-	reportFlag     = "report"
-	resultFlag     = "result"
-	nonceFlag      = "nonce"
-	caFlag         = "ca"
-	policiesFlag   = "policies"
-	apiFlag        = "api"
-	networkFlag    = "network"
-	mtlsFlag       = "mtls"
-	attestFlag     = "attest"
-	logFlag        = "log"
-	publishFlag    = "publish"
-	intervalFlag   = "interval"
-	serializerFlag = "serializer"
-	headerFlag     = "header"
-	methodFlag     = "method"
-	dataFlag       = "data"
+	configFlag        = "config"
+	modeFlag          = "mode"
+	addrFlag          = "addr"
+	cmcFlag           = "cmc"
+	reportFlag        = "report"
+	resultFlag        = "result"
+	nonceFlag         = "nonce"
+	caFlag            = "ca"
+	policiesFlag      = "policies"
+	apiFlag           = "api"
+	networkFlag       = "network"
+	mtlsFlag          = "mtls"
+	attestFlag        = "attest"
+	logFlag           = "log"
+	publishFlag       = "publish"
+	intervalFlag      = "interval"
+	apiSerializerFlag = "apiserializer"
+	headerFlag        = "header"
+	methodFlag        = "method"
+	dataFlag          = "data"
 	// Only lib API, reflects cmcd config
 	cmcAddrFlag        = "cmc"
 	provServerAddrFlag = "prov"
@@ -178,7 +178,8 @@ func getConfig() *config {
 	interval := flag.String(intervalFlag, "",
 		"Interval at which connectors will be attested. If set to <=0, attestation will only be"+
 			" done once")
-	serializer := flag.String(serializerFlag, "", "Serializer to be used for socket API and aTLS (JSON or CBOR)")
+	apiSerializer := flag.String(apiSerializerFlag, "",
+		"Serializer to be used for internal socket and CoAP API and aTLS (JSON or CBOR)")
 	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
 	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
 	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
@@ -222,18 +223,18 @@ func getConfig() *config {
 
 	// Create default configuration
 	c := &config{
-		Mode:        "generate",
-		Addr:        []string{"0.0.0.0:4443"},
-		CmcAddr:     "127.0.0.1:9955",
-		ReportFile:  "attestation-report",
-		ResultFile:  "attestation-result.json",
-		NonceFile:   "nonce",
-		Api:         "grpc",
-		LogLevel:    "info",
-		IntervalStr: "0s",
-		Attest:      "mutual",
-		Method:      "GET",
-		Serializer:  "cbor",
+		Mode:          "generate",
+		Addr:          []string{"0.0.0.0:4443"},
+		CmcAddr:       "127.0.0.1:9955",
+		ReportFile:    "attestation-report",
+		ResultFile:    "attestation-result.json",
+		NonceFile:     "nonce",
+		Api:           "grpc",
+		LogLevel:      "info",
+		IntervalStr:   "0s",
+		Attest:        "mutual",
+		Method:        "GET",
+		ApiSerializer: "cbor",
 		Config: cmc.Config{
 			KeyConfig: "EC256",
 		},
@@ -298,8 +299,8 @@ func getConfig() *config {
 	if internal.FlagPassed(intervalFlag) {
 		c.IntervalStr = *interval
 	}
-	if internal.FlagPassed(serializerFlag) {
-		c.Serializer = *serializer
+	if internal.FlagPassed(apiSerializerFlag) {
+		c.ApiSerializer = *apiSerializer
 	}
 	if internal.FlagPassed(headerFlag) {
 		c.Header = strings.Split(*headers, ",")
@@ -416,11 +417,11 @@ func getConfig() *config {
 	}
 
 	// Get Serializer
-	log.Tracef("Getting serializer %v", c.Serializer)
-	c.serializer, ok = serializers[strings.ToLower(c.Serializer)]
+	log.Tracef("Getting serializer %v", c.ApiSerializer)
+	c.apiSerializer, ok = serializers[strings.ToLower(c.ApiSerializer)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("Serializer %v is not implemented", c.Serializer)
+		log.Fatalf("Serializer %v is not implemented", c.ApiSerializer)
 	}
 
 	// Get API
@@ -534,6 +535,7 @@ func printConfig(c *config) {
 	log.Debugf("\tMtls           : %v", c.Mtls)
 	log.Debugf("\tLogLevel       : %v", c.LogLevel)
 	log.Debugf("\tAttest         : %v", c.Attest)
+	log.Debugf("\tAPI Serializer : %v", c.ApiSerializer)
 	log.Debugf("\tPublish        : %v", c.Publish)
 	if strings.EqualFold(c.Mode, "request") {
 		log.Debugf("\tHTTP Data      : %v", c.Data)
@@ -544,7 +546,7 @@ func printConfig(c *config) {
 		log.Debugf("\tPoliciesFile  : %v", c.PoliciesFile)
 	}
 	if strings.EqualFold(c.Api, "socket") {
-		log.Debugf("\tApi (Network)  : %v (%v, %v)", c.Api, c.Network, c.Serializer)
+		log.Debugf("\tApi (Network)  : %v (%v)", c.Api, c.Network)
 	} else {
 		log.Debugf("\tApi            : %v", c.Api)
 	}

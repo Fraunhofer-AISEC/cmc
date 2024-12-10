@@ -61,7 +61,7 @@ func (a SocketApi) generate(c *config) {
 	}
 
 	// Marshal payload
-	payload, err := c.serializer.Marshal(req)
+	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
 		log.Fatalf("failed to marshal payload: %v", err)
 	}
@@ -77,7 +77,7 @@ func (a SocketApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
 	}
-	checkError(msgType, payload, c.serializer)
+	checkError(msgType, payload, c.apiSerializer)
 
 	// Save the attestation response for the verifier
 	err = saveReport(c, payload, nonce)
@@ -181,7 +181,7 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	}
 
 	// Marshal payload
-	payload, err := c.serializer.Marshal(req)
+	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
@@ -197,11 +197,11 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
 	}
-	checkError(msgType, payload, c.serializer)
+	checkError(msgType, payload, c.apiSerializer)
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
-	err = c.serializer.Unmarshal(payload, verifyResp)
+	err = c.apiSerializer.Unmarshal(payload, verifyResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
@@ -221,7 +221,7 @@ func measureSocketRequest(c *config, req *api.MeasureRequest,
 	}
 
 	// Marshal payload
-	payload, err := c.serializer.Marshal(req)
+	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
@@ -237,11 +237,11 @@ func measureSocketRequest(c *config, req *api.MeasureRequest,
 	if err != nil {
 		log.Fatalf("failed to receive: %v", err)
 	}
-	checkError(msgType, payload, c.serializer)
+	checkError(msgType, payload, c.apiSerializer)
 
 	// Unmarshal attestation response
 	measureResp := new(api.MeasureResponse)
-	err = c.serializer.Unmarshal(payload, measureResp)
+	err = c.apiSerializer.Unmarshal(payload, measureResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}

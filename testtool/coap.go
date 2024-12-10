@@ -32,6 +32,7 @@ import (
 	// local modules
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
@@ -69,13 +70,13 @@ func (a CoapApi) generate(c *config) {
 	}
 
 	// Marshal CoAP payload
-	payload, err := c.serializer.Marshal(req)
+	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
 		log.Fatalf("failed to marshal payload: %v", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, path, getMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		log.Fatalf("failed to send request: %v", err)
 	}
@@ -196,13 +197,13 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 	path := "/Verify"
 
 	// Marshal CoAP payload
-	payload, err := c.serializer.Marshal(req)
+	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, path, getMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -215,7 +216,7 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
-	err = c.serializer.Unmarshal(payload, verifyResp)
+	err = c.apiSerializer.Unmarshal(payload, verifyResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
@@ -239,13 +240,13 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	path := "/Measure"
 
 	// Marshal CoAP payload
-	payload, err := c.serializer.Marshal(req)
+	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %v", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, message.AppCBOR, bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, path, getMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -258,10 +259,23 @@ func measureInternal(c *config, req *api.MeasureRequest,
 
 	// Unmarshal attestation response
 	measureResp := new(api.MeasureResponse)
-	err = c.serializer.Unmarshal(payload, measureResp)
+	err = c.apiSerializer.Unmarshal(payload, measureResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
 
 	return measureResp, nil
+}
+
+func getMediaType(s ar.Serializer) message.MediaType {
+	switch s.(type) {
+	case ar.JsonSerializer:
+		return message.AppJSON
+	case ar.CborSerializer:
+		return message.AppCBOR
+	default:
+		log.Fatalf("internal error: unknown serializer type %T", s)
+	}
+	// Will not be reached, required to vaoid compiler error
+	return message.TextPlain
 }

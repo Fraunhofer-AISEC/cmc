@@ -171,7 +171,7 @@ func loadReport(c *config) (*api.AttestationResponse, []byte, error) {
 	}
 
 	resp := new(api.AttestationResponse)
-	err = json.Unmarshal(data, resp)
+	err = c.apiSerializer.Unmarshal(data, resp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}
