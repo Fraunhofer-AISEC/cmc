@@ -156,12 +156,12 @@ func prepareClient(c *Client) error {
 		// Store aTLS and CMC configuration
 		cmcConfig.Attest = c.Transport.Attest
 		cmcConfig.Ca = c.Transport.Ca
-		cmcConfig.Cmc = c.Transport.Cmc
 		cmcConfig.CmcAddr = c.Transport.CmcAddr
 		cmcConfig.CmcApi = atls.CmcApis[c.Transport.CmcApi]
 		cmcConfig.Mtls = c.Transport.MutualTls
-		cmcConfig.Network = c.Transport.Cmc.Network
+		cmcConfig.Network = c.Transport.CmcNetwork
 		cmcConfig.Policies = c.Transport.CmcPolicies
+		cmcConfig.Cmc = c.Transport.Cmc
 
 		log.Tracef("Initializing new HTTP client")
 		// Create http.Transport from wrapper

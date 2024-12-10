@@ -39,6 +39,7 @@ type Listener struct {
 // Calls Accept of the net.Listnener and additionally performs remote attestation
 // after connection establishment before returning the connection
 func (ln Listener) Accept() (net.Conn, error) {
+
 	// Accept TLS connection
 	conn, err := ln.Listener.Accept()
 	if err != nil {
@@ -53,7 +54,6 @@ func (ln Listener) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
-	log.Trace("TLS established. Providing attestation report..")
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
 		return nil, errors.New("internal error: failed to convert to tlsconn")
@@ -62,16 +62,17 @@ func (ln Listener) Accept() (net.Conn, error) {
 	// Usually, not required, as the the first Read or Write will call it
 	// automatically. We run it here to export the keying material for
 	// channel binding before sending the first message
+	log.Debug("Connection established. Performing TLS handshake..")
 	err = tlsConn.Handshake()
 	if err != nil {
 		return nil, fmt.Errorf("TLS handshake failed: %w", err)
 	}
 
+	log.Trace("TLS handshake complete, generating channel bindings")
 	cs := tlsConn.ConnectionState()
 	if !cs.HandshakeComplete {
 		return nil, errors.New("internal error: handshake not complete")
 	}
-	log.Trace("TLS handshake complete, generating channel bindings")
 	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
@@ -87,6 +88,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
+	log.Debug("Performing atls handshake")
 	err = atlsHandshakeStart(tlsConn, chbindings, fingerprint, ln.CmcConfig, Endpoint_Server)
 	err = aTlsHandshakeComplete(tlsConn, err)
 	if err != nil {
