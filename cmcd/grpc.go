@@ -29,6 +29,7 @@ import (
 
 	"encoding/hex"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 
 	// local modules
@@ -81,33 +82,32 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 
 func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest) (*grpcapi.AttestationResponse, error) {
 
-	log.Debug("Prover: Received gRPC attestation request")
+	log.Debug("Prover: Received grpc request type 'Attest'")
 
 	if len(s.cmc.Drivers) == 0 {
-		return &grpcapi.AttestationResponse{}, errors.New("no valid signers configured")
+		return nil, errors.New("no valid signers configured")
 	}
 
 	if s.cmc.Metadata == nil {
-		return &grpcapi.AttestationResponse{}, errors.New("metadata not specified. Can work only as verifier")
+		return nil, errors.New("metadata not specified. Can work only as verifier")
 	}
 
-	log.Info("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
+	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	resp, err := cmc.Generate(api.ConvertAttestationRequest(req), Cmc)
+	resp, err := cmc.Generate(api.ConvertAttestationRequest(req), s.cmc)
 	if err != nil {
-		return &grpcapi.AttestationResponse{}, fmt.Errorf("failed to generate attestation report: %w", err)
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	log.Info("Prover: Finished")
+	log.Debug("Prover: Finished")
 
 	return resp.Convert(), nil
 }
 
 func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationRequest) (*grpcapi.VerificationResponse, error) {
 
-	log.Info("Received Cconnection request type 'Verification Request'")
+	log.Debug("Received grpc request type 'Verify'")
 
-	log.Debug("Verifier: verifying attestation report")
 	result, err := cmc.Verify(api.ConvertVerificationRequest(req), s.cmc)
 	if err != nil {
 		log.Errorf("verifier: failed to verify: %v", err)
@@ -117,7 +117,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationReques
 		VerificationResult: result,
 	}
 
-	log.Info("Verifier: finished")
+	log.Debug("Verifier: finished")
 
 	return response, nil
 }
@@ -126,9 +126,8 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 
 	var success bool
 
-	log.Info("Received Connection Request Type 'Measure Request'")
+	log.Debug("Received grpc request type 'Measure'")
 
-	log.Info("Measurer: Recording measurement")
 	err := m.Measure(api.ConvertMeasureRequest(req),
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
@@ -147,40 +146,41 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 		Success: success,
 	}
 
-	log.Info("Measure: Finished")
+	log.Debug("Measure: Finished")
 
 	return response, nil
 }
 
-func (s *GrpcServer) TLSSign(ctx context.Context, in *grpcapi.TLSSignRequest) (*grpcapi.TLSSignResponse, error) {
+// Signs TLS handshake data via hardware-based keys
+func (s *GrpcServer) TLSSign(ctx context.Context, req *grpcapi.TLSSignRequest) (*grpcapi.TLSSignResponse, error) {
 	var err error
 	var sr *grpcapi.TLSSignResponse
 	var opts crypto.SignerOpts
 	var signature []byte
 	var tlsKeyPriv crypto.PrivateKey
 
+	log.Debug("Received grpc request type 'TLSSign'")
+
 	if len(s.cmc.Drivers) == 0 {
-		return &grpcapi.TLSSignResponse{}, errors.New("no valid signers configured")
+		return nil, errors.New("no valid signers configured")
 	}
 	d := s.cmc.Drivers[0]
 
 	// get sign opts
-	opts, err = convertHash(in.GetHashtype(), in.GetPssOpts())
+	opts, err = convertHash(req.GetHashtype(), req.GetPssOpts())
 	if err != nil {
-		return &grpcapi.TLSSignResponse{}, fmt.Errorf("failed to find appropriate hash function: %w", err)
+		return nil, fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
 	// get key
 	tlsKeyPriv, _, err = d.GetKeyHandles(ar.IK)
 	if err != nil {
-		return &grpcapi.TLSSignResponse{},
-			fmt.Errorf("failed to get IK: %w", err)
+		return nil, fmt.Errorf("failed to get IK: %w", err)
 	}
 	// Sign
 	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
-	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, in.GetContent(), opts)
+	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.GetContent(), opts)
 	if err != nil {
-		return &grpcapi.TLSSignResponse{},
-			fmt.Errorf("failed to perform Signing operation: %w", err)
+		return nil, fmt.Errorf("failed to perform Signing operation: %w", err)
 	}
 	// Create response
 	sr = &grpcapi.TLSSignResponse{
@@ -192,22 +192,43 @@ func (s *GrpcServer) TLSSign(ctx context.Context, in *grpcapi.TLSSignRequest) (*
 }
 
 // Loads public key for tls certificate
-func (s *GrpcServer) TLSCert(ctx context.Context, in *grpcapi.TLSCertRequest) (*grpcapi.TLSCertResponse, error) {
-	var resp *grpcapi.TLSCertResponse = &grpcapi.TLSCertResponse{}
+func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (*grpcapi.TLSCertResponse, error) {
+
+	log.Debug("Prover: Received grpc request type 'TLSCert'")
 
 	if len(s.cmc.Drivers) == 0 {
-		return &grpcapi.TLSCertResponse{}, errors.New("no valid signers configured")
+		return nil, errors.New("no valid signers configured")
 	}
 	d := s.cmc.Drivers[0]
 
 	// provide TLS certificate chain
 	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
-		return &grpcapi.TLSCertResponse{},
-			fmt.Errorf("failed to get cert chain: %w", err)
+		return nil, fmt.Errorf("failed to get cert chain: %w", err)
+	}
+
+	resp := &grpcapi.TLSCertResponse{
+		Certificate: internal.WriteCertsPem(certChain),
 	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
-	log.Infof("Prover: Sending back %v TLS Cert(s) from %v", len(resp.Certificate), d.Name())
+	log.Debugf("Prover: Sending back %v TLS Cert(s) from %v", len(resp.Certificate), d.Name())
+	return resp, nil
+}
+
+// Fetches the peer cache for a specified peer
+func (s *GrpcServer) PeerCache(ctx context.Context, req *grpcapi.PeerCacheRequest) (*grpcapi.PeerCacheResponse, error) {
+
+	log.Debug("Prover: Received grpc request type 'PeerCache'")
+
+	log.Trace("Collecting peer cache")
+	resp := &grpcapi.PeerCacheResponse{}
+	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
+	if ok {
+		resp.Cache = maps.Keys(c)
+	}
+
+	log.Debug("Prover: Finished")
+
 	return resp, nil
 }
 

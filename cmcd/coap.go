@@ -41,9 +41,9 @@ import (
 )
 
 // CoapServer is the CoAP server structure
-type CoapServer struct{}
-
-var Cmc *cmc.Cmc
+type CoapServer struct {
+	cmc *cmc.Cmc
+}
 
 func init() {
 	log.Info("Adding CoAP server to supported servers")
@@ -52,17 +52,17 @@ func init() {
 
 func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 
-	Cmc = c
+	s.cmc = c
 
 	log.Infof("Starting CMC CoAP Server on %v", addr)
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
-	r.Handle("/Attest", mux.HandlerFunc(Attest))
-	r.Handle("/Verify", mux.HandlerFunc(Verify))
-	r.Handle("/Measure", mux.HandlerFunc(Measure))
-	r.Handle("/TLSSign", mux.HandlerFunc(TlsSign))
-	r.Handle("/TLSCert", mux.HandlerFunc(TlsCert))
-	r.Handle("/PeerCache", mux.HandlerFunc(PeerCache))
+	r.Handle("/Attest", mux.HandlerFunc(s.Attest))
+	r.Handle("/Verify", mux.HandlerFunc(s.Verify))
+	r.Handle("/Measure", mux.HandlerFunc(s.Measure))
+	r.Handle("/TLSSign", mux.HandlerFunc(s.TlsSign))
+	r.Handle("/TLSCert", mux.HandlerFunc(s.TlsCert))
+	r.Handle("/PeerCache", mux.HandlerFunc(s.PeerCache))
 
 	log.Infof("Waiting for requests on %v", addr)
 
@@ -88,8 +88,10 @@ func SendCoapResponse(w mux.ResponseWriter, r *mux.Message, payload []byte) {
 }
 
 func sendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code,
-	format string, args ...interface{}) {
+	format string, args ...interface{},
+) {
 	msg := fmt.Sprintf(format, args...)
+	log.Warn(msg)
 	customResp := w.Conn().AcquireMessage(r.Context())
 	defer w.Conn().ReleaseMessage(customResp)
 	customResp.SetCode(code)
@@ -102,17 +104,17 @@ func sendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code,
 	}
 }
 
-func Attest(w mux.ResponseWriter, r *mux.Message) {
+func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Received CoAP attestation request")
 
-	if len(Cmc.Drivers) == 0 {
+	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to generate attestation report: No valid drivers specified in config")
 		return
 	}
 
-	var req *api.AttestationRequest
+	req := new(api.AttestationRequest)
 	err := unmarshalCoapPayload(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to unmarshal CoAP payload: %v",
@@ -121,7 +123,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	if Cmc.Metadata == nil {
+	if s.cmc.Metadata == nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Metadata not specified. Can work only as verifier")
 		return
@@ -129,7 +131,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	resp, err := cmc.Generate(req, Cmc)
+	resp, err := cmc.Generate(req, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
@@ -149,7 +151,7 @@ func Attest(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Prover: Finished")
 }
 
-func Verify(w mux.ResponseWriter, r *mux.Message) {
+func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received connection request type 'Verification Request'")
 
@@ -162,7 +164,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("Verifier: verifying attestation report")
-	result, err := cmc.Verify(req, Cmc)
+	result, err := cmc.Verify(req, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Verifier: failed to verify: %v", err)
@@ -184,7 +186,7 @@ func Verify(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Verifier: Finished")
 }
 
-func Measure(w mux.ResponseWriter, r *mux.Message) {
+func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received Connection Request Type 'Measure Request'")
 
@@ -200,11 +202,11 @@ func Measure(w mux.ResponseWriter, r *mux.Message) {
 	var success bool
 	err = m.Measure(&req,
 		&m.MeasureConfig{
-			Serializer: Cmc.Serializer,
-			Pcr:        Cmc.CtrPcr,
-			LogFile:    Cmc.CtrLog,
-			ExtLog:     Cmc.ExtCtrLog,
-			Driver:     Cmc.CtrDriver,
+			Serializer: s.cmc.Serializer,
+			Pcr:        s.cmc.CtrPcr,
+			LogFile:    s.cmc.CtrLog,
+			ExtLog:     s.cmc.ExtCtrLog,
+			Driver:     s.cmc.CtrDriver,
 		})
 	if err != nil {
 		success = false
@@ -228,16 +230,16 @@ func Measure(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Measurer: Finished")
 }
 
-func TlsSign(w mux.ResponseWriter, r *mux.Message) {
+func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received CoAP TLS sign request")
 
-	if len(Cmc.Drivers) == 0 {
+	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign: No valid drivers specified in config")
 		return
 	}
-	d := Cmc.Drivers[0]
+	d := s.cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSSignRequest
@@ -288,16 +290,16 @@ func TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Performed signing")
 }
 
-func TlsCert(w mux.ResponseWriter, r *mux.Message) {
+func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received CoAP TLS cert request")
 
-	if len(Cmc.Drivers) == 0 {
+	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Failed to sign: No valid drivers specified in config")
 		return
 	}
-	d := Cmc.Drivers[0]
+	d := s.cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
 	var req api.TLSCertRequest
@@ -333,7 +335,7 @@ func TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	log.Debugf("Obtained TLS cert from %v", d.Name())
 }
 
-func PeerCache(w mux.ResponseWriter, r *mux.Message) {
+func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received connection request type 'Peer Cache'")
 
@@ -347,7 +349,7 @@ func PeerCache(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Collecting peer cache")
 	resp := api.PeerCacheResponse{}
-	c, ok := Cmc.CachedPeerMetadata[req.Peer]
+	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)
 	}
@@ -364,7 +366,7 @@ func PeerCache(w mux.ResponseWriter, r *mux.Message) {
 
 func loggingMiddleware(next mux.Handler) mux.Handler {
 	return mux.HandlerFunc(func(w mux.ResponseWriter, r *mux.Message) {
-		log.Printf("ClientAddress %v, %v\n", w.Conn().RemoteAddr(), r.String())
+		log.Tracef("ClientAddress %v, %v\n", w.Conn().RemoteAddr(), r.String())
 		next.ServeCOAP(w, r)
 	})
 }
@@ -375,6 +377,7 @@ func unmarshalCoapPayload(r *mux.Message, payload interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to read CoAP message body: %v", err)
 	}
+
 	err = cbor.Unmarshal(body, payload)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal CoAP message body: %v", err)
