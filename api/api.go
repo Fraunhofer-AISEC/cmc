@@ -55,8 +55,8 @@ const (
 )
 
 type AttestationRequest struct {
-	Nonce  []byte   `json:"nonce" nonce:"1,keyasint"`
-	Cached []string `json:"cached,omitempty" cbor:"4,keyasint,omitempty"`
+	Nonce  []byte   `json:"nonce" nonce:"0,keyasint"`
+	Cached []string `json:"cached,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
 type AttestationResponse struct {
@@ -91,9 +91,9 @@ type MeasureResponse struct {
 }
 
 type TLSSignRequest struct {
-	Content  []byte       `json:"content" cbor:"1,keyasint"`
-	Hashtype HashFunction `json:"hashType" cbor:"2,keyasint"`
-	PssOpts  *PSSOptions  `json:"pssOpts" cbor:"3,keyasint"`
+	Content  []byte       `json:"content" cbor:"0,keyasint"`
+	Hashtype HashFunction `json:"hashType" cbor:"1,keyasint"`
+	PssOpts  *PSSOptions  `json:"pssOpts" cbor:"2,keyasint"`
 }
 
 type TLSSignResponse struct {

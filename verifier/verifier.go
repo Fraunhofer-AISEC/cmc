@@ -21,14 +21,12 @@ import (
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/fxamacker/cbor/v2"
 	"github.com/sirupsen/logrus"
 
 	"time"
@@ -82,14 +80,9 @@ func Verify(
 	}
 
 	// Detect serialization format
-	var s ar.Serializer
-	if json.Valid(arRaw) {
-		log.Trace("Detected JSON serialization")
-		s = ar.JsonSerializer{}
-	} else if err := cbor.Valid(arRaw); err == nil {
-		log.Trace("Detected CBOR serialization")
-		s = ar.CborSerializer{}
-	} else {
+	log.Tracef("Detecting serialization format of attestation report length %v", len(arRaw))
+	s, err := ar.DetectSerialization(arRaw)
+	if err != nil {
 		log.Trace("Unable to detect AR serialization format")
 		result.Success = false
 		result.ErrorCode = ar.UnknownSerialization

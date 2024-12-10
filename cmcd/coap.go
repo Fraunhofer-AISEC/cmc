@@ -105,7 +105,7 @@ func sendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code,
 
 func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Prover: Received CoAP attestation request")
+	log.Debug("Received coap connection request type 'Attest'")
 
 	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -152,9 +152,9 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 
 func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received connection request type 'Verification Request'")
+	log.Debug("Received coap connection request type 'Verify'")
 
-	var req *api.VerificationRequest
+	req := new(api.VerificationRequest)
 	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -162,7 +162,7 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Debug("Verifier: verifying attestation report")
+	log.Debug("verifying attestation report")
 	result, err := cmc.Verify(req, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -189,8 +189,8 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received Connection Request Type 'Measure Request'")
 
-	var req api.MeasureRequest
-	ser, err := unmarshal(r, &req)
+	req := new(api.MeasureRequest)
+	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -199,7 +199,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Measurer: Recording measurement")
 	var success bool
-	err = m.Measure(&req,
+	err = m.Measure(req,
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,
@@ -241,8 +241,8 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	d := s.cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
-	var req api.TLSSignRequest
-	ser, err := unmarshal(r, &req)
+	req := new(api.TLSSignRequest)
+	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -301,8 +301,8 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	d := s.cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
-	var req api.TLSCertRequest
-	ser, err := unmarshal(r, &req)
+	req := new(api.TLSCertRequest)
+	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
@@ -338,8 +338,8 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Received connection request type 'Peer Cache'")
 
-	var req api.PeerCacheRequest
-	ser, err := unmarshal(r, &req)
+	req := new(api.PeerCacheRequest)
+	ser, err := unmarshal(r, req)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)

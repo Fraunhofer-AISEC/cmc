@@ -34,7 +34,7 @@ func Test_isNewer(t *testing.T) {
 	}{
 		{"Newer", args{"2023-03-15T23:59:14Z", "2022-12-11T15:19:00Z"}, true, false},
 		{"Older", args{"2022-12-11T15:19:00Z", "2023-03-15T23:59:14Z"}, false, false},
-		{"Error", args{"xxxxxxxxxxxxxxxxxxx", "2022-12-11T15:19:00Z"}, false, true},
+		{"Error", args{"abc", "2022-12-11T15:19:00Z"}, false, true},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
 	for _, tt := range tests {
