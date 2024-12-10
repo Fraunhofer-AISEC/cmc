@@ -80,8 +80,7 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 
 	payload, reqType, err := api.Receive(conn)
 	if err != nil {
-		s, err := ar.DetectSerialization(payload)
-		sendError(conn, s, "Failed to receive: %v", err)
+		log.Errorf("Failed to receive: %v", err)
 		return
 	}
 
@@ -112,7 +111,7 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 
 func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Prover: Received socket attestation request")
+	log.Debug("Received socket connection request type 'Attest'")
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "no valid signers configured")
@@ -155,7 +154,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received verification request")
+	log.Debug("Received socket connection request type 'Verify'")
 
 	req := new(api.VerificationRequest)
 	err := s.Unmarshal(payload, req)
@@ -164,10 +163,10 @@ func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	log.Debug("Verifier: verifying attestation report")
+	log.Debug("verifying attestation report")
 	result, err := c.Verify(req, cmc)
 	if err != nil {
-		sendError(conn, s, "Verifier: failed to verify: %v", err)
+		sendError(conn, s, "failed to verify: %v", err)
 		return
 	}
 

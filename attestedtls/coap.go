@@ -49,7 +49,7 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*ap
 	path := "/Attest"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	log.Tracef("Sending attestation request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -96,7 +96,7 @@ func (a CoapApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 	path := "/Verify"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	log.Tracef("Sending verification request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
@@ -127,7 +127,7 @@ func (a CoapApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Parse VerificationResult
+	// Parse VerificationResult (always json)
 	result := new(ar.VerificationResult)
 	err = json.Unmarshal(verifyResp.VerificationResult, result)
 	if err != nil {
@@ -154,7 +154,7 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	path := "/TLSSign"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	log.Tracef("Sending TLSSign request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -208,7 +208,7 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	path := "/TLSCert"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	log.Tracef("Sending TLSCert request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -251,7 +251,7 @@ func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	path := "/PeerCache"
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via coap on %v", cc.CmcAddr)
+	log.Tracef("Sending PeerCache request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)

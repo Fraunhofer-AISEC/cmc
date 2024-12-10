@@ -130,6 +130,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		close(errChan)
 	}()
 
+	// Wait for atls response with report from peer
 	log.Debugf("Verifier %v: waiting for atls handshake response from %v", ownAddr, peerAddr)
 	resp, err := receiveAtlsResponse(conn)
 	if err != nil {
@@ -160,6 +161,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 	// Verify attestation report from peer if configured
 	if attestPeer {
+
 		// Verify AR from listener with own channel bindings
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
 		req := &api.VerificationRequest{

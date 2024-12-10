@@ -138,7 +138,7 @@ func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 		return fmt.Errorf("failed to unmarshal cmcd verify response: %w", err)
 	}
 
-	// Parse VerificationResult
+	// Parse VerificationResult (always json)
 	result := new(ar.VerificationResult)
 	err = json.Unmarshal(verifyResp.VerificationResult, result)
 	if err != nil {
