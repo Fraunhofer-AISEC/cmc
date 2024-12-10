@@ -62,10 +62,10 @@ type Tpm struct {
 }
 
 const (
-	akchainFile = "akchain.pem"
-	ikchainFile = "ikchain.pem"
-	akFile      = "ak_encrypted.json"
-	ikFile      = "ik_encrypted.json"
+	akchainFile = "tpm_ak_chain.pem"
+	ikchainFile = "tpm_ik_chain.pem"
+	akFile      = "tpm_ak_encrypted.json"
+	ikFile      = "tpm_ik_encrypted.json"
 )
 
 var (
@@ -264,7 +264,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		// to result in the final value
 		imaEvents, err := ima.GetImaRuntimeDigests()
 		if err != nil {
-			log.Warnf("failed to get IMA runtime digests: %v", err)
+			return ar.Measurement{}, fmt.Errorf("failed to get IMA runtime digests: %v", err)
 		}
 
 		// Find the IMA PCR in the TPM Measurement
