@@ -198,7 +198,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 						Launched:   true,
 						Name:       event.EventName,
 						EventData:  event.EventData,
-						CtrDetails: ar.GetCtrDetailsFromMeasureEvent(&event, s),
+						CtrDetails: event.CtrData,
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Tracef("Failed to find PCR%v measurement %v: %v in reference values",
@@ -224,7 +224,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 					Launched:    true,
 					Name:        nameInfo,
 					Description: ref.Description,
-					CtrDetails:  ar.GetCtrDetailsFromMeasureEvent(&event, s),
+					CtrDetails:  event.CtrData,
 				}
 				detailedResults = append(detailedResults, measResult)
 			}

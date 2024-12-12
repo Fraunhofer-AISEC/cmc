@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"time"
@@ -139,10 +140,22 @@ func (a CoapApi) measure(c *config) {
 		log.Fatalf("Failed to measure rootfs: %v", err)
 	}
 
+	// Create template hash
+	tbh := []byte(configHash)
+	tbh = append(tbh, rootfsHash...)
+	hasher := sha256.New()
+	hasher.Write(tbh)
+	templateHash := hasher.Sum(nil)
+
 	req := &api.MeasureRequest{
-		Name:         c.CtrName,
-		ConfigSha256: configHash,
-		RootfsSha256: rootfsHash,
+		MeasureEvent: ar.MeasureEvent{
+			Sha256:    templateHash,
+			EventName: c.CtrName,
+			CtrData: &ar.CtrData{
+				ConfigSha256: configHash,
+				RootfsSha256: rootfsHash,
+			},
+		},
 	}
 
 	resp, err := measureInternal(c, req)

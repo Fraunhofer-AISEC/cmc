@@ -88,16 +88,16 @@ var (
 			Type:    "RTM Manifest",
 			Name:    "de.test.rtm",
 			Version: "2023-04-10T20:00:00Z",
+			Validity: ar.Validity{
+				NotBefore: "2023-04-10T20:00:00Z",
+				NotAfter:  "2030-04-10T20:00:00Z",
+			},
+			Description: "de.test.rtm",
 		},
 		Manifest: ar.Manifest{
 			DevCommonName: "Test Developer",
+			CertLevel:     1,
 		},
-		Validity: ar.Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2030-04-10T20:00:00Z",
-		},
-		Description: "de.test.rtm",
-		CertLevel:   1,
 	}
 
 	validOsManifest = ar.Metadata{
@@ -105,19 +105,19 @@ var (
 			Type:    "OS Manifest",
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
+			Validity: ar.Validity{
+				NotBefore: "2023-04-10T20:00:00Z",
+				NotAfter:  "2030-04-10T20:00:00Z",
+			},
+			Description: "PoC Fraunhofer AISEC Sample Report",
 		},
 		Manifest: ar.Manifest{
 			DevCommonName: "Test Developer",
 			BaseLayers: []string{
 				"de.test.rtm",
 			},
+			CertLevel: 1,
 		},
-		Validity: ar.Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2030-04-10T20:00:00Z",
-		},
-		Description: "PoC Fraunhofer AISEC Sample Report",
-		CertLevel:   1,
 	}
 
 	incompatibleOsManifest = ar.Metadata{
@@ -125,19 +125,19 @@ var (
 			Type:    "OS Manifest",
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
+			Validity: ar.Validity{
+				NotBefore: "2023-04-10T20:00:00Z",
+				NotAfter:  "2030-04-10T20:00:00Z",
+			},
+			Description: "PoC Fraunhofer AISEC Sample Report",
 		},
 		Manifest: ar.Manifest{
 			DevCommonName: "Test Developer",
 			BaseLayers: []string{
 				"INVALID",
 			},
+			CertLevel: 1,
 		},
-		Validity: ar.Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2030-04-10T20:00:00Z",
-		},
-		Description: "PoC Fraunhofer AISEC Sample Report",
-		CertLevel:   1,
 	}
 
 	validDeviceDescription = ar.Metadata{
@@ -145,17 +145,16 @@ var (
 			Type:    "Device Description",
 			Name:    "test-device.test.de",
 			Version: "2023-04-10T20:00:00Z",
+			Validity: ar.Validity{
+				NotBefore: "2023-04-10T20:00:00Z",
+				NotAfter:  "2030-04-10T20:00:00Z",
+			},
 		},
 		DeviceDescription: ar.DeviceDescription{
 			Location:    "Munich, Germany",
 			RtmManifest: "de.test.rtm",
 			OsManifest:  "de.test.os",
 		},
-		Validity: ar.Validity{
-			NotBefore: "2023-04-10T20:00:00Z",
-			NotAfter:  "2030-04-10T20:00:00Z",
-		},
-		CertLevel: 3,
 	}
 
 	invalidDeviceDescription = ar.Metadata{
@@ -356,8 +355,8 @@ func TestVerify(t *testing.T) {
 			want: ar.VerificationResult{Success: true},
 		},
 		{
-			// expected aggregated CertificationLevel in Manifests for
-			// empty measurement is max. 1 (here CertificationLevel = 3)
+			// expected aggregated certification level in Manifests for
+			// empty measurement is max. 1 (here certification level = 3)
 			name: "Invalid Certification Level",
 			args: args{
 				serializer: ar.JsonSerializer{},
@@ -366,36 +365,36 @@ func TestVerify(t *testing.T) {
 						Type:    "RTM Manifest",
 						Name:    "de.test.rtm",
 						Version: "2023-04-10T20:00:00Z",
+						Validity: ar.Validity{
+							NotBefore: "2023-04-10T20:00:00Z",
+							NotAfter:  "2026-04-10T20:00:00Z",
+						},
+						Description: "de.test.rtm",
 					},
 					Manifest: ar.Manifest{
 						DevCommonName:   "Test Developer",
 						ReferenceValues: []ar.ReferenceValue{},
+						CertLevel:       3,
 					},
-					Validity: ar.Validity{
-						NotBefore: "2023-04-10T20:00:00Z",
-						NotAfter:  "2026-04-10T20:00:00Z",
-					},
-					Description: "de.test.rtm",
-					CertLevel:   3,
 				},
 				osManifest: ar.Metadata{
 					MetaInfo: ar.MetaInfo{
 						Type:    "OS Manifest",
 						Name:    "de.test.os",
 						Version: "2023-04-10T20:00:00Z",
+						Validity: ar.Validity{
+							NotBefore: "2023-04-10T20:00:00Z",
+							NotAfter:  "2026-04-10T20:00:00Z",
+						},
+						Description: "PoC Fraunhofer AISEC Sample Report",
 					},
 					Manifest: ar.Manifest{
 						DevCommonName: "Test Developer",
 						BaseLayers: []string{
 							"de.test.rtm",
 						},
+						CertLevel: 3,
 					},
-					Validity: ar.Validity{
-						NotBefore: "2023-04-10T20:00:00Z",
-						NotAfter:  "2026-04-10T20:00:00Z",
-					},
-					Description: "PoC Fraunhofer AISEC Sample Report",
-					CertLevel:   3,
 				},
 				deviceDescription: validDeviceDescription,
 				nonce:             nonce,

@@ -9,7 +9,7 @@
 		"notAfter": "2026-04-10T20:00:00Z"
 	},
     "description": "PoC Demonstrator RTM Manifest",
-    "certificationLevel" : 3,
+    "certLevel" : 3,
     "referenceValues": [
     ]
 }

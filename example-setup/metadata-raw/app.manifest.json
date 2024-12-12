@@ -10,7 +10,7 @@
 	"baseLayers" : [ "de.test.os"
 	],
 	"description" : "Test App",
-	"certificationLevel" : 1,
+	"certLevel" : 1,
 	"referenceValues" : [
 	]
 }

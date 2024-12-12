@@ -107,7 +107,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 						Launched:   true,
 						Name:       nameInfo,
 						Digest:     hex.EncodeToString(event.Sha256),
-						CtrDetails: ar.GetCtrDetailsFromMeasureEvent(&event, s),
+						CtrDetails: event.CtrData,
 					}
 					result.Artifacts = append(result.Artifacts, r)
 					break
@@ -120,7 +120,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 					Launched:   true,
 					Name:       event.EventName,
 					Digest:     hex.EncodeToString(event.Sha256),
-					CtrDetails: ar.GetCtrDetailsFromMeasureEvent(&event, s),
+					CtrDetails: event.CtrData,
 				}
 				result.Artifacts = append(result.Artifacts, r)
 				log.Tracef("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.Sha256))

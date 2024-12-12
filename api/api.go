@@ -26,7 +26,9 @@ import (
 	"fmt"
 	"net"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	oci "github.com/opencontainers/runtime-spec/specs-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -80,10 +82,7 @@ type VerificationResponse struct {
 }
 
 type MeasureRequest struct {
-	Name         string `json:"name,omitempty" cbor:"0,keyasint,omitempty"`
-	ConfigSha256 []byte `json:"configSha256,omitempty" cbor:"1,keyasint,omitempty"`
-	RootfsSha256 []byte `json:"rootfsSha256,omitempty" cbor:"2,keyasint,omitempty"`
-	OciSpec      []byte `json:"ociSpec,omitempty" cbor:"3,keyasint,omitempty"`
+	ar.MeasureEvent
 }
 
 type MeasureResponse struct {
@@ -391,10 +390,28 @@ func ConvertVerificationRequest(req *grpcapi.VerificationRequest) *VerificationR
 }
 
 func ConvertMeasureRequest(req *grpcapi.MeasureRequest) *MeasureRequest {
+
+	// oci spec in protobuf is marshaled as bytes
+	spec := new(oci.Spec)
+	s, err := ar.DetectSerialization(req.CtrData.OciSpec)
+	if err != nil {
+		log.Warnf("failed to detect oci spec serialization: %v", err)
+	} else {
+		err = s.Unmarshal(req.CtrData.OciSpec, spec)
+		if err != nil {
+			log.Warnf("failed to unmarshal grpc oci spec: %v", err)
+		}
+	}
+
 	return &MeasureRequest{
-		Name:         req.Name,
-		ConfigSha256: req.ConfigSha256,
-		RootfsSha256: req.RootfsSha256,
-		OciSpec:      req.OciSpec,
+		MeasureEvent: ar.MeasureEvent{
+			Sha256:    req.Sha256,
+			EventName: req.EventName,
+			CtrData: &ar.CtrData{
+				ConfigSha256: req.CtrData.ConfigSha256,
+				RootfsSha256: req.CtrData.RootfsSha256,
+				OciSpec:      spec,
+			},
+		},
 	}
 }

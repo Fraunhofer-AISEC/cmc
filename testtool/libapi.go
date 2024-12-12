@@ -23,11 +23,12 @@ import (
 	// local modules
 
 	"crypto/rand"
-	"encoding/json"
+	"crypto/sha256"
 	"errors"
 	"os"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
@@ -70,8 +71,8 @@ func (a LibApi) generate(c *config) {
 		return
 	}
 
-	// Marshal the attestation response as JSON for saving it to the file system
-	data, err := json.Marshal(resp)
+	// Marshal the attestation response for saving it to the file system
+	data, err := c.apiSerializer.Marshal(resp)
 	if err != nil {
 		log.Fatalf("Failed to marshal attestation response: %v", err)
 	}
@@ -144,11 +145,22 @@ func (a LibApi) measure(c *config) {
 		log.Fatalf("Failed to measure rootfs: %v", err)
 	}
 
+	// Create template hash
+	tbh := []byte(configHash)
+	tbh = append(tbh, rootfsHash...)
+	hasher := sha256.New()
+	hasher.Write(tbh)
+	templateHash := hasher.Sum(nil)
+
 	req := &api.MeasureRequest{
-		Name:         c.CtrName,
-		ConfigSha256: configHash,
-		RootfsSha256: rootfsHash,
-		OciSpec:      ctrConfig,
+		MeasureEvent: ar.MeasureEvent{
+			Sha256:    templateHash,
+			EventName: c.CtrName,
+			CtrData: &ar.CtrData{
+				ConfigSha256: configHash,
+				RootfsSha256: rootfsHash,
+			},
+		},
 	}
 
 	err = m.Measure(req,

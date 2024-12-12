@@ -81,7 +81,7 @@ func Verify(req *api.VerificationRequest, cmc *Cmc) ([]byte, error) {
 	log.Debug("Verifier: marshaling attestation result")
 	data, err := json.Marshal(result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Attestation Result: %w", err)
+		return nil, fmt.Errorf("failed to marshal attestation result: %w", err)
 	}
 
 	return data, nil
