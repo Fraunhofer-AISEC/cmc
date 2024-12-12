@@ -118,6 +118,8 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 
 	if len(roots) == 0 {
 		log.Warnf("No CAs specified. Using system cert pool not implemented for CBOR")
+		result.Summary.Success = false
+		result.Summary.ErrorCode = SetupSystemCA
 		return result, nil, false
 	}
 
@@ -131,12 +133,16 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		log.Tracef("%v -> this is the string representation that could not be unmarshalled",
 			string(data))
 		log.Tracef("Length: %v (0x%x)", len(data), len(data))
+		result.Summary.Success = false
+		result.Summary.ErrorCode = ParseCBOR
 		return result, nil, false
 	}
 
 	// Extract leaf certificates, use its public keys for the verifiers and create verifiers
 	if len(msgToVerify.Signatures) == 0 {
 		log.Warnf("failed to verify COSE: no signatures present")
+		result.Summary.Success = false
+		result.Summary.ErrorCode = COSENoSignatures
 		return result, nil, false
 	}
 	verifiers := make([]cose.Verifier, 0)
@@ -146,6 +152,7 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		x5Chain, okConv := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
 		if !okConv {
 			log.Warnf("failed to parse x5c header: %v", err)
+			result.Summary.ErrorCode = ParseX5C
 			result.SignatureCheck[i].CertChainCheck.Success = false
 			result.SignatureCheck[i].CertChainCheck.ErrorCode = ParseX5C
 			ok = false
@@ -156,6 +163,7 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 			cert, okCert := rawCert.([]byte)
 			if !okCert {
 				log.Warnf("failed to decode certificate chain")
+				result.Summary.ErrorCode = DecodeCertChain
 				result.SignatureCheck[i].CertChainCheck.Success = false
 				result.SignatureCheck[i].CertChainCheck.ErrorCode = DecodeCertChain
 				ok = false
@@ -164,6 +172,7 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 			x509Cert, err := x509.ParseCertificate(cert)
 			if err != nil {
 				log.Warnf("failed to parse leaf certificate: %v", err)
+				result.Summary.ErrorCode = ParseCert
 				result.SignatureCheck[i].CertChainCheck.Success = false
 				result.SignatureCheck[i].CertChainCheck.ErrorCode = ParseCert
 				ok = false
@@ -176,26 +185,35 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		x509Chains, err := internal.VerifyCertChain(certChain, roots)
 		if err != nil {
 			log.Warnf("failed to verify certificate chain: %v", err)
+			result.Summary.ErrorCode = VerifyCertChain
 			result.SignatureCheck[i].CertChainCheck.Success = false
 			result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
 			ok = false
-			continue
-		}
 
-		//Store details from (all) validated certificate chain(s)
-		for _, chain := range x509Chains {
+			// Store details from invalid certs for diagnostic information
 			chainExtracted := []X509CertExtracted{}
-			for _, cert := range chain {
+			for _, cert := range certChain {
 				chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 			}
-			result.SignatureCheck[i].ValidatedCerts = append(result.SignatureCheck[i].ValidatedCerts, chainExtracted)
-		}
+			result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
 
-		result.SignatureCheck[i].CertChainCheck.Success = true
+		} else {
+			result.SignatureCheck[i].CertChainCheck.Success = true
+
+			//Store details from validated certificate chains
+			for _, chain := range x509Chains {
+				chainExtracted := []X509CertExtracted{}
+				for _, cert := range chain {
+					chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+				}
+				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
+			}
+		}
 
 		publicKey, okKey := certChain[0].PublicKey.(*ecdsa.PublicKey)
 		if !okKey {
 			log.Warnf("Failed to extract public key from certificate: %v", err)
+			result.Summary.ErrorCode = ExtractPubKey
 			result.SignatureCheck[i].SignCheck.Success = false
 			result.SignatureCheck[i].SignCheck.ErrorCode = ExtractPubKey
 			ok = false
@@ -206,6 +224,7 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 		if err != nil {
 			log.Warnf("Failed to create verifier: %v", err)
+			result.Summary.ErrorCode = Internal
 			result.SignatureCheck[i].SignCheck.Success = false
 			result.SignatureCheck[i].SignCheck.ErrorCode = Internal
 			ok = false
@@ -220,8 +239,10 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		log.Warnf("Error verifying cbor signature: %v", err)
 		// Can only be set for all signatures here
 		for i := range result.SignatureCheck {
+			result.Summary.ErrorCode = VerifySignature
 			result.SignatureCheck[i].SignCheck.Success = false
 			result.SignatureCheck[i].SignCheck.ErrorCode = VerifySignature
+			ok = false
 		}
 		return result, nil, false
 	} else {
@@ -233,5 +254,5 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 
 	result.Summary.Success = ok
 
-	return result, msgToVerify.Payload, true
+	return result, msgToVerify.Payload, ok
 }

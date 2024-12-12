@@ -195,12 +195,14 @@ type TdAttributesCheck struct {
 	Kl            BooleanMatch `json:"kl"`
 }
 
-// SignatureResults represents the results for validation of
-// a provided signature and the used certificates.
+// SignatureResult shows the result of the signature check, the certificate chain check
+// and includes all certificates present in the metadata item. If the certificate chain
+// check was successful, Certs is always a valid chain. If not, certs contains the
+// collected certificates present in the metadata item
 type SignatureResult struct {
-	SignCheck      Result                `json:"signatureVerification"` // Result from checking the signature has been calculated with this certificate
-	CertChainCheck Result                `json:"certChainValidation"`   // Result from validatint the certification chain back to a shared root of trust
-	ValidatedCerts [][]X509CertExtracted `json:"validatedCerts"`        //Stripped information from validated x509 cert chain(s) for additional checks from the policies module
+	SignCheck      Result                `json:"signatureVerification"`
+	CertChainCheck Result                `json:"certChainValidation"`
+	Certs          [][]X509CertExtracted `json:"certs,omitempty"`
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
@@ -240,8 +242,8 @@ type X509CertExtracted struct {
 	// interpreted as MaxPathLen not being set.
 	MaxPathLenZero bool `json:"maxPathLenZero,omitempty"`
 
-	SubjectKeyId   []byte `json:"subjectKeyId"`
-	AuthorityKeyId []byte `json:"authorityKeyId"`
+	SubjectKeyId   HexByte `json:"subjectKeyId"`
+	AuthorityKeyId HexByte `json:"authorityKeyId,omitempty"`
 
 	// Subject Alternate Name values.
 	DNSNames       []string `json:"dnsNames,omitempty"`
@@ -348,6 +350,7 @@ const (
 	JWSNoSignatures
 	JWSSignatureOrder
 	JWSPayload
+	COSENoSignatures
 	MeasurementNoMatch
 	MeasurementTypeNotSupported
 	NotPresent
@@ -363,6 +366,7 @@ const (
 	ParseCert
 	ParseTcbInfo
 	ParseJSON
+	ParseCBOR
 	ParseOSManifest
 	ParseEvidence
 	ParseExtensions
@@ -516,7 +520,7 @@ func (e ErrorCode) String() string {
 	case EvidenceType:
 		return fmt.Sprintf("%v (Evidence type error)", int(e))
 	case Expired:
-		return fmt.Sprintf("%v (Validity Expired error)", int(e))
+		return fmt.Sprintf("%v (Validity expired error)", int(e))
 	case ExtractPubKey:
 		return fmt.Sprintf("%v (Extract public key error)", int(e))
 	case Internal:
@@ -529,6 +533,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (JWS signature order error)", int(e))
 	case JWSPayload:
 		return fmt.Sprintf("%v (JWS payload error)", int(e))
+	case COSENoSignatures:
+		return fmt.Sprintf("%v (COSE no signatures error)", int(e))
 	case MeasurementNoMatch:
 		return fmt.Sprintf("%v (Measurement no match error)", int(e))
 	case MeasurementTypeNotSupported:
@@ -559,6 +565,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Parse TCB info error)", int(e))
 	case ParseJSON:
 		return fmt.Sprintf("%v (Parse JSON error)", int(e))
+	case ParseCBOR:
+		return fmt.Sprintf("%v (Parse CBOR error)", int(e))
 	case ParseOSManifest:
 		return fmt.Sprintf("%v (Parse OS manifest error)", int(e))
 	case ParseEvidence:
@@ -623,10 +631,12 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Verify TCB info error)", int(e))
 	case ExtensionsCheck:
 		return fmt.Sprintf("%v (Extensions check error)", int(e))
+	case PcrNotSpecified:
+		return fmt.Sprintf("%v (PCR not specified error)", int(e))
 	case DeviceDescriptionNotPresent:
-		return fmt.Sprintf("%v (Device description not present)", int(e))
+		return fmt.Sprintf("%v (Device description not present error)", int(e))
 	case UnknownMetadata:
-		return fmt.Sprintf("%v (Unknown metadata)", int(e))
+		return fmt.Sprintf("%v (Unknown metadata error)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}

@@ -216,6 +216,7 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		certs, err := sig.Protected.Certificates(opts)
 		if err != nil {
 			log.Warnf("Failed to verify certificate chain: %v", err)
+			result.Summary.ErrorCode = VerifyCertChain
 			result.SignatureCheck[i].CertChainCheck.Success = false
 			result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
 			ok = false
@@ -228,7 +229,7 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 			for _, cert := range chain {
 				chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 			}
-			result.SignatureCheck[i].ValidatedCerts = append(result.SignatureCheck[i].ValidatedCerts, chainExtracted)
+			result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
 		}
 
 		result.SignatureCheck[i].CertChainCheck.Success = true
@@ -238,6 +239,7 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
 			log.Warnf("Signature verification failed: %v", err)
+			result.Summary.ErrorCode = VerifySignature
 			result.SignatureCheck[i].SignCheck.Success = false
 			result.SignatureCheck[i].SignCheck.ErrorCode = VerifySignature
 			ok = false
@@ -245,15 +247,15 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 
 		if index[i] != i {
 			log.Warn("order of signatures incorrect")
-			result.Summary.Success = false
 			result.Summary.ErrorCode = JWSSignatureOrder
+			ok = false
 		}
 
 		if i > 0 {
 			if !bytes.Equal(payloads[i], payloads[i-1]) {
 				log.Warn("payloads differ for jws with multiple signatures")
-				result.Summary.Success = false
 				result.Summary.ErrorCode = JWSPayload
+				ok = false
 			}
 		}
 	}

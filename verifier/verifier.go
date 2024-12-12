@@ -264,6 +264,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 	results := ar.MetadataSummary{}
 	errCode := ar.NotSet
 	success := true
+	var err error
 
 	for hash, meta := range metadatamap {
 
@@ -271,12 +272,18 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		if !ok {
 			log.Tracef("Validation of metadata item %v failed", hash)
 			success = false
+			// Still unpack metadata item for validation-result diagnosis
+			payload, err = s.GetPayload(meta)
+			if err != nil {
+				// Summary and error code have already been set in verify
+				log.Tracef("Get unverified payload of metadata item %v failed: %v", hash, err)
+			}
 		}
 
 		m := new(ar.Metadata)
 		err := s.Unmarshal(payload, m)
 		if err != nil {
-			log.Tracef("Unpacking of %v failed: %v", hash, err)
+			log.Tracef("Unpacking of metadata item %v failed: %v", hash, err)
 			result.Summary.Success = false
 			result.Summary.ErrorCode = ar.Parse
 			success = false
@@ -314,7 +321,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		default:
 			log.Tracef("Unknown manifest type %v", m.Type)
 			success = false
-			errCode = ar.UnknownSerialization
+			errCode = ar.UnknownMetadata
 		}
 
 	}
@@ -330,6 +337,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		if !ok {
 			success = false
 		}
+		results.DevDescResult.Summary.Success = ok
 		results.DevDescResult.DevDescResult = *r
 	}
 

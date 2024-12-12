@@ -123,7 +123,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certif
 		for _, cert := range chain {
 			chainExtracted = append(chainExtracted, ar.ExtractX509Infos(cert))
 		}
-		result.Signature.ValidatedCerts = append(result.Signature.ValidatedCerts, chainExtracted)
+		result.Signature.Certs = append(result.Signature.Certs, chainExtracted)
 	}
 
 	result.Summary.Success = ok
