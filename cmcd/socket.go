@@ -209,6 +209,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 			Driver:     cmc.CtrDriver,
 		})
 	if err != nil {
+		log.Errorf("Failed to measure: %v", err)
 		success = false
 	} else {
 		success = true

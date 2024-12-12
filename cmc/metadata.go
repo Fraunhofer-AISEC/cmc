@@ -19,8 +19,6 @@ package cmc
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -31,7 +29,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
-	"github.com/fxamacker/cbor/v2"
 )
 
 func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer, error) {
@@ -86,15 +83,15 @@ func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer
 	}
 
 	if len(metadata) == 0 {
-		return nil, ar.JsonSerializer{}, errors.New("failed to retrieve any metadata. Using default serializer (JSON)")
+		log.Warn("failed to retrieve any metadata. Can only work as verifier")
+		return nil, ar.JsonSerializer{}, nil
 	}
 
 	// Filter metadata: remove any duplicates through always choosing the
 	// newest version of duplicate metadata
 	metadata, s, err := filterMetadata(metadata)
 	if err != nil {
-		log.Warnf("Failed to filter metadata: %v", err)
-		return nil, ar.JsonSerializer{}, nil
+		return nil, ar.JsonSerializer{}, fmt.Errorf("failed to filter metadata: %w", err)
 	}
 
 	// Cache metadata if cache is available
@@ -187,7 +184,6 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 	log.Tracef("Filtering %v meta-data objects..", len(inlist))
 
 	outlist := make([][]byte, 0)
-	var s ar.Serializer
 	foundJson := false
 	foundCbor := false
 
@@ -195,17 +191,16 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 	for _, elem := range inlist {
 
 		// Get serialization format
-		if json.Valid(elem) {
-			log.Trace("Detected JSON serialization")
-			s = ar.JsonSerializer{}
-			foundJson = true
-		} else if err := cbor.Valid(elem); err == nil {
-			log.Trace("Detected CBOR serialization")
-			s = ar.CborSerializer{}
-			foundCbor = true
-		} else {
+		s, err := ar.DetectSerialization(elem)
+		if err != nil {
 			log.Warnf("Failed to detect serialization. Ignoring object..")
 			continue
+		}
+		switch s.(type) {
+		case ar.JsonSerializer:
+			foundJson = true
+		case ar.CborSerializer:
+			foundCbor = true
 		}
 
 		// Extract plain payload (i.e. the manifest/description itself)
@@ -235,13 +230,18 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 		done := false
 		for i := 0; i < len(outlist); i++ {
 
+			stmp, err := ar.DetectSerialization(outlist[i])
+			if err != nil {
+				return nil, s, fmt.Errorf("internal error: failed to detect serialization of already present metadata item")
+			}
+
 			// Get info about item in outlist
-			data, err := s.GetPayload(outlist[i])
+			data, err := stmp.GetPayload(outlist[i])
 			if err != nil {
 				return nil, s, fmt.Errorf("internal error: failed to parse metadata object %v: %v", i, err)
 			}
 			out := new(ar.MetaInfo)
-			err = s.Unmarshal(data, out)
+			err = stmp.Unmarshal(data, out)
 			if err != nil {
 				return nil, s, fmt.Errorf("internal error: failed to unmarshal result: %v", err)
 			}
@@ -296,12 +296,16 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 	}
 
 	if foundJson && foundCbor {
-		return nil, s, fmt.Errorf("found both JSON and CBOR metadata. Mixed metadata is not supported")
+		return nil, ar.JsonSerializer{},
+			fmt.Errorf("found both JSON and CBOR metadata. Mixed metadata is not supported")
+	} else {
+		log.Tracef("Returning filtered lists with %v elements", len(outlist))
+		if foundJson {
+			return outlist, ar.JsonSerializer{}, nil
+		} else {
+			return outlist, ar.CborSerializer{}, nil
+		}
 	}
-
-	log.Tracef("Returning filtered lists with %v elements", len(outlist))
-
-	return outlist, s, nil
 }
 
 func isNewer(t, ref string) (bool, error) {
