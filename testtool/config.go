@@ -524,7 +524,7 @@ func printConfig(c *config) {
 	log.Infof("Running testtool from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tMode		     : %v", c.Mode)
+	log.Debugf("\tMode           : %v", c.Mode)
 	log.Debugf("\tAddr           : %v", c.Addr)
 	log.Debugf("\tInterval       : %v", c.interval)
 	log.Debugf("\tCmcAddr        : %v", c.CmcAddr)
