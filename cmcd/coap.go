@@ -208,6 +208,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 			Driver:     s.cmc.CtrDriver,
 		})
 	if err != nil {
+		log.Errorf("Failed to record measurement: %v", err)
 		success = false
 	} else {
 		success = true

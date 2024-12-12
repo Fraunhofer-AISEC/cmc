@@ -46,6 +46,9 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 	if mc == nil {
 		return errors.New("internal error: measure config is nil")
 	}
+	if mc.Serializer == nil {
+		return errors.New("internal error: serializer is nil")
+	}
 
 	log.Tracef("Recording measurement %v: %v", req.EventName, hex.EncodeToString(req.Sha256))
 

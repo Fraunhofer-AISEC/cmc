@@ -87,59 +87,80 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 
 func NewCmc(c *Config) (*Cmc, error) {
 
+	cmc := &Cmc{
+		Network:      c.Network,
+		IntelStorage: c.Storage,
+		PeerCache:    c.PeerCache,
+		UseCtr:       c.UseCtr,
+		CtrDriver:    c.CtrDriver,
+		CtrPcr:       c.CtrPcr,
+		CtrLog:       c.CtrLog,
+		ExtCtrLog:    c.ExtCtrLog,
+	}
+
 	// Read metadata and device config from the file system
 	metadata, s, err := GetMetadata(c.Metadata, c.Cache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
-	deviceConfig, err := ar.GetDeviceConfig(s, metadata)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get signed device config: %v", err)
-	}
 
-	// Create driver configuration
-	driverConf := &ar.DriverConfig{
-		StoragePath:    c.Storage,
-		ServerAddr:     c.ProvServerAddr,
-		KeyConfig:      c.KeyConfig,
-		DeviceConfig:   *deviceConfig,
-		UseIma:         c.UseIma,
-		ImaPcr:         c.ImaPcr,
-		MeasurementLog: c.MeasurementLog,
-		Serializer:     s,
-		CtrPcr:         c.CtrPcr,
-		CtrLog:         c.CtrLog,
-		ExtCtrLog:      c.ExtCtrLog,
-		CtrDriver:      c.CtrDriver,
-		UseCtr:         c.UseCtr,
-	}
+	// If no metadata is specified, the cmc can only work as verifier
+	if metadata != nil {
 
-	// Initialize drivers
-	usedDrivers := make([]ar.Driver, 0)
-	for _, driver := range c.Drivers {
-		d, ok := drivers[strings.ToLower(driver)]
-		if !ok {
-			return nil, fmt.Errorf("driver %v not implemented", driver)
-		}
-		err = d.Init(driverConf)
+		cmc.Serializer = s
+		cmc.Metadata = metadata
+
+		deviceConfig, err := ar.GetDeviceConfig(s, metadata)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize driver: %w", err)
+			return nil, fmt.Errorf("failed to get signed device config: %v", err)
 		}
-		usedDrivers = append(usedDrivers, d)
-	}
 
-	// Check container driver
-	if c.UseCtr {
-		if !internal.Contains(c.CtrDriver, c.Drivers) {
-			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
-				c.CtrDriver)
+		// Create driver configuration
+		driverConf := &ar.DriverConfig{
+			StoragePath:    c.Storage,
+			ServerAddr:     c.ProvServerAddr,
+			KeyConfig:      c.KeyConfig,
+			DeviceConfig:   *deviceConfig,
+			UseIma:         c.UseIma,
+			ImaPcr:         c.ImaPcr,
+			MeasurementLog: c.MeasurementLog,
+			Serializer:     s,
+			CtrPcr:         c.CtrPcr,
+			CtrLog:         c.CtrLog,
+			ExtCtrLog:      c.ExtCtrLog,
+			CtrDriver:      c.CtrDriver,
+			UseCtr:         c.UseCtr,
 		}
-	}
 
-	// Get policy engine
-	sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
-	if !ok {
-		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
+		// Initialize drivers
+		usedDrivers := make([]ar.Driver, 0)
+		for _, driver := range c.Drivers {
+			d, ok := drivers[strings.ToLower(driver)]
+			if !ok {
+				return nil, fmt.Errorf("driver %v not implemented", driver)
+			}
+			err = d.Init(driverConf)
+			if err != nil {
+				return nil, fmt.Errorf("failed to initialize driver: %w", err)
+			}
+			usedDrivers = append(usedDrivers, d)
+		}
+		cmc.Drivers = usedDrivers
+
+		// Check container driver
+		if c.UseCtr {
+			if !internal.Contains(c.CtrDriver, c.Drivers) {
+				return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
+					c.CtrDriver)
+			}
+		}
+
+		// Get policy engine
+		sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
+		if !ok {
+			log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
+		}
+		cmc.PolicyEngineSelect = sel
 	}
 
 	// Load cached metadata from known peers
@@ -147,22 +168,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load peer cache: %w", err)
 	}
-
-	cmc := &Cmc{
-		Metadata:           metadata,
-		PolicyEngineSelect: sel,
-		Drivers:            usedDrivers,
-		Serializer:         s,
-		Network:            c.Network,
-		IntelStorage:       c.Storage,
-		PeerCache:          c.PeerCache,
-		CachedPeerMetadata: cachedPeerMetadata,
-		UseCtr:             c.UseCtr,
-		CtrDriver:          c.CtrDriver,
-		CtrPcr:             c.CtrPcr,
-		CtrLog:             c.CtrLog,
-		ExtCtrLog:          c.ExtCtrLog,
-	}
+	cmc.CachedPeerMetadata = cachedPeerMetadata
 
 	return cmc, nil
 }
