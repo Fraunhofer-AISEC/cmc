@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/json"
 	"os"
 	"time"
 
@@ -73,8 +72,8 @@ func (a GrpcApi) generate(c *config) {
 		log.Fatalf("GRPC Attest Call failed: %v", err)
 	}
 
-	// gRPC only: Marshal response as JSON for saving it to the file system
-	data, err := json.Marshal(api.ConvertAttestationResponse(response))
+	// gRPC only: Marshal response as JSON/CBOR for saving it to the file system
+	data, err := c.apiSerializer.Marshal(api.ConvertAttestationResponse(response))
 	if err != nil {
 		log.Fatalf("Failed to marshal attestation response: %v", err)
 	}
