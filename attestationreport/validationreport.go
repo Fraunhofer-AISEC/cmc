@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	oci "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // VerificationResult represents the results of all steps taken during
@@ -115,15 +114,15 @@ type TdxResult struct {
 // DigestResult represents a generic result for a digest that was processed
 // during attestation
 type DigestResult struct {
-	Success     bool        `json:"success"`               // Indicates if component is valid
-	Launched    bool        `json:"launched"`              // Indicates if optional component is/was running on the system
-	Pcr         *int        `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
-	Name        string      `json:"name,omitempty"`        // Name of the software artifact
-	Digest      string      `json:"digest,omitempty"`      // Reference Digest
-	Description string      `json:"description,omitempty"` // Optional description, measured PCR in case of PCR result
-	Type        string      `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
-	EventData   *EventData  `json:"eventData,omitempty"`   // data that was included from bioseventlog
-	CtrDetails  *CtrDetails `json:"ctrDetails,omitempty"`  // data that was included from container log
+	Success     bool       `json:"success"`               // Indicates if component is valid
+	Launched    bool       `json:"launched"`              // Indicates if optional component is/was running on the system
+	Pcr         *int       `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
+	Name        string     `json:"name,omitempty"`        // Name of the software artifact
+	Digest      string     `json:"digest,omitempty"`      // Reference Digest
+	Description string     `json:"description,omitempty"` // Optional description, measured PCR in case of PCR result
+	Type        string     `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
+	EventData   *EventData `json:"eventData,omitempty"`   // data that was included from bioseventlog
+	CtrDetails  *CtrData   `json:"ctrDetails,omitempty"`  // data that was included from container log
 }
 
 type PcrResult struct {
@@ -131,12 +130,6 @@ type PcrResult struct {
 	Pcr      int    `json:"pcr"`
 	Digest   string `json:"digest"`
 	Measured string `json:"measured,omitempty"`
-}
-
-type CtrDetails struct {
-	ConfigSha256 HexByte   `json:"configSha256,omitempty"`
-	RootfsSha256 HexByte   `json:"rootfsSha256,omitempty"`
-	OciSpec      *oci.Spec `json:"ociSpec,omitempty"`
 }
 
 type VersionCheck struct {
@@ -351,7 +344,7 @@ const (
 	Expired
 	ExtractPubKey
 	Internal
-	InvalidCertificationLevel
+	InvalidCertLevel
 	JWSNoSignatures
 	JWSSignatureOrder
 	JWSPayload
@@ -528,7 +521,7 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Extract public key error)", int(e))
 	case Internal:
 		return fmt.Sprintf("%v (Internal error)", int(e))
-	case InvalidCertificationLevel:
+	case InvalidCertLevel:
 		return fmt.Sprintf("%v (Invalid certification level error)", int(e))
 	case JWSNoSignatures:
 		return fmt.Sprintf("%v (JWS no signatures error)", int(e))
@@ -781,7 +774,7 @@ func (r *VerificationResult) PrintErr() {
 	}
 }
 
-func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrDetails {
+func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
 
 	if r == nil {
 		log.Warnf("internal error: reference value is nil")
@@ -795,40 +788,7 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrDetails {
 		return nil
 	}
 
-	ociSpecRaw, err := s.Marshal(m.OciSpec)
-	if err != nil {
-		log.Warnf("failed to unmarshal OCI spec for %v: %v", m.Name, err)
-		return nil
-	}
-
-	ociSpec := new(oci.Spec)
-	err = s.Unmarshal(ociSpecRaw, ociSpec)
-	if err != nil {
-		log.Warnf("failed to unmarshal OCI spec: %v", err)
-		return nil
-	}
-
-	return &CtrDetails{
-		OciSpec: ociSpec,
-	}
-}
-
-func GetCtrDetailsFromMeasureEvent(m *MeasureEvent, s Serializer) *CtrDetails {
-
-	if m == nil || m.CtrData == nil || m.CtrData.OciSpec == nil {
-		return nil
-	}
-
-	ociSpec := new(oci.Spec)
-	err := s.Unmarshal(m.CtrData.OciSpec, ociSpec)
-	if err != nil {
-		log.Warnf("failed to unmarshal OCI spec: %v", err)
-		return nil
-	}
-
-	return &CtrDetails{
-		ConfigSha256: m.CtrData.ConfigSha256,
-		RootfsSha256: m.CtrData.RootfsSha256,
-		OciSpec:      ociSpec,
+	return &CtrData{
+		OciSpec: m.OciSpec,
 	}
 }

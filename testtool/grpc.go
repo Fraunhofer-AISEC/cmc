@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"time"
@@ -158,10 +159,20 @@ func (a GrpcApi) measure(c *config) {
 		log.Fatalf("Failed to measure rootfs: %v", err)
 	}
 
+	// Create template hash
+	tbh := []byte(configHash)
+	tbh = append(tbh, rootfsHash...)
+	hasher := sha256.New()
+	hasher.Write(tbh)
+	templateHash := hasher.Sum(nil)
+
 	req := &grpcapi.MeasureRequest{
-		Name:         c.CtrName,
-		ConfigSha256: configHash,
-		RootfsSha256: rootfsHash,
+		Sha256:    templateHash,
+		EventName: c.CtrName,
+		CtrData: &grpcapi.CtrData{
+			ConfigSha256: configHash,
+			RootfsSha256: rootfsHash,
+		},
 	}
 
 	response, err := client.Measure(ctx, req)

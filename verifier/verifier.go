@@ -172,11 +172,15 @@ func Verify(
 		}
 	}
 
-	// The lowest certification level of all components determines the certification
+	// The lowest certification level of all manifests determines the certification
 	// level for the device's software stack
 	aggCertLevel := 0
 	levels := make([]int, 0)
 	for _, m := range metadata {
+		if m.Type == "Device Description" || m.Type == "Company Description" {
+			// Descriptions do not have a certification level
+			continue
+		}
 		levels = append(levels, m.CertLevel)
 	}
 	if len(levels) > 0 {
@@ -188,7 +192,7 @@ func Verify(
 	// must fail
 	if !hwAttest && aggCertLevel > 1 {
 		log.Tracef("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
-		result.ErrorCode = ar.InvalidCertificationLevel
+		result.ErrorCode = ar.InvalidCertLevel
 		result.Success = false
 	}
 	result.CertLevel = aggCertLevel

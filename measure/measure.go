@@ -17,7 +17,6 @@ package measure
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -48,26 +47,7 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 		return errors.New("internal error: measure config is nil")
 	}
 
-	// Hash config entry
-	tbh := []byte(req.ConfigSha256)
-	tbh = append(tbh, req.RootfsSha256...)
-
-	hasher := sha256.New()
-	hasher.Write(tbh)
-	templateHash := hasher.Sum(nil)
-
-	// Generate config entry
-	entry := ar.MeasureEvent{
-		Sha256:    templateHash,
-		EventName: req.Name,
-		CtrData: &ar.CtrData{
-			ConfigSha256: req.ConfigSha256,
-			RootfsSha256: req.RootfsSha256,
-			OciSpec:      req.OciSpec,
-		},
-	}
-
-	log.Tracef("Recording measurement %v: %v", req.Name, hex.EncodeToString(entry.Sha256))
+	log.Tracef("Recording measurement %v: %v", req.EventName, hex.EncodeToString(req.Sha256))
 
 	// Read the existing measurement list if it already exists
 	var measureList []ar.MeasureEvent
@@ -86,7 +66,7 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 	// Search the existing measurement list..
 	found := false
 	for _, e := range measureList {
-		if bytes.Equal(e.Sha256, entry.Sha256) {
+		if bytes.Equal(e.Sha256, req.Sha256) {
 			found = true
 			break
 		}
@@ -94,13 +74,13 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 
 	// ..if the container was already measured, exit
 	if found {
-		log.Tracef("Measurement %v already exists, nothing to do", req.Name)
+		log.Tracef("Measurement %v already exists, nothing to do", req.EventName)
 		return nil
 	}
 
 	// ..otherwise append it to the measurement list and record the measurement
-	measureList = append(measureList, entry)
-	log.Tracef("Recorded measurement %v into measurement list", req.Name)
+	measureList = append(measureList, req.MeasureEvent)
+	log.Tracef("Recorded measurement %v into measurement list", req.EventName)
 
 	data, err := mc.Serializer.Marshal(measureList)
 	if err != nil {
@@ -125,12 +105,12 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 		}
 		defer rwc.Close()
 
-		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, entry.Sha256, "")
+		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, req.Sha256, "")
 		if err != nil {
 			return fmt.Errorf("failed to extend PCR%v: %w", mc.Pcr, err)
 		}
 
-		log.Tracef("Recorded measurement %v into PCR%v", req.Name, mc.Pcr)
+		log.Tracef("Recorded measurement %v into PCR%v", req.EventName, mc.Pcr)
 	} else if strings.EqualFold(mc.Driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {

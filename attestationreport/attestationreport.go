@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	oci "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,7 +32,7 @@ var log = logrus.WithField("service", "ar")
 type AttestationReport struct {
 	Type         string           `json:"type" cbor:"0,keyasint"`
 	Measurements []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
-	Metadata     []MetadataDigest `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
+	Metadata     []MetadataDigest `json:"metadata,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 // MetadataDigest represents attestation report
@@ -57,28 +58,51 @@ type Measurement struct {
 // 'App Manifest', 'Device Description' and 'Company Description'
 type Metadata struct {
 	MetaInfo
-	Description string   `json:"description" cbor:"3,keyasint"`
-	CertLevel   int      `json:"certLevel" cbor:"4,keyasint"`
-	Validity    Validity `json:"validity" cbor:"5,keyasint"`
 	Manifest
 	DeviceDescription
+	*DeviceConfig
+}
+
+// MetaInfo is a helper struct for generic info
+// present in every metadata object
+type MetaInfo struct {
+	Type        string   `json:"type" cbor:"0,keyasint"`
+	Name        string   `json:"name" cbor:"1,keyasint"`
+	Version     string   `json:"version" cbor:"2,keyasint"`
+	Validity    Validity `json:"validity" cbor:"3,keyasint"`
+	Description string   `json:"description,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type Manifest struct {
-	ReferenceValues []ReferenceValue `json:"referenceValues,omitempty" cbor:"6,keyasint,omitempty"`
-	OciSpec         any              `json:"ociSpec,omitempty" cbor:"7,keyasint,omitempty"` // TODO move to app description
-	Details         any              `json:"details,omitempty" cbor:"8,keyasint,omitempty"`
-	DevCommonName   string           `json:"developerCommonName,omitempty"  cbor:"9,keyasint,omitempty"`
-	BaseLayers      []string         `json:"baseLayers,omitempty" cbor:"10,keyasint,omitempty"` // Links to RtmManifest.Name or OsManifest.Name
+	ReferenceValues []ReferenceValue       `json:"referenceValues,omitempty" cbor:"10,keyasint,omitempty"`
+	DevCommonName   string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
+	BaseLayers      []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"` // Links to RtmManifest.Name or OsManifest.Name
+	CertLevel       int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
+	Details         map[string]interface{} `json:"details,omitempty" cbor:"14,keyasint,omitempty"`
+	OciSpec         *oci.Spec              `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"` // TODO move to app description
 }
 
 // DeviceDescription represents the attestation report
 // element of type 'Device Description'
 type DeviceDescription struct {
-	Location        string           `json:"location,omitempty" cbor:"11,keyasint,omitempty"`
-	RtmManifest     string           `json:"rtmManifest,omitempty" cbor:"12,keyasint,omitempty"`
-	OsManifest      string           `json:"osManifest,omitempty" cbor:"13,keyasint,omitempty"`
-	AppDescriptions []AppDescription `json:"appDescriptions,omitempty" cbor:"14,keyasint,omitempty"`
+	Location        string           `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
+	RtmManifest     string           `json:"rtmManifest,omitempty" cbor:"21,keyasint,omitempty"`
+	OsManifest      string           `json:"osManifest,omitempty" cbor:"22,keyasint,omitempty"`
+	AppDescriptions []AppDescription `json:"appDescriptions,omitempty" cbor:"23,keyasint,omitempty"`
+}
+
+// DeviceConfig contains the local device configuration parameters
+type DeviceConfig struct {
+	Tpm       CertConfig `json:"tpm,omitempty" cbor:"30,keyasint,omitempty"`
+	Snp       CertConfig `json:"snp,omitempty" cbor:"31,keyasint,omitempty"`
+	Sgx       CertConfig `json:"sgx,omitempty" cbor:"32,keyasint,omitempty"`
+	Sw        CertConfig `json:"sw,omitempty" cbor:"33,keyasint,omitempty"`
+	SgxValues struct {
+		EncryptedPPID HexByte `json:"encryptedPPID,omitempty" cbor:"34,keyasint,omitempty"`
+		Pceid         HexByte `json:"pceid,omitempty" cbor:"35,keyasint,omitempty"`
+		Cpusvn        HexByte `json:"cpusvn,omitempty" cbor:"36,keyasint,omitempty"`
+		Pcesvn        HexByte `json:"pcesvn,omitempty" cbor:"37,keyasint,omitempty"`
+	}
 }
 
 // AppDescription represents the attestation report
@@ -91,23 +115,8 @@ type AppDescription struct {
 
 // CertConfig contains the subject parameters for CSRs/Certs
 type CertConfig struct {
-	AkCsr CsrParams `json:"akCsr" cbor:"3,keyasint"`
-	IkCsr CsrParams `json:"ikCsr" cbor:"4,keyasint"`
-}
-
-// DeviceConfig contains the local device configuration parameters
-type DeviceConfig struct {
-	MetaInfo
-	Tpm       CertConfig `json:"tpm" cbor:"3,keyasint"`
-	Snp       CertConfig `json:"snp" cbor:"4,keyasint"`
-	Sgx       CertConfig `json:"sgx" cbor:"5,keyasint"`
-	Sw        CertConfig `json:"sw" cbor:"6,keyasint"`
-	SgxValues struct {
-		EncryptedPPID HexByte `json:"encryptedPPID" cbor:"7,keyasint"`
-		Pceid         HexByte `json:"pceid" cbor:"8,keyasint"`
-		Cpusvn        HexByte `json:"cpusvn" cbor:"9,keyasint"`
-		Pcesvn        HexByte `json:"pcesvn" cbor:"10,keyasint"`
-	}
+	AkCsr CsrParams `json:"akCsr,omitempty" cbor:"3,keyasint,omitempty"`
+	IkCsr CsrParams `json:"ikCsr,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // ReferenceValue represents the attestation report
@@ -127,14 +136,6 @@ type ReferenceValue struct {
 	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
 
 	manifest *Metadata
-}
-
-// MetaInfo is a helper struct for generic info
-// present in every metadata object
-type MetaInfo struct {
-	Type    string `json:"type" cbor:"0,keyasint"`
-	Name    string `json:"name" cbor:"1,keyasint"`
-	Version string `json:"version" cbor:"2,keyasint"`
 }
 
 // Validity is a helper struct for 'Validity'
@@ -165,9 +166,9 @@ type MeasureEvent struct {
 }
 
 type CtrData struct {
-	ConfigSha256 HexByte `json:"configSha256" cbor:"0,keyasint"`
-	RootfsSha256 HexByte `json:"rootfsSha256" cbor:"1,keyasint"`
-	OciSpec      []byte  `json:"ociSpec" cbor:"2,keyasint"`
+	ConfigSha256 HexByte   `json:"configSha256" cbor:"0,keyasint"`
+	RootfsSha256 HexByte   `json:"rootfsSha256" cbor:"1,keyasint"`
+	OciSpec      *oci.Spec `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"`
 }
 
 type SnpPolicy struct {
@@ -303,7 +304,7 @@ type Environment struct {
 
 // CsrParams contains certificate signing request parameters
 type CsrParams struct {
-	Subject Name     `json:"subject" cbor:"0,keyasint"`
+	Subject Name     `json:"subject,omitempty" cbor:"0,keyasint,omitempty"`
 	SANs    []string `json:"sans,omitempty" cbor:"1,keyasint,omitempty"`
 }
 

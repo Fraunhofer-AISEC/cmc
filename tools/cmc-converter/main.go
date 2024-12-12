@@ -33,8 +33,8 @@ import (
 func main() {
 	log.SetLevel(log.TraceLevel)
 
-	inputFile := flag.String("in", "", "Path to metadata as JSON or CBOR to be signed")
-	outputFile := flag.String("out", "", "Path to the output file to save signed metadata")
+	inputFile := flag.String("in", "", "Path to JSON or CBOR metadata")
+	outputFile := flag.String("out", "", "Path to output file for converted metadata")
 	outForm := flag.String("outform", "", "Output format (JSON or CBOR)")
 	flag.Parse()
 
@@ -73,12 +73,12 @@ func main() {
 	}
 }
 
-func convert(data []byte, outform string) ([]byte, error) {
+func convert(input []byte, outform string) ([]byte, error) {
 	// Initialize serializers: detect input format
 	var si ar.Serializer
-	if json.Valid(data) {
+	if json.Valid(input) {
 		si = ar.JsonSerializer{}
-	} else if err := cbor.Valid(data); err == nil {
+	} else if err := cbor.Valid(input); err == nil {
 		si = ar.CborSerializer{}
 	} else {
 		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
@@ -95,76 +95,20 @@ func convert(data []byte, outform string) ([]byte, error) {
 			outform)
 	}
 
-	info := new(ar.MetaInfo)
-	err := si.Unmarshal(data, info)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal: %w", err)
-	}
-
-	var raw []byte
-	switch info.Type {
-	case "App Manifest":
-		log.Debug("Found App Manifest")
-		var m ar.Metadata
-		raw, err = convertInternal(data, &m, si, so)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert: %w", err)
-		}
-	case "OS Manifest":
-		log.Debug("Found OS Manifest")
-		var m ar.Metadata
-		raw, err = convertInternal(data, &m, si, so)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert: %w", err)
-		}
-
-	case "RTM Manifest":
-		log.Debug("Found RTM Manifest")
-		var m ar.Metadata
-		raw, err = convertInternal(data, &m, si, so)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert: %w", err)
-		}
-
-	case "Device Description":
-		log.Debug("Found Device Description")
-		var d ar.DeviceDescription
-		raw, err = convertInternal(data, &d, si, so)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert: %w", err)
-		}
-
-	case "Company Description":
-		log.Debug("Found Company Description")
-		var d ar.Metadata
-		raw, err = convertInternal(data, &d, si, so)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert: %w", err)
-		}
-
-	case "Device Config":
-		log.Debug("Found Device Config")
-		var d ar.DeviceConfig
-		raw, err = convertInternal(data, &d, si, so)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert: %w", err)
-		}
-
-	default:
-		return nil, fmt.Errorf("type %v not supported", info.Type)
-	}
-
-	return raw, nil
-}
-
-func convertInternal(data []byte, v any, si ar.Serializer, so ar.Serializer) ([]byte, error) {
-	err := si.Unmarshal(data, v)
+	// Convert serialized input to go representation
+	m := new(ar.Metadata)
+	err := si.Unmarshal(input, m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal: %v", err)
 	}
-	raw, err := so.Marshal(v)
+
+	log.Infof("Manifest ociSpec: %T", m.OciSpec)
+
+	// Convert go representation to serialized output
+	output, err := so.Marshal(m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal: %v", err)
 	}
-	return raw, nil
+
+	return output, nil
 }

@@ -78,10 +78,9 @@ message VerificationResponse {
 }
 
 message MeasureRequest {
-  string name = 1;
-  bytes config_sha256 = 2;
-  bytes rootfs_sha256 = 3;
-  bytes oci_spec = 4;
+  bytes sha256 = 1;
+  string event_name = 2;
+  CtrData ctr_data = 4;
 }
 
 message MeasureResponse {
@@ -115,4 +114,10 @@ message PeerCacheResponse {
 
 message PSSOptions {
   int32 salt_length = 1;
+}
+
+message CtrData {
+  bytes config_sha256 = 1;
+  bytes rootfs_sha256 = 2;
+  bytes oci_spec = 3;
 }
