@@ -463,7 +463,7 @@ func verifySnpSignature(
 		for _, cert := range chain {
 			chainExtracted = append(chainExtracted, ar.ExtractX509Infos(cert))
 		}
-		result.ValidatedCerts = append(result.ValidatedCerts, chainExtracted)
+		result.Certs = append(result.Certs, chainExtracted)
 	}
 
 	return result, true

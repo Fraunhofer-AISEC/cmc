@@ -555,7 +555,7 @@ var (
 	caCertserial, _     = new(big.Int).SetString("634815014411613577372985193537194269253199433648", 10)
 
 	validSignatureResult = ar.SignatureResult{
-		ValidatedCerts: [][]ar.X509CertExtracted{
+		Certs: [][]ar.X509CertExtracted{
 			{
 				{
 					Version:      3,
