@@ -125,9 +125,16 @@ func (a CoapApi) verify(c *config) {
 
 func (a CoapApi) measure(c *config) {
 
+	if c.CtrConfig == "" {
+		log.Fatalf("Mode measure requires OCI runtime config to be specified")
+	}
+	if c.CtrRootfs == "" {
+		log.Fatalf("Mode measure requires container rootfs to be specified")
+	}
+
 	ctrConfig, err := os.ReadFile(c.CtrConfig)
 	if err != nil {
-		log.Fatalf("Failed to read config: %v", err)
+		log.Fatalf("Failed to read oci runtime config: %v", err)
 	}
 
 	configHash, _, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)

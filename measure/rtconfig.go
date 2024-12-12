@@ -106,6 +106,9 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 	// Some container engines such as docker store the rootfs in an non-reproducible
 	// path. Therefore we store the path and hash the rootfs at this path, but remove the
 	// path from the config.json.
+	if config.Root == nil {
+		return nil, "", fmt.Errorf("invalid OCI config: no rootfs specified")
+	}
 	rootfs := config.Root.Path
 	config.Root = nil
 
