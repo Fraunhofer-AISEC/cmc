@@ -115,7 +115,14 @@ func (c *Client) Post(url, contentType string, body io.Reader) (resp *http.Respo
 
 	log.Debugf("Performing aHTTPS POST with content type %v to %v", contentType, url)
 
-	return c.client.Post(url, contentType, body)
+	resp, err = c.client.Post(url, contentType, body)
+	if err != nil {
+		return nil, fmt.Errorf("aHTTPS POST request failed: %w", err)
+	}
+
+	log.Debugf("Client aHTTPS request completed")
+
+	return resp, nil
 }
 
 // Wrapper for net/http client.Head()
@@ -198,7 +205,7 @@ func prepareClient(c *Client) error {
 					_ = conn.SetReadDeadline(time.Now().Add(c.Transport.ReadTimeout))
 				}
 
-				log.Debugf("aHTTPS connection established")
+				log.Debugf("Client-side aHTTPS connection established")
 
 				return conn, err
 			},

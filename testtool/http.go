@@ -158,8 +158,11 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		content, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Warn("Failed to read response")
+		} else {
+			log.Infof("Received from server: '%v'", string(content))
+			log.Debugf("Client-side aHTTPS request completed")
 		}
-		log.Infof("Received from server: '%v'", string(content))
+
 	}
 }
 
@@ -281,7 +284,7 @@ func handleDataRequest(w http.ResponseWriter, req *http.Request) {
 		log.Warnf("failed to write HTTP: %v", err)
 	}
 	if n != len(payload) {
-		log.Warnf("Failed to handle cacerts request: Only %v of %v bytes sent", n, len(payload))
+		log.Warnf("Failed to handle data request: Only %v of %v bytes sent", n, len(payload))
 	}
 }
 
@@ -318,7 +321,9 @@ func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 		log.Warnf("failed to write HTTP: %v", err)
 	}
 	if n != len(payload) {
-		log.Warnf("Failed to handle cacerts request: Only %v of %v bytes sent", n, len(payload))
+		log.Warnf("Failed to handle post request: Only %v of %v bytes sent", n, len(payload))
+	} else {
+		log.Debugf("Server-side aHTTPS request completed")
 	}
 }
 
