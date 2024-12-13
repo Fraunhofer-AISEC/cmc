@@ -68,8 +68,10 @@ func Verify(
 
 	result := ar.VerificationResult{
 		Type:      "Verification Result",
+		Prover:    "Unknown",
 		Success:   true,
-		CertLevel: 0}
+		CertLevel: 0,
+	}
 
 	cas, err := internal.ParseCertsPem(casPem)
 	if err != nil {
