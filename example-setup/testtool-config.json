@@ -9,11 +9,11 @@
     "ca": "../../cmc-data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
-    "measurementLog": false,
-    "apiSerializer": "json",
-    "publish": "http://localhost:8081/results",
-    "logLevel": "debug",
+    "measurementLog": true,
+    "publish": "http://localhost:8080/results",
+    "logLevel": "trace",
     "api": "socket",
+    "apiSerializer": "cbor",
     "network": "tcp",
     "cmc": "localhost:9955"
 }

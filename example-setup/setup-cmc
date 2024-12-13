@@ -34,7 +34,7 @@ echo "Using ${data} as directory for local data"
 mkdir -p "${data}"
 
 # Install dependencies
-sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq
+sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq
 sudo snap install yq
 
 # Install tpm-pcr-tools
@@ -55,10 +55,10 @@ go install ./...
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
 
-# Generate a PKI
+# Generate an example PKI
 "${data}/setup-pki" -i "${data}/pki-input" -o "${data}/pki"
 
-# Generate and sign platform (RTM and OS) metadata
+# Generate and sign platform metadata
 "${data}/update-platform" "${data}" "${ser}"
 
 # Generate example manifest for host apps

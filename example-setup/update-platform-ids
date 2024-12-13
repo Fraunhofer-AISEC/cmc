@@ -12,33 +12,61 @@ if [[ "$#" -ne 2 ]]; then
    exit 1
 fi
 
-data=$(set -e; abs_path "$1")
+data=$(set -e; abs_path "${1}")
 input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 out="${data}/metadata-signed"
-ser="$2"
+ser="${2}"
 
 if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${data} does not exist. Did you run the setup-cmc-ids script? Abort.."
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc-ids script? Abort.."
   exit 1
 fi
 
 echo "Using ${data} as directory for local data"
 
+# Retrieve high level details
+set +e
+firmware="Lenovo"
+bootloader=$(grub-install --version)
+kernel=$(uname -r)
+os=$(lsb_release -sd 2>/dev/null)
+set -e
+
+# Replace existing app descriptions in the device description (will be added through
+# update-app-manifest scripts)
+json=$(cat "${input}/device.description.json")
+json=$(echo "${json}" | jq 'del(.appDescriptions[])')
+printf "%s\n" "${json}" > "${input}/device.description.json"
+
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json -e)
 
-# Replace existing reference values with new reference values in the RTM Manifest
+# Load RTM manifest
 json=$(cat "${input}/rtm.manifest.json")
+
+# Insert high-level details
+json=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
+json=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
+
+# Replace existing reference values with new reference values in the RTM Manifest
 json=$(echo "${json}" | jq 'del(.referenceValues[])')
 json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+
+# Save the RTM manifest
 printf "%s\n" "${json}" > "${input}/rtm.manifest.json"
 
 # Parse the values of the OS PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$(sudo parse-srtm-pcrs -p 8,9 -f json -e)
+referenceValues=$(sudo parse-srtm-pcrs -p 8,9,12,13,14,15 -f json -e)
+
+# Load OS manifest
+json=$(cat "${input}/os.manifest.json")
+
+# Insert high-level details
+json=$(echo "${json}" | jq ".details.kernel = \"${kernel}\"")
+json=$(echo "${json}" | jq ".details.os = \"${os}\"")
 
 # Replace existing reference values with new reference values in the OS Manifest
-json=$(cat "${input}/os.manifest.json")
 json=$(echo "${json}" | jq 'del(.referenceValues[])')
 json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
 printf "%s\n" "${json}" > "${input}/os.manifest.json"

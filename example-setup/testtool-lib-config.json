@@ -11,8 +11,8 @@
     "attest": "mutual",
     "api": "libapi",
     "logLevel": "trace",
-    "publish": "http://localhost:8081/results",
-    "apiSerializer": "json",
+    "publish": "http://localhost:8080/results",
+    "apiSerializer": "cbor",
 
     "provServerAddr": "https://localhost:9000/",
     "metadata": [
