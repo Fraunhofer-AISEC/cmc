@@ -8,13 +8,14 @@ source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
 if [[ "$#" -ne 3 ]]; then
-   echo "Usage: ./setup-cmc-ids <cmc-folder> <data-folder> <cbor|json>"
-   exit 1
+   echo "Usage: ./setup-cmc <cmc-folder> <data-folder> <cbor|json>"
+   exit
 fi
 
 cmc=$(set -e; abs_path "$1")
 data=$(set -e; abs_path "$2")
-ser="$3"
+ser="${3}"
+client="docker"
 
 if [[ ! -d "${cmc}" ]]; then
   echo "CMC directory does not exist. Did you clone the repository? Abort.."
@@ -32,10 +33,11 @@ echo "Using ${data} as directory for local data"
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"
 
-sudo apt install moreutils golang-cfssl build-essential sqlite3
+# Install dependencies
+sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq
+sudo snap install yq
 
-# Install tools
-sudo apt install -y build-essential zlib1g-dev libssl-dev jq
+# Install tpm-pcr-tools
 git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${data}/tpm-pcr-tools"
 cd "${data}/tpm-pcr-tools"
 make
@@ -53,10 +55,12 @@ go install ./...
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
 
-# Generate a PKI suitable for your needs. You can use the IDS PKI example-setup for testing:
+# Generate an example PKI
 "${data}/setup-pki-ids" -i "${data}/pki-input-ids" -o "${data}/pki"
 
-# Update and sign metadata
+# Generate and sign platform metadata
 "${data}/update-platform-ids" "${data}" "${ser}"
 
 
+# Generate example manifest for host apps
+"${data}/update-app-manifest-live-ids" "${data}" "${ser}"
