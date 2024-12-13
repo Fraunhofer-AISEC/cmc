@@ -15,5 +15,21 @@
     "api": "socket",
     "apiSerializer": "cbor",
     "network": "tcp",
-    "cmc": "localhost:9955"
+    "cmc": "localhost:9955",
+    "provServerAddr": "https://localhost:9000/",
+    "metadata": [
+        "file://../../cmc-data/metadata-signed"
+    ],
+    "drivers": [ "tpm", "sw" ],
+    "useIma": true,
+    "imaPcr": 10,
+    "keyConfig": "EC256",
+    "storage": "../../cmc-data/testtool-storage",
+    "cache": "../../cmc-data/testtool-cache",
+    "peerCache": "../../cmc-data/testtool-peer-cache",
+    "useCtr": true,
+    "ctrDriver": "sw",
+    "ctrLog": "/tmp/container_measurements",
+    "ctrPcr": 11,
+    "extendedCtrLog": true
 }
