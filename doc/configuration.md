@@ -4,108 +4,22 @@ All binaries can be configured via JSON configuration files and commandline flag
 configuration option is specified both via configuration file and commandline flag, the
 commandline flag supersedes.
 
-The commandline flags can be shown via `<binary> -help`. Exemplary JSON configuration file examples
-can be found in the `examples/` folder of this repository. Paths in the configuration file can
-either be absolete or relative to the working directory.
+Multiple configuration files can be specified as a comma-separated list. If a specific configuration
+option is present in multiple configuration file, the last configuration file takes precedence.
 
-The remainder of this section explains the different options.
+The commandline flags for each executable can be shown via the `-help` flag. The JSON configuration
+options have the same names, except that commandline flags are all lower case (e.g. *cmcaddr*),
+while JSON properties are camel case (e.g. *cmcAddr*).
 
-## CMCD Configuration
+Furthermore, exemplary JSON configuration file examples can be found in the `examples/` folder of
+this repository. Paths in the configuration file can either be absolete or relative to the working
+directory.
 
-- **addr**: The address the *cmcd* should listen on, e.g. 127.0.0.1:9955
-- **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
-TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
-- **metadata**: A list of locations to fetch metadata from. This can be local files, e.g.,
-`file://manifest.json`, local folders, e.g., `file:///var/metadata/`, or remote HTTPS URLs,
-e.g., `https://localhost:9000/metadata`
-- **drivers**: Tells the *cmcd* prover which drivers to use, currently
-supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
-first provided driver is used for signing operations
-- **measurementLog**: Bool that indicates whether to include measured events in measurement and validation report.
-- **useIma**: Bool that indicates whether the Integrity Measurement Architecture (IMA) shall be used
-- **imaPcr**: TPM PCR where the IMA measurements are recorded (must match the kernel
-configuration). The linux kernel default is 10
-- **keyConfig**: The algorithm to be used for the *cmcd* keys. Possible values are:  RSA2048,
-RSA4096, EC256, EC384, EC521
-- **serialization**: The serialiazation format to use for the attestation report. Can be either
-`cbor` or `json`
-- **api**: Selects whether to use the `grpc`, `coap`, or `socket` API
-- **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
-`Unix Domain Sockets`
-- **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
-- **cache** : An optional folder the *cmcd* uses to cache retrieved metadata. If one or multiple
-locations specified via **metadata** cannot be fetched, the *cmcd* additionally uses this cache.
-File are stored by their sha256 hash as a filename and in case of duplicates, always the newest
-version of a metadata item is chosen
-- **storage**: An optional local storage path. If provided, the *cmcd* uses this path to store
-internal data such as downloaded certificates or created key handles
+## Testtool modes
 
-## EST Server Configuration
+The testtool can run the following commands/modes, specified via the `-mode` flag or the
+`mode` JSON configuration file property:
 
-- **port**: The port the server should listen on
-- **signingKey**: The private key of the CA used to sign the device certificates.
-- **signingCerts**: The certificate chain of the CA used to sign the device certificates.
-- **httpFolder**: The root folder containing metadata (manifests and descriptions) that is served
-by the provisioning server to be fetched by the *cmcd*
-- **verifyEkCert**: Boolean, specifies if the EK certificate chain should be validated via the
-**tpmEkCertDb**
-- **tpmEkCertDb**: SQLite database containing intermediate CA and CA certificates from the TPM
-manufacturers. The provisioning server uses these certificates to verify the TPM
-Endorsement Key (EK) certificate. The repository contains an example database with the
-certificates of some TPM manufacturers which can be used. For different manufacturers,
-certificates might need to be added.
-- **vcekOfflineCaching**: Boolean, specifies whether AMD SEV-SNP VCEK certificates downloaded from
-the AMD KDS server should be stored locally for later offline retrieval
-- **vcekCacheFolder**: The folder the downloaded VCEK certificates should locally be stored (only
-relevant if vcekOfflineCaching is set to true)
-- **estKey**: Server private key for establishing HTTPS connections
-- **estCerts**: Server certificate chain(s) for establishing HTTPS connections
-- **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
-
-## Testtool Configuration
-
-- **mode**: The mode to run. Possible are generate, verify, dial, listen, request, serve, cacerts and iothub. See below for an explanation of these modes
-- **addr**: List of addresses to connect to in mode dial and anddress to serve in mode listen.
-- **cmc**: The address of the CMC server
-- **report**: The file to store the attestation report in (mode generate) or to retrieve
-from (mode verify)
-- **result**: The file to store the attestation result in (mode verify)
-- **nonce**: The file to store the nonce in (mode generate) or to retrieve from (mode verify)
-- **ca**: The trust anchor CA(s)
-- **policies**: Optional policies files
-- **mtls**: Perform mutual TLS in mode dial and listen
-- **api**: Selects whether to use the `grpc`, `coap`, `socket` or `lib` API
-- **network**: Only relevant for the `socket` API, selects whether to use `TCP` or
-`Unix Domain Sockets`
-- **logLevel**: The logging level. Possible are trace, debug, info, warn, and error.
-- **interval**: Interval at which dial will be executed. If set to `0s` or less, then dial will only execute once.
-The interval format has to be in accordance with the input format of Go's
-[`time.Duration`](https://pkg.go.dev/time#ParseDuration).
-- **publish**: Optional HTTP address to publish attestation results to
--**header**: Only for mode `request`. One or multiple (comma-separated) HTTP headers can be specified in the format `key: value`, e.g. *Content-Type: application/json,Content-Transfer-Encoding: base64*
--**method**: Only for mode `request`. Specifies the HTTP method. Possible are `GET`, `POST`, `PUT` and `HEADER`
--**data**: Only for mode `request` with `POST` or `PUT` method. Specifies data to send to the demo server as a string
-
-Further configuration options are only relevant if the testtool is operated with the `lib` API,
-i.e., standalone without the *cmcd* running as a separate binary:
-
-- **cache** : An optional folder the *cmcd* uses to cache retrieved metadata. If one or multiple
-locations specified via **metadata** cannot be fetched, the *cmcd* additionally uses this cache.
-File are stored by their sha256 hash as a filename and in case of duplicates, always the newest
-version of a metadata item is chosen
-- **storage**: An optional local storage path. If provided, the *cmcd* uses this path to store
-internal data such as downloaded certificates or created key handles
-- **drivers**: Tells the *cmcd* prover which drivers to use, currently
-supported are `TPM`, `SNP`, and `SW`. If multiple drivers are used for measurements, always the
-first provided driver is used for signing operations
-- **measurementLog**: Bool that indicates whether to include measured events in measurement and validation report.
-- **metadata**: A list of locations to fetch metadata from. This can be local files, e.g.,
-`file://manifest.json`, local folders, e.g., `file:///var/metadata/`, or remote HTTPS URLs,
-e.g., `https://localhost:9000/metadata`
-- **provServerAddr**: The URL of the provisioning server. The server issues certificates for the
-TPM or software keys. In case of the TPM, the TPM *Credential Activation* process is performed.
-
-**The testtool can run the following commands/modes:**
 - **cacerts**: Retrieves the CA certificates from the EST server
 - **generate**: Generates an attestation report and stores it under the specified path
 - **verify**: Verifies a previously generated attestation report

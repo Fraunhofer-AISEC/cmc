@@ -43,7 +43,7 @@ type Sw struct {
 	ikChain    []*x509.Certificate
 	akPriv     crypto.PrivateKey
 	ikPriv     crypto.PrivateKey
-	useCtr     bool
+	ctr        bool
 	ctrPcr     int
 	ctrLog     string
 	extCtrLog  bool
@@ -90,7 +90,7 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("failed to provision sw driver: %w", err)
 	}
 
-	s.useCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "sw")
+	s.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "sw")
 	s.ctrLog = c.CtrLog
 	s.extCtrLog = c.ExtCtrLog
 	s.ctrPcr = c.CtrPcr
@@ -143,7 +143,7 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 
 	log.Trace("Collecting SW measurements")
 
-	if !s.useCtr {
+	if !s.ctr {
 		return ar.Measurement{}, errors.New("sw driver specified but use containers equals false")
 	}
 

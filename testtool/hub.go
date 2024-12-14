@@ -55,7 +55,7 @@ func serveHub(c *config) error {
 	log.Infof("Starting IoT Hub CoAP Server on %v", addr)
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
-	r.Handle("/attest", mux.HandlerFunc(attest))
+	r.Handle("/attest", mux.HandlerFunc(attestHub))
 
 	log.Infof("Waiting for requests on %v", addr)
 
@@ -67,7 +67,7 @@ func serveHub(c *config) error {
 	return nil
 }
 
-func attest(w mux.ResponseWriter, r *mux.Message) {
+func attestHub(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Received CoAP attestation request")
 

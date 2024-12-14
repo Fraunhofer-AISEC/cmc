@@ -7,7 +7,7 @@ original API, so that only some additional config options must be provided and m
 data types, such as `net.Conn` (https://pkg.go.dev/net#Conn) can still be used.
 
 In the following examples, error handling was omitted for simplicity. For the configurations,
-see [configuration](./configuration.md) or look at the *testtool* code.
+see [configuration](./configuration.md).
 
 ## Attested TLS
 

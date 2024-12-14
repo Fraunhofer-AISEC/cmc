@@ -74,7 +74,6 @@ type config struct {
 	// Generic config
 	Mode          string   `json:"mode"`
 	Addr          []string `json:"addr"`
-	CmcAddr       string   `json:"cmc"`
 	ReportFile    string   `json:"report"`
 	ResultFile    string   `json:"result"`
 	NonceFile     string   `json:"nonce"`
@@ -82,16 +81,13 @@ type config struct {
 	Mtls          bool     `json:"mtls"`
 	Attest        string   `json:"attest"`
 	PoliciesFile  string   `json:"policies"`
-	Api           string   `json:"api"`
-	Network       string   `json:"network"`
-	LogLevel      string   `json:"logLevel"`
 	Publish       string   `json:"publish"`
 	IntervalStr   string   `json:"interval"`
 	Header        []string `json:"header"`
 	Method        string   `json:"method"`
 	Data          string   `json:"data"`
 	ApiSerializer string   `json:"apiSerializer"`
-	// Only Lib API
+	LogLevel      string   `json:"logLevel"`
 	cmc.Config
 	// Only to test cmcd measure API
 	CtrName   string `json:"ctrName"`
@@ -106,19 +102,17 @@ type config struct {
 	attest        atls.AttestSelect
 }
 
+// Defines the testool specic flags. CMC flags are defined in cmc/config.go
 const (
 	// Generic flags
 	configFlag        = "config"
 	modeFlag          = "mode"
 	addrFlag          = "addr"
-	cmcFlag           = "cmc"
 	reportFlag        = "report"
 	resultFlag        = "result"
 	nonceFlag         = "nonce"
 	caFlag            = "ca"
 	policiesFlag      = "policies"
-	apiFlag           = "api"
-	networkFlag       = "network"
 	mtlsFlag          = "mtls"
 	attestFlag        = "attest"
 	logFlag           = "log"
@@ -128,140 +122,84 @@ const (
 	headerFlag        = "header"
 	methodFlag        = "method"
 	dataFlag          = "data"
-	// Only lib API, reflects cmcd config
-	cmcAddrFlag        = "cmc"
-	provServerAddrFlag = "prov"
-	metadataFlag       = "metadata"
-	driversFlag        = "drivers"
-	useImaFlag         = "ima"
-	imaPcrFlag         = "pcr"
-	keyConfigFlag      = "algo"
-	policyEngineFlag   = "policyengine"
-	logLevelFlag       = "log"
-	storageFlag        = "storage"
-	cacheFlag          = "cache"
-	peerCacheFlag      = "peercache"
-	measurementLogFlag = "measurementlog"
-	useCtrFlag         = "ctr"
-	ctrDriverFlag      = "ctrdriver"
-	ctrPcrFlag         = "ctrpcr"
-	ctrLogFlag         = "ctrlog"
-	extCtrLogFlag      = "extctrlog"
+	logLevelFlag      = "loglevel"
 	// Only to test cmcd measure API
 	ctrNameFlag   = "ctrname"
 	ctrRootfsFlag = "ctrrootfs"
 	ctrConfigFlag = "ctrconfig"
 )
 
-func getConfig() *config {
-	var err error
-	var ok bool
-
-	// Parse given command line flags
-	configFile := flag.String(configFlag, "", "Configuration file")
-	mode := flag.String(modeFlag, "", fmt.Sprintf("Possible modes: %v", maps.Keys(cmds)))
-	addr := flag.String(addrFlag, "", "Server ip:port to connect to / listen on via attested tls")
-	cmcAddr := flag.String(cmcFlag, "", "TCP address to connect to the cmcd API")
-	reportFile := flag.String(reportFlag, "", "Output file for the attestation report")
-	resultFile := flag.String(resultFlag, "", "Output file for the attestation result")
-	nonceFile := flag.String(nonceFlag, "", "Output file for the nonce")
-	caFile := flag.String(caFlag, "", "Certificate Authorities to be trusted in PEM format")
-	policiesFile := flag.String(policiesFlag, "", "JSON policies file for custom verification")
-	api := flag.String(apiFlag, "", fmt.Sprintf("APIs for cmcd. Possible: %v", maps.Keys(apis)))
-	network := flag.String(networkFlag, "", "Network for socket API [unix tcp]")
-	mtls := flag.Bool(mtlsFlag, false, "Performs mutual TLS")
-	attest := flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
+var (
+	configFile = flag.String(configFlag, "", "JSON Configuration file")
+	mode       = flag.String(modeFlag, "",
+		fmt.Sprintf("Commands the testtol can run: %v", maps.Keys(cmds)))
+	addr = flag.String(addrFlag, "",
+		"Address to connect to / listen on via attested tls / https")
+	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
+	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
+	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
+	caFile       = flag.String(caFlag, "", "Certificate Authorities to be trusted in PEM format")
+	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
+	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
+	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
 		"client only, or none [mutual, client, server, none]")
-	logLevel := flag.String(logFlag, "",
-		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
-	publish := flag.String(publishFlag, "", "HTTP address to publish attestation results to")
-	interval := flag.String(intervalFlag, "",
-		"Interval at which connectors will be attested. If set to <=0, attestation will only be"+
+	publish  = flag.String(publishFlag, "", "Optional HTTP address to publish attestation results to")
+	interval = flag.String(intervalFlag, "",
+		"Interval at which connectors will be attested. If set to '0s', attestation will only be"+
 			" done once")
-	apiSerializer := flag.String(apiSerializerFlag, "",
+	apiSerializer = flag.String(apiSerializerFlag, "",
 		"Serializer to be used for internal socket and CoAP API and aTLS (JSON or CBOR)")
-	headers := flag.String(headerFlag, "", "Set header for HTTP POST requests")
-	method := flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
-	data := flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
-	// Lib API flags
-	provServerAddr := flag.String(provServerAddrFlag, "",
-		"Address of the provisioning server (only for libapi)")
-	metadata := flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
-		"with file:// for local locations or https:// for remote locations (can be mixed)"+
-		"(only for libapi)")
-	driversList := flag.String(driversFlag, "",
-		fmt.Sprintf("Drivers (comma separated list). Only for libapi. Possible: %v",
-			strings.Join(maps.Keys(cmc.GetDrivers()), ",")))
-	useIma := flag.Bool(useImaFlag, false,
-		"Indicates whether to use Integrity Measurement Architecture (IMA)")
-	imaPcr := flag.Int(imaPcrFlag, 0, "IMA PCR")
-	keyConfig := flag.String(keyConfigFlag, "", "Key configuration")
-	policyEngine := flag.String(policyEngineFlag, "",
-		fmt.Sprintf("Possible policy engines: %v",
-			strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")))
-	storage := flag.String(storageFlag, "",
-		"Optional folder to store internal CMC data in (only for libapi)")
-	cache := flag.String(cacheFlag, "",
-		"Optional folder to cache metadata for offline backup (only for libapi)")
-	peerCache := flag.String(peerCacheFlag, "",
-		"Optional folder to cache peer metadata for smaller attestation reports (only for libapi)")
-	measurementLog := flag.Bool(measurementLogFlag, false,
-		"Indicates whether to include measured events in measurement and validation report")
-	useCtr := flag.Bool(useCtrFlag, false, "Specifies whether to conduct container measurements")
-	ctrDriver := flag.String(ctrDriverFlag, "",
-		"Specifies which driver to use for container measurements")
-	ctrPcr := flag.Int(ctrPcrFlag, 0, "Container PCR")
-	ctrLog := flag.String(ctrLogFlag, "", "Container runtime measurements path")
-	extCtrLog := flag.Bool(extCtrLogFlag, false,
-		"specifies whether to store extended container logs with OCI runtime specs")
+	headers  = flag.String(headerFlag, "", "Set header for HTTP POST requests")
+	method   = flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
+	data     = flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
+	logLevel = flag.String(logLevelFlag, "",
+		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	//  Only to test cmcd measure API
-	ctrName := flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
-	ctrRootfs := flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
-	ctrConfig := flag.String(ctrConfigFlag, "", "Specifies config path of the container to be measured")
+	ctrName   = flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
+	ctrRootfs = flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
+	ctrConfig = flag.String(ctrConfigFlag, "", "Specifies config path of the container to be measured")
+)
+
+func getConfig() *config {
+	var ok bool
 
 	flag.Parse()
 
-	// Create default configuration
+	// Initialize configuration with some default values
 	c := &config{
-		Mode:          "generate",
-		Addr:          []string{"0.0.0.0:4443"},
-		CmcAddr:       "127.0.0.1:9955",
-		ReportFile:    "attestation-report",
-		ResultFile:    "attestation-result.json",
-		NonceFile:     "nonce",
-		Api:           "grpc",
-		LogLevel:      "info",
-		IntervalStr:   "0s",
-		Attest:        "mutual",
-		Method:        "GET",
 		ApiSerializer: "cbor",
-		Config: cmc.Config{
-			KeyConfig: "EC256",
-		},
+		Attest:        "mutual",
+		IntervalStr:   "0s",
 	}
 
-	// Obtain custom configuration from file if specified
+	// Obtain configuration from json configuration file
 	if internal.FlagPassed(configFlag) {
-		log.Infof("Loading config from file %v", *configFile)
-		data, err := os.ReadFile(*configFile)
-		if err != nil {
-			log.Fatalf("Failed to read testtool config file %v: %v", *configFile, err)
-		}
-		err = json.Unmarshal(data, c)
-		if err != nil {
-			log.Fatalf("Failed to parse testtool config: %v", err)
+		files := strings.Split(*configFile, ",")
+		for _, f := range files {
+			log.Infof("Loading config from file %v", f)
+			data, err := os.ReadFile(f)
+			if err != nil {
+				log.Fatalf("Failed to read testtool config file %v: %v", f, err)
+			}
+			err = json.Unmarshal(data, c)
+			if err != nil {
+				log.Fatalf("Failed to parse testtool config: %v", err)
+			}
 		}
 	}
 
-	// Overwrite config file configuration with given command line arguments
+	// Overwrite cmc configuration with values passed via command line (only required for libapi)
+	err := cmc.GetConfig(&c.Config)
+	if err != nil {
+		log.Fatalf("Failed to read cmc config: %v", err)
+	}
+
+	// Overwrite testtool configuration with values passed via command line
 	if internal.FlagPassed(modeFlag) {
 		c.Mode = *mode
 	}
 	if internal.FlagPassed(addrFlag) {
 		c.Addr = strings.Split(*addr, ",")
-	}
-	if internal.FlagPassed(cmcFlag) {
-		c.CmcAddr = *cmcAddr
 	}
 	if internal.FlagPassed(reportFlag) {
 		c.ReportFile = *reportFile
@@ -277,12 +215,6 @@ func getConfig() *config {
 	}
 	if internal.FlagPassed(policiesFlag) {
 		c.PoliciesFile = *policiesFile
-	}
-	if internal.FlagPassed(apiFlag) {
-		c.Api = *api
-	}
-	if internal.FlagPassed(networkFlag) {
-		c.Network = *network
 	}
 	if internal.FlagPassed(mtlsFlag) {
 		c.Mtls = *mtls
@@ -311,54 +243,8 @@ func getConfig() *config {
 	if internal.FlagPassed(dataFlag) {
 		c.Data = *data
 	}
-	// Lib API flags
-	if internal.FlagPassed(provServerAddrFlag) {
-		c.ProvServerAddr = *provServerAddr
-	}
-	if internal.FlagPassed(metadataFlag) {
-		c.Metadata = strings.Split(*metadata, ",")
-	}
-	if internal.FlagPassed(driversFlag) {
-		c.Drivers = strings.Split(*driversList, ",")
-	}
-	if internal.FlagPassed(useImaFlag) {
-		c.UseIma = *useIma
-	}
-	if internal.FlagPassed(imaPcrFlag) {
-		c.ImaPcr = *imaPcr
-	}
-	if internal.FlagPassed(keyConfigFlag) {
-		c.KeyConfig = *keyConfig
-	}
-	if internal.FlagPassed(policyEngineFlag) {
-		c.PolicyEngine = *policyEngine
-	}
-	if internal.FlagPassed(storageFlag) {
-		c.Storage = *storage
-	}
-	if internal.FlagPassed(cacheFlag) {
-		c.Cache = *cache
-	}
-	if internal.FlagPassed(peerCacheFlag) {
-		c.PeerCache = *peerCache
-	}
-	if internal.FlagPassed(measurementLogFlag) {
-		c.MeasurementLog = *measurementLog
-	}
-	if internal.FlagPassed(useCtrFlag) {
-		c.UseCtr = *useCtr
-	}
-	if internal.FlagPassed(ctrDriverFlag) {
-		c.CtrDriver = *ctrDriver
-	}
-	if internal.FlagPassed(ctrPcrFlag) {
-		c.CtrPcr = *ctrPcr
-	}
-	if internal.FlagPassed(ctrLogFlag) {
-		c.CtrLog = *ctrLog
-	}
-	if internal.FlagPassed(extCtrLogFlag) {
-		c.ExtCtrLog = *extCtrLog
+	if internal.FlagPassed(logLevelFlag) {
+		c.LogLevel = *logLevel
 	}
 	//  Only to test cmcd measure API
 	if internal.FlagPassed(ctrNameFlag) {
@@ -371,25 +257,32 @@ func getConfig() *config {
 		c.CtrConfig = *ctrConfig
 	}
 
+	// Configure the logger
+	l, ok := logLevels[strings.ToLower(c.LogLevel)]
+	if !ok {
+		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
+		l = logrus.InfoLevel
+	}
+	log.Infof("Configuring logger for log level %v", c.LogLevel)
+	logrus.SetLevel(l)
+
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
 	if err != nil {
 		log.Fatalf("Failed to parse monitoring interval: %v", err)
 	}
 	c.interval = intervalDuration
 
-	// Configure the logger
-	l, ok := logLevels[strings.ToLower(c.LogLevel)]
-	if !ok {
+	// Basic sanity checks
+	if _, ok := cmds[c.Mode]; !ok {
 		flag.Usage()
-		log.Fatalf("LogLevel %v does not exist", c.LogLevel)
+		log.Fatalf("Unknown mode '%v' specified", c.Mode)
 	}
-	logrus.SetLevel(l)
 
 	// Convert all paths to absolute paths
 	pathsToAbs(c)
 
 	// Print the parsed configuration
-	printConfig(c)
+	c.Print()
 
 	// Get root CA certificate in PEM format if specified
 	if c.Mode != "generate" && c.Mode != "cacerts" && c.Mode != "measure" {
@@ -428,7 +321,7 @@ func getConfig() *config {
 	c.api, ok = apis[strings.ToLower(c.Api)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("API %v is not implemented", c.Api)
+		log.Fatalf("API '%v' is not implemented", c.Api)
 	}
 
 	// Get attestation mode
@@ -516,7 +409,7 @@ func GetAttestMode(attest string) (atls.AttestSelect, error) {
 	return selection, nil
 }
 
-func printConfig(c *config) {
+func (c *config) Print() {
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Warnf("Failed to get working directory: %v", err)
@@ -524,41 +417,33 @@ func printConfig(c *config) {
 	log.Infof("Running testtool from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tMode           : %v", c.Mode)
-	log.Debugf("\tAddr           : %v", c.Addr)
-	log.Debugf("\tInterval       : %v", c.interval)
-	log.Debugf("\tCmcAddr        : %v", c.CmcAddr)
-	log.Debugf("\tReportFile     : %v", c.ReportFile)
-	log.Debugf("\tResultFile     : %v", c.ResultFile)
-	log.Debugf("\tNonceFile      : %v", c.NonceFile)
-	log.Debugf("\tCaFile         : %v", c.CaFile)
-	log.Debugf("\tMtls           : %v", c.Mtls)
-	log.Debugf("\tLogLevel       : %v", c.LogLevel)
-	log.Debugf("\tAttest         : %v", c.Attest)
-	log.Debugf("\tAPI Serializer : %v", c.ApiSerializer)
-	log.Debugf("\tPublish        : %v", c.Publish)
+	log.Debugf("\tMode                     : %v", c.Mode)
+	log.Debugf("\tAddress                  : %v", c.Addr)
+	log.Debugf("\tInterval                 : %v", c.interval)
+	log.Debugf("\tCMC API Address          : %v", c.CmcAddr)
+	log.Debugf("\tReportFile               : %v", c.ReportFile)
+	log.Debugf("\tResultFile               : %v", c.ResultFile)
+	log.Debugf("\tNonceFile                : %v", c.NonceFile)
+	log.Debugf("\tCaFile                   : %v", c.CaFile)
+	log.Debugf("\tMtls                     : %v", c.Mtls)
+	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
+	log.Debugf("\tAttest                   : %v", c.Attest)
+	log.Debugf("\tAPI Serializer           : %v", c.ApiSerializer)
+	log.Debugf("\tPublish                  : %v", c.Publish)
 	if strings.EqualFold(c.Mode, "request") {
-		log.Debugf("\tHTTP Data      : %v", c.Data)
-		log.Debugf("\tHTTP Header    : %v", c.Header)
-		log.Debugf("\tHTTP Method    : %v", c.Method)
+		log.Debugf("\tHTTP Data                : %v", c.Data)
+		log.Debugf("\tHTTP Header              : %v", c.Header)
+		log.Debugf("\tHTTP Method              : %v", c.Method)
 	}
 	if c.PoliciesFile != "" {
-		log.Debugf("\tPoliciesFile  : %v", c.PoliciesFile)
+		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
 	}
 	if strings.EqualFold(c.Api, "socket") {
-		log.Debugf("\tApi (Network)  : %v (%v)", c.Api, c.Network)
+		log.Debugf("\tApi (Network)            : %v (%v)", c.Api, c.Network)
 	} else {
-		log.Debugf("\tApi            : %v", c.Api)
+		log.Debugf("\tApi                      : %v", c.Api)
 	}
 	if strings.EqualFold(c.Api, "libapi") {
-		log.Debugf("\tProvServerAddr : %v", c.ProvServerAddr)
-		log.Debugf("\tMetadata       : %v", c.Metadata)
-		log.Debugf("\tStorage        : %v", c.Storage)
-		log.Debugf("\tCache          : %v", c.Cache)
-		log.Debugf("\tPeer Cache     : %v", c.PeerCache)
-		log.Debugf("\tMeasurement Log: %v", c.MeasurementLog)
-		log.Debugf("\tDrivers        : %v", strings.Join(c.Drivers, ","))
-		log.Debugf("\tUse IMA        : %v", c.UseIma)
-		log.Debugf("\tIMA PCR        : %v", c.ImaPcr)
+		c.Config.Print()
 	}
 }

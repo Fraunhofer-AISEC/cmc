@@ -204,7 +204,6 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,
 			LogFile:    s.cmc.CtrLog,
-			ExtLog:     s.cmc.ExtCtrLog,
 			Driver:     s.cmc.CtrDriver,
 		})
 	if err != nil {
