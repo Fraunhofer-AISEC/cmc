@@ -51,7 +51,7 @@ func (s SocketServer) Serve(addr string, cmc *c.Cmc) error {
 
 	socket, err := net.Listen(cmc.Network, addr)
 	if err != nil {
-		return fmt.Errorf("failed to listen on unix domain soket: %w", err)
+		return fmt.Errorf("failed to listen: %w", err)
 	}
 	defer socket.Close()
 
