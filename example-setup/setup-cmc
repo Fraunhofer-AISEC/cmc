@@ -33,25 +33,6 @@ echo "Using ${data} as directory for local data"
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"
 
-# Install dependencies
-sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq
-sudo snap install yq
-
-# Install tpm-pcr-tools
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${data}/tpm-pcr-tools"
-cd "${data}/tpm-pcr-tools"
-make
-sudo make install
-
-# Build CMC
-cd "${cmc}"
-echo "Building CMC.."
-go build ./...
-
-# Install CMC to $GOPATH/bin
-echo "Installing CMC"
-go install ./...
-
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
 
