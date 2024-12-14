@@ -252,25 +252,23 @@ func initialize(c *config) (*cmc.Cmc, error) {
 	}
 
 	cmcConf := &cmc.Config{
-		Addr:           c.Addr[0],
-		ProvServerAddr: c.ProvServerAddr,
+		CmcAddr:        c.CmcAddr,
+		ProvAddr:       c.ProvAddr,
 		Metadata:       c.Metadata,
 		Drivers:        c.Drivers,
-		UseIma:         c.UseIma,
+		Ima:            c.Ima,
 		ImaPcr:         c.ImaPcr,
 		KeyConfig:      c.KeyConfig,
 		Api:            "libapi",
 		PolicyEngine:   c.PolicyEngine,
-		LogLevel:       c.LogLevel,
 		Storage:        c.Storage,
 		Cache:          c.Cache,
 		PeerCache:      c.PeerCache,
 		MeasurementLog: c.MeasurementLog,
-		UseCtr:         c.UseCtr,
+		Ctr:            c.Ctr,
 		CtrDriver:      c.CtrDriver,
 		CtrPcr:         c.CtrPcr,
 		CtrLog:         c.CtrLog,
-		ExtCtrLog:      c.ExtCtrLog,
 	}
 
 	return cmc.NewCmc(cmcConf)

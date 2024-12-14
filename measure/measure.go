@@ -37,7 +37,6 @@ type MeasureConfig struct {
 	Serializer ar.Serializer
 	Pcr        int
 	LogFile    string
-	ExtLog     bool
 	Driver     string
 }
 

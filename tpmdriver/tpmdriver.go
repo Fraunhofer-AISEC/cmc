@@ -52,10 +52,10 @@ type Tpm struct {
 	Pcrs           []int
 	IkChain        []*x509.Certificate
 	AkChain        []*x509.Certificate
-	UseIma         bool
+	Ima            bool
 	ImaPcr         int
 	MeasurementLog bool
-	UseCtr         bool
+	Ctr            bool
 	CtrPcr         int
 	CtrLog         string
 	Serializer     ar.Serializer
@@ -171,13 +171,13 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	}
 
 	t.Pcrs = pcrs
-	t.UseIma = c.UseIma
+	t.Ima = c.Ima
 	t.ImaPcr = c.ImaPcr
 	t.IkChain = ikchain
 	t.AkChain = akchain
 	t.MeasurementLog = c.MeasurementLog
 	t.Serializer = c.Serializer
-	t.UseCtr = c.UseCtr && strings.EqualFold(c.CtrDriver, "tpm")
+	t.Ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
 	t.CtrLog = c.CtrLog
 	t.CtrPcr = c.CtrPcr
 
@@ -258,7 +258,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		hashChain[i] = pcrMeasurement
 	}
 
-	if t.UseIma {
+	if t.Ima {
 		// If the IMA is used, not the final PCR value is sent but instead
 		// a list of the kernel modules which are extended during verification
 		// to result in the final value
@@ -282,7 +282,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		}
 	}
 
-	if t.UseCtr {
+	if t.Ctr {
 		log.Tracef("Reading container measurements")
 		if _, err := os.Stat(t.CtrLog); err == nil {
 			// If CMC container measurements are used, add the list of executed containers

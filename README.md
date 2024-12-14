@@ -84,9 +84,8 @@ An overview of the architecture is given in [Architecture](./doc/Architecture.md
 
 ### Configuration
 
-The tools can be configured via JSON configuration files and commandline flags. For an explanation,
-each binary can be run with the `-help` flag. All configuration options are explained in the
-[Configuration Documentation](./doc/configuration.md).
+The tools can be configured via JSON configuration files and commandline flags. The configuration
+is further explained in [Configuration Documentation](./doc/configuration.md).
 
 ### Detailed Setup
 

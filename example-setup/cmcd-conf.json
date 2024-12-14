@@ -1,11 +1,11 @@
 {
-    "addr": "localhost:9955",
-    "provServerAddr": "https://localhost:9000/",
+    "cmcAddr": "localhost:9955",
+    "provAddr": "https://localhost:9000/",
     "metadata": [
         "file://../../cmc-data/metadata-signed"
     ],
     "drivers": [ "tpm", "sw" ],
-    "useIma": true,
+    "ima": true,
     "imaPcr": 10,
     "keyConfig": "EC256",
     "api": "socket",
@@ -16,9 +16,8 @@
     "cache": "../../cmc-data/cmc-cache/",
     "peerCache": "../../cmc-data/cmc-peer-cache",
     "measurementLog": true,
-    "useCtr": true,
+    "ctr": true,
     "ctrDriver": "sw",
     "ctrLog": "/tmp/container_measurements",
-    "ctrPcr": 11,
-    "extendedCtrLog": true
+    "ctrPcr": 11
 }

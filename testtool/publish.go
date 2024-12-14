@@ -61,14 +61,14 @@ func publishResult(addr string, result *ar.VerificationResult) {
 		return
 	}
 
-	err = publish(addr, data)
+	err = publishReport(addr, data)
 	if err != nil {
 		log.Tracef("Failed to publish: %v", err)
 		return
 	}
 }
 
-func publish(addr string, result []byte) error {
+func publishReport(addr string, result []byte) error {
 
 	if addr == "" {
 		return nil
@@ -129,7 +129,7 @@ func saveResult(file, addr string, result []byte) error {
 
 	// Publish the attestation result if publishing address was specified
 	if addr != "" {
-		err := publish(addr, result)
+		err := publishReport(addr, result)
 		if err != nil {
 			log.Warnf("failed to publish result: %v", err)
 		}

@@ -37,30 +37,6 @@ var (
 	drivers = map[string]ar.Driver{}
 )
 
-type Config struct {
-	Addr           string   `json:"addr,omitempty"`
-	ProvServerAddr string   `json:"provServerAddr"`
-	Metadata       []string `json:"metadata"`
-	Drivers        []string `json:"drivers"`
-	UseIma         bool     `json:"useIma"`
-	ImaPcr         int      `json:"imaPcr"`
-	KeyConfig      string   `json:"keyConfig,omitempty"`
-	Api            string   `json:"api"`
-	Network        string   `json:"network,omitempty"`
-	PolicyEngine   string   `json:"policyEngine,omitempty"`
-	LogLevel       string   `json:"logLevel,omitempty"`
-	Storage        string   `json:"storage,omitempty"`
-	Cache          string   `json:"cache,omitempty"`
-	PeerCache      string   `json:"peerCache,omitempty"`
-	MeasurementLog bool     `json:"measurementLog,omitempty"`
-	// Only for container measurements
-	UseCtr    bool   `json:"useCtr,omitempty"`
-	CtrDriver string `json:"ctrDriver,omitempty"`
-	CtrPcr    int    `json:"ctrPcr,omitempty"`
-	CtrLog    string `json:"ctrLog"`
-	ExtCtrLog bool   `json:"extendedCtrLog"`
-}
-
 type Cmc struct {
 	Metadata           map[string][]byte
 	CachedPeerMetadata map[string]map[string][]byte
@@ -70,11 +46,10 @@ type Cmc struct {
 	Network            string
 	IntelStorage       string
 	PeerCache          string
-	UseCtr             bool
+	Ctr                bool
 	CtrDriver          string
 	CtrPcr             int
 	CtrLog             string
-	ExtCtrLog          bool
 }
 
 func GetDrivers() map[string]ar.Driver {
@@ -91,11 +66,10 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Network:      c.Network,
 		IntelStorage: c.Storage,
 		PeerCache:    c.PeerCache,
-		UseCtr:       c.UseCtr,
+		Ctr:          c.Ctr,
 		CtrDriver:    c.CtrDriver,
 		CtrPcr:       c.CtrPcr,
 		CtrLog:       c.CtrLog,
-		ExtCtrLog:    c.ExtCtrLog,
 	}
 
 	// Read metadata and device config from the file system
@@ -118,18 +92,17 @@ func NewCmc(c *Config) (*Cmc, error) {
 		// Create driver configuration
 		driverConf := &ar.DriverConfig{
 			StoragePath:    c.Storage,
-			ServerAddr:     c.ProvServerAddr,
+			ServerAddr:     c.ProvAddr,
 			KeyConfig:      c.KeyConfig,
 			DeviceConfig:   *deviceConfig,
-			UseIma:         c.UseIma,
+			Ima:            c.Ima,
 			ImaPcr:         c.ImaPcr,
 			MeasurementLog: c.MeasurementLog,
 			Serializer:     s,
 			CtrPcr:         c.CtrPcr,
 			CtrLog:         c.CtrLog,
-			ExtCtrLog:      c.ExtCtrLog,
 			CtrDriver:      c.CtrDriver,
-			UseCtr:         c.UseCtr,
+			Ctr:            c.Ctr,
 		}
 
 		// Initialize drivers
@@ -148,7 +121,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		cmc.Drivers = usedDrivers
 
 		// Check container driver
-		if c.UseCtr {
+		if c.Ctr {
 			if !internal.Contains(c.CtrDriver, c.Drivers) {
 				return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
 					c.CtrDriver)

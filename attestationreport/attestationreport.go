@@ -344,11 +344,11 @@ type DriverConfig struct {
 	StoragePath    string
 	ServerAddr     string
 	KeyConfig      string
-	UseIma         bool
+	Ima            bool
 	ImaPcr         int
 	Serializer     Serializer
 	MeasurementLog bool
-	UseCtr         bool
+	Ctr            bool
 	CtrPcr         int
 	CtrLog         string
 	ExtCtrLog      bool

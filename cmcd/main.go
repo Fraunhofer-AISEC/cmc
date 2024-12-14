@@ -19,18 +19,23 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/sirupsen/logrus"
+)
+
+var (
+	log = logrus.WithField("service", "cmcd")
 )
 
 func main() {
 
-	log.Infof("Starting cmcd %v", getVersion())
+	log.Infof("Starting cmcd %v", cmc.GetVersion())
 
-	c, err := getConfig()
+	c, err := GetConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	cmc, err := cmc.NewCmc(c)
+	cmc, err := cmc.NewCmc(&c.Config)
 	if err != nil {
 		log.Fatalf("Failed to init CMC: %v", err)
 	}
@@ -40,7 +45,7 @@ func main() {
 		log.Fatalf("API '%v' is not implemented", c.Api)
 	}
 
-	err = server.Serve(c.Addr, cmc)
+	err = server.Serve(c.CmcAddr, cmc)
 	if err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
