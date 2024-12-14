@@ -14,30 +14,51 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 *[paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171) and in the*
 *[documentation](doc/Architecture.md)*
 
-## Prerequisites
+## Requirements
 
 - A Linux platform
 - For TPM attestation, access to `/dev/tpmrm0` or `/dev/tpm0`.
 - For AMD SEV-SNP an SNP-capable AMD server and an SNP VM with access to `/dev/sev-guest`
-- Building the *cmcd* requires *go* (https://golang.org/doc/install)
-- Building AWS Firmware (OVMF) for running the CMC within AWS AMD SEV-SNP virtual machines
-requires [Nix](https://nixos.org/download/)
 
-## Quick Start
+## Prerequisites
 
-The CMC repository contains a complete local TPM-based example setup including a demo CA and all
-required configurations and metadata. It was tested on Ubuntu 22.04 LTS.
+Several packages must be installed for building the `cmc` and generating metada, which has been
+tested for debian and ubuntu:
+```sh
+sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq yq
+```
+NOTE: For ubuntu, `yq` must be installed as a snap package
 
-> :warning: **Note:** You should run this only for testing on a development machine, or inside
-> a Virtual Machine (VM). The software directly interacts with the TPM
+Building the *cmcd* requires *go*. Follow https://golang.org/doc/install.
 
-### Setup and Build
+Generating reference values for TPM-based attestation requires the `tpm-pcr-tools`:
+```sh
+git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${data}/tpm-pcr-tools"
+cd "${data}/tpm-pcr-tools"
+make
+sudo make install
+```
+
+Building the AWS Firmware (OVMF) to calculate the reference values for attestation of AWS AMD SEV-SNP
+virtual machines requires [Nix](https://nixos.org/download/)
+
+## Build
 
 Clone the repository:
 ```sh
 git clone https://github.com/Fraunhofer-AISEC/cmc.git
 ```
-Create a demo PKI and all required metadata:
+
+Build and install all tools to `$HOME/go/bin`:
+```sh
+cd cmc
+go build ./...
+go install ./...
+```
+
+## Quick Start
+
+Create a demo PKI and all required metadata for a TPM-based attestation:
 ```
 ./cmc/example-setup/setup-cmc <cmc-folder> <metadata-folder> json
 ```
@@ -48,6 +69,12 @@ configuration files. `json` specifies JSON as the serialization format. `cbor` i
 For the JSON example configuration folders to work without modifications, choose as `<metadata-folder>`
 the folder `cmc-data` located in the same root folder the `cmc` repository resides in.
 Export this root folder as `$CMC_ROOT`.
+
+The CMC repository contains a complete local TPM-based example setup including a demo CA and all
+required configurations and metadata. It was tested on Ubuntu 22.04 LTS.
+
+> :warning: **Note:** You should run this only for testing on a development machine, or inside
+> a Virtual Machine (VM). The software directly interacts with the hardware (TPM, SNP).
 
 ### Run
 

@@ -92,7 +92,7 @@ elif [[ "${client}" == "docker" ]]; then
     containers=("${target}")
     sudo docker run ${args} "${target}"
 elif [[ "${client}" == "docker-compose" ]]; then
-    containers=($(yq eval '.services | keys | .[]' "${target}"))
+    containers=($(yq '.services | keys | .[]' "${target}"))
     set +e
     docker compose -f "${target}" up &
     echo "Sleeping for 10s to enable container start"
