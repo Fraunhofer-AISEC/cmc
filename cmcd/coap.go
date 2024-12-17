@@ -56,12 +56,12 @@ func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 	log.Infof("Starting CMC CoAP Server on %v", addr)
 	r := mux.NewRouter()
 	r.Use(loggingMiddleware)
-	r.Handle("/Attest", mux.HandlerFunc(s.Attest))
-	r.Handle("/Verify", mux.HandlerFunc(s.Verify))
-	r.Handle("/Measure", mux.HandlerFunc(s.Measure))
-	r.Handle("/TLSSign", mux.HandlerFunc(s.TlsSign))
-	r.Handle("/TLSCert", mux.HandlerFunc(s.TlsCert))
-	r.Handle("/PeerCache", mux.HandlerFunc(s.PeerCache))
+	r.Handle(api.EndpointAttest, mux.HandlerFunc(s.Attest))
+	r.Handle(api.EndpointVerify, mux.HandlerFunc(s.Verify))
+	r.Handle(api.EndpointTLSSign, mux.HandlerFunc(s.TlsSign))
+	r.Handle(api.EndpointTLSCert, mux.HandlerFunc(s.TlsCert))
+	r.Handle(api.EndpointPeerCache, mux.HandlerFunc(s.PeerCache))
+	r.Handle(api.EndpointMeasure, mux.HandlerFunc(s.Measure))
 
 	log.Infof("Waiting for requests on %v", addr)
 

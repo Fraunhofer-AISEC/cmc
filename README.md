@@ -79,8 +79,8 @@ required configurations and metadata. It was tested on Ubuntu 22.04 LTS.
 ### Run
 
 The tools can generate and verify attestation reports, establish attested TLS connections and
-establish attested HTTPS connections. For detailed instructions refer to
-[Manual Setup](./doc/manual-setup.md)
+establish attested HTTPS connections. For detailed instructions refer to the
+[Detailed Setup](./doc/setup.md)
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
@@ -107,7 +107,7 @@ database. The `verifyEkCert` parameter in the *estserver* config can then be set
 
 ### Architecture
 
-An overview of the architecture is given in [Architecture](./doc/Architecture.md).
+An overview of the architecture is given in [Architecture](./doc/architecture.md).
 
 ### Configuration
 
@@ -116,17 +116,23 @@ is further explained in [Configuration Documentation](./doc/configuration.md).
 
 ### Detailed Setup
 
-For instructions on creating and signing the metadata with an arbitrary PKI yourself,
-see [Manual Setup](./doc/manual-setup.md)
+For instructions on creating and signing the metadata with an arbitrary PKI yourself, see
+[Detailed Setup](./doc/setup.md)
 
 ### Build
 
 See [Build Documentation](./doc/build.md)
 
+### APIs and Protocols
+
+For a description of the `cmcd` gRPC, CoaP and socket APIs, refer to [CMCD API](./doc/cmcd-api.md).
+For a description of the attested TLS attestation protocol, refer to
+[Attestation Protocol](./doc/attestation-protocol.md).
+
 ### Integration
 
 Usually, the attested TLS or HTTPS libraries are used within own projects to provide attestation
-for TLS or HTTPS connections, as described in [Integration](./doc/integration.md)
+for TLS or HTTPS connections, as described in [Integration](./doc/go-integration.md)
 
 ### Additional Demo Setups
 

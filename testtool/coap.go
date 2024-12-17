@@ -55,8 +55,6 @@ func (a CoapApi) generate(c *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	path := "/Attest"
-
 	// Generate random nonce
 	nonce := make([]byte, 8)
 	_, err = rand.Read(nonce)
@@ -76,7 +74,7 @@ func (a CoapApi) generate(c *config) {
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointAttest, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		log.Fatalf("failed to send request: %v", err)
 	}
@@ -213,8 +211,6 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	path := "/Verify"
-
 	// Marshal CoAP payload
 	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
@@ -222,7 +218,7 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -256,8 +252,6 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	path := "/Measure"
-
 	// Marshal CoAP payload
 	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
@@ -265,7 +259,7 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}

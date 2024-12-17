@@ -5,7 +5,18 @@ detailed description, also refer to our [paper](https://dl.acm.org/doi/pdf/10.11
 
 ## Architecture Overview
 
-![CMC, drivers and exemplary testtool as well as interface descriptions](./overview.drawio.svg)
+The CMC is a framework that provides a unified interface to various attestation technologies for
+generating and verifying attestation reports. This functionality is implemented in the `cmc`
+package. Furthermore, the framework provides go packages for secure, attested channels:
+attested TLS (`attestedtls`) and attested HTTPS (`attestedhttps`).
+
+Applications aiming to establish attested secure channels might not have direct access to
+the hardware (e.g., because they are running in containers or without the required privileges).
+For this purpose, the framework provides the CMC daemon (`cmcd`) as the main application for
+generating and verifying attestation. The CMC exposes its functionality via multple APIs, which are
+described in the following section.
+
+![CMC, drivers and exemplary testtool](./overview.drawio.svg)
 
 The figure shows how the core components interact with each other. The main software components are:
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
