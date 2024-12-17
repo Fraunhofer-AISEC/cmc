@@ -69,6 +69,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(api),
+			atls.WithApiSerializer(c.apiSerializer),
 			atls.WithCmc(cmc))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
@@ -177,6 +178,7 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(api),
+		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
@@ -216,13 +218,14 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			Addr:      addr,
 			TLSConfig: tlsConfig,
 		},
-		Attest:      c.attest,
-		MutualTls:   c.Mtls,
-		CmcAddr:     c.CmcAddr,
-		CmcApi:      api,
-		Cmc:         cmc,
-		Ca:          c.ca,
-		CmcPolicies: c.policies,
+		Attest:        c.attest,
+		MutualTls:     c.Mtls,
+		CmcAddr:       c.CmcAddr,
+		CmcApi:        api,
+		ApiSerializer: c.apiSerializer,
+		Cmc:           cmc,
+		Ca:            c.ca,
+		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client) {
 				// Publish the attestation result if publishing address was specified

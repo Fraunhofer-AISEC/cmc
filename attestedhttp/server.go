@@ -30,15 +30,15 @@ type Server struct {
 	*http.Server
 
 	// Additional aTLS parameters
-	Attest      atls.AttestSelect
-	MutualTls   bool
-	CmcAddr     string
-	CmcApi      atls.CmcApiSelect
-	CmcNetwork  string
-	Cmc         *cmc.Cmc
-	CmcPolicies []byte
-	Ca          []byte
-	ResultCb    func(result *ar.VerificationResult)
+	Attest        atls.AttestSelect
+	MutualTls     bool
+	CmcAddr       string
+	CmcApi        atls.CmcApiSelect
+	ApiSerializer ar.Serializer
+	Cmc           *cmc.Cmc
+	CmcPolicies   []byte
+	Ca            []byte
+	ResultCb      func(result *ar.VerificationResult)
 }
 
 func (s *Server) ListenAndServe() error {
@@ -53,6 +53,7 @@ func (s *Server) ListenAndServe() error {
 		atls.WithCmcCa(s.Ca),
 		atls.WithCmcPolicies(s.CmcPolicies),
 		atls.WithCmcApi(s.CmcApi),
+		atls.WithApiSerializer(s.ApiSerializer),
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
 		atls.WithResultCb(s.ResultCb),

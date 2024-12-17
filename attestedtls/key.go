@@ -49,19 +49,9 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 func GetCert(moreConfigs ...ConnectionOption[CmcConfig]) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 
-	// Get cmc Config: start with defaults
-	cc := CmcConfig{
-		CmcAddr: cmcAddrDefault,
-		CmcApi:  CmcApis[cmcApiSelectDefault],
-		Attest:  attestDefault,
-	}
-	for _, c := range moreConfigs {
-		c(&cc)
-	}
-
-	// Check that selected API is implemented
-	if cc.CmcApi == nil {
-		return tls.Certificate{}, fmt.Errorf("selected CMC API is not implemented")
+	cc, err := NewCmcConfig(moreConfigs...)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to retrieve CMC config: %w", err)
 	}
 
 	certs, err := cc.CmcApi.fetchCerts(cc)

@@ -90,7 +90,7 @@ func (ln Listener) Accept() (net.Conn, error) {
 	// RFC5705, and RFC9266
 	log.Debug("Performing atls handshake")
 	err = atlsHandshakeStart(tlsConn, chbindings, fingerprint, ln.CmcConfig, Endpoint_Server)
-	err = aTlsHandshakeComplete(tlsConn, err)
+	err = aTlsHandshakeComplete(tlsConn, ln.CmcConfig.ApiSerializer, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)
 	}
@@ -117,23 +117,13 @@ func (ln Listener) Addr() net.Addr {
 // operations right after successful TLS connection establishment
 func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (net.Listener, error) {
 
-	// Default listener
+	cc, err := NewCmcConfig(moreConfigs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve CMC config: %w", err)
+	}
+
 	listener := Listener{
-		CmcConfig: CmcConfig{
-			CmcAddr: cmcAddrDefault,
-			CmcApi:  CmcApis[cmcApiSelectDefault],
-			Attest:  attestDefault,
-		},
-	}
-
-	// Apply all additional (CMC) configs
-	for _, c := range moreConfigs {
-		c(&listener.CmcConfig)
-	}
-
-	// Check that selected API is implemented
-	if listener.CmcConfig.CmcApi == nil {
-		return listener, fmt.Errorf("selected CMC API is not implemented")
+		CmcConfig: cc,
 	}
 
 	// Listen

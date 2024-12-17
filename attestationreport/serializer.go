@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/plgd-dev/go-coap/v3/message"
 )
 
 // SignConfig allows to specify options for signing with the specified serializer
@@ -45,6 +46,20 @@ func DetectSerialization(payload []byte) (Serializer, error) {
 	} else if err := cbor.Valid(payload); err == nil {
 		return CborSerializer{}, nil
 	} else {
-		return nil, fmt.Errorf("failed to detect request serialization")
+		return nil, fmt.Errorf("failed to detect serialization")
 	}
+}
+
+// GetMediaType returns the media type that corresponds to the serializer
+func GetMediaType(s Serializer) message.MediaType {
+	switch s.(type) {
+	case JsonSerializer:
+		return message.AppJSON
+	case CborSerializer:
+		return message.AppCBOR
+	default:
+		log.Fatalf("internal error: unknown serializer type %T", s)
+	}
+	// Will not be reached, required to vaoid compiler error
+	return message.TextPlain
 }
