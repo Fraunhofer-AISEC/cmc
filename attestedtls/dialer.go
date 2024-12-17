@@ -36,6 +36,11 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 		return nil, errors.New("failed to dial. TLS configuration not provided")
 	}
 
+	cc, err := NewCmcConfig(moreConfigs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve CMC config: %w", err)
+	}
+
 	// Create TLS connection
 	var dialer net.Dialer
 	dialer.Timeout = timeout
@@ -69,25 +74,10 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 		fingerprint = hex.EncodeToString(f[:])
 	}
 
-	// Get cmc Config: start with defaults
-	cc := CmcConfig{
-		CmcAddr: cmcAddrDefault,
-		CmcApi:  CmcApis[cmcApiSelectDefault],
-		Attest:  attestDefault,
-	}
-	for _, c := range moreConfigs {
-		c(&cc)
-	}
-
-	// Check that selected API is implemented
-	if cc.CmcApi == nil {
-		return nil, fmt.Errorf("selected CMC API is not implemented")
-	}
-
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
 	err = atlsHandshakeStart(conn, chbindings, fingerprint, cc, Endpoint_Client)
-	err = aTlsHandshakeComplete(conn, err)
+	err = aTlsHandshakeComplete(conn, cc.ApiSerializer, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)
 	}

@@ -71,7 +71,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	// Send attestation request
 	log.Debugf("Verifier %v: sending atls handshake request mode %v to %v",
 		ownAddr, cc.Attest.String(), peerAddr)
-	err = sendAtlsRequest(conn, cc.Attest, cache)
+	err = sendAtlsRequest(conn, cc.ApiSerializer, cc.Attest, cache)
 	if err != nil {
 		return fmt.Errorf("verifer %v: failed to send atls handshake request to %v: %w",
 			ownAddr, peerAddr, err)
@@ -125,7 +125,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		ownAddr, len(report.Report), peerAddr)
 	errChan := make(chan error)
 	go func() {
-		err := sendAtlsResponse(conn, report)
+		err := sendAtlsResponse(conn, cc.ApiSerializer, report)
 		errChan <- err
 		close(errChan)
 	}()
@@ -185,7 +185,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	return nil
 }
 
-func aTlsHandshakeComplete(conn *tls.Conn, handshakeError error) error {
+func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error) error {
 	// Finally send and receive handshake complete
 	complete := AtlsHandshakeComplete{
 		Success: handshakeError == nil,
@@ -196,7 +196,7 @@ func aTlsHandshakeComplete(conn *tls.Conn, handshakeError error) error {
 
 	log.Debugf("Prover %v: sending atls handshake complete to %v",
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
-	err := sendAtlsComplete(conn, complete)
+	err := sendAtlsComplete(conn, s, complete)
 	if err != nil {
 		return fmt.Errorf("%v: failed to send handshake complete to %v: %w",
 			conn.LocalAddr().String(), conn.RemoteAddr().String(), err)
@@ -228,12 +228,15 @@ func aTlsHandshakeComplete(conn *tls.Conn, handshakeError error) error {
 
 func receiveAtlsResponse(conn *tls.Conn) (*AtlsHandshakeResponse, error) {
 
-	s := ar.CborSerializer{}
-
 	// Receive data
 	data, err := Read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	s, err := ar.DetectSerialization(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect atls response serializationt: %v", err)
 	}
 
 	// Unmarshal handshake response
@@ -248,12 +251,15 @@ func receiveAtlsResponse(conn *tls.Conn) (*AtlsHandshakeResponse, error) {
 
 func receiveAtlsRequest(conn *tls.Conn) (*AtlsHandshakeRequest, error) {
 
-	s := ar.CborSerializer{}
-
 	// Receive data
 	data, err := Read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	s, err := ar.DetectSerialization(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect atls complete serializationt: %v", err)
 	}
 
 	// Unmarshal handshake request
@@ -268,12 +274,15 @@ func receiveAtlsRequest(conn *tls.Conn) (*AtlsHandshakeRequest, error) {
 
 func receiveAtlsComplete(conn *tls.Conn) (*AtlsHandshakeComplete, error) {
 
-	s := ar.CborSerializer{}
-
 	// Receive data
 	data, err := Read(conn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read handshake complete: %w", err)
+	}
+
+	s, err := ar.DetectSerialization(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect atls complete serializationt: %v", err)
 	}
 
 	// Unmarshal handshake request
@@ -286,9 +295,7 @@ func receiveAtlsComplete(conn *tls.Conn) (*AtlsHandshakeComplete, error) {
 	return complete, nil
 }
 
-func sendAtlsRequest(conn *tls.Conn, attest AttestSelect, cache []string) error {
-
-	s := ar.CborSerializer{}
+func sendAtlsRequest(conn *tls.Conn, s ar.Serializer, attest AttestSelect, cache []string) error {
 
 	// Create request
 	// TODO Extended report and cached metadata configuration
@@ -313,9 +320,7 @@ func sendAtlsRequest(conn *tls.Conn, attest AttestSelect, cache []string) error 
 	return nil
 }
 
-func sendAtlsResponse(conn *tls.Conn, resp AtlsHandshakeResponse) error {
-
-	s := ar.CborSerializer{}
+func sendAtlsResponse(conn *tls.Conn, s ar.Serializer, resp AtlsHandshakeResponse) error {
 
 	// Marshal payload
 	payload, err := s.Marshal(&resp)
@@ -334,9 +339,7 @@ func sendAtlsResponse(conn *tls.Conn, resp AtlsHandshakeResponse) error {
 	return nil
 }
 
-func sendAtlsComplete(conn *tls.Conn, complete AtlsHandshakeComplete) error {
-
-	s := ar.CborSerializer{}
+func sendAtlsComplete(conn *tls.Conn, s ar.Serializer, complete AtlsHandshakeComplete) error {
 
 	// Marshal payload
 	payload, err := s.Marshal(&complete)

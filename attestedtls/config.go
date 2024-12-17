@@ -17,6 +17,7 @@ package attestedtls
 
 import (
 	"crypto"
+	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -58,14 +59,15 @@ const (
 // Struct that holds information on cmc address and port
 // to be used by Listener and DialConfig
 type CmcConfig struct {
-	CmcAddr  string
-	CmcApi   CmcApi
-	Ca       []byte
-	Policies []byte
-	Mtls     bool
-	Attest   AttestSelect
-	ResultCb func(result *ar.VerificationResult)
-	Cmc      *cmc.Cmc
+	CmcAddr       string
+	CmcApi        CmcApi
+	ApiSerializer ar.Serializer
+	Ca            []byte
+	Policies      []byte
+	Mtls          bool
+	Attest        AttestSelect
+	ResultCb      func(result *ar.VerificationResult)
+	Cmc           *cmc.Cmc
 }
 
 type CmcApi interface {
@@ -79,6 +81,28 @@ type CmcApi interface {
 var CmcApis = map[CmcApiSelect]CmcApi{}
 
 type ConnectionOption[T any] func(*T)
+
+// NewCmcConfig creates a new CMC config based on default and specified values
+func NewCmcConfig(configs ...ConnectionOption[CmcConfig]) (CmcConfig, error) {
+
+	// Start with defaults
+	cc := CmcConfig{
+		CmcAddr:       cmcAddrDefault,
+		CmcApi:        CmcApis[cmcApiSelectDefault],
+		Attest:        attestDefault,
+		ApiSerializer: ar.CborSerializer{},
+	}
+	for _, c := range configs {
+		c(&cc)
+	}
+
+	// Check that selected API is implemented
+	if cc.CmcApi == nil {
+		return cc, fmt.Errorf("selected CMC API is not implemented")
+	}
+
+	return cc, nil
+}
 
 // WithCmcAddress sets the address with which to contact the CMC.
 // If not specified, default is "localhost"
@@ -109,6 +133,13 @@ func WithCmcCa(pem []byte) ConnectionOption[CmcConfig] {
 func WithCmcPolicies(policies []byte) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
 		c.Policies = policies
+	}
+}
+
+// WithApiSerializer specifies the serializer for internal requests
+func WithApiSerializer(apiSerializer ar.Serializer) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.ApiSerializer = apiSerializer
 	}
 }
 

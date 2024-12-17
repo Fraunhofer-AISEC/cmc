@@ -27,7 +27,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/udp"
 
 	// local modules
@@ -77,7 +76,7 @@ func (a CoapApi) generate(c *config) {
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, getMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, path, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		log.Fatalf("failed to send request: %v", err)
 	}
@@ -223,7 +222,7 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, getMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, path, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -266,7 +265,7 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, path, getMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, path, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -285,17 +284,4 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	}
 
 	return measureResp, nil
-}
-
-func getMediaType(s ar.Serializer) message.MediaType {
-	switch s.(type) {
-	case ar.JsonSerializer:
-		return message.AppJSON
-	case ar.CborSerializer:
-		return message.AppCBOR
-	default:
-		log.Fatalf("internal error: unknown serializer type %T", s)
-	}
-	// Will not be reached, required to vaoid compiler error
-	return message.TextPlain
 }
