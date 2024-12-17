@@ -18,7 +18,10 @@ package internal
 // Install github packages with "go get [url]"
 import (
 	"flag"
+	"fmt"
+	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -50,4 +53,19 @@ func FlagPassed(name string) bool {
 		}
 	})
 	return found
+}
+
+// Tests if the address is a network address in the form ip:port. In this
+// case, returns "tcp" to be used as the transport layer, otherwise assumes
+// that the address is a unix domain socket
+func GetNetworkAndAddr(addr string) (string, string, error) {
+	if _, _, err := net.SplitHostPort(addr); err == nil {
+		return "tcp", addr, nil
+	} else {
+		a, err := filepath.Abs(addr)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to parse address '%v': %w", addr, err)
+		}
+		return "unix", a, nil
+	}
 }

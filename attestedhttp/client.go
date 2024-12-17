@@ -61,7 +61,6 @@ type Transport struct {
 	MutualTls   bool
 	CmcAddr     string
 	CmcApi      atls.CmcApiSelect
-	CmcNetwork  string
 	Cmc         *cmc.Cmc
 	CmcPolicies []byte
 	Ca          []byte
@@ -166,7 +165,6 @@ func prepareClient(c *Client) error {
 		cmcConfig.CmcAddr = c.Transport.CmcAddr
 		cmcConfig.CmcApi = atls.CmcApis[c.Transport.CmcApi]
 		cmcConfig.Mtls = c.Transport.MutualTls
-		cmcConfig.Network = c.Transport.CmcNetwork
 		cmcConfig.Policies = c.Transport.CmcPolicies
 		cmcConfig.Cmc = c.Transport.Cmc
 

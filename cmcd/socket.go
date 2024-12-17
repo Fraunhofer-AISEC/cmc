@@ -45,11 +45,16 @@ func init() {
 	servers["socket"] = SocketServer{}
 }
 
-func (s SocketServer) Serve(addr string, cmc *c.Cmc) error {
+func (s SocketServer) Serve(address string, cmc *c.Cmc) error {
 
-	log.Infof("Waiting for requests on %v (%v)", addr, cmc.Network)
+	network, addr, err := internal.GetNetworkAndAddr(address)
+	if err != nil {
+		return fmt.Errorf("failed to get network and address: %w", err)
+	}
 
-	socket, err := net.Listen(cmc.Network, addr)
+	log.Infof("Waiting for requests on %v (%v)", addr, network)
+
+	socket, err := net.Listen(network, addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}

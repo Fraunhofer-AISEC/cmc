@@ -60,7 +60,6 @@ const (
 type CmcConfig struct {
 	CmcAddr  string
 	CmcApi   CmcApi
-	Network  string
 	Ca       []byte
 	Policies []byte
 	Mtls     bool
@@ -94,14 +93,6 @@ func WithCmcAddr(address string) ConnectionOption[CmcConfig] {
 func WithCmcApi(api CmcApiSelect) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
 		c.CmcApi = CmcApis[api]
-	}
-}
-
-// WithCmcNetwork specifies the network type to be used to connect
-// to the cmcd in case the socket API is selected
-func WithCmcNetwork(network string) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
-		c.Network = network
 	}
 }
 

@@ -55,7 +55,6 @@ func (s *Server) ListenAndServe() error {
 		atls.WithCmcApi(s.CmcApi),
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
-		atls.WithCmcNetwork(s.CmcNetwork),
 		atls.WithResultCb(s.ResultCb),
 		atls.WithCmc(s.Cmc))
 	if err != nil {

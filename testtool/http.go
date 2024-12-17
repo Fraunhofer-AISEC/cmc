@@ -69,7 +69,6 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(api),
-			atls.WithCmcNetwork(c.Network),
 			atls.WithCmc(cmc))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
@@ -99,7 +98,6 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		MutualTls:   c.Mtls,
 		CmcAddr:     c.CmcAddr,
 		CmcApi:      api,
-		CmcNetwork:  c.Network,
 		Cmc:         cmc,
 		Ca:          c.ca,
 		CmcPolicies: c.policies,
@@ -179,7 +177,6 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(api),
-		atls.WithCmcNetwork(c.Network),
 		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
@@ -223,7 +220,6 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		MutualTls:   c.Mtls,
 		CmcAddr:     c.CmcAddr,
 		CmcApi:      api,
-		CmcNetwork:  c.Network,
 		Cmc:         cmc,
 		Ca:          c.ca,
 		CmcPolicies: c.policies,

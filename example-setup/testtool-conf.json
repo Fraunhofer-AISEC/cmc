@@ -14,7 +14,6 @@
     "logLevel": "trace",
     "api": "socket",
     "apiSerializer": "cbor",
-    "network": "tcp",
     "cmcAddr": "localhost:9955",
     "keyConfig": "EC256"
 }
