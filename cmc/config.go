@@ -39,7 +39,6 @@ type Config struct {
 	ImaPcr         int      `json:"imaPcr,omitempty"`
 	KeyConfig      string   `json:"keyConfig,omitempty"`
 	Api            string   `json:"api,omitempty"`
-	Network        string   `json:"network,omitempty"`
 	PolicyEngine   string   `json:"policyEngine,omitempty"`
 	Storage        string   `json:"storage,omitempty"`
 	Cache          string   `json:"cache,omitempty"`
@@ -52,15 +51,14 @@ type Config struct {
 }
 
 const (
-	cmcAddrFlag        = "cmc"
-	provAddrFlag       = "prov"
+	cmcAddrFlag        = "cmcaddr"
+	provAddrFlag       = "provaddr"
 	metadataFlag       = "metadata"
 	DriversFlag        = "drivers"
 	ImaFlag            = "ima"
 	ImaPcrFlag         = "imapcr"
 	KeyConfigFlag      = "keyconfig"
 	ApiFlag            = "api"
-	NetworkFlag        = "network"
 	PolicyEngineFlag   = "policyengine"
 	StorageFlag        = "storage"
 	CacheFlag          = "cache"
@@ -85,7 +83,6 @@ var (
 	imaPcr       = flag.Int(ImaPcrFlag, 0, "IMA PCR")
 	keyConfig    = flag.String(KeyConfigFlag, "", "Key configuration")
 	cmcApi       = flag.String(ApiFlag, "", "API to use. Possible: [coap grpc libapi socket]")
-	network      = flag.String(NetworkFlag, "", "Network for socket API [unix tcp]")
 	policyEngine = flag.String(PolicyEngineFlag, "",
 		fmt.Sprintf("Possible policy engines: %v",
 			strings.Join(maps.Keys(GetPolicyEngines()), ",")))
@@ -131,9 +128,6 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(ApiFlag) {
 		c.Api = *cmcApi
-	}
-	if internal.FlagPassed(NetworkFlag) {
-		c.Network = *network
 	}
 	if internal.FlagPassed(PolicyEngineFlag) {
 		c.PolicyEngine = *policyEngine
@@ -193,12 +187,6 @@ func GetVersion() string {
 
 func pathsToAbs(c *Config) {
 	var err error
-	if strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
-		c.CmcAddr, err = filepath.Abs(c.CmcAddr)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.CmcAddr, err)
-		}
-	}
 	if c.Storage != "" {
 		c.Storage, err = filepath.Abs(c.Storage)
 		if err != nil {
@@ -241,7 +229,6 @@ func (c *Config) Print() {
 		log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
 	}
 	log.Debugf("\tAPI                      : %v", c.Api)
-	log.Debugf("\tNetwork                  : %v", c.Network)
 	log.Debugf("\tPolicy engine            : %v", c.PolicyEngine)
 	log.Debugf("\tKey config               : %v", c.KeyConfig)
 	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))

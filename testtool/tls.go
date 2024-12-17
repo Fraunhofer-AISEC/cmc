@@ -43,7 +43,6 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithCmcNetwork(c.Network),
 		atls.WithResultCb(func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
@@ -99,7 +98,6 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(api),
-			atls.WithCmcNetwork(c.Network),
 			atls.WithCmc(cmc))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
@@ -158,7 +156,6 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(api),
-		atls.WithCmcNetwork(c.Network),
 		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
@@ -196,7 +193,6 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		atls.WithCmcApi(api),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithCmcNetwork(c.Network),
 		atls.WithResultCb(func(result *ar.VerificationResult) {
 			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client) {
 				// Publish the attestation result if publishing address was specified

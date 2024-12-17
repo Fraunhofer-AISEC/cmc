@@ -9,7 +9,6 @@
     "imaPcr": 10,
     "keyConfig": "EC256",
     "api": "socket",
-    "network": "tcp",
     "policyEngine": "js",
     "logLevel": "trace",
     "storage": "../../cmc-data/cmc-internal/",

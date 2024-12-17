@@ -43,7 +43,6 @@ type Cmc struct {
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
-	Network            string
 	IntelStorage       string
 	PeerCache          string
 	Ctr                bool
@@ -63,7 +62,6 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 func NewCmc(c *Config) (*Cmc, error) {
 
 	cmc := &Cmc{
-		Network:      c.Network,
 		IntelStorage: c.Storage,
 		PeerCache:    c.PeerCache,
 		Ctr:          c.Ctr,

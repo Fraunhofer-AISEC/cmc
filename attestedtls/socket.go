@@ -30,6 +30,7 @@ import (
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type SocketApi struct{}
@@ -42,9 +43,14 @@ func init() {
 // Obtains attestation report from cmcd
 func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error) {
 
+	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
 	// Establish connection
-	log.Tracef("Sending attestation request to cmcd via %v on %v", cc.Network, cc.CmcAddr)
-	conn, err := net.Dial(cc.Network, cc.CmcAddr)
+	log.Tracef("Sending attestation request to cmcd via %v on %v", network, addr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing cmcd: %w", err)
 	}
@@ -95,9 +101,14 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*
 // Sends attestation report to cmcd for verification
 func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 
+	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
 	// Establish connection
-	log.Tracef("Sending verification request to cmcd via %v on %v", cc.Network, cc.CmcAddr)
-	conn, err := net.Dial(cc.Network, cc.CmcAddr)
+	log.Tracef("Sending verification request to cmcd via %v on %v", network, addr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -161,9 +172,14 @@ func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 
 func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
+	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
-	conn, err := net.Dial(cc.Network, cc.CmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", network, addr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
@@ -224,9 +240,14 @@ func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.Signe
 
 func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 
+	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
-	conn, err := net.Dial(cc.Network, cc.CmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", network, addr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
@@ -275,9 +296,14 @@ func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 
 func (a SocketApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
 
+	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", cc.Network, cc.CmcAddr)
-	conn, err := net.Dial(cc.Network, cc.CmcAddr)
+	log.Tracef("Contacting cmcd via %v on %v", network, addr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}

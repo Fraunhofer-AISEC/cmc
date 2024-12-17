@@ -27,6 +27,7 @@ import (
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -41,10 +42,15 @@ func init() {
 
 func (a SocketApi) generate(c *config) {
 
-	log.Tracef("Connecting via %v socket to %v", c.Network, c.CmcAddr)
+	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
+	log.Tracef("Connecting via %v socket to %v", network, addr)
 
 	// Establish connection
-	conn, err := net.Dial(c.Network, c.CmcAddr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		log.Fatalf("Error dialing: %v", err)
 	}
@@ -192,10 +198,15 @@ func (a SocketApi) iothub(c *config) {
 func verifySocketRequest(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
-	log.Tracef("Connecting via %v socket to %v", c.Network, c.CmcAddr)
+	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
+	log.Tracef("Connecting via %v socket to %v", network, addr)
 
 	// Establish connection
-	conn, err := net.Dial(c.Network, c.CmcAddr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}
@@ -232,10 +243,15 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 func measureSocketRequest(c *config, req *api.MeasureRequest,
 ) (*api.MeasureResponse, error) {
 
-	log.Tracef("Connecting via %v socket to %v", c.Network, c.CmcAddr)
+	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
+	if err != nil {
+		log.Fatalf("Failed to get network and address: %v", err)
+	}
+
+	log.Tracef("Connecting via %v socket to %v", network, addr)
 
 	// Establish connection
-	conn, err := net.Dial(c.Network, c.CmcAddr)
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %v", err)
 	}

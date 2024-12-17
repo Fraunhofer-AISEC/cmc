@@ -335,55 +335,42 @@ func getConfig() *config {
 
 func pathsToAbs(c *config) {
 	var err error
-	if c.CmcAddr != "" && strings.EqualFold(c.Api, "socket") && strings.EqualFold(c.Network, "unix") {
-		c.CmcAddr, err = filepath.Abs(c.CmcAddr)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.CmcAddr, err)
-		}
-	}
-
 	if c.ReportFile != "" {
 		c.ReportFile, err = filepath.Abs(c.ReportFile)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.ReportFile, err)
 		}
 	}
-
 	if c.ResultFile != "" {
 		c.ResultFile, err = filepath.Abs(c.ResultFile)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.ResultFile, err)
 		}
 	}
-
 	if c.NonceFile != "" {
 		c.NonceFile, err = filepath.Abs(c.NonceFile)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.NonceFile, err)
 		}
 	}
-
 	if c.CaFile != "" {
 		c.CaFile, err = filepath.Abs(c.CaFile)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
 		}
 	}
-
 	if c.Storage != "" {
 		c.Storage, err = filepath.Abs(c.Storage)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.Storage, err)
 		}
 	}
-
 	if c.Cache != "" {
 		c.Cache, err = filepath.Abs(c.Cache)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
 		}
 	}
-
 	if c.PeerCache != "" {
 		c.PeerCache, err = filepath.Abs(c.PeerCache)
 		if err != nil {
@@ -430,6 +417,7 @@ func (c *config) Print() {
 	log.Debugf("\tAttest                   : %v", c.Attest)
 	log.Debugf("\tAPI Serializer           : %v", c.ApiSerializer)
 	log.Debugf("\tPublish                  : %v", c.Publish)
+	log.Debugf("\tApi                      : %v", c.Api)
 	if strings.EqualFold(c.Mode, "request") {
 		log.Debugf("\tHTTP Data                : %v", c.Data)
 		log.Debugf("\tHTTP Header              : %v", c.Header)
@@ -437,11 +425,6 @@ func (c *config) Print() {
 	}
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
-	}
-	if strings.EqualFold(c.Api, "socket") {
-		log.Debugf("\tApi (Network)            : %v (%v)", c.Api, c.Network)
-	} else {
-		log.Debugf("\tApi                      : %v", c.Api)
 	}
 	if strings.EqualFold(c.Api, "libapi") {
 		c.Config.Print()
