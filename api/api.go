@@ -26,45 +26,40 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-type HashFunction int32
+const (
+	EndpointAttest    = "/Attest"
+	EndpointVerify    = "/Verify"
+	EndpointTLSSign   = "/TLSSign"
+	EndpointTLSCert   = "/TLSCert"
+	EndpointPeerCache = "/PeerCache"
+	EndpointMeasure   = "/Measure"
+)
 
 const (
-	HashFunction_SHA1        HashFunction = 0
-	HashFunction_SHA224      HashFunction = 1
-	HashFunction_SHA256      HashFunction = 2
-	HashFunction_SHA384      HashFunction = 3
-	HashFunction_SHA512      HashFunction = 4
-	HashFunction_MD4         HashFunction = 5
-	HashFunction_MD5         HashFunction = 6
-	HashFunction_MD5SHA1     HashFunction = 7
-	HashFunction_RIPEMD160   HashFunction = 8
-	HashFunction_SHA3_224    HashFunction = 9
-	HashFunction_SHA3_256    HashFunction = 10
-	HashFunction_SHA3_384    HashFunction = 11
-	HashFunction_SHA3_512    HashFunction = 12
-	HashFunction_SHA512_224  HashFunction = 13
-	HashFunction_SHA512_256  HashFunction = 14
-	HashFunction_BLAKE2s_256 HashFunction = 15
-	HashFunction_BLAKE2b_256 HashFunction = 16
-	HashFunction_BLAKE2b_384 HashFunction = 17
-	HashFunction_BLAKE2b_512 HashFunction = 18
+	TypeError     uint32 = 0
+	TypeAttest    uint32 = 1
+	TypeVerify    uint32 = 2
+	TypeTLSSign   uint32 = 3
+	TypeTLSCert   uint32 = 4
+	TypePeerCache uint32 = 5
+	TypeMeasure   uint32 = 6
 )
 
 type AttestationRequest struct {
-	Nonce  []byte   `json:"nonce" nonce:"0,keyasint"`
+	Nonce  []byte   `json:"nonce" cbor:"0,keyasint"`
 	Cached []string `json:"cached,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
 type AttestationResponse struct {
 	Report      []byte            `json:"report" cbor:"0,keyasint"`
-	Metadata    map[string][]byte `json:"metadata" cbor:"1,keyasint"`
+	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"1,keyasint,omitempty"`
 	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type VerificationRequest struct {
 	Nonce       []byte            `json:"nonce" cbor:"0,keyasint"`
 	Report      []byte            `json:"report" cbor:"1,keyasint"`
-	Metadata    map[string][]byte `json:"metadata" cbor:"2,keyasint"`
+	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"2,keyasint,omitempty"`
 	Ca          []byte            `json:"ca" cbor:"3,keyasint"`
 	Peer        string            `json:"peer,omitempty" cbor:"4,keyasint,omitempty"`
 	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"5,keyasint,omitempty"`
@@ -73,14 +68,6 @@ type VerificationRequest struct {
 
 type VerificationResponse struct {
 	ar.VerificationResult
-}
-
-type MeasureRequest struct {
-	ar.MeasureEvent
-}
-
-type MeasureResponse struct {
-	Success bool `json:"success" cbor:"0,keyasint"`
 }
 
 type TLSSignRequest struct {
@@ -108,6 +95,14 @@ type PeerCacheResponse struct {
 	Cache []string `json:"cache" cbor:"0,keyasint"`
 }
 
+type MeasureRequest struct {
+	ar.MeasureEvent
+}
+
+type MeasureResponse struct {
+	Success bool `json:"success" cbor:"0,keyasint"`
+}
+
 type SocketError struct {
 	Msg string `json:"msg" cbor:"0,keyasint"`
 }
@@ -121,14 +116,28 @@ type PSSOptions struct {
 	SaltLength int32
 }
 
+type HashFunction int32
+
 const (
-	TypeError     uint32 = 0
-	TypeAttest    uint32 = 1
-	TypeVerify    uint32 = 2
-	TypeMeasure   uint32 = 3
-	TypeTLSSign   uint32 = 4
-	TypeTLSCert   uint32 = 5
-	TypePeerCache uint32 = 6
+	HashFunction_SHA1        HashFunction = 0
+	HashFunction_SHA224      HashFunction = 1
+	HashFunction_SHA256      HashFunction = 2
+	HashFunction_SHA384      HashFunction = 3
+	HashFunction_SHA512      HashFunction = 4
+	HashFunction_MD4         HashFunction = 5
+	HashFunction_MD5         HashFunction = 6
+	HashFunction_MD5SHA1     HashFunction = 7
+	HashFunction_RIPEMD160   HashFunction = 8
+	HashFunction_SHA3_224    HashFunction = 9
+	HashFunction_SHA3_256    HashFunction = 10
+	HashFunction_SHA3_384    HashFunction = 11
+	HashFunction_SHA3_512    HashFunction = 12
+	HashFunction_SHA512_224  HashFunction = 13
+	HashFunction_SHA512_256  HashFunction = 14
+	HashFunction_BLAKE2s_256 HashFunction = 15
+	HashFunction_BLAKE2b_256 HashFunction = 16
+	HashFunction_BLAKE2b_384 HashFunction = 17
+	HashFunction_BLAKE2b_512 HashFunction = 18
 )
 
 func TypeToString(t uint32) string {

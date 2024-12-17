@@ -43,8 +43,6 @@ func init() {
 // Obtains attestation report from cmcd
 func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
-	path := "/Attest"
-
 	// Establish connection
 	log.Tracef("Sending attestation request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
@@ -66,7 +64,7 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 	}
 
 	// Send CoAP POST request
-	coapResp, err := conn.Post(ctx, path, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	coapResp, err := conn.Post(ctx, api.EndpointAttest, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -96,8 +94,6 @@ func (a CoapApi) verifyAR(
 	metadata map[string][]byte,
 ) error {
 
-	path := "/Verify"
-
 	// Establish connection
 	log.Tracef("Sending verification request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
@@ -124,7 +120,7 @@ func (a CoapApi) verifyAR(
 	}
 
 	// Perform verification request
-	resp, err := conn.Post(ctx, path, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -157,8 +153,6 @@ func (a CoapApi) verifyAR(
 
 func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
-	path := "/TLSSign"
-
 	// Establish connection
 	log.Tracef("Sending TLSSign request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
@@ -190,7 +184,7 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	}
 
 	// Send sign request
-	resp, err := conn.Post(ctx, path, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointTLSSign, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -211,8 +205,6 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 
 func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 
-	path := "/TLSCert"
-
 	// Establish connection
 	log.Tracef("Sending TLSCert request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
@@ -232,7 +224,7 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 
 	// Send cert request
-	resp, err := conn.Post(ctx, path, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointTLSCert, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -254,8 +246,6 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 // Fetches the peer cache from the cmcd
 func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
 
-	path := "/PeerCache"
-
 	// Establish connection
 	log.Tracef("Sending PeerCache request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
@@ -276,7 +266,7 @@ func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	}
 
 	// Send CoAP POST request
-	coapResp, err := conn.Post(ctx, path, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	coapResp, err := conn.Post(ctx, api.EndpointPeerCache, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}

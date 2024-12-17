@@ -19,35 +19,12 @@ package grpcapi;
 option go_package = "./;grpcapi";
 
 service CMCService {
-    // Signs content of request with key that belongs to ID of requester
-    rpc TLSSign(TLSSignRequest) returns (TLSSignResponse) {}
-    rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
     rpc Attest(AttestationRequest) returns (AttestationResponse) {}
     rpc Verify(VerificationRequest) returns (VerificationResponse) {}
+    rpc TLSSign(TLSSignRequest) returns (TLSSignResponse) {}
+    rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
     rpc PeerCache(PeerCacheRequest) returns (PeerCacheResponse) {}
     rpc Measure(MeasureRequest) returns (MeasureResponse) {}
-}
-
-enum HashFunction {
-	  SHA1        = 0;
-	  SHA224      = 1;
-	  SHA256      = 2;
-	  SHA384      = 3;
-	  SHA512      = 4;
-	  MD4         = 5;
-	  MD5         = 6;
-	  MD5SHA1     = 7;
-	  RIPEMD160   = 8;
-	  SHA3_224    = 9;
-	  SHA3_256    = 10;
-	  SHA3_384    = 11;
-	  SHA3_512    = 12;
-	  SHA512_224  = 13;
-	  SHA512_256  = 14;
-	  BLAKE2s_256 = 15;
-	  BLAKE2b_256 = 16;
-	  BLAKE2b_384 = 17;
-	  BLAKE2b_512 = 18;
 }
 
 
@@ -74,34 +51,24 @@ message VerificationRequest {
 }
 
 message VerificationResponse {
-  bytes verification_result = 2;
-}
-
-message MeasureRequest {
-  bytes sha256 = 1;
-  string event_name = 2;
-  CtrData ctr_data = 4;
-}
-
-message MeasureResponse {
-  bool success = 2;
+  bytes verification_result = 1;
 }
 
 message TLSSignRequest {
-  bytes content = 2;
-  HashFunction hashtype = 3;
-  PSSOptions pssOpts = 4;
+  bytes content = 1;
+  HashFunction hashtype = 2;
+  PSSOptions pssOpts = 3;
 }
 
 message TLSSignResponse {
-  bytes signed_content = 2;
+  bytes signed_content = 1;
 }
 
 message TLSCertRequest {
 }
 
 message TLSCertResponse {
-  repeated bytes certificate = 2; // PEM encoded, separated by line
+  repeated bytes certificate = 1; // PEM encoded
 }
 
 message PeerCacheRequest {
@@ -112,6 +79,17 @@ message PeerCacheResponse {
   repeated string cache = 1;
 }
 
+message MeasureRequest {
+  bytes sha256 = 1;
+  string event_name = 2;
+  CtrData ctr_data = 3;
+}
+
+message MeasureResponse {
+  bool success = 1;
+}
+
+
 message PSSOptions {
   int32 salt_length = 1;
 }
@@ -120,4 +98,27 @@ message CtrData {
   bytes config_sha256 = 1;
   bytes rootfs_sha256 = 2;
   bytes oci_spec = 3;
+}
+
+
+enum HashFunction {
+	  SHA1        = 0;
+	  SHA224      = 1;
+	  SHA256      = 2;
+	  SHA384      = 3;
+	  SHA512      = 4;
+	  MD4         = 5;
+	  MD5         = 6;
+	  MD5SHA1     = 7;
+	  RIPEMD160   = 8;
+	  SHA3_224    = 9;
+	  SHA3_256    = 10;
+	  SHA3_384    = 11;
+	  SHA3_512    = 12;
+	  SHA512_224  = 13;
+	  SHA512_256  = 14;
+	  BLAKE2s_256 = 15;
+	  BLAKE2b_256 = 16;
+	  BLAKE2b_384 = 17;
+	  BLAKE2b_512 = 18;
 }
