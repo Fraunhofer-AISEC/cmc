@@ -77,6 +77,10 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
 	err = atlsHandshakeStart(conn, chbindings, fingerprint, cc, Endpoint_Client)
+	if err != nil {
+		// Only log the error, still send handshake complete message to inform peer
+		log.Warnf("atls handshake failed: %v", err)
+	}
 	err = aTlsHandshakeComplete(conn, cc.ApiSerializer, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)
