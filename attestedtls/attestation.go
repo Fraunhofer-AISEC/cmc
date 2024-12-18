@@ -26,21 +26,21 @@ import (
 
 type AtlsHandshakeRequest struct {
 	Attest         AttestSelect `json:"attest" cbor:"0,keyasint"`
-	Cached         []string     `json:"cached" cbor:"1,keyasint"`
-	ExtendedReport bool         `json:"extendedReport" cbor:"2,keyasint"`
+	Cached         []string     `json:"cached,omitempty" cbor:"1,keyasint,omitempty"`
+	ExtendedReport bool         `json:"extendedReport,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type AtlsHandshakeResponse struct {
 	Attest      AttestSelect      `json:"attest" cbor:"0,keyasint"`
-	Error       string            `json:"error" cbor:"1,keyasint"`
-	Report      []byte            `json:"report" cbor:"2,keyasint"`
-	Metadata    map[string][]byte `json:"metadata" cbor:"3,keyasint"`
-	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"4,keyasint"`
+	Error       string            `json:"error,omitempty" cbor:"1,keyasint,omitempty"`
+	Report      []byte            `json:"report,omitempty" cbor:"2,keyasint,omitempty"`
+	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
+	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type AtlsHandshakeComplete struct {
 	Success bool   `json:"success" cbor:"0,keyasint"`
-	Error   string `json:"error" cbor:"1,keyasint"`
+	Error   string `json:"error,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
 var log = logrus.WithField("service", "atls")

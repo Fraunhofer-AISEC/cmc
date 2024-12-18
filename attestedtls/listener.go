@@ -90,6 +90,10 @@ func (ln Listener) Accept() (net.Conn, error) {
 	// RFC5705, and RFC9266
 	log.Debug("Performing atls handshake")
 	err = atlsHandshakeStart(tlsConn, chbindings, fingerprint, ln.CmcConfig, Endpoint_Server)
+	if err != nil {
+		// Only log the error, still send handshake complete message to inform peer
+		log.Warnf("atls handshake failed: %v", err)
+	}
 	err = aTlsHandshakeComplete(tlsConn, ln.CmcConfig.ApiSerializer, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)
