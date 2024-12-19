@@ -28,171 +28,171 @@ import (
 // VerificationResult represents the results of all steps taken during
 // the validation of an attestation report.
 type VerificationResult struct {
-	Type            string              `json:"type"`
-	Success         bool                `json:"success"`
-	ErrorCode       ErrorCode           `json:"errorCode,omitempty"` // Set in case of global errors
-	Prover          string              `json:"prover,omitempty"`    // Name of the proving device the report was created for
-	Created         string              `json:"created,omitempty"`   // Timestamp the attestation verification was completed
-	CertLevel       int                 `json:"certLevel"`           // Overall certification level
-	Measurements    []MeasurementResult `json:"measurements"`
-	Metadata        MetadataSummary     `json:"metadata"`
-	PolicySuccess   bool                `json:"policySuccess,omitempty"` // Result of custom policy validation (if utilized)
-	ReportSignature []SignatureResult   `json:"reportSignatureCheck"`    // Result for validation of the overall report signature
+	Type            string              `json:"type" cbor:"0,keyasint"`
+	Success         bool                `json:"success" cbor:"1,keyasint"`
+	ErrorCode       ErrorCode           `json:"errorCode,omitempty" cbor:"2,keyasint,omitempty"`
+	Prover          string              `json:"prover,omitempty" cbor:"3,keyasint,omitempty"`
+	Created         string              `json:"created,omitempty" cbor:"4,keyasint,omitempty"`
+	CertLevel       int                 `json:"certLevel" cbor:"5,keyasint"`
+	Measurements    []MeasurementResult `json:"measurements" cbor:"6,keyasint"`
+	Metadata        MetadataSummary     `json:"metadata" cbor:"7,keyasint"`
+	PolicySuccess   bool                `json:"policySuccess,omitempty" cbor:"8,keyasint,omitempty"`
+	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"9,keyasint"`
 }
 
 type MetadataSummary struct {
-	DevDescResult  MetadataResult   `json:"deviceDescValidation"`
-	RtmResult      MetadataResult   `json:"rtmValidation"`
-	OsResult       MetadataResult   `json:"osValidation"`
-	AppResults     []MetadataResult `json:"appValidation,omitempty"`
-	CompDescResult *MetadataResult  `json:"companyValidation,omitempty"`
+	DevDescResult  MetadataResult   `json:"deviceDescValidation" cbor:"0,keyasint"`
+	RtmResult      MetadataResult   `json:"rtmValidation" cbor:"1,keyasint"`
+	OsResult       MetadataResult   `json:"osValidation" cbor:"2,keyasint"`
+	AppResults     []MetadataResult `json:"appValidation,omitempty" cbor:"3,keyasint,omitempty"`
+	CompDescResult *MetadataResult  `json:"companyValidation,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type MetadataResult struct {
 	MetaInfo
-	Summary        Result            `json:"result"`
-	ValidityCheck  Result            `json:"validityCheck,omitempty"`
-	CertLevel      int               `json:"certLevel,omitempty"`
-	Description    string            `json:"description,omitempty"`
-	Location       string            `json:"location,omitempty"`
-	Details        any               `json:"details,omitempty"`
-	DevDescResult                    // For device descriptions only
-	SignatureCheck []SignatureResult `json:"signatureValidation"`
+	Summary        Result                 `json:"result" cbor:"10,keyasint"`
+	ValidityCheck  Result                 `json:"validityCheck,omitempty" cbor:"11,keyasint,omitempty"`
+	CertLevel      int                    `json:"certLevel,omitempty" cbor:"12,keyasint,omitempty"`
+	Description    string                 `json:"description,omitempty" cbor:"13,keyasint,omitempty"`
+	Location       string                 `json:"location,omitempty" cbor:"14,keyasint,omitempty"`
+	Details        map[string]interface{} `json:"details,omitempty" cbor:"15,keyasint,omitempty"`
+	DevDescResult                         // For device descriptions only
+	SignatureCheck []SignatureResult      `json:"signatureValidation" cbor:"30,keyasint,omitempty"`
 }
 
 // DevDescResult represents the results of the validation of the
 // Device Description in the Attestation Report.
 type DevDescResult struct {
-	CorrectRtm          *Result  `json:"correctRtm,omitempty"`
-	CorrectOs           *Result  `json:"correctOs,omitempty"`
-	CorrectApps         []Result `json:"correctApps,omitempty"`
-	RtmOsCompatibility  *Result  `json:"rtmOsCompatibility,omitempty"`
-	OsAppsCompatibility []Result `json:"osAppCompatibility,omitempty"`
+	CorrectRtm          *Result  `json:"correctRtm,omitempty" cbor:"20,keyasint,omitempty"`
+	CorrectOs           *Result  `json:"correctOs,omitempty" cbor:"21,keyasint,omitempty"`
+	CorrectApps         []Result `json:"correctApps,omitempty" cbor:"22,keyasint,omitempty"`
+	RtmOsCompatibility  *Result  `json:"rtmOsCompatibility,omitempty" cbor:"23,keyasint,omitempty"`
+	OsAppsCompatibility []Result `json:"osAppCompatibility,omitempty" cbor:"24,keyasint,omitempty"`
 }
 
 type MeasurementResult struct {
-	Type      string          `json:"type"`
-	Summary   Result          `json:"summary"`
-	Freshness Result          `json:"freshness"`
-	Signature SignatureResult `json:"signature"`
-	Artifacts []DigestResult  `json:"artifacts"`
-	TpmResult *TpmResult      `json:"tpmResult,omitempty"`
-	SnpResult *SnpResult      `json:"snpResult,omitempty"`
-	SgxResult *SgxResult      `json:"sgxResult,omitempty"`
-	TdxResult *TdxResult      `json:"tdxResult,omitempty"`
+	Type      string          `json:"type" cbor:"0,keyasint"`
+	Summary   Result          `json:"summary" cbor:"1,keyasint"`
+	Freshness Result          `json:"freshness" cbor:"2,keyasint"`
+	Signature SignatureResult `json:"signature" cbor:"3,keyasint"`
+	Artifacts []DigestResult  `json:"artifacts" cbor:"4,keyasint"`
+	TpmResult *TpmResult      `json:"tpmResult,omitempty" cbor:"5,keyasint,omitempty"`
+	SnpResult *SnpResult      `json:"snpResult,omitempty" cbor:"6,keyasint,omitempty"`
+	SgxResult *SgxResult      `json:"sgxResult,omitempty" cbor:"7,keyasint,omitempty"`
+	TdxResult *TdxResult      `json:"tdxResult,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 type TpmResult struct {
-	PcrMatch         []PcrResult `json:"pcrMatch"`
-	AggPcrQuoteMatch Result      `json:"aggPcrQuoteMatch"`
+	PcrMatch         []PcrResult `json:"pcrMatch" cbor:"0,keyasint"`
+	AggPcrQuoteMatch Result      `json:"aggPcrQuoteMatch" cbor:"1,keyasint"`
 }
 
 type SnpResult struct {
-	VersionMatch    Result       `json:"reportVersionMatch"`
-	FwCheck         VersionCheck `json:"fwCheck"`
-	TcbCheck        TcbCheck     `json:"tcbCheck"`
-	PolicyCheck     PolicyCheck  `json:"policyCheck"`
-	ExtensionsCheck []Result     `json:"extensionsCheck"`
+	VersionMatch    Result       `json:"reportVersionMatch" cbor:"0,keyasint"`
+	FwCheck         VersionCheck `json:"fwCheck" cbor:"1,keyasint"`
+	TcbCheck        TcbCheck     `json:"tcbCheck" cbor:"2,keyasint"`
+	PolicyCheck     PolicyCheck  `json:"policyCheck" cbor:"3,keyasint"`
+	ExtensionsCheck []Result     `json:"extensionsCheck" cbor:"4,keyasint"`
 }
 
 type SgxResult struct {
-	VersionMatch       Result             `json:"reportVersionMatch"`
-	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck"`
-	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck"`
-	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck"`
+	VersionMatch       Result             `json:"reportVersionMatch" cbor:"0,keyasint"`
+	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck" cbor:"1,keyasint"`
+	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck" cbor:"2,keyasint"`
+	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck" cbor:"3,keyasint"`
 }
 
 type TdxResult struct {
-	VersionMatch        Result            `json:"reportVersionMatch"`
-	TcbInfoCheck        TcbLevelResult    `json:"tcbInfoCheck"`
-	QeIdentityCheck     TcbLevelResult    `json:"qeIdentityCheck"`
-	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck"`
-	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck"`
-	XfamCheck           AttributesCheck   `json:"xfamCheck"`
+	VersionMatch        Result            `json:"reportVersionMatch" cbor:"0,keyasint"`
+	TcbInfoCheck        TcbLevelResult    `json:"tcbInfoCheck" cbor:"1,keyasint"`
+	QeIdentityCheck     TcbLevelResult    `json:"qeIdentityCheck" cbor:"2,keyasint"`
+	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck" cbor:"3,keyasint"`
+	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck" cbor:"4,keyasint"`
+	XfamCheck           AttributesCheck   `json:"xfamCheck" cbor:"5,keyasint"`
 }
 
 // DigestResult represents a generic result for a digest that was processed
 // during attestation
 type DigestResult struct {
-	Success     bool       `json:"success"`               // Indicates if component is valid
-	Launched    bool       `json:"launched"`              // Indicates if optional component is/was running on the system
-	Pcr         *int       `json:"pcr,omitempty"`         // Number for the PCR if present (TPM)
-	Name        string     `json:"name,omitempty"`        // Name of the software artifact
-	Digest      string     `json:"digest,omitempty"`      // Reference Digest
-	Description string     `json:"description,omitempty"` // Optional description, measured PCR in case of PCR result
-	Type        string     `json:"type,omitempty"`        // On fail, indicates whether digest is reference or measurement
-	EventData   *EventData `json:"eventData,omitempty"`   // data that was included from bioseventlog
-	CtrDetails  *CtrData   `json:"ctrDetails,omitempty"`  // data that was included from container log
+	Success     bool       `json:"success" cbor:"0,keyasint"`
+	Launched    bool       `json:"launched" cbor:"1,keyasint"`
+	Pcr         *int       `json:"pcr,omitempty" cbor:"2,keyasint,omitempty"`
+	Name        string     `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
+	Digest      string     `json:"digest,omitempty" cbor:"4,keyasint,omitempty"`
+	Description string     `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
+	Type        string     `json:"type,omitempty" cbor:"6,keyasint,omitempty"`
+	EventData   *EventData `json:"eventData,omitempty" cbor:"7,keyasint,omitempty"`
+	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 type PcrResult struct {
-	Success  bool   `json:"success"`
-	Pcr      int    `json:"pcr"`
-	Digest   string `json:"digest"`
-	Measured string `json:"measured,omitempty"`
+	Success  bool   `json:"success" cbor:"0,keyasint"`
+	Pcr      int    `json:"pcr" cbor:"1,keyasint"`
+	Digest   string `json:"digest" cbor:"2,keyasint"`
+	Measured string `json:"measured,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type VersionCheck struct {
-	Success  bool  `json:"success"`
-	Claimed  []int `json:"claimed"`
-	Measured []int `json:"measured"`
+	Success  bool  `json:"success" cbor:"0,keyasint"`
+	Claimed  []int `json:"claimed" cbor:"1,keyasint"`
+	Measured []int `json:"measured" cbor:"2,keyasint"`
 }
 
 type BooleanMatch struct {
-	Success  bool `json:"success"`
-	Claimed  bool `json:"claimed"`
-	Measured bool `json:"measured"`
+	Success  bool `json:"success" cbor:"0,keyasint"`
+	Claimed  bool `json:"claimed" cbor:"1,keyasint"`
+	Measured bool `json:"measured" cbor:"2,keyasint"`
 }
 
 type TcbCheck struct {
-	Summary Result       `json:"result"`
-	Bl      VersionCheck `json:"bl"`
-	Tee     VersionCheck `json:"tee"`
-	Snp     VersionCheck `json:"snp"`
-	Ucode   VersionCheck `json:"ucode"`
+	Summary Result       `json:"result" cbor:"0,keyasint"`
+	Bl      VersionCheck `json:"bl" cbor:"1,keyasint"`
+	Tee     VersionCheck `json:"tee" cbor:"2,keyasint"`
+	Snp     VersionCheck `json:"snp" cbor:"3,keyasint"`
+	Ucode   VersionCheck `json:"ucode" cbor:"4,keyasint"`
 }
 
 type PolicyCheck struct {
-	Summary      Result       `json:"result"`
-	Abi          VersionCheck `json:"abi"`
-	Smt          BooleanMatch `json:"smt"`
-	Migration    BooleanMatch `json:"migration"`
-	Debug        BooleanMatch `json:"debug"`
-	SingleSocket BooleanMatch `json:"singleSocket"`
+	Summary      Result       `json:"result" cbor:"0,keyasint"`
+	Abi          VersionCheck `json:"abi" cbor:"1,keyasint"`
+	Smt          BooleanMatch `json:"smt" cbor:"2,keyasint"`
+	Migration    BooleanMatch `json:"migration" cbor:"3,keyasint"`
+	Debug        BooleanMatch `json:"debug" cbor:"4,keyasint"`
+	SingleSocket BooleanMatch `json:"singleSocket" cbor:"5,keyasint"`
 }
 
 type AttributesCheck struct {
-	Success  bool    `json:"success"`
-	Claimed  HexByte `json:"claimed"`
-	Measured HexByte `json:"measured"`
+	Success  bool    `json:"success" cbor:"0,keyasint"`
+	Claimed  HexByte `json:"claimed" cbor:"1,keyasint"`
+	Measured HexByte `json:"measured" cbor:"2,keyasint"`
 }
 
 type TcbLevelResult struct {
-	Summary        Result    `json:"success"`
-	MrSigner       Result    `json:"mrsigner"`
-	IsvProdId      Result    `json:"isvProdId"`
-	MiscSelect     Result    `json:"miscSelect"`
-	Attributes     Result    `json:"attributes"`
-	TcbLevelStatus string    `json:"status"`
-	TcbLevelDate   time.Time `json:"date"`
+	Summary        Result    `json:"success" cbor:"0,keyasint"`
+	MrSigner       Result    `json:"mrsigner" cbor:"1,keyasint"`
+	IsvProdId      Result    `json:"isvProdId" cbor:"2,keyasint"`
+	MiscSelect     Result    `json:"miscSelect" cbor:"3,keyasint"`
+	Attributes     Result    `json:"attributes" cbor:"4,keyasint"`
+	TcbLevelStatus string    `json:"status" cbor:"5,keyasint"`
+	TcbLevelDate   time.Time `json:"date" cbor:"6,keyasint"`
 }
 
 type SgxAttributesCheck struct {
-	Initted      BooleanMatch `json:"initted"`
-	Debug        BooleanMatch `json:"debug"`
-	Mode64Bit    BooleanMatch `json:"mode64Bit"`
-	ProvisionKey BooleanMatch `json:"provisionKey"`
-	EInitToken   BooleanMatch `json:"eInitToken"`
-	Kss          BooleanMatch `json:"kss"`
-	Legacy       BooleanMatch `json:"legacy"`
-	Avx          BooleanMatch `json:"avx"`
+	Initted      BooleanMatch `json:"initted" cbor:"0,keyasint"`
+	Debug        BooleanMatch `json:"debug" cbor:"1,keyasint"`
+	Mode64Bit    BooleanMatch `json:"mode64Bit" cbor:"2,keyasint"`
+	ProvisionKey BooleanMatch `json:"provisionKey" cbor:"3,keyasint"`
+	EInitToken   BooleanMatch `json:"eInitToken" cbor:"4,keyasint"`
+	Kss          BooleanMatch `json:"kss" cbor:"5,keyasint"`
+	Legacy       BooleanMatch `json:"legacy" cbor:"6,keyasint"`
+	Avx          BooleanMatch `json:"avx" cbor:"7,keyasint"`
 }
 
 type TdAttributesCheck struct {
-	Debug         BooleanMatch `json:"debug"`
-	SeptVEDisable BooleanMatch `json:"septVEDisable"`
-	Pks           BooleanMatch `json:"pks"`
-	Kl            BooleanMatch `json:"kl"`
+	Debug         BooleanMatch `json:"debug" cbor:"0,keyasint"`
+	SeptVEDisable BooleanMatch `json:"septVEDisable" cbor:"1,keyasint"`
+	Pks           BooleanMatch `json:"pks" cbor:"2,keyasint"`
+	Kl            BooleanMatch `json:"kl" cbor:"3,keyasint"`
 }
 
 // SignatureResult shows the result of the signature check, the certificate chain check
@@ -200,33 +200,33 @@ type TdAttributesCheck struct {
 // check was successful, Certs is always a valid chain. If not, certs contains the
 // collected certificates present in the metadata item
 type SignatureResult struct {
-	SignCheck      Result                `json:"signatureVerification"`
-	CertChainCheck Result                `json:"certChainValidation"`
-	Certs          [][]X509CertExtracted `json:"certs,omitempty"`
+	SignCheck      Result                `json:"signatureVerification" cbor:"0,keyasint"`
+	CertChainCheck Result                `json:"certChainValidation" cbor:"1,keyasint"`
+	Certs          [][]X509CertExtracted `json:"certs,omitempty" cbor:"2,keyasint"`
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
 // in a human-readable way and prepared for (un)marshaling JSON objects.
 // It is based on the type Certificate from the crypto/x509 package.
 type X509CertExtracted struct {
-	Version            int      `json:"version"`
-	SerialNumber       *big.Int `json:"serialNumber"`
-	Issuer             X509Name `json:"issuer"`
-	Subject            X509Name `json:"subject"`
-	Validity           Validity `json:"validity"`
-	KeyUsage           []string `json:"keyUsage"`
-	SignatureAlgorithm string   `json:"signatureAlgorithm"`
-	PublicKeyAlgorithm string   `json:"publicKeyAlgorithm"`
-	PublicKey          string   `json:"publicKey"`
+	Version            int      `json:"version" cbor:"0,keyasint"`
+	SerialNumber       *big.Int `json:"serialNumber" cbor:"1,keyasint"`
+	Issuer             X509Name `json:"issuer" cbor:"2,keyasint"`
+	Subject            X509Name `json:"subject" cbor:"3,keyasint"`
+	Validity           Validity `json:"validity" cbor:"4,keyasint"`
+	KeyUsage           []string `json:"keyUsage" cbor:"5,keyasint"`
+	SignatureAlgorithm string   `json:"signatureAlgorithm" cbor:"6,keyasint"`
+	PublicKeyAlgorithm string   `json:"publicKeyAlgorithm" cbor:"7,keyasint"`
+	PublicKey          string   `json:"publicKey" cbor:"8,keyasint"`
 
 	// Extensions contains raw X.509 extensions extracted during parsing.
-	Extensions []PkixExtension `json:"pkixExtensions"`
+	Extensions []PkixExtension `json:"pkixExtensions" cbor:"9,keyasint"`
 
-	ExtKeyUsage        []string `json:"extKeyUsage,omitempty"`        // Sequence of extended key usages.
-	UnknownExtKeyUsage []string `json:"unknownExtKeyUsage,omitempty"` // Encountered extended key usages unknown to this package.
+	ExtKeyUsage        []string `json:"extKeyUsage,omitempty" cbor:"10,keyasint,omitempty"`
+	UnknownExtKeyUsage []string `json:"unknownExtKeyUsage,omitempty" cbor:"11,keyasint,omitempty"`
 
-	BasicConstraintsValid bool `json:"basicConstraintsValid"` // BasicConstraintsValid indicates whether IsCA, MaxPathLen, and MaxPathLenZero are valid.
-	IsCA                  bool `json:"isCA,omitempty"`
+	BasicConstraintsValid bool `json:"basicConstraintsValid" cbor:"12,keyasint"`
+	IsCA                  bool `json:"isCA,omitempty" cbor:"13,keyasint"`
 
 	// MaxPathLen and MaxPathLenZero indicate the presence and
 	// value of the BasicConstraints' "pathLenConstraint".
@@ -235,43 +235,43 @@ type X509CertExtracted struct {
 	// -1 means it was unset, and MaxPathLenZero being true means that the field was
 	// explicitly set to zero. The case of MaxPathLen==0 with MaxPathLenZero==false
 	// should be treated equivalent to -1 (unset).
-	MaxPathLen int `json:"maxPathLen,omitempty"`
+	MaxPathLen int `json:"maxPathLen,omitempty" cbor:"14,keyasint,omitempty"`
 	// MaxPathLenZero indicates that BasicConstraintsValid==true
 	// and MaxPathLen==0 should be interpreted as an actual
 	// maximum path length of zero. Otherwise, that combination is
 	// interpreted as MaxPathLen not being set.
-	MaxPathLenZero bool `json:"maxPathLenZero,omitempty"`
+	MaxPathLenZero bool `json:"maxPathLenZero,omitempty" cbor:"15,keyasint,omitempty"`
 
 	SubjectKeyId   HexByte `json:"subjectKeyId"`
-	AuthorityKeyId HexByte `json:"authorityKeyId,omitempty"`
+	AuthorityKeyId HexByte `json:"authorityKeyId,omitempty" cbor:"16,keyasint,omitempty"`
 
 	// Subject Alternate Name values.
-	DNSNames       []string `json:"dnsNames,omitempty"`
-	EmailAddresses []string `json:"emailAddresses,omitempty"`
-	IPAddresses    []string `json:"ipAddresses,omitempty"`
-	URIs           []string `json:"uris,omitempty"`
+	DNSNames       []string `json:"dnsNames,omitempty" cbor:"17,keyasint,omitempty"`
+	EmailAddresses []string `json:"emailAddresses,omitempty" cbor:"18,keyasint,omitempty"`
+	IPAddresses    []string `json:"ipAddresses,omitempty" cbor:"19,keyasint,omitempty"`
+	URIs           []string `json:"uris,omitempty" cbor:"20,keyasint,omitempty"`
 }
 
 // X509Name represents an X.509 distinguished name. This only includes the common
 // elements of a DN. Note that the structure is not a complete representation of
 // the X.509 structure.
 type X509Name struct {
-	Country            []string `json:"country,omitempty"`
-	Organization       []string `json:"organization,omitempty"`
-	OrganizationalUnit []string `json:"organizationalUnit,omitempty"`
-	Locality           []string `json:"locality,omitempty"`
-	Province           []string `json:"province,omitempty"`
-	StreetAddress      []string `json:"streetAddress,omitempty"`
-	PostalCode         []string `json:"postalCode,omitempty"`
-	SerialNumber       string   `json:"serialNumber,omitempty"`
-	CommonName         string   `json:"commonName,omitempty"`
+	Country            []string `json:"country,omitempty" cbor:"0,keyasint,omitempty"`
+	Organization       []string `json:"organization,omitempty" cbor:"1,keyasint,omitempty"`
+	OrganizationalUnit []string `json:"organizationalUnit,omitempty" cbor:"2,keyasint,omitempty"`
+	Locality           []string `json:"locality,omitempty" cbor:"3,keyasint,omitempty"`
+	Province           []string `json:"province,omitempty" cbor:"4,keyasint,omitempty"`
+	StreetAddress      []string `json:"streetAddress,omitempty" cbor:"5,keyasint,omitempty"`
+	PostalCode         []string `json:"postalCode,omitempty" cbor:"6,keyasint,omitempty"`
+	SerialNumber       string   `json:"serialNumber,omitempty" cbor:"7,keyasint,omitempty"`
+	CommonName         string   `json:"commonName,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 // PkixExtension represents extensions of a x509 certificate.
 type PkixExtension struct {
-	Id       string `json:"id"`
-	Critical bool   `json:"critical"`
-	Value    []byte `json:"value"`
+	Id       string `json:"id" cbor:"0,keyasint"`
+	Critical bool   `json:"critical" cbor:"1,keyasint"`
+	Value    []byte `json:"value" cbor:"2,keyasint"`
 }
 
 // keyUsageName is used for translating the internal representation of allowed
@@ -406,11 +406,11 @@ const (
 
 type Result struct {
 	Success         bool      `json:"success"`
-	Got             string    `json:"got,omitempty"`
-	Expected        string    `json:"expected,omitempty"`
-	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty"`   // Required for compatibility
-	ExpectedBetween []string  `json:"expectedBetween,omitempty"` // Required for validity
-	ErrorCode       ErrorCode `json:"errorCode,omitempty"`
+	Got             string    `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
+	Expected        string    `json:"expected,omitempty" cbor:"0,keyasint,omitempty"`
+	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"0,keyasint,omitempty"`   // Required for compatibility
+	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"0,keyasint,omitempty"` // Required for validity
+	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"0,keyasint,omitempty"`
 }
 
 // ExtractX509Infos extracts relevant attributes from cert and transform some attribute
