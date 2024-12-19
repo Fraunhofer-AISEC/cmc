@@ -41,7 +41,7 @@ const (
 )
 
 type PolicyValidator interface {
-	Validate(policies []byte, result ar.VerificationResult) bool
+	Validate(policies []byte, result *ar.VerificationResult) bool
 }
 
 var (
@@ -60,13 +60,13 @@ func Verify(
 	polEng PolicyEngineSelect,
 	metadatamap map[string][]byte,
 	intelCache string,
-) ar.VerificationResult {
+) *ar.VerificationResult {
 
 	if len(metadatamap) == 0 {
 		log.Warnf("No metadata specified")
 	}
 
-	result := ar.VerificationResult{
+	result := &ar.VerificationResult{
 		Type:      "Verification Result",
 		Prover:    "Unknown",
 		Success:   true,

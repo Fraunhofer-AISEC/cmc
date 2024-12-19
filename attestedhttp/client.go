@@ -57,15 +57,16 @@ type Transport struct {
 	// as we enforce aTLS as the underlying transport protocol
 
 	// Additional aTLS parameters
-	Attest      atls.AttestSelect
-	MutualTls   bool
-	CmcAddr     string
-	CmcApi      atls.CmcApiSelect
-	Cmc         *cmc.Cmc
-	CmcPolicies []byte
-	Ca          []byte
-	ReadTimeout time.Duration
-	ResultCb    func(result *ar.VerificationResult)
+	Attest        atls.AttestSelect
+	MutualTls     bool
+	CmcAddr       string
+	CmcApi        atls.CmcApiSelect
+	ApiSerializer ar.Serializer
+	Cmc           *cmc.Cmc
+	CmcPolicies   []byte
+	Ca            []byte
+	ReadTimeout   time.Duration
+	ResultCb      func(result *ar.VerificationResult)
 }
 
 // Wrapper for net/http Client
@@ -156,19 +157,14 @@ func (c *Client) PostForm(url string, data url.Values) (resp *http.Response, err
 
 // Prepare the client's underlying attested TLS connection
 func prepareClient(c *Client) error {
-	var cmcConfig atls.CmcConfig
 	if c.client == nil {
 
-		// Store aTLS and CMC configuration
-		cmcConfig.Attest = c.Transport.Attest
-		cmcConfig.Ca = c.Transport.Ca
-		cmcConfig.CmcAddr = c.Transport.CmcAddr
-		cmcConfig.CmcApi = atls.CmcApis[c.Transport.CmcApi]
-		cmcConfig.Mtls = c.Transport.MutualTls
-		cmcConfig.Policies = c.Transport.CmcPolicies
-		cmcConfig.Cmc = c.Transport.Cmc
-
 		log.Tracef("Initializing new HTTP client")
+
+		if c.Transport.ApiSerializer == nil {
+			return fmt.Errorf("API serializer not configured")
+		}
+
 		// Create http.Transport from wrapper
 		transport := &http.Transport{
 			// User-specified HTTPS values
@@ -194,7 +190,14 @@ func prepareClient(c *Client) error {
 				log.Debugf("Dialing TLS address: %v", addr)
 
 				conn, err := atls.Dial("tcp", addr, c.Transport.TLSClientConfig,
-					atls.WithCmcConfig(&cmcConfig),
+					atls.WithApiSerializer(c.Transport.ApiSerializer),
+					atls.WithAttest(c.Transport.Attest),
+					atls.WithCmc(c.Transport.Cmc),
+					atls.WithCmcAddr(c.Transport.CmcAddr),
+					atls.WithCmcApi(c.Transport.CmcApi),
+					atls.WithCmcCa(c.Transport.Ca),
+					atls.WithCmcPolicies(c.Transport.CmcPolicies),
+					atls.WithMtls(c.Transport.MutualTls),
 					atls.WithResultCb(c.Transport.ResultCb))
 				if err != nil {
 					return nil, fmt.Errorf("failed to dial server: %w", err)

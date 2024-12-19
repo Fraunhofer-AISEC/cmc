@@ -20,7 +20,6 @@ package main
 // Install github packages with "go get [url]"
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -29,9 +28,7 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
-
 	// local modules
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 var conf *config
@@ -93,19 +90,8 @@ func attestHub(w mux.ResponseWriter, r *mux.Message) {
 		log.Fatalf("Failed to verify: %v", err)
 	}
 
-	// Check result
-	result := new(ar.VerificationResult)
-	err = json.Unmarshal(resp.VerificationResult, result)
-	if err != nil {
-		log.Fatalf("Failed to parse verification result: %v", err)
-	}
-	success := result.Success
-
-	// TODO send back result
-	log.Debugf("Result: %v", success)
-
 	// CoAP response
-	sendCoapResponse(w, r, []byte(strconv.FormatBool(success)))
+	sendCoapResponse(w, r, []byte(strconv.FormatBool(resp.Success)))
 
 	log.Debug("IoT Hub: Finished")
 }

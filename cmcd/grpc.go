@@ -28,25 +28,26 @@ import (
 	"net"
 
 	"encoding/hex"
+	"encoding/json"
 
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 
 	// local modules
 
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	oci "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 type GrpcServerWrapper struct{}
 
 // GrpcServer is the gRPC server structure
 type GrpcServer struct {
-	grpcapi.UnimplementedCMCServiceServer
+	api.UnimplementedCMCServiceServer
 	cmc *cmc.Cmc
 }
 
@@ -69,7 +70,7 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 
 	// Start gRPC server
 	s := grpc.NewServer()
-	grpcapi.RegisterCMCServiceServer(s, server)
+	api.RegisterCMCServiceServer(s, server)
 
 	log.Infof("Waiting for requests on %v", listener.Addr())
 	err = s.Serve(listener)
@@ -80,7 +81,7 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 	return nil
 }
 
-func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest) (*grpcapi.AttestationResponse, error) {
+func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*api.AttestationResponse, error) {
 
 	log.Debug("Prover: Received grpc request type 'Attest'")
 
@@ -94,27 +95,40 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	resp, err := cmc.Generate(api.ConvertAttestationRequest(req), s.cmc)
+	report, metadata, cacheMisses, err := cmc.Generate(req.Nonce, req.Cached, s.cmc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
+	resp := &api.AttestationResponse{
+		Report:      report,
+		Metadata:    metadata,
+		CacheMisses: cacheMisses,
+	}
+
 	log.Debug("Prover: Finished")
 
-	return resp.Convert(), nil
+	return resp, nil
 }
 
-func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationRequest) (*grpcapi.VerificationResponse, error) {
+func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (*api.VerificationResponse, error) {
 
 	log.Debug("Received grpc request type 'Verify'")
 
-	result, err := cmc.Verify(api.ConvertVerificationRequest(req), s.cmc)
+	result, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		log.Errorf("verifier: failed to verify: %v", err)
 	}
 
-	response := &grpcapi.VerificationResponse{
-		VerificationResult: result,
+	// grpc only: marshal verification result in JSON as we do not have protobuf
+	// definitions for the verification result
+	data, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal verification result")
+	}
+
+	response := &api.VerificationResponse{
+		VerificationResult: data,
 	}
 
 	log.Debug("Verifier: finished")
@@ -122,13 +136,34 @@ func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationReques
 	return response, nil
 }
 
-func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (*grpcapi.MeasureResponse, error) {
+func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api.MeasureResponse, error) {
 
 	var success bool
 
 	log.Debug("Received grpc request type 'Measure'")
 
-	err := m.Measure(api.ConvertMeasureRequest(req),
+	// oci spec in protobuf is marshaled as bytes
+	spec := new(oci.Spec)
+	ser, err := ar.DetectSerialization(req.CtrData.OciSpec)
+	if err != nil {
+		log.Warnf("failed to detect oci spec serialization: %v", err)
+	} else {
+		err = ser.Unmarshal(req.CtrData.OciSpec, spec)
+		if err != nil {
+			log.Warnf("failed to unmarshal grpc oci spec: %v", err)
+		}
+	}
+
+	err = m.Measure(
+		&ar.MeasureEvent{
+			Sha256:    req.Sha256,
+			EventName: req.EventName,
+			CtrData: &ar.CtrData{
+				ConfigSha256: req.CtrData.ConfigSha256,
+				RootfsSha256: req.CtrData.RootfsSha256,
+				OciSpec:      spec,
+			},
+		},
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,
@@ -142,7 +177,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 		success = true
 	}
 
-	response := &grpcapi.MeasureResponse{
+	response := &api.MeasureResponse{
 		Success: success,
 	}
 
@@ -152,9 +187,9 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 }
 
 // Signs TLS handshake data via hardware-based keys
-func (s *GrpcServer) TLSSign(ctx context.Context, req *grpcapi.TLSSignRequest) (*grpcapi.TLSSignResponse, error) {
+func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api.TLSSignResponse, error) {
 	var err error
-	var sr *grpcapi.TLSSignResponse
+	var sr *api.TLSSignResponse
 	var opts crypto.SignerOpts
 	var signature []byte
 	var tlsKeyPriv crypto.PrivateKey
@@ -183,7 +218,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *grpcapi.TLSSignRequest) (
 		return nil, fmt.Errorf("failed to perform Signing operation: %w", err)
 	}
 	// Create response
-	sr = &grpcapi.TLSSignResponse{
+	sr = &api.TLSSignResponse{
 		SignedContent: signature,
 	}
 	// Return response
@@ -192,7 +227,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *grpcapi.TLSSignRequest) (
 }
 
 // Loads public key for tls certificate
-func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (*grpcapi.TLSCertResponse, error) {
+func (s *GrpcServer) TLSCert(ctx context.Context, req *api.TLSCertRequest) (*api.TLSCertResponse, error) {
 
 	log.Debug("Prover: Received grpc request type 'TLSCert'")
 
@@ -207,7 +242,7 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}
 
-	resp := &grpcapi.TLSCertResponse{
+	resp := &api.TLSCertResponse{
 		Certificate: internal.WriteCertsPem(certChain),
 	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
@@ -216,12 +251,12 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (
 }
 
 // Fetches the peer cache for a specified peer
-func (s *GrpcServer) PeerCache(ctx context.Context, req *grpcapi.PeerCacheRequest) (*grpcapi.PeerCacheResponse, error) {
+func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (*api.PeerCacheResponse, error) {
 
 	log.Debug("Prover: Received grpc request type 'PeerCache'")
 
 	log.Trace("Collecting peer cache")
-	resp := &grpcapi.PeerCacheResponse{}
+	resp := &api.PeerCacheResponse{}
 	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)
@@ -233,17 +268,17 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *grpcapi.PeerCacheReques
 }
 
 // Converts Protobuf hashtype to crypto.SignerOpts
-func convertHash(hashtype grpcapi.HashFunction, pssOpts *grpcapi.PSSOptions) (crypto.SignerOpts, error) {
+func convertHash(hashtype api.HashFunction, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
 	var hash crypto.Hash
 	var len int
 	switch hashtype {
-	case grpcapi.HashFunction_SHA256:
+	case api.HashFunction_SHA256:
 		hash = crypto.SHA256
 		len = 32
-	case grpcapi.HashFunction_SHA384:
+	case api.HashFunction_SHA384:
 		hash = crypto.SHA384
 		len = 48
-	case grpcapi.HashFunction_SHA512:
+	case api.HashFunction_SHA512:
 		len = 64
 		hash = crypto.SHA512
 	default:

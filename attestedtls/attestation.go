@@ -21,7 +21,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
@@ -47,13 +46,18 @@ type AtlsHandshakeComplete struct {
 var log = logrus.WithField("service", "atls")
 
 func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc CmcConfig, endpoint Endpoint) error {
+
 	var err error
-	var attestResp *api.AttestationResponse
 	var cache []string
-	var reportErr string
 
 	ownAddr := conn.LocalAddr().String()
 	peerAddr := conn.RemoteAddr().String()
+
+	log.Debugf("Performing atls handshake with %v", peerAddr)
+
+	if cc.ApiSerializer == nil {
+		return fmt.Errorf("internal error: API serializer is nil")
+	}
 
 	attestSelf, attestPeer := convertAttestMode(cc.Attest, endpoint)
 
@@ -94,55 +98,49 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		return err
 	}
 
+	ownResp := AtlsHandshakeResponse{
+		Attest: cc.Attest,
+	}
+
 	// Generate attestation report of own endpoint if configured
 	if attestSelf {
 		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
 		// Obtain attestation report from local cmcd
-		attestResp, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
+		ownResp.Report, ownResp.Metadata, ownResp.CacheMisses, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
 		if err != nil {
-			reportErr = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
-			log.Warn(reportErr)
+			ownResp.Error = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
+			log.Warn(ownResp.Error)
 		} else {
 			log.Debugf("Prover %v: Created report length %v, metadata items %v, cache misses %v",
-				ownAddr, len(attestResp.Report), len(attestResp.Metadata), len(attestResp.CacheMisses))
+				ownAddr, len(ownResp.Report), len(ownResp.Metadata), len(ownResp.CacheMisses))
 		}
 	} else {
 		log.Debugf("Prover %v: Skipping own attestation", ownAddr)
 	}
 
-	report := AtlsHandshakeResponse{
-		Attest: cc.Attest,
-		Error:  reportErr,
-	}
-	if attestResp != nil {
-		report.Report = attestResp.Report
-		report.CacheMisses = attestResp.CacheMisses
-		report.Metadata = attestResp.Metadata
-	}
-
 	// Send created atls handshake response to listener asynchronously to avoid TCP deadlock
 	log.Debugf("Prover %v: sending atls handshake response with report length %v to %v",
-		ownAddr, len(report.Report), peerAddr)
+		ownAddr, len(ownResp.Report), peerAddr)
 	errChan := make(chan error)
 	go func() {
-		err := sendAtlsResponse(conn, cc.ApiSerializer, report)
+		err := sendAtlsResponse(conn, cc.ApiSerializer, ownResp)
 		errChan <- err
 		close(errChan)
 	}()
 
 	// Wait for atls response with report from peer
 	log.Debugf("Verifier %v: waiting for atls handshake response from %v", ownAddr, peerAddr)
-	resp, err := receiveAtlsResponse(conn)
+	peerResp, err := receiveAtlsResponse(conn)
 	if err != nil {
 		return fmt.Errorf("verifier: failed to receive atls handshake response from %v: %w",
 			peerAddr, err)
 	}
 	// Check error message from peer
-	if resp.Error != "" {
-		return fmt.Errorf("atls response returned error: %v", resp.Error)
+	if peerResp.Error != "" {
+		return fmt.Errorf("atls response returned error: %v", peerResp.Error)
 	}
 	log.Debugf("Verifier %v: received atls handshake response mode %v from %v",
-		ownAddr, resp.Attest.String(), peerAddr)
+		ownAddr, peerResp.Attest.String(), peerAddr)
 
 	// Wait until sending of own handshake response is finished
 	log.Debugf("Prover %v: Waiting for atls handshake response sending to be completed", ownAddr)
@@ -164,16 +162,8 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 		// Verify AR from listener with own channel bindings
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
-		req := &api.VerificationRequest{
-			Nonce:       chbindings,
-			Report:      resp.Report,
-			Metadata:    resp.Metadata,
-			Ca:          cc.Ca,
-			Peer:        fingerprint,
-			CacheMisses: resp.CacheMisses,
-			Policies:    cc.Policies,
-		}
-		err = cc.CmcApi.verifyAR(cc, req)
+		err = cc.CmcApi.verifyAR(cc, peerResp.Report, chbindings, cc.Ca, cc.Policies, fingerprint,
+			peerResp.CacheMisses, peerResp.Metadata)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}
@@ -186,6 +176,11 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 }
 
 func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error) error {
+
+	if s == nil {
+		return fmt.Errorf("internal error: API serializer is nil")
+	}
+
 	// Finally send and receive handshake complete
 	complete := AtlsHandshakeComplete{
 		Success: handshakeError == nil,

@@ -104,24 +104,24 @@ func publishReport(addr string, result []byte) error {
 	return nil
 }
 
-func saveResult(file, addr string, result []byte) error {
-
-	// Convert to human readable
-	var out bytes.Buffer
-	json.Indent(&out, result, "", "    ")
+func saveResult(file, addr string, r *ar.VerificationResult) error {
 
 	// Log the result
-	r := new(ar.VerificationResult)
-	json.Unmarshal(result, r)
 	if r.Success {
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", r.Prover, r.Created)
 	} else {
 		log.Infof("FAILED: Verification for Prover %v (%v)", r.Prover, r.Created)
 	}
 
+	// Marshal the result (always as JSON for HTTP REST API and manual review)
+	data, err := json.MarshalIndent(r, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal verification result: %v", err)
+	}
+
 	// Save the Attestation Result to file
 	if file != "" {
-		os.WriteFile(file, out.Bytes(), 0644)
+		os.WriteFile(file, data, 0644)
 		log.Debugf("Wrote file %v", file)
 	} else {
 		log.Debug("No config file specified: will not save attestation report")
@@ -129,7 +129,7 @@ func saveResult(file, addr string, result []byte) error {
 
 	// Publish the attestation result if publishing address was specified
 	if addr != "" {
-		err := publishReport(addr, result)
+		err := publishReport(addr, data)
 		if err != nil {
 			log.Warnf("failed to publish result: %v", err)
 		}

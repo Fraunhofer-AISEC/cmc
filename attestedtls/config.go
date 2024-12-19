@@ -19,7 +19,6 @@ import (
 	"crypto"
 	"fmt"
 
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
@@ -71,8 +70,8 @@ type CmcConfig struct {
 }
 
 type CmcApi interface {
-	obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error)
-	verifyAR(cc CmcConfig, req *api.VerificationRequest) error
+	obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error)
+	verifyAR(cc CmcConfig, report, nonce, ca, policies []byte, peer string, cacheMisses []string, metadata map[string][]byte) error
 	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc CmcConfig) ([][]byte, error)
 	fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error)
@@ -92,6 +91,8 @@ func NewCmcConfig(configs ...ConnectionOption[CmcConfig]) (CmcConfig, error) {
 		Attest:        attestDefault,
 		ApiSerializer: ar.CborSerializer{},
 	}
+
+	// Overwrite with specified configuration options
 	for _, c := range configs {
 		c(&cc)
 	}
@@ -99,6 +100,9 @@ func NewCmcConfig(configs ...ConnectionOption[CmcConfig]) (CmcConfig, error) {
 	// Check that selected API is implemented
 	if cc.CmcApi == nil {
 		return cc, fmt.Errorf("selected CMC API is not implemented")
+	}
+	if cc.ApiSerializer == nil {
+		return cc, fmt.Errorf("specified API serializer is nil")
 	}
 
 	return cc, nil
@@ -138,6 +142,10 @@ func WithCmcPolicies(policies []byte) ConnectionOption[CmcConfig] {
 
 // WithApiSerializer specifies the serializer for internal requests
 func WithApiSerializer(apiSerializer ar.Serializer) ConnectionOption[CmcConfig] {
+	if apiSerializer == nil {
+		log.Fatalf("Cannot configure API serializer 'nil'")
+		return func(c *CmcConfig) {}
+	}
 	return func(c *CmcConfig) {
 		c.ApiSerializer = apiSerializer
 	}
@@ -170,13 +178,6 @@ func WithResultCb(cb func(result *ar.VerificationResult)) ConnectionOption[CmcCo
 func WithCmc(cmc *cmc.Cmc) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
 		c.Cmc = cmc
-	}
-}
-
-// WithCmc specifies an entire CMC configuration
-func WithCmcConfig(cmcConfig *CmcConfig) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
-		*c = *cmcConfig
 	}
 }
 

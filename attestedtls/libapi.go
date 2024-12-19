@@ -40,42 +40,64 @@ func init() {
 }
 
 // Obtains attestation report from CMCd
-func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error) {
+func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
 	if cc.Cmc == nil {
-		return nil, errors.New("internal error: cmc is nil")
+		return nil, nil, nil, errors.New("internal error: cmc is nil")
 	}
 
 	if len(cc.Cmc.Drivers) == 0 {
-		return nil, errors.New("no drivers configured")
+		return nil, nil, nil, errors.New("no drivers configured")
 	}
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(chbindings))
 
-	resp, err := cmc.Generate(&api.AttestationRequest{
-		Nonce:  chbindings,
-		Cached: cached,
-	}, cc.Cmc)
+	report, metadata, cacheMisses, err := cmc.Generate(chbindings, cached, cc.Cmc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	return resp, nil
+	resp := &api.AttestationResponse{
+		Report:      report,
+		Metadata:    metadata,
+		CacheMisses: cacheMisses,
+	}
+
+	return resp.Report, resp.Metadata, resp.CacheMisses, nil
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
-func (a LibApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
+func (a LibApi) verifyAR(
+	cc CmcConfig,
+	report, nonce, ca, policies []byte,
+	peer string,
+	cacheMisses []string,
+	metadata map[string][]byte,
+) error {
 
 	if cc.Cmc == nil {
 		return errors.New("internal error: cmc is nil")
 	}
 
+	req := &api.VerificationRequest{
+		Nonce:       nonce,
+		Report:      report,
+		Metadata:    metadata,
+		Ca:          ca,
+		Peer:        peer,
+		CacheMisses: cacheMisses,
+		Policies:    policies,
+	}
+
 	log.Debug("Verifier: verifying attestation report")
-	result := cmc.VerifyInternal(req, cc.Cmc)
+	result, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, cc.Cmc)
+	if err != nil {
+		return fmt.Errorf("failed to verify: %w", err)
+	}
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
-		cc.ResultCb(&result)
+		cc.ResultCb(result)
 	} else {
 		log.Tracef("Will not return attestation result: no callback specified")
 	}

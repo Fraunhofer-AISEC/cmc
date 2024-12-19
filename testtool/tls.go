@@ -158,7 +158,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(api),
-		// atls.WithApiSerializer(c.apiSerializer),
+		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithCmc(cmc))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
