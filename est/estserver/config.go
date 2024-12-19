@@ -70,10 +70,10 @@ const (
 	estKeyFlag          = "estkey"
 	estCertsFlag        = "estcerts"
 	httpFolderFlag      = "httpfolder"
-	verifyEkCertFlag    = "verifyek"
-	tpmEkCertDbFlag     = "ekdb"
-	vcekCacheFolderFlag = "vcekfolder"
-	logFlag             = "log"
+	verifyEkCertFlag    = "verifyekcert"
+	tpmEkCertDbFlag     = "tpmekcertdb"
+	vcekCacheFolderFlag = "vcekcachefolder"
+	logFlag             = "loglevel"
 )
 
 func getConfig() (*config, error) {
