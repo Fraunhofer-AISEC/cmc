@@ -23,7 +23,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
@@ -40,7 +39,7 @@ type MeasureConfig struct {
 	Driver     string
 }
 
-func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
+func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
 
 	if mc == nil {
 		return errors.New("internal error: measure config is nil")
@@ -49,7 +48,7 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 		return errors.New("internal error: serializer is nil")
 	}
 
-	log.Tracef("Recording measurement %v: %v", req.EventName, hex.EncodeToString(req.Sha256))
+	log.Tracef("Recording measurement %v: %v", event.EventName, hex.EncodeToString(event.Sha256))
 
 	// Read the existing measurement list if it already exists
 	var measureList []ar.MeasureEvent
@@ -68,7 +67,7 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 	// Search the existing measurement list..
 	found := false
 	for _, e := range measureList {
-		if bytes.Equal(e.Sha256, req.Sha256) {
+		if bytes.Equal(e.Sha256, event.Sha256) {
 			found = true
 			break
 		}
@@ -76,13 +75,13 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 
 	// ..if the container was already measured, exit
 	if found {
-		log.Tracef("Measurement %v already exists, nothing to do", req.EventName)
+		log.Tracef("Measurement %v already exists, nothing to do", event.EventName)
 		return nil
 	}
 
 	// ..otherwise append it to the measurement list and record the measurement
-	measureList = append(measureList, req.MeasureEvent)
-	log.Tracef("Recorded measurement %v into measurement list", req.EventName)
+	measureList = append(measureList, *event)
+	log.Tracef("Recorded measurement %v into measurement list", event.EventName)
 
 	data, err := mc.Serializer.Marshal(measureList)
 	if err != nil {
@@ -107,12 +106,12 @@ func Measure(req *api.MeasureRequest, mc *MeasureConfig) error {
 		}
 		defer rwc.Close()
 
-		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, req.Sha256, "")
+		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, event.Sha256, "")
 		if err != nil {
 			return fmt.Errorf("failed to extend PCR%v: %w", mc.Pcr, err)
 		}
 
-		log.Tracef("Recorded measurement %v into PCR%v", req.EventName, mc.Pcr)
+		log.Tracef("Recorded measurement %v into PCR%v", event.EventName, mc.Pcr)
 	} else if strings.EqualFold(mc.Driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {

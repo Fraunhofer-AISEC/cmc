@@ -95,13 +95,14 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		IdleConnTimeout: 60 * time.Second,
 		TLSClientConfig: tlsConfig,
 
-		Attest:      c.attest,
-		MutualTls:   c.Mtls,
-		CmcAddr:     c.CmcAddr,
-		CmcApi:      api,
-		Cmc:         cmc,
-		Ca:          c.ca,
-		CmcPolicies: c.policies,
+		Attest:        c.attest,
+		MutualTls:     c.Mtls,
+		CmcAddr:       c.CmcAddr,
+		CmcApi:        api,
+		ApiSerializer: c.apiSerializer,
+		Cmc:           cmc,
+		Ca:            c.ca,
+		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed

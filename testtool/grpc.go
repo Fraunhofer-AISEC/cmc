@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/json"
 	"os"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	// local modules
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
@@ -73,7 +75,12 @@ func (a GrpcApi) generate(c *config) {
 	}
 
 	// gRPC only: Marshal response as JSON/CBOR for saving it to the file system
-	data, err := c.apiSerializer.Marshal(api.ConvertAttestationResponse(response))
+	apiResp := &api.AttestationResponse{
+		Report:      response.Report,
+		Metadata:    response.Metadata,
+		CacheMisses: response.CacheMisses,
+	}
+	data, err := c.apiSerializer.Marshal(apiResp)
 	if err != nil {
 		log.Fatalf("Failed to marshal attestation response: %v", err)
 	}
@@ -120,7 +127,14 @@ func (a GrpcApi) verify(c *config) {
 		log.Fatalf("GRPC Verify Call failed: %v", err)
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, response.GetVerificationResult())
+	// grpc only: the verification result is marshalled as JSON, as we do not have protobuf definitions
+	result := new(ar.VerificationResult)
+	err = json.Unmarshal(response.GetVerificationResult(), result)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal grpc verification result")
+	}
+
+	err = saveResult(c.ResultFile, c.Publish, result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}

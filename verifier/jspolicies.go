@@ -30,7 +30,7 @@ func init() {
 	policyEngines[PolicyEngineSelect_JS] = JsPolicyEngine{}
 }
 
-func (p JsPolicyEngine) Validate(policies []byte, result ar.VerificationResult) bool {
+func (p JsPolicyEngine) Validate(policies []byte, result *ar.VerificationResult) bool {
 	vr, err := json.Marshal(result)
 	if err != nil {
 		log.Errorf("Failed to marshal verification result: %v", err)

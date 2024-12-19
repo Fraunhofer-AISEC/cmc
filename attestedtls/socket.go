@@ -20,14 +20,12 @@ package attestedtls
 import (
 	"crypto"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -39,7 +37,7 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error) {
+func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
@@ -50,7 +48,7 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*
 	log.Tracef("Sending attestation request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		return nil, fmt.Errorf("error dialing cmcd: %w", err)
+		return nil, nil, nil, fmt.Errorf("error dialing cmcd: %w", err)
 	}
 
 	req := &api.AttestationRequest{
@@ -61,43 +59,49 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*
 	// Marshal request
 	payload, err := cc.ApiSerializer.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request to cmcd: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to send request to cmcd: %w", err)
 	}
 
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to receive from cmcd: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to receive from cmcd: %w", err)
 	}
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
 		err = cc.ApiSerializer.Unmarshal(payload, resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+			return nil, nil, nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
-		return nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
+		return nil, nil, nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
 	} else if mtype != api.TypeAttest {
-		return nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
+		return nil, nil, nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	resp := new(api.AttestationResponse)
 	err = cc.ApiSerializer.Unmarshal(payload, resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
 	}
 
-	return resp, nil
+	return resp.Report, resp.Metadata, resp.CacheMisses, nil
 }
 
 // Sends attestation report to cmcd for verification
-func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
+func (a SocketApi) verifyAR(
+	cc CmcConfig,
+	report, nonce, ca, policies []byte,
+	peer string,
+	cacheMisses []string,
+	metadata map[string][]byte,
+) error {
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
@@ -109,6 +113,16 @@ func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
+	}
+
+	req := &api.VerificationRequest{
+		Nonce:       nonce,
+		Report:      report,
+		Metadata:    metadata,
+		Ca:          ca,
+		Peer:        peer,
+		CacheMisses: cacheMisses,
+		Policies:    policies,
 	}
 
 	// Marshal Verification request
@@ -147,22 +161,15 @@ func (a SocketApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 		return fmt.Errorf("failed to unmarshal cmcd verify response: %w", err)
 	}
 
-	// Parse VerificationResult (always json)
-	result := new(ar.VerificationResult)
-	err = json.Unmarshal(verifyResp.VerificationResult, result)
-	if err != nil {
-		return fmt.Errorf("could not parse verification result: %w", err)
-	}
-
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
-		cc.ResultCb(result)
+		cc.ResultCb(&verifyResp.VerificationResult)
 	} else {
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
 	// Check results
-	if !result.Success {
+	if !verifyResp.Success {
 		return errors.New("attestation report verification failed")
 	}
 	return nil

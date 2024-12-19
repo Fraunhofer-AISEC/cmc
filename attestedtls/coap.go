@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/rsa"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -42,7 +41,7 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*api.AttestationResponse, error) {
+func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
 	path := "/Attest"
 
@@ -50,7 +49,7 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*ap
 	log.Tracef("Sending attestation request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
-		return nil, fmt.Errorf("error dialing: %w", err)
+		return nil, nil, nil, fmt.Errorf("error dialing: %w", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -63,33 +62,39 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) (*ap
 	// Marshal request
 	payload, err := cc.ApiSerializer.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
 	coapResp, err := conn.Post(ctx, path, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read CoAP reply body
 	body, err := coapResp.ReadBody()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to read body: %w", err)
 	}
 
 	// Unmarshal response
 	resp := new(api.AttestationResponse)
 	err = cc.ApiSerializer.Unmarshal(body, resp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to unmarshal body: %w", err)
 	}
 
-	return resp, nil
+	return resp.Report, resp.Metadata, resp.CacheMisses, nil
 }
 
 // Sends attestationreport to cmcd for verification
-func (a CoapApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
+func (a CoapApi) verifyAR(
+	cc CmcConfig,
+	report, nonce, ca, policies []byte,
+	peer string,
+	cacheMisses []string,
+	metadata map[string][]byte,
+) error {
 
 	path := "/Verify"
 
@@ -101,6 +106,16 @@ func (a CoapApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+
+	req := &api.VerificationRequest{
+		Nonce:       nonce,
+		Report:      report,
+		Metadata:    metadata,
+		Ca:          ca,
+		Peer:        peer,
+		CacheMisses: cacheMisses,
+		Policies:    policies,
+	}
 
 	// Marshal verification request
 	payload, err := cc.ApiSerializer.Marshal(req)
@@ -125,22 +140,15 @@ func (a CoapApi) verifyAR(cc CmcConfig, req *api.VerificationRequest) error {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Parse VerificationResult (always json)
-	result := new(ar.VerificationResult)
-	err = json.Unmarshal(verifyResp.VerificationResult, result)
-	if err != nil {
-		return fmt.Errorf("could not parse verification result: %w", err)
-	}
-
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
-		cc.ResultCb(result)
+		cc.ResultCb(&verifyResp.VerificationResult)
 	} else {
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
 	// check results
-	if !result.Success {
+	if !verifyResp.Success {
 		return errors.New("attestation report verification failed")
 	}
 

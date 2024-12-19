@@ -136,10 +136,16 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
 
-	resp, err := c.Generate(req, cmc)
+	report, metadata, cacheMisses, err := c.Generate(req.Nonce, req.Cached, cmc)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
+	}
+
+	resp := &api.AttestationResponse{
+		Report:      report,
+		Metadata:    metadata,
+		CacheMisses: cacheMisses,
 	}
 
 	// Serialize payload
@@ -169,17 +175,18 @@ func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	log.Debug("verifying attestation report")
-	result, err := c.Verify(req, cmc)
+	result, err := c.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, cmc)
 	if err != nil {
 		sendError(conn, s, "failed to verify: %v", err)
 		return
 	}
 
-	// Serialize payload
-	resp := api.VerificationResponse{
-		VerificationResult: result,
+	resp := &api.VerificationResponse{
+		VerificationResult: *result,
 	}
-	data, err := s.Marshal(&resp)
+
+	// Serialize payload
+	data, err := s.Marshal(resp)
 	if err != nil {
 		sendError(conn, s, "failed to marshal message: %v", err)
 		return
@@ -206,7 +213,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Measurer: recording measurement")
 	var success bool
-	err = m.Measure(req,
+	err = m.Measure(&req.MeasureEvent,
 		&m.MeasureConfig{
 			Serializer: cmc.Serializer,
 			Pcr:        cmc.CtrPcr,

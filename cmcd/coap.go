@@ -130,11 +130,17 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
-	resp, err := cmc.Generate(req, s.cmc)
+	report, metadata, cacheMisses, err := cmc.Generate(req.Nonce, req.Cached, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
 		return
+	}
+
+	resp := &api.AttestationResponse{
+		Report:      report,
+		Metadata:    metadata,
+		CacheMisses: cacheMisses,
 	}
 
 	// Serialize CoAP payload
@@ -163,16 +169,13 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("verifying attestation report")
-	result, err := cmc.Verify(req, s.cmc)
+	resp, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Verifier: failed to verify: %v", err)
 		return
 	}
 
-	resp := api.VerificationResponse{
-		VerificationResult: result,
-	}
 	payload, err := ser.Marshal(&resp)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
@@ -199,7 +202,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Measurer: Recording measurement")
 	var success bool
-	err = m.Measure(req,
+	err = m.Measure(&req.MeasureEvent,
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,

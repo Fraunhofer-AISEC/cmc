@@ -18,18 +18,12 @@
 package api
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rsa"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"net"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
-	oci "github.com/opencontainers/runtime-spec/specs-go"
-	log "github.com/sirupsen/logrus"
 )
 
 type HashFunction int32
@@ -78,7 +72,7 @@ type VerificationRequest struct {
 }
 
 type VerificationResponse struct {
-	VerificationResult []byte `json:"verificationResult" cbor:"0,keyasint"`
+	ar.VerificationResult
 }
 
 type MeasureRequest struct {
@@ -230,188 +224,4 @@ func SignerOptsToHash(opts crypto.SignerOpts) (HashFunction, error) {
 	default:
 	}
 	return HashFunction_SHA512, errors.New("could not determine correct Hash function")
-}
-
-// Receive receives data from a socket with the following format
-//
-//	Len uint32 -> Length of the payload to be sent
-//	Type uint32 -> Type of the payload
-//	payload []byte -> encoded payload
-func Receive(conn net.Conn) ([]byte, uint32, error) {
-
-	// If unix domain sockets are used, set the write buffer size
-	_, ok := conn.(*net.UnixConn)
-	if ok {
-		err := conn.(*net.UnixConn).SetReadBuffer(MaxMsgLen)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to socket write buffer size %v", err)
-		}
-	}
-
-	// Read header
-	buf := make([]byte, 8)
-
-	log.Tracef("Reading header length %v", len(buf))
-
-	n, err := conn.Read(buf)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read header: %w", err)
-	}
-	if n != 8 {
-		return nil, 0, fmt.Errorf("read %v bytes (expected 8)", n)
-	}
-
-	// Decode header to get length and type
-	payloadLen := int(binary.BigEndian.Uint32(buf[0:4]))
-	msgType := binary.BigEndian.Uint32(buf[4:8])
-
-	if payloadLen > MaxMsgLen {
-		return nil, 0, fmt.Errorf("cannot receive: payload size %v exceeds maximum size %v",
-			payloadLen, MaxMsgLen)
-	}
-
-	log.Tracef("Received header type %v. Receiving payload length %v", TypeToString(msgType), payloadLen)
-
-	// Read payload
-	payload := bytes.NewBuffer(nil)
-	received := 0
-	for {
-		chunk := make([]byte, 128*1024)
-		n, err = conn.Read(chunk)
-		if err != nil {
-			return nil, 0, fmt.Errorf("failed to read payload: %w", err)
-		}
-		received += n
-		payload.Write(chunk[:n])
-
-		if received == payloadLen {
-			break
-		}
-	}
-
-	log.Tracef("Received payload length %v", payloadLen)
-
-	return payload.Bytes(), msgType, nil
-}
-
-// Send sends data to a socket with the following format
-//
-//	Len uint32 -> Length of the payload to be sent
-//	Type uint32 -> Type of the payload
-//	payload []byte -> encoded payload
-func Send(conn net.Conn, payload []byte, t uint32) error {
-
-	if len(payload) > MaxMsgLen {
-		return fmt.Errorf("cannot send: payload size %v exceeds maximum size %v",
-			len(payload), MaxMsgLen)
-	}
-
-	// If unix domain sockets are used, set the write buffer size
-	_, ok := conn.(*net.UnixConn)
-	if ok {
-		err := conn.(*net.UnixConn).SetWriteBuffer(MaxMsgLen)
-		if err != nil {
-			return fmt.Errorf("failed to socket write buffer size %v", err)
-		}
-	}
-
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint32(buf[0:4], uint32(len(payload)))
-	binary.BigEndian.PutUint32(buf[4:8], t)
-
-	log.Tracef("Sending header length %v", len(buf))
-
-	n, err := conn.Write(buf)
-	if err != nil {
-		return fmt.Errorf("failed to send header: %w", err)
-	}
-	if n != len(buf) {
-		return fmt.Errorf("could only send %v of %v bytes", n, len(buf))
-	}
-
-	log.Tracef("Sending payload type %v length %v", TypeToString(t), uint32(len(payload)))
-
-	n, err = conn.Write(payload)
-	if err != nil {
-		return fmt.Errorf("failed to send response: %w", err)
-	}
-	if n != len(payload) {
-		return fmt.Errorf("could only send %v of %v bytes", n, len(payload))
-	}
-
-	return nil
-}
-
-func (req *AttestationResponse) Convert() *grpcapi.AttestationResponse {
-	return &grpcapi.AttestationResponse{
-		Report:      req.Report,
-		Metadata:    req.Metadata,
-		CacheMisses: req.CacheMisses,
-	}
-}
-
-func (req *VerificationRequest) Convert() *grpcapi.VerificationRequest {
-	return &grpcapi.VerificationRequest{
-		Nonce:       req.Nonce,
-		Report:      req.Report,
-		Metadata:    req.Metadata,
-		Ca:          req.Ca,
-		Peer:        req.Peer,
-		CacheMisses: req.CacheMisses,
-		Policies:    req.Policies,
-	}
-}
-
-func ConvertAttestationRequest(req *grpcapi.AttestationRequest) *AttestationRequest {
-	return &AttestationRequest{
-		Nonce:  req.Nonce,
-		Cached: req.Cached,
-	}
-}
-
-func ConvertAttestationResponse(resp *grpcapi.AttestationResponse) *AttestationResponse {
-	return &AttestationResponse{
-		Report:      resp.Report,
-		Metadata:    resp.Metadata,
-		CacheMisses: resp.CacheMisses,
-	}
-}
-
-func ConvertVerificationRequest(req *grpcapi.VerificationRequest) *VerificationRequest {
-	return &VerificationRequest{
-		Nonce:       req.Nonce,
-		Report:      req.Report,
-		Metadata:    req.Metadata,
-		Ca:          req.Ca,
-		Peer:        req.Peer,
-		CacheMisses: req.CacheMisses,
-		Policies:    req.Policies,
-	}
-}
-
-func ConvertMeasureRequest(req *grpcapi.MeasureRequest) *MeasureRequest {
-
-	// oci spec in protobuf is marshaled as bytes
-	spec := new(oci.Spec)
-	s, err := ar.DetectSerialization(req.CtrData.OciSpec)
-	if err != nil {
-		log.Warnf("failed to detect oci spec serialization: %v", err)
-	} else {
-		err = s.Unmarshal(req.CtrData.OciSpec, spec)
-		if err != nil {
-			log.Warnf("failed to unmarshal grpc oci spec: %v", err)
-		}
-	}
-
-	return &MeasureRequest{
-		MeasureEvent: ar.MeasureEvent{
-			Sha256:    req.Sha256,
-			EventName: req.EventName,
-			CtrData: &ar.CtrData{
-				ConfigSha256: req.CtrData.ConfigSha256,
-				RootfsSha256: req.CtrData.RootfsSha256,
-				OciSpec:      spec,
-			},
-		},
-	}
 }

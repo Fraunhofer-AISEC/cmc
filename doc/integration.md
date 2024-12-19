@@ -17,13 +17,12 @@ see [configuration](./configuration.md).
 // Import the attested TLS package
 import atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 
-// Create CMC configuration (see configuration documentation)
-conf := &CmcConfig{
-    // ...
-}
-
 // Establish attested TLS client connection
-conn, _ := atls.Dial("tcp", "localhost:4443", tlsConf, atls.WithCmcConfig(conf))
+conn, _ := atls.Dial("tcp", "localhost:4443", tlsConf,
+    atls.WithCmcAddr("localhost:9955"),
+    atls.WithCmcApi(CmcApi_Socket),
+    // TODO Potentially more configuration options
+)
 defer conn.Close()
 
 // Send data over the attested TLS connection
@@ -49,7 +48,11 @@ conf := &CmcConfig{
 }
 
 // Create an attested TLS listener
-ln, _ := atls.Listen("tcp", "localhost:4443", tlsConf, atls.WithCmcConfig(conf))
+ln, _ := atls.Listen("tcp", "localhost:4443", tlsConf,
+    atls.WithCmcAddr("localhost:9955"),
+    atls.WithCmcApi(CmcApi_Socket),
+    // TODO Potentially more configuration options
+)
 defer ln.Close()
 
 for {

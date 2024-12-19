@@ -65,10 +65,16 @@ func (a LibApi) generate(c *config) {
 	}
 
 	// Generate attestation report
-	resp, err := cmc.Generate(&api.AttestationRequest{Nonce: nonce}, a.cmc)
+	report, metadata, cacheMisses, err := cmc.Generate(nonce, nil, a.cmc)
 	if err != nil {
 		log.Errorf("Failed to generate attestation report: %v", err)
 		return
+	}
+
+	resp := &api.AttestationResponse{
+		Report:      report,
+		Metadata:    metadata,
+		CacheMisses: cacheMisses,
 	}
 
 	// Marshal the attestation response for saving it to the file system
@@ -102,19 +108,13 @@ func (a LibApi) verify(c *config) {
 
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
-	result, err := cmc.Verify(&api.VerificationRequest{
-		Nonce:    nonce,
-		Report:   report.Report,
-		Metadata: report.Metadata,
-		Ca:       c.ca,
-		Policies: c.policies,
-	}, a.cmc)
+	resp, err := cmc.Verify(report.Report, nonce, c.ca, c.policies, "", nil, report.Metadata, a.cmc)
 	if err != nil {
 		log.Errorf("Verifier: failed to verify: %v", err)
 		return
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, result)
+	err = saveResult(c.ResultFile, c.Publish, resp)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
@@ -159,18 +159,16 @@ func (a LibApi) measure(c *config) {
 	hasher.Write(tbh)
 	templateHash := hasher.Sum(nil)
 
-	req := &api.MeasureRequest{
-		MeasureEvent: ar.MeasureEvent{
-			Sha256:    templateHash,
-			EventName: c.CtrName,
-			CtrData: &ar.CtrData{
-				ConfigSha256: configHash,
-				RootfsSha256: rootfsHash,
-			},
+	event := &ar.MeasureEvent{
+		Sha256:    templateHash,
+		EventName: c.CtrName,
+		CtrData: &ar.CtrData{
+			ConfigSha256: configHash,
+			RootfsSha256: rootfsHash,
 		},
 	}
 
-	err = m.Measure(req,
+	err = m.Measure(event,
 		&m.MeasureConfig{
 			Serializer: a.cmc.Serializer,
 			Pcr:        a.cmc.CtrPcr,
