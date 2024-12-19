@@ -8,7 +8,6 @@
     "httpFolder": "../../../cmc-data-ids/",
     "verifyEkCert": false,
     "tpmEkCertDb": "../../../cmc-data-ids/tpm-ek-certs.db",
-    "serialization": "json",
     "estKey": "../../../cmc-data-ids/pki/est-key.pem",
     "estCerts": [
         "../../../cmc-data-ids/pki/est.pem"
