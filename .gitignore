@@ -16,6 +16,7 @@ tools/fmspc-retrieval-tool/fmspc-retrieval-tool
 tools/measurefs/measurefs
 tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1
 tools/measure-bundle/measure-bundle
+tools/schema-generator/schema-generator
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
