@@ -67,14 +67,19 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 	log.Trace("Contacting backend to obtain AR.")
 
 	req := &api.AttestationRequest{
-		Nonce:  chbindings,
-		Cached: cached,
+		Version: api.GetVersion(),
+		Nonce:   chbindings,
+		Cached:  cached,
 	}
 
 	// Call Attest request
 	resp, err := cmcClient.Attest(context.Background(), req)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to obtain AR: %w", err)
+	}
+
+	if resp.Version != api.GetVersion() {
+		return nil, nil, nil, fmt.Errorf("API version mismatch. Expected AttestationResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
 	// Return response
@@ -101,6 +106,7 @@ func (a GrpcApi) verifyAR(
 	log.Trace("Contacting backend for AR verification")
 
 	req := &api.VerificationRequest{
+		Version:     api.GetVersion(),
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
@@ -114,6 +120,10 @@ func (a GrpcApi) verifyAR(
 	resp, err := cmcClient.Verify(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("could not obtain verification result: %w", err)
+	}
+
+	if resp.Version != api.GetVersion() {
+		return fmt.Errorf("API version mismatch. Expected VerificationResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
 	// grpc only: the attestation result is marshalled as JSON, as we do not have protobuf definitions
@@ -154,6 +164,7 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 		return nil, fmt.Errorf("sign request creation failed: %w", err)
 	}
 	req := api.TLSSignRequest{
+		Version:  api.GetVersion(),
 		Content:  digest,
 		Hashtype: hash,
 	}
@@ -167,6 +178,10 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	resp, err := cmcClient.TLSSign(context.Background(), &req)
 	if err != nil {
 		return nil, fmt.Errorf("sign request failed: %w", err)
+	}
+
+	if resp.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected TLSSignResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
 	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
@@ -184,12 +199,18 @@ func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	defer cancel()
 
 	// Create TLSCert request
-	req := api.TLSCertRequest{}
+	req := api.TLSCertRequest{
+		Version: api.GetVersion(),
+	}
 
 	// Call TLSCert request
 	resp, err := cmcClient.TLSCert(context.Background(), &req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request TLS certificate: %w", err)
+	}
+
+	if resp.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected TLSCertResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
 	if len(resp.GetCertificate()) == 0 {
@@ -213,13 +234,18 @@ func (a GrpcApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	log.Tracef("Contacting backend to fetch peer cache for peer %v", fingerprint)
 
 	req := &api.PeerCacheRequest{
-		Peer: fingerprint,
+		Version: api.GetVersion(),
+		Peer:    fingerprint,
 	}
 
 	// Call peer cache API
 	resp, err := cmcClient.PeerCache(context.Background(), req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch peer cache: %w", err)
+	}
+
+	if resp.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected PeerCacheResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
 	return resp.Cache, nil

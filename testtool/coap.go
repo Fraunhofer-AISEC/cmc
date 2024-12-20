@@ -64,7 +64,8 @@ func (a CoapApi) generate(c *config) {
 
 	// Generate attestation request
 	req := &api.AttestationRequest{
-		Nonce: nonce,
+		Version: api.GetVersion(),
+		Nonce:   nonce,
 	}
 
 	// Marshal CoAP payload
@@ -102,6 +103,7 @@ func (a CoapApi) verify(c *config) {
 	}
 
 	req := &api.VerificationRequest{
+		Version:  api.GetVersion(),
 		Nonce:    nonce,
 		Report:   report.Report,
 		Metadata: report.Metadata,
@@ -114,7 +116,12 @@ func (a CoapApi) verify(c *config) {
 		log.Fatalf("Failed to verify: %v", err)
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, &resp.VerificationResult)
+	err = resp.CheckVersion()
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	err = saveResult(c.ResultFile, c.Publish, &resp.Result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
@@ -152,7 +159,8 @@ func (a CoapApi) measure(c *config) {
 	templateHash := hasher.Sum(nil)
 
 	req := &api.MeasureRequest{
-		MeasureEvent: ar.MeasureEvent{
+		Version: api.GetVersion(),
+		Event: ar.MeasureEvent{
 			Sha256:    templateHash,
 			EventName: c.CtrName,
 			CtrData: &ar.CtrData{
@@ -236,6 +244,11 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 		return nil, fmt.Errorf("failed to unmarshal response")
 	}
 
+	err = verifyResp.CheckVersion()
+	if err != nil {
+		return nil, err
+	}
+
 	return verifyResp, nil
 }
 
@@ -275,6 +288,11 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	err = c.apiSerializer.Unmarshal(payload, measureResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response")
+	}
+
+	err = measureResp.CheckVersion()
+	if err != nil {
+		return nil, err
 	}
 
 	return measureResp, nil

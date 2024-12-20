@@ -67,11 +67,17 @@ func (a GrpcApi) generate(c *config) {
 	}
 
 	request := grpcapi.AttestationRequest{
-		Nonce: nonce,
+		Version: api.GetVersion(),
+		Nonce:   nonce,
 	}
 	response, err := client.Attest(ctx, &request)
 	if err != nil {
 		log.Fatalf("GRPC Attest Call failed: %v", err)
+	}
+
+	if response.Version != api.GetVersion() {
+		log.Fatalf("API version mismatch. Expected AttestationResponse version %v, got %v",
+			api.GetVersion(), response.Version)
 	}
 
 	// gRPC only: Marshal response as JSON/CBOR for saving it to the file system
@@ -115,6 +121,7 @@ func (a GrpcApi) verify(c *config) {
 	}
 
 	request := grpcapi.VerificationRequest{
+		Version:  api.GetVersion(),
 		Nonce:    nonce,
 		Report:   report.Report,
 		Metadata: report.Metadata,
@@ -125,6 +132,11 @@ func (a GrpcApi) verify(c *config) {
 	response, err := client.Verify(ctx, &request)
 	if err != nil {
 		log.Fatalf("GRPC Verify Call failed: %v", err)
+	}
+
+	if response.Version != api.GetVersion() {
+		log.Fatalf("API version mismatch. Expected VerificationResponse version %v, got %v",
+			api.GetVersion(), response.Version)
 	}
 
 	// grpc only: the verification result is marshalled as JSON, as we do not have protobuf definitions
@@ -180,6 +192,7 @@ func (a GrpcApi) measure(c *config) {
 	templateHash := hasher.Sum(nil)
 
 	req := &grpcapi.MeasureRequest{
+		Version:   api.GetVersion(),
 		Sha256:    templateHash,
 		EventName: c.CtrName,
 		CtrData: &grpcapi.CtrData{
@@ -192,6 +205,12 @@ func (a GrpcApi) measure(c *config) {
 	if err != nil {
 		log.Fatalf("GRPC Measure Call failed: %v", err)
 	}
+
+	if response.Version != api.GetVersion() {
+		log.Fatalf("API version mismatch. Expected MeasureResponse version %v, got %v",
+			api.GetVersion(), response.Version)
+	}
+
 	if !response.Success {
 		log.Warn("Failed to record measurement")
 	}

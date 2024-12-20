@@ -12,7 +12,7 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 
 *A detailed description of the architecture can be found in our*
 *[paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171) and in the*
-*[documentation](doc/Architecture.md)*
+*[documentation](./doc)*
 
 ## Requirements
 

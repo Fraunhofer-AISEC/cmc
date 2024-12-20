@@ -53,8 +53,9 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 	defer cancel()
 
 	req := &api.AttestationRequest{
-		Nonce:  chbindings,
-		Cached: cached,
+		Version: api.GetVersion(),
+		Nonce:   chbindings,
+		Cached:  cached,
 	}
 
 	// Marshal request
@@ -82,6 +83,10 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 		return nil, nil, nil, fmt.Errorf("failed to unmarshal body: %w", err)
 	}
 
+	if err := resp.CheckVersion(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	return resp.Report, resp.Metadata, resp.CacheMisses, nil
 }
 
@@ -104,6 +109,7 @@ func (a CoapApi) verifyAR(
 	defer cancel()
 
 	req := &api.VerificationRequest{
+		Version:     api.GetVersion(),
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
@@ -136,15 +142,19 @@ func (a CoapApi) verifyAR(
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
+	if err := verifyResp.CheckVersion(); err != nil {
+		return err
+	}
+
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
-		cc.ResultCb(&verifyResp.VerificationResult)
+		cc.ResultCb(&verifyResp.Result)
 	} else {
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
 	// check results
-	if !verifyResp.Success {
+	if !verifyResp.Result.Success {
 		return errors.New("attestation report verification failed")
 	}
 
@@ -168,6 +178,7 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	}
 
 	req := api.TLSSignRequest{
+		Version:  api.GetVersion(),
 		Content:  digest,
 		Hashtype: hash,
 	}
@@ -200,6 +211,10 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
+	if err := signResp.CheckVersion(); err != nil {
+		return nil, err
+	}
+
 	return signResp.SignedContent, nil
 }
 
@@ -215,7 +230,9 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	defer cancel()
 
 	// Create TLS certificate request
-	req := api.TLSCertRequest{}
+	req := api.TLSCertRequest{
+		Version: api.GetVersion(),
+	}
 
 	// Marshal payload
 	payload, err := cc.ApiSerializer.Marshal(req)
@@ -240,6 +257,10 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
+	if err := certResp.CheckVersion(); err != nil {
+		return nil, err
+	}
+
 	return certResp.Certificate, nil
 }
 
@@ -256,7 +277,8 @@ func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	defer cancel()
 
 	req := &api.PeerCacheRequest{
-		Peer: fingerprint,
+		Version: api.GetVersion(),
+		Peer:    fingerprint,
 	}
 
 	// Marshal request
@@ -282,6 +304,10 @@ func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	err = cc.ApiSerializer.Unmarshal(body, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
+	}
+
+	if err := resp.CheckVersion(); err != nil {
+		return nil, err
 	}
 
 	return resp.Cache, nil

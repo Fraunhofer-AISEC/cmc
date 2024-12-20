@@ -91,7 +91,7 @@ func attestHub(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// CoAP response
-	sendCoapResponse(w, r, []byte(strconv.FormatBool(resp.Success)))
+	sendCoapResponse(w, r, []byte(strconv.FormatBool(resp.Result.Success)))
 
 	log.Debug("IoT Hub: Finished")
 }
