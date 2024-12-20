@@ -44,7 +44,8 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
 	report := &ar.AttestationReport{
-		Type: "Attestation Report",
+		Version: ar.GetVersion(),
+		Type:    "Attestation Report",
 	}
 
 	if len(nonce) > 32 {

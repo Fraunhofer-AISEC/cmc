@@ -134,6 +134,12 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, err.Error())
+		return
+	}
+
 	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
 
 	report, metadata, cacheMisses, err := c.Generate(req.Nonce, req.Cached, cmc)
@@ -143,6 +149,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	resp := &api.AttestationResponse{
+		Version:     api.GetVersion(),
 		Report:      report,
 		Metadata:    metadata,
 		CacheMisses: cacheMisses,
@@ -174,6 +181,12 @@ func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, err.Error())
+		return
+	}
+
 	log.Debug("verifying attestation report")
 	result, err := c.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, cmc)
 	if err != nil {
@@ -182,7 +195,8 @@ func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	resp := &api.VerificationResponse{
-		VerificationResult: *result,
+		Version: api.GetVersion(),
+		Result:  *result,
 	}
 
 	// Serialize payload
@@ -211,9 +225,15 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, err.Error())
+		return
+	}
+
 	log.Debug("Measurer: recording measurement")
 	var success bool
-	err = m.Measure(&req.MeasureEvent,
+	err = m.Measure(&req.Event,
 		&m.MeasureConfig{
 			Serializer: cmc.Serializer,
 			Pcr:        cmc.CtrPcr,
@@ -229,6 +249,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	// Serialize payload
 	resp := api.MeasureResponse{
+		Version: api.GetVersion(),
 		Success: success,
 	}
 	data, err := s.Marshal(&resp)
@@ -263,6 +284,12 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, err.Error())
+		return
+	}
+
 	// Get signing options from request
 	opts, err := api.HashToSignerOpts(req.Hashtype, req.PssOpts)
 	if err != nil {
@@ -287,6 +314,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	// Create response
 	resp := &api.TLSSignResponse{
+		Version:       api.GetVersion(),
 		SignedContent: signature,
 	}
 	data, err := s.Marshal(&resp)
@@ -321,7 +349,11 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	log.Tracef("Received TLS cert request")
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, err.Error())
+		return
+	}
 
 	// Retrieve certificates
 	certChain, err := d.GetCertChain(ar.IK)
@@ -332,6 +364,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	// Create response
 	resp := &api.TLSCertResponse{
+		Version:     api.GetVersion(),
 		Certificate: internal.WriteCertsPem(certChain),
 	}
 	data, err := s.Marshal(&resp)
@@ -359,8 +392,16 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, err.Error())
+		return
+	}
+
 	log.Debug("Collecting peer cache")
-	resp := api.PeerCacheResponse{}
+	resp := api.PeerCacheResponse{
+		Version: api.GetVersion(),
+	}
 	c, ok := cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)
@@ -386,7 +427,8 @@ func sendError(conn net.Conn, s ar.Serializer, format string, args ...interface{
 	msg := fmt.Sprintf(format, args...)
 	log.Warn(msg)
 	resp := &api.SocketError{
-		Msg: msg,
+		Version: api.GetVersion(),
+		Msg:     msg,
 	}
 	payload, err := s.Marshal(resp)
 	if err != nil {

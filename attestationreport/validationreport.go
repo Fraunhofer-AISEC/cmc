@@ -28,16 +28,17 @@ import (
 // VerificationResult represents the results of all steps taken during
 // the validation of an attestation report.
 type VerificationResult struct {
-	Type            string              `json:"type" cbor:"0,keyasint"`
-	Success         bool                `json:"success" cbor:"1,keyasint"`
-	ErrorCode       ErrorCode           `json:"errorCode,omitempty" cbor:"2,keyasint,omitempty"`
-	Prover          string              `json:"prover,omitempty" cbor:"3,keyasint,omitempty"`
-	Created         string              `json:"created,omitempty" cbor:"4,keyasint,omitempty"`
-	CertLevel       int                 `json:"certLevel" cbor:"5,keyasint"`
-	Measurements    []MeasurementResult `json:"measurements" cbor:"6,keyasint"`
-	Metadata        MetadataSummary     `json:"metadata" cbor:"7,keyasint"`
-	PolicySuccess   bool                `json:"policySuccess,omitempty" cbor:"8,keyasint,omitempty"`
-	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"9,keyasint"`
+	Version         string              `json:"version" cbor:"0,keyasint"`
+	Type            string              `json:"type" cbor:"1,keyasint"`
+	Success         bool                `json:"success" cbor:"2,keyasint"`
+	ErrorCode       ErrorCode           `json:"errorCode,omitempty" cbor:"3,keyasint,omitempty"`
+	Prover          string              `json:"prover,omitempty" cbor:"4,keyasint,omitempty"`
+	Created         string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
+	CertLevel       int                 `json:"certLevel" cbor:"6,keyasint"`
+	Measurements    []MeasurementResult `json:"measurements" cbor:"7,keyasint"`
+	Metadata        MetadataSummary     `json:"metadata" cbor:"8,keyasint"`
+	PolicySuccess   bool                `json:"policySuccess,omitempty" cbor:"9,keyasint,omitempty"`
+	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"10,keyasint"`
 }
 
 type MetadataSummary struct {
@@ -205,6 +206,15 @@ type SignatureResult struct {
 	Certs          [][]X509CertExtracted `json:"certs,omitempty" cbor:"2,keyasint"`
 }
 
+type Result struct {
+	Success         bool      `json:"success"`
+	Got             string    `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
+	Expected        string    `json:"expected,omitempty" cbor:"1,keyasint,omitempty"`
+	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
+	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"3,keyasint,omitempty"`
+	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"4,keyasint,omitempty"`
+}
+
 // X509CertExtracted represents a x509 certificate with attributes
 // in a human-readable way and prepared for (un)marshaling JSON objects.
 // It is based on the type Certificate from the crypto/x509 package.
@@ -329,90 +339,6 @@ func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 	return res
 }
 
-type ErrorCode int
-
-const (
-	NotSet ErrorCode = iota
-	CaFingerprint
-	CRLCheckRoot
-	CRLCheckPCK
-	CRLCheckSigningCert
-	DecodeCertChain
-	UnknownSerialization
-	DownloadRootCRL
-	DownloadPCKCRL
-	EvidenceLength
-	EvidenceType
-	Expired
-	ExtractPubKey
-	Internal
-	InvalidCertLevel
-	JWSNoSignatures
-	JWSSignatureOrder
-	JWSPayload
-	COSENoSignatures
-	MeasurementNoMatch
-	MeasurementTypeNotSupported
-	NotPresent
-	NotYetValid
-	OidLength
-	OidNotPresent
-	OidTag
-	Parse
-	ParseAR
-	ParseX5C
-	ParseCA
-	ParseCAFingerprint
-	ParseCert
-	ParseTcbInfo
-	ParseJSON
-	ParseCBOR
-	ParseOSManifest
-	ParseEvidence
-	ParseExtensions
-	ParseQEIdentity
-	ParseRTMManifest
-	ParseTime
-	PolicyEngineNotImplemented
-	RefValTypeNotSupported
-	SetupSystemCA
-	SgxFmpcMismatch
-	SgxPceidMismatch
-	SignatureLength
-	DetailsNotPresent
-	RefValMultiple
-	RefValNotPresent
-	RefValType
-	RefValNoMatch
-	TcbInfoExpired
-	TcbLevelUnsupported
-	TcbLevelRevoked
-	UnsupportedAlgorithm
-	VerifyAR
-	VerifyCertChain
-	VerifyPCKChain
-	VerifyOSManifest
-	VerifyPolicies
-	VerifyQEIdentityErr
-	VerifyRTMManifest
-	VerifySignature
-	VerifyTCBChain
-	VerifyTcbInfo
-	ExtensionsCheck
-	PcrNotSpecified
-	DeviceDescriptionNotPresent
-	UnknownMetadata
-)
-
-type Result struct {
-	Success         bool      `json:"success"`
-	Got             string    `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
-	Expected        string    `json:"expected,omitempty" cbor:"0,keyasint,omitempty"`
-	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"0,keyasint,omitempty"`   // Required for compatibility
-	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"0,keyasint,omitempty"` // Required for validity
-	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"0,keyasint,omitempty"`
-}
-
 // ExtractX509Infos extracts relevant attributes from cert and transform some attribute
 // into a more human-readable form by translating enums to a string representations.
 func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
@@ -494,6 +420,82 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 
 	return certExtracted
 }
+
+type ErrorCode int
+
+const (
+	NotSet ErrorCode = iota
+	CaFingerprint
+	CRLCheckRoot
+	CRLCheckPCK
+	CRLCheckSigningCert
+	DecodeCertChain
+	UnknownSerialization
+	DownloadRootCRL
+	DownloadPCKCRL
+	EvidenceLength
+	EvidenceType
+	Expired
+	ExtractPubKey
+	Internal
+	InvalidCertLevel
+	JWSNoSignatures
+	JWSSignatureOrder
+	JWSPayload
+	COSENoSignatures
+	MeasurementNoMatch
+	MeasurementTypeNotSupported
+	NotPresent
+	NotYetValid
+	OidLength
+	OidNotPresent
+	OidTag
+	Parse
+	ParseAR
+	ParseX5C
+	ParseCA
+	ParseCAFingerprint
+	ParseCert
+	ParseTcbInfo
+	ParseJSON
+	ParseCBOR
+	ParseOSManifest
+	ParseEvidence
+	ParseExtensions
+	ParseQEIdentity
+	ParseRTMManifest
+	ParseTime
+	PolicyEngineNotImplemented
+	RefValTypeNotSupported
+	SetupSystemCA
+	SgxFmpcMismatch
+	SgxPceidMismatch
+	SignatureLength
+	DetailsNotPresent
+	RefValMultiple
+	RefValNotPresent
+	RefValType
+	RefValNoMatch
+	TcbInfoExpired
+	TcbLevelUnsupported
+	TcbLevelRevoked
+	UnsupportedAlgorithm
+	VerifyAR
+	VerifyCertChain
+	VerifyPCKChain
+	VerifyOSManifest
+	VerifyPolicies
+	VerifyQEIdentityErr
+	VerifyRTMManifest
+	VerifySignature
+	VerifyTCBChain
+	VerifyTcbInfo
+	ExtensionsCheck
+	PcrNotSpecified
+	DeviceDescriptionNotPresent
+	UnknownMetadata
+	InvalidVersion
+)
 
 func (e ErrorCode) String() string {
 	switch e {
@@ -637,6 +639,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Device description not present error)", int(e))
 	case UnknownMetadata:
 		return fmt.Sprintf("%v (Unknown metadata error)", int(e))
+	case InvalidVersion:
+		return fmt.Sprintf("%v (Invalid attestation report version)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -801,4 +805,14 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
 	return &CtrData{
 		OciSpec: m.OciSpec,
 	}
+}
+
+func (result *VerificationResult) CheckVersion() error {
+	if result == nil {
+		return fmt.Errorf("internal error: VerificationResult is nil")
+	}
+	if !strings.EqualFold(arVersion, result.Version) {
+		return fmt.Errorf("API version mismatch. Expected VerificationResult version %v, got %v", arVersion, result.Version)
+	}
+	return nil
 }

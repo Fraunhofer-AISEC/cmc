@@ -93,6 +93,11 @@ func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*
 		return nil, errors.New("metadata not specified. Can work only as verifier")
 	}
 
+	if req.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected AttestationRequest version %v, got %v",
+			api.GetVersion(), req.Version)
+	}
+
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
 
 	report, metadata, cacheMisses, err := cmc.Generate(req.Nonce, req.Cached, s.cmc)
@@ -101,6 +106,7 @@ func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*
 	}
 
 	resp := &api.AttestationResponse{
+		Version:     api.GetVersion(),
 		Report:      report,
 		Metadata:    metadata,
 		CacheMisses: cacheMisses,
@@ -115,6 +121,11 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 
 	log.Debug("Received grpc request type 'Verify'")
 
+	if req.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected VerificationRequest version %v, got %v",
+			api.GetVersion(), req.Version)
+	}
+
 	result, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		log.Errorf("verifier: failed to verify: %v", err)
@@ -128,6 +139,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 	}
 
 	response := &api.VerificationResponse{
+		Version:            api.GetVersion(),
 		VerificationResult: data,
 	}
 
@@ -141,6 +153,11 @@ func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api
 	var success bool
 
 	log.Debug("Received grpc request type 'Measure'")
+
+	if req.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected MeasureRequest version %v, got %v",
+			api.GetVersion(), req.Version)
+	}
 
 	// oci spec in protobuf is marshaled as bytes
 	spec := new(oci.Spec)
@@ -178,6 +195,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api
 	}
 
 	response := &api.MeasureResponse{
+		Version: api.GetVersion(),
 		Success: success,
 	}
 
@@ -195,6 +213,11 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 	var tlsKeyPriv crypto.PrivateKey
 
 	log.Debug("Received grpc request type 'TLSSign'")
+
+	if req.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected TLSSignRequest version %v, got %v",
+			api.GetVersion(), req.Version)
+	}
 
 	if len(s.cmc.Drivers) == 0 {
 		return nil, errors.New("no valid signers configured")
@@ -219,6 +242,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 	}
 	// Create response
 	sr = &api.TLSSignResponse{
+		Version:       api.GetVersion(),
 		SignedContent: signature,
 	}
 	// Return response
@@ -230,6 +254,11 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 func (s *GrpcServer) TLSCert(ctx context.Context, req *api.TLSCertRequest) (*api.TLSCertResponse, error) {
 
 	log.Debug("Prover: Received grpc request type 'TLSCert'")
+
+	if req.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected TLSCertRequest version %v, got %v",
+			api.GetVersion(), req.Version)
+	}
 
 	if len(s.cmc.Drivers) == 0 {
 		return nil, errors.New("no valid signers configured")
@@ -243,6 +272,7 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *api.TLSCertRequest) (*api
 	}
 
 	resp := &api.TLSCertResponse{
+		Version:     api.GetVersion(),
 		Certificate: internal.WriteCertsPem(certChain),
 	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
@@ -255,8 +285,15 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (
 
 	log.Debug("Prover: Received grpc request type 'PeerCache'")
 
+	if req.Version != api.GetVersion() {
+		return nil, fmt.Errorf("API version mismatch. Expected PeerCacheRequest version %v, got %v",
+			api.GetVersion(), req.Version)
+	}
+
 	log.Trace("Collecting peer cache")
-	resp := &api.PeerCacheResponse{}
+	resp := &api.PeerCacheResponse{
+		Version: api.GetVersion(),
+	}
 	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)

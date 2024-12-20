@@ -18,20 +18,26 @@ package attestedtls
 import (
 	"crypto/tls"
 	"fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
+const (
+	atlsHandshakeVersion = "1.0.0"
+)
+
 type AtlsHandshakeRequest struct {
-	Attest         AttestSelect `json:"attest" cbor:"0,keyasint"`
-	Cached         []string     `json:"cached,omitempty" cbor:"1,keyasint,omitempty"`
-	ExtendedReport bool         `json:"extendedReport,omitempty" cbor:"2,keyasint,omitempty"`
+	Version        string       `json:"version" cbor:"0,keyasint"`
+	Attest         AttestSelect `json:"attest" cbor:"1,keyasint" jsonschema:"enum=0,enum=1,enum=2,enum=3,description=Type of attestation: 0 (Mutual) 1 (Client) 2 (Server) 3 (None)"`
+	Cached         []string     `json:"cached,omitempty" cbor:"2,keyasint,omitempty"`
+	ExtendedReport bool         `json:"extendedReport,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type AtlsHandshakeResponse struct {
-	Attest      AttestSelect      `json:"attest" cbor:"0,keyasint"`
+	Version     string            `json:"version" cbor:"0,keyasint"`
 	Error       string            `json:"error,omitempty" cbor:"1,keyasint,omitempty"`
 	Report      []byte            `json:"report,omitempty" cbor:"2,keyasint,omitempty"`
 	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
@@ -39,8 +45,9 @@ type AtlsHandshakeResponse struct {
 }
 
 type AtlsHandshakeComplete struct {
-	Success bool   `json:"success" cbor:"0,keyasint"`
-	Error   string `json:"error,omitempty" cbor:"1,keyasint,omitempty"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Success bool   `json:"success" cbor:"1,keyasint"`
+	Error   string `json:"error,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 var log = logrus.WithField("service", "atls")
@@ -99,7 +106,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	}
 
 	ownResp := AtlsHandshakeResponse{
-		Attest: cc.Attest,
+		Version: atlsHandshakeVersion,
 	}
 
 	// Generate attestation report of own endpoint if configured
@@ -139,8 +146,8 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	if peerResp.Error != "" {
 		return fmt.Errorf("atls response returned error: %v", peerResp.Error)
 	}
-	log.Debugf("Verifier %v: received atls handshake response mode %v from %v",
-		ownAddr, peerResp.Attest.String(), peerAddr)
+	log.Debugf("Verifier %v: received atls handshake response from %v",
+		ownAddr, peerAddr)
 
 	// Wait until sending of own handshake response is finished
 	log.Debugf("Prover %v: Waiting for atls handshake response sending to be completed", ownAddr)
@@ -150,12 +157,6 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	}
 	log.Debugf("Prover %v: finished sending atls handshake response to %v",
 		ownAddr, peerAddr)
-
-	// Check that configured attestation mode matches peers attestation mode
-	err = checkAttestationMode(cc.Attest, req.Attest)
-	if err != nil {
-		return err
-	}
 
 	// Verify attestation report from peer if configured
 	if attestPeer {
@@ -183,6 +184,7 @@ func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error
 
 	// Finally send and receive handshake complete
 	complete := AtlsHandshakeComplete{
+		Version: atlsHandshakeVersion,
 		Success: handshakeError == nil,
 	}
 	if handshakeError != nil {
@@ -241,6 +243,11 @@ func receiveAtlsResponse(conn *tls.Conn) (*AtlsHandshakeResponse, error) {
 		return nil, fmt.Errorf("failed to unmarshal ATLS handshake response: %w", err)
 	}
 
+	// Check version
+	if err := resp.CheckVersion(); err != nil {
+		return nil, err
+	}
+
 	return resp, nil
 }
 
@@ -262,6 +269,11 @@ func receiveAtlsRequest(conn *tls.Conn) (*AtlsHandshakeRequest, error) {
 	err = s.Unmarshal(data, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ATLS handshake response: %w", err)
+	}
+
+	// Check version
+	if err := req.CheckVersion(); err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -287,6 +299,11 @@ func receiveAtlsComplete(conn *tls.Conn) (*AtlsHandshakeComplete, error) {
 		return nil, fmt.Errorf("failed to unmarshal atls handshake complete: %w", err)
 	}
 
+	// Check version
+	if err := complete.CheckVersion(); err != nil {
+		return nil, err
+	}
+
 	return complete, nil
 }
 
@@ -295,6 +312,7 @@ func sendAtlsRequest(conn *tls.Conn, s ar.Serializer, attest AttestSelect, cache
 	// Create request
 	// TODO Extended report and cached metadata configuration
 	req := &AtlsHandshakeRequest{
+		Version:        atlsHandshakeVersion,
 		Attest:         attest,
 		ExtendedReport: false,
 		Cached:         cache,
@@ -383,6 +401,36 @@ func checkAttestationMode(own, peer AttestSelect) error {
 	} else {
 		return fmt.Errorf("mismatching attestation mode, local set to: [%v], while remote is set to: [%v]",
 			own.String(), peer.String())
+	}
+	return nil
+}
+
+func (req *AtlsHandshakeRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: AtlsHandshakeRequest is nil")
+	}
+	if !strings.EqualFold(atlsHandshakeVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeRequest version %v, got %v", atlsHandshakeVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *AtlsHandshakeResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: AtlsHandshakeResponse is nil")
+	}
+	if !strings.EqualFold(atlsHandshakeVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeResponse version %v, got %v", atlsHandshakeVersion, resp.Version)
+	}
+	return nil
+}
+
+func (complete *AtlsHandshakeComplete) CheckVersion() error {
+	if complete == nil {
+		return fmt.Errorf("internal error: AtlsHandshakeComplete is nil")
+	}
+	if !strings.EqualFold(atlsHandshakeVersion, complete.Version) {
+		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeComplete version %v, got %v", atlsHandshakeVersion, complete.Version)
 	}
 	return nil
 }

@@ -20,19 +20,30 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	oci "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
+
+// The attestation report and verification result version
+const (
+	arVersion = "1.0.0"
+)
+
+func GetVersion() string {
+	return arVersion
+}
 
 var log = logrus.WithField("service", "ar")
 
 // AttestationReport represents the attestation report in JWS/COSE format with its
 // contents already in signed JWS/COSE format
 type AttestationReport struct {
-	Type         string           `json:"type" cbor:"0,keyasint"`
-	Measurements []Measurement    `json:"measurements,omitempty" cbor:"1,keyasint,omitempty"`
-	Metadata     []MetadataDigest `json:"metadata,omitempty" cbor:"2,keyasint,omitempty"`
+	Version      string           `json:"version" cbor:"0,keyasint"`
+	Type         string           `json:"type" cbor:"1,keyasint"`
+	Measurements []Measurement    `json:"measurements,omitempty" cbor:"2,keyasint,omitempty"`
+	Metadata     []MetadataDigest `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 // MetadataDigest represents attestation report
@@ -159,10 +170,10 @@ type Artifact struct {
 }
 
 type MeasureEvent struct {
-	Sha256    HexByte    `json:"sha256" cbor:"2,keyasint"`
-	EventName string     `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
-	EventData *EventData `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
-	CtrData   *CtrData   `json:"ctrData,omitempty" cbor:"6,keyasint,omitempty"`
+	Sha256    HexByte    `json:"sha256" cbor:"0,keyasint"`
+	EventName string     `json:"eventname,omitempty" cbor:"1,keyasint,omitempty"`
+	EventData *EventData `json:"eventdata,omitempty" cbor:"2,keyasint,omitempty"`
+	CtrData   *CtrData   `json:"ctrData,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type CtrData struct {
@@ -373,4 +384,14 @@ func (r *ReferenceValue) GetManifest() (*Metadata, error) {
 
 func (r *ReferenceValue) SetManifest(m *Metadata) {
 	r.manifest = m
+}
+
+func (report *AttestationReport) CheckVersion() error {
+	if report == nil {
+		return fmt.Errorf("internal error: AttestationReport is nil")
+	}
+	if !strings.EqualFold(arVersion, report.Version) {
+		return fmt.Errorf("API version mismatch. Expected AttestationReport version %v, got %v", arVersion, report.Version)
+	}
+	return nil
 }

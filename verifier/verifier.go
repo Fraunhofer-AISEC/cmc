@@ -67,6 +67,7 @@ func Verify(
 	}
 
 	result := &ar.VerificationResult{
+		Version:   ar.GetVersion(),
 		Type:      "Verification Result",
 		Prover:    "Unknown",
 		Success:   true,
@@ -253,6 +254,12 @@ func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer
 	if err != nil {
 		log.Tracef("Parsing of Attestation Report failed: %v", err)
 		return nil, result, ar.ParseAR
+	}
+
+	// Check version
+	err = report.CheckVersion()
+	if err != nil {
+		return nil, result, ar.InvalidVersion
 	}
 
 	return &report, result, ar.NotSet

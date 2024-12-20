@@ -22,11 +22,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CMCServiceClient interface {
-	// Signs content of request with key that belongs to ID of requester
-	TLSSign(ctx context.Context, in *TLSSignRequest, opts ...grpc.CallOption) (*TLSSignResponse, error)
-	TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error)
 	Attest(ctx context.Context, in *AttestationRequest, opts ...grpc.CallOption) (*AttestationResponse, error)
 	Verify(ctx context.Context, in *VerificationRequest, opts ...grpc.CallOption) (*VerificationResponse, error)
+	TLSSign(ctx context.Context, in *TLSSignRequest, opts ...grpc.CallOption) (*TLSSignResponse, error)
+	TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error)
 	PeerCache(ctx context.Context, in *PeerCacheRequest, opts ...grpc.CallOption) (*PeerCacheResponse, error)
 	Measure(ctx context.Context, in *MeasureRequest, opts ...grpc.CallOption) (*MeasureResponse, error)
 }
@@ -37,24 +36,6 @@ type cMCServiceClient struct {
 
 func NewCMCServiceClient(cc grpc.ClientConnInterface) CMCServiceClient {
 	return &cMCServiceClient{cc}
-}
-
-func (c *cMCServiceClient) TLSSign(ctx context.Context, in *TLSSignRequest, opts ...grpc.CallOption) (*TLSSignResponse, error) {
-	out := new(TLSSignResponse)
-	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/TLSSign", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *cMCServiceClient) TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error) {
-	out := new(TLSCertResponse)
-	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/TLSCert", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *cMCServiceClient) Attest(ctx context.Context, in *AttestationRequest, opts ...grpc.CallOption) (*AttestationResponse, error) {
@@ -69,6 +50,24 @@ func (c *cMCServiceClient) Attest(ctx context.Context, in *AttestationRequest, o
 func (c *cMCServiceClient) Verify(ctx context.Context, in *VerificationRequest, opts ...grpc.CallOption) (*VerificationResponse, error) {
 	out := new(VerificationResponse)
 	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/Verify", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cMCServiceClient) TLSSign(ctx context.Context, in *TLSSignRequest, opts ...grpc.CallOption) (*TLSSignResponse, error) {
+	out := new(TLSSignResponse)
+	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/TLSSign", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cMCServiceClient) TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error) {
+	out := new(TLSCertResponse)
+	err := c.cc.Invoke(ctx, "/grpcapi.CMCService/TLSCert", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +96,10 @@ func (c *cMCServiceClient) Measure(ctx context.Context, in *MeasureRequest, opts
 // All implementations must embed UnimplementedCMCServiceServer
 // for forward compatibility
 type CMCServiceServer interface {
-	// Signs content of request with key that belongs to ID of requester
-	TLSSign(context.Context, *TLSSignRequest) (*TLSSignResponse, error)
-	TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error)
 	Attest(context.Context, *AttestationRequest) (*AttestationResponse, error)
 	Verify(context.Context, *VerificationRequest) (*VerificationResponse, error)
+	TLSSign(context.Context, *TLSSignRequest) (*TLSSignResponse, error)
+	TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error)
 	PeerCache(context.Context, *PeerCacheRequest) (*PeerCacheResponse, error)
 	Measure(context.Context, *MeasureRequest) (*MeasureResponse, error)
 	mustEmbedUnimplementedCMCServiceServer()
@@ -111,17 +109,17 @@ type CMCServiceServer interface {
 type UnimplementedCMCServiceServer struct {
 }
 
-func (UnimplementedCMCServiceServer) TLSSign(context.Context, *TLSSignRequest) (*TLSSignResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TLSSign not implemented")
-}
-func (UnimplementedCMCServiceServer) TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method TLSCert not implemented")
-}
 func (UnimplementedCMCServiceServer) Attest(context.Context, *AttestationRequest) (*AttestationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Attest not implemented")
 }
 func (UnimplementedCMCServiceServer) Verify(context.Context, *VerificationRequest) (*VerificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Verify not implemented")
+}
+func (UnimplementedCMCServiceServer) TLSSign(context.Context, *TLSSignRequest) (*TLSSignResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TLSSign not implemented")
+}
+func (UnimplementedCMCServiceServer) TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TLSCert not implemented")
 }
 func (UnimplementedCMCServiceServer) PeerCache(context.Context, *PeerCacheRequest) (*PeerCacheResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PeerCache not implemented")
@@ -140,42 +138,6 @@ type UnsafeCMCServiceServer interface {
 
 func RegisterCMCServiceServer(s grpc.ServiceRegistrar, srv CMCServiceServer) {
 	s.RegisterService(&CMCService_ServiceDesc, srv)
-}
-
-func _CMCService_TLSSign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TLSSignRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CMCServiceServer).TLSSign(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpcapi.CMCService/TLSSign",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CMCServiceServer).TLSSign(ctx, req.(*TLSSignRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CMCService_TLSCert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(TLSCertRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CMCServiceServer).TLSCert(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/grpcapi.CMCService/TLSCert",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CMCServiceServer).TLSCert(ctx, req.(*TLSCertRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _CMCService_Attest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -210,6 +172,42 @@ func _CMCService_Verify_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CMCServiceServer).Verify(ctx, req.(*VerificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CMCService_TLSSign_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TLSSignRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CMCServiceServer).TLSSign(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpcapi.CMCService/TLSSign",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CMCServiceServer).TLSSign(ctx, req.(*TLSSignRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CMCService_TLSCert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TLSCertRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CMCServiceServer).TLSCert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/grpcapi.CMCService/TLSCert",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CMCServiceServer).TLSCert(ctx, req.(*TLSCertRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -258,20 +256,20 @@ var CMCService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CMCServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "TLSSign",
-			Handler:    _CMCService_TLSSign_Handler,
-		},
-		{
-			MethodName: "TLSCert",
-			Handler:    _CMCService_TLSCert_Handler,
-		},
-		{
 			MethodName: "Attest",
 			Handler:    _CMCService_Attest_Handler,
 		},
 		{
 			MethodName: "Verify",
 			Handler:    _CMCService_Verify_Handler,
+		},
+		{
+			MethodName: "TLSSign",
+			Handler:    _CMCService_TLSSign_Handler,
+		},
+		{
+			MethodName: "TLSCert",
+			Handler:    _CMCService_TLSCert_Handler,
 		},
 		{
 			MethodName: "PeerCache",

@@ -122,6 +122,12 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		return
+	}
+
 	if s.cmc.Metadata == nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Metadata not specified. Can work only as verifier")
@@ -138,6 +144,7 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	resp := &api.AttestationResponse{
+		Version:     api.GetVersion(),
 		Report:      report,
 		Metadata:    metadata,
 		CacheMisses: cacheMisses,
@@ -168,12 +175,23 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		return
+	}
+
 	log.Debug("verifying attestation report")
-	resp, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, s.cmc)
+	result, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"Verifier: failed to verify: %v", err)
 		return
+	}
+
+	resp := &api.VerificationResponse{
+		Version: api.GetVersion(),
+		Result:  *result,
 	}
 
 	payload, err := ser.Marshal(&resp)
@@ -200,9 +218,15 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		return
+	}
+
 	log.Debug("Measurer: Recording measurement")
 	var success bool
-	err = m.Measure(&req.MeasureEvent,
+	err = m.Measure(&req.Event,
 		&m.MeasureConfig{
 			Serializer: s.cmc.Serializer,
 			Pcr:        s.cmc.CtrPcr,
@@ -218,6 +242,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	// Serialize CoAP payload
 	resp := api.MeasureResponse{
+		Version: api.GetVersion(),
 		Success: success,
 	}
 	payload, err := ser.Marshal(&resp)
@@ -249,7 +274,12 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to unmarshal CoAP payload: %v", err)
+		return
+	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
 		return
 	}
 
@@ -278,6 +308,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	// Create response
 	resp := &api.TLSSignResponse{
+		Version:       api.GetVersion(),
 		SignedContent: signature,
 	}
 	payload, err := ser.Marshal(&resp)
@@ -312,6 +343,12 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		return
+	}
+
 	log.Trace("Received COAP TLS cert request")
 
 	// Retrieve certificates
@@ -323,6 +360,7 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	// Create response
 	resp := &api.TLSCertResponse{
+		Version:     api.GetVersion(),
 		Certificate: internal.WriteCertsPem(certChain),
 	}
 	payload, err := ser.Marshal(&resp)
@@ -349,8 +387,16 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		return
+	}
+
 	log.Debug("Collecting peer cache")
-	resp := api.PeerCacheResponse{}
+	resp := api.PeerCacheResponse{
+		Version: api.GetVersion(),
+	}
 	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)

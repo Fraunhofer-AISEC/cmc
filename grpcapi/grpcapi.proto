@@ -29,66 +29,81 @@ service CMCService {
 
 
 message AttestationRequest {
-  bytes nonce = 1;
-  repeated string cached = 2;
+  string version = 1;
+  bytes nonce = 2;
+  repeated string cached = 3;
 }
 
 message AttestationResponse {
-  bytes report = 1;
-  map<string, bytes> metadata = 2;
-  repeated string cache_misses = 3;
+  string version = 1;
+  bytes report = 2;
+  map<string, bytes> metadata = 3;
+  repeated string cache_misses = 4;
 }
 
 message VerificationRequest {
-  bytes nonce = 1;
-  bytes report = 2;
-  map<string, bytes> metadata = 3;
-  bytes ca = 4;
-  string peer = 5;
-  repeated string cache_misses = 6;
-  bytes policies = 7;
-
+  string version = 1;
+  bytes nonce = 2;
+  bytes report = 3;
+  map<string, bytes> metadata = 4;
+  bytes ca = 5;
+  string peer = 6;
+  repeated string cache_misses = 7;
+  bytes policies = 8;
 }
 
 message VerificationResponse {
-  bytes verification_result = 1;
+  string version = 1;
+  bytes result = 2;
 }
 
 message TLSSignRequest {
-  bytes content = 1;
-  HashFunction hashtype = 2;
-  PSSOptions pssOpts = 3;
+  string version = 1;
+  bytes content = 2;
+  HashFunction hashtype = 3;
+  PSSOptions pssOpts = 4;
 }
 
 message TLSSignResponse {
-  bytes signed_content = 1;
+  string version = 1;
+  bytes signed_content = 2;
 }
 
 message TLSCertRequest {
+  string version = 1;
 }
 
 message TLSCertResponse {
-  repeated bytes certificate = 1; // PEM encoded
+  string version = 1;
+  repeated bytes certificate = 2; // PEM encoded
 }
 
 message PeerCacheRequest {
-  string peer = 1;
+  string version = 1;
+  string peer = 2;
 }
 
 message PeerCacheResponse {
-  repeated string cache = 1;
+  string version = 1;
+  repeated string cache = 2;
 }
 
 message MeasureRequest {
+  string version = 1;
+  MeasureEvent measure_envent = 2;
+}
+
+
+message MeasureResponse {
+  string version = 1;
+  bool success = 2;
+}
+
+message MeasureEvent {
   bytes sha256 = 1;
   string event_name = 2;
   CtrData ctr_data = 3;
 }
-
-message MeasureResponse {
-  bool success = 1;
-}
-
 
 message PSSOptions {
   int32 salt_length = 1;

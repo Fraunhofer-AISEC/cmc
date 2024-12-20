@@ -22,9 +22,19 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
+
+// The version of the API
+const (
+	apiVersion = "1.0.0"
+)
+
+func GetVersion() string {
+	return apiVersion
+}
 
 const (
 	EndpointAttest    = "/Attest"
@@ -46,65 +56,78 @@ const (
 )
 
 type AttestationRequest struct {
-	Nonce  []byte   `json:"nonce" cbor:"0,keyasint"`
-	Cached []string `json:"cached,omitempty" cbor:"1,keyasint,omitempty"`
+	Version string   `json:"version" cbor:"0,keyasint"`
+	Nonce   []byte   `json:"nonce" cbor:"1,keyasint"`
+	Cached  []string `json:"cached,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type AttestationResponse struct {
-	Report      []byte            `json:"report" cbor:"0,keyasint"`
-	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"1,keyasint,omitempty"`
-	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"2,keyasint,omitempty"`
+	Version     string            `json:"version" cbor:"0,keyasint"`
+	Report      []byte            `json:"report" cbor:"1,keyasint"`
+	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"2,keyasint,omitempty"`
+	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type VerificationRequest struct {
-	Nonce       []byte            `json:"nonce" cbor:"0,keyasint"`
-	Report      []byte            `json:"report" cbor:"1,keyasint"`
-	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"2,keyasint,omitempty"`
-	Ca          []byte            `json:"ca" cbor:"3,keyasint"`
-	Peer        string            `json:"peer,omitempty" cbor:"4,keyasint,omitempty"`
-	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"5,keyasint,omitempty"`
-	Policies    []byte            `json:"policies,omitempty" cbor:"6,keyasint,omitempty"`
+	Version     string            `json:"version" cbor:"0,keyasint"`
+	Nonce       []byte            `json:"nonce" cbor:"1,keyasint"`
+	Report      []byte            `json:"report" cbor:"2,keyasint"`
+	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
+	Ca          []byte            `json:"ca" cbor:"4,keyasint"`
+	Peer        string            `json:"peer,omitempty" cbor:"5,keyasint,omitempty"`
+	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"6,keyasint,omitempty"`
+	Policies    []byte            `json:"policies,omitempty" cbor:"7,keyasint,omitempty"`
 }
 
 type VerificationResponse struct {
-	ar.VerificationResult
+	Version string                `json:"version" cbor:"0,keyasint"`
+	Result  ar.VerificationResult `json:"result" cbor:"1,keyasint"`
 }
 
 type TLSSignRequest struct {
-	Content  []byte       `json:"content" cbor:"0,keyasint"`
-	Hashtype HashFunction `json:"hashType" cbor:"1,keyasint"`
-	PssOpts  *PSSOptions  `json:"pssOpts" cbor:"2,keyasint"`
+	Version  string       `json:"version" cbor:"0,keyasint"`
+	Content  []byte       `json:"content" cbor:"1,keyasint"`
+	Hashtype HashFunction `json:"hashType" cbor:"2,keyasint"`
+	PssOpts  *PSSOptions  `json:"pssOpts" cbor:"3,keyasint"`
 }
 
 type TLSSignResponse struct {
-	SignedContent []byte `json:"signedContent" cbor:"0,keyasint"`
+	Version       string `json:"version" cbor:"0,keyasint"`
+	SignedContent []byte `json:"signedContent" cbor:"1,keyasint"`
 }
 
 type TLSCertRequest struct {
+	Version string `json:"version" cbor:"0,keyasint"`
 }
 
 type TLSCertResponse struct {
-	Certificate [][]byte `json:"certificate" cbor:"0,keyasint"`
+	Version     string   `json:"version" cbor:"0,keyasint"`
+	Certificate [][]byte `json:"certificate" cbor:"1,keyasint"`
 }
 
 type PeerCacheRequest struct {
-	Peer string `json:"peer" cbor:"0,keyasint"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Peer    string `json:"peer" cbor:"1,keyasint"`
 }
 
 type PeerCacheResponse struct {
-	Cache []string `json:"cache" cbor:"0,keyasint"`
+	Version string   `json:"version" cbor:"0,keyasint"`
+	Cache   []string `json:"cache" cbor:"1,keyasint"`
 }
 
 type MeasureRequest struct {
-	ar.MeasureEvent
+	Version string          `json:"version" cbor:"0,keyasint"`
+	Event   ar.MeasureEvent `json:"event" cbor:"1,keyasint"`
 }
 
 type MeasureResponse struct {
-	Success bool `json:"success" cbor:"0,keyasint"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Success bool   `json:"success" cbor:"1,keyasint"`
 }
 
 type SocketError struct {
-	Msg string `json:"msg" cbor:"0,keyasint"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Msg     string `json:"msg" cbor:"1,keyasint"`
 }
 
 const (
@@ -233,4 +256,134 @@ func SignerOptsToHash(opts crypto.SignerOpts) (HashFunction, error) {
 	default:
 	}
 	return HashFunction_SHA512, errors.New("could not determine correct Hash function")
+}
+
+func (req *AttestationRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: AttestationRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected AttestationRequest version %v, got %v", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *AttestationResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: AttestationResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected AttestationResponse version %v, got %v", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *VerificationRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: VerificationRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected VerificationRequest version %v, got %v", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *VerificationResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: VerificationResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected VerificationResponse version %v, got %v", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *TLSSignRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: TLSSignRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected TLSSignRequest version %v, got %v", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *TLSSignResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: TLSSignResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected TLSSignResponse version %v, got %v", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *TLSCertRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: TLSCertRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected TLSCertRequest version %v, got %v", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *TLSCertResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: TLSCertResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected TLSCertResponse version %v, got %v", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *PeerCacheRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: PeerCacheRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected PeerCacheRequest version %v, got %v", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *PeerCacheResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: PeerCacheResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected PeerCacheResponse version %v, got %v", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *MeasureRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: MeasureRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected MeasureRequest version %v, got %v", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *MeasureResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: MeasureResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected MeasureResponse version %v, got %v", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (err *SocketError) CheckVersion() error {
+	if err == nil {
+		return fmt.Errorf("internal error: SocketError is nil")
+	}
+	if !strings.EqualFold(apiVersion, err.Version) {
+		return fmt.Errorf("API version mismatch. Expected SocketError version %v, got %v", apiVersion, err.Version)
+	}
+	return nil
 }
