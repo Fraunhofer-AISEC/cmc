@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/VerificationRequest",
+  "$defs": {
+    "VerificationRequest": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "report": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "object"
+        },
+        "ca": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "cacheMisses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "policies": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "nonce",
+        "report",
+        "ca"
+      ]
+    }
+  }
+}

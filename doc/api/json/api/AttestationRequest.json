@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/AttestationRequest",
+  "$defs": {
+    "AttestationRequest": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "nonce": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "cached": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "nonce"
+      ]
+    }
+  }
+}

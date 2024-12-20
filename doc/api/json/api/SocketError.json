@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/SocketError",
+  "$defs": {
+    "SocketError": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "msg": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "msg"
+      ]
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/AttestationResponse",
+  "$defs": {
+    "AttestationResponse": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "object"
+        },
+        "cacheMisses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "report"
+      ]
+    }
+  }
+}

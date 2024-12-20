@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/PeerCacheRequest",
+  "$defs": {
+    "PeerCacheRequest": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "peer": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "peer"
+      ]
+    }
+  }
+}

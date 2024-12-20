@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/TLSCertResponse",
+  "$defs": {
+    "TLSCertResponse": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "certificate": {
+          "items": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "certificate"
+      ]
+    }
+  }
+}

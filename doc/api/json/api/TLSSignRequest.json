@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/TLSSignRequest",
+  "$defs": {
+    "PSSOptions": {
+      "properties": {
+        "SaltLength": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "SaltLength"
+      ]
+    },
+    "TLSSignRequest": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "hashType": {
+          "type": "integer"
+        },
+        "pssOpts": {
+          "$ref": "#/$defs/PSSOptions"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "content",
+        "hashType",
+        "pssOpts"
+      ]
+    }
+  }
+}

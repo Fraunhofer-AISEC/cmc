@@ -28,13 +28,8 @@ The socket API uses a simple header followed by a serialized payload:
 | Length  | 32-bit Big Endian | Length of the payload |
 | Payload | JSON / CBOR       | Serialized payload    |
 
-The `attest` field determines whether to perform mutual attestation, client-only attestation,
-server-only attestation or no attestation and must match in all messages:
-
-- `Attest_Mutual = 0`
-- `Attest_Client = 1`
-- `Attest_Server = 2`
-- `Attest_None   = 3`
+All JSON schema definitions can be found [here](./api/json/). For each message, the link
+to the JSON schema definition is provided in the following sections.
 
 The following messages are defined:
 
@@ -45,95 +40,34 @@ specifying the `attest` selection. For a description of the optional cached item
 see [Peer Cache Mechanism](#peer-cache-mechanism).
 
 ### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "attest": {
-      "type": "string",
-      "description": "The selected attestation type."
-    },
-    "cached": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "nullable": true,
-      "description": "Optional list of cached items."
-    },
-    "extendedReport": {
-      "type": "boolean",
-      "nullable": true,
-      "description": "Whether to request an extended report."
-    }
-  },
-  "required": ["attest"]
-}
-```
+See [AtlsHandshakeRequest](./api/json/attestedtls/AtlsHandshakeRequest.json)
 
 ### CBOR
 ```
 AtlsHandshakeRequest = {
-    0: tstr,                         ; Attestation selection as a text string
-    ? 1: [* tstr],                   ; Optional array of cached text strings
-    ? 2: bool                        ; Optional boolean for extended report
+    0: tstr,            ; Version - protocol version
+    1: AttestSelect,    ; Attestation type - enumeration
+    ? 2: [* tstr],      ; Cached - an optional array of text strings
+    ? 3: bool           ; ExtendedReport - an optional boolean
 }
+
+AttestSelect = 0 / 1 / 2 / 3
+; 0 = Mutual, 1 = Client, 2 = Server, 3 = None
 ```
 
 ## AtlsHandshakeResponse
 
 The `AtlsHandshakeResponse` provides the response to an aTLS handshake request,
-including `attest` selection, optional `error` messages, `report`, `metadata`, and cache misses.
+including `attest` selection, optional `error` messages, `report`, `metadata`, `cacheMisses`.
 For a description of the optional cache misses, see [Peer Cache Mechanism](#peer-cache-mechanism).
 
 ### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "attest": {
-      "type": "string",
-      "description": "The selected attestation type."
-    },
-    "error": {
-      "type": "string",
-      "nullable": true,
-      "description": "An optional error message if the handshake failed."
-    },
-    "report": {
-      "type": "string",
-      "contentEncoding": "base64",
-      "nullable": true,
-      "description": "An optional attestation report."
-    },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string",
-        "contentEncoding": "base64"
-      },
-      "nullable": true,
-      "description": "Optional metadata associated with the handshake."
-    },
-    "cacheMisses": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "nullable": true,
-      "description": "Optional list of cache misses."
-    }
-  },
-  "required": ["attest"]
-}
-```
+See [AtlsHandshakeResponse](./api/json/attestedtls/AtlsHandshakeResponse.json)
 
 ### CBOR
 ```
 AtlsHandshakeResponse = {
-    0: tstr,                         ; Attestation selection as a text string
+    0: tstr,                         ; Version - protocol version
     ? 1: tstr,                       ; Optional error message as a text string
     ? 2: bstr,                       ; Optional report as a byte string
     ? 3: { * tstr => bstr },         ; Optional metadata as a map of text strings to byte strings
@@ -147,30 +81,14 @@ The `AtlsHandshakeComplete` provides the final result of an aTLS handshake proce
 indicating success or failure with an optional error message.
 
 ### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "success": {
-      "type": "boolean",
-      "description": "Indicates whether the handshake was successful."
-    },
-    "error": {
-      "type": "string",
-      "nullable": true,
-      "description": "An optional error message if the handshake failed."
-    }
-  },
-  "required": ["success"]
-}
-```
+See [AtlsHandshakeComplete](./api/json/attestedtls/AtlsHandshakeComplete.json)
 
 ### CBOR
 ```
 AtlsHandshakeComplete = {
-    0: bool,                        ; Boolean indicating success
-    ? 1: tstr                       ; Optional error message as a text string
+    0: tstr,                        ; Version - protocol version
+    1: bool,                        ; Boolean indicating success
+    ? 2: tstr                       ; Optional error message as a text string
 }
 ```
 
