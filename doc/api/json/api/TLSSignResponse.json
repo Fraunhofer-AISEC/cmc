@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/TLSSignResponse",
+  "$defs": {
+    "TLSSignResponse": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "signedContent": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "signedContent"
+      ]
+    }
+  }
+}

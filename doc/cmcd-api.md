@@ -81,6 +81,10 @@ The following message types are defined:
 This section describes the serialized messages / payloads of the API endpoints. Note that the
 gRPC APIs only supports protobuf, while the socket and CoAP APIs only support JSON and CBOR.
 
+All JSON schema definitions can be found [here](./api/json/). For each message, the link
+to the JSON schema definition is provided in the following sections. CBOR and protobuf definitions
+are directly embedded into the document.
+
 ### Attestation Request
 
 An attestation request instructs the *cmcd* to generate an attestation report with the specified
@@ -90,40 +94,23 @@ present in the requesting party (see
 cache mechanism).
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "nonce": {
-      "type": "string",
-      "contentEncoding": "base64",
-    },
-    "cached": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "nullable": true
-    }
-  },
-  "required": ["nonce"],
-}
-```
+See [AttestationRequest](./api/json/api/AttestationRequest.json)
 
 #### CBOR
 ```
 AttestationRequest = {
-    0: bstr,                          ; Nonce as a byte string
-    ? 1: [* tstr]                     ; Optional cached array of text strings
+  0: tstr,                          ; Version - protocol version
+  1: bstr,                          ; Nonce as a byte string
+  ? 2: [* tstr]                     ; Optional cached array of text strings
 }
 ```
 
 #### Protobuf
 ```protobuf
 message AttestationRequest {
-  bytes nonce = 1;
-  repeated string cached = 2;
+  string version = 1;
+  bytes nonce = 2;
+  repeated string cached = 3;
 }
 ```
 
@@ -137,51 +124,25 @@ values are the base64-encoded metadata items, the keys are their hex-encoded has
 peer cache mechanism).
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "report": {
-      "type": "string",
-      "contentEncoding": "base64"
-    },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string",
-        "contentEncoding": "base64"
-      },
-      "nullable": true
-    },
-    "cacheMisses": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "contentEncoding": "hex"
-      },
-      "nullable": true
-    }
-  },
-  "required": ["report"]
-}
-```
+See [AttestationResponse](./api/json/api/AttestationResponse.json)
 
 #### CBOR
 ```
 AttestationResponse = {
-    0: bstr,                          ; Report as a byte string
-    ? 1: { tstr => bstr },            ; Metadata as a map of strings to byte strings
-    ? 2: [* tstr]                     ; Optional cache misses array of text strings
+  0: tstr,                          ; Version - protocol version
+  1: bstr,                          ; Report as a byte string
+  ? 2: { tstr => bstr },            ; Metadata as a map of strings to byte strings
+  ? 3: [* tstr]                     ; Optional cache misses array of text strings
 }
 ```
 
 #### Protobuf
 ```protobuf
 message AttestationResponse {
-  bytes report = 1;
-  map<string, bytes> metadata = 2;
-  repeated string cache_misses = 3;
+  string version = 1;
+  bytes report = 2;
+  map<string, bytes> metadata = 3;
+  repeated string cache_misses = 4;
 }
 ```
 
@@ -197,75 +158,33 @@ Policies are additional attestation policies to verify against. See
 for information on the peer cache mechanism and the policies engine.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "nonce": {
-      "type": "string",
-      "contentEncoding": "base64"
-    },
-    "report": {
-      "type": "string",
-      "contentEncoding": "base64"
-    },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "string",
-        "contentEncoding": "base64",
-        "nullable": true
-      }
-    },
-    "ca": {
-      "type": "string",
-      "contentEncoding": "base64"
-    },
-    "peer": {
-      "type": "string",
-      "nullable": true
-    },
-    "cacheMisses": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "nullable": true
-    },
-    "policies": {
-      "type": "string",
-      "contentEncoding": "base64",
-      "nullable": true
-    }
-  },
-  "required": ["nonce", "report", "ca"]
-}
-```
+See [VerificationRequest](./api/json/api/VerificationRequest.json)
 
 #### CBOR
 ```
 VerificationRequest = {
-    0: bstr,                          ; Nonce as a byte string
-    1: bstr,                          ; Report as a byte string
-    2: { tstr => bstr },              ; Metadata as a map of strings to byte strings
-    3: bstr,                          ; CA as a byte string
-    ? 4: tstr,                        ; Optional peer string
-    ? 5: [* tstr],                    ; Optional cache misses array of text strings
-    ? 6: bstr                         ; Optional policies as a byte string
+  0: tstr,                          ; Version - protocol version
+  1: bstr,                          ; Nonce as a byte string
+  2: bstr,                          ; Report as a byte string
+  3: { tstr => bstr },              ; Metadata as a map of strings to byte strings
+  4: bstr,                          ; CA as a byte string
+  ? 5: tstr,                        ; Optional peer string
+  ? 6: [* tstr],                    ; Optional cache misses array of text strings
+  ? 7: bstr                         ; Optional policies as a byte string
 }
 ```
 
 #### Protobuf
 ```protobuf
 message VerificationRequest {
-  bytes nonce = 1;
-  bytes report = 2;
-  map<string, bytes> metadata = 3;
-  bytes ca = 4;
-  string peer = 5;
-  repeated string cache_misses = 6;
-  bytes policies = 7;
+  string version = 1;
+  bytes nonce = 2;
+  bytes report = 3;
+  map<string, bytes> metadata = 4;
+  bytes ca = 5;
+  string peer = 6;
+  repeated string cache_misses = 7;
+  bytes policies = 8;
 }
 ```
 
@@ -274,31 +193,21 @@ message VerificationRequest {
 A verification response contains the `verificationResult` of the verification process.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "verificationResult": {
-      "type": "string",
-      "contentEncoding": "base64"
-    }
-  },
-  "required": ["verificationResult"]
-}
-```
+See [VerificationResponse](./api/json/api/VerificationResponse.json)
 
 #### CBOR
 ```
 VerificationResponse = {
-    0: bstr                           ; Verification result as a byte string
+  0: tstr,                          ; Version - protocol version
+  1: any                            ; Verification result
 }
 ```
 
 #### Protobuf
 ```protobuf
 message VerificationResponse {
-  bytes verification_result = 1;
+  string version = 1;
+  bytes result = 2;
 }
 ```
 
@@ -309,42 +218,25 @@ hash function `hashType` and optional PSS options `pssOpts`. See [Helper Structs
 for the type and values of `hashType` and `pssOpts`.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "content": {
-      "type": "string",
-      "contentEncoding": "base64"
-    },
-    "hashType": {
-      "type": "string"
-    },
-    "pssOpts": {
-      "type": "object",
-      "nullable": true
-    }
-  },
-  "required": ["content", "hashType"]
-}
-```
+See [TLSSignRequest](./api/json/api/TLSSignRequest.json)
 
 #### CBOR
 ```
 TLSSignRequest = {
-    0: bstr,                          ; Content as a byte string
-    1: tstr,                          ; Hash type as a text string
-    ? 2: any                          ; Optional PSS options
+  0: tstr,                          ; Version - protocol version
+  0: bstr,                          ; Content as a byte string
+  1: tstr,                          ; Hash type as a text string
+  ? 2: any                          ; Optional PSS options
 }
 ```
 
 #### Protobuf
 ```protobuf
 message TLSSignRequest {
-  bytes content = 1;
-  HashFunction hashtype = 2;
-  PSSOptions pssOpts = 3;
+  string version = 1;
+  bytes content = 2;
+  HashFunction hashtype = 3;
+  PSSOptions pssOpts = 4;
 }
 ```
 
@@ -353,31 +245,21 @@ message TLSSignRequest {
 A TLSSign response contains the signed content.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "signedContent": {
-      "type": "string",
-      "contentEncoding": "base64"
-    }
-  },
-  "required": ["signedContent"]
-}
-```
+See [TLSSignResponse](./api/json/api/TLSSignResponse.json)
 
 #### CBOR
 ```
 TLSSignResponse = {
-    0: bstr                           ; Signed content as a byte string
+  0: tstr,                          ; Version - protocol version
+  1: bstr                           ; Signed content as a byte string
 }
 ```
 
 #### Protobuf
 ```protobuf
 message TLSSignResponse {
-  bytes signed_content = 1;
+  string version = 1;
+  bytes signed_content = 2;
 }
 ```
 
@@ -387,22 +269,20 @@ A TLSCert is a request to retrieve the TLS certificates corresponding to the har
 keys the CMC created. It does not require any properties.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {}
-}
-```
+See [TLSCertRequest](./api/json/api/TLSCertRequest.json)
 
 #### CBOR
 ```
-TLSCertRequest = {}
+TLSCertRequest = {
+  0: tstr,                          ; Version - protocol version
+}
 ```
 
 #### Protobuf
 ```protobuf
-message TLSCertRequest {}
+message TLSCertRequest {
+  string version = 1;
+}
 ```
 
 ### TLSCert Response
@@ -410,34 +290,21 @@ message TLSCertRequest {}
 A TLSCert response contains a PEM-encoded certificate chain for a hardware-based key.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "certificate": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "contentEncoding": "base64"
-      }
-    }
-  },
-  "required": ["certificate"]
-}
-```
+See [TLSCertResponse](./api/json/api/TLSCertResponse.json)
 
 #### CBOR
 ```
 TLSCertResponse = {
-    0: [* bstr]                       ; Certificate chain as an array of byte strings
+  0: tstr,                          ; Version - protocol version
+  1: [* bstr]                       ; Certificate chain as an array of byte strings
 }
 ```
 
 #### Protobuf
 ```protobuf
 message TLSCertResponse {
-  repeated bytes certificate = 1;
+  string version = 1;
+  repeated bytes certificate = 2; // PEM encoded
 }
 ```
 
@@ -448,30 +315,21 @@ fingerprint `peer` (see [Peer Cache Mechanism](./attestation-protocol.md#peer-ca
 description of the peer cache mechanism).
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "peer": {
-      "type": "string"
-    }
-  },
-  "required": ["peer"]
-}
-```
+See [PeerCacheRequest](./api/json/api/PeerCacheRequest.json)
 
 #### CBOR
 ```
 PeerCacheRequest = {
-    0: tstr                           ; Peer as a text string
+  0: tstr,                          ; Version - protocol version
+  1: tstr                           ; Peer as a text string
 }
 ```
 
 #### Protobuf
 ```protobuf
 message PeerCacheRequest {
-  string peer = 1;
+  string version = 1;
+  string peer = 2;
 }
 ```
 
@@ -482,33 +340,21 @@ A PeerCache response contains the hash digests of the cached metadata items for 
 the peer cache mechanism).
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "cache": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    }
-  },
-  "required": ["cache"]
-}
-```
+See [PeerCacheResponse](./api/json/api/PeerCacheResponse.json)
 
 #### CBOR
 ```
 PeerCacheResponse = {
-    0: [* tstr]                       ; Cache as an array of text strings
+  0: tstr,                          ; Version - protocol version
+  1: [* tstr]                       ; Cache as an array of text strings
 }
 ```
 
 #### Protobuf
 ```protobuf
 message PeerCacheResponse {
-  repeated string cache = 1;
+  string version = 1;
+  repeated string cache = 2;
 }
 ```
 
@@ -520,30 +366,21 @@ attetation technologies (e.g., into TPM PCRs). This API is used by container run
 containers they have launched.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "measureEvent": {
-      "type": "object"
-    }
-  },
-  "required": ["measureEvent"]
-}
-```
+See [MeasureRequest](./api/json/api/MeasureRequest.json)
 
 #### CBOR
 ```
-MeasureRequest = MeasureEvent
+MeasureRequest = {
+    0: tstr,           ; Version - a text string
+    1: MeasureEvent    ; Event - a MeasureEvent type
+}
 ```
 
 #### Protobuf
 ```protobuf
 message MeasureRequest {
-  bytes sha256 = 1;
-  string event_name = 2;
-  CtrData ctr_data = 3;
+  string version = 1;
+  MeasureEvent measure_envent = 2;
 }
 ```
 
@@ -552,30 +389,21 @@ message MeasureRequest {
 A Measure response indicates whether the CMC measure operation was successful.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "success": {
-      "type": "boolean"
-    }
-  },
-  "required": ["success"]
-}
-```
+See [MeasureResponse](./api/json/api/MeasureResponse.json)
 
 #### CBOR
 ```
 MeasureResponse = {
-    0: bool                           ; Success as a boolean
+  0: tstr,                          ; Version - protocol version
+  1: bool                           ; Success as a boolean
 }
 ```
 
 #### Protobuf
 ```protobuf
 message MeasureResponse {
-  bool success = 1;
+  string version = 1;
+  bool success = 2;
 }
 ```
 
@@ -584,23 +412,13 @@ message MeasureResponse {
 A SocketError contains an error message.
 
 #### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "msg": {
-      "type": "string"
-    }
-  },
-  "required": ["msg"]
-}
-```
+See [SocketError](./api/json/api/SocketError.json)
 
 #### CBOR
 ```
 SocketError = {
-    0: tstr                           ; Message as a text string
+  0: tstr,                          ; Version - protocol version
+  1: tstr                           ; Message as a text string
 }
 ```
 
@@ -636,19 +454,7 @@ BLAKE2b_512  = 18
 The `PSSOptions` struct specifies the options for PSS signature schemes, including the salt length.
 
 ### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "saltLength": {
-      "type": "integer",
-      "description": "The length of the salt used in the PSS signature scheme."
-    }
-  },
-  "required": ["saltLength"]
-}
-```
+See [PSSOptions](./api/json/api/PSSOptions.json)
 
 ### CBOR
 ```
@@ -669,43 +475,24 @@ message PSSOptions {
 The `MeasureEvent` struct represents an event to be measured, including a SHA256 hash and optional metadata.
 
 ### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "sha256": {
-      "type": "string",
-      "contentEncoding": "base64",
-      "description": "The SHA256 hash of the event."
-    },
-    "eventname": {
-      "type": "string",
-      "nullable": true,
-      "description": "The name of the event."
-    },
-    "eventdata": {
-      "type": "object",
-      "nullable": true,
-      "description": "Additional data related to the event."
-    },
-    "ctrData": {
-      "type": "object",
-      "nullable": true,
-      "description": "Container-related data associated with the event."
-    }
-  },
-  "required": ["sha256"]
-}
-```
+See [MeasureEvent](./api/json/attestationreport/MeasureEvent.json)
 
 ### CBOR
 ```
 MeasureEvent = {
-    2: bstr,                          ; SHA256 hash as a byte string
-    ? 4: tstr,                        ; Optional event name as a text string
-    ? 5: any,                         ; Optional event data as any type
-    ? 6: any                          ; Optional container data as any type
+  0: bstr,                          ; SHA256 hash as a byte string
+  ? 1: tstr,                        ; Optional event name as a text string
+  ? 2: any,                         ; Optional event data as any type
+  ? 3: any                          ; Optional container data as any type
+}
+```
+
+### Protobuf
+```
+message MeasureEvent {
+  bytes sha256 = 1;
+  string event_name = 2;
+  CtrData ctr_data = 3;
 }
 ```
 
@@ -715,37 +502,14 @@ The `CtrData` struct represents container-related data, including hashes of OCI 
 root filesystem as well the OCI runtime config.
 
 ### JSON
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "properties": {
-    "configSha256": {
-      "type": "string",
-      "contentEncoding": "base64",
-      "description": "The SHA256 hash of the container configuration."
-    },
-    "rootfsSha256": {
-      "type": "string",
-      "contentEncoding": "base64",
-      "description": "The SHA256 hash of the container root filesystem."
-    },
-    "ociSpec": {
-      "type": "object",
-      "nullable": true,
-      "description": "Optional OCI specification for the container."
-    }
-  },
-  "required": ["configSha256", "rootfsSha256"]
-}
-```
+See [MeasureEvent](./api/json/attestationreport/MeasureEvent.json)
 
 ### CBOR
 ```
 CtrData = {
-    0: bstr,                          ; Config SHA256 as a byte string
-    1: bstr,                          ; Rootfs SHA256 as a byte string
-    ? "ociSpec": any                  ; Optional OCI specification
+  0: bstr,                          ; Config SHA256 as a byte string
+  1: bstr,                          ; Rootfs SHA256 as a byte string
+  ? "ociSpec": any                  ; Optional OCI specification
 }
 ```
 

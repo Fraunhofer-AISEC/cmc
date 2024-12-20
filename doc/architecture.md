@@ -16,7 +16,7 @@ For this purpose, the framework provides the CMC daemon (`cmcd`) as the main app
 generating and verifying attestation. The CMC exposes its functionality via multple APIs, which are
 described in the following section.
 
-![CMC, drivers and exemplary testtool](./overview.drawio.svg)
+![CMC, drivers and exemplary testtool](./diagrams/architecture.drawio.svg)
 
 The figure shows how the core components interact with each other. The main software components are:
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
@@ -40,7 +40,7 @@ in the [Example Setup](../example-setup/).
 The overall structure of the attestation report can be seen in the following figure and is
 described in detail in our [paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171):
 
-![Attestation Report](./attestation_report.drawio.svg)
+![Attestation Report](./diagrams/attestation-report.drawio.svg)
 
 ## Components
 The following components correspond to the packages / directories of this repository.

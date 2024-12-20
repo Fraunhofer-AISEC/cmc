@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/PSSOptions",
+  "$defs": {
+    "PSSOptions": {
+      "properties": {
+        "SaltLength": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "SaltLength"
+      ]
+    }
+  }
+}

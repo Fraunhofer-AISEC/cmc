@@ -37,7 +37,7 @@ file systems and software running on the host. Some configurations are mandatory
 to work (e.g., if used, TPM-support must be enabled in the kernel configuration).
 
 Further information about the platform configuration can be found
-[here](doc/platform-configuration.md)
+[here](./platform-configuration.md)
 
 ## Custom Policies
 
