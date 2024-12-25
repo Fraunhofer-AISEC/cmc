@@ -52,7 +52,6 @@ type GrpcServer struct {
 }
 
 func init() {
-	log.Info("Adding gRPC server to supported servers")
 	servers["grpc"] = GrpcServerWrapper{}
 }
 
@@ -72,7 +71,7 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 	s := grpc.NewServer()
 	api.RegisterCMCServiceServer(s, server)
 
-	log.Infof("Waiting for requests on %v", listener.Addr())
+	log.Infof("Waiting for grpc requests on %v", listener.Addr())
 	err = s.Serve(listener)
 	if err != nil {
 		return fmt.Errorf("failed to serve: %v", err)
@@ -83,7 +82,7 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 
 func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*api.AttestationResponse, error) {
 
-	log.Debug("Prover: Received grpc request type 'Attest'")
+	log.Info("Received grpc request type 'Attest'")
 
 	if len(s.cmc.Drivers) == 0 {
 		return nil, errors.New("no valid signers configured")
@@ -112,14 +111,14 @@ func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*
 		CacheMisses: cacheMisses,
 	}
 
-	log.Debug("Prover: Finished")
+	log.Info("Served grpc request type 'Attest'")
 
 	return resp, nil
 }
 
 func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (*api.VerificationResponse, error) {
 
-	log.Debug("Received grpc request type 'Verify'")
+	log.Info("Received grpc request type 'Verify'")
 
 	if req.Version != api.GetVersion() {
 		return nil, fmt.Errorf("API version mismatch. Expected VerificationRequest version %v, got %v",
@@ -143,7 +142,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 		VerificationResult: data,
 	}
 
-	log.Debug("Verifier: finished")
+	log.Info("Served grpc request type 'Verify'")
 
 	return response, nil
 }
@@ -152,7 +151,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api
 
 	var success bool
 
-	log.Debug("Received grpc request type 'Measure'")
+	log.Info("Received grpc request type 'Measure'")
 
 	if req.Version != api.GetVersion() {
 		return nil, fmt.Errorf("API version mismatch. Expected MeasureRequest version %v, got %v",
@@ -199,7 +198,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api
 		Success: success,
 	}
 
-	log.Debug("Measure: Finished")
+	log.Info("Served grpc request type 'Measure'")
 
 	return response, nil
 }
@@ -212,7 +211,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 	var signature []byte
 	var tlsKeyPriv crypto.PrivateKey
 
-	log.Debug("Received grpc request type 'TLSSign'")
+	log.Info("Received grpc request type 'TLSSign'")
 
 	if req.Version != api.GetVersion() {
 		return nil, fmt.Errorf("API version mismatch. Expected TLSSignRequest version %v, got %v",
@@ -235,7 +234,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 		return nil, fmt.Errorf("failed to get IK: %w", err)
 	}
 	// Sign
-	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
+	log.Debugf("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err = tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.GetContent(), opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform Signing operation: %w", err)
@@ -245,15 +244,16 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 		Version:       api.GetVersion(),
 		SignedContent: signature,
 	}
-	// Return response
-	log.Info("Prover: Performed Sign operation.")
+
+	log.Info("Served grpc request type 'TLSSign'")
+
 	return sr, nil
 }
 
 // Loads public key for tls certificate
 func (s *GrpcServer) TLSCert(ctx context.Context, req *api.TLSCertRequest) (*api.TLSCertResponse, error) {
 
-	log.Debug("Prover: Received grpc request type 'TLSCert'")
+	log.Info("Received grpc request type 'TLSCert'")
 
 	if req.Version != api.GetVersion() {
 		return nil, fmt.Errorf("API version mismatch. Expected TLSCertRequest version %v, got %v",
@@ -271,26 +271,30 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *api.TLSCertRequest) (*api
 		return nil, fmt.Errorf("failed to get cert chain: %w", err)
 	}
 
+	certs := internal.WriteCertsPem(certChain)
+	log.Debugf("Obtained %v TLS Cert(s) from %v", len(certs), d.Name())
+
 	resp := &api.TLSCertResponse{
 		Version:     api.GetVersion(),
-		Certificate: internal.WriteCertsPem(certChain),
+		Certificate: certs,
 	}
 	resp.Certificate = internal.WriteCertsPem(certChain)
-	log.Debugf("Prover: Sending back %v TLS Cert(s) from %v", len(resp.Certificate), d.Name())
+
+	log.Info("Served grpc request type 'TLSCert'")
 	return resp, nil
 }
 
 // Fetches the peer cache for a specified peer
 func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (*api.PeerCacheResponse, error) {
 
-	log.Debug("Prover: Received grpc request type 'PeerCache'")
+	log.Info("Received grpc request type 'PeerCache'")
 
 	if req.Version != api.GetVersion() {
 		return nil, fmt.Errorf("API version mismatch. Expected PeerCacheRequest version %v, got %v",
 			api.GetVersion(), req.Version)
 	}
 
-	log.Trace("Collecting peer cache")
+	log.Debugf("Collecting peer cache for peer %v", req.Peer)
 	resp := &api.PeerCacheResponse{
 		Version: api.GetVersion(),
 	}
@@ -299,7 +303,7 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (
 		resp.Cache = maps.Keys(c)
 	}
 
-	log.Debug("Prover: Finished")
+	log.Info("Served grpc request type 'PeerCache'")
 
 	return resp, nil
 }

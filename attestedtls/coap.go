@@ -44,7 +44,7 @@ func init() {
 func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
 	// Establish connection
-	log.Tracef("Sending attestation request to cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending attestation request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error dialing: %w", err)
@@ -100,7 +100,7 @@ func (a CoapApi) verifyAR(
 ) error {
 
 	// Establish connection
-	log.Tracef("Sending verification request to cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending verification request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
@@ -164,7 +164,7 @@ func (a CoapApi) verifyAR(
 func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
 	// Establish connection
-	log.Tracef("Sending TLSSign request to cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending TLS sign request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -221,7 +221,7 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 
 	// Establish connection
-	log.Tracef("Sending TLSCert request to cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending TLS certificate request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -268,7 +268,7 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
 
 	// Establish connection
-	log.Tracef("Sending PeerCache request to cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending peer cache request to cmcd on %v", cc.CmcAddr)
 	conn, err := udp.Dial(cc.CmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)

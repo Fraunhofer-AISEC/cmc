@@ -45,7 +45,7 @@ func NewClient(roots []*x509.Certificate) *Client {
 	}
 	insecureSkipVerify := false
 	if len(roots) == 0 {
-		log.Trace("No EST server CA provided: Skipping certificate validation")
+		log.Debug("No EST server CA provided: Skipping certificate validation")
 		insecureSkipVerify = true
 	}
 
@@ -130,8 +130,9 @@ func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	certs := p7.Certificates
+
+	log.Tracef("Parsed %v certificates", len(certs))
 
 	return certs, nil
 }
@@ -334,7 +335,7 @@ func request(
 	body io.Reader,
 ) (*http.Response, error) {
 
-	log.Tracef("Sending %v request to %v", method, endpoint)
+	log.Debugf("Sending EST %v request to %v", method, endpoint)
 
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
@@ -356,7 +357,7 @@ func request(
 		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)
 	}
 
-	log.Trace("Performed HTTP request")
+	log.Debug("Finished EST HTTP request")
 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()

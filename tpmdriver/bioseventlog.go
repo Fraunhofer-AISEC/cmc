@@ -156,7 +156,6 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 	buf.Next(int(event.EventDataSize))
 
 	log.Trace("Detected event log format version 2")
-	//log format 2 means the crypto agile format
 
 	//an entry is at least 16 Bytes long
 	for buf.Len() >= 16 {
@@ -217,7 +216,7 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 			//generate the locality entry
 			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData)
 			if err != nil {
-				log.Trace(err)
+				log.Debug(err)
 			} else {
 				extends = append(extends, entry)
 			}

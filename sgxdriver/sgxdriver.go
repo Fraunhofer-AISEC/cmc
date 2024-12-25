@@ -93,6 +93,7 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 	sgx.ikPriv = ikPriv
 
 	// Create CSRs and fetch IK and AK certificates
+	log.Info("Performing SGX provisioning")
 	sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c, c.ServerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to provision sgx driver: %w", err)
@@ -105,7 +106,7 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 // as a plugin during attestation report generation
 func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
 
-	log.Trace("Collecting SGX measurements")
+	log.Debug("Collecting SGX measurements")
 
 	if sgx == nil {
 		return ar.Measurement{}, errors.New("internal error: SGX object is nil")
@@ -162,10 +163,10 @@ func (sgx *Sgx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	}
 
 	if sel == ar.AK {
-		log.Tracef("Returning %v AK certificates", len(sgx.akChain))
+		log.Debugf("Returning %v AK certificates", len(sgx.akChain))
 		return sgx.akChain, nil
 	} else if sel == ar.IK {
-		log.Tracef("Returning %v IK certificates", len(sgx.ikChain))
+		log.Debugf("Returning %v IK certificates", len(sgx.ikChain))
 		return sgx.ikChain, nil
 
 	}
@@ -182,7 +183,7 @@ func provisionSgx(ik crypto.PrivateKey, c *ar.DriverConfig, addr string,
 	log.Warn("Creating new EST client without server authentication")
 	client := est.NewClient(nil)
 
-	log.Info("Retrieving CA certs")
+	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
@@ -207,7 +208,7 @@ func provisionSgx(ik crypto.PrivateKey, c *ar.DriverConfig, addr string,
 		return nil, nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
-	log.Infof("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
+	log.Debugf("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikCert, err := client.SimpleEnroll(addr, ikCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)
@@ -246,7 +247,7 @@ func isCertValid(cert *x509.Certificate) bool {
 // retrieve PCK Certificate Chain + TCB Signing Cert with caching mechanism
 func getSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	if c.StoragePath == "" {
-		log.Traceln("No cache storage available, downloading cert chain")
+		log.Trace("No cache storage available, downloading cert chain")
 		return downloadSgxCertChain(&c.DeviceConfig)
 	}
 

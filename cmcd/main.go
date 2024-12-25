@@ -28,12 +28,12 @@ var (
 
 func main() {
 
-	log.Infof("Starting cmcd %v", cmc.GetVersion())
-
 	c, err := GetConfig()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	log.Infof("Running cmc %v", cmc.GetVersion())
 
 	cmc, err := cmc.NewCmc(&c.Config)
 	if err != nil {

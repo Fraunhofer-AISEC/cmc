@@ -68,27 +68,29 @@ func (ln Listener) Accept() (net.Conn, error) {
 		return nil, fmt.Errorf("TLS handshake failed: %w", err)
 	}
 
-	log.Trace("TLS handshake complete, generating channel bindings")
+	log.Debug("Connection established, getting connection state")
 	cs := tlsConn.ConnectionState()
 	if !cs.HandshakeComplete {
 		return nil, errors.New("internal error: handshake not complete")
 	}
+
+	log.Debug("TLS handshake complete, generating channel bindings")
 	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
 	}
 
 	// Retrieve peer's TLS leaf certificate fingerprint to be used as peer ID for peer cache
-	log.Trace("Retrieving TLS certificate fingerprint as peer ID")
+	log.Debug("Retrieving TLS certificate fingerprint as peer ID")
 	var fingerprint string
 	if len(cs.PeerCertificates) > 0 {
 		f := sha256.Sum256(cs.PeerCertificates[0].Raw)
 		fingerprint = hex.EncodeToString(f[:])
 	}
+	log.Debugf("Successfully retrieved peer TLS fingerprint: %v", fingerprint)
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
-	log.Debug("Performing atls handshake")
 	err = atlsHandshakeStart(tlsConn, chbindings, fingerprint, ln.CmcConfig, Endpoint_Server)
 	if err != nil {
 		// Only log the error, still send handshake complete message to inform peer

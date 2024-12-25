@@ -57,14 +57,14 @@ func getCMCServiceConn(cc CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, co
 func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
 	// Get backend connection
-	log.Tracef("Obtaining AR from local cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending attestation request to cmcd on %v", cc.CmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, nil, nil, errors.New("failed to establish connection to obtain AR")
 	}
 	defer cmcconn.Close()
 	defer cancel()
-	log.Trace("Contacting backend to obtain AR.")
+	log.Debug("Contacting backend to obtain AR.")
 
 	req := &api.AttestationRequest{
 		Version: api.GetVersion(),
@@ -96,14 +96,14 @@ func (a GrpcApi) verifyAR(
 ) error {
 
 	// Get backend connection
-	log.Tracef("Verifying remote AR via local cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending verification request to cmcd on %v", cc.CmcAddr)
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return errors.New("failed to establish connection to obtain attestation result")
 	}
 	defer conn.Close()
 	defer cancel()
-	log.Trace("Contacting backend for AR verification")
+	log.Debug("Contacting backend for AR verification")
 
 	req := &api.VerificationRequest{
 		Version:     api.GetVersion(),
@@ -149,14 +149,14 @@ func (a GrpcApi) verifyAR(
 
 func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// Get backend connection
-	log.Tracef("Fetching signature from local cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending TLS sign request to cmcd on %v", cc.CmcAddr)
 	cmcClient, conn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("connection failed. No signing performed")
 	}
 	defer conn.Close()
 	defer cancel()
-	log.Trace("contacting backend for Sign Operation")
+	log.Debug("contacting backend for Sign Operation")
 
 	// Create Sign request
 	hash, err := convertHash(opts)
@@ -184,13 +184,13 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 		return nil, fmt.Errorf("API version mismatch. Expected TLSSignResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
-	log.Trace("signature: \n ", hex.EncodeToString(resp.GetSignedContent()))
+	log.Tracef("Signature: %v", hex.EncodeToString(resp.GetSignedContent()))
 	return resp.GetSignedContent(), nil
 }
 
 func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	// Get backend connection
-	log.Tracef("Fetching certificates from local cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending TLS certificate request to cmcd on %v", cc.CmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to cmcd")
@@ -224,14 +224,13 @@ func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 func (a GrpcApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
 
 	// Get backend connection
-	log.Tracef("Fetching peer cache from local cmcd on %v", cc.CmcAddr)
+	log.Debugf("Sending peer cache request for peer %v to cmcd on %v", fingerprint, cc.CmcAddr)
 	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to obtain AR")
 	}
 	defer cmcconn.Close()
 	defer cancel()
-	log.Tracef("Contacting backend to fetch peer cache for peer %v", fingerprint)
 
 	req := &api.PeerCacheRequest{
 		Version: api.GetVersion(),

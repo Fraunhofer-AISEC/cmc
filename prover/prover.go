@@ -126,7 +126,7 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 		log.Debugf("Added %v to attestation report", measurement.Type)
 	}
 
-	log.Trace("Finished attestation report generation")
+	log.Debugf("Finished attestation report generation")
 
 	return report, metadataReturn, nil
 }

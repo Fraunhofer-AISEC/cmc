@@ -252,17 +252,17 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 // Just an example HTTP handler
 func handleRootRequest(w http.ResponseWriter, req *http.Request) {
-	log.Tracef("Received '/' %v request from %v", req.Method, req.RemoteAddr)
+	log.Debugf("Received '/' %v request from %v", req.Method, req.RemoteAddr)
 	w.Header().Set("Content-Type", "text/html")
 
-	log.Tracef("Sending HTTP response")
+	log.Debugf("Sending HTTP response")
 	fmt.Fprintf(w, "<h1>Hello from HTML</h1>")
 }
 
 // Just an example HTTP handler
 func handleDataRequest(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received '/data' %v request from %v", req.Method, req.RemoteAddr)
+	log.Debugf("Received '/data' %v request from %v", req.Method, req.RemoteAddr)
 
 	if strings.Compare(req.Method, "GET") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for /post request", req.Method)
@@ -278,7 +278,7 @@ func handleDataRequest(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set(ContentTypeHeader, MimeTypeJSON)
 	w.WriteHeader(http.StatusOK)
 
-	log.Tracef("Sending HTTP response")
+	log.Debugf("Sending HTTP response")
 	n, err := w.Write(payload)
 	if err != nil {
 		log.Warnf("failed to write HTTP: %v", err)
@@ -291,7 +291,7 @@ func handleDataRequest(w http.ResponseWriter, req *http.Request) {
 // Just an example HTTP handler
 func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received '/post' %v request from %v", req.Method, req.RemoteAddr)
+	log.Debugf("Received '/post' %v request from %v", req.Method, req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for /post request", req.Method)
@@ -299,7 +299,7 @@ func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 	}
 
 	for k, v := range req.Header {
-		log.Tracef("HTTP Header %v: %v", k, v)
+		log.Debugf("HTTP Header %v: %v", k, v)
 	}
 
 	payload, err := io.ReadAll(req.Body)
@@ -315,7 +315,7 @@ func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set(ContentTypeHeader, MimeTypeJSON)
 	w.WriteHeader(http.StatusOK)
 
-	log.Tracef("Sending HTTP response")
+	log.Debugf("Sending HTTP response")
 	n, err := w.Write(payload)
 	if err != nil {
 		log.Warnf("failed to write HTTP: %v", err)

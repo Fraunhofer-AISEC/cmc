@@ -44,7 +44,7 @@ func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer
 	// Iterate over all given paths, determine whether this is a file
 	// system or remote location, and fetch metadata
 	for _, p := range paths {
-		log.Tracef("Retrieving metadata from %v", p)
+		log.Debugf("Retrieving metadata from %v", p)
 		if strings.HasPrefix(p, "file://") {
 			f := strings.TrimPrefix(p, "file://")
 			data, err := loadMetadata(f)
@@ -64,13 +64,13 @@ func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer
 			metadata = append(metadata, data...)
 		}
 	}
-	log.Tracef("Retrieved metadata from %v of %v locations (%v failed)",
+	log.Debugf("Retrieved metadata from %v of %v locations (%v failed)",
 		len(paths)-fails, len(paths), fails)
 
 	// In case of errors, load cached metadata if cache is available
 	if fails > 0 {
 		if cache != "" {
-			log.Tracef("Additionally loading cached metadata from %v", cache)
+			log.Debugf("Additionally loading cached metadata from %v", cache)
 			data, err := loadMetadata(cache)
 			if err != nil {
 				log.Warnf("failed to read cache %v: %v", cache, err)
@@ -78,7 +78,7 @@ func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer
 				metadata = append(metadata, data...)
 			}
 		} else {
-			log.Trace("No cache available. Do not load additional metadata")
+			log.Debug("No cache available. Do not load additional metadata")
 		}
 	}
 
@@ -141,7 +141,7 @@ func loadMetadata(dir string) ([][]byte, error) {
 	}
 
 	// Retrieve the metadata files
-	log.Tracef("Parsing %v metadata files in %v", len(files), dir)
+	log.Debugf("Parsing %v metadata files in %v", len(files), dir)
 	for i := 0; i < len(files); i++ {
 		file := path.Join(dir, files[i].Name())
 		if fileInfo, err := os.Stat(file); err == nil {
@@ -171,7 +171,7 @@ func cacheMetadata(data [][]byte, localPath string) error {
 	for _, d := range data {
 		digest := sha256.Sum256(d)
 		filename := path.Join(localPath, hex.EncodeToString(digest[:]))
-		log.Debug("Caching metadata object: ", filename)
+		log.Tracef("Caching metadata object: %v", filename)
 		err := os.WriteFile(filename, d, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write file: %v", err)
@@ -181,7 +181,7 @@ func cacheMetadata(data [][]byte, localPath string) error {
 }
 
 func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
-	log.Tracef("Filtering %v meta-data objects..", len(inlist))
+	log.Debugf("Filtering %v meta-data objects..", len(inlist))
 
 	outlist := make([][]byte, 0)
 	foundJson := false
@@ -299,7 +299,7 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 		return nil, ar.JsonSerializer{},
 			fmt.Errorf("found both JSON and CBOR metadata. Mixed metadata is not supported")
 	} else {
-		log.Tracef("Returning filtered lists with %v elements", len(outlist))
+		log.Debugf("Returning filtered lists with %v elements", len(outlist))
 		if foundJson {
 			return outlist, ar.JsonSerializer{}, nil
 		} else {

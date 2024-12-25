@@ -42,14 +42,14 @@ func verifyTpmMeasurements(
 		TpmResult: &ar.TpmResult{},
 	}
 
-	log.Trace("Verifying TPM measurements")
+	log.Debug("Verifying TPM measurements")
 
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
 	calculatedPcrs, pcrResult, artifacts, ok := recalculatePcrs(s, tpmM, referenceValues)
 	if !ok {
-		log.Trace("failed to recalculate PCRs")
+		log.Debug("failed to recalculate PCRs")
 	}
 	result.TpmResult.PcrMatch = pcrResult
 	result.Artifacts = artifacts
@@ -57,7 +57,7 @@ func verifyTpmMeasurements(
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Evidence)
 	if err != nil {
-		log.Tracef("Failed to decode TPM attestation data: %v", err)
+		log.Debugf("Failed to decode TPM attestation data: %v", err)
 		result.Summary.SetErr(ar.ParseEvidence)
 		return result, false
 	}
@@ -65,9 +65,9 @@ func verifyTpmMeasurements(
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
 		result.Freshness.Success = true
-		log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
+		log.Debugf("Successfully verified nonce %v", hex.EncodeToString(nonce))
 	} else {
-		log.Tracef("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
+		log.Debugf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
 		result.Freshness.Success = false
 		result.Freshness.Expected = hex.EncodeToString(nonce)
@@ -80,7 +80,7 @@ func verifyTpmMeasurements(
 	sum := make([]byte, 0)
 	for i := range tpmM.Artifacts {
 		if tpmM.Artifacts[i].Pcr == nil {
-			log.Tracef("PCR not specified")
+			log.Debugf("PCR not specified")
 			result.Summary.SetErr(ar.PcrNotSpecified)
 			return result, false
 		}
@@ -93,10 +93,10 @@ func verifyTpmMeasurements(
 	}
 	verPcr := sha256.Sum256(sum)
 	if bytes.Equal(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) {
-		log.Trace("Aggregated PCR matches quote PCR")
+		log.Debug("Aggregated PCR matches quote PCR")
 		result.TpmResult.AggPcrQuoteMatch.Success = true
 	} else {
-		log.Tracef("Aggregated PCR does not match Quote PCR: %v vs. %v",
+		log.Debugf("Aggregated PCR does not match Quote PCR: %v vs. %v",
 			hex.EncodeToString(verPcr[:]),
 			hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
 		result.TpmResult.AggPcrQuoteMatch.Success = false
@@ -107,7 +107,7 @@ func verifyTpmMeasurements(
 
 	mCerts, err := internal.ParseCertsDer(tpmM.Certs)
 	if err != nil {
-		log.Tracef("Failed to parse measurement certs: %v", err)
+		log.Debugf("Failed to parse measurement certs: %v", err)
 		result.Signature.CertChainCheck.SetErr(ar.ParseCert)
 		result.Summary.Success = false
 		return result, false
@@ -117,17 +117,17 @@ func verifyTpmMeasurements(
 	if !result.Signature.SignCheck.Success {
 		ok = false
 	}
-	log.Trace("Successfully verified TPM quote signature")
+	log.Debug("Successfully verified TPM quote signature")
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
-		log.Tracef("Failed to verify certificate chain: %v", err)
+		log.Debugf("Failed to verify certificate chain: %v", err)
 		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
 		ok = false
 	} else {
 		result.Signature.CertChainCheck.Success = true
 	}
-	log.Trace("Successfully verified TPM certificate chain")
+	log.Debug("Successfully verified TPM certificate chain")
 
 	//Store details from (all) validated certificate chain(s) in the report
 	for _, chain := range x509Chains {
@@ -159,7 +159,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 		}
 
 		if measuredPcr.Pcr == nil {
-			log.Trace("PCR not specified")
+			log.Debug("PCR not specified")
 			ok = false
 			pcrResult.Success = false
 			continue
@@ -201,7 +201,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 						CtrDetails: event.CtrData,
 					}
 					detailedResults = append(detailedResults, measResult)
-					log.Tracef("Failed to find PCR%v measurement %v: %v in reference values",
+					log.Debugf("Failed to find PCR%v measurement %v: %v in reference values",
 						*measuredPcr.Pcr, event.EventName, hex.EncodeToString(event.Sha256))
 					ok = false
 					pcrResult.Success = false
@@ -227,6 +227,9 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 					CtrDetails:  event.CtrData,
 				}
 				detailedResults = append(detailedResults, measResult)
+
+				log.Tracef("Found PCR%v measurement %v: %v in reference values",
+					pcr, nameInfo, hex.EncodeToString(event.Sha256))
 			}
 			pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 			if !bytes.Equal(measuredSummary, calculatedPcrs[pcr]) {
@@ -238,7 +241,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 			// We therefore unconditionally extend every reference value for this PCR
 			for _, ref := range referenceValues {
 				if ref.Pcr == nil {
-					log.Tracef("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
+					log.Debugf("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
 					ok = false
 					continue
 				}
@@ -267,7 +270,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 				pcrResult.Success = true
 			} else {
-				log.Tracef("PCR%v mismatch: measured: %v, calculated: %v", pcr,
+				log.Debugf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
 					hex.EncodeToString(measuredPcr.Summary),
 					hex.EncodeToString(calculatedPcrs[pcr]))
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
@@ -288,7 +291,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 		} else {
 			ok = false
 			pcrResult.Success = false
-			log.Tracef("Unknown measurement PCR type %v", measuredPcr.Type)
+			log.Debugf("Unknown measurement PCR type %v", measuredPcr.Type)
 		}
 
 		pcrResults = append(pcrResults, pcrResult)
@@ -317,7 +320,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 			}
 			detailedResults = append(detailedResults, result)
 			ok = false
-			log.Tracef("Reference value %v does not contain PCR", ref.Name)
+			log.Debugf("Reference value %v does not contain PCR", ref.Name)
 			continue
 		}
 
@@ -326,7 +329,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 		for _, measuredPcr := range measurement.Artifacts {
 
 			if measuredPcr.Pcr == nil {
-				log.Trace("PCR not specified")
+				log.Debug("PCR not specified")
 				ok = false
 				continue
 			}
@@ -361,7 +364,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 					detailedResults = append(detailedResults, result)
 					if !ref.Optional {
 						ok = false
-						log.Tracef("Failed to find required PCR%v reference value %v: %v in measurements",
+						log.Debugf("Failed to find required PCR%v reference value %v: %v in measurements",
 							*ref.Pcr, ref.Name, hex.EncodeToString(ref.Sha256))
 					}
 					continue
@@ -393,24 +396,24 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
-		log.Tracef("Failed to decode TPM signature: %v", err)
+		log.Debugf("Failed to decode TPM signature: %v", err)
 		return ar.Result{Success: false, ErrorCode: ar.Parse}
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
-		log.Tracef("Hash algorithm %v not supported", tpmtSig.Alg)
+		log.Debugf("Hash algorithm %v not supported", tpmtSig.Alg)
 		return ar.Result{Success: false, ErrorCode: ar.UnsupportedAlgorithm}
 	}
 
 	// Extract public key from x509 certificate
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		log.Tracef("Failed to extract public key from certificate")
+		log.Debugf("Failed to extract public key from certificate")
 		return ar.Result{Success: false, ErrorCode: ar.ExtractPubKey}
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		log.Tracef("Hash algorithm not supported")
+		log.Debugf("Hash algorithm not supported")
 		return ar.Result{Success: false, ErrorCode: ar.UnsupportedAlgorithm}
 	}
 
@@ -418,7 +421,7 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
-		log.Tracef("Failed to verify TPM quote signature: %v", err)
+		log.Debugf("Failed to verify TPM quote signature: %v", err)
 		return ar.Result{Success: false, ErrorCode: ar.VerifySignature}
 	}
 	return ar.Result{Success: true}

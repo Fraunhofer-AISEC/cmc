@@ -28,7 +28,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	s ar.Serializer, refVals []ar.ReferenceValue) (*ar.MeasurementResult, bool,
 ) {
 
-	log.Trace("Verifying SW measurements")
+	log.Debug("Verifying SW measurements")
 
 	result := &ar.MeasurementResult{
 		Type: "SW Result",
@@ -38,16 +38,16 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	// Verify signature and extract evidence, which is just the nonce for the sw driver
 	tr, evidenceNonce, ok := s.Verify(swMeasurement.Evidence, cas)
 	if !ok {
-		log.Tracef("Failed to verify sw evidence")
+		log.Debugf("Failed to verify sw evidence")
 		result.Summary.SetErr(ar.ParseEvidence)
 		return result, false
 	}
 	result.Signature = tr.SignatureCheck[0]
-	log.Trace("Successfully verified SW measurement signature")
+	log.Debug("Successfully verified SW measurement signature")
 
 	// Verify nonce
 	if res := bytes.Compare(evidenceNonce, nonce); res != 0 {
-		log.Tracef("Nonces mismatch: supplied nonce: %v, report nonce = %v",
+		log.Debugf("Nonces mismatch: supplied nonce: %v, report nonce = %v",
 			hex.EncodeToString(nonce), hex.EncodeToString(evidenceNonce))
 		ok = false
 		result.Freshness.Success = false
@@ -55,7 +55,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	} else {
 		result.Freshness.Success = true
-		log.Tracef("Successfully verified nonce %v", hex.EncodeToString(nonce))
+		log.Debugf("Successfully verified nonce %v", hex.EncodeToString(nonce))
 	}
 
 	// Check that reference values are reflected by mandatory measurements
@@ -85,7 +85,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 
 			// Only fail attestation if component is mandatory
 			if !r.Optional {
-				log.Tracef("no SW Measurement found for mandatory SW reference value %v (hash: %v)", r.Name, hex.EncodeToString(r.Sha256))
+				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %v)", r.Name, hex.EncodeToString(r.Sha256))
 				ok = false
 			}
 		}
@@ -123,7 +123,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 					CtrDetails: event.CtrData,
 				}
 				result.Artifacts = append(result.Artifacts, r)
-				log.Tracef("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.Sha256))
+				log.Debugf("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.Sha256))
 				ok = false
 			}
 		}
@@ -131,7 +131,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 
 	result.Summary.Success = ok
 
-	log.Tracef("Finished verifying SW measurements. Success: %v", ok)
+	log.Debugf("Finished verifying SW measurements. Success: %v", ok)
 
 	return result, ok
 }

@@ -126,7 +126,7 @@ func (a LibApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOp
 	}
 
 	// Sign
-	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
+	log.Debugf("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, digest, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign: %w", err)

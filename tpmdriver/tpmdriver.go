@@ -188,7 +188,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 // as a plugin during attestation report generation
 func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
-	log.Trace("Collecting TPM measurements")
+	log.Debug("Collecting TPM measurements")
 
 	if t == nil {
 		return ar.Measurement{}, fmt.Errorf("internal error: tpm object not initialized")
@@ -197,7 +197,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		log.Warn("TPM measurement based on reference values does not contain any PCRs")
 	}
 
-	log.Tracef("Collecting TPM Quote for PCRs %v",
+	log.Debugf("Collecting TPM Quote for PCRs %v",
 		strings.Trim(strings.Join(strings.Fields(fmt.Sprint(t.Pcrs)), ","), "[]"))
 
 	pcrValues, quote, err := GetMeasurement(t, nonce, t.Pcrs)
@@ -210,14 +210,14 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	// extended. Use the final PCR values only as a fallback, if the file cannot be read
 	var biosMeasurements []ar.ReferenceValue
 	if t.MeasurementLog {
-		log.Trace("Collecting binary bios measurements")
+		log.Debug("Collecting binary bios measurements")
 		biosMeasurements, err = GetBiosMeasurements("/sys/kernel/security/tpm0/binary_bios_measurements")
 		if err != nil {
 			t.MeasurementLog = false
 			log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
 				err)
 		}
-		log.Tracef("Collected %v binary bios measurements", len(biosMeasurements))
+		log.Debugf("Collected %v binary bios measurements", len(biosMeasurements))
 	}
 
 	hashChain := make([]ar.Artifact, len(t.Pcrs))
@@ -273,7 +273,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 				return ar.Measurement{}, errors.New("internal error: pcr is nil")
 			}
 			if *hashChain[i].Pcr == t.ImaPcr {
-				log.Tracef("Adding %v IMA events to PCR%v measurement", len(imaEvents),
+				log.Debugf("Adding %v IMA events to PCR%v measurement", len(imaEvents),
 					*hashChain[i].Pcr)
 				hashChain[i].Events = imaEvents
 				hashChain[i].Summary = nil
@@ -283,7 +283,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	}
 
 	if t.Ctr {
-		log.Tracef("Reading container measurements")
+		log.Debugf("Reading container measurements")
 		if _, err := os.Stat(t.CtrLog); err == nil {
 			// If CMC container measurements are used, add the list of executed containers
 			data, err := os.ReadFile(t.CtrLog)
@@ -302,7 +302,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 					return ar.Measurement{}, errors.New("internal error: pcr is nil")
 				}
 				if *hashChain[i].Pcr == t.CtrPcr {
-					log.Tracef("Adding %v container events to PCR%v measurement", len(measureList),
+					log.Debugf("Adding %v container events to PCR%v measurement", len(measureList),
 						*hashChain[i].Pcr)
 					hashChain[i].Summary = nil
 					hashChain[i].Type = "PCR Eventlog"
@@ -333,8 +333,8 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			}
 		}
 	}
-	log.Trace("Quote: ", hex.EncodeToString(tm.Evidence))
-	log.Trace("Signature: ", hex.EncodeToString(tm.Signature))
+	log.Debug("Quote: ", hex.EncodeToString(tm.Evidence))
+	log.Debug("Signature: ", hex.EncodeToString(tm.Signature))
 
 	return tm, nil
 }
@@ -391,10 +391,10 @@ func (t *Tpm) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	}
 
 	if sel == ar.AK {
-		log.Tracef("Returning %v AK certificates", len(t.AkChain))
+		log.Debugf("Returning %v AK certificates", len(t.AkChain))
 		return t.AkChain, nil
 	} else if sel == ar.IK {
-		log.Tracef("Returning %v IK certificates", len(t.IkChain))
+		log.Debugf("Returning %v IK certificates", len(t.IkChain))
 		return t.IkChain, nil
 	}
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
@@ -588,14 +588,14 @@ func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quo
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
-	log.Trace("Finished reading PCRs from TPM")
+	log.Debug("Finished reading PCRs from TPM")
 
 	// Retrieve quote and store quote data and signature in TPM measurement object
 	quote, err := ak.QuotePCRs(TPM, nonce, attest.HashSHA256, pcrs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get TPM quote - %w", err)
 	}
-	log.Trace("Finished getting Quote from TPM")
+	log.Debug("Finished getting Quote from TPM")
 
 	return pcrValues, quote, nil
 }
@@ -622,7 +622,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 	log.Warn("Creating new EST client without server authentication")
 	client := est.NewClient(nil)
 
-	log.Info("Retrieving CA certs")
+	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certificates: %w", err)
@@ -651,7 +651,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		ekRaw = ek[0].Certificate.Raw
 	} else {
 		ekRaw = nil
-		log.Tracef("EK not present. Using EK URL %v", ek[0].CertificateURL)
+		log.Debugf("EK not present. Using EK URL %v", ek[0].CertificateURL)
 	}
 
 	// Create AK CSR and perform EST enrollment with TPM credential activation
@@ -660,7 +660,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
-	log.Infof("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
+	log.Debugf("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
 	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
 		addr, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
@@ -672,7 +672,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to enroll AK: %w", err)
 	}
 
-	log.Tracef("Performing credential activation")
+	log.Debugf("Performing credential activation")
 	secret, err := ActivateCredential(TPM, ak, encCredential, encSecret)
 	if err != nil {
 		return nil, nil, fmt.Errorf("request activate credential failed: %w", err)
@@ -694,7 +694,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
-	log.Tracef("Created new AK Cert: %v", akCert.Subject.CommonName)
+	log.Debugf("Created new AK Cert: %v", akCert.Subject.CommonName)
 
 	// Create IK CSR and perform EST enrollment with TPM certification
 	ikPriv, err := ik.Private(ik.Public())
@@ -707,7 +707,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
 	}
 
-	log.Infof("Performing TPM IK Enroll for CN=%v", ikCsr.Subject.CommonName)
+	log.Debugf("Performing TPM IK Enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikParams := ik.CertificationParameters()
 
 	ikCert, err := client.TpmCertifyEnroll(
@@ -720,7 +720,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to enroll IK: %w", err)
 	}
 
-	log.Tracef("Created new IK cert: %v", ikCert.Subject.CommonName)
+	log.Debugf("Created new IK cert: %v", ikCert.Subject.CommonName)
 
 	akchain := append([]*x509.Certificate{akCert}, caCerts...)
 	ikchain := append([]*x509.Certificate{ikCert}, caCerts...)
@@ -820,7 +820,7 @@ func loadTpmCerts(storagePath string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Tracef("Parsed stored AK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
 
 	data, err = os.ReadFile(path.Join(storagePath, ikchainFile))
 	if err != nil {
@@ -830,7 +830,7 @@ func loadTpmCerts(storagePath string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
 	}
-	log.Tracef("Parsed stored IK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
 
 	return akchain, ikchain, nil
 }
@@ -843,7 +843,7 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load EKs - %w", err)
 	}
-	log.Tracef("Found %v EK(s)", len(eks))
+	log.Debugf("Found %v EK(s)", len(eks))
 
 	log.Debug("Creating new AK")
 	akConfig := &attest.AKConfig{}
@@ -924,7 +924,7 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 	t.Lock()
 	defer t.Unlock()
 
-	log.Trace("Retrieving PCRs")
+	log.Debug("Retrieving PCRs")
 	pcrValues, err := TPM.PCRs(attest.HashSHA256)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
@@ -949,7 +949,7 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 		}
 	}
 
-	log.Tracef("Using PCRs: %v", pcrs)
+	log.Debugf("Using PCRs: %v", pcrs)
 
 	return pcrs, nil
 }
@@ -958,7 +958,7 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 // perform hashing and can therefore be used to create CSRs for restricted tpm keys
 func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, error) {
 
-	log.Tracef("Creating AK CSR..")
+	log.Debugf("Creating AK CSR..")
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{

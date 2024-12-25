@@ -88,6 +88,7 @@ type config struct {
 	Data          string   `json:"data"`
 	ApiSerializer string   `json:"apiSerializer"`
 	LogLevel      string   `json:"logLevel"`
+	LogFile       string   `json:"logFile,omitempty"`
 	cmc.Config
 	// Only to test cmcd measure API
 	CtrName   string `json:"ctrName"`
@@ -115,7 +116,6 @@ const (
 	policiesFlag      = "policies"
 	mtlsFlag          = "mtls"
 	attestFlag        = "attest"
-	logFlag           = "log"
 	publishFlag       = "publish"
 	intervalFlag      = "interval"
 	apiSerializerFlag = "apiserializer"
@@ -123,6 +123,7 @@ const (
 	methodFlag        = "method"
 	dataFlag          = "data"
 	logLevelFlag      = "loglevel"
+	logFileFlag       = "logfile"
 	// Only to test cmcd measure API
 	ctrNameFlag   = "ctrname"
 	ctrRootfsFlag = "ctrrootfs"
@@ -154,6 +155,7 @@ var (
 	data     = flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
 	logLevel = flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
+	logFile = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	//  Only to test cmcd measure API
 	ctrName   = flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
 	ctrRootfs = flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
@@ -176,7 +178,6 @@ func getConfig() *config {
 	if internal.FlagPassed(configFlag) {
 		files := strings.Split(*configFile, ",")
 		for _, f := range files {
-			log.Infof("Loading config from file %v", f)
 			data, err := os.ReadFile(f)
 			if err != nil {
 				log.Fatalf("Failed to read testtool config file %v: %v", f, err)
@@ -222,9 +223,6 @@ func getConfig() *config {
 	if internal.FlagPassed(attestFlag) {
 		c.Attest = *attest
 	}
-	if internal.FlagPassed(logFlag) {
-		c.LogLevel = *logLevel
-	}
 	if internal.FlagPassed(publishFlag) {
 		c.Publish = *publish
 	}
@@ -246,6 +244,9 @@ func getConfig() *config {
 	if internal.FlagPassed(logLevelFlag) {
 		c.LogLevel = *logLevel
 	}
+	if internal.FlagPassed(logFileFlag) {
+		c.LogFile = *logFile
+	}
 	//  Only to test cmcd measure API
 	if internal.FlagPassed(ctrNameFlag) {
 		c.CtrName = *ctrName
@@ -258,12 +259,22 @@ func getConfig() *config {
 	}
 
 	// Configure the logger
+	if c.LogFile != "" {
+		lf, err := filepath.Abs(*logFile)
+		if err != nil {
+			log.Fatalf("Failed to get logfile path: %v", err)
+		}
+		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatal(err)
+		}
+		logrus.SetOutput(file)
+	}
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
 		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
 		l = logrus.InfoLevel
 	}
-	log.Infof("Configuring logger for log level %v", c.LogLevel)
 	logrus.SetLevel(l)
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
@@ -310,7 +321,7 @@ func getConfig() *config {
 	}
 
 	// Get Serializer
-	log.Tracef("Getting serializer %v", c.ApiSerializer)
+	log.Debugf("Getting serializer %v", c.ApiSerializer)
 	c.apiSerializer, ok = serializers[strings.ToLower(c.ApiSerializer)]
 	if !ok {
 		flag.Usage()
