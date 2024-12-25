@@ -45,7 +45,7 @@ func init() {
 
 func (a CoapApi) generate(c *config) {
 
-	log.Tracef("Connecting via CoAP to %v", c.CmcAddr)
+	log.Infof("Sending coap request type 'Attest' to %v", c.CmcAddr)
 
 	// Establish connection
 	conn, err := udp.Dial(c.CmcAddr)
@@ -96,6 +96,8 @@ func (a CoapApi) generate(c *config) {
 
 func (a CoapApi) verify(c *config) {
 
+	log.Infof("Sending coap request type 'Verify' to %v", c.CmcAddr)
+
 	// Read the attestation report and the nonce previously stored
 	report, nonce, err := loadReport(c)
 	if err != nil {
@@ -128,6 +130,8 @@ func (a CoapApi) verify(c *config) {
 }
 
 func (a CoapApi) measure(c *config) {
+
+	log.Infof("Sending coap request type 'Measure' to %v", c.CmcAddr)
 
 	if c.CtrConfig == "" {
 		log.Fatalf("Mode measure requires OCI runtime config to be specified")
@@ -209,8 +213,6 @@ func (a CoapApi) iothub(c *config) {
 func verifyInternal(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
-	log.Tracef("Connecting via CoAP to %v", c.CmcAddr)
-
 	// Establish connection
 	conn, err := udp.Dial(c.CmcAddr)
 	if err != nil {
@@ -254,8 +256,6 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 
 func measureInternal(c *config, req *api.MeasureRequest,
 ) (*api.MeasureResponse, error) {
-
-	log.Tracef("Connecting via CoAP to %v", c.CmcAddr)
 
 	// Establish connection
 	conn, err := udp.Dial(c.CmcAddr)

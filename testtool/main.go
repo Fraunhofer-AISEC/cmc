@@ -37,8 +37,6 @@ var (
 
 func main() {
 
-	log.Info("Testtool v0.1")
-
 	c := getConfig()
 
 	cmd, ok := cmds[strings.ToLower(c.Mode)]

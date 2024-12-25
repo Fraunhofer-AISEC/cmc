@@ -91,6 +91,7 @@ func (s JsonSerializer) Marshal(v any) ([]byte, error) {
 }
 
 func (s JsonSerializer) Unmarshal(data []byte, v any) error {
+	log.Tracef("Unmarshalling data using %v serialization", s.String())
 	return json.Unmarshal(data, v)
 }
 

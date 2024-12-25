@@ -41,7 +41,6 @@ import (
 type SocketServer struct{}
 
 func init() {
-	log.Info("Adding socket server to supported servers (TCP, Unix Domain Socket)")
 	servers["socket"] = SocketServer{}
 }
 
@@ -81,7 +80,7 @@ func (s SocketServer) Serve(address string, cmc *c.Cmc) error {
 func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 	defer conn.Close()
 
-	log.Infof("Received request from %v", conn.RemoteAddr().String())
+	log.Debugf("Received request from %v", conn.RemoteAddr().String())
 
 	payload, reqType, err := api.Receive(conn)
 	if err != nil {
@@ -94,13 +93,14 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 		log.Errorf("Failed to detect serialization of request: %v", err)
 		return
 	}
+	log.Tracef("Detected request serialization: %v", s.String())
 
 	// Handle request
 	switch reqType {
 	case api.TypeAttest:
 		attest(conn, payload, cmc, s)
 	case api.TypeVerify:
-		validate(conn, payload, cmc, s)
+		verify(conn, payload, cmc, s)
 	case api.TypeMeasure:
 		measure(conn, payload, cmc, s)
 	case api.TypeTLSCert:
@@ -116,7 +116,7 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 
 func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received socket connection request type 'Attest'")
+	log.Infof("Received socket request type 'Attest' from %v", conn.RemoteAddr().String())
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "no valid signers configured")
@@ -167,12 +167,12 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debug("Prover: Finished")
+	log.Infof("Sent socket response type 'Attest' to %v", conn.RemoteAddr().String())
 }
 
-func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
+func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received socket connection request type 'Verify'")
+	log.Infof("Received socket request type 'Verify' from %v", conn.RemoteAddr().String())
 
 	req := new(api.VerificationRequest)
 	err := s.Unmarshal(payload, req)
@@ -211,12 +211,12 @@ func validate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debug("Verifier: Finished")
+	log.Infof("Sent socket response type 'Verify' to %v", conn.RemoteAddr().String())
 }
 
 func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received Connection Request Type 'Measure Request'")
+	log.Infof("Received socket request type 'Measure' from %v", conn.RemoteAddr().String())
 
 	req := new(api.MeasureRequest)
 	err := s.Unmarshal(payload, req)
@@ -263,12 +263,12 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debug("Measurer: Finished")
+	log.Infof("Sent socket response type 'Measure' to %v", conn.RemoteAddr().String())
 }
 
 func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received TLS sign request")
+	log.Infof("Received socket request type 'TLSSign' from %v", conn.RemoteAddr().String())
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "no valid signers configured")
@@ -328,12 +328,12 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debug("Performed signing")
+	log.Infof("Sent socket response type 'TLSSign' to %v", conn.RemoteAddr().String())
 }
 
 func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received TLS cert request")
+	log.Infof("Received socket request type 'TLSCert' from %v", conn.RemoteAddr().String())
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "no valid signers configured")
@@ -342,7 +342,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	d := cmc.Drivers[0]
 
 	// Parse the message and return the TLS signing request
-	req := new(api.TLSSignRequest)
+	req := new(api.TLSCertRequest)
 	err := s.Unmarshal(payload, req)
 	if err != nil {
 		sendError(conn, s, "failed to unmarshal payload: %v", err)
@@ -361,6 +361,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to get certchain: %v", err)
 		return
 	}
+	log.Debugf("Obtained TLS cert from %v", d.Name())
 
 	// Create response
 	resp := &api.TLSCertResponse{
@@ -378,12 +379,12 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debugf("Obtained TLS cert from %v", d.Name())
+	log.Infof("Sent socket response type 'TLSCert' to %v", conn.RemoteAddr().String())
 }
 
 func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Debug("Received Connection Request Type 'Peer Cache'")
+	log.Infof("Received socket request type 'PeerCache' from %v", conn.RemoteAddr().String())
 
 	req := new(api.PeerCacheRequest)
 	err := s.Unmarshal(payload, req)
@@ -420,7 +421,7 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Debug("Peer cache: Finished")
+	log.Infof("Sent socket response type 'PeerCache' to %v", conn.RemoteAddr().String())
 }
 
 func sendError(conn net.Conn, s ar.Serializer, format string, args ...interface{}) error {

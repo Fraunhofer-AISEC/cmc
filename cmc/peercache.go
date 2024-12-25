@@ -30,23 +30,23 @@ var (
 
 func LoadCacheMetadata(path string) (map[string]map[string][]byte, error) {
 
-	log.Trace("Loading cached peer metadata")
+	log.Debug("Loading cached peer metadata")
 
 	peerCache := map[string]map[string][]byte{}
 
 	// Return empty peer cache if peer cache folder is not configured
 	if path == "" {
-		log.Tracef("No peer cache configured. Do not load peer cache from storage")
+		log.Debugf("No peer cache configured. Do not load peer cache from storage")
 		return peerCache, nil
 	}
 
 	// Iterate through file system and collect persistent peer cache
 	dirs, err := os.ReadDir(path)
 	if err != nil {
-		log.Tracef("Peer cache folder does not (yet) exist. Do not read cache")
+		log.Debugf("Peer cache folder does not (yet) exist. Do not read cache")
 		return peerCache, nil
 	}
-	log.Tracef("Read peer cache folder %v", path)
+	log.Debugf("Read peer cache folder %v", path)
 
 	for _, d := range dirs {
 		if d.IsDir() {
@@ -110,15 +110,15 @@ func UpdateCacheMetadata(peer string, cmcCache map[string]map[string][]byte, req
 
 func StoreCacheMetadata(peerCache, prover string, cached map[string][]byte, misses []string) error {
 
-	log.Tracef("Updating peer cache for peer %v", prover)
+	log.Debugf("Updating peer cache for peer %v", prover)
 
 	// Return if peer cache is not configured
 	if peerCache == "" {
-		log.Tracef("No peer cache configured. Do not store persistently")
+		log.Debugf("No peer cache configured. Do not store persistently")
 		return nil
 	}
 	if prover == "" {
-		log.Tracef("No prover configured. Do not store peer cache")
+		log.Debugf("No prover configured. Do not store peer cache")
 		return nil
 	}
 

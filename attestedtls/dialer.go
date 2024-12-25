@@ -30,7 +30,7 @@ import (
 // before returning the established connection.
 func Dial(network string, addr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (*tls.Conn, error) {
 
-	log.Tracef("Dialing TLS server %v:%v", network, addr)
+	log.Debugf("Dialing TLS server %v:%v", network, addr)
 
 	if config == nil {
 		return nil, errors.New("failed to dial. TLS configuration not provided")
@@ -54,25 +54,26 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 		return nil, fmt.Errorf("failed to establish tls connection: %w. %v", err, details)
 	}
 
-	log.Trace("Connection established, generating channel bindings")
+	log.Debug("Connection established, getting connection state")
 	cs := conn.ConnectionState()
 	if !cs.HandshakeComplete {
 		return nil, errors.New("internal error: handshake not complete")
 	}
 
-	log.Trace("TLS handshake complete, generating channel bindings")
+	log.Debug("TLS handshake complete, generating channel bindings")
 	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
 	}
 
 	// Retrieve peer's TLS leaf certificate fingerprint to be used as peer ID for peer cache
-	log.Trace("Retrieving TLS certificate fingerprint as peer ID")
+	log.Debug("Retrieving TLS certificate fingerprint as peer ID")
 	var fingerprint string
 	if len(cs.PeerCertificates) > 0 {
 		f := sha256.Sum256(cs.PeerCertificates[0].Raw)
 		fingerprint = hex.EncodeToString(f[:])
 	}
+	log.Debugf("Successfully retrieved peer TLS fingerprint: %v", fingerprint)
 
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266

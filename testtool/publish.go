@@ -53,17 +53,17 @@ func publishResult(addr string, result *ar.VerificationResult) {
 		return
 	}
 
-	log.Tracef("Publishing result to '%v'", addr)
+	log.Debugf("Publishing result to '%v'", addr)
 
 	data, err := json.Marshal(*result)
 	if err != nil {
-		log.Tracef("Failed to marshal result: %v", err)
+		log.Warnf("Failed to marshal result: %v", err)
 		return
 	}
 
 	err = publishReport(addr, data)
 	if err != nil {
-		log.Tracef("Failed to publish: %v", err)
+		log.Debugf("Failed to publish: %v", err)
 		return
 	}
 }
@@ -99,7 +99,7 @@ func publishReport(addr string, result []byte) error {
 			resp.Status, string(data))
 	}
 
-	log.Tracef("Successfully published result: server responded with %v", resp.Status)
+	log.Debugf("Successfully published result: server responded with %v", resp.Status)
 
 	return nil
 }

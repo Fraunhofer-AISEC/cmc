@@ -48,7 +48,7 @@ func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
 		return errors.New("internal error: serializer is nil")
 	}
 
-	log.Tracef("Recording measurement %v: %v", event.EventName, hex.EncodeToString(event.Sha256))
+	log.Debugf("Recording measurement %v: %v", event.EventName, hex.EncodeToString(event.Sha256))
 
 	// Read the existing measurement list if it already exists
 	var measureList []ar.MeasureEvent
@@ -75,13 +75,13 @@ func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
 
 	// ..if the container was already measured, exit
 	if found {
-		log.Tracef("Measurement %v already exists, nothing to do", event.EventName)
+		log.Debugf("Measurement %v already exists, nothing to do", event.EventName)
 		return nil
 	}
 
 	// ..otherwise append it to the measurement list and record the measurement
 	measureList = append(measureList, *event)
-	log.Tracef("Recorded measurement %v into measurement list", event.EventName)
+	log.Debugf("Recorded measurement %v into measurement list", event.EventName)
 
 	data, err := mc.Serializer.Marshal(measureList)
 	if err != nil {
@@ -111,7 +111,7 @@ func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
 			return fmt.Errorf("failed to extend PCR%v: %w", mc.Pcr, err)
 		}
 
-		log.Tracef("Recorded measurement %v into PCR%v", event.EventName, mc.Pcr)
+		log.Debugf("Recorded measurement %v into PCR%v", event.EventName, mc.Pcr)
 	} else if strings.EqualFold(mc.Driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {

@@ -130,10 +130,10 @@ func (s *Sw) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 		return nil, errors.New("internal error: SW object is nil")
 	}
 	if sel == ar.AK {
-		log.Tracef("Returning %v AK certificates", len(s.akChain))
+		log.Debugf("Returning %v AK certificates", len(s.akChain))
 		return s.akChain, nil
 	} else if sel == ar.IK {
-		log.Tracef("Returning %v IK certificates", len(s.ikChain))
+		log.Debugf("Returning %v IK certificates", len(s.ikChain))
 		return s.ikChain, nil
 	}
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
@@ -141,7 +141,7 @@ func (s *Sw) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 
 func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 
-	log.Trace("Collecting SW measurements")
+	log.Debug("Collecting SW measurements")
 
 	if !s.ctr {
 		return ar.Measurement{}, errors.New("sw driver specified but use containers equals false")
@@ -159,7 +159,7 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		Certs:    internal.WriteCertsDer(s.akChain),
 	}
 
-	log.Tracef("Reading container measurements")
+	log.Debugf("Reading container measurements")
 	if _, err := os.Stat(s.ctrLog); err == nil {
 
 		// If CMC container measurements are used, add the list of executed containers
@@ -191,6 +191,8 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
+	log.Info("Performing SW provisioning")
+
 	// Get CA certificates and enroll newly created CSR
 	// TODO provision EST server certificate with a different mechanism,
 	// otherwise this step has to happen in a secure environment. Allow
@@ -198,7 +200,7 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	log.Warn("Creating new EST client without server authentication")
 	client := est.NewClient(nil)
 
-	log.Info("Retrieving CA certs")
+	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
@@ -223,7 +225,7 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
-	log.Infof("Performing simple AK enroll for CN=%v", akCsr.Subject.CommonName)
+	log.Debugf("Performing simple AK enroll for CN=%v", akCsr.Subject.CommonName)
 	akCert, err := client.SimpleEnroll(addr, akCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll AK cert: %w", err)
@@ -238,7 +240,7 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
 	}
 
-	log.Infof("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
+	log.Debugf("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikCert, err := client.SimpleEnroll(addr, ikCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)

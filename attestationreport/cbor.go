@@ -57,6 +57,7 @@ func (s CborSerializer) Marshal(v any) ([]byte, error) {
 }
 
 func (s CborSerializer) Unmarshal(data []byte, v any) error {
+	log.Tracef("Unmarshalling data using %v serialization", s.String())
 	return cbor.Unmarshal(data, v)
 }
 

@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
@@ -30,18 +31,21 @@ import (
 
 type Config struct {
 	LogLevel string `json:"logLevel,omitempty"`
+	LogFile  string `json:"logFile,omitempty"`
 	cmc.Config
 }
 
 const (
 	configFlag   = "config"
-	LogLevelFlag = "loglevel"
+	logLevelFlag = "loglevel"
+	logFileFlag  = "logfile"
 )
 
 var (
 	configFile = flag.String(configFlag, "", "configuration file")
-	logLevel   = flag.String(LogLevelFlag, "",
+	logLevel   = flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
+	logFile = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 )
 
 var (
@@ -67,7 +71,6 @@ func GetConfig() (*Config, error) {
 	if internal.FlagPassed(configFlag) {
 		files := strings.Split(*configFile, ",")
 		for _, f := range files {
-			log.Infof("Loading config from file %v", f)
 			data, err := os.ReadFile(f)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read cmcd config file %v: %v", f, err)
@@ -85,17 +88,30 @@ func GetConfig() (*Config, error) {
 		log.Fatalf("Failed to read cmc config: %v", err)
 	}
 
-	if internal.FlagPassed(LogLevelFlag) {
+	if internal.FlagPassed(logLevelFlag) {
 		c.LogLevel = *logLevel
+	}
+	if internal.FlagPassed(logFileFlag) {
+		c.LogFile = *logFile
 	}
 
 	// Configure the logger
+	if c.LogFile != "" {
+		lf, err := filepath.Abs(*logFile)
+		if err != nil {
+			log.Fatalf("Failed to get logfile path: %v", err)
+		}
+		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatal(err)
+		}
+		logrus.SetOutput(file)
+	}
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
 		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
 		l = logrus.InfoLevel
 	}
-	log.Infof("Configuring logger for log level %v", c.LogLevel)
 	logrus.SetLevel(l)
 
 	// Output the configuration

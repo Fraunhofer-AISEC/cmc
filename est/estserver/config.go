@@ -55,6 +55,7 @@ type config struct {
 	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
 	VcekCacheFolder string   `json:"vcekCacheFolder,omitempty"`
 	LogLevel        string   `json:"logLevel"`
+	LogFile         string   `json:"logFile,omitempty"`
 
 	signingKey   *ecdsa.PrivateKey
 	signingCerts []*x509.Certificate
@@ -73,7 +74,8 @@ const (
 	verifyEkCertFlag    = "verifyekcert"
 	tpmEkCertDbFlag     = "tpmekcertdb"
 	vcekCacheFolderFlag = "vcekcachefolder"
-	logFlag             = "loglevel"
+	logLevelFlag        = "loglevel"
+	logFileFlag         = "logfile"
 )
 
 func getConfig() (*config, error) {
@@ -92,8 +94,9 @@ func getConfig() (*config, error) {
 		"Indicates whether to verify TPM EK certificate chains")
 	tpmEkCertDb := flag.String(tpmEkCertDbFlag, "", "Database for EK cert chain verification")
 	vcekCacheFolder := flag.String(vcekCacheFolderFlag, "", "Folder to cache AMD SNP VCEKs")
-	logLevel := flag.String(logFlag, "",
+	logLevel := flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
+	logFile := flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	flag.Parse()
 
 	// Create default configuration
@@ -143,11 +146,25 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(vcekCacheFolderFlag) {
 		c.VcekCacheFolder = *vcekCacheFolder
 	}
-	if internal.FlagPassed(logFlag) {
+	if internal.FlagPassed(logFileFlag) {
 		c.LogLevel = *logLevel
+	}
+	if internal.FlagPassed(logFileFlag) {
+		c.LogFile = *logFile
 	}
 
 	// Configure the logger
+	if c.LogFile != "" {
+		lf, err := filepath.Abs(*logFile)
+		if err != nil {
+			log.Fatalf("Failed to get logfile path: %v", err)
+		}
+		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.SetOutput(file)
+	}
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
 		flag.Usage()

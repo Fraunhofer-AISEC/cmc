@@ -108,6 +108,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 	}
 
 	if provisioningRequired(c.StoragePath) {
+		log.Info("Performing SNP provisioning")
 		// Create new private key for signing
 		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
@@ -140,7 +141,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 // as a plugin during attestation report generation
 func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 
-	log.Trace("Collecting SNP measurements")
+	log.Debug("Collecting SNP measurements")
 
 	if snp == nil {
 		return ar.Measurement{}, errors.New("internal error: SNP object is nil")
@@ -197,10 +198,10 @@ func (snp *Snp) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	}
 
 	if sel == ar.AK {
-		log.Tracef("Returning %v AK certificates", len(snp.akChain))
+		log.Debugf("Returning %v AK certificates", len(snp.akChain))
 		return snp.akChain, nil
 	} else if sel == ar.IK {
-		log.Tracef("Returning %v IK certificates", len(snp.ikChain))
+		log.Debugf("Returning %v IK certificates", len(snp.ikChain))
 		return snp.ikChain, nil
 	}
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
@@ -212,7 +213,7 @@ func getMeasurement(nonce []byte) ([]byte, error) {
 		return nil, errors.New("user Data must be at most 64 bytes")
 	}
 
-	log.Tracef("Generating SNP attestation report with nonce: %v", hex.EncodeToString(nonce))
+	log.Debugf("Generating SNP attestation report with nonce: %v", hex.EncodeToString(nonce))
 
 	d, err := client.OpenDevice()
 	if err != nil {
@@ -228,14 +229,14 @@ func getMeasurement(nonce []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
 
-	log.Trace("Generated SNP attestation report")
+	log.Debug("Generated SNP attestation report")
 
 	return buf, nil
 }
 
 func getVlek() ([]byte, error) {
 
-	log.Trace("Fetching VLEK via extended attestation report request")
+	log.Debug("Fetching VLEK via extended attestation report request")
 
 	d, err := client.OpenDevice()
 	if err != nil {
@@ -249,11 +250,11 @@ func getVlek() ([]byte, error) {
 		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
 
-	log.Tracef("Fetched extended SNP attestation report with certs length %v", len(certs))
+	log.Debugf("Fetched extended SNP attestation report with certs length %v", len(certs))
 
 	b := bytes.NewBuffer(certs)
 	for {
-		log.Trace("Parsing cert table entry..")
+		log.Debug("Parsing cert table entry..")
 		var entry SnpCertTableEntry
 		err = binary.Read(b, binary.LittleEndian, &entry)
 		if err != nil {
@@ -261,14 +262,14 @@ func getVlek() ([]byte, error) {
 		}
 
 		if entry == (SnpCertTableEntry{}) {
-			log.Tracef("Reached last (zero) SNP cert table entry")
+			log.Debugf("Reached last (zero) SNP cert table entry")
 			break
 		}
 
-		log.Tracef("Found cert table entry with UUID %v", hex.EncodeToString(entry.Uuid[:]))
+		log.Debugf("Found cert table entry with UUID %v", hex.EncodeToString(entry.Uuid[:]))
 
 		if bytes.Equal(entry.Uuid[:], vlekUuid) {
-			log.Tracef("Found VLEK offset %v length %v", entry.Offset, entry.Length)
+			log.Debugf("Found VLEK offset %v length %v", entry.Offset, entry.Length)
 			return certs[entry.Offset : entry.Offset+entry.Length], nil
 		}
 	}
@@ -278,7 +279,7 @@ func getVlek() ([]byte, error) {
 
 func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
 
-	log.Tracef("Requesting Cert from %v", url)
+	log.Debugf("Requesting Cert from %v", url)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -365,7 +366,7 @@ func fetchAk(addr string) ([]*x509.Certificate, error) {
 	var caUrl string
 	if akType == verifier.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
-		log.Trace("Enrolling VCEK via EST")
+		log.Debug("Enrolling VCEK via EST")
 		signingCert, err = client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
@@ -377,12 +378,12 @@ func fetchAk(addr string) ([]*x509.Certificate, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch VLEK: %w", err)
 		}
-		log.Trace("Parsing VLEK")
+		log.Debug("Parsing VLEK")
 		signingCert, err = x509.ParseCertificate(vlek)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse VLEK")
 		}
-		log.Tracef("Successfully parsed VLEK CN=%v", signingCert.Subject.CommonName)
+		log.Debugf("Successfully parsed VLEK CN=%v", signingCert.Subject.CommonName)
 		caUrl = milanUrlVlek
 	} else {
 		return nil, fmt.Errorf("internal error: signing cert not initialized")
@@ -412,7 +413,7 @@ func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	log.Warn("Creating new EST client without server authentication")
 	client := est.NewClient(nil)
 
-	log.Info("Retrieving CA certs")
+	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
@@ -483,7 +484,7 @@ func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Tracef("Parsed stored AK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
 
 	data, err = os.ReadFile(path.Join(p, signingChainFile))
 	if err != nil {
@@ -493,7 +494,7 @@ func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
 	}
-	log.Tracef("Parsed stored IK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
 
 	data, err = os.ReadFile(path.Join(p, snpPrivFile))
 	if err != nil {

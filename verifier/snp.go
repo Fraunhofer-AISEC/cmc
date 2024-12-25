@@ -91,7 +91,7 @@ const (
 func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
-	log.Trace("Verifying SNP measurements")
+	log.Debug("Verifying SNP measurements")
 
 	result := &ar.MeasurementResult{
 		Type:      "SNP Result",
@@ -100,11 +100,11 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	ok := true
 
 	if len(referenceValues) == 0 {
-		log.Trace("Could not find SNP Reference Value")
+		log.Debug("Could not find SNP Reference Value")
 		result.Summary.SetErr(ar.RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		log.Tracef("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
+		log.Debugf("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
 			len(referenceValues))
 		result.Summary.SetErr(ar.RefValMultiple)
 		return result, false
@@ -112,12 +112,12 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	snpReferenceValue := referenceValues[0]
 
 	if snpReferenceValue.Type != "SNP Reference Value" {
-		log.Tracef("SNP Reference Value invalid type %v", snpReferenceValue.Type)
+		log.Debugf("SNP Reference Value invalid type %v", snpReferenceValue.Type)
 		result.Summary.SetErr(ar.RefValType)
 		return result, false
 	}
 	if snpReferenceValue.Snp == nil {
-		log.Trace("SNP Reference Value does not contain policy")
+		log.Debug("SNP Reference Value does not contain policy")
 		result.Summary.SetErr(ar.DetailsNotPresent)
 		return result, false
 	}
@@ -125,7 +125,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	// Extract the SNP attestation report data structure
 	s, err := DecodeSnpReport(snpM.Evidence)
 	if err != nil {
-		log.Tracef("Failed to decode SNP report: %v", err)
+		log.Debugf("Failed to decode SNP report: %v", err)
 		result.Summary.SetErr(ar.ParseEvidence)
 		return result, false
 	}
@@ -134,7 +134,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {
-		log.Tracef("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
+		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
 		result.Freshness.Success = false
 		result.Freshness.Expected = hex.EncodeToString(nonce)
@@ -146,7 +146,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 
 	certs, err := internal.ParseCertsDer(snpM.Certs)
 	if err != nil {
-		log.Tracef("Failed to parse certificates: %v", err)
+		log.Debugf("Failed to parse certificates: %v", err)
 		result.Summary.SetErr(ar.ParseCert)
 		return result, false
 	}
@@ -160,7 +160,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 
 	// Compare Measurements
 	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
-		log.Trace("Failed to verify SNP reference value")
+		log.Debug("Failed to verify SNP reference value")
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Name:     snpReferenceValue.Name,
@@ -180,7 +180,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 
 		ok = false
 	} else {
-		log.Trace("Successfully verified SNP reference value")
+		log.Debug("Successfully verified SNP reference value")
 		// As we previously checked, that the attestation report contains exactly one
 		// SNP Reference Value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
@@ -227,7 +227,7 @@ func verifySnpVersion(expected, got uint32) (ar.Result, bool) {
 	r := ar.Result{}
 	ok := expected == got
 	if !ok {
-		log.Tracef("SNP report version mismatch: Report = %v, supplied = %v", got, expected)
+		log.Debugf("SNP report version mismatch: Report = %v, supplied = %v", got, expected)
 		r.Success = false
 		r.Expected = strconv.FormatUint(uint64(expected), 10)
 		r.Got = strconv.FormatUint(uint64(got), 10)
@@ -280,7 +280,7 @@ func verifySnpPolicy(policy uint64, v ar.SnpPolicy) (ar.PolicyCheck, bool) {
 		r.Debug.Success &&
 		r.SingleSocket.Success
 	if !ok {
-		log.Tracef("SNP policies do not match: Abi: %v, Smt: %v, Migration: %v, Debug: %v, SingleSocket: %v",
+		log.Debugf("SNP policies do not match: Abi: %v, Smt: %v, Migration: %v, Debug: %v, SingleSocket: %v",
 			r.Abi.Success, r.Smt.Success, r.Migration.Success, r.Debug.Success, r.SingleSocket.Success)
 	}
 	r.Summary.Success = ok
@@ -296,7 +296,7 @@ func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
 
 	ok := checkMinVersion([]uint8{major, minor, build}, []uint8{v.Major, v.Minor, v.Build})
 	if !ok {
-		log.Tracef("SNP FW version check failed. Expected: %v.%v.%v, got %v.%v.%v",
+		log.Debugf("SNP FW version check failed. Expected: %v.%v.%v, got %v.%v.%v",
 			v.Major, v.Minor, v.Build, major, minor, build)
 	}
 
@@ -360,7 +360,7 @@ func verifySnpTcb(s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
 	}
 	ok := r.Bl.Success && r.Tee.Success && r.Snp.Success && r.Ucode.Success
 	if !ok {
-		log.Tracef("SNP TCB check failed: BL: %v, TEE: %v, SNP: %v, UCODE: %v",
+		log.Debugf("SNP TCB check failed: BL: %v, TEE: %v, SNP: %v, UCODE: %v",
 			r.Bl.Success, r.Tee.Success, r.Snp.Success, r.Ucode.Success)
 	}
 	r.Summary.Success = ok
@@ -403,7 +403,7 @@ func verifySnpSignature(
 
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
-		log.Tracef("Signature Algorithm %v not supported", report.SignatureAlgo)
+		log.Debugf("Signature Algorithm %v not supported", report.SignatureAlgo)
 		result.SignCheck.SetErr(ar.UnsupportedAlgorithm)
 		return result, false
 	}
@@ -411,7 +411,7 @@ func verifySnpSignature(
 	// Extract the public key from the certificate
 	pub, ok := certs[0].PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		log.Trace("Failed to extract ECDSA public key from certificate")
+		log.Debug("Failed to extract ECDSA public key from certificate")
 		result.SignCheck.SetErr(ar.ExtractPubKey)
 		return result, false
 	}
@@ -419,36 +419,36 @@ func verifySnpSignature(
 	// Verify ECDSA Signature represented by r and s
 	ok = ecdsa.Verify(pub, digest[:], r, s)
 	if !ok {
-		log.Trace("Failed to verify SNP report signature")
+		log.Debug("Failed to verify SNP report signature")
 		result.SignCheck.SetErr(ar.VerifySignature)
 		return result, false
 	}
-	log.Trace("Successfully verified SNP report signature")
+	log.Debug("Successfully verified SNP report signature")
 	result.SignCheck.Success = true
 
 	// Verify the SNP certificate chain
 	ca := certs[len(certs)-1]
 	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
 	if err != nil {
-		log.Tracef("Failed to verify certificate chain: %v", err)
+		log.Debugf("Failed to verify certificate chain: %v", err)
 		result.CertChainCheck.SetErr(ar.VerifyCertChain)
 		return result, false
 	}
 	// Verify that the reference value fingerprint matches the certificate fingerprint
 	if fingerprint == "" {
-		log.Trace("Reference value SNP CA fingerprint not present")
+		log.Debug("Reference value SNP CA fingerprint not present")
 		result.CertChainCheck.SetErr(ar.NotPresent)
 		return result, false
 	}
 	refFingerprint, err := hex.DecodeString(fingerprint)
 	if err != nil {
-		log.Tracef("Failed to decode CA fingerprint %v: %v", fingerprint, err)
+		log.Debugf("Failed to decode CA fingerprint %v: %v", fingerprint, err)
 		result.CertChainCheck.SetErr(ar.ParseCAFingerprint)
 		return result, false
 	}
 	caFingerprint := sha256.Sum256(ca.Raw)
 	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		log.Tracef("Reference Values CA fingerprint '%v' does not match trusted CA fingerprint '%v'",
+		log.Debugf("Reference Values CA fingerprint '%v' does not match trusted CA fingerprint '%v'",
 			fingerprint, hex.EncodeToString(caFingerprint[:]))
 		result.CertChainCheck.Success = false
 		result.CertChainCheck.Expected = fingerprint
@@ -505,7 +505,7 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 	// Checked extensions depend on the key type
 	akType, err := GetAkType(report.KeySelection)
 	if err != nil {
-		log.Tracef("Could not determine SNP attestation report attestation key type")
+		log.Debugf("Could not determine SNP attestation report attestation key type")
 		success = false
 	}
 
@@ -515,25 +515,25 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 	results := make([]ar.Result, 0)
 
 	if r, ok = checkExtensionUint8(cert, oidBl, uint8(tcb)); !ok {
-		log.Tracef("SEV BL extension check failed")
+		log.Debugf("SEV BL extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, oidTee, uint8(tcb>>8)); !ok {
-		log.Tracef("SEV TEE extension check failed")
+		log.Debugf("SEV TEE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, oidSnp, uint8(tcb>>48)); !ok {
-		log.Tracef("SEV SNP extension check failed")
+		log.Debugf("SEV SNP extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, oidUcode, uint8(tcb>>56)); !ok {
-		log.Tracef("SEV UCODE extension check failed")
+		log.Debugf("SEV UCODE extension check failed")
 		success = false
 	}
 	results = append(results, r)
@@ -541,7 +541,7 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 	if akType == VCEK {
 		// If the VCEK was used, we must compare the reported Chip ID against the extension Chip ID
 		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:]); !ok {
-			log.Tracef("Chip ID extension check failed")
+			log.Debugf("Chip ID extension check failed")
 			success = false
 		}
 		results = append(results, r)
@@ -552,10 +552,10 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 		// TODO currently we simply accept all CSPs, discuss if we need to match here
 		csp, ok := getExtensionString(cert, oidCspId)
 		if !ok {
-			log.Trace("CSP ID extension check failed")
+			log.Debug("CSP ID extension check failed")
 			success = false
 		}
-		log.Tracef("CSP ID extension present: %v", csp)
+		log.Debugf("CSP ID extension present: %v", csp)
 		results = append(results, ar.Result{Success: ok, Got: csp})
 	}
 
@@ -603,10 +603,10 @@ func checkMinVersion(version []uint8, ref []uint8) bool {
 func GetAkType(keySelection uint32) (AkType, error) {
 	arkey := (keySelection >> 2) & 0x7
 	if arkey == 0 {
-		log.Trace("VCEK is used to sign attestation report")
+		log.Debug("VCEK is used to sign attestation report")
 		return VCEK, nil
 	} else if arkey == 1 {
-		log.Trace("VLEK is used to sign attestation report")
+		log.Debug("VLEK is used to sign attestation report")
 		return VLEK, nil
 	}
 	return UNKNOWN, fmt.Errorf("unknown AK type %v", arkey)

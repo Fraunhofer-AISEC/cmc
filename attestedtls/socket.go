@@ -45,7 +45,7 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([
 	}
 
 	// Establish connection
-	log.Tracef("Sending attestation request to cmcd via %v on %v", network, addr)
+	log.Debugf("Sending attestation request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error dialing cmcd: %w", err)
@@ -114,7 +114,7 @@ func (a SocketApi) verifyAR(
 	}
 
 	// Establish connection
-	log.Tracef("Sending verification request to cmcd via %v on %v", network, addr)
+	log.Debugf("Sending verification request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
@@ -193,7 +193,7 @@ func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.Signe
 	}
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", network, addr)
+	log.Debugf("Sending TLS sign request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -266,7 +266,7 @@ func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", network, addr)
+	log.Debugf("Sending TLS certificate request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
@@ -328,7 +328,7 @@ func (a SocketApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, e
 	}
 
 	// Establish connection
-	log.Tracef("Contacting cmcd via %v on %v", network, addr)
+	log.Debugf("Sending peer cache request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)

@@ -47,7 +47,7 @@ func (a SocketApi) generate(c *config) {
 		log.Fatalf("Failed to get network and address: %v", err)
 	}
 
-	log.Tracef("Connecting via %v socket to %v", network, addr)
+	log.Infof("Sending socket request type 'Attest' to %v", c.CmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)
@@ -97,6 +97,8 @@ func (a SocketApi) generate(c *config) {
 
 func (a SocketApi) verify(c *config) {
 
+	log.Infof("Sending socket request type 'Verify' to %v", c.CmcAddr)
+
 	report, nonce, err := loadReport(c)
 	if err != nil {
 		log.Fatalf("Failed to load report: %v", err)
@@ -124,6 +126,8 @@ func (a SocketApi) verify(c *config) {
 }
 
 func (a SocketApi) measure(c *config) {
+
+	log.Infof("Sending socket request type 'Measure' to %v", c.CmcAddr)
 
 	if c.CtrConfig == "" {
 		log.Fatalf("Mode measure requires OCI runtime config to be specified")
@@ -206,8 +210,6 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 		log.Fatalf("Failed to get network and address: %v", err)
 	}
 
-	log.Tracef("Connecting via %v socket to %v", network, addr)
-
 	// Establish connection
 	conn, err := net.Dial(network, addr)
 	if err != nil {
@@ -254,8 +256,6 @@ func measureSocketRequest(c *config, req *api.MeasureRequest,
 	if err != nil {
 		log.Fatalf("Failed to get network and address: %v", err)
 	}
-
-	log.Tracef("Connecting via %v socket to %v", network, addr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)

@@ -45,7 +45,6 @@ type CoapServer struct {
 }
 
 func init() {
-	log.Info("Adding CoAP server to supported servers")
 	servers["coap"] = CoapServer{}
 }
 
@@ -73,39 +72,9 @@ func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 	return nil
 }
 
-func SendCoapResponse(w mux.ResponseWriter, r *mux.Message, payload []byte) {
-	customResp := w.Conn().AcquireMessage(r.Context())
-	defer w.Conn().ReleaseMessage(customResp)
-	customResp.SetCode(codes.Content)
-	customResp.SetToken(r.Token())
-	customResp.SetContentFormat(message.TextPlain)
-	customResp.SetBody(bytes.NewReader(payload))
-	err := w.Conn().WriteMessage(customResp)
-	if err != nil {
-		log.Errorf("cannot set response: %v", err)
-	}
-}
-
-func sendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code,
-	format string, args ...interface{},
-) {
-	msg := fmt.Sprintf(format, args...)
-	log.Warn(msg)
-	customResp := w.Conn().AcquireMessage(r.Context())
-	defer w.Conn().ReleaseMessage(customResp)
-	customResp.SetCode(code)
-	customResp.SetToken(r.Token())
-	customResp.SetContentFormat(message.TextPlain)
-	customResp.SetBody(bytes.NewReader([]byte(msg)))
-	err := w.Conn().WriteMessage(customResp)
-	if err != nil {
-		log.Errorf("cannot set response: %v", err)
-	}
-}
-
 func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received coap connection request type 'Attest'")
+	log.Infof("Received coap request type 'Attest' from %v", w.Conn().RemoteAddr())
 
 	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -160,12 +129,12 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Debug("Prover: Finished")
+	log.Infof("Sent coap response type 'Attest' to %v", w.Conn().RemoteAddr())
 }
 
 func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received coap connection request type 'Verify'")
+	log.Infof("Received coap request type 'Verify' from %v", w.Conn().RemoteAddr())
 
 	req := new(api.VerificationRequest)
 	ser, err := unmarshal(r, req)
@@ -203,12 +172,12 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Verifier: sending attestation response")
 	SendCoapResponse(w, r, payload)
 
-	log.Debug("Verifier: Finished")
+	log.Infof("Sent coap response type 'Verify' to %v", w.Conn().RemoteAddr())
 }
 
 func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received Connection Request Type 'Measure Request'")
+	log.Infof("Received coap request type 'Measure' from %v", w.Conn().RemoteAddr())
 
 	req := new(api.MeasureRequest)
 	ser, err := unmarshal(r, req)
@@ -254,12 +223,12 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Debug("Measurer: Finished")
+	log.Infof("Sent coap response type 'Measure' to %v", w.Conn().RemoteAddr())
 }
 
 func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received CoAP TLS sign request")
+	log.Infof("Received coap request type 'TLSSign' from %v", w.Conn().RemoteAddr())
 
 	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -299,7 +268,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Sign
-	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
+	log.Debugf("TLSSign using opts: %v, driver %v", opts, d.Name())
 	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to sign: %v", err)
@@ -320,12 +289,12 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Debug("Performed signing")
+	log.Infof("Sent coap response type 'TLSSign' to %v", w.Conn().RemoteAddr())
 }
 
 func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received CoAP TLS cert request")
+	log.Infof("Received coap request type 'TLSCert' from %v", w.Conn().RemoteAddr())
 
 	if len(s.cmc.Drivers) == 0 {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -349,14 +318,13 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Trace("Received COAP TLS cert request")
-
 	// Retrieve certificates
 	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return
 	}
+	log.Debugf("Obtained TLS cert for driver %v", d.Name())
 
 	// Create response
 	resp := &api.TLSCertResponse{
@@ -372,12 +340,12 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	// CoAP response
 	SendCoapResponse(w, r, payload)
 
-	log.Debugf("Obtained TLS cert from %v", d.Name())
+	log.Infof("Sent coap response type 'TLSCert' to %v", w.Conn().RemoteAddr())
 }
 
 func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 
-	log.Debug("Received connection request type 'Peer Cache'")
+	log.Infof("Received coap request type 'PeerCache' from %v", w.Conn().RemoteAddr())
 
 	req := new(api.PeerCacheRequest)
 	ser, err := unmarshal(r, req)
@@ -408,13 +376,14 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Debug("sending peer cache response")
 	SendCoapResponse(w, r, payload)
+
+	log.Infof("Sent coap response type 'PeerCache' to %v", w.Conn().RemoteAddr())
 }
 
 func loggingMiddleware(next mux.Handler) mux.Handler {
 	return mux.HandlerFunc(func(w mux.ResponseWriter, r *mux.Message) {
-		log.Tracef("ClientAddress %v, %v\n", w.Conn().RemoteAddr(), r.String())
+		log.Tracef("ClientAddress %v, %v", w.Conn().RemoteAddr(), r.String())
 		next.ServeCOAP(w, r)
 	})
 }
@@ -438,4 +407,38 @@ func unmarshal(r *mux.Message, payload interface{}) (ar.Serializer, error) {
 	}
 
 	return s, nil
+}
+
+func SendCoapResponse(w mux.ResponseWriter, r *mux.Message, payload []byte) {
+	customResp := w.Conn().AcquireMessage(r.Context())
+	defer w.Conn().ReleaseMessage(customResp)
+	customResp.SetCode(codes.Content)
+	customResp.SetToken(r.Token())
+	customResp.SetContentFormat(message.TextPlain)
+	customResp.SetBody(bytes.NewReader(payload))
+	log.Tracef("Sending coap message type %v, code %v, payload length %v",
+		message.TextPlain.String(), codes.Content.String(), len(payload))
+	err := w.Conn().WriteMessage(customResp)
+	if err != nil {
+		log.Errorf("cannot set response: %v", err)
+	}
+}
+
+func sendCoapError(w mux.ResponseWriter, r *mux.Message, code codes.Code,
+	format string, args ...interface{},
+) {
+	msg := fmt.Sprintf(format, args...)
+	log.Warn(msg)
+	customResp := w.Conn().AcquireMessage(r.Context())
+	defer w.Conn().ReleaseMessage(customResp)
+	customResp.SetCode(code)
+	customResp.SetToken(r.Token())
+	customResp.SetContentFormat(message.TextPlain)
+	customResp.SetBody(bytes.NewReader([]byte(msg)))
+	log.Tracef("Sending coap error message type %v, code %v, payload length %v",
+		message.TextPlain.String(), code.String(), len([]byte(msg)))
+	err := w.Conn().WriteMessage(customResp)
+	if err != nil {
+		log.Errorf("cannot set response: %v", err)
+	}
 }

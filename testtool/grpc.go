@@ -50,7 +50,7 @@ func (a GrpcApi) generate(c *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Tracef("Connecting via gRPC to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'Attest' to %v", c.CmcAddr)
 
 	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
@@ -105,7 +105,7 @@ func (a GrpcApi) verify(c *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Tracef("Connecting via gRPC to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'Verify' to %v", c.CmcAddr)
 
 	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
@@ -160,7 +160,7 @@ func (a GrpcApi) measure(c *config) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Tracef("Connecting via gRPC to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'Measure' to %v", c.CmcAddr)
 
 	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {

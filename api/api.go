@@ -263,7 +263,7 @@ func (req *AttestationRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: AttestationRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected AttestationRequest version %v, got %v", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected AttestationRequest version '%v', got '%v'", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -273,7 +273,7 @@ func (resp *AttestationResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: AttestationResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected AttestationResponse version %v, got %v", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected AttestationResponse version '%v', got '%v'", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -283,7 +283,7 @@ func (req *VerificationRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: VerificationRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected VerificationRequest version %v, got %v", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected VerificationRequest version '%v', got '%v'", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -293,7 +293,7 @@ func (resp *VerificationResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: VerificationResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected VerificationResponse version %v, got %v", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected VerificationResponse version '%v', got '%v'", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -303,7 +303,7 @@ func (req *TLSSignRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSSignRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSSignRequest version %v, got %v", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSSignRequest version '%v', got '%v'", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -313,7 +313,7 @@ func (resp *TLSSignResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSSignResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSSignResponse version %v, got %v", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSSignResponse version '%v', got '%v'", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -323,7 +323,7 @@ func (req *TLSCertRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSCertRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSCertRequest version %v, got %v", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSCertRequest version '%v', got '%v'", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -333,7 +333,7 @@ func (resp *TLSCertResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSCertResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSCertResponse version %v, got %v", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSCertResponse version '%v', got '%v'", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -343,7 +343,7 @@ func (req *PeerCacheRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: PeerCacheRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected PeerCacheRequest version %v, got %v", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected PeerCacheRequest version '%v', got '%v'", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -353,7 +353,7 @@ func (resp *PeerCacheResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: PeerCacheResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected PeerCacheResponse version %v, got %v", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected PeerCacheResponse version '%v', got '%v'", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -363,7 +363,7 @@ func (req *MeasureRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: MeasureRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected MeasureRequest version %v, got %v", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected MeasureRequest version '%v', got '%v'", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -373,7 +373,7 @@ func (resp *MeasureResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: MeasureResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected MeasureResponse version %v, got %v", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected MeasureResponse version '%v', got '%v'", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -383,7 +383,7 @@ func (err *SocketError) CheckVersion() error {
 		return fmt.Errorf("internal error: SocketError is nil")
 	}
 	if !strings.EqualFold(apiVersion, err.Version) {
-		return fmt.Errorf("API version mismatch. Expected SocketError version %v, got %v", apiVersion, err.Version)
+		return fmt.Errorf("API version mismatch. Expected SocketError version '%v', got '%v'", apiVersion, err.Version)
 	}
 	return nil
 }

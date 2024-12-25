@@ -47,7 +47,7 @@ func FetchMetadata(addr string) ([][]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	log.Debug("Response Status: ", resp.Status)
+	log.Debugf("Metadata request response Status: %v", resp.Status)
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
 	}
@@ -97,26 +97,26 @@ func fetchDataRecursively(client *Client, pre Pre, addr string) ([][]byte, error
 			subpath = addr + "/" + pre.Content[i].Name
 		}
 
-		log.Debug("Requesting ", subpath)
+		log.Tracef("Requesting data from %v", subpath)
 		resp, err := request(client.client, http.MethodGet, subpath, "", "", "", nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to perform request: %w", err)
 		}
 		defer resp.Body.Close()
 
-		log.Trace("Response Status: ", resp.Status)
+		log.Tracef("Response Status: %v", resp.Status)
 		if resp.StatusCode != 200 {
 			return nil, fmt.Errorf("HTTP GET request returned status %v", resp.Status)
 		}
 
-		log.Debug("Found: ", pre.Content[i].Name, " Type:", resp.Header.Values("Content-Type")[0])
+		log.Tracef("Found: %v, type: %v", pre.Content[i].Name, resp.Header.Values("Content-Type")[0])
 
 		if strings.Compare(resp.Header.Values("Content-Type")[0], "text/html; charset=utf-8") == 0 {
 
 			// Content is a subdirectory, parse recursively
 			content, err := io.ReadAll(resp.Body)
 			if err != nil {
-				log.Error("Failed to read response")
+				log.Errorf("Failed to read response: %v", err)
 			}
 
 			var pre Pre

@@ -656,7 +656,7 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 				hash.Hash = parseVariableDataHash_GUID(buf, SHA384_DIGEST_LEN)
 				hashes = append(hashes, hash)
 			default:
-				log.Tracef("Signature GUID %v", sigdb.SignatureTypeGUID)
+				log.Debugf("Signature GUID %v", sigdb.SignatureTypeGUID)
 			}
 			//incomplete, to support more types: (Unified Extensible Firmware Interface Specification 2.10 p.1427)
 			counter++

@@ -163,13 +163,14 @@ func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x
 }
 
 func PrintTlsConfig(conf *tls.Config, roots []byte) error {
+	log.Debug("Using the following TLS certificate configuration")
 	for i, certs := range conf.Certificates {
 		for j, data := range certs.Certificate {
 			c, err := ParseCert(data)
 			if err != nil {
 				return fmt.Errorf("failed to convert certificate: %w", err)
 			}
-			log.Tracef("Cert %v:%v: %v, SubjectKeyID %v, AuthorityKeyID %v",
+			log.Debugf("Cert %v:%v: %v, SubjectKeyID %v, AuthorityKeyID %v",
 				i, j, c.Subject.CommonName,
 				hex.EncodeToString(c.SubjectKeyId),
 				hex.EncodeToString(c.AuthorityKeyId))
@@ -180,7 +181,7 @@ func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 		return fmt.Errorf("failed to load certs: %w", err)
 	}
 	for i, c := range certs {
-		log.Tracef("CA Cert%v: %v, SubjectKeyID %v",
+		log.Debugf("CA Cert%v: %v, SubjectKeyID %v",
 			i, c.Subject.CommonName, hex.EncodeToString(c.SubjectKeyId))
 	}
 	return nil

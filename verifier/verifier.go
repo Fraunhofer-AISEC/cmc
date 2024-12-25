@@ -76,7 +76,7 @@ func Verify(
 
 	cas, err := internal.ParseCertsPem(casPem)
 	if err != nil {
-		log.Tracef("Failed to parse specified CA certificate(s): %v", err)
+		log.Debugf("Failed to parse specified CA certificate(s): %v", err)
 		result.Success = false
 		result.ErrorCode = ar.ParseCA
 		return result
@@ -86,11 +86,12 @@ func Verify(
 	log.Tracef("Detecting serialization format of attestation report length %v", len(arRaw))
 	s, err := ar.DetectSerialization(arRaw)
 	if err != nil {
-		log.Trace("Unable to detect AR serialization format")
+		log.Debug("Unable to detect AR serialization format")
 		result.Success = false
 		result.ErrorCode = ar.UnknownSerialization
 		return result
 	}
+	log.Tracef("Detected %v serialization", s.String())
 
 	// Verify and unpack attestation report
 	report, tr, code := verifyAr(arRaw, cas, s)
@@ -111,7 +112,7 @@ func Verify(
 
 	refVals, err := collectReferenceValues(metadata)
 	if err != nil {
-		log.Tracef("Failed to collect reference values: %v", err)
+		log.Debugf("Failed to collect reference values: %v", err)
 		result.Success = false
 		result.ErrorCode = ar.RefValTypeNotSupported
 	}
@@ -169,7 +170,7 @@ func Verify(
 			result.Measurements = append(result.Measurements, *r)
 
 		default:
-			log.Tracef("Unsupported measurement type '%v'", mtype)
+			log.Debugf("Unsupported measurement type '%v'", mtype)
 			result.Success = false
 			result.ErrorCode = ar.MeasurementTypeNotSupported
 		}
@@ -189,12 +190,12 @@ func Verify(
 	if len(levels) > 0 {
 		aggCertLevel = slices.Min(levels)
 	}
-	log.Tracef("Aggregated cert level: %v", aggCertLevel)
+	log.Debugf("Aggregated cert level: %v", aggCertLevel)
 	// If no hardware trust anchor is present, the maximum certification level is 1
 	// If there are reference values with a higher trust level present, the remote attestation
 	// must fail
 	if !hwAttest && aggCertLevel > 1 {
-		log.Tracef("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
+		log.Debugf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
 		result.ErrorCode = ar.InvalidCertLevel
 		result.Success = false
 	}
@@ -205,21 +206,21 @@ func Verify(
 	if policies != nil {
 		p, ok := policyEngines[polEng]
 		if !ok {
-			log.Tracef("Internal error: policy engine %v not implemented", polEng)
+			log.Debugf("Internal error: policy engine %v not implemented", polEng)
 			result.Success = false
 			result.ErrorCode = ar.PolicyEngineNotImplemented
 			result.PolicySuccess = false
 		} else {
 			ok = p.Validate(policies, result)
 			if !ok {
-				log.Trace("Custom policy validation failed")
+				log.Debug("Custom policy validation failed")
 				result.Success = false
 				result.ErrorCode = ar.VerifyPolicies
 				result.PolicySuccess = false
 			}
 		}
 	} else {
-		log.Tracef("No custom policies specified")
+		log.Debugf("No custom policies specified")
 	}
 
 	// Add additional information
@@ -246,19 +247,20 @@ func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer
 	//Validate Attestation Report signature
 	result, payload, ok := s.Verify(attestationReport, cas)
 	if !ok {
-		log.Trace("Validation of Attestation Report failed")
+		log.Debug("Validation of Attestation Report failed")
 		return nil, result, ar.VerifyAR
 	}
 
 	err := s.Unmarshal(payload, &report)
 	if err != nil {
-		log.Tracef("Parsing of Attestation Report failed: %v", err)
+		log.Debugf("Parsing of Attestation Report failed: %v", err)
 		return nil, result, ar.ParseAR
 	}
 
 	// Check version
 	err = report.CheckVersion()
 	if err != nil {
+		log.Debug(err.Error())
 		return nil, result, ar.InvalidVersion
 	}
 
@@ -279,20 +281,20 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 
 		result, payload, ok := s.Verify(meta, cas)
 		if !ok {
-			log.Tracef("Validation of metadata item %v failed", hash)
+			log.Debugf("Validation of metadata item %v failed", hash)
 			success = false
 			// Still unpack metadata item for validation-result diagnosis
 			payload, err = s.GetPayload(meta)
 			if err != nil {
 				// Summary and error code have already been set in verify
-				log.Tracef("Get unverified payload of metadata item %v failed: %v", hash, err)
+				log.Debugf("Get unverified payload of metadata item %v failed: %v", hash, err)
 			}
 		}
 
 		m := new(ar.Metadata)
 		err := s.Unmarshal(payload, m)
 		if err != nil {
-			log.Tracef("Unpacking of metadata item %v failed: %v", hash, err)
+			log.Debugf("Unpacking of metadata item %v failed: %v", hash, err)
 			result.Summary.Success = false
 			result.Summary.ErrorCode = ar.Parse
 			success = false
@@ -305,11 +307,11 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		result.Details = m.Details
 		result.ValidityCheck = checkValidity(m.Validity)
 		if !result.ValidityCheck.Success {
-			log.Tracef("%v: %v expired (NotBefore: %v, NotAfter: %v)", m.Type, m.Name, m.Validity.NotBefore, m.Validity.NotAfter)
+			log.Debugf("%v: %v expired (NotBefore: %v, NotAfter: %v)", m.Type, m.Name, m.Validity.NotBefore, m.Validity.NotAfter)
 			result.Summary.Success = false
 			success = false
 		} else {
-			log.Tracef("Checking validity of %v: %v successful", m.Type, m.Name)
+			log.Debugf("Checking validity of %v: %v successful", m.Type, m.Name)
 		}
 
 		metadata[m.Name] = *m
@@ -328,7 +330,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		case "App Manifest":
 			results.AppResults = append(results.AppResults, result)
 		default:
-			log.Tracef("Unknown manifest type %v", m.Type)
+			log.Debugf("Unknown manifest type %v", m.Type)
 			success = false
 			errCode = ar.UnknownMetadata
 		}
@@ -338,7 +340,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 	// Check metadata compatibility and update device description result
 	_, ok := metadata[devDescName]
 	if !ok {
-		log.Tracef("Device description not present")
+		log.Debugf("Device description not present")
 		success = false
 		errCode = ar.DeviceDescriptionNotPresent
 	} else {
@@ -372,7 +374,7 @@ func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metad
 	if _, ok := metadata[deviceDescription.RtmManifest]; ok {
 		DevDescResult.CorrectRtm.Success = true
 	} else {
-		log.Tracef("Device Description listed wrong RTM Manifest: %v", deviceDescription.RtmManifest)
+		log.Debugf("Device Description listed wrong RTM Manifest: %v", deviceDescription.RtmManifest)
 		DevDescResult.CorrectRtm.Success = false
 		DevDescResult.CorrectRtm.Expected = deviceDescription.RtmManifest
 		success = false
@@ -380,7 +382,7 @@ func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metad
 	if _, ok := metadata[deviceDescription.OsManifest]; ok {
 		DevDescResult.CorrectOs.Success = true
 	} else {
-		log.Tracef("Device Description listed wrong OS Manifest: %v", deviceDescription.OsManifest)
+		log.Debugf("Device Description listed wrong OS Manifest: %v", deviceDescription.OsManifest)
 		DevDescResult.CorrectOs.Success = false
 		DevDescResult.CorrectOs.Expected = deviceDescription.OsManifest
 		success = false
@@ -395,12 +397,12 @@ func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metad
 	}
 
 	// Check that every App Description has a corresponding App Manifest
-	log.Tracef("Iterating app descriptions length %v", len(deviceDescription.AppDescriptions))
+	log.Debugf("Iterating app descriptions length %v", len(deviceDescription.AppDescriptions))
 	for _, desc := range deviceDescription.AppDescriptions {
 
 		_, ok := metadata[desc.AppManifest]
 		if !ok {
-			log.Tracef("No app manifest for app description: %v", desc.AppManifest)
+			log.Debugf("No app manifest for app description: %v", desc.AppManifest)
 		}
 
 		r := ar.Result{
@@ -418,7 +420,7 @@ func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metad
 			if contains(rtm.Name, os.BaseLayers) {
 				DevDescResult.RtmOsCompatibility.Success = true
 			} else {
-				log.Tracef("OS Manifest %v is not compatible with RTM Manifest %v",
+				log.Debugf("OS Manifest %v is not compatible with RTM Manifest %v",
 					rtm.Name, os.Name)
 				DevDescResult.RtmOsCompatibility.Success = false
 				DevDescResult.RtmOsCompatibility.ExpectedOneOf = os.BaseLayers
@@ -438,7 +440,7 @@ func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metad
 					Got:           os.Name,
 				}
 				if !contains(os.Name, a.BaseLayers) {
-					log.Tracef("App Manifest %v is not compatible with OS Manifest %v", a.Name, os.Name)
+					log.Debugf("App Manifest %v is not compatible with OS Manifest %v", a.Name, os.Name)
 					r.Success = false
 					success = false
 				}
@@ -457,14 +459,14 @@ func checkValidity(val ar.Validity) ar.Result {
 
 	notBefore, err := time.Parse(time.RFC3339, val.NotBefore)
 	if err != nil {
-		log.Tracef("Failed to parse NotBefore time. Time.Parse returned %v", err)
+		log.Debugf("Failed to parse NotBefore time. Time.Parse returned %v", err)
 		result.Success = false
 		result.ErrorCode = ar.ParseTime
 		return result
 	}
 	notAfter, err := time.Parse(time.RFC3339, val.NotAfter)
 	if err != nil {
-		log.Tracef("Failed to parse NotAfter time. Time.Parse returned %v", err)
+		log.Debugf("Failed to parse NotAfter time. Time.Parse returned %v", err)
 		result.Success = false
 		result.ErrorCode = ar.ParseTime
 		return result
@@ -472,13 +474,13 @@ func checkValidity(val ar.Validity) ar.Result {
 	currentTime := time.Now()
 
 	if notBefore.After(currentTime) {
-		log.Trace("Validity check failed: Artifact is not valid yet")
+		log.Debug("Validity check failed: Artifact is not valid yet")
 		result.Success = false
 		result.ErrorCode = ar.NotYetValid
 	}
 
 	if currentTime.After(notAfter) {
-		log.Trace("Validity check failed: Artifact validity has expired")
+		log.Debug("Validity check failed: Artifact validity has expired")
 		result.Success = false
 		result.ErrorCode = ar.Expired
 	}
@@ -520,20 +522,20 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 	for _, ext := range cert.Extensions {
 
 		if ext.Id.String() == oid {
-			log.Tracef("Found %v, length %v, values %v", oid, len(ext.Value), ext.Value)
+			log.Debugf("Found %v, length %v, values %v", oid, len(ext.Value), ext.Value)
 			if len(ext.Value) != 3 && len(ext.Value) != 4 {
-				log.Tracef("extension %v value unexpected length %v (expected 3 or 4)",
+				log.Debugf("extension %v value unexpected length %v (expected 3 or 4)",
 					oid, len(ext.Value))
 				return ar.Result{Success: false, ErrorCode: ar.OidLength}, false
 			}
 			if ext.Value[0] != 0x2 {
-				log.Tracef("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
+				log.Debugf("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
 					oid, ext.Value[0])
 				return ar.Result{Success: false, ErrorCode: ar.OidTag}, false
 			}
 			if ext.Value[1] == 0x1 {
 				if ext.Value[2] != value {
-					log.Tracef("extension %v value[2]: %v does not match expected value %v",
+					log.Debugf("extension %v value[2]: %v does not match expected value %v",
 						oid, ext.Value[2], value)
 					return ar.Result{
 						Success:  false,
@@ -546,7 +548,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 				// even though this field is defined as unsigned int in the AMD spec
 				// Thus, if the most significant bit is required, one byte of additional 0x00 padding is added
 				if ext.Value[2] != 0x00 || ext.Value[3] != value {
-					log.Tracef("extension %v value = %v%v does not match expected value  %v",
+					log.Debugf("extension %v value = %v%v does not match expected value  %v",
 						oid, ext.Value[2], ext.Value[3], value)
 					return ar.Result{
 						Success:  false,
@@ -555,7 +557,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 					}, false
 				}
 			} else {
-				log.Tracef("extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
+				log.Debugf("extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
 					oid, ext.Value[1])
 				return ar.Result{Success: false, ErrorCode: ar.OidLength}, false
 			}
@@ -566,7 +568,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 		}
 	}
 
-	log.Tracef("extension %v not present in certificate", oid)
+	log.Debugf("extension %v not present in certificate", oid)
 	return ar.Result{Success: false, ErrorCode: ar.OidNotPresent}, false
 }
 
@@ -576,7 +578,7 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 
 		if ext.Id.String() == oid {
 			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
-				log.Tracef("extension %v value %v does not match expected value %v",
+				log.Debugf("extension %v value %v does not match expected value %v",
 					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
 				return ar.Result{
 					Success:  false,
@@ -591,7 +593,7 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 		}
 	}
 
-	log.Tracef("extension %v not present in certificate", oid)
+	log.Debugf("extension %v not present in certificate", oid)
 	return ar.Result{Success: false, ErrorCode: ar.OidNotPresent}, false
 }
 
@@ -602,7 +604,7 @@ func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
 			return string(ext.Value), true
 		}
 	}
-	log.Tracef("extension %v: %v not present in certificate", oid, oidDesc(oid))
+	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
 	return "", false
 }
 

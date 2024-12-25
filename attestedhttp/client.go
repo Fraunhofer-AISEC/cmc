@@ -159,7 +159,7 @@ func (c *Client) PostForm(url string, data url.Values) (resp *http.Response, err
 func prepareClient(c *Client) error {
 	if c.client == nil {
 
-		log.Tracef("Initializing new HTTP client")
+		log.Debugf("Initializing new HTTP client")
 
 		if c.Transport.ApiSerializer == nil {
 			return fmt.Errorf("API serializer not configured")
