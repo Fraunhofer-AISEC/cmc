@@ -38,6 +38,7 @@ type Serializer interface {
 	Unmarshal(data []byte, v any) error
 	Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error)
 	Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
+	String() string
 }
 
 func DetectSerialization(payload []byte) (Serializer, error) {
