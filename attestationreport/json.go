@@ -64,6 +64,10 @@ func (h *HexByte) UnmarshalJSON(data []byte) error {
 
 type JsonSerializer struct{}
 
+func (s JsonSerializer) String() string {
+	return "JSON"
+}
+
 func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 	// Extract plain payload out of base64-encoded JSON Web Signature
 	jws, err := jose.ParseSigned(string(raw), []jose.SignatureAlgorithm{
@@ -82,6 +86,7 @@ func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 }
 
 func (s JsonSerializer) Marshal(v any) ([]byte, error) {
+	log.Tracef("Marshalling data using %v serialization", s.String())
 	return json.Marshal(v)
 }
 

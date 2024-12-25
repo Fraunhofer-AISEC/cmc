@@ -30,6 +30,10 @@ import (
 
 type CborSerializer struct{}
 
+func (s CborSerializer) String() string {
+	return "CBOR"
+}
+
 func (s CborSerializer) GetPayload(raw []byte) ([]byte, error) {
 	// TODO better option to subdivide?
 	// Try unmarshalling as Sign1Message
@@ -48,6 +52,7 @@ func (s CborSerializer) GetPayload(raw []byte) ([]byte, error) {
 }
 
 func (s CborSerializer) Marshal(v any) ([]byte, error) {
+	log.Tracef("Marshalling data using %v serialization", s.String())
 	return cbor.Marshal(v)
 }
 
