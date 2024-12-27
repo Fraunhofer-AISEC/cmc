@@ -146,7 +146,8 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		// Perform the actual, user specified request
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Fatalf("HTTP %v failed: %v", c.Method, err)
+			log.Warnf("HTTP %v failed: %v", c.Method, err)
+			return
 		}
 		defer resp.Body.Close()
 
@@ -246,7 +247,7 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	// to run the server
 	err = server.ListenAndServe()
 	if err != nil {
-		log.Fatalf("Failed to serve HTTPS: %v", err)
+		log.Warnf("Failed to serve HTTPS: %v", err)
 	}
 }
 
