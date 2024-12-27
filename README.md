@@ -33,8 +33,8 @@ Building the *cmcd* requires *go*. Follow https://golang.org/doc/install.
 
 Generating reference values for TPM-based attestation requires the `tpm-pcr-tools`:
 ```sh
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${data}/tpm-pcr-tools"
-cd "${data}/tpm-pcr-tools"
+git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
+cd tpm-pcr-tools
 make
 sudo make install
 ```
