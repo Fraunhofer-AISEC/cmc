@@ -1,0 +1,257 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Cleanup to kill all running processes
+trap "exit" INT TERM
+trap cleanup EXIT
+
+cleanup() {
+
+    if [[ ! $? -eq 0 ]]; then
+        printf "[\033[31;1mFAILED\033[0m]\nCleaning up..\n"
+    fi
+    kill_process "cmcd"
+    kill_process "testtool"
+    kill_process "estserver"
+    stty sane
+}
+
+kill_process() {
+    local process_name=$1
+    set +e
+
+    pid=$(pgrep -x "$process_name")
+    if [ ! -n "$pid" ]; then
+        set -e
+        return
+    fi
+
+    pkill -SIGINT "${process_name}" > /dev/null 2>&1
+    if [ $? -eq 1 ]; then
+        sudo pkill -SIGINT "${process_name}" > /dev/null 2>&1
+        if [ $? -eq 1 ]; then
+            printf "FAIL\n"
+            set -e
+            return
+        fi
+    fi
+
+    sleep 0.2
+
+    if pgrep -x "${process_name}" > /dev/null; then
+        sudo pkill -9 "${process_name}" > /dev/null 2>&1
+        sleep 0.2
+    fi
+
+    if pgrep -x "${process_name}" > /dev/null; then
+        echo "Failed to kill ${process_name}"
+        exit 1
+    fi
+
+    set -e
+    return
+}
+
+
+# Function to wait for a specific message in a process's output
+wait_for_message() {
+    local process_pid=$1
+    local output_file=$2
+    local message=$3
+
+    # Give the output file some time to be generated
+    sleep 0.3
+
+    message_found=false
+    while kill -0 ${process_pid} 2>/dev/null; do
+        if [[ -f "${cmc_log}" ]]; then
+            if grep -q "${message}" "${output_file}"; then
+                message_found=true
+                return 0
+            fi
+        fi
+    done
+
+    if ! ${message_found}; then
+        echo "Process did not output the expected message: '$message'."
+        return 1
+    fi
+}
+
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+
+cmc_data_dir="${dir}"
+cmc_dir="${dir}/../cmc"
+log_dir="${dir}/logs"
+
+metadata="${cmc_data_dir}/metadata-signed"
+storage="${cmc_data_dir}/cmc-storage"
+cache="${cmc_data_dir}/cmc-cache"
+peercache="${cmc_data_dir}/cmc-peer-cache"
+ctrlog="${cmc_data_dir}/cmc-container-measurements"
+
+est_params=(
+    "-port" "9000" \
+    "-signingkey"           "${cmc_data_dir}/pki/ca-key.pem" \
+    "-signingcerts"         "${cmc_data_dir}/pki/ca.pem" \
+    "-httpfolder"           "${cmc_data_dir}" \
+    "-tpmekcertdb"          "${cmc_data_dir}/tpm-ek-certs.db" \
+    "-estkey"               "${cmc_data_dir}/pki/est-key.pem" \
+    "-estcerts"             "${cmc_data_dir}/pki/est.pem" \
+    "-loglevel"             "trace" \
+    "-logfile"              "${log_dir}/estserver.log" \
+    "-verifyekcert=false" \
+)
+
+cmc_params=(
+    "-cmcaddr" "localhost:9955" \
+    "-provaddr" "https://localhost:9000" \
+    "-metadata" "file://${metadata}" \
+    "-drivers" "tpm,sw" \
+    "-ima=true" \
+    "-imapcr" "10" \
+    "-keyconfig" "EC256" \
+    "-loglevel" "trace" \
+    "-storage" "${storage}" \
+    "-cache" "${cache}"
+    "-peercache" "${peercache}" \
+    "-measurementlog=true" \
+    "-ctr=true" \
+    "-ctrdriver" "sw" \
+    "-ctrlog" "${ctrlog}" \
+)
+
+testtool_params=(
+    "-report" "attestation-report" \
+    "-result" "attestation-result.json" \
+    "-nonce" "nonce" \
+    "-ca" "${cmc_data_dir}/pki/ca.pem" \
+    "-mtls=true" \
+    "-attest" "mutual" \
+    "-loglevel" "trace" \
+    "-cmcaddr" "localhost:9955" \
+    "-keyconfig" "EC256" \
+)
+
+attest_success=("success" "fail")
+
+ar_serializers=("json" "cbor")
+
+api_serializers=("json" "cbor")
+
+protocols=("grpc" "coap" "socket")
+
+modes_server=("generate" "listen" "serve")
+
+modes_server_params=("" "-addr 0.0.0.0:4443" "-addr 0.0.0.0:8082")
+
+modes_client=("verify" "dial" "request")
+
+modes_client_params=("" "-addr localhost:4443" "-addr https://localhost:8082/post -method POST -data \"hello ahttps\" -header \"Content-Type: text/plain\"")
+
+modes_server_ready_msg=("Wrote attestation response" "Serving under" "Serving HTTPS under")
+
+modes_server_success_msg=("Wrote attestation response" "Server-side aTLS connection complete" "Server-side aHTTPS request completed")
+modes_client_success_msg=("SUCCESS: Verification for Prover" "Client-side aTLS connection complete" "Client-side aHTTPS request completed")
+
+modes_server_fail_msg=("Wrote attestation response" "attestation report verification failed" "attestation report verification failed")
+modes_client_fail_msg=("FAILED: Verification for Prover" "attestation report verification failed" "attestation report verification failed")
+
+# Clean start
+sudo rm -rf "${storage}"
+sudo rm -rf "${cache}"
+sudo rm -rf "${peercache}"
+sudo rm -rf "${log_dir}"
+
+mkdir -p "${log_dir}"
+
+# Start est server
+sudo "${cmc_dir}/est/estserver/estserver" "${est_params[@]}" &
+disown
+sleep 0.2
+stty sane
+
+# Iterate over the array
+for success in "${attest_success[@]}"
+do
+    for ar_serializer in "${ar_serializers[@]}"
+    do
+        metadata_log="${log_dir}/metadata_${ar_serializer}.log"
+
+        # Generate metadata for serializer (do not generate app manifest for failed attestation test)
+        echo "Generating ${ar_serializer} metadata =================================================="
+        "${cmc_data_dir}/update-platform" "${cmc_data_dir}" "${ar_serializer}" > "${metadata_log}" 2>&1
+        if [[ "${success}" == "success" ]]; then
+            "${cmc_data_dir}/update-app-manifest-live" "${cmc_data_dir}" "${ar_serializer}" > "${metadata_log}" 2>&1
+        fi
+
+        # Test CMC with the parameter matrix
+        for api_serializer in "${api_serializers[@]}"
+        do
+            for i in "${!protocols[@]}"
+            do
+                cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}.log"
+
+                echo "Starting cmcd"
+                sudo "${cmc_dir}/cmcd/cmcd" \
+                    "${cmc_params[@]}" \
+                    -logfile "${cmc_log}" \
+                    -api "${protocols[i]}" \
+                    &
+                cmc_pid="$!"
+                disown
+                wait_for_message "$cmc_pid" "${cmc_log}" "Waiting for.*requests"
+                stty sane
+                echo "Restarted cmcd ----------------------------------------------------------------"
+
+                for j in "${!modes_server[@]}"
+                do
+                    server_log="${log_dir}/testtool_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_server[j]}.log"
+                    client_log="${log_dir}/testtool_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_client[j]}.log"
+
+                    printf "TEST MODE %-8s | ATT %-7s | AR %s | SER %s | API %s\t" "${modes_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
+
+                    "${cmc_dir}/testtool/testtool" \
+                        "${testtool_params[@]}" \
+                        -logfile "${server_log}" \
+                        -mode ${modes_server[j]} \
+                        -api ${protocols[i]} \
+                        -apiserializer ${api_serializer} \
+                        ${modes_server_params[j]} \
+                        &
+                    disown
+                    wait_for_message $! "${server_log}" "${modes_server_ready_msg[j]}"
+                    stty sane
+
+                    "${cmc_dir}/testtool/testtool" \
+                        "${testtool_params[@]}" \
+                        -logfile "${client_log}" \
+                        -mode "${modes_client[j]}" \
+                        -apiserializer "${api_serializer}" \
+                        -api "${protocols[i]}" \
+                        ${modes_client_params[j]}
+                    stty sane
+
+                    if [[ "${success}" == "success" ]]; then
+                        wait_msg_server="${modes_server_success_msg[j]}"
+                        wait_msg_client="${modes_client_success_msg[j]}"
+                    else
+                        wait_msg_server="${modes_server_fail_msg[j]}"
+                        wait_msg_client="${modes_client_fail_msg[j]}"
+                    fi
+
+                    # Verify the server and client output
+                    grep -q "${wait_msg_server}" "${server_log}"
+                    grep -q "${wait_msg_client}" "${client_log}"
+                    printf "[\033[32;1m  OK  \033[0m]\n"
+
+                    kill_process "testtool"
+                done
+                kill_process "cmcd"
+            done
+        done
+    done
+done
+
+echo "Finished"
