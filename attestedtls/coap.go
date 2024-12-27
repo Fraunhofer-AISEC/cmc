@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/udp"
 
 	// local modules
@@ -75,6 +76,13 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read body: %w", err)
 	}
+
+	// Read CoAP code
+	if coapResp.Code() != codes.Content {
+		return nil, nil, nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
+			coapResp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", coapResp.Code().String())
 
 	// Unmarshal response
 	resp := new(api.AttestationResponse)
@@ -130,10 +138,19 @@ func (a CoapApi) verifyAR(
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
+
+	// Read CoAP message body
 	payload, err = resp.ReadBody()
 	if err != nil {
 		return fmt.Errorf("failed to read body: %w", err)
 	}
+
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		return fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	// Unmarshal verify response
 	var verifyResp api.VerificationResponse
@@ -199,10 +216,19 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
+
+	// Read CoAP message body
 	payload, err = resp.ReadBody()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %w", err)
 	}
+
+	// Read CoAP message code to check for errors
+	if resp.Code() != codes.Content {
+		return nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	// Unmarshal sign response
 	var signResp api.TLSSignResponse
@@ -245,10 +271,19 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
+
+	// Read CoAP message body
 	payload, err = resp.ReadBody()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %w", err)
 	}
+
+	// Read CoAP message code to check for errors
+	if resp.Code() != codes.Content {
+		return nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	// Unmarshal cert response
 	var certResp api.TLSCertResponse
@@ -298,6 +333,13 @@ func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %w", err)
 	}
+
+	// Read CoAP message code to check for errors
+	if coapResp.Code() != codes.Content {
+		return nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
+			coapResp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", coapResp.Code().String())
 
 	// Unmarshal response
 	resp := new(api.PeerCacheResponse)
