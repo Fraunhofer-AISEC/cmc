@@ -27,6 +27,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/udp"
 
 	// local modules
@@ -85,6 +86,13 @@ func (a CoapApi) generate(c *config) {
 	if err != nil {
 		log.Fatalf("failed to read body: %v", err)
 	}
+
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		log.Fatalf("Server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	// Save the attestation report for the verifier
 	err = saveReport(c, payload, nonce)
@@ -239,11 +247,18 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 		return nil, fmt.Errorf("failed to read body: %v", err)
 	}
 
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		return nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
+
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
 	err = c.apiSerializer.Unmarshal(payload, verifyResp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response")
+		return nil, fmt.Errorf("failed to unmarshal verification response: %w", err)
 	}
 
 	err = verifyResp.CheckVersion()
@@ -282,6 +297,13 @@ func measureInternal(c *config, req *api.MeasureRequest,
 	if err != nil {
 		return nil, fmt.Errorf("failed to read body: %v", err)
 	}
+
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		return nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	// Unmarshal attestation response
 	measureResp := new(api.MeasureResponse)
