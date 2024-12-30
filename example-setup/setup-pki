@@ -3,32 +3,17 @@
 set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
-dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
+export PATH=${PATH}:${HOME}/go/bin
 
-cmc="${dir}/.."
-input="${cmc}/example-setup"
-out="${dir}"
+if [[ "$#" -ne 2 ]]; then
+   echo "Usage: $(basename "$0") <input-folder (containing cfssl config)> <output-folder>"
+   exit 1
+fi
 
-print_usage() {
-  printf "Usage: ./setup-pki [-i <input-dir>] [-o <output-dir] [-h]\n"
-}
-
-while getopts 'i:o:h' flag; do
-  case "${flag}" in
-    i)
-        input="${OPTARG}"
-        ;;
-    o)
-        out="${OPTARG}"
-        ;;
-    h)
-        print_usage
-        exit 1
-        ;;
-    *) print_usage
-       exit 1 ;;
-  esac
-done
+input="${1}"
+out="${2}"
 
 if [[ ! -d "${input}" ]]; then
     echo "Input directory ${input} does not exist"

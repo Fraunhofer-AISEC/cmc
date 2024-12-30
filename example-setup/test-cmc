@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
+
 # Cleanup to kill all running processes
 trap "exit" INT TERM
 trap cleanup EXIT
@@ -79,26 +82,41 @@ wait_for_message() {
     fi
 }
 
-dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+if [[ "$#" -ne 2 ]]; then
+   echo "Usage: $(basename "$0") <data-folder> <cmc-folder>"
+   exit 1
+fi
 
-cmc_data_dir="${dir}"
-cmc_dir="${dir}/../cmc"
-log_dir="${dir}/logs"
+data=$(set -e; abs_path "${1}")
+cmc=$(set -e; abs_path "${2}")
 
-metadata="${cmc_data_dir}/metadata-signed"
-storage="${cmc_data_dir}/cmc-storage"
-cache="${cmc_data_dir}/cmc-cache"
-peercache="${cmc_data_dir}/cmc-peer-cache"
-ctrlog="${cmc_data_dir}/cmc-container-measurements"
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -d "${cmc}" ]]; then
+  echo "CMC directory ${cmc} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+log_dir="${data}/logs"
+
+metadata="${data}/metadata-signed"
+storage="${data}/cmc-storage"
+cache="${data}/cmc-cache"
+peercache="${data}/cmc-peer-cache"
+ctrlog="${data}/cmc-container-measurements"
+scripts="${cmc}/example-setup"
 
 est_params=(
     "-port" "9000" \
-    "-signingkey"           "${cmc_data_dir}/pki/ca-key.pem" \
-    "-signingcerts"         "${cmc_data_dir}/pki/ca.pem" \
-    "-httpfolder"           "${cmc_data_dir}" \
-    "-tpmekcertdb"          "${cmc_data_dir}/tpm-ek-certs.db" \
-    "-estkey"               "${cmc_data_dir}/pki/est-key.pem" \
-    "-estcerts"             "${cmc_data_dir}/pki/est.pem" \
+    "-signingkey"           "${data}/pki/ca-key.pem" \
+    "-signingcerts"         "${data}/pki/ca.pem" \
+    "-httpfolder"           "${data}" \
+    "-tpmekcertdb"          "${data}/tpm-ek-certs.db" \
+    "-estkey"               "${data}/pki/est-key.pem" \
+    "-estcerts"             "${data}/pki/est.pem" \
     "-loglevel"             "trace" \
     "-logfile"              "${log_dir}/estserver.log" \
     "-verifyekcert=false" \
@@ -126,7 +144,7 @@ testtool_params=(
     "-report" "attestation-report" \
     "-result" "attestation-result.json" \
     "-nonce" "nonce" \
-    "-ca" "${cmc_data_dir}/pki/ca.pem" \
+    "-ca" "${data}/pki/ca.pem" \
     "-mtls=true" \
     "-attest" "mutual" \
     "-loglevel" "trace" \
@@ -167,7 +185,7 @@ sudo rm -rf "${log_dir}"
 mkdir -p "${log_dir}"
 
 # Start est server
-sudo "${cmc_dir}/est/estserver/estserver" "${est_params[@]}" &
+sudo "${cmc}/est/estserver/estserver" "${est_params[@]}" &
 disown
 sleep 0.2
 stty sane
@@ -181,10 +199,13 @@ do
 
         # Generate metadata for serializer (do not generate app manifest for failed attestation test)
         echo "Generating ${ar_serializer} metadata =================================================="
-        "${cmc_data_dir}/update-platform" "${cmc_data_dir}" "${ar_serializer}" > "${metadata_log}" 2>&1
+        "${scripts}/generate-device-description" "${data}" > "${metadata_log}" 2>&1
+        "${scripts}/generate-rtm-manifest-tpm" "${data}" >> "${metadata_log}" 2>&1
+        "${scripts}/generate-os-manifest-tpm" "${data}" >> "${metadata_log}" 2>&1
         if [[ "${success}" == "success" ]]; then
-            "${cmc_data_dir}/update-app-manifest-live" "${cmc_data_dir}" "${ar_serializer}" > "${metadata_log}" 2>&1
+            "${scripts}/generate-app-manifest-live-tpm" "${data}" >> "${metadata_log}" 2>&1
         fi
+        "${scripts}/sign-metadata" "${data}" "${ar_serializer}" >> "${metadata_log}" 2>&1
 
         # Test CMC with the parameter matrix
         for api_serializer in "${api_serializers[@]}"
@@ -194,7 +215,7 @@ do
                 cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}.log"
 
                 echo "Starting cmcd"
-                sudo "${cmc_dir}/cmcd/cmcd" \
+                sudo "${cmc}/cmcd/cmcd" \
                     "${cmc_params[@]}" \
                     -logfile "${cmc_log}" \
                     -api "${protocols[i]}" \
@@ -212,7 +233,7 @@ do
 
                     printf "TEST MODE %-8s | ATT %-7s | AR %s | SER %s | API %s\t" "${modes_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
 
-                    "${cmc_dir}/testtool/testtool" \
+                    "${cmc}/testtool/testtool" \
                         "${testtool_params[@]}" \
                         -logfile "${server_log}" \
                         -mode ${modes_server[j]} \
@@ -224,7 +245,7 @@ do
                     wait_for_message $! "${server_log}" "${modes_server_ready_msg[j]}"
                     stty sane
 
-                    "${cmc_dir}/testtool/testtool" \
+                    "${cmc}/testtool/testtool" \
                         "${testtool_params[@]}" \
                         -logfile "${client_log}" \
                         -mode "${modes_client[j]}" \

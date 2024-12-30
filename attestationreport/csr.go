@@ -29,7 +29,6 @@ func GetDeviceConfig(s Serializer, metadata map[string][]byte) (*DeviceConfig, e
 
 	for i, m := range metadata {
 
-		// Extract plain payload (i.e. the manifest/description itself)
 		payload, err := s.GetPayload(m)
 		if err != nil {
 			log.Warnf("Failed to parse metadata object %v: %v", i, err)

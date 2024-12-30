@@ -1,0 +1,10 @@
+{
+    "type" : "Company Description",
+    "name" : "",
+    "version" : "",
+    "description" : "",
+	"validity" : {
+		"notBefore": "",
+		"notAfter": ""
+	}
+}

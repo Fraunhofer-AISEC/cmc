@@ -19,6 +19,7 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 - A Linux platform
 - For TPM attestation, access to `/dev/tpmrm0` or `/dev/tpm0`.
 - For AMD SEV-SNP an SNP-capable AMD server and an SNP VM with access to `/dev/sev-guest`
+- for Intel SGX an Intel SGX capable machine with all required Intel SGX software installed
 
 ## Prerequisites
 
@@ -59,8 +60,8 @@ go install ./...
 ## Quick Start
 
 Create a demo PKI and all required metadata for a TPM-based attestation:
-```
-./cmc/example-setup/setup-cmc <cmc-folder> <metadata-folder> json
+```sh
+./cmc/example-setup/setup-cmc-tpm <cmc-folder> <metadata-folder> json
 ```
 `<cmc-folder>` is the relative or absolute path to the cloned `cmc` repository.
 `<metadata-folder>` is an arbitrary folder that will be created and that will store metadata and

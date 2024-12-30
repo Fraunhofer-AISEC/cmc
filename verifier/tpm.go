@@ -228,7 +228,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				}
 				detailedResults = append(detailedResults, measResult)
 
-				log.Tracef("Found PCR%v measurement %v: %v in reference values",
+				log.Tracef("Found refval for PCR%v measurement %v: %v",
 					pcr, nameInfo, hex.EncodeToString(event.Sha256))
 			}
 			pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])

@@ -53,7 +53,7 @@ mrsigner=$(echo "$(ego signerid testtool)" | awk 'NR==1')
 cp -r "${cmc}/example-setup/"* "${data}"
 
 # Generate a PKI
-"${data}/setup-pki" -i "${data}" -o "${data}/pki"
+"${data}/setup-pki" "${data}/pki-input" "${data}/pki"
 
 cd "${data}"
 

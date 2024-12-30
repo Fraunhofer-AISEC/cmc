@@ -250,7 +250,7 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 			if in.Type == out.Type {
 				// Metadata which can be present multiple times must be checked by its
 				// unique name
-				if in.Type == "App Manifest" || in.Type == "App Description" {
+				if in.Type == "Manifest" || in.Type == "Manifest Description" {
 					if in.Name == out.Name {
 						// Metadata is already present, compare versions
 						log.Tracef("Checking if %v: %v is newer then %v:%v", in.Name, in.Version, out.Name, out.Version)

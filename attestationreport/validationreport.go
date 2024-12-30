@@ -31,7 +31,7 @@ type VerificationResult struct {
 	Version         string              `json:"version" cbor:"0,keyasint"`
 	Type            string              `json:"type" cbor:"1,keyasint"`
 	Success         bool                `json:"success" cbor:"2,keyasint"`
-	ErrorCode       ErrorCode           `json:"errorCode,omitempty" cbor:"3,keyasint,omitempty"`
+	ErrorCodes      []ErrorCode         `json:"errorCodes,omitempty" cbor:"3,keyasint,omitempty"`
 	Prover          string              `json:"prover,omitempty" cbor:"4,keyasint,omitempty"`
 	Created         string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
 	CertLevel       int                 `json:"certLevel" cbor:"6,keyasint"`
@@ -42,33 +42,24 @@ type VerificationResult struct {
 }
 
 type MetadataSummary struct {
-	DevDescResult  MetadataResult   `json:"deviceDescValidation" cbor:"0,keyasint"`
-	RtmResult      MetadataResult   `json:"rtmValidation" cbor:"1,keyasint"`
-	OsResult       MetadataResult   `json:"osValidation" cbor:"2,keyasint"`
-	AppResults     []MetadataResult `json:"appValidation,omitempty" cbor:"3,keyasint,omitempty"`
-	CompDescResult *MetadataResult  `json:"companyValidation,omitempty" cbor:"4,keyasint,omitempty"`
+	DevDescResult       MetadataResult      `json:"deviceDescValidation" cbor:"0,keyasint"`
+	ManifestResults     []MetadataResult    `json:"manifestValidation" cbor:"1,keyasint"`
+	CompDescResult      *MetadataResult     `json:"companyValidation,omitempty" cbor:"2,keyasint,omitempty"`
+	CompatibilityResult CompatibilityResult `json:"compatibilityValidation" cbor:"3,keyasint"`
 }
 
 type MetadataResult struct {
-	MetaInfo
-	Summary        Result                 `json:"result" cbor:"10,keyasint"`
-	ValidityCheck  Result                 `json:"validityCheck,omitempty" cbor:"11,keyasint,omitempty"`
-	CertLevel      int                    `json:"certLevel,omitempty" cbor:"12,keyasint,omitempty"`
-	Description    string                 `json:"description,omitempty" cbor:"13,keyasint,omitempty"`
-	Location       string                 `json:"location,omitempty" cbor:"14,keyasint,omitempty"`
-	Details        map[string]interface{} `json:"details,omitempty" cbor:"15,keyasint,omitempty"`
-	DevDescResult                         // For device descriptions only
-	SignatureCheck []SignatureResult      `json:"signatureValidation" cbor:"30,keyasint,omitempty"`
+	Metadata
+	Summary        Result            `json:"result" cbor:"40,keyasint"`
+	ValidityCheck  Result            `json:"validityCheck,omitempty" cbor:"41,keyasint,omitempty"`
+	SignatureCheck []SignatureResult `json:"signatureValidation" cbor:"42,keyasint,omitempty"`
 }
 
-// DevDescResult represents the results of the validation of the
-// Device Description in the Attestation Report.
-type DevDescResult struct {
-	CorrectRtm          *Result  `json:"correctRtm,omitempty" cbor:"20,keyasint,omitempty"`
-	CorrectOs           *Result  `json:"correctOs,omitempty" cbor:"21,keyasint,omitempty"`
-	CorrectApps         []Result `json:"correctApps,omitempty" cbor:"22,keyasint,omitempty"`
-	RtmOsCompatibility  *Result  `json:"rtmOsCompatibility,omitempty" cbor:"23,keyasint,omitempty"`
-	OsAppsCompatibility []Result `json:"osAppCompatibility,omitempty" cbor:"24,keyasint,omitempty"`
+type CompatibilityResult struct {
+	Summary               Result   `json:"result" cbor:"0,keyasint"`
+	DescriptionMatch      []Result `json:"descriptionMatch,omitempty" cbor:"1,keyasint,omitempty"`
+	ManifestMatch         []Result `json:"manifestMatch,omitempty" cbor:"2,keyasint,omitempty"`
+	ManifestCompatibility []Result `json:"manifestCompatibility,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type MeasurementResult struct {
@@ -459,11 +450,10 @@ const (
 	ParseTcbInfo
 	ParseJSON
 	ParseCBOR
-	ParseOSManifest
+	ParseManifest
 	ParseEvidence
 	ParseExtensions
 	ParseQEIdentity
-	ParseRTMManifest
 	ParseTime
 	PolicyEngineNotImplemented
 	RefValTypeNotSupported
@@ -483,10 +473,9 @@ const (
 	VerifyAR
 	VerifyCertChain
 	VerifyPCKChain
-	VerifyOSManifest
+	VerifyManifest
 	VerifyPolicies
 	VerifyQEIdentityErr
-	VerifyRTMManifest
 	VerifySignature
 	VerifyTCBChain
 	VerifyTcbInfo
@@ -495,6 +484,8 @@ const (
 	DeviceDescriptionNotPresent
 	UnknownMetadata
 	InvalidVersion
+	NoRootManifest
+	MultipleRootManifests
 )
 
 func (e ErrorCode) String() string {
@@ -569,16 +560,14 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Parse JSON error)", int(e))
 	case ParseCBOR:
 		return fmt.Sprintf("%v (Parse CBOR error)", int(e))
-	case ParseOSManifest:
-		return fmt.Sprintf("%v (Parse OS manifest error)", int(e))
 	case ParseEvidence:
 		return fmt.Sprintf("%v (Parse evidence error)", int(e))
 	case ParseExtensions:
 		return fmt.Sprintf("%v (Parse extensions error)", int(e))
 	case ParseQEIdentity:
 		return fmt.Sprintf("%v (Parse QE identity error)", int(e))
-	case ParseRTMManifest:
-		return fmt.Sprintf("%v (Parse RTM manifest error)", int(e))
+	case ParseManifest:
+		return fmt.Sprintf("%v (Parse manifest error)", int(e))
 	case ParseTime:
 		return fmt.Sprintf("%v (Parse time error)", int(e))
 	case PolicyEngineNotImplemented:
@@ -617,14 +606,12 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Verify certificate chain error)", int(e))
 	case VerifyPCKChain:
 		return fmt.Sprintf("%v (Verify PCK chain error)", int(e))
-	case VerifyOSManifest:
-		return fmt.Sprintf("%v (Verify OS manifest error)", int(e))
+	case VerifyManifest:
+		return fmt.Sprintf("%v (Verify manifest error)", int(e))
 	case VerifyPolicies:
 		return fmt.Sprintf("%v (Verify policies error)", int(e))
 	case VerifyQEIdentityErr:
 		return fmt.Sprintf("%v (Verify QE identity error)", int(e))
-	case VerifyRTMManifest:
-		return fmt.Sprintf("%v (Verify RTM manifest error)", int(e))
 	case VerifySignature:
 		return fmt.Sprintf("%v (Verify signature error)", int(e))
 	case VerifyTCBChain:
@@ -641,6 +628,10 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Unknown metadata error)", int(e))
 	case InvalidVersion:
 		return fmt.Sprintf("%v (Invalid attestation report version)", int(e))
+	case NoRootManifest:
+		return fmt.Sprintf("%v (No root manifest)", int(e))
+	case MultipleRootManifests:
+		return fmt.Sprintf("%v (Multiple root manifests)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -664,6 +655,7 @@ func (r *Result) PrintErr(format string, args ...interface{}) {
 	} else {
 		log.Warnf("%v failed with error code %v", fmt.Sprintf(format, args...), r.ErrorCode)
 	}
+
 	if r.Expected != "" {
 		log.Warnf("\tExpected: %v", r.Expected)
 		log.Warnf("\tGot     : %v", r.Got)
@@ -687,10 +679,10 @@ func (r *VerificationResult) PrintErr() {
 
 	if !r.Success {
 
-		if r.ErrorCode == NotSet {
+		if len(r.ErrorCodes) == 0 {
 			log.Warn("Verification failed")
 		} else {
-			log.Warnf("Verification failed with error code: %v", r.ErrorCode)
+			log.Warnf("Verification failed with error codes: %v", r.ErrorCodes)
 		}
 
 		for _, m := range r.Measurements {
@@ -744,42 +736,28 @@ func (r *VerificationResult) PrintErr() {
 			r.Metadata.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
 		}
 
-		r.Metadata.OsResult.Summary.PrintErr("OS Manifest check")
-		for _, s := range r.Metadata.OsResult.SignatureCheck {
-			s.PrintErr("OS Manifest")
-		}
-		r.Metadata.OsResult.ValidityCheck.PrintErr("OS Manifest validity check")
-
-		r.Metadata.RtmResult.Summary.PrintErr("RTM Manifest check")
-		for _, s := range r.Metadata.RtmResult.SignatureCheck {
-			s.PrintErr("RTM Manifest")
-		}
-		r.Metadata.RtmResult.ValidityCheck.PrintErr("RTM Manifest validity check")
-
-		for _, a := range r.Metadata.AppResults {
-			a.Summary.PrintErr("App Manifest %v check", a.Name)
-			for _, s := range a.SignatureCheck {
-				s.PrintErr("App Manifest %v", a.Name)
+		for _, mr := range r.Metadata.ManifestResults {
+			mr.Summary.PrintErr("%v %v check", mr.Type, mr.Name)
+			for _, s := range mr.SignatureCheck {
+				s.PrintErr("App Manifest %v", mr.Name)
 			}
-			a.ValidityCheck.PrintErr("App Manifest %v validity check", a.Name)
+			mr.ValidityCheck.PrintErr("App Manifest %v validity check", mr.Name)
 		}
 
 		r.Metadata.DevDescResult.Summary.PrintErr("Device Description check")
 		for _, s := range r.Metadata.DevDescResult.SignatureCheck {
 			s.PrintErr("Device Description")
 		}
-		r.Metadata.DevDescResult.CorrectRtm.PrintErr("Correct RTM check")
-		r.Metadata.DevDescResult.CorrectOs.PrintErr("Correct OS check")
-		for _, a := range r.Metadata.DevDescResult.CorrectApps {
-			a.PrintErr("Correct App check")
-		}
-		r.Metadata.DevDescResult.RtmOsCompatibility.PrintErr("RTM OS compatibility")
-		for _, a := range r.Metadata.DevDescResult.OsAppsCompatibility {
-			a.PrintErr("OS App compatibility check")
-		}
 
-		if !r.PolicySuccess {
-			log.Warnf("Custom policy validation failed")
+		r.Metadata.CompatibilityResult.Summary.PrintErr("Metadata compatibility check")
+		for _, mr := range r.Metadata.CompatibilityResult.ManifestCompatibility {
+			mr.PrintErr("Manifest compatibility check")
+		}
+		for _, dr := range r.Metadata.CompatibilityResult.DescriptionMatch {
+			dr.PrintErr("Description -> Manifest match")
+		}
+		for _, dr := range r.Metadata.CompatibilityResult.ManifestMatch {
+			dr.PrintErr("Manifest -> Description match")
 		}
 
 		if !r.PolicySuccess {

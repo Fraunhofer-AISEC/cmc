@@ -69,18 +69,12 @@ For a more complex PKI, have a look at the [IDS-Setup](./ids-example-setup.md).
 ### 3. Generate metadata
 
 The example setup (folder `cmc/example-setup`) contains templates for the required metadata files
-in JSON. The attributes of these files can be adjusted according to individual requirements:
+in JSON.
 
-- **rtm.manifest.json**: Contains information about the Root of Trust for Measurements, which
-usually comprises the reference values (hashes) for BIOS/UEFI, bootloader and other early boot
-components
-- **os.manifest.json**: Contains the operating system reference values and information
-- **app.manifest.json**: Contains the reference values for an app on the system
+- **device.description.json**: Metadata describing the overall platform
+- **manifest.description.json**: Embedded into device description, describes an instance of a manifest (i.e., a software layer or application)
+- **manifest.json**: Template for a manifest containing reference values for a specific software layer or single application
 - **company.description.json**: Optional, metadata describing the operater of the computing platform
-- **device.description.json**: Metadata describing the overall platform, contains links to
-RTM Manifest, OS Manifest
-- **app.description.json**: Metadata describing an application, links to an App Manifest. Must be
-embedded in to the `appDescriptions` property of the device description.
 - **device.config.json**: Signed local device configuration, contains e.g. the parameters for
 the Certificate Signing Requests for the attestation and identity keys
 

@@ -1,8 +1,0 @@
-{
-	"type": "App Description",
-	"name": "de.test.app-description.example",
-	"version": "2024-02-22T15:36:34Z",
-	"appManifest": "de.test.app.example",
-	"externalConnections": [],
-	"environment":  []
-}

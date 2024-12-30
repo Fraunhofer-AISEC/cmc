@@ -78,7 +78,7 @@ func Verify(
 	if err != nil {
 		log.Debugf("Failed to parse specified CA certificate(s): %v", err)
 		result.Success = false
-		result.ErrorCode = ar.ParseCA
+		result.ErrorCodes = append(result.ErrorCodes, ar.ParseCA)
 		return result
 	}
 
@@ -88,7 +88,7 @@ func Verify(
 	if err != nil {
 		log.Debug("Unable to detect AR serialization format")
 		result.Success = false
-		result.ErrorCode = ar.UnknownSerialization
+		result.ErrorCodes = append(result.ErrorCodes, ar.UnknownSerialization)
 		return result
 	}
 	log.Tracef("Detected %v serialization", s.String())
@@ -97,24 +97,24 @@ func Verify(
 	report, tr, code := verifyAr(arRaw, cas, s)
 	result.ReportSignature = tr.SignatureCheck
 	if code != ar.NotSet {
-		result.ErrorCode = code
+		result.ErrorCodes = append(result.ErrorCodes, code)
 		result.Success = false
 		return result
 	}
 
 	// Verify and unpack metadata from attestation report
-	devDescName, metadata, metaResults, ec, ok := verifyMetadata(cas, s, metadatamap)
+	metaResults, ec, ok := verifyMetadata(cas, s, metadatamap)
 	if !ok {
 		result.Success = false
-		result.ErrorCode = ec
+		result.ErrorCodes = append(result.ErrorCodes, ec...)
 	}
 	result.Metadata = metaResults
 
-	refVals, err := collectReferenceValues(metadata)
+	refVals, err := collectReferenceValues(metaResults.ManifestResults)
 	if err != nil {
 		log.Debugf("Failed to collect reference values: %v", err)
 		result.Success = false
-		result.ErrorCode = ar.RefValTypeNotSupported
+		result.ErrorCodes = append(result.ErrorCodes, ar.RefValTypeNotSupported)
 	}
 
 	hwAttest := false
@@ -172,7 +172,7 @@ func Verify(
 		default:
 			log.Debugf("Unsupported measurement type '%v'", mtype)
 			result.Success = false
-			result.ErrorCode = ar.MeasurementTypeNotSupported
+			result.ErrorCodes = append(result.ErrorCodes, ar.MeasurementTypeNotSupported)
 		}
 	}
 
@@ -180,11 +180,7 @@ func Verify(
 	// level for the device's software stack
 	aggCertLevel := 0
 	levels := make([]int, 0)
-	for _, m := range metadata {
-		if m.Type == "Device Description" || m.Type == "Company Description" {
-			// Descriptions do not have a certification level
-			continue
-		}
+	for _, m := range metaResults.ManifestResults {
 		levels = append(levels, m.CertLevel)
 	}
 	if len(levels) > 0 {
@@ -196,7 +192,7 @@ func Verify(
 	// must fail
 	if !hwAttest && aggCertLevel > 1 {
 		log.Debugf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
-		result.ErrorCode = ar.InvalidCertLevel
+		result.ErrorCodes = append(result.ErrorCodes, ar.InvalidCertLevel)
 		result.Success = false
 	}
 	result.CertLevel = aggCertLevel
@@ -208,14 +204,14 @@ func Verify(
 		if !ok {
 			log.Debugf("Internal error: policy engine %v not implemented", polEng)
 			result.Success = false
-			result.ErrorCode = ar.PolicyEngineNotImplemented
+			result.ErrorCodes = append(result.ErrorCodes, ar.PolicyEngineNotImplemented)
 			result.PolicySuccess = false
 		} else {
 			ok = p.Validate(policies, result)
 			if !ok {
 				log.Debug("Custom policy validation failed")
 				result.Success = false
-				result.ErrorCode = ar.VerifyPolicies
+				result.ErrorCodes = append(result.ErrorCodes, ar.VerifyPolicies)
 				result.PolicySuccess = false
 			}
 		}
@@ -224,7 +220,7 @@ func Verify(
 	}
 
 	// Add additional information
-	result.Prover = devDescName
+	result.Prover = metaResults.DevDescResult.Name
 	if result.Prover == "" {
 		result.Prover = "Unknown"
 	}
@@ -267,13 +263,16 @@ func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer
 	return &report, result, ar.NotSet
 }
 
+// verifyMetadata takes the metadata map with keys being the hashes of the raw metadata items,
+// a set of CAs and a serializer and performs a validity, signature and certificate chain validation
+// as well as compatibility checks: The device description must reference all manifests, and
+// starting from an inherently trusted root manifest, all manifests must have a compatible
+// base layer.
 func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[string][]byte,
-) (string, map[string]ar.Metadata, ar.MetadataSummary, ar.ErrorCode, bool) {
+) (ar.MetadataSummary, []ar.ErrorCode, bool) {
 
-	devDescName := ""
-	metadata := map[string]ar.Metadata{}
 	results := ar.MetadataSummary{}
-	errCode := ar.NotSet
+	errCodes := make([]ar.ErrorCode, 0)
 	success := true
 	var err error
 
@@ -291,8 +290,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 			}
 		}
 
-		m := new(ar.Metadata)
-		err := s.Unmarshal(payload, m)
+		err := s.Unmarshal(payload, &result.Metadata)
 		if err != nil {
 			log.Debugf("Unpacking of metadata item %v failed: %v", hash, err)
 			result.Summary.Success = false
@@ -300,157 +298,213 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 			success = false
 		}
 
-		result.MetaInfo = m.MetaInfo
-		result.Description = m.Description
-		result.Location = m.Location
-		result.CertLevel = m.CertLevel
-		result.Details = m.Details
-		result.ValidityCheck = checkValidity(m.Validity)
+		result.ValidityCheck = checkValidity(result.Metadata.Validity)
 		if !result.ValidityCheck.Success {
-			log.Debugf("%v: %v expired (NotBefore: %v, NotAfter: %v)", m.Type, m.Name, m.Validity.NotBefore, m.Validity.NotAfter)
+			log.Debugf("%v: %v expired (NotBefore: %v, NotAfter: %v)", result.Metadata.Type, result.Metadata.Name, result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
 			result.Summary.Success = false
 			success = false
 		} else {
-			log.Debugf("Checking validity of %v: %v successful", m.Type, m.Name)
+			log.Debugf("Checking validity of %v: %v successful", result.Metadata.Type, result.Metadata.Name)
 		}
 
-		metadata[m.Name] = *m
-
-		switch m.Type {
-
+		switch result.Metadata.Type {
 		case "Device Description":
-			devDescName = m.Name
 			results.DevDescResult = result
 		case "Company Description":
 			results.CompDescResult = &result
-		case "RTM Manifest":
-			results.RtmResult = result
-		case "OS Manifest":
-			results.OsResult = result
-		case "App Manifest":
-			results.AppResults = append(results.AppResults, result)
+		case "Manifest":
+			results.ManifestResults = append(results.ManifestResults, result)
 		default:
-			log.Debugf("Unknown manifest type %v", m.Type)
+			log.Debugf("Unknown manifest type %v", result.Metadata.Type)
 			success = false
-			errCode = ar.UnknownMetadata
+			errCodes = append(errCodes, ar.UnknownMetadata)
 		}
 
 	}
 
 	// Check metadata compatibility and update device description result
-	_, ok := metadata[devDescName]
-	if !ok {
+	if results.DevDescResult.Name == "" {
 		log.Debugf("Device description not present")
 		success = false
-		errCode = ar.DeviceDescriptionNotPresent
-	} else {
-		r, ok := checkMetadataCompatibility(devDescName, metadata)
-		if !ok {
-			success = false
-		}
-		results.DevDescResult.Summary.Success = ok
-		results.DevDescResult.DevDescResult = *r
+		errCodes = append(errCodes, ar.DeviceDescriptionNotPresent)
 	}
 
-	return devDescName, metadata, results, errCode, success
+	r, errCode, ok := checkMetadataCompatibility(&results)
+	if !ok {
+		success = false
+	}
+	results.CompatibilityResult = *r
+	if errCode != ar.NotSet {
+		errCodes = append(errCodes, errCode)
+	}
+
+	return results, errCodes, success
 }
 
-func checkMetadataCompatibility(devDescName string, metadata map[string]ar.Metadata) (*ar.DevDescResult, bool) {
+func checkMetadataCompatibility(metadata *ar.MetadataSummary) (*ar.CompatibilityResult, ar.ErrorCode, bool) {
 
-	DevDescResult := &ar.DevDescResult{
-		CorrectRtm:         &ar.Result{},
-		CorrectOs:          &ar.Result{},
-		RtmOsCompatibility: &ar.Result{},
-	}
 	success := true
 
-	// Fail silently as the error is already logged in the calling function
-	deviceDescription, ok := metadata[devDescName]
-	if !ok {
-		return nil, false
+	// Gather all manifest names referenced in the manifest descriptions
+	descManifests := make([]string, 0, len(metadata.DevDescResult.Descriptions))
+	for _, m := range metadata.DevDescResult.Descriptions {
+		descManifests = append(descManifests, m.Manifest)
 	}
 
-	// Check that the OS and RTM Manifest are specified in the Device Description
-	if _, ok := metadata[deviceDescription.RtmManifest]; ok {
-		DevDescResult.CorrectRtm.Success = true
-	} else {
-		log.Debugf("Device Description listed wrong RTM Manifest: %v", deviceDescription.RtmManifest)
-		DevDescResult.CorrectRtm.Success = false
-		DevDescResult.CorrectRtm.Expected = deviceDescription.RtmManifest
-		success = false
-	}
-	if _, ok := metadata[deviceDescription.OsManifest]; ok {
-		DevDescResult.CorrectOs.Success = true
-	} else {
-		log.Debugf("Device Description listed wrong OS Manifest: %v", deviceDescription.OsManifest)
-		DevDescResult.CorrectOs.Success = false
-		DevDescResult.CorrectOs.Expected = deviceDescription.OsManifest
-		success = false
+	// Gather all manifest names from the manifests
+	manifestNames := make([]string, 0, len(metadata.ManifestResults))
+	for _, m := range metadata.ManifestResults {
+		manifestNames = append(manifestNames, m.Name)
 	}
 
-	// Extract app manifest names
-	appManifestNames := make([]string, 0)
-	for _, m := range metadata {
-		if m.Type == "App Description" {
-			appManifestNames = append(appManifestNames, m.Name)
-		}
-	}
+	// Check that each manifest description has a corresponding manifest
+	log.Debugf("Iterating manifest descriptions length %v", len(metadata.DevDescResult.Descriptions))
+	descriptionMatch := make([]ar.Result, 0, len(metadata.DevDescResult.Descriptions))
+	for _, desc := range metadata.DevDescResult.Descriptions {
 
-	// Check that every App Description has a corresponding App Manifest
-	log.Debugf("Iterating app descriptions length %v", len(deviceDescription.AppDescriptions))
-	for _, desc := range deviceDescription.AppDescriptions {
-
-		_, ok := metadata[desc.AppManifest]
+		ok := internal.Contains(desc.Manifest, manifestNames)
 		if !ok {
-			log.Debugf("No app manifest for app description: %v", desc.AppManifest)
+			log.Debugf("No manifest for manifest description: %v", desc.Manifest)
+			success = false
 		}
 
 		r := ar.Result{
 			Success:       ok,
-			Got:           desc.AppManifest,
-			ExpectedOneOf: appManifestNames,
+			Got:           desc.Manifest,
+			ExpectedOneOf: manifestNames,
 		}
-		DevDescResult.CorrectApps = append(DevDescResult.CorrectApps, r)
+		descriptionMatch = append(descriptionMatch, r)
 
 	}
 
-	// Check that the Rtm Manifest is compatible with the OS Manifest
-	if rtm, ok := metadata[deviceDescription.RtmManifest]; ok {
-		if os, ok := metadata[deviceDescription.OsManifest]; ok {
-			if contains(rtm.Name, os.BaseLayers) {
-				DevDescResult.RtmOsCompatibility.Success = true
-			} else {
-				log.Debugf("OS Manifest %v is not compatible with RTM Manifest %v",
-					rtm.Name, os.Name)
-				DevDescResult.RtmOsCompatibility.Success = false
-				DevDescResult.RtmOsCompatibility.ExpectedOneOf = os.BaseLayers
-				DevDescResult.RtmOsCompatibility.Got = rtm.Name
+	// Check that each manifest has a corresponding manifest description
+	log.Debugf("Iterating manifests length %v", len(metadata.ManifestResults))
+	manifestMatch := make([]ar.Result, 0, len(metadata.ManifestResults))
+	for _, m := range metadata.ManifestResults {
+
+		ok := internal.Contains(m.Name, descManifests)
+		if !ok {
+			log.Debugf("No manifest description for manifest: %v", m.Name)
+			success = false
+			r := ar.Result{
+				Success:       false,
+				Got:           m.Name,
+				ExpectedOneOf: descManifests,
+			}
+			manifestMatch = append(manifestMatch, r)
+		}
+		// Found manifests have already been recorded, nothing to do
+	}
+
+	// Check that each manifest has a compatible base layer
+	manifestResults, manifestCompatibility, errCode, ok := processManifests(metadata.ManifestResults)
+	if !ok {
+		log.Debug("Manifest check failed")
+		success = false
+	}
+	metadata.ManifestResults = manifestResults
+
+	result := &ar.CompatibilityResult{
+		Summary: ar.Result{
+			Success:   success,
+			ErrorCode: errCode,
+		},
+		DescriptionMatch:      descriptionMatch,
+		ManifestMatch:         manifestMatch,
+		ManifestCompatibility: manifestCompatibility,
+	}
+
+	return result, errCode, success
+}
+
+func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.Result, ar.ErrorCode, bool) {
+
+	mm := make(map[string][]ar.MetadataResult)
+	var root ar.MetadataResult
+	results := make([]ar.Result, 0)
+	success := true
+
+	// Organize manifests by BaseLayer
+	foundRoot := false
+	for _, m := range manifests {
+		if len(m.BaseLayers) == 1 && m.Name == m.BaseLayers[0] {
+			// Check that there is exactly one root of trust manifest
+			if foundRoot {
+				log.Debugf("Found additional root of trust manifest %v (already got %v)", m.Name, root.Name)
 				success = false
+				return manifests, nil, ar.MultipleRootManifests, success
+			}
+			root = m
+			foundRoot = true
+		} else {
+			for _, base := range m.BaseLayers {
+				mm[base] = append(mm[base], m)
 			}
 		}
 	}
 
-	// Check that the OS Manifest is compatible with all App Manifests
-	if os, ok := metadata[deviceDescription.OsManifest]; ok {
-		for _, a := range metadata {
-			if a.Type == "App Manifest" {
-				r := ar.Result{
+	// Start the sorted list with the root
+	var sorted []ar.MetadataResult
+	var unplaced []ar.MetadataResult
+	if root.Name != "" {
+		sorted = append(sorted, root)
+		results = append(results, ar.Result{
+			Success: true,
+			Got:     root.Name,
+		})
+	} else {
+		log.Debug("Did not find root manifest")
+		unplaced = manifests
+		success = false
+		return manifests, nil, ar.NoRootManifest, success
+	}
+
+	// Track processed layers
+	processed := map[string]bool{root.Name: true}
+
+	// Iteratively add dependent layers
+	for i := 0; i < len(sorted); i++ {
+		current := sorted[i]
+		for _, dependent := range mm[current.Name] {
+			if !processed[dependent.Name] && hasCompatibleBaseLayer(dependent.BaseLayers, processed) {
+				sorted = append(sorted, dependent)
+				processed[dependent.Name] = true
+				results = append(results, ar.Result{
 					Success:       true,
-					ExpectedOneOf: a.BaseLayers,
-					Got:           os.Name,
-				}
-				if !contains(os.Name, a.BaseLayers) {
-					log.Debugf("App Manifest %v is not compatible with OS Manifest %v", a.Name, os.Name)
-					r.Success = false
-					success = false
-				}
-				DevDescResult.OsAppsCompatibility =
-					append(DevDescResult.OsAppsCompatibility, r)
+					Got:           dependent.Name,
+					ExpectedOneOf: dependent.BaseLayers,
+				})
 			}
 		}
 	}
 
-	return DevDescResult, success
+	// Identify manifests with no compatible base layer
+	for _, m := range manifests {
+		if !processed[m.Name] {
+			log.Debugf("%v has no compatible baselayer\n", m.Name)
+			unplaced = append(unplaced, m)
+			success = false
+			results = append(results, ar.Result{
+				Success:       false,
+				Got:           m.Name,
+				ExpectedOneOf: m.BaseLayers,
+			})
+		}
+	}
+
+	// Add unplaced manifests to the end of the list
+	sorted = append(sorted, unplaced...)
+
+	return sorted, results, ar.NotSet, success
+}
+
+func hasCompatibleBaseLayer(baseLayers []string, processed map[string]bool) bool {
+	for _, base := range baseLayers {
+		if processed[base] {
+			return true
+		}
+	}
+	return false
 }
 
 func checkValidity(val ar.Validity) ar.Result {
@@ -488,7 +542,7 @@ func checkValidity(val ar.Validity) ar.Result {
 	return result
 }
 
-func collectReferenceValues(metadata map[string]ar.Metadata) (map[string][]ar.ReferenceValue, error) {
+func collectReferenceValues(metadata []ar.MetadataResult) (map[string][]ar.ReferenceValue, error) {
 
 	refmap := make(map[string][]ar.ReferenceValue)
 	// Iterate over all manifests (iterator required)
@@ -507,7 +561,7 @@ func collectReferenceValues(metadata map[string]ar.Metadata) (map[string][]ar.Re
 			// in the reference value would always point to the last element in the map
 			m := metadata[i]
 			// Add a reference to the corresponding manifest to each reference value
-			r.SetManifest(&m)
+			r.SetManifest(&m.Metadata)
 
 			// Collect all reference values, depending on type, independent of the manifest
 			refmap[r.Type] = append(refmap[r.Type], r)
@@ -606,15 +660,6 @@ func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
 	}
 	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
 	return "", false
-}
-
-func contains(elem string, list []string) bool {
-	for _, s := range list {
-		if s == elem {
-			return true
-		}
-	}
-	return false
 }
 
 func extendSha256(hash []byte, data []byte) []byte {

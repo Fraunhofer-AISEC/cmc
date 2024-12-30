@@ -102,8 +102,6 @@ func convert(input []byte, outform string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to unmarshal: %v", err)
 	}
 
-	log.Infof("Manifest ociSpec: %T", m.OciSpec)
-
 	// Convert go representation to serialized output
 	output, err := so.Marshal(m)
 	if err != nil {

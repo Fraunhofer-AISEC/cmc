@@ -1,0 +1,18 @@
+{
+    "type": "Manifest",
+    "name": "",
+    "version" : "",
+	"validity" : {
+        "notBefore": "",
+		"notAfter": ""
+	},
+    "description": "",
+    "developerCommonName": "",
+    "baseLayers": [
+        ""
+    ],
+    "certLevel" : 0,
+    "referenceValues": [
+    ]
+}
+
