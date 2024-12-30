@@ -110,7 +110,8 @@ func saveResult(file, addr string, r *ar.VerificationResult) error {
 	if r.Success {
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", r.Prover, r.Created)
 	} else {
-		log.Infof("FAILED: Verification for Prover %v (%v)", r.Prover, r.Created)
+		log.Warnf("FAILED: Verification for Prover %v (%v)", r.Prover, r.Created)
+		r.PrintErr()
 	}
 
 	// Marshal the result (always as JSON for HTTP REST API and manual review)

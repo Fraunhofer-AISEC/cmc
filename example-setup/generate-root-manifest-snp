@@ -1,0 +1,108 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
+export PATH=${PATH}:${HOME}/go/bin
+
+if [[ "$#" -ne 1 ]]; then
+   echo "Usage: $(basename "$0") <data-folder>"
+   exit 1
+fi
+
+data=$(set -e; abs_path "${1}")
+input="${data}/metadata-templates"
+out="${data}/metadata-raw"
+
+device_description="${out}/device.description.json"
+ovmf="${data}/uefi/result/ovmf_img.fd"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -d "${input}" ]]; then
+  echo "Data directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+mkdir -p "${out}"
+
+echo "Using ${data} as directory for local data"
+
+# Retrieve high level details
+set +e
+firmware="unknown"
+bootloader=$(grub-install --version)
+kernel=$(uname -r)
+os=$(lsb_release -sd 2>/dev/null)
+set -e
+
+# Load manifest template
+manifestjson=$(cat "${input}/manifest.json")
+
+# Insert platform details
+manifestjson=$(echo "${manifestjson}" | jq ".details.firmware = \"${firmware}\"")
+manifestjson=$(echo "${manifestjson}" | jq ".details.bootloader = \"${bootloader}\"")
+manifestjson=$(echo "${manifestjson}" | jq ".details.kernel = \"${kernel}\"")
+manifestjson=$(echo "${manifestjson}" | jq ".details.os = \"${os}\"")
+
+json=$(cat "${input}/snp.referencevalue.json")
+
+# TODO parameters for vcpus and vmm-type
+ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus=2 --vmm-type=ec2 --ovmf="${ovmf}")
+
+# Get AMD cert chain for milan
+wget -O "${dir}/cert_chain" https://kdsintf.amd.com/vlek/v1/Milan/cert_chain
+awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${dir}/cert_chain" > "${dir}/ark_milan.pem"
+
+fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+
+# Insert reference values
+setjson "sha384" "${ref}"
+setjson "snp.version" 2
+setjson "snp.caFingerprint" "${fingerprint}"
+setjson "snp.policy.SingleSocket" false
+setjson "snp.policy.Debug" false
+setjson "snp.policy.Migration" false
+setjson "snp.policy.Smt" true
+setjson "snp.policy.AbiMajor" 0
+setjson "snp.policy.AbiMinor" 0
+setjson "snp.fw.build" 3
+setjson "snp.fw.major" 1
+setjson "snp.fw.minor" 49
+setjson "snp.tcb.bl" 2
+setjson "snp.tcb.tee" 0
+setjson "snp.tcb.snp" 5
+setjson "snp.tcb.ucode" 55
+
+refval="${json}"
+json="${manifestjson}"
+
+extendarr "referenceValues" "${refval}"
+
+# Save the RTM manifest
+printf "%s\n" "${json}" > "${out}/rtm.manifest.json"
+
+# App Description: Create corresponding app description
+appdesc=$(cat "${input}/manifest.description.json")
+appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
+appdesc=$(echo "${appdesc}" | jq ".manifest = \"${name}\"")
+
+# Device Description: Add/replace app description to/in device description
+devdesc=$(cat "${device_description}")
+exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
+if [[ "${exists}" = false ]]; then
+  echo "Adding app description to device description"
+else
+  echo "Replacing existing app description"
+  devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+fi
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+
+# Device Description: Store
+echo "Writing ${device_description}"
+printf "%s\n" "${devdesc}" > "${device_description}"

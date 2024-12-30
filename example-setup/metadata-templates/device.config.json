@@ -55,32 +55,5 @@
             },
             "sans": [ "127.0.0.1", "localhost", "nuc-02.aisec.fraunhofer.de" ]
         }
-    },
-    "snp": {
-        "akCsr": {
-            "subject": {
-                "commonName": "de.test.snp.ak.device0",
-                "country": "DE",
-                "organization": "Test Organization",
-                "organizationalUnit": "device",
-                "locality": "Munich",
-                "province": "BY",
-                "streetAddress": "teststreet 15",
-                "postalCode": "85748"
-            }
-        },
-        "ikCsr": {
-            "subject": {
-                "commonName": "de.test.snp.ik.device0",
-                "country": "DE",
-                "organization": "Test organization",
-                "organizationalUnit": "device",
-                "locality": "Munich",
-                "province": "BY",
-                "streetAddress": "teststreet 16",
-                "postalCode": "85748"
-            },
-            "sans": [ "127.0.0.1", "localhost", "nuc-02.aisec.fraunhofer.de" ]
-        }
     }
 }

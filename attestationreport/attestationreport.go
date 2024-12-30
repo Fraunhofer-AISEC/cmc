@@ -46,9 +46,7 @@ type AttestationReport struct {
 	Metadata     []MetadataDigest `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
-// MetadataDigest represents attestation report
-// elements of type 'RTM Manifest', 'OS Manifest', 'App Manifest'
-// 'Device Description' and 'Company Description'
+// MetadataDigest represents attestation report metadata elements
 type MetadataDigest struct {
 	Type   string  `json:"type" cbor:"0,keyasint"`
 	Digest HexByte `json:"digest" cbor:"1,keyasint"`
@@ -65,8 +63,8 @@ type Measurement struct {
 	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
-// Metadata represents attestation report elements of type 'RTM Manifest', 'OS Manifest',
-// 'App Manifest', 'Device Description' and 'Company Description'
+// Metadata represents attestation report elements of type 'Manifest'
+// 'Device Description', 'Manifest Description' and 'Company Description'
 type Metadata struct {
 	MetaInfo
 	Manifest
@@ -87,19 +85,15 @@ type MetaInfo struct {
 type Manifest struct {
 	ReferenceValues []ReferenceValue       `json:"referenceValues,omitempty" cbor:"10,keyasint,omitempty"`
 	DevCommonName   string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
-	BaseLayers      []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"` // Links to RtmManifest.Name or OsManifest.Name
+	BaseLayers      []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
 	CertLevel       int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
 	Details         map[string]interface{} `json:"details,omitempty" cbor:"14,keyasint,omitempty"`
 	OciSpec         *oci.Spec              `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"` // TODO move to app description
 }
 
-// DeviceDescription represents the attestation report
-// element of type 'Device Description'
 type DeviceDescription struct {
-	Location        string           `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
-	RtmManifest     string           `json:"rtmManifest,omitempty" cbor:"21,keyasint,omitempty"`
-	OsManifest      string           `json:"osManifest,omitempty" cbor:"22,keyasint,omitempty"`
-	AppDescriptions []AppDescription `json:"appDescriptions,omitempty" cbor:"23,keyasint,omitempty"`
+	Location     string                `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
+	Descriptions []ManifestDescription `json:"descriptions,omitempty" cbor:"21,keyasint,omitempty"`
 }
 
 // DeviceConfig contains the local device configuration parameters
@@ -116,12 +110,15 @@ type DeviceConfig struct {
 	}
 }
 
-// AppDescription represents the attestation report
-// element of type 'App Description'
-type AppDescription struct {
-	AppManifest string              `json:"appManifest,omitempty" cbor:"0,keyasint,omitempty"` // Links to App Manifest.Name
-	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"1,keyasint,omitempty"`
-	Environment []Environment       `json:"environment,omitempty" cbor:"2,keyasint,omitempty"`
+// ManifestDescription represents the attestation report
+// element of type 'Manifest Description'
+type ManifestDescription struct {
+	Type        string              `json:"type" cbor:"0,keyasint"`
+	Name        string              `json:"name" cbor:"1,keyasint"`
+	Description string              `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
+	Manifest    string              `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
+	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
+	Environment []Environment       `json:"environment,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // CertConfig contains the subject parameters for CSRs/Certs
@@ -287,23 +284,13 @@ type TDId struct {
 	MrConfigId    [48]byte `json:"mrConfigId" cbor:"2,keyasint"`
 }
 
-// InternalConnection represents the attestation report
-// element of type 'Internal Connection'
-type InternalConnection struct {
-	Type         string `json:"type" cbor:"0,keyasint"`
-	NameAppA     string `json:"nameAppA" cbor:"1,keyasint"`     // Links to AppDescription.Name
-	EndpointAppA string `json:"endpointAppA" cbor:"2,keyasint"` // Links to AppManifest.Endpoint
-	NameAppB     string `json:"nameAppB" cbor:"3,keyasint"`     // Links to AppDescription.Name
-	EndpointAppB string `json:"endpointAppB" cbor:"4,keyasint"` // Links to AppManifest.Endpoint
-}
-
 // ExternalInterface represents the attestation report
 // element of type 'External Interface'
 type ExternalInterface struct {
 	Type        string `json:"type" cbor:"0,keyasint"`
-	AppEndpoint string `json:"appEndpoint" cbor:"1,keyasint"` // Links to AppManifest.Endpoint
-	Interface   string `json:"interface" cbor:"2,keyasint"`   // Links to AppDescription.Name
-	Port        int    `json:"port" cbor:"3,keyasint"`        // Links to App Manifest.Endpoint
+	AppEndpoint string `json:"appEndpoint" cbor:"1,keyasint"`
+	Interface   string `json:"interface" cbor:"2,keyasint"`
+	Port        int    `json:"port" cbor:"3,keyasint"`
 }
 
 // Environment represents environment variables

@@ -1,0 +1,13 @@
+{
+	"type" : "Device Description",
+	"name" : "",
+	"version" : "",
+	"validity" : {
+		"notBefore": "",
+		"notAfter": ""
+	},
+	"description" : "",
+	"location" : "",
+	"descriptions": [
+	]
+}

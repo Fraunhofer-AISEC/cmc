@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2024 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,11 +27,9 @@ import (
 
 var log = logrus.WithField("service", "ar")
 
-// Generate generates an attestation report with the provided
-// nonce and manifests and descriptions metadata. The manifests and descriptions
-// must be either raw JWS tokens in the JWS JSON full serialization
-// format or CBOR COSE tokens. Takes a list of drivers providing a method
-// for collecting  the measurements from a hardware or software interface
+// Generate generates an attestation report with the provided nonce and metadata. The metadata must
+// either be in the form of JWS tokens infull serialization format or CBOR COSE tokens. The function
+// takes a list of drivers for collecting the measurements from a hardware or software interface
 func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []ar.Driver, s ar.Serializer,
 ) (*ar.AttestationReport, map[string][]byte, error) {
 
@@ -52,15 +50,15 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 		return nil, nil, fmt.Errorf("nonce exceeds maximum length of 32 bytes")
 	}
 
-	log.Debug("Adding manifests and descriptions to Attestation Report..")
+	log.Debug("Adding metadata to Attestation Report..")
 
-	// Step 1: Retrieve manifests and descriptions
+	// Step 1: Retrieve metadata
 	log.Trace("Parsing ", len(metadata), " meta-data objects..")
 	num := 0
 
 	for hash, m := range metadata {
 
-		// Extract plain payload (i.e. the manifest/description itself)
+		// Extract plain payload
 		data, err := s.GetPayload(m)
 		if err != nil {
 			log.Tracef("Failed to parse metadata object %v: %v", hash, err)

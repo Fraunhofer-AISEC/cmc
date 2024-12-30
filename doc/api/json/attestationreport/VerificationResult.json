@@ -55,6 +55,60 @@
         "width"
       ]
     },
+    "CertConfig": {
+      "properties": {
+        "akCsr": {
+          "$ref": "#/$defs/CsrParams"
+        },
+        "ikCsr": {
+          "$ref": "#/$defs/CsrParams"
+        }
+      },
+      "type": "object"
+    },
+    "CompatibilityResult": {
+      "properties": {
+        "result": {
+          "$ref": "#/$defs/Result"
+        },
+        "descriptionMatch": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
+        },
+        "manifestMatch": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
+        },
+        "manifestCompatibility": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [
+        "result"
+      ]
+    },
+    "CsrParams": {
+      "properties": {
+        "subject": {
+          "$ref": "#/$defs/Name"
+        },
+        "sans": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "CtrData": {
       "properties": {
         "configSha256": {
@@ -134,6 +188,21 @@
         "filepathlist"
       ]
     },
+    "Environment": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ]
+    },
     "EventData": {
       "properties": {
         "uefivariabledata": {
@@ -162,6 +231,29 @@
         }
       },
       "type": "object"
+    },
+    "ExternalInterface": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "appEndpoint": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type",
+        "appEndpoint",
+        "interface",
+        "port"
+      ]
     },
     "FilePathList": {
       "properties": {
@@ -425,6 +517,29 @@
     "Int": {
       "properties": {},
       "type": "object"
+    },
+    "IntelCollateral": {
+      "properties": {
+        "teeType": {
+          "type": "integer"
+        },
+        "tcbInfo": true,
+        "tcbInfoSize": {
+          "type": "integer"
+        },
+        "qeIdentity": true,
+        "qeIdentitySize": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "teeType",
+        "tcbInfo",
+        "tcbInfoSize",
+        "qeIdentity",
+        "qeIdentitySize"
+      ]
     },
     "Linux": {
       "properties": {
@@ -1028,6 +1143,39 @@
         "minor"
       ]
     },
+    "ManifestDescription": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "manifest": {
+          "type": "string"
+        },
+        "externalConnections": {
+          "items": {
+            "$ref": "#/$defs/ExternalInterface"
+          },
+          "type": "array"
+        },
+        "environment": {
+          "items": {
+            "$ref": "#/$defs/Environment"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
+    },
     "MeasurementResult": {
       "properties": {
         "type": {
@@ -1087,39 +1235,73 @@
         "description": {
           "type": "string"
         },
+        "referenceValues": {
+          "items": {
+            "$ref": "#/$defs/ReferenceValue"
+          },
+          "type": "array"
+        },
+        "developerCommonName": {
+          "type": "string"
+        },
+        "baseLayers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "certLevel": {
+          "type": "integer"
+        },
+        "details": {
+          "type": "object"
+        },
+        "ociSpec": {
+          "$ref": "#/$defs/Spec"
+        },
+        "location": {
+          "type": "string"
+        },
+        "descriptions": {
+          "items": {
+            "$ref": "#/$defs/ManifestDescription"
+          },
+          "type": "array"
+        },
+        "tpm": {
+          "$ref": "#/$defs/CertConfig"
+        },
+        "snp": {
+          "$ref": "#/$defs/CertConfig"
+        },
+        "sgx": {
+          "$ref": "#/$defs/CertConfig"
+        },
+        "sw": {
+          "$ref": "#/$defs/CertConfig"
+        },
+        "SgxValues": {
+          "properties": {
+            "encryptedPPID": {
+              "$ref": "#/$defs/HexByte"
+            },
+            "pceid": {
+              "$ref": "#/$defs/HexByte"
+            },
+            "cpusvn": {
+              "$ref": "#/$defs/HexByte"
+            },
+            "pcesvn": {
+              "$ref": "#/$defs/HexByte"
+            }
+          },
+          "type": "object"
+        },
         "result": {
           "$ref": "#/$defs/Result"
         },
         "validityCheck": {
           "$ref": "#/$defs/Result"
-        },
-        "certLevel": {
-          "type": "integer"
-        },
-        "location": {
-          "type": "string"
-        },
-        "details": true,
-        "correctRtm": {
-          "$ref": "#/$defs/Result"
-        },
-        "correctOs": {
-          "$ref": "#/$defs/Result"
-        },
-        "correctApps": {
-          "items": {
-            "$ref": "#/$defs/Result"
-          },
-          "type": "array"
-        },
-        "rtmOsCompatibility": {
-          "$ref": "#/$defs/Result"
-        },
-        "osAppCompatibility": {
-          "items": {
-            "$ref": "#/$defs/Result"
-          },
-          "type": "array"
         },
         "signatureValidation": {
           "items": {
@@ -1134,6 +1316,7 @@
         "name",
         "version",
         "validity",
+        "SgxValues",
         "result",
         "signatureValidation"
       ]
@@ -1143,13 +1326,7 @@
         "deviceDescValidation": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "rtmValidation": {
-          "$ref": "#/$defs/MetadataResult"
-        },
-        "osValidation": {
-          "$ref": "#/$defs/MetadataResult"
-        },
-        "appValidation": {
+        "manifestValidation": {
           "items": {
             "$ref": "#/$defs/MetadataResult"
           },
@@ -1157,13 +1334,16 @@
         },
         "companyValidation": {
           "$ref": "#/$defs/MetadataResult"
+        },
+        "compatibilityValidation": {
+          "$ref": "#/$defs/CompatibilityResult"
         }
       },
       "type": "object",
       "required": [
         "deviceDescValidation",
-        "rtmValidation",
-        "osValidation"
+        "manifestValidation",
+        "compatibilityValidation"
       ]
     },
     "Mount": {
@@ -1200,6 +1380,39 @@
       "required": [
         "destination"
       ]
+    },
+    "Name": {
+      "properties": {
+        "commonName": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        },
+        "organization": {
+          "type": "string"
+        },
+        "organizationalUnit": {
+          "type": "string"
+        },
+        "locality": {
+          "type": "string"
+        },
+        "province": {
+          "type": "string"
+        },
+        "streetAddress": {
+          "type": "string"
+        },
+        "postalCode": {
+          "type": "string"
+        },
+        "names": {
+          "items": true,
+          "type": "array"
+        }
+      },
+      "type": "object"
     },
     "PCClientTaggedEvent": {
       "properties": {
@@ -1371,6 +1584,47 @@
         "cwd"
       ]
     },
+    "ReferenceValue": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "sha384": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "name": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "pcr": {
+          "type": "integer"
+        },
+        "snp": {
+          "$ref": "#/$defs/SnpDetails"
+        },
+        "tdx": {
+          "$ref": "#/$defs/TDXDetails"
+        },
+        "sgx": {
+          "$ref": "#/$defs/SGXDetails"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eventdata": {
+          "$ref": "#/$defs/EventData"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
     "Result": {
       "properties": {
         "success": {
@@ -1415,6 +1669,106 @@
       "type": "object",
       "required": [
         "path"
+      ]
+    },
+    "RtMrHashChainElem": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "Hashes": {
+          "items": {
+            "$ref": "#/$defs/HexByte"
+          },
+          "type": "array"
+        },
+        "summary": {
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type",
+        "name",
+        "Hashes",
+        "summary"
+      ]
+    },
+    "SGXAttributes": {
+      "properties": {
+        "initted": {
+          "type": "boolean"
+        },
+        "debug": {
+          "type": "boolean"
+        },
+        "mode64Bit": {
+          "type": "boolean"
+        },
+        "provisionKey": {
+          "type": "boolean"
+        },
+        "eInitToken": {
+          "type": "boolean"
+        },
+        "kss": {
+          "type": "boolean"
+        },
+        "legacy": {
+          "type": "boolean"
+        },
+        "avx": {
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "required": [
+        "initted",
+        "debug",
+        "mode64Bit",
+        "provisionKey",
+        "eInitToken",
+        "kss",
+        "legacy",
+        "avx"
+      ]
+    },
+    "SGXDetails": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "collateral": {
+          "$ref": "#/$defs/IntelCollateral"
+        },
+        "caFingerprint": {
+          "type": "string"
+        },
+        "isvProdId": {
+          "type": "integer"
+        },
+        "mrSigner": {
+          "type": "string"
+        },
+        "isvSvn": {
+          "type": "integer"
+        },
+        "attributes": {
+          "$ref": "#/$defs/SGXAttributes"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "collateral",
+        "caFingerprint",
+        "isvProdId",
+        "mrSigner",
+        "isvSvn",
+        "attributes"
       ]
     },
     "Scheduler": {
@@ -1558,6 +1912,87 @@
         "certChainValidation"
       ]
     },
+    "SnpDetails": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "caFingerprint": {
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/SnpPolicy"
+        },
+        "fw": {
+          "$ref": "#/$defs/SnpFw"
+        },
+        "tcb": {
+          "$ref": "#/$defs/SnpTcb"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "caFingerprint",
+        "policy",
+        "fw",
+        "tcb"
+      ]
+    },
+    "SnpFw": {
+      "properties": {
+        "build": {
+          "type": "integer"
+        },
+        "major": {
+          "type": "integer"
+        },
+        "minor": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "build",
+        "major",
+        "minor"
+      ]
+    },
+    "SnpPolicy": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "singleSocket": {
+          "type": "boolean"
+        },
+        "debug": {
+          "type": "boolean"
+        },
+        "migration": {
+          "type": "boolean"
+        },
+        "smt": {
+          "type": "boolean"
+        },
+        "abiMajor": {
+          "type": "integer"
+        },
+        "abiMinor": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type",
+        "singleSocket",
+        "debug",
+        "migration",
+        "smt",
+        "abiMajor",
+        "abiMinor"
+      ]
+    },
     "SnpResult": {
       "properties": {
         "reportVersionMatch": {
@@ -1586,6 +2021,29 @@
         "tcbCheck",
         "policyCheck",
         "extensionsCheck"
+      ]
+    },
+    "SnpTcb": {
+      "properties": {
+        "bl": {
+          "type": "integer"
+        },
+        "tee": {
+          "type": "integer"
+        },
+        "snp": {
+          "type": "integer"
+        },
+        "ucode": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "bl",
+        "tee",
+        "snp",
+        "ucode"
       ]
     },
     "Solaris": {
@@ -1710,6 +2168,130 @@
       "type": "object",
       "required": [
         "ociVersion"
+      ]
+    },
+    "TDAttributes": {
+      "properties": {
+        "debug": {
+          "type": "boolean"
+        },
+        "septVEDisable": {
+          "type": "boolean"
+        },
+        "pks": {
+          "type": "boolean"
+        },
+        "kl": {
+          "type": "boolean"
+        }
+      },
+      "type": "object",
+      "required": [
+        "debug",
+        "septVEDisable",
+        "pks",
+        "kl"
+      ]
+    },
+    "TDId": {
+      "properties": {
+        "mrOwner": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 48,
+          "minItems": 48
+        },
+        "mrOwnerConfig": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 48,
+          "minItems": 48
+        },
+        "mrConfigId": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 48,
+          "minItems": 48
+        }
+      },
+      "type": "object",
+      "required": [
+        "mrOwner",
+        "mrOwnerConfig",
+        "mrConfigId"
+      ]
+    },
+    "TDMeasurements": {
+      "properties": {
+        "rtMr0": {
+          "$ref": "#/$defs/RtMrHashChainElem"
+        },
+        "rtMr1": {
+          "$ref": "#/$defs/RtMrHashChainElem"
+        },
+        "rtMr2": {
+          "$ref": "#/$defs/RtMrHashChainElem"
+        },
+        "rtMr3": {
+          "$ref": "#/$defs/RtMrHashChainElem"
+        },
+        "mrSeam": {
+          "$ref": "#/$defs/HexByte"
+        }
+      },
+      "type": "object",
+      "required": [
+        "rtMr0",
+        "rtMr1",
+        "rtMr2",
+        "rtMr3",
+        "mrSeam"
+      ]
+    },
+    "TDXDetails": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "collateral": {
+          "$ref": "#/$defs/IntelCollateral"
+        },
+        "caFingerprint": {
+          "type": "string"
+        },
+        "tdId": {
+          "$ref": "#/$defs/TDId"
+        },
+        "tdMeasurements": {
+          "$ref": "#/$defs/TDMeasurements"
+        },
+        "xfam": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array",
+          "maxItems": 8,
+          "minItems": 8
+        },
+        "tdAttributes": {
+          "$ref": "#/$defs/TDAttributes"
+        }
+      },
+      "type": "object",
+      "required": [
+        "version",
+        "collateral",
+        "caFingerprint",
+        "tdId",
+        "tdMeasurements",
+        "xfam",
+        "tdAttributes"
       ]
     },
     "TcbCheck": {
@@ -2081,8 +2663,11 @@
         "success": {
           "type": "boolean"
         },
-        "errorCode": {
-          "type": "integer"
+        "errorCodes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
         },
         "prover": {
           "type": "string"
