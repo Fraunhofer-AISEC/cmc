@@ -147,20 +147,11 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, errors.New("sw driver specified but use containers equals false")
 	}
 
-	// For the swdriver, the evidence is simply the signed nonce
-	evidence, err := s.serializer.Sign(nonce, s, ar.AK)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to sign sw evidence: %w", err)
-	}
-
-	measurement := ar.Measurement{
-		Type:     "SW Measurement",
-		Evidence: evidence,
-		Certs:    internal.WriteCertsDer(s.akChain),
-	}
-
-	log.Debugf("Reading container measurements")
+	artifacts := make([]ar.Artifact, 0)
+	aggregatedHash := make([]byte, 32)
 	if _, err := os.Stat(s.ctrLog); err == nil {
+
+		log.Debugf("Reading container measurements")
 
 		// If CMC container measurements are used, add the list of executed containers
 		data, err := os.ReadFile(s.ctrLog)
@@ -178,11 +169,37 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 			Type:   "SW Eventlog",
 			Events: measureList,
 		}
+		artifacts = append(artifacts, artifact)
 
-		measurement.Artifacts = []ar.Artifact{artifact}
+		// Calculate the aggregated evidence hash through extending all container measurements
+		for _, ml := range measureList {
+			aggregatedHash = internal.ExtendSha256(aggregatedHash, ml.Sha256)
+		}
 
-	} else {
+	} else if errors.Is(err, os.ErrNotExist) {
 		log.Trace("No container measurements to read")
+	} else {
+		return ar.Measurement{}, fmt.Errorf("failed to check container measurement file: %w", err)
+	}
+
+	// Generate Evidence = Nonce | Aggregated_Hash
+	data, err := s.serializer.Marshal(&ar.SwEvidence{
+		Nonce:  nonce,
+		Sha256: aggregatedHash,
+	})
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to marshal evidence: %w", err)
+	}
+	evidence, err := s.serializer.Sign(data, s, ar.AK)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to sign sw evidence: %w", err)
+	}
+
+	measurement := ar.Measurement{
+		Type:      "SW Measurement",
+		Evidence:  evidence,
+		Artifacts: artifacts,
+		Certs:     internal.WriteCertsDer(s.akChain),
 	}
 
 	return measurement, nil
