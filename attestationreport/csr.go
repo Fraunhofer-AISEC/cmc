@@ -15,7 +15,6 @@
 
 package attestationreport
 
-// Install github packages with "go get [url]"
 import (
 	"crypto"
 	"crypto/rand"

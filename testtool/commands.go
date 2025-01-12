@@ -15,10 +15,6 @@
 
 package main
 
-// Install github packages with "go get [url]"
-
-// local modules
-
 func generate(c *config) {
 	c.api.generate(c)
 }
