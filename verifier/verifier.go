@@ -17,8 +17,6 @@ package verifier
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"crypto/sha512"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -660,20 +658,4 @@ func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
 	}
 	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
 	return "", false
-}
-
-func extendSha256(hash []byte, data []byte) []byte {
-	concat := append(hash, data...)
-	h := sha256.Sum256(concat)
-	ret := make([]byte, 32)
-	copy(ret, h[:])
-	return ret
-}
-
-func extendSha384(hash []byte, data []byte) []byte {
-	concat := append(hash, data...)
-	h := sha512.Sum384(concat)
-	ret := make([]byte, 48)
-	copy(ret, h[:])
-	return ret
 }

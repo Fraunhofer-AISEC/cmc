@@ -185,7 +185,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				}
 
 				// Extend measurement summary unconditionally...
-				measuredSummary = extendSha256(measuredSummary, event.Sha256)
+				measuredSummary = internal.ExtendSha256(measuredSummary, event.Sha256)
 
 				// Check for every event that a corresponding reference value exists
 				ref := getReferenceValue(event.Sha256, pcr, referenceValues)
@@ -209,7 +209,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				}
 
 				// ...Extent calculated summary only if reference value was found
-				calculatedPcrs[pcr] = extendSha256(calculatedPcrs[pcr],
+				calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr],
 					event.Sha256)
 
 				nameInfo := ref.Name
@@ -250,7 +250,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 						calculatedPcrs[pcr] = ref.Sha256 //the Sha256 should contain the init value
 						continue                         //break the loop iteration and continue with the next event
 					}
-					calculatedPcrs[pcr] = extendSha256(calculatedPcrs[pcr], ref.Sha256)
+					calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr], ref.Sha256)
 
 					// As we only have the PCR summary, we will later  set all reference values
 					// to true/false depending on whether the calculation matches the PCR summary
