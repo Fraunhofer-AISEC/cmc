@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // TDX Report V4
@@ -528,7 +529,7 @@ func recalculateRtMr(rmtr ar.HexByte, refHashes ar.RtMrHashChainElem) bool {
 		calculatedMeas = refHashes.Hashes[0]
 	} else {
 		for _, ref := range refHashes.Hashes {
-			calculatedMeas = extendSha384(calculatedMeas, ref)
+			calculatedMeas = internal.ExtendSha384(calculatedMeas, ref)
 		}
 	}
 
