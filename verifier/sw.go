@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x509.Certificate,
@@ -35,23 +36,31 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	}
 	ok := true
 
-	// Verify signature and extract evidence, which is just the nonce for the sw driver
-	tr, evidenceNonce, ok := s.Verify(swMeasurement.Evidence, cas)
+	// Verify signature and extract evidence
+	tr, payload, ok := s.Verify(swMeasurement.Evidence, cas)
 	if !ok {
 		log.Debugf("Failed to verify sw evidence")
-		result.Summary.SetErr(ar.ParseEvidence)
+		result.Summary.SetErr(ar.VerifyEvidence)
 		return result, false
 	}
 	result.Signature = tr.SignatureCheck[0]
 	log.Debug("Successfully verified SW measurement signature")
 
+	// Unmarshal evidence
+	evidence := new(ar.SwEvidence)
+	err := s.Unmarshal(payload, evidence)
+	if err != nil {
+		log.Debugf("Failed to unmarshal sw evidence")
+		result.Summary.SetErr(ar.ParseEvidence)
+	}
+
 	// Verify nonce
-	if res := bytes.Compare(evidenceNonce, nonce); res != 0 {
+	if !bytes.Equal(evidence.Nonce, nonce) {
 		log.Debugf("Nonces mismatch: supplied nonce: %v, report nonce = %v",
-			hex.EncodeToString(nonce), hex.EncodeToString(evidenceNonce))
+			hex.EncodeToString(nonce), hex.EncodeToString(evidence.Nonce))
 		ok = false
 		result.Freshness.Success = false
-		result.Freshness.Expected = hex.EncodeToString(evidenceNonce)
+		result.Freshness.Expected = hex.EncodeToString(evidence.Nonce)
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	} else {
 		result.Freshness.Success = true
@@ -92,6 +101,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	}
 
 	// Check that every measurement is reflected by a reference value
+	aggregatedHash := make([]byte, 32)
 	for _, swm := range swMeasurement.Artifacts {
 		for _, event := range swm.Events {
 			found := false
@@ -110,6 +120,10 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 						CtrDetails: event.CtrData,
 					}
 					result.Artifacts = append(result.Artifacts, r)
+
+					// Recalculate aggregated hash
+					aggregatedHash = internal.ExtendSha256(aggregatedHash, event.Sha256)
+
 					break
 				}
 			}
@@ -127,6 +141,15 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 				ok = false
 			}
 		}
+	}
+
+	// Verify recalculated aggregated hash against evidence hash
+	if !bytes.Equal(aggregatedHash, evidence.Sha256) {
+		log.Debugf("Aggregated hash does not match evidence hash (%v vs %v)", aggregatedHash, evidence.Sha256)
+		ok = false
+		result.Summary.SetErr(ar.VerifyAggregatedSwHash)
+	} else {
+		log.Debugf("Successfully verified aggregated hash %v", hex.EncodeToString(aggregatedHash))
 	}
 
 	result.Summary.Success = ok

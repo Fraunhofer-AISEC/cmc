@@ -486,6 +486,8 @@ const (
 	InvalidVersion
 	NoRootManifest
 	MultipleRootManifests
+	VerifyEvidence
+	VerifyAggregatedSwHash
 )
 
 func (e ErrorCode) String() string {
@@ -632,6 +634,10 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (No root manifest)", int(e))
 	case MultipleRootManifests:
 		return fmt.Sprintf("%v (Multiple root manifests)", int(e))
+	case VerifyEvidence:
+		return fmt.Sprintf("%v (Verify Evidence)", int(e))
+	case VerifyAggregatedSwHash:
+		return fmt.Sprintf("%v (Verify aggregated SW hash)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}

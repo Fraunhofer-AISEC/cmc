@@ -63,6 +63,13 @@ type Measurement struct {
 	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
+// SwEvidence represents the CMC's own format for software-based container measurement
+// evidences
+type SwEvidence struct {
+	Nonce  []byte `json:"nonce" cbor:"0,keyasint"`
+	Sha256 []byte `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
+}
+
 // Metadata represents attestation report elements of type 'Manifest'
 // 'Device Description', 'Manifest Description' and 'Company Description'
 type Metadata struct {
