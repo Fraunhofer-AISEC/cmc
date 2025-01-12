@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2024 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,6 @@
 
 package main
 
-// Install github packages with "go get [url]"
 import (
 	"bytes"
 	"crypto/tls"

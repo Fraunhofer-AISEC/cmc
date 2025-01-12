@@ -24,8 +24,6 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-// Install github packages with "go get [url]"
-
 type config struct {
 	config   string
 	rootfs   string

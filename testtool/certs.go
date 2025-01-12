@@ -15,7 +15,6 @@
 
 package main
 
-// Install github packages with "go get [url]"
 import (
 	"os"
 

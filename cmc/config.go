@@ -15,7 +15,6 @@
 
 package cmc
 
-// Install github packages with "go get [url]"
 import (
 	"fmt"
 	"path/filepath"
