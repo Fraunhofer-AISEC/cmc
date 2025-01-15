@@ -17,12 +17,17 @@ package verifier
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x509.Certificate,
@@ -68,13 +73,28 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	}
 
 	// Check that reference values are reflected by mandatory measurements
-	for _, r := range refVals {
+	for _, ref := range refVals {
 		found := false
 		for _, swm := range swMeasurement.Artifacts {
 			for _, event := range swm.Events {
-				if bytes.Equal(event.Sha256, r.Sha256) {
-					found = true
-					break
+				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
+
+					// Calculate the measurement template hash
+					templateHash, ok, err := CalculateTemplateHash(&ref, event.CtrData.ConfigSha256)
+					if err != nil {
+						log.Errorf("Internal error: calculate template hash: %v", err)
+						result.Summary.SetErr(ar.Internal)
+						ok = false
+						continue
+					}
+					if !ok {
+						log.Debugf("Rootfs matches but config does not. Detailed comparison not yet implemented")
+						continue
+					}
+					if bytes.Equal(event.Sha256, templateHash) {
+						found = true
+						break
+					}
 				}
 			}
 			if found {
@@ -84,17 +104,17 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 		if !found {
 			res := ar.DigestResult{
 				Type:       "Reference Value",
-				Success:    r.Optional, // Only fail attestation if component is mandatory
+				Success:    ref.Optional, // Only fail attestation if component is mandatory
 				Launched:   false,
-				Name:       r.Name,
-				Digest:     hex.EncodeToString(r.Sha256),
-				CtrDetails: ar.GetCtrDetailsFromRefVal(&r, s),
+				Name:       ref.Name,
+				Digest:     hex.EncodeToString(ref.Sha256),
+				CtrDetails: ar.GetCtrDetailsFromRefVal(&ref, s),
 			}
 			result.Artifacts = append(result.Artifacts, res)
 
 			// Only fail attestation if component is mandatory
-			if !r.Optional {
-				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %v)", r.Name, hex.EncodeToString(r.Sha256))
+			if !ref.Optional {
+				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
 				ok = false
 			}
 		}
@@ -106,7 +126,28 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 		for _, event := range swm.Events {
 			found := false
 			for _, ref := range refVals {
-				if bytes.Equal(event.Sha256, ref.Sha256) {
+				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
+
+					// Calculate the measurement template hash
+					templateHash, ok, err := CalculateTemplateHash(&ref, event.CtrData.ConfigSha256)
+					if err != nil {
+						log.Errorf("Internal error: calculate template hash: %v", err)
+						result.Summary.SetErr(ar.Internal)
+						ok = false
+						continue
+					}
+					if !ok {
+						log.Debugf("Rootfs matches but config does not. Detailed comparison not yet implemented")
+						continue
+					}
+
+					if !bytes.Equal(event.Sha256, templateHash) {
+						// No need to set error, as aggregated hash will fail
+						log.Debugf("Failed to match template hash")
+					} else {
+						log.Debugf("Calculated template hash matches measured hash: %v", hex.EncodeToString(templateHash))
+					}
+
 					found = true
 					nameInfo := ref.Name
 					if event.EventName != "" && !strings.EqualFold(ref.Name, event.EventName) {
@@ -122,7 +163,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 					result.Artifacts = append(result.Artifacts, r)
 
 					// Recalculate aggregated hash
-					aggregatedHash = internal.ExtendSha256(aggregatedHash, event.Sha256)
+					aggregatedHash = internal.ExtendSha256(aggregatedHash, templateHash)
 
 					break
 				}
@@ -145,11 +186,12 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 
 	// Verify recalculated aggregated hash against evidence hash
 	if !bytes.Equal(aggregatedHash, evidence.Sha256) {
-		log.Debugf("Aggregated hash does not match evidence hash (%v vs %v)", aggregatedHash, evidence.Sha256)
+		log.Debugf("Aggregated hash does not match evidence hash (%v vs %v)",
+			hex.EncodeToString(aggregatedHash), hex.EncodeToString(evidence.Sha256))
 		ok = false
 		result.Summary.SetErr(ar.VerifyAggregatedSwHash)
 	} else {
-		log.Debugf("Successfully verified aggregated hash %v", hex.EncodeToString(aggregatedHash))
+		log.Debugf("Aggregated SW measurement hash matches evidence hash")
 	}
 
 	result.Summary.Success = ok
@@ -157,4 +199,52 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	log.Debugf("Finished verifying SW measurements. Success: %v", ok)
 
 	return result, ok
+}
+
+func CalculateTemplateHash(ref *ar.ReferenceValue, measuredHash []byte) ([]byte, bool, error) {
+
+	// Fetch manifest config
+	m, err := ref.GetManifest()
+	if err != nil {
+		return nil, false, fmt.Errorf("internal error: failed to get manifest: %w", err)
+	}
+
+	// Hash manifest config
+	specHash, err := CalculateSpecHash(m.OciSpec)
+	if err != nil {
+		return nil, false, fmt.Errorf("internal error: failed to calculate OCI config hash: %w", err)
+	}
+
+	// Compare with reference value
+	if !bytes.Equal(measuredHash, specHash) {
+		// TODO If no match: compare configs value by value
+		return nil, false, nil
+	}
+
+	// Recalculate template hash
+	tbh := []byte(specHash)
+	tbh = append(tbh, ref.Sha256...)
+	hasher := sha256.New()
+	hasher.Write(tbh)
+	templateHash := hasher.Sum(nil)
+
+	return templateHash, true, nil
+}
+
+func CalculateSpecHash(spec *specs.Spec) ([]byte, error) {
+
+	data, err := json.Marshal(spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Transform to RFC 8785 canonical JSON form for reproducible hashing
+	tbh, err := jcs.Transform(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cannonicalize json: %w", err)
+	}
+
+	hash := sha256.Sum256(tbh)
+
+	return hash[:], nil
 }

@@ -371,7 +371,7 @@ const (
 
 func (r *ReferenceValue) GetManifest() (*Metadata, error) {
 	if r.manifest == nil {
-		return nil, fmt.Errorf("internal error: failed to retrieve manifest")
+		return nil, fmt.Errorf("internal error: manifest is nil")
 	}
 	return r.manifest, nil
 }
