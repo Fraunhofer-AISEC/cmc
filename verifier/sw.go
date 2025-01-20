@@ -80,7 +80,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
 
 					// Calculate the measurement template hash
-					templateHash, ok, err := CalculateTemplateHash(&ref, event.CtrData.ConfigSha256)
+					templateHash, ok, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
 						log.Errorf("Internal error: calculate template hash: %v", err)
 						result.Summary.SetErr(ar.Internal)
@@ -88,7 +88,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 						continue
 					}
 					if !ok {
-						log.Debugf("Rootfs matches but config does not. Detailed comparison not yet implemented")
+						log.Debugf("Rootfs matches but config validation failed. Continue search")
 						continue
 					}
 					if bytes.Equal(event.Sha256, templateHash) {
@@ -129,20 +129,21 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
 
 					// Calculate the measurement template hash
-					templateHash, ok, err := CalculateTemplateHash(&ref, event.CtrData.ConfigSha256)
+					templateHash, validateOk, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
-						log.Errorf("Internal error: calculate template hash: %v", err)
+						log.Errorf("Internal error: validate template hash: %v", err)
 						result.Summary.SetErr(ar.Internal)
 						ok = false
 						continue
 					}
-					if !ok {
-						log.Debugf("Rootfs matches but config does not. Detailed comparison not yet implemented")
+					if !validateOk {
+						log.Debugf("Rootfs matches but config validation failed. Continue search")
 						continue
 					}
 
 					if !bytes.Equal(event.Sha256, templateHash) {
-						// No need to set error, as aggregated hash will fail
+						validateOk = false
+						ok = false
 						log.Debugf("Failed to match template hash")
 					} else {
 						log.Debugf("Calculated template hash matches measured hash: %v", hex.EncodeToString(templateHash))
@@ -154,7 +155,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 						nameInfo += ": " + event.EventName
 					}
 					r := ar.DigestResult{
-						Success:    true,
+						Success:    validateOk,
 						Launched:   true,
 						Name:       nameInfo,
 						Digest:     hex.EncodeToString(event.Sha256),
@@ -201,28 +202,45 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	return result, ok
 }
 
-func CalculateTemplateHash(ref *ar.ReferenceValue, measuredHash []byte) ([]byte, bool, error) {
+func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.CtrData) ([]byte, bool, error) {
 
 	// Fetch manifest config
-	m, err := ref.GetManifest()
+	manifest, err := ref.GetManifest()
 	if err != nil {
 		return nil, false, fmt.Errorf("internal error: failed to get manifest: %w", err)
 	}
 
 	// Hash manifest config
-	specHash, err := CalculateSpecHash(m.OciSpec)
+	refSpecHash, err := CalculateSpecHash(manifest.OciSpec)
 	if err != nil {
 		return nil, false, fmt.Errorf("internal error: failed to calculate OCI config hash: %w", err)
 	}
 
 	// Compare with reference value
-	if !bytes.Equal(measuredHash, specHash) {
-		// TODO If no match: compare configs value by value
-		return nil, false, nil
+	if !bytes.Equal(measured.ConfigSha256, refSpecHash) {
+		// If no match: perform rule-based validation
+		refConvSpec, err := ConvertSpec(s, manifest.OciSpec)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to convert reference spec: %w", err)
+		}
+		measConvSpec, err := ConvertSpec(s, measured.OciSpec)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to convert measurement spec: %w", err)
+		}
+
+		// TODO load rules
+		err = ValidateConfig(refConvSpec, measConvSpec, map[string]interface{}{})
+		if err != nil {
+			log.Debugf("Failed to validate specs: %v", err)
+			return nil, false, nil
+		}
+
+		// use measured hash, as rule-based config validation was successful
+		refSpecHash = measured.ConfigSha256
 	}
 
 	// Recalculate template hash
-	tbh := []byte(specHash)
+	tbh := []byte(refSpecHash)
 	tbh = append(tbh, ref.Sha256...)
 	hasher := sha256.New()
 	hasher.Write(tbh)
