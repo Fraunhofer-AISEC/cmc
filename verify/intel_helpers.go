@@ -945,7 +945,7 @@ func CrlCheck(crl *x509.RevocationList, cert *x509.Certificate, parentCert *x509
 	}
 
 	// Check if certificate has been revoked
-	for _, revokedCert := range crl.RevokedCertificates {
+	for _, revokedCert := range crl.RevokedCertificateEntries {
 		if cert.SerialNumber == revokedCert.SerialNumber {
 			return false, fmt.Errorf("certificate has been revoked since: %v", revokedCert.RevocationTime)
 		}
