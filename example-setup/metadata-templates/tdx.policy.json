@@ -1,0 +1,15 @@
+{
+    "quoteVersion": 0,
+    "tdId": {
+      "mrOwner": "",
+      "mrOwnerConfig": "",
+      "mrConfigId": ""
+    },
+    "xfam": "",
+    "tdAttributes": {
+      "debug": false,
+      "septVEDisable": false,
+      "pks": false,
+      "kl": false
+    }
+}

@@ -23,13 +23,16 @@ setjson() {
   local value=$3
 
   if [[ "${value}" == \"*\" || "${value}" == \'*\' ]]; then
-    # Parameter is string in quotes, use quotes
+    # Parameter is string in quotes, use as is
+    ref="$(echo "${ref}" | jq ".${key} = ${value}")"
+  elif [[ "${value}" =~ ^\{.*\}$ || "${value}" =~ ^\[.*\]$ ]]; then
+    # Parameter is a JSON object or array, do not use quotes
     ref="$(echo "${ref}" | jq ".${key} = ${value}")"
   elif [[ "${value}" =~ ^[0-9]+$ || "${value}" == "true" || "${value}" == "false" ]]; then
     # Parameter is number or boolean, do not use quotes
     ref="$(echo "${ref}" | jq ".${key} = ${value}")"
   else
-    # Parameter is string, use quotes
+    # Parameter is a string, wrap in quotes
     ref="$(echo "${ref}" | jq ".${key} = \"${value}\"")"
   fi
 }

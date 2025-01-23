@@ -1,0 +1,16 @@
+{
+    "quoteVersion": 0,
+    "isvProdId": 0,
+    "mrSigner": "",
+    "isvSvn": 0,
+    "attributes": {
+      "initted": false,
+      "debug": false,
+      "mode64Bit": false,
+      "provisionKey": false,
+      "eInitToken": false,
+      "kss": false,
+      "legacy": false,
+      "avx": false
+    }
+}

@@ -24,6 +24,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // ParseCert parses a certificate from PEM or DER encoded data into an X.509 certificate
@@ -159,6 +160,65 @@ func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x
 	chains, err := leafCert.Verify(opts)
 
 	return chains, err
+}
+
+func CheckCert(cert *x509.Certificate, cn string, signatureAlgo x509.SignatureAlgorithm) error {
+	if cert == nil {
+		return errors.New("internal error: cert to check is nil")
+	}
+
+	if cn != cert.Subject.CommonName {
+		return fmt.Errorf("unexpected CN=%v. Expected %v", cert.Subject.CommonName, cn)
+	}
+	log.Tracef("Certificate CN=%v matches expected CN", cn)
+
+	if signatureAlgo != cert.SignatureAlgorithm {
+		return fmt.Errorf("unsupported signature algorithm %v. Only supports %v",
+			cert.SignatureAlgorithm.String(), signatureAlgo.String())
+	}
+	log.Tracef("Certificate signature algorithm %v matches expected algorithm", signatureAlgo.String())
+
+	return nil
+}
+
+// CheckRevocation first validates the provided certificate revocation list against a CA and then
+// checks if the provided certificate was revoked
+func CheckRevocation(crl *x509.RevocationList, cert *x509.Certificate, ca *x509.Certificate) error {
+
+	if cert == nil || crl == nil {
+		return fmt.Errorf("certificate or revocation null pointer exception")
+	}
+
+	if crl.Issuer.String() != ca.Subject.String() {
+		return fmt.Errorf("CRL issuer name %v does not match CA subject name %v",
+			crl.Issuer.String(), ca.Subject.String())
+	}
+	log.Tracef("CRL issuer name %v matches expected name", crl.Issuer.String())
+
+	// Check CRL signature
+	err := crl.CheckSignatureFrom(ca)
+	if err != nil {
+		return fmt.Errorf("CRL signature is invalid: %v", err)
+	}
+
+	// Check if CRL is up to date
+	now := time.Now()
+	if now.After(crl.NextUpdate) {
+		return fmt.Errorf("CRL has expired since: %v", crl.NextUpdate)
+	}
+
+	if !bytes.Equal(crl.RawIssuer, cert.RawIssuer) {
+		return fmt.Errorf("CRL RawIssuer is invalid. got: %v, expected: %v ", crl.RawIssuer, cert.RawIssuer)
+	}
+
+	// Check if certificate has been revoked
+	for _, revokedCert := range crl.RevokedCertificateEntries {
+		if cert.SerialNumber.Cmp(revokedCert.SerialNumber) == 0 {
+			return fmt.Errorf("certificate has been revoked since: %v", revokedCert.RevocationTime)
+		}
+	}
+
+	return nil
 }
 
 func PrintTlsConfig(conf *tls.Config, roots []byte) error {

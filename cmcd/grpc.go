@@ -84,7 +84,7 @@ func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*
 	log.Info("Received grpc request type 'Attest'")
 
 	if len(s.cmc.Drivers) == 0 {
-		return nil, errors.New("no valid signers configured")
+		return nil, errors.New("attest: no drivers configured")
 	}
 
 	if s.cmc.Metadata == nil {
@@ -218,7 +218,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 	}
 
 	if len(s.cmc.Drivers) == 0 {
-		return nil, errors.New("no valid signers configured")
+		return nil, errors.New("TLS sign: no drivers configured")
 	}
 	d := s.cmc.Drivers[0]
 
@@ -260,7 +260,7 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *api.TLSCertRequest) (*api
 	}
 
 	if len(s.cmc.Drivers) == 0 {
-		return nil, errors.New("no valid signers configured")
+		return nil, errors.New("TLS cert: no drivers configured")
 	}
 	d := s.cmc.Drivers[0]
 

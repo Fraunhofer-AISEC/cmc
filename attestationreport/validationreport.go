@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -40,6 +39,21 @@ type VerificationResult struct {
 	PolicySuccess   bool                `json:"policySuccess,omitempty" cbor:"9,keyasint,omitempty"`
 	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"10,keyasint"`
 }
+
+// Result is a generic struct do display if a verification of a measured/provided data structure
+// against a reference data structure was successful
+type Result struct {
+	Success         bool      `json:"success"`
+	Got             string    `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
+	Expected        string    `json:"expected,omitempty" cbor:"1,keyasint,omitempty"`
+	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
+	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"3,keyasint,omitempty"`
+	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"4,keyasint,omitempty"`
+}
+
+//
+// Metadata-related definitions
+//
 
 type MetadataSummary struct {
 	DevDescResult       MetadataResult      `json:"deviceDescValidation" cbor:"0,keyasint"`
@@ -62,6 +76,10 @@ type CompatibilityResult struct {
 	ManifestCompatibility []Result `json:"manifestCompatibility,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
+//
+// Generic measurement definitions
+//
+
 type MeasurementResult struct {
 	Type      string          `json:"type" cbor:"0,keyasint"`
 	Summary   Result          `json:"summary" cbor:"1,keyasint"`
@@ -72,35 +90,6 @@ type MeasurementResult struct {
 	SnpResult *SnpResult      `json:"snpResult,omitempty" cbor:"6,keyasint,omitempty"`
 	SgxResult *SgxResult      `json:"sgxResult,omitempty" cbor:"7,keyasint,omitempty"`
 	TdxResult *TdxResult      `json:"tdxResult,omitempty" cbor:"8,keyasint,omitempty"`
-}
-
-type TpmResult struct {
-	PcrMatch         []PcrResult `json:"pcrMatch" cbor:"0,keyasint"`
-	AggPcrQuoteMatch Result      `json:"aggPcrQuoteMatch" cbor:"1,keyasint"`
-}
-
-type SnpResult struct {
-	VersionMatch    Result       `json:"reportVersionMatch" cbor:"0,keyasint"`
-	FwCheck         VersionCheck `json:"fwCheck" cbor:"1,keyasint"`
-	TcbCheck        TcbCheck     `json:"tcbCheck" cbor:"2,keyasint"`
-	PolicyCheck     PolicyCheck  `json:"policyCheck" cbor:"3,keyasint"`
-	ExtensionsCheck []Result     `json:"extensionsCheck" cbor:"4,keyasint"`
-}
-
-type SgxResult struct {
-	VersionMatch       Result             `json:"reportVersionMatch" cbor:"0,keyasint"`
-	TcbInfoCheck       TcbLevelResult     `json:"tcbInfoCheck" cbor:"1,keyasint"`
-	QeIdentityCheck    TcbLevelResult     `json:"qeIdentityCheck" cbor:"2,keyasint"`
-	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck" cbor:"3,keyasint"`
-}
-
-type TdxResult struct {
-	VersionMatch        Result            `json:"reportVersionMatch" cbor:"0,keyasint"`
-	TcbInfoCheck        TcbLevelResult    `json:"tcbInfoCheck" cbor:"1,keyasint"`
-	QeIdentityCheck     TcbLevelResult    `json:"qeIdentityCheck" cbor:"2,keyasint"`
-	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck" cbor:"3,keyasint"`
-	SeamAttributesCheck AttributesCheck   `json:"seamAttributesCheck" cbor:"4,keyasint"`
-	XfamCheck           AttributesCheck   `json:"xfamCheck" cbor:"5,keyasint"`
 }
 
 // DigestResult represents a generic result for a digest that was processed
@@ -114,28 +103,43 @@ type DigestResult struct {
 	SubType     string     `json:"subtype,omitempty" cbor:"3,keyasint,omitempty"`
 	Index       int        `json:"index" cbor:"4,keyasint"`
 	Digest      string     `json:"digest,omitempty" cbor:"5,keyasint,omitempty"`
-	Description string     `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
-	EventData   *EventData `json:"eventData,omitempty" cbor:"7,keyasint,omitempty"`
-	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"8,keyasint,omitempty"`
-}
-
-type PcrResult struct {
-	Success  bool   `json:"success" cbor:"0,keyasint"`
-	Pcr      int    `json:"pcr" cbor:"1,keyasint"`
-	Digest   string `json:"digest" cbor:"2,keyasint"`
-	Measured string `json:"measured,omitempty" cbor:"3,keyasint,omitempty"`
-}
-
-type VersionCheck struct {
-	Success  bool  `json:"success" cbor:"0,keyasint"`
-	Claimed  []int `json:"claimed" cbor:"1,keyasint"`
-	Measured []int `json:"measured" cbor:"2,keyasint"`
+	Measured    string     `json:"measured,omitempty" cbor:"6,keyasint,omitempty"`
+	Description string     `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
+	EventData   *EventData `json:"eventData,omitempty" cbor:"8,keyasint,omitempty"`
+	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
 type BooleanMatch struct {
 	Success  bool `json:"success" cbor:"0,keyasint"`
 	Claimed  bool `json:"claimed" cbor:"1,keyasint"`
 	Measured bool `json:"measured" cbor:"2,keyasint"`
+}
+
+//
+// TPM-related definitions
+//
+
+type TpmResult struct {
+	PcrMatch         []DigestResult `json:"pcrMatch" cbor:"0,keyasint"`
+	AggPcrQuoteMatch Result         `json:"aggPcrQuoteMatch" cbor:"1,keyasint"`
+}
+
+//
+// SNP-related definitions
+//
+
+type SnpResult struct {
+	VersionMatch    Result       `json:"reportVersionMatch" cbor:"0,keyasint"`
+	FwCheck         VersionCheck `json:"fwCheck" cbor:"1,keyasint"`
+	TcbCheck        TcbCheck     `json:"tcbCheck" cbor:"2,keyasint"`
+	PolicyCheck     PolicyCheck  `json:"policyCheck" cbor:"3,keyasint"`
+	ExtensionsCheck []Result     `json:"extensionsCheck" cbor:"4,keyasint"`
+}
+
+type VersionCheck struct {
+	Success  bool  `json:"success" cbor:"0,keyasint"`
+	Claimed  []int `json:"claimed" cbor:"1,keyasint"`
+	Measured []int `json:"measured" cbor:"2,keyasint"`
 }
 
 type TcbCheck struct {
@@ -155,20 +159,43 @@ type PolicyCheck struct {
 	SingleSocket BooleanMatch `json:"singleSocket" cbor:"5,keyasint"`
 }
 
-type AttributesCheck struct {
-	Success  bool    `json:"success" cbor:"0,keyasint"`
-	Claimed  HexByte `json:"claimed" cbor:"1,keyasint"`
-	Measured HexByte `json:"measured" cbor:"2,keyasint"`
+//
+// TDX / SGX-related definitions
+//
+
+type SgxResult struct {
+	VersionMatch       Result             `json:"quoteVersionMatch" cbor:"0,keyasint"`
+	TcbInfoCheck       TcbInfoResult      `json:"tcbInfoCheck" cbor:"1,keyasint"`
+	QeReportCheck      QeReportResult     `json:"qeReportCheck" cbor:"2,keyasint"`
+	SgxAttributesCheck SgxAttributesCheck `json:"sgxAttributesCheck" cbor:"3,keyasint"`
 }
 
-type TcbLevelResult struct {
-	Summary        Result    `json:"success" cbor:"0,keyasint"`
-	MrSigner       Result    `json:"mrsigner" cbor:"1,keyasint"`
-	IsvProdId      Result    `json:"isvProdId" cbor:"2,keyasint"`
-	MiscSelect     Result    `json:"miscSelect" cbor:"3,keyasint"`
-	Attributes     Result    `json:"attributes" cbor:"4,keyasint"`
-	TcbLevelStatus string    `json:"status" cbor:"5,keyasint"`
-	TcbLevelDate   time.Time `json:"date" cbor:"6,keyasint"`
+type TdxResult struct {
+	VersionMatch        Result            `json:"quoteVersionMatch" cbor:"0,keyasint"`
+	TcbInfoCheck        TcbInfoResult     `json:"tcbInfoCheck" cbor:"1,keyasint"`
+	QeReportCheck       QeReportResult    `json:"qeReportCheck" cbor:"2,keyasint"`
+	TdAttributesCheck   TdAttributesCheck `json:"tdAttributesCheck" cbor:"3,keyasint"`
+	SeamAttributesCheck Result            `json:"seamAttributesCheck" cbor:"4,keyasint"`
+	XfamCheck           Result            `json:"xfamCheck" cbor:"5,keyasint"`
+	MrMatch             []DigestResult    `json:"mrMatch" cbor:"6,keyasint"`
+}
+
+type QeReportResult struct {
+	Summary        Result `json:"success" cbor:"0,keyasint"`
+	MrSigner       Result `json:"mrsigner" cbor:"1,keyasint"`
+	IsvProdId      Result `json:"isvProdId" cbor:"2,keyasint"`
+	MiscSelect     Result `json:"miscSelect" cbor:"3,keyasint"`
+	Attributes     Result `json:"attributes" cbor:"4,keyasint"`
+	TcbLevelStatus string `json:"status" cbor:"5,keyasint"`
+	TcbLevelDate   string `json:"date" cbor:"6,keyasint"`
+}
+
+type TcbInfoResult struct {
+	Summary        Result `json:"success" cbor:"0,keyasint"`
+	Id             Result `json:"id" cbor:"1,keyasint"`
+	Version        Result `json:"version" cbor:"2,keyasint"`
+	TcbLevelStatus string `json:"status" cbor:"5,keyasint"`
+	TcbLevelDate   string `json:"date" cbor:"6,keyasint"`
 }
 
 type SgxAttributesCheck struct {
@@ -189,6 +216,10 @@ type TdAttributesCheck struct {
 	Kl            BooleanMatch `json:"kl" cbor:"3,keyasint"`
 }
 
+//
+// X509-related definitions
+//
+
 // SignatureResult shows the result of the signature check, the certificate chain check
 // and includes all certificates present in the metadata item. If the certificate chain
 // check was successful, Certs is always a valid chain. If not, certs contains the
@@ -197,15 +228,6 @@ type SignatureResult struct {
 	SignCheck      Result                `json:"signatureVerification" cbor:"0,keyasint"`
 	CertChainCheck Result                `json:"certChainValidation" cbor:"1,keyasint"`
 	Certs          [][]X509CertExtracted `json:"certs,omitempty" cbor:"2,keyasint"`
-}
-
-type Result struct {
-	Success         bool      `json:"success"`
-	Got             string    `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
-	Expected        string    `json:"expected,omitempty" cbor:"1,keyasint,omitempty"`
-	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
-	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"3,keyasint,omitempty"`
-	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
@@ -276,6 +298,10 @@ type PkixExtension struct {
 	Critical bool   `json:"critical" cbor:"1,keyasint"`
 	Value    []byte `json:"value" cbor:"2,keyasint"`
 }
+
+//
+// End validation report definitions
+//
 
 // keyUsageName is used for translating the internal representation of allowed
 // key usage in an x509 certificate to a string array.
@@ -463,7 +489,7 @@ const (
 	SgxFmpcMismatch
 	SgxPceidMismatch
 	SignatureLength
-	DetailsNotPresent
+	PolicyNotPresent
 	RefValMultiple
 	RefValNotPresent
 	RefValType
@@ -490,6 +516,9 @@ const (
 	MultipleRootManifests
 	VerifyEvidence
 	VerifyAggregatedSwHash
+	CollateralNotPresent
+	ParseCollateral
+	IllegalTdxMrIndex
 )
 
 func (e ErrorCode) String() string {
@@ -586,8 +615,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (SGX PCEID mismatch error)", int(e))
 	case SignatureLength:
 		return fmt.Sprintf("%v (Signature length error)", int(e))
-	case DetailsNotPresent:
-		return fmt.Sprintf("%v (Details not present error)", int(e))
+	case PolicyNotPresent:
+		return fmt.Sprintf("%v (Policy not present error)", int(e))
 	case RefValMultiple:
 		return fmt.Sprintf("%v (Reference value multiple error)", int(e))
 	case RefValNotPresent:
@@ -640,6 +669,12 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Verify Evidence)", int(e))
 	case VerifyAggregatedSwHash:
 		return fmt.Sprintf("%v (Verify aggregated SW hash)", int(e))
+	case CollateralNotPresent:
+		return fmt.Sprintf("%v (Collateral not present)", int(e))
+	case ParseCollateral:
+		return fmt.Sprintf("%v (Parse Collateral)", int(e))
+	case IllegalTdxMrIndex:
+		return fmt.Sprintf("%v (Illegal Intel TDX measurement register index)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -710,7 +745,7 @@ func (r *VerificationResult) PrintErr() {
 				m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
 				for _, p := range m.TpmResult.PcrMatch {
 					if !p.Success {
-						log.Warnf("PCR%v calculated: %v, measured: %v", p.Pcr, p.Digest,
+						log.Warnf("PCR%v calculated: %v, measured: %v", p.Index, p.Digest,
 							p.Measured)
 					}
 				}
@@ -723,12 +758,12 @@ func (r *VerificationResult) PrintErr() {
 			if m.SgxResult != nil {
 				m.SgxResult.VersionMatch.PrintErr("Version match")
 				// TODO
-				log.Warnf("Detailed SNP evaluation not yet implemented")
+				log.Warnf("Detailed SGX evaluation not yet implemented")
 			}
 			if m.TdxResult != nil {
 				m.TdxResult.VersionMatch.PrintErr("Version match")
 				// TODO
-				log.Warnf("Detailed SNP evaluation not yet implemented")
+				log.Warnf("Detailed TDX evaluation not yet implemented")
 			}
 		}
 

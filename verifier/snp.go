@@ -32,7 +32,7 @@ import (
 )
 
 type snpreport struct {
-	// Table 21 @ https://www.amd.com/system/files/TechDocs/56860.pdf
+	// Table 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf
 	Version         uint32
 	GuestSvn        uint32
 	Policy          uint64
@@ -88,7 +88,8 @@ const (
 	VLEK
 )
 
-func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []ar.ReferenceValue,
+func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
+	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying SNP measurements")
@@ -109,21 +110,29 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 		result.Summary.SetErr(ar.RefValMultiple)
 		return result, false
 	}
-	snpReferenceValue := referenceValues[0]
 
+	snpReferenceValue := referenceValues[0]
 	if snpReferenceValue.Type != "SNP Reference Value" {
 		log.Debugf("SNP Reference Value invalid type %v", snpReferenceValue.Type)
 		result.Summary.SetErr(ar.RefValType)
 		return result, false
 	}
-	if snpReferenceValue.Snp == nil {
-		log.Debug("SNP Reference Value does not contain policy")
-		result.Summary.SetErr(ar.DetailsNotPresent)
+
+	if rootManifest == nil {
+		log.Debugf("Internal error: root manifest not present")
+		result.Summary.SetErr((ar.Internal))
+		return result, false
+	}
+
+	snpPolicy := rootManifest.SnpPolicy
+	if snpPolicy == nil {
+		log.Debugf("SNP manifest %v does not contain SNP policy", rootManifest.Name)
+		result.Summary.SetErr(ar.PolicyNotPresent)
 		return result, false
 	}
 
 	// Extract the SNP attestation report data structure
-	s, err := DecodeSnpReport(snpM.Evidence)
+	s, err := DecodeSnpReport(measurement.Evidence)
 	if err != nil {
 		log.Debugf("Failed to decode SNP report: %v", err)
 		result.Summary.SetErr(ar.ParseEvidence)
@@ -144,7 +153,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 		result.Freshness.Success = true
 	}
 
-	certs, err := internal.ParseCertsDer(snpM.Certs)
+	certs, err := internal.ParseCertsDer(measurement.Certs)
 	if err != nil {
 		log.Debugf("Failed to parse certificates: %v", err)
 		result.Summary.SetErr(ar.ParseCert)
@@ -152,7 +161,7 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(snpM.Evidence, s, certs, snpReferenceValue.Snp.CaFingerprint)
+	sig, ret := verifySnpSignature(measurement.Evidence, s, certs, rootManifest.CaFingerprint)
 	if !ret {
 		ok = false
 	}
@@ -193,22 +202,22 @@ func verifySnpMeasurements(snpM ar.Measurement, nonce []byte, referenceValues []
 	}
 
 	// Verify the SNP report version
-	result.SnpResult.VersionMatch, ret = verifySnpVersion(s.Version, snpReferenceValue.Snp.Version)
+	result.SnpResult.VersionMatch, ret = verifySnpVersion(s.Version, snpPolicy.ReportVersion)
 	if !ret {
 		ok = false
 	}
 	// Verify SNP VM configuration
-	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, snpReferenceValue.Snp.Policy)
+	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, snpPolicy.GuestPolicy)
 	if !ret {
 		ok = false
 	}
 	// Verify the SNP firmware version
-	result.SnpResult.FwCheck, ret = verifySnpFw(s, snpReferenceValue.Snp.Fw)
+	result.SnpResult.FwCheck, ret = verifySnpFw(s, snpPolicy.Fw)
 	if !ret {
 		ok = false
 	}
 	// Verify the SNP TCB against the specified minimum versions
-	result.SnpResult.TcbCheck, ret = verifySnpTcb(s, snpReferenceValue.Snp.Tcb)
+	result.SnpResult.TcbCheck, ret = verifySnpTcb(s, snpPolicy.Tcb)
 	if !ret {
 		ok = false
 	}
@@ -237,7 +246,7 @@ func verifySnpVersion(expected, got uint32) (ar.Result, bool) {
 	return r, ok
 }
 
-func verifySnpPolicy(policy uint64, v ar.SnpPolicy) (ar.PolicyCheck, bool) {
+func verifySnpPolicy(policy uint64, v ar.SnpGuestPolicy) (ar.PolicyCheck, bool) {
 
 	abiMajor := uint8(policy & 0xFF)
 	abiMinor := uint8((policy >> 8) & 0xFF)
@@ -448,7 +457,7 @@ func verifySnpSignature(
 	}
 	caFingerprint := sha256.Sum256(ca.Raw)
 	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		log.Debugf("Reference Values CA fingerprint '%v' does not match trusted CA fingerprint '%v'",
+		log.Debugf("Root Manifest CA fingerprint '%v' does not match measurement CA fingerprint '%v'",
 			fingerprint, hex.EncodeToString(caFingerprint[:]))
 		result.CertChainCheck.Success = false
 		result.CertChainCheck.Expected = fingerprint
