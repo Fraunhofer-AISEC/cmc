@@ -1,14 +1,16 @@
 module github.com/Fraunhofer-AISEC/cmc
 
-go 1.18
+go 1.22
+
+toolchain go1.22.4
 
 require (
-	github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230623144130-44bece0a4cef
+	github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6
 	github.com/edgelesssys/ego v1.4.1
 	github.com/fxamacker/cbor/v2 v2.4.0
-	github.com/google/go-attestation v0.4.4-0.20230613144338-a9b6eb1eb888
+	github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9
 	github.com/google/go-sev-guest v0.11.1
-	github.com/google/go-tpm v0.9.0
+	github.com/google/go-tpm v0.9.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/plgd-dev/go-coap/v3 v3.1.2
@@ -26,7 +28,6 @@ require (
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/certificate-transparency-go v1.1.6 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-configfs-tsm v0.2.2 // indirect
 	github.com/google/go-tspi v0.3.0 // indirect
 	github.com/google/logger v1.1.1 // indirect

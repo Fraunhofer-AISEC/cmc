@@ -1,5 +1,5 @@
-github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230623144130-44bece0a4cef h1:eeRBtxG9XjrWyV/gyGPG66EYCIkFOp4RlnGboitPzFk=
-github.com/Fraunhofer-AISEC/go-attestation v0.3.3-0.20230623144130-44bece0a4cef/go.mod h1:piGYUJYVR/LCzIFh+YKgu5ZQWzgMdipIEwT2OpztbvY=
+github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6 h1:iQrMNQbdg8L6WfpazWhTAuQOODTRVS6ppzhO3kt3uaE=
+github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6/go.mod h1:aupPS5aOJwVmuVfHzn5cp+CnFSsjTRFn8NbdNWYaIv4=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -15,8 +15,8 @@ github.com/golang/protobuf v1.5.3/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiu
 github.com/google/certificate-transparency-go v1.0.21/go.mod h1:QeJfpSbVSfYc7RgB3gJFj9cbuQMMchQxrWXz8Ruopmg=
 github.com/google/certificate-transparency-go v1.1.6 h1:SW5K3sr7ptST/pIvNkSVWMiJqemRmkjJPPT0jzXdOOY=
 github.com/google/certificate-transparency-go v1.1.6/go.mod h1:0OJjOsOk+wj6aYQgP7FU0ioQ0AJUmnWPFMqTjQeazPQ=
-github.com/google/go-attestation v0.4.4-0.20230613144338-a9b6eb1eb888 h1:HURgKPRPJSozDuMHpjdV+iyFVLhB6bi1JanhGgSzI1k=
-github.com/google/go-attestation v0.4.4-0.20230613144338-a9b6eb1eb888/go.mod h1:xCfWZojUHwedNcs780T8cblW9XHss9XKD2s3U44FVbo=
+github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9 h1:DbmY/tRtuyAWyn4feJac34O95nKPyERx/9wmDBkUPEA=
+github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9/go.mod h1:RYGO8E3ddRa6djSET7/YrQr/xC8TUIyV16xsc7NuKic=
 github.com/google/go-cmp v0.5.5/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
@@ -24,9 +24,10 @@ github.com/google/go-configfs-tsm v0.2.2 h1:YnJ9rXIOj5BYD7/0DNnzs8AOp7UcvjfTvt21
 github.com/google/go-configfs-tsm v0.2.2/go.mod h1:EL1GTDFMb5PZQWDviGfZV9n87WeGTR/JUg13RfwkgRo=
 github.com/google/go-sev-guest v0.11.1 h1:gnww4U8fHV5DCPz4gykr1s8SEX1fFNcxCBy+vvXN24k=
 github.com/google/go-sev-guest v0.11.1/go.mod h1:qBOfb+JmgsUI3aUyzQoGC13Kpp9zwLeWvuyXmA9q77w=
-github.com/google/go-tpm v0.9.0 h1:sQF6YqWMi+SCXpsmS3fd21oPy/vSddwZry4JnmltHVk=
-github.com/google/go-tpm v0.9.0/go.mod h1:FkNVkc6C+IsvDI9Jw1OveJmxGZUUaKxtrpOS47QWKfU=
-github.com/google/go-tpm-tools v0.3.13-0.20230620182252-4639ecce2aba h1:qJEJcuLzH5KDR0gKc0zcktin6KSAwL7+jWKBYceddTc=
+github.com/google/go-tpm v0.9.1 h1:0pGc4X//bAlmZzMKf8iz6IsDo1nYTbYJ6FZN/rg4zdM=
+github.com/google/go-tpm v0.9.1/go.mod h1:h9jEsEECg7gtLis0upRBQU+GhYVH6jMjrFxI8u6bVUY=
+github.com/google/go-tpm-tools v0.4.4 h1:oiQfAIkc6xTy9Fl5NKTeTJkBTlXdHsxAofmQyxBKY98=
+github.com/google/go-tpm-tools v0.4.4/go.mod h1:T8jXkp2s+eltnCDIsXR84/MTcVU9Ja7bh3Mit0pa4AY=
 github.com/google/go-tspi v0.3.0 h1:ADtq8RKfP+jrTyIWIZDIYcKOMecRqNJFOew2IT0Inus=
 github.com/google/go-tspi v0.3.0/go.mod h1:xfMGI3G0PhxCdNVcYr1C4C+EizojDg/TXuX5by8CiHI=
 github.com/google/logger v1.1.1 h1:+6Z2geNxc9G+4D4oDO9njjjn2d0wN5d7uOo0vOIW1NQ=
@@ -73,6 +74,7 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.8.3/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
+github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/veraison/go-cose v1.1.0 h1:AalPS4VGiKavpAzIlBjrn7bhqXiXi4jbMYY/2+UC+4o=
 github.com/veraison/go-cose v1.1.0/go.mod h1:7ziE85vSq4ScFTg6wyoMXjucIGOf4JkFEZi/an96Ct4=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
