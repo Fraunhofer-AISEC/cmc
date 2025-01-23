@@ -28,9 +28,11 @@ import (
 
 func Test_verifySgxMeasurements(t *testing.T) {
 	type args struct {
-		sgxM  *ar.Measurement
-		sgxV  []ar.ReferenceValue
-		nonce []byte
+		measurement    *ar.Measurement
+		nonce          []byte
+		rootManifest   *ar.MetadataResult
+		refvals        []ar.ReferenceValue
+		omitCollateral bool
 	}
 	tests := []struct {
 		name string
@@ -40,34 +42,33 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
 				nonce: validSGXNonce,
@@ -77,34 +78,33 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    invalidSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
 				nonce: validSGXNonce,
@@ -114,34 +114,33 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: invalidSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
 				nonce: validSGXNonce,
@@ -149,110 +148,72 @@ func Test_verifySgxMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Invalid Tcb Info",
+			name: "Missing Collateral",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
-					{
-						Type:   "SGX Reference Value",
-						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        tcb_info_old,
-								TcbInfoSize:    tcb_info_size_old,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
 							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
 						},
 					},
 				},
-				nonce: validSGXNonce,
-			},
-			want: false,
-		},
-		{
-			name: "Invalid QE Identity",
-			args: args{
-				sgxM: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
-					Certs:    validSGXCertChain,
-				},
-				sgxV: []ar.ReferenceValue{
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     qe_identity_old,
-								QeIdentitySize: qe_identity_size_old,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
-				nonce: validSGXNonce,
+				nonce:          validSGXNonce,
+				omitCollateral: true,
 			},
 			want: false,
 		},
 		{
 			name: "Invalid Measurement",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: []byte{},
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
 				nonce: validSGXNonce,
@@ -262,34 +223,33 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Debug:     true,
+									Mode64Bit: true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Debug:     true,
-								Mode64Bit: true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
 				nonce: validSGXNonce,
@@ -299,34 +259,33 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  validMRSIGNER,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
-							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  validMRSIGNER,
-						},
 					},
 				},
 				nonce: []byte{},
@@ -336,34 +295,58 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MRSIGNER",
 			args: args{
-				sgxM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 					Certs:    validSGXCertChain,
 				},
-				sgxV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: rootCACertFingerprint,
+							SgxPolicy: &ar.SgxPolicy{
+								QuoteVersion: validSGXVersion,
+								Attributes: ar.SGXAttributes{
+									Initted:   true,
+									Mode64Bit: true,
+									Legacy:    true,
+								},
+								IsvProdId: validIsvProdId,
+								IsvSvn:    validIsvSvn,
+								MrSigner:  "00000",
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SGX Reference Value",
 						Sha256: validSGXMeasurement,
-						Sgx: &ar.SGXDetails{
-							Version: validSGXVersion,
-							Collateral: ar.IntelCollateral{
-								TeeType:        tee_type_sgx,
-								TcbInfo:        []byte{},
-								TcbInfoSize:    0,
-								QeIdentity:     []byte{},
-								QeIdentitySize: 0,
-							},
+					},
+				},
+				nonce: validSGXNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Missing SGX Policy",
+			args: args{
+				measurement: &ar.Measurement{
+					Type:     "SGX Measurement",
+					Evidence: validSGXQuote,
+					Certs:    validSGXCertChain,
+				},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
 							CaFingerprint: rootCACertFingerprint,
-							Attributes: ar.SGXAttributes{
-								Initted:   true,
-								Mode64Bit: true,
-								Legacy:    true,
-							},
-							IsvProdId: validIsvProdId,
-							IsvSvn:    validIsvSvn,
-							MrSigner:  "00000",
 						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
+					{
+						Type:   "SGX Reference Value",
+						Sha256: validSGXMeasurement,
 					},
 				},
 				nonce: validSGXNonce,
@@ -374,27 +357,28 @@ func Test_verifySgxMeasurements(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	log.Trace("Fetching TcbInfo")
-	tcbInfoSgx, err := fetchLatestTcbInfo(false, fmspc_sgx)
+	collateral, err := FetchCollateral(fmspc_sgx, SGXPCKCert, SGX_QUOTE_TYPE)
 	if err != nil {
-		log.Errorf("internal error: failed to fetch tcbInfo: %v", err)
+		log.Errorf("failed to get TDX collateral: %v", err)
 	}
 
-	log.Trace("Fetching QeIdentity")
-	qeIdentitySgx, err := fetchLatestQeIdentity(false)
-	if err != nil {
-		log.Errorf("internal error: failed to fetch qeIdentity: %v", err)
-	}
 	for _, tt := range tests {
+		if tt.args.omitCollateral {
+			collateral = nil
+		}
+		tt.args.measurement.Artifacts = []ar.Artifact{
+			{
+				Type: "TDX Collateral",
+				Events: []ar.MeasureEvent{
+					{
+						IntelCollateral: collateral,
+					},
+				},
+			},
+		}
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.args.sgxV[0].Sgx.Collateral.TcbInfoSize == 0 {
-				tt.args.sgxV[0].Sgx.Collateral.TcbInfo = tcbInfoSgx
-				tt.args.sgxV[0].Sgx.Collateral.TcbInfoSize = uint32(len(tcbInfoSgx))
-			}
-			if tt.args.sgxV[0].Sgx.Collateral.QeIdentitySize == 0 {
-				tt.args.sgxV[0].Sgx.Collateral.QeIdentity = qeIdentitySgx
-				tt.args.sgxV[0].Sgx.Collateral.QeIdentitySize = uint32(len(qeIdentitySgx))
-			}
-			res, got := verifySgxMeasurements(*tt.args.sgxM, tt.args.nonce, "", tt.args.sgxV)
+			res, got := verifySgxMeasurements(*tt.args.measurement, tt.args.nonce,
+				tt.args.rootManifest, tt.args.refvals)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("verifySgxMeasurements() got = %v, want %v", got, tt.want)
 			}
@@ -442,6 +426,26 @@ func TestParseSGXExtensions(t *testing.T) {
 }
 
 var (
+	fmspc_sgx             = "00706a100000"
+	SGXPCKCert            = conv([]byte("-----BEGIN CERTIFICATE-----\nMIIEijCCBDKgAwIBAgIUUcfkXVhIadovPuUFjZl2+cqDHxYwCgYIKoZIzj0EAwIwcTEjMCEGA1UEAwwaSW50ZWwgU0dYIFBDSyBQcm9jZXNzb3IgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTIzMDUxMDE5MzAzNFoXDTMwMDUxMDE5MzAzNFowcDEiMCAGA1UEAwwZSW50ZWwgU0dYIFBDSyBDZXJ0aWZpY2F0ZTEaMBgGA1UECgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYDVQQIDAJDQTELMAkGA1UEBhMCVVMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAT5aL3LqXPoVZE2Kd/2plbjBiHh3/BSLz9WINb9Np8SLG7XQckQY8Ah625qBXigxJV4eWDUa+ggeGwCtROr9iZHo4ICpzCCAqMwHwYDVR0jBBgwFoAU0Oiq2nXX+S5JF5g8exRl0NXyWU0wbAYDVR0fBGUwYzBhoF+gXYZbaHR0cHM6Ly9hcGkudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9zZ3gvY2VydGlmaWNhdGlvbi92NC9wY2tjcmw/Y2E9cHJvY2Vzc29yJmVuY29kaW5nPWRlcjAdBgNVHQ4EFgQUSCApqBTxIkOtDpSt4T4YItTDOkQwDgYDVR0PAQH/BAQDAgbAMAwGA1UdEwEB/wQCMAAwggHTBgkqhkiG+E0BDQEEggHEMIIBwDAeBgoqhkiG+E0BDQEBBBBofycWyLUzrk9KRCwHnbIEMIIBYwYKKoZIhvhNAQ0BAjCCAVMwEAYLKoZIhvhNAQ0BAgECAQcwEAYLKoZIhvhNAQ0BAgICAQcwEAYLKoZIhvhNAQ0BAgMCAQAwEAYLKoZIhvhNAQ0BAgQCAQAwEAYLKoZIhvhNAQ0BAgUCAQAwEAYLKoZIhvhNAQ0BAgYCAQAwEAYLKoZIhvhNAQ0BAgcCAQAwEAYLKoZIhvhNAQ0BAggCAQAwEAYLKoZIhvhNAQ0BAgkCAQAwEAYLKoZIhvhNAQ0BAgoCAQAwEAYLKoZIhvhNAQ0BAgsCAQAwEAYLKoZIhvhNAQ0BAgwCAQAwEAYLKoZIhvhNAQ0BAg0CAQAwEAYLKoZIhvhNAQ0BAg4CAQAwEAYLKoZIhvhNAQ0BAg8CAQAwEAYLKoZIhvhNAQ0BAhACAQAwEAYLKoZIhvhNAQ0BAhECAQ0wHwYLKoZIhvhNAQ0BAhIEEAcHAAAAAAAAAAAAAAAAAAAwEAYKKoZIhvhNAQ0BAwQCAAAwFAYKKoZIhvhNAQ0BBAQGAHBqEAAAMA8GCiqGSIb4TQENAQUKAQAwCgYIKoZIzj0EAwIDRgAwQwIgW5VgrBqux967AZR/i3579JUD3Pc3V8+S1+DyzQ9Kl2kCHzICpI02b3AWrjowye4+pSvYyOYPjyEsC1fDp3gMCIU=\n-----END CERTIFICATE-----"))
+	SGXPCKProcessorCaCert = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICmDCCAj6gAwIBAgIVANDoqtp11/kuSReYPHsUZdDV8llNMAoGCCqGSM49BAMCMGgxGjAYBgNVBAMMEUludGVsIFNHWCBSb290IENBMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzAeFw0xODA1MjExMDUwMTBaFw0zMzA1MjExMDUwMTBaMHExIzAhBgNVBAMMGkludGVsIFNHWCBQQ0sgUHJvY2Vzc29yIENBMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABL9q+NMp2IOgtdl1bk/uWZ5+TGQm8aCi8z78fs+fKCQ3d+uDzXnVTAT2ZhDCifyIuJwvN3wNBp9iHBSSMJMJrBOjgbswgbgwHwYDVR0jBBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYDVR0OBBYEFNDoqtp11/kuSReYPHsUZdDV8llNMA4GA1UdDwEB/wQEAwIBBjASBgNVHRMBAf8ECDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQCJgTbtVqOyZ1m3jqiAXM6QYa6r5sWS4y/G7y8uIJGxdwIgRqPvBSKzzQagBLQq5s5A70pdoiaRJ8z/0uDz4NgV91k=\n-----END CERTIFICATE-----"))
+	SGXRootCaCert         = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoXDTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRFhWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAWgBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmljYXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4EFgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8CAQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=\n-----END CERTIFICATE-----"))
+	TCBSigningCert        = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICizCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIwaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNTAxMFoXDTI1MDUyMTEwNTAxMFowbDEeMBwGA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGvP+mAh91PEyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2ljuypajgbUwgbIwHwYDVR0jBBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYDVR0OBBYEFH44gtX7VSlKQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAAMAoGCCqGSM49BAMCA0cAMEQCIB9C8wOAN/ImxDtGACV246KcqjagZOR0kyctyBrsGGJVAiAjftbrNGsGU8YH211dRiYNoPPu19Zp/ze8JmhujB0oBw==\n-----END CERTIFICATE-----"))
+	validSGXCertChain     = [][]byte{TCBSigningCert.Raw, SGXPCKCert.Raw, SGXPCKProcessorCaCert.Raw, SGXRootCaCert.Raw}
+	validSGXMeasurement   = []byte{0x08, 0x75, 0x5c, 0xd5, 0x7f, 0x2c, 0x04, 0xb8, 0x45, 0xc4, 0x91, 0x25, 0x77, 0xd6, 0x9a, 0xf3, 0xf9, 0x6c, 0xb7, 0xe3, 0xea, 0xda, 0x57, 0xd1, 0xf9, 0xa7, 0xc6, 0x25, 0xf6, 0xa6, 0x23, 0x3c}
+	rootCACertFingerprint = "44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674D3"
+
+	// valid report values
+	validSGXNonce               = []byte("12345")
+	sgx_extensions_short        = []byte{0x30, 0x1E, 0x06, 0x0A, 0x2A, 0x86, 0x48, 0x86, 0xF8, 0x4D, 0x01, 0x0D, 0x01, 0x01, 0x04, 0x10, 0x68, 0x7F, 0x27, 0x16, 0xC8, 0xB5, 0x33, 0xAE, 0x4F, 0x4A, 0x44, 0x2C, 0x07, 0x9D, 0xB2, 0x04}
+	sgx_extensions, _           = hex.DecodeString("301E060A2A864886F84D010D01010410687F2716C8B533AE4F4A442C079DB20430820163060A2A864886F84D010D0102308201533010060B2A864886F84D010D0102010201073010060B2A864886F84D010D0102020201073010060B2A864886F84D010D0102030201003010060B2A864886F84D010D0102040201003010060B2A864886F84D010D0102050201003010060B2A864886F84D010D0102060201003010060B2A864886F84D010D0102070201003010060B2A864886F84D010D0102080201003010060B2A864886F84D010D0102090201003010060B2A864886F84D010D01020A0201003010060B2A864886F84D010D01020B0201003010060B2A864886F84D010D01020C0201003010060B2A864886F84D010D01020D0201003010060B2A864886F84D010D01020E0201003010060B2A864886F84D010D01020F0201003010060B2A864886F84D010D0102100201003010060B2A864886F84D010D01021102010D301F060B2A864886F84D010D0102120410070700000000000000000000000000003010060A2A864886F84D010D0103040200003014060A2A864886F84D010D0104040600706A100000300F060A2A864886F84D010D01050A0100")
+	validSGXVersion      uint16 = 0x03
+	validIsvProdId       uint16 = 0x00
+	validIsvSvn          uint16 = 0
+	validMRSIGNER               = "37E0543F5597B0F0E028FA18955E1307CB7A8CF54B37F513FF64961EADEF94C4"
+
+	invalidSGXCertChain = [][]byte{SGXPCKCert.Raw, SGXRootCaCert.Raw}
+
 	validSGXQuote = []byte{
 		0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x0e, 0x00,
 		0x93, 0x9a, 0x72, 0x33, 0xf7, 0x9c, 0x4c, 0xa9, 0x94, 0x0a, 0x0d, 0xb3,
@@ -1215,30 +1219,4 @@ var (
 		0x52, 0x54, 0x49, 0x46, 0x49, 0x43, 0x41, 0x54, 0x45, 0x2d, 0x2d, 0x2d,
 		0x2d, 0x2d, 0x0a, 0x00, // only changed penultimate byte to 0x00
 	}
-
-	tee_type_sgx          = uint32(0)
-	fmspc_sgx             = "00706a100000"
-	SGXPCKCert            = conv([]byte("-----BEGIN CERTIFICATE-----\nMIIEijCCBDKgAwIBAgIUUcfkXVhIadovPuUFjZl2+cqDHxYwCgYIKoZIzj0EAwIwcTEjMCEGA1UEAwwaSW50ZWwgU0dYIFBDSyBQcm9jZXNzb3IgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTIzMDUxMDE5MzAzNFoXDTMwMDUxMDE5MzAzNFowcDEiMCAGA1UEAwwZSW50ZWwgU0dYIFBDSyBDZXJ0aWZpY2F0ZTEaMBgGA1UECgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYDVQQIDAJDQTELMAkGA1UEBhMCVVMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAT5aL3LqXPoVZE2Kd/2plbjBiHh3/BSLz9WINb9Np8SLG7XQckQY8Ah625qBXigxJV4eWDUa+ggeGwCtROr9iZHo4ICpzCCAqMwHwYDVR0jBBgwFoAU0Oiq2nXX+S5JF5g8exRl0NXyWU0wbAYDVR0fBGUwYzBhoF+gXYZbaHR0cHM6Ly9hcGkudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9zZ3gvY2VydGlmaWNhdGlvbi92NC9wY2tjcmw/Y2E9cHJvY2Vzc29yJmVuY29kaW5nPWRlcjAdBgNVHQ4EFgQUSCApqBTxIkOtDpSt4T4YItTDOkQwDgYDVR0PAQH/BAQDAgbAMAwGA1UdEwEB/wQCMAAwggHTBgkqhkiG+E0BDQEEggHEMIIBwDAeBgoqhkiG+E0BDQEBBBBofycWyLUzrk9KRCwHnbIEMIIBYwYKKoZIhvhNAQ0BAjCCAVMwEAYLKoZIhvhNAQ0BAgECAQcwEAYLKoZIhvhNAQ0BAgICAQcwEAYLKoZIhvhNAQ0BAgMCAQAwEAYLKoZIhvhNAQ0BAgQCAQAwEAYLKoZIhvhNAQ0BAgUCAQAwEAYLKoZIhvhNAQ0BAgYCAQAwEAYLKoZIhvhNAQ0BAgcCAQAwEAYLKoZIhvhNAQ0BAggCAQAwEAYLKoZIhvhNAQ0BAgkCAQAwEAYLKoZIhvhNAQ0BAgoCAQAwEAYLKoZIhvhNAQ0BAgsCAQAwEAYLKoZIhvhNAQ0BAgwCAQAwEAYLKoZIhvhNAQ0BAg0CAQAwEAYLKoZIhvhNAQ0BAg4CAQAwEAYLKoZIhvhNAQ0BAg8CAQAwEAYLKoZIhvhNAQ0BAhACAQAwEAYLKoZIhvhNAQ0BAhECAQ0wHwYLKoZIhvhNAQ0BAhIEEAcHAAAAAAAAAAAAAAAAAAAwEAYKKoZIhvhNAQ0BAwQCAAAwFAYKKoZIhvhNAQ0BBAQGAHBqEAAAMA8GCiqGSIb4TQENAQUKAQAwCgYIKoZIzj0EAwIDRgAwQwIgW5VgrBqux967AZR/i3579JUD3Pc3V8+S1+DyzQ9Kl2kCHzICpI02b3AWrjowye4+pSvYyOYPjyEsC1fDp3gMCIU=\n-----END CERTIFICATE-----"))
-	SGXPCKProcessorCaCert = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICmDCCAj6gAwIBAgIVANDoqtp11/kuSReYPHsUZdDV8llNMAoGCCqGSM49BAMCMGgxGjAYBgNVBAMMEUludGVsIFNHWCBSb290IENBMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzAeFw0xODA1MjExMDUwMTBaFw0zMzA1MjExMDUwMTBaMHExIzAhBgNVBAMMGkludGVsIFNHWCBQQ0sgUHJvY2Vzc29yIENBMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABL9q+NMp2IOgtdl1bk/uWZ5+TGQm8aCi8z78fs+fKCQ3d+uDzXnVTAT2ZhDCifyIuJwvN3wNBp9iHBSSMJMJrBOjgbswgbgwHwYDVR0jBBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYDVR0OBBYEFNDoqtp11/kuSReYPHsUZdDV8llNMA4GA1UdDwEB/wQEAwIBBjASBgNVHRMBAf8ECDAGAQH/AgEAMAoGCCqGSM49BAMCA0gAMEUCIQCJgTbtVqOyZ1m3jqiAXM6QYa6r5sWS4y/G7y8uIJGxdwIgRqPvBSKzzQagBLQq5s5A70pdoiaRJ8z/0uDz4NgV91k=\n-----END CERTIFICATE-----"))
-	SGXRootCaCert         = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoXDTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRFhWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAWgBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmljYXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4EFgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8CAQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=\n-----END CERTIFICATE-----"))
-	TCBSigningCert        = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICizCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIwaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNTAxMFoXDTI1MDUyMTEwNTAxMFowbDEeMBwGA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGvP+mAh91PEyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2ljuypajgbUwgbIwHwYDVR0jBBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYDVR0OBBYEFH44gtX7VSlKQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAAMAoGCCqGSM49BAMCA0cAMEQCIB9C8wOAN/ImxDtGACV246KcqjagZOR0kyctyBrsGGJVAiAjftbrNGsGU8YH211dRiYNoPPu19Zp/ze8JmhujB0oBw==\n-----END CERTIFICATE-----"))
-	validSGXCertChain     = [][]byte{TCBSigningCert.Raw, SGXPCKCert.Raw, SGXPCKProcessorCaCert.Raw, SGXRootCaCert.Raw}
-	validSGXMeasurement   = []byte{0x08, 0x75, 0x5c, 0xd5, 0x7f, 0x2c, 0x04, 0xb8, 0x45, 0xc4, 0x91, 0x25, 0x77, 0xd6, 0x9a, 0xf3, 0xf9, 0x6c, 0xb7, 0xe3, 0xea, 0xda, 0x57, 0xd1, 0xf9, 0xa7, 0xc6, 0x25, 0xf6, 0xa6, 0x23, 0x3c}
-	rootCACertFingerprint = "44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674D3"
-
-	// valid report values
-	validSGXNonce               = []byte("12345")
-	sgx_extensions_short        = []byte{0x30, 0x1E, 0x06, 0x0A, 0x2A, 0x86, 0x48, 0x86, 0xF8, 0x4D, 0x01, 0x0D, 0x01, 0x01, 0x04, 0x10, 0x68, 0x7F, 0x27, 0x16, 0xC8, 0xB5, 0x33, 0xAE, 0x4F, 0x4A, 0x44, 0x2C, 0x07, 0x9D, 0xB2, 0x04}
-	sgx_extensions, _           = hex.DecodeString("301E060A2A864886F84D010D01010410687F2716C8B533AE4F4A442C079DB20430820163060A2A864886F84D010D0102308201533010060B2A864886F84D010D0102010201073010060B2A864886F84D010D0102020201073010060B2A864886F84D010D0102030201003010060B2A864886F84D010D0102040201003010060B2A864886F84D010D0102050201003010060B2A864886F84D010D0102060201003010060B2A864886F84D010D0102070201003010060B2A864886F84D010D0102080201003010060B2A864886F84D010D0102090201003010060B2A864886F84D010D01020A0201003010060B2A864886F84D010D01020B0201003010060B2A864886F84D010D01020C0201003010060B2A864886F84D010D01020D0201003010060B2A864886F84D010D01020E0201003010060B2A864886F84D010D01020F0201003010060B2A864886F84D010D0102100201003010060B2A864886F84D010D01021102010D301F060B2A864886F84D010D0102120410070700000000000000000000000000003010060A2A864886F84D010D0103040200003014060A2A864886F84D010D0104040600706A100000300F060A2A864886F84D010D01050A0100")
-	validSGXVersion      uint16 = 0x03
-	validIsvProdId       uint16 = 0x00
-	validIsvSvn          uint16 = 0
-	validMRSIGNER               = "37E0543F5597B0F0E028FA18955E1307CB7A8CF54B37F513FF64961EADEF94C4"
-
-	// old/invalid values
-	tcb_info_old         = []byte(`{"tcbInfo":{"id":"SGX","version":3,"issueDate":"2023-05-20T23:45:45Z","nextUpdate":"2023-06-19T23:45:45Z","fmspc":"00706A100000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":15,"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":8},{"svn":8},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":13},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":7},{"svn":7},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":13},"tcbDate":"2022-11-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":5},{"svn":5},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11},"tcbDate":"2021-11-10T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":4},{"svn":4},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11},"tcbDate":"2021-06-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":3},{"svn":3},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":10},"tcbDate":"2020-11-11T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00465","INTEL-SA-00477","INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":2},{"svn":2},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":9},"tcbDate":"2020-06-10T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00465","INTEL-SA-00477","INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":2},{"svn":2},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":7},"tcbDate":"2019-05-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00220","INTEL-SA-00270","INTEL-SA-00293","INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00465","INTEL-SA-00477","INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":2},{"svn":2},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":6},"tcbDate":"2018-08-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00203","INTEL-SA-00220","INTEL-SA-00270","INTEL-SA-00293","INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00465","INTEL-SA-00477","INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":1},{"svn":1},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00115","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00220","INTEL-SA-00270","INTEL-SA-00293","INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00465","INTEL-SA-00477","INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]},{"tcb":{"sgxtcbcomponents":[{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":4},"tcbDate":"2017-07-26T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00088","INTEL-SA-00106","INTEL-SA-00115","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00220","INTEL-SA-00270","INTEL-SA-00293","INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00465","INTEL-SA-00477","INTEL-SA-00528","INTEL-SA-00617","INTEL-SA-00657","INTEL-SA-00767"]}]},"signature":"0f0dcda69af0014b69e2af1a826d5cf5caee7fdcac2ec10740d7b6caedf04871005976e4cc0803bc50e824fb23c82b21078da45d867c30925a56e6d23fe53119"}`)
-	tcb_info_size_old    = uint32(4391)
-	qe_identity_old      = []byte(`{"enclaveIdentity":{"id":"QE","version":2,"issueDate":"2023-05-20T23:50:17Z","nextUpdate":"2023-06-19T23:50:17Z","tcbEvaluationDataNumber":15,"miscselect":"00000000","miscselectMask":"FFFFFFFF","attributes":"11000000000000000000000000000000","attributesMask":"FBFFFFFFFFFFFFFF0000000000000000","mrsigner":"8C4F5775D796503E96137F77C68A829A0056AC8DED70140B081B094490C57BFF","isvprodid":1,"tcbLevels":[{"tcb":{"isvsvn":8},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"isvsvn":6},"tcbDate":"2021-11-10T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00615"]},{"tcb":{"isvsvn":5},"tcbDate":"2020-11-11T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00477","INTEL-SA-00615"]},{"tcb":{"isvsvn":4},"tcbDate":"2019-11-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00334","INTEL-SA-00477","INTEL-SA-00615"]},{"tcb":{"isvsvn":2},"tcbDate":"2019-05-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00219","INTEL-SA-00293","INTEL-SA-00334","INTEL-SA-00477","INTEL-SA-00615"]},{"tcb":{"isvsvn":1},"tcbDate":"2018-08-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00202","INTEL-SA-00219","INTEL-SA-00293","INTEL-SA-00334","INTEL-SA-00477","INTEL-SA-00615"]}]},"signature":"d2a951b5a145f82b089903cc4747c28edf9d9a63b55a043ff2e7a93ecb339bb0b935d4ad516e3e91e57a00d3f913769d60dddd1ed54e242ea9365c9ca5d280ed"}`)
-	qe_identity_size_old = uint32(1381)
-	invalidSGXCertChain  = [][]byte{SGXPCKCert.Raw, SGXRootCaCert.Raw}
 )

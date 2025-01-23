@@ -23,9 +23,13 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/google/go-tdx-guest/pcs"
 )
 
-// TDX Report V4
+const NUM_TDX_MRS = 6
+
+// TDX quote V4: Intel TDX DCAP: Quote Generation Library and Quote Verification Library Rev 0.9 p37
+// A.3. Version 4 Quote Format (TDX-ECDSA, SGX-ECDSA, and SGX-EPID)
 type TdxReportV4 struct {
 	QuoteHeader           QuoteHeader
 	QuoteBody             TdxReportBody
@@ -33,15 +37,16 @@ type TdxReportV4 struct {
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructureV4 // variable size
 }
 
-// TDX 1.0: 584 bytes
+// TDX quote V4: Intel TDX DCAP: Quote Generation Library and Quote Verification Library Rev 0.9 p38
+// A.3.2. TD Quote Body (574 Bytes)
 type TdxReportBody struct {
-	TeeTcbSvn      [16]byte
-	MrSeam         [48]byte
-	MrSignerSeam   [48]byte
-	SeamAttributes [8]byte
+	TeeTcbSvn      [16]byte // Describes the TCB of TDX
+	MrSeam         [48]byte // Measurement of the TDX Module
+	MrSignerSeam   [48]byte // Zero for the Intel TDX Module.
+	SeamAttributes [8]byte  // Must be zero for TDX 1.0
 	TdAttributes   [8]byte
 	XFAM           [8]byte
-	MrTd           [48]byte
+	MrTd           [48]byte // Measurements of the initial contents of the TD
 	MrConfigId     [48]byte
 	MrOwner        [48]byte
 	MrOwnerConfig  [48]byte
@@ -52,28 +57,220 @@ type TdxReportBody struct {
 	ReportData     [64]byte
 }
 
-// Quote Signature for TDX, contains QE Certification Data version 4
+// TDX quote V4: Intel TDX DCAP: Quote Generation Library and Quote Verification Library Rev 0.9 p41
+// A.3.8. ECDSA 256-bit Quote Signature Data Structure - Version 4
 type ECDSA256QuoteSignatureDataStructureV4 struct {
 	QuoteSignature      [64]byte
 	ECDSAAttestationKey [64]byte
-	QECertDataType      uint16
-	QECertDataSize      uint32
-	QECertData          QEReportCertDataV4 // Version 4
+	QECertificationData QECertificationData
 }
 
-// This is the datastructure of QECertDataType 6
-type QEReportCertDataV4 struct {
+// TDX quote V4: Intel TDX DCAP: Quote Generation Library and Quote Verification Library Rev 0.9 p42
+// A.3.9. QE Certification Data - Version 4
+type QECertificationData struct {
+	QECertificationDataType   uint16 // Type 6 (QEReportCertDataV4)
+	Size                      uint32
+	QEReportCertificationData QEReportCertificationData // Only in case of type 6
+}
+
+// TDX quote V4: Intel TDX DCAP: Quote Generation Library and Quote Verification Library Rev 0.9 p44
+// A.3.11. QE Report Certification Data
+type QEReportCertificationData struct {
 	QEReport          EnclaveReportBody
 	QEReportSignature [64]byte
-	QEAuthDataSize    uint16
-	QEAuthData        []byte
-	QECertDataType    uint16 // Type 5 (PCK Cert Chain)
-	QECertDataSize    uint32
-	QECertData        SgxCertificates
+	QEAuthDataSize    uint16          // A3.7 QE Authentication Data
+	QEAuthData        []byte          // A3.7 QE Authentication Data
+	QECertDataType    uint16          // A3.9 QE Certification Data: Type 5 (PCK Cert Chain)
+	QECertDataSize    uint32          // A3.9 QE Certification Data
+	PCKCertChain      SgxCertificates // A3.9 QE Certification Data: Type 5 (PCK Cert Chain)
+}
+
+func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
+	referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
+
+	log.Debug("Verifying TDX measurements")
+
+	var err error
+	result := &ar.MeasurementResult{
+		Type:      "TDX Result",
+		TdxResult: &ar.TdxResult{},
+	}
+	ok := true
+
+	if len(referenceValues) == 0 {
+		log.Debugf("Could not find TDX reference values")
+		result.Summary.SetErr(ar.RefValNotPresent)
+		return result, false
+	}
+	if rootManifest == nil {
+		log.Debugf("Internal error: root manifest not present")
+		result.Summary.SetErr((ar.Internal))
+		return result, false
+	}
+	tdxPolicy := rootManifest.TdxPolicy
+	if tdxPolicy == nil {
+		log.Debugf("TDX manifest does not contain TDX policy")
+		result.Summary.SetErr(ar.PolicyNotPresent)
+		return result, false
+	}
+
+	// Parse intel collateral (QE identity, TCB info, certificate revocation lists)
+	if len(measurement.Artifacts) == 0 ||
+		len(measurement.Artifacts[0].Events) == 0 ||
+		measurement.Artifacts[0].Events[0].IntelCollateral == nil {
+		log.Debugf("Could not find TDX artifacts (collateral)")
+		result.Summary.SetErr(ar.CollateralNotPresent)
+		return result, false
+	}
+	collateralRaw := measurement.Artifacts[0].Events[0].IntelCollateral
+	collateral, err := ParseCollateral(collateralRaw)
+	if err != nil {
+		log.Debugf("Could not parse TDX artifacts (collateral)")
+		result.Summary.SetErr(ar.ParseCollateral)
+		return result, false
+	}
+
+	// Currently only support for report version 4
+	tdxQuote, err := DecodeTdxReportV4(measurement.Evidence)
+	if err != nil {
+		log.Debugf("Failed to decode TDX report: %v", err)
+		result.Summary.SetErr(ar.ParseEvidence)
+		return result, false
+	}
+
+	// Compare nonce for freshness (called report data in the TDX attestation report structure)
+	nonce64 := make([]byte, 64)
+	copy(nonce64, nonce)
+	if !bytes.Equal(tdxQuote.QuoteBody.ReportData[:], nonce64) {
+		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
+			hex.EncodeToString(nonce), hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:]))
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce)
+		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
+		ok = false
+		return result, ok
+	} else {
+		result.Freshness.Success = true
+	}
+
+	// Extract certificate chain from quote
+	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain
+	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
+		log.Debugf("incomplete certificate chain")
+		result.Summary.SetErr(ar.VerifyCertChain)
+		return result, false
+	}
+
+	// Match measurement root CAs against reference root CA fingerprint
+	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprint)
+	if errCode != ar.NotSet {
+		result.Summary.SetErr(errCode)
+		return result, false
+	}
+
+	// Parse and verify PCK certificate extensions
+	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	if err != nil {
+		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		result.Summary.SetErr(ar.ParseCert)
+		return result, false
+	}
+
+	// Verify TCB info
+	result.TdxResult.TcbInfoCheck = ValidateTcbInfo(
+		&collateral.TcbInfo, collateralRaw.TcbInfo,
+		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
+		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
+	if !result.TdxResult.TcbInfoCheck.Summary.Success {
+		log.Debugf("Failed to validate TCB info")
+		result.Summary.SetErr(ar.VerifyTcbInfo)
+		return result, false
+	}
+
+	// Verify Quoting Enclave Identity
+	qeIdentityResult, err := ValidateQEIdentity(
+		&tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.QEReport,
+		&collateral.QeIdentity, collateralRaw.QeIdentity,
+		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
+		TDX_QUOTE_TYPE)
+	result.TdxResult.QeReportCheck = qeIdentityResult
+	if err != nil {
+		log.Debugf("Failed to validate QE Identity: %v", err)
+		result.Summary.SetErr(ar.VerifyQEIdentityErr)
+		return result, false
+	}
+
+	// Verify Quote Signature including certificate chains and CRLs
+	sig, ret := VerifyIntelQuoteSignature(measurement.Evidence, tdxQuote.QuoteSignatureData,
+		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
+		rootManifest.CaFingerprint, TDX_QUOTE_TYPE, collateral.PckCrl, collateral.RootCaCrl)
+	if !ret {
+		log.Debug("Failed to verify Intel quote signature")
+		ok = false
+	}
+	result.Signature = sig
+
+	// Verify the measurement registers (MRTD, RTMRs) against the reference values
+	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody, referenceValues)
+	if errCode != ar.NotSet || !ok {
+		log.Debugf("Failed to recalculate measurement registers")
+		ok = false
+		result.Summary.SetErr(errCode)
+	} else {
+		log.Tracef("Successfully recalculated TDX MRs")
+	}
+	result.TdxResult.MrMatch = mrResults
+	result.Artifacts = append(result.Artifacts, detailedResults...)
+
+	// TODO verify MRSEAM
+
+	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &tdxPolicy.TdId, &collateral.TcbInfo)
+	if !okTdId {
+		log.Debugf("Failed to verify TDX TD ID")
+		ok = false
+	}
+	result.Artifacts = append(result.Artifacts, tdIdResults...)
+
+	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], tdxPolicy.Xfam)
+	if !result.TdxResult.XfamCheck.Success {
+		log.Debugf("TDX XFAM check failed")
+		ok = false
+	}
+
+	result.TdxResult.SeamAttributesCheck = verifyTdxSeamAttributes(tdxQuote.QuoteBody.SeamAttributes[:])
+	if !result.TdxResult.SeamAttributesCheck.Success {
+		log.Debugf("TDX SEAM attributes check failed")
+		ok = false
+	}
+
+	// Verify Quote Body values against reference TDX policy
+	var okTdAttr bool
+	result.TdxResult.TdAttributesCheck, okTdAttr = verifyTdxTdAttributes(tdxQuote.QuoteBody.TdAttributes, &tdxPolicy.TdAttributes)
+	if !okTdAttr {
+		log.Debugf("TDX TD Attributes check failed")
+		ok = false
+	}
+
+	// Check version
+	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader.Version, tdxPolicy.QuoteVersion)
+	if !ret {
+		return result, false
+	}
+	log.Tracef("Successfully validated TDX quote version")
+
+	if ok {
+		log.Debug("Successfully verified TDX measurements")
+	} else {
+		log.Debug("Failed to verify TDX measurements")
+	}
+
+	result.Summary.Success = ok
+
+	return result, ok
 }
 
 // Parses the report into the TDReport structure
-func decodeTdxReportV4(report []byte) (TdxReportV4, error) {
+func DecodeTdxReportV4(report []byte) (TdxReportV4, error) {
 	var reportStruct TdxReportV4
 	var header QuoteHeader
 	var body TdxReportBody
@@ -86,6 +283,11 @@ func decodeTdxReportV4(report []byte) (TdxReportV4, error) {
 	if err != nil {
 		return TdxReportV4{}, fmt.Errorf("failed to decode TD report header: %v", err)
 	}
+
+	if header.Version != uint16(4) {
+		return TdxReportV4{}, fmt.Errorf("unsupported Quote version %v. Only  v4 is supported", header.Version)
+	}
+	log.Tracef("Decoding TDX quote header version 4")
 
 	// parse body
 	err = binary.Read(buf, binary.LittleEndian, &body)
@@ -100,7 +302,7 @@ func decodeTdxReportV4(report []byte) (TdxReportV4, error) {
 	}
 
 	// parse signature
-	err = parseECDSASignatureV4(buf, &sig)
+	err = parseECDSAQuoteSignatureDataStructV4(buf, &sig)
 	if err != nil {
 		return TdxReportV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureData: %v", err)
 	}
@@ -115,26 +317,33 @@ func decodeTdxReportV4(report []byte) (TdxReportV4, error) {
 }
 
 // parse the full quote signature data structure (V4) from buf to sig
-func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStructureV4) error {
+func parseECDSAQuoteSignatureDataStructV4(buf *bytes.Buffer, quoteSigStruct *ECDSA256QuoteSignatureDataStructureV4) error {
 
-	err := binary.Read(buf, binary.LittleEndian, &sig.QuoteSignature)
+	err := binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QuoteSignature)
 	if err != nil {
 		return fmt.Errorf("failed to parse QuoteSignature")
 	}
-	err = binary.Read(buf, binary.LittleEndian, &sig.ECDSAAttestationKey)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.ECDSAAttestationKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse ECDSAAttestationKey")
 	}
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertDataType)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.QECertificationDataType)
 	if err != nil {
 		return fmt.Errorf("failed to parse QECertDataType")
 	}
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.Size)
 	if err != nil {
 		return fmt.Errorf("failed to parse QECertDataSize")
 	}
 
-	rawData := make([]byte, sig.QECertDataSize)
+	// QE Certification Data Type 6: QE Report Certification Data (outer type)
+	if quoteSigStruct.QECertificationData.QECertificationDataType != uint16(6) {
+		return fmt.Errorf("unsupported QE certification data type %v (expected type 6: QE Report Certification Data)",
+			quoteSigStruct.QECertificationData.QECertificationDataType)
+	}
+	log.Trace("QE certification data type: 6 (QE Report Certification Data)")
+
+	rawData := make([]byte, quoteSigStruct.QECertificationData.Size)
 	err = binary.Read(buf, binary.LittleEndian, &rawData)
 	if err != nil {
 		return fmt.Errorf("failed to parse QECertData")
@@ -142,401 +351,329 @@ func parseECDSASignatureV4(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStr
 
 	// parse QEReportCertDataV4
 	buf = bytes.NewBuffer(rawData)
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QEReport)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.QEReportCertificationData.QEReport)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Report: %v", err)
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QEReportSignature)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.QEReportCertificationData.QEReportSignature)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Report Signature: %v", err)
 	}
 
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QEAuthDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.QEReportCertificationData.QEAuthDataSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Authentication Data Size: %v", err)
 	}
 
-	tmp := make([]byte, sig.QECertData.QEAuthDataSize)
+	tmp := make([]byte, quoteSigStruct.QECertificationData.QEReportCertificationData.QEAuthDataSize)
 	err = binary.Read(buf, binary.LittleEndian, &tmp)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Authentication Data: %v", err)
 	}
-	sig.QECertData.QEAuthData = tmp
+	quoteSigStruct.QECertificationData.QEReportCertificationData.QEAuthData = tmp
 
-	// parse QE Certification Data Type (has to be type 5)
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QECertDataType)
+	// QE Report Certification Data Type 5: PCK Cert Chain
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.QEReportCertificationData.QECertDataType)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Certification Data Type: %v", err)
 	}
-	if sig.QECertData.QECertDataType != 5 {
-		return fmt.Errorf("wrong QECertDataType. Expected: 5, Got: %v", sig.QECertData.QECertDataType)
+	if quoteSigStruct.QECertificationData.QEReportCertificationData.QECertDataType != 5 {
+		return fmt.Errorf("wrong QECertDataType. Expected: 5, Got: %v", quoteSigStruct.QECertificationData.QEReportCertificationData.QECertDataType)
 	}
+	log.Tracef("QE report certifiation data type: 5 (Concatenated PCK Cert Chain)")
 
-	err = binary.Read(buf, binary.LittleEndian, &sig.QECertData.QECertDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &quoteSigStruct.QECertificationData.QEReportCertificationData.QECertDataSize)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Certification Data Size: %v", err)
 	}
 
 	// parse QE Certification Data (Raw)
-	tmp = make([]byte, sig.QECertData.QECertDataSize)
+	tmp = make([]byte, quoteSigStruct.QECertificationData.QEReportCertificationData.QECertDataSize)
 	err = binary.Read(buf, binary.LittleEndian, &tmp)
 	if err != nil {
 		return fmt.Errorf("failed to parse QE Certification Data: %v", err)
 	}
 
 	// parse PCK Cert Chain (PCK Leaf Cert || Intermediate CA Cert || Root CA Cert)
+	log.Trace("Parsing measurement certificate chain from report..")
 	certChain, err := parseCertificates(tmp[:], true)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate chain from QECertData: %v", err)
 	}
-	sig.QECertData.QECertData = certChain
+	quoteSigStruct.QECertificationData.QEReportCertificationData.PCKCertChain = certChain
 
 	return nil
 }
 
-func verifyTdxMeasurements(tdxM ar.Measurement, nonce []byte, intelCache string, referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
+// verifyTdxMrs recalculates the TDX measurement registers based on the reference values
+// and compares them with the measurements. For the MR index, the function uses the mapping
+// according to UEFI Spec 2.10 Section 38.4.1:
+// CC MR Index | TDX register
+// 0           | MRTD
+// 1           | RTMR0
+// 2           | RTMR1
+// 3           | RTMR2
+// 4           | RTMR3
+// 5           | MRSEAM (not in UEFI spec)
+func verifyTdxMrs(body *TdxReportBody, refvals []ar.ReferenceValue) ([]ar.DigestResult, []ar.DigestResult, ar.ErrorCode, bool) {
 
-	log.Debug("Verifying TDX measurements")
+	success := true
+	detailedResults := make([]ar.DigestResult, 0)
+	mrResults := make([]ar.DigestResult, 0, NUM_TDX_MRS)
 
-	var err error
-	result := &ar.MeasurementResult{
-		Type:      "TDX Result",
-		TdxResult: &ar.TdxResult{},
+	// Recalculate the expected MR values based on the reference values
+	calculatedMrs := make([][]byte, NUM_TDX_MRS)
+	for i := 0; i < NUM_TDX_MRS; i++ {
+		calculatedMrs[i] = make([]byte, 48)
 	}
-	ok := true
-
-	log.Debug("Verifying TDX measurements")
-
-	if len(referenceValues) == 0 {
-		log.Debugf("Could not find TDX Reference Value")
-		result.Summary.SetErr(ar.RefValNotPresent)
-		return result, false
-	} else if len(referenceValues) > 1 {
-		log.Debugf("Report contains %v reference values. Currently, only one TDX Reference Value is supported",
-			len(referenceValues))
-		result.Summary.SetErr(ar.RefValMultiple)
-		return result, false
-	}
-	tdxReferenceValue := referenceValues[0]
-
-	if tdxReferenceValue.Type != "TDX Reference Value" {
-		log.Debugf("TDX Reference Value invalid type %v", tdxReferenceValue.Type)
-		result.Summary.SetErr(ar.RefValType)
-		return result, false
-	}
-	if tdxReferenceValue.Tdx == nil {
-		log.Debugf("TDX Reference Value does not contain details")
-		result.Summary.SetErr(ar.DetailsNotPresent)
-		return result, false
-	}
-
-	// Currently only support for report version 4
-	tdxQuote, err := decodeTdxReportV4(tdxM.Evidence)
-	if err != nil {
-		log.Debugf("Failed to decode TDX report: %v", err)
-		result.Summary.SetErr(ar.ParseEvidence)
-		return result, false
+	for _, refval := range refvals {
+		if refval.Index >= NUM_TDX_MRS {
+			return nil, nil, ar.IllegalTdxMrIndex, false
+		}
+		if refval.Index == 0 || refval.Index == 5 {
+			// MRTD and MRSEAM are not extended
+			copy(calculatedMrs[refval.Index], refval.Sha384)
+		} else {
+			// RTMRs are extended
+			calculatedMrs[refval.Index] = internal.ExtendSha384(calculatedMrs[refval.Index], refval.Sha384)
+			log.Tracef("Extended %v: %v = %v", indexToMr(refval.Index), refval.SubType, hex.EncodeToString(refval.Sha384))
+		}
 	}
 
-	// Compare nonce for freshness (called report data in the TDX attestation report structure)
-	nonce64 := make([]byte, 64)
-	copy(nonce64, nonce)
-	if cmp := bytes.Compare(tdxQuote.QuoteBody.ReportData[:], nonce64); cmp != 0 {
-		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
-			hex.EncodeToString(nonce), hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:]))
-		result.Freshness.Success = false
-		result.Freshness.Expected = hex.EncodeToString(nonce)
-		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
-		ok = false
-		return result, ok
-	} else {
-		result.Freshness.Success = true
+	measuredMrs := [][]byte{
+		body.MrTd[:],
+		body.RtMr0[:],
+		body.RtMr1[:],
+		body.RtMr2[:],
+		body.RtMr3[:],
+		body.MrSeam[:],
 	}
 
-	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertData.QECertData
+	successMrs := make([]bool, NUM_TDX_MRS)
 
-	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
-		log.Debugf("incomplete certificate chain")
-		result.Summary.SetErr(ar.VerifyCertChain)
-		return result, false
+	// Verify the calculated MR values against the quote body MR values
+	for i := 0; i < NUM_TDX_MRS; i++ {
+
+		successMrs[i] = bytes.Equal(calculatedMrs[i], measuredMrs[i])
+		if !successMrs[i] {
+			success = false
+			detailedResults = append(detailedResults,
+				ar.DigestResult{
+					Type:     "Measurement",
+					Digest:   hex.EncodeToString(measuredMrs[i]),
+					Index:    i,
+					Success:  false,
+					Launched: true,
+				})
+			log.Debugf("%v: Measurement %q does not match reference %q", indexToMr(i),
+				hex.EncodeToString(measuredMrs[i]), hex.EncodeToString(calculatedMrs[i]))
+		} else {
+			log.Tracef("%v: Measurement %q does match reference", indexToMr(i),
+				hex.EncodeToString(measuredMrs[i]))
+		}
+
+		// Measurement register summary
+		mrResults = append(mrResults, ar.DigestResult{
+			Index:    i,
+			SubType:  indexToMr(i),
+			Success:  successMrs[i],
+			Digest:   hex.EncodeToString(calculatedMrs[i]),
+			Measured: hex.EncodeToString(measuredMrs[i]),
+		})
 	}
 
-	// parse reference cert chain (TCBSigningCert chain)
-	referenceCerts, err := parseCertificates(tdxM.Certs, true)
-	if err != nil || referenceCerts.TCBSigningCert == nil || referenceCerts.RootCACert == nil {
-		log.Debugf("Failed to parse reference certificates (TCBSigningCert + IntelRootCACert): %v", err)
-		result.Summary.SetErr(ar.ParseCert)
-		return result, false
+	// Without the CC eventlog, we cannot display, which individual measurements
+	// did not match. Instead, we set all reference values of a certain MR to false in case the
+	// comparison of the recalculated MR with the measured MR fails
+	for _, refval := range refvals {
+		detailedResults = append(detailedResults,
+			ar.DigestResult{
+				Type:        "Reference Value",
+				SubType:     refval.SubType,
+				Index:       refval.Index,
+				Digest:      hex.EncodeToString(refval.Sha384),
+				Success:     successMrs[refval.Index],
+				Launched:    successMrs[refval.Index],
+				Description: refval.Description,
+			})
 	}
 
-	_, code := VerifyTCBSigningCertChain(referenceCerts, intelCache)
-	if code != ar.NotSet {
-		log.Debug("failed to verify TCB signing cert chain")
-		result.Summary.SetErr(code)
-		return result, false
+	return mrResults, detailedResults, ar.NotSet, success
+}
+
+func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbInfo) ([]ar.DigestResult, bool) {
+
+	tdIdSuccess := true
+	results := make([]ar.DigestResult, 0, 3)
+
+	// Verify MROWNER
+	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
+	results = append(results, ar.DigestResult{
+		Type:     "Reference Value",
+		SubType:  "MrOwner",
+		Digest:   hex.EncodeToString(refTdId.MrOwner),
+		Success:  success,
+		Launched: success,
+	})
+	if !success {
+		tdIdSuccess = false
+		results = append(results, ar.DigestResult{
+			Type:     "Measurement",
+			SubType:  "MROWNER",
+			Digest:   hex.EncodeToString(report.MrOwner[:]),
+			Success:  false,
+			Launched: false,
+		})
 	}
 
-	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
-	if err != nil {
-		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-		result.Summary.SetErr(ar.ParseCert)
-		return result, false
+	// Verify MROWNERCONFIG
+	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
+	results = append(results, ar.DigestResult{
+		Type:     "Reference Value",
+		SubType:  "MROWNERCONFIG",
+		Digest:   hex.EncodeToString(refTdId.MrOwnerConfig),
+		Success:  success,
+		Launched: success,
+	})
+	if !success {
+		tdIdSuccess = false
+		results = append(results, ar.DigestResult{
+			Type:     "Measurement",
+			SubType:  "MROWNERCONFIG",
+			Digest:   hex.EncodeToString(report.MrOwnerConfig[:]),
+			Success:  false,
+			Launched: false,
+		})
 	}
 
-	// Parse and verify TcbInfo object
-	tcbInfo, err := parseTcbInfo(tdxReferenceValue.Tdx.Collateral.TcbInfo)
-	if err != nil {
-		log.Debugf("Failed to parse tcbInfo: %v", err)
-		result.Summary.SetErr(ar.ParseTcbInfo)
-		return result, false
+	// Verify MRCONFIGID
+	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
+	results = append(results, ar.DigestResult{
+		Type:     "Reference Value",
+		SubType:  "MRCONFIGID",
+		Digest:   hex.EncodeToString(refTdId.MrConfigId),
+		Success:  success,
+		Launched: success,
+	})
+	if !success {
+		tdIdSuccess = false
+		results = append(results, ar.DigestResult{
+			Type:     "Measurement",
+			SubType:  "MRCONFIGID",
+			Digest:   hex.EncodeToString(report.MrConfigId[:]),
+			Success:  false,
+			Launched: false,
+		})
 	}
 
-	result.TdxResult.TcbInfoCheck = verifyTcbInfo(&tcbInfo,
-		string(tdxReferenceValue.Tdx.Collateral.TcbInfo), referenceCerts.TCBSigningCert,
-		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
-	if !result.TdxResult.TcbInfoCheck.Summary.Success {
-		log.Debugf("Failed to verify TCB info structure: %v", err)
-		result.Summary.SetErr(ar.VerifyTcbInfo)
-		return result, false
+	// Verify MRSIGNERSEAM
+	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
+	results = append(results, ar.DigestResult{
+		Type:     "Reference Value",
+		SubType:  "MRSIGNERSEAM",
+		Digest:   hex.EncodeToString(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes),
+		Success:  success,
+		Launched: success,
+	})
+	if !success {
+		tdIdSuccess = false
+		results = append(results, ar.DigestResult{
+			Type:     "Measurement",
+			SubType:  "MRSIGNERSEAM",
+			Digest:   hex.EncodeToString(report.MrSignerSeam[:]),
+			Success:  false,
+			Launched: false,
+		})
 	}
 
-	// Parse and verify QE Identity object
-	qeIdentity, err := parseQEIdentity(tdxReferenceValue.Tdx.Collateral.QeIdentity)
-	if err != nil {
-		log.Debugf("Failed to parse QE Identity: %v", err)
-		result.Summary.SetErr(ar.ParseQEIdentity)
-		return result, false
-	}
+	return results, tdIdSuccess
+}
 
-	qeIdentityResult, err := VerifyQEIdentity(&tdxQuote.QuoteSignatureData.QECertData.QEReport, &qeIdentity,
-		string(tdxReferenceValue.Tdx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, TDX_QUOTE_TYPE)
-	result.TdxResult.QeIdentityCheck = qeIdentityResult
-	if err != nil {
-		log.Debugf("Failed to verify QE Identity structure: %v", err)
-		result.Summary.SetErr(ar.VerifyQEIdentityErr)
-		return result, false
+func verifyTdxXfam(measured, reference []byte) ar.Result {
+	success := bytes.Equal(measured, reference)
+	result := ar.Result{
+		Success:  success,
+		Got:      hex.EncodeToString(measured),
+		Expected: hex.EncodeToString(reference),
 	}
+	return result
+}
 
-	// Verify Quote Signature
-	sig, ret := VerifyIntelQuoteSignature(tdxM.Evidence, tdxQuote.QuoteSignatureData,
-		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		tdxReferenceValue.Tdx.CaFingerprint, intelCache, TDX_QUOTE_TYPE)
-	if !ret {
-		ok = false
-	}
-	result.Signature = sig
+func verifyTdxSeamAttributes(measured []byte) ar.Result {
 
-	// Verify Quote Body values
-	err = verifyTdxQuoteBody(&tdxQuote.QuoteBody, &tcbInfo, &quoteCerts, &tdxReferenceValue, result)
-	if err != nil {
-		log.Debugf("Failed to verify TDX Report Body: %v", err)
-		result.Summary.SetErr(ar.VerifySignature)
-		result.Summary.Success = false
-		return result, false
+	// Intel TDX DCAP Quote Generation Library and Quote Verification Library p38:
+	// SeamAttributes must be zero for Intel TDX 1.0
+	refAttributes := make([]byte, 8)
+	success := bytes.Equal(measured, refAttributes)
+	result := ar.Result{
+		Success:  success,
+		Got:      hex.EncodeToString(measured),
+		Expected: hex.EncodeToString(refAttributes),
 	}
+	return result
+}
 
-	// Check version
-	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader, tdxReferenceValue.Tdx.Version)
-	if !ret {
-		return result, false
+func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAttributes) (ar.TdAttributesCheck, bool) {
+
+	result := ar.TdAttributesCheck{
+		Debug: ar.BooleanMatch{
+			Success:  refTdAttributes.Debug == (measuredAttributes[0] > 0),
+			Claimed:  refTdAttributes.Debug,
+			Measured: measuredAttributes[0] > 0,
+		},
+		SeptVEDisable: ar.BooleanMatch{
+			Success:  refTdAttributes.SeptVEDisable == getBit(measuredAttributes[:], 28),
+			Claimed:  refTdAttributes.SeptVEDisable,
+			Measured: getBit(measuredAttributes[:], 28),
+		},
+		Pks: ar.BooleanMatch{
+			Success:  refTdAttributes.Pks == getBit(measuredAttributes[:], 30),
+			Claimed:  refTdAttributes.Pks,
+			Measured: getBit(measuredAttributes[:], 30),
+		},
+		Kl: ar.BooleanMatch{
+			Success:  refTdAttributes.Kl == getBit(measuredAttributes[:], 31),
+			Claimed:  refTdAttributes.Kl,
+			Measured: getBit(measuredAttributes[:], 31),
+		},
 	}
+	ok := result.Debug.Success &&
+		result.SeptVEDisable.Success &&
+		result.Pks.Success &&
+		result.Kl.Success
+
+	log.Tracef("TDX Attribute 'Debug' reference: %v, measurement: %v",
+		refTdAttributes.Debug, measuredAttributes[0] > 0)
+
+	log.Tracef("TDX Attribute 'EPT violation conversion disabled' reference: %v, measurement: %v",
+		refTdAttributes.SeptVEDisable, getBit(measuredAttributes[:], 28))
+
+	log.Tracef("TDX Attribute 'Protection Kes (PKS) Enabled' reference: %v, measurement: %v",
+		refTdAttributes.Pks, getBit(measuredAttributes[:], 30))
+
+	log.Tracef("TDX Attribute 'Key Locker (KL) Enabled' reference: %v, measurement: %v",
+		refTdAttributes.Kl, getBit(measuredAttributes[:], 31))
 
 	return result, ok
 }
 
-func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
-	certs *SgxCertificates, tdxReferenceValue *ar.ReferenceValue, result *ar.MeasurementResult) error {
-	if body == nil || tcbInfo == nil || certs == nil || tdxReferenceValue == nil || result == nil {
-		return fmt.Errorf("invalid function parameter (null pointer exception)")
+// For the MR index, the function uses the mapping according to UEFI Spec 2.10 Section 38.4.1
+func indexToMr(index int) string {
+	switch index {
+	case 0:
+		return "MRTD"
+	case 1:
+		return "RTMR0"
+	case 2:
+		return "RTMR1"
+	case 3:
+		return "RTMR2"
+	case 4:
+		return "RTMR3"
+	case 5:
+		return "MRSEAM"
+	default:
+		return "UNKNOWN"
 	}
-
-	// check MrTd reference value (measurement of the initial contents of the TD)
-	if !bytes.Equal(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
-		result.Artifacts = append(result.Artifacts,
-			ar.DigestResult{
-				Type:     "Reference Value",
-				SubType:  tdxReferenceValue.SubType,
-				Digest:   hex.EncodeToString(tdxReferenceValue.Sha256),
-				Success:  false,
-				Launched: false,
-			})
-		result.Artifacts = append(result.Artifacts,
-			ar.DigestResult{
-				Type:     "Measurement",
-				SubType:  tdxReferenceValue.SubType,
-				Digest:   hex.EncodeToString(body.MrTd[:]),
-				Success:  false,
-				Launched: true,
-			})
-		return fmt.Errorf("MrTd mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
-	} else {
-		result.Artifacts = append(result.Artifacts,
-			ar.DigestResult{
-				SubType:  tdxReferenceValue.SubType,
-				Digest:   hex.EncodeToString(body.MrTd[:]),
-				Success:  true,
-				Launched: true,
-			})
-	}
-
-	result.Artifacts = append(result.Artifacts,
-		ar.DigestResult{
-			SubType:  "MrSignerSeam",
-			Digest:   hex.EncodeToString(body.MrSignerSeam[:]),
-			Success:  bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner[:], body.MrSignerSeam[:]),
-			Launched: true,
-			Type:     "Measurement",
-		},
-		ar.DigestResult{
-			SubType:  "MrSeam",
-			Digest:   hex.EncodeToString(body.MrSeam[:]),
-			Success:  bytes.Equal(body.MrSeam[:], tdxReferenceValue.Tdx.TdMeas.MrSeam),
-			Launched: true,
-			Type:     "Measurement",
-		},
-		ar.DigestResult{
-			SubType:  "RtMr0",
-			Digest:   hex.EncodeToString(body.RtMr0[:]),
-			Success:  recalculateRtMr(body.RtMr0[:], tdxReferenceValue.Tdx.TdMeas.RtMr0),
-			Launched: true,
-			Type:     "Firmware Measurement",
-		},
-		ar.DigestResult{
-			SubType:  "RtMr1",
-			Digest:   hex.EncodeToString(body.RtMr1[:]),
-			Success:  recalculateRtMr(body.RtMr1[:], tdxReferenceValue.Tdx.TdMeas.RtMr1),
-			Launched: true,
-			Type:     "BIOS Measurement",
-		},
-		ar.DigestResult{
-			SubType:  "RtMr2",
-			Digest:   hex.EncodeToString(body.RtMr2[:]),
-			Success:  recalculateRtMr(body.RtMr2[:], tdxReferenceValue.Tdx.TdMeas.RtMr2),
-			Launched: true,
-			Type:     "OS Measurement",
-		},
-		ar.DigestResult{
-			SubType:  "RtMr3",
-			Digest:   hex.EncodeToString(body.RtMr3[:]),
-			Success:  recalculateRtMr(body.RtMr3[:], tdxReferenceValue.Tdx.TdMeas.RtMr3),
-			Launched: true,
-			Type:     "Runtime Measurement",
-		},
-		ar.DigestResult{
-			SubType:  "MrOwner",
-			Digest:   hex.EncodeToString(body.MrOwner[:]),
-			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]),
-			Launched: true,
-			Type:     "Software-defined ID",
-		},
-		ar.DigestResult{
-			SubType:  "MrOwnerConfig",
-			Digest:   hex.EncodeToString(body.MrOwnerConfig[:]),
-			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwnerConfig[:], body.MrOwnerConfig[:]),
-			Launched: true,
-			Type:     "Software-defined ID",
-		},
-		ar.DigestResult{
-			SubType:  "MrConfigId",
-			Digest:   hex.EncodeToString(body.MrConfigId[:]),
-			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrConfigId[:], body.MrConfigId[:]),
-			Launched: true,
-			Type:     "Software-defined ID",
-		},
-	)
-
-	seamAttributesQuote := body.SeamAttributes
-	if len(tcbInfo.TcbInfo.TdxModule.AttributesMask) == len(seamAttributesQuote) {
-		for i := range seamAttributesQuote {
-			seamAttributesQuote[i] &= tcbInfo.TcbInfo.TdxModule.AttributesMask[i]
-		}
-	}
-	seamAttributesResult := bytes.Equal(tcbInfo.TcbInfo.TdxModule.Attributes, seamAttributesQuote[:])
-
-	result.TdxResult.TdAttributesCheck = ar.TdAttributesCheck{
-		Debug: ar.BooleanMatch{
-			Success:  tdxReferenceValue.Tdx.TdAttributes.Debug == (body.TdAttributes[0] > 0),
-			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Debug,
-			Measured: body.TdAttributes[0] > 0,
-		},
-		SeptVEDisable: ar.BooleanMatch{
-			Success:  tdxReferenceValue.Tdx.TdAttributes.SeptVEDisable == getBit(body.TdAttributes[:], 28),
-			Claimed:  tdxReferenceValue.Tdx.TdAttributes.SeptVEDisable,
-			Measured: getBit(body.TdAttributes[:], 28),
-		},
-		Pks: ar.BooleanMatch{
-			Success:  tdxReferenceValue.Tdx.TdAttributes.Pks == getBit(body.TdAttributes[:], 30),
-			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Pks,
-			Measured: getBit(body.TdAttributes[:], 30),
-		},
-		Kl: ar.BooleanMatch{
-			Success:  tdxReferenceValue.Tdx.TdAttributes.Kl == getBit(body.TdAttributes[:], 31),
-			Claimed:  tdxReferenceValue.Tdx.TdAttributes.Kl,
-			Measured: getBit(body.TdAttributes[:], 31),
-		},
-	}
-	ok := result.TdxResult.TdAttributesCheck.Debug.Success &&
-		result.TdxResult.TdAttributesCheck.SeptVEDisable.Success &&
-		result.TdxResult.TdAttributesCheck.Pks.Success &&
-		result.TdxResult.TdAttributesCheck.Kl.Success
-
-	if !ok {
-		return fmt.Errorf("TDAttributesCheck failed: Debug: %v, SeptVEDisable: %v, Pks: %v, Kl: %v",
-			result.TdxResult.TdAttributesCheck.Debug.Success, result.TdxResult.TdAttributesCheck.SeptVEDisable.Success,
-			result.TdxResult.TdAttributesCheck.Pks, result.TdxResult.TdAttributesCheck.Kl)
-	}
-
-	result.TdxResult.SeamAttributesCheck = ar.AttributesCheck{
-		Success:  seamAttributesResult,
-		Claimed:  ar.HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
-		Measured: ar.HexByte(seamAttributesQuote[:]),
-	}
-	if !result.TdxResult.SeamAttributesCheck.Success {
-		return fmt.Errorf("SeamAttributesCheck failed: Expected: %v, Measured: %v",
-			result.TdxResult.SeamAttributesCheck.Claimed, result.TdxResult.SeamAttributesCheck.Measured)
-	}
-
-	result.TdxResult.XfamCheck = ar.AttributesCheck{
-		Success:  seamAttributesResult,
-		Claimed:  ar.HexByte(tcbInfo.TcbInfo.TdxModule.Attributes),
-		Measured: ar.HexByte(seamAttributesQuote[:]),
-	}
-	if !result.TdxResult.SeamAttributesCheck.Success {
-		return fmt.Errorf("XfamCheck failed: Expected: %v, Measured: %v",
-			result.TdxResult.XfamCheck.Claimed, result.TdxResult.XfamCheck.Measured)
-	}
-
-	for _, a := range result.Artifacts {
-		if !a.Success {
-			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Got: %v)", a.SubType, a.Digest)
-		}
-	}
-
-	return nil
-}
-
-// calculation of rtmrs according to Intel TDX Module 1.5 base architecture specification:
-// chapter 12.1.2. RTMR: Run-Time Measurement Registers
-func recalculateRtMr(rmtr ar.HexByte, refHashes ar.RtMrHashChainElem) bool {
-	if len(refHashes.Hashes) == 0 {
-		log.Debugf("no reference hash values found")
-		return false
-	}
-	var calculatedMeas []byte = make([]byte, 48)
-	if refHashes.Summary {
-		calculatedMeas = refHashes.Hashes[0]
-	} else {
-		for _, ref := range refHashes.Hashes {
-			calculatedMeas = internal.ExtendSha384(calculatedMeas, ref)
-		}
-	}
-
-	if bytes.Equal(rmtr, calculatedMeas) {
-		return true
-	}
-	log.Debugf("Expected: %v, Got: %v\n", calculatedMeas, rmtr)
-
-	return false
 }

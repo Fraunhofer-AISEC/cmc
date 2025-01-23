@@ -18,7 +18,6 @@ package attestationreport
 import (
 	"crypto"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -28,7 +27,7 @@ import (
 
 // The attestation report and verification result version
 const (
-	arVersion = "1.1.0"
+	arVersion = "1.2.0"
 )
 
 func GetVersion() string {
@@ -94,7 +93,11 @@ type Manifest struct {
 	DevCommonName   string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
 	BaseLayers      []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
 	CertLevel       int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
-	Details         map[string]interface{} `json:"details,omitempty" cbor:"14,keyasint,omitempty"`
+	CaFingerprint   string                 `json:"caFingerprint" cbor:"14,keyasint"`
+	SnpPolicy       *SnpPolicy             `json:"snpPolicy,omitempty" cbor:"15,keyasint,omitempty"`
+	TdxPolicy       *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
+	SgxPolicy       *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
+	Details         map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
 	OciSpec         *oci.Spec              `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"` // TODO move to app description
 }
 
@@ -107,6 +110,7 @@ type DeviceDescription struct {
 type DeviceConfig struct {
 	Tpm       CertConfig `json:"tpm,omitempty" cbor:"30,keyasint,omitempty"`
 	Snp       CertConfig `json:"snp,omitempty" cbor:"31,keyasint,omitempty"`
+	Tdx       CertConfig `json:"tdx,omitempty" cbor:"31,keyasint,omitempty"`
 	Sgx       CertConfig `json:"sgx,omitempty" cbor:"32,keyasint,omitempty"`
 	Sw        CertConfig `json:"sw,omitempty" cbor:"33,keyasint,omitempty"`
 	SgxValues struct {
@@ -138,20 +142,25 @@ type CertConfig struct {
 // element of types 'SNP Reference Value', 'TPM Reference Value', 'TDX Reference Value',
 // 'SGX Reference Value' and 'SW Reference Value'. The Index is the unique identifier for the
 // reference value: This is the number of the PCR in case of TPM reference values,
-// the MR index according to UEFI Spec 2.10 Section 38.4.1 in case of TDX reference values, and
-// simply a monotonic counter for other reference values.
+// the CC measurement register (MR) index according to UEFI Spec 2.10 Section 38.4.1 in case of
+// TDX reference values:
+// TPM PCR Index | CC MR Index | TDX register
+// 0             | 0           |   MRTD
+// 1, 7          | 1           |   RTMR0
+// 2~6           | 2           |   RTMR1
+// 8~15          | 3           |   RTMR2
+// -             | 4           |   RTMR3
+// -             | 5           |   MRSEAM (not in UEFI spec)
 type ReferenceValue struct {
-	Type        string      `json:"type" cbor:"0,keyasint"`
-	SubType     string      `json:"subtype" cbor:"1,keyasint,omitempty"`
-	Index       int         `json:"index" cbor:"2,keyasint"`
-	Sha256      HexByte     `json:"sha256,omitempty" cbor:"3,keyasint,omitempty"`
-	Sha384      HexByte     `json:"sha384,omitempty" cbor:"4,keyasint,omitempty"`
-	Optional    bool        `json:"optional,omitempty" cbor:"5,keyasint,omitempty"`
-	Snp         *SnpDetails `json:"snp,omitempty" cbor:"6,keyasint,omitempty"`
-	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"7,keyasint,omitempty"`
-	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"8,keyasint,omitempty"`
-	Description string      `json:"description,omitempty" cbor:"9,keyasint,omitempty"`
-	EventData   *EventData  `json:"eventdata,omitempty" cbor:"10,keyasint,omitempty"`
+	Type        string     `json:"type" cbor:"0,keyasint"`
+	SubType     string     `json:"subtype" cbor:"1,keyasint,omitempty"`
+	Index       int        `json:"index" cbor:"2,keyasint"`
+	Sha256      HexByte    `json:"sha256,omitempty" cbor:"3,keyasint,omitempty"`
+	Sha384      HexByte    `json:"sha384,omitempty" cbor:"4,keyasint,omitempty"`
+	Sha512      HexByte    `json:"sha512,omitempty" cbor:"5,keyasint,omitempty"`
+	Optional    bool       `json:"optional,omitempty" cbor:"6,keyasint,omitempty"`
+	Description string     `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
+	EventData   *EventData `json:"eventdata,omitempty" cbor:"8,keyasint,omitempty"`
 
 	manifest *Metadata
 }
@@ -179,10 +188,24 @@ type Artifact struct {
 }
 
 type MeasureEvent struct {
-	Sha256    HexByte    `json:"sha256" cbor:"0,keyasint"`
-	EventName string     `json:"eventname,omitempty" cbor:"1,keyasint,omitempty"`
-	EventData *EventData `json:"eventdata,omitempty" cbor:"2,keyasint,omitempty"`
-	CtrData   *CtrData   `json:"ctrData,omitempty" cbor:"3,keyasint,omitempty"`
+	Sha256          HexByte          `json:"sha256" cbor:"0,keyasint"`
+	EventName       string           `json:"eventname,omitempty" cbor:"1,keyasint,omitempty"`
+	EventData       *EventData       `json:"eventdata,omitempty" cbor:"2,keyasint,omitempty"`
+	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"3,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"4,keyasint,omitempty"`
+}
+
+type IntelCollateral struct {
+	TcbInfo                    []byte
+	QeIdentity                 []byte
+	RootCaCrl                  []byte
+	PckCrl                     []byte
+	PckCrlIntermediateCert     []byte
+	PckCrlRootCert             []byte
+	TcbInfoIntermediateCert    []byte
+	TcbInfoRootCert            []byte
+	QeIdentityIntermediateCert []byte
+	QeIdentityRootCert         []byte
 }
 
 type CtrData struct {
@@ -191,7 +214,7 @@ type CtrData struct {
 	OciSpec      *oci.Spec `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"`
 }
 
-type SnpPolicy struct {
+type SnpGuestPolicy struct {
 	Type         string `json:"type" cbor:"0,keyasint"`
 	SingleSocket bool   `json:"singleSocket" cbor:"1,keyasint"`
 	Debug        bool   `json:"debug" cbor:"2,keyasint"`
@@ -214,20 +237,11 @@ type SnpTcb struct {
 	Ucode uint8 `json:"ucode" cbor:"3,keyasint"`
 }
 
-type SnpDetails struct {
-	Version       uint32    `json:"version" cbor:"0,keyasint"`
-	CaFingerprint string    `json:"caFingerprint" cbor:"1,keyasint"`
-	Policy        SnpPolicy `json:"policy" cbor:"2,keyasint"`
-	Fw            SnpFw     `json:"fw" cbor:"3,keyasint"`
-	Tcb           SnpTcb    `json:"tcb" cbor:"4,keyasint"`
-}
-
-type IntelCollateral struct {
-	TeeType        uint32          `json:"teeType" cbor:"0,keyasint"`
-	TcbInfo        json.RawMessage `json:"tcbInfo" cbor:"1,keyasint"`
-	TcbInfoSize    uint32          `json:"tcbInfoSize" cbor:"2,keyasint"`
-	QeIdentity     json.RawMessage `json:"qeIdentity" cbor:"3,keyasint"`
-	QeIdentitySize uint32          `json:"qeIdentitySize" cbor:"4,keyasint"`
+type SnpPolicy struct {
+	ReportVersion uint32         `json:"reportVersion" cbor:"0,keyasint"`
+	GuestPolicy   SnpGuestPolicy `json:"policy" cbor:"1,keyasint"`
+	Fw            SnpFw          `json:"fw" cbor:"2,keyasint"`
+	Tcb           SnpTcb         `json:"tcb" cbor:"3,keyasint"`
 }
 
 // RtMrHashChainElem represents the attestation report
@@ -239,24 +253,19 @@ type RtMrHashChainElem struct {
 	Summary bool      `json:"summary" cbor:"3,keyasint"` // Indicates if element represents final RMTR value or single artifact
 }
 
-type TDXDetails struct {
-	Version       uint16          `json:"version" cbor:"0,keyasint"`
-	Collateral    IntelCollateral `json:"collateral" cbor:"1,keyasint"`
-	CaFingerprint string          `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	TdId          TDId            `json:"tdId" cbor:"3,keyasint"`
-	TdMeas        TDMeasurements  `json:"tdMeasurements" cbor:"4,keyasint"`
-	Xfam          [8]byte         `json:"xfam" cbor:"5,keyasint"`
-	TdAttributes  TDAttributes    `json:"tdAttributes" cbor:"6,keyasint"`
+type TdxPolicy struct {
+	QuoteVersion uint16       `json:"quoteVersion" cbor:"0,keyasint"`
+	TdId         TDId         `json:"tdId" cbor:"3,keyasint"`
+	Xfam         HexByte      `json:"xfam" cbor:"5,keyasint"`
+	TdAttributes TDAttributes `json:"tdAttributes" cbor:"6,keyasint"`
 }
 
-type SGXDetails struct {
-	Version       uint16          `json:"version" cbor:"0,keyasint"`
-	Collateral    IntelCollateral `json:"collateral" cbor:"1,keyasint"`
-	CaFingerprint string          `json:"caFingerprint" cbor:"2,keyasint"` // Intel Root CA Certificate Fingerprint
-	IsvProdId     uint16          `json:"isvProdId" cbor:"3,keyasint"`
-	MrSigner      string          `json:"mrSigner" cbor:"4,keyasint"`
-	IsvSvn        uint16          `json:"isvSvn" cbor:"5,keyasint"`
-	Attributes    SGXAttributes   `json:"attributes" cbor:"6,keyasint"`
+type SgxPolicy struct {
+	QuoteVersion uint16        `json:"quoteVersion" cbor:"0,keyasint"`
+	IsvProdId    uint16        `json:"isvProdId" cbor:"3,keyasint"`
+	MrSigner     string        `json:"mrSigner" cbor:"4,keyasint"`
+	IsvSvn       uint16        `json:"isvSvn" cbor:"5,keyasint"`
+	Attributes   SGXAttributes `json:"attributes" cbor:"6,keyasint"`
 }
 
 // SGX attributes according to
@@ -282,18 +291,10 @@ type TDAttributes struct {
 	Kl            bool `json:"kl" cbor:"3,keyasint"`
 }
 
-type TDMeasurements struct {
-	RtMr0  RtMrHashChainElem `json:"rtMr0" cbor:"0,keyasint"`  // Firmware measurement
-	RtMr1  RtMrHashChainElem `json:"rtMr1" cbor:"1,keyasint"`  // BIOS measurement
-	RtMr2  RtMrHashChainElem `json:"rtMr2" cbor:"2,keyasint"`  // OS measurement
-	RtMr3  RtMrHashChainElem `json:"rtMr3" cbor:"3,keyasint"`  // Runtime measurement
-	MrSeam HexByte           `json:"mrSeam" cbor:"4,keyasint"` // TDX Module measurement
-}
-
 type TDId struct {
-	MrOwner       [48]byte `json:"mrOwner" cbor:"0,keyasint"`
-	MrOwnerConfig [48]byte `json:"mrOwnerConfig" cbor:"1,keyasint"`
-	MrConfigId    [48]byte `json:"mrConfigId" cbor:"2,keyasint"`
+	MrOwner       HexByte `json:"mrOwner" cbor:"0,keyasint"`
+	MrOwnerConfig HexByte `json:"mrOwnerConfig" cbor:"1,keyasint"`
+	MrConfigId    HexByte `json:"mrConfigId" cbor:"2,keyasint"`
 }
 
 // ExternalInterface represents the attestation report

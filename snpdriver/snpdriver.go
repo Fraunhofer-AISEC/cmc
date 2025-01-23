@@ -176,7 +176,7 @@ func (snp *Snp) Unlock() error {
 // GetKeyHandles returns private and public key handles as a generic crypto interface
 func (snp *Snp) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	if snp == nil {
-		return nil, nil, errors.New("internal error: SW object is nil")
+		return nil, nil, errors.New("internal error: TDX object is nil")
 	}
 
 	if sel == ar.AK {

@@ -31,10 +31,11 @@ import (
 
 func Test_verifyTpmMeasurements(t *testing.T) {
 	type args struct {
-		tpmM            *ar.Measurement
+		measurements    *ar.Measurement
 		nonce           []byte
+		s               ar.Serializer
+		rootManifest    *ar.MetadataResult
 		referenceValues []ar.ReferenceValue
-		cas             []*x509.Certificate
 	}
 	tests := []struct {
 		name  string
@@ -45,16 +46,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Valid TPM Measurement Summary",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  &validTpmMeasurementResult,
 			want1: true,
@@ -62,16 +70,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Valid TPM Measurement",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: validHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  &validTpmMeasurementResult,
 			want1: true,
@@ -79,16 +94,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce:           invalidTpmNonce,
+				nonce: invalidTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -96,16 +118,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -113,16 +142,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid HashChain Summary",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: invalidSummaryHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -130,16 +166,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid HashChain",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: invalidHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -147,33 +190,47 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Values",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: invalidReferenceValues,
-				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
 		},
 		{
-			name: "Invalid CA SubjectKeyId",
+			name: "Invalid CA",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: invalidCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{invalidCaTpm},
 			},
 			want:  nil,
 			want1: false,
@@ -181,16 +238,23 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		{
 			name: "Invalid Cert Chain",
 			args: args{
-				tpmM: &ar.Measurement{
+				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     invalidTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce:           validTpmNonce,
+				nonce: validTpmNonce,
+				s:     ar.JsonSerializer{},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validCaFingerprint,
+						},
+					},
+				},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{invalidCaTpm},
 			},
 			want:  nil,
 			want1: false,
@@ -201,7 +265,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpmMeasurements(*tt.args.tpmM, tt.args.nonce, tt.args.cas, ar.JsonSerializer{}, tt.args.referenceValues)
+			got, got1 := verifyTpmMeasurements(*tt.args.measurements, tt.args.nonce, tt.args.s, tt.args.rootManifest, tt.args.referenceValues)
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}
@@ -349,97 +413,99 @@ var (
 
 	validCa = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICBjCCAaygAwIBAgIUbzIW+iUiIFmCWbOL4rW4UBQfj7AwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMDIzMTcwMTAwWhcNMjcxMDIyMTcwMTAwWjBhMQswCQYDVQQGEwJE\nRTESMBAGA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAO\nBgNVBAsTB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTBZMBMGByqGSM49\nAgEGCCqGSM49AwEHA0IABEqaNo91iTSSbc9BL1iIQIVpZLd88RL5LfH15SVugJy4\n3d0jeE+KHtpQA8FpAvxXQHJm31z5V6+oLG4MQfVHN/GjQjBAMA4GA1UdDwEB/wQE\nAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBQ/hcnLtyQF97DU0kTLwAQ0\nQ3jiAjAKBggqhkjOPQQDAgNIADBFAiAFsmaZDBu+cfOqX9a5YAOgSeYB4Sb+r18m\nBIcuxwthhgIhALRHfA32ZcOA6piTKtWLZsdsG6CH50KGImHlkj4TwfXw\n-----END CERTIFICATE-----"))
 
+	validCaFingerprint = "9FA4D2FDFD76D3699148CD5529D946DEC80EC32409C120DA866CF9F5BEA6298E"
+
+	invalidCaFingerprint = "AAA4D2FDFD76D3699148CD5529D946DEC80EC32409C120DA866CF9F5BEA6298E"
+
 	invalidCaTpm = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"))
 
 	validTpmCertChain   = [][]byte{validAk.Raw, validCa.Raw}
 	invalidTpmCertChain = [][]byte{validAk.Raw, invalidCaTpm.Raw}
-
-	pcrs = [23]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}
 
 	validReferenceValues = []ar.ReferenceValue{
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
 			SubType: "EV_CPU_MICROCODE",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
 			SubType: "Unknown Event Type",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
 			SubType: "EV_NONHOST_CONFIG",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
 			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
 			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
 			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
 			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
 			SubType: "EV_SEPARATOR",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
 			SubType: "EV_PLATFORM_CONFIG_FLAGS",
-			Index:   pcrs[1],
+			Index:   1,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
 			SubType: "EV_EFI_ACTION",
-			Index:   pcrs[4],
+			Index:   4,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
 			SubType: "EV_SEPARATOR",
-			Index:   pcrs[4],
+			Index:   4,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
 			SubType: "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:   pcrs[4],
+			Index:   4,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
 			SubType: "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:   pcrs[4],
+			Index:   4,
 		},
 		{
 			Type:    "TPM Reference Value",
 			Sha256:  dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
 			SubType: "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:   pcrs[4],
+			Index:   4,
 		},
 	}
 
@@ -448,7 +514,7 @@ var (
 			Type:    "TPM Reference Value",
 			Sha256:  dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
 			SubType: "SINIT ACM Digest",
-			Index:   pcrs[4],
+			Index:   4,
 		},
 	}
 
@@ -681,14 +747,14 @@ var (
 		Signature: validSignatureResult,
 		Artifacts: validArtifacts,
 		TpmResult: &ar.TpmResult{
-			PcrMatch: []ar.PcrResult{
+			PcrMatch: []ar.DigestResult{
 				{
-					Pcr:     1,
+					Index:   1,
 					Digest:  "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
 					Success: true,
 				},
 				{
-					Pcr:     4,
+					Index:   4,
 					Digest:  "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
 					Success: true,
 				},

@@ -57,7 +57,6 @@ func Verify(
 	peer string,
 	polEng PolicyEngineSelect,
 	metadatamap map[string][]byte,
-	intelCache string,
 ) *ar.VerificationResult {
 
 	if len(metadatamap) == 0 {
@@ -121,7 +120,8 @@ func Verify(
 		switch mtype := m.Type; mtype {
 
 		case "TPM Measurement":
-			r, ok := verifyTpmMeasurements(m, nonce, cas, s, refVals["TPM Reference Value"])
+			r, ok := verifyTpmMeasurements(m, nonce, s, &metaResults.ManifestResults[0],
+				refVals["TPM Reference Value"])
 			if !ok {
 				result.Success = false
 			}
@@ -129,7 +129,8 @@ func Verify(
 			hwAttest = true
 
 		case "SNP Measurement":
-			r, ok := verifySnpMeasurements(m, nonce, refVals["SNP Reference Value"])
+			r, ok := verifySnpMeasurements(m, nonce, &metaResults.ManifestResults[0],
+				refVals["SNP Reference Value"])
 			if !ok {
 				result.Success = false
 			}
@@ -137,7 +138,8 @@ func Verify(
 			hwAttest = true
 
 		case "TDX Measurement":
-			r, ok := verifyTdxMeasurements(m, nonce, intelCache, refVals["TDX Reference Value"])
+			r, ok := verifyTdxMeasurements(m, nonce, &metaResults.ManifestResults[0],
+				refVals["TDX Reference Value"])
 			if !ok {
 				result.Success = false
 			}
@@ -145,7 +147,8 @@ func Verify(
 			hwAttest = true
 
 		case "SGX Measurement":
-			r, ok := verifySgxMeasurements(m, nonce, intelCache, refVals["SGX Reference Value"])
+			r, ok := verifySgxMeasurements(m, nonce, &metaResults.ManifestResults[0],
+				refVals["SGX Reference Value"])
 			if !ok {
 				result.Success = false
 			}
@@ -444,17 +447,17 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 	// Start the sorted list with the root
 	var sorted []ar.MetadataResult
 	var unplaced []ar.MetadataResult
-	if root.Name != "" {
+	if !foundRoot || root.Name == "" {
+		log.Debug("Did not find root manifest")
+		unplaced = manifests
+		success = false
+		return manifests, nil, ar.NoRootManifest, success
+	} else {
 		sorted = append(sorted, root)
 		results = append(results, ar.Result{
 			Success: true,
 			Got:     root.Name,
 		})
-	} else {
-		log.Debug("Did not find root manifest")
-		unplaced = manifests
-		success = false
-		return manifests, nil, ar.NoRootManifest, success
 	}
 
 	// Track processed layers

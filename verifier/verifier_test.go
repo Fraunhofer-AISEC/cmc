@@ -707,8 +707,7 @@ func TestVerify(t *testing.T) {
 				arSigned, nonce, internal.WriteCertPem(certchain[len(certchain)-1]), nil,
 				"",
 				PolicyEngineSelect_None,
-				metadata,
-				"")
+				metadata)
 			log.Info("Finished FUT")
 			if got.Success != tt.want.Success {
 				log.Warnf("Printing Summary")

@@ -30,32 +30,25 @@ import (
 )
 
 func verifyTpmMeasurements(
-	tpmM ar.Measurement,
+	measurement ar.Measurement,
 	nonce []byte,
-	cas []*x509.Certificate,
 	s ar.Serializer,
+	rootManifest *ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{
-		Type:      "TPM Result",
+		Type: "TPM Result",
+		Summary: ar.Result{
+			Success: true,
+		},
 		TpmResult: &ar.TpmResult{},
 	}
 
 	log.Debug("Verifying TPM measurements")
 
-	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
-	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
-	// the measured PCR value
-	calculatedPcrs, pcrResult, artifacts, ok := recalculatePcrs(s, tpmM, referenceValues)
-	if !ok {
-		log.Debug("failed to recalculate PCRs")
-	}
-	result.TpmResult.PcrMatch = pcrResult
-	result.Artifacts = artifacts
-
 	// Extract TPM Quote (TPMS ATTEST) and signature
-	tpmsAttest, err := tpm2.DecodeAttestationData(tpmM.Evidence)
+	tpmsAttest, err := tpm2.DecodeAttestationData(measurement.Evidence)
 	if err != nil {
 		log.Debugf("Failed to decode TPM attestation data: %v", err)
 		result.Summary.SetErr(ar.ParseEvidence)
@@ -72,35 +65,22 @@ func verifyTpmMeasurements(
 		result.Freshness.Success = false
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(tpmsAttest.ExtraData)
-		ok = false
+		result.Summary.Success = false
 	}
 
-	// Verify aggregated PCR against TPM Quote PCRDigest: Hash all reference values
-	// together then compare
-	sum := make([]byte, 0)
-	for i := range tpmM.Artifacts {
-		pcr := tpmM.Artifacts[i].Index
-		_, ok := calculatedPcrs[pcr]
-		if !ok {
-			continue
-		}
-		sum = append(sum, calculatedPcrs[pcr]...)
+	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
+	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
+	// the measured PCR value
+	tpmResult, artifacts, ok := verifyPcrs(s, measurement, tpmsAttest.AttestedQuoteInfo.PCRDigest,
+		referenceValues)
+	if !ok {
+		log.Debug("failed to recalculate PCRs")
+		result.Summary.Success = false
 	}
-	verPcr := sha256.Sum256(sum)
-	if bytes.Equal(verPcr[:], tpmsAttest.AttestedQuoteInfo.PCRDigest) {
-		log.Debug("Aggregated PCR matches quote PCR")
-		result.TpmResult.AggPcrQuoteMatch.Success = true
-	} else {
-		log.Debugf("Aggregated PCR does not match Quote PCR: %v vs. %v",
-			hex.EncodeToString(verPcr[:]),
-			hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest))
-		result.TpmResult.AggPcrQuoteMatch.Success = false
-		result.TpmResult.AggPcrQuoteMatch.Expected = hex.EncodeToString(verPcr[:])
-		result.TpmResult.AggPcrQuoteMatch.Got = hex.EncodeToString(tpmsAttest.AttestedQuoteInfo.PCRDigest)
-		ok = false
-	}
+	result.TpmResult = tpmResult
+	result.Artifacts = artifacts
 
-	mCerts, err := internal.ParseCertsDer(tpmM.Certs)
+	mCerts, err := internal.ParseCertsDer(measurement.Certs)
 	if err != nil {
 		log.Debugf("Failed to parse measurement certs: %v", err)
 		result.Signature.CertChainCheck.SetErr(ar.ParseCert)
@@ -108,17 +88,38 @@ func verifyTpmMeasurements(
 		return result, false
 	}
 
-	result.Signature.SignCheck = verifyTpmQuoteSignature(tpmM.Evidence, tpmM.Signature, mCerts[0])
+	result.Signature.SignCheck = verifyTpmQuoteSignature(measurement.Evidence, measurement.Signature, mCerts[0])
 	if !result.Signature.SignCheck.Success {
-		ok = false
+		result.Summary.Success = false
 	}
 	log.Debug("Successfully verified TPM quote signature")
 
-	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
+	// Verify CA fingerprint
+	refCaFingerprint, err := hex.DecodeString(rootManifest.CaFingerprint)
+	if err != nil {
+		log.Debugf("Failed to decode CA fingerprint %v: %v", rootManifest.CaFingerprint, err)
+		result.Signature.CertChainCheck.SetErr(ar.ParseCAFingerprint)
+		return result, false
+	}
+	measurementCa := mCerts[len(mCerts)-1]
+	measCaFingerprint := sha256.Sum256(measurementCa.Raw)
+	if !bytes.Equal(refCaFingerprint, measCaFingerprint[:]) {
+		log.Debugf("Root Manifest CA fingerprint %q does not match measurement CA fingerprint %q",
+			rootManifest.CaFingerprint, hex.EncodeToString(measCaFingerprint[:]))
+		result.Signature.CertChainCheck.Success = false
+		result.Signature.CertChainCheck.Expected = rootManifest.CaFingerprint
+		result.Signature.CertChainCheck.Got = hex.EncodeToString(measCaFingerprint[:])
+		return result, false
+	}
+	verifiedCas := []*x509.Certificate{measurementCa}
+
+	log.Debugf("Measurement cert chain CA matches trusted manifest CA")
+
+	x509Chains, err := internal.VerifyCertChain(mCerts, verifiedCas)
 	if err != nil {
 		log.Debugf("Failed to verify certificate chain: %v", err)
 		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
-		ok = false
+		result.Summary.Success = false
 	} else {
 		result.Signature.CertChainCheck.Success = true
 	}
@@ -133,23 +134,22 @@ func verifyTpmMeasurements(
 		result.Signature.Certs = append(result.Signature.Certs, chainExtracted)
 	}
 
-	result.Summary.Success = ok
-
-	return result, ok
+	return result, result.Summary.Success
 }
 
-func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValues []ar.ReferenceValue,
-) (map[int][]byte, []ar.PcrResult, []ar.DigestResult, bool) {
-	ok := true
-	pcrResults := make([]ar.PcrResult, 0)
+func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
+	aggregatedQuotePcr []byte, referenceValues []ar.ReferenceValue,
+) (*ar.TpmResult, []ar.DigestResult, bool) {
+	success := true
+	pcrResults := make([]ar.DigestResult, 0)
 	detailedResults := make([]ar.DigestResult, 0)
 	calculatedPcrs := make(map[int][]byte)
 
 	// Iterate over the provided measurement
 	for _, measuredPcr := range measurement.Artifacts {
 
-		pcrResult := ar.PcrResult{
-			Pcr:     measuredPcr.Index,
+		pcrResult := ar.DigestResult{
+			Index:   measuredPcr.Index,
 			Success: true,
 		}
 
@@ -192,7 +192,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 					detailedResults = append(detailedResults, measResult)
 					log.Debugf("Failed to find PCR%v measurement %v: %v in reference values",
 						measuredPcr.Index, event.EventName, hex.EncodeToString(event.Sha256))
-					ok = false
+					success = false
 					pcrResult.Success = false
 					continue
 				}
@@ -230,7 +230,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 			// We therefore unconditionally extend every reference value for this PCR
 			if len(measuredPcr.Events) != 1 {
 				log.Debugf("Expected exactly one event for artifact type 'PCR Summary', got %v", len(measuredPcr.Events))
-				ok = false
+				success = false
 				continue
 			}
 			for _, ref := range referenceValues {
@@ -265,7 +265,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 				pcrResult.Measured = hex.EncodeToString(measuredPcr.Events[0].Sha256)
 				pcrResult.Success = false
-				ok = false
+				success = false
 			}
 			// If the measurement only contains the final PCR value, set all reference values
 			// for this PCR to the according value, as we cannot determine which ones
@@ -278,7 +278,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 			}
 
 		} else {
-			ok = false
+			success = false
 			pcrResult.Success = false
 			log.Debugf("Unknown measurement PCR type %v", measuredPcr.Type)
 		}
@@ -289,7 +289,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 
 	// Sort the results in ascending order
 	sort.Slice(pcrResults, func(i, j int) bool {
-		return pcrResults[i].Pcr < pcrResults[j].Pcr
+		return pcrResults[i].Index < pcrResults[j].Index
 	})
 
 	// Finally, iterate over the reference values to find reference values with no
@@ -330,7 +330,7 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 					}
 					detailedResults = append(detailedResults, result)
 					if !ref.Optional {
-						ok = false
+						success = false
 						log.Debugf("Failed to find required PCR%v reference value %v: %v in measurements",
 							ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
 					}
@@ -349,12 +349,44 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 				Description: ref.Description,
 			}
 			detailedResults = append(detailedResults, result)
-			ok = false
+			success = false
 			continue
 		}
 	}
 
-	return calculatedPcrs, pcrResults, detailedResults, ok
+	// Calculate aggregated quote PCR: Hash all reference values together
+	sum := make([]byte, 0)
+	for i := range measurement.Artifacts {
+		pcr := measurement.Artifacts[i].Index
+		_, ok := calculatedPcrs[pcr]
+		if !ok {
+			continue
+		}
+		sum = append(sum, calculatedPcrs[pcr]...)
+	}
+	verPcr := sha256.Sum256(sum)
+
+	// Verify calculated aggregated PCR value against quote PCR value
+	aggPcrQuoteMatch := ar.Result{}
+	if bytes.Equal(verPcr[:], aggregatedQuotePcr) {
+		log.Debug("Aggregated PCR matches quote PCR")
+		aggPcrQuoteMatch.Success = true
+	} else {
+		log.Debugf("Aggregated PCR does not match Quote PCR: %v vs. %v",
+			hex.EncodeToString(verPcr[:]),
+			hex.EncodeToString(aggregatedQuotePcr))
+		aggPcrQuoteMatch.Success = false
+		aggPcrQuoteMatch.Expected = hex.EncodeToString(verPcr[:])
+		aggPcrQuoteMatch.Got = hex.EncodeToString(aggregatedQuotePcr)
+		success = false
+	}
+
+	tpmResult := &ar.TpmResult{
+		PcrMatch:         pcrResults,
+		AggPcrQuoteMatch: aggPcrQuoteMatch,
+	}
+
+	return tpmResult, detailedResults, success
 }
 
 func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Result {

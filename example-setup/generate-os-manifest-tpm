@@ -67,21 +67,21 @@ json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues 
 echo "Writing ${out}/rtm.manifest.json"
 printf "%s\n" "${json}" > "${out}/os.manifest.json"
 
-# App Description: Create corresponding app description
-appdesc=$(cat "${input}/manifest.description.json")
-appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
-appdesc=$(echo "${appdesc}" | jq ".manifest = \"${name}\"")
+# OS Manifest Description: Create corresponding OS manifest description
+osdesc=$(cat "${input}/manifest.description.json")
+osdesc=$(echo "${osdesc}" | jq ".name = \"${name}.description\"")
+osdesc=$(echo "${osdesc}" | jq ".manifest = \"${name}\"")
 
-# Device Description: Add/replace app description to/in device description
+# Device Description: Add/replace os manifest description to/in device description
 devdesc=$(cat "${device_description}")
 exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
 if [[ "${exists}" = false ]]; then
-  echo "Adding app description to device description"
+  echo "Adding OS Manifest description to device description"
 else
-  echo "Replacing existing app description"
+  echo "Replacing existing OS Manifest description"
   devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${osdesc}]" '.descriptions += $desc')
 
 # Device Description: Store
 echo "Writing ${device_description}"

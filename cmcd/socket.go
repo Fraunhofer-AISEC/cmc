@@ -119,7 +119,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Infof("Received socket request type 'Attest' from %v", conn.RemoteAddr().String())
 
 	if len(cmc.Drivers) == 0 {
-		sendError(conn, s, "no valid signers configured")
+		sendError(conn, s, "attest: no drivers configured")
 		return
 	}
 
@@ -271,7 +271,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Infof("Received socket request type 'TLSSign' from %v", conn.RemoteAddr().String())
 
 	if len(cmc.Drivers) == 0 {
-		sendError(conn, s, "no valid signers configured")
+		sendError(conn, s, "TLS sign: no drivers configured")
 		return
 	}
 	d := cmc.Drivers[0]
@@ -336,7 +336,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Infof("Received socket request type 'TLSCert' from %v", conn.RemoteAddr().String())
 
 	if len(cmc.Drivers) == 0 {
-		sendError(conn, s, "no valid signers configured")
+		sendError(conn, s, "TLS cert: no drivers configured")
 		return
 	}
 	d := cmc.Drivers[0]

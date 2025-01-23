@@ -41,67 +41,84 @@ kernel=$(uname -r)
 os=$(lsb_release -sd 2>/dev/null)
 set -e
 
-# Load manifest template
-manifestjson=$(cat "${input}/manifest.json")
-
-# Insert platform details
-manifestjson=$(echo "${manifestjson}" | jq ".details.firmware = \"${firmware}\"")
-manifestjson=$(echo "${manifestjson}" | jq ".details.bootloader = \"${bootloader}\"")
-manifestjson=$(echo "${manifestjson}" | jq ".details.kernel = \"${kernel}\"")
-manifestjson=$(echo "${manifestjson}" | jq ".details.os = \"${os}\"")
-
-json=$(cat "${input}/snp.referencevalue.json")
-
-# TODO parameters for vcpus and vmm-type
-ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus=2 --vmm-type=ec2 --ovmf="${ovmf}")
-
 # Get AMD cert chain for milan
 wget -O "${dir}/cert_chain" https://kdsintf.amd.com/vlek/v1/Milan/cert_chain
 awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${dir}/cert_chain" > "${dir}/ark_milan.pem"
 
 fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
 
-# Insert reference values
-setjson "sha384" "${ref}"
-setjson "snp.version" 2
-setjson "snp.caFingerprint" "${fingerprint}"
-setjson "snp.policy.SingleSocket" false
-setjson "snp.policy.Debug" false
-setjson "snp.policy.Migration" false
-setjson "snp.policy.Smt" true
-setjson "snp.policy.AbiMajor" 0
-setjson "snp.policy.AbiMinor" 0
-setjson "snp.fw.build" 3
-setjson "snp.fw.major" 1
-setjson "snp.fw.minor" 49
-setjson "snp.tcb.bl" 2
-setjson "snp.tcb.tee" 0
-setjson "snp.tcb.snp" 5
-setjson "snp.tcb.ucode" 55
+# TODO parameters for vcpus and vmm-type
+ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus=2 --vmm-type=ec2 --ovmf="${ovmf}")
 
-refval="${json}"
-json="${manifestjson}"
+# Load manifest template
+manifest=$(cat "${input}/manifest.json")
 
-extendarr "referenceValues" "${refval}"
+name="de.test.rtm"
+
+# Insert manifest properties
+setjson "manifest" "name"                  "${name}"
+setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "manifest" "developerCommonName"   "test developer"
+setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "manifest" "description"           "RTM Manifest"
+setarr  "manifest" "baseLayers"            "${name}"
+setjson "manifest" "certLevel"             3
+setjson "manifest" "caFingerprint"         "${fingerprint}"
+
+# Insert platform details
+setjson "manifest" "details.firmware" "${firmware}"
+setjson "manifest" "details.bootloader" "${bootloader}"
+setjson "manifest" "details.kernel" "${kernel}"
+setjson "manifest" "details.os" "${os}"
+
+# Insert reference value
+refval="{}"
+setjson "refval" "type" "SNP Reference Value"
+setjson "refval" "subtype" "SNP Launch Digest"
+setjson "refval" "index" 0
+setjson "refval" "sha384" "${ref}"
+extendarr "manifest" "referenceValues" "${refval}"
+
+policy=$(cat "${input}/snp.policy.json")
+
+# Create policy
+setjson "policy" "reportVersion" 2
+setjson "policy" "policy.SingleSocket" false
+setjson "policy" "policy.Debug" false
+setjson "policy" "policy.Migration" false
+setjson "policy" "policy.Smt" true
+setjson "policy" "policy.AbiMajor" 0
+setjson "policy" "policy.AbiMinor" 0
+setjson "policy" "fw.build" 3
+setjson "policy" "fw.major" 1
+setjson "policy" "fw.minor" 49
+setjson "policy" "tcb.bl" 2
+setjson "policy" "tcb.tee" 0
+setjson "policy" "tcb.snp" 5
+setjson "policy" "tcb.ucode" 55
+
+setjson "manifest" "snpPolicy" "${policy}"
 
 # Save the RTM manifest
-printf "%s\n" "${json}" > "${out}/rtm.manifest.json"
+printf "Writing %s\n" "${out}/rtm.manifest.json"
+printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
 
-# App Description: Create corresponding app description
-appdesc=$(cat "${input}/manifest.description.json")
-appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
-appdesc=$(echo "${appdesc}" | jq ".manifest = \"${name}\"")
+# Root manifest description: Create corresponding root manifest description
+rootdesc=$(cat "${input}/manifest.description.json")
+rootdesc=$(echo "${rootdesc}" | jq ".name = \"${name}.description\"")
+rootdesc=$(echo "${rootdesc}" | jq ".manifest = \"${name}\"")
 
-# Device Description: Add/replace app description to/in device description
+# Device Description: Add/replace root manifest description to/in device description
 devdesc=$(cat "${device_description}")
 exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
 if [[ "${exists}" = false ]]; then
-  echo "Adding app description to device description"
+  echo "Adding root manifest description to device description"
 else
-  echo "Replacing existing app description"
+  echo "Replacing existing root manifest description"
   devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${rootdesc}]" '.descriptions += $desc')
 
 # Device Description: Store
 echo "Writing ${device_description}"

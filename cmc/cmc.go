@@ -43,7 +43,6 @@ type Cmc struct {
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
-	IntelStorage       string
 	PeerCache          string
 	Ctr                bool
 	CtrDriver          string
@@ -62,12 +61,11 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 func NewCmc(c *Config) (*Cmc, error) {
 
 	cmc := &Cmc{
-		IntelStorage: c.Storage,
-		PeerCache:    c.PeerCache,
-		Ctr:          c.Ctr,
-		CtrDriver:    c.CtrDriver,
-		CtrPcr:       c.CtrPcr,
-		CtrLog:       c.CtrLog,
+		PeerCache: c.PeerCache,
+		Ctr:       c.Ctr,
+		CtrDriver: c.CtrDriver,
+		CtrPcr:    c.CtrPcr,
+		CtrLog:    c.CtrLog,
 	}
 
 	// Read metadata and device config from the file system

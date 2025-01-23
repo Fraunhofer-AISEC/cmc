@@ -38,10 +38,13 @@ firmware="Lenovo"
 bootloader=$(grub-install --version)
 set -e
 
+# Get the fingerprint of the TPM privacy CA that was used for credential activation
+fingerprint=$(openssl x509 -in "${data}/pki/ca.pem" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json -e)
 
-# Load RTM manifest
+# Load manifest template
 json=$(cat "${input}/manifest.json")
 
 name="de.test.rtm"
@@ -55,6 +58,7 @@ setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 y
 setjson "json" "description"           "RTM Manifest"
 setarr  "json" "baseLayers"            "${name}"
 setjson "json" "certLevel"             3
+setjson "json" "caFingerprint"         "${fingerprint}"
 
 # Insert platform details
 json=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
@@ -68,21 +72,21 @@ json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues 
 echo "Writing ${out}/rtm.manifest.json"
 printf "%s\n" "${json}" > "${out}/rtm.manifest.json"
 
-# App Description: Create corresponding app description
-appdesc=$(cat "${input}/manifest.description.json")
-appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
-appdesc=$(echo "${appdesc}" | jq ".manifest = \"${name}\"")
+# RTM Manifest Description: Create corresponding RTM manifest description
+rtmdesc=$(cat "${input}/manifest.description.json")
+rtmdesc=$(echo "${rtmdesc}" | jq ".name = \"${name}.description\"")
+rtmdesc=$(echo "${rtmdesc}" | jq ".manifest = \"${name}\"")
 
-# Device Description: Add/replace app description to/in device description
+# Device Description: Add/replace RTM manifest description to/in device description
 devdesc=$(cat "${device_description}")
 exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
 if [[ "${exists}" = false ]]; then
-  echo "Adding app description to device description"
+  echo "Adding RTM manifest description to device description"
 else
-  echo "Replacing existing app description"
+  echo "Replacing existing RTM Manifest description"
   devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${rtmdesc}]" '.descriptions += $desc')
 
 # Device Description: Store
 echo "Writing ${device_description}"

@@ -10,8 +10,10 @@ require (
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9
+	github.com/google/go-configfs-tsm v0.3.2
 	github.com/google/go-eventlog v0.0.2
 	github.com/google/go-sev-guest v0.11.1
+	github.com/google/go-tdx-guest v0.3.2-0.20250131194449-460f94c01da7
 	github.com/google/go-tpm v0.9.1
 	github.com/invopop/jsonschema v0.12.0
 	github.com/mattn/go-sqlite3 v1.14.16
@@ -32,7 +34,6 @@ require (
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/certificate-transparency-go v1.1.6 // indirect
-	github.com/google/go-configfs-tsm v0.2.2 // indirect
 	github.com/google/go-tspi v0.3.0 // indirect
 	github.com/google/logger v1.1.1 // indirect
 	github.com/google/uuid v1.3.1 // indirect

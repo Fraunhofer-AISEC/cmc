@@ -12,6 +12,7 @@
         ""
     ],
     "certLevel" : 0,
+    "caFingerprint": "",
     "referenceValues": [
     ]
 }

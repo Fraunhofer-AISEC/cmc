@@ -29,9 +29,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	type args struct {
-		snpM  *ar.Measurement
-		snpV  []ar.ReferenceValue
-		nonce []byte
+		measurement  *ar.Measurement
+		nonce        []byte
+		rootManifest *ar.MetadataResult
+		refvals      []ar.ReferenceValue
 	}
 	tests := []struct {
 		name string
@@ -41,22 +42,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "ValidAttestationReport",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -66,22 +73,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: invalidReportSignature,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -91,22 +104,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    invalidCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -116,22 +135,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid VCEK Certificate",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    invalidLeafCert,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -141,22 +166,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: invalidReportData,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -166,22 +197,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: invalidMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -191,22 +228,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Policy Parameter Debug",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   invalidSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        invalidSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -216,22 +259,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: invalidNonce,
@@ -241,12 +290,25 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Value Type",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "TPM Reference Value",
 						Sha256: validMeasurement,
@@ -259,10 +321,23 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "No Reference Values Present",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
+				},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
 				},
 				nonce: validNonce,
 			},
@@ -271,22 +346,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Firmware",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            invalidFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            invalidFw,
-							Tcb:           validTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -296,22 +377,28 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid TCB",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           invalidTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
-							CaFingerprint: validFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           invalidTcb,
-						},
 					},
 				},
 				nonce: validNonce,
@@ -319,24 +406,55 @@ func Test_verifySnpMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Invalid CA KeyID",
+			name: "Invalid CA Fingerprint",
 			args: args{
-				snpM: &ar.Measurement{
+				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				snpV: []ar.ReferenceValue{
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: invalidFingerprint,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportVersion: validVersion,
+								GuestPolicy:   validSnpPolicy,
+								Fw:            validFw,
+								Tcb:           validTcb,
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
 					{
 						Type:   "SNP Reference Value",
 						Sha384: validMeasurement,
-						Snp: &ar.SnpDetails{
-							Version:       validVersion,
+					},
+				},
+				nonce: validNonce,
+			},
+			want: false,
+		},
+		{
+			name: "Missing SNP Policy",
+			args: args{
+				measurement: &ar.Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
+				},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
 							CaFingerprint: invalidFingerprint,
-							Policy:        validSnpPolicy,
-							Fw:            validFw,
-							Tcb:           validTcb,
 						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
+					{
+						Type:   "SNP Reference Value",
+						Sha384: validMeasurement,
 					},
 				},
 				nonce: validNonce,
@@ -346,7 +464,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, got := verifySnpMeasurements(*tt.args.snpM, tt.args.nonce, tt.args.snpV); got != tt.want {
+			if _, got := verifySnpMeasurements(*tt.args.measurement, tt.args.nonce,
+				tt.args.rootManifest, tt.args.refvals); got != tt.want {
 				t.Errorf("verifySnpMeasurements() = %v, want %v", got, tt.want)
 			}
 		})
@@ -836,7 +955,7 @@ AFZEAwoKCQ==
 
 	invalidLeafCert = [][]byte{invalidVcek.Raw, askMilan.Raw, arkMilan.Raw}
 
-	validSnpPolicy = ar.SnpPolicy{
+	validSnpPolicy = ar.SnpGuestPolicy{
 		Type:         "SNP Policy",
 		SingleSocket: false,
 		Debug:        false,
@@ -846,7 +965,7 @@ AFZEAwoKCQ==
 		AbiMinor:     0,
 	}
 
-	invalidSnpPolicy = ar.SnpPolicy{
+	invalidSnpPolicy = ar.SnpGuestPolicy{
 		Type:         "SNP Policy",
 		SingleSocket: false,
 		Debug:        true,

@@ -1,3 +1,18 @@
+// Copyright (c) 2025 Fraunhofer AISEC
+// Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -87,9 +102,9 @@ func printEventlog(l *tcg.EventLog) error {
 
 		refval := ar.ReferenceValue{
 			Type:        "TDX Reference Value",
-			Name:        fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
+			SubType:     fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
 			Sha384:      event.Digest,
-			Pcr:         &index,
+			Index:       index,
 			Description: formatData(event.Data),
 		}
 
@@ -126,10 +141,10 @@ func printSummary(l *tcg.EventLog) error {
 	summary := make([]ar.ReferenceValue, 0, len(rtmrs))
 	for index, rtmr := range rtmrs {
 		refval := ar.ReferenceValue{
-			Type:   "TDX Reference Value",
-			Name:   fmt.Sprintf("RTMR%v", index-1),
-			Pcr:    &index,
-			Sha384: rtmr,
+			Type:    "TDX Reference Value",
+			SubType: fmt.Sprintf("RTMR%v", index-1),
+			Index:   index,
+			Sha384:  rtmr,
 		}
 		summary = append(summary, refval)
 	}

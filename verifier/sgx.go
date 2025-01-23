@@ -17,7 +17,6 @@ package verifier
 
 import (
 	"bytes"
-	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -25,6 +24,7 @@ import (
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/google/go-tdx-guest/pcs"
 )
 
 // Overall structure: table 2 from https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf
@@ -34,6 +34,194 @@ type SgxReport struct {
 	ISVEnclaveReport      EnclaveReportBody
 	QuoteSignatureDataLen uint32
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructure // variable size
+}
+
+func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
+	rootManifest *ar.MetadataResult, referenceValues []ar.ReferenceValue,
+) (*ar.MeasurementResult, bool) {
+
+	var err error
+	result := &ar.MeasurementResult{
+		Type:      "SGX Result",
+		SgxResult: &ar.SgxResult{},
+	}
+	ok := true
+
+	log.Debug("Verifying SGX measurements")
+
+	if len(referenceValues) == 0 {
+		log.Debugf("Could not find SGX Reference Value")
+		result.Summary.SetErr(ar.RefValNotPresent)
+		return result, false
+	} else if len(referenceValues) > 1 {
+		log.Debugf("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
+			len(referenceValues))
+		result.Summary.SetErr(ar.RefValMultiple)
+		return result, false
+	}
+	sgxReferenceValue := referenceValues[0]
+	if rootManifest == nil {
+		log.Debugf("Internal error: root manifest not present")
+		result.Summary.SetErr((ar.Internal))
+		return result, false
+	}
+	sgxReferencePolicy := rootManifest.Manifest.SgxPolicy
+
+	// Validate Parameters:
+	if len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
+		log.Debugf("Invalid SGX Report")
+		result.Summary.SetErr(ar.ParseEvidence)
+		return result, false
+	}
+
+	if sgxReferenceValue.Type != "SGX Reference Value" {
+		log.Debugf("SGX Reference Value invalid type %v", sgxReferenceValue.Type)
+		result.Summary.SetErr(ar.RefValType)
+		return result, false
+	}
+
+	if sgxReferencePolicy == nil {
+		log.Debugf("SGX manifest does not contain SGX policy")
+		result.Summary.SetErr(ar.PolicyNotPresent)
+		return result, false
+	}
+
+	// Extract the attestation report into the SGXReport data structure
+	sgxQuote, err := DecodeSgxReport(sgxM.Evidence)
+	if err != nil {
+		log.Debugf("Failed to decode SGX report: %v", err)
+		result.Summary.SetErr(ar.ParseEvidence)
+		return result, false
+	}
+
+	if QuoteType(sgxQuote.QuoteHeader.TeeType) != SGX_QUOTE_TYPE {
+		log.Debugf("Unsupported SGX quote type (tee_type: %X)\n", sgxQuote.QuoteHeader.TeeType)
+		return result, false
+	}
+
+	// Compare nonce for freshness (called report data in the SNP attestation report structure)
+	// ReportData contains: nonce in ReportData field
+	nonce64 := make([]byte, 64)
+	copy(nonce64, nonce[:])
+
+	if cmp := bytes.Compare(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64); cmp != 0 {
+		log.Debugf("Nonces mismatch: Plain Nonce: %v, Expected: %v, Got = %v",
+			nonce, hex.EncodeToString(nonce64),
+			hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:]))
+		result.Freshness.Success = false
+		result.Freshness.Expected = hex.EncodeToString(nonce64)
+		result.Freshness.Got = hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:])
+		result.Summary.Success = false
+		return result, false
+	} else {
+		result.Freshness.Success = true
+	}
+
+	// Obtain collateral from measurements
+	if len(sgxM.Artifacts) == 0 ||
+		len(sgxM.Artifacts[0].Events) == 0 ||
+		sgxM.Artifacts[0].Events[0].IntelCollateral == nil {
+		log.Debugf("Could not find TDX artifacts (collateral)")
+		result.Summary.SetErr(ar.CollateralNotPresent)
+		return result, false
+	}
+	collateralRaw := sgxM.Artifacts[0].Events[0].IntelCollateral
+	collateral, err := ParseCollateral(collateralRaw)
+	if err != nil {
+		log.Debugf("Could not parse SGX artifacts (collateral)")
+		result.Summary.SetErr(ar.ParseCollateral)
+		return result, false
+	}
+
+	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
+	var quoteCerts SgxCertificates
+	if sgxQuote.QuoteSignatureData.QECertDataType == 5 {
+		quoteCerts, err = parseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
+		if err != nil {
+			log.Debugf("Failed to parse certificate chain from QECertData: %v", err)
+			result.Summary.SetErr(ar.ParseCert)
+			return result, false
+		}
+	} else {
+		log.Debugf("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
+		result.Summary.SetErr(ar.ParseCert)
+		return result, false
+	}
+
+	// Check that root CA from PCK cert chain is present in quote
+	if quoteCerts.RootCACert == nil {
+		log.Debugf("root cert is null")
+		result.Summary.SetErr(ar.ParseCA)
+		return result, false
+	}
+
+	// Match measurement root CAs against reference root CA fingerprint
+	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprint)
+	if errCode != ar.NotSet {
+		result.Summary.SetErr(errCode)
+		return result, false
+	}
+
+	// Parse and verify PCK certificate extensions
+	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
+	if err != nil {
+		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		result.Summary.SetErr(ar.ParseExtensions)
+		return result, false
+	}
+
+	// Verify TcbInfo
+	result.SgxResult.TcbInfoCheck = ValidateTcbInfo(
+		&collateral.TcbInfo, collateralRaw.TcbInfo,
+		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
+		sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE)
+	if !result.SgxResult.TcbInfoCheck.Summary.Success {
+		log.Debugf("Failed to verify TCB info structure")
+		result.Summary.SetErr(ar.VerifyTcbInfo)
+		return result, false
+	}
+
+	// Verify QE Identity
+	qeIdentityResult, err := ValidateQEIdentity(
+		&sgxQuote.QuoteSignatureData.QEReport,
+		&collateral.QeIdentity, collateralRaw.QeIdentity,
+		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
+		SGX_QUOTE_TYPE)
+	if err != nil {
+		log.Debugf("Failed to verify QE Identity structure: %v", err)
+		result.Summary.SetErr(ar.VerifyQEIdentityErr)
+		return result, false
+	}
+	result.SgxResult.QeReportCheck = qeIdentityResult
+
+	// Verify Quote Signature
+	sig, ret := VerifyIntelQuoteSignature(sgxM.Evidence, sgxQuote.QuoteSignatureData,
+		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
+		rootManifest.CaFingerprint, QuoteType(sgxQuote.QuoteHeader.TeeType), collateral.PckCrl, collateral.RootCaCrl)
+	if !ret {
+		ok = false
+	}
+	result.Signature = sig
+
+	// Verify Quote Body values
+	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &collateral.TcbInfo, &sgxExtensions,
+		&sgxReferenceValue, sgxReferencePolicy, result)
+	if err != nil {
+		log.Debugf("Failed to verify SGX Report Body: %v", err)
+		result.Summary.SetErr(ar.VerifySignature)
+		result.Summary.Success = false
+		return result, false
+	}
+
+	// Check version
+	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, sgxReferencePolicy.QuoteVersion)
+	if !ret {
+		return result, false
+	}
+
+	result.Summary.Success = ok
+
+	return result, ok
 }
 
 // Parses the report into the SgxReport structure
@@ -78,203 +266,22 @@ func DecodeSgxReport(report []byte) (SgxReport, error) {
 	return reportStruct, nil
 }
 
-func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte, intelCache string, referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
+func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
+	sgxExtensions *SGXExtensionsValue, sgxReferenceValue *ar.ReferenceValue,
+	sgxReferencePolicy *ar.SgxPolicy, result *ar.MeasurementResult,
+) error {
 
-	var err error
-	result := &ar.MeasurementResult{
-		Type:      "SGX Result",
-		SgxResult: &ar.SgxResult{},
+	if tcbInfo == nil {
+		return fmt.Errorf("internal error: SGX tcb info is nil")
 	}
-	ok := true
-
-	log.Debug("Verifying SGX measurements")
-
-	if len(referenceValues) == 0 {
-		log.Debugf("Could not find SGX Reference Value")
-		result.Summary.SetErr(ar.RefValNotPresent)
-		return result, false
-	} else if len(referenceValues) > 1 {
-		log.Debugf("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
-			len(referenceValues))
-		result.Summary.SetErr(ar.RefValMultiple)
-		return result, false
+	if sgxExtensions == nil {
+		return fmt.Errorf("internal error: SGX certs is nil")
 	}
-	sgxReferenceValue := referenceValues[0]
-
-	// Validate Parameters:
-	if len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
-		log.Debugf("Invalid SGX Report")
-		result.Summary.SetErr(ar.ParseEvidence)
-		return result, false
+	if sgxReferenceValue == nil {
+		return fmt.Errorf("internal error: SGX reference value is nil")
 	}
-
-	if sgxReferenceValue.Type != "SGX Reference Value" {
-		log.Debugf("SGX Reference Value invalid type %v", sgxReferenceValue.Type)
-		result.Summary.SetErr(ar.RefValType)
-		return result, false
-	}
-
-	if sgxReferenceValue.Sgx == nil {
-		log.Debugf("SGX Reference Value details not present")
-		result.Summary.SetErr(ar.DetailsNotPresent)
-		return result, false
-	}
-
-	var sgxQuote SgxReport
-	var quoteType uint32 = sgxReferenceValue.Sgx.Collateral.TeeType
-	if quoteType == SGX_QUOTE_TYPE {
-		// extract the attestation report into the SGXReport data structure
-		sgxQuote, err = DecodeSgxReport(sgxM.Evidence)
-		if err != nil {
-			log.Debugf("Failed to decode SGX report: %v", err)
-			result.Summary.SetErr(ar.ParseEvidence)
-			return result, false
-		}
-	} else {
-		log.Debugf("Unknown quote type (tee_type: %X)\n", quoteType)
-		return result, false
-	}
-
-	// Compare nonce for freshness (called report data in the SNP attestation report structure)
-	// ReportData contains: nonce in ReportData field
-	nonce64 := make([]byte, 64)
-	copy(nonce64, nonce[:])
-
-	if cmp := bytes.Compare(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64); cmp != 0 {
-		log.Debugf("Nonces mismatch: Plain Nonce: %v, Expected: %v, Got = %v",
-			nonce, hex.EncodeToString(nonce64),
-			hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:]))
-		result.Freshness.Success = false
-		result.Freshness.Expected = hex.EncodeToString(nonce64)
-		result.Freshness.Got = hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:])
-		result.Summary.Success = false
-		return result, false
-	} else {
-		result.Freshness.Success = true
-	}
-
-	// Parse certificate chain
-	referenceCerts, err := parseCertificates(sgxM.Certs, true)
-	if err != nil {
-		log.Debugf("Failed to parse reference certificates: %v", err)
-		result.Summary.SetErr(ar.ParseCert)
-		return result, false
-	}
-
-	// Currently only support for QECertDataType 5
-	var quoteCerts SgxCertificates
-	if sgxQuote.QuoteSignatureData.QECertDataType == 5 {
-		quoteCerts, err = parseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
-		if err != nil {
-			log.Debugf("Failed to parse certificate chain from QECertData: %v", err)
-			result.Summary.SetErr(ar.ParseCert)
-			return result, false
-		}
-	} else {
-		log.Debugf("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
-		result.Summary.SetErr(ar.ParseCert)
-		return result, false
-	}
-
-	// Extract root CA from PCK cert chain in quote -> compare nullptr
-	if quoteCerts.RootCACert == nil {
-		log.Debugf("root cert is null")
-		result.Summary.SetErr(ar.ParseCA)
-		return result, false
-	}
-
-	// Check root public key
-	quotePublicKeyBytes, err := x509.MarshalPKIXPublicKey(quoteCerts.RootCACert.PublicKey)
-	if err != nil {
-		return result, false
-	}
-
-	referencePublicKeyBytes, err := x509.MarshalPKIXPublicKey(referenceCerts.RootCACert.PublicKey)
-	if err != nil {
-		return result, false
-	}
-
-	if !bytes.Equal(quotePublicKeyBytes, referencePublicKeyBytes) {
-		log.Debugf("root cert public key didn't match")
-		result.Summary.SetErr(ar.CaFingerprint)
-		return result, false
-	}
-
-	// Parse and verify PCK certificate extensions
-	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
-	if err != nil {
-		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-		result.Summary.SetErr(ar.ParseExtensions)
-		return result, false
-	}
-
-	// Parse and verify TcbInfo object
-	tcbInfo, err := parseTcbInfo(sgxReferenceValue.Sgx.Collateral.TcbInfo)
-	if err != nil {
-		log.Debugf("Failed to parse tcbInfo: %v", err)
-		result.Summary.SetErr(ar.ParseTcbInfo)
-		return result, false
-	}
-
-	result.SgxResult.TcbInfoCheck = verifyTcbInfo(&tcbInfo,
-		string(sgxReferenceValue.Sgx.Collateral.TcbInfo),
-		referenceCerts.TCBSigningCert, sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE)
-	if !result.SgxResult.TcbInfoCheck.Summary.Success {
-		log.Debugf("Failed to verify TCB info structure: %v", err)
-		result.Summary.SetErr(ar.VerifyTcbInfo)
-		return result, false
-	}
-
-	// Parse and verify QE Identity object
-	qeIdentity, err := parseQEIdentity(sgxReferenceValue.Sgx.Collateral.QeIdentity)
-	if err != nil {
-		log.Debugf("Failed to parse QE identity: %v", err)
-		result.Summary.SetErr(ar.ParseQEIdentity)
-		return result, false
-	}
-
-	qeIdentityResult, err := VerifyQEIdentity(&sgxQuote.QuoteSignatureData.QEReport, &qeIdentity,
-		string(sgxReferenceValue.Sgx.Collateral.QeIdentity), referenceCerts.TCBSigningCert, SGX_QUOTE_TYPE)
-	if err != nil {
-		log.Debugf("Failed to verify QE Identity structure: %v", err)
-		result.Summary.SetErr(ar.VerifyQEIdentityErr)
-		return result, false
-	}
-	result.SgxResult.QeIdentityCheck = qeIdentityResult
-
-	// Verify Quote Signature
-	sig, ret := VerifyIntelQuoteSignature(sgxM.Evidence, sgxQuote.QuoteSignatureData,
-		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), referenceCerts,
-		sgxReferenceValue.Sgx.CaFingerprint, intelCache, quoteType)
-	if !ret {
-		ok = false
-	}
-	result.Signature = sig
-
-	// Verify Quote Body values
-	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &tcbInfo, &sgxExtensions, &sgxReferenceValue, result)
-	if err != nil {
-		log.Debugf("Failed to verify SGX Report Body: %v", err)
-		result.Summary.SetErr(ar.VerifySignature)
-		result.Summary.Success = false
-		return result, false
-	}
-
-	// Check version
-	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader, sgxReferenceValue.Sgx.Version)
-	if !ret {
-		return result, false
-	}
-
-	result.Summary.Success = ok
-
-	return result, ok
-}
-
-func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
-	sgxExtensions *SGXExtensionsValue, sgxReferenceValue *ar.ReferenceValue, result *ar.MeasurementResult) error {
-	if body == nil || tcbInfo == nil || sgxExtensions == nil || sgxReferenceValue == nil || result == nil {
-		return fmt.Errorf("invalid function parameter (null pointer exception)")
+	if result == nil {
+		return fmt.Errorf("internal error: SGX measurement result is nil")
 	}
 
 	// check MRENCLAVE reference value
@@ -312,7 +319,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 			Type:     "Measurement",
 			SubType:  "MrSigner",
 			Digest:   hex.EncodeToString(body.MRSIGNER[:]),
-			Success:  strings.EqualFold(sgxReferenceValue.Sgx.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
+			Success:  strings.EqualFold(sgxReferencePolicy.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
 			Launched: true,
 		},
 		ar.DigestResult{
@@ -326,14 +333,14 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 			Type:     "Product ID",
 			SubType:  "IsvProdId",
 			Digest:   strconv.Itoa(int(body.ISVProdID)),
-			Success:  sgxReferenceValue.Sgx.IsvProdId == body.ISVProdID,
+			Success:  sgxReferencePolicy.IsvProdId == body.ISVProdID,
 			Launched: true,
 		},
 		ar.DigestResult{
 			Type:     "Security Version",
 			SubType:  "IsvSvn",
 			Digest:   strconv.Itoa(int(body.ISVSVN)),
-			Success:  sgxReferenceValue.Sgx.IsvSvn == body.ISVSVN,
+			Success:  sgxReferencePolicy.IsvSvn == body.ISVSVN,
 			Launched: true,
 		},
 	)
@@ -346,43 +353,43 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 
 	result.SgxResult.SgxAttributesCheck = ar.SgxAttributesCheck{
 		Initted: ar.BooleanMatch{
-			Success:  getBit(body.Attributes[:], 0) == sgxReferenceValue.Sgx.Attributes.Initted,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.Initted,
+			Success:  getBit(body.Attributes[:], 0) == sgxReferencePolicy.Attributes.Initted,
+			Claimed:  sgxReferencePolicy.Attributes.Initted,
 			Measured: getBit(body.Attributes[:], 0),
 		},
 		Debug: ar.BooleanMatch{
-			Success:  getBit(body.Attributes[:], 1) == sgxReferenceValue.Sgx.Attributes.Debug,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.Debug,
+			Success:  getBit(body.Attributes[:], 1) == sgxReferencePolicy.Attributes.Debug,
+			Claimed:  sgxReferencePolicy.Attributes.Debug,
 			Measured: getBit(body.Attributes[:], 1),
 		},
 		Mode64Bit: ar.BooleanMatch{
-			Success:  getBit(body.Attributes[:], 2) == sgxReferenceValue.Sgx.Attributes.Mode64Bit,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.Mode64Bit,
+			Success:  getBit(body.Attributes[:], 2) == sgxReferencePolicy.Attributes.Mode64Bit,
+			Claimed:  sgxReferencePolicy.Attributes.Mode64Bit,
 			Measured: getBit(body.Attributes[:], 2),
 		},
 		ProvisionKey: ar.BooleanMatch{
-			Success:  getBit(body.Attributes[:], 5) == sgxReferenceValue.Sgx.Attributes.ProvisionKey,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.ProvisionKey,
+			Success:  getBit(body.Attributes[:], 5) == sgxReferencePolicy.Attributes.ProvisionKey,
+			Claimed:  sgxReferencePolicy.Attributes.ProvisionKey,
 			Measured: getBit(body.Attributes[:], 5),
 		},
 		EInitToken: ar.BooleanMatch{
-			Success:  getBit(body.Attributes[:], 6) == sgxReferenceValue.Sgx.Attributes.EInitToken,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.EInitToken,
+			Success:  getBit(body.Attributes[:], 6) == sgxReferencePolicy.Attributes.EInitToken,
+			Claimed:  sgxReferencePolicy.Attributes.EInitToken,
 			Measured: getBit(body.Attributes[:], 6),
 		},
 		Kss: ar.BooleanMatch{
-			Success:  getBit(body.Attributes[:], 8) == sgxReferenceValue.Sgx.Attributes.Kss,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.Kss,
+			Success:  getBit(body.Attributes[:], 8) == sgxReferencePolicy.Attributes.Kss,
+			Claimed:  sgxReferencePolicy.Attributes.Kss,
 			Measured: getBit(body.Attributes[:], 8),
 		},
 		Legacy: ar.BooleanMatch{
-			Success:  (body.Attributes[8] == 3) == sgxReferenceValue.Sgx.Attributes.Legacy,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.Legacy,
+			Success:  (body.Attributes[8] == 3) == sgxReferencePolicy.Attributes.Legacy,
+			Claimed:  sgxReferencePolicy.Attributes.Legacy,
 			Measured: body.Attributes[8] == 3,
 		},
 		Avx: ar.BooleanMatch{
-			Success:  (body.Attributes[8] == 6) == sgxReferenceValue.Sgx.Attributes.Avx,
-			Claimed:  sgxReferenceValue.Sgx.Attributes.Avx,
+			Success:  (body.Attributes[8] == 6) == sgxReferencePolicy.Attributes.Avx,
+			Claimed:  sgxReferencePolicy.Attributes.Avx,
 			Measured: body.Attributes[8] == 6,
 		},
 	}
@@ -407,6 +414,54 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 			result.SgxResult.SgxAttributesCheck.Avx.Success,
 		)
 	}
+
+	return nil
+}
+
+// (for SGX): parses quote signature data structure from buf to sig
+func parseECDSASignature(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStructure) error {
+
+	err := binary.Read(buf, binary.LittleEndian, &sig.ISVEnclaveReportSignature)
+	if err != nil {
+		return fmt.Errorf("failed to parse ISVEnclaveReportSignature")
+	}
+	err = binary.Read(buf, binary.LittleEndian, &sig.ECDSAAttestationKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse ECDSAAttestationKey")
+	}
+	err = binary.Read(buf, binary.LittleEndian, &sig.QEReport)
+	if err != nil {
+		return fmt.Errorf("failed to parse QEReport")
+	}
+	err = binary.Read(buf, binary.LittleEndian, &sig.QEReportSignature)
+	if err != nil {
+		return fmt.Errorf("failed to parse QEReportSignature")
+	}
+	err = binary.Read(buf, binary.LittleEndian, &sig.QEAuthDataSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse QEAuthDataSize")
+	}
+	tmp := make([]byte, sig.QEAuthDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &tmp)
+	if err != nil {
+		return fmt.Errorf("failed to parse QEAuthData")
+	}
+	sig.QEAuthData = tmp
+
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertDataType)
+	if err != nil {
+		return fmt.Errorf("failed to parse QECertDataType")
+	}
+	err = binary.Read(buf, binary.LittleEndian, &sig.QECertDataSize)
+	if err != nil {
+		return fmt.Errorf("failed to parse QECertDataSize")
+	}
+	tmp = make([]byte, sig.QECertDataSize)
+	err = binary.Read(buf, binary.LittleEndian, &tmp)
+	if err != nil {
+		return fmt.Errorf("failed to parse QECertData")
+	}
+	sig.QECertData = tmp
 
 	return nil
 }
