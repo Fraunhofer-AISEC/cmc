@@ -16,12 +16,11 @@
 package attestedtls
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
-	"time"
 )
 
 // Writes byte array to provided channel by first sending length information, then data.
@@ -56,7 +55,6 @@ func Write(msg []byte, c net.Conn) error {
 // Receives byte array from provided channel by first receiving length information, then data.
 // Used for transmitting the attestation reports between peers
 func Read(c net.Conn) ([]byte, error) {
-	start := time.Now()
 
 	lenbuf := make([]byte, 4)
 	_, err := c.Read(lenbuf)
@@ -66,37 +64,20 @@ func Read(c net.Conn) ([]byte, error) {
 	}
 
 	len := int(binary.BigEndian.Uint32(lenbuf)) // Max size of 4GB
-	log.Tracef("TCP Message to be received: %v", len)
+	log.Tracef("Receiving TCP Message length: %v", len)
 
 	if len == 0 {
 		return nil, errors.New("message length is zero")
 	}
 
-	// Receive data in chunks of 1024 bytes as the Read function receives a maxium of 64K bytes
-	// and the buffer must be longer, then append it to the final buffer
-	buf := bytes.NewBuffer(nil)
-	received := 0
-
-	for {
-		chunk := make([]byte, 64*1024)
-		n, err := c.Read(chunk)
-		received += n
-		if err != nil {
-			return nil, fmt.Errorf("failed to receive message: %w", err)
-		}
-		buf.Write(chunk[:n])
-
-		// Abort as soon as we have read the expected data as signaled in the first 4 bytes
-		// of the message
-		if received == len {
-			log.Trace("Received message")
-			break
-		}
-
-		if time.Since(start).Seconds() >= 10 {
-			log.Warn("Manual timeout during read")
-			break
-		}
+	buf := make([]byte, len)
+	n, err := io.ReadFull(c, buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed read full message: %w", err)
 	}
-	return buf.Bytes(), nil
+	if n != len {
+		return nil, fmt.Errorf("could only read %v of %v bytes", n, len)
+	}
+
+	return buf, nil
 }
