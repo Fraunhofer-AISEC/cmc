@@ -239,6 +239,11 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 		} else if measuredPcr.Type == "PCR Summary" {
 			// measurement contains just the summary PCR value
 			// We therefore unconditionally extend every reference value for this PCR
+			if len(measuredPcr.Events) != 1 {
+				log.Debugf("Expected exactly one event for artifact type 'PCR Summary', got %v", len(measuredPcr.Events))
+				ok = false
+				continue
+			}
 			for _, ref := range referenceValues {
 				if ref.Pcr == nil {
 					log.Debugf("No PCR set in TPM Reference Value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
@@ -265,16 +270,16 @@ func recalculatePcrs(s ar.Serializer, measurement ar.Measurement, referenceValue
 
 			}
 			// Then we compare the calculated value with the PCR measurement summary
-			equal := bytes.Equal(calculatedPcrs[pcr], measuredPcr.Summary)
+			equal := bytes.Equal(calculatedPcrs[pcr], measuredPcr.Events[0].Sha256)
 			if equal {
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 				pcrResult.Success = true
 			} else {
 				log.Debugf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
-					hex.EncodeToString(measuredPcr.Summary),
+					hex.EncodeToString(measuredPcr.Events[0].Sha256),
 					hex.EncodeToString(calculatedPcrs[pcr]))
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
-				pcrResult.Measured = hex.EncodeToString(measuredPcr.Summary)
+				pcrResult.Measured = hex.EncodeToString(measuredPcr.Events[0].Sha256)
 				pcrResult.Success = false
 				ok = false
 			}

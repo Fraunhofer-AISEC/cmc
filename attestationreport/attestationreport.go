@@ -159,18 +159,19 @@ type Validity struct {
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
 
-// Artifact represents the digests of a measurement, e.g., of a single PCR.
-// If the type is 'PCR Summary', Summary is the final PCR value.
-// If the type is 'PCR Eventlog', Events contains a list of the extends that lead to the final
+// Artifact represents the digests of a measurement.
+// If the type is 'PCR Summary', 'Events' contains the final PCR value of PCR 'Pcr'.
+// If the type is 'PCR Eventlog', 'Events' contains a list of the extends that lead to the final
 // PCR value. The list is retrieved by the prover, e.g., from the TPM binary bios measurements
 // list or the IMA runtime measurements list.
-// If the type is 'SW Eventlog', Events contains a list of digests that have been recorded as
+// If the type is 'SW Eventlog', 'Events' contains a list of digests that have been recorded as
 // SW measurements
+// If the type is 'TDX Collateral', 'Events' contains the TDX collateral, which includes the
+// TDX TCB info, the quoting enclave identity and the certicate revocation lists.
 type Artifact struct {
-	Type    string         `json:"type" cbor:"0,keyasint"` // PCR Summary, PCR Eventlog, SW Eventlog
-	Pcr     *int           `json:"pcr,omitempty" cbor:"1,keyasint"`
-	Summary HexByte        `json:"summary,omitempty" cbor:"2,keyasint,omitempty"` // Either summary
-	Events  []MeasureEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`  // Or Events
+	Type   string         `json:"type" cbor:"0,keyasint"`
+	Pcr    *int           `json:"pcr,omitempty" cbor:"1,keyasint,omitempty"`
+	Events []MeasureEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type MeasureEvent struct {
