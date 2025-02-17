@@ -253,27 +253,35 @@ var (
 
 	validSummaryHashChain = []ar.Artifact{
 		{
-			Type:    "PCR Summary",
-			Pcr:     ptr(1),
-			Summary: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6"),
+			Type: "PCR Summary",
+			Pcr:  ptr(1),
+			Events: []ar.MeasureEvent{
+				{Sha256: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
+			},
 		},
 		{
-			Type:    "PCR Summary",
-			Pcr:     ptr(4),
-			Summary: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72"),
+			Type: "PCR Summary",
+			Pcr:  ptr(4),
+			Events: []ar.MeasureEvent{
+				{Sha256: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")},
+			},
 		},
 	}
 
 	invalidSummaryHashChain = []ar.Artifact{
 		{
-			Type:    "PCR Summary",
-			Pcr:     ptr(1),
-			Summary: dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80"),
+			Type: "PCR Summary",
+			Pcr:  ptr(1),
+			Events: []ar.MeasureEvent{
+				{Sha256: dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
+			},
 		},
 		{
-			Type:    "PCR Summary",
-			Pcr:     ptr(4),
-			Summary: dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9"),
+			Type: "PCR Summary",
+			Pcr:  ptr(4),
+			Events: []ar.MeasureEvent{
+				{Sha256: dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
+			},
 		},
 	}
 

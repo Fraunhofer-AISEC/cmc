@@ -252,7 +252,9 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			pcrMeasurement.Events = events
 		} else {
 			pcrMeasurement.Type = "PCR Summary"
-			pcrMeasurement.Summary = pcrValues[num].Digest
+			pcrMeasurement.Events = append(pcrMeasurement.Events, ar.MeasureEvent{
+				Sha256: pcrValues[num].Digest,
+			})
 		}
 
 		hashChain[i] = pcrMeasurement
@@ -276,7 +278,6 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 				log.Debugf("Adding %v IMA events to PCR%v measurement", len(imaEvents),
 					*hashChain[i].Pcr)
 				hashChain[i].Events = imaEvents
-				hashChain[i].Summary = nil
 				hashChain[i].Type = "PCR Eventlog"
 			}
 		}
@@ -304,7 +305,6 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 				if *hashChain[i].Pcr == t.CtrPcr {
 					log.Debugf("Adding %v container events to PCR%v measurement", len(measureList),
 						*hashChain[i].Pcr)
-					hashChain[i].Summary = nil
 					hashChain[i].Type = "PCR Eventlog"
 					hashChain[i].Events = measureList
 				}
@@ -325,12 +325,8 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	}
 
 	for _, elem := range tm.Artifacts {
-		if elem.Type == "PCR Summary" {
-			log.Tracef("PCR%v: %v", *elem.Pcr, hex.EncodeToString(elem.Summary))
-		} else if elem.Type == "PCR Eventlog" {
-			for _, event := range elem.Events {
-				log.Tracef("PCR%v Measured Event: %v", *elem.Pcr, hex.EncodeToString(event.Sha256))
-			}
+		for _, event := range elem.Events {
+			log.Tracef("PCR%v %v: %v", *elem.Pcr, elem.Type, hex.EncodeToString(event.Sha256))
 		}
 	}
 	log.Debug("Quote: ", hex.EncodeToString(tm.Evidence))
