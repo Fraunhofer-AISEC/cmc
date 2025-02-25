@@ -102,7 +102,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte, intelCache string,
 	sgxReferenceValue := referenceValues[0]
 
 	// Validate Parameters:
-	if sgxM.Evidence == nil || len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
+	if len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
 		log.Debugf("Invalid SGX Report")
 		result.Summary.SetErr(ar.ParseEvidence)
 		return result, false
