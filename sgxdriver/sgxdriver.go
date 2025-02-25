@@ -317,7 +317,7 @@ func downloadSgxCertChain(config *ar.DeviceConfig) ([]*x509.Certificate, error) 
 	}
 
 	// Perform untrusted GET request (ego has no access to root certificates in enclave)
-	// Should be ok, since root ca certificate fingerpint is checked by verifier
+	// Should be ok, since root ca certificate fingerprint is checked by verifier
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 	client := http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
 	resp, err := client.Do(req)
