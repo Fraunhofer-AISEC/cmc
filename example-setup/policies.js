@@ -9,7 +9,7 @@ if (obj.type != "Verification Result") {
     success = false;
 }
 if (!obj.raSuccessful) {
-    console.log("Attestation not sucessful")
+    console.log("Attestation not successful")
     success = false;
 }
 
