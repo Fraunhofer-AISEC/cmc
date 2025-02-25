@@ -28,7 +28,7 @@
                 "usages": [
                     "signing",
                     "digital signature",
-                    "content committment",
+                    "content commitment",
                     "code signing"
                 ],
                 "ocsp_url": "127.0.0.1:8888"
@@ -42,7 +42,7 @@
                 "usages": [
                     "signing",
                     "digital signature",
-                    "content committment",
+                    "content commitment",
                     "code signing"
                 ],
                 "ocsp_url": "127.0.0.1:8889"
