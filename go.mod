@@ -10,6 +10,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9
+	github.com/google/go-eventlog v0.0.2
 	github.com/google/go-sev-guest v0.11.1
 	github.com/google/go-tpm v0.9.1
 	github.com/invopop/jsonschema v0.12.0
@@ -22,7 +23,7 @@ require (
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	google.golang.org/grpc v1.56.3
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
