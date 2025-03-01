@@ -17,6 +17,7 @@ tools/measurefs/measurefs
 tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1
 tools/measure-bundle/measure-bundle
 tools/schema-generator/schema-generator
+tools/parse-tdx-mrs/parse-tdx-mrs
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
