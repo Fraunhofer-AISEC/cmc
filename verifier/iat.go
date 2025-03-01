@@ -131,20 +131,20 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certif
 	log.Debug("Verifying measurements")
 
 	// Verify that every reference value has a corresponding measurement
-	for _, ver := range referenceValues {
-		log.Tracef("Found reference value %v: %v", ver.Name, hex.EncodeToString(ver.Sha256))
-		if ver.Type != "IAS Reference Value" {
-			log.Tracef("IAS Reference Value invalid type %v", ver.Type)
+	for _, ref := range referenceValues {
+		log.Tracef("Found reference value %v: %v", ref.SubType, hex.EncodeToString(ref.Sha256))
+		if ref.Type != "IAS Reference Value" {
+			log.Tracef("IAS Reference Value invalid type %v", ref.Type)
 			result.Summary.SetErr(ar.RefValType)
 			return result, false
 		}
 		found := false
 		for _, swc := range iat.SwComponents {
-			if bytes.Equal(ver.Sha256, swc.MeasurementValue) {
+			if bytes.Equal(ref.Sha256, swc.MeasurementValue) {
 				result.Artifacts = append(result.Artifacts,
 					ar.DigestResult{
-						Name:     ver.Name,
-						Digest:   hex.EncodeToString(ver.Sha256),
+						SubType:  ref.SubType,
+						Digest:   hex.EncodeToString(ref.Sha256),
 						Success:  true,
 						Launched: true,
 					})
@@ -155,8 +155,8 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certif
 			ok = false
 			result.Artifacts = append(result.Artifacts,
 				ar.DigestResult{
-					Name:     ver.Name,
-					Digest:   hex.EncodeToString(ver.Sha256),
+					SubType:  ref.SubType,
+					Digest:   hex.EncodeToString(ref.Sha256),
 					Success:  false,
 					Launched: false,
 					Type:     "Reference Value",
@@ -172,7 +172,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certif
 		for _, ver := range referenceValues {
 			if bytes.Equal(ver.Sha256, swc.MeasurementValue) {
 				result.Artifacts = append(result.Artifacts, ar.DigestResult{
-					Name:     ver.Name,
+					SubType:  ver.SubType,
 					Digest:   hex.EncodeToString(swc.MeasurementValue),
 					Success:  true,
 					Launched: true,
@@ -183,7 +183,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certif
 		if !found {
 			ok = false
 			result.Artifacts = append(result.Artifacts, ar.DigestResult{
-				Name:     swc.MeasurementDescription,
+				SubType:  swc.MeasurementDescription,
 				Digest:   hex.EncodeToString(swc.MeasurementValue),
 				Success:  false,
 				Launched: true,

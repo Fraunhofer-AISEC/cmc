@@ -229,8 +229,6 @@ func dec(s string) []byte {
 	return b
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func conv(d []byte) *x509.Certificate {
 	input := d
 	block, _ := pem.Decode(d)
@@ -253,15 +251,15 @@ var (
 
 	validSummaryHashChain = []ar.Artifact{
 		{
-			Type: "PCR Summary",
-			Pcr:  ptr(1),
+			Type:  "PCR Summary",
+			Index: 1,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
 			},
 		},
 		{
-			Type: "PCR Summary",
-			Pcr:  ptr(4),
+			Type:  "PCR Summary",
+			Index: 4,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")},
 			},
@@ -270,15 +268,15 @@ var (
 
 	invalidSummaryHashChain = []ar.Artifact{
 		{
-			Type: "PCR Summary",
-			Pcr:  ptr(1),
+			Type:  "PCR Summary",
+			Index: 1,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
 			},
 		},
 		{
-			Type: "PCR Summary",
-			Pcr:  ptr(4),
+			Type:  "PCR Summary",
+			Index: 4,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")},
 			},
@@ -287,8 +285,8 @@ var (
 
 	validHashChain = []ar.Artifact{
 		{
-			Type: "PCR Eventlog",
-			Pcr:  ptr(1),
+			Type:  "PCR Eventlog",
+			Index: 1,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")},
 				{Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")},
@@ -302,8 +300,8 @@ var (
 			},
 		},
 		{
-			Type: "PCR Eventlog",
-			Pcr:  ptr(4),
+			Type:  "PCR Eventlog",
+			Index: 4,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")},
 				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
@@ -316,8 +314,8 @@ var (
 
 	invalidHashChain = []ar.Artifact{
 		{
-			Type: "PCR Eventlog",
-			Pcr:  ptr(1),
+			Type:  "PCR Eventlog",
+			Index: 1,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("ff5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")},
 				{Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")},
@@ -331,8 +329,8 @@ var (
 			},
 		},
 		{
-			Type: "PCR Eventlog",
-			Pcr:  ptr(4),
+			Type:  "PCR Eventlog",
+			Index: 4,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")},
 				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
@@ -360,97 +358,97 @@ var (
 
 	validReferenceValues = []ar.ReferenceValue{
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
-			Name:   "EV_CPU_MICROCODE",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
+			SubType: "EV_CPU_MICROCODE",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
-			Name:   "Unknown Event Type",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
+			SubType: "Unknown Event Type",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
-			Name:   "EV_NONHOST_CONFIG",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
+			SubType: "EV_NONHOST_CONFIG",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
-			Name:   "EV_SEPARATOR",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			SubType: "EV_SEPARATOR",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
-			Name:   "EV_PLATFORM_CONFIG_FLAGS",
-			Pcr:    &pcrs[1],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			SubType: "EV_PLATFORM_CONFIG_FLAGS",
+			Index:   pcrs[1],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
-			Name:   "EV_EFI_ACTION",
-			Pcr:    &pcrs[4],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
+			SubType: "EV_EFI_ACTION",
+			Index:   pcrs[4],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
-			Name:   "EV_SEPARATOR",
-			Pcr:    &pcrs[4],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			SubType: "EV_SEPARATOR",
+			Index:   pcrs[4],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
-			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:    &pcrs[4],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036"),
+			SubType: "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:   pcrs[4],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
-			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:    &pcrs[4],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05"),
+			SubType: "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:   pcrs[4],
 		},
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
-			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:    &pcrs[4],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025"),
+			SubType: "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:   pcrs[4],
 		},
 	}
 
 	invalidReferenceValues = []ar.ReferenceValue{
 		{
-			Type:   "TPM Reference Value",
-			Sha256: dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
-			Name:   "SINIT ACM Digest",
-			Pcr:    &pcrs[4],
+			Type:    "TPM Reference Value",
+			Sha256:  dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
+			SubType: "SINIT ACM Digest",
+			Index:   pcrs[4],
 		},
 	}
 
@@ -461,99 +459,99 @@ var (
 	validArtifacts = []ar.DigestResult{
 		{
 			Digest:   "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
-			Name:     "EV_CPU_MICROCODE",
-			Pcr:      ptr(1),
+			SubType:  "EV_CPU_MICROCODE",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
-			Name:     "Unknown Event Type",
-			Pcr:      ptr(1),
+			SubType:  "Unknown Event Type",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
-			Name:     "EV_NONHOST_CONFIG",
-			Pcr:      ptr(1),
+			SubType:  "EV_NONHOST_CONFIG",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
-			Name:     "EV_EFI_VARIABLE_BOOT",
-			Pcr:      ptr(1),
+			SubType:  "EV_EFI_VARIABLE_BOOT",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
-			Name:     "EV_EFI_VARIABLE_BOOT",
-			Pcr:      ptr(1),
+			SubType:  "EV_EFI_VARIABLE_BOOT",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
-			Name:     "EV_EFI_VARIABLE_BOOT",
-			Pcr:      ptr(1),
+			SubType:  "EV_EFI_VARIABLE_BOOT",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
-			Name:     "EV_EFI_VARIABLE_BOOT",
-			Pcr:      ptr(1),
+			SubType:  "EV_EFI_VARIABLE_BOOT",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-			Name:     "EV_SEPARATOR",
-			Pcr:      ptr(1),
+			SubType:  "EV_SEPARATOR",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
-			Name:     "EV_PLATFORM_CONFIG_FLAGS",
-			Pcr:      ptr(1),
+			SubType:  "EV_PLATFORM_CONFIG_FLAGS",
+			Index:    1,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
-			Name:     "EV_EFI_ACTION",
-			Pcr:      ptr(4),
+			SubType:  "EV_EFI_ACTION",
+			Index:    4,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-			Name:     "EV_SEPARATOR",
-			Pcr:      ptr(4),
+			SubType:  "EV_SEPARATOR",
+			Index:    4,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
-			Name:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:      ptr(4),
+			SubType:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:    4,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
-			Name:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:      ptr(4),
+			SubType:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:    4,
 			Success:  true,
 			Launched: true,
 		},
 		{
 			Digest:   "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
-			Name:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Pcr:      ptr(4),
+			SubType:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:    4,
 			Success:  true,
 			Launched: true,
 		},

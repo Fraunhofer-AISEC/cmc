@@ -74,18 +74,18 @@ func main() {
 	pcr := 11
 	configRef := ar.ReferenceValue{
 		Type:     "TPM Reference Value",
-		Name:     "OCI Runtime Config",
+		SubType:  "OCI Runtime Config",
 		Sha256:   configHash,
-		Pcr:      &pcr,
+		Index:    pcr,
 		Optional: true,
 	}
 	refs = append(refs, configRef)
 
 	rootfsRef := ar.ReferenceValue{
 		Type:     "TPM Reference Value",
-		Name:     "OCI Runtime Rootfs",
+		SubType:  "OCI Runtime Rootfs",
 		Sha256:   rootfsHash,
-		Pcr:      &pcr,
+		Index:    pcr,
 		Optional: true,
 	}
 	refs = append(refs, rootfsRef)

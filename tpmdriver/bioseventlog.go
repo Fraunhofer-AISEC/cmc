@@ -232,7 +232,6 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 		if !(len(sha384Digest) == SHA384_DIGEST_LEN || len(sha256Digest) == SHA256_DIGEST_LEN) {
 			return nil, errors.New("no SHA256 or SHA384 in TCG event entry")
 		}
-		pcrP := int(pcrIndex)
 
 		//skip event
 		if eventName == eventtypeToString(EV_NO_ACTION) {
@@ -240,8 +239,14 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 		}
 
 		//add to extends
-		extends = append(extends, ar.ReferenceValue{Type: EVENT_TYPE, Sha256: sha256Digest, Sha384: sha384Digest, Name: eventName,
-			Pcr: &pcrP, Snp: nil, EventData: extendedeventData})
+		extends = append(extends, ar.ReferenceValue{
+			Type:      EVENT_TYPE,
+			Index:     int(pcrIndex),
+			Sha256:    sha256Digest,
+			Sha384:    sha384Digest,
+			SubType:   eventName,
+			EventData: extendedeventData,
+		})
 
 	}
 
@@ -279,7 +284,12 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (a
 	digest := make([]byte, 32)
 	digest[31] = locality
 
-	entry := ar.ReferenceValue{Type: "INITVAL", Sha256: digest, Sha384: nil, Name: "TPM_PCR_INIT_VALUE", Pcr: &pcrIndex, Snp: nil, Description: "", EventData: nil}
+	entry := ar.ReferenceValue{
+		Type:    "INITVAL",
+		Sha256:  digest,
+		SubType: "TPM_PCR_INIT_VALUE",
+		Index:   pcrIndex,
+	}
 
 	//generate the Locality
 	return entry, skipEvent, nil

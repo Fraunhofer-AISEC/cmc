@@ -356,25 +356,25 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 	if !bytes.Equal(body.MrTd[:], []byte(tdxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     tdxReferenceValue.Name,
+				Type:     "Reference Value",
+				SubType:  tdxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(tdxReferenceValue.Sha256),
 				Success:  false,
 				Launched: false,
-				Type:     "Reference Value",
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     tdxReferenceValue.Name,
+				Type:     "Measurement",
+				SubType:  tdxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(body.MrTd[:]),
 				Success:  false,
 				Launched: true,
-				Type:     "Measurement",
 			})
 		return fmt.Errorf("MrTd mismatch. Expected: %v, Got. %v", tdxReferenceValue.Sha256, body.MrTd)
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     tdxReferenceValue.Name,
+				SubType:  tdxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(body.MrTd[:]),
 				Success:  true,
 				Launched: true,
@@ -383,63 +383,63 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Name:     "MrSignerSeam",
+			SubType:  "MrSignerSeam",
 			Digest:   hex.EncodeToString(body.MrSignerSeam[:]),
 			Success:  bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner[:], body.MrSignerSeam[:]),
 			Launched: true,
 			Type:     "Measurement",
 		},
 		ar.DigestResult{
-			Name:     "MrSeam",
+			SubType:  "MrSeam",
 			Digest:   hex.EncodeToString(body.MrSeam[:]),
 			Success:  bytes.Equal(body.MrSeam[:], tdxReferenceValue.Tdx.TdMeas.MrSeam),
 			Launched: true,
 			Type:     "Measurement",
 		},
 		ar.DigestResult{
-			Name:     "RtMr0",
+			SubType:  "RtMr0",
 			Digest:   hex.EncodeToString(body.RtMr0[:]),
 			Success:  recalculateRtMr(body.RtMr0[:], tdxReferenceValue.Tdx.TdMeas.RtMr0),
 			Launched: true,
 			Type:     "Firmware Measurement",
 		},
 		ar.DigestResult{
-			Name:     "RtMr1",
+			SubType:  "RtMr1",
 			Digest:   hex.EncodeToString(body.RtMr1[:]),
 			Success:  recalculateRtMr(body.RtMr1[:], tdxReferenceValue.Tdx.TdMeas.RtMr1),
 			Launched: true,
 			Type:     "BIOS Measurement",
 		},
 		ar.DigestResult{
-			Name:     "RtMr2",
+			SubType:  "RtMr2",
 			Digest:   hex.EncodeToString(body.RtMr2[:]),
 			Success:  recalculateRtMr(body.RtMr2[:], tdxReferenceValue.Tdx.TdMeas.RtMr2),
 			Launched: true,
 			Type:     "OS Measurement",
 		},
 		ar.DigestResult{
-			Name:     "RtMr3",
+			SubType:  "RtMr3",
 			Digest:   hex.EncodeToString(body.RtMr3[:]),
 			Success:  recalculateRtMr(body.RtMr3[:], tdxReferenceValue.Tdx.TdMeas.RtMr3),
 			Launched: true,
 			Type:     "Runtime Measurement",
 		},
 		ar.DigestResult{
-			Name:     "MrOwner",
+			SubType:  "MrOwner",
 			Digest:   hex.EncodeToString(body.MrOwner[:]),
 			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwner[:], body.MrOwner[:]),
 			Launched: true,
 			Type:     "Software-defined ID",
 		},
 		ar.DigestResult{
-			Name:     "MrOwnerConfig",
+			SubType:  "MrOwnerConfig",
 			Digest:   hex.EncodeToString(body.MrOwnerConfig[:]),
 			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrOwnerConfig[:], body.MrOwnerConfig[:]),
 			Launched: true,
 			Type:     "Software-defined ID",
 		},
 		ar.DigestResult{
-			Name:     "MrConfigId",
+			SubType:  "MrConfigId",
 			Digest:   hex.EncodeToString(body.MrConfigId[:]),
 			Success:  bytes.Equal(tdxReferenceValue.Tdx.TdId.MrConfigId[:], body.MrConfigId[:]),
 			Launched: true,
@@ -508,9 +508,9 @@ func verifyTdxQuoteBody(body *TdxReportBody, tcbInfo *TcbInfo,
 			result.TdxResult.XfamCheck.Claimed, result.TdxResult.XfamCheck.Measured)
 	}
 
-	for _, v := range result.Artifacts {
-		if !v.Success {
-			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Got: %v)", v.Name, v.Digest)
+	for _, a := range result.Artifacts {
+		if !a.Success {
+			return fmt.Errorf("TDX Quote Body Verification failed. %v: (Got: %v)", a.SubType, a.Digest)
 		}
 	}
 

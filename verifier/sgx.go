@@ -281,66 +281,66 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *TcbInfo,
 	if !bytes.Equal(body.MRENCLAVE[:], []byte(sgxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     sgxReferenceValue.Name,
+				Type:     "Reference Value",
+				SubType:  sgxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(sgxReferenceValue.Sha256[:]),
 				Success:  false,
 				Launched: false,
-				Type:     "Reference Value",
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     sgxReferenceValue.Name,
+				Type:     "Measurement",
+				SubType:  sgxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(body.MRENCLAVE[:]),
 				Success:  false,
 				Launched: false,
-				Type:     "Measurement",
 			})
 		return fmt.Errorf("MRENCLAVE mismatch. Expected: %v, Got. %v", sgxReferenceValue.Sha256, body.MRENCLAVE)
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     sgxReferenceValue.Name,
+				Type:     "Measurement",
+				SubType:  sgxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(body.MRENCLAVE[:]),
 				Success:  true,
 				Launched: true,
-				Type:     "Measurement",
 			})
 	}
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Name:     "MrSigner",
+			Type:     "Measurement",
+			SubType:  "MrSigner",
 			Digest:   hex.EncodeToString(body.MRSIGNER[:]),
 			Success:  strings.EqualFold(sgxReferenceValue.Sgx.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
 			Launched: true,
-			Type:     "Measurement",
 		},
 		ar.DigestResult{
-			Name:     "CpuSvn",
+			Type:     "Security Version",
+			SubType:  "CpuSvn",
 			Digest:   hex.EncodeToString(body.CPUSVN[:]),
 			Success:  bytes.Compare(sgxExtensions.Tcb.Value.CpuSvn.Value, body.CPUSVN[:]) <= 0,
 			Launched: true,
-			Type:     "Security Version",
 		},
 		ar.DigestResult{
-			Name:     "IsvProdId",
+			Type:     "Product ID",
+			SubType:  "IsvProdId",
 			Digest:   strconv.Itoa(int(body.ISVProdID)),
 			Success:  sgxReferenceValue.Sgx.IsvProdId == body.ISVProdID,
 			Launched: true,
-			Type:     "Product ID",
 		},
 		ar.DigestResult{
-			Name:     "IsvSvn",
+			Type:     "Security Version",
+			SubType:  "IsvSvn",
 			Digest:   strconv.Itoa(int(body.ISVSVN)),
 			Success:  sgxReferenceValue.Sgx.IsvSvn == body.ISVSVN,
 			Launched: true,
-			Type:     "Security Version",
 		},
 	)
 
 	for _, v := range result.Artifacts {
 		if !v.Success {
-			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Got: %v)", v.Name, v.Digest)
+			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Got: %v)", v.SubType, v.Digest)
 		}
 	}
 
