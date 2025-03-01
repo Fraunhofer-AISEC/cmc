@@ -192,22 +192,22 @@ var (
 
 	validUbuntuRefVal = ar.ReferenceValue{
 		Type:     "SW Reference Value",
+		SubType:  "OCI Runtime Bundle Rootfs Digest: ubuntu:24.04",
 		Sha256:   dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e"),
-		Name:     "OCI Runtime Bundle Rootfs Digest: ubuntu:24.04",
 		Optional: true,
 	}
 
 	validNginxRefVal = ar.ReferenceValue{
 		Type:     "SW Reference Value",
+		SubType:  "OCI Runtime Bundle Rootfs Digest: nginx:latest",
 		Sha256:   dec("627a04fe9d8c2b32aa07b6363fbd9ed0f9a533ff0ea9a25804f9cbdd7faba068"),
-		Name:     "OCI Runtime Bundle Rootfs Digest: nginx:latest",
 		Optional: true,
 	}
 
 	invalidSwRefVal = ar.ReferenceValue{
 		Type:     "SW Reference Value",
+		SubType:  "OCI Runtime Bundle Digest",
 		Sha256:   dec("ff5ed62e8fb85decea88ffee33274245d2924e2e961b3cc95be6e09a6ae5a25d"),
-		Name:     "OCI Runtime Bundle Digest",
 		Optional: true,
 	}
 

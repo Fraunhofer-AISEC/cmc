@@ -28,7 +28,7 @@ import (
 
 // The attestation report and verification result version
 const (
-	arVersion = "1.0.0"
+	arVersion = "1.1.0"
 )
 
 func GetVersion() string {
@@ -135,15 +135,18 @@ type CertConfig struct {
 }
 
 // ReferenceValue represents the attestation report
-// element of types 'SNP Reference Value', 'TPM Reference Value', 'TDX Reference Value', 'SGX Reference Value'
-// and 'SW Reference Value'
+// element of types 'SNP Reference Value', 'TPM Reference Value', 'TDX Reference Value',
+// 'SGX Reference Value' and 'SW Reference Value'. The Index is the unique identifier for the
+// reference value: This is the number of the PCR in case of TPM reference values,
+// the MR index according to UEFI Spec 2.10 Section 38.4.1 in case of TDX reference values, and
+// simply a monotonic counter for other reference values.
 type ReferenceValue struct {
 	Type        string      `json:"type" cbor:"0,keyasint"`
-	Sha256      HexByte     `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
-	Sha384      HexByte     `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
-	Name        string      `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
-	Optional    bool        `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
-	Pcr         *int        `json:"pcr,omitempty" cbor:"5,keyasint,omitempty"`
+	SubType     string      `json:"subtype" cbor:"1,keyasint,omitempty"`
+	Index       int         `json:"index" cbor:"2,keyasint"`
+	Sha256      HexByte     `json:"sha256,omitempty" cbor:"3,keyasint,omitempty"`
+	Sha384      HexByte     `json:"sha384,omitempty" cbor:"4,keyasint,omitempty"`
+	Optional    bool        `json:"optional,omitempty" cbor:"5,keyasint,omitempty"`
 	Snp         *SnpDetails `json:"snp,omitempty" cbor:"6,keyasint,omitempty"`
 	Tdx         *TDXDetails `json:"tdx,omitempty" cbor:"7,keyasint,omitempty"`
 	Sgx         *SGXDetails `json:"sgx,omitempty" cbor:"8,keyasint,omitempty"`
@@ -160,17 +163,18 @@ type Validity struct {
 }
 
 // Artifact represents the digests of a measurement.
-// If the type is 'PCR Summary', 'Events' contains the final PCR value of PCR 'Pcr'.
+// If the type is 'PCR Summary', 'Events' contains the final PCR value of PCR 'Pcr' and 'Index'
+// contains the number of the PCR.
 // If the type is 'PCR Eventlog', 'Events' contains a list of the extends that lead to the final
-// PCR value. The list is retrieved by the prover, e.g., from the TPM binary bios measurements
-// list or the IMA runtime measurements list.
+// PCR value and 'Index' contains the number of the PCR. The list is retrieved by the prover, e.g.,
+// from the TPM binary bios measurements list or the IMA runtime measurements list.
 // If the type is 'SW Eventlog', 'Events' contains a list of digests that have been recorded as
 // SW measurements
 // If the type is 'TDX Collateral', 'Events' contains the TDX collateral, which includes the
 // TDX TCB info, the quoting enclave identity and the certicate revocation lists.
 type Artifact struct {
 	Type   string         `json:"type" cbor:"0,keyasint"`
-	Pcr    *int           `json:"pcr,omitempty" cbor:"1,keyasint,omitempty"`
+	Index  int            `json:"index" cbor:"1,keyasint"`
 	Events []MeasureEvent `json:"events,omitempty" cbor:"3,keyasint,omitempty"`
 }
 

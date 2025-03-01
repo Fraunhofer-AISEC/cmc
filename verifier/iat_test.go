@@ -180,20 +180,20 @@ var (
 	validNspeMeasurement, _ = hex.DecodeString("73deb833155c9c317d838b5368b6a63bd38706fa874e874c1b5affe4571b348b")
 
 	validSpeReferenceValue = ar.ReferenceValue{
-		Type:   "IAS Reference Value",
-		Name:   "SPE Measurement",
-		Sha256: validSpeMeasurement,
+		Type:    "IAS Reference Value",
+		SubType: "SPE Measurement",
+		Sha256:  validSpeMeasurement,
 	}
 
 	invalidSpeReferenceValue = ar.ReferenceValue{
-		Type:   "IAS Reference Value",
-		Name:   "SPE Measurement",
-		Sha256: invalidSpeMeasurement,
+		Type:    "IAS Reference Value",
+		SubType: "SPE Measurement",
+		Sha256:  invalidSpeMeasurement,
 	}
 
 	validNspeReferenceValue = ar.ReferenceValue{
-		Type:   "IAS Reference Value",
-		Name:   "NSPE Measurement",
-		Sha256: validNspeMeasurement,
+		Type:    "IAS Reference Value",
+		SubType: "NSPE Measurement",
+		Sha256:  validNspeMeasurement,
 	}
 )

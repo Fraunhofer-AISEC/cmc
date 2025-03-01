@@ -104,15 +104,17 @@ type TdxResult struct {
 }
 
 // DigestResult represents a generic result for a digest that was processed
-// during attestation
+// during attestation. The Index is the unique identifier for the result: This is the number of the
+// PCR in case of TPM reference values, the MR index according to UEFI Spec 2.10 Section 38.4.1 in
+// case of TDX reference values, and simply a monotonic counter for other reference values.
 type DigestResult struct {
 	Success     bool       `json:"success" cbor:"0,keyasint"`
 	Launched    bool       `json:"launched" cbor:"1,keyasint"`
-	Pcr         *int       `json:"pcr,omitempty" cbor:"2,keyasint,omitempty"`
-	Name        string     `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
-	Digest      string     `json:"digest,omitempty" cbor:"4,keyasint,omitempty"`
-	Description string     `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
-	Type        string     `json:"type,omitempty" cbor:"6,keyasint,omitempty"`
+	Type        string     `json:"type,omitempty" cbor:"2,keyasint,omitempty"`
+	SubType     string     `json:"subtype,omitempty" cbor:"3,keyasint,omitempty"`
+	Index       int        `json:"index" cbor:"4,keyasint"`
+	Digest      string     `json:"digest,omitempty" cbor:"5,keyasint,omitempty"`
+	Description string     `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
 	EventData   *EventData `json:"eventData,omitempty" cbor:"7,keyasint,omitempty"`
 	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"8,keyasint,omitempty"`
 }
@@ -698,10 +700,10 @@ func (r *VerificationResult) PrintErr() {
 			for _, a := range m.Artifacts {
 				if !a.Success {
 					details := ""
-					if a.Pcr != nil {
-						details = fmt.Sprintf("PCR%v", *a.Pcr)
+					if m.Type == "TPM Measurement" {
+						details = fmt.Sprintf("PCR%v", a.Index)
 					}
-					log.Warnf("%v Measurement %v: %v verification failed", details, a.Name, a.Digest)
+					log.Warnf("%v Measurement %v: %v verification failed", details, a.SubType, a.Digest)
 				}
 			}
 			if m.TpmResult != nil {
@@ -782,7 +784,7 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
 	// Get OCI runtime config from manifest
 	m, err := r.GetManifest()
 	if err != nil {
-		log.Warnf("%v: %v: %v", r.Type, r.Name, err)
+		log.Warnf("%v: %v: %v", r.Type, r.SubType, err)
 		return nil
 	}
 

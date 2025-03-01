@@ -39,11 +39,11 @@ import (
 // variables for Test_collectReferenceValues
 var (
 	refs = []ar.ReferenceValue{
-		{Type: "TPM Reference Value", Name: "TPM1"},
-		{Type: "TPM Reference Value", Name: "TPM2"},
-		{Type: "SNP Reference Value", Name: "SNP1"},
-		{Type: "SW Reference Value", Name: "SW1"},
-		{Type: "SW Reference Value", Name: "SW2"},
+		{Type: "TPM Reference Value", SubType: "TPM1"},
+		{Type: "TPM Reference Value", SubType: "TPM2"},
+		{Type: "SNP Reference Value", SubType: "SNP1"},
+		{Type: "SW Reference Value", SubType: "SW1"},
+		{Type: "SW Reference Value", SubType: "SW2"},
 	}
 
 	refMap = map[string][]ar.ReferenceValue{
@@ -469,12 +469,12 @@ func Test_collectReferenceValues(t *testing.T) {
 				for _, wantedrefval := range wantedrefvals {
 					found := false
 					for _, gotrefval := range got[wantedkey] {
-						if gotrefval.Name == wantedrefval.Name {
+						if gotrefval.SubType == wantedrefval.SubType {
 							found = true
 						}
 					}
 					if !found {
-						t.Errorf("collectReferenceValues() failed to find %v", wantedrefval.Name)
+						t.Errorf("collectReferenceValues() failed to find %v", wantedrefval.SubType)
 					}
 				}
 			}
@@ -677,7 +677,7 @@ func TestVerify(t *testing.T) {
 
 			report := ar.AttestationReport{
 				Type:    "Attestation Report",
-				Version: "1.0.0",
+				Version: "1.1.0",
 				Metadata: []ar.MetadataDigest{
 					rtmManifestDigest, osManifestDigest, appManifestDigest, deviceDescriptionDigest,
 				},

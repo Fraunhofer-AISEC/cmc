@@ -106,7 +106,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 				Type:       "Reference Value",
 				Success:    ref.Optional, // Only fail attestation if component is mandatory
 				Launched:   false,
-				Name:       ref.Name,
+				SubType:    ref.SubType,
 				Digest:     hex.EncodeToString(ref.Sha256),
 				CtrDetails: ar.GetCtrDetailsFromRefVal(&ref, s),
 			}
@@ -114,7 +114,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 
 			// Only fail attestation if component is mandatory
 			if !ref.Optional {
-				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %v)", ref.Name, hex.EncodeToString(ref.Sha256))
+				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %v)", ref.SubType, hex.EncodeToString(ref.Sha256))
 				ok = false
 			}
 		}
@@ -150,14 +150,14 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 					}
 
 					found = true
-					nameInfo := ref.Name
-					if event.EventName != "" && !strings.EqualFold(ref.Name, event.EventName) {
+					nameInfo := ref.SubType
+					if event.EventName != "" && !strings.EqualFold(ref.SubType, event.EventName) {
 						nameInfo += ": " + event.EventName
 					}
 					r := ar.DigestResult{
 						Success:    validateOk,
 						Launched:   true,
-						Name:       nameInfo,
+						SubType:    nameInfo,
 						Digest:     hex.EncodeToString(event.Sha256),
 						CtrDetails: event.CtrData,
 					}
@@ -174,7 +174,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 					Type:       "Measurement",
 					Success:    false,
 					Launched:   true,
-					Name:       event.EventName,
+					SubType:    event.EventName,
 					Digest:     hex.EncodeToString(event.Sha256),
 					CtrDetails: event.CtrData,
 				}
