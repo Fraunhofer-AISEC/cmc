@@ -61,7 +61,7 @@ for path in "${input}/"*; do
 
     # Convert to CBOR if specified, otherwise just copy
     if [[ "${ser,,}" = "cbor" ]]; then
-      cmc-converter \
+      metaconv \
         -in "${path}" \
         -out "${tmp}/${out_file}" \
         -outform cbor
@@ -84,7 +84,7 @@ for path in "${input}/"*; do
 
 
     # Sign metadata object
-    cmc-signing-tool \
+    metasign \
       -in "${tmp}/${out_file}" \
       -out "${out}/${out_file}" \
       -keys "${keys}" \

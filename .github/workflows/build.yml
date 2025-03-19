@@ -26,10 +26,10 @@ jobs:
           pushd testtool
           go build
           popd
-          pushd tools/cmc-signing-tool
+          pushd tools/metasign
           go build
           popd
-          pushd tools/cmc-converter
+          pushd tools/metaconv
           go build
           popd
       - name: Vet Check
@@ -57,14 +57,14 @@ jobs:
         with:
           name: testtool
           path: testtool/testtool
-      - name: "Upload cmc-converter"
+      - name: "Upload metaconv"
         uses: actions/upload-artifact@v4
         with:
-          name: cmc-converter
-          path: tools/cmc-converter/cmc-converter
-      - name: "Upload cmc-signing-tool"
+          name: metaconv
+          path: tools/metaconv/metaconv
+      - name: "Upload metasign"
         uses: actions/upload-artifact@v4
         with:
-          name: cmc-signing-tool
-          path: tools/cmc-signing-tool/cmc-signing-tool
+          name: metasign
+          path: tools/metasign/metasign
 

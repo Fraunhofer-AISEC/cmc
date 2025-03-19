@@ -10,8 +10,8 @@ est/estserver/estserver
 **/nonce
 **/attestation-report
 **/attestation-result.json
-tools/cmc-signing-tool/cmc-signing-tool
-tools/cmc-converter/cmc-converter
+tools/metasign/metasign
+tools/metaconv/metaconv
 tools/fmspc-retrieval-tool/fmspc-retrieval-tool
 tools/measurefs/measurefs
 tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1

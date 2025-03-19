@@ -91,7 +91,7 @@ to CBOR before signing them. To convert a metadata file from JSON to CBOR:
 
 ```sh
 # Convert JSON to CBOR using the converter-tool
-cmc/tools/cmc-converter/cmc-converter -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
+cmc/tools/metaconv/metaconv -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
 ```
 
 #### Reference Values
@@ -214,10 +214,10 @@ CHAIN=cmc-data/pki/signing-cert.pem,cmc-data/pki/ca.pem
 
 mkdir -p $OUT
 
-cmc-signing-tool -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN
-cmc-signing-tool -in $IN/device.config.json       -out $OUT/device.config.json       -keys $KEY -x5cs $CHAIN
+metasign -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN
+metasign -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN
+metasign -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN
+metasign -in $IN/device.config.json       -out $OUT/device.config.json       -keys $KEY -x5cs $CHAIN
 ```
 
 ### 5. Adjust the configuration files
