@@ -140,16 +140,16 @@ if [[ "${ser,,}" = "json" ]]; then
   cp "${input}/device.config.json"       "${tmp}/device.config.json"
 elif [[ "${ser,,}" = "cbor" ]]; then
   echo "using cbor serialiation"
-  cmc-converter -in "${input}/rtm.manifest.json"        -out "${tmp}/rtm.manifest.cbor"       -outform cbor
-  cmc-converter -in "${input}/os.manifest.json"         -out "${tmp}/os.manifest.cbor"        -outform cbor
-  cmc-converter -in "${input}/device.description.json"  -out "${tmp}/device.description.cbor" -outform cbor
-  cmc-converter -in "${input}/device.config.json"       -out "${tmp}/device.config.cbor"      -outform cbor
+  metaconv -in "${input}/rtm.manifest.json"        -out "${tmp}/rtm.manifest.cbor"       -outform cbor
+  metaconv -in "${input}/os.manifest.json"         -out "${tmp}/os.manifest.cbor"        -outform cbor
+  metaconv -in "${input}/device.description.json"  -out "${tmp}/device.description.cbor" -outform cbor
+  metaconv -in "${input}/device.config.json"       -out "${tmp}/device.config.cbor"      -outform cbor
 else
   echo "serialization format ${ser} is not supported"
   exit 1
 fi
 
-cmc-signing-tool -in "${tmp}/rtm.manifest.${ser}"        -out "${out}/rtm.manifest.${ser}"        -keys "${key}" -x5cs "${chain}"
-cmc-signing-tool -in "${tmp}/os.manifest.${ser}"         -out "${out}/os.manifest.${ser}"         -keys "${key}" -x5cs "${chain}"
-cmc-signing-tool -in "${tmp}/device.description.${ser}"  -out "${out}/device.description.${ser}"  -keys "${key}" -x5cs "${chain}"
-cmc-signing-tool -in "${tmp}/device.config.${ser}"       -out "${out}/device.config.${ser}"       -keys "${key}" -x5cs "${chain}"
+metasign -in "${tmp}/rtm.manifest.${ser}"        -out "${out}/rtm.manifest.${ser}"        -keys "${key}" -x5cs "${chain}"
+metasign -in "${tmp}/os.manifest.${ser}"         -out "${out}/os.manifest.${ser}"         -keys "${key}" -x5cs "${chain}"
+metasign -in "${tmp}/device.description.${ser}"  -out "${out}/device.description.${ser}"  -keys "${key}" -x5cs "${chain}"
+metasign -in "${tmp}/device.config.${ser}"       -out "${out}/device.config.${ser}"       -keys "${key}" -x5cs "${chain}"
