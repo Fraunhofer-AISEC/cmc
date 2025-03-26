@@ -27,6 +27,7 @@ import (
 	"go.mozilla.org/pkcs7"
 
 	est "github.com/Fraunhofer-AISEC/cmc/est/common"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/sirupsen/logrus"
 )
 
@@ -287,7 +288,46 @@ func (c *Client) TpmCertifyEnroll(
 	return certs[0], nil
 }
 
-func (c *Client) SnpEnroll(addr string, ChipId [64]byte, Tcb uint64,
+func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certificate, error) {
+
+	// TODO mandate server authentication in the future
+
+	buf, contentType, err := est.EncodeMultiPart(
+		[]est.MimeMultipart{
+			{ContentType: est.MimeTypeOctetStream, Data: []byte{byte(akType)}},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode multipart: %w", err)
+	}
+
+	body := io.NopCloser(buf)
+
+	method := http.MethodPost
+	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.SnpCaCertsEndpoint
+	accepts := est.MimeTypePKCS7
+	transferEncoding := est.EncodingTypeBase64
+
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
+	}
+
+	certs, err := parseSimplePkiResponse(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse simple PKI response: %w", err)
+	}
+
+	return certs, nil
+}
+
+func (c *Client) GetSnpVcek(addr string, ChipId [64]byte, Tcb uint64,
 ) (*x509.Certificate, error) {
 
 	// TODO mandate server authentication in the future
@@ -305,7 +345,7 @@ func (c *Client) SnpEnroll(addr string, ChipId [64]byte, Tcb uint64,
 	body := io.NopCloser(buf)
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.SnpEnrollEndpoint
+	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.SnpVcekEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 

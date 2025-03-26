@@ -24,14 +24,10 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
-
-	"net/http"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
@@ -57,9 +53,6 @@ const (
 )
 
 var (
-	milanUrlVcek = "https://kdsintf.amd.com/vcek/v1/Milan/cert_chain"
-	milanUrlVlek = "https://kdsintf.amd.com/vlek/v1/Milan/cert_chain"
-
 	vlekUuid = []byte{0xa8, 0x07, 0x4b, 0xc2, 0xa2, 0x5a, 0x48, 0x3e, 0xaa, 0xe6, 0x39, 0xc0, 0x45, 0xa0, 0xb8, 0xa1}
 )
 
@@ -277,49 +270,6 @@ func getVlek() ([]byte, error) {
 	return nil, errors.New("could not find VLEK in certificates")
 }
 
-func getCerts(url string, format certFormat) ([]*x509.Certificate, int, error) {
-
-	log.Debugf("Requesting Cert from %v", url)
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, 0, fmt.Errorf("error HTTP GET: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, resp.StatusCode, fmt.Errorf("HTTP Response Status: %v (%v)", resp.StatusCode, resp.Status)
-	}
-
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("failed to read HTTP body: %w", err)
-	}
-
-	var data []byte
-	if format == PEM {
-		rest := content
-		var block *pem.Block
-		for {
-			block, rest = pem.Decode(rest)
-			if block == nil {
-				break
-			}
-			data = append(data, block.Bytes...)
-
-		}
-	} else if format == DER {
-		data = content
-	} else {
-		return nil, resp.StatusCode, fmt.Errorf("internal error: Unknown certificate format %v", format)
-	}
-
-	certs, err := x509.ParseCertificates(data)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("failed to parse x509 Certificate: %w", err)
-	}
-	return certs, resp.StatusCode, nil
-}
-
 func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
@@ -363,15 +313,13 @@ func fetchAk(addr string) ([]*x509.Certificate, error) {
 	client := est.NewClient(nil)
 
 	var signingCert *x509.Certificate
-	var caUrl string
 	if akType == verifier.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		signingCert, err = client.SnpEnroll(addr, s.ChipId, s.CurrentTcb)
+		signingCert, err = client.GetSnpVcek(addr, s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
-		caUrl = milanUrlVcek
 	} else if akType == verifier.VLEK {
 		// VLEK is used, in this case we fetch the VLEK from the host
 		vlek, err := getVlek()
@@ -384,20 +332,15 @@ func fetchAk(addr string) ([]*x509.Certificate, error) {
 			return nil, fmt.Errorf("failed to parse VLEK")
 		}
 		log.Debugf("Successfully parsed VLEK CN=%v", signingCert.Subject.CommonName)
-		caUrl = milanUrlVlek
 	} else {
 		return nil, fmt.Errorf("internal error: signing cert not initialized")
 	}
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
-	ca, _, err := getCerts(caUrl, PEM)
+	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), addr)
+	ca, err := client.GetSnpCa(addr, akType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP certificate chain: %w", err)
-	}
-	if len(ca) != 2 {
-		return nil,
-			fmt.Errorf("failed to get SNP certificate chain. Expected 2 certificates, got %v",
-				len(ca))
+		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
 
 	return append([]*x509.Certificate{signingCert}, ca...), nil
