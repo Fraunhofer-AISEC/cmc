@@ -76,16 +76,17 @@ an SNP attestation report as well as the certificate chain for this attestation 
 respective AMD servers.
 
 __sgxdriver:__
-The *sgxdriver* interfaces with the Intel SGX CPU. It retrieves SGX measurements in the form of an
-SGX attestation report signed by the SGX quoting enclave. It implements a small caching mechanism to
-fetch and store the certificate chain used for report verification from the Intel SGX API.
+The *sgxdriver* interfaces with an Intel SGX-capable CPU. It retrieves SGX measurements in the form
+of an SGX Quote signed by the SGX quoting enclave. It implements a small caching mechanism to fetch
+and store the certificate chain used for report verification from the Intel SGX API.
 
 __tdxdriver:__
-*Will be implemented as soon as Intel TDX hardware is available.*
+The *tdxdriver* interfaces with an Intel TDX-capable CPU. It retrieves TDX measurements in the form
+of a TDX Quote signed by the SGQ quoting enclave.
 
 __swdriver:__
-The *swdriver* simply creates keys in software for testing purposes. Currently, it does not implement
-a measurement functionality. **Note**: This should mainly be used for testing purposes.
+The *swdriver* creates keys in software for testing purposes. It can retrieve user space container
+measurements.
 
 __estserver:__
 During provisioning, the cmcd requires interaction with a provisioning server (*estserver*). The
