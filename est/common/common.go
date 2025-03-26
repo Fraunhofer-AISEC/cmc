@@ -35,6 +35,8 @@ import (
 const (
 	EndpointPrefix            = "/.well-known/est"
 	CacertsEndpoint           = "/cacerts"
+	SnpCaCertsEndpoint        = "/snpcacerts"
+	SnpVcekEndpoint           = "/snpvcek"
 	CsrattrsEndpoint          = "/csrattrs"
 	EnrollEndpoint            = "/simpleenroll"
 	HealthCheckEndpoint       = "/healthcheck"
@@ -42,7 +44,6 @@ const (
 	ServerkeygenEndpoint      = "/serverkeygen"
 	TpmActivateEnrollEndpoint = "/tpmactivateenroll"
 	TpmCertifyEnrollEndpoint  = "/tpmcertifyenroll"
-	SnpEnrollEndpoint         = "/snpenroll"
 )
 
 // HTTP header constants

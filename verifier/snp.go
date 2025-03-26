@@ -80,13 +80,24 @@ const (
 	signature_offset = 0x2A0
 )
 
-type AkType int
+type AkType byte
 
 const (
 	UNKNOWN = iota
 	VCEK
 	VLEK
 )
+
+func (t AkType) String() string {
+	switch t {
+	case VCEK:
+		return "vcek"
+	case VLEK:
+		return "vlek"
+	default:
+		return "unknown"
+	}
+}
 
 func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,

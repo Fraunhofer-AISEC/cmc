@@ -34,6 +34,7 @@ import (
 	"time"
 
 	est "github.com/Fraunhofer-AISEC/cmc/est/common"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
 	"go.mozilla.org/pkcs7"
@@ -99,13 +100,15 @@ func NewServer(c *config) (*Server, error) {
 	simpleenrollEndpoint := est.EndpointPrefix + est.EnrollEndpoint
 	tpmActivateEnrollEndpoint := est.EndpointPrefix + est.TpmActivateEnrollEndpoint
 	tpmCertifyEnrollEndpoint := est.EndpointPrefix + est.TpmCertifyEnrollEndpoint
-	snpEnrollEndpoint := est.EndpointPrefix + est.SnpEnrollEndpoint
+	snpVcekEndpoint := est.EndpointPrefix + est.SnpVcekEndpoint
+	snpCaCertsEndpoint := est.EndpointPrefix + est.SnpCaCertsEndpoint
 
 	http.HandleFunc(cacertsEndpoint, server.handleCacerts)
 	http.HandleFunc(simpleenrollEndpoint, server.handleSimpleenroll)
 	http.HandleFunc(tpmActivateEnrollEndpoint, server.handleTpmActivateEnroll)
 	http.HandleFunc(tpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
-	http.HandleFunc(snpEnrollEndpoint, server.handleSnpEnroll)
+	http.HandleFunc(snpVcekEndpoint, server.handleSnpVcek)
+	http.HandleFunc(snpCaCertsEndpoint, server.handleSnpCa)
 
 	err := httpHandleMetadata(c.HttpFolder)
 	if err != nil {
@@ -128,7 +131,7 @@ func (s *Server) Serve() {
 
 func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received 'cacerts' %v request from %v", req.Method, req.RemoteAddr)
+	log.Debugf("Received /cacerts %v request from %v", req.Method, req.RemoteAddr)
 
 	if strings.Compare(req.Method, "GET") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for cacerts request", req.Method)
@@ -151,7 +154,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received 'simpleenroll' request from %v", req.RemoteAddr)
+	log.Debugf("Received /simpleenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for simpleenroll request", req.Method)
@@ -199,7 +202,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 
 func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received 'tpmactivateenroll' request from %v", req.RemoteAddr)
+	log.Debugf("Received /tpmactivateenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for tpmactivateenroll request", req.Method)
@@ -265,11 +268,11 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	// AK is a restricted, fixedTPM, fixedParent key
 	secret, encryptedCredentials, err := params.Generate()
 	if err != nil {
-		writeHttpErrorf(w, "failed to generate AK credentials: '%v'", err)
+		writeHttpErrorf(w, "failed to generate AK credentials: %v", err)
 		return
 	}
 
-	// Verify that activated AK is actually the certificate's public key
+	// Verify that activated AK is actually the certificate public key
 	err = verifyTpmCsr(akPublic, csr)
 	if err != nil {
 		writeHttpErrorf(w, "failed to verify AK: %v", err)
@@ -310,7 +313,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 
 func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received 'tpmcertifyenroll' request from %v", req.RemoteAddr)
+	log.Debugf("Received /tpmcertifyenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for tpmcertifyenroll request", req.Method)
@@ -354,7 +357,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		writeHttpErrorf(w, "failed to verify IK: %v", err)
 	}
 
-	// Verify that certified IK is actually the CSR's public key
+	// Verify that certified IK is actually the CSR public key
 	err = verifyTpmCsr(ikPublic, csr)
 	if err != nil {
 		writeHttpErrorf(w, "failed to verify IK: %v", err)
@@ -381,9 +384,9 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 }
 
-func (s *Server) handleSnpEnroll(w http.ResponseWriter, req *http.Request) {
+func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 
-	log.Tracef("Received 'snpenroll' request from %v", req.RemoteAddr)
+	log.Debugf("Received /snpvcek request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for snpenroll request", req.Method)
@@ -426,6 +429,51 @@ func (s *Server) handleSnpEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
+
+	log.Debugf("Received /snpca request from %v", req.RemoteAddr)
+
+	if strings.Compare(req.Method, "POST") != 0 {
+		writeHttpErrorf(w, "Method %v not implemented for /snpca request", req.Method)
+		return
+	}
+
+	var akTypeRaw []byte
+
+	_, err := est.DecodeMultipart(
+		req.Body,
+		[]est.MimeMultipart{
+			{ContentType: est.MimeTypeOctetStream, Data: &akTypeRaw},
+		},
+		req.Header.Get(est.ContentTypeHeader),
+	)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
+		return
+	}
+
+	akType := verifier.AkType(akTypeRaw[0])
+
+	ca, err := s.getSnpCa(akType)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
+		return
+	}
+
+	body, err := est.EncodePkcs7CertsOnly(ca)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
+		return
+	}
+	encoded := est.EncodeBase64(body)
+
+	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
+		return
+	}
+}
+
 func httpHandleMetadata(folder string) error {
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
@@ -433,7 +481,7 @@ func httpHandleMetadata(folder string) error {
 
 	dirs, err := os.ReadDir(folder)
 	if err != nil {
-		return fmt.Errorf("failed to open metaddata folders '%v': %v", folder, err)
+		return fmt.Errorf("failed to open metaddata folders %q: %v", folder, err)
 	}
 
 	for _, dir := range dirs {
@@ -453,7 +501,7 @@ func httpHandleMetadata(folder string) error {
 
 func logRequest(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Tracef("Received request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		log.Debugf("Received request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		h.ServeHTTP(w, r)
 	})
 }
