@@ -26,7 +26,6 @@ import (
 
 	"github.com/google/go-eventlog/register"
 	"github.com/google/go-eventlog/tcg"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -41,9 +40,9 @@ func main() {
 	flag.Parse()
 
 	if *verbose {
-		logrus.SetLevel(logrus.TraceLevel)
+		log.SetLevel(log.TraceLevel)
 	} else {
-		logrus.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 	}
 
 	if !*eventlogFlag && !*summaryFlag {

@@ -39,13 +39,6 @@ import (
 
 var log = logrus.WithField("service", "snpdriver")
 
-type certFormat int
-
-const (
-	PEM = iota
-	DER
-)
-
 const (
 	snpChainFile     = "snp_ak_chain.pem"
 	signingChainFile = "snp_ik_chain.pem"

@@ -912,29 +912,32 @@ func ValidateQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdent
 func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, tcbLevel pcs.TcbLevel) bool {
 	// Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to 16)
 	// with the corresponding values of SVNs in sgxtcbcomponents array of TCB Level.
+	ok := true
 	for i := 0; i < 16; i++ {
 		tcbFromCert := getTCBCompByIndex(sgxExtensions.Tcb, i+1)
 		if byte(tcbFromCert.Value) < tcbLevel.Tcb.SgxTcbcomponents[i].Svn {
-			log.Tracef("Extension %v PCK cert SVN %v lower than TCB info SVN %v",
-				i, tcbFromCert.Value, tcbLevel.Tcb.SgxTcbcomponents[i].Svn)
-			return false
+			log.Tracef("Extension %v PCK cert SVN %v lower than TCB info SVN %v (Category: %q, Type: %q)",
+				i, tcbFromCert.Value, tcbLevel.Tcb.SgxTcbcomponents[i].Svn,
+				tcbLevel.Tcb.SgxTcbcomponents[i].Category, tcbLevel.Tcb.SgxTcbcomponents[i].Type)
+			ok = false
 		}
 	}
-	return true
+	return ok
 }
 
 // helper function for verifyTcbInfo
 func compareTeeTcbSvns(teeTcbSvn [16]byte, tcbLevel pcs.TcbLevel) bool {
 	// Compare all of the SVNs in TEE TCB SVN array retrieved from TD Report in Quote (from index 0 to 15)
 	// with the corresponding values of SVNs in tdxtcbcomponents array of TCB Level
+	ok := true
 	for i := 0; i < 16; i++ {
 		if teeTcbSvn[i] < tcbLevel.Tcb.TdxTcbcomponents[i].Svn {
-			log.Tracef("Quote TEE TCB SVN ID %v (%v) lower then expected TCB info SVN (%v)",
+			log.Tracef("Quote TEE TCB SVN ID %v (%v) lower than expected TCB info SVN (%v)",
 				i, teeTcbSvn[i], tcbLevel.Tcb.TdxTcbcomponents[i].Svn)
-			return false
+			ok = false
 		}
 	}
-	return true
+	return ok
 }
 
 func getTcbStatusAndDateQE(qeIdentity *pcs.QeIdentity, body *EnclaveReportBody) (pcs.TcbComponentStatus, string, error) {

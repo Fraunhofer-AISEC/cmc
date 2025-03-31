@@ -40,13 +40,6 @@ import (
 
 var log = logrus.WithField("service", "tdxdriver")
 
-type certFormat int
-
-const (
-	PEM = iota
-	DER
-)
-
 const (
 	tdxChainFile     = "tdx_ak_chain.pem"
 	signingChainFile = "tdx_ik_chain.pem"

@@ -17,7 +17,6 @@ package verifier
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -34,10 +33,9 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		omitCollateral bool
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  *ar.MeasurementResult
-		want1 bool
+		name string
+		args args
+		want bool
 	}{
 		{
 			name: "Valid Attestation Report",
@@ -68,7 +66,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: true,
+			want: true,
 		},
 		{
 			name: "Invalid Report Signature",
@@ -99,7 +97,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Invalid Nonce",
@@ -130,7 +128,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   invalidTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Invalid Certificate Chain",
@@ -161,7 +159,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Invalid Refvals",
@@ -192,7 +190,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: invalidTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Invalid Attributes",
@@ -223,7 +221,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Invalid Collateral",
@@ -255,7 +253,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				nonce:          validTDXNonce,
 				omitCollateral: true,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Invalid MrSeam",
@@ -287,7 +285,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 		{
 			name: "Missing Reference Values",
@@ -318,7 +316,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				refvals: invalidTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want1: false,
+			want: false,
 		},
 	}
 
@@ -326,7 +324,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 
 	collateral, err := FetchCollateral(fmspc_tdx, pck_cert_tdx, TDX_QUOTE_TYPE)
 	if err != nil {
-		log.Errorf("failed to get TDX collateral: %v", err)
+		t.Errorf("failed to get TDX collateral: %v", err)
 	}
 
 	for _, tt := range tests {
@@ -344,13 +342,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					},
 				},
 			}
-			res, got := verifyTdxMeasurements(*tt.args.measurement, tt.args.nonce,
+			_, got := verifyTdxMeasurements(*tt.args.measurement, tt.args.nonce,
 				tt.args.rootManifest, tt.args.refvals)
-			if got != tt.want1 {
-				t.Errorf("verifyTdxMeasurements() got = %v, want %v", got, tt.want1)
-			}
-			if !got {
-				fmt.Println(res)
+			if got != tt.want {
+				t.Errorf("verifyTdxMeasurements() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
