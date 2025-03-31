@@ -259,7 +259,8 @@ var (
 
 // Variables for TestVerify
 var (
-	nonce = []byte{0x01, 0x02, 0x03}
+	ArVersion = "1.2.0"
+	nonce     = []byte{0x01, 0x02, 0x03}
 )
 
 // Variables for Test_checkMetadataCompatibility
@@ -677,7 +678,7 @@ func TestVerify(t *testing.T) {
 
 			report := ar.AttestationReport{
 				Type:    "Attestation Report",
-				Version: "1.1.0",
+				Version: ArVersion,
 				Metadata: []ar.MetadataDigest{
 					rtmManifestDigest, osManifestDigest, appManifestDigest, deviceDescriptionDigest,
 				},
