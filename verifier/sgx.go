@@ -105,8 +105,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	copy(nonce64, nonce[:])
 
 	if cmp := bytes.Compare(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64); cmp != 0 {
-		log.Debugf("Nonces mismatch: Plain Nonce: %v, Expected: %v, Got = %v",
-			nonce, hex.EncodeToString(nonce64),
+		log.Debugf("Nonces mismatch: Expected: %v, Got = %v", hex.EncodeToString(nonce64),
 			hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:]))
 		result.Freshness.Success = false
 		result.Freshness.Expected = hex.EncodeToString(nonce64)
@@ -302,7 +301,8 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				Success:  false,
 				Launched: false,
 			})
-		return fmt.Errorf("MRENCLAVE mismatch. Expected: %v, Got. %v", sgxReferenceValue.Sha256, body.MRENCLAVE)
+		return fmt.Errorf("MRENCLAVE mismatch. Expected: %v, Got. %v",
+			hex.EncodeToString(sgxReferenceValue.Sha256), hex.EncodeToString(body.MRENCLAVE[:]))
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
@@ -316,30 +316,34 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Type:     "Measurement",
+			Type:     "Reference Value",
 			SubType:  "MrSigner",
-			Digest:   hex.EncodeToString(body.MRSIGNER[:]),
+			Digest:   sgxReferencePolicy.MrSigner,
+			Measured: hex.EncodeToString(body.MRSIGNER[:]),
 			Success:  strings.EqualFold(sgxReferencePolicy.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
 			Launched: true,
 		},
 		ar.DigestResult{
-			Type:     "Security Version",
+			Type:     "Reference Value",
 			SubType:  "CpuSvn",
-			Digest:   hex.EncodeToString(body.CPUSVN[:]),
+			Digest:   hex.EncodeToString(sgxExtensions.Tcb.Value.CpuSvn.Value),
+			Measured: hex.EncodeToString(body.CPUSVN[:]),
 			Success:  bytes.Compare(sgxExtensions.Tcb.Value.CpuSvn.Value, body.CPUSVN[:]) <= 0,
 			Launched: true,
 		},
 		ar.DigestResult{
-			Type:     "Product ID",
+			Type:     "Reference Value",
 			SubType:  "IsvProdId",
-			Digest:   strconv.Itoa(int(body.ISVProdID)),
+			Digest:   strconv.Itoa(int(sgxReferencePolicy.IsvProdId)),
+			Measured: strconv.Itoa(int(body.ISVProdID)),
 			Success:  sgxReferencePolicy.IsvProdId == body.ISVProdID,
 			Launched: true,
 		},
 		ar.DigestResult{
-			Type:     "Security Version",
+			Type:     "Reference Value",
 			SubType:  "IsvSvn",
-			Digest:   strconv.Itoa(int(body.ISVSVN)),
+			Digest:   strconv.Itoa(int(sgxReferencePolicy.IsvSvn)),
+			Measured: strconv.Itoa(int(body.ISVSVN)),
 			Success:  sgxReferencePolicy.IsvSvn == body.ISVSVN,
 			Launched: true,
 		},
@@ -347,7 +351,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 
 	for _, v := range result.Artifacts {
 		if !v.Success {
-			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Got: %v)", v.SubType, v.Digest)
+			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Expected: %v Got: %v)", v.SubType, v.Digest, v.Measured)
 		}
 	}
 
