@@ -10,7 +10,7 @@ export PATH=${PATH}:${HOME}/go/bin
 print_usage() {
   echo "Usage: $(basename "$0") [-i] [-h] <data-folder> <cmc-folder> <cbor|json>"
   echo "       -h: print help"
-  echo "       -i: use ids instead of simple pki"
+  echo "       -i: use ids pki instead of simple pki"
   echo "       data-folder: a non-existing folder to store cmc data in"
   echo "       cmc-folder: path where the cmc repository resides"
   echo "       cbor | json: serialization to use for metadata"

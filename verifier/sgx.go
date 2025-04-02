@@ -36,7 +36,7 @@ type SgxReport struct {
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructure // variable size
 }
 
-func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
+func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	rootManifest *ar.MetadataResult, referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -68,7 +68,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	sgxReferencePolicy := rootManifest.Manifest.SgxPolicy
 
 	// Validate Parameters:
-	if len(sgxM.Evidence) < SGX_QUOTE_MIN_SIZE {
+	if len(measurement.Evidence) < SGX_QUOTE_MIN_SIZE {
 		log.Debugf("Invalid SGX Report")
 		result.Summary.SetErr(ar.ParseEvidence)
 		return result, false
@@ -87,7 +87,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	}
 
 	// Extract the attestation report into the SGXReport data structure
-	sgxQuote, err := DecodeSgxReport(sgxM.Evidence)
+	sgxQuote, err := DecodeSgxReport(measurement.Evidence)
 	if err != nil {
 		log.Debugf("Failed to decode SGX report: %v", err)
 		result.Summary.SetErr(ar.ParseEvidence)
@@ -117,14 +117,14 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	}
 
 	// Obtain collateral from measurements
-	if len(sgxM.Artifacts) == 0 ||
-		len(sgxM.Artifacts[0].Events) == 0 ||
-		sgxM.Artifacts[0].Events[0].IntelCollateral == nil {
+	if len(measurement.Artifacts) == 0 ||
+		len(measurement.Artifacts[0].Events) == 0 ||
+		measurement.Artifacts[0].Events[0].IntelCollateral == nil {
 		log.Debugf("Could not find TDX artifacts (collateral)")
 		result.Summary.SetErr(ar.CollateralNotPresent)
 		return result, false
 	}
-	collateralRaw := sgxM.Artifacts[0].Events[0].IntelCollateral
+	collateralRaw := measurement.Artifacts[0].Events[0].IntelCollateral
 	collateral, err := ParseCollateral(collateralRaw)
 	if err != nil {
 		log.Debugf("Could not parse SGX artifacts (collateral)")
@@ -133,9 +133,10 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	}
 
 	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
+	log.Debugf("Retrieving certificate chain from quote")
 	var quoteCerts SgxCertificates
 	if sgxQuote.QuoteSignatureData.QECertDataType == 5 {
-		quoteCerts, err = parseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
+		quoteCerts, err = ParseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
 		if err != nil {
 			log.Debugf("Failed to parse certificate chain from QECertData: %v", err)
 			result.Summary.SetErr(ar.ParseCert)
@@ -170,6 +171,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	}
 
 	// Verify TcbInfo
+	log.Debugf("Verifying TCB info")
 	result.SgxResult.TcbInfoCheck = ValidateTcbInfo(
 		&collateral.TcbInfo, collateralRaw.TcbInfo,
 		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
@@ -181,6 +183,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	}
 
 	// Verify QE Identity
+	log.Debugf("Verifying quoting enclave identity")
 	qeIdentityResult, err := ValidateQEIdentity(
 		&sgxQuote.QuoteSignatureData.QEReport,
 		&collateral.QeIdentity, collateralRaw.QeIdentity,
@@ -194,7 +197,8 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	result.SgxResult.QeReportCheck = qeIdentityResult
 
 	// Verify Quote Signature
-	sig, ret := VerifyIntelQuoteSignature(sgxM.Evidence, sgxQuote.QuoteSignatureData,
+	log.Debugf("Verifying SGX quote signature")
+	sig, ret := VerifyIntelQuoteSignature(measurement.Evidence, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		rootManifest.CaFingerprint, QuoteType(sgxQuote.QuoteHeader.TeeType), collateral.PckCrl, collateral.RootCaCrl)
 	if !ret {
@@ -203,6 +207,7 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	result.Signature = sig
 
 	// Verify Quote Body values
+	log.Debugf("Verifying SGX quote body")
 	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &collateral.TcbInfo, &sgxExtensions,
 		&sgxReferenceValue, sgxReferencePolicy, result)
 	if err != nil {
@@ -213,8 +218,10 @@ func verifySgxMeasurements(sgxM ar.Measurement, nonce []byte,
 	}
 
 	// Check version
+	log.Debugf("Verifying SGX quote version")
 	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, sgxReferencePolicy.QuoteVersion)
 	if !ret {
+		log.Debugf("Failed to verify ")
 		return result, false
 	}
 
@@ -301,7 +308,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				Success:  false,
 				Launched: false,
 			})
-		return fmt.Errorf("MRENCLAVE mismatch. Expected: %v, Got. %v",
+		return fmt.Errorf("MRENCLAVE mismatch. Expected: %q, Got: %q",
 			hex.EncodeToString(sgxReferenceValue.Sha256), hex.EncodeToString(body.MRENCLAVE[:]))
 	} else {
 		result.Artifacts = append(result.Artifacts,
@@ -313,6 +320,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				Launched: true,
 			})
 	}
+	log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(sgxReferenceValue.Sha256))
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
@@ -348,6 +356,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			Launched: true,
 		},
 	)
+	log.Debugf("Successfully verified MRSIGNER (%q)", sgxReferencePolicy.MrSigner)
 
 	for _, v := range result.Artifacts {
 		if !v.Success {
@@ -422,7 +431,6 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	return nil
 }
 
-// (for SGX): parses quote signature data structure from buf to sig
 func parseECDSASignature(buf *bytes.Buffer, sig *ECDSA256QuoteSignatureDataStructure) error {
 
 	err := binary.Read(buf, binary.LittleEndian, &sig.ISVEnclaveReportSignature)

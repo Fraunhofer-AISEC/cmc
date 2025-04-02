@@ -132,7 +132,7 @@ func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
 	// Decode attestation report to get FMSPC (required to fetch collateral)
 	quote, err := verifier.DecodeTdxReportV4(data)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode TDX quote: %v", err)
+		return ar.Measurement{}, fmt.Errorf("failed to decode TDX quote: %w", err)
 	}
 	log.Tracef("PCK Leaf Certificate: %v",
 		string(internal.WriteCertPem(quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)))
@@ -256,7 +256,7 @@ func provisionTdx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
 
-	// Fetch TDX certificate chain for VCEK/VLEK (TDX Attestation Key)
+	// Fetch TDX certificate chain for TDX Attestation Key
 	akchain, err := fetchAk()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get TDX cert chain: %w", err)

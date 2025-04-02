@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+source "${dir}/utils.sh"
+export PATH=${PATH}:${HOME}/go/bin
+
+if [[ "$#" -ne 2 ]]; then
+   echo "Usage: $(basename "$0") <data-folder> <cmc-folder>"
+   exit 1
+fi
+
+data=$(set -e; abs_path "${1}")
+cmc=$(set -e; abs_path "${2}")
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+"${dir}/generate-device-description" "$1"
+
+"${dir}/generate-root-manifest-sgx" "$@"

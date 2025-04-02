@@ -7,47 +7,55 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
 source "${dir}/utils.sh"
 export PATH=${PATH}:${HOME}/go/bin
 
-if [[ "$#" -ne 3 ]]; then
-   echo "Usage: ./setup-cmc-sgx <cmc-folder> <data-folder> <cbor|json>"
-   exit
+print_usage() {
+  echo "Usage: $(basename "$0") [-i] [-h] <data-folder> <cmc-folder> <cbor|json>"
+  echo "       -h: print help"
+  echo "       -i: use ids pki instead of simple pki"
+  echo "       data-folder: a non-existing folder to store cmc data in"
+  echo "       cmc-folder: path where the cmc repository resides"
+  echo "       cbor | json: serialization to use for metadata"
+}
+
+script_suffix=""
+while getopts 'i:h' flag; do
+  case "${flag}" in
+    i)
+        script_suffix="-ids"
+        shift
+        ;;
+    h)
+        print_usage
+        exit 0 ;;
+    *) print_usage
+       exit 1 ;;
+  esac
+done
+
+if [[ "$#" -lt 3 ]]; then
+   print_usage
+   exit 1
 fi
 
-
-cmc="$(abs_path "${1}")"
-data="$(abs_path "${2}")"
+cmc=$(set -e; abs_path "$2")
+data=$(set -e; abs_path "$1")
 ser="${3}"
 
-if [[ ! -d "$cmc" ]]; then
-  echo "cmc directory does not exist. Did you clone the repository? Abort.."
+
+if [[ ! -d "${cmc}" ]]; then
+  echo "CMC directory ${cmc} does not exist. Did you clone the repository? Abort.."
   exit 1
 fi
 
-if [[ ! -d "${data}" ]]; then
-    mkdir -p "${data}"
+if [[ -d "${data}" ]]; then
+  echo "Data directory ${data} does already exist. Please choose a new directory. Abort.."
+  exit 1
 fi
 
-echo "Using cmc: ${cmc}"
-echo "Using $data as directory for local data"
+echo "Using CMC: ${cmc}"
+echo "Using ${data} as directory for local data"
 
-# Install dependencies
-sudo apt install -y moreutils golang-cfssl build-essential zlib1g-dev libssl-dev jq openssl
-
-# Build cmc
-cd "${cmc}"
-echo "Building cmc.."
-go build ./...
-
-# Install cmc to $GOPATH/bin
-echo "Installing cmc"
-go install ./...
-
-# Build testtool enclave
-cd "${cmc}/testtool"
-make egocmc
-
-# Get MRENCLAVE and MRSIGNER
-mrenclave=$(echo "$(ego uniqueid testtool)" | awk 'NR==1')
-mrsigner=$(echo "$(ego signerid testtool)" | awk 'NR==1')
+# Create a folder for the cmc configuration and metadata
+mkdir -p "${data}"
 
 # Copy metadata templates
 cp -r "${cmc}/example-setup/"* "${data}"
@@ -55,101 +63,8 @@ cp -r "${cmc}/example-setup/"* "${data}"
 # Generate a PKI
 "${data}/setup-pki" "${data}/pki-input" "${data}/pki"
 
-cd "${data}"
+# Generate example SGX metadata for the current machine
+"${data}/generate-metadata-sgx" "${data}" "${cmc}"
 
-# Retrieve values from PCKIDRetrievalTool
-sudo PCKIDRetrievalTool -f pckid_retrieval.csv
-pckid_retrieval="$(cat pckid_retrieval.csv)"
-encrypted_ppid="$(echo "${pckid_retrieval}" | cut -d ',' -f1)"
-pceid="$(echo "${pckid_retrieval}" | cut -d ',' -f2)"
-cpusvn="$(echo "${pckid_retrieval}" | cut -d ',' -f3)"
-pcesvn="$(echo "${pckid_retrieval}" | cut -d ',' -f4)"
-rm -f pckid_retrieval.csv
-
-# GET PCK Certificate and extract FMSPC
-fmspc="$(fmspc-retrieval-tool -encrypted_ppid "${encrypted_ppid}" -pceid "${pceid}" -cpusvn "${cpusvn}" -pcesvn "${pcesvn}")"
-
-# GET root CA certificate fingerprint
-cert_chain=$(curl -I -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert?encrypted_ppid=$encrypted_ppid&cpusvn=$cpusvn&pceid=$pceid&pcesvn=$pcesvn" | grep 'SGX-PCK-Certificate-Issuer-Chain')
-decoded=$(printf '%b' "$(echo "$cert_chain" | sed 's/SGX-PCK-Certificate-Issuer-Chain: //' | sed 's/+/ /g; s/%/\\x/g')")
-root_ca=$(echo -e "$decoded" | sed -n '/-----END CERTIFICATE-----/,$p' | sed '1d')
-ca_fingerprint=$(openssl x509 -in <(echo "$root_ca") -noout -sha256 -fingerprint | awk -F= '{print $2}' | tr -d ': ' | tr '[:upper:]' '[:lower:]')
-
-# GET TCB Info
-tcb_info="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=$fmspc" | jq -c .)"
-echo "$tcb_info" > "${data}/metadata-raw/tcb_info.json"
-
-# GET Quoting Enclave Identity
-qe_identity="$(curl -s -X GET "https://api.trustedservices.intel.com/sgx/certification/v4/qe/identity" | jq -c .)"
-echo "$qe_identity" > "${data}/metadata-raw/qe_identity.json"
-
-# Calculate the sizes in bytes
-tcb_info_size="$(echo -n "$tcb_info" | wc -c | jq 'tonumber')"
-qe_identity_size="$(echo -n "$qe_identity" | wc -c | jq 'tonumber')"
-
-jq --argjson tcb_info "$tcb_info" --argjson qe_identity "$qe_identity" --argjson tcb_info_size "$tcb_info_size" --argjson qe_identity_size "$qe_identity_size" '.referenceValues = [{
-  "type": "SGX Reference Value",
-  "sha256": "'"$mrenclave"'",
-  "sgx": {
-    "version": 3,
-    "collateral": {
-      "teeType": 0,
-      "tcbInfo": $tcb_info,
-      "tcbInfoSize": $tcb_info_size,
-      "qeIdentity": $qe_identity,
-      "qeIdentitySize": $qe_identity_size
-    },
-    "caFingerprint": "'"$ca_fingerprint"'",
-    "attributes": {
-      "initted": true,
-      "mode64Bit": true,
-      "legacy": true
-    },
-    "isvProdId": 1,
-    "isvSvn": 1,
-    "mrSigner": "'"$mrsigner"'"
-  }
-}]' "$data/metadata-raw/rtm.manifest.json" | sponge "$data/metadata-raw/rtm.manifest.json"
-
-# Add PCKIDRetrievalTool values to device.config.json
-jq --arg encrypted_ppid "${encrypted_ppid}" --arg pceid "${pceid}" --arg cpusvn "${cpusvn}" --arg pcesvn "${pcesvn}" '.sgxValues = {
-      "encryptedPPID": $encrypted_ppid,
-      "pceid": $pceid,
-      "cpusvn": $cpusvn,
-      "pcesvn": $pcesvn
-      }' "$data/metadata-raw/device.config.json" | sponge "$data/metadata-raw/device.config.json"
-
-# Sign the metadata*
-input="${data}/metadata-raw"
-tmp="${data}/metadata-tmp"
-out="${data}/metadata-signed"
-key="${data}/pki/signing-cert-key.pem"
-chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
-
-rm -rf "${tmp}"
-rm -rf "${out}"
-
-mkdir -p "${tmp}"
-mkdir -p "${out}"
-
-if [[ "${ser,,}" = "json" ]]; then
-  echo "using json serialization"
-  cp "${input}/rtm.manifest.json"        "${tmp}/rtm.manifest.json"
-  cp "${input}/os.manifest.json"         "${tmp}/os.manifest.json"
-  cp "${input}/device.description.json"  "${tmp}/device.description.json"
-  cp "${input}/device.config.json"       "${tmp}/device.config.json"
-elif [[ "${ser,,}" = "cbor" ]]; then
-  echo "using cbor serialiation"
-  metaconv -in "${input}/rtm.manifest.json"        -out "${tmp}/rtm.manifest.cbor"       -outform cbor
-  metaconv -in "${input}/os.manifest.json"         -out "${tmp}/os.manifest.cbor"        -outform cbor
-  metaconv -in "${input}/device.description.json"  -out "${tmp}/device.description.cbor" -outform cbor
-  metaconv -in "${input}/device.config.json"       -out "${tmp}/device.config.cbor"      -outform cbor
-else
-  echo "serialization format ${ser} is not supported"
-  exit 1
-fi
-
-metasign -in "${tmp}/rtm.manifest.${ser}"        -out "${out}/rtm.manifest.${ser}"        -keys "${key}" -x5cs "${chain}"
-metasign -in "${tmp}/os.manifest.${ser}"         -out "${out}/os.manifest.${ser}"         -keys "${key}" -x5cs "${chain}"
-metasign -in "${tmp}/device.description.${ser}"  -out "${out}/device.description.${ser}"  -keys "${key}" -x5cs "${chain}"
-metasign -in "${tmp}/device.config.${ser}"       -out "${out}/device.config.${ser}"       -keys "${key}" -x5cs "${chain}"
+# Sign the metadata
+"${data}/sign-metadata${script_suffix}" "${data}" "json"

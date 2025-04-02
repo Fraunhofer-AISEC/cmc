@@ -1,8 +1,8 @@
 {
     "quoteVersion": 0,
     "isvProdId": 0,
-    "mrSigner": "",
     "isvSvn": 0,
+    "mrSigner": "",
     "attributes": {
       "initted": false,
       "debug": false,
