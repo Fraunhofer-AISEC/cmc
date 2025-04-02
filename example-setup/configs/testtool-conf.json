@@ -1,0 +1,19 @@
+{
+    "mode": "generate",
+    "addr": [
+        "localhost:4443"
+    ],
+    "report": "attestation-report",
+    "result": "attestation-result.json",
+    "nonce": "nonce",
+    "ca": "../data/pki/ca.pem",
+    "mtls": true,
+    "attest": "mutual",
+    "measurementLog": true,
+    "publish": "http://localhost:8080/results",
+    "logLevel": "trace",
+    "api": "socket",
+    "apiSerializer": "cbor",
+    "cmcAddr": "localhost:9955",
+    "keyConfig": "EC256"
+}

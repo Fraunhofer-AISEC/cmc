@@ -1,0 +1,10 @@
+#!/bin/bash
+
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+
+name=cmc-docker
+image=cmc-docker-image
+
+docker stop "${name}"
+docker rm "${name}"
+docker image rm "${image}"

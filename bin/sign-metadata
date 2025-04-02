@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+if [[ "$#" -ne 1 ]]; then
+   echo "Usage: $(basename "$0") <cbor|json>"
+   exit 1
+fi
+
+data="${dir}/data"
+input="${data}/metadata-raw"
+tmp="${data}/metadata-tmp"
+out="${data}/metadata-signed"
+ser="${1}"
+
+if [[ ! -d "${input}" ]]; then
+  echo "Input directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+echo "Using ${data} as directory for local data"
+
+key="${data}/pki/signing-cert-key.pem"
+chain="${data}/pki/signing-cert.pem,${data}/pki/ca.pem"
+
+# Clean start
+rm -rf "${tmp}"
+rm -rf "${out}"
+
+mkdir -p "${tmp}"
+mkdir -p "${out}"
+
+# Iterate over all input metadata
+for path in "${input}/"*; do
+    [[ -e "${path}" ]] || continue
+
+    out_file="$(basename "${path}" | sed 's/\.[^.]*$//').${ser}"
+
+    # Convert to CBOR if specified, otherwise just copy
+    if [[ "${ser,,}" = "cbor" ]]; then
+      "${dir}/tools/metaconv/metaconv" \
+        -in "${path}" \
+        -out "${tmp}/${out_file}" \
+        -outform cbor
+    else
+      cp "${path}" "${tmp}/${out_file}"
+    fi
+
+    # Sign metadata object
+    "${dir}/tools/metasign/metasign" \
+      -in "${tmp}/${out_file}" \
+      -out "${out}/${out_file}" \
+      -keys "${key}" \
+      -x5cs "${chain}"
+done

@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+input="${dir}/example-setup/pki-input"
+out="${dir}/data/pki"
+
+if [[ ! -d "${input}" ]]; then
+    echo "Input directory ${input} does not exist"
+    exit 1
+fi
+
+echo "Using ${input} as input directory"
+echo "Using ${out} as output directory"
+
+mkdir -p "${out}"
+
+# Set up root CA
+cfssl gencert -initca "${input}/cfssl-ca.json" | cfssljson -bare "${out}/ca"
+
+# Generate key and CSR for metadata signing
+cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}/cfssl-leaf.json" | cfssljson -bare "${out}/signing-cert"
+
+# Sign CSR and generate certificate for metadata signing
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/signing-cert.csr" | cfssljson -bare "${out}/signing-cert"
+
+# Generate key and CSR for EST server
+cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}/cfssl-est.json" | cfssljson -bare "${out}/est"
+
+# Sign CSR and generate certificate for EST server
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/est.csr" | cfssljson -bare "${out}/est"
+
+# Generate certificates to use with Intel TDX PCCS
+pccs_key="${out}/tdx-pccs-private.pem"
+pccs_csr="${out}/tdx-pccs-csr.pem"
+pccs_crt="${out}/tdx-pccs-cert.pem"
+openssl genrsa -out "${pccs_key}" 2048
+openssl req -new -key "${pccs_key}" -out "${pccs_csr}" \
+    -subj "/C=DE/ST=BY/L=Munich/O=TestCompany/OU=TestUnit/CN=localhost/emailAddress=test@pccs.de"
+openssl x509 -req -days 1095 -in "${pccs_csr}" -signkey "${pccs_key}" -out "${pccs_crt}"
+rm -rf "${pccs_csr}"
+chmod 644 "${pccs_key}"
+chmod 644 "${pccs_crt}"

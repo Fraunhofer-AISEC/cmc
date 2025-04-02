@@ -1,0 +1,29 @@
+{
+    "mode": "generate",
+    "addr": [
+      "localhost:4443"
+    ],
+    "report": "data/attestation-report",
+    "result": "data/attestation-result.json",
+    "nonce": "data/nonce",
+    "ca": "data/pki/ca.pem",
+    "mtls": true,
+    "attest": "mutual",
+    "measurementLog": false,
+    "publish": "http://nuc-02.sos.aisec.fraunhofer.de:8080/results",
+    "logLevel": "trace",
+    "api": "libapi",
+    "apiSerializer": "cbor",
+    "keyConfig": "EC256",
+    "provAddr": "https://localhost:9000/",
+    "metadata": [
+      "file://../data/metadata-signed"
+    ],
+    "drivers": [
+      "sgx"
+    ],
+    "ima": false,
+    "storage": "data/testtool-internal",
+    "cache": "data/testtool-cache",
+    "peerCache": "data/cmc-peer-cache"
+  }

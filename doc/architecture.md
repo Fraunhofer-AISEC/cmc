@@ -28,19 +28,69 @@ generate and verify attestation reports and to create attested tls connections.
 - Drivers for trusted hardware provide the attestation reports and, if available, key storage and
 signing functionalities.
 
-## Basic Principle
+## Attestation Reports
 
 The overall exchanged data structure *Attestation Report* does not only contain measurements of
-the software running on the platform, but also metadata in the form of *Manifests* and
+the software running on the platform, but also *metadata* in the form of *Manifests* and
 *Descriptions*. This metadata describes the entire state of the platform and must be signed by
 one or more trusted entities. This allows a verifier to validate the attestation report without
 knowing the platform in advance. Examples and tools for creating the metadata can be found
 in the [Example Setup](../example-setup/).
 
+Core of the *Manifests* are the reference values, which contain the hashes of the software
+artifacts running on the platform. We aim to provide
+[tools](https://github.com/Fraunhofer-AISEC/tpm-pcr-tools) to precompute the hashes of all artifacts
+based on reproducible software builds.
+
 The overall structure of the attestation report can be seen in the following figure and is
 described in detail in our [paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171):
 
 ![Attestation Report](./diagrams/attestation-report.drawio.svg)
+
+### Metadata Templates
+
+The example setup (folder `cmc/example-setup`) contains templates for the required metadata files
+in JSON.
+
+- **device.description.json**: Metadata describing the overall platform
+- **manifest.description.json**: Embedded into device description, describes an instance of a manifest (i.e., a software layer or application)
+- **manifest.json**: Template for a manifest containing reference values for a specific software layer or single application
+- **company.description.json**: Optional, metadata describing the operater of the computing platform
+- **device.config.json**: Signed local device configuration, contains e.g. the parameters for
+the Certificate Signing Requests for the attestation and identity keys
+
+### Serialization Format
+
+The attestation report can be serialized to JSON and signed via JSON Web signatures (JWS), or to
+CBOR and signed via CBOR Object Signing and Encryption (COSE).
+
+As CBOR is a binary serialization format, the serialized data is not human-readable. Therefore, the
+metadata templates are always in JSON. A [converter](../tools/metaconv/) is provided to convert the
+metadata files to CBOR before signing them (see [Setup](./setup.md)).
+
+### Reference Values
+
+The signed manifests contain reference-values that describe the legitimate software that is expected
+to be running on the platform. The trust in the measurements comes from hardware-based measurement
+technologies, such as TPMs or Confidential Computing technologies. The reference values for the
+proving platform must be generated based on the used technology (TPM, Intel TDX/SGX, AMD SEV-SNP).
+
+We provide [tools]([tools](https://github.com/Fraunhofer-AISEC/tpm-pcr-tools) ) for parsing and
+precomputing the reference values based on reproducible builds.
+
+## Infrastructure Overview
+
+The CMC framework supports attestation in the cloud (AMD SEV-SNP and Intel TDX platforms),
+on the edge (e.g., Confidential Computing or TPM-based platforms) and also IoT / embedded
+infrastructure (ARM Cortex-M TrustZone-based Initial Attestation Service, ARM Cortex-A with
+OP-TEE and vTPM). For tiny embedded devices, we rely on an embdded CMC version implemented
+in Rust (no_std).
+
+Components can establish attestedTLS and attestedHTTPS connections. OSCORE/EDHOC support
+for embedded devices is planned. Further TLS-based protocols can be integrated with
+minimal effort.
+
+![Infrastructure Overview](./diagrams/cmc-infrastructure.drawio.svg)
 
 ## Components
 The following components correspond to the packages / directories of this repository.

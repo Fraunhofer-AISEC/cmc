@@ -1,0 +1,41 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+case "${PATH}" in ""|"${dir}/bin:"*) ;; *) PATH="${dir}/bin:${PATH}";; esac
+
+container_image="tdx-qgs-image"
+container_name="tdx-qgs"
+
+docker_file_path="${dir}/example-setup/docker/${container_name}.dockerfile"
+docker_network="tdx-host"
+qgs_vsock_path="/var/run/tdx-qgs"
+
+docker build -t "${container_image}" -f "${docker_file_path}" "${dir}"
+
+docker network ls | grep -q "${docker_network}" || docker network create "${docker_network}"
+
+if [[ -n "$(docker ps -aq -f name="^${container_name}\$")" ]]; then
+    docker rm "${container_name}"
+fi
+
+docker create \
+    --device=/dev/sgx_enclave \
+    --device=/dev/sgx_provision \
+    -v /dev/log:/dev/log \
+    -v "${qgs_vsock_path}":"${qgs_vsock_path}" \
+    -it \
+    --add-host=host.docker.internal:host-gateway \
+    --network "${docker_network}" \
+    --name "${container_name}" \
+    "${container_image}" \
+    /opt/intel/tdx-qgs/qgs --no-daemon
+
+docker start "${container_name}"
+
+while [ ! -S /var/run/tdx-qgs/qgs.socket ]; do
+    sleep 0.1
+done
+sudo chmod 777 "${qgs_vsock_path}/qgs.socket"

@@ -1,0 +1,73 @@
+#!/bin/bash
+
+set -e
+
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+
+uid=$(id -u)
+gid=$(id -g)
+
+uidn=$(id -un)
+gidn=$(id -gn)
+
+name="cmc-docker"
+image="cmc-docker-image"
+docker_network="tdx-host"
+
+cd "${dir}"
+
+docker network ls | grep -q "${docker_network}" || docker network create "${docker_network}"
+
+# Build the image
+if [[ -z "$(docker images -q ${image})" ]]; then
+    echo "Building docker image ${image}.."
+    docker build --tag "${image}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
+fi
+
+# If container does not exist, create it
+if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
+    echo "Creating container ${name}.."
+    docker create \
+    --name "${name}" \
+    -it \
+    --mount type=bind,src="${dir}",dst="${dir}" \
+    --network "${docker_network}" \
+    --device /dev/sgx_enclave \
+    --device /dev/sgx_provision \
+    "${image}" /bin/bash -c "/bin/sleep infinity"
+fi
+
+# If container does not run, start and configure it
+if [[ -z "$(docker ps -q -f name=${name})" ]]; then
+    echo "Configuring container ${name}.."
+    docker start "${name}"
+    docker exec "${name}" addgroup --gid "${gid}" "${gidn}" || true
+    docker exec "${name}" adduser --uid "${uid}" --gid "${gid}" --disabled-login --gecos "" "${uidn}" || true
+    docker exec "${name}" mkdir -p "${HOME}"
+    docker exec "${name}" chown "${uid}":"${gid}" "${HOME}"
+    docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_enclave
+    docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_provision
+    docker exec \
+    --user "${uid}":"${gid}" \
+    --env HOME="${HOME}" \
+    --env PATH="/usr/bin:/usr/local/go/bin:$HOME/go/bin:${dir}/bin" \
+    --workdir "${dir}/cmc" \
+    "${name}" sh -c "go build ./... && go install ./..."
+fi
+
+# Run specified command
+if [[ $# -eq 0 ]]; then
+    args="/bin/bash"
+else
+    args=("${@}")
+fi
+
+docker exec \
+--user "${uid}":"${gid}" \
+--env HOME="${HOME}" \
+--env PATH="/usr/sbin:/sbin:/usr/bin:/bin:/usr/local/bin:/opt/ego/bin:/usr/local/go/bin:$HOME/go/bin:${dir}/bin" \
+--env LANG=C.UTF-8 \
+--workdir "${dir}" \
+--interactive \
+--tty \
+"${name}" "${args[@]}"

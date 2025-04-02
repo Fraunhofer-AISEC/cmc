@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/data"
+input="${dir}/example-setup/metadata-templates"
+out="${data}/metadata-raw"
+
+name="de.test.host-apps"
+device_description="${out}/device.description.json"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -f "${device_description}" ]]; then
+    echo "Error: Device description ${device_description} does not exist. Run generate-device-description first"
+    exit 1
+fi
+
+echo "Using ${data} as directory for local data"
+
+# Calculate the IMA app reference values
+referenceValues=$(sudo calculate-ima-pcr -t 10 -i ima-ng -p /usr/local/bin)
+
+# App Manifest: load
+json=$(cat "${input}/app.manifest.json")
+
+# App Manifest: Insert reference values
+json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+
+# App Manifest: Set name
+json=$(echo "${json}" | jq ".name = \"${name}\"")
+
+# App Manifest: Set other properties
+setjson "json" "name"                  "${name}"
+setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "json" "developerCommonName"   "test developer"
+setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "json" "description"           "App Manifest"
+setarr  "json" "baseLayers"            "de.test.os"
+setjson "json" "certLevel"             1
+
+# App Manifest: Store
+echo "Writing ${out}/app.manifest.json"
+printf "%s\n" "${json}" > "${out}/app.manifest.json"
+
+# App Description: Create corresponding app description
+appdesc=$(cat "${input}/manifest.description.json")
+appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
+appdesc=$(echo "${appdesc}" | jq ".manifest = \"${name}\"")
+
+# Device Description: Add/replace app description to/in device description
+devdesc=$(cat "${input}/device.description.json")
+exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
+if [[ "${exists}" = false ]]; then
+  echo "Adding app description to device description"
+else
+  echo "Replacing existing app description"
+  devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+fi
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+
+# Device Description: Store
+echo "Writing ${input}/device.description.json"
+printf "%s\n" "${devdesc}" > "${input}/device.description.json"

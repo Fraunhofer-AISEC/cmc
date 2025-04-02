@@ -1,0 +1,200 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+print_usage() {
+  echo "Usage: $(basename "$0") <container-engine> <container> [<container arguments>]"
+  echo "       container-engine: docker, ctr, docker-compose, runc"
+  echo "       container: depends on the engine, e.g."
+  echo "              docker/ctr:     docker.io/library/ubuntu:22.04"
+  echo "              docker-compose: docker-compose.yaml"
+  echo "              runc:           /path/to/runtime-bundle"
+  echo "      container arguments: additional container cmdline parameters"
+}
+
+if [[ "$#" -lt 2 ]]; then
+  print_usage
+  exit 1
+fi
+
+# Extract the -env parameters
+keys=()
+values=()
+found=false
+for arg in "$@"; do
+    if [[ "${arg}" == "-env" ]]; then
+        found=true
+    elif [[ "${found}" == true ]]; then
+        IFS='=' read -r KEY VAL <<< "$arg"
+        keys+=("${KEY}")
+        values+=("${VAL}")
+        found=false
+    fi
+done
+
+# Set all parameters
+client="$1"
+shift
+target="$1"
+shift
+args="$@"
+
+data="${dir}/data"
+cmc="${dir}"
+input="${dir}/example-setup/metadata-templates"
+out="${data}/metadata-raw"
+
+runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
+runc_config="/etc/runc-measure-conf.json"
+target="${target%/}"
+device_description="${out}/device.description.json"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -f "${device_description}" ]]; then
+    echo "Error: Device description ${device_description} does not exist. Run generate-device-description first"
+    exit 1
+fi
+
+echo "Creating reference values for container: ${target} with args ${args}"
+echo "Using ${data} as directory for local data"
+
+mkdir -p "${out}"
+
+# Temporarily configure runc to generate reference values
+if [[ ! -f "${runc_config}" ]]; then
+    exists=false
+    echo "{\"generateRefVals\":\"true\"}" | tee "${runc_config}"
+else
+  exists=true
+  json=$(cat "${runc_config}")
+  original_json=${json}
+  json=$(echo "$json" | jq '.generateRefVals = true')
+  echo "${json}" | sudo tee "${runc_config}"
+fi
+
+# Calculate the container reference values
+sudo rm -f /tmp/container-refs
+
+echo "Generating reference values for ${client} client"
+if  [[ "${client}" == "ctr" ]]; then
+    containers=("${target}")
+    sudo ctr image pull "${target}"
+    set +e
+    sudo ctr run --detach ${args} "${target}" REF_CONTAINER
+    sudo ctr task kill -s SIGKILL REF_CONTAINER
+    sudo ctr container delete REF_CONTAINER
+    set -e
+elif  [[ "${client}" == "shim" ]]; then
+    containers=("${target}")
+    sudo ctr image pull "${target}"
+    set +e
+    sudo ctr run --runtime "${runtime}" -t --rm ${args} "${target}" CMC_GENERATE_APP_MANIFEST
+    set -e
+elif [[ "${client}" == "docker" ]]; then
+    containers=("${target}")
+    sudo docker run ${args} "${target}"
+elif [[ "${client}" == "docker-compose" ]]; then
+    containers=($(yq '.services | keys | .[]' "${target}"))
+    set +e
+    docker compose -f "${target}" up &
+    echo "Sleeping for 10s to enable container start"
+    sleep 10
+    echo "Stopping containers"
+    docker compose -f "${target}" stop
+    sleep 3
+    set -e
+elif [[ "${client}" == "runc" ]]; then
+    containers=("${target}")
+    cd "${target}"
+    sudo runc create references
+    sudo runc delete references
+    cd -
+else
+    echo "Client ${client} not supported. Only 'docker', 'docker-compose', 'ctr' and 'runc' supported for now."
+    exit
+fi
+
+# Restore the original runc config
+if [[ "${exists}" = true ]] ; then
+ echo "${original_json}" | sudo tee "${runc_config}"
+else
+  sudo rm "${runc_config}"
+fi
+
+refvals=$(cat /tmp/container-refs)
+
+# In some scenarios, e.g. docker-compose, we have more than one container and have to iterate over all
+num_containers=$(echo "${refvals}" | jq length)
+for ((i = 0; i < num_containers; i++)); do
+    echo "Creating manifest for container $i"
+
+    container=${containers[$i]}
+    container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
+
+    refval=$(echo "${refvals}" | jq -r ".[$i].referenceValue")
+    config=$(echo "${refvals}" | jq -r ".[$i].ociSpec")
+
+    # App Manifest: load
+    json=$(cat "${input}/manifest.json")
+
+    # App Manifest: Insert reference values and OCI config
+    json=$(echo "${json}" | jq --argjson ver "[${refval}]" '.referenceValues += $ver')
+    json=$(echo "${json}" | jq --argjson cfg "${config}" '.ociSpec = $cfg')
+
+    # App Manifest: Extract the reference value sha256 and add it to the file name to not overwrite the same
+    # container with different arguments such as environment variables
+    sha256=$(echo "${json}" | jq -r '.referenceValues[0].sha256')
+
+    echo "Refval sha256: ${sha256}"
+
+    # App Manifest: Set name and reference value name
+    json=$(echo "${json}" | jq ".name = \"${container}-${sha256}\"")
+    json=$(echo "${json}" | jq ".referenceValues[0].name += \": ${container}\"")
+
+    # App Manifest: Set other properties
+    setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    setjson "json" "developerCommonName"   "test developer"
+    setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+    setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+    setjson "json" "description"           "App Manifest"
+    setarr  "json" "baseLayers"            "de.test.os"
+    setjson "json" "certLevel"             1
+
+    # App Manifest: Store
+    echo "Writing ${out}/${container_name}-${sha256}.manifest.json"
+    printf "%s\n" "${json}" > "${out}/${container_name}-${sha256}.manifest.json"
+
+    # App Description: Create corresponding app description
+    appdesc=$(cat "${input}/manifest.description.json")
+    appdesc=$(echo "${appdesc}" | jq ".name = \"${container}-${sha256}.description\"")
+    appdesc=$(echo "${appdesc}" | jq ".manifest = \"${container}-${sha256}\"")
+    echo "Adding environment variables"
+    for j in "${!keys[@]}"; do
+        envs="{\"key\": \"${keys[${j}]}\", \"value\": \"${values[${j}]}\"}"
+        echo "Adding $envs"
+        appdesc=$(echo "${appdesc}" | jq --argjson envs "${envs}" '.environment += [$envs]')
+    done
+
+    # Device Description: Add/replace app description to/in device description
+    devdesc=$(cat "${device_description}")
+    exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${container}-${sha256}.description\")")
+    if [[ "${exists}" = false ]]; then
+      echo "Adding app description to device description"
+    else
+      echo "Replacing existing app description"
+      devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${container}-${sha256}.description\"))")
+    fi
+    devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+
+    # Device Description: Store
+    echo "Writing ${device_description}"
+    printf "%s\n" "${devdesc}" > "${device_description}"
+done

@@ -1,7 +1,5 @@
-.PHONY: all
 all:
 	go build
 
-.PHONY: coap
-coap:
-	go build -tags coap -ldflags="-s -w"
+minimal:
+	go build -ldflags="-s -w" -tags nodefaults,socket,tpm,snp,tdx,sw
