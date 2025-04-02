@@ -397,7 +397,7 @@ func parseECDSAQuoteSignatureDataStructV4(buf *bytes.Buffer, quoteSigStruct *ECD
 
 	// parse PCK Cert Chain (PCK Leaf Cert || Intermediate CA Cert || Root CA Cert)
 	log.Trace("Parsing measurement certificate chain from report..")
-	certChain, err := parseCertificates(tmp[:], true)
+	certChain, err := ParseCertificates(tmp[:], true)
 	if err != nil {
 		return fmt.Errorf("failed to parse certificate chain from QECertData: %v", err)
 	}

@@ -16,28 +16,23 @@
 package sgxdriver
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
-	"strings"
-	"time"
+	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/edgelesssys/ego/enclave"
+	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -45,13 +40,10 @@ import (
 
 var log = logrus.WithField("service", "sgxdriver")
 
-var (
-	tcbInfoUrl             = "https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=%s"
-	pckCertUrl             = "https://api.trustedservices.intel.com/sgx/certification/v4/pckcert?encrypted_ppid=%s&cpusvn=%s&pceid=%s&pcesvn=%s"
-	ROOT_CA_CERT_NAME      = "Intel_SGX_Root_CA"
-	INTERMEDIATE_CERT_NAME = "Intel_SGX_PCK_Processor_CA"
-	PCK_CERT_NAME          = "Intel_SGX_PCK_Certificate"
-	TCB_SIGNING_CERT_NAME  = "Intel_SGX_TCB_Signing"
+const (
+	sgxChainFile     = "sgx_ak_chain.pem"
+	signingChainFile = "sgx_ik_chain.pem"
+	sgxPrivFile      = "sgx_ik_private.key"
 )
 
 // Sgx is a structure required for implementing the Measure method
@@ -69,10 +61,17 @@ func (s *Sgx) Name() string {
 
 // Init initializes the SGX driver with the specifified configuration
 func (sgx *Sgx) Init(c *ar.DriverConfig) error {
+	var err error
 
 	// Initial checks
 	if sgx == nil {
 		return errors.New("internal error: SNP object is nil")
+	}
+	switch c.Serializer.(type) {
+	case ar.JsonSerializer:
+	case ar.CborSerializer:
+	default:
+		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
 	// Create storage folder for storage of internal data if not existing
@@ -85,18 +84,32 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 		}
 	}
 
-	// Create new private key for signing
-	ikPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("failed to generate private key: %w", err)
-	}
-	sgx.ikPriv = ikPriv
+	if provisioningRequired(c.StoragePath) {
+		// Create new private key for signing
+		ikPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return fmt.Errorf("failed to generate private key: %w", err)
+		}
+		sgx.ikPriv = ikPriv
 
-	// Create CSRs and fetch IK and AK certificates
-	log.Info("Performing SGX provisioning")
-	sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c, c.ServerAddr)
-	if err != nil {
-		return fmt.Errorf("failed to provision sgx driver: %w", err)
+		// Create CSRs and fetch IK and AK certificates
+		log.Info("Performing SGX provisioning")
+		sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c.DeviceConfig, c.ServerAddr)
+		if err != nil {
+			return fmt.Errorf("failed to provision sgx driver: %w", err)
+		}
+
+		if c.StoragePath != "" {
+			err = saveCredentials(c.StoragePath, sgx)
+			if err != nil {
+				return fmt.Errorf("failed to save SGX credentials: %w", err)
+			}
+		}
+	} else {
+		sgx.akChain, sgx.ikChain, sgx.ikPriv, err = loadCredentials(c.StoragePath)
+		if err != nil {
+			return fmt.Errorf("failed to load SGX credentials: %w", err)
+		}
 	}
 
 	return nil
@@ -112,18 +125,67 @@ func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, errors.New("internal error: SGX object is nil")
 	}
 
-	data, err := enclave.GetRemoteReport(nonce)
+	data, err := getMeasurement(nonce)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}
 
+	quote, err := verifier.DecodeSgxReport(data)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to decode SGX quote: %w", err)
+	}
+
+	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
+	var quoteCerts verifier.SgxCertificates
+	if quote.QuoteSignatureData.QECertDataType != 5 {
+		return ar.Measurement{}, fmt.Errorf("quoting enclave cert data type not supported: %v",
+			quote.QuoteSignatureData.QECertDataType)
+	}
+	quoteCerts, err = verifier.ParseCertificates(quote.QuoteSignatureData.QECertData, true)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to parse certificate chain from QECertData: %w", err)
+	}
+	log.Tracef("PCK Leaf Certificate: %v",
+		string(internal.WriteCertPem(quoteCerts.PCKCert)))
+
+	// Get FMSPC
+	exts, err := pcs.PckCertificateExtensions(quoteCerts.PCKCert)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+	}
+	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
+
+	// Fetch collateral
+	collateral, err := verifier.FetchCollateral(exts.FMSPC, quoteCerts.PCKCert, verifier.SGX_QUOTE_TYPE)
+	if err != nil {
+		return ar.Measurement{}, fmt.Errorf("failed to get SGX collateral: %w", err)
+	}
+
 	measurement := ar.Measurement{
 		Type:     "SGX Measurement",
-		Evidence: data[16:],
+		Evidence: data,
 		Certs:    internal.WriteCertsDer(sgx.akChain),
+		Artifacts: []ar.Artifact{
+			{
+				Type: "SGX Collateral",
+				Events: []ar.MeasureEvent{
+					{
+						IntelCollateral: collateral,
+					},
+				},
+			},
+		},
 	}
 
 	return measurement, nil
+}
+
+func getMeasurement(nonce []byte) ([]byte, error) {
+	data, err := enclave.GetRemoteReport(nonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
+	}
+	return data[16:], nil
 }
 
 // Lock implements the locking method for the attestation report signer interface
@@ -173,8 +235,26 @@ func (sgx *Sgx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func provisionSgx(ik crypto.PrivateKey, c *ar.DriverConfig, addr string,
+func provisionSgx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
+
+	// Create IK CSR and fetch new certificate including its chain from EST server
+	ikchain, err := provisionIk(priv, devConf, addr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
+	}
+
+	// Fetch SGX certificate chain for SGX Attestation Key
+	akchain, err := fetchAk()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get SGX cert chain: %w", err)
+	}
+
+	return akchain, ikchain, nil
+}
+
+func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+) ([]*x509.Certificate, error) {
 
 	// Get CA certificates and enroll newly created CSR
 	// TODO provision EST server certificate with a different mechanism,
@@ -186,242 +266,168 @@ func provisionSgx(ik crypto.PrivateKey, c *ar.DriverConfig, addr string,
 	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
+		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 	log.Debug("Received certs:")
 	for _, c := range caCerts {
 		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 	if len(caCerts) == 0 {
-		return nil, nil, fmt.Errorf("no certs provided")
+		return nil, fmt.Errorf("no certs provided")
 	}
 
 	log.Warn("Setting retrieved cert for future authentication")
 	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to set EST CA: %w", err)
+		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
-	// Perform IK EST enrollment
-	ikCsr, err := ar.CreateCsr(ik, c.DeviceConfig.Sgx.IkCsr)
+	// Create IK CSR for authentication
+	csr, err := ar.CreateCsr(priv, devConf.Sgx.IkCsr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create CSRs: %w", err)
+		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
-	log.Debugf("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := client.SimpleEnroll(addr, ikCsr)
+	// Request IK certificate from EST server
+	cert, err := client.SimpleEnroll(addr, csr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)
-	}
-	ikChain := append([]*x509.Certificate{ikCert}, caCerts...)
-
-	// Fetch SGX AK certificate chain
-	akChain, err := getSgxCertChain(c)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get SGX cert chain: %w", err)
+		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
-	return akChain, ikChain, nil
+	return append([]*x509.Certificate{cert}, caCerts...), nil
 }
 
-func readCertFromFile(filePath string) (*x509.Certificate, error) {
-	// Read Certificate
-	cert_raw, err := os.ReadFile(filePath)
+func fetchAk() ([]*x509.Certificate, error) {
+
+	nonce := make([]byte, 64)
+	_, err := rand.Read(nonce)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate: %w", err)
+		return nil, fmt.Errorf("failed to create nonce: %w", err)
 	}
 
-	// Parse Certificate
-	ikCert, err := x509.ParseCertificate(cert_raw)
+	// Fetch initial attestation report which contains AK cert chain
+	data, err := getMeasurement(nonce)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}
-	return ikCert, nil
+
+	// Decode attestation report
+	quote, err := verifier.DecodeSgxReport(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode SGX quote: %v", err)
+	}
+
+	// Check nonce
+	if !bytes.Equal(quote.ISVEnclaveReport.ReportData[:], nonce) {
+		return nil, errors.New("freshness check failed for SGX quote")
+	}
+
+	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
+	var quoteCerts verifier.SgxCertificates
+	if quote.QuoteSignatureData.QECertDataType != 5 {
+		return nil, fmt.Errorf("quoting enclave cert data type not supported: %v",
+			quote.QuoteSignatureData.QECertDataType)
+	}
+	quoteCerts, err = verifier.ParseCertificates(quote.QuoteSignatureData.QECertData, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate chain from QECertData: %w", err)
+	}
+
+	// Return AK cert chain
+	return []*x509.Certificate{
+		quoteCerts.PCKCert,
+		quoteCerts.IntermediateCert,
+		quoteCerts.RootCACert,
+	}, nil
 }
 
-func isCertValid(cert *x509.Certificate) bool {
-	currentTime := time.Now()
-	return currentTime.After(cert.NotAfter) || currentTime.Before(cert.NotBefore)
+func provisioningRequired(p string) bool {
+	// Stateless operation always requires provisioning
+	if p == "" {
+		log.Info("SGX Provisioning REQUIRED")
+		return true
+	}
+
+	// If any of the required files is not present, we need to provision
+	if _, err := os.Stat(path.Join(p, sgxChainFile)); err != nil {
+		log.Info("SGX Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, signingChainFile)); err != nil {
+		log.Info("SGX Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, sgxPrivFile)); err != nil {
+		log.Info("SGX Provisioning REQUIRED")
+		return true
+	}
+
+	log.Info("SGX Provisioning NOT REQUIRED")
+
+	return false
 }
 
-// retrieve PCK Certificate Chain + TCB Signing Cert with caching mechanism
-func getSgxCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
-	if c.StoragePath == "" {
-		log.Trace("No cache storage available, downloading cert chain")
-		return downloadSgxCertChain(&c.DeviceConfig)
+func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
+	crypto.PrivateKey, error,
+) {
+	data, err := os.ReadFile(path.Join(p, sgxChainFile))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+	}
+	akchain, err := internal.ParseCertsPem(data)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+	}
+	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
+
+	data, err = os.ReadFile(path.Join(p, signingChainFile))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+	}
+	ikchain, err := internal.ParseCertsPem(data)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+	}
+	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
+
+	data, err = os.ReadFile(path.Join(p, sgxPrivFile))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read SGX private key from %v: %w", p, err)
+	}
+	priv, err := x509.ParsePKCS8PrivateKey(data)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse SGX private key: %w", err)
 	}
 
-	fileNames := []string{PCK_CERT_NAME, INTERMEDIATE_CERT_NAME, ROOT_CA_CERT_NAME, TCB_SIGNING_CERT_NAME}
-	certificates := []*x509.Certificate{}
-
-	// Use cache or download if not present
-	for _, fileName := range fileNames {
-		filePath := fmt.Sprintf("%s/%s.pem", c.StoragePath, fileName)
-		_, err := os.Stat(filePath)
-
-		if err != nil {
-			certs, err := downloadAndCacheCertChain(c)
-			if err != nil {
-				return nil, fmt.Errorf("error downloading and caching Sgx Certificate Chain: %v", err)
-			}
-			certificates = append(certificates, certs...)
-			return certificates, nil
-		}
-
-		cert, err := readCertFromFile(filePath)
-		if err != nil || !isCertValid(cert) {
-			certs, err := downloadAndCacheCertChain(c)
-			if err != nil {
-				return nil, fmt.Errorf("error downloading and caching Sgx Certificate Chain: %v", err)
-			}
-			certificates = append(certificates, certs...)
-			break
-		}
-		certificates = append(certificates, cert)
-	}
-
-	return certificates, nil
+	return akchain, ikchain, priv, nil
 }
 
-func downloadAndCacheCertChain(c *ar.DriverConfig) ([]*x509.Certificate, error) {
-	certs, err := downloadSgxCertChain(&c.DeviceConfig)
+func saveCredentials(p string, sgx *Sgx) error {
+	akchainPem := make([]byte, 0)
+	for _, cert := range sgx.akChain {
+		c := internal.WriteCertPem(cert)
+		akchainPem = append(akchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(p, sgxChainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, sgxChainFile), err)
+	}
+
+	ikchainPem := make([]byte, 0)
+	for _, cert := range sgx.ikChain {
+		c := internal.WriteCertPem(cert)
+		ikchainPem = append(ikchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(p, signingChainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, signingChainFile), err)
+	}
+
+	key, err := x509.MarshalPKCS8PrivateKey(sgx.ikPriv)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed marshal private key: %w", err)
+	}
+	if err := os.WriteFile(path.Join(p, sgxPrivFile), key, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(p, sgxPrivFile), err)
 	}
 
-	// Store certificates in cache
-	for _, cert := range certs {
-		fileName := fmt.Sprintf("%s/%s.pem", c.StoragePath, strings.ReplaceAll(cert.Subject.CommonName, " ", "_"))
-		err = os.WriteFile(fileName, cert.Raw, 0644)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return certs, nil
-}
-
-// download PCK Certificate Chain + TCB Signing Cert from Intel API
-func downloadSgxCertChain(config *ar.DeviceConfig) ([]*x509.Certificate, error) {
-
-	certificates := []*x509.Certificate{}
-	encrypted_ppid := hex.EncodeToString(config.SgxValues.EncryptedPPID)
-	cpusvn := hex.EncodeToString(config.SgxValues.Cpusvn)
-	pceid := hex.EncodeToString(config.SgxValues.Pceid)
-	pcesvn := hex.EncodeToString(config.SgxValues.Pcesvn)
-	pckCertUrl = fmt.Sprintf(pckCertUrl, encrypted_ppid, cpusvn, pceid, pcesvn)
-
-	// 1. GET PCK Certificate and Certificte Chain
-	req, err := http.NewRequest("GET", pckCertUrl, nil)
-	if err != nil {
-		return certificates, fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Perform untrusted GET request (ego has no access to root certificates in enclave)
-	// Should be ok, since root ca certificate fingerprint is checked by verifier
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	client := http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
-	resp, err := client.Do(req)
-	if err != nil {
-		return certificates, fmt.Errorf("error performing request: %v", err)
-	}
-
-	// Extract PCK-Certificate-Chain from the header
-	sgxPckIssuerChain := resp.Header.Get("SGX-PCK-Certificate-Issuer-Chain")
-
-	decoded, err := url.QueryUnescape(sgxPckIssuerChain)
-	if err != nil {
-		return certificates, fmt.Errorf("error decoding URL-encoded string: %v", err)
-	}
-
-	// Split the PEM certificates
-	certs := strings.SplitAfter(decoded, "-----END CERTIFICATE-----\n")
-	for _, certPEM := range certs {
-		if certPEM != "" {
-
-			// Decode the PEM block
-			block, _ := pem.Decode([]byte(certPEM))
-			if block == nil {
-				return certificates, fmt.Errorf("error decoding PCK cert chain")
-			}
-
-			// Parse the certificate
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return certificates, fmt.Errorf("error parsing certificate: %v", err)
-			}
-
-			certificates = append(certificates, cert)
-		}
-	}
-
-	// Read the PCK certificate
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return certificates, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	// Decode the PEM block
-	block, _ := pem.Decode([]byte(body))
-	if block == nil {
-		return certificates, fmt.Errorf("error decoding PCK cert")
-	}
-
-	// Parse the certificate
-	pckCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return certificates, fmt.Errorf("error parsing certificate: %v", err)
-
-	}
-	certificates = append(certificates, pckCert)
-	resp.Body.Close()
-
-	// Extract FMSPC from PCK certificate SGX Extensions
-	sgxExtensions, err := verifier.ParseSGXExtensions(pckCert.Extensions[verifier.SGX_EXTENSION_INDEX].Value[4:])
-	if err != nil {
-		return certificates, err
-	}
-	tcbInfoUrl = fmt.Sprintf(tcbInfoUrl, hex.EncodeToString(sgxExtensions.Fmspc.Value))
-
-	// 2. GET TCB Signing Certificate
-	req, err = http.NewRequest("GET", tcbInfoUrl, nil)
-	if err != nil {
-		return certificates, fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Perform the request
-	resp, err = client.Do(req)
-	if err != nil {
-		return certificates, fmt.Errorf("error performing request: %v", err)
-	}
-
-	// Extract and print TCB-Info-Issuer-Chain from the header
-	tcbInfoIssuerChain := resp.Header.Get("TCB-Info-Issuer-Chain")
-
-	decoded, err = url.QueryUnescape(tcbInfoIssuerChain)
-	if err != nil {
-		return certificates, fmt.Errorf("error decoding URL-encoded string: %v", err)
-	}
-
-	// Split the PEM certificates
-	certs = strings.SplitAfter(decoded, "-----END CERTIFICATE-----\n")
-	tcbSigningCert := certs[0]
-	if tcbSigningCert != "" {
-		// Decode the PEM block
-		block, _ := pem.Decode([]byte(tcbSigningCert))
-		if block == nil {
-			return certificates, fmt.Errorf("error decoding TCB Signing Cert")
-		}
-
-		// Parse the certificate
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return certificates, fmt.Errorf("error parsing certificate: %v", err)
-		}
-
-		certificates = append(certificates, cert)
-	}
-
-	resp.Body.Close()
-
-	return certificates, nil
+	return nil
 }

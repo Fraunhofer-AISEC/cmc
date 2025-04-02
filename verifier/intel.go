@@ -366,7 +366,7 @@ func ParseCollateral(c *ar.IntelCollateral) (*Collateral, error) {
 }
 
 // parse PEM/DER formatted certificates into a SgxCertificates struct
-func parseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
+func ParseCertificates(certsRaw any, pem bool) (SgxCertificates, error) {
 	var certChain SgxCertificates
 	var certs []*x509.Certificate
 	var err error
