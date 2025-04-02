@@ -1,39 +1,46 @@
 # Build
 
-All binaries can be built with the *go*-compiler. For an explanation of the various flags run
-<binary> -help
+All binaries can be built with the *go*-compiler.
 
-## Build and Run the Provisioning Server
+> Note: Building SGX enclaves requires a custom compiler and different commands,
+> see [SGX Setup](./setup-sgx.md)
+
+## Build and Install all Binaries
+
+```sh
+# Clone the CMC repo
+git clone https://github.com/Fraunhofer-AISEC/cmc
+
+# Build CMC
+cd cmc
+go build ./...
+
+# Install CMC $GOPATH/bin
+go install ./...
+```
+
+## Build the Provisioning Server
 
 ```sh
 cd est/estserver
 go build
-./estserver -help # For all commandline flags
 ```
 
-## Build and Run the CMC Daemon
-
-The below commands show how to build and run the cmcd. At runtime, a client can provide the cmcd
-with root certificates that are to be used during the verification of the attestation report. If
-these are not provided, the cmcd uses the system's root certificates instead. Under Linux, these are
-commonly stored under `/etc/ssl/certs`. To temporarily add certificates, see the commands
-using `SSL_CERT_FILE` and `SSL_CERT_DIR` below.
+## Build the CMC Daemon
 
 ```sh
 cd cmcd
 go build
-./cmcd -help # For all command line options
-# with added custom certificates
-SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd -config <config-file>
-SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file>
 ```
 
-## Build and Run the Test Tool
+## Build the Test Tool
 
 ```sh
 cd testtool
 go build
-./testtool -help # To display all commandline options
+
+# Build testtool as SGX enclave
+make egocmc
 ```
 
 ## Customize Builds
@@ -56,12 +63,20 @@ To disable all features, use the custom `nodefaults` tag. You can then enable th
 want to build via additional tags.
 
 Currently supported tags for the `cmcd` and `testtool` are:
+- `nodefaults` Disables all features
 - `grpc` Enables the gRPC API
 - `coap` Enables the CoAP API
+- `socket` Enables the socket API
+- `libapi` Enables the library API
+- `tpm` Enables the TPM driver
+- `snp` Enables the SNP driver
+- `tdx` Enables the Intel TDX driver
+- `sgx` Enables the Intel SGX driver
+- `sw` Enables the container driver
 
-To build all binaries with `coap` but without `grpc` support:
+To build the cmcd/testtool with `socket` and `tpm` support:
 ```sh
-go build -tags nodefaults,coap
+go build -tags nodefaults,socket,tpm
 ```
 
 > Note: disabling features during build-time but specifying to use them in the configuration files
@@ -78,19 +93,3 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 cd grpcapi/
 make
 ```
-
-### SGX Build
-
-The SGX integration is build on top of the [EGo Framework](https://github.com/edgelesssys/ego) for the development of confidential apps in Go. 
-Since SGX enclaves are designed to execute only one process inside an isolated environment, the libapi implementation has to be used for the generation and verification of attestation reports. 
-
-Once you have developed your application and integrated the cmc library following the instructions provided in the [integration documentation](integration.md), compile, sign and run it like this: 
-```
-CGO_CFLAGS=-D_FORTIFY_SOURCE=0 ego-go build && ego sign ../example-setup/enclave.json # or create custom enclave.json
-sudo ego run testtool -mode generate -config cmc-data/libapi-sgx-config.json # run generate example 
-sudo ego run testtool -mode verify -config cmc-data/libapi-sgx-config.json # run verify example
-``` 
-
-Additional information for the enclave such as heapSize, mount points, security version (ISV SVN) and enclave product ID (ISV Prod ID) can be specified in the enclave.json file. 
-
-See https://docs.edgeless.systems/ego/reference/config for more information. 

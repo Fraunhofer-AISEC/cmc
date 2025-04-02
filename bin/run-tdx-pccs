@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+case "${PATH}" in ""|"${dir}/bin:"*) ;; *) PATH="${dir}/bin:${PATH}";; esac
+
+config="${dir}/example-setup/sgx/tdx-pccs-conf.json"
+pki="${dir}/data/pki"
+
+container_image="tdx-pccs:latest"
+container_name="tdx-pccs"
+
+docker_file_path="${dir}/example-setup/docker/${container_name}.dockerfile"
+docker_network="tdx-host"
+
+docker build -t "${container_image}" -f "${docker_file_path}" "${dir}"
+
+docker network ls | grep -q "${docker_network}" || docker network create "${docker_network}"
+
+docker create \
+--user "pccs:pccs" \
+-v "${pki}/tdx-pccs-private.pem":/opt/intel/pccs/ssl_key/private.pem \
+-v "${pki}/tdx-pccs-cert.pem":/opt/intel/pccs/ssl_key/file.crt \
+-v "${config}":/opt/intel/pccs/config/default.json \
+--network "${docker_network}" \
+-p 8081:8081  \
+--name "${container_name}" \
+"${container_image}"
+
+docker start "${container_name}"

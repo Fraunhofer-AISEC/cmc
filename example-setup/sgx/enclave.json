@@ -1,0 +1,30 @@
+{
+ "exe": "../../testtool/testtool",
+ "key": "../../data/pki/private-ego.pem",
+ "debug": false,
+ "heapSize": 512,
+ "executableHeap": false,
+ "productID": 1,
+ "securityVersion": 1,
+ "mounts": [
+    {
+        "source": "../data",
+        "target": "data",
+        "type": "hostfs",
+        "readOnly": false
+    },
+    {
+        "source": "../example-setup/configs",
+        "target": "configs",
+        "type": "hostfs",
+        "readOnly": true
+    }
+ ],
+ "env": null,
+ "files": [
+        {
+            "source": "../example-setup/cas/SectigoRSAOrganizationValidationSecureServerCA.pem",
+            "target": "/etc/ssl/certs/SectigoRSAOrganizationValidationSecureServerCA.pem"
+        }
+    ]
+}

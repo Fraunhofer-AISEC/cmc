@@ -1,0 +1,123 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+# TODO specify path to OVMF and parameters
+ovmf="${dir}/data/uefi/result/ovmf_img.fd"
+vcpus=2
+vmm_type=ec2
+
+data="${dir}/data"
+input="${dir}/example-setup/metadata-templates"
+out="${data}/metadata-raw"
+
+device_description="${out}/device.description.json"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -d "${input}" ]]; then
+  echo "Data directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+mkdir -p "${out}"
+
+echo "Using ${data} as directory for local data"
+
+# Retrieve high level details
+set +e
+firmware="unknown"
+bootloader=$(grub-install --version)
+kernel=$(uname -r)
+os=$(lsb_release -sd 2>/dev/null)
+set -e
+
+# Get AMD cert chain for milan
+wget -O "${dir}/cert_chain" https://kdsintf.amd.com/vlek/v1/Milan/cert_chain
+awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${dir}/cert_chain" > "${dir}/ark_milan.pem"
+
+fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+
+# TODO parameters for vcpus and vmm-type
+ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus="${vcpus}" --vmm-type="${vmm_type}" --ovmf="${ovmf}")
+
+# Load manifest template
+manifest=$(cat "${input}/manifest.json")
+
+name="de.test.rtm"
+
+# Insert manifest properties
+setjson "manifest" "name"                  "${name}"
+setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "manifest" "developerCommonName"   "test developer"
+setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "manifest" "description"           "RTM Manifest"
+setarr  "manifest" "baseLayers"            "${name}"
+setjson "manifest" "certLevel"             3
+setjson "manifest" "caFingerprint"         "${fingerprint}"
+
+# Insert platform details
+setjson "manifest" "details.firmware" "${firmware}"
+setjson "manifest" "details.bootloader" "${bootloader}"
+setjson "manifest" "details.kernel" "${kernel}"
+setjson "manifest" "details.os" "${os}"
+
+# Insert reference value
+refval="{}"
+setjson "refval" "type" "SNP Reference Value"
+setjson "refval" "subtype" "SNP Launch Digest"
+setjson "refval" "index" 0
+setjson "refval" "sha384" "${ref}"
+extendarr "manifest" "referenceValues" "${refval}"
+
+policy=$(cat "${input}/snp.policy.json")
+
+# Create policy
+setjson "policy" "reportVersion" 2
+setjson "policy" "policy.SingleSocket" false
+setjson "policy" "policy.Debug" false
+setjson "policy" "policy.Migration" false
+setjson "policy" "policy.Smt" true
+setjson "policy" "policy.AbiMajor" 0
+setjson "policy" "policy.AbiMinor" 0
+setjson "policy" "fw.build" 3
+setjson "policy" "fw.major" 1
+setjson "policy" "fw.minor" 49
+setjson "policy" "tcb.bl" 2
+setjson "policy" "tcb.tee" 0
+setjson "policy" "tcb.snp" 5
+setjson "policy" "tcb.ucode" 55
+
+setjson "manifest" "snpPolicy" "${policy}"
+
+# Save the RTM manifest
+printf "Writing %s\n" "${out}/rtm.manifest.json"
+printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
+
+# Root manifest description: Create corresponding root manifest description
+rootdesc=$(cat "${input}/manifest.description.json")
+rootdesc=$(echo "${rootdesc}" | jq ".name = \"${name}.description\"")
+rootdesc=$(echo "${rootdesc}" | jq ".manifest = \"${name}\"")
+
+# Device Description: Add/replace root manifest description to/in device description
+devdesc=$(cat "${device_description}")
+exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
+if [[ "${exists}" = false ]]; then
+  echo "Adding root manifest description to device description"
+else
+  echo "Replacing existing root manifest description"
+  devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+fi
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${rootdesc}]" '.descriptions += $desc')
+
+# Device Description: Store
+echo "Writing ${device_description}"
+printf "%s\n" "${devdesc}" > "${device_description}"

@@ -6,7 +6,7 @@
 
 The CMC repository provides tools and software to enable remote attestation of computing platforms,
 as well as remote attested TLS and HTTPS channels between those platforms. Currently, the CMC
-repository supports Trusted Platform Module (TPM) attestation, as well as AMD SEV-SNP attestation.
+repository supports Trusted Platform Modules (TPMs), AMD SEV-SNP, Intel SGX as well as Intel TDX.
 The goal is to make attestation easy for verifiers without prior knowledge of the software stack,
 based on a set of trusted CAs and signed metadata describing the software stack.
 
@@ -14,36 +14,18 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 *[paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171) and in the*
 *[documentation](./doc)*
 
-## Requirements
+## Quick Start
 
-- A Linux platform
-- For TPM attestation, access to `/dev/tpmrm0` or `/dev/tpm0`.
-- For AMD SEV-SNP an SNP-capable AMD server and an SNP VM with access to `/dev/sev-guest`
-- for Intel SGX an Intel SGX capable machine with all required Intel SGX software installed
+### Prerequites
 
-## Prerequisites
+Make sure, all [prerequisites](./doc/setup.md#prerequisites) are installed and all
+[requirements](./doc/setup.md#requirements) are met.
 
-Several packages must be installed for building the `cmc` and generating metada, which has been
-tested for debian and ubuntu:
-```sh
-sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq yq
-```
-NOTE: For ubuntu, `yq` must be installed as a snap package
+> :warning: **Note:** You should run the CMC only for testing on a development machine, or inside
+> a Virtual Machine (VM) or container. The software directly interacts with the hardware (TPM, SNP,
+> SGX, or TDX).
 
-Building the *cmcd* requires *go*. Follow https://golang.org/doc/install.
-
-Generating reference values for TPM-based attestation requires the `tpm-pcr-tools`:
-```sh
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
-cd tpm-pcr-tools
-make
-sudo make install
-```
-
-Building the AWS Firmware (OVMF) to calculate the reference values for attestation of AWS AMD SEV-SNP
-virtual machines requires [Nix](https://nixos.org/download/)
-
-## Build
+### Build
 
 Clone the repository:
 ```sh
@@ -57,25 +39,17 @@ go build ./...
 go install ./...
 ```
 
-## Quick Start
+### Generate metadata
 
-Create a demo PKI and all required metadata for a TPM-based attestation:
 ```sh
-./cmc/example-setup/setup-cmc-tpm <cmc-folder> <metadata-folder> json
+source env.bash
+setup-cmc <driver>
 ```
-`<cmc-folder>` is the relative or absolute path to the cloned `cmc` repository.
-`<metadata-folder>` is an arbitrary folder that will be created and that will store metadata and
-configuration files. `json` specifies JSON as the serialization format. `cbor` is possible as well.
+This will create and store an example PKI, metadata and configuration files in `cmc/data`.
+`driver` can be `tpm` for TPM, `sgx` for Intel SGX, `tdx` for Intel TDX, or `snp` for AMD SEV-SNP.
 
-For the JSON example configuration folders to work without modifications, choose as `<metadata-folder>`
-the folder `cmc-data` located in the same root folder the `cmc` repository resides in.
-Export this root folder as `$CMC_ROOT`.
-
-The CMC repository contains a complete local TPM-based example setup including a demo CA and all
-required configurations and metadata. It was tested on Ubuntu 22.04 LTS.
-
-> :warning: **Note:** You should run this only for testing on a development machine, or inside
-> a Virtual Machine (VM). The software directly interacts with the hardware (TPM, SNP).
+Modify the paths in `cmc/example-setup/configs`. Either use absolute paths or paths relative
+to your working directory.
 
 ### Run
 
@@ -85,24 +59,17 @@ establish attested HTTPS connections. For detailed instructions refer to the
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-./estserver -config $CMC_ROOT/cmc-data/est-server-conf.json
+./estserver -config cmc/example-setup/configs/est-server-conf.json
 
-# Build and run the cmcd
-./cmcd -config $CMC_ROOT/cmc-data/cmcd-conf.json
+# Build and run the cmcd (Adjust driver to tpm, sgx, tdx, or snp)
+./cmcd -config cmc/example-setup/configs/cmcd-conf.json
 
 # Run an attested TLS server
-./testtool -config $CMC_ROOT/cmc-data/testtool-conf.json -mode listen
+./testtool -config cmc/example-setup/configs/testtool-conf.json -mode listen
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-./testtool -config $CMC_ROOT/cmc-data/testtool-conf.json -mode dial
+./testtool -config cmc/example-setup/configs/testtool-conf.json -mode dial
 ```
-
-**Note**: The *cmcd* TPM provisioning process includes the verification of the TPM's EK certificate
-chain. In the example setup, this verification is turned off, as the database might not contain
-the certificate chain for the TPM of the machine the *cmcd* is running on. Instead, simply a
-warning is printed. The intermediate and root CA for this chain can be downloaded from the TPM
-vendor. The certificates can then be added in to the `cmc/example-setup/tpm-ek-certs.db`
-database. The `verifyEkCert` parameter in the *estserver* config can then be set to true.
 
 ## Further Documentation
 
@@ -110,19 +77,19 @@ database. The `verifyEkCert` parameter in the *estserver* config can then be set
 
 An overview of the architecture is given in [Architecture](./doc/architecture.md).
 
-### Configuration
-
-The tools can be configured via JSON configuration files and commandline flags. The configuration
-is further explained in [Configuration Documentation](./doc/configuration.md).
-
 ### Detailed Setup
 
-For instructions on creating and signing the metadata with an arbitrary PKI yourself, see
-[Detailed Setup](./doc/setup.md)
+For detailed instructions on how to setup TPM, Intel SGX, Intel TDX or AMD SEV-SNP platforms
+including PKI and metadata generation, refer to [Detailed Setup](./doc/setup.md)
 
 ### Build
 
-See [Build Documentation](./doc/build.md)
+See [Build Documentation](./doc/build.md) for instructions on how to build the go binaries.
+
+### Run
+
+For configuring and running the go binaries, refer to the
+[Run Documentation](./doc/configuration.md).
 
 ### APIs and Protocols
 

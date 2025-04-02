@@ -1,0 +1,87 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/data"
+input="${dir}/example-setup/metadata-templates"
+out="${data}/metadata-raw"
+
+device_description="${out}/device.description.json"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -d "${input}" ]]; then
+  echo "Data directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+mkdir -p "${out}"
+
+echo "Using ${data} as directory for local data"
+
+# Retrieve platform details
+set +e
+firmware="Lenovo"
+bootloader=$(grub-install --version)
+set -e
+
+# Get the fingerprint of the TPM privacy CA that was used for credential activation
+fingerprint=$(openssl x509 -in "${data}/pki/ca.pem" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+
+# Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
+referenceValues=$(sudo parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json -e)
+
+# Load manifest template
+json=$(cat "${input}/manifest.json")
+
+name="de.test.rtm"
+
+# Insert manifest properties
+setjson "json" "name"                  "${name}"
+setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "json" "developerCommonName"   "test developer"
+setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "json" "description"           "RTM Manifest"
+setarr  "json" "baseLayers"            "${name}"
+setjson "json" "certLevel"             3
+setjson "json" "caFingerprint"         "${fingerprint}"
+
+# Insert platform details
+json=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
+json=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
+
+# Replace existing reference values with new reference values in the RTM Manifest
+json=$(echo "${json}" | jq 'del(.referenceValues[])')
+json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+
+# Save the RTM manifest
+echo "Writing ${out}/rtm.manifest.json"
+printf "%s\n" "${json}" > "${out}/rtm.manifest.json"
+
+# RTM Manifest Description: Create corresponding RTM manifest description
+rtmdesc=$(cat "${input}/manifest.description.json")
+rtmdesc=$(echo "${rtmdesc}" | jq ".name = \"${name}.description\"")
+rtmdesc=$(echo "${rtmdesc}" | jq ".manifest = \"${name}\"")
+
+# Device Description: Add/replace RTM manifest description to/in device description
+devdesc=$(cat "${device_description}")
+exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
+if [[ "${exists}" = false ]]; then
+  echo "Adding RTM manifest description to device description"
+else
+  echo "Replacing existing RTM Manifest description"
+  devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+fi
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${rtmdesc}]" '.descriptions += $desc')
+
+# Device Description: Store
+echo "Writing ${device_description}"
+printf "%s\n" "${devdesc}" > "${device_description}"

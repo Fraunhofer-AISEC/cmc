@@ -1,0 +1,16 @@
+{
+    "port": 9000,
+    "signingKey": "../../data-ids/pki/device_sub_ca-key.pem",
+    "signingCerts": [
+        "../../data-ids/pki/device_sub_ca.pem",
+        "../../data-ids/pki/ca.pem"
+    ],
+    "httpFolder": "../../data-ids/",
+    "verifyEkCert": false,
+    "tpmEkCertDb": "../../data-ids/tpm-ek-certs.db",
+    "estKey": "../../data-ids/pki/est-key.pem",
+    "estCerts": [
+        "../../data-ids/pki/est.pem"
+    ],
+    "logLevel": "trace"
+}
