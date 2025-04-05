@@ -21,10 +21,6 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 Make sure, all [prerequisites](./doc/setup.md#prerequisites) are installed and all
 [requirements](./doc/setup.md#requirements) are met.
 
-> :warning: **Note:** You should run the CMC only for testing on a development machine, or inside
-> a Virtual Machine (VM) or container. The software directly interacts with the hardware (TPM, SNP,
-> SGX, or TDX).
-
 ### Build
 
 Clone the repository:
@@ -39,37 +35,33 @@ go build ./...
 go install ./...
 ```
 
-### Generate metadata
-
-```sh
-source env.bash
-setup-cmc <driver>
-```
-This will create and store an example PKI, metadata and configuration files in `cmc/data`.
-`driver` can be `tpm` for TPM, `sgx` for Intel SGX, `tdx` for Intel TDX, or `snp` for AMD SEV-SNP.
-
-Modify the paths in `cmc/example-setup/configs`. Either use absolute paths or paths relative
-to your working directory.
+Instructions on how to customize the build can be found in the [Build Documentation](./doc/build.md).
 
 ### Run
 
-The tools can generate and verify attestation reports, establish attested TLS connections and
-establish attested HTTPS connections. For detailed instructions refer to the
-[Detailed Setup](./doc/setup.md)
-
+We provide a Ubuntu-VM with attached swTPM for testing:
 ```sh
-# Start the EST server that supplies the certificates and metadata for the cmcd
-./estserver -config cmc/example-setup/configs/est-server-conf.json
+source env.bash
 
-# Build and run the cmcd (Adjust driver to tpm, sgx, tdx, or snp)
-./cmcd -config cmc/example-setup/configs/cmcd-conf.json
+# Download and configure image and tools
+setup-vm
 
-# Run an attested TLS server
-./testtool -config cmc/example-setup/configs/testtool-conf.json -mode listen
+# Start swTPM (separate terminal )
+vm-swtpm
 
-# Run an attested TLS client estblishing a mutually attested TLS connection to the server
-./testtool -config cmc/example-setup/configs/testtool-conf.json -mode dial
+# Start estserver
+vm-estserver
+
+# Start VM
+vm-start
+
+# Establish attested TLS connection to Ubuntu VM server
+vm-testtool
 ```
+
+The testtool on the host establishes an attested TLS connection to the testtool running within the
+ubuntu VM with server-side authentication and server-side attestation. Find the generated
+attestation result in `cmc/data/attestation-result`.
 
 ## Further Documentation
 

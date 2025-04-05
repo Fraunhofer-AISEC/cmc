@@ -1,0 +1,18 @@
+{
+    "mode": "dial",
+    "addr": [
+        "localhost:4443"
+    ],
+    "report": "data/attestation-report",
+    "result": "data/attestation-result.json",
+    "nonce": "data/nonce",
+    "ca": "example-setup/vm-config/ca.pem",
+    "mtls": false,
+    "attest": "server",
+    "measurementLog": true,
+    "logLevel": "trace",
+    "api": "socket",
+    "apiSerializer": "cbor",
+    "cmcAddr": "localhost:9955",
+    "keyConfig": "EC256"
+}

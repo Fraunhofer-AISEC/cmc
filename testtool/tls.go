@@ -52,8 +52,6 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 				defer wg.Wait()
 				go publishResultAsync(c.Publish, c.ResultFile, result, wg)
 			}
-			// Log errors if any
-			result.PrintErr()
 		}),
 		atls.WithCmc(cmc))
 	if err != nil {
@@ -202,8 +200,6 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 				// and result is not empty
 				go publishResult(c.Publish, c.ResultFile, result)
 			}
-			// Log errors if any
-			result.PrintErr()
 		}),
 		atls.WithCmc(cmc))
 	if err != nil {

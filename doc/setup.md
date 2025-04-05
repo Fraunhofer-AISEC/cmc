@@ -20,7 +20,7 @@ Several packages must be installed for building the `cmc` and generating metadat
 ```sh
 sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq yq
 ```
-NOTE: For ubuntu, `yq` must be installed as a snap package
+> NOTE: For ubuntu, `yq` must be installed as a snap package
 
 Building the *cmcd* requires *go*. Follow https://golang.org/doc/install.
 
@@ -34,26 +34,16 @@ sudo make install
 
 ## Setup environment
 
-This simply adds `cmc/bin` to the PATH, so that all scripts can be run:
+This simply adds `cmc/bin` to the PATH:
 ```sh
 source env.bash
 ```
-
-## Setup PKI
-
-Generate a PKI suitable for your needs. A minimal PKI based on `cmc/example-setup/pki-input`
-can be created and stored in `cmc/data/pki` as follows:
-```sh
-mkdir -p cmc/data
-setup-pki cmc/example-setup/pki-input cmc/data/pki
-```
-
-For a more complex PKI, have a look at the [IDS-Setup](./ids-example-setup.md).
 
 ## Platform-specific Setup and Metadata Generation
 
 As the setup differs between the different hardware attestation technologies, the platform-specific
 setup is summarized in
+- [VM-Setup](./setup-vm.md)
 - [TPM-Setup](./setup-tpm.md)
 - [SNP-Setup](./setup-snp.md)
 - [SGX-Setup](./setup-sgx.md)

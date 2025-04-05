@@ -203,7 +203,7 @@ do
         "${scripts}/generate-rtm-manifest-tpm" "${data}" >> "${metadata_log}" 2>&1
         "${scripts}/generate-os-manifest-tpm" "${data}" >> "${metadata_log}" 2>&1
         if [[ "${success}" == "success" ]]; then
-            "${scripts}/generate-app-manifest-live-tpm" "${data}" >> "${metadata_log}" 2>&1
+            "${scripts}/generate-app-manifest-tpm" "${data}" >> "${metadata_log}" 2>&1
         fi
         "${scripts}/sign-metadata" "${data}" "${ar_serializer}" >> "${metadata_log}" 2>&1
 

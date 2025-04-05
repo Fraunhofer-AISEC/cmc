@@ -13,6 +13,9 @@ input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
 device_description="${out}/device.description.json"
 
+images="${dir}/vm/images"
+vm_config="${dir}/example-setup/vm-config"
+
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
@@ -33,8 +36,27 @@ kernel=$(uname -r)
 os=$(lsb_release -sd 2>/dev/null)
 set -e
 
-# Parse the values of the OS PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$("${parse_srtm_pcrs_prefix}" parse-srtm-pcrs -p 8,9,12,13,14,15 -f json -e)
+# Precompute the values of the OS PCRs
+referenceValues=$(calculate-srtm-pcrs \
+    --format json \
+    --eventlog \
+    --pcrs 8,9 \
+    --kernel "${images}/boot/vmlinuz" \
+    --initrd "${images}/boot/initrd.img" \
+    --cmdline "${vm_config}/cmdline" \
+    --grubcmds "${vm_config}/grub_cmds" \
+    --path "${images}/boot/efi/EFI/ubuntu/grub.cfg" \
+    --path "${images}/boot/grub/x86_64-efi/command.lst" \
+    --path "${images}/boot/grub/x86_64-efi/fs.lst" \
+    --path "${images}/boot/grub/x86_64-efi/crypto.lst" \
+    --path "${images}/boot/grub/x86_64-efi/terminal.lst" \
+    --path "${images}/boot/grub/grub.cfg" \
+    --path "${images}/boot/grub/grubenv" \
+    --path "${images}/boot/grub/x86_64-efi/bli.mod" \
+    --path "${images}/boot/vmlinuz" \
+    --path "${images}/boot/initrd.img" \
+)
+
 
 # Load OS manifest
 json=$(cat "${input}/manifest.json")

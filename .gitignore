@@ -5,6 +5,7 @@
 
 /data/
 /artifacts/
+/vm/
 cmcd/cmcd
 testtool/testtool
 testtool/ca.pem
