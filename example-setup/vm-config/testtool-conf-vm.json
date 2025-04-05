@@ -1,0 +1,18 @@
+{
+    "mode": "listen",
+    "addr": [
+        "0.0.0.0:4443"
+    ],
+    "mtls": false,
+    "report": "/var/testtool/attestation-report",
+    "result": "/var/testtool/attestation-result.json",
+    "nonce": "/var/testtool/nonce",
+    "ca": "/var/testtool/ca.pem",
+    "attest": "server",
+    "measurementLog": true,
+    "logLevel": "trace",
+    "api": "socket",
+    "apiSerializer": "cbor",
+    "cmcAddr": "localhost:9955",
+    "keyConfig": "EC256"
+}

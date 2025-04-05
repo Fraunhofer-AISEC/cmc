@@ -10,4 +10,6 @@ bin="${dir}/bin"
 
 "${bin}/generate-device-description"
 
-"${bin}/precompute-rtm-manifest-sgx"
+"${bin}/precompute-rtm-manifest-vm"
+
+"${bin}/precompute-os-manifest-vm"

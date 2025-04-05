@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -euo pipefail
+
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+
+data="${dir}/vm"
+
+exec ssh \
+    -F "${data}/ssh/config" \
+    vm-ubuntu \
+    "$@"

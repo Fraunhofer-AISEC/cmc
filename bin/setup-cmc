@@ -42,8 +42,8 @@ fi
 
 driver="${1}"
 
-if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx)$ ]]; then
-    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx."
+if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx|vm)$ ]]; then
+    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx"
     exit 1
 fi
 
@@ -64,11 +64,11 @@ echo "Using CMC: ${cmc}"
 echo "Using ${data} as directory for local data"
 
 # Build CMC
-go build -C testtool
-go build -C cmcd
-go build -C est/estserver
-go build -C tools/metaconv
-go build -C tools/metasign
+go build -C "${dir}/testtool"
+go build -C "${dir}/cmcd"
+go build -C "${dir}/est/estserver"
+go build -C "${dir}/tools/metaconv"
+go build -C "${dir}/tools/metasign"
 
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"

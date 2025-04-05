@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+
+data="${dir}/vm"
+
+tpm_bin_dir="${data}/swtpm/src/bin"
+tpm_state="${data}/swtpm/swtpm-state"
+tpm_sock="${data}/swtpm/swtpm-sock"
+
+# Start swtpm
+printf "[\033[34;1m EXEC \033[0m] Starting swtpm\n"
+case ":${PATH}:" in *":${tpm_bin_dir}:"*) ;; *) PATH="${tpm_bin_dir}:${PATH}";; esac
+
+exec swtpm socket \
+  --tpmstate dir="${tpm_state}" \
+  --ctrl type=unixio,path="${tpm_sock}" \
+  --log level=20 \
+  --tpm2

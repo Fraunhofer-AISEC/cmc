@@ -1,22 +1,28 @@
 # TPM Setup
 
-Describes the setup to run the CMC on platforms with a Trusted Platform Module (TPM)
+Describes the setup to run the CMC on platforms with a Trusted Platform Module (TPM).
+
+> **Note:** For testing the CMC, we provide a readily configured Ubuntu-VM with attached swTPM.
+> For the VM-setup see [Setup-VM](./setup-vm.md).
 
 ## Prerequisites
 
-You need a machine with a TPM and `/dev/tpmrm0` or `/dev/tpm0` present. This is the case for most
-desktop and server platforms. Alternatively, you can test the CMC in a VM with an attached
-software TPM.
+You need a machine with a TPM and `/dev/tpmrm0` or `/dev/tpm0` present.
 
-> :warning: **Note:** You should run the CMC only for testing on a development machine, or inside
-> a Virtual Machine (VM). The software directly interacts with the TPM.
+> :warning: **Note:** You should run the CMC on a testing/development machine as the software
+> directly interacts with the TPM.
 
 ## TPM Setup
 
 Creates the PKI and metadata for running the CMC on TPM platforms
 ```sh
 source env.bash
-cmc-docker setup-cmc tpm
+
+# For platforms with hardware TPM
+setup-cmc tpm
+
+# For VM with swTPM
+setup-cmc vm
 ```
 
 ## TPM Build
@@ -97,7 +103,7 @@ calculate-srtm-pcrs \
     --cmdline "linux-commandline" \
     --ovmf "OVMF.fd" \
     --format json \
-    --pcrs "4,5,8,9,11,12,13,14,15" \
+    --pcrs 4,5,8,9 \
     --eventlog \
 ```
 Then insert those values into the json `referenceValues` array in the OS Manifest.

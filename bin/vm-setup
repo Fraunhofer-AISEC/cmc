@@ -1,0 +1,198 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/vm"
+vm_config="${dir}/example-setup/vm-config"
+
+debug=0
+edk_output_dir="RELEASE_GCC5"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--debug)
+            debug=1
+            edk_output_dir="DEBUG_GCC5"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+img="noble-server-cloudimg-amd64.img"
+cloudimg="https://cloud-images.ubuntu.com/noble/current/${img}"
+cloudfile="${data}/images/${img}"
+
+edk2="${data}/edk2"
+swtpm_root_dir="${data}/swtpm"
+swtpm_srcs_dir="${swtpm_root_dir}/src"
+swtpm_src_dir="${swtpm_srcs_dir}/swtpm"
+libtpms_dir="${swtpm_srcs_dir}/libtpms"
+swtpm_state_dir="${swtpm_root_dir}/swtpm-state"
+swtpm_setup_dir="${swtpm_root_dir}/swtpm-setup"
+swtpm_bin_dir="${swtpm_srcs_dir}/bin"
+tpm_pcr_tools="${data}/tpm-pcr-tools"
+
+# Install prerequisites
+printf "[\033[34;1m EXEC \033[0m] Checking prerequisites..\n"
+packages=("build-essential" "nasm" "acpica-tools" "uuid-dev" "guestfs-tools" "guestmount" "qemu-system" "libtasn1-dev" "libjson-glib-dev" "libgnutls28-dev" "socat" "libseccomp-dev" "moreutils" "golang-cfssl" "build-essential" "sqlite3" "zlib1g-dev" "libssl-dev" "jq" "yq" "gnutls-bin")
+for pkg in "${packages[@]}"; do
+    if ! dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q "installed"; then
+        echo "Installing missing package: ${pkg}"
+        sudo apt update
+        sudo apt install -y "${pkg}"
+    fi
+done
+
+# Build edk2 OVMF firmware
+[ -d "${edk2}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Building edk2 firmware (%s)..\n" "${edk_output_dir}"
+    git clone https://github.com/tianocore/edk2.git "${edk2}"
+    cd "${edk2}"
+    git checkout edk2-stable202408.01
+    git submodule update --init
+
+    make -j "$(nproc)" -C BaseTools/
+
+    . ./edksetup.sh --reconfig
+
+    build_params=(  "-DTPM2_ENABLE=TRUE"
+                    "-DFD_SIZE_2MB"
+                    "-n $(nproc)"
+                    "-a X64"
+                    "-t GCC5"
+                    "-p OvmfPkg/OvmfPkgX64.dsc")
+
+    if [[ "${debug}" -eq 1 ]]; then
+        build_params+=("-b DEBUG"
+            "-DDEBUG_ON_SERIAL_PORT=TRUE")
+    else
+        build_params+=("-b RELEASE")
+    fi
+
+    # Build OVMF
+    build ${build_params[@]}
+
+    mkdir -p "${data}/images"
+
+    # Copy OVMF to images
+    install -D -m 0644 "${edk2}/Build/OvmfX64/${edk_output_dir}/FV/OVMF.fd" "${data}/images/"
+}
+
+# Build swtpm
+[[ -d "${libtpms_dir}" ]] || {
+    printf "[\033[34;1m EXEC \033[0m] Building libtpms..\n"
+
+    export PKG_CONFIG_PATH="${swtpm_srcs_dir}/lib/pkgconfig/"
+
+    mkdir -p "${swtpm_srcs_dir}"
+    cd "${swtpm_srcs_dir}"
+
+    git clone https://github.com/stefanberger/libtpms.git
+
+    cd "${libtpms_dir}"
+    git checkout v0.10.0
+    ./bootstrap.sh
+    ./configure --prefix="${swtpm_srcs_dir}" --with-openssl --without-tpm1
+    make -j "$(nproc)"
+    make install
+    cd "${data}"
+}
+[[ -d "${swtpm_src_dir}" ]] || {
+    printf "[\033[34;1m EXEC \033[0m] Building swtpm..\n"
+
+    export PKG_CONFIG_PATH="${swtpm_srcs_dir}/lib/pkgconfig/"
+
+    mkdir -p "${swtpm_srcs_dir}"
+    cd "${swtpm_srcs_dir}"
+
+    git clone https://github.com/stefanberger/swtpm.git
+
+    cd "${swtpm_src_dir}"
+    git checkout v0.10.0
+    ./autogen.sh --prefix="${swtpm_srcs_dir}" --with-openssl --with-gnutls
+    make -j "$(nproc)"
+    make install
+}
+[ -d "${swtpm_state_dir}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Configuring swtpm..\n"
+    mkdir -p "${swtpm_state_dir}"
+    export XDG_CONFIG_HOME="${swtpm_setup_dir}"
+    case ":${PATH}:" in *":${swtpm_bin_dir}:"*) ;; *) PATH="${swtpm_bin_dir}:${PATH}";; esac
+    swtpm_setup --create-config-files skip-if-exist,root
+    sed -i 's,^create_certs_tool = .*swtpm_localca$,create_certs_tool = swtpm_localca,g' "${swtpm_setup_dir}"/swtpm_setup.conf
+    swtpm_setup --tpm2 --tpmstate "${swtpm_state_dir}" --create-ek-cert
+}
+
+# Clone and build tpm-pcr-tools
+[ -d "${tpm_pcr_tools}"] || {
+    printf "[\033[34;1m EXEC \033[0m] Building tpm-pcr-tools..\n"
+    git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${tpm_pcr_tools}"
+    cd "${tpm_pcr_tools}"
+    make
+    cd "${dir}"
+}
+
+# Build CMC
+printf "[\033[34;1m EXEC \033[0m] Building CMC..\n"
+go build -C "${dir}/testtool"
+go build -C "${dir}/cmcd"
+go build -C "${dir}/est/estserver"
+go build -C "${dir}/tools/metaconv"
+go build -C "${dir}/tools/metasign"
+
+# Create a folder for the cmc configuration and metadata
+mkdir -p "${data}"
+
+# Generate an example PKI
+"${dir}/bin/setup-pki${script_suffix}"
+
+# Download Ubuntu Cloud Image
+[ -f "${cloudfile}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Downloading Ubuntu Cloud Image..\n"
+	mkdir -p "${data}/images"
+    wget -O "${cloudfile}" "${cloudimg}"
+}
+
+# Setup SSH for VM
+[[ -d "${data}/ssh" ]] || {
+
+    host_key_path="${data}/ssh/id_ed25519"
+    host_known_hosts_path="${data}/ssh/known_hosts"
+    host_config_path="${data}/ssh/config"
+
+    mkdir -p "${data}/ssh"
+
+    # Generate host key to SSH into VMs
+    ssh-keygen -t ed25519 -C "" -N "" -f "${host_key_path}"
+
+    # Generate local SSH config
+    printf "Host vm-ubuntu\n\tHostname 127.0.0.1\n\tUser root\n\tPort 2222\n\tUserKnownHostsFile ${host_known_hosts_path}\n\tIdentityFile ${host_key_path}\n\tIdentitiesOnly yes\n" > "${host_config_path}"
+
+    # Update SSH key in cloud-init user-config
+    echo "Updating SSH key in cloud-init user-config.."
+    sed -i "s|^\(\s*-\s*\)ssh-ed25519 .*|\1$(<${host_key_path}.pub)|" "${vm_config}/user-data"
+}
+
+# Create cloud-init configuration volume
+genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
+    "${vm_config}/user-data" \
+    "${vm_config}/meta-data" \
+    "${vm_config}/network-config" \
+    "${vm_config}/cmcd.service" \
+    "${vm_config}/testtool.service" \
+    "${vm_config}/testtool-conf-vm.json" \
+    "${vm_config}/cmcd-conf.json" \
+    "${dir}/cmcd/cmcd" \
+    "${dir}/testtool/testtool" \
+    "${dir}/vm/tpm-pcr-tools/parse-srtm-pcrs/parse-srtm-pcrs" \
+    "${dir}/vm/tpm-pcr-tools/parse-ima-pcr/parse-ima-pcr" \
+    "${dir}/data/pki/ca.pem"
+
+# Finished successfully
+printf "[\033[32;1m  OK  \033[0m] $0\n"

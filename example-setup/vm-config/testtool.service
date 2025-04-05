@@ -1,0 +1,14 @@
+[Unit]
+Description=CMC testtool aTLS listener
+Wants=cmcd.service
+After=cmcd.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=root
+ExecStart=testtool -config /etc/testtool-conf-vm.json
+
+[Install]
+WantedBy=multi-user.target

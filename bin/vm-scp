@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -euo pipefail
+
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+
+data="${dir}/vm"
+
+# Usage: vm-scp vm-ubuntu:/path/to/file /path/to/destination
+exec scp \
+    -F "${data}/ssh/config" \
+    "$@"
