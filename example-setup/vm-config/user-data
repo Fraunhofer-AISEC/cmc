@@ -1,0 +1,42 @@
+#cloud-config
+users:
+  - name: root
+    ssh-authorized-keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPcSpdkHkOVm20PX3QzNP2xfCAC8+JLlJO8rUaK5EZJI
+    shell: /bin/bash
+    lock_passwd: true
+
+chpasswd:
+  expire: false
+  users:
+  - {name: root, password: root, type: text}
+
+disable_root: false
+
+ssh_pwauth: false
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - tpm2-tools
+
+runcmd:
+  - mkdir /var/testtool
+  - mount /dev/sr0 /mnt/
+  - cp /mnt/cmcd /usr/bin/
+  - cp /mnt/testtool /usr/bin/
+  - cp /mnt/parse-srtm-pcrs /usr/bin/
+  - cp /mnt/parse-ima-pcr /usr/bin/
+  - cp /mnt/cmcd-conf.json /etc/cmcd-conf.json
+  - cp /mnt/testtool-conf-vm.json /etc/testtool-conf-vm.json
+  - cp /mnt/cmcd.service /etc/systemd/system/cmcd.service
+  - cp /mnt/testtool.service /etc/systemd/system/testtool.service
+  - cp /mnt/ca.pem /var/testtool/ca.pem
+  - systemctl daemon-reload
+  - systemctl enable cmcd.service
+  - systemctl start cmcd.service
+  - systemctl enable testtool.service
+  - systemctl start testtool.service
+
+

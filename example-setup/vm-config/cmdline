@@ -1,0 +1,1 @@
+BOOT_IMAGE=/vmlinuz-6.8.0-57-generic root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0

@@ -10,6 +10,6 @@ bin="${dir}/bin"
 
 "${bin}/generate-device-description"
 
-"${bin}/generate-rtm-manifest-tdx"
+"${bin}/precompute-rtm-manifest-tdx"
 
-"${bin}/generate-os-manifest-tdx"
+"${bin}/precompute-os-manifest-tdx"

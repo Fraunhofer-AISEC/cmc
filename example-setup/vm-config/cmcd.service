@@ -1,0 +1,15 @@
+[Unit]
+Description=cmcd
+Wants=network-online.target systemd-hostnamed.service
+After=network-online.target systemd-hostnamed.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+Restart=always
+RestartSec=10
+User=root
+ExecStart=cmcd -config /etc/cmcd-conf.json
+
+[Install]
+WantedBy=multi-user.target

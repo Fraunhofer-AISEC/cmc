@@ -10,4 +10,4 @@ bin="${dir}/bin"
 
 "${bin}/generate-device-description"
 
-"${bin}/generate-rtm-manifest-snp"
+"${bin}/precompute-rtm-manifest-snp"

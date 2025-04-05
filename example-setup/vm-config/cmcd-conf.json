@@ -1,0 +1,21 @@
+{
+    "cmcAddr": "0.0.0.0:9955",
+    "provAddr": "https://10.0.2.2:9000/",
+    "metadata": [
+        "https://10.0.2.2:9000/vm-metadata"
+    ],
+    "drivers": [ "tpm", "sw" ],
+    "ima": true,
+    "imaPcr": 10,
+    "keyConfig": "EC256",
+    "api": "socket",
+    "logLevel": "trace",
+    "storage": "/var/cmc/internal/",
+    "cache": "/var/cmc/cache/",
+    "peerCache": "/var/cmc/peer-cache",
+    "measurementLog": true,
+    "ctr": true,
+    "ctrDriver": "sw",
+    "ctrLog": "/tmp/container_measurements",
+    "ctrPcr": 11
+}

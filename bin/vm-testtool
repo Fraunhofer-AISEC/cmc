@@ -4,10 +4,7 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
 
-bin="${dir}/bin"
+cd "${dir}"
 
-"${bin}/generate-device-description"
-
-"${bin}/precompute-rtm-manifest-sgx"
+exec "${dir}/testtool/testtool" -config "${dir}/example-setup/vm-config/testtool-conf-host.json" "$@"

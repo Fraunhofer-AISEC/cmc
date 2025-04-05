@@ -1,0 +1,74 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/vm"
+images="${data}/images"
+vm_config="${dir}/example-setup/vm-config"
+img_qcow="${data}/images/noble-server-cloudimg-amd64.img"
+
+#
+# PCR 5
+#
+
+# Extract files required for remote attestation from image
+img_raw="${data}/images/noble-server-cloudimg-amd64.raw"
+gpt_header="${data}/images/gpt_header"
+gpt_table="${data}/images/gpt_part_table"
+tmp_entry="${data}/images/tmp_entry"
+ev_efi_gpt_event="${data}/images/ev_efi_gpt_event"
+entry_size=128
+gpt_entries=128
+
+# Extract GPT header and partition entries from image
+printf "[\033[34;1m EXEC \033[0m] Converting ${img_qcow} to ${img_raw} to extract GPT table\n"
+qemu-img convert -O raw "${img_qcow}" "${img_raw}"
+dd if="${img_raw}" of="${gpt_header}" bs=1 skip=512 count=92
+dd if="${img_raw}" of="${gpt_table}" bs=512 skip=2 count=32
+
+# Add GPT header to reference measurement
+cat "${gpt_header}" > "${ev_efi_gpt_event}"
+
+# Add number of entries
+echo -n -e '\x04\x00\x00\x00\x00\x00\x00\x00' >> "${ev_efi_gpt_event}"
+
+# Add non-zero GPT partition table entries to reference measurement
+for i in $(seq 0 $((gpt_entries - 1))); do
+    offset=$((i * entry_size))
+    # Extract entry
+    dd if="${gpt_table}" bs=1 skip=${offset} count="${entry_size}" of="${tmp_entry}" status=none
+    # Add if non-zero
+    if ! cmp -s "${tmp_entry}" <(head -c ${entry_size} < /dev/zero); then
+        cat "${tmp_entry}" >> "${ev_efi_gpt_event}"
+    fi
+done
+rm "${tmp_entry}" "${gpt_table}" "${gpt_header}"
+
+
+#
+# PCR 8 & 9
+#
+
+# TODO just a quick & easy way to extract files required for attestation
+# Better build artifacts reproducibly or at least use alternative without requiring root privileges
+
+# Guest-mount VM for data extraction
+printf "[\033[34;1m EXEC \033[0m] Mounting VM to extract files..\n"
+mnt="${data}/mnt"
+mkdir -p "${mnt}"
+sudo guestmount -a "${img_qcow}" -i --rw "${mnt}"
+
+# Extract and own files
+sudo rsync -a --copy-links --chown=${USER}:${USER} "${mnt}/boot" "${data}/images/"
+
+# Finish
+sudo umount "${mnt}"
+sudo rm -r "${mnt}"
+
+
+# Finished successfully
+printf "[\033[32;1m  OK  \033[0m] $0\n"

@@ -1,0 +1,61 @@
+search.fs_uuid 09d53dc1-1e03-4286-bbb8-2b1796cf92ec root
+set prefix=(hd0,gpt16)/grub
+configfile (hd0,gpt16)/grub/grub.cfg
+[ -s (hd0,gpt16)/grub/grubenv ]
+set have_grubenv=true
+load_env
+[  = 2 ]
+[  = 1 ]
+[  ]
+set default=0
+[ xy = xy ]
+menuentry_id_option=--id
+export menuentry_id_option
+[  ]
+terminal_input console
+terminal_output console
+[  = 1 ]
+[ xy = xy ]
+set timeout_style=hidden
+set timeout=0
+[ -n true ]
+[ -n  ]
+unset initrdless_boot_fallback_triggered
+save_env initrdless_boot_fallback_triggered
+set menu_color_normal=white/black
+set menu_color_highlight=black/light-gray
+[  != 1 ]
+[ -e (hd0,gpt16)/grub/gfxblacklist.txt ]
+[ efi != pc ]
+set linux_gfx_mode=keep
+export linux_gfx_mode
+menuentry Ubuntu --class ubuntu --class gnu-linux --class gnu --class os --id gnulinux-simple-b852d8d2-8460-44aa-8998-23e4f04d73cf { recordfail load_video gfxmode $linux_gfx_mode insmod gzio if [ x$grub_platform = xxen ]; then insmod xzio; insmod lzopio; fi insmod part_gpt insmod ext2 search --no-floppy --fs-uuid --set=root 09d53dc1-1e03-4286-bbb8-2b1796cf92ec linux /vmlinuz-6.8.0-57-generic root=LABEL=cloudimg-rootfs ro  console=tty1 console=ttyS0 initrd /initrd.img-6.8.0-57-generic}
+submenu Advanced options for Ubuntu --id gnulinux-advanced-b852d8d2-8460-44aa-8998-23e4f04d73cf { menuentry 'Ubuntu, with Linux 6.8.0-57-generic' --class ubuntu --class gnu-linux --class gnu --class os $menuentry_id_option 'gnulinux-6.8.0-57-generic-advanced-b852d8d2-8460-44aa-8998-23e4f04d73cf' {  recordfail  load_video  gfxmode $linux_gfx_mode  insmod gzio  if [ x$grub_platform = xxen ]; then insmod xzio; insmod lzopio; fi  insmod part_gpt  insmod ext2  search --no-floppy --fs-uuid --set=root 09d53dc1-1e03-4286-bbb8-2b1796cf92ec  echo 'Loading Linux 6.8.0-57-generic ...'  linux /vmlinuz-6.8.0-57-generic root=LABEL=cloudimg-rootfs ro  console=tty1 console=ttyS0  echo 'Loading initial ramdisk ...'  initrd /initrd.img-6.8.0-57-generic } menuentry 'Ubuntu, with Linux 6.8.0-57-generic (recovery mode)' --class ubuntu --class gnu-linux --class gnu --class os $menuentry_id_option 'gnulinux-6.8.0-57-generic-recovery-b852d8d2-8460-44aa-8998-23e4f04d73cf' {  recordfail  load_video  insmod gzio  if [ x$grub_platform = xxen ]; then insmod xzio; insmod lzopio; fi  insmod part_gpt  insmod ext2  search --no-floppy --fs-uuid --set=root 09d53dc1-1e03-4286-bbb8-2b1796cf92ec  echo 'Loading Linux 6.8.0-57-generic ...'  linux /vmlinuz-6.8.0-57-generic root=LABEL=cloudimg-rootfs ro recovery nomodeset dis_ucode_ldr   echo 'Loading initial ramdisk ...'  initrd /initrd.img-6.8.0-57-generic }}
+[ efi = efi ]
+insmod bli
+[ efi = efi ]
+fwsetup --is-supported
+[ 0 = 0 ]
+menuentry UEFI Firmware Settings --id uefi-firmware {   fwsetup  }
+[ -f (hd0,gpt16)/grub/custom.cfg ]
+[ -z (hd0,gpt16)/grub -a -f (hd0,gpt16)/grub/custom.cfg ]
+setparams Ubuntu
+recordfail
+set recordfail=1
+[ -n true ]
+[ -z  ]
+save_env recordfail
+load_video
+[ xy = xy ]
+insmod all_video
+gfxmode keep
+set gfxpayload=keep
+[ keep = keep ]
+set vt_handoff=vt.handoff=7
+insmod gzio
+[ xefi = xxen ]
+insmod part_gpt
+insmod ext2
+search --no-floppy --fs-uuid --set=root 09d53dc1-1e03-4286-bbb8-2b1796cf92ec
+linux /vmlinuz-6.8.0-57-generic root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0
+initrd /initrd.img-6.8.0-57-generic

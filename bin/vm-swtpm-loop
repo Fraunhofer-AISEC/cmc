@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+
+while true
+do
+  printf "Starting swptm...\n"
+  vm-swtpm "$@"
+  printf "Sleeping for 900 ms...\n"
+  sleep .9
+done
+

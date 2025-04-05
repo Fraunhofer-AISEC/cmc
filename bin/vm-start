@@ -1,0 +1,54 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+
+data="${dir}/vm"
+
+id="${1:-0}"
+
+image="${data}/images/noble-server-cloudimg-amd64.img"
+
+ovmf="${data}/images/OVMF.fd"
+tpm_sock="${data}/swtpm/swtpm-sock"
+
+[[ -f "${ovmf}" ]] || {
+    echo "OVMF file ${ovmf} does not exist. Exit.."
+    exit
+}
+
+[[ -f "${image}" ]] || {
+   echo "Image file ${image} does not exist. Exit.."
+   exit
+}
+
+[[ -S "${tpm_sock}" ]] || {
+    echo "TPM socket ${tpm_sock} does not exist. Exit.."
+    exit
+}
+
+qemu_opts=(
+    "-name machine${id},process=machine${id}"
+    "-machine q35,accel=kvm,vmport=off,kernel_irqchip=split"
+    "-cpu host"
+    "-m 4G"
+    "-nographic"
+    "-serial mon:stdio"
+    "-drive if=pflash,format=raw,unit=0,file=${ovmf},readonly=on"
+    "-device virtio-rng-pci"
+    "-device virtio-scsi-pci,id=scsi"
+    "-device scsi-hd,drive=hd0 -drive if=none,id=hd0,file=${image}"
+    "-netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::9955-:9955,hostfwd=tcp::4443-:4443"
+	"-device virtio-net-pci,disable-legacy=on,netdev=net0,romfile="
+    "-chardev socket,id=chrtpm,path=${tpm_sock}"
+    "-tpmdev emulator,id=tpm0,chardev=chrtpm"
+    "-device tpm-tis,tpmdev=tpm0"
+    "-drive file=${dir}/vm/images/seed.iso,media=cdrom,readonly=on"
+)
+
+# Start vm
+printf "[\033[34;1m EXEC \033[0m] Starting VM..\n"
+
+exec qemu-system-x86_64 ${qemu_opts[@]}

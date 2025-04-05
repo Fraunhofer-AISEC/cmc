@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/vm"
+vm_config="${dir}/example-setup/vm-config"
+
+debug=0
+edk_output_dir="RELEASE_GCC5"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--debug)
+            debug=1
+            edk_output_dir="DEBUG_GCC5"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+edk2="${data}/edk2"
+
+# Build edk2 OVMF firmware
+[ -d "${edk2}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Building edk2 firmware (%s)..\n" "${edk_output_dir}"
+    git clone https://github.com/tianocore/edk2.git "${edk2}"
+    cd "${edk2}"
+    git checkout edk2-stable202408.01
+    git submodule update --init
+}
+
+cd "${edk2}"
+
+make -j "$(nproc)" -C BaseTools/
+
+. ./edksetup.sh --reconfig
+
+build_params=(  "-DTPM2_ENABLE=TRUE"
+                "-DFD_SIZE_2MB"
+                "-n $(nproc)"
+                "-a X64"
+                "-t GCC5"
+                "-p OvmfPkg/OvmfPkgX64.dsc")
+
+if [[ "${debug}" -eq 1 ]]; then
+    build_params+=("-b DEBUG"
+        "-DDEBUG_ON_SERIAL_PORT=TRUE")
+else
+    build_params+=("-b RELEASE")
+fi
+
+# Build OVMF
+build ${build_params[@]}
+
+mkdir -p "${data}/images"
+
+# Copy OVMF to images
+install -D -m 0644 "${edk2}/Build/OvmfX64/${edk_output_dir}/FV/OVMF.fd" "${data}/images/"
