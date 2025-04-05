@@ -42,8 +42,8 @@ fi
 
 driver="${1}"
 
-if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx)$ ]]; then
-    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx."
+if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx|vm)$ ]]; then
+    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx, vm."
     exit 1
 fi
 

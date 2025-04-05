@@ -5,18 +5,33 @@ Describes the setup to run the CMC on platforms with a Trusted Platform Module (
 ## Prerequisites
 
 You need a machine with a TPM and `/dev/tpmrm0` or `/dev/tpm0` present. This is the case for most
-desktop and server platforms. Alternatively, you can test the CMC in a VM with an attached
-software TPM.
+desktop and server platforms. For testing, we provide an ubuntu VM with an attached software TPM.
+The VM setup is also described in this manual.
 
 > :warning: **Note:** You should run the CMC only for testing on a development machine, or inside
 > a Virtual Machine (VM). The software directly interacts with the TPM.
+
+## VM Setup
+
+Note: on a hardware platform, you can simply omit this step.
+
+Creates a QEMU ubuntu server VM with attached swTPM:
+```sh
+source env.bash
+setup-vm
+```
 
 ## TPM Setup
 
 Creates the PKI and metadata for running the CMC on TPM platforms
 ```sh
 source env.bash
-cmc-docker setup-cmc tpm
+
+# For platforms with hardware TPM
+setup-cmc tpm
+
+# For VM with swTPM
+setup-cmc vm
 ```
 
 ## TPM Build
