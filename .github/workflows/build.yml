@@ -17,7 +17,6 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: 1.22.5
-
       - name: Build
         run: |
           pushd cmcd
@@ -67,4 +66,14 @@ jobs:
         with:
           name: metasign
           path: tools/metasign/metasign
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            cmcd/cmcd
+            testtool/testtool
+            tools/metaconv/metaconv
+            tools/metasign/metasign
+
 
