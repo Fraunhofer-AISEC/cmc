@@ -22,16 +22,16 @@ jobs:
       - name: Build
         run: |
           pushd cmcd
-          go build
+          go build -ldflags="-s -w" -trimpath
           popd
           pushd testtool
-          go build
+          go build -ldflags="-s -w" -trimpath
           popd
           pushd tools/metasign
-          go build
+          go build -ldflags="-s -w" -trimpath
           popd
           pushd tools/metaconv
-          go build
+          go build -ldflags="-s -w" -trimpath
           popd
       - name: Vet Check
         run: go vet ./...
