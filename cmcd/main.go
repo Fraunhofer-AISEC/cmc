@@ -45,6 +45,11 @@ func main() {
 		log.Fatalf("API '%v' is not implemented", c.Api)
 	}
 
+	err = notifySystemd()
+	if err != nil {
+		log.Fatalf("Failed to notify systemd: %v", err)
+	}
+
 	err = server.Serve(c.CmcAddr, cmc)
 	if err != nil {
 		log.Fatalf("Failed to serve: %v", err)
