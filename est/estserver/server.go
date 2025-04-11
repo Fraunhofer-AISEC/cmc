@@ -477,23 +477,23 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 func httpHandleMetadata(folder string) error {
 	// Retrieve the directories to be provided from config and create http
 	// directory structure
-	log.Debug("Serving Directories: ")
+	log.Debugf("Serving Directory: %v", folder)
 
 	dirs, err := os.ReadDir(folder)
 	if err != nil {
 		return fmt.Errorf("failed to open metaddata folders %q: %v", folder, err)
 	}
 
+	log.Tracef("Sub-paths:")
 	for _, dir := range dirs {
 		d := dir.Name()
-		log.Debugf("\t%v", d)
+		log.Tracef("\t%v", d)
 		path := path.Join(folder, d)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			abs, _ := filepath.Abs(path)
 			return fmt.Errorf("path %v does not exist", abs)
 		}
 		fs := http.FileServer(http.Dir(path))
-		// http.Handle("/"+d+"/", http.StripPrefix("/"+d, fs))
 		http.Handle("/"+d+"/", logRequest(http.StripPrefix("/"+d, fs)))
 	}
 	return nil
