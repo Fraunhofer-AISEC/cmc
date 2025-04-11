@@ -105,11 +105,11 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
-			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server) {
+			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
-				go publishResultAsync(c.Publish, result, wg)
+				go publishResultAsync(c.Publish, c.ResultFile, result, wg)
 			}
 		},
 	}
@@ -228,10 +228,10 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Ca:            c.ca,
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
-			if c.Publish != "" && (c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client) {
+			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go publishResult(c.Publish, result)
+				go publishResult(c.Publish, c.ResultFile, result)
 			}
 		},
 	}

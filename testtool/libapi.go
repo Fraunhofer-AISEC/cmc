@@ -113,7 +113,7 @@ func (a LibApi) verify(c *config) {
 		return
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, resp)
+	err = publishResult(c.Publish, c.ResultFile, resp)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}

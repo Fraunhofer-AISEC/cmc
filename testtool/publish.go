@@ -32,42 +32,66 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func publishResultAsync(addr string, result *ar.VerificationResult, wg *sync.WaitGroup) {
+func publishResultAsync(addr, file string, result *ar.VerificationResult, wg *sync.WaitGroup) {
 	defer wg.Done()
-	publishResult(addr, result)
+	err := publishResult(addr, file, result)
+	if err != nil {
+		log.Warnf("Failed to asynchronously publish result: %v", err)
+	}
 }
 
-func publishResult(addr string, result *ar.VerificationResult) {
+func publishResult(addr, file string, result *ar.VerificationResult) error {
 
 	if result == nil {
-		log.Trace("Will not publish result: not present")
-		return
+		return fmt.Errorf("will not publish result: not present")
 	}
 	if result.Prover == "" {
-		log.Trace("Will not publish result: prover is empty (this happens if connection could not be established)")
-		return
-	}
-	if addr == "" {
-		log.Trace("Will not publish: no address specified")
-		return
+		return fmt.Errorf("will not publish result: prover is empty (this happens if connection could not be established)")
 	}
 
-	log.Debugf("Publishing result to '%v'", addr)
-
-	data, err := json.Marshal(*result)
-	if err != nil {
-		log.Warnf("Failed to marshal result: %v", err)
-		return
+	// Log the result
+	if result.Success {
+		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
+	} else {
+		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
+		result.PrintErr()
 	}
 
-	err = publishReport(addr, data)
-	if err != nil {
-		log.Debugf("Failed to publish: %v", err)
-		return
+	// Send the attestation result to the specified server
+	if addr != "" {
+		log.Debugf("Publishing result to '%v'", addr)
+
+		data, err := json.Marshal(*result)
+		if err != nil {
+			return fmt.Errorf("failed to marshal result: %v", err)
+		}
+
+		err = sendResult(addr, data)
+		if err != nil {
+			return fmt.Errorf("failed to publish: %v", err)
+		}
+	} else {
+		log.Trace("Will not publish to remote server: no address specified")
 	}
+
+	// Save the attestation tesult to file
+	if file != "" {
+		log.Debugf("Publishing result to file %q", file)
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal verification result: %v", err)
+		}
+
+		os.WriteFile(file, data, 0644)
+		log.Debugf("Wrote file %v", file)
+	} else {
+		log.Trace("Will not publish attestation result to file: no file specified")
+	}
+
+	return nil
 }
 
-func publishReport(addr string, result []byte) error {
+func sendResult(addr string, result []byte) error {
 
 	if addr == "" {
 		return nil
@@ -99,44 +123,6 @@ func publishReport(addr string, result []byte) error {
 	}
 
 	log.Debugf("Successfully published result: server responded with %v", resp.Status)
-
-	return nil
-}
-
-func saveResult(file, addr string, r *ar.VerificationResult) error {
-
-	// Log the result
-	if r.Success {
-		log.Infof("SUCCESS: Verification for Prover %v (%v)", r.Prover, r.Created)
-	} else {
-		log.Warnf("FAILED: Verification for Prover %v (%v)", r.Prover, r.Created)
-		r.PrintErr()
-	}
-
-	// Marshal the result (always as JSON for HTTP REST API and manual review)
-	data, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal verification result: %v", err)
-	}
-
-	// Save the Attestation Result to file
-	if file != "" {
-		os.WriteFile(file, data, 0644)
-		log.Debugf("Wrote file %v", file)
-	} else {
-		log.Debug("No config file specified: will not save attestation report")
-	}
-
-	// Publish the attestation result if publishing address was specified
-	if addr != "" {
-		err := publishReport(addr, data)
-		if err != nil {
-			log.Warnf("failed to publish result: %v", err)
-		}
-		log.Debugf("Published attestation report to %v", addr)
-	} else {
-		log.Debug("No publish address specified: will not publish attestation report")
-	}
 
 	return nil
 }
