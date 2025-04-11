@@ -145,7 +145,7 @@ func (a GrpcApi) verify(c *config) {
 		log.Fatalf("Failed to unmarshal grpc verification result")
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, result)
+	err = publishResult(c.Publish, c.ResultFile, result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
