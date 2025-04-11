@@ -130,7 +130,7 @@ func (a CoapApi) verify(c *config) {
 		log.Fatalf("%v", err)
 	}
 
-	err = saveResult(c.ResultFile, c.Publish, &resp.Result)
+	err = publishResult(c.Publish, c.ResultFile, &resp.Result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
