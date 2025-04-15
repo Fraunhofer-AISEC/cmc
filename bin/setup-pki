@@ -28,11 +28,11 @@ cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}
 # Sign CSR and generate certificate for metadata signing
 cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/signing-cert.csr" | cfssljson -bare "${out}/signing-cert"
 
-# Generate key and CSR for EST server
-cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}/cfssl-est.json" | cfssljson -bare "${out}/est"
+# Generate key and CSR for EST server TLS connections
+cfssl genkey -config "${input}/cfssl-ca-config.json" -profile leafcert "${input}/cfssl-est-tls.json" | cfssljson -bare "${out}/est-tls"
 
-# Sign CSR and generate certificate for EST server
-cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/est.csr" | cfssljson -bare "${out}/est"
+# Sign CSR and generate certificate for EST server TLS connections
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile leafcert -config "${input}/cfssl-ca-config.json" "${out}/est-tls.csr" | cfssljson -bare "${out}/est-tls"
 
 # Generate certificates to use with Intel TDX PCCS
 pccs_key="${out}/tdx-pccs-private.pem"

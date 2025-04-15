@@ -1,15 +1,16 @@
 {
     "port": 9000,
-    "signingKey": "data/pki/ca-key.pem",
-    "signingCerts": [
+    "estCaKey": "data/pki/ca-key.pem",
+    "estCaChain": [
+        "data/pki/ca.pem"
+    ],
+    "tlsKey": "data/pki/est-tls-key.pem",
+    "tlsCerts": [
+        "data/pki/est-tls.pem",
         "data/pki/ca.pem"
     ],
     "httpFolder": "example-setup/vm-config",
     "verifyEkCert": false,
     "tpmEkCertDb": "data/tpm-ek-certs.db",
-    "estKey": "data/pki/est-key.pem",
-    "estCerts": [
-        "data/pki/est.pem"
-    ],
     "logLevel": "trace"
 }

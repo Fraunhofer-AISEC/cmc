@@ -46,10 +46,10 @@ var (
 
 type config struct {
 	Port            int      `json:"port"`
-	SigningKey      string   `json:"signingKey"`
-	SigningCerts    []string `json:"signingCerts"`
-	EstKey          string   `json:"estKey"`
-	EstCerts        []string `json:"estCerts"`
+	EstCaKey        string   `json:"estCaKey"`
+	EstCaChain      []string `json:"estCaChain"`
+	TlsKey          string   `json:"tlsKey"`
+	TlsCerts        []string `json:"tlsCerts"`
 	HttpFolder      string   `json:"httpFolder"`
 	VerifyEkCert    bool     `json:"verifyEkCert"`
 	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
@@ -57,19 +57,19 @@ type config struct {
 	LogLevel        string   `json:"logLevel"`
 	LogFile         string   `json:"logFile,omitempty"`
 
-	signingKey   *ecdsa.PrivateKey
-	signingCerts []*x509.Certificate
-	estKey       *ecdsa.PrivateKey
-	estCerts     []*x509.Certificate
+	estCaKey   *ecdsa.PrivateKey
+	estCaChain []*x509.Certificate
+	tlsKey     *ecdsa.PrivateKey
+	tlsCerts   []*x509.Certificate
 }
 
 const (
 	configFlag          = "config"
 	portFlag            = "port"
-	signingKeyFlag      = "signingkey"
-	signingCertsFlag    = "signingcerts"
-	estKeyFlag          = "estkey"
-	estCertsFlag        = "estcerts"
+	estCaKeyFlag        = "estcakey"
+	estCaChainFlag      = "estcachain"
+	tlsKeyFlag          = "tlskey"
+	tlsCertsFlag        = "tlscerts"
 	httpFolderFlag      = "httpfolder"
 	verifyEkCertFlag    = "verifyekcert"
 	tpmEkCertDbFlag     = "tpmekcertdb"
@@ -85,10 +85,10 @@ func getConfig() (*config, error) {
 	// Parse given command line flags
 	configFile := flag.String(configFlag, "", "configuration file")
 	port := flag.Int(portFlag, 0, "Port to listen on")
-	signingKey := flag.String(signingKeyFlag, "", "Path to the key used for signing certs")
-	signingCerts := flag.String(signingCertsFlag, "", "Path to the signing key cert chain")
-	estKey := flag.String(estKeyFlag, "", "TLS key for HTTPS server")
-	estCerts := flag.String(estCertsFlag, "", "Certificate chain for TLS key")
+	estCaKey := flag.String(estCaKeyFlag, "", "Path to the EST CA key for signing CSRs")
+	estCaChain := flag.String(estCaChainFlag, "", "Path to the EST CA certificate chain")
+	tlsKey := flag.String(tlsKeyFlag, "", "TLS key for EST HTTPS server")
+	tlsCerts := flag.String(tlsCertsFlag, "", "TLS certificate chain for EST HTTPS server")
 	httpFolder := flag.String(httpFolderFlag, "", "Folder to be served")
 	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
 		"Indicates whether to verify TPM EK certificate chains")
@@ -122,17 +122,17 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(portFlag) {
 		c.Port = *port
 	}
-	if internal.FlagPassed(signingKeyFlag) {
-		c.SigningKey = *signingKey
+	if internal.FlagPassed(estCaKeyFlag) {
+		c.EstCaKey = *estCaKey
 	}
-	if internal.FlagPassed(signingCertsFlag) {
-		c.SigningCerts = strings.Split(*signingCerts, ",")
+	if internal.FlagPassed(estCaChainFlag) {
+		c.EstCaChain = strings.Split(*estCaChain, ",")
 	}
-	if internal.FlagPassed(estKeyFlag) {
-		c.EstKey = *estKey
+	if internal.FlagPassed(tlsKeyFlag) {
+		c.TlsKey = *tlsKey
 	}
-	if internal.FlagPassed(estCertsFlag) {
-		c.EstCerts = strings.Split(*estCerts, ",")
+	if internal.FlagPassed(tlsCertsFlag) {
+		c.TlsCerts = strings.Split(*tlsCerts, ",")
 	}
 	if internal.FlagPassed(httpFolderFlag) {
 		c.HttpFolder = *httpFolder
@@ -179,22 +179,22 @@ func getConfig() (*config, error) {
 	printConfig(c)
 
 	// Load specified files
-	c.signingKey, err = loadPrivateKey(c.SigningKey)
+	c.estCaKey, err = loadPrivateKey(c.EstCaKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.signingCerts, err = loadCertChain(c.SigningCerts)
+	c.estCaChain, err = loadCertChain(c.EstCaChain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
 
-	c.estKey, err = loadPrivateKey(c.EstKey)
+	c.tlsKey, err = loadPrivateKey(c.TlsKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.estCerts, err = loadCertChain(c.EstCerts)
+	c.tlsCerts, err = loadCertChain(c.TlsCerts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
@@ -208,27 +208,27 @@ func getConfig() (*config, error) {
 
 func pathsToAbs(c *config) {
 	var err error
-	c.SigningKey, err = filepath.Abs(c.SigningKey)
+	c.EstCaKey, err = filepath.Abs(c.EstCaKey)
 	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.signingKey, err)
+		log.Warnf("Failed to get absolute path for %v: %v", c.EstCaKey, err)
 	}
 
-	for i := 0; i < len(c.SigningCerts); i++ {
-		c.SigningCerts[i], err = filepath.Abs(c.SigningCerts[i])
+	for i := 0; i < len(c.EstCaChain); i++ {
+		c.EstCaChain[i], err = filepath.Abs(c.EstCaChain[i])
 		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.SigningCerts[i], err)
+			log.Warnf("Failed to get absolute path for %v: %v", c.EstCaChain[i], err)
 		}
 	}
 
-	c.EstKey, err = filepath.Abs(c.EstKey)
+	c.TlsKey, err = filepath.Abs(c.TlsKey)
 	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.EstKey, err)
+		log.Warnf("Failed to get absolute path for %v: %v", c.TlsKey, err)
 	}
 
-	for i := 0; i < len(c.EstCerts); i++ {
-		c.EstCerts[i], err = filepath.Abs(c.EstCerts[i])
+	for i := 0; i < len(c.TlsCerts); i++ {
+		c.TlsCerts[i], err = filepath.Abs(c.TlsCerts[i])
 		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.EstCerts[i], err)
+			log.Warnf("Failed to get absolute path for %v: %v", c.TlsCerts[i], err)
 		}
 	}
 
@@ -260,10 +260,10 @@ func printConfig(c *config) {
 
 	log.Debug("Using the following configuration:")
 	log.Debugf("\tPort                : %v", c.Port)
-	log.Debugf("\tSigning Key File    : %v", c.SigningKey)
-	log.Debugf("\tSigning Certificates: %v", strings.Join(c.SigningCerts, ","))
-	log.Debugf("\tEST Key File        : %v", c.EstKey)
-	log.Debugf("\tEST Certificates    : %v", strings.Join(c.EstCerts, ","))
+	log.Debugf("\tEST CA key file     : %v", c.EstCaKey)
+	log.Debugf("\tEST CA cert chain   : %v", strings.Join(c.EstCaChain, ","))
+	log.Debugf("\tTLS Key File        : %v", c.TlsKey)
+	log.Debugf("\tTLS certificates    : %v", strings.Join(c.TlsCerts, ","))
 	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
