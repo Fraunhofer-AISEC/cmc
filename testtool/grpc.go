@@ -34,6 +34,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
@@ -120,12 +121,13 @@ func (a GrpcApi) verify(c *config) {
 	}
 
 	request := grpcapi.VerificationRequest{
-		Version:  api.GetVersion(),
-		Nonce:    nonce,
-		Report:   report.Report,
-		Metadata: report.Metadata,
-		Ca:       c.ca,
-		Policies: c.policies,
+		Version:     api.GetVersion(),
+		Nonce:       nonce,
+		Report:      report.Report,
+		Metadata:    report.Metadata,
+		IdentityCas: internal.WriteCertsDer(c.identityCas),
+		MetadataCas: internal.WriteCertsDer(c.metadataCas),
+		Policies:    c.policies,
 	}
 
 	response, err := client.Verify(ctx, &request)
@@ -140,7 +142,7 @@ func (a GrpcApi) verify(c *config) {
 
 	// grpc only: the verification result is marshalled as JSON, as we do not have protobuf definitions
 	result := new(ar.VerificationResult)
-	err = json.Unmarshal(response.GetVerificationResult(), result)
+	err = json.Unmarshal(response.GetResult(), result)
 	if err != nil {
 		log.Fatalf("Failed to unmarshal grpc verification result")
 	}
@@ -191,12 +193,14 @@ func (a GrpcApi) measure(c *config) {
 	templateHash := hasher.Sum(nil)
 
 	req := &grpcapi.MeasureRequest{
-		Version:   api.GetVersion(),
-		Sha256:    templateHash,
-		EventName: c.CtrName,
-		CtrData: &grpcapi.CtrData{
-			ConfigSha256: configHash,
-			RootfsSha256: rootfsHash,
+		Version: api.GetVersion(),
+		MeasureEvent: &grpcapi.MeasureEvent{
+			Sha256:    templateHash,
+			EventName: c.CtrName,
+			CtrData: &grpcapi.CtrData{
+				ConfigSha256: configHash,
+				RootfsSha256: rootfsHash,
+			},
 		},
 	}
 

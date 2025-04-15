@@ -53,11 +53,10 @@ const (
 // Creates an attested HTTPS connection and performs the specified requests
 func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
-	// Add root CA
-	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(c.ca)
-	if !success {
-		log.Fatal("Could not add cert to root CAs")
+	// Add trusted server root CAs
+	trustedRootCas := x509.NewCertPool()
+	for _, ca := range c.identityCas {
+		trustedRootCas.AddCert(ca)
 	}
 
 	// Load certificate from CMC if mutual TLS is activated and
@@ -76,16 +75,16 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		// Create TLS config with root CA and own certificate for authentication
 		tlsConfig = &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			RootCAs:      roots,
+			RootCAs:      trustedRootCas,
 		}
 	} else {
 		// Create TLS config with root CA only
 		tlsConfig = &tls.Config{
-			RootCAs:       roots,
+			RootCAs:       trustedRootCas,
 			Renegotiation: tls.RenegotiateNever,
 		}
 	}
-	internal.PrintTlsConfig(tlsConfig, c.ca)
+	internal.PrintTlsConfig(tlsConfig, c.identityCas)
 
 	// Create an attested HTTP Transport structure. This is a wrapper around http.Transport,
 	// look for the descriptions of the parameters there. Additionally, the aTLS parameters
@@ -100,7 +99,8 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		CmcApi:        api,
 		ApiSerializer: c.apiSerializer,
 		Cmc:           cmc,
-		Ca:            c.ca,
+		IdentityCas:   c.identityCas,
+		MetadataCas:   c.metadataCas,
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
@@ -168,11 +168,10 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
-	// Add root CA
-	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(c.ca)
-	if !success {
-		log.Fatal("Could not add cert to root CAs")
+	// Add trusted client root CAs
+	trustedRootCas := x509.NewCertPool()
+	for _, ca := range c.identityCas {
+		trustedRootCas.AddCert(ca)
 	}
 
 	// Load certificate from CMC
@@ -198,11 +197,11 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	tlsConfig := &tls.Config{
 		Certificates:  []tls.Certificate{cert},
 		ClientAuth:    clientAuth,
-		ClientCAs:     roots,
+		ClientCAs:     trustedRootCas,
 		Renegotiation: tls.RenegotiateNever,
 	}
 
-	internal.PrintTlsConfig(tlsConfig, c.ca)
+	internal.PrintTlsConfig(tlsConfig, c.identityCas)
 
 	// Config allows to specify more than one address for dialing,
 	// always use first address for listening
@@ -225,7 +224,8 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		CmcApi:        api,
 		ApiSerializer: c.apiSerializer,
 		Cmc:           cmc,
-		Ca:            c.ca,
+		IdentityCas:   c.identityCas,
+		MetadataCas:   c.metadataCas,
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {

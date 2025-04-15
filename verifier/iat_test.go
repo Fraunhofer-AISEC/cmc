@@ -16,7 +16,6 @@
 package verifier
 
 import (
-	"crypto/x509"
 	"encoding/hex"
 	"reflect"
 	"testing"
@@ -30,7 +29,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		IasM            *ar.Measurement
 		nonce           []byte
 		referenceValues []ar.ReferenceValue
-		ca              *x509.Certificate
+		rootManifest    *ar.MetadataResult
 	}
 	tests := []struct {
 		name string
@@ -50,7 +49,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: validIasCa,
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validIatFingerprint,
+						},
+					},
+				},
 			},
 			want: false,
 		},
@@ -67,12 +72,18 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: validIasCa,
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validIatFingerprint,
+						},
+					},
+				},
 			},
 			want: false,
 		},
 		{
-			name: "Invalid CA",
+			name: "Invalid CA Fingerprint",
 			args: args{
 				IasM: &ar.Measurement{
 					Type:     "IAS Measurement",
@@ -84,7 +95,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: invalidIasCa,
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: invalidIatFingerprint,
+						},
+					},
+				},
 			},
 			want: false,
 		},
@@ -101,7 +118,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: validIasCa,
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validIatFingerprint,
+						},
+					},
+				},
 			},
 			want: false,
 		},
@@ -118,7 +141,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: validIasCa,
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validIatFingerprint,
+						},
+					},
+				},
 			},
 			want: false,
 		},
@@ -135,7 +164,13 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				ca: validIasCa,
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprint: validIatFingerprint,
+						},
+					},
+				},
 			},
 			want: false,
 		},
@@ -144,7 +179,8 @@ func Test_verifyIasMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, []*x509.Certificate{tt.args.ca}, tt.args.referenceValues)
+			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, tt.args.rootManifest,
+				tt.args.referenceValues)
 			if got != tt.want {
 				t.Errorf("verifyIasMeasurements() error = %v, wantErr %v", got, tt.want)
 				return
@@ -157,6 +193,10 @@ func Test_verifyIasMeasurements(t *testing.T) {
 }
 
 var (
+	validIatFingerprint = "650E3221B0EC2BF2E20B25DCF79D788CDAEA140EA8FBE2E0B5F02E54A34C541E"
+
+	invalidIatFingerprint = "F50E3221B0EC2BF2E20B25DCF79D788CDAEA140EA8FBE2E0B5F02E54A34C541E"
+
 	validIat, _ = hex.DecodeString("D28443A10126A05901D3AA3A000124FF584000112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF3A000124FB5820A0A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBF3A00012500582101FA58755F658627CE5460F29B75296713248CAE7AD9E2984B90280EFCBCB502483A000124FA5820AAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDD3A000124F8203A000124F91930003A000124FD82A501635350450465302E302E30055820BFE6D86F8826F4FF97FB96C4E6FBC4993E4619FC565DA26ADF34C329489ADC380666534841323536025820C6C06836E8CD07DEAD305C01EC46A3E264858C47D661E5A257AB81AED87E34F0A501644E5350450465302E302E30055820B360CAF5C98C6B942A4882FA9D4823EFB166A9EF6A6E4AA37C1919ED1FCCC049066653484132353602582073DEB833155C9C317D838B5368B6A63BD38706FA874E874C1B5AFFE4571B348B3A00012501777777772E747275737465646669726D776172652E6F72673A000124F7715053415F494F545F50524F46494C455F313A000124FC7030363034353635323732383239313030584059233E805EE09FFAE3F41462D315A5B095B5E5CB7992F8F1A0FE140C6C842A41EFD211E57F35F182B87E6AB2B0CE1A514C3729D0ACA403C91237568DB77F0B5B")
 
 	invalidIat, _ = hex.DecodeString("D28443A10126A05901D3AA3A000124FF584000112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF3A000124FB5820A0A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBF3A00012500582101FA58755F658627CE5460F29B75296713248CAE7AD9E2984B90280EFCBCB502483A000124FA5820AAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDD3A000124F8203A000124F91930003A000124FD82A501635350450465302E302E30055820BFE6D86F8826F4FF97FB96C4E6FBC4993E4619FC565DA26ADF34C329489ADC380666534841323536025820C6C06836E8CD07DEAD305C01EC46A3E264858C47D661E5A257AB81AED87E34F0A501644E5350450465302E302E30055820B360CAF5C98C6B942A4882FA9D4823EFB166A9EF6A6E4AA37C1919ED1FCCC049066653484132353602582073DEB833155C9C317D838B5368B6A63BD38706FA874E874C1B5AFFE4571B348B3A00012501777777772E747275737465646669726D776172652E6F72673A000124F7715053415F494F545F50524F46494C455F313A000124FC7030363034353635323732383239313030584059233E805EE09FFAE3F41462D315A5B095B5E5CB7992F8F1A0FE140C6C842A41EFD211E57F35F182B87E6AB2B0CE1A514C3729D0ACA403C91237568DB77F0B5B")

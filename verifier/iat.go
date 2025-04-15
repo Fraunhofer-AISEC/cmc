@@ -18,6 +18,7 @@ package verifier
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 
@@ -48,7 +49,7 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certificate,
+func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -108,14 +109,37 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, cas []*x509.Certif
 	log.Debug("Verifying certificate chain")
 
 	// Verify certificate chain
-	x509Chains, err := internal.VerifyCertChain(certs, cas)
+	ca := certs[len(certs)-1]
+	x509Chains, err := internal.VerifyCertChain(certs, []*x509.Certificate{ca})
 	if err != nil {
 		log.Debugf("Failed to verify certificate chain: %v", err)
 		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
 		ok = false
-	} else {
-		result.Signature.CertChainCheck.Success = true
+		return result, false
 	}
+
+	// Verify that the reference value fingerprint matches the certificate fingerprint
+	if rootManifest.CaFingerprint == "" {
+		log.Debug("Reference value SNP CA fingerprint not present")
+		result.Signature.CertChainCheck.SetErr(ar.NotPresent)
+		return result, false
+	}
+	refFingerprint, err := hex.DecodeString(rootManifest.CaFingerprint)
+	if err != nil {
+		log.Debugf("Failed to decode CA fingerprint %v: %v", rootManifest.CaFingerprint, err)
+		result.Signature.CertChainCheck.SetErr(ar.ParseCAFingerprint)
+		return result, false
+	}
+	caFingerprint := sha256.Sum256(ca.Raw)
+	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
+		log.Debugf("Root Manifest CA fingerprint '%v' does not match measurement CA fingerprint '%v'",
+			rootManifest.CaFingerprint, hex.EncodeToString(caFingerprint[:]))
+		result.Signature.CertChainCheck.Success = false
+		result.Signature.CertChainCheck.Expected = rootManifest.CaFingerprint
+		result.Signature.CertChainCheck.Got = hex.EncodeToString(caFingerprint[:])
+		return result, false
+	}
+	result.Signature.CertChainCheck.Success = true
 
 	//Store details from (all) validated certificate chain(s) in the report
 	for _, chain := range x509Chains {

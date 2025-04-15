@@ -221,8 +221,8 @@ func CheckRevocation(crl *x509.RevocationList, cert *x509.Certificate, ca *x509.
 	return nil
 }
 
-func PrintTlsConfig(conf *tls.Config, roots []byte) error {
-	log.Debug("Using the following TLS certificate configuration")
+func PrintTlsConfig(conf *tls.Config, trustedRoots []*x509.Certificate) error {
+	log.Debug("Using the following TLS certificate chain")
 	for i, certs := range conf.Certificates {
 		for j, data := range certs.Certificate {
 			c, err := ParseCert(data)
@@ -235,11 +235,8 @@ func PrintTlsConfig(conf *tls.Config, roots []byte) error {
 				hex.EncodeToString(c.AuthorityKeyId))
 		}
 	}
-	certs, err := ParseCertsPem(roots)
-	if err != nil {
-		return fmt.Errorf("failed to load certs: %w", err)
-	}
-	for i, c := range certs {
+	log.Debug("Using the following trusted root CAs")
+	for i, c := range trustedRoots {
 		log.Debugf("CA Cert%v: %v, SubjectKeyID %v",
 			i, c.Subject.CommonName, hex.EncodeToString(c.SubjectKeyId))
 	}

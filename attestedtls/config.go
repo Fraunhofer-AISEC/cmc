@@ -17,6 +17,7 @@ package attestedtls
 
 import (
 	"crypto"
+	"crypto/x509"
 	"fmt"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -61,7 +62,8 @@ type CmcConfig struct {
 	CmcAddr       string
 	CmcApi        CmcApi
 	ApiSerializer ar.Serializer
-	Ca            []byte
+	IdentityCas   []*x509.Certificate
+	MetadataCas   []*x509.Certificate
 	Policies      []byte
 	Mtls          bool
 	Attest        AttestSelect
@@ -71,7 +73,7 @@ type CmcConfig struct {
 
 type CmcApi interface {
 	obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error)
-	verifyAR(cc CmcConfig, report, nonce, ca, policies []byte, peer string, cacheMisses []string, metadata map[string][]byte) error
+	verifyAR(cc CmcConfig, identityCas, metadataCas [][]byte, report, nonce, policies []byte, peer string, cacheMisses []string, metadata map[string][]byte) error
 	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc CmcConfig) ([][]byte, error)
 	fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error)
@@ -124,19 +126,25 @@ func WithCmcApi(api CmcApiSelect) ConnectionOption[CmcConfig] {
 	}
 }
 
-// WithCmcCa specifies the CA the attestation report should be verified against
-// in PEM format
-func WithCmcCa(pem []byte) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
-		c.Ca = pem
-	}
-}
-
 // WithCmcPolicies specifies optional custom policies the attestation report should
 // be verified against
 func WithCmcPolicies(policies []byte) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
 		c.Policies = policies
+	}
+}
+
+// WithIdentityCas specifies the CAs to verify the attestation report in DER format
+func WithIdentityCas(certs []*x509.Certificate) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.IdentityCas = certs
+	}
+}
+
+// WithMetadataCas specifies the metadata CAs for attestation report metadata in DER format
+func WithMetadataCas(certs []*x509.Certificate) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) {
+		c.MetadataCas = certs
 	}
 }
 

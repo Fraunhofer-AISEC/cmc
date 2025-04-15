@@ -31,7 +31,6 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/sirupsen/logrus"
 )
@@ -705,7 +704,10 @@ func TestVerify(t *testing.T) {
 			// Run FUT
 			log.Info("Running FUT")
 			got := Verify(
-				arSigned, nonce, internal.WriteCertPem(certchain[len(certchain)-1]), nil,
+				arSigned, nonce,
+				[]*x509.Certificate{certchain[len(certchain)-1]},
+				[]*x509.Certificate{certchain[len(certchain)-1]},
+				nil,
 				"",
 				PolicyEngineSelect_None,
 				metadata)

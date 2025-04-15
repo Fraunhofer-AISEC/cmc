@@ -46,10 +46,11 @@ message VerificationRequest {
   bytes nonce = 2;
   bytes report = 3;
   map<string, bytes> metadata = 4;
-  bytes ca = 5;
-  string peer = 6;
-  repeated string cache_misses = 7;
-  bytes policies = 8;
+  repeated bytes metadataCas = 5;
+  repeated bytes identityCas = 6;
+  string peer = 7;
+  repeated string cache_misses = 8;
+  bytes policies = 9;
 }
 
 message VerificationResponse {
@@ -90,7 +91,7 @@ message PeerCacheResponse {
 
 message MeasureRequest {
   string version = 1;
-  MeasureEvent measure_envent = 2;
+  MeasureEvent measure_event = 2;
 }
 
 

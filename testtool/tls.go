@@ -37,9 +37,10 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 
 	conn, err := atls.Dial("tcp", addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcCa(c.ca),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
+		atls.WithIdentityCas(c.identityCas),
+		atls.WithMetadataCas(c.metadataCas),
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
@@ -83,11 +84,10 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	var tlsConf *tls.Config
 
-	// Add root CA
-	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(c.ca)
-	if !success {
-		log.Fatal("Could not add cert to root CAs")
+	// Add trusted server root CAs
+	trustedRootCas := x509.NewCertPool()
+	for _, ca := range c.identityCas {
+		trustedRootCas.AddCert(ca)
 	}
 
 	if c.Mtls {
@@ -104,17 +104,17 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		// Create TLS config with root CA and own certificate
 		tlsConf = &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			RootCAs:      roots,
+			RootCAs:      trustedRootCas,
 		}
 	} else {
 		// Create TLS config with root CA only
 		tlsConf = &tls.Config{
-			RootCAs:       roots,
+			RootCAs:       trustedRootCas,
 			Renegotiation: tls.RenegotiateNever,
 		}
 	}
 
-	internal.PrintTlsConfig(tlsConf, c.ca)
+	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
 	testTime := time.Unix(0, 0)
 
@@ -144,11 +144,11 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 }
 
 func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
-	// Add root CA
-	roots := x509.NewCertPool()
-	success := roots.AppendCertsFromPEM(c.ca)
-	if !success {
-		log.Fatal("Could not add cert to root CAs")
+
+	// Add trusted client root CAs
+	trustedRootCas := x509.NewCertPool()
+	for _, ca := range c.identityCas {
+		trustedRootCas.AddCert(ca)
 	}
 
 	// Load certificate
@@ -174,11 +174,11 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	tlsConf := &tls.Config{
 		Certificates:  []tls.Certificate{cert},
 		ClientAuth:    clientAuth,
-		ClientCAs:     roots,
+		ClientCAs:     trustedRootCas,
 		Renegotiation: tls.RenegotiateNever,
 	}
 
-	internal.PrintTlsConfig(tlsConf, c.ca)
+	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
 	addr := ""
 	if len(c.Addr) > 0 {
@@ -188,9 +188,10 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcCa(c.ca),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
+		atls.WithIdentityCas(c.identityCas),
+		atls.WithMetadataCas(c.metadataCas),
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),

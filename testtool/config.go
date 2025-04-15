@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -76,7 +77,9 @@ type config struct {
 	ReportFile    string   `json:"report"`
 	ResultFile    string   `json:"result"`
 	NonceFile     string   `json:"nonce"`
-	CaFile        string   `json:"ca"`
+	IdentityCas   []string `json:"identityCas"`
+	MetadataCas   []string `json:"metadataCas"`
+	EstCa         string   `json:"estCa"`
 	Mtls          bool     `json:"mtls"`
 	Attest        string   `json:"attest"`
 	PoliciesFile  string   `json:"policies"`
@@ -94,7 +97,8 @@ type config struct {
 	CtrRootfs string `json:"ctrRootfs"`
 	CtrConfig string `json:"ctrConfig"`
 
-	ca            []byte
+	identityCas   []*x509.Certificate
+	metadataCas   []*x509.Certificate
 	policies      []byte
 	api           Api
 	interval      time.Duration
@@ -111,7 +115,9 @@ const (
 	reportFlag        = "report"
 	resultFlag        = "result"
 	nonceFlag         = "nonce"
-	caFlag            = "ca"
+	identityCasFlag   = "identitycas"
+	metadataCasFlag   = "metadatacas"
+	estCaFlag         = "estca"
 	policiesFlag      = "policies"
 	mtlsFlag          = "mtls"
 	attestFlag        = "attest"
@@ -138,7 +144,9 @@ var (
 	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
 	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
 	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
-	caFile       = flag.String(caFlag, "", "Certificate Authorities to be trusted in PEM format")
+	identityCas  = flag.String(identityCasFlag, "", "Trusted certificate authorities for attestation reports")
+	metadataCas  = flag.String(metadataCasFlag, "", "Trusted certificate authorities for metadata")
+	estCa        = flag.String(estCaFlag, "", "Path to store CA retrieved from /cacerts endpoint via mode cacerts")
 	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
@@ -210,8 +218,11 @@ func getConfig() *config {
 	if internal.FlagPassed(nonceFlag) {
 		c.NonceFile = *nonceFile
 	}
-	if internal.FlagPassed(caFlag) {
-		c.CaFile = *caFile
+	if internal.FlagPassed(identityCasFlag) {
+		c.IdentityCas = strings.Split(*identityCas, ",")
+	}
+	if internal.FlagPassed(estCaFlag) {
+		c.EstCa = *estCa
 	}
 	if internal.FlagPassed(policiesFlag) {
 		c.PoliciesFile = *policiesFile
@@ -296,18 +307,41 @@ func getConfig() *config {
 
 	// Get root CA certificate in PEM format if specified
 	if c.Mode != "generate" && c.Mode != "cacerts" && c.Mode != "measure" {
-		if c.CaFile != "" {
-			c.ca, err = os.ReadFile(c.CaFile)
-			if err != nil {
-				log.Fatalf("Failed to read certificate file %v: %v", *caFile, err)
-			}
-		} else {
-			log.Fatal("Path to read CA certificate file must be specified either via config file or commandline")
+		if len(c.IdentityCas) == 0 {
+			log.Fatal("Path to read Report CAs must be specified either via config file or commandline")
 		}
+		if len(c.MetadataCas) == 0 {
+			log.Fatal("Path to read Metadata CAs must be specified either via config file or commandline")
+		}
+
+		for _, ca := range c.IdentityCas {
+			ca, err := os.ReadFile(ca)
+			if err != nil {
+				log.Fatalf("Failed to read certificate file %v: %v", ca, err)
+			}
+			cert, err := internal.ParseCert(ca)
+			if err != nil {
+				log.Fatalf("Failed to parse certificate %v: %v", ca, err)
+			}
+			c.identityCas = append(c.identityCas, cert)
+		}
+
+		for _, ca := range c.MetadataCas {
+			ca, err := os.ReadFile(ca)
+			if err != nil {
+				log.Fatalf("Failed to read certificate file %v: %v", ca, err)
+			}
+			cert, err := internal.ParseCert(ca)
+			if err != nil {
+				log.Fatalf("Failed to parse certificate %v: %v", ca, err)
+			}
+			c.metadataCas = append(c.metadataCas, cert)
+		}
+
 	}
 
-	if c.Mode == "cacerts" && c.CaFile == "" {
-		log.Fatal("Path to store CA file must be specified either via config file or commandline")
+	if c.Mode == "cacerts" && c.EstCa == "" {
+		log.Fatal("Path to store EST CA must be specified either via config file or commandline")
 	}
 
 	// Add optional policies if specified
@@ -363,12 +397,6 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.NonceFile, err)
 		}
 	}
-	if c.CaFile != "" {
-		c.CaFile, err = filepath.Abs(c.CaFile)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.CaFile, err)
-		}
-	}
 	if c.Storage != "" {
 		c.Storage, err = filepath.Abs(c.Storage)
 		if err != nil {
@@ -381,10 +409,22 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
 		}
 	}
+	if c.EstCa != "" {
+		c.EstCa, err = filepath.Abs(c.EstCa)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.EstCa, err)
+		}
+	}
 	if c.PeerCache != "" {
 		c.PeerCache, err = filepath.Abs(c.PeerCache)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.PeerCache, err)
+		}
+	}
+	for i := range c.IdentityCas {
+		c.IdentityCas[i], err = filepath.Abs(c.IdentityCas[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.IdentityCas[i], err)
 		}
 	}
 }
@@ -421,7 +461,9 @@ func (c *config) Print() {
 	log.Debugf("\tReportFile               : %v", c.ReportFile)
 	log.Debugf("\tResultFile               : %v", c.ResultFile)
 	log.Debugf("\tNonceFile                : %v", c.NonceFile)
-	log.Debugf("\tCaFile                   : %v", c.CaFile)
+	log.Debugf("\tIdentity CAs             : %v", strings.Join(c.IdentityCas, ","))
+	log.Debugf("\tMetadata CAs             : %v", strings.Join(c.MetadataCas, ","))
+	log.Debugf("\tEstCa                    : %v", c.EstCa)
 	log.Debugf("\tMtls                     : %v", c.Mtls)
 	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
 	log.Debugf("\tAttest                   : %v", c.Attest)

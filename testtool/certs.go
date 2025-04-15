@@ -41,7 +41,7 @@ func getCaCertsInternal(c *config) {
 		log.Debugf("\t%v", c.Subject.CommonName)
 	}
 	// Store CA certificate
-	err = os.WriteFile(c.CaFile, internal.WriteCertPem(certs[len(certs)-1]), 0644)
+	err = os.WriteFile(c.EstCa, internal.WriteCertPem(certs[len(certs)-1]), 0644)
 	if err != nil {
 		log.Fatalf("Failed to store CA certificate: %v", err)
 	}

@@ -32,9 +32,9 @@ import (
 func verifyTpmMeasurements(
 	measurement ar.Measurement,
 	nonce []byte,
-	s ar.Serializer,
 	rootManifest *ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
+	s ar.Serializer,
 ) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{

@@ -109,7 +109,8 @@ func (a SocketApi) verify(c *config) {
 		Report:      report.Report,
 		Metadata:    report.Metadata,
 		CacheMisses: report.CacheMisses,
-		Ca:          c.ca,
+		IdentityCas: internal.WriteCertsDer(c.identityCas),
+		MetadataCas: internal.WriteCertsDer(c.metadataCas),
 		Policies:    c.policies,
 	}
 

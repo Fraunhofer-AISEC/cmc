@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	coap "github.com/plgd-dev/go-coap/v3"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -78,10 +79,11 @@ func attestHub(w mux.ResponseWriter, r *mux.Message) {
 	// Send attestation report to cmcd
 	req := &api.VerificationRequest{
 		// TODO COAP GET
-		Nonce:    []byte{0xde, 0xad},
-		Report:   body, // TODO metadata
-		Ca:       conf.ca,
-		Policies: conf.policies,
+		Nonce:       []byte{0xde, 0xad},
+		Report:      body, // TODO metadata
+		IdentityCas: internal.WriteCertsDer(conf.identityCas),
+		MetadataCas: internal.WriteCertsDer(conf.metadataCas),
+		Policies:    conf.policies,
 	}
 
 	resp, err := verifyInternal(conf, req)

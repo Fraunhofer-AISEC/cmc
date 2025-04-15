@@ -18,7 +18,7 @@ components, see [Architecture](./architecture.md)
 
 Several packages must be installed for building the `cmc` and generating metadata:
 ```sh
-sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq yq
+sudo apt install -y moreutils golang-cfssl build-essential sqlite3 zlib1g-dev libssl-dev jq yq protoc-gen-go protoc-gen-go-grpc
 ```
 > NOTE: For ubuntu, `yq` must be installed as a snap package
 

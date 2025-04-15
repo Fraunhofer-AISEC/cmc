@@ -7,7 +7,13 @@
     "report": "/var/testtool/attestation-report",
     "result": "/var/testtool/attestation-result.json",
     "nonce": "/var/testtool/nonce",
-    "ca": "/var/testtool/ca.pem",
+    "identityCas": [
+        "/var/testtool/ca.pem"
+    ],
+    "metadataCas": [
+        "/var/testtool/ca.pem"
+    ],
+    "estCa": "/var/testtool/ca.pem",
     "attest": "server",
     "measurementLog": true,
     "logLevel": "trace",
