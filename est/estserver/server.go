@@ -43,22 +43,24 @@ import (
 )
 
 type Server struct {
-	server       *http.Server
-	signingKey   *ecdsa.PrivateKey
-	signingCerts []*x509.Certificate
-	tpmConf      tpmConfig
-	snpConf      snpConfig
+	server     *http.Server
+	estCaKey   *ecdsa.PrivateKey
+	estCaChain []*x509.Certificate
+	tpmConf    tpmConfig
+	snpConf    snpConfig
 }
 
 func NewServer(c *config) (*Server, error) {
 
 	var tlsCerts [][]byte
-	for _, c := range c.estCerts {
+	for _, c := range c.tlsCerts {
 		tlsCerts = append(tlsCerts, c.Raw)
 	}
 
 	clientCAs := x509.NewCertPool()
-	clientCAs.AddCert(c.signingCerts[len(c.signingCerts)-1])
+	for _, cert := range c.tlsCerts {
+		clientCAs.AddCert(cert)
+	}
 
 	tlsCfg := &tls.Config{
 		MinVersion:       tls.VersionTLS12,
@@ -67,8 +69,8 @@ func NewServer(c *config) (*Server, error) {
 		Certificates: []tls.Certificate{
 			{
 				Certificate: tlsCerts,
-				PrivateKey:  c.estKey,
-				Leaf:        c.estCerts[0],
+				PrivateKey:  c.tlsKey,
+				Leaf:        c.tlsCerts[0],
 			},
 		},
 		ClientCAs: clientCAs,
@@ -83,9 +85,9 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	server := &Server{
-		server:       s,
-		signingKey:   c.signingKey,
-		signingCerts: c.signingCerts,
+		server:     s,
+		estCaKey:   c.estCaKey,
+		estCaChain: c.estCaChain,
 		tpmConf: tpmConfig{
 			verifyEkCert: c.VerifyEkCert,
 			dbPath:       c.TpmEkCertDb,
@@ -138,7 +140,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	body, err := est.EncodePkcs7CertsOnly(s.signingCerts)
+	body, err := est.EncodePkcs7CertsOnly(s.estCaChain)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
 		return
@@ -180,7 +182,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cert, err := enrollCert(csr, s.signingKey, s.signingCerts[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -279,7 +281,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	cert, err := enrollCert(csr, s.signingKey, s.signingCerts[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -364,7 +366,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	cert, err := enrollCert(csr, s.signingKey, s.signingCerts[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return

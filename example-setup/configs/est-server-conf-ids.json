@@ -1,16 +1,17 @@
 {
     "port": 9000,
-    "signingKey": "../../data-ids/pki/device_sub_ca-key.pem",
-    "signingCerts": [
+    "estCaKey": "../../data-ids/pki/device_sub_ca-key.pem",
+    "estCaChain": [
         "../../data-ids/pki/device_sub_ca.pem",
+        "../../data-ids/pki/ca.pem"
+    ],
+    "tlsKey": "../../data-ids/pki/est-tls-key.pem",
+    "tlsCerts": [
+        "../../data-ids/pki/est-tls.pem",
         "../../data-ids/pki/ca.pem"
     ],
     "httpFolder": "../../data-ids/",
     "verifyEkCert": false,
     "tpmEkCertDb": "../../data-ids/tpm-ek-certs.db",
-    "estKey": "../../data-ids/pki/est-key.pem",
-    "estCerts": [
-        "../../data-ids/pki/est.pem"
-    ],
     "logLevel": "trace"
 }
