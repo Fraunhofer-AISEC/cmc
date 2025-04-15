@@ -342,10 +342,13 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					},
 				},
 			}
-			_, got := verifyTdxMeasurements(*tt.args.measurement, tt.args.nonce,
+			got, got1 := verifyTdxMeasurements(*tt.args.measurement, tt.args.nonce,
 				tt.args.rootManifest, tt.args.refvals)
-			if got != tt.want {
-				t.Errorf("verifyTdxMeasurements() got = %v, want %v", got, tt.want)
+			if got.Summary.Success != tt.want {
+				t.Errorf("verifyTpmMeasurements() --GOT-- = %v, --WANT-- %v", got.Summary.Success, tt.want)
+			}
+			if got1 != tt.want {
+				t.Errorf("verifyTdxMeasurements() --GOT1-- = %v, --WANT-- %v", got1, tt.want)
 			}
 		})
 	}

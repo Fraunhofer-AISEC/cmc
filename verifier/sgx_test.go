@@ -338,10 +338,13 @@ func Test_verifySgxMeasurements(t *testing.T) {
 			},
 		}
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifySgxMeasurements(*tt.args.measurement, tt.args.nonce,
+			got, got1 := verifySgxMeasurements(*tt.args.measurement, tt.args.nonce,
 				tt.args.rootManifest, tt.args.refvals)
-			if got != tt.want {
-				t.Errorf("verifySgxMeasurements() got = %v, want %v", got, tt.want)
+			if got.Summary.Success != tt.want {
+				t.Errorf("verifySgxMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
+			}
+			if got1 != tt.want {
+				t.Errorf("verifySgxMeasurements() got1 = %v, want %v", got1, tt.want)
 			}
 		})
 	}

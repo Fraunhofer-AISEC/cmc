@@ -30,9 +30,9 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x509.Certificate,
-	s ar.Serializer, refVals []ar.ReferenceValue) (*ar.MeasurementResult, bool,
-) {
+func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.Certificate,
+	refVals []ar.ReferenceValue, s ar.Serializer,
+) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying SW measurements")
 
@@ -42,7 +42,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	ok := true
 
 	// Verify signature and extract evidence
-	tr, payload, ok := s.Verify(swMeasurement.Evidence, cas)
+	tr, payload, ok := s.Verify(measurement.Evidence, cas)
 	if !ok {
 		log.Debugf("Failed to verify sw evidence")
 		result.Summary.SetErr(ar.VerifyEvidence)
@@ -57,6 +57,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	if err != nil {
 		log.Debugf("Failed to unmarshal sw evidence")
 		result.Summary.SetErr(ar.ParseEvidence)
+		return result, false
 	}
 
 	// Verify nonce
@@ -75,7 +76,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 	// Check that reference values are reflected by mandatory measurements
 	for _, ref := range refVals {
 		found := false
-		for _, swm := range swMeasurement.Artifacts {
+		for _, swm := range measurement.Artifacts {
 			for _, event := range swm.Events {
 				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
 
@@ -122,7 +123,7 @@ func verifySwMeasurements(swMeasurement ar.Measurement, nonce []byte, cas []*x50
 
 	// Check that every measurement is reflected by a reference value
 	aggregatedHash := make([]byte, 32)
-	for _, swm := range swMeasurement.Artifacts {
+	for _, swm := range measurement.Artifacts {
 		for _, event := range swm.Events {
 			found := false
 			for _, ref := range refVals {

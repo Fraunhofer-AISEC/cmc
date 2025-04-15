@@ -6,7 +6,13 @@
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",
-    "ca": "example-setup/vm-config/ca.pem",
+    "identityCas": [
+        "data/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "example-setup/vm-config/ca.pem"
+    ],
+    "estCa": "data/pki/ca.pem",
     "mtls": false,
     "attest": "server",
     "measurementLog": true,

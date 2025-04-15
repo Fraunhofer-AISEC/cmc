@@ -132,9 +132,15 @@ func Test_verifySwMeasurements(t *testing.T) {
 
 		// Begin FUT
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifySwMeasurements(tt.args.swMeasurement, tt.args.nonce, tt.args.cas, tt.args.s, refVals["SW Reference Value"])
-			if got != tt.want {
-				t.Errorf("verifySwMeasurements() got = %v, want %v", got, tt.want)
+			got, got1 := verifySwMeasurements(tt.args.swMeasurement,
+				tt.args.nonce,
+				tt.args.cas,
+				refVals["SW Reference Value"], tt.args.s)
+			if got.Summary.Success != tt.want {
+				t.Errorf("verifySwMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
+			}
+			if got1 != tt.want {
+				t.Errorf("verifySwMeasurements() got = %v, want %v", got1, tt.want)
 			}
 		})
 		// End FUT

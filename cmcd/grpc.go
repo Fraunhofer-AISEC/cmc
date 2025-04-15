@@ -124,7 +124,8 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 			api.GetVersion(), req.Version)
 	}
 
-	result, err := cmc.Verify(req.Report, req.Nonce, req.Ca, req.Policies, req.Peer, req.CacheMisses, req.Metadata, s.cmc)
+	result, err := cmc.Verify(req.Report, req.Nonce, req.IdentityCas, req.MetadataCas, req.Policies,
+		req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		log.Errorf("verifier: failed to verify: %v", err)
 	}
@@ -137,8 +138,8 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 	}
 
 	response := &api.VerificationResponse{
-		Version:            api.GetVersion(),
-		VerificationResult: data,
+		Version: api.GetVersion(),
+		Result:  data,
 	}
 
 	log.Info("Served grpc request type 'Verify'")
@@ -159,11 +160,11 @@ func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api
 
 	// oci spec in protobuf is marshaled as bytes
 	spec := new(oci.Spec)
-	ser, err := ar.DetectSerialization(req.CtrData.OciSpec)
+	ser, err := ar.DetectSerialization(req.MeasureEvent.CtrData.OciSpec)
 	if err != nil {
 		log.Warnf("failed to detect oci spec serialization: %v", err)
 	} else {
-		err = ser.Unmarshal(req.CtrData.OciSpec, spec)
+		err = ser.Unmarshal(req.MeasureEvent.CtrData.OciSpec, spec)
 		if err != nil {
 			log.Warnf("failed to unmarshal grpc oci spec: %v", err)
 		}
@@ -171,11 +172,11 @@ func (s *GrpcServer) Measure(ctx context.Context, req *api.MeasureRequest) (*api
 
 	err = m.Measure(
 		&ar.MeasureEvent{
-			Sha256:    req.Sha256,
-			EventName: req.EventName,
+			Sha256:    req.MeasureEvent.Sha256,
+			EventName: req.MeasureEvent.EventName,
 			CtrData: &ar.CtrData{
-				ConfigSha256: req.CtrData.ConfigSha256,
-				RootfsSha256: req.CtrData.RootfsSha256,
+				ConfigSha256: req.MeasureEvent.CtrData.ConfigSha256,
+				RootfsSha256: req.MeasureEvent.CtrData.RootfsSha256,
 				OciSpec:      spec,
 			},
 		},

@@ -49,11 +49,14 @@ var (
 )
 
 // Verify verifies an attestation report in full serialized JWS
-// format against the supplied nonce and CA certificate. Verifies the certificate
+// format against the supplied nonce and CA certificates. Verifies the certificate
 // chains of all attestation report elements as well as the measurements against
 // the reference values and the compatibility of software artefacts.
 func Verify(
-	arRaw, nonce, casPem, policies []byte,
+	arRaw, nonce []byte,
+	identityCas []*x509.Certificate,
+	metadataCas []*x509.Certificate,
+	policies []byte,
 	peer string,
 	polEng PolicyEngineSelect,
 	metadatamap map[string][]byte,
@@ -71,14 +74,6 @@ func Verify(
 		CertLevel: 0,
 	}
 
-	cas, err := internal.ParseCertsPem(casPem)
-	if err != nil {
-		log.Debugf("Failed to parse specified CA certificate(s): %v", err)
-		result.Success = false
-		result.ErrorCodes = append(result.ErrorCodes, ar.ParseCA)
-		return result
-	}
-
 	// Detect serialization format
 	log.Tracef("Detecting serialization format of attestation report length %v", len(arRaw))
 	s, err := ar.DetectSerialization(arRaw)
@@ -91,7 +86,7 @@ func Verify(
 	log.Tracef("Detected %v serialization", s.String())
 
 	// Verify and unpack attestation report
-	report, tr, code := verifyAr(arRaw, cas, s)
+	report, tr, code := verifyAr(arRaw, identityCas, s)
 	result.ReportSignature = tr.SignatureCheck
 	if code != ar.NotSet {
 		result.ErrorCodes = append(result.ErrorCodes, code)
@@ -100,7 +95,7 @@ func Verify(
 	}
 
 	// Verify and unpack metadata from attestation report
-	metaResults, ec, ok := verifyMetadata(cas, s, metadatamap)
+	metaResults, ec, ok := verifyMetadata(metadataCas, s, metadatamap)
 	if !ok {
 		result.Success = false
 		result.ErrorCodes = append(result.ErrorCodes, ec...)
@@ -120,8 +115,8 @@ func Verify(
 		switch mtype := m.Type; mtype {
 
 		case "TPM Measurement":
-			r, ok := verifyTpmMeasurements(m, nonce, s, &metaResults.ManifestResults[0],
-				refVals["TPM Reference Value"])
+			r, ok := verifyTpmMeasurements(m, nonce, &metaResults.ManifestResults[0],
+				refVals["TPM Reference Value"], s)
 			if !ok {
 				result.Success = false
 			}
@@ -156,7 +151,8 @@ func Verify(
 			hwAttest = true
 
 		case "IAS Measurement":
-			r, ok := verifyIasMeasurements(m, nonce, cas, refVals["IAS Reference Value"])
+			r, ok := verifyIasMeasurements(m, nonce, &metaResults.ManifestResults[0],
+				refVals["IAS Reference Value"])
 			if !ok {
 				result.Success = false
 			}
@@ -164,7 +160,8 @@ func Verify(
 			hwAttest = true
 
 		case "SW Measurement":
-			r, ok := verifySwMeasurements(m, nonce, cas, s, refVals["SW Reference Value"])
+			r, ok := verifySwMeasurements(m, nonce, identityCas,
+				refVals["SW Reference Value"], s)
 			if !ok {
 				result.Success = false
 			}

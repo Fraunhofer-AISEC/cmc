@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 const (
@@ -163,8 +164,11 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 		// Verify AR from listener with own channel bindings
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
-		err = cc.CmcApi.verifyAR(cc, peerResp.Report, chbindings, cc.Ca, cc.Policies, fingerprint,
-			peerResp.CacheMisses, peerResp.Metadata)
+		err = cc.CmcApi.verifyAR(cc,
+			internal.WriteCertsDer(cc.IdentityCas),
+			internal.WriteCertsDer(cc.MetadataCas),
+			peerResp.Report, chbindings, cc.Policies,
+			fingerprint, peerResp.CacheMisses, peerResp.Metadata)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}

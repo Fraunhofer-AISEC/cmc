@@ -30,6 +30,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
@@ -107,7 +108,11 @@ func (a LibApi) verify(c *config) {
 
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
-	resp, err := cmc.Verify(report.Report, nonce, c.ca, c.policies, "", nil, report.Metadata, a.cmc)
+	resp, err := cmc.Verify(report.Report, nonce,
+		internal.WriteCertsDer(c.identityCas),
+		internal.WriteCertsDer(c.metadataCas),
+		c.policies, "", nil,
+		report.Metadata, a.cmc)
 	if err != nil {
 		log.Errorf("Verifier: failed to verify: %v", err)
 		return

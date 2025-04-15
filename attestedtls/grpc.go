@@ -89,7 +89,8 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 // Checks Attestation report by calling the CMC to Verify and checking its status response
 func (a GrpcApi) verifyAR(
 	cc CmcConfig,
-	report, nonce, ca, policies []byte,
+	identityCas, metadataCas [][]byte,
+	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
 	metadata map[string][]byte,
@@ -110,7 +111,8 @@ func (a GrpcApi) verifyAR(
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
-		Ca:          ca,
+		IdentityCas: identityCas,
+		MetadataCas: metadataCas,
 		Peer:        peer,
 		CacheMisses: cacheMisses,
 		Policies:    policies,
@@ -128,7 +130,7 @@ func (a GrpcApi) verifyAR(
 
 	// grpc only: the attestation result is marshalled as JSON, as we do not have protobuf definitions
 	result := new(ar.VerificationResult)
-	err = json.Unmarshal(resp.GetVerificationResult(), result)
+	err = json.Unmarshal(resp.GetResult(), result)
 	if err != nil {
 		return fmt.Errorf("could not parse verification result: %w", err)
 	}

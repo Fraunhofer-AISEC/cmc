@@ -212,7 +212,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			want1: false,
 		},
 		{
-			name: "Invalid CA",
+			name: "Invalid CA fingerprint",
 			args: args{
 				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
@@ -265,7 +265,11 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpmMeasurements(*tt.args.measurements, tt.args.nonce, tt.args.s, tt.args.rootManifest, tt.args.referenceValues)
+			got, got1 := verifyTpmMeasurements(*tt.args.measurements, tt.args.nonce,
+				tt.args.rootManifest, tt.args.referenceValues, tt.args.s)
+			if got.Summary.Success != tt.want1 {
+				t.Errorf("verifyTpmMeasurements() --GOT-- = %v, --WANT1-- %v", got.Summary.Success, tt.want1)
+			}
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
 			}

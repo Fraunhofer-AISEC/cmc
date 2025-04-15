@@ -464,9 +464,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, got := verifySnpMeasurements(*tt.args.measurement, tt.args.nonce,
-				tt.args.rootManifest, tt.args.refvals); got != tt.want {
-				t.Errorf("verifySnpMeasurements() = %v, want %v", got, tt.want)
+			got, got1 := verifySnpMeasurements(*tt.args.measurement, tt.args.nonce,
+				tt.args.rootManifest, tt.args.refvals)
+			if got.Summary.Success != tt.want {
+				t.Errorf("verifySnpMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
+			}
+			if got1 != tt.want {
+				t.Errorf("verifySnpMeasurements() got1 = %v, want %v", got1, tt.want)
 			}
 		})
 	}

@@ -6,7 +6,13 @@
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
-    "ca": "../data/pki/ca.pem",
+    "identityCas": [
+        "../data/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "../data/pki/ca.pem"
+    ],
+    "estCa": "../data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
     "measurementLog": true,
