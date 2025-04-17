@@ -32,7 +32,7 @@ import (
 func verifyTpmMeasurements(
 	measurement ar.Measurement,
 	nonce []byte,
-	rootManifest *ar.MetadataResult,
+	cas []*x509.Certificate,
 	referenceValues []ar.ReferenceValue,
 	s ar.Serializer,
 ) (*ar.MeasurementResult, bool) {
@@ -62,10 +62,10 @@ func verifyTpmMeasurements(
 	} else {
 		log.Debugf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tpmsAttest.ExtraData))
+		result.Summary.Success = false
 		result.Freshness.Success = false
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(tpmsAttest.ExtraData)
-		result.Summary.Success = false
 	}
 
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
@@ -94,32 +94,11 @@ func verifyTpmMeasurements(
 	}
 	log.Debug("Successfully verified TPM quote signature")
 
-	// Verify CA fingerprint
-	refCaFingerprint, err := hex.DecodeString(rootManifest.CaFingerprint)
-	if err != nil {
-		log.Debugf("Failed to decode CA fingerprint %v: %v", rootManifest.CaFingerprint, err)
-		result.Signature.CertChainCheck.SetErr(ar.ParseCAFingerprint)
-		return result, false
-	}
-	measurementCa := mCerts[len(mCerts)-1]
-	measCaFingerprint := sha256.Sum256(measurementCa.Raw)
-	if !bytes.Equal(refCaFingerprint, measCaFingerprint[:]) {
-		log.Debugf("Root Manifest CA fingerprint %q does not match measurement CA fingerprint %q",
-			rootManifest.CaFingerprint, hex.EncodeToString(measCaFingerprint[:]))
-		result.Signature.CertChainCheck.Success = false
-		result.Signature.CertChainCheck.Expected = rootManifest.CaFingerprint
-		result.Signature.CertChainCheck.Got = hex.EncodeToString(measCaFingerprint[:])
-		return result, false
-	}
-	verifiedCas := []*x509.Certificate{measurementCa}
-
-	log.Debugf("Measurement cert chain CA matches trusted manifest CA")
-
-	x509Chains, err := internal.VerifyCertChain(mCerts, verifiedCas)
+	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
 		log.Debugf("Failed to verify certificate chain: %v", err)
-		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
 		result.Summary.Success = false
+		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
 	} else {
 		result.Signature.CertChainCheck.Success = true
 	}

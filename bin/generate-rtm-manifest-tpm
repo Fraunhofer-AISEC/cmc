@@ -34,9 +34,6 @@ firmware="Lenovo"
 bootloader=$(grub-install --version)
 set -e
 
-# Get the fingerprint of the TPM privacy CA that was used for credential activation
-fingerprint=$(openssl x509 -in "${data}/pki/ca.pem" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
-
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$("${parse_srtm_pcrs_prefix}" parse-srtm-pcrs -p 0,1,2,3,4,5,6,7 -f json -e)
 
@@ -54,7 +51,6 @@ setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 y
 setjson "json" "description"           "RTM Manifest"
 setarr  "json" "baseLayers"            "${name}"
 setjson "json" "certLevel"             3
-setjson "json" "caFingerprint"         "${fingerprint}"
 
 # Insert platform details
 json=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")

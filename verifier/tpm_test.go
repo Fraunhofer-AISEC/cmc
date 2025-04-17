@@ -34,8 +34,8 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		measurements    *ar.Measurement
 		nonce           []byte
 		s               ar.Serializer
-		rootManifest    *ar.MetadataResult
 		referenceValues []ar.ReferenceValue
+		cas             []*x509.Certificate
 	}
 	tests := []struct {
 		name  string
@@ -53,16 +53,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  &validTpmMeasurementResult,
 			want1: true,
@@ -77,16 +71,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: validHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  &validTpmMeasurementResult,
 			want1: true,
@@ -101,16 +89,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce: invalidTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           invalidTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -125,16 +107,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -149,16 +125,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: invalidSummaryHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -173,16 +143,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: invalidHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
@@ -197,22 +161,16 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: invalidReferenceValues,
+				cas:             []*x509.Certificate{validCa},
 			},
 			want:  nil,
 			want1: false,
 		},
 		{
-			name: "Invalid CA fingerprint",
+			name: "Invalid CA SubjectKeyId",
 			args: args{
 				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
@@ -221,16 +179,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     validTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: invalidCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{invalidCaTpm},
 			},
 			want:  nil,
 			want1: false,
@@ -245,16 +197,10 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Certs:     invalidTpmCertChain,
 					Artifacts: validSummaryHashChain,
 				},
-				nonce: validTpmNonce,
-				s:     ar.JsonSerializer{},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprint: validCaFingerprint,
-						},
-					},
-				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{invalidCaTpm},
 			},
 			want:  nil,
 			want1: false,
@@ -266,7 +212,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifyTpmMeasurements(*tt.args.measurements, tt.args.nonce,
-				tt.args.rootManifest, tt.args.referenceValues, tt.args.s)
+				tt.args.cas, tt.args.referenceValues, tt.args.s)
 			if got.Summary.Success != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT-- = %v, --WANT1-- %v", got.Summary.Success, tt.want1)
 			}
@@ -416,10 +362,6 @@ var (
 	validAk = conv([]byte("-----BEGIN CERTIFICATE-----\nMIIDGjCCAr+gAwIBAgIBATAKBggqhkjOPQQDAjBhMQswCQYDVQQGEwJERTESMBAG\nA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAOBgNVBAsT\nB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTAeFw0yMjExMDcwODUxNDla\nFw0yNzEwMTIwODUxNDlaMIGdMQswCQYDVQQGEwJERTELMAkGA1UECBMCQlkxDzAN\nBgNVBAcTBk11bmljaDEWMBQGA1UECRMNdGVzdHN0cmVldCAxNTEOMAwGA1UEERMF\nODU3NDgxGjAYBgNVBAoTEVRlc3QgT3JnYW5pemF0aW9uMQ8wDQYDVQQLEwZkZXZp\nY2UxGzAZBgNVBAMTEmRlLnRlc3QuYWsuZGV2aWNlMDCCASIwDQYJKoZIhvcNAQEB\nBQADggEPADCCAQoCggEBALMxAElQ+xiBcNrfpPNd6ksmoftvdIAwBHaXJXta0JcN\n28aveILx2gWuAlhpB90h0IngWpETUckxmAJ/KvTtsOH1lhRQeWwXLmFciXc2lKD3\nNk//dtp6LVd7WaJzx8MtNMlsrYgG9tpjGggISTQyFACQYnmapbqvf8OS0UP93vUT\neAnCKBRDAOKT3FjpUl6y66buAnU1u1I9N7XBUem6nQSlw9KymrgXSG0Hvbpe7f6c\nWmNJC2dJOdxxpN523Fq9I9iMIOi+K2DXfsw2ShxtIj0NEWx+/gKNhsdVln5EnYar\nSef7N12tHTSZnl6oTWtnTGMaSmOfa1bkEpXguM9xV9cCAwEAAaNgMF4wDgYDVR0P\nAQH/BAQDAgeAMAwGA1UdEwEB/wQCMAAwHQYDVR0OBBYEFNKgV/REoVQpy8eJ/cOR\nXsE58bLRMB8GA1UdIwQYMBaAFD+Fycu3JAX3sNTSRMvABDRDeOICMAoGCCqGSM49\nBAMCA0kAMEYCIQDIC7CTHr1RYwUIvmd+lfZme2g1lUmuLWlWRzpEhP1K5AIhAMnp\nFhf+1eNqcZkg2ISsZ5GefN/A/5xvbQXPj06hHwZq\n-----END CERTIFICATE-----"))
 
 	validCa = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICBjCCAaygAwIBAgIUbzIW+iUiIFmCWbOL4rW4UBQfj7AwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwHhcNMjIxMDIzMTcwMTAwWhcNMjcxMDIyMTcwMTAwWjBhMQswCQYDVQQGEwJE\nRTESMBAGA1UEBxMJVGVzdCBDaXR5MRUwEwYDVQQKEwxUZXN0IENvbXBhbnkxEDAO\nBgNVBAsTB1Jvb3QgQ0ExFTATBgNVBAMTDFRlc3QgUm9vdCBDQTBZMBMGByqGSM49\nAgEGCCqGSM49AwEHA0IABEqaNo91iTSSbc9BL1iIQIVpZLd88RL5LfH15SVugJy4\n3d0jeE+KHtpQA8FpAvxXQHJm31z5V6+oLG4MQfVHN/GjQjBAMA4GA1UdDwEB/wQE\nAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBQ/hcnLtyQF97DU0kTLwAQ0\nQ3jiAjAKBggqhkjOPQQDAgNIADBFAiAFsmaZDBu+cfOqX9a5YAOgSeYB4Sb+r18m\nBIcuxwthhgIhALRHfA32ZcOA6piTKtWLZsdsG6CH50KGImHlkj4TwfXw\n-----END CERTIFICATE-----"))
-
-	validCaFingerprint = "9FA4D2FDFD76D3699148CD5529D946DEC80EC32409C120DA866CF9F5BEA6298E"
-
-	invalidCaFingerprint = "AAA4D2FDFD76D3699148CD5529D946DEC80EC32409C120DA866CF9F5BEA6298E"
 
 	invalidCaTpm = conv([]byte("-----BEGIN CERTIFICATE-----\nMIICSDCCAc2gAwIBAgIUHxAyr1Y3QlrYutGU317Uy5FhdpQwCgYIKoZIzj0EAwMw\nYzELMAkGA1UEBhMCREUxETAPBgNVBAcTCEdhcmNoaW5nMRkwFwYDVQQKExBGcmF1\nbmhvZmVyIEFJU0VDMRAwDgYDVQQLEwdSb290IENBMRQwEgYDVQQDEwtJRFMgUm9v\ndCBDQTAeFw0yMjA0MDQxNTE3MDBaFw0yNzA0MDMxNTE3MDBaMGMxCzAJBgNVBAYT\nAkRFMREwDwYDVQQHEwhHYXJjaGluZzEZMBcGA1UEChMQRnJhdW5ob2ZlciBBSVNF\nQzEQMA4GA1UECxMHUm9vdCBDQTEUMBIGA1UEAxMLSURTIFJvb3QgQ0EwdjAQBgcq\nhkjOPQIBBgUrgQQAIgNiAAQSneAVxZRShdfwEu3HtCcwRnV5b4UtOnxJaVZ/bILS\n4dThZVWpXNm+ikvp6Sk0RlI30mKl2X7fX8aRew+HvvFT08xJw9dGAkm2Fsp+4/c7\nM3rMhiHXyCpu/Xg4OlxAYOajQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8E\nBTADAQH/MB0GA1UdDgQWBBTyFTqqlt0/YxJBiCB3WM7lkpqWVjAKBggqhkjOPQQD\nAwNpADBmAjEAizrjlmYQmrMbsEaGaFzouMT02iMu0NLILhm1wkfAl3UUWymcliy8\nf1IAI1nO4448AjEAkd74w4WEaTqvslmkPktxNhDA1cVL55LDLbUNXLcSdzr2UBhp\nK8Vv1j4nATtg1Vkf\n-----END CERTIFICATE-----\n"))
 
