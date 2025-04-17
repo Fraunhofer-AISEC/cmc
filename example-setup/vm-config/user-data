@@ -2,7 +2,7 @@
 users:
   - name: root
     ssh-authorized-keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPcSpdkHkOVm20PX3QzNP2xfCAC8+JLlJO8rUaK5EZJI
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDfIkh927Yzio6L48EEN2doyX388tktqWPPbQtwDnWSM
     shell: /bin/bash
     lock_passwd: true
 
@@ -16,7 +16,6 @@ disable_root: false
 ssh_pwauth: false
 
 package_update: true
-package_upgrade: true
 
 packages:
   - tpm2-tools

@@ -130,7 +130,7 @@ done
 }
 
 # Clone and build tpm-pcr-tools
-[ -d "${tpm_pcr_tools}"] || {
+[ -d "${tpm_pcr_tools}" ] || {
     printf "[\033[34;1m EXEC \033[0m] Building tpm-pcr-tools..\n"
     git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${tpm_pcr_tools}"
     cd "${tpm_pcr_tools}"
