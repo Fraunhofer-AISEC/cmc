@@ -37,66 +37,42 @@ type Client struct {
 	client *http.Client
 }
 
-func NewClient(roots []*x509.Certificate) *Client {
+func NewClient(serverTlsCas []*x509.Certificate, allowSystemCerts bool) (*Client, error) {
+	var err error
 
 	// Create Certpool for Root CAs
 	rootpool := x509.NewCertPool()
-	for _, r := range roots {
+	if allowSystemCerts {
+		log.Debug("Using system cert pool")
+		rootpool, err = x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to add system cert pool: %w", err)
+		}
+	}
+	for _, r := range serverTlsCas {
 		rootpool.AddCert(r)
 	}
-	insecureSkipVerify := false
-	if len(roots) == 0 {
-		log.Debug("No EST server CA provided: Skipping certificate validation")
-		insecureSkipVerify = true
-	}
 
-	// Read TLS certificate
-	var tlsCerts []tls.Certificate
+	if len(serverTlsCas) == 0 {
+		return nil, fmt.Errorf("no EST server CA provided")
+	}
 
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
+				// The client does authenticate the EST server
 				RootCAs:            rootpool,
-				Certificates:       tlsCerts,
-				InsecureSkipVerify: insecureSkipVerify,
+				InsecureSkipVerify: false,
+				// The client does not authenticate itself: the EST server performs authentication
+				// during certificate enrollment via trust anchor authentication, e.g., TPM
+				// credential activation.
+				Certificates: nil,
 			},
 			DisableKeepAlives: false,
 		},
 	}
 
-	return &Client{client: client}
-}
-
-func (c *Client) SetCAs(roots []*x509.Certificate) error {
-	if len(roots) == 0 {
-		return fmt.Errorf("no roots provided")
-	}
-
-	// Create Certpool for Root CAs
-	rootpool := x509.NewCertPool()
-	for _, r := range roots {
-		rootpool.AddCert(r)
-	}
-
-	tp, ok := c.client.Transport.(*http.Transport)
-	if !ok {
-		return fmt.Errorf("internal error: failed to get transport")
-	}
-
-	tp.TLSClientConfig.InsecureSkipVerify = false
-	tp.TLSClientConfig.RootCAs = rootpool
-
-	return nil
-}
-
-func (c *Client) GetInsecureSkipVerify() bool {
-	tp, ok := c.client.Transport.(*http.Transport)
-	if !ok {
-		// Simply return insecure set to true if assertion fails
-		return true
-	}
-
-	return tp.TLSClientConfig.InsecureSkipVerify
+	return &Client{client: client}, nil
 }
 
 func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
@@ -141,10 +117,6 @@ func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
 func (c *Client) SimpleEnroll(addr string, csr *x509.CertificateRequest,
 ) (*x509.Certificate, error) {
 
-	if c.GetInsecureSkipVerify() {
-		return nil, fmt.Errorf("simple enroll requires server CAs to be configured")
-	}
-
 	// PKCS#10 Request
 	csrbase64 := est.EncodeBase64(csr.Raw)
 
@@ -182,10 +154,6 @@ func (c *Client) TpmActivateEnroll(
 	akPublic, akCreateData, akCreateAttestation, akCreateSignature []byte,
 	ekPublic, ekCertDer []byte,
 ) ([]byte, []byte, []byte, error) {
-
-	if c.GetInsecureSkipVerify() {
-		return nil, nil, nil, fmt.Errorf("enroll requires server CAs to be configured")
-	}
 
 	// Create string with TPM info required for the server to find the
 	// correct EK certificate chain
@@ -244,10 +212,6 @@ func (c *Client) TpmCertifyEnroll(
 	akPublic []byte,
 ) (*x509.Certificate, error) {
 
-	if c.GetInsecureSkipVerify() {
-		return nil, fmt.Errorf("enroll requires server CAs to be configured")
-	}
-
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypePKCS10, Data: csr},
@@ -290,8 +254,6 @@ func (c *Client) TpmCertifyEnroll(
 
 func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certificate, error) {
 
-	// TODO mandate server authentication in the future
-
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: []byte{byte(akType)}},
@@ -329,8 +291,6 @@ func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certific
 
 func (c *Client) GetSnpVcek(addr string, ChipId [64]byte, Tcb uint64,
 ) (*x509.Certificate, error) {
-
-	// TODO mandate server authentication in the future
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{

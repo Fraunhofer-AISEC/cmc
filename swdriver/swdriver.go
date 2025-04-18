@@ -85,7 +85,8 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 	s.ikPriv = ikPriv
 
 	// Create CSR and fetch new certificate including its chain from EST server
-	s.akChain, s.ikChain, err = provisionSw(akPriv, ikPriv, c.DeviceConfig, c.ServerAddr)
+	s.akChain, s.ikChain, err = provisionSw(akPriv, ikPriv, c.DeviceConfig,
+		c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
 	if err != nil {
 		return fmt.Errorf("failed to provision sw driver: %w", err)
 	}
@@ -206,16 +207,15 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 }
 
 func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	log.Info("Performing SW provisioning")
 
-	// Get CA certificates and enroll newly created CSR
-	// TODO provision EST server certificate with a different mechanism,
-	// otherwise this step has to happen in a secure environment. Allow
-	// different CAs for metadata and the EST server authentication
-	log.Warn("Creating new EST client without server authentication")
-	client := est.NewClient(nil)
+	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
 
 	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
@@ -228,12 +228,6 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 	if len(caCerts) == 0 {
 		return nil, nil, fmt.Errorf("no certs provided")
-	}
-
-	log.Warn("Setting retrieved cert for future authentication")
-	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
 	// Perform AK EST enrollment

@@ -94,7 +94,8 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 
 		// Create CSRs and fetch IK and AK certificates
 		log.Info("Performing SGX provisioning")
-		sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c.DeviceConfig, c.ServerAddr)
+		sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c.DeviceConfig,
+			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
 		if err != nil {
 			return fmt.Errorf("failed to provision sgx driver: %w", err)
 		}
@@ -236,10 +237,11 @@ func (sgx *Sgx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 }
 
 func provisionSgx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikchain, err := provisionIk(priv, devConf, addr)
+	ikchain, err := provisionIk(priv, devConf, addr, estTlsCas, useSystemRootCas)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -254,14 +256,13 @@ func provisionSgx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 }
 
 func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, error) {
 
-	// Get CA certificates and enroll newly created CSR
-	// TODO provision EST server certificate with a different mechanism,
-	// otherwise this step has to happen in a secure environment. Allow
-	// different CAs for metadata and the EST server authentication
-	log.Warn("Creating new EST client without server authentication")
-	client := est.NewClient(nil)
+	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
 
 	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
@@ -274,12 +275,6 @@ func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 	if len(caCerts) == 0 {
 		return nil, fmt.Errorf("no certs provided")
-	}
-
-	log.Warn("Setting retrieved cert for future authentication")
-	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
-	if err != nil {
-		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
 	// Create IK CSR for authentication

@@ -102,7 +102,8 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 		}
 		snp.ikPriv = priv
 
-		snp.akChain, snp.ikChain, err = provisionSnp(priv, c.DeviceConfig, c.ServerAddr)
+		snp.akChain, snp.ikChain, err = provisionSnp(priv, c.DeviceConfig,
+			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
 		if err != nil {
 			return fmt.Errorf("failed to provision snp driver: %w", err)
 		}
@@ -264,16 +265,17 @@ func getVlek() ([]byte, error) {
 }
 
 func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikchain, err := provisionIk(priv, devConf, addr)
+	ikchain, err := provisionIk(priv, devConf, addr, estTlsCas, useSystemRootCas)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
 
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-	akchain, err := fetchAk(addr)
+	akchain, err := fetchAk(addr, estTlsCas, useSystemRootCas)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
@@ -281,7 +283,8 @@ func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	return akchain, ikchain, nil
 }
 
-func fetchAk(addr string) ([]*x509.Certificate, error) {
+func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool,
+) ([]*x509.Certificate, error) {
 
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
@@ -300,10 +303,10 @@ func fetchAk(addr string) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
-	// TODO mandate server authentication in the future, otherwise
-	// this step has to happen in a secure environment
-	log.Warn("Creating new EST client without server authentication")
-	client := est.NewClient(nil)
+	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
 
 	var signingCert *x509.Certificate
 	if akType == verifier.VCEK {
@@ -340,14 +343,13 @@ func fetchAk(addr string) ([]*x509.Certificate, error) {
 }
 
 func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, error) {
 
-	// Get CA certificates and enroll newly created CSR
-	// TODO provision EST server certificate with a different mechanism,
-	// otherwise this step has to happen in a secure environment. Allow
-	// different CAs for metadata and the EST server authentication
-	log.Warn("Creating new EST client without server authentication")
-	client := est.NewClient(nil)
+	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
 
 	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
@@ -360,12 +362,6 @@ func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 	if len(caCerts) == 0 {
 		return nil, fmt.Errorf("no certs provided")
-	}
-
-	log.Warn("Setting retrieved cert for future authentication")
-	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
-	if err != nil {
-		return nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
 	// Create IK CSR for authentication

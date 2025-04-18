@@ -31,7 +31,7 @@ runcmd:
   - cp /mnt/testtool-conf-vm.json /etc/testtool-conf-vm.json
   - cp /mnt/cmcd.service /etc/systemd/system/cmcd.service
   - cp /mnt/testtool.service /etc/systemd/system/testtool.service
-  - cp /mnt/ca.pem /var/testtool/ca.pem
+  - cp /mnt/ca.pem /var/ca.pem
   - systemctl daemon-reload
   - systemctl enable cmcd.service
   - systemctl start cmcd.service

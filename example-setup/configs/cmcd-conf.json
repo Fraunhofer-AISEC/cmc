@@ -18,5 +18,8 @@
     "ctr": true,
     "ctrDriver": "sw",
     "ctrLog": "/tmp/container_measurements",
-    "ctrPcr": 11
+    "ctrPcr": 11,
+    "estTlsCas": [
+        "../data/pki/ca.pem"
+    ]
 }
