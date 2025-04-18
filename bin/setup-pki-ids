@@ -72,10 +72,10 @@ gen certifier_A
 gen certifier_B
 
 # Generate key and CSR for EST server TLS connections
-cfssl genkey -config "${input}/ca-config.json" -profile leafcert "${input}/cfssl-est-tls.json" | cfssljson -bare "${out}/est-tls"
+cfssl genkey -config "${input}/ca-config.json" -profile tlscert "${input}/cfssl-est-tls.json" | cfssljson -bare "${out}/est-tls"
 
 # Sign CSR and generate certificate for EST server TLS connections
-cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" "${out}/est-tls.csr" | cfssljson -bare "${out}/est-tls"
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile tlscert "${out}/est-tls.csr" | cfssljson -bare "${out}/est-tls"
 
 # Generate certificates to use with Intel TDX PCCS
 pccs_key="${out}/tdx-pccs-private.pem"

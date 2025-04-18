@@ -57,15 +57,14 @@ func NewServer(c *config) (*Server, error) {
 		tlsCerts = append(tlsCerts, c.Raw)
 	}
 
-	clientCAs := x509.NewCertPool()
-	for _, cert := range c.tlsCerts {
-		clientCAs.AddCert(cert)
-	}
-
 	tlsCfg := &tls.Config{
 		MinVersion:       tls.VersionTLS12,
 		CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		ClientAuth:       tls.VerifyClientCertIfGiven,
+		// The client does not need to authenticate itself during the TLS handshake, as client
+		// trust anchor authentication (e.g., TPM credential activation) is performed during
+		// certificate enrollment.
+		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientCAs:  nil,
 		Certificates: []tls.Certificate{
 			{
 				Certificate: tlsCerts,
@@ -73,7 +72,6 @@ func NewServer(c *config) (*Server, error) {
 				Leaf:        c.tlsCerts[0],
 			},
 		},
-		ClientCAs: clientCAs,
 	}
 
 	addr := fmt.Sprintf(":%v", c.Port)

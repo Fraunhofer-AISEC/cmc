@@ -14,11 +14,11 @@
                 ],
                 "ca_constraint": {
                     "is_ca": true,
-                    "max_path_len": 0, 
+                    "max_path_len": 0,
                     "max_path_len_zero": true
                 },
-                "ocsp_url": "127.0.0.1:8887"              
-            },           
+                "ocsp_url": "127.0.0.1:8887"
+            },
             "user": {
                 "key": {
                     "algo": "ecdsa",
@@ -46,6 +46,17 @@
                     "code signing"
                 ],
                 "ocsp_url": "127.0.0.1:8889"
+            },
+            "tlscert": {
+                "expiry": "876000h",
+                "key": {
+                    "algo": "ecdsa",
+                    "size": 256
+                },
+                "usages": [
+                    "digital signature",
+                    "server auth"
+                ]
             }
     	}
     }

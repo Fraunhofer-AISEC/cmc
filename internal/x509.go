@@ -24,6 +24,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -39,6 +40,22 @@ func ParseCert(data []byte) (*x509.Certificate, error) {
 	cert, err := x509.ParseCertificate(input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse x509 Certificate: %v", err)
+	}
+
+	return cert, nil
+}
+
+// ReadCert reads a PEM or DER encoded certificate from a file
+func ReadCert(path string) (*x509.Certificate, error) {
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read: %w", err)
+	}
+
+	cert, err := ParseCert(data)
+	if err != nil {
+		return nil, err
 	}
 
 	return cert, nil

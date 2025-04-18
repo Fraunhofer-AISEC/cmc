@@ -16,6 +16,7 @@
 package cmc
 
 import (
+	"crypto/x509"
 	"fmt"
 	"strings"
 
@@ -68,8 +69,18 @@ func NewCmc(c *Config) (*Cmc, error) {
 		CtrLog:    c.CtrLog,
 	}
 
+	// Read CA for EST server TLS authentication
+	estTlsCas := make([]*x509.Certificate, 0, len(c.EstTlsCas))
+	for _, file := range c.EstTlsCas {
+		ca, err := internal.ReadCert(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read EST TLS CA certificate: %w", err)
+		}
+		estTlsCas = append(estTlsCas, ca)
+	}
+
 	// Read metadata and device config from the file system
-	metadata, s, err := GetMetadata(c.Metadata, c.Cache)
+	metadata, s, err := GetMetadata(c.Metadata, c.Cache, estTlsCas, c.EstTlsSysRoots)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
@@ -87,18 +98,20 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 		// Create driver configuration
 		driverConf := &ar.DriverConfig{
-			StoragePath:    c.Storage,
-			ServerAddr:     c.ProvAddr,
-			KeyConfig:      c.KeyConfig,
-			DeviceConfig:   *deviceConfig,
-			Ima:            c.Ima,
-			ImaPcr:         c.ImaPcr,
-			MeasurementLog: c.MeasurementLog,
-			Serializer:     s,
-			CtrPcr:         c.CtrPcr,
-			CtrLog:         c.CtrLog,
-			CtrDriver:      c.CtrDriver,
-			Ctr:            c.Ctr,
+			StoragePath:      c.Storage,
+			ServerAddr:       c.ProvAddr,
+			KeyConfig:        c.KeyConfig,
+			DeviceConfig:     *deviceConfig,
+			Ima:              c.Ima,
+			ImaPcr:           c.ImaPcr,
+			MeasurementLog:   c.MeasurementLog,
+			Serializer:       s,
+			CtrPcr:           c.CtrPcr,
+			CtrLog:           c.CtrLog,
+			CtrDriver:        c.CtrDriver,
+			Ctr:              c.Ctr,
+			EstTlsCas:        estTlsCas,
+			UseSystemRootCas: c.EstTlsSysRoots,
 		}
 
 		// Initialize drivers

@@ -129,7 +129,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 			return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 		}
 
-		akchain, ikchain, err = provisionTpm(ak, ik, c.DeviceConfig, c.ServerAddr)
+		akchain, ikchain, err = provisionTpm(ak, ik, c.DeviceConfig, c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
 		if err != nil {
 			return fmt.Errorf("failed to provision TPM: %w", err)
 		}
@@ -590,6 +590,7 @@ func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quo
 }
 
 func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr string,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 	log.Debug("Performing TPM credential activation..")
 
@@ -605,11 +606,10 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to retrieve TPM Info: %w", err)
 	}
 
-	// TODO provision EST server certificate with a different mechanism,
-	// otherwise this step has to happen in a secure environment. Allow
-	// different CAs for metadata and the EST server authentication
-	log.Warn("Creating new EST client without server authentication")
-	client := est.NewClient(nil)
+	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
 
 	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(addr)
@@ -619,12 +619,6 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 	log.Debugf("Received cert chain length %v:", len(caCerts))
 	for _, c := range caCerts {
 		log.Debugf("\t%v", c.Subject.CommonName)
-	}
-
-	log.Warn("Setting retrieved certificate for future authentication")
-	err = client.SetCAs([]*x509.Certificate{caCerts[len(caCerts)-1]})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to set EST CA: %w", err)
 	}
 
 	akParams := ak.AttestationParameters()

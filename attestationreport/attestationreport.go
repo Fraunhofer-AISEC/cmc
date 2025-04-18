@@ -352,19 +352,21 @@ type Driver interface {
 
 // DriverConfig contains all configuration values required for the different drivers
 type DriverConfig struct {
-	StoragePath    string
-	ServerAddr     string
-	KeyConfig      string
-	Ima            bool
-	ImaPcr         int
-	Serializer     Serializer
-	MeasurementLog bool
-	Ctr            bool
-	CtrPcr         int
-	CtrLog         string
-	ExtCtrLog      bool
-	CtrDriver      string
-	DeviceConfig   DeviceConfig
+	StoragePath      string
+	ServerAddr       string
+	KeyConfig        string
+	Ima              bool
+	ImaPcr           int
+	Serializer       Serializer
+	MeasurementLog   bool
+	Ctr              bool
+	CtrPcr           int
+	CtrLog           string
+	ExtCtrLog        bool
+	CtrDriver        string
+	DeviceConfig     DeviceConfig
+	EstTlsCas        []*x509.Certificate
+	UseSystemRootCas bool
 }
 
 type KeySelection int

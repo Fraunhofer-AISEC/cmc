@@ -16,6 +16,7 @@
 package client
 
 import (
+	"crypto/x509"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -37,9 +38,14 @@ type Content struct {
 }
 
 // FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
-func FetchMetadata(addr string) ([][]byte, error) {
+func FetchMetadata(addr string, rootCas []*x509.Certificate,
+	useSystemRoots bool,
+) ([][]byte, error) {
 
-	client := NewClient(nil)
+	client, err := NewClient(rootCas, useSystemRoots)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
 
 	resp, err := request(client.client, http.MethodGet, addr, "", "", "", nil)
 	if err != nil {

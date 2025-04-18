@@ -17,6 +17,7 @@ package cmc
 
 import (
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -30,7 +31,8 @@ import (
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 )
 
-func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer, error) {
+func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
+	useSystemRoots bool) (map[string][]byte, ar.Serializer, error) {
 
 	if len(paths) == 0 {
 		log.Info("No metadata specified via config. Using default serializer (JSON)")
@@ -54,7 +56,7 @@ func GetMetadata(paths []string, cache string) (map[string][]byte, ar.Serializer
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := est.FetchMetadata(p)
+			data, err := est.FetchMetadata(p, rootCas, useSystemRoots)
 			if err != nil {
 				log.Warnf("failed to fetch %v: %v", p, err)
 				fails++

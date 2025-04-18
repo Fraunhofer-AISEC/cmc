@@ -47,6 +47,8 @@ type Config struct {
 	CtrDriver      string   `json:"ctrDriver,omitempty"`
 	CtrPcr         int      `json:"ctrPcr,omitempty"`
 	CtrLog         string   `json:"ctrLog,omitempty"`
+	EstTlsCas      []string `json:"estTlsCas,omitempty"`
+	EstTlsSysRoots bool     `json:"estTlsSysRoots"`
 }
 
 const (
@@ -67,6 +69,8 @@ const (
 	CtrDriverFlag      = "ctrdriver"
 	CtrPcrFlag         = "ctrpcr"
 	CtrLogFlag         = "ctrlog"
+	EstTlsCasFlag      = "esttlscasflag"
+	EstTlsSysRootsFlag = "esttlssysroots"
 )
 
 var (
@@ -94,8 +98,10 @@ var (
 	ctr       = flag.Bool(CtrFlag, false, "Specifies whether to conduct container measurements")
 	ctrDriver = flag.String(CtrDriverFlag, "",
 		"Specifies which driver to use for container measurements")
-	ctrPcr = flag.Int(CtrPcrFlag, 0, "Container PCR")
-	ctrLog = flag.String(CtrLogFlag, "", "Container runtime measurements path")
+	ctrPcr         = flag.Int(CtrPcrFlag, 0, "Container PCR")
+	ctrLog         = flag.String(CtrLogFlag, "", "Container runtime measurements path")
+	estTlsCas      = flag.String(EstTlsCasFlag, "", "Path to the EST TLS CA certificates")
+	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -154,6 +160,12 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(CtrLogFlag) {
 		c.CtrLog = *ctrLog
+	}
+	if internal.FlagPassed(EstTlsCasFlag) {
+		c.EstTlsCas = strings.Split(*estTlsCas, ",")
+	}
+	if internal.FlagPassed(EstTlsSysRootsFlag) {
+		c.EstTlsSysRoots = *estTlsSysRoots
 	}
 
 	// Convert all paths to absolute paths
@@ -215,36 +227,52 @@ func pathsToAbs(c *Config) {
 			c.Metadata[i] = "file://" + f
 		}
 	}
+	if c.CtrLog != "" {
+		c.CtrLog, err = filepath.Abs(c.CtrLog)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.CtrLog, err)
+		}
+	}
+	for i := 0; i < len(c.EstTlsCas); i++ {
+		c.EstTlsCas[i], err = filepath.Abs(c.EstTlsCas[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.EstTlsCas[i], err)
+		}
+	}
 }
 
 func (c *Config) Print() {
 
 	log.Debugf("Using the following cmc configuration:")
-	log.Debugf("\tCMC listen address       : %v", c.CmcAddr)
-	log.Debugf("\tProvisioning server URL  : %v", c.ProvAddr)
-	log.Debugf("\tMetadata locations       : %v", strings.Join(c.Metadata, ","))
-	log.Debugf("\tUse IMA                  : %v", c.Ima)
+	log.Debugf("\tCMC listen address             : %v", c.CmcAddr)
+	log.Debugf("\tProvisioning server URL        : %v", c.ProvAddr)
+	log.Debugf("\tMetadata locations             : %v", strings.Join(c.Metadata, ","))
+	log.Debugf("\tUse IMA                        : %v", c.Ima)
 	if c.Ima {
-		log.Debugf("\tIMA PCR                  : %v", c.ImaPcr)
+		log.Debugf("\tIMA PCR                        : %v", c.ImaPcr)
 	}
-	log.Debugf("\tAPI                      : %v", c.Api)
-	log.Debugf("\tPolicy engine            : %v", c.PolicyEngine)
-	log.Debugf("\tKey config               : %v", c.KeyConfig)
-	log.Debugf("\tDrivers                  : %v", strings.Join(c.Drivers, ","))
-	log.Debugf("\tMeasurement log          : %v", c.MeasurementLog)
-	log.Debugf("\tMeasure containers       : %v", c.Ctr)
+	log.Debugf("\tAPI                            : %v", c.Api)
+	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)
+	log.Debugf("\tKey config                     : %v", c.KeyConfig)
+	log.Debugf("\tDrivers                        : %v", strings.Join(c.Drivers, ","))
+	log.Debugf("\tMeasurement log                : %v", c.MeasurementLog)
+	log.Debugf("\tMeasure containers             : %v", c.Ctr)
 	if c.Ctr {
-		log.Debugf("\tContainer driver         : %v", c.CtrDriver)
-		log.Debugf("\tContainer measurements   : %v", c.CtrLog)
-		log.Debugf("\tContainer PCR            : %v", c.CtrPcr)
+		log.Debugf("\tContainer driver               : %v", c.CtrDriver)
+		log.Debugf("\tContainer measurements         : %v", c.CtrLog)
+		log.Debugf("\tContainer PCR                  : %v", c.CtrPcr)
 	}
 	if c.Storage != "" {
-		log.Debugf("\tInternal storage path    : %v", c.Storage)
+		log.Debugf("\tInternal storage path          : %v", c.Storage)
 	}
 	if c.Cache != "" {
-		log.Debugf("\tMetadata cache path      : %v", c.Cache)
+		log.Debugf("\tMetadata cache path            : %v", c.Cache)
 	}
 	if c.PeerCache != "" {
-		log.Debugf("\tPeer cache path          : %v", c.PeerCache)
+		log.Debugf("\tPeer cache path                : %v", c.PeerCache)
 	}
+	for _, ca := range c.EstTlsCas {
+		log.Debugf("\tEST TLS CA path                : %v", ca)
+	}
+	log.Debugf("\tUse system root CAs for EST TLS: %v", c.EstTlsSysRoots)
 }

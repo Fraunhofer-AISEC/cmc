@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto/x509"
 	"os"
 
 	// local modules
@@ -31,7 +32,22 @@ func getCaCertsInternal(c *config) {
 	}
 
 	log.Info("Retrieving CA certs")
-	client := est.NewClient(nil)
+
+	estTlsCas := make([]*x509.Certificate, 0, len(c.EstTlsCas))
+	for _, file := range c.EstTlsCas {
+		log.Tracef("Reading EST TLS CA certificate from %v", file)
+		ca, err := internal.ReadCert(file)
+		if err != nil {
+			log.Fatalf("Failed to read EST TLS CA certificate: %v", err)
+		}
+		estTlsCas = append(estTlsCas, ca)
+	}
+
+	client, err := est.NewClient(estTlsCas, c.EstTlsSysRoots)
+	if err != nil {
+		log.Fatalf("Failed to create EST client: %v", err)
+	}
+
 	certs, err := client.CaCerts(addr)
 	if err != nil {
 		log.Fatalf("Failed to retrieve certificates: %v", err)

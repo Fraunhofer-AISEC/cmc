@@ -78,6 +78,45 @@ proving platform must be generated based on the used technology (TPM, Intel TDX/
 We provide [tools]([tools](https://github.com/Fraunhofer-AISEC/tpm-pcr-tools) ) for parsing and
 precomputing the reference values based on reproducible builds.
 
+## PKI
+
+The following figure shows the Public Key Infrastructure (PKI) and Certificate Authority (CA) roles
+in the CMC ecosystem. In practice, a single component may fulfill multiple roles.
+
+![PKI](./diagrams/pki.drawio.svg)
+
+| CA Name         | # (Prover, Verifier) | Required for                                 | Certs                 |
+| --------------- | -------------------- | -------------------------------------------- | --------------------- |
+| EST TLS CA      | 1, -                 | Perform AK / IK certificate enrollment       | EST TLS cert          |
+| Identity CA     | 1, n                 | Signing / Verifying aTLS connections and ARs | IK Cert               |
+| Trust Anchor CA | n, -                 | Embedding CA into attestation report         | AK Cert               |
+| Metadata CA     | - , n                | Verifying metadata                           | Dev / Certifier certs |
+
+
+Each node requires `1` EST TLS CA for EST server authentication during initial certificate
+enrollment. Nodes (i.e., EST clients) do not need to authenticate against the server, as a
+trust anchor-based authentication is performed during certificate enrollment (e.g., TPM
+credential activation). This bootstrapping CA must be provisioned onto the node and measured during
+attestation. The EST TLS CA issues short-lived certificates to EST servers for TLS authentication.
+
+Each node requires `1` identity CA for it's own identity. Keys and certificates under this CA are
+used for attested TLS authentication and attestation report signing and verification. This CA
+can be fetched through querying the `/cacerts` EST server endpoint. The identity CA issues node
+Identity Key (IK) ceritificates via EST endpoints (`/simpleenroll`, `/tpmcertifyenroll`).
+
+Each node requires `n` trust anchor CAs (e.g., The AMD SEV-SNP or Intel SGX/TDX root CA, the TPM
+manufacturer CA) if it shall be able to act as a prover. Verifying-only nodes do not require trust
+anchor CAs, as the certificates are embedded in the *Measurements* and the valid CA fingerprints are
+embdded into the *Manifests*. Trust Anchor CAs are either embedded into the evidence itself
+(Intel TDX quote), fetched by querying the EST endpoint `/snpcacerts` (AMD SEV-SNP) or the EST
+endpoint `/cacerts` (TPM privacy CA). Trust Anchor CAs are usually operated by chip vendors and
+issue keys for signing evidences.
+
+Each node requires `n` metadata CAs, which are the root of trust for manifests and
+reference values. *Metadata CAs can be fetched through the /metdatacacerts endpoint.*
+Metadata CAs issue certificates to entities providing signed metadata and
+reference values (e.g., software developers or certifiers).
+
 ## Infrastructure Overview
 
 The CMC framework supports attestation in the cloud (AMD SEV-SNP and Intel TDX platforms),
@@ -154,7 +193,7 @@ integrate the library into own applications, the *testtool* with its modes *list
 *dial* can serve as an exemplary application.
 
 __attestedhttp:__
-The *attestedhttp packages utilizes **attestedtls** to provide HTTPS client and server capabilities
+The *attestedhttp* packages utilizes **attestedtls** to provide HTTPS client and server capabilities
 to applications. For an example on how to integrate the library into own applications, the
 *testtool* with its modes *listen* and *dial* can serve as an exemplary application.
 
