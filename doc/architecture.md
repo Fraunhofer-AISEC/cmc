@@ -53,8 +53,10 @@ The example setup (folder `cmc/example-setup`) contains templates for the requir
 in JSON.
 
 - **device.description.json**: Metadata describing the overall platform
-- **manifest.description.json**: Embedded into device description, describes an instance of a manifest (i.e., a software layer or application)
-- **manifest.json**: Template for a manifest containing reference values for a specific software layer or single application
+- **manifest.description.json**: Embedded into device description, describes an instance of a
+manifest (i.e., a software layer or application)
+- **manifest.json**: Template for a manifest containing reference values for a specific software
+layer or single application
 - **company.description.json**: Optional, metadata describing the operater of the computing platform
 - **device.config.json**: Signed local device configuration, contains e.g. the parameters for
 the Certificate Signing Requests for the attestation and identity keys
@@ -85,12 +87,12 @@ in the CMC ecosystem. In practice, a single component may fulfill multiple roles
 
 ![PKI](./diagrams/pki.drawio.svg)
 
-| CA Name         | # (Prover, Verifier) | Required for                                 | Certs                 |
-| --------------- | -------------------- | -------------------------------------------- | --------------------- |
-| EST TLS CA      | 1, -                 | Perform AK / IK certificate enrollment       | EST TLS cert          |
-| Identity CA     | 1, n                 | Signing / Verifying aTLS connections and ARs | IK Cert               |
-| Trust Anchor CA | n, -                 | Embedding CA into attestation report         | AK Cert               |
-| Metadata CA     | - , n                | Verifying metadata                           | Dev / Certifier certs |
+| CA Name         | #Prover, Verifier | Required for                           | Certs           |
+| --------------- | ----------------- | -------------------------------------- | --------------- |
+| EST TLS CA      | 1, -              | Perform AK / IK certificate enrollment | EST TLS cert    |
+| Identity CA     | 1, n              | Sign / Verify aTLS connections and ARs | IK Cert         |
+| Trust Anchor CA | n, -              | Embedding CA into attestation report   | AK Cert         |
+| Metadata CA     | - , n             | Verifying metadata                     | SW Signer certs |
 
 
 Each node requires `1` EST TLS CA for EST server authentication during initial certificate
@@ -134,14 +136,14 @@ minimal effort.
 ## Components
 The following components correspond to the packages / directories of this repository.
 
-__cmcd:__
+### cmcd
 The CMC daemon (*cmcd*) is the main component running on the platform. On request, the cmcd either
 generates or verifies an attestation-report, i.e. the state of the platform. The cmcd provides
 a gRPC interface to access its services (*grpcapi*), as well as a REST CoAP interface. For the
 generation and verification of attestation reports, the *cmcd* relies on the *attestationreport*
 package.
 
-__attestationreport:__
+### attestationreport
 The *attestationreport* package provides a generic JSON/CBOR-based serialization format to summarize
 the meta-data describing the software running on the computer platform. Enabling trust in this
 meta-data requires a hardware-based Root-of-Trust (RoT) that provides the possibility to store keys
@@ -150,7 +152,7 @@ implements generic interfaces.
 These interfaces must be implemented by *drivers* that provide access to a hardware based RoT.
 Currently, this repository contains a *tpmdriver*, an *snpdriver* and an *swdriver*.
 
-__tpmdriver:__
+### tpmdriver
 The *tpmdriver* package interfaces with a Trusted Platform Module (TPM) as the RoT.
 The TPM is used to store cryptographic keys, store the software measurements (hashes) in its
 Platform Configuration Registers (PCRs) during the *Measured Boot* and to generate and sign *Quotes*
@@ -159,32 +161,32 @@ package interfacing with the kernel's Integrity Measurement Architecture (IMA) f
 detailed measurement lists of the kernel modules, firmware and optionally further components
 running on the platform.
 
-__snpdriver:__
+### snpdriver
 The *snpdriver* interfaces with the AMD SEV-SNP SP. It retrieves SNP measurements in the form of
 an SNP attestation report as well as the certificate chain for this attestation report from the
 respective AMD servers.
 
-__sgxdriver:__
+### sgxdriver
 The *sgxdriver* interfaces with an Intel SGX-capable CPU. It retrieves SGX measurements in the form
 of an SGX Quote signed by the SGX quoting enclave. It implements a small caching mechanism to fetch
 and store the certificate chain used for report verification from the Intel SGX API.
 
-__tdxdriver:__
+### tdxdriver
 The *tdxdriver* interfaces with an Intel TDX-capable CPU. It retrieves TDX measurements in the form
 of a TDX Quote signed by the SGQ quoting enclave.
 
-__swdriver:__
+### swdriver
 The *swdriver* creates keys in software for testing purposes. It can retrieve user space container
 measurements.
 
-__estserver:__
+### estserver
 During provisioning, the cmcd requires interaction with a provisioning server (*estserver*). The
 server can provide certificates for software signing, perform the TPM *Credential Activiation* and
 provision TPM certificates, and can provide the metadata (manifests and configurations) for the
 *cmcd*. The server is mainly for demonstration purposes. In productive setups, its functionality
 might be split onto different servers (e.g. an EST server and an internal metadata server).
 
-__attestedtls:__
+### attestedtls
 The *attestedtls* package provides an exemplary protocol which shows how a connection between two
 parties can be performed using remote attestation. After a tls connection is established, additional
 steps are performed to obtain and verify the attestation reports from the respective communication
@@ -192,14 +194,15 @@ partner. Only then is the connection provided to the server / client. For an exa
 integrate the library into own applications, the *testtool* with its modes *listen* and
 *dial* can serve as an exemplary application.
 
-__attestedhttp:__
+### attestedhttp
 The *attestedhttp* packages utilizes **attestedtls** to provide HTTPS client and server capabilities
 to applications. For an example on how to integrate the library into own applications, the
 *testtool* with its modes *listen* and *dial* can serve as an exemplary application.
 
-__testtool:__
+### testtool
 The *testtool* can generate and verify attestation reports and establish attested TLS as well as
 attested HTTPS connections. For the latter, it makes use of the *attestedtls* and
-*attestedhttp* packages. The testtool can act as a standalone application, i.e., integrate
-all *cmc* functionality via their go API, or as a tool that interacts with the
-*cmcd* via a gRPC, CoAP or socket API for performing remote attestation.
+*attestedhttp* packages. Usually, the testtool interacts with the *cmcd* via the *cmc* gRPC, CoAP or
+socket API. However, the testtool can also act as a standalone application, i.e., integrate
+all *cmc* functionality via their go API. The testtool is merely a demo application, but can be
+used as a blueprint for building own attested TLS or HTTPS applications.

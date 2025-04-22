@@ -5,8 +5,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/Fraunhofer-AISEC/cmc)](https://goreportcard.com/report/github.com/Fraunhofer-AISEC/cmc)
 
 The CMC repository provides tools and software to enable remote attestation of computing platforms,
-as well as remote attested TLS and HTTPS channels between those platforms. Currently, the CMC
-repository supports Trusted Platform Modules (TPMs), AMD SEV-SNP, Intel SGX as well as Intel TDX.
+as well as secure attested TLS and HTTPS channels between those platforms. Currently, the CMC
+repository supports Trusted Platform Modules (TPMs), AMD SEV-SNP, Intel SGX, as well as Intel TDX.
 The goal is to make attestation easy for verifiers without prior knowledge of the software stack,
 based on a set of trusted CAs and signed metadata describing the software stack.
 
@@ -16,63 +16,58 @@ based on a set of trusted CAs and signed metadata describing the software stack.
 
 ## Quick Start
 
-### Prerequites
+> Note: If you want to run the *cmc* on actual hardware, refer to the [Setup](./doc/setup.md),
+> [Build](./doc/build.md) and [Run](./doc/run.md) documentation.
 
-Make sure, all [prerequisites](./doc/setup.md#prerequisites) are installed and all
-[requirements](./doc/setup.md#requirements) are met.
+For demonstration purposes, we provide a docker container for building the tools and a
+Virtual Machine (VM) with attached software TPM as a demo.
 
-### Build
+If you use the docker container, simply make sure docker is installed. The docker container
+bind-mounts the repository root as the current user, i.e all artifacts are built within the
+same location as without docker. If you do not want to use docker, make sure you install all
+[prerequisites](./doc/setup.md#prerequisites) and simply omit prepending `cmc-docker` before
+every command.
 
-Clone the repository:
+Create and launch VM with swTPM, establish server-side attested TLS connection to VM:
 ```sh
-git clone https://github.com/Fraunhofer-AISEC/cmc.git
-```
-
-Build and install all tools to `$HOME/go/bin`:
-```sh
-cd cmc
-go build ./...
-go install ./...
-```
-
-Instructions on how to customize the build can be found in the [Build Documentation](./doc/build.md).
-
-### Run
-
-We provide a Ubuntu-VM with attached swTPM for testing:
-```sh
+# Setup environment
 source env.bash
 
 # Download and configure image and tools
-setup-vm
+cmc-docker setup-vm
 
 # Start swTPM (separate terminal )
-vm-swtpm
+cmc-docker vm-swtpm
 
 # Start estserver
-vm-estserver
+cmc-docker vm-estserver
 
 # Start VM
-vm-start
+cmc-docker vm-start
 
-# Establish attested TLS connection to Ubuntu VM server
-vm-testtool
+# Establish attested TLS connection to Ubuntu VM
+cmc-docker vm-testtool
 ```
 
-The testtool on the host establishes an attested TLS connection to the testtool running within the
-ubuntu VM with server-side authentication and server-side attestation. Find the generated
-attestation result in `cmc/data/attestation-result`.
+The [testtool](./doc/architecture.md#testtool) on the host establishes an attested TLS connection
+to the testtool running within the ubuntu VM with server-side authentication and server-side
+attestation. Find the generated attestation result in `cmc/data/attestation-result`.
+
+The VM setup is described in more detail in [Setup](./doc/setup.md) and
+[VM Setup](./doc/setup-vm.md)
 
 ## Further Documentation
+
+The following contents can be found in the [doc](./doc/) folder:
 
 ### Architecture
 
 An overview of the architecture is given in [Architecture](./doc/architecture.md).
 
-### Detailed Setup
+### Setup
 
 For detailed instructions on how to setup TPM, Intel SGX, Intel TDX or AMD SEV-SNP platforms
-including PKI and metadata generation, refer to [Detailed Setup](./doc/setup.md)
+including PKI and metadata generation, refer to the [Setup Documentation](./doc/setup.md)
 
 ### Build
 

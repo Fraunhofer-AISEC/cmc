@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 img="noble-server-cloudimg-amd64.img"
-cloudimg="https://cloud-images.ubuntu.com/noble/current/${img}"
+cloudimg="https://cloud-images.ubuntu.com/noble/20250403/${img}"
 cloudfile="${data}/images/${img}"
 
 edk2="${data}/edk2"
@@ -40,12 +40,11 @@ tpm_pcr_tools="${data}/tpm-pcr-tools"
 
 # Install prerequisites
 printf "[\033[34;1m EXEC \033[0m] Checking prerequisites..\n"
-packages=("build-essential" "nasm" "acpica-tools" "uuid-dev" "guestfs-tools" "guestmount" "qemu-system" "libtasn1-dev" "libjson-glib-dev" "libgnutls28-dev" "socat" "libseccomp-dev" "moreutils" "golang-cfssl" "build-essential" "sqlite3" "zlib1g-dev" "libssl-dev" "jq" "yq" "gnutls-bin")
+packages=("build-essential" "nasm" "acpica-tools" "uuid-dev" "guestfs-tools" "guestmount" "qemu-system" "libtasn1-dev" "libjson-glib-1.0-0" "libjson-glib-dev" "libgnutls28-dev" "socat" "libseccomp-dev" "moreutils" "golang-cfssl" "build-essential" "sqlite3" "zlib1g-dev" "libssl-dev" "jq" "genisoimage" "gnutls-bin")
 for pkg in "${packages[@]}"; do
     if ! dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q "installed"; then
-        echo "Installing missing package: ${pkg}"
-        sudo apt update
-        sudo apt install -y "${pkg}"
+        echo "Fatal: missing package: ${pkg}"
+	exit 1
     fi
 done
 
@@ -150,7 +149,10 @@ go build -C "${dir}/tools/metasign"
 mkdir -p "${data}"
 
 # Generate an example PKI
-"${dir}/bin/setup-pki${script_suffix}"
+[ -d "${dir}/data/pki" ] || {
+	printf "[\033[34;1m EXEC \033[0m] Generating PKI..\n"
+	"${dir}/bin/setup-pki${script_suffix}"
+}
 
 # Download Ubuntu Cloud Image
 [ -f "${cloudfile}" ] || {
@@ -161,6 +163,8 @@ mkdir -p "${data}"
 
 # Setup SSH for VM
 [[ -d "${data}/ssh" ]] || {
+
+    printf "[\033[34;1m EXEC \033[0m] Generating SSH keys..\n"
 
     host_key_path="${data}/ssh/id_ed25519"
     host_known_hosts_path="${data}/ssh/known_hosts"
@@ -180,6 +184,7 @@ mkdir -p "${data}"
 }
 
 # Create cloud-init configuration volume
+printf "[\033[34;1m EXEC \033[0m] Generating cloud-init configuration volume..\n"
 genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${vm_config}/user-data" \
     "${vm_config}/meta-data" \

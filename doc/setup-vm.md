@@ -2,28 +2,33 @@
 
 Describes the setup with a QEMU Ubuntu VM with attached software TPM.
 
+As described in [Setup](./setup.md#prerequisites), each command can be prepended with `cmc-docker`
+for running in docker, or `cmc-docker` can simply be omitted. However, as e.g. old QEMU versions
+lead to different reference values, the attestation on systems other than ubuntu 24.04 might fail if
+docker is not used.
+
 ## VM Setup
 
 Creates an ubuntu server VM image with attached swTPM:
 ```sh
 source env.bash
-vm-setup
+cmc-docker vm-setup
 ```
 
 ## Run CMC
 
 ```sh
 # Start swTPM (separate terminal)
-vm-swtpm
+cmc-docker vm-swtpm
 
 # Start estserver
-vm-estserver
+cmc-docker vm-estserver
 
 # Start VM
-vm-start
+cmc-docker vm-start
 
 # Establish attested TLS connection to Ubuntu VM server
-vm-testtool
+cmc-docker vm-testtool
 ```
 
 The testtool on the host establishes an attested TLS connection to the testtool running within the
@@ -35,9 +40,9 @@ Find the generated attestation result in `cmc/data/attestation-result`.
 
 You can SSH into the VM and copy files to and from the VM:
 ```sh
-vm-ssh [optional-command]
+cmc-docker vm-ssh [optional-command]
 
-vm-scp vm-ubuntu:/path/to/file/in/vm /path/on/host
+cmc-docker vm-scp vm-ubuntu:/path/to/file/in/vm /path/on/host
 ```
 
 
@@ -52,9 +57,9 @@ on how this could be achieved.
 ### Parsing the Reference Values
 
 ```sh
-vm-swtpm
-vm-start
-generate-metadata-vm
+cmc-docker vm-swtpm
+cmc-docker vm-start
+cmc-docker generate-metadata-vm
 sign-metadata json
 cp data/metadata-signed/* example-setup/vm-config/vm-metadata/
 cp data/pki/ca.pem example-setup/vm-config/
