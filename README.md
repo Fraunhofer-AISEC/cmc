@@ -23,11 +23,11 @@ include signed metadata and reference hash values.
 For demonstration purposes, we provide a docker container for building the tools and a
 Virtual Machine (VM) with attached software TPM as a demo.
 
-If you use the docker container, simply make sure docker is installed. The docker container
-bind-mounts the repository root as the current user, i.e all artifacts are built within the
-same location as without docker. If you do not want to use docker, make sure you install all
-[prerequisites](./doc/setup.md#prerequisites) and simply omit prepending `cmc-docker` before
-every command.
+If you choose to use the Docker container, simply ensure that Docker is installed. The container
+bind-mounts the repository root and runs as the current user, meaning all artifacts are built in
+the same location as they would be without Docker. If you prefer not to use Docker, make sure all
+[prerequisites](./doc/setup.md#prerequisites) are installed, and omit the `cmc-docker` prefix from
+each command.
 
 Create and launch VM with swTPM, establish server-side attested TLS connection to VM:
 ```sh
