@@ -1,10 +1,10 @@
-# Manual Setup
+# Setup
 
 This setup shows step-by-step how to install the tools and generate the metadata for
 running the *cmcd*.  It was tested on Ubuntu 24.04 LTS.
 
-For general information on the attestation metadata formats and an explanation of the different
-components, see [Architecture](./architecture.md)
+> Note: For general information on the attestation metadata formats and an explanation of the different
+> components, see [Architecture](./architecture.md)
 
 ## Setup environment
 
@@ -77,28 +77,24 @@ setup is summarized in
 
 As soon as the platform-specific metadata has been generated, it must be signed.
 
-This example uses JSON/JWS as serialization format. By default, the metadata is in JSON format
-and can be signed like this:
-
+By default, the metadata is in JSON format. If the demo-setup is used, the metadata can
+be signed with:
 ```sh
-IN=cmc/data/metadata-raw
-OUT=cmc/data/metadata-signed
-KEY=cmc/data/pki/signing-cert-key.pem
-CHAIN=cmc/data/pki/signing-cert.pem,cmc-data/pki/ca.pem
+sign-metadata json
+```
+This signs all metadata in `data/metadata-raw` and puts it in `data/metadata-signed`. If
+`CBOR` serialization shall be used, simply replace `json` with `cbor`.
 
-mkdir -p $OUT
-
-metasign -in $IN/rtm.manifest.json        -out $OUT/rtm.manifest.json        -keys $KEY -x5cs $CHAIN
-metasign -in $IN/os.manifest.json         -out $OUT/os.manifest.json         -keys $KEY -x5cs $CHAIN
-metasign -in $IN/device.description.json  -out $OUT/device.description.json  -keys $KEY -x5cs $CHAIN
-metasign -in $IN/device.config.json       -out $OUT/device.config.json       -keys $KEY -x5cs $CHAIN
+If an own setup and PKI are used, metadata can be signed with the `metasign` tool:
+```sh
+metasign -in <metadata.json> -out <metadata-signed.json> -keys <private-key(s)> -x5cs <certificate-chain(s)>
 ```
 
 If the CMC shall work with CBOR metadata, first convert the metadata and then sign as described
 above:
 ```sh
 # Convert JSON to CBOR using the converter-tool
-cmc/tools/metaconv/metaconv -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
+metaconv -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
 ```
 
 ### Build and Run the CMC
