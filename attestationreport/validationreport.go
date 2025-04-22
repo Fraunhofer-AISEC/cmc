@@ -734,11 +734,14 @@ func (r *VerificationResult) PrintErr() {
 			m.Signature.PrintErr("Measurement")
 			for _, a := range m.Artifacts {
 				if !a.Success {
-					details := ""
+					header := ""
 					if m.Type == "TPM Measurement" {
-						details = fmt.Sprintf("PCR%v", a.Index)
+						header = fmt.Sprintf("PCR%v ", a.Index)
+					} else if m.Type == "TDX Measurement" {
+						header = fmt.Sprintf("%v ", internal.IndexToMr(a.Index))
 					}
-					log.Warnf("%v Measurement %v: %v verification failed", details, a.SubType, a.Digest)
+					log.Warnf("%vMeasurement Type %v, Subtype: %v: %v verification failed",
+						header, a.Type, a.SubType, a.Digest)
 				}
 			}
 			if m.TpmResult != nil {

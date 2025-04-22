@@ -221,6 +221,9 @@ func getConfig() *config {
 	if internal.FlagPassed(identityCasFlag) {
 		c.IdentityCas = strings.Split(*identityCas, ",")
 	}
+	if internal.FlagPassed(metadataCasFlag) {
+		c.MetadataCas = strings.Split(*metadataCas, ",")
+	}
 	if internal.FlagPassed(estCaFlag) {
 		c.EstCa = *estCa
 	}

@@ -437,7 +437,8 @@ func verifyTdxMrs(body *TdxReportBody, refvals []ar.ReferenceValue) ([]ar.Digest
 		} else {
 			// RTMRs are extended
 			calculatedMrs[refval.Index] = internal.ExtendSha384(calculatedMrs[refval.Index], refval.Sha384)
-			log.Tracef("Extended %v: %v = %v", indexToMr(refval.Index), refval.SubType, hex.EncodeToString(refval.Sha384))
+			log.Tracef("Extended %v: %v = %v", internal.IndexToMr(refval.Index), refval.SubType,
+				hex.EncodeToString(refval.Sha384))
 		}
 	}
 
@@ -466,17 +467,18 @@ func verifyTdxMrs(body *TdxReportBody, refvals []ar.ReferenceValue) ([]ar.Digest
 					Success:  false,
 					Launched: true,
 				})
-			log.Debugf("%v: Measurement %q does not match reference %q", indexToMr(i),
+			log.Debugf("%v: Measurement %q does not match reference %q",
+				internal.IndexToMr(i),
 				hex.EncodeToString(measuredMrs[i]), hex.EncodeToString(calculatedMrs[i]))
 		} else {
-			log.Tracef("%v: Measurement %q does match reference", indexToMr(i),
+			log.Tracef("%v: Measurement %q does match reference", internal.IndexToMr(i),
 				hex.EncodeToString(measuredMrs[i]))
 		}
 
 		// Measurement register summary
 		mrResults = append(mrResults, ar.DigestResult{
 			Index:    i,
-			SubType:  indexToMr(i),
+			SubType:  internal.IndexToMr(i),
 			Success:  successMrs[i],
 			Digest:   hex.EncodeToString(calculatedMrs[i]),
 			Measured: hex.EncodeToString(measuredMrs[i]),
@@ -656,24 +658,4 @@ func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAtt
 		refTdAttributes.Kl, getBit(measuredAttributes[:], 31))
 
 	return result, ok
-}
-
-// For the MR index, the function uses the mapping according to UEFI Spec 2.10 Section 38.4.1
-func indexToMr(index int) string {
-	switch index {
-	case 0:
-		return "MRTD"
-	case 1:
-		return "RTMR0"
-	case 2:
-		return "RTMR1"
-	case 3:
-		return "RTMR2"
-	case 4:
-		return "RTMR3"
-	case 5:
-		return "MRSEAM"
-	default:
-		return "UNKNOWN"
-	}
 }

@@ -24,6 +24,10 @@ if [[ -z "$(docker images -q ${image})" ]]; then
     docker build --tag "${image}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
 fi
 
+test -c "/dev/kvm" && kvm="--device /dev/kvm" || kvm=""
+test -c "/dev/sgx_enclave" && sgx_enclave="--device /dev/sgx_enclave" || sgx_enclave=""
+test -c "/dev/sgx_provision" && sgx_provision="--device /dev/sgx_provision" || sgx_provision=""
+
 # If container does not exist, create it
 if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
     echo "Creating container ${name}.."
@@ -32,8 +36,9 @@ if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
     -it \
     --mount type=bind,src="${dir}",dst="${dir}" \
     --network "${docker_network}" \
-    --device /dev/sgx_enclave \
-    --device /dev/sgx_provision \
+    ${kvm} \
+    ${sgx_enclave} \
+    ${sgx_provision} \
     "${image}" /bin/bash -c "/bin/sleep infinity"
 fi
 
@@ -45,8 +50,9 @@ if [[ -z "$(docker ps -q -f name=${name})" ]]; then
     docker exec "${name}" adduser --uid "${uid}" --gid "${gid}" --disabled-login --gecos "" "${uidn}" || true
     docker exec "${name}" mkdir -p "${HOME}"
     docker exec "${name}" chown "${uid}":"${gid}" "${HOME}"
-    docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_enclave
-    docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_provision
+    docker exec "${name}" chown "${uid}":"${gid}" /dev/kvm || true
+    docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_enclave || true
+    docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_provision || true
     docker exec \
     --user "${uid}":"${gid}" \
     --env HOME="${HOME}" \
@@ -65,7 +71,7 @@ fi
 docker exec \
 --user "${uid}":"${gid}" \
 --env HOME="${HOME}" \
---env PATH="/usr/sbin:/sbin:/usr/bin:/bin:/usr/local/bin:/opt/ego/bin:/usr/local/go/bin:$HOME/go/bin:${dir}/bin" \
+--env PATH="/usr/sbin:/sbin:/usr/bin:/bin:/usr/local/bin:/opt/ego/bin:/usr/local/go/bin:$HOME/go/bin:${dir}/bin:${dir}/vm/swtpm/src/bin" \
 --env LANG=C.UTF-8 \
 --workdir "${dir}" \
 --interactive \

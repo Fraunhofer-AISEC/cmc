@@ -68,3 +68,23 @@ func GetNetworkAndAddr(addr string) (string, string, error) {
 		return "unix", a, nil
 	}
 }
+
+// For the Intel TDX MR index, the function uses the mapping according to UEFI Spec 2.10 Section 38.4.1
+func IndexToMr(index int) string {
+	switch index {
+	case 0:
+		return "MRTD"
+	case 1:
+		return "RTMR0"
+	case 2:
+		return "RTMR1"
+	case 3:
+		return "RTMR2"
+	case 4:
+		return "RTMR3"
+	case 5:
+		return "MRSEAM"
+	default:
+		return "UNKNOWN"
+	}
+}

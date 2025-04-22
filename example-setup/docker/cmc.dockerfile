@@ -6,8 +6,11 @@ ARG DEBIAN_FRONTEND=noninteractive \
     PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
 
 # Install dependencies
-RUN apt-get update && apt-get install -y wget lsb-release moreutils golang-cfssl build-essential \
-    sqlite3 zlib1g-dev libssl-dev jq yq git curl ca-certificates
+RUN apt-get update && apt-get install -y wget lsb-release moreutils golang-cfssl \
+	build-essential sqlite3 zlib1g-dev libssl-dev jq yq git curl ca-certificates \
+	qemu-system libjson-glib-dev libjson-glib-1.0-0 nasm acpica-tools uuid-dev \
+	genisoimage gnutls-bin guestfs-tools guestmount libtasn1-dev libgnutls28-dev \
+	socat libseccomp-dev python-is-python3 libtool expect
 
 # Install Go
 RUN curl -fsSL "https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz" -o go.tar.gz \
