@@ -7,8 +7,9 @@
 The CMC repository provides tools and software to enable remote attestation of computing platforms,
 as well as secure attested TLS and HTTPS channels between those platforms. Currently, the CMC
 repository supports Trusted Platform Modules (TPMs), AMD SEV-SNP, Intel SGX, as well as Intel TDX.
-The goal is to make attestation easy for verifiers without prior knowledge of the software stack,
-based on a set of trusted CAs and signed metadata describing the software stack.
+The goal is to make attestation easy for verifiers without prior knowledge of the peer's software
+stack. This is achieved through a set of trusted CAs and self-contained attestation reports that
+include signed metadata and reference hash values.
 
 *A detailed description of the architecture can be found in our*
 *[paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171) and in the*
