@@ -3,9 +3,7 @@
 Describes the setup with a QEMU Ubuntu VM with attached software TPM.
 
 As described in [Setup](./setup.md#prerequisites), each command can be prepended with `cmc-docker`
-for running in docker, or `cmc-docker` can simply be omitted. However, as e.g. old QEMU versions
-lead to different reference values, the attestation on systems other than ubuntu 24.04 might fail if
-docker is not used.
+for running in docker, or `cmc-docker` can simply be omitted.
 
 ## VM Setup
 
@@ -17,6 +15,8 @@ cmc-docker vm-setup
 
 ## Run CMC
 
+Starts swTPM, EST provisioning server and VM with CMC and [testtool](./architecture.md#testtool) in
+server mode and then establishes server-side attested TLS connection from the host to the VM:
 ```sh
 # Start swTPM (separate terminal)
 cmc-docker vm-swtpm
@@ -31,31 +31,37 @@ cmc-docker vm-start
 cmc-docker vm-testtool
 ```
 
-The testtool on the host establishes an attested TLS connection to the testtool running within the
-ubuntu VM with server-side authentication and server-side attestation.
+The [testtool](./architecture.md#testtool) on the host establishes an attested TLS connection to
+the testtool running within the ubuntu VM with server-side authentication and server-side
+attestation.
 
 Find the generated attestation result in `cmc/data/attestation-result`.
 
-## SSH into VM
+> **Note:** The **attestation might fail**, as this simple demo setup does not aim for a full
+> reproducible build of all components. For a successful attestation, you can update the metadata as
+> described in [parsing the reference values](#parsing-the-reference-values).
 
-You can SSH into the VM and copy files to and from the VM:
-```sh
-cmc-docker vm-ssh [optional-command]
-
-cmc-docker vm-scp vm-ubuntu:/path/to/file/in/vm /path/on/host
-```
+> **Note:** This demo VM is just for demonstration purposes and **not secure**, as secure boot is
+> not enabled, the user has root access, and neither file systems nor user space applications are
+> measured. [Platform Configuration](./setup-tpm.md#platform-configuration) provides some guidance,
+> especially how to activate the IMA to extend the measured boot to the user space.
 
 
 ---
 
 
-## Experimental: Manually Update Metadata
+## Troubleshooting
 
-If another image is to be used, the metadata must be updated. This is an experimental guide
+Below you can find some guidance on updating metadata and inspecting the VM.
+
+### Manually Update Metadata
+
+If attestation fails, the metadata must be updated. This is an experimental guide
 on how this could be achieved.
 
-### Parsing the Reference Values
+#### Parsing the Reference Values
 
+Simply parses the reference values from a running VM:
 ```sh
 cmc-docker vm-swtpm
 cmc-docker vm-start
@@ -65,11 +71,47 @@ cp data/metadata-signed/* example-setup/vm-config/vm-metadata/
 cp data/pki/ca.pem example-setup/vm-config/
 ```
 
-### Precomputing the Reference Values
+#### Precomputing the Reference Values
 
+Precomputes the metadata based on software artifacts. Not yet working!
 ```sh
 vm-extract-data
 precompute-metadata-vm
 cp data/metadata-signed/* example-setup/vm-config/vm-metadata/
 cp data/pki/ca.pem example-setup/vm-config/
+```
+
+### Access VM
+
+You can access the VM via user `root`, pw `root`.
+
+### SSH into VM
+
+You can SSH into the VM and copy files to and from the VM:
+```sh
+cmc-docker vm-ssh [optional-command]
+
+cmc-docker vm-scp vm-ubuntu:/path/to/file/in/vm /path/on/host
+```
+
+### View Logs
+
+The cmcd and testtool server run as systemd [cmcd.service](../example-setup/vm-config/cmcd.service)
+and [testtool.service](../example-setup/vm-config/testtool.service).
+
+Logs can be viewed via:
+```sh
+journalctl [-f] -u cmcd
+journalctl [-f] -u testtool
+```
+
+### Manually Run Services
+
+The services can also be stopped and manually run:
+```sh
+systemctl stop cmcd
+systemctl stop testtool
+
+cmcd -config /etc/cmcd-conf.json
+testtool -config /etc/testtool-conf-vm.json
 ```

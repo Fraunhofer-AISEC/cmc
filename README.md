@@ -4,7 +4,7 @@
 [![](https://godoc.org/github.com/Fraunhofer-AISEC/cmc?status.svg)](https://pkg.go.dev/github.com/Fraunhofer-AISEC/cmc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Fraunhofer-AISEC/cmc)](https://goreportcard.com/report/github.com/Fraunhofer-AISEC/cmc)
 
-The CMC repository provides tools and software to enable remote attestation of computing platforms,
+The CMC repository provides software to enable remote attestation of computing platforms,
 as well as secure attested TLS and HTTPS channels between those platforms. Currently, the CMC
 repository supports Trusted Platform Modules (TPMs), AMD SEV-SNP, Intel SGX, as well as Intel TDX.
 The goal is to make attestation easy for verifiers without prior knowledge of the peer's software
@@ -20,16 +20,18 @@ include signed metadata and reference hash values.
 > Note: If you want to run the *cmc* on actual hardware, refer to the [Setup](./doc/setup.md),
 > [Build](./doc/build.md) and [Run](./doc/run.md) documentation.
 
-For demonstration purposes, we provide a docker container for building the tools and a
-Virtual Machine (VM) with attached software TPM as a demo.
+For demonstration purposes only, we provide a docker container for building the software and a
+Virtual Machine (VM) with attached software TPM.
 
-If you choose to use the Docker container, simply ensure that Docker is installed. The container
-bind-mounts the repository root and runs as the current user, meaning all artifacts are built in
-the same location as they would be without Docker. If you prefer not to use Docker, make sure all
-[prerequisites](./doc/setup.md#prerequisites) are installed, and omit the `cmc-docker` prefix from
-each command.
+If you choose to use the Docker container, simply ensure that
+[Docker is installed](https://docs.docker.com/engine/install/). The container bind-mounts the
+repository root directory and runs as the current user, meaning all artifacts are built in
+the same location as they would be without Docker.
 
-Create and launch VM with swTPM, establish server-side attested TLS connection to VM:
+If you prefer not to use Docker, make sure all [prerequisites](./doc/setup.md#prerequisites) are
+installed, and omit the `cmc-docker` prefix from each command.
+
+Create and launch the VM with attached swTPM, establish server-side attested TLS connection to VM:
 ```sh
 # Setup environment
 source env.bash
@@ -54,8 +56,8 @@ The [testtool](./doc/architecture.md#testtool) on the host establishes an attest
 to the testtool running within the ubuntu VM with server-side authentication and server-side
 attestation. Find the generated attestation result in `cmc/data/attestation-result`.
 
-The VM setup is described in more detail in [Setup](./doc/setup.md) and
-[VM Setup](./doc/setup-vm.md)
+> Note: This demo is not secure and attestation might fail. Refer to [VM Setup](./doc/setup-vm.md)
+> for more information and how to fix.
 
 ## Further Documentation
 

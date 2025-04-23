@@ -115,6 +115,10 @@ sudo calculate-ima-pcr -t 10 -i ima-ng -p /usr/bin -p /usr/sbin -p /usr/lib
 ```
 Then insert those values into an app manifest.
 
+
+---
+
+
 ## Platform Configuration
 
 The *cmcd* must run on a Linux platform with TPM support enabled. The
@@ -131,7 +135,7 @@ Furthermore, *Secure Boot* should be enabled and the platform should only run si
 verified components. It is advisable to run a minimal, hardened Linux distribution for server or
 container environments.
 
-## BIOS/UEFI Configuration
+### BIOS/UEFI Configuration
 
 For SRTM, only the TPM must be activated in the BIOS configuration.
 
@@ -143,7 +147,7 @@ the following capabilities must be activated:
 - Activate Administrator Password
 - Clear TPM
 
-## Kernel Configuration
+### Kernel Configuration
 
 Running the *cmcd* for testing purposes only requires TPM support, which is enabled by default
 on most distributions:
@@ -165,8 +169,8 @@ The initramfs should be signed and appended to the kernel to be included into th
 
 - CONFIG_INITRAMFS_SOURCE
 
-The Integrity Measurement Architecture (IMA) can be activated to measure firmware, kernel modules
-and, if desired, also binaries running in the root namespace:
+The Integrity Measurement Architecture (IMA) can be activated to measure firmware, kernel modules,
+user-space applications and configuration files:
 
 - CONFIG_INTEGRITY
 - CONFIG_INTEGRITY_SIGNATURE
@@ -200,7 +204,36 @@ measure and verify the rootfs and integrate it into the measured boot:
 - CONFIG_DM_VERITY_FEC
 - CONFIG_SQUASHFS
 
-## User space configuration
+### IMA Configuration
 
-Note: Beside activating the respective kernel configurations, the subsystems must also be
-configured. *Systemd* is capable of configuring both dm-verity and IMA.
+By default, the IMA will not measure anything except the boot aggregate on many distributions.
+On systemd-based systems, systemd can be used to configure the IMA.
+
+Systemd will load the IMA policies if put in `/etc/ima/ima-policy`. A policy that measures kernel
+modules, applications and files opened by root could look like this:
+
+```sh
+dont_measure fsmagic=0x9fa0
+dont_measure fsmagic=0x62656572
+dont_measure fsmagic=0x64626720
+dont_measure fsmagic=0x1cd1
+dont_measure fsmagic=0x42494e4d
+dont_measure fsmagic=0x73636673
+dont_measure fsmagic=0xf97cff8c
+dont_measure fsmagic=0x43415d53
+dont_measure fsmagic=0x27e0eb
+dont_measure fsmagic=0x63677270
+dont_measure fsmagic=0x6e736673
+dont_measure fsmagic=0xde5e81e4
+measure func=MMAP_CHECK mask=MAY_EXEC
+measure func=BPRM_CHECK mask=MAY_EXEC
+measure func=FILE_CHECK mask=MAY_READ euid=0
+measure func=FILE_CHECK mask=MAY_READ uid=0
+measure func=MODULE_CHECK
+measure func=FIRMWARE_CHECK
+measure func=POLICY_CHECK
+```
+
+More information on how to configure the IMA can be found
+[here](https://sourceforge.net/p/linux-ima/wiki/Home/) and
+[here](https://ima-doc.readthedocs.io/en/latest/ima-configuration.html).
