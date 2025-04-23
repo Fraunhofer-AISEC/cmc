@@ -352,6 +352,63 @@
       "properties": {},
       "type": "object"
     },
+    "IntelCollateral": {
+      "properties": {
+        "TcbInfo": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "QeIdentity": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "RootCaCrl": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "PckCrl": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "PckCrlIntermediateCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "PckCrlRootCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "TcbInfoIntermediateCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "TcbInfoRootCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "QeIdentityIntermediateCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "QeIdentityRootCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
+      },
+      "type": "object",
+      "required": [
+        "TcbInfo",
+        "QeIdentity",
+        "RootCaCrl",
+        "PckCrl",
+        "PckCrlIntermediateCert",
+        "PckCrlRootCert",
+        "TcbInfoIntermediateCert",
+        "TcbInfoRootCert",
+        "QeIdentityIntermediateCert",
+        "QeIdentityRootCert"
+      ]
+    },
     "Linux": {
       "properties": {
         "uidMappings": {
@@ -967,6 +1024,9 @@
         },
         "ctrData": {
           "$ref": "#/$defs/CtrData"
+        },
+        "intelCollateral": {
+          "$ref": "#/$defs/IntelCollateral"
         }
       },
       "type": "object",
