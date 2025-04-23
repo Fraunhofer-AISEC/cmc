@@ -37,7 +37,7 @@ Create and launch the VM with attached swTPM, establish server-side attested TLS
 source env.bash
 
 # Download and configure image and tools
-cmc-docker setup-vm
+cmc-docker vm-setup
 
 # Start swTPM (separate terminal )
 cmc-docker vm-swtpm

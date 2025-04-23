@@ -1,4 +1,5 @@
-FROM ubuntu:24.04
+# Fixed ubuntu 24.04
+FROM ubuntu@sha256:1e622c5f073b4f6bfad6632f2616c7f59ef256e96fe78bf6a595d1dc4376ac02
 
 ARG DEBIAN_FRONTEND=noninteractive \
     GO_VERSION=1.24.1 \
@@ -10,7 +11,7 @@ RUN apt-get update && apt-get install -y wget lsb-release moreutils golang-cfssl
 	build-essential sqlite3 zlib1g-dev libssl-dev jq yq git curl ca-certificates \
 	qemu-system libjson-glib-dev libjson-glib-1.0-0 nasm acpica-tools uuid-dev \
 	genisoimage gnutls-bin guestfs-tools guestmount libtasn1-dev libgnutls28-dev \
-	socat libseccomp-dev python-is-python3 libtool expect
+	socat libseccomp-dev python-is-python3 libtool expect clang llvm lld
 
 # Install Go
 RUN curl -fsSL "https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz" -o go.tar.gz \

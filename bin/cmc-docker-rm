@@ -2,9 +2,9 @@
 
 dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
 
-name=cmc-docker
-image=cmc-docker-image
+name="cmc$(printf "%s" "${dir}" | tr '/' '-')"
 
 docker stop "${name}"
 docker rm "${name}"
-docker image rm "${image}"
+docker image rm "${name}"
+docker network rm "${name}"

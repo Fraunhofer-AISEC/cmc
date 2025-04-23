@@ -10,18 +10,16 @@ gid=$(id -g)
 uidn=$(id -un)
 gidn=$(id -gn)
 
-name="cmc-docker"
-image="cmc-docker-image"
-docker_network="tdx-host"
+name="cmc$(printf "%s" "${dir}" | tr '/' '-')"
 
 cd "${dir}"
 
-docker network ls | grep -q "${docker_network}" || docker network create "${docker_network}"
+docker network ls | grep -q "${name}" || docker network create "${name}"
 
 # Build the image
-if [[ -z "$(docker images -q ${image})" ]]; then
-    echo "Building docker image ${image}.."
-    docker build --tag "${image}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
+if [[ -z "$(docker images -q ${name})" ]]; then
+    echo "Building docker image ${name}.."
+    docker build --tag "${name}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
 fi
 
 test -c "/dev/kvm" && kvm="--device /dev/kvm" || kvm=""
@@ -35,11 +33,11 @@ if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
     --name "${name}" \
     -it \
     --mount type=bind,src="${dir}",dst="${dir}" \
-    --network "${docker_network}" \
+    --network "${name}" \
     ${kvm} \
     ${sgx_enclave} \
     ${sgx_provision} \
-    "${image}" /bin/bash -c "/bin/sleep infinity"
+    "${name}" /bin/bash -c "/bin/sleep infinity"
 fi
 
 # If container does not run, start and configure it

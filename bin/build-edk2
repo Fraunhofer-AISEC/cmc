@@ -10,12 +10,12 @@ data="${dir}/vm"
 vm_config="${dir}/example-setup/vm-config"
 
 debug=0
-edk_output_dir="RELEASE_GCC5"
+edk_output_dir="RELEASE_CLANGPDB"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--debug)
             debug=1
-            edk_output_dir="DEBUG_GCC5"
+            edk_output_dir="DEBUG_CLANGPDB"
             shift
             ;;
         *)
@@ -45,7 +45,7 @@ build_params=(  "-DTPM2_ENABLE=TRUE"
                 "-DFD_SIZE_2MB"
                 "-n $(nproc)"
                 "-a X64"
-                "-t GCC5"
+                "-t CLANGPDB"
                 "-p OvmfPkg/OvmfPkgX64.dsc")
 
 if [[ "${debug}" -eq 1 ]]; then
