@@ -2,25 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$ref": "#/$defs/VerificationResponse",
   "$defs": {
-    "AttributesCheck": {
-      "properties": {
-        "success": {
-          "type": "boolean"
-        },
-        "claimed": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "measured": {
-          "$ref": "#/$defs/HexByte"
-        }
-      },
-      "type": "object",
-      "required": [
-        "success",
-        "claimed",
-        "measured"
-      ]
-    },
     "BooleanMatch": {
       "properties": {
         "success": {
@@ -135,19 +116,22 @@
         "launched": {
           "type": "boolean"
         },
-        "pcr": {
-          "type": "integer"
-        },
-        "name": {
+        "type": {
           "type": "string"
+        },
+        "subtype": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
         },
         "digest": {
           "type": "string"
         },
-        "description": {
+        "measured": {
           "type": "string"
         },
-        "type": {
+        "description": {
           "type": "string"
         },
         "eventData": {
@@ -160,7 +144,8 @@
       "type": "object",
       "required": [
         "success",
-        "launched"
+        "launched",
+        "index"
       ]
     },
     "EFILoadOption": {
@@ -517,29 +502,6 @@
     "Int": {
       "properties": {},
       "type": "object"
-    },
-    "IntelCollateral": {
-      "properties": {
-        "teeType": {
-          "type": "integer"
-        },
-        "tcbInfo": true,
-        "tcbInfoSize": {
-          "type": "integer"
-        },
-        "qeIdentity": true,
-        "qeIdentitySize": {
-          "type": "integer"
-        }
-      },
-      "type": "object",
-      "required": [
-        "teeType",
-        "tcbInfo",
-        "tcbInfoSize",
-        "qeIdentity",
-        "qeIdentitySize"
-      ]
     },
     "Linux": {
       "properties": {
@@ -1253,6 +1215,18 @@
         "certLevel": {
           "type": "integer"
         },
+        "caFingerprint": {
+          "type": "string"
+        },
+        "snpPolicy": {
+          "$ref": "#/$defs/SnpPolicy"
+        },
+        "tdxPolicy": {
+          "$ref": "#/$defs/TdxPolicy"
+        },
+        "sgxPolicy": {
+          "$ref": "#/$defs/SgxPolicy"
+        },
         "details": {
           "type": "object"
         },
@@ -1272,6 +1246,9 @@
           "$ref": "#/$defs/CertConfig"
         },
         "snp": {
+          "$ref": "#/$defs/CertConfig"
+        },
+        "tdx": {
           "$ref": "#/$defs/CertConfig"
         },
         "sgx": {
@@ -1448,28 +1425,6 @@
         "soft"
       ]
     },
-    "PcrResult": {
-      "properties": {
-        "success": {
-          "type": "boolean"
-        },
-        "pcr": {
-          "type": "integer"
-        },
-        "digest": {
-          "type": "string"
-        },
-        "measured": {
-          "type": "string"
-        }
-      },
-      "type": "object",
-      "required": [
-        "success",
-        "pcr",
-        "digest"
-      ]
-    },
     "PkixExtension": {
       "properties": {
         "id": {
@@ -1584,10 +1539,51 @@
         "cwd"
       ]
     },
+    "QeReportResult": {
+      "properties": {
+        "success": {
+          "$ref": "#/$defs/Result"
+        },
+        "mrsigner": {
+          "$ref": "#/$defs/Result"
+        },
+        "isvProdId": {
+          "$ref": "#/$defs/Result"
+        },
+        "miscSelect": {
+          "$ref": "#/$defs/Result"
+        },
+        "attributes": {
+          "$ref": "#/$defs/Result"
+        },
+        "status": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "success",
+        "mrsigner",
+        "isvProdId",
+        "miscSelect",
+        "attributes",
+        "status",
+        "date"
+      ]
+    },
     "ReferenceValue": {
       "properties": {
         "type": {
           "type": "string"
+        },
+        "subtype": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
         },
         "sha256": {
           "$ref": "#/$defs/HexByte"
@@ -1595,23 +1591,11 @@
         "sha384": {
           "$ref": "#/$defs/HexByte"
         },
-        "name": {
-          "type": "string"
+        "sha512": {
+          "$ref": "#/$defs/HexByte"
         },
         "optional": {
           "type": "boolean"
-        },
-        "pcr": {
-          "type": "integer"
-        },
-        "snp": {
-          "$ref": "#/$defs/SnpDetails"
-        },
-        "tdx": {
-          "$ref": "#/$defs/TDXDetails"
-        },
-        "sgx": {
-          "$ref": "#/$defs/SGXDetails"
         },
         "description": {
           "type": "string"
@@ -1622,7 +1606,9 @@
       },
       "type": "object",
       "required": [
-        "type"
+        "type",
+        "subtype",
+        "index"
       ]
     },
     "Result": {
@@ -1671,32 +1657,6 @@
         "path"
       ]
     },
-    "RtMrHashChainElem": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "Hashes": {
-          "items": {
-            "$ref": "#/$defs/HexByte"
-          },
-          "type": "array"
-        },
-        "summary": {
-          "type": "boolean"
-        }
-      },
-      "type": "object",
-      "required": [
-        "type",
-        "name",
-        "Hashes",
-        "summary"
-      ]
-    },
     "SGXAttributes": {
       "properties": {
         "initted": {
@@ -1734,41 +1694,6 @@
         "kss",
         "legacy",
         "avx"
-      ]
-    },
-    "SGXDetails": {
-      "properties": {
-        "version": {
-          "type": "integer"
-        },
-        "collateral": {
-          "$ref": "#/$defs/IntelCollateral"
-        },
-        "caFingerprint": {
-          "type": "string"
-        },
-        "isvProdId": {
-          "type": "integer"
-        },
-        "mrSigner": {
-          "type": "string"
-        },
-        "isvSvn": {
-          "type": "integer"
-        },
-        "attributes": {
-          "$ref": "#/$defs/SGXAttributes"
-        }
-      },
-      "type": "object",
-      "required": [
-        "version",
-        "collateral",
-        "caFingerprint",
-        "isvProdId",
-        "mrSigner",
-        "isvSvn",
-        "attributes"
       ]
     },
     "Scheduler": {
@@ -1842,16 +1767,43 @@
         "avx"
       ]
     },
+    "SgxPolicy": {
+      "properties": {
+        "quoteVersion": {
+          "type": "integer"
+        },
+        "isvProdId": {
+          "type": "integer"
+        },
+        "mrSigner": {
+          "type": "string"
+        },
+        "isvSvn": {
+          "type": "integer"
+        },
+        "attributes": {
+          "$ref": "#/$defs/SGXAttributes"
+        }
+      },
+      "type": "object",
+      "required": [
+        "quoteVersion",
+        "isvProdId",
+        "mrSigner",
+        "isvSvn",
+        "attributes"
+      ]
+    },
     "SgxResult": {
       "properties": {
-        "reportVersionMatch": {
+        "quoteVersionMatch": {
           "$ref": "#/$defs/Result"
         },
         "tcbInfoCheck": {
-          "$ref": "#/$defs/TcbLevelResult"
+          "$ref": "#/$defs/TcbInfoResult"
         },
-        "qeIdentityCheck": {
-          "$ref": "#/$defs/TcbLevelResult"
+        "qeReportCheck": {
+          "$ref": "#/$defs/QeReportResult"
         },
         "sgxAttributesCheck": {
           "$ref": "#/$defs/SgxAttributesCheck"
@@ -1859,9 +1811,9 @@
       },
       "type": "object",
       "required": [
-        "reportVersionMatch",
+        "quoteVersionMatch",
         "tcbInfoCheck",
-        "qeIdentityCheck",
+        "qeReportCheck",
         "sgxAttributesCheck"
       ]
     },
@@ -1912,33 +1864,6 @@
         "certChainValidation"
       ]
     },
-    "SnpDetails": {
-      "properties": {
-        "version": {
-          "type": "integer"
-        },
-        "caFingerprint": {
-          "type": "string"
-        },
-        "policy": {
-          "$ref": "#/$defs/SnpPolicy"
-        },
-        "fw": {
-          "$ref": "#/$defs/SnpFw"
-        },
-        "tcb": {
-          "$ref": "#/$defs/SnpTcb"
-        }
-      },
-      "type": "object",
-      "required": [
-        "version",
-        "caFingerprint",
-        "policy",
-        "fw",
-        "tcb"
-      ]
-    },
     "SnpFw": {
       "properties": {
         "build": {
@@ -1958,7 +1883,7 @@
         "minor"
       ]
     },
-    "SnpPolicy": {
+    "SnpGuestPolicy": {
       "properties": {
         "type": {
           "type": "string"
@@ -1991,6 +1916,29 @@
         "smt",
         "abiMajor",
         "abiMinor"
+      ]
+    },
+    "SnpPolicy": {
+      "properties": {
+        "reportVersion": {
+          "type": "integer"
+        },
+        "policy": {
+          "$ref": "#/$defs/SnpGuestPolicy"
+        },
+        "fw": {
+          "$ref": "#/$defs/SnpFw"
+        },
+        "tcb": {
+          "$ref": "#/$defs/SnpTcb"
+        }
+      },
+      "type": "object",
+      "required": [
+        "reportVersion",
+        "policy",
+        "fw",
+        "tcb"
       ]
     },
     "SnpResult": {
@@ -2196,28 +2144,13 @@
     "TDId": {
       "properties": {
         "mrOwner": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array",
-          "maxItems": 48,
-          "minItems": 48
+          "$ref": "#/$defs/HexByte"
         },
         "mrOwnerConfig": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array",
-          "maxItems": 48,
-          "minItems": 48
+          "$ref": "#/$defs/HexByte"
         },
         "mrConfigId": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array",
-          "maxItems": 48,
-          "minItems": 48
+          "$ref": "#/$defs/HexByte"
         }
       },
       "type": "object",
@@ -2225,73 +2158,6 @@
         "mrOwner",
         "mrOwnerConfig",
         "mrConfigId"
-      ]
-    },
-    "TDMeasurements": {
-      "properties": {
-        "rtMr0": {
-          "$ref": "#/$defs/RtMrHashChainElem"
-        },
-        "rtMr1": {
-          "$ref": "#/$defs/RtMrHashChainElem"
-        },
-        "rtMr2": {
-          "$ref": "#/$defs/RtMrHashChainElem"
-        },
-        "rtMr3": {
-          "$ref": "#/$defs/RtMrHashChainElem"
-        },
-        "mrSeam": {
-          "$ref": "#/$defs/HexByte"
-        }
-      },
-      "type": "object",
-      "required": [
-        "rtMr0",
-        "rtMr1",
-        "rtMr2",
-        "rtMr3",
-        "mrSeam"
-      ]
-    },
-    "TDXDetails": {
-      "properties": {
-        "version": {
-          "type": "integer"
-        },
-        "collateral": {
-          "$ref": "#/$defs/IntelCollateral"
-        },
-        "caFingerprint": {
-          "type": "string"
-        },
-        "tdId": {
-          "$ref": "#/$defs/TDId"
-        },
-        "tdMeasurements": {
-          "$ref": "#/$defs/TDMeasurements"
-        },
-        "xfam": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array",
-          "maxItems": 8,
-          "minItems": 8
-        },
-        "tdAttributes": {
-          "$ref": "#/$defs/TDAttributes"
-        }
-      },
-      "type": "object",
-      "required": [
-        "version",
-        "collateral",
-        "caFingerprint",
-        "tdId",
-        "tdMeasurements",
-        "xfam",
-        "tdAttributes"
       ]
     },
     "TcbCheck": {
@@ -2321,38 +2187,29 @@
         "ucode"
       ]
     },
-    "TcbLevelResult": {
+    "TcbInfoResult": {
       "properties": {
         "success": {
           "$ref": "#/$defs/Result"
         },
-        "mrsigner": {
+        "id": {
           "$ref": "#/$defs/Result"
         },
-        "isvProdId": {
-          "$ref": "#/$defs/Result"
-        },
-        "miscSelect": {
-          "$ref": "#/$defs/Result"
-        },
-        "attributes": {
+        "version": {
           "$ref": "#/$defs/Result"
         },
         "status": {
           "type": "string"
         },
         "date": {
-          "type": "string",
-          "format": "date-time"
+          "type": "string"
         }
       },
       "type": "object",
       "required": [
         "success",
-        "mrsigner",
-        "isvProdId",
-        "miscSelect",
-        "attributes",
+        "id",
+        "version",
         "status",
         "date"
       ]
@@ -2380,42 +2237,72 @@
         "kl"
       ]
     },
+    "TdxPolicy": {
+      "properties": {
+        "quoteVersion": {
+          "type": "integer"
+        },
+        "tdId": {
+          "$ref": "#/$defs/TDId"
+        },
+        "xfam": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "tdAttributes": {
+          "$ref": "#/$defs/TDAttributes"
+        }
+      },
+      "type": "object",
+      "required": [
+        "quoteVersion",
+        "tdId",
+        "xfam",
+        "tdAttributes"
+      ]
+    },
     "TdxResult": {
       "properties": {
-        "reportVersionMatch": {
+        "quoteVersionMatch": {
           "$ref": "#/$defs/Result"
         },
         "tcbInfoCheck": {
-          "$ref": "#/$defs/TcbLevelResult"
+          "$ref": "#/$defs/TcbInfoResult"
         },
-        "qeIdentityCheck": {
-          "$ref": "#/$defs/TcbLevelResult"
+        "qeReportCheck": {
+          "$ref": "#/$defs/QeReportResult"
         },
         "tdAttributesCheck": {
           "$ref": "#/$defs/TdAttributesCheck"
         },
         "seamAttributesCheck": {
-          "$ref": "#/$defs/AttributesCheck"
+          "$ref": "#/$defs/Result"
         },
         "xfamCheck": {
-          "$ref": "#/$defs/AttributesCheck"
+          "$ref": "#/$defs/Result"
+        },
+        "mrMatch": {
+          "items": {
+            "$ref": "#/$defs/DigestResult"
+          },
+          "type": "array"
         }
       },
       "type": "object",
       "required": [
-        "reportVersionMatch",
+        "quoteVersionMatch",
         "tcbInfoCheck",
-        "qeIdentityCheck",
+        "qeReportCheck",
         "tdAttributesCheck",
         "seamAttributesCheck",
-        "xfamCheck"
+        "xfamCheck",
+        "mrMatch"
       ]
     },
     "TpmResult": {
       "properties": {
         "pcrMatch": {
           "items": {
-            "$ref": "#/$defs/PcrResult"
+            "$ref": "#/$defs/DigestResult"
           },
           "type": "array"
         },

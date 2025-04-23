@@ -22,9 +22,19 @@
           },
           "type": "object"
         },
-        "ca": {
-          "type": "string",
-          "contentEncoding": "base64"
+        "metadataCas": {
+          "items": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "array"
+        },
+        "identityCas": {
+          "items": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "array"
         },
         "peer": {
           "type": "string"
@@ -45,7 +55,8 @@
         "version",
         "nonce",
         "report",
-        "ca"
+        "metadataCas",
+        "identityCas"
       ]
     }
   }
