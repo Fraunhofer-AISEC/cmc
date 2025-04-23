@@ -10,12 +10,12 @@ data="${dir}/vm"
 vm_config="${dir}/example-setup/vm-config"
 
 debug=0
-edk_output_dir="RELEASE_GCC5"
+edk_output_dir="RELEASE_CLANGPDB"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--debug)
             debug=1
-            edk_output_dir="DEBUG_GCC5"
+            edk_output_dir="DEBUG_CLANGPDB"
             shift
             ;;
         *)
@@ -53,7 +53,7 @@ done
     printf "[\033[34;1m EXEC \033[0m] Building edk2 firmware (%s)..\n" "${edk_output_dir}"
     git clone https://github.com/tianocore/edk2.git "${edk2}"
     cd "${edk2}"
-    git checkout edk2-stable202408.01
+    git checkout edk2-stable202502
     git submodule update --init
 
     make -j "$(nproc)" -C BaseTools/
@@ -64,7 +64,7 @@ done
                     "-DFD_SIZE_2MB"
                     "-n $(nproc)"
                     "-a X64"
-                    "-t GCC5"
+                    "-t CLANGPDB"
                     "-p OvmfPkg/OvmfPkgX64.dsc")
 
     if [[ "${debug}" -eq 1 ]]; then

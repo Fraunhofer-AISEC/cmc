@@ -1,0 +1,33 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/vm"
+hostname=$(hostname)
+
+acpi_dump_vm="/root/acpi_dump"
+acpi_host_dir="${data}/images/acpi/${hostname}"
+acpi_dump_host="${acpi_host_dir}/acpi_dump"
+
+echo "Copying acpi_dump to ${acpi_dump_host}"
+
+mkdir -p "${acpi_host_dir}/decompiled"
+cd "${acpi_host_dir}"
+
+cmc-docker vm-ssh rm -rf "${acpi_dump_vm}"
+
+cmc-docker vm-ssh acpidump -o "${acpi_dump_vm}"
+
+cmc-docker vm-scp vm-ubuntu:"${acpi_dump_vm}" "${acpi_dump_host}"
+
+acpixtract -a -f "${acpi_dump_host}"
+
+for table in *.dat; do
+    iasl -d "${table}"
+done
+
+grep -A5 QWordMemory "${acpi_host_dir}/dsdt.dsl"

@@ -33,7 +33,7 @@ qemu_opts=(
     "-name machine${id},process=machine${id}"
     "-machine q35,accel=kvm,vmport=off,kernel_irqchip=split"
     "-cpu kvm64-v1"
-    "-m 4G"
+    "-m 4096M"
     "-nographic"
     "-serial mon:stdio"
     "-drive if=pflash,format=raw,unit=0,file=${ovmf},readonly=on"
