@@ -22,6 +22,7 @@ func Test_parseEventlog(t *testing.T) {
 		data         []byte
 		eventlogFlag bool
 		summaryFlag  bool
+		mrs          []int
 	}
 	tests := []struct {
 		name    string
@@ -34,6 +35,7 @@ func Test_parseEventlog(t *testing.T) {
 				data:         CC_EVENTLOG,
 				eventlogFlag: true,
 				summaryFlag:  true,
+				mrs:          []int{1, 2, 3, 4},
 			},
 			wantErr: false,
 		},
@@ -43,13 +45,14 @@ func Test_parseEventlog(t *testing.T) {
 				data:         []byte{0x01, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff},
 				eventlogFlag: true,
 				summaryFlag:  true,
+				mrs:          []int{1, 2, 3, 4},
 			},
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := parseEventlog(tt.args.data, tt.args.eventlogFlag, tt.args.summaryFlag); (err != nil) != tt.wantErr {
+			if err := parseEventlog(tt.args.data, tt.args.eventlogFlag, tt.args.summaryFlag, tt.args.mrs); (err != nil) != tt.wantErr {
 				t.Errorf("parseEventlog() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

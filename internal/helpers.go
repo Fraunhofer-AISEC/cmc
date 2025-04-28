@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/sirupsen/logrus"
 )
@@ -69,7 +70,7 @@ func GetNetworkAndAddr(addr string) (string, string, error) {
 	}
 }
 
-// For the Intel TDX MR index, the function uses the mapping according to UEFI Spec 2.10 Section 38.4.1
+// IndexToMr uses the mapping according to UEFI Spec 2.10 Section 38.4.1
 func IndexToMr(index int) string {
 	switch index {
 	case 0:
@@ -87,4 +88,14 @@ func IndexToMr(index int) string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// FormatRtmrData formats the RTMR data to a string if the data is printable
+func FormatRtmrData(data []byte) string {
+	for _, b := range data {
+		if b > 127 || !unicode.IsPrint(rune(b)) {
+			return ""
+		}
+	}
+	return string(data)
 }
