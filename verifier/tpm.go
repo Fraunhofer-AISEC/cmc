@@ -140,7 +140,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			calculatedPcrs[pcr] = make([]byte, 32)
 		}
 
-		if measuredPcr.Type == "PCR Eventlog" {
+		if measuredPcr.Type == ar.ARTIFACT_TYPE_PCR_EVENTLOG {
 			// measurement contains a detailed measurement list (e.g. retrieved from bios
 			// measurement logs or ima runtime measurement logs)
 			measuredSummary := make([]byte, 32)
@@ -204,11 +204,12 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 				pcrResult.Measured = hex.EncodeToString(measuredSummary)
 			}
 
-		} else if measuredPcr.Type == "PCR Summary" {
+		} else if measuredPcr.Type == ar.ARTIFACT_TYPE_PCR_SUMMARY {
 			// measurement contains just the summary PCR value
 			// We therefore unconditionally extend every reference value for this PCR
 			if len(measuredPcr.Events) != 1 {
-				log.Debugf("Expected exactly one event for artifact type 'PCR Summary', got %v", len(measuredPcr.Events))
+				log.Debugf("Expected exactly one event for artifact type %q, got %v",
+					ar.ARTIFACT_TYPE_PCR_SUMMARY, len(measuredPcr.Events))
 				success = false
 				continue
 			}
@@ -250,7 +251,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			// for this PCR to the according value, as we cannot determine which ones
 			// were good or potentially failed
 			for i, elem := range detailedResults {
-				if elem.Index == pcr && measuredPcr.Type != "PCR Eventlog" {
+				if elem.Index == pcr && measuredPcr.Type != ar.ARTIFACT_TYPE_PCR_EVENTLOG {
 					detailedResults[i].Success = equal
 					detailedResults[i].Launched = equal
 				}
@@ -289,7 +290,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			// Check if the reference value is present (only possible if detailed
 			// measurement logs were provided. In case of summary, every reference value is
 			// extended expected)
-			if measuredPcr.Type != "PCR Summary" {
+			if measuredPcr.Type != ar.ARTIFACT_TYPE_PCR_SUMMARY {
 				foundEvent := false
 				for _, event := range measuredPcr.Events {
 					if bytes.Equal(event.Sha256, ref.Sha256) {

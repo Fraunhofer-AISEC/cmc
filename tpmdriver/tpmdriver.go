@@ -48,17 +48,17 @@ import (
 // Tpm is a structure that implements the Measure method
 // of the attestation report Measurer interface
 type Tpm struct {
-	Mu             sync.Mutex
-	Pcrs           []int
-	IkChain        []*x509.Certificate
-	AkChain        []*x509.Certificate
-	Ima            bool
-	ImaPcr         int
-	MeasurementLog bool
-	Ctr            bool
-	CtrPcr         int
-	CtrLog         string
-	Serializer     ar.Serializer
+	mu             sync.Mutex
+	pcrs           []int
+	ikChain        []*x509.Certificate
+	akChain        []*x509.Certificate
+	ima            bool
+	imaPcr         int
+	measurementLog bool
+	ctr            bool
+	ctrPcr         int
+	ctrLog         string
+	serializer     ar.Serializer
 }
 
 const (
@@ -66,6 +66,8 @@ const (
 	ikchainFile = "tpm_ik_chain.pem"
 	akFile      = "tpm_ak_encrypted.json"
 	ikFile      = "tpm_ik_encrypted.json"
+
+	DEFAULT_BINARY_BIOS_MEASUREMENTS = "/sys/kernel/security/tpm0/binary_bios_measurements"
 )
 
 var (
@@ -170,16 +172,16 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("failed to determine TPM Quote CRs: %w", err)
 	}
 
-	t.Pcrs = pcrs
-	t.Ima = c.Ima
-	t.ImaPcr = c.ImaPcr
-	t.IkChain = ikchain
-	t.AkChain = akchain
-	t.MeasurementLog = c.MeasurementLog
-	t.Serializer = c.Serializer
-	t.Ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
-	t.CtrLog = c.CtrLog
-	t.CtrPcr = c.CtrPcr
+	t.pcrs = pcrs
+	t.ima = c.Ima
+	t.imaPcr = c.ImaPcr
+	t.ikChain = ikchain
+	t.akChain = akchain
+	t.measurementLog = c.MeasurementLog
+	t.serializer = c.Serializer
+	t.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
+	t.ctrLog = c.CtrLog
+	t.ctrPcr = c.CtrPcr
 
 	return nil
 }
@@ -193,14 +195,14 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	if t == nil {
 		return ar.Measurement{}, fmt.Errorf("internal error: tpm object not initialized")
 	}
-	if len(t.Pcrs) == 0 {
-		log.Warn("TPM measurement based on reference values does not contain any PCRs")
+	if len(t.pcrs) == 0 {
+		return ar.Measurement{}, fmt.Errorf("TPM measurement based on reference values does not contain any PCRs")
 	}
 
 	log.Debugf("Collecting TPM Quote for PCRs %v",
-		strings.Trim(strings.Join(strings.Fields(fmt.Sprint(t.Pcrs)), ","), "[]"))
+		strings.Trim(strings.Join(strings.Fields(fmt.Sprint(t.pcrs)), ","), "[]"))
 
-	pcrValues, quote, err := GetMeasurement(t, nonce, t.Pcrs)
+	pcrValues, quote, err := GetMeasurement(t, nonce, t.pcrs)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to get TPM Measurement: %w", err)
 	}
@@ -209,33 +211,31 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 	// and use these values, which represent the software artifacts that have been
 	// extended. Use the final PCR values only as a fallback, if the file cannot be read
 	var biosMeasurements []ar.ReferenceValue
-	if t.MeasurementLog {
+	if t.measurementLog {
 		log.Debug("Collecting binary bios measurements")
-		biosMeasurements, err = GetBiosMeasurements("/sys/kernel/security/tpm0/binary_bios_measurements")
+		biosMeasurements, err = GetBiosMeasurements(DEFAULT_BINARY_BIOS_MEASUREMENTS)
 		if err != nil {
-			t.MeasurementLog = false
+			t.measurementLog = false
 			log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
 				err)
 		}
 		log.Debugf("Collected %v binary bios measurements", len(biosMeasurements))
 	}
 
-	hashChain := make([]ar.Artifact, len(t.Pcrs))
-	for i, num := range t.Pcrs {
+	hashChain := make([]ar.Artifact, len(t.pcrs))
+	for i, num := range t.pcrs {
 
 		events := make([]ar.MeasureEvent, 0)
 
 		// Collect detailed measurements from event logs if specified
-		if t.MeasurementLog {
+		if t.measurementLog {
 			for _, digest := range biosMeasurements {
 				if num == digest.Index {
 					event := ar.MeasureEvent{
 						Sha256:    digest.Sha256,
 						EventName: digest.SubType,
 					}
-					if digest.SubType == "TPM_PCR_INIT_VALUE" {
-						event.EventData = nil
-					} else {
+					if digest.SubType != "TPM_PCR_INIT_VALUE" {
 						event.EventData = digest.EventData
 					}
 					events = append(events, event)
@@ -247,7 +247,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 			Index: num,
 		}
 
-		if t.MeasurementLog {
+		if t.measurementLog {
 			pcrMeasurement.Type = "PCR Eventlog"
 			pcrMeasurement.Events = events
 		} else {
@@ -260,7 +260,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		hashChain[i] = pcrMeasurement
 	}
 
-	if t.Ima {
+	if t.ima {
 		// If the IMA is used, not the final PCR value is sent but instead
 		// a list of the kernel modules which are extended during verification
 		// to result in the final value
@@ -271,7 +271,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 
 		// Find the IMA PCR in the TPM Measurement
 		for i := range hashChain {
-			if hashChain[i].Index == t.ImaPcr {
+			if hashChain[i].Index == t.imaPcr {
 				log.Debugf("Adding %v IMA events to PCR%v measurement", len(imaEvents), hashChain[i].Index)
 				hashChain[i].Events = imaEvents
 				hashChain[i].Type = "PCR Eventlog"
@@ -279,23 +279,23 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		}
 	}
 
-	if t.Ctr {
+	if t.ctr {
 		log.Debugf("Reading container measurements")
-		if _, err := os.Stat(t.CtrLog); err == nil {
+		if _, err := os.Stat(t.ctrLog); err == nil {
 			// If CMC container measurements are used, add the list of executed containers
-			data, err := os.ReadFile(t.CtrLog)
+			data, err := os.ReadFile(t.ctrLog)
 			if err != nil {
 				return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
 			}
 
 			var measureList []ar.MeasureEvent
-			err = t.Serializer.Unmarshal(data, &measureList)
+			err = t.serializer.Unmarshal(data, &measureList)
 			if err != nil {
 				return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 			}
 
 			for i := range hashChain {
-				if hashChain[i].Index == t.CtrPcr {
+				if hashChain[i].Index == t.ctrPcr {
 					log.Debugf("Adding %v container events to PCR%v measurement", len(measureList),
 						hashChain[i].Index)
 					hashChain[i].Type = "PCR Eventlog"
@@ -313,7 +313,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		Type:      "TPM Measurement",
 		Evidence:  quote.Quote,
 		Signature: quote.Signature,
-		Certs:     internal.WriteCertsDer(t.AkChain),
+		Certs:     internal.WriteCertsDer(t.akChain),
 		Artifacts: hashChain,
 	}
 
@@ -333,7 +333,7 @@ func (t *Tpm) Lock() error {
 		return errors.New("internal error: TPM object is nil")
 	}
 	log.Trace("Trying to get lock for TPM")
-	t.Mu.Lock()
+	t.mu.Lock()
 	log.Trace("Got lock for TPM")
 	return nil
 }
@@ -343,7 +343,7 @@ func (t *Tpm) Unlock() error {
 		return errors.New("internal error: TPM object is nil")
 	}
 	log.Trace("Releasing TPM Lock")
-	t.Mu.Unlock()
+	t.mu.Unlock()
 	log.Trace("Released TPM Lock")
 	return nil
 }
@@ -380,11 +380,11 @@ func (t *Tpm) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	}
 
 	if sel == ar.AK {
-		log.Debugf("Returning %v AK certificates", len(t.AkChain))
-		return t.AkChain, nil
+		log.Debugf("Returning %v AK certificates", len(t.akChain))
+		return t.akChain, nil
 	} else if sel == ar.IK {
-		log.Debugf("Returning %v IK certificates", len(t.IkChain))
-		return t.IkChain, nil
+		log.Debugf("Returning %v IK certificates", len(t.ikChain))
+		return t.ikChain, nil
 	}
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
