@@ -22,21 +22,28 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"unicode"
+	"strconv"
+	"strings"
 
 	"github.com/google/go-eventlog/register"
 	"github.com/google/go-eventlog/tcg"
 	log "github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+)
+
+const (
+	DEFAULT_CCEL_ACPI_TABLE = "/sys/firmware/acpi/tables/data/CCEL"
 )
 
 func main() {
 
 	eventlogFlag := flag.Bool("eventlog", false, "Print the eventlog for the TDX measurement registers")
 	summaryFlag := flag.Bool("summary", false, "Print the final values of the TDX measurement registers")
-	input := flag.String("input", "", "The CC eventlog file to be parsed")
+	input := flag.String("input", DEFAULT_CCEL_ACPI_TABLE, "The CC eventlog file to be parsed")
 	verbose := flag.Bool("verbose", false, "Print debug output")
+	mrsFlag := flag.String("mrs", "1,2,3,4", "The MRS to be parsed as a comma separated list. 1: RTMR0, 2: RTMR1, 3: RTMR2, 4: RTMR3")
 	flag.Parse()
 
 	if *verbose {
@@ -51,6 +58,20 @@ func main() {
 		return
 	}
 
+	mrs := make([]int, 0)
+	tmp := strings.Split(*mrsFlag, ",")
+	for _, m := range tmp {
+		mr, err := strconv.Atoi(m)
+		if err != nil {
+			log.Fatalf("Failed to convert MRS value: %v", err)
+		}
+		if mr < 1 || mr > 4 {
+			flag.Usage()
+			log.Fatalf("Invalid MRS value: %v. Only 1, 2, 3, and 4 are allowed", m)
+		}
+		mrs = append(mrs, mr)
+	}
+
 	if *input == "" {
 		flag.Usage()
 		log.Fatalf("CC eventlog input file has not been provided")
@@ -61,28 +82,28 @@ func main() {
 		log.Fatalf("Failed to read input file: %v", err)
 	}
 
-	err = parseEventlog(data, *eventlogFlag, *summaryFlag)
+	err = parseEventlog(data, *eventlogFlag, *summaryFlag, mrs)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
 
 }
 
-func parseEventlog(data []byte, eventlogFlag, summaryFlag bool) error {
+func parseEventlog(data []byte, eventlogFlag, summaryFlag bool, mrs []int) error {
 	eventlog, err := tcg.ParseEventLog(data, tcg.ParseOpts{AllowPadding: true})
 	if err != nil {
 		return fmt.Errorf("failed to parse CC eventlog: %w", err)
 	}
 
 	if eventlogFlag {
-		err = printEventlog(eventlog)
+		err = printEventlog(eventlog, mrs)
 		if err != nil {
 			return fmt.Errorf("failed to print eventlog: %w", err)
 		}
 	}
 
 	if summaryFlag {
-		err = printSummary(eventlog)
+		err = printSummary(eventlog, mrs)
 		if err != nil {
 			return fmt.Errorf("failed to print summary: %w", err)
 		}
@@ -91,11 +112,15 @@ func parseEventlog(data []byte, eventlogFlag, summaryFlag bool) error {
 	return nil
 }
 
-func printEventlog(l *tcg.EventLog) error {
+func printEventlog(l *tcg.EventLog, mrs []int) error {
 
 	refvals := make([]ar.ReferenceValue, 0, len(l.Events(register.HashSHA384)))
 
 	for _, event := range l.Events(register.HashSHA384) {
+
+		if !contains(mrs, int(event.MRIndex())) {
+			continue
+		}
 
 		index := int(event.MRIndex())
 
@@ -104,7 +129,7 @@ func printEventlog(l *tcg.EventLog) error {
 			SubType:     fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
 			Sha384:      event.Digest,
 			Index:       index,
-			Description: formatData(event.Data),
+			Description: internal.FormatRtmrData(event.Data),
 		}
 
 		refvals = append(refvals, refval)
@@ -120,10 +145,14 @@ func printEventlog(l *tcg.EventLog) error {
 	return nil
 }
 
-func printSummary(l *tcg.EventLog) error {
+func printSummary(l *tcg.EventLog, mrs []int) error {
 
 	rtmrs := map[int][]byte{}
 	for _, event := range l.Events(register.HashSHA384) {
+
+		if !contains(mrs, int(event.MRIndex())) {
+			continue
+		}
 
 		if _, ok := rtmrs[int(event.MRIndex())]; !ok {
 			log.Debugf("Initializing RTMR%v", event.MRIndex()-1)
@@ -158,11 +187,11 @@ func printSummary(l *tcg.EventLog) error {
 	return nil
 }
 
-func formatData(data []byte) string {
-	for _, b := range data {
-		if b > 127 || !unicode.IsPrint(rune(b)) {
-			return ""
+func contains(slice []int, item int) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
 		}
 	}
-	return string(data)
+	return false
 }
