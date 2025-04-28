@@ -51,4 +51,4 @@ qemu_opts=(
 # Start vm
 printf "[\033[34;1m EXEC \033[0m] Starting VM..\n"
 
-exec qemu-system-x86_64 ${qemu_opts[@]}
+exec "${data}/qemu/build/qemu-system-x86_64" ${qemu_opts[@]}

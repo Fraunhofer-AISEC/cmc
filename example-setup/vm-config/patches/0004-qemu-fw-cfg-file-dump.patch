@@ -1,0 +1,165 @@
+diff --git a/hw/acpi/aml-build.c b/hw/acpi/aml-build.c
+index 6d4517cfbe..ce5fab01a5 100644
+--- a/hw/acpi/aml-build.c
++++ b/hw/acpi/aml-build.c
+@@ -32,6 +32,8 @@
+ #include "hw/pci/pci_bridge.h"
+ #include "qemu/cutils.h"
+ 
++#include "qemu/fw-cfg-measured-files-dump.h"
++
+ static GArray *build_alloc_array(void)
+ {
+     return g_array_new(false, true /* clear */, 1);
+@@ -1839,6 +1841,7 @@ build_rsdp(GArray *tbl, BIOSLinker *linker, AcpiRsdpData *rsdp_data)
+ 
+     if (rsdp_data->revision == 0) {
+         /* ACPI 1.0 RSDP, we're done */
++        fw_cfg_dump_measured_file(ACPI_BUILD_RSDP_FILE, tbl->data, tbl->len);
+         return;
+     }
+ 
+@@ -1859,6 +1862,8 @@ build_rsdp(GArray *tbl, BIOSLinker *linker, AcpiRsdpData *rsdp_data)
+     bios_linker_loader_add_checksum(linker, ACPI_BUILD_RSDP_FILE,
+                                     tbl_off, 36, /* ACPI rev 2.0 RSDP size */
+                                     32);
++
++    fw_cfg_dump_measured_file(ACPI_BUILD_RSDP_FILE, tbl->data, tbl->len);
+ }
+ 
+ /*
+diff --git a/hw/i386/acpi-build.c b/hw/i386/acpi-build.c
+index f4e366f64f..9659b95e2a 100644
+--- a/hw/i386/acpi-build.c
++++ b/hw/i386/acpi-build.c
+@@ -78,6 +78,8 @@
+ #include "hw/acpi/hmat.h"
+ #include "hw/acpi/viot.h"
+ 
++#include "qemu/fw-cfg-measured-files-dump.h"
++
+ #include CONFIG_DEVICES
+ 
+ /* These are used to size the ACPI tables for -M pc-i440fx-1.7 and
+@@ -2679,6 +2681,10 @@ void acpi_build(AcpiBuildTables *tables, MachineState *machine)
+ 
+     acpi_align_size(tables->linker->cmd_blob, ACPI_BUILD_ALIGN_SIZE);
+ 
++    fw_cfg_dump_measured_file(ACPI_BUILD_TABLE_FILE, tables_blob->data, tables_blob->len);
++    fw_cfg_dump_measured_file(ACPI_BUILD_LOADER_FILE, tables->linker->cmd_blob->data,
++        tables->linker->cmd_blob->len);
++
+     /* Cleanup memory that's no longer used. */
+     g_array_free(table_offsets, true);
+     g_free(slic_oem.id);
+diff --git a/hw/nvram/fw_cfg.c b/hw/nvram/fw_cfg.c
+index fc0263f349..a890267ec1 100644
+--- a/hw/nvram/fw_cfg.c
++++ b/hw/nvram/fw_cfg.c
+@@ -44,6 +44,8 @@
+ #include "hw/pci/pci_bus.h"
+ #include "hw/loader.h"
+ 
++#include "qemu/fw-cfg-measured-files-dump.h"
++
+ #define FW_CFG_FILE_SLOTS_DFLT 0x20
+ 
+ /* FW_CFG_VERSION bits */
+@@ -992,6 +994,8 @@ void fw_cfg_add_file_callback(FWCfgState *s,  const char *filename,
+ 
+     s->files->count = cpu_to_be32(count+1);
+     fw_cfg_acpi_mr_save(s, filename, len);
++
++    fw_cfg_dump_measured_file(filename, data, len);
+ }
+ 
+ void fw_cfg_add_file(FWCfgState *s,  const char *filename,
+diff --git a/include/qemu/fw-cfg-measured-files-dump.h b/include/qemu/fw-cfg-measured-files-dump.h
+new file mode 100644
+index 0000000000..4c25c8e06e
+--- /dev/null
++++ b/include/qemu/fw-cfg-measured-files-dump.h
+@@ -0,0 +1,6 @@
++#ifndef QEMU_FW_CFG_MEASURED_FILES_H
++#define QEMU_FW_CFG_MEASURED_FILES_H
++
++void fw_cfg_dump_measured_file(const char *input, void *data, size_t len);
++
++#endif
+diff --git a/util/fw-cfg-measured-files-dump.c b/util/fw-cfg-measured-files-dump.c
+new file mode 100644
+index 0000000000..652cd5e860
+--- /dev/null
++++ b/util/fw-cfg-measured-files-dump.c
+@@ -0,0 +1,47 @@
++#include "qemu/osdep.h"
++#include "trace.h"
++
++#include "qemu/fw-cfg-measured-files-dump.h"
++
++// This patch dumps the qemu fw cfg files etc/acpi/tables, etc/acpi/tables, etc/table-loader, and
++// etc/tpm/log into a file into the folder 'tmp'. This is necessary, because the OVMF measures
++// the content of these files into TPM PCR 1 / Intel TDX RTMR 0. Therefore, we must dump these files
++// to be able to calculate the expected PCR / RTMR value.
++
++static void replace(char* str, char find, char replace) {
++    for (int i = 0; i < strlen(str); i++) {
++        if (str[i] == find) {
++            str[i] = replace;
++        }
++    }
++}
++
++void fw_cfg_dump_measured_file(const char *file, void *data, size_t len)
++{
++    // Only dump files that are measured into PCR1 / RTMR 0
++    if (strcmp(file, "etc/acpi/tables") &&
++        strcmp(file, "etc/acpi/rsdp") &&
++        strcmp(file, "etc/table-loader") &&
++        strcmp(file, "etc/tpm/log")) {
++            return;
++    }
++
++    g_autofree char *tmp = g_strdup(file);
++
++    // Convert filename
++    replace(tmp, '/', '-');
++
++    g_autofree char *path = g_strdup_printf("tmp/%s", tmp);
++
++    trace_fw_cfg_dump_measured_file(file, len);
++
++    FILE *f = fopen(path, "w+b");
++    if (f) {
++        if (fwrite(data, len, 1, f) != len) {
++            /* ignore errors for now*/
++        }
++        fclose(f);
++    } else {
++        trace_fw_cfg_dump_measured_file("Error opening file", (size_t)0);
++    }
++}
+diff --git a/util/meson.build b/util/meson.build
+index 72b505df11..d564dcb6c9 100644
+--- a/util/meson.build
++++ b/util/meson.build
+@@ -1,4 +1,4 @@
+-util_ss.add(files('osdep.c', 'cutils.c', 'unicode.c', 'qemu-timer-common.c'))
++util_ss.add(files('osdep.c', 'cutils.c', 'unicode.c', 'qemu-timer-common.c', 'fw-cfg-measured-files-dump.c'))
+ util_ss.add(files('thread-context.c'), numa)
+ if not config_host_data.get('CONFIG_ATOMIC64')
+   util_ss.add(files('atomic64.c'))
+diff --git a/util/trace-events b/util/trace-events
+index 49a4962e18..7ab78ad7b0 100644
+--- a/util/trace-events
++++ b/util/trace-events
+@@ -33,6 +33,9 @@ qemu_file_monitor_disable_watch(void *mon, const char *dirpath, int id) "File mo
+ qemu_file_monitor_event(void *mon, const char *dirpath, const char *filename, int mask, unsigned int id) "File monitor %p event dir='%s' file='%s' mask=0x%x id=%u"
+ qemu_file_monitor_dispatch(void *mon, const char *dirpath, const char *filename, int ev, void *cb, void *opaque, int64_t id) "File monitor %p dispatch dir='%s' file='%s' ev=%d cb=%p opaque=%p id=%" PRId64
+ 
++# fw-cfg-measured-files-dump.c
++fw_cfg_dump_measured_file(const char *s, size_t len) "PATCH: Dumping %s (len %ld)"
++
+ # qemu-coroutine.c
+ qemu_aio_coroutine_enter(void *ctx, void *from, void *to, void *opaque) "ctx %p from %p to %p opaque %p"
+ qemu_coroutine_yield(void *from, void *to) "from %p to %p"

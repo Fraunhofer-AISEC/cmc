@@ -28,6 +28,7 @@ img="noble-server-cloudimg-amd64.img"
 cloudimg="https://cloud-images.ubuntu.com/noble/20250403/${img}"
 cloudfile="${data}/images/${img}"
 
+qemu="${data}/qemu"
 edk2="${data}/edk2"
 swtpm_root_dir="${data}/swtpm"
 swtpm_srcs_dir="${swtpm_root_dir}/src"
@@ -40,13 +41,77 @@ tpm_pcr_tools="${data}/tpm-pcr-tools"
 
 # Install prerequisites
 printf "[\033[34;1m EXEC \033[0m] Checking prerequisites..\n"
-packages=("build-essential" "nasm" "acpica-tools" "uuid-dev" "guestfs-tools" "guestmount" "qemu-system" "libtasn1-dev" "libjson-glib-1.0-0" "libjson-glib-dev" "libgnutls28-dev" "socat" "libseccomp-dev" "moreutils" "golang-cfssl" "build-essential" "sqlite3" "zlib1g-dev" "libssl-dev" "jq" "genisoimage" "gnutls-bin")
+packages=("build-essential" "nasm" "acpica-tools" "uuid-dev" "guestfs-tools" "guestmount" "libtasn1-dev" "libjson-glib-1.0-0" "libjson-glib-dev" "libgnutls28-dev" "socat" "libseccomp-dev" "moreutils" "golang-cfssl" "build-essential" "sqlite3" "zlib1g-dev" "libssl-dev" "jq" "genisoimage" "gnutls-bin" "git" "libglib2.0-dev" "libfdt-dev" "libpixman-1-dev" "zlib1g-dev" "ninja-build" "flex" "bison")
 for pkg in "${packages[@]}"; do
     if ! dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q "installed"; then
         echo "Fatal: missing package: ${pkg}"
 	exit 1
     fi
 done
+
+# Build QEMU
+[ -d "${qemu}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Building QEMU..\n"
+    git clone https://gitlab.com/qemu-project/qemu.git "${qemu}"
+    cd "${qemu}"
+    git checkout v9.2.0
+    git apply "${vm_config}/patches/0004-qemu-fw-cfg-file-dump.patch"
+
+    mkdir "${qemu}/build"
+    cd "${qemu}/build"
+
+    "${qemu}/configure" \
+        --target-list=x86_64-softmmu \
+        --enable-attr \
+        --enable-kvm \
+        --enable-vhost-net \
+        --enable-fdt \
+        --enable-user \
+        --enable-vhost-user \
+        --enable-slirp \
+        --disable-sdl \
+        --disable-tools \
+        --disable-fuse \
+        --disable-fuse-lseek \
+        --disable-seccomp \
+        --disable-libssh \
+        --disable-libusb \
+        --disable-vnc-jpeg \
+        --disable-vnc \
+        --disable-nettle \
+        --disable-numa \
+        --disable-spice \
+        --disable-usb-redir \
+        --disable-bpf \
+        --disable-brlapi \
+        --disable-bsd-user \
+        --disable-cap-ng \
+        --disable-capstone \
+        --disable-containers \
+        --disable-curl \
+        --disable-curses \
+        --disable-docs \
+        --disable-hvf \
+        --disable-libiscsi \
+        --disable-linux-aio \
+        --disable-linux-io-uring \
+        --disable-malloc-trim \
+        --disable-membarrier \
+        --disable-mpath \
+        --disable-netmap \
+        --disable-opengl \
+        --disable-rbd \
+        --disable-sparse \
+        --disable-strip \
+        --disable-vde \
+        --disable-vhost-crypto \
+        --disable-vhost-user-blk-server \
+        --disable-virtfs \
+        --disable-whpx \
+        --disable-xen
+
+    make -j$(nproc)
+}
 
 # Build edk2 OVMF firmware
 [ -d "${edk2}" ] || {

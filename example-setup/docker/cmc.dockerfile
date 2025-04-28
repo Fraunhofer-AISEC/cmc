@@ -9,9 +9,18 @@ ARG DEBIAN_FRONTEND=noninteractive \
 # Install dependencies
 RUN apt-get update && apt-get install -y wget lsb-release moreutils golang-cfssl \
 	build-essential sqlite3 zlib1g-dev libssl-dev jq yq git curl ca-certificates \
-	qemu-system libjson-glib-dev libjson-glib-1.0-0 nasm acpica-tools uuid-dev \
+	python3-venv libjson-glib-dev libjson-glib-1.0-0 nasm acpica-tools uuid-dev \
 	genisoimage gnutls-bin guestfs-tools guestmount libtasn1-dev libgnutls28-dev \
 	socat libseccomp-dev python-is-python3 libtool expect clang llvm lld
+
+# Required for QEMU
+RUN apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev \
+    ninja-build libnfs-dev libiscsi-dev flex git-email libaio-dev libbluetooth-dev \
+	libcapstone-dev libbrlapi-dev libbz2-dev libcap-ng-dev libcurl4-gnutls-dev \
+	libgtk-3-dev libibverbs-dev libjpeg8-dev libncurses5-dev libnuma-dev librbd-dev \
+	librdmacm-dev libsasl2-dev libsdl2-dev libseccomp-dev libsnappy-dev libssh-dev \
+	libvde-dev libvdeplug-dev libvte-2.91-dev libxen-dev liblzo2-dev valgrind \
+	bison xfslibs-dev
 
 # Install Go
 RUN curl -fsSL "https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz" -o go.tar.gz \
