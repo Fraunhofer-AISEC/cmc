@@ -27,7 +27,7 @@ import (
 
 // The attestation report and verification result version
 const (
-	arVersion = "1.2.0"
+	arVersion = "1.3.0"
 )
 
 func GetVersion() string {
@@ -171,6 +171,14 @@ type Validity struct {
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
 }
 
+const (
+	ARTIFACT_TYPE_PCR_SUMMARY    = "PCR Summary"
+	ARTIFACT_TYPE_PCR_EVENTLOG   = "PCR Eventlog"
+	ARTIFACT_TYPE_SW_EVENTLOG    = "SW Eventlog"
+	ARTIFACT_TYPE_TDX_COLLATERAL = "TDX Collateral"
+	ARTIFACT_TYPE_CC_EVENTLOG    = "CC Eventlog"
+)
+
 // Artifact represents the digests of a measurement.
 // If the type is 'PCR Summary', 'Events' contains the final PCR value of PCR 'Pcr' and 'Index'
 // contains the number of the PCR.
@@ -181,6 +189,8 @@ type Validity struct {
 // SW measurements
 // If the type is 'TDX Collateral', 'Events' contains the TDX collateral, which includes the
 // TDX TCB info, the quoting enclave identity and the certicate revocation lists.
+// It the type is CC Eventlog, 'Events' contains a list of the extends that lead to the final
+// TDX RTMR value and 'Index' contains the number of the RTMR.
 type Artifact struct {
 	Type   string         `json:"type" cbor:"0,keyasint"`
 	Index  int            `json:"index" cbor:"1,keyasint"`
@@ -188,11 +198,14 @@ type Artifact struct {
 }
 
 type MeasureEvent struct {
-	Sha256          HexByte          `json:"sha256" cbor:"0,keyasint"`
-	EventName       string           `json:"eventname,omitempty" cbor:"1,keyasint,omitempty"`
-	EventData       *EventData       `json:"eventdata,omitempty" cbor:"2,keyasint,omitempty"`
-	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"3,keyasint,omitempty"`
-	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"4,keyasint,omitempty"`
+	Sha256          HexByte          `json:"sha256,omitempty" cbor:"0,keyasint,omitempty"`
+	Sha384          HexByte          `json:"sha384,omitempty" cbor:"1,keyasint,omitempty"`
+	Sha512          HexByte          `json:"sha512,omitempty" cbor:"2,keyasint,omitempty"`
+	EventName       string           `json:"eventname,omitempty" cbor:"3,keyasint,omitempty"`
+	EventData       *EventData       `json:"eventdata,omitempty" cbor:"4,keyasint,omitempty"`
+	Description     string           `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
+	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"6,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"7,keyasint,omitempty"`
 }
 
 type IntelCollateral struct {

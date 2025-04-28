@@ -1064,11 +1064,20 @@
         "sha256": {
           "$ref": "#/$defs/HexByte"
         },
+        "sha384": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "sha512": {
+          "$ref": "#/$defs/HexByte"
+        },
         "eventname": {
           "type": "string"
         },
         "eventdata": {
           "$ref": "#/$defs/EventData"
+        },
+        "description": {
+          "type": "string"
         },
         "ctrData": {
           "$ref": "#/$defs/CtrData"
@@ -1077,10 +1086,7 @@
           "$ref": "#/$defs/IntelCollateral"
         }
       },
-      "type": "object",
-      "required": [
-        "sha256"
-      ]
+      "type": "object"
     },
     "Measurement": {
       "properties": {
