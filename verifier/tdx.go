@@ -115,19 +115,23 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	}
 
 	// Parse intel collateral (QE identity, TCB info, certificate revocation lists)
-	if len(measurement.Artifacts) == 0 ||
-		len(measurement.Artifacts[0].Events) == 0 ||
-		measurement.Artifacts[0].Events[0].IntelCollateral == nil {
-		log.Debugf("Could not find TDX artifacts (collateral)")
-		result.Summary.SetErr(ar.CollateralNotPresent)
-		return result, false
-	}
-	collateralRaw := measurement.Artifacts[0].Events[0].IntelCollateral
-	collateral, err := ParseCollateral(collateralRaw)
-	if err != nil {
-		log.Debugf("Could not parse TDX artifacts (collateral)")
-		result.Summary.SetErr(ar.ParseCollateral)
-		return result, false
+	var collateralRaw *ar.IntelCollateral
+	var collateral *Collateral
+	for _, artifact := range measurement.Artifacts {
+		if artifact.Type == ar.ARTIFACT_TYPE_TDX_COLLATERAL {
+			collateralRaw = measurement.Artifacts[0].Events[0].IntelCollateral
+			if collateralRaw == nil {
+				log.Debugf("Could not find TDX collateral")
+				result.Summary.SetErr(ar.CollateralNotPresent)
+				return result, false
+			}
+			collateral, err = ParseCollateral(collateralRaw)
+			if err != nil {
+				log.Debugf("Could not parse TDX collateral artifcat: %v", err)
+				result.Summary.SetErr(ar.ParseCollateral)
+				return result, false
+			}
+		}
 	}
 
 	// Currently only support for report version 4
@@ -211,7 +215,8 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	result.Signature = sig
 
 	// Verify the measurement registers (MRTD, RTMRs) against the reference values
-	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody, referenceValues)
+	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody,
+		measurement.Artifacts, referenceValues)
 	if errCode != ar.NotSet || !ok {
 		log.Debugf("Failed to recalculate measurement registers")
 		ok = false
@@ -416,7 +421,8 @@ func parseECDSAQuoteSignatureDataStructV4(buf *bytes.Buffer, quoteSigStruct *ECD
 // 3           | RTMR2
 // 4           | RTMR3
 // 5           | MRSEAM (not in UEFI spec)
-func verifyTdxMrs(body *TdxReportBody, refvals []ar.ReferenceValue) ([]ar.DigestResult, []ar.DigestResult, ar.ErrorCode, bool) {
+func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.ReferenceValue,
+) ([]ar.DigestResult, []ar.DigestResult, ar.ErrorCode, bool) {
 
 	success := true
 	detailedResults := make([]ar.DigestResult, 0)
@@ -485,20 +491,95 @@ func verifyTdxMrs(body *TdxReportBody, refvals []ar.ReferenceValue) ([]ar.Digest
 		})
 	}
 
-	// Without the CC eventlog, we cannot display, which individual measurements
-	// did not match. Instead, we set all reference values of a certain MR to false in case the
-	// comparison of the recalculated MR with the measured MR fails
-	for _, refval := range refvals {
-		detailedResults = append(detailedResults,
-			ar.DigestResult{
-				Type:        "Reference Value",
-				SubType:     refval.SubType,
-				Index:       refval.Index,
-				Digest:      hex.EncodeToString(refval.Sha384),
-				Success:     successMrs[refval.Index],
-				Launched:    successMrs[refval.Index],
-				Description: refval.Description,
-			})
+	if !ccelPresent(artifacts, refvals) {
+		// Without the CC eventlog, we cannot display, which individual measurements
+		// did not match. Instead, we set all reference values of a certain MR to false in case the
+		// comparison of the recalculated MR with the measured MR fails
+		log.Debug("Verifying reference values based on MR")
+		for _, refval := range refvals {
+			detailedResults = append(detailedResults,
+				ar.DigestResult{
+					Type:        "Reference Value",
+					SubType:     refval.SubType,
+					Index:       refval.Index,
+					Digest:      hex.EncodeToString(refval.Sha384),
+					Success:     successMrs[refval.Index],
+					Launched:    successMrs[refval.Index],
+					Description: refval.Description,
+				})
+		}
+	} else {
+		// If the CC eventlog is present, we can display the individual measurements
+		log.Debug("Verifying reference values based on eventlog")
+		for _, artifact := range artifacts {
+			if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG {
+				for _, event := range artifact.Events {
+					found := false
+					for _, refval := range refvals {
+						if bytes.Equal(refval.Sha384, event.Sha384) {
+							found = true
+							break
+						}
+					}
+					r := ar.DigestResult{
+						Type:        "Measurement",
+						SubType:     event.EventName,
+						Index:       artifact.Index,
+						Digest:      hex.EncodeToString(event.Sha384),
+						Description: event.Description,
+					}
+					r.Success = found
+					r.Launched = found
+					detailedResults = append(detailedResults, r)
+
+					if r.Success {
+						log.Tracef("Successfully verified measurement %v: %v = %v",
+							internal.IndexToMr(artifact.Index), event.EventName,
+							hex.EncodeToString(event.Sha384))
+					} else {
+						success = false
+						log.Debugf("Failed to verify measurement %v: %v = %v",
+							internal.IndexToMr(artifact.Index), event.EventName,
+							hex.EncodeToString(event.Sha384))
+					}
+
+				}
+			}
+		}
+		for _, refval := range refvals {
+			for _, artifact := range artifacts {
+				if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
+					found := false
+					for _, event := range artifact.Events {
+						if bytes.Equal(refval.Sha384, event.Sha384) {
+							found = true
+							break
+						}
+					}
+					r := ar.DigestResult{
+						Type:        "Reference Value",
+						SubType:     refval.SubType,
+						Index:       refval.Index,
+						Digest:      hex.EncodeToString(refval.Sha384),
+						Description: refval.Description,
+					}
+					r.Success = found
+					r.Launched = found
+					detailedResults = append(detailedResults, r)
+
+					if r.Success {
+						log.Tracef("Successfully verified reference value %v: %v = %v",
+							internal.IndexToMr(refval.Index), refval.SubType,
+							hex.EncodeToString(refval.Sha384))
+					} else {
+						success = false
+						log.Tracef("Failed to verify reference value %v: %v = %v",
+							internal.IndexToMr(refval.Index), refval.SubType,
+							hex.EncodeToString(refval.Sha384))
+					}
+				}
+			}
+		}
 	}
 
 	return mrResults, detailedResults, ar.NotSet, success
@@ -658,4 +739,28 @@ func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAtt
 		refTdAttributes.Kl, getBit(measuredAttributes[:], 31))
 
 	return result, ok
+}
+
+// ccelPresent checks if the CCEL is present and complete
+func ccelPresent(artifacts []ar.Artifact, refvals []ar.ReferenceValue) bool {
+	log.Tracef("Checking if CC eventlog is present and complete")
+	for _, refval := range refvals {
+		// Only check RTMRs
+		if refval.Index < 1 || refval.Index > 4 {
+			continue
+		}
+		found := false
+		for _, artifact := range artifacts {
+			if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Tracef("Failed to find CC eventlog entry for %v", internal.IndexToMr(refval.Index))
+			return false
+		}
+	}
+	log.Tracef("CC eventlog is present and complete")
+	return true
 }
