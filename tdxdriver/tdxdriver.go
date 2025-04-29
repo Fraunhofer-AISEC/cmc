@@ -27,6 +27,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
+
+	"golang.org/x/exp/maps"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
@@ -34,6 +37,8 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
 	"github.com/google/go-configfs-tsm/report"
+	"github.com/google/go-eventlog/register"
+	"github.com/google/go-eventlog/tcg"
 	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
 )
@@ -44,14 +49,17 @@ const (
 	tdxChainFile     = "tdx_ak_chain.pem"
 	signingChainFile = "tdx_ik_chain.pem"
 	tdxPrivFile      = "tdx_ik_private.key"
+
+	DEFAULT_CCEL_ACPI_TABLE = "/sys/firmware/acpi/tables/data/CCEL"
 )
 
 // Tdx is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
 type Tdx struct {
-	akChain []*x509.Certificate
-	ikChain []*x509.Certificate
-	ikPriv  crypto.PrivateKey
+	akChain        []*x509.Certificate
+	ikChain        []*x509.Certificate
+	ikPriv         crypto.PrivateKey
+	measurementLog bool
 }
 
 // Name returns the name of the driver
@@ -112,6 +120,8 @@ func (tdx *Tdx) Init(c *ar.DriverConfig) error {
 		}
 	}
 
+	tdx.measurementLog = c.MeasurementLog
+
 	return nil
 }
 
@@ -125,7 +135,7 @@ func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, errors.New("internal error: TDX object is nil")
 	}
 
-	data, err := getMeasurement(nonce)
+	data, err := GetMeasurement(nonce)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to get TDX Measurement: %w", err)
 	}
@@ -168,6 +178,17 @@ func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
 				},
 			},
 		},
+	}
+
+	// For a more detailed measurement, try to read the CC event log from the CCEL ACPI table
+	// and add the values to the measurement artifacts
+	if tdx.measurementLog {
+		log.Debug("Collecting TDX CCEL measurement log")
+		ccel, err := GetCcel(DEFAULT_CCEL_ACPI_TABLE)
+		if err != nil {
+			log.Warnf("Failed to get CCEL: %v", err)
+		}
+		measurement.Artifacts = append(measurement.Artifacts, ccel...)
 	}
 
 	return measurement, nil
@@ -219,7 +240,7 @@ func (tdx *Tdx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func getMeasurement(nonce []byte) ([]byte, error) {
+func GetMeasurement(nonce []byte) ([]byte, error) {
 
 	// Maximum TD quote REPORTDATA length
 	if len(nonce) > 64 {
@@ -276,7 +297,7 @@ func fetchAk() ([]*x509.Certificate, error) {
 	}
 
 	// Fetch initial attestation report which contains AK cert chain
-	data, err := getMeasurement(nonce)
+	data, err := GetMeasurement(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX Measurement: %w", err)
 	}
@@ -426,4 +447,58 @@ func saveCredentials(p string, tdx *Tdx) error {
 	}
 
 	return nil
+}
+
+func GetCcel(path string) ([]ar.Artifact, error) {
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read: %w", err)
+	}
+
+	log.Tracef("Parsing CCEL eventlog: %v", path)
+
+	eventlog, err := tcg.ParseEventLog(data, tcg.ParseOpts{AllowPadding: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CC eventlog: %w", err)
+	}
+
+	log.Tracef("Adding %v events to CCEL artifacts", len(eventlog.Events(register.HashSHA384)))
+	artifactsMap := map[int]ar.Artifact{}
+	for _, event := range eventlog.Events(register.HashSHA384) {
+
+		index := int(event.MRIndex())
+		if _, ok := artifactsMap[index]; !ok {
+			log.Tracef("Adding new artifact for index %v", index)
+			artifactsMap[index] = ar.Artifact{
+				Type:   ar.ARTIFACT_TYPE_CC_EVENTLOG,
+				Index:  index,
+				Events: []ar.MeasureEvent{},
+			}
+		}
+
+		measureEvent := ar.MeasureEvent{
+			Sha384:      event.Digest,
+			EventName:   event.Type.String(),
+			Description: internal.FormatRtmrData(event.Data),
+		}
+
+		log.Tracef("Adding %v %v: %v", internal.IndexToMr(index), measureEvent.EventName,
+			hex.EncodeToString(measureEvent.Sha384))
+
+		artifact := artifactsMap[index]
+		artifact.Events = append(artifact.Events, measureEvent)
+		artifactsMap[index] = artifact
+	}
+
+	artifacts := maps.Values(artifactsMap)
+
+	// Sort artifacts by index
+	sort.Slice(artifacts, func(i, j int) bool {
+		return artifacts[i].Index < artifacts[j].Index
+	})
+
+	log.Tracef("Returning %v artifacts", len(artifacts))
+
+	return artifacts, nil
 }

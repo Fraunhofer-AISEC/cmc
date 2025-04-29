@@ -299,6 +299,10 @@ func getTCBCompByIndex(tcb TCB, index int) TCBComp {
 
 func ParseCollateral(c *ar.IntelCollateral) (*Collateral, error) {
 
+	if c == nil {
+		return nil, errors.New("cannot parse collateral: collateral is nil")
+	}
+
 	var tcbInfo pcs.TdxTcbInfo
 	err := json.Unmarshal(c.TcbInfo, &tcbInfo)
 	if err != nil {
