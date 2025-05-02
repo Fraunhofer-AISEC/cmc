@@ -24,11 +24,12 @@ import (
 	"fmt"
 )
 
-func GetDeviceConfig(s Serializer, metadata map[string][]byte) (*DeviceConfig, error) {
+func GetDeviceConfig(s Serializer, metadata map[string][]byte, cas []*x509.Certificate,
+) (*DeviceConfig, error) {
 
 	for i, m := range metadata {
 
-		payload, err := s.GetPayload(m)
+		unverified, err := s.GetPayload(m)
 		if err != nil {
 			log.Warnf("Failed to parse metadata object %v: %v", i, err)
 			continue
@@ -36,13 +37,19 @@ func GetDeviceConfig(s Serializer, metadata map[string][]byte) (*DeviceConfig, e
 
 		// Unmarshal the Type field of the metadata file to determine the type
 		info := new(MetaInfo)
-		err = s.Unmarshal(payload, info)
+		err = s.Unmarshal(unverified, info)
 		if err != nil {
 			log.Warnf("Failed to unmarshal data from metadata object: %v", err)
 			continue
 		}
 
 		if info.Type == "Device Config" {
+
+			_, payload, ok := s.Verify(m, cas)
+			if !ok {
+				return nil, fmt.Errorf("validation of device config failed")
+			}
+
 			deviceConfig := new(DeviceConfig)
 			err = s.Unmarshal(payload, deviceConfig)
 			if err != nil {
