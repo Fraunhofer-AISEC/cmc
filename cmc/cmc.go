@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
@@ -85,13 +86,25 @@ func NewCmc(c *Config) (*Cmc, error) {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
 
+	// Read CA for verifying the device config
+	// TODO clarify if this CA is OK in all cases
+	client, err := est.NewClient(estTlsCas, c.EstTlsSysRoots)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EST client: %w", err)
+	}
+	log.Debug("Retrieving CA certs")
+	caCerts, err := client.CaCerts(c.ProvAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve certificates: %w", err)
+	}
+
 	// If no metadata is specified, the cmc can only work as verifier
 	if metadata != nil {
 
 		cmc.Serializer = s
 		cmc.Metadata = metadata
 
-		deviceConfig, err := ar.GetDeviceConfig(s, metadata)
+		deviceConfig, err := ar.GetDeviceConfig(s, metadata, caCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get signed device config: %v", err)
 		}
