@@ -57,6 +57,23 @@ func publishResult(addr, file string, result *ar.VerificationResult) error {
 		result.PrintErr()
 	}
 
+	// Save the attestation result to file
+	if file != "" {
+		log.Debugf("Publishing result to file %q", file)
+		data, err := json.MarshalIndent(result, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal verification result: %v", err)
+		}
+
+		err = os.WriteFile(file, data, 0644)
+		if err != nil {
+			log.Warnf("Failed to write: %v", err)
+		}
+		log.Debugf("Wrote file %v", file)
+	} else {
+		log.Trace("Will not publish attestation result to file: no file specified")
+	}
+
 	// Send the attestation result to the specified server
 	if addr != "" {
 		log.Debugf("Publishing result to '%v'", addr)
@@ -68,24 +85,10 @@ func publishResult(addr, file string, result *ar.VerificationResult) error {
 
 		err = sendResult(addr, data)
 		if err != nil {
-			return fmt.Errorf("failed to publish: %v", err)
+			log.Warnf("Failed to publish: %v", err)
 		}
 	} else {
 		log.Trace("Will not publish to remote server: no address specified")
-	}
-
-	// Save the attestation tesult to file
-	if file != "" {
-		log.Debugf("Publishing result to file %q", file)
-		data, err := json.MarshalIndent(result, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal verification result: %v", err)
-		}
-
-		os.WriteFile(file, data, 0644)
-		log.Debugf("Wrote file %v", file)
-	} else {
-		log.Trace("Will not publish attestation result to file: no file specified")
 	}
 
 	return nil
