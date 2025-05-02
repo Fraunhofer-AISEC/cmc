@@ -227,8 +227,6 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	result.TdxResult.MrMatch = mrResults
 	result.Artifacts = append(result.Artifacts, detailedResults...)
 
-	// TODO verify MRSEAM
-
 	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &tdxPolicy.TdId, &collateral.TcbInfo)
 	if !okTdId {
 		log.Debugf("Failed to verify TDX TD ID")
