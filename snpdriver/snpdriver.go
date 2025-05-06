@@ -286,10 +286,17 @@ func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool,
 ) ([]*x509.Certificate, error) {
 
+	// Generate random nonce
+	nonce := make([]byte, 64)
+	_, err := rand.Read(nonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read random bytes: %w", err)
+	}
+
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
 	// Fetch an initial attestation report to determine which key is used.
-	arRaw, err := getMeasurement(make([]byte, 64))
+	arRaw, err := getMeasurement(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
@@ -297,6 +304,13 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool,
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
+
+	// Verify nonce
+	if !bytes.Equal(nonce, s.ReportData[:]) {
+		return nil, fmt.Errorf("failed to verify SNP report nonce (expected %v, got %v)",
+			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
+	}
+	log.Debugf("Successfully decoded attestation report and verified nonce")
 
 	akType, err := verifier.GetAkType(s.KeySelection)
 	if err != nil {
