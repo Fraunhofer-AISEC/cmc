@@ -677,7 +677,7 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 			return result
 		}
 		if bytes.Equal(refFingerprint, caFingerprint[:]) {
-			log.Debugf("Found matching CA fingerprint %q", refFingerprint)
+			log.Debugf("Found matching CA fingerprint %q", hex.EncodeToString(refFingerprint))
 			result.Got = fp
 			result.Success = true
 			return result
