@@ -125,6 +125,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 			Ctr:              c.Ctr,
 			EstTlsCas:        estTlsCas,
 			UseSystemRootCas: c.EstTlsSysRoots,
+			Vmpl:             c.Vmpl,
 		}
 
 		// Initialize drivers

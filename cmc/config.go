@@ -49,6 +49,7 @@ type Config struct {
 	CtrLog         string   `json:"ctrLog,omitempty"`
 	EstTlsCas      []string `json:"estTlsCas,omitempty"`
 	EstTlsSysRoots bool     `json:"estTlsSysRoots"`
+	Vmpl           int      `json:"vmpl"`
 }
 
 const (
@@ -71,6 +72,7 @@ const (
 	CtrLogFlag         = "ctrlog"
 	EstTlsCasFlag      = "esttlscasflag"
 	EstTlsSysRootsFlag = "esttlssysroots"
+	VmplFlag           = "vmpl"
 )
 
 var (
@@ -102,6 +104,7 @@ var (
 	ctrLog         = flag.String(CtrLogFlag, "", "Container runtime measurements path")
 	estTlsCas      = flag.String(EstTlsCasFlag, "", "Path to the EST TLS CA certificates")
 	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
+	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -166,6 +169,9 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(EstTlsSysRootsFlag) {
 		c.EstTlsSysRoots = *estTlsSysRoots
+	}
+	if internal.FlagPassed(VmplFlag) {
+		c.Vmpl = *vmpl
 	}
 
 	// Convert all paths to absolute paths
