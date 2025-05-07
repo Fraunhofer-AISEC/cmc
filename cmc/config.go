@@ -70,7 +70,7 @@ const (
 	CtrDriverFlag      = "ctrdriver"
 	CtrPcrFlag         = "ctrpcr"
 	CtrLogFlag         = "ctrlog"
-	EstTlsCasFlag      = "esttlscasflag"
+	EstTlsCasFlag      = "esttlscas"
 	EstTlsSysRootsFlag = "esttlssysroots"
 	VmplFlag           = "vmpl"
 )
