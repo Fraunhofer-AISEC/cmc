@@ -258,7 +258,7 @@ var (
 
 // Variables for TestVerify
 var (
-	ArVersion = "1.3.0"
+	ArVersion = "1.4.0"
 	nonce     = []byte{0x01, 0x02, 0x03}
 )
 

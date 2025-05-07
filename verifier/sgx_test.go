@@ -48,7 +48,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -79,7 +79,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: invalidSgxCaFingerprint,
+							CaFingerprints: invalidSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -110,7 +110,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -141,7 +141,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -173,7 +173,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -204,7 +204,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   invalidSgxAttributes,
@@ -235,7 +235,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -266,7 +266,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 							SgxPolicy: &ar.SgxPolicy{
 								QuoteVersion: validSGXVersion,
 								Attributes:   validSgxAttributes,
@@ -297,7 +297,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validSgxCaFingerprint,
+							CaFingerprints: validSgxCaFingerprints,
 						},
 					},
 				},
@@ -388,10 +388,10 @@ func TestParseSGXExtensions(t *testing.T) {
 
 // Test_verifySgxMeasurements
 var (
-	fmspc_sgx               = "c0806f000000"
-	validSGXMeasurement, _  = hex.DecodeString("91bf8b96b001aa9311f3c4c4797a4fd9932bf5cfbb7e8e27a28e531fa0a39fdc")
-	validSgxCaFingerprint   = "44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674D3"
-	invalidSgxCaFingerprint = "44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674DF"
+	fmspc_sgx                = "c0806f000000"
+	validSGXMeasurement, _   = hex.DecodeString("91bf8b96b001aa9311f3c4c4797a4fd9932bf5cfbb7e8e27a28e531fa0a39fdc")
+	validSgxCaFingerprints   = []string{"44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674D3"}
+	invalidSgxCaFingerprints = []string{"44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674DF"}
 
 	validSGXNonce, _        = hex.DecodeString("b11651d0b6b9ffa770c3220dfdef2ce31d15d23681baed5bca6282b6f345879c")
 	validSGXVersion  uint16 = 0x03

@@ -25,9 +25,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// The attestation report and verification result version
+// The attestation report version
 const (
-	arVersion = "1.3.0"
+	arVersion = "1.4.0"
 )
 
 func GetVersion() string {
@@ -93,7 +93,7 @@ type Manifest struct {
 	DevCommonName   string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
 	BaseLayers      []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
 	CertLevel       int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
-	CaFingerprint   string                 `json:"caFingerprint,omitempty" cbor:"14,keyasint,omitempty"`
+	CaFingerprints  []string               `json:"caFingerprints,omitempty" cbor:"14,keyasint,omitempty"`
 	SnpPolicy       *SnpPolicy             `json:"snpPolicy,omitempty" cbor:"15,keyasint,omitempty"`
 	TdxPolicy       *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
 	SgxPolicy       *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`

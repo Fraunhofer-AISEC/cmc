@@ -47,7 +47,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -78,7 +78,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -109,7 +109,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -140,7 +140,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: invalidTdxRootCAFingerprint,
+							CaFingerprints: invalidTdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -171,7 +171,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -202,7 +202,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -233,7 +233,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -265,7 +265,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -297,7 +297,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: tdxRootCAFingerprint,
+							CaFingerprints: tdxRootCAFingerprints,
 							TdxPolicy: &ar.TdxPolicy{
 								QuoteVersion: 0x04,
 								TdId: ar.TDId{
@@ -359,8 +359,8 @@ var (
 	fmspc_tdx    = "c0806f000000"
 	pck_cert_tdx = conv([]byte("-----BEGIN CERTIFICATE-----\nMIIE8jCCBJegAwIBAgIVAJvGI6f4P3zOeDSJYlEspNMIcUqpMAoGCCqGSM49BAMC\nMHAxIjAgBgNVBAMMGUludGVsIFNHWCBQQ0sgUGxhdGZvcm0gQ0ExGjAYBgNVBAoM\nEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UE\nCAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTIzMDYyNjA4NTUwOVoXDTMwMDYyNjA4NTUw\nOVowcDEiMCAGA1UEAwwZSW50ZWwgU0dYIFBDSyBDZXJ0aWZpY2F0ZTEaMBgGA1UE\nCgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYD\nVQQIDAJDQTELMAkGA1UEBhMCVVMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQR\nYR9UsHJVorg50HmnR3Z5Nn5GVqPHQM+vwsLEuseMdhB8n0clw4cdEkoVF6O8EhGR\n7YgkrfNxeaWaKDJB2bHdo4IDDDCCAwgwHwYDVR0jBBgwFoAUlW9dzb0b4elAScnU\n9DPOAVcL3lQwawYDVR0fBGQwYjBgoF6gXIZaaHR0cHM6Ly9hcGkudHJ1c3RlZHNl\ncnZpY2VzLmludGVsLmNvbS9zZ3gvY2VydGlmaWNhdGlvbi92NC9wY2tjcmw/Y2E9\ncGxhdGZvcm0mZW5jb2Rpbmc9ZGVyMB0GA1UdDgQWBBQskjTZeHj4wUIWyaaqOZIU\npCUcbTAOBgNVHQ8BAf8EBAMCBsAwDAYDVR0TAQH/BAIwADCCAjkGCSqGSIb4TQEN\nAQSCAiowggImMB4GCiqGSIb4TQENAQEEENcYpIqPA0Np9ZOdBOKw3F4wggFjBgoq\nhkiG+E0BDQECMIIBUzAQBgsqhkiG+E0BDQECAQIBBTAQBgsqhkiG+E0BDQECAgIB\nBTAQBgsqhkiG+E0BDQECAwIBAjAQBgsqhkiG+E0BDQECBAIBAjAQBgsqhkiG+E0B\nDQECBQIBAzAQBgsqhkiG+E0BDQECBgIBATAQBgsqhkiG+E0BDQECBwIBADAQBgsq\nhkiG+E0BDQECCAIBAzAQBgsqhkiG+E0BDQECCQIBADAQBgsqhkiG+E0BDQECCgIB\nADAQBgsqhkiG+E0BDQECCwIBADAQBgsqhkiG+E0BDQECDAIBADAQBgsqhkiG+E0B\nDQECDQIBADAQBgsqhkiG+E0BDQECDgIBADAQBgsqhkiG+E0BDQECDwIBADAQBgsq\nhkiG+E0BDQECEAIBADAQBgsqhkiG+E0BDQECEQIBCzAfBgsqhkiG+E0BDQECEgQQ\nBQUCAgMBAAMAAAAAAAAAADAQBgoqhkiG+E0BDQEDBAIAADAUBgoqhkiG+E0BDQEE\nBAYAgG8FAAAwDwYKKoZIhvhNAQ0BBQoBATAeBgoqhkiG+E0BDQEGBBAhdbn4Bcu/\nAT3q4WEsmkUdMEQGCiqGSIb4TQENAQcwNjAQBgsqhkiG+E0BDQEHAQEB/zAQBgsq\nhkiG+E0BDQEHAgEBADAQBgsqhkiG+E0BDQEHAwEB/zAKBggqhkjOPQQDAgNJADBG\nAiEAu3SV4SBJY+Y4MCp9XouZjdTZS9O51IQ4Mq23wg2c34YCIQDmFy7cAg+zxuxS\nc6AZ+TN/NgvHVrtBBmqVz0ssUML6+g==\n-----END CERTIFICATE-----"))
 
-	tdxRootCAFingerprint        = "44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"
-	invalidTdxRootCAFingerprint = "ffa0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"
+	tdxRootCAFingerprints        = []string{"44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"}
+	invalidTdxRootCAFingerprints = []string{"ffa0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"}
 
 	// valid report values
 	validTDXNonce, _   = hex.DecodeString("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
