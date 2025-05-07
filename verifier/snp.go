@@ -454,6 +454,8 @@ func verifySnpSignature(
 		result.CertChainCheck.SetErr(ar.VerifyCertChain)
 		return result, false
 	}
+	log.Debug("Successfully verified SNP certificate chain")
+
 	// Verify that the reference value fingerprint matches the certificate fingerprint
 	if fingerprint == "" {
 		log.Debug("Reference value SNP CA fingerprint not present")
@@ -468,13 +470,14 @@ func verifySnpSignature(
 	}
 	caFingerprint := sha256.Sum256(ca.Raw)
 	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		log.Debugf("Root Manifest CA fingerprint '%v' does not match measurement CA fingerprint '%v'",
+		log.Debugf("Root manifest CA fingerprint %q does not match measurement CA fingerprint %q",
 			fingerprint, hex.EncodeToString(caFingerprint[:]))
 		result.CertChainCheck.Success = false
 		result.CertChainCheck.Expected = fingerprint
 		result.CertChainCheck.Got = hex.EncodeToString(caFingerprint[:])
 		return result, false
 	}
+	log.Tracef("Root manifest CA fingerprint matches measurement CA fingerprint: %q", fingerprint)
 	result.CertChainCheck.Success = true
 
 	//Store details from validated certificate chains in the report
