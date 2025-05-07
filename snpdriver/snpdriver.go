@@ -55,6 +55,7 @@ type Snp struct {
 	akChain []*x509.Certificate // SNP VCEK / VLEK certificate chain
 	ikChain []*x509.Certificate
 	ikPriv  crypto.PrivateKey
+	vmpl    int
 }
 
 type SnpCertTableEntry struct {
@@ -103,7 +104,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 		snp.ikPriv = priv
 
 		snp.akChain, snp.ikChain, err = provisionSnp(priv, c.DeviceConfig,
-			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
+			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Vmpl)
 		if err != nil {
 			return fmt.Errorf("failed to provision snp driver: %w", err)
 		}
@@ -121,6 +122,8 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 		}
 	}
 
+	snp.vmpl = c.Vmpl
+
 	return nil
 }
 
@@ -134,7 +137,7 @@ func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, errors.New("internal error: SNP object is nil")
 	}
 
-	data, err := getMeasurement(nonce)
+	data, err := getMeasurement(nonce, snp.vmpl)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to get SNP Measurement: %w", err)
 	}
@@ -194,13 +197,14 @@ func (snp *Snp) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func getMeasurement(nonce []byte) ([]byte, error) {
+func getMeasurement(nonce []byte, vmpl int) ([]byte, error) {
 
 	if len(nonce) > 64 {
 		return nil, errors.New("user Data must be at most 64 bytes")
 	}
 
-	log.Debugf("Generating SNP attestation report with nonce: %v", hex.EncodeToString(nonce))
+	log.Debugf("Generating SNP attestation report on VMPL %v with nonce: %v", vmpl,
+		hex.EncodeToString(nonce))
 
 	d, err := client.OpenDevice()
 	if err != nil {
@@ -211,7 +215,7 @@ func getMeasurement(nonce []byte) ([]byte, error) {
 	var ud [64]byte
 	copy(ud[:], nonce)
 	//lint:ignore SA1019 will be updated later
-	buf, err := client.GetRawReport(d, ud)
+	buf, err := client.GetRawReportAtVmpl(d, ud, vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
@@ -221,9 +225,9 @@ func getMeasurement(nonce []byte) ([]byte, error) {
 	return buf, nil
 }
 
-func getVlek() ([]byte, error) {
+func getVlek(vmpl int) ([]byte, error) {
 
-	log.Debug("Fetching VLEK via extended attestation report request")
+	log.Debugf("Fetching VLEK via extended attestation report request on VMPL %v", vmpl)
 
 	d, err := client.OpenDevice()
 	if err != nil {
@@ -232,7 +236,7 @@ func getVlek() ([]byte, error) {
 	defer d.Close()
 
 	//lint:ignore SA1019 will be updated later
-	_, certs, err := client.GetRawExtendedReport(d, [64]byte{0})
+	_, certs, err := client.GetRawExtendedReportAtVmpl(d, [64]byte{0}, vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
@@ -265,7 +269,7 @@ func getVlek() ([]byte, error) {
 }
 
 func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
+	estTlsCas []*x509.Certificate, useSystemRootCas bool, vmpl int,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
@@ -275,7 +279,7 @@ func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-	akchain, err := fetchAk(addr, estTlsCas, useSystemRootCas)
+	akchain, err := fetchAk(addr, estTlsCas, useSystemRootCas, vmpl)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
@@ -283,7 +287,7 @@ func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	return akchain, ikchain, nil
 }
 
-func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool,
+func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, vmpl int,
 ) ([]*x509.Certificate, error) {
 
 	// Generate random nonce
@@ -296,7 +300,7 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool,
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
 	// Fetch an initial attestation report to determine which key is used.
-	arRaw, err := getMeasurement(nonce)
+	arRaw, err := getMeasurement(nonce, vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
@@ -332,7 +336,7 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool,
 		}
 	} else if akType == verifier.VLEK {
 		// VLEK is used, in this case we fetch the VLEK from the host
-		vlek, err := getVlek()
+		vlek, err := getVlek(vmpl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch VLEK: %w", err)
 		}
