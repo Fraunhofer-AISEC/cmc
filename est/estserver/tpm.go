@@ -67,34 +67,36 @@ func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error 
 		return fmt.Errorf("invalid TPM info format, %v is not a valid minor: %w", info[2], err)
 	}
 
-	// Retrieve the EK cert (varies between manufacturers)
-	var ekCert *x509.Certificate
-	if (cert == nil) || (len(cert) == 0) {
-		if certUrl == "" {
-			return fmt.Errorf("neither EK Certificate nor Certificate URL present")
-		}
-		// Intel TPMs do not provide their EK certificate but instead a certificate URL from where the certificate can be retrieved via its public key
-		if manufacturer != manufacturerIntel {
-			return fmt.Errorf("ek certificate not present and Certificate URL not supported for manufacturer %v", manufacturer)
-		}
-		resp, err := getIntelEkCert(certUrl)
-		if err != nil {
-			return fmt.Errorf("failed to retrieve Intel TPM EK certificate from Intel server: %w", err)
-		}
-		ekCert, err = parseIntelEkCert(resp)
-		if err != nil {
-			return fmt.Errorf("failed to parse Intel EK cert: %w", err)
-		}
-	} else {
-		// Other manufacturers simply provde their cert in an NV index
-		ekCert, err = x509.ParseCertificate(cert)
-		if err != nil {
-			return fmt.Errorf("failed to parse EK certificate: %w", err)
-		}
-	}
-
 	// Verify the EK certificate chain
 	if conf.verifyEkCert {
+		// Retrieve the EK cert (varies between manufacturers)
+		var ekCert *x509.Certificate
+		if len(cert) == 0 {
+			if certUrl == "" {
+				return fmt.Errorf("neither EK Certificate nor certificate URL present")
+			}
+			// Intel TPMs do not provide their EK certificate but instead a certificate URL from where
+			// // the certificate can be retrieved via its public key
+			if manufacturer != manufacturerIntel {
+				return fmt.Errorf("ek certificate not present and Certificate URL not supported for manufacturer %v",
+					manufacturer)
+			}
+			resp, err := getIntelEkCert(certUrl)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve Intel TPM EK certificate from Intel server: %w", err)
+			}
+			ekCert, err = parseIntelEkCert(resp)
+			if err != nil {
+				return fmt.Errorf("failed to parse Intel EK cert: %w", err)
+			}
+		} else {
+			// Other manufacturers simply provde their cert in an NV index
+			ekCert, err = x509.ParseCertificate(cert)
+			if err != nil {
+				return fmt.Errorf("failed to parse EK certificate: %w", err)
+			}
+		}
+
 		err := verifyEkCert(conf.dbPath, ekCert, manufacturer, major, minor)
 		if err != nil {
 			return fmt.Errorf("verify EK certificate chain: error = %w", err)
