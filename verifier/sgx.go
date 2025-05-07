@@ -156,7 +156,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	}
 
 	// Match measurement root CAs against reference root CA fingerprint
-	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprint)
+	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
 	if errCode != ar.NotSet {
 		result.Summary.SetErr(errCode)
 		return result, false
@@ -200,7 +200,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	log.Debugf("Verifying SGX quote signature")
 	sig, ret := VerifyIntelQuoteSignature(measurement.Evidence, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		rootManifest.CaFingerprint, QuoteType(sgxQuote.QuoteHeader.TeeType), collateral.PckCrl, collateral.RootCaCrl)
+		QuoteType(sgxQuote.QuoteHeader.TeeType), collateral.PckCrl, collateral.RootCaCrl)
 	if !ret {
 		ok = false
 	}

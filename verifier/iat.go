@@ -18,7 +18,6 @@ package verifier
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 
@@ -108,38 +107,22 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 
 	log.Debug("Verifying certificate chain")
 
-	// Verify certificate chain
 	ca := certs[len(certs)-1]
+
+	// Verify certificate chain
 	x509Chains, err := internal.VerifyCertChain(certs, []*x509.Certificate{ca})
 	if err != nil {
 		log.Debugf("Failed to verify certificate chain: %v", err)
-		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
+		result.Summary.SetErr(ar.VerifyCertChain)
 		ok = false
-		return result, false
 	}
 
-	// Verify that the reference value fingerprint matches the certificate fingerprint
-	if rootManifest.CaFingerprint == "" {
-		log.Debug("Reference value SNP CA fingerprint not present")
-		result.Signature.CertChainCheck.SetErr(ar.NotPresent)
-		return result, false
+	// Verify that the certificate fingerprint matches one of the manifest fingerprints
+	result.Signature.CertChainCheck = verifyCaFingerprint(ca, rootManifest.CaFingerprints)
+	if !result.Signature.CertChainCheck.Success {
+		result.Summary.SetErr(ar.CaFingerprint)
+		ok = false
 	}
-	refFingerprint, err := hex.DecodeString(rootManifest.CaFingerprint)
-	if err != nil {
-		log.Debugf("Failed to decode CA fingerprint %v: %v", rootManifest.CaFingerprint, err)
-		result.Signature.CertChainCheck.SetErr(ar.ParseCAFingerprint)
-		return result, false
-	}
-	caFingerprint := sha256.Sum256(ca.Raw)
-	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		log.Debugf("Root Manifest CA fingerprint '%v' does not match measurement CA fingerprint '%v'",
-			rootManifest.CaFingerprint, hex.EncodeToString(caFingerprint[:]))
-		result.Signature.CertChainCheck.Success = false
-		result.Signature.CertChainCheck.Expected = rootManifest.CaFingerprint
-		result.Signature.CertChainCheck.Got = hex.EncodeToString(caFingerprint[:])
-		return result, false
-	}
-	result.Signature.CertChainCheck.Success = true
 
 	//Store details from (all) validated certificate chain(s) in the report
 	for _, chain := range x509Chains {
@@ -149,8 +132,6 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 		}
 		result.Signature.Certs = append(result.Signature.Certs, chainExtracted)
 	}
-
-	result.Summary.Success = ok
 
 	log.Debug("Verifying measurements")
 
@@ -215,6 +196,8 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 			})
 		}
 	}
+
+	result.Summary.Success = ok
 
 	return result, ok
 }

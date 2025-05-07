@@ -50,7 +50,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -81,7 +81,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -112,7 +112,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -143,7 +143,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -174,7 +174,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -205,7 +205,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -236,7 +236,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   invalidSnpPolicy,
@@ -267,7 +267,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -298,7 +298,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -329,7 +329,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -354,7 +354,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -385,7 +385,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: validFingerprint,
+							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -406,7 +406,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Invalid CA Fingerprint",
+			name: "Invalid CA Fingerprints",
 			args: args{
 				measurement: &ar.Measurement{
 					Type:     "SNP Measurement",
@@ -416,7 +416,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: invalidFingerprint,
+							CaFingerprints: invalidFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
 								ReportVersion: validVersion,
 								GuestPolicy:   validSnpPolicy,
@@ -447,7 +447,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				rootManifest: &ar.MetadataResult{
 					Metadata: ar.Metadata{
 						Manifest: ar.Manifest{
-							CaFingerprint: invalidFingerprint,
+							CaFingerprints: validFingerprints,
 						},
 					},
 				},
@@ -1007,7 +1007,6 @@ AFZEAwoKCQ==
 		Ucode: 68,
 	}
 
-	validFingerprint = "69D063B45344D26A2E94E1F4210DE49EF555308287D4C174445C95639A540BCD"
-
-	invalidFingerprint = "AAD063B45344D26A2E94E1F4210DE49EF555308287D4C174445C95639A540BCD"
+	validFingerprints   = []string{"69D063B45344D26A2E94E1F4210DE49EF555308287D4C174445C95639A540BCD"}
+	invalidFingerprints = []string{"AAD063B45344D26A2E94E1F4210DE49EF555308287D4C174445C95639A540BCD"}
 )

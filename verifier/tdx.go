@@ -166,7 +166,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	}
 
 	// Match measurement root CAs against reference root CA fingerprint
-	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprint)
+	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
 	if errCode != ar.NotSet {
 		result.Summary.SetErr(errCode)
 		return result, false
@@ -207,7 +207,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	// Verify Quote Signature including certificate chains and CRLs
 	sig, ret := VerifyIntelQuoteSignature(measurement.Evidence, tdxQuote.QuoteSignatureData,
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		rootManifest.CaFingerprint, TDX_QUOTE_TYPE, collateral.PckCrl, collateral.RootCaCrl)
+		TDX_QUOTE_TYPE, collateral.PckCrl, collateral.RootCaCrl)
 	if !ret {
 		log.Debug("Failed to verify Intel quote signature")
 		ok = false

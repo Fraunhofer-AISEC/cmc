@@ -24,6 +24,11 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
+// The validation report version
+const (
+	vrVersion = "1.3.0"
+)
+
 // VerificationResult represents the results of all steps taken during
 // the validation of an attestation report.
 type VerificationResult struct {
@@ -835,7 +840,7 @@ func (result *VerificationResult) CheckVersion() error {
 	if result == nil {
 		return fmt.Errorf("internal error: VerificationResult is nil")
 	}
-	if !strings.EqualFold(arVersion, result.Version) {
+	if !strings.EqualFold(vrVersion, result.Version) {
 		return fmt.Errorf("API version mismatch. Expected VerificationResult version %v, got %v", arVersion, result.Version)
 	}
 	return nil

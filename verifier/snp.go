@@ -18,7 +18,6 @@ package verifier
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
 	"encoding/binary"
@@ -172,7 +171,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(measurement.Evidence, s, certs, rootManifest.CaFingerprint)
+	sig, ret := verifySnpSignature(measurement.Evidence, s, certs, rootManifest.CaFingerprints)
 	if !ret {
 		ok = false
 	}
@@ -390,7 +389,7 @@ func verifySnpTcb(s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
 
 func verifySnpSignature(
 	reportRaw []byte, report snpreport,
-	certs []*x509.Certificate, fingerprint string,
+	certs []*x509.Certificate, fingerprints []string,
 ) (ar.SignatureResult, bool) {
 
 	result := ar.SignatureResult{}
@@ -456,29 +455,12 @@ func verifySnpSignature(
 	}
 	log.Debug("Successfully verified SNP certificate chain")
 
-	// Verify that the reference value fingerprint matches the certificate fingerprint
-	if fingerprint == "" {
-		log.Debug("Reference value SNP CA fingerprint not present")
-		result.CertChainCheck.SetErr(ar.NotPresent)
+	// Verify that the certificate fingerprint matches one of the manifest fingerprints
+	result.CertChainCheck = verifyCaFingerprint(ca, fingerprints)
+	if !result.CertChainCheck.Success {
+		result.CertChainCheck.SetErr(ar.CaFingerprint)
 		return result, false
 	}
-	refFingerprint, err := hex.DecodeString(fingerprint)
-	if err != nil {
-		log.Debugf("Failed to decode CA fingerprint %v: %v", fingerprint, err)
-		result.CertChainCheck.SetErr(ar.ParseCAFingerprint)
-		return result, false
-	}
-	caFingerprint := sha256.Sum256(ca.Raw)
-	if !bytes.Equal(refFingerprint, caFingerprint[:]) {
-		log.Debugf("Root manifest CA fingerprint %q does not match measurement CA fingerprint %q",
-			fingerprint, hex.EncodeToString(caFingerprint[:]))
-		result.CertChainCheck.Success = false
-		result.CertChainCheck.Expected = fingerprint
-		result.CertChainCheck.Got = hex.EncodeToString(caFingerprint[:])
-		return result, false
-	}
-	log.Tracef("Root manifest CA fingerprint matches measurement CA fingerprint: %q", fingerprint)
-	result.CertChainCheck.Success = true
 
 	//Store details from validated certificate chains in the report
 	for _, chain := range x509Chains {

@@ -17,6 +17,7 @@ package verifier
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -658,4 +659,39 @@ func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
 	}
 	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
 	return "", false
+}
+
+func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Result {
+
+	result := ar.Result{}
+
+	log.Debugf("Checking %v CA fingerprints", len(refFingerprints))
+
+	caFingerprint := sha256.Sum256(ca.Raw)
+
+	for _, fp := range refFingerprints {
+		refFingerprint, err := hex.DecodeString(fp)
+		if err != nil {
+			log.Debugf("Failed to decode CA fingerprint %v: %v", fp, err)
+			result.SetErr(ar.ParseCAFingerprint)
+			return result
+		}
+		if bytes.Equal(refFingerprint, caFingerprint[:]) {
+			log.Debugf("Found matching CA fingerprint %q", refFingerprint)
+			result.Got = fp
+			result.Success = true
+			return result
+		} else {
+			log.Debugf("Root Manifest CA fingerprint %q does not match measurement CA fingerprint %q. Continue..",
+				refFingerprint, hex.EncodeToString(caFingerprint[:]))
+			continue
+		}
+	}
+
+	log.Debug("Failed to find matching CA fingerprint")
+
+	result.Success = false
+	result.ExpectedOneOf = refFingerprints
+	result.Got = hex.EncodeToString(caFingerprint[:])
+	return result
 }
