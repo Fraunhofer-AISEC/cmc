@@ -631,10 +631,11 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 
 	var ekRaw []byte
 	if ek[0].Certificate != nil {
+		log.Debugf("Using EK %v", ek[0].Certificate.Subject.CommonName)
 		ekRaw = ek[0].Certificate.Raw
-	} else {
+	} else if ek[0].CertificateURL != "" {
+		log.Debugf("Using EK URL %q", ek[0].CertificateURL)
 		ekRaw = nil
-		log.Debugf("EK not present. Using EK URL %v", ek[0].CertificateURL)
 	}
 
 	// Create AK CSR and perform EST enrollment with TPM credential activation
