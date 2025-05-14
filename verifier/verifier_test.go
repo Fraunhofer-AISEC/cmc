@@ -708,7 +708,6 @@ func TestVerify(t *testing.T) {
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
-				"",
 				PolicyEngineSelect_None,
 				metadata)
 			log.Info("Finished FUT")
