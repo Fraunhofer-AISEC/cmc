@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
@@ -32,6 +33,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
@@ -103,8 +105,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 		}
 		snp.ikPriv = priv
 
-		snp.akChain, snp.ikChain, err = provisionSnp(priv, c.DeviceConfig,
-			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Vmpl)
+		snp.akChain, snp.ikChain, err = snp.provisionSnp(priv, c)
 		if err != nil {
 			return fmt.Errorf("failed to provision snp driver: %w", err)
 		}
@@ -268,18 +269,17 @@ func getVlek(vmpl int) ([]byte, error) {
 	return nil, errors.New("could not find VLEK in certificates")
 }
 
-func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool, vmpl int,
+func (snp *Snp) provisionSnp(priv crypto.PrivateKey, c *ar.DriverConfig,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikchain, err := provisionIk(priv, devConf, addr, estTlsCas, useSystemRootCas)
+	ikchain, err := snp.provisionIk(priv, c)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
 
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-	akchain, err := fetchAk(addr, estTlsCas, useSystemRootCas, vmpl)
+	akchain, err := fetchAk(c)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
@@ -287,8 +287,7 @@ func provisionSnp(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	return akchain, ikchain, nil
 }
 
-func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, vmpl int,
-) ([]*x509.Certificate, error) {
+func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Generate random nonce
 	nonce := make([]byte, 64)
@@ -300,7 +299,7 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, 
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
 	// Fetch an initial attestation report to determine which key is used.
-	arRaw, err := getMeasurement(nonce, vmpl)
+	arRaw, err := getMeasurement(nonce, c.Vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
@@ -321,7 +320,7 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, 
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
-	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	client, err := est.NewClient(c.EstTlsCas, c.UseSystemRootCas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -330,13 +329,13 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, 
 	if akType == verifier.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		signingCert, err = client.GetSnpVcek(addr, s.ChipId, s.CurrentTcb)
+		signingCert, err = client.GetSnpVcek(c.ServerAddr, s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
 	} else if akType == verifier.VLEK {
 		// VLEK is used, in this case we fetch the VLEK from the host
-		vlek, err := getVlek(vmpl)
+		vlek, err := getVlek(c.Vmpl)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch VLEK: %w", err)
 		}
@@ -351,8 +350,8 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, 
 	}
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
-	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), addr)
-	ca, err := client.GetSnpCa(addr, akType)
+	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
+	ca, err := client.GetSnpCa(c.ServerAddr, akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
@@ -360,17 +359,15 @@ func fetchAk(addr string, estTlsCas []*x509.Certificate, useSystemRootCas bool, 
 	return append([]*x509.Certificate{signingCert}, ca...), nil
 }
 
-func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
-) ([]*x509.Certificate, error) {
+func (snp *Snp) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
-	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	client, err := est.NewClient(c.EstTlsCas, c.UseSystemRootCas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(addr)
+	caCerts, err := client.CaCerts(c.ServerAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -383,13 +380,31 @@ func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(priv, devConf.Snp.IkCsr)
+	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Snp.IkCsr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
+	// Use Subject Key Identifier (SKI) as nonce for attestation report
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CSR public key: %v", err)
+	}
+	nonce := sha1.Sum(pubKey)
+
+	// Fetch attestation report as part of client authentication
+	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{snp}, c.Serializer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+	}
+
+	r, err := c.Serializer.Marshal(report)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the attestation report: %v", err)
+	}
+
 	// Request IK certificate from EST server
-	cert, err := client.SimpleEnroll(addr, csr)
+	cert, err := client.AttestEnroll(c.ServerAddr, csr, r, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
