@@ -58,7 +58,6 @@ func Verify(
 	identityCas []*x509.Certificate,
 	metadataCas []*x509.Certificate,
 	policies []byte,
-	peer string,
 	polEng PolicyEngineSelect,
 	metadatamap map[string][]byte,
 ) *ar.VerificationResult {
