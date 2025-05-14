@@ -368,6 +368,7 @@ type DriverConfig struct {
 	StoragePath      string
 	ServerAddr       string
 	KeyConfig        string
+	Metadata         map[string][]byte
 	Ima              bool
 	ImaPcr           int
 	Serializer       Serializer
