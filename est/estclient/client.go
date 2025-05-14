@@ -252,6 +252,50 @@ func (c *Client) TpmCertifyEnroll(
 	return certs[0], nil
 }
 
+func (c *Client) AttestEnroll(
+	addr string,
+	csr *x509.CertificateRequest,
+	report []byte,
+	metadata [][]byte,
+) (*x509.Certificate, error) {
+
+	buf, contentType, err := est.EncodeMultiPart(
+		[]est.MimeMultipart{
+			{ContentType: est.MimeTypePKCS10, Data: csr},
+			{ContentType: est.MimeTypeOctetStream, Data: report},
+			{ContentType: est.MimeTypeOctetStream, Data: metadata},
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode multipart: %w", err)
+	}
+
+	body := io.NopCloser(buf)
+
+	method := http.MethodPost
+	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.TpmCertifyEnrollEndpoint
+	accepts := est.MimeTypePKCS7
+	transferEncoding := est.EncodingTypeBase64
+
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
+	}
+
+	certs, err := parseSimplePkiResponse(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse simple PKI response: %w", err)
+	}
+
+	return certs[0], nil
+}
+
 func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
