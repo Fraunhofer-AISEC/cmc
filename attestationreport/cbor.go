@@ -95,6 +95,18 @@ func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]by
 	// with each certificate being in its own byte string (DER Encoded)
 	sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChainRaw
 
+	// Add public key
+	coseKey, err := cose.NewKeyFromPublic(stmp.Public())
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to COSE_Key: %w", err)
+	}
+	coseKeyRaw, err := coseKey.MarshalCBOR()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal COSE_Key: %w", err)
+	}
+	// For now, we just put this in the keyid header
+	sigHolder.Headers.Unprotected[cose.HeaderLabelKeyID] = coseKeyRaw
+
 	msgToSign := cose.NewSignMessage()
 	msgToSign.Payload = data
 	msgToSign.Signatures = append(msgToSign.Signatures, sigHolder)
@@ -117,12 +129,12 @@ func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]by
 	return coseRaw, nil
 }
 
-func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool) {
+func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool) (MetadataResult, []byte, bool) {
 
 	result := MetadataResult{}
 	ok := true
 
-	if len(roots) == 0 {
+	if useSystemCerts {
 		log.Warnf("No CAs specified. Using system cert pool not implemented for CBOR")
 		result.Summary.Success = false
 		result.Summary.ErrorCode = SetupSystemCA
@@ -144,90 +156,111 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 		return result, nil, false
 	}
 
-	// Extract leaf certificates, use its public keys for the verifiers and create verifiers
 	if len(msgToVerify.Signatures) == 0 {
 		log.Warnf("failed to verify COSE: no signatures present")
 		result.Summary.Success = false
 		result.Summary.ErrorCode = COSENoSignatures
 		return result, nil, false
 	}
+
+	// Create verifiers
 	verifiers := make([]cose.Verifier, 0)
 	for i, sig := range msgToVerify.Signatures {
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
-		x5Chain, okConv := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
-		if !okConv {
-			log.Warnf("failed to parse x5c header: %v", err)
-			result.Summary.ErrorCode = ParseX5C
-			result.SignatureCheck[i].CertChainCheck.Success = false
-			result.SignatureCheck[i].CertChainCheck.ErrorCode = ParseX5C
-			ok = false
-			continue
-		}
-		certChain := make([]*x509.Certificate, 0, len(x5Chain))
-		for _, rawCert := range x5Chain {
-			cert, okCert := rawCert.([]byte)
-			if !okCert {
-				log.Warnf("failed to decode certificate chain")
-				result.Summary.ErrorCode = DecodeCertChain
+		// Key(s) for verifying the signature(s)
+		var verifyingKey crypto.PublicKey
+
+		if len(roots) > 0 {
+
+			// Only verify certificate chain(s) if roots are given
+			x5Chain, okConv := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
+			if !okConv {
+				log.Warnf("failed to parse x5c header: %v", err)
+				result.Summary.ErrorCode = ParseX5C
 				result.SignatureCheck[i].CertChainCheck.Success = false
-				result.SignatureCheck[i].CertChainCheck.ErrorCode = DecodeCertChain
+				result.SignatureCheck[i].CertChainCheck.ErrorCode = ParseX5C
 				ok = false
 				continue
 			}
-			x509Cert, err := x509.ParseCertificate(cert)
+			certChain := make([]*x509.Certificate, 0, len(x5Chain))
+			for _, rawCert := range x5Chain {
+				cert, okCert := rawCert.([]byte)
+				if !okCert {
+					log.Warnf("failed to decode certificate chain")
+					result.Summary.ErrorCode = DecodeCertChain
+					result.SignatureCheck[i].CertChainCheck.Success = false
+					result.SignatureCheck[i].CertChainCheck.ErrorCode = DecodeCertChain
+					ok = false
+					continue
+				}
+				x509Cert, err := x509.ParseCertificate(cert)
+				if err != nil {
+					log.Warnf("failed to parse leaf certificate: %v", err)
+					result.Summary.ErrorCode = ParseCert
+					result.SignatureCheck[i].CertChainCheck.Success = false
+					result.SignatureCheck[i].CertChainCheck.ErrorCode = ParseCert
+					ok = false
+					continue
+				}
+
+				certChain = append(certChain, x509Cert)
+			}
+
+			x509Chains, err := internal.VerifyCertChain(certChain, roots)
 			if err != nil {
-				log.Warnf("failed to parse leaf certificate: %v", err)
-				result.Summary.ErrorCode = ParseCert
+				log.Warnf("failed to verify certificate chain: %v", err)
+				result.Summary.ErrorCode = VerifyCertChain
 				result.SignatureCheck[i].CertChainCheck.Success = false
-				result.SignatureCheck[i].CertChainCheck.ErrorCode = ParseCert
+				result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
 				ok = false
-				continue
-			}
 
-			certChain = append(certChain, x509Cert)
-		}
-
-		x509Chains, err := internal.VerifyCertChain(certChain, roots)
-		if err != nil {
-			log.Warnf("failed to verify certificate chain: %v", err)
-			result.Summary.ErrorCode = VerifyCertChain
-			result.SignatureCheck[i].CertChainCheck.Success = false
-			result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
-			ok = false
-
-			// Store details from invalid certs for diagnostic information
-			chainExtracted := []X509CertExtracted{}
-			for _, cert := range certChain {
-				chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
-			}
-			result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
-
-		} else {
-			result.SignatureCheck[i].CertChainCheck.Success = true
-
-			//Store details from validated certificate chains
-			for _, chain := range x509Chains {
+				// Store details from invalid certs for diagnostic information
 				chainExtracted := []X509CertExtracted{}
-				for _, cert := range chain {
+				for _, cert := range certChain {
 					chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 				}
 				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
+
+			} else {
+				result.SignatureCheck[i].CertChainCheck.Success = true
+
+				//Store details from validated certificate chains
+				for _, chain := range x509Chains {
+					chainExtracted := []X509CertExtracted{}
+					for _, cert := range chain {
+						chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+					}
+					result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
+				}
+			}
+			var keyOk bool
+			verifyingKey, ok = certChain[0].PublicKey.(*ecdsa.PublicKey)
+			if !keyOk {
+				log.Warnf("Failed to extract public key from certificate: %v", err)
+				result.Summary.ErrorCode = ExtractPubKey
+				result.SignatureCheck[i].SignCheck.Success = false
+				result.SignatureCheck[i].SignCheck.ErrorCode = ExtractPubKey
+				ok = false
+				continue
+			}
+		} else {
+			// If no roots are given, look for a public key
+			var coseKey cose.Key
+			k := sig.Headers.Unprotected[cose.HeaderLabelKeyID].([]byte)
+			coseKey.UnmarshalCBOR(k)
+			verifyingKey, err = coseKey.PublicKey()
+			if err != nil {
+				log.Warnf("Failed to unmarshal cbor key: %v", err)
+				result.Summary.ErrorCode = ParseCBOR
+				result.SignatureCheck[i].SignCheck.Success = false
+				result.SignatureCheck[i].SignCheck.ErrorCode = ParseCBOR
+				ok = false
+				continue
 			}
 		}
 
-		publicKey, okKey := certChain[0].PublicKey.(*ecdsa.PublicKey)
-		if !okKey {
-			log.Warnf("Failed to extract public key from certificate: %v", err)
-			result.Summary.ErrorCode = ExtractPubKey
-			result.SignatureCheck[i].SignCheck.Success = false
-			result.SignatureCheck[i].SignCheck.ErrorCode = ExtractPubKey
-			ok = false
-			continue
-		}
-
-		// create a verifier from a trusted private key
-		verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
+		verifier, err := cose.NewVerifier(cose.AlgorithmES256, verifyingKey)
 		if err != nil {
 			log.Warnf("Failed to create verifier: %v", err)
 			result.Summary.ErrorCode = Internal

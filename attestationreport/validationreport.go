@@ -524,6 +524,7 @@ const (
 	CollateralNotPresent
 	ParseCollateral
 	IllegalTdxMrIndex
+	ParseKey
 )
 
 func (e ErrorCode) String() string {
@@ -680,6 +681,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Parse Collateral)", int(e))
 	case IllegalTdxMrIndex:
 		return fmt.Sprintf("%v (Illegal Intel TDX measurement register index)", int(e))
+	case ParseKey:
+		return fmt.Sprintf("%v (Parse key)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
