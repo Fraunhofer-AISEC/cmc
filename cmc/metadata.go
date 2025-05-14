@@ -29,6 +29,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
@@ -104,12 +105,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 
 	log.Debugf("Loaded %v metadata objects", len(metadata))
 
-	// Convert metadata for faster retrieval
-	metamap := make(map[string][]byte)
-	for _, m := range metadata {
-		hash := sha256.Sum256(m)
-		metamap[hex.EncodeToString(hash[:])] = m
-	}
+	metamap := internal.ConvertToMap(metadata)
 
 	return metamap, s, nil
 }
