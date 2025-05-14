@@ -115,6 +115,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 			ServerAddr:       c.ProvAddr,
 			KeyConfig:        c.KeyConfig,
 			DeviceConfig:     *deviceConfig,
+			Metadata:         metadata,
 			Ima:              c.Ima,
 			ImaPcr:           c.ImaPcr,
 			MeasurementLog:   c.MeasurementLog,
