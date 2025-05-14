@@ -42,7 +42,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	ok := true
 
 	// Verify signature and extract evidence
-	tr, payload, ok := s.Verify(measurement.Evidence, cas)
+	tr, payload, ok := s.Verify(measurement.Evidence, cas, false, nil)
 	if !ok {
 		log.Debugf("Failed to verify sw evidence")
 		result.Summary.SetErr(ar.VerifyEvidence)

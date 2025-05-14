@@ -8,7 +8,7 @@ require (
 	github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/edgelesssys/ego v1.4.1
-	github.com/fxamacker/cbor/v2 v2.4.0
+	github.com/fxamacker/cbor/v2 v2.5.0
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9
 	github.com/google/go-configfs-tsm v0.3.2
@@ -22,7 +22,7 @@ require (
 	github.com/plgd-dev/go-coap/v3 v3.1.2
 	github.com/robertkrimen/otto v0.2.1
 	github.com/sirupsen/logrus v1.9.3
-	github.com/veraison/go-cose v1.1.0
+	github.com/veraison/go-cose v1.3.0
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	google.golang.org/grpc v1.56.3

@@ -45,7 +45,7 @@ func GetDeviceConfig(s Serializer, metadata map[string][]byte, cas []*x509.Certi
 
 		if info.Type == "Device Config" {
 
-			_, payload, ok := s.Verify(m, cas)
+			_, payload, ok := s.Verify(m, cas, false, nil)
 			if !ok {
 				return nil, fmt.Errorf("validation of device config failed")
 			}
