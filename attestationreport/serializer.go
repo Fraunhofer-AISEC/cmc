@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
@@ -37,7 +38,7 @@ type Serializer interface {
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
 	Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error)
-	Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool)
+	Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool, pubKey crypto.PublicKey) (MetadataResult, []byte, bool)
 	String() string
 }
 

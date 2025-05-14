@@ -239,7 +239,7 @@ func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer
 	report := ar.AttestationReport{}
 
 	//Validate Attestation Report signature
-	result, payload, ok := s.Verify(attestationReport, cas)
+	result, payload, ok := s.Verify(attestationReport, cas, false, nil)
 	if !ok {
 		log.Debug("Validation of Attestation Report failed")
 		return nil, result, ar.VerifyAR
@@ -276,7 +276,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 
 	for hash, meta := range metadatamap {
 
-		result, payload, ok := s.Verify(meta, cas)
+		result, payload, ok := s.Verify(meta, cas, false, nil)
 		if !ok {
 			log.Debugf("Validation of metadata item %v failed", hash)
 			success = false

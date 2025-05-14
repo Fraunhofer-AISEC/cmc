@@ -135,7 +135,9 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 	var hws *hwSigner
 	var opaqueSigner jose.OpaqueSigner
 	hws = &hwSigner{
-		pk:     &jose.JSONWebKey{Key: pub},
+		pk: &jose.JSONWebKey{
+			Key: pub,
+		},
 		signer: priv,
 		alg:    alg,
 	}
@@ -145,7 +147,10 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 	// x5c: adds Certificate Chain in later result
 	var opt jose.SignerOptions
 	var joseSigner jose.Signer
-	joseSigner, err = jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: opaqueSigner}, opt.WithHeader("x5c", certsb64))
+	joseSigner, err = jose.NewSigner(
+		jose.SigningKey{Algorithm: alg, Key: opaqueSigner},
+		opt.WithHeader("x5c", certsb64),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup signer : %w", err)
 	}
@@ -165,14 +170,15 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 }
 
 // Verify verifies signatures and certificate chains for JWS tokens
-func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (MetadataResult, []byte, bool) {
+func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool, pubKey crypto.PublicKey,
+) (MetadataResult, []byte, bool) {
 
 	var rootpool *x509.CertPool
 	var err error
 	result := MetadataResult{}
 	ok := true
 
-	if len(roots) == 0 {
+	if useSystemCerts {
 		log.Debug("Using system certificate pool in absence of provided root certifcates")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
@@ -217,30 +223,42 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate) (Metadata
 	index := make([]int, len(jwsData.Signatures))
 	payloads := make([][]byte, len(jwsData.Signatures))
 	for i, sig := range jwsData.Signatures {
+		var verifyingKey crypto.PublicKey
+
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
-		certs, err := sig.Protected.Certificates(opts)
-		if err != nil {
-			log.Warnf("Failed to verify certificate chain: %v", err)
-			result.Summary.ErrorCode = VerifyCertChain
-			result.SignatureCheck[i].CertChainCheck.Success = false
-			result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
-			ok = false
-			continue
-		}
+		// if no roots are given and useSystemCerts is set to false, do not verify the
+		// certificate chain (verify only the signature with the given public key)
+		if len(roots) > 0 || useSystemCerts {
 
-		//Store details from (all) validated certificate chain(s)
-		for _, chain := range certs {
-			chainExtracted := []X509CertExtracted{}
-			for _, cert := range chain {
-				chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+			// Verify the certificate chain present in the x5c header against the given roots
+			certs, err := sig.Protected.Certificates(opts)
+			if err != nil {
+				log.Warnf("Failed to verify certificate chain: %v", err)
+				result.Summary.ErrorCode = VerifyCertChain
+				result.SignatureCheck[i].CertChainCheck.Success = false
+				result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
+				ok = false
+				continue
 			}
-			result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
+
+			// Store details from validated certificate chain(s)
+			for _, chain := range certs {
+				chainExtracted := []X509CertExtracted{}
+				for _, cert := range chain {
+					chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
+				}
+				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
+			}
+			result.SignatureCheck[i].CertChainCheck.Success = true
+
+			verifyingKey = certs[0][0].PublicKey
+		} else {
+			verifyingKey = pubKey
 		}
 
-		result.SignatureCheck[i].CertChainCheck.Success = true
-
-		index[i], _, payloads[i], err = jwsData.VerifyMulti(certs[0][0].PublicKey)
+		// The JSONWebKey uses the certificates from the x5c header, already validated before
+		index[i], _, payloads[i], err = jwsData.VerifyMulti(verifyingKey)
 		if err == nil {
 			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
