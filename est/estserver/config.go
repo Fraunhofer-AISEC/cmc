@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -50,6 +49,7 @@ type config struct {
 	EstCaChain      []string `json:"estCaChain"`
 	TlsKey          string   `json:"tlsKey"`
 	TlsCaChain      []string `json:"tlsCaChain"`
+	MetadataCas     []string `json:"metadataCas"`
 	HttpFolder      string   `json:"httpFolder"`
 	VerifyEkCert    bool     `json:"verifyEkCert"`
 	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
@@ -57,10 +57,11 @@ type config struct {
 	LogLevel        string   `json:"logLevel"`
 	LogFile         string   `json:"logFile,omitempty"`
 
-	estCaKey   *ecdsa.PrivateKey
-	estCaChain []*x509.Certificate
-	tlsKey     *ecdsa.PrivateKey
-	tlsCaChain []*x509.Certificate
+	estCaKey    *ecdsa.PrivateKey
+	estCaChain  []*x509.Certificate
+	tlsKey      *ecdsa.PrivateKey
+	tlsCaChain  []*x509.Certificate
+	metadataCas []*x509.Certificate
 }
 
 const (
@@ -70,6 +71,7 @@ const (
 	estCaChainFlag      = "estcachain"
 	tlsKeyFlag          = "tlskey"
 	tlsCaChainFlag      = "tlscachain"
+	metadataCasFlag     = "metadatacas"
 	httpFolderFlag      = "httpfolder"
 	verifyEkCertFlag    = "verifyekcert"
 	tpmEkCertDbFlag     = "tpmekcertdb"
@@ -89,6 +91,7 @@ func getConfig() (*config, error) {
 	estCaChain := flag.String(estCaChainFlag, "", "Path to the EST CA certificate chain")
 	tlsKey := flag.String(tlsKeyFlag, "", "TLS key for EST HTTPS server")
 	tlsCaChain := flag.String(tlsCaChainFlag, "", "TLS certificate chain for EST HTTPS server")
+	metadataCas := flag.String(metadataCasFlag, "", "Trusted metadata root CAs for attest enroll")
 	httpFolder := flag.String(httpFolderFlag, "", "Folder to be served")
 	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
 		"Indicates whether to verify TPM EK certificate chains")
@@ -133,6 +136,9 @@ func getConfig() (*config, error) {
 	}
 	if internal.FlagPassed(tlsCaChainFlag) {
 		c.TlsCaChain = strings.Split(*tlsCaChain, ",")
+	}
+	if internal.FlagPassed(*metadataCas) {
+		c.MetadataCas = strings.Split(*metadataCas, ",")
 	}
 	if internal.FlagPassed(httpFolderFlag) {
 		c.HttpFolder = *httpFolder
@@ -184,7 +190,7 @@ func getConfig() (*config, error) {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.estCaChain, err = loadCertChain(c.EstCaChain)
+	c.estCaChain, err = internal.ReadCerts(c.EstCaChain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
@@ -194,9 +200,14 @@ func getConfig() (*config, error) {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.tlsCaChain, err = loadCertChain(c.TlsCaChain)
+	c.tlsCaChain, err = internal.ReadCerts(c.TlsCaChain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
+	}
+
+	c.metadataCas, err = internal.ReadCerts(c.MetadataCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load trusted metadata CAs: %w", err)
 	}
 
 	if !c.VerifyEkCert {
@@ -229,6 +240,13 @@ func pathsToAbs(c *config) {
 		c.TlsCaChain[i], err = filepath.Abs(c.TlsCaChain[i])
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.TlsCaChain[i], err)
+		}
+	}
+
+	for i := 0; i < len(c.MetadataCas); i++ {
+		c.MetadataCas[i], err = filepath.Abs(c.MetadataCas[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.MetadataCas[i], err)
 		}
 	}
 
@@ -269,30 +287,6 @@ func printConfig(c *config) {
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
 	log.Debugf("\tVCEK Cache Folder   : %v", c.VcekCacheFolder)
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
-}
-
-func loadCertChain(certChainFiles []string) ([]*x509.Certificate, error) {
-
-	certChain := make([]*x509.Certificate, 0)
-
-	if len(certChainFiles) == 0 {
-		return nil, errors.New("failed to load certchain: not specified in config file")
-	}
-
-	// Load certificate chain
-	for _, f := range certChainFiles {
-		pem, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get file: %w", err)
-		}
-		cert, err := internal.ParseCert(pem)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load certificate: %w", err)
-		}
-		certChain = append(certChain, cert)
-	}
-
-	return certChain, nil
 }
 
 func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {

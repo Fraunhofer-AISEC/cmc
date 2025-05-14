@@ -706,6 +706,7 @@ func TestVerify(t *testing.T) {
 			got := Verify(
 				arSigned, nonce,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
+				nil,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
 				PolicyEngineSelect_None,
