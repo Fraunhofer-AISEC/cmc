@@ -22,6 +22,7 @@ import (
 	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -34,6 +35,7 @@ import (
 	"time"
 
 	est "github.com/Fraunhofer-AISEC/cmc/est/common"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
@@ -43,11 +45,12 @@ import (
 )
 
 type Server struct {
-	server     *http.Server
-	estCaKey   *ecdsa.PrivateKey
-	estCaChain []*x509.Certificate
-	tpmConf    tpmConfig
-	snpConf    snpConfig
+	server      *http.Server
+	estCaKey    *ecdsa.PrivateKey
+	estCaChain  []*x509.Certificate
+	metadataCas []*x509.Certificate
+	tpmConf     tpmConfig
+	snpConf     snpConfig
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -83,9 +86,10 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	server := &Server{
-		server:     s,
-		estCaKey:   c.estCaKey,
-		estCaChain: c.estCaChain,
+		server:      s,
+		estCaKey:    c.estCaKey,
+		estCaChain:  c.estCaChain,
+		metadataCas: c.metadataCas,
 		tpmConf: tpmConfig{
 			verifyEkCert: c.VerifyEkCert,
 			dbPath:       c.TpmEkCertDb,
@@ -100,6 +104,7 @@ func NewServer(c *config) (*Server, error) {
 	simpleenrollEndpoint := est.EndpointPrefix + est.EnrollEndpoint
 	tpmActivateEnrollEndpoint := est.EndpointPrefix + est.TpmActivateEnrollEndpoint
 	tpmCertifyEnrollEndpoint := est.EndpointPrefix + est.TpmCertifyEnrollEndpoint
+	attestEnrollEndpoint := est.EndpointPrefix + est.AttestEnrollEndpoint
 	snpVcekEndpoint := est.EndpointPrefix + est.SnpVcekEndpoint
 	snpCaCertsEndpoint := est.EndpointPrefix + est.SnpCaCertsEndpoint
 
@@ -107,6 +112,7 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc(simpleenrollEndpoint, server.handleSimpleenroll)
 	http.HandleFunc(tpmActivateEnrollEndpoint, server.handleTpmActivateEnroll)
 	http.HandleFunc(tpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
+	http.HandleFunc(attestEnrollEndpoint, server.handleAttestEnroll)
 	http.HandleFunc(snpVcekEndpoint, server.handleSnpVcek)
 	http.HandleFunc(snpCaCertsEndpoint, server.handleSnpCa)
 
@@ -376,6 +382,84 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 	encoded := est.EncodeBase64(body)
+
+	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
+		return
+	}
+}
+
+func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
+
+	log.Debugf("Received /attestenroll request from %v", req.RemoteAddr)
+
+	if strings.Compare(req.Method, "POST") != 0 {
+		writeHttpErrorf(w, "Method %v not implemented for tpmcertifyenroll request", req.Method)
+		return
+	}
+
+	var csr *x509.CertificateRequest
+	var report []byte
+	var metadataFlattened []byte
+
+	_, err := est.DecodeMultipart(
+		req.Body,
+		[]est.MimeMultipart{
+			{ContentType: est.MimeTypePKCS10, Data: &csr},
+			{ContentType: est.MimeTypeOctetStream, Data: &report},
+			{ContentType: est.MimeTypeOctetStream, Data: &metadataFlattened},
+		},
+		req.Header.Get(est.ContentTypeHeader),
+	)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
+		return
+	}
+
+	metadata, err := internal.UnflattenArray(metadataFlattened)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to decode metadata: %v", err)
+	}
+
+	// Use Subject Key Identifier (SKI) as nonce
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		writeHttpErrorf(w, "failed to parse CSR public key: %v", err)
+		return
+	}
+	nonce := sha1.Sum(pubKey)
+
+	log.Debugf("Verifying attestation report with SKI as nonce: %v",
+		hex.EncodeToString(nonce[:]))
+
+	// Call verify with pubkey instead of identity CAs for verification in provisioning mode, which
+	// only checks the signature, but not the certificate chains (which are about to
+	// be created)
+	result := verifier.Verify(report, nonce[:], nil, csr.PublicKey, s.metadataCas, nil,
+		verifier.PolicyEngineSelect_None, internal.ConvertToMap(metadata))
+	if !result.Success {
+		result.PrintErr()
+		writeHttpErrorf(w, "failed to verify attestation report")
+		return
+	}
+
+	log.Debugf("Successfully verified attestation report")
+
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
+	if err != nil {
+		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
+		return
+	}
+
+	body, err := est.EncodePkcs7CertsOnly([]*x509.Certificate{cert})
+	if err != nil {
+		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
+		return
+	}
+	encoded := est.EncodeBase64(body)
+
+	log.Debugf("Enrolled cert %v", cert.Subject.CommonName)
 
 	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
 	if err != nil {

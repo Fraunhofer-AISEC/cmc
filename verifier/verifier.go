@@ -17,6 +17,7 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -56,6 +57,7 @@ var (
 func Verify(
 	arRaw, nonce []byte,
 	identityCas []*x509.Certificate,
+	identityPubKey crypto.PublicKey,
 	metadataCas []*x509.Certificate,
 	policies []byte,
 	polEng PolicyEngineSelect,
@@ -86,7 +88,7 @@ func Verify(
 	log.Tracef("Detected %v serialization", s.String())
 
 	// Verify and unpack attestation report
-	report, tr, code := verifyAr(arRaw, identityCas, s)
+	report, tr, code := verifyAr(arRaw, identityCas, identityPubKey, s)
 	result.ReportSignature = tr.SignatureCheck
 	if code != ar.NotSet {
 		result.ErrorCodes = append(result.ErrorCodes, code)
@@ -233,13 +235,13 @@ func Verify(
 	return result
 }
 
-func verifyAr(attestationReport []byte, cas []*x509.Certificate, s ar.Serializer,
+func verifyAr(attestationReport []byte, cas []*x509.Certificate, pubKey crypto.PublicKey, s ar.Serializer,
 ) (*ar.AttestationReport, ar.MetadataResult, ar.ErrorCode) {
 
 	report := ar.AttestationReport{}
 
 	//Validate Attestation Report signature
-	result, payload, ok := s.Verify(attestationReport, cas, false, nil)
+	result, payload, ok := s.Verify(attestationReport, cas, false, pubKey)
 	if !ok {
 		log.Debug("Validation of Attestation Report failed")
 		return nil, result, ar.VerifyAR

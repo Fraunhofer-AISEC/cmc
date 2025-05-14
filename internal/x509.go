@@ -61,6 +61,24 @@ func ReadCert(path string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
+// ReadCerts reads PEM or DER encoded certificates from a list of files
+func ReadCerts(paths []string) ([]*x509.Certificate, error) {
+
+	if len(paths) == 0 {
+		return nil, errors.New("no cert paths provided")
+	}
+
+	certs := make([]*x509.Certificate, 0, len(paths))
+	for _, p := range paths {
+		cert, err := ReadCert(p)
+		if err != nil {
+			return nil, err
+		}
+		certs = append(certs, cert)
+	}
+	return certs, nil
+}
+
 // ParseCertsDer parses DER encoded certificates
 func ParseCertsDer(data any) ([]*x509.Certificate, error) {
 	switch d := data.(type) {

@@ -16,10 +16,13 @@
 package internal
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -117,4 +120,30 @@ func ConvertToArray(metamap map[string][]byte) [][]byte {
 		metadata = append(metadata, v)
 	}
 	return metadata
+}
+
+func FlattenArray(data [][]byte) []byte {
+	var buf bytes.Buffer
+	for _, part := range data {
+		binary.Write(&buf, binary.BigEndian, uint32(len(part)))
+		buf.Write(part)
+	}
+	return buf.Bytes()
+}
+
+func UnflattenArray(data []byte) ([][]byte, error) {
+	var result [][]byte
+	buf := bytes.NewReader(data)
+	for buf.Len() > 0 {
+		var length uint32
+		if err := binary.Read(buf, binary.BigEndian, &length); err != nil {
+			return nil, err
+		}
+		chunk := make([]byte, length)
+		if _, err := io.ReadFull(buf, chunk); err != nil {
+			return nil, err
+		}
+		result = append(result, chunk)
+	}
+	return result, nil
 }
