@@ -87,7 +87,7 @@ func Verify(
 	}
 
 	// Verify attetation report
-	result := verifier.Verify(ar, nonce, identityCas, metadataCas, policies, peer,
+	result := verifier.Verify(ar, nonce, identityCas, metadataCas, policies,
 		cmc.PolicyEngineSelect, cmc.CachedPeerMetadata[peer])
 
 	// Update persistent peer cache
