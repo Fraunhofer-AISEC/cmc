@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+data="${dir}/vm"
+vm_config="${dir}/example-setup/vm-config"
+
+edk2="${data}/edk2-aws"
+measured_boot_tools="${data}/measured-boot-tools"
+
+# Install prerequisites
+printf "[\033[34;1m EXEC \033[0m] Checking prerequisites..\n"
+packages=()
+for pkg in "${packages[@]}"; do
+    if ! dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q "installed"; then
+        echo "Fatal: missing package: ${pkg}"
+	exit 1
+    fi
+done
+
+# Build edk2 OVMF firmware
+[ -d "${edk2}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Building aws edk2 firmware..\n"
+    git clone https://github.com/aws/uefi.git "${edk2}"
+    cd "${edk2}"
+    # TODO correct version git checkout edk2-stable202502
+
+    # Build OVMF
+    nix-build --pure
+
+    # Copy OVMF to images
+    install -D -m 0644 "${edk2}/result/ovmf_img.fd" "${data}/images/OVMF-AWS.fd"
+}
+
+# Build CMC
+printf "[\033[34;1m EXEC \033[0m] Building CMC..\n"
+go build -C "${dir}/testtool"
+go build -C "${dir}/cmcd"
+go build -C "${dir}/est/estserver"
+go build -C "${dir}/tools/metaconv"
+go build -C "${dir}/tools/metasign"
+
+# Create a folder for the cmc configuration and metadata
+mkdir -p "${data}"
+
+# Generate an example PKI
+[ -d "${dir}/data/pki" ] || {
+	printf "[\033[34;1m EXEC \033[0m] Generating PKI..\n"
+	"${dir}/bin/setup-pki${script_suffix}"
+}
+
+# TODO Create cloud-init configuration
+
+# Finished successfully
+printf "[\033[32;1m  OK  \033[0m] $0\n"

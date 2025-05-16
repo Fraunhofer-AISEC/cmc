@@ -6,10 +6,33 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-# TODO specify path to OVMF and parameters
-ovmf="${dir}/data/uefi/result/ovmf_img.fd"
+# Default values
+ovmf="${dir}/vm/images/OVMF-AWS.fd"
 vcpus=2
 vmm_type=ec2
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --vcpus)
+      vcpus="$2"
+      shift 2
+      ;;
+    --vmm-type)
+      vmm_type="$2"
+      shift 2
+      ;;
+    --ovmf)
+      ovmf="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--vcpus #] [--vmm-type TYPE] [--ovmf PATH]"
+      exit 1
+      ;;
+  esac
+done
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
@@ -45,8 +68,21 @@ awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${dir}/cert_chain" > "${dir}/ark_
 
 fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
 
-# TODO parameters for vcpus and vmm-type
-ref=$("${dir}/sev-snp-measure/sev-snp-measure.py" --mode snp --vcpus="${vcpus}" --vmm-type="${vmm_type}" --ovmf="${ovmf}")
+set +e
+ref=$(calculate-snp-mr \
+  --vcpus "${vcpus}" \
+  --vmm-type "${vmm_type}" \
+  --ovmf "${ovmf}" \
+)
+if [[ -z "${ref}" ]]; then
+    echo "calculate-snp-mr failed: empty reference values"
+    exit 1
+fi
+echo "${ref}" | jq empty 2>/dev/null || {
+    echo "calculate-snp-mr failed: '${ref}'"
+    exit 1
+}
+set -e
 
 # Load manifest template
 manifest=$(cat "${input}/manifest.json")
@@ -63,20 +99,13 @@ setjson "manifest" "description"           "RTM Manifest"
 setarr  "manifest" "baseLayers"            "${name}"
 setjson "manifest" "certLevel"             3
 setjson "manifest" "caFingerprint"         "${fingerprint}"
+setarr  "manifest" "referenceValues"       "${ref}"
 
 # Insert platform details
 setjson "manifest" "details.firmware" "${firmware}"
 setjson "manifest" "details.bootloader" "${bootloader}"
 setjson "manifest" "details.kernel" "${kernel}"
 setjson "manifest" "details.os" "${os}"
-
-# Insert reference value
-refval="{}"
-setjson "refval" "type" "SNP Reference Value"
-setjson "refval" "subtype" "SNP Launch Digest"
-setjson "refval" "index" 0
-setjson "refval" "sha384" "${ref}"
-extendarr "manifest" "referenceValues" "${refval}"
 
 policy=$(cat "${input}/snp.policy.json")
 
