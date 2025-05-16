@@ -55,10 +55,10 @@ sudo apt install -y moreutils sqlite3 zlib1g-dev libssl-dev protoc-gen-go protoc
                     libtool expect
 ```
 
-Generating reference values for TDX/TPM-based attestation requires the `tpm-pcr-tools`:
+Generating reference values for TDX/TPM-based attestation requires the `measured-boot-tools`:
 ```sh
-git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git
-cd tpm-pcr-tools
+git clone https://github.com/Fraunhofer-AISEC/measured-boot-tools.git
+cd measured-boot-tools
 make
 sudo make install
 ```

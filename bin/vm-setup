@@ -37,7 +37,7 @@ libtpms_dir="${swtpm_srcs_dir}/libtpms"
 swtpm_state_dir="${swtpm_root_dir}/swtpm-state"
 swtpm_setup_dir="${swtpm_root_dir}/swtpm-setup"
 swtpm_bin_dir="${swtpm_srcs_dir}/bin"
-tpm_pcr_tools="${data}/tpm-pcr-tools"
+measured_boot_tools="${data}/measured-boot-tools"
 
 # Install prerequisites
 printf "[\033[34;1m EXEC \033[0m] Checking prerequisites..\n"
@@ -193,11 +193,11 @@ done
     swtpm_setup --tpm2 --tpmstate "${swtpm_state_dir}" --create-ek-cert
 }
 
-# Clone and build tpm-pcr-tools
-[ -d "${tpm_pcr_tools}" ] || {
-    printf "[\033[34;1m EXEC \033[0m] Building tpm-pcr-tools..\n"
-    git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git "${tpm_pcr_tools}"
-    cd "${tpm_pcr_tools}"
+# Clone and build measured-boot-tools
+[ -d "${measured_boot_tools}" ] || {
+    printf "[\033[34;1m EXEC \033[0m] Building measured-boot-tools..\n"
+    git clone https://github.com/Fraunhofer-AISEC/measured-boot-tools.git "${measured_boot_tools}"
+    cd "${measured_boot_tools}"
     make
     cd "${dir}"
 }
@@ -260,8 +260,8 @@ genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${vm_config}/cmcd-conf.json" \
     "${dir}/cmcd/cmcd" \
     "${dir}/testtool/testtool" \
-    "${dir}/vm/tpm-pcr-tools/parse-srtm-pcrs/parse-srtm-pcrs" \
-    "${dir}/vm/tpm-pcr-tools/parse-ima-pcr/parse-ima-pcr" \
+    "${dir}/vm/measured-boot-tools/parse-srtm-pcrs/parse-srtm-pcrs" \
+    "${dir}/vm/measured-boot-tools/parse-ima-pcr/parse-ima-pcr" \
     "${dir}/data/pki/ca.pem"
 
 # Finished successfully

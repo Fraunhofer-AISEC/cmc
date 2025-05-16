@@ -39,7 +39,7 @@ in the [Example Setup](../example-setup/).
 
 Core of the *Manifests* are the reference values, which contain the hashes of the software
 artifacts running on the platform. We aim to provide
-[tools](https://github.com/Fraunhofer-AISEC/tpm-pcr-tools) to precompute the hashes of all artifacts
+[tools](https://github.com/Fraunhofer-AISEC/measured-boot-tools) to precompute the hashes of all artifacts
 based on reproducible software builds.
 
 The overall structure of the attestation report can be seen in the following figure and is
@@ -77,7 +77,7 @@ to be running on the platform. The trust in the measurements comes from hardware
 technologies, such as TPMs or Confidential Computing technologies. The reference values for the
 proving platform must be generated based on the used technology (TPM, Intel TDX/SGX, AMD SEV-SNP).
 
-We provide [tools]([tools](https://github.com/Fraunhofer-AISEC/tpm-pcr-tools) ) for parsing and
+We provide [tools](https://github.com/Fraunhofer-AISEC/measured-boot-tools) for parsing and
 precomputing the reference values based on reproducible builds.
 
 ## PKI
