@@ -7,7 +7,7 @@ instead of `setup-cmc tdx`). This omits installing prerequisites.
 
 ## Prerequites
 
-Install the tpm-pcr-tools as described in [prerequisites](./setup.md#prerequisites)
+Install the measured-boot-tools as described in [prerequisites](./setup.md#prerequisites)
 
 ## TDX Setup
 

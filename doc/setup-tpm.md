@@ -44,7 +44,8 @@ into the TPM platform or VM with attached swTPM. Then the CMC can be run as desc
 The reference values can either be parsed on a good reference platform in a secure environment,
 or they can be precomputed based on the built software artifacts of a computing platform (e.g.,
 within a build-system such as *Yocto* or *Buildroot*). Tools for parsing and precomputing
-are available as open source [tpm-pcr-tools](https://github.com/Fraunhofer-AISEC/tpm-pcr-tools).
+are available as open source
+[measured-boot-tools](https://github.com/Fraunhofer-AISEC/measured-boot-tools).
 
 Complete examples can be found in the [generate-rtm-manifest-tpm](../bin/generate-rtm-manifest-tpm),
 [generate-os-manifest-tpm](../bin/generate-os-manifest-tpm),

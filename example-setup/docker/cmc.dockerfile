@@ -37,9 +37,9 @@ RUN mkdir -p /etc/apt/keyrings && \
     apt-get install -y ./$EGO_DEB build-essential libssl-dev && \
     apt-get install -y libsgx-dcap-default-qpl
 
-# Install tpm-pcr-tools
-RUN git clone https://github.com/Fraunhofer-AISEC/tpm-pcr-tools.git && \
-    cd tpm-pcr-tools && \
+# Install measured-boot-tools
+RUN git clone https://github.com/Fraunhofer-AISEC/measured-boot-tools.git && \
+    cd measured-boot-tools && \
     make && \
     make install
 
