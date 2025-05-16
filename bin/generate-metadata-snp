@@ -8,6 +8,33 @@ source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
+ovmf="${dir}/vm/images/OVMF-AWS.fd"
+vcpus=2
+vmm_type=ec2
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --vcpus)
+      vcpus="$2"
+      shift 2
+      ;;
+    --vmm-type)
+      vmm_type="$2"
+      shift 2
+      ;;
+    --ovmf)
+      ovmf="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--vcpus #] [--vmm-type TYPE] [--ovmf PATH]"
+      exit 1
+      ;;
+  esac
+done
+
 "${bin}/generate-device-description"
 
-"${bin}/precompute-rtm-manifest-snp"
+"${bin}/precompute-rtm-manifest-snp" --vcpus "${vcpus}" --vmm-type "${vmm_type}" --ovmf "${ovmf}"

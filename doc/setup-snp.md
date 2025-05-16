@@ -1,6 +1,7 @@
 # AMD SEV-SNP Setup
 
-Describes the setup to run the CMC within AMD SEV-SNP Confidential VMs.
+Describes the setup to run the CMC within AMD SEV-SNP Confidential VMs. Currently, QEMU and
+AWS EC2 VMs are supported.
 
 ## Prerequisites
 
@@ -12,12 +13,19 @@ virtual machines requires [Nix](https://nixos.org/download/)
 Creates the PKI and metadata for running the CMC within SNP Confidential VMs.
 ```sh
 source env.bash
+```
+
+### QEMU VMs
+```sh
 cmc-docker setup-cmc snp
 ```
 
-The script calls [generate-rtm-manifest-snp](../bin/generate-rtm-manifest-snp), which calls the
-`virtee/sev-snp-measure` tool to precompute the SNP measurement. The number of vCPUS, the
-VMM-type and the SNP policy must be set within the script.
+### AWS EC2 VMs
+```sh
+cmc-docker snp-ec2-setup
+
+cmc-docker generate-metadata-snp [--vcpus NUM] [--vmm-type ec2]
+```
 
 ## SNP Build
 
