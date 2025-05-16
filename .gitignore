@@ -22,6 +22,7 @@ tools/measure-bundle/measure-bundle
 tools/schema-generator/schema-generator
 tools/parsetdxmrs/parsetdxmrs
 tools/dump-tdx-quote/dump-tdx-quote
+tools/hextobin/hextobin
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
