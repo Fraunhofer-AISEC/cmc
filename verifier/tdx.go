@@ -127,7 +127,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 			}
 			collateral, err = ParseCollateral(collateralRaw)
 			if err != nil {
-				log.Debugf("Could not parse TDX collateral artifcat: %v", err)
+				log.Debugf("Could not parse TDX collateral artifact: %v", err)
 				result.Summary.SetErr(ar.ParseCollateral)
 				return result, false
 			}
