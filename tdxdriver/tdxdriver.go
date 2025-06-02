@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
@@ -34,6 +35,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
 	"github.com/google/go-configfs-tsm/report"
@@ -46,9 +48,9 @@ import (
 var log = logrus.WithField("service", "tdxdriver")
 
 const (
-	tdxChainFile     = "tdx_ak_chain.pem"
-	signingChainFile = "tdx_ik_chain.pem"
-	tdxPrivFile      = "tdx_ik_private.key"
+	akChainFile = "tdx_ak_chain.pem"
+	ikChainFile = "tdx_ik_chain.pem"
+	ikFile      = "tdx_ik_private.key"
 
 	DEFAULT_CCEL_ACPI_TABLE = "/sys/firmware/acpi/tables/data/CCEL"
 )
@@ -101,20 +103,19 @@ func (tdx *Tdx) Init(c *ar.DriverConfig) error {
 		}
 		tdx.ikPriv = priv
 
-		tdx.akChain, tdx.ikChain, err = provisionTdx(priv, c.DeviceConfig,
-			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
+		err = tdx.provision(priv, c)
 		if err != nil {
 			return fmt.Errorf("failed to provision tdx driver: %w", err)
 		}
 
 		if c.StoragePath != "" {
-			err = saveCredentials(c.StoragePath, tdx)
+			err = tdx.saveCredentials(c.StoragePath)
 			if err != nil {
 				return fmt.Errorf("failed to save TDX credentials: %w", err)
 			}
 		}
 	} else {
-		tdx.akChain, tdx.ikChain, tdx.ikPriv, err = loadCredentials(c.StoragePath)
+		err = tdx.loadCredentials(c.StoragePath)
 		if err != nil {
 			return fmt.Errorf("failed to load TDX credentials: %w", err)
 		}
@@ -269,23 +270,23 @@ func GetMeasurement(nonce []byte) ([]byte, error) {
 	return resp.OutBlob, nil
 }
 
-func provisionTdx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
-) ([]*x509.Certificate, []*x509.Certificate, error) {
-
-	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikchain, err := provisionIk(priv, devConf, addr, estTlsCas, useSystemRootCas)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
-	}
+func (tdx *Tdx) provision(priv crypto.PrivateKey, c *ar.DriverConfig,
+) error {
+	var err error
 
 	// Fetch TDX certificate chain for TDX Attestation Key
-	akchain, err := fetchAk()
+	tdx.akChain, err = fetchAk()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get TDX cert chain: %w", err)
+		return fmt.Errorf("failed to get TDX cert chain: %w", err)
 	}
 
-	return akchain, ikchain, nil
+	// Create IK CSR and fetch new certificate including its chain from EST server
+	tdx.ikChain, err = tdx.provisionIk(priv, c)
+	if err != nil {
+		return fmt.Errorf("failed to get signing cert chain: %w", err)
+	}
+
+	return nil
 }
 
 func fetchAk() ([]*x509.Certificate, error) {
@@ -321,17 +322,15 @@ func fetchAk() ([]*x509.Certificate, error) {
 	}, nil
 }
 
-func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
-) ([]*x509.Certificate, error) {
+func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
-	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	client, err := est.NewClient(c.EstTlsCas, c.UseSystemRootCas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(addr)
+	caCerts, err := client.CaCerts(c.ServerAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -344,13 +343,34 @@ func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(priv, devConf.Tdx.IkCsr)
+	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Tdx.IkCsr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
+	// Use Subject Key Identifier (SKI) as nonce for attestation report
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CSR public key: %v", err)
+	}
+	nonce := sha1.Sum(pubKey)
+
+	// Fetch attestation report as part of client authentication
+	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{tdx}, c.Serializer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+	}
+	r, err := c.Serializer.Marshal(report)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+	}
+	signedReport, err := prover.Sign(r, tdx, c.Serializer, ar.IK)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
+	}
+
 	// Request IK certificate from EST server
-	cert, err := client.SimpleEnroll(addr, csr)
+	cert, err := client.AttestEnroll(c.ServerAddr, csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
@@ -366,15 +386,15 @@ func provisioningRequired(p string) bool {
 	}
 
 	// If any of the required files is not present, we need to provision
-	if _, err := os.Stat(path.Join(p, tdxChainFile)); err != nil {
+	if _, err := os.Stat(path.Join(p, akChainFile)); err != nil {
 		log.Info("TDX Provisioning REQUIRED")
 		return true
 	}
-	if _, err := os.Stat(path.Join(p, signingChainFile)); err != nil {
+	if _, err := os.Stat(path.Join(p, ikChainFile)); err != nil {
 		log.Info("TDX Provisioning REQUIRED")
 		return true
 	}
-	if _, err := os.Stat(path.Join(p, tdxPrivFile)); err != nil {
+	if _, err := os.Stat(path.Join(p, ikFile)); err != nil {
 		log.Info("TDX Provisioning REQUIRED")
 		return true
 	}
@@ -384,49 +404,47 @@ func provisioningRequired(p string) bool {
 	return false
 }
 
-func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
-	crypto.PrivateKey, error,
-) {
-	data, err := os.ReadFile(path.Join(p, tdxChainFile))
+func (tdx *Tdx) loadCredentials(p string) error {
+	data, err := os.ReadFile(path.Join(p, akChainFile))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read AK chain from %v: %w", p, err)
 	}
-	akchain, err := internal.ParseCertsPem(data)
+	tdx.akChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored AK chain of length %v", len(tdx.akChain))
 
-	data, err = os.ReadFile(path.Join(p, signingChainFile))
+	data, err = os.ReadFile(path.Join(p, ikChainFile))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read IK chain from %v: %w", p, err)
 	}
-	ikchain, err := internal.ParseCertsPem(data)
+	tdx.ikChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+		return fmt.Errorf("failed to parse IK certs: %w", err)
 	}
-	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored IK chain of length %v", len(tdx.ikChain))
 
-	data, err = os.ReadFile(path.Join(p, tdxPrivFile))
+	data, err = os.ReadFile(path.Join(p, ikFile))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read TDX private key from %v: %w", p, err)
+		return fmt.Errorf("failed to read TDX IK private key from %v: %w", p, err)
 	}
-	priv, err := x509.ParsePKCS8PrivateKey(data)
+	tdx.ikPriv, err = x509.ParsePKCS8PrivateKey(data)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse TDX private key: %w", err)
+		return fmt.Errorf("failed to parse TDX IK private key: %w", err)
 	}
 
-	return akchain, ikchain, priv, nil
+	return nil
 }
 
-func saveCredentials(p string, tdx *Tdx) error {
+func (tdx *Tdx) saveCredentials(p string) error {
 	akchainPem := make([]byte, 0)
 	for _, cert := range tdx.akChain {
 		c := internal.WriteCertPem(cert)
 		akchainPem = append(akchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, tdxChainFile), akchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, tdxChainFile), err)
+	if err := os.WriteFile(path.Join(p, akChainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, akChainFile), err)
 	}
 
 	ikchainPem := make([]byte, 0)
@@ -434,16 +452,16 @@ func saveCredentials(p string, tdx *Tdx) error {
 		c := internal.WriteCertPem(cert)
 		ikchainPem = append(ikchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, signingChainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, signingChainFile), err)
+	if err := os.WriteFile(path.Join(p, ikChainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, ikChainFile), err)
 	}
 
 	key, err := x509.MarshalPKCS8PrivateKey(tdx.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}
-	if err := os.WriteFile(path.Join(p, tdxPrivFile), key, 0600); err != nil {
-		return fmt.Errorf("failed to write %v: %w", path.Join(p, tdxPrivFile), err)
+	if err := os.WriteFile(path.Join(p, ikFile), key, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(p, ikFile), err)
 	}
 
 	return nil
