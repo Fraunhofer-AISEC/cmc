@@ -33,8 +33,23 @@ dd if="${img_raw}" of="${gpt_table}" bs=512 skip=2 count=32
 # Add GPT header to reference measurement
 cat "${gpt_header}" > "${ev_efi_gpt_event}"
 
+# Get number of entries
+num_entries=0
+for i in $(seq 0 $((gpt_entries - 1))); do
+    offset=$((i * entry_size))
+    # Extract entry
+    dd if="${gpt_table}" bs=1 skip=${offset} count="${entry_size}" of="${tmp_entry}" status=none
+    # Add if non-zero
+    if ! cmp -s "${tmp_entry}" <(head -c ${entry_size} < /dev/zero); then
+        let num_entries=num_entries+1
+    fi
+done
+
 # Add number of entries
-echo -n -e '\x04\x00\x00\x00\x00\x00\x00\x00' >> "${ev_efi_gpt_event}"
+printf '%016x\n' "${num_entries}" | \
+  sed 's/../& /g' | \
+  awk '{for(i=8;i>=1;i--) printf "%s", $i}' | \
+  xxd -r -p >> "${ev_efi_gpt_event}"
 
 # Add non-zero GPT partition table entries to reference measurement
 for i in $(seq 0 $((gpt_entries - 1))); do
