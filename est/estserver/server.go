@@ -52,9 +52,9 @@ type Server struct {
 
 func NewServer(c *config) (*Server, error) {
 
-	var tlsCerts [][]byte
-	for _, c := range c.tlsCerts {
-		tlsCerts = append(tlsCerts, c.Raw)
+	var tlsCaChain [][]byte
+	for _, c := range c.tlsCaChain {
+		tlsCaChain = append(tlsCaChain, c.Raw)
 	}
 
 	tlsCfg := &tls.Config{
@@ -67,9 +67,9 @@ func NewServer(c *config) (*Server, error) {
 		ClientCAs:  nil,
 		Certificates: []tls.Certificate{
 			{
-				Certificate: tlsCerts,
+				Certificate: tlsCaChain,
 				PrivateKey:  c.tlsKey,
-				Leaf:        c.tlsCerts[0],
+				Leaf:        c.tlsCaChain[0],
 			},
 		},
 	}
