@@ -49,7 +49,7 @@ type config struct {
 	EstCaKey        string   `json:"estCaKey"`
 	EstCaChain      []string `json:"estCaChain"`
 	TlsKey          string   `json:"tlsKey"`
-	TlsCerts        []string `json:"tlsCerts"`
+	TlsCaChain      []string `json:"tlsCaChain"`
 	HttpFolder      string   `json:"httpFolder"`
 	VerifyEkCert    bool     `json:"verifyEkCert"`
 	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
@@ -60,7 +60,7 @@ type config struct {
 	estCaKey   *ecdsa.PrivateKey
 	estCaChain []*x509.Certificate
 	tlsKey     *ecdsa.PrivateKey
-	tlsCerts   []*x509.Certificate
+	tlsCaChain []*x509.Certificate
 }
 
 const (
@@ -69,7 +69,7 @@ const (
 	estCaKeyFlag        = "estcakey"
 	estCaChainFlag      = "estcachain"
 	tlsKeyFlag          = "tlskey"
-	tlsCertsFlag        = "tlscerts"
+	tlsCaChainFlag      = "tlscachain"
 	httpFolderFlag      = "httpfolder"
 	verifyEkCertFlag    = "verifyekcert"
 	tpmEkCertDbFlag     = "tpmekcertdb"
@@ -88,7 +88,7 @@ func getConfig() (*config, error) {
 	estCaKey := flag.String(estCaKeyFlag, "", "Path to the EST CA key for signing CSRs")
 	estCaChain := flag.String(estCaChainFlag, "", "Path to the EST CA certificate chain")
 	tlsKey := flag.String(tlsKeyFlag, "", "TLS key for EST HTTPS server")
-	tlsCerts := flag.String(tlsCertsFlag, "", "TLS certificate chain for EST HTTPS server")
+	tlsCaChain := flag.String(tlsCaChainFlag, "", "TLS certificate chain for EST HTTPS server")
 	httpFolder := flag.String(httpFolderFlag, "", "Folder to be served")
 	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
 		"Indicates whether to verify TPM EK certificate chains")
@@ -131,8 +131,8 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(tlsKeyFlag) {
 		c.TlsKey = *tlsKey
 	}
-	if internal.FlagPassed(tlsCertsFlag) {
-		c.TlsCerts = strings.Split(*tlsCerts, ",")
+	if internal.FlagPassed(tlsCaChainFlag) {
+		c.TlsCaChain = strings.Split(*tlsCaChain, ",")
 	}
 	if internal.FlagPassed(httpFolderFlag) {
 		c.HttpFolder = *httpFolder
@@ -194,7 +194,7 @@ func getConfig() (*config, error) {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.tlsCerts, err = loadCertChain(c.TlsCerts)
+	c.tlsCaChain, err = loadCertChain(c.TlsCaChain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
@@ -225,10 +225,10 @@ func pathsToAbs(c *config) {
 		log.Warnf("Failed to get absolute path for %v: %v", c.TlsKey, err)
 	}
 
-	for i := 0; i < len(c.TlsCerts); i++ {
-		c.TlsCerts[i], err = filepath.Abs(c.TlsCerts[i])
+	for i := 0; i < len(c.TlsCaChain); i++ {
+		c.TlsCaChain[i], err = filepath.Abs(c.TlsCaChain[i])
 		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.TlsCerts[i], err)
+			log.Warnf("Failed to get absolute path for %v: %v", c.TlsCaChain[i], err)
 		}
 	}
 
@@ -263,7 +263,7 @@ func printConfig(c *config) {
 	log.Debugf("\tEST CA key file     : %v", c.EstCaKey)
 	log.Debugf("\tEST CA cert chain   : %v", strings.Join(c.EstCaChain, ","))
 	log.Debugf("\tTLS Key File        : %v", c.TlsKey)
-	log.Debugf("\tTLS certificates    : %v", strings.Join(c.TlsCerts, ","))
+	log.Debugf("\tTLS CA cert chain   : %v", strings.Join(c.TlsCaChain, ","))
 	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
