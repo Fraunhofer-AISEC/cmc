@@ -32,6 +32,8 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
+const HOSTNAME_PLACEHOLDER = "__HOSTNAME__"
+
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	useSystemRoots bool) (map[string][]byte, ar.Serializer, error) {
 
@@ -46,9 +48,18 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	// Iterate over all given paths, determine whether this is a file
 	// system or remote location, and fetch metadata
 	for _, p := range paths {
-		log.Debugf("Retrieving metadata from %v", p)
-		if strings.HasPrefix(p, "file://") {
-			f := strings.TrimPrefix(p, "file://")
+		// The cmc allows HOSTNAME_PLACEHOLDER placeholders to be resolved by the actual hostname
+		log.Tracef("Resolving metadata path %v", p)
+		resolvedPath, err := resolveHostnamePlaceholder(p)
+		if err != nil {
+			log.Warnf("Failed to resolve hostname: %v", err)
+			fails++
+			continue
+		}
+		log.Debugf("Retrieving metadata from %v", resolvedPath)
+		if strings.HasPrefix(resolvedPath, "file://") {
+			f := strings.TrimPrefix(resolvedPath, "file://")
+
 			data, err := loadMetadata(f)
 			if err != nil {
 				log.Warnf("failed to read %v: %v", f, err)
@@ -57,9 +68,9 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := est.FetchMetadata(p, rootCas, useSystemRoots)
+			data, err := est.FetchMetadata(resolvedPath, rootCas, useSystemRoots)
 			if err != nil {
-				log.Warnf("failed to fetch %v: %v", p, err)
+				log.Warnf("failed to fetch %v: %v", resolvedPath, err)
 				fails++
 				continue
 			}
@@ -318,4 +329,17 @@ func isNewer(t, ref string) (bool, error) {
 	}
 
 	return checktime.After(reftime), nil
+}
+
+func resolveHostnamePlaceholder(input string) (string, error) {
+	if !strings.Contains(input, HOSTNAME_PLACEHOLDER) {
+		return input, nil
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve hostname: %w", err)
+	}
+
+	return strings.ReplaceAll(input, HOSTNAME_PLACEHOLDER, hostname), nil
 }
