@@ -50,6 +50,7 @@ type Config struct {
 	EstTlsCas      []string `json:"estTlsCas,omitempty"`
 	EstTlsSysRoots bool     `json:"estTlsSysRoots"`
 	Vmpl           int      `json:"vmpl"`
+	Token          string   `json:"token"`
 }
 
 const (
@@ -73,6 +74,7 @@ const (
 	EstTlsCasFlag      = "esttlscas"
 	EstTlsSysRootsFlag = "esttlssysroots"
 	VmplFlag           = "vmpl"
+	TokenFlag          = "token"
 )
 
 var (
@@ -105,6 +107,7 @@ var (
 	estTlsCas      = flag.String(EstTlsCasFlag, "", "Path to the EST TLS CA certificates")
 	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
 	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
+	token          = flag.String(TokenFlag, "", "Bootstrap token for EST client authentication")
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -172,6 +175,9 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(VmplFlag) {
 		c.Vmpl = *vmpl
+	}
+	if internal.FlagPassed(TokenFlag) {
+		c.Token = *token
 	}
 
 	// Convert all paths to absolute paths
@@ -245,6 +251,12 @@ func pathsToAbs(c *Config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.EstTlsCas[i], err)
 		}
 	}
+	if c.Token != "" {
+		c.Token, err = filepath.Abs(c.Token)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
+		}
+	}
 }
 
 func (c *Config) Print() {
@@ -281,4 +293,7 @@ func (c *Config) Print() {
 		log.Debugf("\tEST TLS CA path                : %v", ca)
 	}
 	log.Debugf("\tUse system root CAs for EST TLS: %v", c.EstTlsSysRoots)
+	if c.Token != "" {
+		log.Debugf("\tBootstrap token                : %v", c.Token)
+	}
 }

@@ -107,12 +107,16 @@ func GetConfig() (*Config, error) {
 		}
 		logrus.SetOutput(file)
 	}
-	l, ok := logLevels[strings.ToLower(c.LogLevel)]
-	if !ok {
-		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
-		l = logrus.InfoLevel
+	if c.LogLevel != "" {
+		l, ok := logLevels[strings.ToLower(c.LogLevel)]
+		if !ok {
+			log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
+			l = logrus.InfoLevel
+		}
+		logrus.SetLevel(l)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
 	}
-	logrus.SetLevel(l)
 
 	// Output the configuration
 	c.Print()

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2024 Fraunhofer AISEC
+// Copyright (c) 2021 - 2025 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,15 +22,16 @@ import (
 
 var (
 	cmds = map[string]func(*config){
-		"cacerts":  getCaCerts, // Retrieve CA certs from EST server
-		"generate": generate,   // Generate an attestation report
-		"verify":   verify,     // Verify an attestation report
-		"measure":  measure,    // Record measurements
-		"dial":     dial,       // Act as client to establish an attested TLS connection
-		"listen":   listen,     // Act as server in etsblishing attested TLS connections
-		"request":  request,    // Perform an attested HTTPS request
-		"serve":    serve,      // Establish an attested HTTPS server
-		"iothub":   iothub,     // Simulate an IoT hub for Cortex-M IAS Attestation Demo
+		"cacerts":   cacerts,   // Retrieve CA certs from EST server
+		"generate":  generate,  // Generate an attestation report
+		"verify":    verify,    // Verify an attestation report
+		"measure":   measure,   // Record measurements
+		"dial":      dial,      // Act as client to establish an attested TLS connection
+		"listen":    listen,    // Act as server in etsblishing attested TLS connections
+		"request":   request,   // Perform an attested HTTPS request
+		"serve":     serve,     // Establish an attested HTTPS server
+		"token":     token,     // Request a bootstrap-token for EST certificate requests
+		"provision": provision, // Retrieve provisioning data for CVMs
 	}
 )
 

@@ -98,7 +98,7 @@ func (s JsonSerializer) Unmarshal(data []byte, v any) error {
 // Sign signs data with the specified driver (to enable hardware-based signatures)
 func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error) {
 
-	log.Tracef("Signing data length %v", len(data))
+	log.Tracef("Signing JSON data length %v...", len(data))
 
 	// This allows the signer to ensure mutual access for signing, if required
 	driver.Lock()
@@ -143,13 +143,15 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 	}
 	opaqueSigner = jose.OpaqueSigner(hws)
 
-	// Create jose.Signer with OpaqueSigner
-	// x5c: adds Certificate Chain in later result
-	var opt jose.SignerOptions
+	// Create signer with certificate chain header if present
+	opts := &jose.SignerOptions{}
+	if len(certsb64) > 0 {
+		opts.WithHeader("x5c", certsb64)
+	}
 	var joseSigner jose.Signer
 	joseSigner, err = jose.NewSigner(
 		jose.SigningKey{Algorithm: alg, Key: opaqueSigner},
-		opt.WithHeader("x5c", certsb64),
+		opts,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup signer : %w", err)
@@ -173,13 +175,15 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool, pubKey crypto.PublicKey,
 ) (MetadataResult, []byte, bool) {
 
+	log.Debugf("Verifying JWS object...")
+
 	var rootpool *x509.CertPool
 	var err error
 	result := MetadataResult{}
 	ok := true
 
 	if useSystemCerts {
-		log.Debug("Using system certificate pool in absence of provided root certifcates")
+		log.Debug("Using system certificate pool for JWS verification")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
 			log.Warnf("Failed to setup trusted cert pool with system certificate pool")
@@ -187,11 +191,20 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 			result.Summary.ErrorCode = SetupSystemCA
 			return result, nil, false
 		}
-	} else {
+	} else if len(roots) > 0 {
+		log.Debugf("Using %v provided root CAs for JWS verification", len(roots))
 		rootpool = x509.NewCertPool()
 		for _, cert := range roots {
 			rootpool.AddCert(cert)
 		}
+	} else if pubKey != nil {
+		log.Debug("Using provided public key for JWS verification")
+		rootpool = nil
+	} else {
+		log.Warn("No JWS verification key or certificate chain provided")
+		result.Summary.Success = false
+		result.Summary.ErrorCode = JWSNoKeyOrCert
+		return result, nil, false
 	}
 
 	opts := x509.VerifyOptions{
@@ -270,7 +283,7 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 		}
 
 		if index[i] != i {
-			log.Warn("order of signatures incorrect")
+			log.Warnf("Order of signatures incorrect (index %v != iterator %v)", index[i], i)
 			result.Summary.ErrorCode = JWSSignatureOrder
 			ok = false
 		}
@@ -282,6 +295,10 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 				ok = false
 			}
 		}
+	}
+
+	if ok {
+		log.Debug("Successfully verified JWS object")
 	}
 
 	payload := payloads[0]

@@ -7,4 +7,4 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 cd "${dir}"
 
-exec "${dir}/est/estserver/estserver" -config "${dir}/example-setup/vm-config/est-server-conf.json"
+exec "${dir}/provision/estserver/estserver" -config "${dir}/example-setup/vm-config/est-server-conf.json"

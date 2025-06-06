@@ -24,11 +24,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/sirupsen/logrus"
 )
 
@@ -50,6 +51,13 @@ type Sw struct {
 	serializer ar.Serializer
 }
 
+const (
+	akchainFile = "sw_ak_chain.pem"
+	ikchainFile = "sw_ik_chain.pem"
+	akFile      = "sw_ak_private.key"
+	ikFile      = "sw_ik_private.key"
+)
+
 // Name returns the name of the driver
 func (s *Sw) Name() string {
 	return "SW driver"
@@ -57,6 +65,7 @@ func (s *Sw) Name() string {
 
 // Init a new object for software-based signing
 func (s *Sw) Init(c *ar.DriverConfig) error {
+	var err error
 
 	if s == nil {
 		return errors.New("internal error: SW object is nil")
@@ -70,25 +79,40 @@ func (s *Sw) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
-	// Create new IK private key
-	akPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("failed to generate AK private key: %w", err)
-	}
-	s.akPriv = akPriv
+	if provisioningRequired(c.StoragePath) {
+		log.Info("Performing SW provisioning")
 
-	// Create new AK private key
-	ikPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("failed to generate IK private key: %w", err)
-	}
-	s.ikPriv = ikPriv
+		// Create new IK private key
+		akPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return fmt.Errorf("failed to generate AK private key: %w", err)
+		}
+		s.akPriv = akPriv
 
-	// Create CSR and fetch new certificate including its chain from EST server
-	s.akChain, s.ikChain, err = provisionSw(akPriv, ikPriv, c.DeviceConfig,
-		c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
-	if err != nil {
-		return fmt.Errorf("failed to provision sw driver: %w", err)
+		// Create new AK private key
+		ikPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return fmt.Errorf("failed to generate IK private key: %w", err)
+		}
+		s.ikPriv = ikPriv
+
+		// Create CSR and fetch new certificate including its chain from EST server
+		s.akChain, s.ikChain, err = provisionSw(akPriv, ikPriv, c)
+		if err != nil {
+			return fmt.Errorf("failed to provision sw driver: %w", err)
+		}
+
+		if c.StoragePath != "" {
+			err = saveCredentials(c.StoragePath, s)
+			if err != nil {
+				return fmt.Errorf("failed to save SNP credentials: %w", err)
+			}
+		}
+	} else {
+		s.akChain, s.ikChain, s.akPriv, s.ikPriv, err = loadCredentials(c.StoragePath)
+		if err != nil {
+			return fmt.Errorf("failed to load SW credentials: %w", err)
+		}
 	}
 
 	s.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "sw")
@@ -206,19 +230,48 @@ func (s *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	return measurement, nil
 }
 
-func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
+func provisioningRequired(p string) bool {
+	// Stateless operation always requires provisioning
+	if p == "" {
+		log.Info("SW Provisioning REQUIRED")
+		return true
+	}
+
+	// If any of the required files is not present, we need to provision
+	if _, err := os.Stat(path.Join(p, akchainFile)); err != nil {
+		log.Info("SW Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, ikchainFile)); err != nil {
+		log.Info("SW Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, akFile)); err != nil {
+		log.Info("SW Provisioning REQUIRED")
+		return true
+	}
+	if _, err := os.Stat(path.Join(p, ikFile)); err != nil {
+		log.Info("SW Provisioning REQUIRED")
+		return true
+	}
+
+	log.Info("SW Provisioning NOT REQUIRED")
+
+	return false
+}
+
+func provisionSw(ak, ik crypto.PrivateKey, c *ar.DriverConfig,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	log.Info("Performing SW provisioning")
 
-	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(addr)
+	caCerts, err := client.CaCerts(c.ServerAddr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -231,13 +284,13 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 
 	// Perform AK EST enrollment
-	akCsr, err := ar.CreateCsr(ak, devConf.Sw.AkCsr)
+	akCsr, err := ar.CreateCsr(ak, c.DeviceConfig.Sw.AkCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
 	log.Debugf("Performing simple AK enroll for CN=%v", akCsr.Subject.CommonName)
-	akCert, err := client.SimpleEnroll(addr, akCsr)
+	akCert, err := client.SimpleEnroll(c.ServerAddr, akCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll AK cert: %w", err)
 	}
@@ -246,13 +299,13 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	log.Debugf("Received certificate CN=%v", akCert.Subject.CommonName)
 
 	// Perform IK EST enrollment
-	ikCsr, err := ar.CreateCsr(ik, devConf.Sw.IkCsr)
+	ikCsr, err := ar.CreateCsr(ik, c.DeviceConfig.Sw.IkCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
 	}
 
 	log.Debugf("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := client.SimpleEnroll(addr, ikCsr)
+	ikCert, err := client.SimpleEnroll(c.ServerAddr, ikCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)
 	}
@@ -261,4 +314,86 @@ func provisionSw(ak, ik crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	log.Debugf("Received certificate CN=%v", ikCert.Subject.CommonName)
 
 	return akChain, ikChain, nil
+}
+
+func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
+	crypto.PrivateKey, crypto.PrivateKey, error,
+) {
+	data, err := os.ReadFile(path.Join(p, akchainFile))
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+	}
+	akchain, err := internal.ParseCertsPem(data)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+	}
+	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
+
+	data, err = os.ReadFile(path.Join(p, ikchainFile))
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+	}
+	ikchain, err := internal.ParseCertsPem(data)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+	}
+	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
+
+	data, err = os.ReadFile(path.Join(p, akFile))
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to read AK private key from %v: %w", p, err)
+	}
+	ak, err := x509.ParsePKCS8PrivateKey(data)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to parse AK private key: %w", err)
+	}
+
+	data, err = os.ReadFile(path.Join(p, ikFile))
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to read IK private key from %v: %w", p, err)
+	}
+	ik, err := x509.ParsePKCS8PrivateKey(data)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to parse IK private key: %w", err)
+	}
+
+	return akchain, ikchain, ak, ik, nil
+}
+
+func saveCredentials(p string, sw *Sw) error {
+	akchainPem := make([]byte, 0)
+	for _, cert := range sw.akChain {
+		c := internal.WriteCertPem(cert)
+		akchainPem = append(akchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(p, akchainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, akchainFile), err)
+	}
+
+	ikchainPem := make([]byte, 0)
+	for _, cert := range sw.ikChain {
+		c := internal.WriteCertPem(cert)
+		ikchainPem = append(ikchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(p, ikchainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(p, ikchainFile), err)
+	}
+
+	ak, err := x509.MarshalPKCS8PrivateKey(sw.ikPriv)
+	if err != nil {
+		return fmt.Errorf("failed marshal private key: %w", err)
+	}
+	if err := os.WriteFile(path.Join(p, akFile), ak, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(p, akFile), err)
+	}
+
+	ik, err := x509.MarshalPKCS8PrivateKey(sw.ikPriv)
+	if err != nil {
+		return fmt.Errorf("failed marshal private key: %w", err)
+	}
+	if err := os.WriteFile(path.Join(p, ikFile), ik, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(p, ikFile), err)
+	}
+
+	return nil
 }

@@ -21,11 +21,11 @@ import (
 
 	// local modules
 
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 )
 
-func getCaCertsInternal(c *config) {
+func getCaCerts(c *config) {
 	addr := ""
 	if len(c.Addr) > 0 {
 		addr = c.Addr[0]
@@ -43,7 +43,7 @@ func getCaCertsInternal(c *config) {
 		estTlsCas = append(estTlsCas, ca)
 	}
 
-	client, err := est.NewClient(estTlsCas, c.EstTlsSysRoots)
+	client, err := estclient.NewClient(estTlsCas, c.EstTlsSysRoots, nil)
 	if err != nil {
 		log.Fatalf("Failed to create EST client: %v", err)
 	}

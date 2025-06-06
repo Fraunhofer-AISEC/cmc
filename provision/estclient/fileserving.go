@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package client
+package estclient
 
 import (
 	"crypto/x509"
@@ -42,12 +42,12 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	useSystemRoots bool,
 ) ([][]byte, error) {
 
-	client, err := NewClient(rootCas, useSystemRoots)
+	client, err := NewClient(rootCas, useSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
-	resp, err := request(client.client, http.MethodGet, addr, "", "", "", nil)
+	resp, err := request(client.client, http.MethodGet, addr, "", "", "", nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -104,7 +104,7 @@ func fetchDataRecursively(client *Client, pre Pre, addr string) ([][]byte, error
 		}
 
 		log.Tracef("Requesting data from %v", subpath)
-		resp, err := request(client.client, http.MethodGet, subpath, "", "", "", nil)
+		resp, err := request(client.client, http.MethodGet, subpath, "", "", "", nil, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to perform request: %w", err)
 		}

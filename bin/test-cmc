@@ -177,7 +177,7 @@ sudo rm -rf "${log_dir}"
 mkdir -p "${log_dir}"
 
 # Start est server
-sudo "${dir}/est/estserver/estserver" "${est_params[@]}" &
+sudo "${dir}/provision/estserver/estserver" "${est_params[@]}" &
 disown
 sleep 0.2
 stty sane

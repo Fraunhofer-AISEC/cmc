@@ -59,7 +59,6 @@ var (
 )
 
 type Api interface {
-	cacerts(c *config)
 	generate(c *config)
 	verify(c *config)
 	measure(c *config)
@@ -67,7 +66,6 @@ type Api interface {
 	listen(c *config)
 	request(c *config)
 	serve(c *config)
-	iothub(c *config)
 }
 
 type config struct {
@@ -146,7 +144,7 @@ var (
 	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
 	identityCas  = flag.String(identityCasFlag, "", "Trusted certificate authorities for attestation reports")
 	metadataCas  = flag.String(metadataCasFlag, "", "Trusted certificate authorities for metadata")
-	estCa        = flag.String(estCaFlag, "", "Path to store CA retrieved from /cacerts endpoint via mode cacerts")
+	estCa        = flag.String(estCaFlag, "", "Path to store retrieved CA certificates")
 	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
@@ -176,6 +174,9 @@ func getConfig() *config {
 
 	// Initialize configuration with some default values
 	c := &config{
+		Config: cmc.Config{
+			Api: "socket",
+		},
 		ApiSerializer: "cbor",
 		Attest:        "mutual",
 		IntervalStr:   "0s",
@@ -283,12 +284,16 @@ func getConfig() *config {
 		}
 		logrus.SetOutput(file)
 	}
-	l, ok := logLevels[strings.ToLower(c.LogLevel)]
-	if !ok {
-		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
-		l = logrus.InfoLevel
+	if c.LogLevel != "" {
+		l, ok := logLevels[strings.ToLower(c.LogLevel)]
+		if !ok {
+			log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
+			l = logrus.InfoLevel
+		}
+		logrus.SetLevel(l)
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
 	}
-	logrus.SetLevel(l)
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
 	if err != nil {
@@ -309,7 +314,7 @@ func getConfig() *config {
 	c.Print()
 
 	// Get root CA certificate in PEM format if specified
-	if c.Mode != "generate" && c.Mode != "cacerts" && c.Mode != "measure" {
+	if c.Mode == "verify" || c.Mode == "dial" || c.Mode == "listen" || c.Mode == "request" || c.Mode == "serve" {
 		if len(c.IdentityCas) == 0 {
 			log.Fatal("Path to read Report CAs must be specified either via config file or commandline")
 		}
@@ -343,8 +348,11 @@ func getConfig() *config {
 
 	}
 
-	if c.Mode == "cacerts" && c.EstCa == "" {
-		log.Fatal("Path to store EST CA must be specified either via config file or commandline")
+	if (c.Mode == "cacerts" || c.Mode == "provision") && c.EstCa == "" {
+		log.Fatal("Path to store CA must be specified either via config file or commandline")
+	}
+	if c.Mode == "provision" && c.Token == "" {
+		log.Fatal("Path to store bootstrap token must be specified either via config file or commandline")
 	}
 
 	// Add optional policies if specified
@@ -414,6 +422,12 @@ func pathsToAbs(c *config) {
 	}
 	if c.EstCa != "" {
 		c.EstCa, err = filepath.Abs(c.EstCa)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.EstCa, err)
+		}
+	}
+	if c.Token != "" {
+		c.Token, err = filepath.Abs(c.Token)
 		if err != nil {
 			log.Warnf("Failed to get absolute path for %v: %v", c.EstCa, err)
 		}

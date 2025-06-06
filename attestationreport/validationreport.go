@@ -466,6 +466,7 @@ const (
 	JWSNoSignatures
 	JWSSignatureOrder
 	JWSPayload
+	JWSNoKeyOrCert
 	COSENoSignatures
 	MeasurementNoMatch
 	MeasurementTypeNotSupported
@@ -565,6 +566,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (JWS signature order error)", int(e))
 	case JWSPayload:
 		return fmt.Sprintf("%v (JWS payload error)", int(e))
+	case JWSNoKeyOrCert:
+		return fmt.Sprintf("%v (JWS No key or cert provided)", int(e))
 	case COSENoSignatures:
 		return fmt.Sprintf("%v (COSE no signatures error)", int(e))
 	case MeasurementNoMatch:

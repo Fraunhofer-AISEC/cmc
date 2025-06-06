@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"mime"
@@ -34,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	est "github.com/Fraunhofer-AISEC/cmc/est/common"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
@@ -51,6 +50,8 @@ type Server struct {
 	metadataCas []*x509.Certificate
 	tpmConf     tpmConfig
 	snpConf     snpConfig
+	authMethods AuthMethod
+	tokenPath   string
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -63,10 +64,9 @@ func NewServer(c *config) (*Server, error) {
 	tlsCfg := &tls.Config{
 		MinVersion:       tls.VersionTLS12,
 		CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		// The client does not need to authenticate itself during the TLS handshake, as client
-		// trust anchor authentication (e.g., TPM credential activation) is performed during
-		// certificate enrollment.
-		ClientAuth: tls.VerifyClientCertIfGiven,
+		// The client does authenticate itself via an attestation and/or
+		// a token as configured
+		ClientAuth: tls.NoClientCert,
 		ClientCAs:  nil,
 		Certificates: []tls.Certificate{
 			{
@@ -77,10 +77,23 @@ func NewServer(c *config) (*Server, error) {
 		},
 	}
 
-	addr := fmt.Sprintf(":%v", c.Port)
+	// The client does authenticate itself via a certificate if configured
+	if c.authMethods.Has(AuthCertificate) {
+		log.Debugf("Enforcing client authentication via certificate")
+		clientRoots := x509.NewCertPool()
+		for _, ca := range c.ClientTlsCas {
+			c, err := internal.ReadCert(ca)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse client CA certificate: %w", err)
+			}
+			clientRoots.AddCert(c)
+		}
+		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+		tlsCfg.ClientCAs = clientRoots
+	}
 
 	s := &http.Server{
-		Addr:      addr,
+		Addr:      c.EstAddr,
 		Handler:   nil,
 		TLSConfig: tlsCfg,
 	}
@@ -98,6 +111,8 @@ func NewServer(c *config) (*Server, error) {
 			vcekCacheFolder: c.VcekCacheFolder,
 			vceks:           make(map[vcekInfo][]byte),
 		},
+		authMethods: c.authMethods,
+		tokenPath:   c.TokenPath,
 	}
 
 	cacertsEndpoint := est.EndpointPrefix + est.CacertsEndpoint
@@ -124,15 +139,13 @@ func NewServer(c *config) (*Server, error) {
 	return server, nil
 }
 
-func (s *Server) Serve() {
+func (s *Server) Serve() error {
+	log.Infof("Waiting for EST requests on %v (https)", s.server.Addr)
 	err := s.server.ListenAndServeTLS("", "")
 	if err != nil {
-		if errors.Is(err, http.ErrServerClosed) {
-			log.Infof("Server closed")
-		} else {
-			log.Errorf("Server failed: %v", err)
-		}
+		return fmt.Errorf("EST server failed: %w", err)
 	}
+	return nil
 }
 
 func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
@@ -143,6 +156,9 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 		writeHttpErrorf(w, "Method %v not implemented for cacerts request", req.Method)
 		return
 	}
+
+	// RFC7030: The EST server SHOULD NOT require client authentication, thus
+	// we do not perform token authentication, even if configured
 
 	body, err := est.EncodePkcs7CertsOnly(s.estCaChain)
 	if err != nil {
@@ -165,6 +181,18 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for simpleenroll request", req.Method)
 		return
+	}
+
+	if s.authMethods.Has(AuthAttestation) {
+		writeHttpErrorf(w, "%v (Server config requires attetation-based authentication)", http.StatusUnauthorized)
+		return
+	}
+
+	if s.authMethods.Has(AuthToken) {
+		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
+			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
+			return
+		}
 	}
 
 	// Check content type pkcs10 CSR
@@ -215,12 +243,18 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	if s.authMethods.Has(AuthToken) {
+		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
+			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
+			return
+		}
+	}
+
 	var tpmInfo string
 	var ekCertUrl string
 	var csr *x509.CertificateRequest
 	var ekCertDer []byte
 	var ekPubPkix []byte
-	// TODO is there a TPM structure that summarizes this data?
 	var akPublic []byte
 	var akCreateData []byte
 	var akCreateAttestation []byte
@@ -326,6 +360,13 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	if s.authMethods.Has(AuthToken) {
+		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
+			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
+			return
+		}
+	}
+
 	var csr *x509.CertificateRequest
 	// TODO is there a TPM structure that summarizes this data?
 	var ikPublic []byte
@@ -397,6 +438,13 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for tpmcertifyenroll request", req.Method)
 		return
+	}
+
+	if s.authMethods.Has(AuthToken) {
+		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
+			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
+			return
+		}
 	}
 
 	var csr *x509.CertificateRequest
@@ -477,6 +525,13 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if s.authMethods.Has(AuthToken) {
+		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
+			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
+			return
+		}
+	}
+
 	var chipId []byte
 	var tcb uint64
 
@@ -520,6 +575,13 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for /snpca request", req.Method)
 		return
+	}
+
+	if s.authMethods.Has(AuthToken) {
+		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
+			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
+			return
+		}
 	}
 
 	var akTypeRaw []byte
@@ -692,4 +754,21 @@ func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) 
 	msg := fmt.Sprintf(format, args...)
 	log.Warn(msg)
 	http.Error(w, msg, http.StatusBadRequest)
+}
+
+func verifyBootStrapToken(tokenPath string, req *http.Request) error {
+
+	authHeader := req.Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		return fmt.Errorf("missing or invalid authorization header")
+	}
+
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	token = strings.TrimSpace(token)
+
+	if err := est.VerifyToken(tokenPath, token); err != nil {
+		return fmt.Errorf("failed to verify bootstrap token: %w", err)
+	}
+
+	return nil
 }

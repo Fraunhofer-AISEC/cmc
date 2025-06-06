@@ -22,7 +22,7 @@ go install ./...
 ## Build the Provisioning Server
 
 ```sh
-cd est/estserver
+cd provision/estserver
 go build
 ```
 
