@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Fraunhofer-AISEC/cmc/est/common"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm/legacy/tpm2"
 
@@ -145,7 +145,7 @@ func parseIntelEkCert(data []byte) (*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to unmarshal Intel EK: %w", err)
 	}
 
-	der, err := common.DecodeBase64Url([]byte(intelEk.Cert))
+	der, err := est.DecodeBase64Url([]byte(intelEk.Cert))
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64: %w", err)
 	}

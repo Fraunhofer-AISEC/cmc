@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
@@ -43,41 +44,57 @@ var (
 	}
 )
 
+type AuthMethod uint32
+
+const (
+	AuthNone  AuthMethod = 0
+	AuthToken AuthMethod = 1 << iota
+	AuthCertificate
+	AuthAttestation
+)
+
 type config struct {
-	Port            int      `json:"port"`
+	EstAddr         string   `json:"estAddr"`
 	EstCaKey        string   `json:"estCaKey"`
 	EstCaChain      []string `json:"estCaChain"`
 	TlsKey          string   `json:"tlsKey"`
 	TlsCaChain      []string `json:"tlsCaChain"`
 	MetadataCas     []string `json:"metadataCas"`
+	ClientTlsCas    []string `json:"clientTlsCas"`
 	HttpFolder      string   `json:"httpFolder"`
 	VerifyEkCert    bool     `json:"verifyEkCert"`
 	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
 	VcekCacheFolder string   `json:"vcekCacheFolder,omitempty"`
 	LogLevel        string   `json:"logLevel"`
 	LogFile         string   `json:"logFile,omitempty"`
+	AuthMethods     []string `json:"authMethods,omitempty"`
+	TokenPath       string   `json:"tokenPath"`
 
 	estCaKey    *ecdsa.PrivateKey
 	estCaChain  []*x509.Certificate
 	tlsKey      *ecdsa.PrivateKey
 	tlsCaChain  []*x509.Certificate
 	metadataCas []*x509.Certificate
+	authMethods AuthMethod
 }
 
 const (
 	configFlag          = "config"
-	portFlag            = "port"
+	tokenPathFlag       = "tokenPath"
+	estAddrFlag         = "estaddr"
 	estCaKeyFlag        = "estcakey"
 	estCaChainFlag      = "estcachain"
 	tlsKeyFlag          = "tlskey"
 	tlsCaChainFlag      = "tlscachain"
 	metadataCasFlag     = "metadatacas"
+	clientTlsCasFlag    = "clienttlscas"
 	httpFolderFlag      = "httpfolder"
 	verifyEkCertFlag    = "verifyekcert"
 	tpmEkCertDbFlag     = "tpmekcertdb"
 	vcekCacheFolderFlag = "vcekcachefolder"
 	logLevelFlag        = "loglevel"
 	logFileFlag         = "logfile"
+	authMethodsFlag     = "authmethods"
 )
 
 func getConfig() (*config, error) {
@@ -86,12 +103,14 @@ func getConfig() (*config, error) {
 
 	// Parse given command line flags
 	configFile := flag.String(configFlag, "", "configuration file")
-	port := flag.Int(portFlag, 0, "Port to listen on")
+	tokenAddr := flag.String(tokenPathFlag, "", "Local address to request tokens")
+	estAddr := flag.String(estAddrFlag, "", "EST server address to listen for EST requests")
 	estCaKey := flag.String(estCaKeyFlag, "", "Path to the EST CA key for signing CSRs")
 	estCaChain := flag.String(estCaChainFlag, "", "Path to the EST CA certificate chain")
 	tlsKey := flag.String(tlsKeyFlag, "", "TLS key for EST HTTPS server")
 	tlsCaChain := flag.String(tlsCaChainFlag, "", "TLS certificate chain for EST HTTPS server")
 	metadataCas := flag.String(metadataCasFlag, "", "Trusted metadata root CAs for attest enroll")
+	clientTlsCas := flag.String(clientTlsCasFlag, "", "Trusted root CAs for client authentication if active")
 	httpFolder := flag.String(httpFolderFlag, "", "Folder to be served")
 	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
 		"Indicates whether to verify TPM EK certificate chains")
@@ -100,13 +119,15 @@ func getConfig() (*config, error) {
 	logLevel := flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	logFile := flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
+	authMethods := flag.String(authMethodsFlag, "", "Client authentication methods (none,token,certificate,attestation)")
 	flag.Parse()
 
 	// Create default configuration
 	c := &config{
-		Port:         9000,
+		EstAddr:      "0.0.0.0:9000",
 		VerifyEkCert: true,
 		LogLevel:     "info",
+		AuthMethods:  []string{"attestation"},
 	}
 
 	// Obtain custom configuration from file if specified
@@ -122,8 +143,11 @@ func getConfig() (*config, error) {
 	}
 
 	// Overwrite config file configuration with given commandline arguments
-	if internal.FlagPassed(portFlag) {
-		c.Port = *port
+	if internal.FlagPassed(tokenPathFlag) {
+		c.TokenPath = *tokenAddr
+	}
+	if internal.FlagPassed(estAddrFlag) {
+		c.EstAddr = *estAddr
 	}
 	if internal.FlagPassed(estCaKeyFlag) {
 		c.EstCaKey = *estCaKey
@@ -140,6 +164,9 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(*metadataCas) {
 		c.MetadataCas = strings.Split(*metadataCas, ",")
 	}
+	if internal.FlagPassed(*clientTlsCas) {
+		c.ClientTlsCas = strings.Split(*clientTlsCas, ",")
+	}
 	if internal.FlagPassed(httpFolderFlag) {
 		c.HttpFolder = *httpFolder
 	}
@@ -152,11 +179,14 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(vcekCacheFolderFlag) {
 		c.VcekCacheFolder = *vcekCacheFolder
 	}
-	if internal.FlagPassed(logFileFlag) {
+	if internal.FlagPassed(logLevelFlag) {
 		c.LogLevel = *logLevel
 	}
 	if internal.FlagPassed(logFileFlag) {
 		c.LogFile = *logFile
+	}
+	if internal.FlagPassed(authMethodsFlag) {
+		c.AuthMethods = strings.Split(*authMethods, ",")
 	}
 
 	// Configure the logger
@@ -173,16 +203,13 @@ func getConfig() (*config, error) {
 	}
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
-		flag.Usage()
-		log.Fatalf("LogLevel %v does not exist", c.LogLevel)
+		log.Warnf("LogLevel %v does not exist Default to info level", c.LogLevel)
+		l = logrus.InfoLevel
 	}
 	log.SetLevel(l)
 
 	// Convert all paths to absolute paths
 	pathsToAbs(c)
-
-	// Print the parsed configuration
-	printConfig(c)
 
 	// Load specified files
 	c.estCaKey, err = loadPrivateKey(c.EstCaKey)
@@ -213,6 +240,14 @@ func getConfig() (*config, error) {
 	if !c.VerifyEkCert {
 		log.Warn("UNSAFE: Verification of EK certificate chain turned off via config")
 	}
+
+	c.authMethods, err = parseAuthMethods(c.AuthMethods)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
+	}
+
+	// Print the parsed configuration
+	printConfig(c)
 
 	return c, nil
 }
@@ -250,6 +285,13 @@ func pathsToAbs(c *config) {
 		}
 	}
 
+	for i := 0; i < len(c.ClientTlsCas); i++ {
+		c.ClientTlsCas[i], err = filepath.Abs(c.ClientTlsCas[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.MetadataCas[i], err)
+		}
+	}
+
 	c.HttpFolder, err = filepath.Abs(c.HttpFolder)
 	if err != nil {
 		log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
@@ -277,16 +319,23 @@ func printConfig(c *config) {
 	log.Infof("Running estserver from working directory %v", wd)
 
 	log.Debug("Using the following configuration:")
-	log.Debugf("\tPort                : %v", c.Port)
+	log.Debugf("\tToken path          : %v", c.TokenPath)
+	log.Debugf("\tEST server address  : %v", c.EstAddr)
 	log.Debugf("\tEST CA key file     : %v", c.EstCaKey)
 	log.Debugf("\tEST CA cert chain   : %v", strings.Join(c.EstCaChain, ","))
 	log.Debugf("\tTLS Key File        : %v", c.TlsKey)
 	log.Debugf("\tTLS CA cert chain   : %v", strings.Join(c.TlsCaChain, ","))
+	log.Debugf("\tMetadata CAs        : %v", strings.Join(c.MetadataCas, ","))
+	for _, cca := range c.ClientTlsCas {
+		log.Debugf("\tClient TLS CAs:     : %v", cca)
+	}
 	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
 	log.Debugf("\tVCEK Cache Folder   : %v", c.VcekCacheFolder)
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
+	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
+	log.Debugf("\tToken Path          : %v", c.TokenPath)
 }
 
 func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
@@ -305,4 +354,46 @@ func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
 	}
 
 	return priv, nil
+}
+
+func parseAuthMethods(input []string) (AuthMethod, error) {
+	var methods AuthMethod
+	for _, part := range input {
+		switch strings.TrimSpace(strings.ToLower(part)) {
+		case "none":
+			methods |= AuthNone
+		case "token":
+			methods |= AuthToken
+		case "certificate":
+			methods |= AuthCertificate
+		case "attestation":
+			methods |= AuthAttestation
+		default:
+			return 0, fmt.Errorf("unknown auth method: %q", part)
+		}
+	}
+	return methods, nil
+}
+
+func (a AuthMethod) Has(method AuthMethod) bool {
+	return a&method != 0
+}
+
+func (a AuthMethod) String() string {
+	if a == AuthNone {
+		return "none"
+	}
+
+	var parts []string
+	if a.Has(AuthToken) {
+		parts = append(parts, "token")
+	}
+	if a.Has(AuthCertificate) {
+		parts = append(parts, "certificate")
+	}
+	if a.Has(AuthAttestation) {
+		parts = append(parts, "attestation")
+	}
+
+	return strings.Join(parts, ",")
 }

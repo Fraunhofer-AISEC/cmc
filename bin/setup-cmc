@@ -66,7 +66,7 @@ echo "Using ${data} as directory for local data"
 # Build CMC
 go build -C "${dir}/testtool"
 go build -C "${dir}/cmcd"
-go build -C "${dir}/est/estserver"
+go build -C "${dir}/provision/estserver"
 go build -C "${dir}/tools/metaconv"
 go build -C "${dir}/tools/metasign"
 

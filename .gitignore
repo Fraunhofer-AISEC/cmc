@@ -8,8 +8,9 @@
 /vm/
 cmcd/cmcd
 testtool/testtool
+testtool/token
 testtool/ca.pem
-est/estserver/estserver
+provision/estserver/estserver
 **/nonce
 **/attestation-report
 **/attestation-result.json

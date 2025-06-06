@@ -207,18 +207,6 @@ func (a CoapApi) serve(c *config) {
 	serveInternal(c, attestedtls.CmcApi_COAP, nil)
 }
 
-func (a CoapApi) cacerts(c *config) {
-	getCaCertsInternal(c)
-}
-
-func (a CoapApi) iothub(c *config) {
-	// Start coap server
-	err := serveHub(c)
-	if err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
-}
-
 func verifyInternal(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 

@@ -33,9 +33,9 @@ import (
 	"golang.org/x/exp/maps"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
 	"github.com/google/go-configfs-tsm/report"
@@ -324,7 +324,7 @@ func fetchAk() ([]*x509.Certificate, error) {
 
 func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
-	client, err := est.NewClient(c.EstTlsCas, c.UseSystemRootCas)
+	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}

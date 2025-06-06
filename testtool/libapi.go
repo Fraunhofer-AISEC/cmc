@@ -186,10 +186,6 @@ func (a LibApi) measure(c *config) {
 	log.Debug("Measure: Recorded measurement")
 }
 
-func (a LibApi) cacerts(c *config) {
-	getCaCertsInternal(c)
-}
-
 func (a LibApi) dial(c *config) {
 	if a.cmc == nil {
 		cmc, err := initialize(c)
@@ -241,10 +237,6 @@ func (a LibApi) serve(c *config) {
 	}
 
 	serveInternal(c, attestedtls.CmcApi_Lib, a.cmc)
-}
-
-func (a LibApi) iothub(c *config) {
-	log.Fatalf("IoT hub not implemented for lib API")
 }
 
 func initialize(c *config) (*cmc.Cmc, error) {

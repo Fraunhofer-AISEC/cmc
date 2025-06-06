@@ -31,9 +31,9 @@ import (
 	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
@@ -321,7 +321,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
-	client, err := est.NewClient(c.EstTlsCas, c.UseSystemRootCas)
+	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -362,7 +362,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 func (snp *Snp) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
-	client, err := est.NewClient(c.EstTlsCas, c.UseSystemRootCas)
+	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}

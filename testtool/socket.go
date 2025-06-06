@@ -194,14 +194,6 @@ func (a SocketApi) serve(c *config) {
 	serveInternal(c, attestedtls.CmcApi_Socket, nil)
 }
 
-func (a SocketApi) cacerts(c *config) {
-	getCaCertsInternal(c)
-}
-
-func (a SocketApi) iothub(c *config) {
-	log.Fatalf("IoT hub not implemented for sockets API")
-}
-
 func verifySocketRequest(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 

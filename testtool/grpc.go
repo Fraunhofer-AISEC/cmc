@@ -236,11 +236,3 @@ func (a GrpcApi) request(c *config) {
 func (a GrpcApi) serve(c *config) {
 	serveInternal(c, attestedtls.CmcApi_GRPC, nil)
 }
-
-func (a GrpcApi) cacerts(c *config) {
-	getCaCertsInternal(c)
-}
-
-func (a GrpcApi) iothub(c *config) {
-	log.Fatalf("IoT hub not implemented for gRPC")
-}

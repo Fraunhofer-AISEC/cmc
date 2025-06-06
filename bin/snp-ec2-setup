@@ -40,7 +40,7 @@ done
 printf "[\033[34;1m EXEC \033[0m] Building CMC..\n"
 go build -C "${dir}/testtool"
 go build -C "${dir}/cmcd"
-go build -C "${dir}/est/estserver"
+go build -C "${dir}/provision/estserver"
 go build -C "${dir}/tools/metaconv"
 go build -C "${dir}/tools/metasign"
 

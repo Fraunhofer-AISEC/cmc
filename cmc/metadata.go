@@ -28,8 +28,8 @@ import (
 	// local modules
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 )
 
 const HOSTNAME_PLACEHOLDER = "__HOSTNAME__"
@@ -68,7 +68,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := est.FetchMetadata(resolvedPath, rootCas, useSystemRoots)
+			data, err := estclient.FetchMetadata(resolvedPath, rootCas, useSystemRoots)
 			if err != nil {
 				log.Warnf("failed to fetch %v: %v", resolvedPath, err)
 				fails++

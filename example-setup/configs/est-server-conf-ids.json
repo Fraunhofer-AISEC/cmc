@@ -1,14 +1,18 @@
 {
-    "port": 9000,
+    "tokenAddr": "127.0.0.1:9001",
+    "estAddr": "0.0.0.0:9000",
     "estCaKey": "../../data-ids/pki/device_sub_ca-key.pem",
     "estCaChain": [
         "../../data-ids/pki/device_sub_ca.pem",
         "../../data-ids/pki/ca.pem"
     ],
     "tlsKey": "../../data-ids/pki/est-tls-key.pem",
-    "tlsCerts": [
+    "tlsCaChain": [
         "../../data-ids/pki/est-tls.pem",
         "../../data-ids/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "../../data/pki/ca.pem"
     ],
     "httpFolder": "../../data-ids/",
     "verifyEkCert": false,

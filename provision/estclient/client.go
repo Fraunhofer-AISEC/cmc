@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package client
+package estclient
 
 import (
 	"bytes"
@@ -26,8 +26,8 @@ import (
 
 	"go.mozilla.org/pkcs7"
 
-	est "github.com/Fraunhofer-AISEC/cmc/est/common"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/sirupsen/logrus"
 )
@@ -35,10 +35,11 @@ import (
 var log = logrus.WithField("service", "estclient")
 
 type Client struct {
-	client *http.Client
+	bootstrapToken []byte
+	client         *http.Client
 }
 
-func NewClient(serverTlsCas []*x509.Certificate, allowSystemCerts bool) (*Client, error) {
+func NewClient(serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
 	var err error
 
 	// Create Certpool for Root CAs
@@ -64,16 +65,18 @@ func NewClient(serverTlsCas []*x509.Certificate, allowSystemCerts bool) (*Client
 				// The client does authenticate the EST server
 				RootCAs:            rootpool,
 				InsecureSkipVerify: false,
-				// The client does not authenticate itself: the EST server performs authentication
-				// during certificate enrollment via trust anchor authentication, e.g., TPM
-				// credential activation.
+				// The client does authenticate itself via attestation evidence and/or
+				// a token as configured
 				Certificates: nil,
 			},
 			DisableKeepAlives: false,
 		},
 	}
 
-	return &Client{client: client}, nil
+	return &Client{
+		bootstrapToken: token,
+		client:         client,
+	}, nil
 }
 
 func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
@@ -84,7 +87,7 @@ func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
 	contentType := ""
 	transferEncoding := ""
 
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, nil)
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, nil, c.bootstrapToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -129,7 +132,7 @@ func (c *Client) SimpleEnroll(addr string, csr *x509.CertificateRequest,
 	contentType := est.MimeTypePKCS10
 	transferEncoding := est.EncodingTypeBase64
 
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body, c.bootstrapToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -180,7 +183,8 @@ func (c *Client) TpmActivateEnroll(
 
 	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.TpmActivateEnrollEndpoint
 
-	resp, err := request(c.client, http.MethodPost, endpoint, est.MimeTypePKCS7, contentType, est.EncodingTypeBase64, body)
+	resp, err := request(c.client, http.MethodPost, endpoint, est.MimeTypePKCS7, contentType,
+		est.EncodingTypeBase64, body, c.bootstrapToken)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -234,7 +238,8 @@ func (c *Client) TpmCertifyEnroll(
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding,
+		body, c.bootstrapToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -278,7 +283,8 @@ func (c *Client) AttestEnroll(
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding,
+		body, c.bootstrapToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -315,7 +321,8 @@ func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certific
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding,
+		body, c.bootstrapToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -354,7 +361,8 @@ func (c *Client) GetSnpVcek(addr string, ChipId [64]byte, Tcb uint64,
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding, body)
+	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding,
+		body, c.bootstrapToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -378,6 +386,7 @@ func request(
 	method, endpoint, accepts string,
 	contentType, transferEncoding string,
 	body io.Reader,
+	token []byte,
 ) (*http.Response, error) {
 
 	log.Debugf("Sending EST %v request to %v", method, endpoint)
@@ -395,6 +404,12 @@ func request(
 	}
 	if transferEncoding != "" {
 		req.Header.Set(est.TransferEncodingHeader, transferEncoding)
+	}
+	if token != nil {
+		log.Tracef("Adding bootstrap token %v to authorization header", string(token))
+		req.Header.Set("Authorization", "Bearer "+string(token))
+	} else {
+		log.Tracef("Sending request without authorization token")
 	}
 
 	resp, err := client.Do(req)

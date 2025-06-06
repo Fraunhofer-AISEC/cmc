@@ -33,6 +33,8 @@ var log = logrus.WithField("service", "ar")
 func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []ar.Driver, s ar.Serializer,
 ) (*ar.AttestationReport, map[string][]byte, error) {
 
+	log.Debugf("Generating attestation report...")
+
 	metadataReturn := map[string][]byte{}
 
 	if s == nil {

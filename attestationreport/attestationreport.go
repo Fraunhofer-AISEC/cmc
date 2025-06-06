@@ -382,6 +382,7 @@ type DriverConfig struct {
 	EstTlsCas        []*x509.Certificate
 	UseSystemRootCas bool
 	Vmpl             int
+	Token            []byte
 }
 
 type KeySelection int

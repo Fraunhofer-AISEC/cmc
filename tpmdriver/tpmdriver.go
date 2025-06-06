@@ -40,9 +40,9 @@ import (
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 )
 
 // Tpm is a structure that implements the Measure method
@@ -131,7 +131,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 			return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 		}
 
-		akchain, ikchain, err = provisionTpm(ak, ik, c.DeviceConfig, c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
+		akchain, ikchain, err = provisionTpm(ak, ik, c)
 		if err != nil {
 			return fmt.Errorf("failed to provision TPM: %w", err)
 		}
@@ -589,8 +589,7 @@ func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quo
 	return pcrValues, quote, nil
 }
 
-func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
+func provisionTpm(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 	log.Debug("Performing TPM credential activation..")
 
@@ -606,13 +605,13 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to retrieve TPM Info: %w", err)
 	}
 
-	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(addr)
+	caCerts, err := client.CaCerts(c.ServerAddr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certificates: %w", err)
 	}
@@ -639,14 +638,14 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 	}
 
 	// Create AK CSR and perform EST enrollment with TPM credential activation
-	akCsr, err := createAkCsr(ak, devConf.Tpm.AkCsr)
+	akCsr, err := createAkCsr(ak, c.DeviceConfig.Tpm.AkCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
 	log.Debugf("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
 	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
-		addr, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
+		c.ServerAddr, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
 		akParams.Public, akParams.CreateData, akParams.CreateAttestation, akParams.CreateSignature,
@@ -686,7 +685,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 		return nil, nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
 	}
 
-	ikCsr, err := ar.CreateCsr(ikPriv, devConf.Tpm.IkCsr)
+	ikCsr, err := ar.CreateCsr(ikPriv, c.DeviceConfig.Tpm.IkCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
 	}
@@ -695,7 +694,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, devConf ar.DeviceConfig, addr s
 	ikParams := ik.CertificationParameters()
 
 	ikCert, err := client.TpmCertifyEnroll(
-		addr,
+		c.ServerAddr,
 		ikCsr,
 		ikParams.Public, ikParams.CreateData, ikParams.CreateAttestation, ikParams.CreateSignature,
 		akParams.Public,

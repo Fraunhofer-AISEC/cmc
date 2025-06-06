@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2024 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,48 +15,25 @@
 
 package main
 
-func generate(c *config) {
-	c.api.generate(c)
-}
+import (
+	"errors"
+	"fmt"
 
-func verify(c *config) {
-	c.api.verify(c)
-}
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
+)
 
-func measure(c *config) {
-	c.api.measure(c)
-}
+func createToken(c *config) error {
 
-func dial(c *config) {
-	c.api.dial(c)
-}
-
-func listen(c *config) {
-	c.api.listen(c)
-}
-
-func request(c *config) {
-	c.api.request(c)
-}
-
-func serve(c *config) {
-	c.api.serve(c)
-}
-
-func cacerts(c *config) {
-	getCaCerts(c)
-}
-
-func token(c *config) {
-	err := createToken(c)
-	if err != nil {
-		log.Fatalf("Failed to get token: %v", err)
+	if c.Token == "" {
+		return errors.New("token file must be specified via config")
 	}
-}
 
-func provision(c *config) {
-	err := retrieveProvisioningData(c)
+	token, err := est.CreateAndStoreToken(c.Token)
 	if err != nil {
-		log.Fatalf("Failed to get provisioning data: %v", err)
+		return fmt.Errorf("failed to create and store token: %w", err)
 	}
+
+	fmt.Printf("%v", string(token))
+
+	return nil
 }

@@ -63,6 +63,8 @@ func (s CborSerializer) Unmarshal(data []byte, v any) error {
 
 func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]byte, error) {
 
+	log.Debugf("Signing CBOR data length %v...", len(data))
+
 	private, _, err := signer.GetKeyHandles(sel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get signing keys: %w", err)
@@ -114,6 +116,8 @@ func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]by
 		return nil, fmt.Errorf("failed to marshal cbor object: %w", err)
 	}
 
+	log.Trace("Signing finished")
+
 	return coseRaw, nil
 }
 
@@ -121,6 +125,8 @@ func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]by
 // system root CA certificates, or the provided public key
 func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool, pubKey crypto.PublicKey,
 ) (MetadataResult, []byte, bool) {
+
+	log.Debugf("Verifying COSE object...")
 
 	result := MetadataResult{}
 	ok := true
@@ -271,6 +277,10 @@ func (s CborSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 		for i := range result.SignatureCheck {
 			result.SignatureCheck[i].SignCheck.Success = true
 		}
+	}
+
+	if ok {
+		log.Debug("Successfully verified COSE object")
 	}
 
 	result.Summary.Success = ok

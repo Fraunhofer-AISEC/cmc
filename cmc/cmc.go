@@ -18,13 +18,14 @@ package cmc
 import (
 	"crypto/x509"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
@@ -86,9 +87,18 @@ func NewCmc(c *Config) (*Cmc, error) {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
 
+	// Read bootstrap token if present
+	var token []byte
+	if c.Token != "" {
+		token, err = os.ReadFile(c.Token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read token: %v", err)
+		}
+	}
+
 	// Read CA for verifying the device config
 	// TODO clarify if this CA is OK in all cases
-	client, err := est.NewClient(estTlsCas, c.EstTlsSysRoots)
+	client, err := estclient.NewClient(estTlsCas, c.EstTlsSysRoots, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -127,6 +137,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 			EstTlsCas:        estTlsCas,
 			UseSystemRootCas: c.EstTlsSysRoots,
 			Vmpl:             c.Vmpl,
+			Token:            token,
 		}
 
 		// Initialize drivers

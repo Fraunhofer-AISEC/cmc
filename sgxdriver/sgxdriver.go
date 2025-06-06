@@ -28,8 +28,8 @@ import (
 	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	est "github.com/Fraunhofer-AISEC/cmc/est/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/edgelesssys/ego/enclave"
 	"github.com/google/go-tdx-guest/pcs"
@@ -94,8 +94,7 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 
 		// Create CSRs and fetch IK and AK certificates
 		log.Info("Performing SGX provisioning")
-		sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c.DeviceConfig,
-			c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas)
+		sgx.akChain, sgx.ikChain, err = provisionSgx(ikPriv, c)
 		if err != nil {
 			return fmt.Errorf("failed to provision sgx driver: %w", err)
 		}
@@ -236,12 +235,11 @@ func (sgx *Sgx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func provisionSgx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
+func provisionSgx(priv crypto.PrivateKey, c *ar.DriverConfig,
 ) ([]*x509.Certificate, []*x509.Certificate, error) {
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikchain, err := provisionIk(priv, devConf, addr, estTlsCas, useSystemRootCas)
+	ikchain, err := provisionIk(priv, c)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -255,17 +253,16 @@ func provisionSgx(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	return akchain, ikchain, nil
 }
 
-func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
-	estTlsCas []*x509.Certificate, useSystemRootCas bool,
+func provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig,
 ) ([]*x509.Certificate, error) {
 
-	client, err := est.NewClient(estTlsCas, useSystemRootCas)
+	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(addr)
+	caCerts, err := client.CaCerts(c.ServerAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -278,13 +275,13 @@ func provisionIk(priv crypto.PrivateKey, devConf ar.DeviceConfig, addr string,
 	}
 
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(priv, devConf.Sgx.IkCsr)
+	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Sgx.IkCsr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
 	// Request IK certificate from EST server
-	cert, err := client.SimpleEnroll(addr, csr)
+	cert, err := client.SimpleEnroll(c.ServerAddr, csr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
