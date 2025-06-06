@@ -563,6 +563,13 @@ func httpHandleMetadata(folder string) error {
 	// directory structure
 	log.Debugf("Serving Directory: %v", folder)
 
+	// Create directory, if it does not yet exist (might be populated later)
+	if _, err := os.Stat(folder); err != nil {
+		if err := os.MkdirAll(folder, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %q: %w", folder, err)
+		}
+	}
+
 	dirs, err := os.ReadDir(folder)
 	if err != nil {
 		return fmt.Errorf("failed to open metaddata folders %q: %v", folder, err)
