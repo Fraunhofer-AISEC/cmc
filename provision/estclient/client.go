@@ -215,6 +215,8 @@ func (c *Client) TpmCertifyEnroll(
 	csr *x509.CertificateRequest,
 	ikPublic, ikCreateData, ikCreateAttestation, ikCreateSignature []byte,
 	akPublic []byte,
+	report []byte,
+	metadata [][]byte,
 ) (*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
@@ -225,6 +227,8 @@ func (c *Client) TpmCertifyEnroll(
 			{ContentType: est.MimeTypeOctetStream, Data: ikCreateAttestation},
 			{ContentType: est.MimeTypeOctetStream, Data: ikCreateSignature},
 			{ContentType: est.MimeTypeOctetStream, Data: akPublic},
+			{ContentType: est.MimeTypeOctetStream, Data: report},
+			{ContentType: est.MimeTypeOctetStream, Data: internal.FlattenArray(metadata)},
 		},
 	)
 	if err != nil {
