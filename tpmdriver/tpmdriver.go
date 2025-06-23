@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -42,6 +43,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 )
 
@@ -91,6 +93,13 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
 	}
+	t.ima = c.Ima
+	t.imaPcr = c.ImaPcr
+	t.measurementLog = c.MeasurementLog
+	t.serializer = c.Serializer
+	t.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
+	t.ctrLog = c.CtrLog
+	t.ctrPcr = c.CtrPcr
 
 	// Check if serializer is initialized
 	switch c.Serializer.(type) {
@@ -121,8 +130,13 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("failed to open TPM: %w", err)
 	}
 
-	var akchain []*x509.Certificate
-	var ikchain []*x509.Certificate
+	// Determine if the system is an SRTM or DRTM system to include the
+	// respective PCRs into the TPM quote
+	t.pcrs, err = getQuotePcrs(t)
+	if err != nil {
+		return fmt.Errorf("failed to determine TPM Quote CRs: %w", err)
+	}
+
 	if provisioningRequired {
 
 		log.Info("Provisioning TPM (might take a while)..")
@@ -131,31 +145,22 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 			return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 		}
 
-		akchain, ikchain, err = provisionTpm(ak, ik, c)
+		err = t.provision(ak, ik, c)
 		if err != nil {
 			return fmt.Errorf("failed to provision TPM: %w", err)
 		}
 
 		if c.StoragePath != "" {
-			err = saveCerts(c.StoragePath, akchain, ikchain)
+			err = t.saveCredentials(c.StoragePath)
 			if err != nil {
 				return fmt.Errorf("failed to save TPM data: %w", err)
-			}
-
-			err = saveKeys(c.StoragePath)
-			if err != nil {
-				return fmt.Errorf("failed to save keys: %w", err)
 			}
 		}
 
 	} else {
-		err = loadTpmKeys(c.StoragePath)
+		err = t.loadCredentials(c.StoragePath)
 		if err != nil {
 			return fmt.Errorf("failed to load TPM keys: %w", err)
-		}
-		akchain, ikchain, err = loadTpmCerts(c.StoragePath)
-		if err != nil {
-			return fmt.Errorf("failed to load TPM certificates: %w", err)
 		}
 	}
 
@@ -164,24 +169,6 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("failed to get AK qualified name: %w", err)
 	}
 	log.Debugf("Using AK with qualified name: %v", hex.EncodeToString(name))
-
-	// Determine if the system is an SRTM or DRTM system to include the
-	// respective PCRs into the TPM quote
-	pcrs, err := getQuotePcrs(t)
-	if err != nil {
-		return fmt.Errorf("failed to determine TPM Quote CRs: %w", err)
-	}
-
-	t.pcrs = pcrs
-	t.ima = c.Ima
-	t.imaPcr = c.ImaPcr
-	t.ikChain = ikchain
-	t.akChain = akchain
-	t.measurementLog = c.MeasurementLog
-	t.serializer = c.Serializer
-	t.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
-	t.ctrLog = c.CtrLog
-	t.ctrPcr = c.CtrPcr
 
 	return nil
 }
@@ -196,7 +183,7 @@ func (t *Tpm) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, fmt.Errorf("internal error: tpm object not initialized")
 	}
 	if len(t.pcrs) == 0 {
-		return ar.Measurement{}, fmt.Errorf("TPM measurement based on reference values does not contain any PCRs")
+		return ar.Measurement{}, fmt.Errorf("TPM measurement does not contain any PCRs")
 	}
 
 	log.Debugf("Collecting TPM Quote for PCRs %v",
@@ -589,31 +576,30 @@ func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quo
 	return pcrValues, quote, nil
 }
 
-func provisionTpm(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig,
-) ([]*x509.Certificate, []*x509.Certificate, error) {
+func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error {
 	log.Debug("Performing TPM credential activation..")
 
 	if TPM == nil {
-		return nil, nil, errors.New("TPM is not openend")
+		return errors.New("TPM is not openend")
 	}
 	if len(ek) == 0 || ak == nil || ik == nil {
-		return nil, nil, errors.New("keys not created")
+		return errors.New("keys not created")
 	}
 
 	tpmInfo, err := GetTpmInfo()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to retrieve TPM Info: %w", err)
+		return fmt.Errorf("failed to retrieve TPM Info: %w", err)
 	}
 
 	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create EST client: %w", err)
+		return fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
 	caCerts, err := client.CaCerts(c.ServerAddr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to retrieve certificates: %w", err)
+		return fmt.Errorf("failed to retrieve certificates: %w", err)
 	}
 	log.Debugf("Received cert chain length %v:", len(caCerts))
 	for _, c := range caCerts {
@@ -625,7 +611,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig,
 	// Encode EK public key
 	ekPub, err := x509.MarshalPKIXPublicKey(ek[0].Public)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal EK public key: %w", err)
+		return fmt.Errorf("failed to marshal EK public key: %w", err)
 	}
 
 	var ekRaw []byte
@@ -640,7 +626,7 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig,
 	// Create AK CSR and perform EST enrollment with TPM credential activation
 	akCsr, err := createAkCsr(ak, c.DeviceConfig.Tpm.AkCsr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create AK CSR: %w", err)
+		return fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
 	log.Debugf("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
@@ -652,89 +638,93 @@ func provisionTpm(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig,
 		ekPub, ekRaw,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to enroll AK: %w", err)
+		return fmt.Errorf("failed to enroll AK: %w", err)
 	}
 
 	log.Debugf("Performing credential activation")
 	secret, err := ActivateCredential(TPM, ak, encCredential, encSecret)
 	if err != nil {
-		return nil, nil, fmt.Errorf("request activate credential failed: %w", err)
+		return fmt.Errorf("request activate credential failed: %w", err)
 	}
 
 	encryptedCert, err := pkcs7.Parse(pkcs7Cert)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse PKCS7 CMS EnvelopedData: %w", err)
+		return fmt.Errorf("failed to parse PKCS7 CMS EnvelopedData: %w", err)
 	}
 
 	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES256GCM
 	certDer, err := encryptedCert.DecryptUsingPSK(secret)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to decrypt PKCS7 encrypted cert: %w", err)
+		return fmt.Errorf("failed to decrypt PKCS7 encrypted cert: %w", err)
 	}
 
 	akCert, err := x509.ParseCertificate(certDer)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse certificate: %w", err)
+		return fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
 	log.Debugf("Created new AK Cert: %v", akCert.Subject.CommonName)
 
+	// Store AK chain internally
+	t.akChain = append([]*x509.Certificate{akCert}, caCerts...)
+
 	// Create IK CSR and perform EST enrollment with TPM certification
 	ikPriv, err := ik.Private(ik.Public())
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
+		return fmt.Errorf("failed to retrieve IK private key: %w", err)
 	}
 
 	ikCsr, err := ar.CreateCsr(ikPriv, c.DeviceConfig.Tpm.IkCsr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create IK CSR: %w", err)
+		return fmt.Errorf("failed to create IK CSR: %w", err)
 	}
 
-	log.Debugf("Performing TPM IK Enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikParams := ik.CertificationParameters()
 
+	// Use Subject Key Identifier (SKI) as nonce for attestation report
+	pubKey, err := x509.MarshalPKIXPublicKey(ikCsr.PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse CSR public key: %v", err)
+	}
+	nonce := sha1.Sum(pubKey)
+
+	// Fetch attestation report as part of client authentication
+	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{t}, c.Serializer)
+	if err != nil {
+		return fmt.Errorf("failed to generate attestation report: %w", err)
+	}
+	r, err := c.Serializer.Marshal(report)
+	if err != nil {
+		return fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+	}
+	signedReport, err := prover.Sign(r, t, c.Serializer, ar.IK)
+	if err != nil {
+		return fmt.Errorf("failed to sign attestation report: %w", err)
+	}
+
+	log.Debugf("Performing TPM IK Attest Enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikCert, err := client.TpmCertifyEnroll(
 		c.ServerAddr,
 		ikCsr,
 		ikParams.Public, ikParams.CreateData, ikParams.CreateAttestation, ikParams.CreateSignature,
 		akParams.Public,
+		signedReport,
+		internal.ConvertToArray(metadata),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to enroll IK: %w", err)
+		return fmt.Errorf("failed to enroll IK: %w", err)
 	}
 
 	log.Debugf("Created new IK cert: %v", ikCert.Subject.CommonName)
 
-	akchain := append([]*x509.Certificate{akCert}, caCerts...)
-	ikchain := append([]*x509.Certificate{ikCert}, caCerts...)
-
-	return akchain, ikchain, nil
-}
-
-func saveCerts(storagePath string, akchain, ikchain []*x509.Certificate) error {
-
-	akchainPem := make([]byte, 0)
-	for _, cert := range akchain {
-		c := internal.WriteCertPem(cert)
-		akchainPem = append(akchainPem, c...)
-	}
-	if err := os.WriteFile(path.Join(storagePath, akchainFile), akchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(storagePath, akchainFile), err)
-	}
-
-	ikchainPem := make([]byte, 0)
-	for _, cert := range ikchain {
-		c := internal.WriteCertPem(cert)
-		ikchainPem = append(ikchainPem, c...)
-	}
-	if err := os.WriteFile(path.Join(storagePath, ikchainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(storagePath, ikchainFile), err)
-	}
+	// Store IK chain internally
+	t.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
 
 	return nil
 }
 
-func saveKeys(storagePath string) error {
+func (t *Tpm) saveCredentials(storagePath string) error {
+
 	// Store the encrypted AK blob on disk
 	akBytes, err := ak.Marshal()
 	if err != nil {
@@ -755,17 +745,36 @@ func saveKeys(storagePath string) error {
 		return fmt.Errorf("failed to write file %v: %w", ikPath, err)
 	}
 
+	// Store the AK chain on disk
+	akchainPem := make([]byte, 0)
+	for _, cert := range t.akChain {
+		c := internal.WriteCertPem(cert)
+		akchainPem = append(akchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(storagePath, akchainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(storagePath, akchainFile), err)
+	}
+
+	// Store the IK chain on disk
+	ikchainPem := make([]byte, 0)
+	for _, cert := range t.ikChain {
+		c := internal.WriteCertPem(cert)
+		ikchainPem = append(ikchainPem, c...)
+	}
+	if err := os.WriteFile(path.Join(storagePath, ikchainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(storagePath, ikchainFile), err)
+	}
+
 	return nil
 }
 
-func loadTpmKeys(storagePath string) error {
+func (t *Tpm) loadCredentials(storagePath string) error {
 
 	if TPM == nil {
 		return errors.New("tpm is not opened")
 	}
 
-	log.Debug("Loading TPM keys..")
-
+	// Load encrypted AK into TPM
 	akPath := path.Join(storagePath, akFile)
 	akBytes, err := os.ReadFile(akPath)
 	if err != nil {
@@ -775,9 +784,9 @@ func loadTpmKeys(storagePath string) error {
 	if err != nil {
 		return fmt.Errorf("LoadAK failed: %w", err)
 	}
-
 	log.Debug("Loaded AK")
 
+	// Load encrypted IK into TPM
 	ikPath := path.Join(storagePath, ikFile)
 	ikBytes, err := os.ReadFile(ikPath)
 	if err != nil {
@@ -787,35 +796,31 @@ func loadTpmKeys(storagePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load key: %w", err)
 	}
-
 	log.Debug("Loaded IK")
 
-	return nil
-}
-
-func loadTpmCerts(storagePath string) ([]*x509.Certificate, []*x509.Certificate, error) {
-
+	// Load AK chain
 	data, err := os.ReadFile(path.Join(storagePath, akchainFile))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", storagePath, err)
+		return fmt.Errorf("failed to read AK chain from %v: %w", storagePath, err)
 	}
-	akchain, err := internal.ParseCertsPem(data)
+	t.akChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored AK chain of length %v", len(t.akChain))
 
+	// Load IK chain
 	data, err = os.ReadFile(path.Join(storagePath, ikchainFile))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", storagePath, err)
+		return fmt.Errorf("failed to read IK chain from %v: %w", storagePath, err)
 	}
-	ikchain, err := internal.ParseCertsPem(data)
+	t.ikChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+		return fmt.Errorf("failed to parse IK certs: %w", err)
 	}
-	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored IK chain of length %v", len(t.ikChain))
 
-	return akchain, ikchain, nil
+	return nil
 }
 
 func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *attest.Key, error) {
@@ -897,9 +902,6 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 
 	if TPM == nil {
 		return nil, fmt.Errorf("TPM is not opened")
-	}
-	if ak == nil {
-		return nil, fmt.Errorf("AK does not exist")
 	}
 
 	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only

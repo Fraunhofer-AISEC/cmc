@@ -117,7 +117,7 @@ func Verify(
 		switch mtype := m.Type; mtype {
 
 		case "TPM Measurement":
-			r, ok := verifyTpmMeasurements(m, nonce, identityCas,
+			r, ok := verifyTpmMeasurements(m, nonce, metadataCas,
 				refVals["TPM Reference Value"], s)
 			if !ok {
 				result.Success = false

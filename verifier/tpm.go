@@ -96,7 +96,7 @@ func verifyTpmMeasurements(
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
-		log.Debugf("Failed to verify certificate chain: %v", err)
+		log.Debugf("Failed to verify TPM quote certificate chain: %v", err)
 		result.Summary.Success = false
 		result.Signature.CertChainCheck.SetErr(ar.VerifyCertChain)
 	} else {

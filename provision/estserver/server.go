@@ -368,12 +368,13 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 
 	var csr *x509.CertificateRequest
-	// TODO is there a TPM structure that summarizes this data?
 	var ikPublic []byte
 	var ikCreateData []byte
 	var ikCreateAttestation []byte
 	var ikCreateSignature []byte
 	var akPublic []byte
+	var report []byte
+	var metadata []byte
 
 	_, err := est.DecodeMultipart(
 		req.Body,
@@ -384,6 +385,8 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 			{ContentType: est.MimeTypeOctetStream, Data: &ikCreateAttestation},
 			{ContentType: est.MimeTypeOctetStream, Data: &ikCreateSignature},
 			{ContentType: est.MimeTypeOctetStream, Data: &akPublic},
+			{ContentType: est.MimeTypeOctetStream, Data: &report},
+			{ContentType: est.MimeTypeOctetStream, Data: &metadata},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -408,6 +411,14 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	err = verifyTpmCsr(ikPublic, csr)
 	if err != nil {
 		writeHttpErrorf(w, "failed to verify IK: %v", err)
+		return
+	}
+
+	// Verify attestation report
+	log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
+	err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 		return
 	}
 
@@ -449,14 +460,14 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 
 	var csr *x509.CertificateRequest
 	var report []byte
-	var metadataFlattened []byte
+	var metadata []byte
 
 	_, err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypePKCS10, Data: &csr},
 			{ContentType: est.MimeTypeOctetStream, Data: &report},
-			{ContentType: est.MimeTypeOctetStream, Data: &metadataFlattened},
+			{ContentType: est.MimeTypeOctetStream, Data: &metadata},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -465,34 +476,11 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	metadata, err := internal.UnflattenArray(metadataFlattened)
+	err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to decode metadata: %v", err)
-	}
-
-	// Use Subject Key Identifier (SKI) as nonce
-	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		writeHttpErrorf(w, "failed to parse CSR public key: %v", err)
+		writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 		return
 	}
-	nonce := sha1.Sum(pubKey)
-
-	log.Debugf("Verifying attestation report with SKI as nonce: %v",
-		hex.EncodeToString(nonce[:]))
-
-	// Call verify with pubkey instead of identity CAs for verification in provisioning mode, which
-	// only checks the signature, but not the certificate chains (which are about to
-	// be created)
-	result := verifier.Verify(report, nonce[:], nil, csr.PublicKey, s.metadataCas, nil,
-		verifier.PolicyEngineSelect_None, internal.ConvertToMap(metadata))
-	if !result.Success {
-		result.PrintErr()
-		writeHttpErrorf(w, "failed to verify attestation report")
-		return
-	}
-
-	log.Debugf("Successfully verified attestation report")
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
 	if err != nil {
@@ -747,6 +735,39 @@ func verifyTpmCsr(tpmPub []byte, csr *x509.CertificateRequest) error {
 	if !bytes.Equal(akPkix, csrPkix) {
 		return fmt.Errorf("provided TPM key does not match TPM csr key")
 	}
+	return nil
+}
+
+func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
+	report, metadataFlattened []byte,
+) error {
+	metadata, err := internal.UnflattenArray(metadataFlattened)
+	if err != nil {
+		return fmt.Errorf("failed to decode metadata: %w", err)
+	}
+
+	// Use Subject Key Identifier (SKI) as nonce
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse CSR public key: %w", err)
+	}
+	nonce := sha1.Sum(pubKey)
+
+	log.Debugf("Verifying attestation report with SKI as nonce: %v",
+		hex.EncodeToString(nonce[:]))
+
+	// Call verify with pubkey instead of identity CAs for verification in provisioning mode, which
+	// only checks the signature, but not the certificate chains (which are about to
+	// be created)
+	result := verifier.Verify(report, nonce[:], nil, csr.PublicKey, cas, nil,
+		verifier.PolicyEngineSelect_None, internal.ConvertToMap(metadata))
+	if !result.Success {
+		result.PrintErr()
+		return fmt.Errorf("failed to verify attestation report")
+	}
+
+	log.Debugf("Successfully verified attestation report")
+
 	return nil
 }
 
