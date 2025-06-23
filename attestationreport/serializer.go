@@ -45,7 +45,7 @@ type Serializer interface {
 func DetectSerialization(payload []byte) (Serializer, error) {
 	if json.Valid(payload) {
 		return JsonSerializer{}, nil
-	} else if err := cbor.Valid(payload); err == nil {
+	} else if err := cbor.Wellformed(payload); err == nil {
 		return CborSerializer{}, nil
 	} else {
 		return nil, fmt.Errorf("failed to detect serialization")

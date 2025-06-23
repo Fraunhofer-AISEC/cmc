@@ -175,7 +175,7 @@ func sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
 	if json.Valid(data) {
 		log.Trace("Detected JSON serialization")
 		s = JsonSerializer{}
-	} else if err := cbor.Valid(data); err == nil {
+	} else if err := cbor.Wellformed(data); err == nil {
 		log.Trace("Detected CBOR serialization")
 		s = CborSerializer{}
 	} else {

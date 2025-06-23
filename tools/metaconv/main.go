@@ -78,7 +78,7 @@ func convert(input []byte, outform string) ([]byte, error) {
 	var si ar.Serializer
 	if json.Valid(input) {
 		si = ar.JsonSerializer{}
-	} else if err := cbor.Valid(input); err == nil {
+	} else if err := cbor.Wellformed(input); err == nil {
 		si = ar.CborSerializer{}
 	} else {
 		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")

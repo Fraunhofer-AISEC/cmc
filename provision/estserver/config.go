@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
@@ -204,7 +203,7 @@ func getConfig() (*config, error) {
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
 		log.Warnf("LogLevel %v does not exist Default to info level", c.LogLevel)
-		l = logrus.InfoLevel
+		l = log.InfoLevel
 	}
 	log.SetLevel(l)
 
