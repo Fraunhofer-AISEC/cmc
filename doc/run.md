@@ -15,10 +15,10 @@ Furthermore, exemplary JSON configuration file examples can be found in the `exa
 this repository. Paths in the configuration file can either be absolete or relative to the working
 directory.
 
-## Testtool modes
+## cmcctl commands
 
-The testtool can run the following commands/modes, specified via the `-mode` flag or the
-`mode` JSON configuration file property:
+The cmcctl can run the following commands, specified via the first parameter or the
+`command` JSON configuration file property:
 
 - **cacerts**: Retrieves the CA certificates from the EST server
 - **generate**: Generates an attestation report and stores it under the specified path
@@ -47,11 +47,11 @@ The testtool can run the following commands/modes, specified via the `-mode` fla
 #### Generate and Verify Attestation Reports
 
 ```sh
-# Run the testtool to retrieve an attestation report (stored in current folder unless otherwise specified)
-./testtool -mode generate
+# Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
+./cmcctl -mode generate
 
-# Run the testtool to verify the attestation report (stored in current folder unless otherwise specified)
-./testtool -mode verify -ca cmc-data/pki/ca.pem
+# Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
+./cmcctl -mode verify -ca cmc-data/pki/ca.pem
 ```
 
 #### Establish Attested TLS Connections
@@ -59,22 +59,22 @@ The testtool can run the following commands/modes, specified via the `-mode` fla
 ```sh
 
 # Run an attested TLS server
-./testtool -mode listen -addr 0.0.0.0:4443 -ca cmc-data/pki/ca.pem -mtls
+./cmcctl -mode listen -addr 0.0.0.0:4443 -ca cmc-data/pki/ca.pem -mtls
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-./testtool -mode dial -addr localhost:4443 -ca cmc-data/pki/ca.pem -mtls
+./cmcctl -mode dial -addr localhost:4443 -ca cmc-data/pki/ca.pem -mtls
 ```
 
 #### Establish Attested HTTPS Connections
 
 ```sh
 # Run two attested HTTPS servers
-./testtool -config testtool-config.json -addr 0.0.0.0:8081 -mode serve
+./cmcctl -config cmcctl-config.json -addr 0.0.0.0:8081 -mode serve
 
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections
-./testtool \
-    -config ../data/testtool-config.json \
+./cmcctl \
+    -config ../data/cmcctl-config.json \
     -addr https://localhost:8081/post,https://localhost:8082/post \
     -mode request \
     -method POST \
@@ -96,6 +96,6 @@ SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd -config <config-file>
 SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd -config <config-file>
 ```
 
-#### Run testtool in SGX-Enclave
+#### Run cmcctl in SGX-Enclave
 
 See [SGX-Setup](./setup-sgx.md).

@@ -49,11 +49,11 @@ cmc-docker vm-estserver
 cmc-docker vm-start
 
 # Establish attested TLS connection to Ubuntu VM
-cmc-docker vm-testtool
+cmc-docker vm-cmcctl
 ```
 
-The [testtool](./doc/architecture.md#testtool) on the host establishes an attested TLS connection
-to the testtool running within the ubuntu VM with server-side authentication and server-side
+[cmcctl](./doc/architecture.md#cmcctl) on the host establishes an attested TLS connection
+to the cmcctl running within the ubuntu VM with server-side authentication and server-side
 attestation. Find the generated attestation result in `cmc/data/attestation-result`.
 
 > Note: This demo is not secure and attestation might fail. Refer to [VM Setup](./doc/setup-vm.md)
