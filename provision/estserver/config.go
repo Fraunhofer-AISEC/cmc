@@ -160,7 +160,7 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(tlsCaChainFlag) {
 		c.TlsCaChain = strings.Split(*tlsCaChain, ",")
 	}
-	if internal.FlagPassed(*metadataCas) {
+	if internal.FlagPassed(metadataCasFlag) {
 		c.MetadataCas = strings.Split(*metadataCas, ",")
 	}
 	if internal.FlagPassed(*clientTlsCas) {
