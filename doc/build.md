@@ -36,10 +36,10 @@ go build
 ## Build the Test Tool
 
 ```sh
-cd testtool
+cd cmcctl
 go build
 
-# Build testtool as SGX enclave
+# Build cmcctl as SGX enclave
 make egocmc
 ```
 
@@ -62,7 +62,7 @@ enabled. The project uses the go build system with build tags to disable feature
 To disable all features, use the custom `nodefaults` tag. You can then enable the features you
 want to build via additional tags.
 
-Currently supported tags for the `cmcd` and `testtool` are:
+Currently supported tags for the `cmcd` and `cmcctl` are:
 - `nodefaults` Disables all features
 - `grpc` Enables the gRPC API
 - `coap` Enables the CoAP API
@@ -74,7 +74,7 @@ Currently supported tags for the `cmcd` and `testtool` are:
 - `sgx` Enables the Intel SGX driver
 - `sw` Enables the container driver
 
-To build the cmcd/testtool with `socket` and `tpm` support:
+To build the cmcd/cmcctl with `socket` and `tpm` support:
 ```sh
 go build -tags nodefaults,socket,tpm
 ```

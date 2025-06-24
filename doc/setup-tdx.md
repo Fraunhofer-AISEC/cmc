@@ -39,7 +39,7 @@ run-tdx-qgs
 
 ## TDX Run
 
-the `cmcd` and the `testtool` including their [configuration files](./run.md) must be installed
+the `cmcd` and the `cmcctl` including their [configuration files](./run.md) must be installed
 into the CVM image of your choice. Then the CMC can be run as described in
 [Running the CMC](./run.md). Potentially you also want to create e.g. systemd services
 to automatically run the components.

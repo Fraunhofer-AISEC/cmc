@@ -27,8 +27,8 @@ mkdir -p "${out}"
 
 echo "Using ${data} as directory for local data"
 
-# Build testtool enclave
-cd "${cmc}/testtool"
+# Build cmcctl enclave
+cd "${cmc}/cmcctl"
 make egocmc
 
 # Get the fingerprint of the Intel SGX Provisioning Certitification Root CA
@@ -36,7 +36,7 @@ wget -O "${data}/pki/Intel_SGX_RootCA.pem" https://certificates.trustedservices.
 fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
 
 # Get MRENCLAVE reference value
-mrenclave=$(echo "$(ego uniqueid testtool)" | awk 'NR==1')
+mrenclave=$(echo "$(ego uniqueid cmcctl)" | awk 'NR==1')
 referenceValues='[
     {
       "type": "SGX Reference Value",
@@ -48,7 +48,7 @@ referenceValues='[
 ]'
 
 # Get MRSIGNER enclave signer hash
-mrsigner=$(echo "$(ego signerid testtool)" | awk 'NR==1')
+mrsigner=$(echo "$(ego signerid cmcctl)" | awk 'NR==1')
 
 cd "${data}"
 

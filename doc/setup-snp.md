@@ -33,7 +33,7 @@ To run within a CVM, everything can be [built as usual](./build.md).
 
 ## SNP Run
 
-the `cmcd` and the `testtool` including their [configuration files](./run.md) must be installed
+the `cmcd` and the `cmcctl` including their [configuration files](./run.md) must be installed
 into the CVM. Then the CMC can be run as described in
 [Running the CMC](./run.md). Potentially you also want to create e.g. systemd services
 to automatically run the components.

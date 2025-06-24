@@ -7,9 +7,9 @@ or the enforcement of a four eyes principle mandating different PKIs for the man
 attestation report module implements a generic policies interface.
 
 The current implementation contains the `attestationpolicies` module which implements a javascript
-engine. This allows passing arbitrary javascript files via the `testtool` `-policies` parameter.
+engine. This allows passing arbitrary javascript files via the `cmcctl` `-policies` parameter.
 The policies javascript file is then used to evaluate arbitrary attributes of the JSON
-attestation result output by the `cmcd` and stored by the `testtool`. The attestation result
+attestation result output by the `cmcd` and stored by the `cmcctl`. The attestation result
 can be referenced via the `json` variable in the script. The javascript code must return a single
 boolean indicating success or failure of the custom policy validation. A minimal policies file, verifying only the `type` field of the attesation result could look as follows:
 
