@@ -24,7 +24,7 @@ jobs:
           pushd cmcd
           go build -ldflags="-s -w" -trimpath
           popd
-          pushd testtool
+          pushd cmcctl
           go build -ldflags="-s -w" -trimpath
           popd
           pushd tools/metasign
@@ -53,11 +53,11 @@ jobs:
         with:
           name: cmcd
           path: cmcd/cmcd
-      - name: "Upload testtool"
+      - name: "Upload cmcctl"
         uses: actions/upload-artifact@v4
         with:
-          name: testtool
-          path: testtool/testtool
+          name: cmcctl
+          path: cmcctl/cmcctl
       - name: "Upload metaconv"
         uses: actions/upload-artifact@v4
         with:
@@ -74,7 +74,7 @@ jobs:
         with:
           files: |
             cmcd/cmcd
-            testtool/testtool
+            cmcctl/cmcctl
             tools/metaconv/metaconv
             tools/metasign/metasign
 

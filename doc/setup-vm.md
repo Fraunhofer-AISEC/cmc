@@ -15,7 +15,7 @@ cmc-docker vm-setup
 
 ## Run CMC
 
-Starts swTPM, EST provisioning server and VM with CMC and [testtool](./architecture.md#testtool) in
+Starts swTPM, EST provisioning server and VM with CMC and [cmcctl](./architecture.md#cmcctl) in
 server mode and then establishes server-side attested TLS connection from the host to the VM:
 ```sh
 # Start swTPM (separate terminal)
@@ -28,11 +28,11 @@ cmc-docker vm-estserver
 cmc-docker vm-start
 
 # Establish attested TLS connection to Ubuntu VM server
-cmc-docker vm-testtool
+cmc-docker vm-cmcctl
 ```
 
-The [testtool](./architecture.md#testtool) on the host establishes an attested TLS connection to
-the testtool running within the ubuntu VM with server-side authentication and server-side
+The [cmcctl](./architecture.md#cmcctl) on the host establishes an attested TLS connection to
+the cmcctl running within the ubuntu VM with server-side authentication and server-side
 attestation.
 
 Find the generated attestation result in `cmc/data/attestation-result`.
@@ -96,13 +96,13 @@ cmc-docker vm-scp vm-ubuntu:/path/to/file/in/vm /path/on/host
 
 ### View Logs
 
-The cmcd and testtool server run as systemd [cmcd.service](../example-setup/vm-config/cmcd.service)
-and [testtool.service](../example-setup/vm-config/testtool.service).
+The cmcd and cmcctl server run as systemd [cmcd.service](../example-setup/vm-config/cmcd.service)
+and [cmcctl.service](../example-setup/vm-config/cmcctl.service).
 
 Logs can be viewed via:
 ```sh
 journalctl [-f] -u cmcd
-journalctl [-f] -u testtool
+journalctl [-f] -u cmcctl
 ```
 
 ### Manually Run Services
@@ -110,8 +110,8 @@ journalctl [-f] -u testtool
 The services can also be stopped and manually run:
 ```sh
 systemctl stop cmcd
-systemctl stop testtool
+systemctl stop cmcctl
 
 cmcd -config /etc/cmcd-conf.json
-testtool -config /etc/testtool-conf-vm.json
+cmcctl -config /etc/cmcctl-conf-vm.json
 ```

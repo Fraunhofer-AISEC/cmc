@@ -14,7 +14,7 @@ must be installed manually. In this case, you can still follow this manual, just
 
 ## SGX Setup
 
-Creates the PKI and metadata for running the testtool with libapi (CMC integrated) within
+Creates the PKI and metadata for running cmcctl with libapi (CMC integrated) within
 an SGX enclave:
 ```sh
 source env.bash
@@ -23,9 +23,9 @@ cmc-docker setup-cmc sgx
 
 ## SGX Build
 
-Build the testtool with integrated CMC as SGX enclave:
+Build the cmcctl with integrated CMC as SGX enclave:
 ```sh
-cmc-docker make -C testtool egocmc
+cmc-docker make -C cmcctl egocmc
 ```
 
 ## PCCS
@@ -50,15 +50,15 @@ cd cmc/provision/estserver
 ./estserver -config ../../example-setup/configs/est-server-conf.json
 ```
 
-Run the testtool:
+Run the cmcctl:
 ```sh
-cd cmc/testtool
+cd cmc/cmcctl
 
 # Generate attestation report within enclave (configs folder is mounted into enclave)
-ego run ./testtool -config configs/testtool-conf-sgx.json -mode generate
+ego run ./cmcctl -config configs/cmcctl-conf-sgx.json -mode generate
 
 # Verify attestation report within enclave (can also be performed outside)
-ego run ./testtool -config configs/testtool-conf-sgx.json -mode verify
+ego run ./cmcctl -config configs/cmcctl-conf-sgx.json -mode verify
 ```
 
 Additional information for the enclave such as heapSize, mount points, security version (ISV SVN)

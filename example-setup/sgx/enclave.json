@@ -1,5 +1,5 @@
 {
- "exe": "../../testtool/testtool",
+ "exe": "../../cmcctl/cmcctl",
  "key": "../../data/pki/private-ego.pem",
  "debug": false,
  "heapSize": 512,

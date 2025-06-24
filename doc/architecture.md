@@ -16,15 +16,15 @@ For this purpose, the framework provides the CMC daemon (`cmcd`) as the main app
 generating and verifying attestation. The CMC exposes its functionality via multple APIs, which are
 described in the following section.
 
-![CMC, drivers and exemplary testtool](./diagrams/architecture.drawio.svg)
+![cmcd, drivers and cmcctl](./diagrams/architecture.drawio.svg)
 
 The figure shows how the core components interact with each other. The main software components are:
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects measurements from
 different hardware trust anchors and assembles this data together with signed metadata describing
 the platform to an attestation report (prover), or validates the measurements against the metadata.
 The *cmcd* provides a gRPC as well as a CoAP REST API.
-- The testtool is an exemplary application that makes use of the *cmcd* to
-generate and verify attestation reports and to create attested tls connections.
+- The cmcctl can be used to control the *cmcd*, to generate and verify attestation reports and to
+create exemplary attested tls and https connections.
 - Drivers for trusted hardware provide the attestation reports and, if available, key storage and
 signing functionalities.
 
@@ -187,22 +187,20 @@ provision TPM certificates, and can provide the metadata (manifests and configur
 might be split onto different servers (e.g. an EST server and an internal metadata server).
 
 ### attestedtls
-The *attestedtls* package provides an exemplary protocol which shows how a connection between two
-parties can be performed using remote attestation. After a tls connection is established, additional
-steps are performed to obtain and verify the attestation reports from the respective communication
-partner. Only then is the connection provided to the server / client. For an example on how to
-integrate the library into own applications, the *testtool* with its modes *listen* and
-*dial* can serve as an exemplary application.
+The *attestedtls* package provides attested TLS connections between two parties. After a tls
+connection is established, additional steps are performed to obtain and verify the attestation
+reports from the respective communication partner. Only then is the connection provided to the
+server / client. For an example on how to integrate the library into own applications, the
+*cmcctl* with its commands *listen* and *dial* can serve as an exemplary application.
 
 ### attestedhttp
 The *attestedhttp* packages utilizes **attestedtls** to provide HTTPS client and server capabilities
-to applications. For an example on how to integrate the library into own applications, the
-*testtool* with its modes *listen* and *dial* can serve as an exemplary application.
+to applications. The *cmcctl* with its modes *request* and *serve* can serve as an exemplary
+application.
 
-### testtool
-The *testtool* can generate and verify attestation reports and establish attested TLS as well as
+### cmcctl
+The *cmcctl* can generate and verify attestation reports and establish attested TLS as well as
 attested HTTPS connections. For the latter, it makes use of the *attestedtls* and
-*attestedhttp* packages. Usually, the testtool interacts with the *cmcd* via the *cmc* gRPC, CoAP or
-socket API. However, the testtool can also act as a standalone application, i.e., integrate
-all *cmc* functionality via their go API. The testtool is merely a demo application, but can be
-used as a blueprint for building own attested TLS or HTTPS applications.
+*attestedhttp* packages. Usually, the *cmcctl* interacts with the *cmcd* via the *cmc* gRPC, CoAP or
+socket API. However, the cmcctl can also act as a standalone application, i.e., integrate
+all *cmc* functionality via their go API.

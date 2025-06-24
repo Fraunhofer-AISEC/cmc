@@ -1,5 +1,4 @@
 {
-    "mode": "generate",
     "addr": [
       "localhost:4443"
     ],
@@ -29,7 +28,7 @@
       "sgx"
     ],
     "ima": false,
-    "storage": "data/testtool-internal",
-    "cache": "data/testtool-cache",
+    "storage": "data/cmcctl-internal",
+    "cache": "data/cmcctl-cache",
     "peerCache": "data/cmc-peer-cache"
   }

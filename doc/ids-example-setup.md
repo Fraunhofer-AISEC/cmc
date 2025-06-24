@@ -24,9 +24,9 @@ server -config $DATA/est-server-conf-ids.json
 # Build and run the cmcd
 cmcd -config $DATA/cmcd-conf.json -addr https://127.0.0.1:9000/metadata-signed
 
-# Run the testtool to retrieve an attestation report (stored in current folder unless otherwise specified)
-testtool -mode generate
+# Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
+cmcctl -mode generate
 
-# Run the testtool to verify the attestation report (stored in current folder unless otherwise specified)
-testtool -mode verify -ca $DATA/pki/ca.pem -policies $DATA/policies-ids.js
+# Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
+cmcctl -mode verify -ca $DATA/pki/ca.pem -policies $DATA/policies-ids.js
 ```

@@ -31,7 +31,7 @@ Everything can be [built as usual](./build.md).
 
 ## TPM Run
 
-the `cmcd` and the `testtool` including their [configuration files](./run.md) must be installed
+the `cmcd` and the `cmcctl` including their [configuration files](./run.md) must be installed
 into the TPM platform or VM with attached swTPM. Then the CMC can be run as described in
 [Running the CMC](./run.md).
 

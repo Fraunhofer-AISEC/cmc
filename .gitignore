@@ -7,9 +7,9 @@
 /artifacts/
 /vm/
 cmcd/cmcd
-testtool/testtool
-testtool/token
-testtool/ca.pem
+cmcctl/cmcctl
+cmcctl/token
+cmcctl/ca.pem
 provision/estserver/estserver
 **/nonce
 **/attestation-report

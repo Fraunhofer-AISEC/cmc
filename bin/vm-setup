@@ -204,7 +204,7 @@ done
 
 # Build CMC
 printf "[\033[34;1m EXEC \033[0m] Building CMC..\n"
-go build -C "${dir}/testtool"
+go build -C "${dir}/cmcctl"
 go build -C "${dir}/cmcd"
 go build -C "${dir}/provision/estserver"
 go build -C "${dir}/tools/metaconv"
@@ -255,11 +255,11 @@ genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${vm_config}/meta-data" \
     "${vm_config}/network-config" \
     "${vm_config}/cmcd.service" \
-    "${vm_config}/testtool.service" \
-    "${vm_config}/testtool-conf-vm.json" \
+    "${vm_config}/cmcctl.service" \
+    "${vm_config}/cmcctl-conf-vm.json" \
     "${vm_config}/cmcd-conf.json" \
     "${dir}/cmcd/cmcd" \
-    "${dir}/testtool/testtool" \
+    "${dir}/cmcctl/cmcctl" \
     "${dir}/vm/measured-boot-tools/parse-srtm-pcrs/parse-srtm-pcrs" \
     "${dir}/vm/measured-boot-tools/parse-ima-pcr/parse-ima-pcr" \
     "${dir}/data/pki/ca.pem"

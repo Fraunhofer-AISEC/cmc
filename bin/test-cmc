@@ -17,7 +17,7 @@ cleanup() {
         printf "[\033[31;1mFAILED\033[0m]\nCleaning up..\n"
     fi
     kill_process "cmcd"
-    kill_process "testtool"
+    kill_process "cmcctl"
     kill_process "estserver"
     stty sane
 }
@@ -130,7 +130,7 @@ cmc_params=(
     "-esttlscas" "${data}/pki/ca.pem" \
 )
 
-testtool_params=(
+cmcctl_params=(
     "-report" "attestation-report" \
     "-result" "attestation-result.json" \
     "-nonce" "nonce" \
@@ -220,13 +220,13 @@ do
 
                 for j in "${!modes_server[@]}"
                 do
-                    server_log="${log_dir}/testtool_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_server[j]}.log"
-                    client_log="${log_dir}/testtool_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_client[j]}.log"
+                    server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_server[j]}.log"
+                    client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_client[j]}.log"
 
                     printf "TEST MODE %-8s | ATT %-7s | AR %s | SER %s | API %s\t" "${modes_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
 
-                    "${dir}/testtool/testtool" \
-                        "${testtool_params[@]}" \
+                    "${dir}/cmcctl/cmcctl" \
+                        "${cmcctl_params[@]}" \
                         -logfile "${server_log}" \
                         -mode ${modes_server[j]} \
                         -api ${protocols[i]} \
@@ -237,8 +237,8 @@ do
                     wait_for_message $! "${server_log}" "${modes_server_ready_msg[j]}"
                     stty sane
 
-                    "${dir}/testtool/testtool" \
-                        "${testtool_params[@]}" \
+                    "${dir}/cmcctl/cmcctl" \
+                        "${cmcctl_params[@]}" \
                         -logfile "${client_log}" \
                         -mode "${modes_client[j]}" \
                         -apiserializer "${api_serializer}" \
@@ -259,7 +259,7 @@ do
                     grep -q "${wait_msg_client}" "${client_log}"
                     printf "[\033[32;1m  OK  \033[0m]\n"
 
-                    kill_process "testtool"
+                    kill_process "cmcctl"
                 done
                 kill_process "cmcd"
             done

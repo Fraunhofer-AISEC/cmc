@@ -55,7 +55,7 @@ var (
 		"trace": logrus.TraceLevel,
 	}
 
-	log = logrus.WithField("service", "testtool")
+	log = logrus.WithField("service", "cmcctl")
 )
 
 type Api interface {
@@ -70,7 +70,6 @@ type Api interface {
 
 type config struct {
 	// Generic config
-	Mode          string   `json:"mode"`
 	Addr          []string `json:"addr"`
 	ReportFile    string   `json:"report"`
 	ResultFile    string   `json:"result"`
@@ -108,7 +107,6 @@ type config struct {
 const (
 	// Generic flags
 	configFlag        = "config"
-	modeFlag          = "mode"
 	addrFlag          = "addr"
 	reportFlag        = "report"
 	resultFlag        = "result"
@@ -135,9 +133,7 @@ const (
 
 var (
 	configFile = flag.String(configFlag, "", "JSON Configuration file")
-	mode       = flag.String(modeFlag, "",
-		fmt.Sprintf("Commands the testtol can run: %v", maps.Keys(cmds)))
-	addr = flag.String(addrFlag, "",
+	addr       = flag.String(addrFlag, "",
 		"Address to connect to / listen on via attested tls / https")
 	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
 	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
@@ -167,8 +163,10 @@ var (
 	ctrConfig = flag.String(ctrConfigFlag, "", "Specifies config path of the container to be measured")
 )
 
-func getConfig() *config {
+func getConfig(cmd string) (*config, error) {
 	var ok bool
+
+	os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
 
 	flag.Parse()
 
@@ -188,11 +186,11 @@ func getConfig() *config {
 		for _, f := range files {
 			data, err := os.ReadFile(f)
 			if err != nil {
-				log.Fatalf("Failed to read testtool config file %v: %v", f, err)
+				return nil, fmt.Errorf("failed to read cmcctl config file %v: %v", f, err)
 			}
 			err = json.Unmarshal(data, c)
 			if err != nil {
-				log.Fatalf("Failed to parse testtool config: %v", err)
+				return nil, fmt.Errorf("failed to parse cmcctl config: %v", err)
 			}
 		}
 	}
@@ -200,13 +198,10 @@ func getConfig() *config {
 	// Overwrite cmc configuration with values passed via command line (only required for libapi)
 	err := cmc.GetConfig(&c.Config)
 	if err != nil {
-		log.Fatalf("Failed to read cmc config: %v", err)
+		return nil, fmt.Errorf("failed to read cmc config: %v", err)
 	}
 
-	// Overwrite testtool configuration with values passed via command line
-	if internal.FlagPassed(modeFlag) {
-		c.Mode = *mode
-	}
+	// Overwrite cmcctl configuration with values passed via command line
 	if internal.FlagPassed(addrFlag) {
 		c.Addr = strings.Split(*addr, ",")
 	}
@@ -276,7 +271,7 @@ func getConfig() *config {
 	if c.LogFile != "" {
 		lf, err := filepath.Abs(*logFile)
 		if err != nil {
-			log.Fatalf("Failed to get logfile path: %v", err)
+			return nil, fmt.Errorf("failed to get logfile path: %v", err)
 		}
 		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
@@ -297,15 +292,9 @@ func getConfig() *config {
 
 	intervalDuration, err := time.ParseDuration(c.IntervalStr)
 	if err != nil {
-		log.Fatalf("Failed to parse monitoring interval: %v", err)
+		return nil, fmt.Errorf("failed to parse monitoring interval: %v", err)
 	}
 	c.interval = intervalDuration
-
-	// Basic sanity checks
-	if _, ok := cmds[c.Mode]; !ok {
-		flag.Usage()
-		log.Fatalf("Unknown mode '%v' specified", c.Mode)
-	}
 
 	// Convert all paths to absolute paths
 	pathsToAbs(c)
@@ -314,7 +303,7 @@ func getConfig() *config {
 	c.Print()
 
 	// Get root CA certificate in PEM format if specified
-	if c.Mode == "verify" || c.Mode == "dial" || c.Mode == "listen" || c.Mode == "request" || c.Mode == "serve" {
+	if cmd == "verify" || cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" {
 		if len(c.IdentityCas) == 0 {
 			log.Fatal("Path to read Report CAs must be specified either via config file or commandline")
 		}
@@ -325,11 +314,11 @@ func getConfig() *config {
 		for _, ca := range c.IdentityCas {
 			ca, err := os.ReadFile(ca)
 			if err != nil {
-				log.Fatalf("Failed to read certificate file %v: %v", ca, err)
+				return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
 			}
 			cert, err := internal.ParseCert(ca)
 			if err != nil {
-				log.Fatalf("Failed to parse certificate %v: %v", ca, err)
+				return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
 			}
 			c.identityCas = append(c.identityCas, cert)
 		}
@@ -337,21 +326,21 @@ func getConfig() *config {
 		for _, ca := range c.MetadataCas {
 			ca, err := os.ReadFile(ca)
 			if err != nil {
-				log.Fatalf("Failed to read certificate file %v: %v", ca, err)
+				return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
 			}
 			cert, err := internal.ParseCert(ca)
 			if err != nil {
-				log.Fatalf("Failed to parse certificate %v: %v", ca, err)
+				return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
 			}
 			c.metadataCas = append(c.metadataCas, cert)
 		}
 
 	}
 
-	if (c.Mode == "cacerts" || c.Mode == "provision") && c.EstCa == "" {
+	if (cmd == "cacerts" || cmd == "provision") && c.EstCa == "" {
 		log.Fatal("Path to store CA must be specified either via config file or commandline")
 	}
-	if c.Mode == "provision" && c.Token == "" {
+	if cmd == "provision" && c.Token == "" {
 		log.Fatal("Path to store bootstrap token must be specified either via config file or commandline")
 	}
 
@@ -360,7 +349,7 @@ func getConfig() *config {
 		log.Debug("Adding specified policies")
 		c.policies, err = os.ReadFile(c.PoliciesFile)
 		if err != nil {
-			log.Fatalf("Failed to read policies file: %v", err)
+			return nil, fmt.Errorf("failed to read policies file: %v", err)
 		}
 	}
 
@@ -369,23 +358,23 @@ func getConfig() *config {
 	c.apiSerializer, ok = serializers[strings.ToLower(c.ApiSerializer)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("Serializer %v is not implemented", c.ApiSerializer)
+		return nil, fmt.Errorf("serializer %v is not implemented", c.ApiSerializer)
 	}
 
 	// Get API
 	c.api, ok = apis[strings.ToLower(c.Api)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("API '%v' is not implemented", c.Api)
+		return nil, fmt.Errorf("API '%v' is not implemented", c.Api)
 	}
 
 	// Get attestation mode
 	c.attest, err = GetAttestMode(c.Attest)
 	if err != nil {
-		log.Fatalf("failed to get attestation mode: %v", err)
+		return nil, fmt.Errorf("failed to get attestation mode: %v", err)
 	}
 
-	return c
+	return c, nil
 }
 
 func pathsToAbs(c *config) {
@@ -468,10 +457,9 @@ func (c *config) Print() {
 	if err != nil {
 		log.Warnf("Failed to get working directory: %v", err)
 	}
-	log.Infof("Running testtool from working directory %v", wd)
+	log.Infof("Running cmcctl from working directory %v", wd)
 
 	log.Debugf("Using the following configuration:")
-	log.Debugf("\tMode                     : %v", c.Mode)
 	log.Debugf("\tAddress                  : %v", c.Addr)
 	log.Debugf("\tInterval                 : %v", c.interval)
 	log.Debugf("\tCMC API Address          : %v", c.CmcAddr)
@@ -487,11 +475,9 @@ func (c *config) Print() {
 	log.Debugf("\tAPI Serializer           : %v", c.ApiSerializer)
 	log.Debugf("\tPublish                  : %v", c.Publish)
 	log.Debugf("\tApi                      : %v", c.Api)
-	if strings.EqualFold(c.Mode, "request") {
-		log.Debugf("\tHTTP Data                : %v", c.Data)
-		log.Debugf("\tHTTP Header              : %v", c.Header)
-		log.Debugf("\tHTTP Method              : %v", c.Method)
-	}
+	log.Debugf("\tHTTP Data                : %v", c.Data)
+	log.Debugf("\tHTTP Header              : %v", c.Header)
+	log.Debugf("\tHTTP Method              : %v", c.Method)
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
 	}

@@ -7,4 +7,4 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 cd "${dir}"
 
-exec "${dir}/testtool/testtool" -config "${dir}/example-setup/vm-config/testtool-conf-host.json" "$@"
+exec "${dir}/cmcctl/cmcctl" -config "${dir}/example-setup/vm-config/cmcctl-conf-host.json" "$@"
