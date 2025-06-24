@@ -2,7 +2,7 @@
 users:
   - name: root
     ssh-authorized-keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN3jXlCYWe2djogkfe5PjZXl63WuH62n4+loi3Y52Fek
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJG+JL4h21poxX4nTOnVMsn+ctjuMkfxhVjTZfRZHZj4 
     shell: /bin/bash
     lock_passwd: true
 

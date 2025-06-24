@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 img="noble-server-cloudimg-amd64.img"
-cloudimg="https://cloud-images.ubuntu.com/noble/20250403/${img}"
+cloudimg="https://cloud-images.ubuntu.com/noble/current/${img}"
 cloudfile="${data}/images/${img}"
 
 qemu="${data}/qemu"
