@@ -379,7 +379,7 @@ func saveCredentials(p string, sw *Sw) error {
 		return fmt.Errorf("failed to write  %v: %w", path.Join(p, ikchainFile), err)
 	}
 
-	ak, err := x509.MarshalPKCS8PrivateKey(sw.ikPriv)
+	ak, err := x509.MarshalPKCS8PrivateKey(sw.akPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}
