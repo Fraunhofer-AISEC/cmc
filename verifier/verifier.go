@@ -162,7 +162,7 @@ func Verify(
 			hwAttest = true
 
 		case "SW Measurement":
-			r, ok := verifySwMeasurements(m, nonce, identityCas,
+			r, ok := verifySwMeasurements(m, nonce, metadataCas,
 				refVals["SW Reference Value"], s)
 			if !ok {
 				result.Success = false
