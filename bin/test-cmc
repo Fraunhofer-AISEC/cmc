@@ -92,29 +92,32 @@ fi
 
 log_dir="${data}/logs"
 
-metadata="${data}/metadata-signed"
+metadata_raw="${data}/metadata-raw"
+metadata_signed="${data}/metadata-signed"
 storage="${data}/cmc-storage"
 cache="${data}/cmc-cache"
 peercache="${data}/cmc-peer-cache"
 ctrlog="${data}/cmc-container-measurements"
 
 est_params=(
-    "-port" "9000" \
+    "-estaddr"              "0.0.0.0:9000" \
     "-estcakey"             "${data}/pki/ca-key.pem" \
     "-estcachain"           "${data}/pki/ca.pem" \
+    "-metadatacas"          "${data}/pki/ca.pem" \
     "-httpfolder"           "${data}" \
     "-tpmekcertdb"          "${data}/tpm-ek-certs.db" \
     "-tlskey"               "${data}/pki/est-tls-key.pem" \
-    "-tlscerts"             "${data}/pki/est-tls.pem" \
+    "-tlscachain"           "${data}/pki/est-tls.pem" \
     "-loglevel"             "trace" \
     "-logfile"              "${log_dir}/estserver.log" \
+    "-authmethods"          "none" \
     "-verifyekcert=false" \
 )
 
 cmc_params=(
     "-cmcaddr" "localhost:9955" \
     "-provaddr" "https://localhost:9000" \
-    "-metadata" "file://${metadata}" \
+    "-metadata" "file://${metadata_signed}" \
     "-drivers" "tpm,sw" \
     "-ima=true" \
     "-imapcr" "10" \
@@ -152,23 +155,25 @@ api_serializers=("json" "cbor")
 
 protocols=("grpc" "coap" "socket")
 
-modes_server=("generate" "listen" "serve")
+commands_server=("generate" "listen" "serve")
 
-modes_server_params=("" "-addr 0.0.0.0:4443" "-addr 0.0.0.0:8082")
+commands_params_server=("" "-addr 0.0.0.0:4443" "-addr 0.0.0.0:8082")
 
-modes_client=("verify" "dial" "request")
+commands_client=("verify" "dial" "request")
 
-modes_client_params=("" "-addr localhost:4443" "-addr https://localhost:8082/post -method POST -data \"hello ahttps\" -header \"Content-Type: text/plain\"")
+commands_params_client=("" "-addr localhost:4443" "-addr https://localhost:8082/post -method POST -data \"hello ahttps\" -header \"Content-Type: text/plain\"")
 
-modes_server_ready_msg=("Wrote attestation response" "Serving under" "Serving HTTPS under")
+commands_server_ready_msg=("Wrote attestation response" "Serving under" "Serving HTTPS under")
 
-modes_server_success_msg=("Wrote attestation response" "Server-side aTLS connection complete" "Server-side aHTTPS request completed")
-modes_client_success_msg=("SUCCESS: Verification for Prover" "Client-side aTLS connection complete" "Client-side aHTTPS request completed")
+commands_server_success_msg=("Wrote attestation response" "Server-side aTLS connection complete" "Server-side aHTTPS request completed")
+commands_client_success_msg=("SUCCESS: Verification for Prover" "Client-side aTLS connection complete" "Client-side aHTTPS request completed")
 
-modes_server_fail_msg=("Wrote attestation response" "attestation report verification failed" "attestation report verification failed")
-modes_client_fail_msg=("FAILED: Verification for Prover" "attestation report verification failed" "attestation report verification failed")
+commands_server_fail_msg=("Wrote attestation response" "attestation report verification failed" "attestation report verification failed")
+commands_client_fail_msg=("FAILED: Verification for Prover" "attestation report verification failed" "attestation report verification failed")
 
 # Clean start
+sudo rm -rf "${metadata_raw}"
+sudo rm -rf "${metadata_signed}"
 sudo rm -rf "${storage}"
 sudo rm -rf "${cache}"
 sudo rm -rf "${peercache}"
@@ -218,40 +223,40 @@ do
                 stty sane
                 echo "Restarted cmcd ----------------------------------------------------------------"
 
-                for j in "${!modes_server[@]}"
+                for j in "${!commands_server[@]}"
                 do
-                    server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_server[j]}.log"
-                    client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${modes_client[j]}.log"
+                    server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${commands_server[j]}.log"
+                    client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${commands_client[j]}.log"
 
-                    printf "TEST MODE %-8s | ATT %-7s | AR %s | SER %s | API %s\t" "${modes_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
+                    printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | API %s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
 
                     "${dir}/cmcctl/cmcctl" \
+                        "${commands_server[j]}" \
                         "${cmcctl_params[@]}" \
                         -logfile "${server_log}" \
-                        -mode ${modes_server[j]} \
                         -api ${protocols[i]} \
                         -apiserializer ${api_serializer} \
-                        ${modes_server_params[j]} \
+                        ${commands_params_server[j]} \
                         &
                     disown
-                    wait_for_message $! "${server_log}" "${modes_server_ready_msg[j]}"
+                    wait_for_message $! "${server_log}" "${commands_server_ready_msg[j]}"
                     stty sane
 
                     "${dir}/cmcctl/cmcctl" \
+                        "${commands_client[j]}" \
                         "${cmcctl_params[@]}" \
                         -logfile "${client_log}" \
-                        -mode "${modes_client[j]}" \
                         -apiserializer "${api_serializer}" \
                         -api "${protocols[i]}" \
-                        ${modes_client_params[j]}
+                        ${commands_params_client[j]}
                     stty sane
 
                     if [[ "${success}" == "success" ]]; then
-                        wait_msg_server="${modes_server_success_msg[j]}"
-                        wait_msg_client="${modes_client_success_msg[j]}"
+                        wait_msg_server="${commands_server_success_msg[j]}"
+                        wait_msg_client="${commands_client_success_msg[j]}"
                     else
-                        wait_msg_server="${modes_server_fail_msg[j]}"
-                        wait_msg_client="${modes_client_fail_msg[j]}"
+                        wait_msg_server="${commands_server_fail_msg[j]}"
+                        wait_msg_client="${commands_client_fail_msg[j]}"
                     fi
 
                     # Verify the server and client output
