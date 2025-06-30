@@ -33,5 +33,8 @@ func main() {
 		log.Fatalf("Failed to create new server: %v", err)
 	}
 
-	s.Serve()
+	err = s.Serve()
+	if err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
 }
