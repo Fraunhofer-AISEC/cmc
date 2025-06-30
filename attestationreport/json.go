@@ -195,6 +195,7 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 		log.Debugf("Using %v provided root CAs for JWS verification", len(roots))
 		rootpool = x509.NewCertPool()
 		for _, cert := range roots {
+			log.Tracef("Root CA key id: %v", hex.EncodeToString(cert.SubjectKeyId))
 			rootpool.AddCert(cert)
 		}
 	} else if pubKey != nil {
@@ -254,6 +255,11 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 				ok = false
 				continue
 			}
+			log.Tracef("JWS embedded cert chain: ")
+			for _, c := range certs {
+				log.Tracef("%v: %v -> %v", c[0].Subject.CommonName,
+					hex.EncodeToString(c[0].SubjectKeyId), hex.EncodeToString(c[0].AuthorityKeyId))
+			}
 
 			// Store details from validated certificate chain(s)
 			for _, chain := range certs {
@@ -264,6 +270,8 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
 			}
 			result.SignatureCheck[i].CertChainCheck.Success = true
+
+			log.Tracef("Using public key from cert %v for signature verification", certs[0][0].Subject.CommonName)
 
 			verifyingKey = certs[0][0].PublicKey
 		} else {
