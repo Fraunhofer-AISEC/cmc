@@ -18,12 +18,15 @@ package internal
 import (
 	"bytes"
 	"crypto"
+	"crypto/rand"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"time"
 )
@@ -214,6 +217,42 @@ func CheckCert(cert *x509.Certificate, cn string, signatureAlgo x509.SignatureAl
 	log.Tracef("Certificate signature algorithm %v matches expected algorithm", signatureAlgo.String())
 
 	return nil
+}
+
+func CreateCert(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+
+	// Check that CSR is self-signed
+	err := csr.CheckSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify CSR signature: %v", err)
+	}
+
+	// Parse public key and generate Subject Key Identifier (SKI)
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CSR public key: %w", err)
+	}
+	ski := sha1.Sum(pubKey)
+
+	// Create random 128-bit serial number
+	serial, err := rand.Int(rand.Reader, big.NewInt(1).Exp(big.NewInt(2), big.NewInt(128), nil))
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate serial number for certificate: %w", err)
+	}
+
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		RawSubject:            csr.RawSubject,
+		SubjectKeyId:          ski[:],
+		NotBefore:             time.Now().Add(-24 * time.Hour),
+		NotAfter:              time.Now().Add(24 * 180 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              csr.DNSNames,
+	}
+
+	return tmpl, nil
 }
 
 // CheckRevocation first validates the provided certificate revocation list against a CA and then

@@ -321,7 +321,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
-	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
+	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -330,7 +330,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	if akType == verifier.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = client.GetSnpVcek(c.ServerAddr, s.ChipId, s.CurrentTcb)
+		akCert, err = client.GetSnpVcek(s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
@@ -352,7 +352,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
 	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := client.GetSnpCa(c.ServerAddr, akType)
+	ca, err := client.GetSnpCa(akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
@@ -362,13 +362,13 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 func (snp *Snp) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
-	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
+	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(c.ServerAddr)
+	caCerts, err := client.CaCerts()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -408,7 +408,7 @@ func (snp *Snp) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509
 	}
 
 	// Request IK certificate from EST server
-	cert, err := client.AttestEnroll(c.ServerAddr, csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := client.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

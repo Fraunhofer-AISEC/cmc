@@ -98,12 +98,12 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 	// Read CA for verifying the device config
 	// TODO clarify if this CA is OK in all cases
-	client, err := estclient.NewClient(estTlsCas, c.EstTlsSysRoots, token)
+	client, err := estclient.New(c.ProvAddr, estTlsCas, c.EstTlsSysRoots, token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(c.ProvAddr)
+	caCerts, err := client.CaCerts()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certificates: %w", err)
 	}

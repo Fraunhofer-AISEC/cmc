@@ -324,13 +324,13 @@ func fetchAk() ([]*x509.Certificate, error) {
 
 func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
-	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
+	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(c.ServerAddr)
+	caCerts, err := client.CaCerts()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -370,7 +370,7 @@ func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509
 	}
 
 	// Request IK certificate from EST server
-	cert, err := client.AttestEnroll(c.ServerAddr, csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := client.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

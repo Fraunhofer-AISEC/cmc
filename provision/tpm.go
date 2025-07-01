@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package provision
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
@@ -29,7 +30,7 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
-	"github.com/google/go-attestation/attest"
+	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"github.com/google/go-tpm/legacy/tpm2"
 
 	log "github.com/sirupsen/logrus"
@@ -40,12 +41,12 @@ const (
 	intelEKCertServiceURL = "https://ekop.intel.com/ekcertservice/"
 )
 
-type tpmConfig struct {
-	verifyEkCert bool
-	dbPath       string
+type TpmConfig struct {
+	VerifyEkCert bool
+	DbPath       string
 }
 
-func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error {
+func VerifyEk(pub, cert []byte, tpmInfo, certUrl, ekDbPath string, verifyEk bool) error {
 
 	// Check that public key was part of the request
 	if pub == nil {
@@ -68,7 +69,7 @@ func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error 
 	}
 
 	// Verify the EK certificate chain
-	if conf.verifyEkCert {
+	if verifyEk {
 		// Retrieve the EK cert (varies between manufacturers)
 		var ekCert *x509.Certificate
 		if len(cert) == 0 {
@@ -97,7 +98,7 @@ func verifyEk(pub, cert []byte, tpmInfo, certUrl string, conf *tpmConfig) error 
 			}
 		}
 
-		err := verifyEkCert(conf.dbPath, ekCert, manufacturer, major, minor)
+		err := verifyEkCert(ekDbPath, ekCert, manufacturer, major, minor)
 		if err != nil {
 			return fmt.Errorf("verify EK certificate chain: error = %w", err)
 		}
@@ -222,7 +223,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, majo
 	return nil
 }
 
-func verifyIk(ikParams attest.CertificationParameters, akPub []byte) error {
+func VerifyIk(ikParams attest.CertificationParameters, akPub []byte) error {
 	pub, err := tpm2.DecodePublic(akPub)
 	if err != nil {
 		return fmt.Errorf("decode public failed: %w", err)
@@ -243,5 +244,24 @@ func verifyIk(ikParams attest.CertificationParameters, akPub []byte) error {
 	}
 	log.Debug("Successfully verified IK with AK")
 
+	return nil
+}
+
+func VerifyTpmCsr(tpmPub []byte, csr *x509.CertificateRequest) error {
+	pub, err := attest.ParseAKPublic(attest.TPMVersion20, tpmPub)
+	if err != nil {
+		return fmt.Errorf("parse TPM key failed: %w", err)
+	}
+	akPkix, err := x509.MarshalPKIXPublicKey(pub.Public)
+	if err != nil {
+		return fmt.Errorf("activate credential failed: %w", err)
+	}
+	csrPkix, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return fmt.Errorf("activate credential failed: %w", err)
+	}
+	if !bytes.Equal(akPkix, csrPkix) {
+		return fmt.Errorf("provided TPM key does not match TPM csr key")
+	}
 	return nil
 }

@@ -43,12 +43,12 @@ func getCaCerts(c *config) {
 		estTlsCas = append(estTlsCas, ca)
 	}
 
-	client, err := estclient.NewClient(estTlsCas, c.EstTlsSysRoots, nil)
+	client, err := estclient.New(addr, estTlsCas, c.EstTlsSysRoots, nil)
 	if err != nil {
 		log.Fatalf("Failed to create EST client: %v", err)
 	}
 
-	certs, err := client.CaCerts(addr)
+	certs, err := client.CaCerts()
 	if err != nil {
 		log.Fatalf("Failed to retrieve certificates: %v", err)
 	}

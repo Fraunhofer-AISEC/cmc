@@ -265,13 +265,13 @@ func provisionSw(ak, ik crypto.PrivateKey, c *ar.DriverConfig,
 
 	log.Info("Performing SW provisioning")
 
-	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
+	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(c.ServerAddr)
+	caCerts, err := client.CaCerts()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -290,7 +290,7 @@ func provisionSw(ak, ik crypto.PrivateKey, c *ar.DriverConfig,
 	}
 
 	log.Debugf("Performing simple AK enroll for CN=%v", akCsr.Subject.CommonName)
-	akCert, err := client.SimpleEnroll(c.ServerAddr, akCsr)
+	akCert, err := client.SimpleEnroll(akCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll AK cert: %w", err)
 	}
@@ -305,7 +305,7 @@ func provisionSw(ak, ik crypto.PrivateKey, c *ar.DriverConfig,
 	}
 
 	log.Debugf("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := client.SimpleEnroll(c.ServerAddr, ikCsr)
+	ikCert, err := client.SimpleEnroll(ikCsr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enroll cert: %w", err)
 	}

@@ -42,7 +42,7 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	useSystemRoots bool,
 ) ([][]byte, error) {
 
-	client, err := NewClient(rootCas, useSystemRoots, nil)
+	client, err := New(addr, rootCas, useSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
