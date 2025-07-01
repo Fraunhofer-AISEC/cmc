@@ -29,17 +29,19 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
+	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.WithField("service", "estclient")
 
 type Client struct {
+	addr           string
 	bootstrapToken []byte
 	client         *http.Client
 }
 
-func NewClient(serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
+func New(addr string, serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
 	var err error
 
 	// Create Certpool for Root CAs
@@ -74,15 +76,16 @@ func NewClient(serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []
 	}
 
 	return &Client{
+		addr:           addr,
 		bootstrapToken: token,
 		client:         client,
 	}, nil
 }
 
-func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
+func (c *Client) CaCerts() ([]*x509.Certificate, error) {
 
 	method := http.MethodGet
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.CacertsEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.CacertsEndpoint
 	accepts := est.MimeTypePKCS7
 	contentType := ""
 	transferEncoding := ""
@@ -118,8 +121,7 @@ func (c *Client) CaCerts(addr string) ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
-func (c *Client) SimpleEnroll(addr string, csr *x509.CertificateRequest,
-) (*x509.Certificate, error) {
+func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
 
 	// PKCS#10 Request
 	csrbase64 := est.EncodeBase64(csr.Raw)
@@ -127,7 +129,7 @@ func (c *Client) SimpleEnroll(addr string, csr *x509.CertificateRequest,
 	body := io.NopCloser(bytes.NewBuffer(csrbase64))
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.EnrollEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.EnrollEndpoint
 	accepts := est.MimeTypePKCS7
 	contentType := est.MimeTypePKCS10
 	transferEncoding := est.EncodingTypeBase64
@@ -151,11 +153,13 @@ func (c *Client) SimpleEnroll(addr string, csr *x509.CertificateRequest,
 	return certs[0], nil
 }
 
+// akPublic, akCreateData, akCreateAttestation, akCreateSignature []byte,
+
 func (c *Client) TpmActivateEnroll(
-	addr, tpmManufacturer, ekCertUrl string,
+	tpmManufacturer, ekCertUrl string,
 	tpmMajor, tpmMinor int,
 	csr *x509.CertificateRequest,
-	akPublic, akCreateData, akCreateAttestation, akCreateSignature []byte,
+	akParams attest.AttestationParameters,
 	ekPublic, ekCertDer []byte,
 ) ([]byte, []byte, []byte, error) {
 
@@ -168,10 +172,10 @@ func (c *Client) TpmActivateEnroll(
 			{ContentType: est.MimeTypeTextPlain, Data: tpmInfo},
 			{ContentType: est.MimeTypeTextPlain, Data: ekCertUrl},
 			{ContentType: est.MimeTypePKCS10, Data: csr},
-			{ContentType: est.MimeTypeOctetStream, Data: akPublic},
-			{ContentType: est.MimeTypeOctetStream, Data: akCreateData},
-			{ContentType: est.MimeTypeOctetStream, Data: akCreateAttestation},
-			{ContentType: est.MimeTypeOctetStream, Data: akCreateSignature},
+			{ContentType: est.MimeTypeOctetStream, Data: akParams.Public},
+			{ContentType: est.MimeTypeOctetStream, Data: akParams.CreateData},
+			{ContentType: est.MimeTypeOctetStream, Data: akParams.CreateAttestation},
+			{ContentType: est.MimeTypeOctetStream, Data: akParams.CreateSignature},
 			{ContentType: est.MimeTypeOctetStream, Data: ekPublic},
 			{ContentType: est.MimeTypeOctetStream, Data: ekCertDer},
 		},
@@ -181,7 +185,7 @@ func (c *Client) TpmActivateEnroll(
 	}
 	body := io.NopCloser(buf)
 
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.TpmActivateEnrollEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.TpmActivateEnrollEndpoint
 
 	resp, err := request(c.client, http.MethodPost, endpoint, est.MimeTypePKCS7, contentType,
 		est.EncodingTypeBase64, body, c.bootstrapToken)
@@ -211,9 +215,8 @@ func (c *Client) TpmActivateEnroll(
 }
 
 func (c *Client) TpmCertifyEnroll(
-	addr string,
 	csr *x509.CertificateRequest,
-	ikPublic, ikCreateData, ikCreateAttestation, ikCreateSignature []byte,
+	ikParams attest.CertificationParameters,
 	akPublic []byte,
 	report []byte,
 	metadata [][]byte,
@@ -222,10 +225,10 @@ func (c *Client) TpmCertifyEnroll(
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypePKCS10, Data: csr},
-			{ContentType: est.MimeTypeOctetStream, Data: ikPublic},
-			{ContentType: est.MimeTypeOctetStream, Data: ikCreateData},
-			{ContentType: est.MimeTypeOctetStream, Data: ikCreateAttestation},
-			{ContentType: est.MimeTypeOctetStream, Data: ikCreateSignature},
+			{ContentType: est.MimeTypeOctetStream, Data: ikParams.Public},
+			{ContentType: est.MimeTypeOctetStream, Data: ikParams.CreateData},
+			{ContentType: est.MimeTypeOctetStream, Data: ikParams.CreateAttestation},
+			{ContentType: est.MimeTypeOctetStream, Data: ikParams.CreateSignature},
 			{ContentType: est.MimeTypeOctetStream, Data: akPublic},
 			{ContentType: est.MimeTypeOctetStream, Data: report},
 			{ContentType: est.MimeTypeOctetStream, Data: internal.FlattenArray(metadata)},
@@ -238,7 +241,7 @@ func (c *Client) TpmCertifyEnroll(
 	body := io.NopCloser(buf)
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.TpmCertifyEnrollEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.TpmCertifyEnrollEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
@@ -262,8 +265,7 @@ func (c *Client) TpmCertifyEnroll(
 	return certs[0], nil
 }
 
-func (c *Client) AttestEnroll(
-	addr string,
+func (c *Client) CcEnroll(
 	csr *x509.CertificateRequest,
 	report []byte,
 	metadata [][]byte,
@@ -283,7 +285,7 @@ func (c *Client) AttestEnroll(
 	body := io.NopCloser(buf)
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.AttestEnrollEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.CcEnrollEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
@@ -307,7 +309,7 @@ func (c *Client) AttestEnroll(
 	return certs[0], nil
 }
 
-func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certificate, error) {
+func (c *Client) GetSnpCa(akType verifier.AkType) ([]*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
@@ -321,7 +323,7 @@ func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certific
 	body := io.NopCloser(buf)
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.SnpCaCertsEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.SnpCaCertsEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
@@ -345,13 +347,13 @@ func (c *Client) GetSnpCa(addr string, akType verifier.AkType) ([]*x509.Certific
 	return certs, nil
 }
 
-func (c *Client) GetSnpVcek(addr string, ChipId [64]byte, Tcb uint64,
+func (c *Client) GetSnpVcek(chipId [64]byte, tcb uint64,
 ) (*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
-			{ContentType: est.MimeTypeOctetStream, Data: ChipId[:]},
-			{ContentType: est.MimeTypeOctetStream, Data: Tcb},
+			{ContentType: est.MimeTypeOctetStream, Data: chipId[:]},
+			{ContentType: est.MimeTypeOctetStream, Data: tcb},
 		},
 	)
 	if err != nil {
@@ -361,7 +363,7 @@ func (c *Client) GetSnpVcek(addr string, ChipId [64]byte, Tcb uint64,
 	body := io.NopCloser(buf)
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(addr, "/") + est.EndpointPrefix + est.SnpVcekEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.SnpVcekEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 
