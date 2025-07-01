@@ -19,7 +19,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
@@ -41,15 +41,6 @@ var (
 		"debug": log.DebugLevel,
 		"trace": log.TraceLevel,
 	}
-)
-
-type AuthMethod uint32
-
-const (
-	AuthNone  AuthMethod = 0
-	AuthToken AuthMethod = 1 << iota
-	AuthCertificate
-	AuthAttestation
 )
 
 type config struct {
@@ -74,7 +65,7 @@ type config struct {
 	tlsKey      *ecdsa.PrivateKey
 	tlsCaChain  []*x509.Certificate
 	metadataCas []*x509.Certificate
-	authMethods AuthMethod
+	authMethods provision.AuthMethod
 }
 
 const (
@@ -211,7 +202,7 @@ func getConfig() (*config, error) {
 	pathsToAbs(c)
 
 	// Load specified files
-	c.estCaKey, err = loadPrivateKey(c.EstCaKey)
+	c.estCaKey, err = internal.LoadPrivateKey(c.EstCaKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -221,7 +212,7 @@ func getConfig() (*config, error) {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
 
-	c.tlsKey, err = loadPrivateKey(c.TlsKey)
+	c.tlsKey, err = internal.LoadPrivateKey(c.TlsKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -240,7 +231,7 @@ func getConfig() (*config, error) {
 		log.Warn("UNSAFE: Verification of EK certificate chain turned off via config")
 	}
 
-	c.authMethods, err = parseAuthMethods(c.AuthMethods)
+	c.authMethods, err = provision.ParseAuthMethods(c.AuthMethods)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
@@ -335,64 +326,4 @@ func printConfig(c *config) {
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
 	log.Debugf("\tToken Path          : %v", c.TokenPath)
-}
-
-func loadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
-
-	// Read private pem-encoded key and convert it to a private key
-	privBytes, err := os.ReadFile(caPrivFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file: %w", err)
-	}
-
-	privPem, _ := pem.Decode(privBytes)
-
-	priv, err := x509.ParseECPrivateKey(privPem.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	return priv, nil
-}
-
-func parseAuthMethods(input []string) (AuthMethod, error) {
-	var methods AuthMethod
-	for _, part := range input {
-		switch strings.TrimSpace(strings.ToLower(part)) {
-		case "none":
-			methods |= AuthNone
-		case "token":
-			methods |= AuthToken
-		case "certificate":
-			methods |= AuthCertificate
-		case "attestation":
-			methods |= AuthAttestation
-		default:
-			return 0, fmt.Errorf("unknown auth method: %q", part)
-		}
-	}
-	return methods, nil
-}
-
-func (a AuthMethod) Has(method AuthMethod) bool {
-	return a&method != 0
-}
-
-func (a AuthMethod) String() string {
-	if a == AuthNone {
-		return "none"
-	}
-
-	var parts []string
-	if a.Has(AuthToken) {
-		parts = append(parts, "token")
-	}
-	if a.Has(AuthCertificate) {
-		parts = append(parts, "certificate")
-	}
-	if a.Has(AuthAttestation) {
-		parts = append(parts, "attestation")
-	}
-
-	return strings.Join(parts, ",")
 }

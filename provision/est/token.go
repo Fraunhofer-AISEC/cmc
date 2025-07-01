@@ -32,7 +32,7 @@ type TokenData struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-func CreateAndStoreToken(path string) (string, error) {
+func CreateAndCacheToken(path string) (string, error) {
 
 	var tokenData []TokenData
 

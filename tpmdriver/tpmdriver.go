@@ -591,13 +591,13 @@ func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error
 		return fmt.Errorf("failed to retrieve TPM Info: %w", err)
 	}
 
-	client, err := estclient.NewClient(c.EstTlsCas, c.UseSystemRootCas, c.Token)
+	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(c.ServerAddr)
+	caCerts, err := client.CaCerts()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certificates: %w", err)
 	}
@@ -631,10 +631,10 @@ func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error
 
 	log.Debugf("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
 	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
-		c.ServerAddr, tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
+		tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
-		akParams.Public, akParams.CreateData, akParams.CreateAttestation, akParams.CreateSignature,
+		akParams,
 		ekPub, ekRaw,
 	)
 	if err != nil {
@@ -704,9 +704,8 @@ func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error
 
 	log.Debugf("Performing TPM IK Attest Enroll for CN=%v", ikCsr.Subject.CommonName)
 	ikCert, err := client.TpmCertifyEnroll(
-		c.ServerAddr,
 		ikCsr,
-		ikParams.Public, ikParams.CreateData, ikParams.CreateAttestation, ikParams.CreateSignature,
+		ikParams,
 		akParams.Public,
 		signedReport,
 		internal.ConvertToArray(metadata),

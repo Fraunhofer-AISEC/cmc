@@ -16,7 +16,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha1"
@@ -24,17 +23,16 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"mime"
 	"net/http"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
-	"github.com/google/go-attestation/attest"
+	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
 	"go.mozilla.org/pkcs7"
 
@@ -46,9 +44,9 @@ type Server struct {
 	estCaKey    *ecdsa.PrivateKey
 	estCaChain  []*x509.Certificate
 	metadataCas []*x509.Certificate
-	tpmConf     tpmConfig
-	snpConf     snpConfig
-	authMethods AuthMethod
+	snpConf     *provision.SnpConfig
+	tpmConf     provision.TpmConfig
+	authMethods provision.AuthMethod
 	tokenPath   string
 }
 
@@ -76,7 +74,7 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	// The client does authenticate itself via a certificate if configured
-	if c.authMethods.Has(AuthCertificate) {
+	if c.authMethods.Has(provision.AuthCertificate) {
 		log.Debugf("Enforcing client authentication via certificate")
 		clientRoots := x509.NewCertPool()
 		for _, ca := range c.ClientTlsCas {
@@ -101,13 +99,13 @@ func NewServer(c *config) (*Server, error) {
 		estCaKey:    c.estCaKey,
 		estCaChain:  c.estCaChain,
 		metadataCas: c.metadataCas,
-		tpmConf: tpmConfig{
-			verifyEkCert: c.VerifyEkCert,
-			dbPath:       c.TpmEkCertDb,
+		tpmConf: provision.TpmConfig{
+			VerifyEkCert: c.VerifyEkCert,
+			DbPath:       c.TpmEkCertDb,
 		},
-		snpConf: snpConfig{
-			vcekCacheFolder: c.VcekCacheFolder,
-			vceks:           make(map[vcekInfo][]byte),
+		snpConf: &provision.SnpConfig{
+			VcekCacheFolder: c.VcekCacheFolder,
+			Vceks:           make(map[provision.VcekInfo][]byte),
 		},
 		authMethods: c.authMethods,
 		tokenPath:   c.TokenPath,
@@ -117,7 +115,7 @@ func NewServer(c *config) (*Server, error) {
 	simpleenrollEndpoint := est.EndpointPrefix + est.EnrollEndpoint
 	tpmActivateEnrollEndpoint := est.EndpointPrefix + est.TpmActivateEnrollEndpoint
 	tpmCertifyEnrollEndpoint := est.EndpointPrefix + est.TpmCertifyEnrollEndpoint
-	attestEnrollEndpoint := est.EndpointPrefix + est.AttestEnrollEndpoint
+	ccEnrollEndpoint := est.EndpointPrefix + est.CcEnrollEndpoint
 	snpVcekEndpoint := est.EndpointPrefix + est.SnpVcekEndpoint
 	snpCaCertsEndpoint := est.EndpointPrefix + est.SnpCaCertsEndpoint
 
@@ -125,7 +123,7 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc(simpleenrollEndpoint, server.handleSimpleenroll)
 	http.HandleFunc(tpmActivateEnrollEndpoint, server.handleTpmActivateEnroll)
 	http.HandleFunc(tpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
-	http.HandleFunc(attestEnrollEndpoint, server.handleAttestEnroll)
+	http.HandleFunc(ccEnrollEndpoint, server.handleCcEnroll)
 	http.HandleFunc(snpVcekEndpoint, server.handleSnpVcek)
 	http.HandleFunc(snpCaCertsEndpoint, server.handleSnpCa)
 
@@ -178,12 +176,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(AuthAttestation) {
-		writeHttpErrorf(w, "%v (Server config requires attetation-based authentication)", http.StatusUnauthorized)
-		return
-	}
-
-	if s.authMethods.Has(AuthToken) {
+	if s.authMethods.Has(provision.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -238,7 +231,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if s.authMethods.Has(AuthToken) {
+	if s.authMethods.Has(provision.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -275,7 +268,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	err = verifyEk(ekPubPkix, ekCertDer, tpmInfo, ekCertUrl, &s.tpmConf)
+	err = provision.VerifyEk(ekPubPkix, ekCertDer, tpmInfo, ekCertUrl, s.tpmConf.DbPath, s.tpmConf.VerifyEkCert)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to verify EK: %v", err)
 		return
@@ -308,7 +301,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	}
 
 	// Verify that activated AK is actually the certificate public key
-	err = verifyTpmCsr(akPublic, csr)
+	err = provision.VerifyTpmCsr(akPublic, csr)
 	if err != nil {
 		writeHttpErrorf(w, "failed to verify AK: %v", err)
 		return
@@ -320,7 +313,6 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	// TODO Discuss if this is secure
 	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES256GCM
 	encryptedCert, err := pkcs7.EncryptUsingPSK(cert.Raw, secret)
 	if err != nil {
@@ -355,7 +347,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if s.authMethods.Has(AuthToken) {
+	if s.authMethods.Has(provision.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -397,24 +389,26 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		CreateAttestation: ikCreateAttestation,
 		CreateSignature:   ikCreateSignature,
 	}
-	err = verifyIk(ikParams, akPublic)
+	err = provision.VerifyIk(ikParams, akPublic)
 	if err != nil {
 		writeHttpErrorf(w, "failed to verify IK: %v", err)
 	}
 
 	// Verify that certified IK is actually the CSR public key
-	err = verifyTpmCsr(ikPublic, csr)
+	err = provision.VerifyTpmCsr(ikPublic, csr)
 	if err != nil {
 		writeHttpErrorf(w, "failed to verify IK: %v", err)
 		return
 	}
 
-	// Verify attestation report
-	log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
-	err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
-		return
+	// Verify attestation report if authentication method attestation is activated
+	if s.authMethods.Has(provision.AuthAttestation) {
+		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
+		err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
+		if err != nil {
+			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
+			return
+		}
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
@@ -437,16 +431,16 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 }
 
-func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
+func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 
-	log.Debugf("Received /attestenroll request from %v", req.RemoteAddr)
+	log.Debugf("Received /ccenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Method %v not implemented for tpmcertifyenroll request", req.Method)
 		return
 	}
 
-	if s.authMethods.Has(AuthToken) {
+	if s.authMethods.Has(provision.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -471,10 +465,13 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
-		return
+	// Verify attestation report if authentication method attestation is activated
+	if s.authMethods.Has(provision.AuthAttestation) {
+		err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
+		if err != nil {
+			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
+			return
+		}
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
@@ -508,7 +505,7 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(AuthToken) {
+	if s.authMethods.Has(provision.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -531,7 +528,7 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vcek, err := s.getVcek(chipId, tcb)
+	vcek, err := s.snpConf.GetVcek(chipId, tcb)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return
@@ -560,7 +557,7 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(AuthToken) {
+	if s.authMethods.Has(provision.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -583,7 +580,7 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 
 	akType := verifier.AkType(akTypeRaw[0])
 
-	ca, err := s.getSnpCa(akType)
+	ca, err := s.snpConf.GetSnpCa(akType)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return
@@ -648,38 +645,12 @@ func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, p
 func enrollCert(csr *x509.CertificateRequest, key *ecdsa.PrivateKey, parent *x509.Certificate,
 ) (*x509.Certificate, error) {
 
-	// Check that CSR is self-signed
-	err := csr.CheckSignature()
+	tmpl, err := internal.CreateCert(csr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify CSR signature: %v", err)
+		return nil, fmt.Errorf("failed to create cert from CSR: %w", err)
 	}
 
-	// Parse public key and generate Subject Key Identifier (SKI)
-	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse CSR public key: %w", err)
-	}
-	ski := sha1.Sum(pubKey)
-
-	// Create random 128-bit serial number
-	serial, err := rand.Int(rand.Reader, big.NewInt(1).Exp(big.NewInt(2), big.NewInt(128), nil))
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate serial number for certificate: %w", err)
-	}
-
-	tmpl := x509.Certificate{
-		SerialNumber:          serial,
-		RawSubject:            csr.RawSubject,
-		SubjectKeyId:          ski[:],
-		NotBefore:             time.Now().Add(-24 * time.Hour),
-		NotAfter:              time.Now().Add(24 * 180 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		BasicConstraintsValid: true,
-		DNSNames:              csr.DNSNames,
-	}
-
-	certDer, err := x509.CreateCertificate(rand.Reader, &tmpl, parent, csr.PublicKey, key)
+	certDer, err := x509.CreateCertificate(rand.Reader, tmpl, parent, csr.PublicKey, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create IK certificate: %w", err)
 	}
@@ -690,25 +661,6 @@ func enrollCert(csr *x509.CertificateRequest, key *ecdsa.PrivateKey, parent *x50
 	}
 
 	return cert, nil
-}
-
-func verifyTpmCsr(tpmPub []byte, csr *x509.CertificateRequest) error {
-	pub, err := attest.ParseAKPublic(attest.TPMVersion20, tpmPub)
-	if err != nil {
-		return fmt.Errorf("parse TPM key failed: %w", err)
-	}
-	akPkix, err := x509.MarshalPKIXPublicKey(pub.Public)
-	if err != nil {
-		return fmt.Errorf("activate credential failed: %w", err)
-	}
-	csrPkix, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		return fmt.Errorf("activate credential failed: %w", err)
-	}
-	if !bytes.Equal(akPkix, csrPkix) {
-		return fmt.Errorf("provided TPM key does not match TPM csr key")
-	}
-	return nil
 }
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
