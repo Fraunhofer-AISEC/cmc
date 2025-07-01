@@ -27,8 +27,6 @@ import (
 	"math/big"
 	"mime"
 	"net/http"
-	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -131,10 +129,7 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc(snpVcekEndpoint, server.handleSnpVcek)
 	http.HandleFunc(snpCaCertsEndpoint, server.handleSnpCa)
 
-	err := httpHandleMetadata(c.HttpFolder)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serve metadata: %w", err)
-	}
+	httpHandleMetadata(c.HttpFolder)
 
 	return server, nil
 }
@@ -157,8 +152,8 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// RFC7030: The EST server SHOULD NOT require client authentication, thus
-	// we do not perform token authentication, even if configured
+	// RFC7030: The EST server SHOULD NOT require client authentication for /cacerts
+	// endpoint, thus we do not perform token authentication, even if configured
 
 	body, err := est.EncodePkcs7CertsOnly(s.estCaChain)
 	if err != nil {
@@ -608,36 +603,14 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func httpHandleMetadata(folder string) error {
-	// Retrieve the directories to be provided from config and create http
-	// directory structure
-	log.Debugf("Serving Directory: %v", folder)
+func httpHandleMetadata(path string) {
 
-	// Create directory, if it does not yet exist (might be populated later)
-	if _, err := os.Stat(folder); err != nil {
-		if err := os.MkdirAll(folder, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %q: %w", folder, err)
-		}
-	}
+	log.Debugf("Serving Directory: %v", path)
 
-	dirs, err := os.ReadDir(folder)
-	if err != nil {
-		return fmt.Errorf("failed to open metaddata folders %q: %v", folder, err)
-	}
+	d := filepath.Base(path)
 
-	log.Tracef("Sub-paths:")
-	for _, dir := range dirs {
-		d := dir.Name()
-		log.Tracef("\t%v", d)
-		path := path.Join(folder, d)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			abs, _ := filepath.Abs(path)
-			return fmt.Errorf("path %v does not exist", abs)
-		}
-		fs := http.FileServer(http.Dir(path))
-		http.Handle("/"+d+"/", logRequest(http.StripPrefix("/"+d, fs)))
-	}
-	return nil
+	fs := http.FileServer(http.Dir(path))
+	http.Handle("/"+d+"/", logRequest(http.StripPrefix("/"+d, fs)))
 }
 
 func logRequest(h http.Handler) http.Handler {
