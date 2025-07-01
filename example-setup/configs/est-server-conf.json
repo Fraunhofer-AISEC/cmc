@@ -12,7 +12,7 @@
     "metadataCas": [
         "../../data/pki/ca.pem"
     ],
-    "httpFolder": "../../data",
+    "httpFolder": "../../data/metadata-signed",
     "verifyEkCert": false,
     "tpmEkCertDb": "../../data/tpm-ek-certs.db",
     "logLevel": "trace",
