@@ -467,7 +467,11 @@ const (
 	JWSSignatureOrder
 	JWSPayload
 	JWSNoKeyOrCert
+	JWSExtractSelfSignedCert
+	JWSUnknownVerifierType
 	COSENoSignatures
+	COSEExtractSelfSignedCert
+	COSEUnknownVerifierType
 	MeasurementNoMatch
 	MeasurementTypeNotSupported
 	NotPresent
@@ -568,8 +572,16 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (JWS payload error)", int(e))
 	case JWSNoKeyOrCert:
 		return fmt.Sprintf("%v (JWS No key or cert provided)", int(e))
+	case JWSExtractSelfSignedCert:
+		return fmt.Sprintf("%v (JWS extract self-signed cert)", int(e))
+	case JWSUnknownVerifierType:
+		return fmt.Sprintf("%v (JWS Unknown verifier type)", int(e))
 	case COSENoSignatures:
 		return fmt.Sprintf("%v (COSE no signatures error)", int(e))
+	case COSEExtractSelfSignedCert:
+		return fmt.Sprintf("%v (COSE extract self-signed cert)", int(e))
+	case COSEUnknownVerifierType:
+		return fmt.Sprintf("%v (COSE Unknown verifier type)", int(e))
 	case MeasurementNoMatch:
 		return fmt.Sprintf("%v (Measurement no match error)", int(e))
 	case MeasurementTypeNotSupported:
@@ -692,6 +704,7 @@ func (e ErrorCode) String() string {
 }
 
 func (r *Result) SetErr(e ErrorCode) {
+	log.Warnf("Verification failed with error code %v", e.String())
 	r.Success = false
 	r.ErrorCode = e
 }

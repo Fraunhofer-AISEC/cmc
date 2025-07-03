@@ -16,8 +16,6 @@
 package attestationreport
 
 import (
-	"crypto"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 
@@ -30,6 +28,15 @@ type SignConfig struct {
 	UseAk bool // Use the AK instead of the IK for signing
 }
 
+// VerifierOptions represents verifiers that do not need certificates or public keys
+// If certs or public keys are used, they can be passed directly to the Verify function
+type VerifierOptions int
+
+const (
+	VerifyWithSystemCerts    VerifierOptions = iota // Use the system trusted root CAs for verification
+	VerifyWithSelfSignedCert                        // Use the embedded self-signed cert for verification
+)
+
 // Serializer is a generic interface providing methods for data serialization and
 // de-serialization. This enables to generate and verify attestation reports in
 // different formats, such as JSON/JWS or CBOR/COSE
@@ -38,7 +45,7 @@ type Serializer interface {
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
 	Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error)
-	Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool, pubKey crypto.PublicKey) (MetadataResult, []byte, bool)
+	Verify(data []byte, verifier interface{}) (MetadataResult, []byte, bool)
 	String() string
 }
 

@@ -17,7 +17,6 @@ package verifier
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -56,8 +55,7 @@ var (
 // the reference values and the compatibility of software artefacts.
 func Verify(
 	arRaw, nonce []byte,
-	identityCas []*x509.Certificate,
-	identityPubKey crypto.PublicKey,
+	verifier interface{},
 	metadataCas []*x509.Certificate,
 	policies []byte,
 	polEng PolicyEngineSelect,
@@ -88,7 +86,7 @@ func Verify(
 	log.Tracef("Detected %v serialization", s.String())
 
 	// Verify and unpack attestation report
-	report, tr, code := verifyAr(arRaw, identityCas, identityPubKey, s)
+	report, tr, code := verifyAr(arRaw, verifier, s)
 	result.ReportSignature = tr.SignatureCheck
 	if code != ar.NotSet {
 		result.ErrorCodes = append(result.ErrorCodes, code)
@@ -235,13 +233,13 @@ func Verify(
 	return result
 }
 
-func verifyAr(attestationReport []byte, cas []*x509.Certificate, pubKey crypto.PublicKey, s ar.Serializer,
+func verifyAr(attestationReport []byte, verifier interface{}, s ar.Serializer,
 ) (*ar.AttestationReport, ar.MetadataResult, ar.ErrorCode) {
 
 	report := ar.AttestationReport{}
 
 	//Validate Attestation Report signature
-	result, payload, ok := s.Verify(attestationReport, cas, false, pubKey)
+	result, payload, ok := s.Verify(attestationReport, verifier)
 	if !ok {
 		log.Debug("Validation of Attestation Report failed")
 		return nil, result, ar.VerifyAR
@@ -278,7 +276,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 
 	for hash, meta := range metadatamap {
 
-		result, payload, ok := s.Verify(meta, cas, false, nil)
+		result, payload, ok := s.Verify(meta, cas)
 		if !ok {
 			log.Debugf("Validation of metadata item %v failed", hash)
 			success = false
