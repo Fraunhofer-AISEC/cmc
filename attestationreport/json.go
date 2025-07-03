@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/go-jose/go-jose/v4"
 )
 
@@ -38,6 +39,13 @@ import (
 // encoded as hex strings in JSON but used as byte arrays
 // internally and by CBOR encoding
 type HexByte []byte
+
+// Custom type for manually parsing JWS byte buffers.
+//
+//	Required because JWS uses use-safe base64
+type buf struct {
+	data []byte
+}
 
 // MarshalJSON marshalls a byte array into a hex string
 func (h *HexByte) MarshalJSON() ([]byte, error) {
@@ -59,6 +67,27 @@ func (h *HexByte) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to decode string: %v", err)
 	}
 
+	return nil
+}
+
+// UnmarshalJSON unmarshals JSON JWS url-safe base64 encoded
+// byte buffers
+func (b *buf) UnmarshalJSON(data []byte) error {
+	var s string
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
+	if s == "" {
+		return nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	*b = buf{
+		data: decoded,
+	}
 	return nil
 }
 
@@ -171,48 +200,21 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 	return []byte(msg), nil
 }
 
-// Verify verifies signatures and certificate chains for JWS tokens
-func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystemCerts bool, pubKey crypto.PublicKey,
-) (MetadataResult, []byte, bool) {
+// Verify verifies signatures and certificate chains of JWS tokens. The verifier interface must
+// either be a list of trusted CA certificates, or a trusted public key, or a VerifierOption,
+// which can be using the system certificates or the embedded self-signed certificate.
+func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
+
+	var rootpool *x509.CertPool
+	var verifyingKey crypto.PublicKey
+	var err error
+	result := MetadataResult{}
+	success := true
+	verifyCertChain := true
 
 	log.Debugf("Verifying JWS object...")
 
-	var rootpool *x509.CertPool
-	var err error
-	result := MetadataResult{}
-	ok := true
-
-	if useSystemCerts {
-		log.Debug("Using system certificate pool for JWS verification")
-		rootpool, err = x509.SystemCertPool()
-		if err != nil {
-			log.Warnf("Failed to setup trusted cert pool with system certificate pool")
-			result.Summary.Success = false
-			result.Summary.ErrorCode = SetupSystemCA
-			return result, nil, false
-		}
-	} else if len(roots) > 0 {
-		log.Debugf("Using %v provided root CAs for JWS verification", len(roots))
-		rootpool = x509.NewCertPool()
-		for _, cert := range roots {
-			log.Tracef("Root CA key id: %v", hex.EncodeToString(cert.SubjectKeyId))
-			rootpool.AddCert(cert)
-		}
-	} else if pubKey != nil {
-		log.Debug("Using provided public key for JWS verification")
-		rootpool = nil
-	} else {
-		log.Warn("No JWS verification key or certificate chain provided")
-		result.Summary.Success = false
-		result.Summary.ErrorCode = JWSNoKeyOrCert
-		return result, nil, false
-	}
-
-	opts := x509.VerifyOptions{
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
-		Roots:     rootpool,
-	}
-
+	// Parse the signed JWS object
 	jwsData, err := jose.ParseSigned(string(data), []jose.SignatureAlgorithm{
 		jose.RS256,
 		jose.RS512,
@@ -222,45 +224,61 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 	})
 	if err != nil {
 		log.Warnf("Data could not be parsed: %v", err)
-		result.Summary.Success = false
-		result.Summary.ErrorCode = ParseJSON
+		result.Summary.SetErr(ParseJSON)
 		return result, nil, false
 	}
-
 	if len(jwsData.Signatures) == 0 {
-		log.Warnf("JWS does not contain signatures")
-		result.Summary.Success = false
-		result.Summary.ErrorCode = JWSNoSignatures
+		result.Summary.SetErr(JWSNoSignatures)
 		return result, nil, false
 	}
-
 	index := make([]int, len(jwsData.Signatures))
 	payloads := make([][]byte, len(jwsData.Signatures))
+
+	// Determine verifier type
+	switch verifier := verifier.(type) {
+	case []*x509.Certificate:
+		roots := verifier
+		log.Debugf("Using %v provided root CAs for JWS verification", len(roots))
+		rootpool = x509.NewCertPool()
+		for _, cert := range roots {
+			rootpool.AddCert(cert)
+		}
+	case crypto.PublicKey:
+		log.Debug("Using provided public key for JWS verification")
+		verifyingKey = verifier
+		rootpool = nil
+		verifyCertChain = false
+	case nil:
+		log.Debug("Using system certificate pool for JWS verification")
+		rootpool, err = x509.SystemCertPool()
+		if err != nil {
+			result.Summary.SetErr(SetupSystemCA)
+			return result, nil, false
+		}
+	default:
+		result.Summary.SetErr(JWSUnknownVerifierType)
+		return result, nil, false
+	}
+
+	opts := x509.VerifyOptions{
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		Roots:     rootpool,
+	}
+
 	for i, sig := range jwsData.Signatures {
-		var verifyingKey crypto.PublicKey
 
 		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
 
-		// if no roots are given and useSystemCerts is set to false, do not verify the
-		// certificate chain (verify only the signature with the given public key)
-		if len(roots) > 0 || useSystemCerts {
-
+		if verifyCertChain {
 			// Verify the certificate chain present in the x5c header against the given roots
 			certs, err := sig.Protected.Certificates(opts)
 			if err != nil {
-				log.Warnf("Failed to verify certificate chain: %v", err)
-				result.Summary.ErrorCode = VerifyCertChain
+				result.Summary.SetErr(VerifyCertChain)
 				result.SignatureCheck[i].CertChainCheck.Success = false
 				result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
-				ok = false
+				success = false
 				continue
 			}
-			log.Tracef("JWS embedded cert chain: ")
-			for _, c := range certs {
-				log.Tracef("%v: %v -> %v", c[0].Subject.CommonName,
-					hex.EncodeToString(c[0].SubjectKeyId), hex.EncodeToString(c[0].AuthorityKeyId))
-			}
-
 			// Store details from validated certificate chain(s)
 			for _, chain := range certs {
 				chainExtracted := []X509CertExtracted{}
@@ -270,12 +288,9 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
 			}
 			result.SignatureCheck[i].CertChainCheck.Success = true
+			verifyingKey = certs[0][0].PublicKey
 
 			log.Tracef("Using public key from cert %v for signature verification", certs[0][0].Subject.CommonName)
-
-			verifyingKey = certs[0][0].PublicKey
-		} else {
-			verifyingKey = pubKey
 		}
 
 		// The JSONWebKey uses the certificates from the x5c header, already validated before
@@ -283,36 +298,35 @@ func (s JsonSerializer) Verify(data []byte, roots []*x509.Certificate, useSystem
 		if err == nil {
 			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
-			log.Warnf("Signature verification failed: %v", err)
-			result.Summary.ErrorCode = VerifySignature
+			result.Summary.SetErr(VerifySignature)
 			result.SignatureCheck[i].SignCheck.Success = false
 			result.SignatureCheck[i].SignCheck.ErrorCode = VerifySignature
-			ok = false
+			success = false
 		}
 
 		if index[i] != i {
 			log.Warnf("Order of signatures incorrect (index %v != iterator %v)", index[i], i)
-			result.Summary.ErrorCode = JWSSignatureOrder
-			ok = false
+			result.Summary.SetErr(JWSSignatureOrder)
+			success = false
 		}
 
 		if i > 0 {
 			if !bytes.Equal(payloads[i], payloads[i-1]) {
 				log.Warn("payloads differ for jws with multiple signatures")
-				result.Summary.ErrorCode = JWSPayload
-				ok = false
+				result.Summary.SetErr(JWSPayload)
+				success = false
 			}
 		}
 	}
 
-	if ok {
+	if success {
 		log.Debug("Successfully verified JWS object")
 	}
 
 	payload := payloads[0]
-	result.Summary.Success = ok
+	result.Summary.Success = success
 
-	return result, payload, ok
+	return result, payload, success
 }
 
 // Deduces jose signature algorithm from provided key type
@@ -432,4 +446,43 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		// The return format of all other signatures does not need to be adapted for go-jose
 		return hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
 	}
+}
+
+type jwsPartial struct {
+	Protected buf `json:"protected"`
+}
+
+type protectedPartial struct {
+	X5c [][]byte `json:"x5c"`
+}
+
+func getSelfSignedJwsCert(data []byte) (*x509.Certificate, error) {
+
+	log.Tracef("jws: %v", string(data))
+
+	jws := new(jwsPartial)
+	err := json.Unmarshal(data, jws)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal jws: %w", err)
+	}
+	protected := new(protectedPartial)
+	err = json.Unmarshal(jws.Protected.data, protected)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal protected: %w", err)
+	}
+	certs, err := internal.ParseCertsDer(protected.X5c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificates: %w", err)
+	}
+	if len(certs) != 1 {
+		return nil, fmt.Errorf("invalid number of self-signed certificates: %v", len(certs))
+	}
+	cert := certs[0]
+	// Check if cert is self-signed
+	err = cert.CheckSignatureFrom(cert)
+	if err != nil {
+		return nil, fmt.Errorf("cert is no self-signed: %w", err)
+	}
+	log.Tracef("Extracted self-signed cert %v", cert.Subject.CommonName)
+	return cert, nil
 }
