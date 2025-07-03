@@ -135,7 +135,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 			got, got1 := verifySwMeasurements(tt.args.swMeasurement,
 				tt.args.nonce,
 				tt.args.cas,
-				refVals["SW Reference Value"], tt.args.s)
+				refVals["SW Reference Value"],
+				tt.args.s)
 			if got.Summary.Success != tt.want {
 				t.Errorf("verifySwMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
 			}

@@ -732,7 +732,7 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	// Call verify with pubkey instead of identity CAs for verification in provisioning mode, which
 	// only checks the signature, but not the certificate chains (which are about to
 	// be created)
-	result := verifier.Verify(report, nonce[:], nil, csr.PublicKey, cas, nil,
+	result := verifier.Verify(report, nonce[:], csr.PublicKey, cas, nil,
 		verifier.PolicyEngineSelect_None, internal.ConvertToMap(metadata))
 	if !result.Success {
 		result.PrintErr()
