@@ -35,7 +35,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
-	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-configfs-tsm/configfs/linuxtsm"
 	"github.com/google/go-configfs-tsm/report"
@@ -96,14 +95,8 @@ func (tdx *Tdx) Init(c *ar.DriverConfig) error {
 
 	if provisioningRequired(c.StoragePath) {
 		log.Info("Performing TDX provisioning")
-		// Create new private key for signing
-		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			return fmt.Errorf("failed to generate private key: %w", err)
-		}
-		tdx.ikPriv = priv
 
-		err = tdx.provision(priv, c)
+		err = tdx.provision(c)
 		if err != nil {
 			return fmt.Errorf("failed to provision tdx driver: %w", err)
 		}
@@ -270,9 +263,20 @@ func GetMeasurement(nonce []byte) ([]byte, error) {
 	return resp.OutBlob, nil
 }
 
-func (tdx *Tdx) provision(priv crypto.PrivateKey, c *ar.DriverConfig,
-) error {
+func (tdx *Tdx) provision(c *ar.DriverConfig) error {
 	var err error
+
+	// Create new private key for signing
+	tdx.ikPriv, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	log.Debug("Retrieving CA certs")
+	caCerts, err := c.Provisioner.CaCerts()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve certs: %w", err)
+	}
 
 	// Fetch TDX certificate chain for TDX Attestation Key
 	tdx.akChain, err = fetchAk()
@@ -281,10 +285,12 @@ func (tdx *Tdx) provision(priv crypto.PrivateKey, c *ar.DriverConfig,
 	}
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	tdx.ikChain, err = tdx.provisionIk(priv, c)
+	ikCert, err := tdx.provisionIk(tdx.ikPriv, c)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
+
+	tdx.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
 
 	return nil
 }
@@ -322,25 +328,7 @@ func fetchAk() ([]*x509.Certificate, error) {
 	}, nil
 }
 
-func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
-
-	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create EST client: %w", err)
-	}
-
-	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
-	}
-	log.Debug("Received certs:")
-	for _, c := range caCerts {
-		log.Debugf("\t%v", c.Subject.CommonName)
-	}
-	if len(caCerts) == 0 {
-		return nil, fmt.Errorf("no certs provided")
-	}
+func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) (*x509.Certificate, error) {
 
 	// Create IK CSR for authentication
 	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Tdx.IkCsr)
@@ -370,12 +358,12 @@ func (tdx *Tdx) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509
 	}
 
 	// Request IK certificate from EST server
-	cert, err := client.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := c.Provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
-	return append([]*x509.Certificate{cert}, caCerts...), nil
+	return cert, nil
 }
 
 func provisioningRequired(p string) bool {

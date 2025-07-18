@@ -28,7 +28,6 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
-	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 )
@@ -309,7 +308,7 @@ func (c *Client) CcEnroll(
 	return certs[0], nil
 }
 
-func (c *Client) GetSnpCa(akType verifier.AkType) ([]*x509.Certificate, error) {
+func (c *Client) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{

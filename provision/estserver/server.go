@@ -578,7 +578,7 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	akType := verifier.AkType(akTypeRaw[0])
+	akType := internal.AkType(akTypeRaw[0])
 
 	ca, err := s.snpConf.GetSnpCa(akType)
 	if err != nil {

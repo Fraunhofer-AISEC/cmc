@@ -2,6 +2,9 @@
     "addr": [
       "localhost:4443"
     ],
+    "provAddr": "https://localhost:9000/",
+    "provisionMode": "est",
+    "provisionAuth": [ "none" ],
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",
@@ -20,7 +23,6 @@
     "api": "libapi",
     "apiSerializer": "cbor",
     "keyConfig": "EC256",
-    "provAddr": "https://localhost:9000/",
     "metadata": [
       "file://../data/metadata-signed"
     ],
@@ -30,5 +32,6 @@
     "ima": false,
     "storage": "data/cmcctl-internal",
     "cache": "data/cmcctl-cache",
-    "peerCache": "data/cmc-peer-cache"
+    "peerCache": "data/cmc-peer-cache",
+    "provisionToken": "../data/provision_token"
   }

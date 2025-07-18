@@ -80,11 +80,11 @@ func retrieveProvisioningData(c *config) error {
 	}
 	log.Tracef("Stored CA to %v", c.EstTlsCa)
 
-	err = os.WriteFile(c.Token, data["token"], 0644)
+	err = os.WriteFile(c.ProvisionToken, data["token"], 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write: %w", err)
 	}
-	log.Tracef("Stored token to %v", c.Token)
+	log.Tracef("Stored token to %v", c.ProvisionToken)
 
 	log.Trace("Finished")
 

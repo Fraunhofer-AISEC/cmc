@@ -17,5 +17,7 @@
     "api": "socket",
     "apiSerializer": "cbor",
     "cmcAddr": "localhost:9955",
-    "keyConfig": "EC256"
+    "keyConfig": "EC256",
+    "tokenStore": "../data/token_store",
+    "provisionToken": "../data/provision_token"
 }
