@@ -21,5 +21,11 @@
     "ctrPcr": 11,
     "estTlsCas": [
         "../data/pki/ca.pem"
+    ],
+    "identityCas": [
+        "../data/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "../data/pki/ca.pem"
     ]
 }

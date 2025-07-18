@@ -69,7 +69,6 @@ func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]by
 // Checks Attestation report by calling the CMC to Verify and checking its status response
 func (a LibApi) verifyAR(
 	cc CmcConfig,
-	identityCas, metadataCas [][]byte,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
@@ -84,15 +83,13 @@ func (a LibApi) verifyAR(
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
-		IdentityCas: identityCas,
-		MetadataCas: metadataCas,
 		Peer:        peer,
 		CacheMisses: cacheMisses,
 		Policies:    policies,
 	}
 
 	log.Debug("Verifier: verifying attestation report")
-	result, err := cmc.Verify(req.Report, req.Nonce, req.IdentityCas, req.MetadataCas, req.Policies,
+	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
 		req.Peer, req.CacheMisses, req.Metadata, cc.Cmc)
 	if err != nil {
 		return fmt.Errorf("failed to verify: %w", err)

@@ -29,7 +29,7 @@ import (
 
 // The version of the API
 const (
-	apiVersion = "1.1.0"
+	apiVersion = "1.2.0"
 )
 
 func GetVersion() string {
@@ -73,8 +73,6 @@ type VerificationRequest struct {
 	Nonce       []byte            `json:"nonce" cbor:"1,keyasint"`
 	Report      []byte            `json:"report" cbor:"2,keyasint"`
 	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
-	MetadataCas [][]byte          `json:"metadataCas" cbor:"4,keyasint"`
-	IdentityCas [][]byte          `json:"identityCas" cbor:"5,keyasint"`
 	Peer        string            `json:"peer,omitempty" cbor:"6,keyasint,omitempty"`
 	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"7,keyasint,omitempty"`
 	Policies    []byte            `json:"policies,omitempty" cbor:"8,keyasint,omitempty"`

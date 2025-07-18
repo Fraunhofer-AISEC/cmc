@@ -8,10 +8,7 @@
     "identityCas": [
         "../data/pki/ca.pem"
     ],
-    "metadataCas": [
-        "../data/pki/ca.pem"
-    ],
-    "estCa": "../data/pki/ca.pem",
+    "estTlsCa": "../data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
     "measurementLog": true,

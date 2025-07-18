@@ -188,7 +188,7 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	log.Debug("verifying attestation report")
-	result, err := c.Verify(req.Report, req.Nonce, req.IdentityCas, req.MetadataCas, req.Policies,
+	result, err := c.Verify(req.Report, req.Nonce, req.Policies,
 		req.Peer, req.CacheMisses, req.Metadata, cmc)
 	if err != nil {
 		sendError(conn, s, "failed to verify: %v", err)

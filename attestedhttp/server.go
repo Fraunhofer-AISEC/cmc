@@ -16,7 +16,6 @@
 package attestedhttp
 
 import (
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/http"
@@ -38,8 +37,6 @@ type Server struct {
 	ApiSerializer ar.Serializer
 	Cmc           *cmc.Cmc
 	CmcPolicies   []byte
-	IdentityCas   []*x509.Certificate
-	MetadataCas   []*x509.Certificate
 	ResultCb      func(result *ar.VerificationResult)
 }
 
@@ -54,8 +51,6 @@ func (s *Server) ListenAndServe() error {
 		atls.WithCmcAddr(s.CmcAddr),
 		atls.WithCmcPolicies(s.CmcPolicies),
 		atls.WithCmcApi(s.CmcApi),
-		atls.WithIdentityCas(s.IdentityCas),
-		atls.WithMetadataCas(s.MetadataCas),
 		atls.WithApiSerializer(s.ApiSerializer),
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),

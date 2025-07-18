@@ -18,7 +18,6 @@ package attestedhttp
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -65,8 +64,6 @@ type Transport struct {
 	ApiSerializer ar.Serializer
 	Cmc           *cmc.Cmc
 	CmcPolicies   []byte
-	IdentityCas   []*x509.Certificate
-	MetadataCas   []*x509.Certificate
 	ReadTimeout   time.Duration
 	ResultCb      func(result *ar.VerificationResult)
 }
@@ -197,8 +194,6 @@ func prepareClient(c *Client) error {
 					atls.WithCmc(c.Transport.Cmc),
 					atls.WithCmcAddr(c.Transport.CmcAddr),
 					atls.WithCmcApi(c.Transport.CmcApi),
-					atls.WithIdentityCas(c.Transport.IdentityCas),
-					atls.WithMetadataCas(c.Transport.MetadataCas),
 					atls.WithCmcPolicies(c.Transport.CmcPolicies),
 					atls.WithMtls(c.Transport.MutualTls),
 					atls.WithResultCb(c.Transport.ResultCb))

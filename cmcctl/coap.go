@@ -34,7 +34,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 )
 
@@ -113,13 +112,11 @@ func (a CoapApi) verify(c *config) {
 	}
 
 	req := &api.VerificationRequest{
-		Version:     api.GetVersion(),
-		Nonce:       nonce,
-		Report:      report.Report,
-		Metadata:    report.Metadata,
-		IdentityCas: internal.WriteCertsDer(c.identityCas),
-		MetadataCas: internal.WriteCertsDer(c.metadataCas),
-		Policies:    c.policies,
+		Version:  api.GetVersion(),
+		Nonce:    nonce,
+		Report:   report.Report,
+		Metadata: report.Metadata,
+		Policies: c.policies,
 	}
 
 	resp, err := verifyInternal(c, req)

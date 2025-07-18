@@ -99,8 +99,6 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		CmcApi:        api,
 		ApiSerializer: c.apiSerializer,
 		Cmc:           cmc,
-		IdentityCas:   c.identityCas,
-		MetadataCas:   c.metadataCas,
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
@@ -224,8 +222,6 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		CmcApi:        api,
 		ApiSerializer: c.apiSerializer,
 		Cmc:           cmc,
-		IdentityCas:   c.identityCas,
-		MetadataCas:   c.metadataCas,
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {

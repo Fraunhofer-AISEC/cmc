@@ -43,10 +43,6 @@ func serve(c *config) {
 	c.api.serve(c)
 }
 
-func cacerts(c *config) {
-	getCaCerts(c)
-}
-
 func token(c *config) {
 	err := createToken(c)
 	if err != nil {

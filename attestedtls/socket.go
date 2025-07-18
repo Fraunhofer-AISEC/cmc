@@ -102,7 +102,6 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([
 // Sends attestation report to cmcd for verification
 func (a SocketApi) verifyAR(
 	cc CmcConfig,
-	identityCas, metadataCas [][]byte,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
@@ -126,8 +125,6 @@ func (a SocketApi) verifyAR(
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
-		IdentityCas: identityCas,
-		MetadataCas: metadataCas,
 		Peer:        peer,
 		CacheMisses: cacheMisses,
 		Policies:    policies,

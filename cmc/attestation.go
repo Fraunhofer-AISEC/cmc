@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
@@ -60,8 +59,6 @@ func Generate(nonce []byte, cached []string, cmc *Cmc) ([]byte, map[string][]byt
 
 func Verify(
 	ar, nonce []byte,
-	identityCasDer [][]byte,
-	metadataCasDer [][]byte,
 	policies []byte,
 	peer string,
 	cacheMisses []string,
@@ -76,22 +73,12 @@ func Verify(
 	// Update volatile peer cache
 	UpdateCacheMetadata(peer, cmc.CachedPeerMetadata, metadata, cacheMisses)
 
-	metadataCas, err := internal.ParseCertsPem(metadataCasDer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse metadata CAs: %w", err)
-	}
-
-	identityCas, err := internal.ParseCertsPem(identityCasDer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse metadata CAs: %w", err)
-	}
-
 	// Verify attetation report
-	result := verifier.Verify(ar, nonce, identityCas, nil, metadataCas, policies,
+	result := verifier.Verify(ar, nonce, cmc.IdentityCas, nil, cmc.MetadataCas, policies,
 		cmc.PolicyEngineSelect, cmc.CachedPeerMetadata[peer])
 
 	// Update persistent peer cache
-	err = StoreCacheMetadata(cmc.PeerCache, peer, cmc.CachedPeerMetadata[peer], cacheMisses)
+	err := StoreCacheMetadata(cmc.PeerCache, peer, cmc.CachedPeerMetadata[peer], cacheMisses)
 	if err != nil {
 		log.Warnf("Internal error: failed to cache metadata: %v", err)
 	}
