@@ -53,7 +53,13 @@ type Config struct {
 	EstTlsSysRoots bool     `json:"estTlsSysRoots"`
 	Vmpl           int      `json:"vmpl"`
 	Token          string   `json:"token"`
+	ProvisionMode  string   `json:"provisionMode"`
 }
+
+const (
+	provisionEst        = "est"
+	provisionSelfSigned = "selfsigned"
+)
 
 const (
 	cmcAddrFlag        = "cmcaddr"
@@ -79,6 +85,7 @@ const (
 	EstTlsSysRootsFlag = "esttlssysroots"
 	VmplFlag           = "vmpl"
 	TokenFlag          = "token"
+	ProvisionModeFlag  = "provisionmode"
 )
 
 var (
@@ -114,6 +121,8 @@ var (
 	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
 	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
 	token          = flag.String(TokenFlag, "", "Bootstrap token for EST client authentication")
+	provisionMode  = flag.String(ProvisionModeFlag, "",
+		fmt.Sprintf("Provisioning Mode. Possible: [%v %v]", provisionEst, provisionSelfSigned))
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -190,6 +199,9 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(TokenFlag) {
 		c.Token = *token
+	}
+	if internal.FlagPassed(ProvisionModeFlag) {
+		c.ProvisionMode = *provisionMode
 	}
 
 	// Convert all paths to absolute paths
@@ -320,4 +332,5 @@ func (c *Config) Print() {
 	if c.Token != "" {
 		log.Debugf("\tBootstrap token                : %v", c.Token)
 	}
+	log.Debugf("\tProvision Mode                 : %v", c.ProvisionMode)
 }
