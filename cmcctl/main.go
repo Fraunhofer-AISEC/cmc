@@ -24,7 +24,6 @@ import (
 
 var (
 	cmds = map[string]func(*config){
-		"cacerts":   cacerts,
 		"generate":  generate,
 		"verify":    verify,
 		"measure":   measure,
@@ -41,7 +40,6 @@ func init() {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "USAGE:\n\tcmcctl command [options]\n\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "COMMANDS:\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  cacerts\tRetrieve CA certs from EST server\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  generate\tGenerate attestation report\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  verify\tVerify attestation report\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  dial\t\tEstablish attested TLS client\n")

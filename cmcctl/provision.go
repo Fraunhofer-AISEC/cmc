@@ -74,11 +74,11 @@ func retrieveProvisioningData(c *config) error {
 
 	// Store CA and bootstrap token
 	log.Tracef("Storing provisioning data...")
-	err = os.WriteFile(c.EstCa, data["ca"], 0644)
+	err = os.WriteFile(c.EstTlsCa, data["ca"], 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write: %w", err)
 	}
-	log.Tracef("Stored CA to %v", c.EstCa)
+	log.Tracef("Stored CA to %v", c.EstTlsCa)
 
 	err = os.WriteFile(c.Token, data["token"], 0644)
 	if err != nil {

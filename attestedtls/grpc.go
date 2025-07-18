@@ -89,7 +89,6 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 // Checks Attestation report by calling the CMC to Verify and checking its status response
 func (a GrpcApi) verifyAR(
 	cc CmcConfig,
-	identityCas, metadataCas [][]byte,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
@@ -111,8 +110,6 @@ func (a GrpcApi) verifyAR(
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
-		IdentityCas: identityCas,
-		MetadataCas: metadataCas,
 		Peer:        peer,
 		CacheMisses: cacheMisses,
 		Policies:    policies,

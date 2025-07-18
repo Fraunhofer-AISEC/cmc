@@ -75,8 +75,7 @@ type config struct {
 	ResultFile    string   `json:"result"`
 	NonceFile     string   `json:"nonce"`
 	IdentityCas   []string `json:"identityCas"`
-	MetadataCas   []string `json:"metadataCas"`
-	EstCa         string   `json:"estCa"`
+	EstTlsCa      string   `json:"estTlsCa"`
 	Mtls          bool     `json:"mtls"`
 	Attest        string   `json:"attest"`
 	PoliciesFile  string   `json:"policies"`
@@ -95,7 +94,6 @@ type config struct {
 	CtrConfig string `json:"ctrConfig"`
 
 	identityCas   []*x509.Certificate
-	metadataCas   []*x509.Certificate
 	policies      []byte
 	api           Api
 	interval      time.Duration
@@ -112,8 +110,7 @@ const (
 	resultFlag        = "result"
 	nonceFlag         = "nonce"
 	identityCasFlag   = "identitycas"
-	metadataCasFlag   = "metadatacas"
-	estCaFlag         = "estca"
+	estTlsCaFlag      = "esttlsca"
 	policiesFlag      = "policies"
 	mtlsFlag          = "mtls"
 	attestFlag        = "attest"
@@ -139,8 +136,7 @@ var (
 	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
 	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
 	identityCas  = flag.String(identityCasFlag, "", "Trusted certificate authorities for attestation reports")
-	metadataCas  = flag.String(metadataCasFlag, "", "Trusted certificate authorities for metadata")
-	estCa        = flag.String(estCaFlag, "", "Path to store retrieved CA certificates")
+	estTlsCa     = flag.String(estTlsCaFlag, "", "Path to store retrieved CA certificates")
 	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
@@ -217,11 +213,8 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(identityCasFlag) {
 		c.IdentityCas = strings.Split(*identityCas, ",")
 	}
-	if internal.FlagPassed(metadataCasFlag) {
-		c.MetadataCas = strings.Split(*metadataCas, ",")
-	}
-	if internal.FlagPassed(estCaFlag) {
-		c.EstCa = *estCa
+	if internal.FlagPassed(estTlsCaFlag) {
+		c.EstTlsCa = *estTlsCa
 	}
 	if internal.FlagPassed(policiesFlag) {
 		c.PoliciesFile = *policiesFile
@@ -303,12 +296,9 @@ func getConfig(cmd string) (*config, error) {
 	c.Print()
 
 	// Get root CA certificate in PEM format if specified
-	if cmd == "verify" || cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" {
+	if cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" {
 		if len(c.IdentityCas) == 0 {
 			log.Fatal("Path to read Report CAs must be specified either via config file or commandline")
-		}
-		if len(c.MetadataCas) == 0 {
-			log.Fatal("Path to read Metadata CAs must be specified either via config file or commandline")
 		}
 
 		for _, ca := range c.IdentityCas {
@@ -323,21 +313,9 @@ func getConfig(cmd string) (*config, error) {
 			c.identityCas = append(c.identityCas, cert)
 		}
 
-		for _, ca := range c.MetadataCas {
-			ca, err := os.ReadFile(ca)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
-			}
-			cert, err := internal.ParseCert(ca)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
-			}
-			c.metadataCas = append(c.metadataCas, cert)
-		}
-
 	}
 
-	if (cmd == "cacerts" || cmd == "provision") && c.EstCa == "" {
+	if (cmd == "cacerts" || cmd == "provision") && c.EstTlsCa == "" {
 		log.Fatal("Path to store CA must be specified either via config file or commandline")
 	}
 	if cmd == "provision" && c.Token == "" {
@@ -409,16 +387,16 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
 		}
 	}
-	if c.EstCa != "" {
-		c.EstCa, err = filepath.Abs(c.EstCa)
+	if c.EstTlsCa != "" {
+		c.EstTlsCa, err = filepath.Abs(c.EstTlsCa)
 		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.EstCa, err)
+			log.Warnf("Failed to get absolute path for %v: %v", c.EstTlsCa, err)
 		}
 	}
 	if c.Token != "" {
 		c.Token, err = filepath.Abs(c.Token)
 		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.EstCa, err)
+			log.Warnf("Failed to get absolute path for %v: %v", c.Token, err)
 		}
 	}
 	if c.PeerCache != "" {
@@ -467,8 +445,7 @@ func (c *config) Print() {
 	log.Debugf("\tResultFile               : %v", c.ResultFile)
 	log.Debugf("\tNonceFile                : %v", c.NonceFile)
 	log.Debugf("\tIdentity CAs             : %v", strings.Join(c.IdentityCas, ","))
-	log.Debugf("\tMetadata CAs             : %v", strings.Join(c.MetadataCas, ","))
-	log.Debugf("\tEstCa                    : %v", c.EstCa)
+	log.Debugf("\tEstCa                    : %v", c.EstTlsCa)
 	log.Debugf("\tMtls                     : %v", c.Mtls)
 	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
 	log.Debugf("\tAttest                   : %v", c.Attest)

@@ -101,7 +101,6 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 // Sends attestationreport to cmcd for verification
 func (a CoapApi) verifyAR(
 	cc CmcConfig,
-	identityCas, metadataCas [][]byte,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
@@ -122,8 +121,6 @@ func (a CoapApi) verifyAR(
 		Nonce:       nonce,
 		Report:      report,
 		Metadata:    metadata,
-		IdentityCas: identityCas,
-		MetadataCas: metadataCas,
 		Peer:        peer,
 		CacheMisses: cacheMisses,
 		Policies:    policies,

@@ -151,7 +151,7 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("verifying attestation report")
-	result, err := cmc.Verify(req.Report, req.Nonce, req.IdentityCas, req.MetadataCas, req.Policies,
+	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
 		req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,

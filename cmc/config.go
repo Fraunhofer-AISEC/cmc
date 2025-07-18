@@ -47,6 +47,8 @@ type Config struct {
 	CtrDriver      string   `json:"ctrDriver,omitempty"`
 	CtrPcr         int      `json:"ctrPcr,omitempty"`
 	CtrLog         string   `json:"ctrLog,omitempty"`
+	IdentityCas    []string `json:"identityCas,omitempty"`
+	MetadataCas    []string `json:"metadataCas,omitempty"`
 	EstTlsCas      []string `json:"estTlsCas,omitempty"`
 	EstTlsSysRoots bool     `json:"estTlsSysRoots"`
 	Vmpl           int      `json:"vmpl"`
@@ -71,6 +73,8 @@ const (
 	CtrDriverFlag      = "ctrdriver"
 	CtrPcrFlag         = "ctrpcr"
 	CtrLogFlag         = "ctrlog"
+	IdentityCasFlag    = "identityCasFlag"
+	MetadataCasFlag    = "metadataCasFlag"
 	EstTlsCasFlag      = "esttlscas"
 	EstTlsSysRootsFlag = "esttlssysroots"
 	VmplFlag           = "vmpl"
@@ -104,6 +108,8 @@ var (
 		"Specifies which driver to use for container measurements")
 	ctrPcr         = flag.Int(CtrPcrFlag, 0, "Container PCR")
 	ctrLog         = flag.String(CtrLogFlag, "", "Container runtime measurements path")
+	identityCas    = flag.String(IdentityCasFlag, "", "Paths to trusted identity root CAs")
+	metadataCas    = flag.String(MetadataCasFlag, "", "Paths to trusted metadata root CAs")
 	estTlsCas      = flag.String(EstTlsCasFlag, "", "Path to the EST TLS CA certificates")
 	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
 	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
@@ -166,6 +172,12 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(CtrLogFlag) {
 		c.CtrLog = *ctrLog
+	}
+	if internal.FlagPassed(IdentityCasFlag) {
+		c.IdentityCas = strings.Split(*identityCas, ",")
+	}
+	if internal.FlagPassed(MetadataCasFlag) {
+		c.MetadataCas = strings.Split(*metadataCas, ",")
 	}
 	if internal.FlagPassed(EstTlsCasFlag) {
 		c.EstTlsCas = strings.Split(*estTlsCas, ",")
@@ -245,6 +257,18 @@ func pathsToAbs(c *Config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.CtrLog, err)
 		}
 	}
+	for i := 0; i < len(c.IdentityCas); i++ {
+		c.IdentityCas[i], err = filepath.Abs(c.IdentityCas[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.IdentityCas[i], err)
+		}
+	}
+	for i := 0; i < len(c.MetadataCas); i++ {
+		c.MetadataCas[i], err = filepath.Abs(c.MetadataCas[i])
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.MetadataCas[i], err)
+		}
+	}
 	for i := 0; i < len(c.EstTlsCas); i++ {
 		c.EstTlsCas[i], err = filepath.Abs(c.EstTlsCas[i])
 		if err != nil {
@@ -289,9 +313,9 @@ func (c *Config) Print() {
 	if c.PeerCache != "" {
 		log.Debugf("\tPeer cache path                : %v", c.PeerCache)
 	}
-	for _, ca := range c.EstTlsCas {
-		log.Debugf("\tEST TLS CA path                : %v", ca)
-	}
+	log.Debugf("\tIdentity root CA paths         : %v", strings.Join(c.EstTlsCas, ","))
+	log.Debugf("\tMetadata root CA paths         : %v", strings.Join(c.EstTlsCas, ","))
+	log.Debugf("\tEST TLS root CA paths          : %v", strings.Join(c.EstTlsCas, ","))
 	log.Debugf("\tUse system root CAs for EST TLS: %v", c.EstTlsSysRoots)
 	if c.Token != "" {
 		log.Debugf("\tBootstrap token                : %v", c.Token)

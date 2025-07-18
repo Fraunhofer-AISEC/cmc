@@ -46,8 +46,6 @@ message VerificationRequest {
   bytes nonce = 2;
   bytes report = 3;
   map<string, bytes> metadata = 4;
-  repeated bytes metadataCas = 5;
-  repeated bytes identityCas = 6;
   string peer = 7;
   repeated string cache_misses = 8;
   bytes policies = 9;

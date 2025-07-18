@@ -25,7 +25,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
@@ -41,6 +40,8 @@ var (
 )
 
 type Cmc struct {
+	IdentityCas        []*x509.Certificate
+	MetadataCas        []*x509.Certificate
 	Metadata           map[string][]byte
 	CachedPeerMetadata map[string]map[string][]byte
 	PolicyEngineSelect verifier.PolicyEngineSelect
@@ -63,22 +64,28 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 
 func NewCmc(c *Config) (*Cmc, error) {
 
-	cmc := &Cmc{
-		PeerCache: c.PeerCache,
-		Ctr:       c.Ctr,
-		CtrDriver: c.CtrDriver,
-		CtrPcr:    c.CtrPcr,
-		CtrLog:    c.CtrLog,
+	// Read trusted root CAs for EST server TLS authentication, IKs and metadata
+	estTlsCas, err := internal.ReadCerts(c.EstTlsCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read EST TLS CA certificates: %w", err)
+	}
+	identityCas, err := internal.ReadCerts(c.IdentityCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read trusted identity root CAs: %w", err)
+	}
+	metadataCas, err := internal.ReadCerts(c.MetadataCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read trusted metadata root CAs: %w", err)
 	}
 
-	// Read CA for EST server TLS authentication
-	estTlsCas := make([]*x509.Certificate, 0, len(c.EstTlsCas))
-	for _, file := range c.EstTlsCas {
-		ca, err := internal.ReadCert(file)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read EST TLS CA certificate: %w", err)
-		}
-		estTlsCas = append(estTlsCas, ca)
+	cmc := &Cmc{
+		IdentityCas: identityCas,
+		MetadataCas: metadataCas,
+		PeerCache:   c.PeerCache,
+		Ctr:         c.Ctr,
+		CtrDriver:   c.CtrDriver,
+		CtrPcr:      c.CtrPcr,
+		CtrLog:      c.CtrLog,
 	}
 
 	// Read metadata and device config from the file system
@@ -96,25 +103,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 		}
 	}
 
-	// Read CA for verifying the device config
-	// TODO clarify if this CA is OK in all cases
-	client, err := estclient.NewClient(estTlsCas, c.EstTlsSysRoots, token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create EST client: %w", err)
-	}
-	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts(c.ProvAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certificates: %w", err)
-	}
-
 	// If no metadata is specified, the cmc can only work as verifier
 	if metadata != nil {
 
 		cmc.Serializer = s
 		cmc.Metadata = metadata
 
-		deviceConfig, err := ar.GetDeviceConfig(s, metadata, caCerts)
+		deviceConfig, err := ar.GetDeviceConfig(s, metadata, metadataCas)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get signed device config: %v", err)
 		}

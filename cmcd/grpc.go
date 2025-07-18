@@ -124,7 +124,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 			api.GetVersion(), req.Version)
 	}
 
-	result, err := cmc.Verify(req.Report, req.Nonce, req.IdentityCas, req.MetadataCas, req.Policies,
+	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
 		req.Peer, req.CacheMisses, req.Metadata, s.cmc)
 	if err != nil {
 		log.Errorf("verifier: failed to verify: %v", err)
