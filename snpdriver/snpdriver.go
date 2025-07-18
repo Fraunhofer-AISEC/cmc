@@ -33,7 +33,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
-	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
@@ -98,14 +98,8 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 
 	if provisioningRequired(c.StoragePath) {
 		log.Info("Performing SNP provisioning")
-		// Create new private key for signing
-		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			return fmt.Errorf("failed to generate private key: %w", err)
-		}
-		snp.ikPriv = priv
 
-		err = snp.provision(priv, c)
+		err = snp.provision(c)
 		if err != nil {
 			return fmt.Errorf("failed to provision snp driver: %w", err)
 		}
@@ -269,26 +263,38 @@ func getVlek(vmpl int) ([]byte, error) {
 	return nil, errors.New("could not find VLEK in certificates")
 }
 
-func (snp *Snp) provision(priv crypto.PrivateKey, c *ar.DriverConfig,
-) error {
+func (snp *Snp) provision(c *ar.DriverConfig) error {
 	var err error
 
+	// Create new private key for signing
+	snp.ikPriv, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	log.Debug("Retrieving CA certs")
+	caCerts, err := c.Provisioner.CaCerts()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve certs: %w", err)
+	}
+
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-	snp.akChain, err = fetchAk(c)
+	snp.akChain, err = fetchAk(c.Provisioner, c)
 	if err != nil {
 		return fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	snp.ikChain, err = snp.provisionIk(priv, c)
+	ikCert, err := snp.provisionIk(c.Provisioner, snp.ikPriv, c)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
+	snp.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
 
 	return nil
 }
 
-func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
+func fetchAk(provisioner provision.Provisioner, c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Generate random nonce
 	nonce := make([]byte, 64)
@@ -316,25 +322,20 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	}
 	log.Debugf("Successfully decoded attestation report and verified nonce")
 
-	akType, err := verifier.GetAkType(s.KeySelection)
+	akType, err := internal.GetAkType(s.KeySelection)
 	if err != nil {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
-	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create EST client: %w", err)
-	}
-
 	var akCert *x509.Certificate
-	if akType == verifier.VCEK {
+	if akType == internal.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = client.GetSnpVcek(s.ChipId, s.CurrentTcb)
+		akCert, err = provisioner.GetSnpVcek(s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
-	} else if akType == verifier.VLEK {
+	} else if akType == internal.VLEK {
 		// VLEK is used, in this case we fetch the VLEK from the host
 		vlek, err := getVlek(c.Vmpl)
 		if err != nil {
@@ -352,7 +353,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
 	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := client.GetSnpCa(akType)
+	ca, err := provisioner.GetSnpCa(akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
@@ -360,25 +361,8 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	return append([]*x509.Certificate{akCert}, ca...), nil
 }
 
-func (snp *Snp) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509.Certificate, error) {
-
-	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create EST client: %w", err)
-	}
-
-	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
-	}
-	log.Debug("Received certs:")
-	for _, c := range caCerts {
-		log.Debugf("\t%v", c.Subject.CommonName)
-	}
-	if len(caCerts) == 0 {
-		return nil, fmt.Errorf("no certs provided")
-	}
+func (snp *Snp) provisionIk(provisioner provision.Provisioner, priv crypto.PrivateKey, c *ar.DriverConfig,
+) (*x509.Certificate, error) {
 
 	// Create IK CSR for authentication
 	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Snp.IkCsr)
@@ -408,12 +392,12 @@ func (snp *Snp) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) ([]*x509
 	}
 
 	// Request IK certificate from EST server
-	cert, err := client.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
-	return append([]*x509.Certificate{cert}, caCerts...), nil
+	return cert, nil
 }
 
 func provisioningRequired(p string) bool {

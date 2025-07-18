@@ -26,7 +26,6 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
-	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 type Client struct {
@@ -191,7 +190,7 @@ func (c *Client) CcEnroll(
 	return c.SimpleEnroll(csr)
 }
 
-func (c *Client) GetSnpCa(akType verifier.AkType) ([]*x509.Certificate, error) {
+func (c *Client) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
 
 	ca, err := c.snpConf.GetSnpCa(akType)
 	if err != nil {

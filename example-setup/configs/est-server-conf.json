@@ -17,7 +17,8 @@
     "tpmEkCertDb": "../../data/tpm-ek-certs.db",
     "logLevel": "trace",
     "authMethods": [
-        "token"
+        "token",
+        "attestation"
     ],
     "tokenPath": "../../data/token_store"
 }

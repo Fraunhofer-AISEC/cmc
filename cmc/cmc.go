@@ -19,12 +19,16 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
+	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/provision/selfsigned"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
@@ -94,15 +98,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
 
-	// Read bootstrap token if present
-	var token []byte
-	if c.Token != "" {
-		token, err = os.ReadFile(c.Token)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read token: %v", err)
-		}
-	}
-
 	// If no metadata is specified, the cmc can only work as verifier
 	if metadata != nil {
 
@@ -114,10 +109,44 @@ func NewCmc(c *Config) (*Cmc, error) {
 			return nil, fmt.Errorf("failed to get signed device config: %v", err)
 		}
 
+		authMethods, err := provision.ParseAuthMethods(c.ProvisionAuth)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
+		}
+
+		var provisioner provision.Provisioner
+		switch c.ProvisionMode {
+		case "est":
+			var token []byte
+			if authMethods.Has(provision.AuthToken) {
+				token, err = os.ReadFile(c.ProvisionToken)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read token: %v", err)
+				}
+			}
+			provisioner, err = estclient.New(c.ProvisionAddr, estTlsCas, c.EstTlsSysRoots, token)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create EST client: %w", err)
+			}
+		case "selfsigned":
+			caKey, err := internal.LoadPrivateKey(c.CaKey)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load CA private key: %w", err)
+			}
+			provisioner, err = selfsigned.New(caKey, identityCas,
+				path.Join(c.Storage, "vcek-cache"),
+				c.TpmEkCertDb, c.VerifyEkCert)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create self-signed provisioner")
+			}
+		default:
+			return nil, fmt.Errorf("unknown provisioner %q", c.ProvisionMode)
+		}
+
 		// Create driver configuration
 		driverConf := &ar.DriverConfig{
 			StoragePath:      c.Storage,
-			ServerAddr:       c.ProvAddr,
+			ServerAddr:       c.ProvisionAddr,
 			KeyConfig:        c.KeyConfig,
 			DeviceConfig:     *deviceConfig,
 			Metadata:         metadata,
@@ -132,7 +161,8 @@ func NewCmc(c *Config) (*Cmc, error) {
 			EstTlsCas:        estTlsCas,
 			UseSystemRootCas: c.EstTlsSysRoots,
 			Vmpl:             c.Vmpl,
-			Token:            token,
+			ProvisionAuth:    authMethods,
+			Provisioner:      provisioner,
 		}
 
 		// Initialize drivers

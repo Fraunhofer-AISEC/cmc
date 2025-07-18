@@ -44,7 +44,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
-	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 )
 
 // Tpm is a structure that implements the Measure method
@@ -140,12 +140,8 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	if provisioningRequired {
 
 		log.Info("Provisioning TPM (might take a while)..")
-		ek, ak, ik, err = createKeys(TPM, c.KeyConfig)
-		if err != nil {
-			return fmt.Errorf("activate credential failed: createKeys returned %w", err)
-		}
 
-		err = t.provision(ak, ik, c)
+		err = t.provision(c)
 		if err != nil {
 			return fmt.Errorf("failed to provision TPM: %w", err)
 		}
@@ -576,44 +572,56 @@ func GetMeasurement(t *Tpm, nonce []byte, pcrs []int) ([]attest.PCR, *attest.Quo
 	return pcrValues, quote, nil
 }
 
-func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error {
+func (t *Tpm) provision(c *ar.DriverConfig) error {
+	var err error
+
 	log.Debug("Performing TPM credential activation..")
 
 	if TPM == nil {
 		return errors.New("TPM is not openend")
 	}
-	if len(ek) == 0 || ak == nil || ik == nil {
-		return errors.New("keys not created")
-	}
 
-	tpmInfo, err := GetTpmInfo()
+	ek, ak, ik, err = createKeys(TPM, c.KeyConfig)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve TPM Info: %w", err)
-	}
-
-	client, err := estclient.New(c.ServerAddr, c.EstTlsCas, c.UseSystemRootCas, c.Token)
-	if err != nil {
-		return fmt.Errorf("failed to create EST client: %w", err)
+		return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := client.CaCerts()
+	caCerts, err := c.Provisioner.CaCerts()
 	if err != nil {
-		return fmt.Errorf("failed to retrieve certificates: %w", err)
-	}
-	log.Debugf("Received cert chain length %v:", len(caCerts))
-	for _, c := range caCerts {
-		log.Debugf("\t%v", c.Subject.CommonName)
+		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
-	akParams := ak.AttestationParameters()
+	akCert, err := t.provisionAk(c)
+	if err != nil {
+		return fmt.Errorf("failed to provision AK cert chain: %w", err)
+	}
+	t.akChain = append([]*x509.Certificate{akCert}, caCerts...)
+
+	ikCert, err := t.provisionIk(c)
+	if err != nil {
+		return fmt.Errorf("failed to provision IK cert chain: %w", err)
+	}
+	t.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
+
+	return nil
+}
+
+func (t *Tpm) provisionAk(c *ar.DriverConfig) (*x509.Certificate, error) {
+
+	log.Debug("Provisioning AK certificate..")
+
+	// Retrieve TPM information
+	tpmInfo, err := GetTpmInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve TPM Info: %w", err)
+	}
 
 	// Encode EK public key
 	ekPub, err := x509.MarshalPKIXPublicKey(ek[0].Public)
 	if err != nil {
-		return fmt.Errorf("failed to marshal EK public key: %w", err)
+		return nil, fmt.Errorf("failed to marshal EK public key: %w", err)
 	}
-
 	var ekRaw []byte
 	if ek[0].Certificate != nil {
 		log.Debugf("Using EK %v", ek[0].Certificate.Subject.CommonName)
@@ -626,57 +634,61 @@ func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error
 	// Create AK CSR and perform EST enrollment with TPM credential activation
 	akCsr, err := createAkCsr(ak, c.DeviceConfig.Tpm.AkCsr)
 	if err != nil {
-		return fmt.Errorf("failed to create AK CSR: %w", err)
+		return nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
-	log.Debugf("Performing TPM AK Enroll for CN=%v", akCsr.Subject.CommonName)
-	encCredential, encSecret, pkcs7Cert, err := client.TpmActivateEnroll(
+	log.Debugf("Performing AK TPM activate credential enroll for CN=%v", akCsr.Subject.CommonName)
+	encCredential, encSecret, pkcs7Cert, err := c.Provisioner.TpmActivateEnroll(
 		tpmInfo.Manufacturer.String(), ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
-		akParams,
+		ak.AttestationParameters(),
 		ekPub, ekRaw,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to enroll AK: %w", err)
+		return nil, fmt.Errorf("failed to enroll AK: %w", err)
 	}
 
 	log.Debugf("Performing credential activation")
 	secret, err := ActivateCredential(TPM, ak, encCredential, encSecret)
 	if err != nil {
-		return fmt.Errorf("request activate credential failed: %w", err)
+		return nil, fmt.Errorf("request activate credential failed: %w", err)
 	}
 
 	encryptedCert, err := pkcs7.Parse(pkcs7Cert)
 	if err != nil {
-		return fmt.Errorf("failed to parse PKCS7 CMS EnvelopedData: %w", err)
+		return nil, fmt.Errorf("failed to parse PKCS7 CMS EnvelopedData: %w", err)
 	}
 
 	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES256GCM
 	certDer, err := encryptedCert.DecryptUsingPSK(secret)
 	if err != nil {
-		return fmt.Errorf("failed to decrypt PKCS7 encrypted cert: %w", err)
+		return nil, fmt.Errorf("failed to decrypt PKCS7 encrypted cert: %w", err)
 	}
 
 	akCert, err := x509.ParseCertificate(certDer)
 	if err != nil {
-		return fmt.Errorf("failed to parse certificate: %w", err)
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
-	log.Debugf("Created new AK Cert: %v", akCert.Subject.CommonName)
+	log.Debugf("Provisioned new AK Cert: %v", akCert.Subject.CommonName)
 
-	// Store AK chain internally
-	t.akChain = append([]*x509.Certificate{akCert}, caCerts...)
+	return akCert, nil
+}
+
+func (t *Tpm) provisionIk(c *ar.DriverConfig) (*x509.Certificate, error) {
+
+	log.Debug("Provisioning IK certificate..")
 
 	// Create IK CSR and perform EST enrollment with TPM certification
 	ikPriv, err := ik.Private(ik.Public())
 	if err != nil {
-		return fmt.Errorf("failed to retrieve IK private key: %w", err)
+		return nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
 	}
 
 	ikCsr, err := ar.CreateCsr(ikPriv, c.DeviceConfig.Tpm.IkCsr)
 	if err != nil {
-		return fmt.Errorf("failed to create IK CSR: %w", err)
+		return nil, fmt.Errorf("failed to create IK CSR: %w", err)
 	}
 
 	ikParams := ik.CertificationParameters()
@@ -684,42 +696,44 @@ func (t *Tpm) provision(ak *attest.AK, ik *attest.Key, c *ar.DriverConfig) error
 	// Use Subject Key Identifier (SKI) as nonce for attestation report
 	pubKey, err := x509.MarshalPKIXPublicKey(ikCsr.PublicKey)
 	if err != nil {
-		return fmt.Errorf("failed to parse CSR public key: %v", err)
+		return nil, fmt.Errorf("failed to parse CSR public key: %v", err)
 	}
 	nonce := sha1.Sum(pubKey)
 
-	// Fetch attestation report as part of client authentication
-	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{t}, c.Serializer)
-	if err != nil {
-		return fmt.Errorf("failed to generate attestation report: %w", err)
-	}
-	r, err := c.Serializer.Marshal(report)
-	if err != nil {
-		return fmt.Errorf("failed to marshal the Attestation Report: %v", err)
-	}
-	signedReport, err := prover.Sign(r, t, c.Serializer, ar.IK)
-	if err != nil {
-		return fmt.Errorf("failed to sign attestation report: %w", err)
+	// Fetch attestation report as part of client authentication if configured
+	var report []byte
+	var metadata [][]byte
+	if c.ProvisionAuth.Has(provision.AuthAttestation) {
+		r, m, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{t}, c.Serializer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+		}
+		metadata = internal.ConvertToArray(m)
+		data, err := c.Serializer.Marshal(r)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+		}
+		report, err = prover.Sign(data, t, c.Serializer, ar.IK)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign attestation report: %w", err)
+		}
 	}
 
-	log.Debugf("Performing TPM IK Attest Enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := client.TpmCertifyEnroll(
+	log.Debugf("Performing IK TPM certify enroll for CN=%v", ikCsr.Subject.CommonName)
+	ikCert, err := c.Provisioner.TpmCertifyEnroll(
 		ikCsr,
 		ikParams,
-		akParams.Public,
-		signedReport,
-		internal.ConvertToArray(metadata),
+		ak.AttestationParameters().Public,
+		report,
+		metadata,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to enroll IK: %w", err)
+		return nil, fmt.Errorf("failed to enroll IK: %w", err)
 	}
 
 	log.Debugf("Created new IK cert: %v", ikCert.Subject.CommonName)
 
-	// Store IK chain internally
-	t.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
-
-	return nil
+	return ikCert, nil
 }
 
 func (t *Tpm) saveCredentials(storagePath string) error {

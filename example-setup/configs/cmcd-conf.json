@@ -1,6 +1,9 @@
 {
     "cmcAddr": "localhost:9955",
-    "provAddr": "https://localhost:9000/",
+    "provisionMode": "selfsigned",
+    "provisionAuth": [ "none" ],
+    "provisionAddr": "https://localhost:9000/",
+    "provisionToken": "../data/provision_token",
     "metadata": [
         "file://../data/metadata-signed"
     ],
@@ -27,5 +30,6 @@
     ],
     "metadataCas": [
         "../data/pki/ca.pem"
-    ]
+    ],
+    "caKey": "../data/pki/ca-key.pem"
 }

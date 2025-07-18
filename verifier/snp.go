@@ -79,25 +79,6 @@ const (
 	signature_offset = 0x2A0
 )
 
-type AkType byte
-
-const (
-	UNKNOWN = iota
-	VCEK
-	VLEK
-)
-
-func (t AkType) String() string {
-	switch t {
-	case VCEK:
-		return "vcek"
-	case VLEK:
-		return "vlek"
-	default:
-		return "unknown"
-	}
-}
-
 func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
@@ -508,7 +489,7 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 	var r ar.Result
 
 	// Checked extensions depend on the key type
-	akType, err := GetAkType(report.KeySelection)
+	akType, err := internal.GetAkType(report.KeySelection)
 	if err != nil {
 		log.Debugf("Could not determine SNP attestation report attestation key type")
 		success = false
@@ -543,7 +524,7 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 	}
 	results = append(results, r)
 
-	if akType == VCEK {
+	if akType == internal.VCEK {
 		// If the VCEK was used, we must compare the reported Chip ID against the extension Chip ID
 		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:]); !ok {
 			log.Debugf("Chip ID extension check failed")
@@ -552,7 +533,7 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 		results = append(results, r)
 	}
 
-	if akType == VLEK {
+	if akType == internal.VLEK {
 		// If the VLEK was used, the CSP extensions must be present
 		// TODO currently we simply accept all CSPs, discuss if we need to match here
 		csp, ok := getExtensionString(cert, oidCspId)
@@ -603,16 +584,4 @@ func checkMinVersion(version []uint8, ref []uint8) bool {
 		}
 	}
 	return true
-}
-
-func GetAkType(keySelection uint32) (AkType, error) {
-	arkey := (keySelection >> 2) & 0x7
-	if arkey == 0 {
-		log.Debug("VCEK is used to sign attestation report")
-		return VCEK, nil
-	} else if arkey == 1 {
-		log.Debug("VLEK is used to sign attestation report")
-		return VLEK, nil
-	}
-	return UNKNOWN, fmt.Errorf("unknown AK type %v", arkey)
 }

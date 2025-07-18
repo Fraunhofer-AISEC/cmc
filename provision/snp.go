@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -58,7 +57,7 @@ const (
 	lenChipId     = 64
 )
 
-func SnpCaUrl(aktype verifier.AkType, codeName string) string {
+func SnpCaUrl(aktype internal.AkType, codeName string) string {
 	return fmt.Sprintf("%s/%s/v1/%s/cert_chain", snpBaseUrl, aktype.String(), codeName)
 }
 
@@ -130,7 +129,7 @@ func (s *SnpConfig) GetVcek(chipId []byte, tcb uint64) (*x509.Certificate, error
 	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
 }
 
-func (s *SnpConfig) GetSnpCa(akType verifier.AkType) ([]*x509.Certificate, error) {
+func (s *SnpConfig) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
 
 	codeName, err := getSnpCodeName()
 	if err != nil {

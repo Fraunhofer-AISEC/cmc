@@ -244,7 +244,7 @@ func initialize(c *config) (*cmc.Cmc, error) {
 
 	cmcConf := &cmc.Config{
 		CmcAddr:        c.CmcAddr,
-		ProvAddr:       c.ProvAddr,
+		ProvisionAddr:  c.ProvisionAddr,
 		Metadata:       c.Metadata,
 		Drivers:        c.Drivers,
 		Ima:            c.Ima,

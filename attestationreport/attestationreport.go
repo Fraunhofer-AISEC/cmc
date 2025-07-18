@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	oci "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -382,7 +383,8 @@ type DriverConfig struct {
 	EstTlsCas        []*x509.Certificate
 	UseSystemRootCas bool
 	Vmpl             int
-	Token            []byte
+	ProvisionAuth    provision.AuthMethod
+	Provisioner      provision.Provisioner
 }
 
 type KeySelection int

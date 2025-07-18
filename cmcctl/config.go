@@ -86,7 +86,8 @@ type config struct {
 	Data          string   `json:"data"`
 	ApiSerializer string   `json:"apiSerializer"`
 	LogLevel      string   `json:"logLevel"`
-	LogFile       string   `json:"logFile,omitempty"`
+	LogFile       string   `json:"logFile"`
+	TokenStore    string   `json:"tokenStore"`
 	cmc.Config
 	// Only to test cmcd measure API
 	CtrName   string `json:"ctrName"`
@@ -122,6 +123,7 @@ const (
 	dataFlag          = "data"
 	logLevelFlag      = "loglevel"
 	logFileFlag       = "logfile"
+	tokenStoreFlag    = "tokenstore"
 	// Only to test cmcd measure API
 	ctrNameFlag   = "ctrname"
 	ctrRootfsFlag = "ctrrootfs"
@@ -152,7 +154,8 @@ var (
 	data     = flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
 	logLevel = flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
-	logFile = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
+	logFile    = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
+	tokenStore = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
 	//  Only to test cmcd measure API
 	ctrName   = flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
 	ctrRootfs = flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
@@ -249,6 +252,9 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(logFileFlag) {
 		c.LogFile = *logFile
 	}
+	if internal.FlagPassed(tokenStoreFlag) {
+		c.TokenStore = *tokenStore
+	}
 	//  Only to test cmcd measure API
 	if internal.FlagPassed(ctrNameFlag) {
 		c.CtrName = *ctrName
@@ -318,7 +324,7 @@ func getConfig(cmd string) (*config, error) {
 	if (cmd == "cacerts" || cmd == "provision") && c.EstTlsCa == "" {
 		log.Fatal("Path to store CA must be specified either via config file or commandline")
 	}
-	if cmd == "provision" && c.Token == "" {
+	if cmd == "provision" && c.ProvisionToken == "" {
 		log.Fatal("Path to store bootstrap token must be specified either via config file or commandline")
 	}
 
@@ -393,10 +399,16 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.EstTlsCa, err)
 		}
 	}
-	if c.Token != "" {
-		c.Token, err = filepath.Abs(c.Token)
+	if c.ProvisionToken != "" {
+		c.ProvisionToken, err = filepath.Abs(c.ProvisionToken)
 		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Token, err)
+			log.Warnf("Failed to get absolute path for %v: %v", c.ProvisionToken, err)
+		}
+	}
+	if c.TokenStore != "" {
+		c.TokenStore, err = filepath.Abs(c.TokenStore)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.TokenStore, err)
 		}
 	}
 	if c.PeerCache != "" {
@@ -455,6 +467,7 @@ func (c *config) Print() {
 	log.Debugf("\tHTTP Data                : %v", c.Data)
 	log.Debugf("\tHTTP Header              : %v", c.Header)
 	log.Debugf("\tHTTP Method              : %v", c.Method)
+	log.Debugf("\tToken Store              : %v", c.TokenStore)
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
 	}

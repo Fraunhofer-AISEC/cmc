@@ -133,5 +133,5 @@ func (c *Config) Print() {
 
 	c.Config.Print()
 
-	log.Debugf("\tLog Level                : %v", c.LogLevel)
+	log.Debugf("\tLog Level                     : %v", c.LogLevel)
 }

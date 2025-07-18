@@ -18,22 +18,31 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 )
 
 func createToken(c *config) error {
 
-	if c.Token == "" {
-		return errors.New("token file must be specified via config")
+	if c.TokenStore == "" {
+		return errors.New("path to token store must be specified via config")
 	}
 
-	token, err := est.CreateAndStoreToken(c.Token)
+	token, err := est.CreateAndCacheToken(c.TokenStore)
 	if err != nil {
-		return fmt.Errorf("failed to create and store token: %w", err)
+		return fmt.Errorf("failed to create and cache token: %w", err)
 	}
 
-	fmt.Printf("%v", string(token))
+	// If path to token is provided, store in file, otherwise print to stdout
+	if c.ProvisionToken == "" {
+		fmt.Printf("%v", token)
+	} else {
+		err = os.WriteFile(c.ProvisionToken, []byte(token), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to store token: %w", err)
+		}
+	}
 
 	return nil
 }
