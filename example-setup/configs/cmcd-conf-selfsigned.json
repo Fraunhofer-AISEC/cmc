@@ -1,0 +1,32 @@
+{
+    "cmcAddr": "localhost:9955",
+    "provisionMode": "selfsigned",
+    "metadata": [
+        "file://../data/metadata-signed"
+    ],
+    "drivers": [ "tpm", "sw" ],
+    "ima": true,
+    "imaPcr": 10,
+    "keyConfig": "EC256",
+    "api": "socket",
+    "policyEngine": "js",
+    "logLevel": "trace",
+    "storage": "../data/cmc-internal/",
+    "cache": "../data/cmc-cache/",
+    "peerCache": "../data/cmc-peer-cache",
+    "measurementLog": true,
+    "ctr": true,
+    "ctrDriver": "sw",
+    "ctrLog": "/tmp/container_measurements",
+    "ctrPcr": 11,
+    "estTlsCas": [
+        "../data/pki/ca.pem"
+    ],
+    "identityCas": [
+        "../data/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "../data/pki/ca.pem"
+    ],
+    "caKey": "../data/pki/ca-key.pem"
+}
