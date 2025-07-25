@@ -177,11 +177,15 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	var rootpool *x509.CertPool
 	var verifyingKey crypto.PublicKey
 	var err error
-	result := MetadataResult{}
+	result := MetadataResult{
+		Summary: Result{
+			Success: true,
+		},
+	}
 	success := true
 	verifyCertChain := true
 
-	log.Debugf("Verifying JWS object...")
+	log.Tracef("Verifying JWS object...")
 
 	// Parse the signed JWS object
 	jwsData, err := jose.ParseSigned(string(data), []jose.SignatureAlgorithm{
@@ -206,18 +210,18 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	switch verifier := verifier.(type) {
 	case []*x509.Certificate:
 		roots := verifier
-		log.Debugf("Using %v provided root CAs for JWS verification", len(roots))
+		log.Tracef("Using %v provided root CAs for JWS verification", len(roots))
 		rootpool = x509.NewCertPool()
 		for _, cert := range roots {
 			rootpool.AddCert(cert)
 		}
 	case crypto.PublicKey:
-		log.Debug("Using provided public key for JWS verification")
+		log.Trace("Using provided public key for JWS verification")
 		verifyingKey = verifier
 		rootpool = nil
 		verifyCertChain = false
 	case nil:
-		log.Debug("Using system certificate pool for JWS verification")
+		log.Trace("Using system certificate pool for JWS verification")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
 			result.Summary.SetErr(SetupSystemCA, err)
@@ -241,7 +245,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			// Verify the certificate chain present in the x5c header against the given roots
 			certs, err := sig.Protected.Certificates(opts)
 			if err != nil {
-				result.Summary.SetErr(VerifyCertChain)
+				result.Summary.SetErr(NotSpecified)
 				result.SignatureCheck[i].CertChainCheck.SetErr(VerifyCertChain, err)
 				success = false
 				continue
@@ -265,7 +269,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		if err == nil {
 			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
-			result.Summary.SetErr(VerifySignature)
+			result.Summary.SetErr(NotSpecified)
 			result.SignatureCheck[i].SignCheck.SetErr(VerifySignature, err)
 			success = false
 		}
@@ -285,7 +289,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	}
 
 	if success {
-		log.Debug("Successfully verified JWS object")
+		log.Trace("Successfully verified JWS object")
 	}
 
 	payload := payloads[0]
