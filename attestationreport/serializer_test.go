@@ -362,9 +362,12 @@ func TestVerify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// FUT: Verify
-			_, _, got := tt.args.s.Verify(tt.args.data, tt.args.verifier)
-			if got != tt.want {
-				t.Errorf("Result.Success = %v, want %v", got, tt.want)
+			got, _, got1 := tt.args.s.Verify(tt.args.data, tt.args.verifier)
+			if got.Summary.Success != tt.want {
+				t.Errorf("Result.Success = %v, want %v", got.Summary.Success, tt.want)
+			}
+			if got1 != tt.want {
+				t.Errorf("ok = %v, want %v", got1, tt.want)
 			}
 		})
 	}

@@ -60,7 +60,7 @@ func (s CborSerializer) Unmarshal(data []byte, v any) error {
 
 func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]byte, error) {
 
-	log.Debugf("Signing CBOR data length %v...", len(data))
+	log.Tracef("Signing CBOR data length %v...", len(data))
 
 	private, _, err := signer.GetKeyHandles(sel)
 	if err != nil {
@@ -123,12 +123,16 @@ func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]by
 // which can be using the system certificates or the embedded self-signed certificate.
 func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
 
-	result := MetadataResult{}
+	result := MetadataResult{
+		Summary: Result{
+			Success: true,
+		},
+	}
 	var roots []*x509.Certificate
 	var verifyingKey crypto.PublicKey
 	success := true
 
-	log.Debugf("Verifying COSE message...")
+	log.Tracef("Verifying COSE message...")
 
 	// Parse the signed COSE message
 	var msgToVerify cose.SignMessage
@@ -146,10 +150,10 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	switch verifier := verifier.(type) {
 	case []*x509.Certificate:
 		roots = verifier
-		log.Debugf("Using %v provided root CAs for COSE verification", len(roots))
+		log.Tracef("Using %v provided root CAs for COSE verification", len(roots))
 	case crypto.PublicKey:
 		verifyingKey = verifier
-		log.Debugf("Verifying signature against provided key %T", verifyingKey)
+		log.Tracef("Verifying signature against provided key %T", verifyingKey)
 	case nil:
 		log.Warnf("Using system cert pool not implemented for CBOR")
 		result.Summary.SetErr(SetupSystemCA)
@@ -167,12 +171,12 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 
 		if len(roots) > 0 {
 
-			log.Debugf("Verifying signature against certificate chain with %v roots", len(roots))
+			log.Tracef("Verifying signature against certificate chain with %v roots", len(roots))
 
 			// Only verify certificate chain(s) if roots are given
 			x5Chain, ok := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
 			if !ok {
-				result.Summary.SetErr(ParseX5C)
+				result.Summary.SetErr(NotSpecified)
 				result.SignatureCheck[i].CertChainCheck.SetErr(ParseX5C)
 				success = false
 				continue
@@ -190,7 +194,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 				x509Cert, err := x509.ParseCertificate(cert)
 				if err != nil {
 					log.Warnf("failed to parse leaf certificate: %v", err)
-					result.Summary.SetErr(ParseCert)
+					result.Summary.SetErr(NotSpecified)
 					result.SignatureCheck[i].CertChainCheck.SetErr(ParseCert, err)
 					success = false
 					continue
@@ -201,7 +205,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 
 			x509Chains, err := internal.VerifyCertChain(certChain, roots)
 			if err != nil {
-				result.Summary.SetErr(VerifyCertChain)
+				result.Summary.SetErr(NotSpecified)
 				result.SignatureCheck[i].CertChainCheck.SetErr(VerifyCertChain, err)
 				success = false
 
@@ -225,7 +229,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			}
 			verifyingKey, ok = certChain[0].PublicKey.(*ecdsa.PublicKey)
 			if !ok {
-				result.Summary.SetErr(ExtractPubKey)
+				result.Summary.SetErr(NotSpecified)
 				result.SignatureCheck[i].SignCheck.SetErr(ExtractPubKey)
 				success = false
 				continue
@@ -234,7 +238,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 
 		verifier, err := cose.NewVerifier(cose.AlgorithmES256, verifyingKey)
 		if err != nil {
-			result.Summary.SetErr(Internal, err)
+			result.Summary.SetErr(NotSpecified, err)
 			result.SignatureCheck[i].SignCheck.SetErr(Internal, err)
 			success = false
 			continue
@@ -247,7 +251,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	if err != nil {
 		// Can only be set for all signatures here
 		for i := range result.SignatureCheck {
-			result.Summary.SetErr(VerifySignature)
+			result.Summary.SetErr(NotSpecified)
 			result.SignatureCheck[i].SignCheck.SetErr(VerifySignature)
 			success = false
 		}
@@ -260,7 +264,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	}
 
 	if success {
-		log.Debug("Successfully verified COSE object")
+		log.Trace("Successfully verified COSE object")
 	}
 
 	return result, msgToVerify.Payload, success
