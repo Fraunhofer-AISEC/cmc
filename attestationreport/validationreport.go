@@ -17,6 +17,7 @@ package attestationreport
 
 import (
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -54,6 +55,7 @@ type Result struct {
 	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
 	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"3,keyasint,omitempty"`
 	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"4,keyasint,omitempty"`
+	Details         string    `json:"details,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 //
@@ -703,10 +705,15 @@ func (e ErrorCode) String() string {
 	}
 }
 
-func (r *Result) SetErr(e ErrorCode) {
-	log.Warnf("Verification failed with error code %v", e.String())
+func (r *Result) SetErr(code ErrorCode, errs ...error) {
 	r.Success = false
-	r.ErrorCode = e
+	r.ErrorCode = code
+	if len(errs) > 0 {
+		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
+		log.Warnf("Verification failed with error code %v: %v", code.String(), r.Details)
+	} else {
+		log.Warnf("Verification failed with error code %v", code.String())
+	}
 }
 
 func (r *Result) PrintErr(format string, args ...interface{}) {
