@@ -31,7 +31,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/go-jose/go-jose/v4"
 )
 
@@ -39,13 +38,6 @@ import (
 // encoded as hex strings in JSON but used as byte arrays
 // internally and by CBOR encoding
 type HexByte []byte
-
-// Custom type for manually parsing JWS byte buffers.
-//
-//	Required because JWS uses use-safe base64
-type buf struct {
-	data []byte
-}
 
 // MarshalJSON marshalls a byte array into a hex string
 func (h *HexByte) MarshalJSON() ([]byte, error) {
@@ -67,27 +59,6 @@ func (h *HexByte) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to decode string: %v", err)
 	}
 
-	return nil
-}
-
-// UnmarshalJSON unmarshals JSON JWS url-safe base64 encoded
-// byte buffers
-func (b *buf) UnmarshalJSON(data []byte) error {
-	var s string
-	err := json.Unmarshal(data, &s)
-	if err != nil {
-		return err
-	}
-	if s == "" {
-		return nil
-	}
-	decoded, err := base64.RawURLEncoding.DecodeString(s)
-	if err != nil {
-		return err
-	}
-	*b = buf{
-		data: decoded,
-	}
 	return nil
 }
 
@@ -115,12 +86,10 @@ func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 }
 
 func (s JsonSerializer) Marshal(v any) ([]byte, error) {
-	log.Tracef("Marshalling data using %v serialization", s.String())
 	return json.Marshal(v)
 }
 
 func (s JsonSerializer) Unmarshal(data []byte, v any) error {
-	log.Tracef("Unmarshalling data using %v serialization", s.String())
 	return json.Unmarshal(data, v)
 }
 
@@ -223,8 +192,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		jose.ES512,
 	})
 	if err != nil {
-		log.Warnf("Data could not be parsed: %v", err)
-		result.Summary.SetErr(ParseJSON)
+		result.Summary.SetErr(ParseJSON, err)
 		return result, nil, false
 	}
 	if len(jwsData.Signatures) == 0 {
@@ -252,7 +220,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		log.Debug("Using system certificate pool for JWS verification")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
-			result.Summary.SetErr(SetupSystemCA)
+			result.Summary.SetErr(SetupSystemCA, err)
 			return result, nil, false
 		}
 	default:
@@ -274,8 +242,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			certs, err := sig.Protected.Certificates(opts)
 			if err != nil {
 				result.Summary.SetErr(VerifyCertChain)
-				result.SignatureCheck[i].CertChainCheck.Success = false
-				result.SignatureCheck[i].CertChainCheck.ErrorCode = VerifyCertChain
+				result.SignatureCheck[i].CertChainCheck.SetErr(VerifyCertChain, err)
 				success = false
 				continue
 			}
@@ -299,20 +266,18 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			result.SignatureCheck[i].SignCheck.Success = true
 		} else {
 			result.Summary.SetErr(VerifySignature)
-			result.SignatureCheck[i].SignCheck.Success = false
-			result.SignatureCheck[i].SignCheck.ErrorCode = VerifySignature
+			result.SignatureCheck[i].SignCheck.SetErr(VerifySignature, err)
 			success = false
 		}
 
 		if index[i] != i {
-			log.Warnf("Order of signatures incorrect (index %v != iterator %v)", index[i], i)
-			result.Summary.SetErr(JWSSignatureOrder)
+			result.Summary.SetErr(JWSSignatureOrder,
+				fmt.Errorf("order of signatures incorrect (index %v != iterator %v)", index[i], i))
 			success = false
 		}
 
 		if i > 0 {
 			if !bytes.Equal(payloads[i], payloads[i-1]) {
-				log.Warn("payloads differ for jws with multiple signatures")
 				result.Summary.SetErr(JWSPayload)
 				success = false
 			}
@@ -324,7 +289,6 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	}
 
 	payload := payloads[0]
-	result.Summary.Success = success
 
 	return result, payload, success
 }
@@ -446,43 +410,4 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		// The return format of all other signatures does not need to be adapted for go-jose
 		return hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
 	}
-}
-
-type jwsPartial struct {
-	Protected buf `json:"protected"`
-}
-
-type protectedPartial struct {
-	X5c [][]byte `json:"x5c"`
-}
-
-func getSelfSignedJwsCert(data []byte) (*x509.Certificate, error) {
-
-	log.Tracef("jws: %v", string(data))
-
-	jws := new(jwsPartial)
-	err := json.Unmarshal(data, jws)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal jws: %w", err)
-	}
-	protected := new(protectedPartial)
-	err = json.Unmarshal(jws.Protected.data, protected)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal protected: %w", err)
-	}
-	certs, err := internal.ParseCertsDer(protected.X5c)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificates: %w", err)
-	}
-	if len(certs) != 1 {
-		return nil, fmt.Errorf("invalid number of self-signed certificates: %v", len(certs))
-	}
-	cert := certs[0]
-	// Check if cert is self-signed
-	err = cert.CheckSignatureFrom(cert)
-	if err != nil {
-		return nil, fmt.Errorf("cert is no self-signed: %w", err)
-	}
-	log.Tracef("Extracted self-signed cert %v", cert.Subject.CommonName)
-	return cert, nil
 }
