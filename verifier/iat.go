@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/hex"
+	"fmt"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -208,27 +209,31 @@ func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
 	var msgToVerify cose.Sign1Message
 	err := msgToVerify.UnmarshalCBOR(data)
 	if err != nil {
-		log.Debugf("error unmarshalling cose: %v", err)
-		return ar.Result{Success: false, ErrorCode: ar.ParseEvidence}, nil, false
+		result := ar.Result{}
+		result.SetErr(ar.ParseEvidence, err)
+		return result, nil, false
 	}
 
 	publicKey, okKey := cert.PublicKey.(*ecdsa.PublicKey)
 	if !okKey {
-		log.Debugf("Failed to extract public key from certificate: %v", err)
-		return ar.Result{Success: false, ErrorCode: ar.ExtractPubKey}, nil, false
+		result := ar.Result{}
+		result.SetErr(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate: %v", err))
+		return result, nil, false
 	}
 
 	// create a verifier from a trusted private key
 	verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 	if err != nil {
-		log.Debugf("Failed to create verifier: %v", err)
-		return ar.Result{Success: false, ErrorCode: ar.Internal}, nil, false
+		result := ar.Result{}
+		result.SetErr(ar.Internal, err)
+		return result, nil, false
 	}
 
 	err = msgToVerify.Verify(nil, verifier)
 	if err != nil {
-		log.Debugf("Failed to verify COSE token: %v", err)
-		return ar.Result{Success: false, ErrorCode: ar.VerifySignature}, nil, false
+		result := ar.Result{}
+		result.SetErr(ar.VerifySignature, err)
+		return result, nil, false
 	}
 
 	return ar.Result{Success: true}, msgToVerify.Payload, true

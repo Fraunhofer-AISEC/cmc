@@ -35,27 +35,25 @@ const (
 type VerificationResult struct {
 	Version         string              `json:"version" cbor:"0,keyasint"`
 	Type            string              `json:"type" cbor:"1,keyasint"`
-	Success         bool                `json:"success" cbor:"2,keyasint"`
-	ErrorCodes      []ErrorCode         `json:"errorCodes,omitempty" cbor:"3,keyasint,omitempty"`
+	Summary         Result              `json:"summary" cbor:"2,keyasint"`
 	Prover          string              `json:"prover,omitempty" cbor:"4,keyasint,omitempty"`
 	Created         string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
 	CertLevel       int                 `json:"certLevel" cbor:"6,keyasint"`
 	Measurements    []MeasurementResult `json:"measurements" cbor:"7,keyasint"`
 	Metadata        MetadataSummary     `json:"metadata" cbor:"8,keyasint"`
-	PolicySuccess   bool                `json:"policySuccess,omitempty" cbor:"9,keyasint,omitempty"`
 	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"10,keyasint"`
 }
 
 // Result is a generic struct do display if a verification of a measured/provided data structure
 // against a reference data structure was successful
 type Result struct {
-	Success         bool      `json:"success"`
-	Got             string    `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
-	Expected        string    `json:"expected,omitempty" cbor:"1,keyasint,omitempty"`
-	ExpectedOneOf   []string  `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
-	ExpectedBetween []string  `json:"expectedBetween,omitempty" cbor:"3,keyasint,omitempty"`
-	ErrorCode       ErrorCode `json:"errorCode,omitempty" cbor:"4,keyasint,omitempty"`
-	Details         string    `json:"details,omitempty" cbor:"5,keyasint,omitempty"`
+	Success         bool        `json:"success"`
+	Got             string      `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
+	Expected        string      `json:"expected,omitempty" cbor:"1,keyasint,omitempty"`
+	ExpectedOneOf   []string    `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
+	ExpectedBetween []string    `json:"expectedBetween,omitempty" cbor:"3,keyasint,omitempty"`
+	ErrorCodes      []ErrorCode `json:"errorCodes,omitempty" cbor:"4,keyasint,omitempty"`
+	Details         string      `json:"details,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 //
@@ -63,10 +61,11 @@ type Result struct {
 //
 
 type MetadataSummary struct {
-	DevDescResult       MetadataResult      `json:"deviceDescValidation" cbor:"0,keyasint"`
-	ManifestResults     []MetadataResult    `json:"manifestValidation" cbor:"1,keyasint"`
-	CompDescResult      *MetadataResult     `json:"companyValidation,omitempty" cbor:"2,keyasint,omitempty"`
-	CompatibilityResult CompatibilityResult `json:"compatibilityValidation" cbor:"3,keyasint"`
+	DevDescResult       MetadataResult      `json:"devDescResult" cbor:"0,keyasint"`
+	ManifestResults     []MetadataResult    `json:"manifestResults" cbor:"1,keyasint"`
+	CompDescResult      *MetadataResult     `json:"compDescResult,omitempty" cbor:"2,keyasint,omitempty"`
+	UnknownResults      []MetadataResult    `json:"unknownResults" cbor:"3,keyasint"`
+	CompatibilityResult CompatibilityResult `json:"compatibilityResult" cbor:"4,keyasint"`
 }
 
 type MetadataResult struct {
@@ -450,7 +449,7 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 type ErrorCode int
 
 const (
-	NotSet ErrorCode = iota
+	NotSpecified ErrorCode = iota
 	CaFingerprint
 	CRLCheckRoot
 	CRLCheckPCK
@@ -469,10 +468,8 @@ const (
 	JWSSignatureOrder
 	JWSPayload
 	JWSNoKeyOrCert
-	JWSExtractSelfSignedCert
 	JWSUnknownVerifierType
 	COSENoSignatures
-	COSEExtractSelfSignedCert
 	COSEUnknownVerifierType
 	MeasurementNoMatch
 	MeasurementTypeNotSupported
@@ -490,7 +487,7 @@ const (
 	ParseTcbInfo
 	ParseJSON
 	ParseCBOR
-	ParseManifest
+	ParseMetadata
 	ParseEvidence
 	ParseExtensions
 	ParseQEIdentity
@@ -513,12 +510,13 @@ const (
 	VerifyAR
 	VerifyCertChain
 	VerifyPCKChain
-	VerifyManifest
+	VerifyMetadata
 	VerifyPolicies
 	VerifyQEIdentityErr
 	VerifySignature
 	VerifyTCBChain
 	VerifyTcbInfo
+	VerifyMeasurement
 	ExtensionsCheck
 	PcrNotSpecified
 	DeviceDescriptionNotPresent
@@ -532,11 +530,12 @@ const (
 	ParseCollateral
 	IllegalTdxMrIndex
 	ParseKey
+	ExtractPayload
 )
 
 func (e ErrorCode) String() string {
 	switch e {
-	case NotSet:
+	case NotSpecified:
 		return fmt.Sprintf("%v (Error code not set)", int(e))
 	case CaFingerprint:
 		return fmt.Sprintf("%v (CA fingerprint error)", int(e))
@@ -574,14 +573,10 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (JWS payload error)", int(e))
 	case JWSNoKeyOrCert:
 		return fmt.Sprintf("%v (JWS No key or cert provided)", int(e))
-	case JWSExtractSelfSignedCert:
-		return fmt.Sprintf("%v (JWS extract self-signed cert)", int(e))
 	case JWSUnknownVerifierType:
 		return fmt.Sprintf("%v (JWS Unknown verifier type)", int(e))
 	case COSENoSignatures:
 		return fmt.Sprintf("%v (COSE no signatures error)", int(e))
-	case COSEExtractSelfSignedCert:
-		return fmt.Sprintf("%v (COSE extract self-signed cert)", int(e))
 	case COSEUnknownVerifierType:
 		return fmt.Sprintf("%v (COSE Unknown verifier type)", int(e))
 	case MeasurementNoMatch:
@@ -622,8 +617,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Parse extensions error)", int(e))
 	case ParseQEIdentity:
 		return fmt.Sprintf("%v (Parse QE identity error)", int(e))
-	case ParseManifest:
-		return fmt.Sprintf("%v (Parse manifest error)", int(e))
+	case ParseMetadata:
+		return fmt.Sprintf("%v (Parse metadata error)", int(e))
 	case ParseTime:
 		return fmt.Sprintf("%v (Parse time error)", int(e))
 	case PolicyEngineNotImplemented:
@@ -662,8 +657,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Verify certificate chain error)", int(e))
 	case VerifyPCKChain:
 		return fmt.Sprintf("%v (Verify PCK chain error)", int(e))
-	case VerifyManifest:
-		return fmt.Sprintf("%v (Verify manifest error)", int(e))
+	case VerifyMetadata:
+		return fmt.Sprintf("%v (Verify metadata error)", int(e))
 	case VerifyPolicies:
 		return fmt.Sprintf("%v (Verify policies error)", int(e))
 	case VerifyQEIdentityErr:
@@ -674,6 +669,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Verify TCB chain error)", int(e))
 	case VerifyTcbInfo:
 		return fmt.Sprintf("%v (Verify TCB info error)", int(e))
+	case VerifyMeasurement:
+		return fmt.Sprintf("%v (Verify measurement)", int(e))
 	case ExtensionsCheck:
 		return fmt.Sprintf("%v (Extensions check error)", int(e))
 	case PcrNotSpecified:
@@ -700,6 +697,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Illegal Intel TDX measurement register index)", int(e))
 	case ParseKey:
 		return fmt.Sprintf("%v (Parse key)", int(e))
+	case ExtractPayload:
+		return fmt.Sprintf("%v (Extract Payload)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -707,12 +706,26 @@ func (e ErrorCode) String() string {
 
 func (r *Result) SetErr(code ErrorCode, errs ...error) {
 	r.Success = false
-	r.ErrorCode = code
+	if code != NotSpecified {
+		r.ErrorCodes = append(r.ErrorCodes, code)
+	}
 	if len(errs) > 0 {
 		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
 		log.Warnf("Verification failed with error code %v: %v", code.String(), r.Details)
-	} else {
+	} else if code != NotSpecified {
 		log.Warnf("Verification failed with error code %v", code.String())
+	} else {
+		log.Warnf("Verification failed")
+	}
+}
+
+func (r *VerificationResult) SetErr(code ErrorCode, errs ...error) {
+	if len(errs) > 0 {
+		for _, err := range errs {
+			r.Summary.SetErr(code, err)
+		}
+	} else {
+		r.Summary.SetErr(code)
 	}
 }
 
@@ -724,10 +737,13 @@ func (r *Result) PrintErr(format string, args ...interface{}) {
 	if r.Success {
 		return
 	}
-	if r.ErrorCode == NotSet {
+	if len(r.ErrorCodes) == 0 || len(r.ErrorCodes) == 1 && r.ErrorCodes[0] == NotSpecified {
 		log.Warnf("%v failed", fmt.Sprintf(format, args...))
 	} else {
-		log.Warnf("%v failed with error code %v", fmt.Sprintf(format, args...), r.ErrorCode)
+		log.Warnf("%v failed with error codes:", fmt.Sprintf(format, args...))
+		for _, code := range r.ErrorCodes {
+			log.Warnf("    %v", code.String())
+		}
 	}
 
 	if r.Expected != "" {
@@ -751,12 +767,12 @@ func (r *SignatureResult) PrintErr(format string, args ...interface{}) {
 
 func (r *VerificationResult) PrintErr() {
 
-	if !r.Success {
+	if !r.Summary.Success {
 
-		if len(r.ErrorCodes) == 0 {
+		if len(r.Summary.ErrorCodes) == 0 {
 			log.Warn("Verification failed")
 		} else {
-			log.Warnf("Verification failed with error codes: %v", r.ErrorCodes)
+			log.Warnf("Verification failed with error codes: %v", r.Summary.ErrorCodes)
 		}
 
 		for _, m := range r.Measurements {
@@ -816,9 +832,9 @@ func (r *VerificationResult) PrintErr() {
 		for _, mr := range r.Metadata.ManifestResults {
 			mr.Summary.PrintErr("%v %v check", mr.Type, mr.Name)
 			for _, s := range mr.SignatureCheck {
-				s.PrintErr("App Manifest %v", mr.Name)
+				s.PrintErr("%v", mr.Name)
 			}
-			mr.ValidityCheck.PrintErr("App Manifest %v validity check", mr.Name)
+			mr.ValidityCheck.PrintErr("%v validity check", mr.Name)
 		}
 
 		r.Metadata.DevDescResult.Summary.PrintErr("Device Description check")
@@ -835,10 +851,6 @@ func (r *VerificationResult) PrintErr() {
 		}
 		for _, dr := range r.Metadata.CompatibilityResult.ManifestMatch {
 			dr.PrintErr("Manifest -> Description match")
-		}
-
-		if !r.PolicySuccess {
-			log.Warnf("Custom policy validation failed")
 		}
 	}
 }

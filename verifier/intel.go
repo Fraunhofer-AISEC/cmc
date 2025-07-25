@@ -540,7 +540,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 
 	// Parse and verify the entire PCK certificate chain
 	x509Chains, code := VerifyPckCertChain(certs, pckCrl, rootCrl)
-	if code != ar.NotSet {
+	if code != ar.NotSpecified {
 		log.Debugf("Failed to verify certificate chain: %v", err)
 		result.CertChainCheck.SetErr(code)
 		return result, false
@@ -612,7 +612,7 @@ func verifyCollateralElem(elem []byte, signature string, cn, tbsJsonKey string, 
 	}
 	log.Tracef("Successfully verified %q ECDSA signature", tbsJsonKey)
 
-	return ar.NotSet
+	return ar.NotSpecified
 }
 
 func extractTbsArea(elem []byte, key string) ([]byte, error) {
@@ -653,7 +653,7 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 	}
 
 	errCode := verifyCollateralElem(tcbInfoBodyRaw, tcbInfo.Signature, CN_TCB_SIGNING, TCB_INFO_JSON_KEY, signingCert, caCert)
-	if errCode != ar.NotSet {
+	if errCode != ar.NotSpecified {
 		result.Summary.SetErr(errCode)
 		return result
 	}
@@ -797,7 +797,7 @@ func ValidateQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdent
 
 	errCode := verifyCollateralElem(qeIdentityBodyRaw, qeIdentity.Signature, CN_TCB_SIGNING, QE_IDENTITY_JSON_KEY,
 		signingCert, caCert)
-	if errCode != ar.NotSet {
+	if errCode != ar.NotSpecified {
 		result.Summary.SetErr(errCode)
 		return result, errors.New("failed to verify QE identity")
 	}
@@ -1001,7 +1001,7 @@ func VerifyPckCertChain(quoteCerts SgxCertificates, pckCrl, rootCrl *x509.Revoca
 	}
 	log.Tracef("Successfully checked root CA revocation list")
 
-	return x509CertChains, ar.NotSet
+	return x509CertChains, ar.NotSpecified
 }
 
 func verifyQuoteVersion(quoteVersion, expectedVersion uint16) (ar.Result, bool) {
@@ -1117,7 +1117,7 @@ func verifyRootCas(quoteCerts *SgxCertificates, collateral *Collateral, fingerpr
 		return ar.CaFingerprint
 	}
 
-	return ar.NotSet
+	return ar.NotSpecified
 }
 
 // isNewer checks if s2 is newer (later) than s1

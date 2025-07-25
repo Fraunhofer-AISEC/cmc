@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -375,33 +376,38 @@ func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
-		log.Debugf("Failed to decode TPM signature: %v", err)
-		return ar.Result{Success: false, ErrorCode: ar.Parse}
+		result := ar.Result{}
+		result.SetErr(ar.Parse, err)
+		return result
 	}
 
 	if tpmtSig.Alg != tpm2.AlgRSASSA {
-		log.Debugf("Hash algorithm %v not supported", tpmtSig.Alg)
-		return ar.Result{Success: false, ErrorCode: ar.UnsupportedAlgorithm}
+		result := ar.Result{}
+		result.SetErr(ar.UnsupportedAlgorithm, fmt.Errorf("hash algorithm %v not supported", tpmtSig.Alg))
+		return result
 	}
 
 	// Extract public key from x509 certificate
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
-		log.Debugf("Failed to extract public key from certificate")
-		return ar.Result{Success: false, ErrorCode: ar.ExtractPubKey}
+		result := ar.Result{}
+		result.SetErr(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate"))
+		return result
 	}
 	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
 	if err != nil {
-		log.Debugf("Hash algorithm not supported")
-		return ar.Result{Success: false, ErrorCode: ar.UnsupportedAlgorithm}
+		result := ar.Result{}
+		result.SetErr(ar.UnsupportedAlgorithm, fmt.Errorf("hash algorithm not supported"))
+		return result
 	}
 
 	// Hash the quote and Verify the TPM Quote signature
 	hashed := sha256.Sum256(quote)
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
-		log.Debugf("Failed to verify TPM quote signature: %v", err)
-		return ar.Result{Success: false, ErrorCode: ar.VerifySignature}
+		result := ar.Result{}
+		result.SetErr(ar.VerifySignature, err)
+		return result
 	}
 	return ar.Result{Success: true}
 }

@@ -50,7 +50,7 @@ func publishResult(addr, file string, result *ar.VerificationResult) error {
 	}
 
 	// Log the result
-	if result.Success {
+	if result.Summary.Success {
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
 	} else {
 		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)

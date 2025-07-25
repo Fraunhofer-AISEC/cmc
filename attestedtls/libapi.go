@@ -102,7 +102,7 @@ func (a LibApi) verifyAR(
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
-	if !result.Success {
+	if !result.Summary.Success {
 		return errors.New("attestation report verification failed")
 	}
 	return nil

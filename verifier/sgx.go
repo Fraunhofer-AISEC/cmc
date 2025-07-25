@@ -157,7 +157,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 
 	// Match measurement root CAs against reference root CA fingerprint
 	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
-	if errCode != ar.NotSet {
+	if errCode != ar.NotSpecified {
 		result.Summary.SetErr(errCode)
 		return result, false
 	}

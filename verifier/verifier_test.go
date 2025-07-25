@@ -26,7 +26,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
 
@@ -258,7 +257,7 @@ var (
 
 // Variables for TestVerify
 var (
-	ArVersion = "1.4.1"
+	ArVersion = "1.4.2"
 	nonce     = []byte{0x01, 0x02, 0x03}
 )
 
@@ -508,7 +507,11 @@ func TestVerify(t *testing.T) {
 				deviceDescription: validDeviceDescription,
 				nonce:             nonce,
 			},
-			want: ar.VerificationResult{Success: true},
+			want: ar.VerificationResult{
+				Summary: ar.Result{
+					Success: true,
+				},
+			},
 		},
 		{
 			name: "Valid Report CBOR",
@@ -520,7 +523,11 @@ func TestVerify(t *testing.T) {
 				deviceDescription: validDeviceDescription,
 				nonce:             nonce,
 			},
-			want: ar.VerificationResult{Success: true},
+			want: ar.VerificationResult{
+				Summary: ar.Result{
+					Success: true,
+				},
+			},
 		},
 		{
 			// expected aggregated certification level in Manifests for
@@ -568,7 +575,11 @@ func TestVerify(t *testing.T) {
 				deviceDescription: validDeviceDescription,
 				nonce:             nonce,
 			},
-			want: ar.VerificationResult{Success: false},
+			want: ar.VerificationResult{
+				Summary: ar.Result{
+					Success: false,
+				},
+			},
 		},
 		{
 			name: "Invalid Device Description",
@@ -580,7 +591,11 @@ func TestVerify(t *testing.T) {
 				deviceDescription: invalidDeviceDescription,
 				nonce:             nonce,
 			},
-			want: ar.VerificationResult{Success: false},
+			want: ar.VerificationResult{
+				Summary: ar.Result{
+					Success: false,
+				},
+			},
 		},
 		{
 			name: "Incompatible RTM/OS Manifests",
@@ -592,7 +607,11 @@ func TestVerify(t *testing.T) {
 				deviceDescription: validDeviceDescription,
 				nonce:             nonce,
 			},
-			want: ar.VerificationResult{Success: false},
+			want: ar.VerificationResult{
+				Summary: ar.Result{
+					Success: false,
+				},
+			},
 		},
 	}
 
@@ -711,10 +730,10 @@ func TestVerify(t *testing.T) {
 				PolicyEngineSelect_None,
 				metadata)
 			log.Info("Finished FUT")
-			if got.Success != tt.want.Success {
+			if got.Summary.Success != tt.want.Summary.Success {
 				log.Warnf("Printing Summary")
 				got.PrintErr()
-				t.Errorf("Result.Success = %v, want %v", got.Success, tt.want.Success)
+				t.Errorf("Result.Success = %v, want %v", got.Summary.Success, tt.want.Summary.Success)
 			}
 		})
 	}
@@ -729,14 +748,12 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 		name  string
 		args  args
 		want  *ar.CompatibilityResult
-		want1 ar.ErrorCode
-		want2 bool
+		want1 []ar.ErrorCode
 	}{
 		{
 			name:  "Valid Metadata",
 			want:  successCompatibilityResult,
-			want1: ar.NotSet,
-			want2: true,
+			want1: []ar.ErrorCode{},
 			args: args{
 				metadata: validMetadata,
 			},
@@ -744,8 +761,7 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 		{
 			name:  "No Root Manifest",
 			want:  failedCompatibilityResult,
-			want1: ar.NoRootManifest,
-			want2: false,
+			want1: []ar.ErrorCode{ar.NoRootManifest},
 			args: args{
 				metadata: noRootManifestMetadata,
 			},
@@ -753,8 +769,7 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 		{
 			name:  "Multiple Root Manifests",
 			want:  failedCompatibilityResult,
-			want1: ar.MultipleRootManifests,
-			want2: false,
+			want1: []ar.ErrorCode{ar.MultipleRootManifests},
 			args: args{
 				metadata: multipleRootManifestMetadata,
 			},
@@ -762,8 +777,7 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 		{
 			name:  "Missing Manifests",
 			want:  failedCompatibilityResult,
-			want1: ar.NotSet,
-			want2: false,
+			want1: []ar.ErrorCode{},
 			args: args{
 				metadata: missingManifestMetadata,
 			},
@@ -771,8 +785,7 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 		{
 			name:  "Missing Manifest Description",
 			want:  failedCompatibilityResult,
-			want1: ar.NotSet,
-			want2: false,
+			want1: []ar.ErrorCode{},
 			args: args{
 				metadata: missingDescriptionMetadata,
 			},
@@ -781,15 +794,24 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, got2 := checkMetadataCompatibility(tt.args.metadata)
+			got := checkMetadataCompatibility(tt.args.metadata)
 			if got.Summary.Success != tt.want.Summary.Success {
 				t.Errorf("checkMetadataCompatibility() got = %v, want %v", got, tt.want)
 			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got1, tt.want1)
+			if len(got.Summary.ErrorCodes) != len(tt.want1) {
+				t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
 			}
-			if got2 != tt.want2 {
-				t.Errorf("checkMetadataCompatibility() got2 = %v, want %v", got2, tt.want2)
+			for _, ec1 := range got.Summary.ErrorCodes {
+				found := false
+				for _, ec2 := range tt.want1 {
+					if ec1 == ec2 {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
+				}
 			}
 		})
 	}

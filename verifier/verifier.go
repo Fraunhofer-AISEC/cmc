@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -67,10 +68,12 @@ func Verify(
 	}
 
 	result := &ar.VerificationResult{
-		Version:   ar.GetVersion(),
-		Type:      "Verification Result",
-		Prover:    "Unknown",
-		Success:   true,
+		Version: ar.GetVersion(),
+		Type:    "Verification Result",
+		Prover:  "Unknown",
+		Summary: ar.Result{
+			Success: true,
+		},
 		CertLevel: 0,
 	}
 
@@ -78,9 +81,7 @@ func Verify(
 	log.Tracef("Detecting serialization format of attestation report length %v", len(arRaw))
 	s, err := ar.DetectSerialization(arRaw)
 	if err != nil {
-		log.Debug("Unable to detect AR serialization format")
-		result.Success = false
-		result.ErrorCodes = append(result.ErrorCodes, ar.UnknownSerialization)
+		result.SetErr(ar.UnknownSerialization, err)
 		return result
 	}
 	log.Tracef("Detected %v serialization", s.String())
@@ -88,25 +89,21 @@ func Verify(
 	// Verify and unpack attestation report
 	report, tr, code := verifyAr(arRaw, verifier, s)
 	result.ReportSignature = tr.SignatureCheck
-	if code != ar.NotSet {
-		result.ErrorCodes = append(result.ErrorCodes, code)
-		result.Success = false
+	if code != ar.NotSpecified {
+		result.SetErr(code)
 		return result
 	}
 
 	// Verify and unpack metadata from attestation report
-	metaResults, ec, ok := verifyMetadata(metadataCas, s, metadatamap)
+	metaResults, ok := verifyMetadata(metadataCas, s, metadatamap)
 	if !ok {
-		result.Success = false
-		result.ErrorCodes = append(result.ErrorCodes, ec...)
+		result.SetErr(ar.VerifyMetadata)
 	}
 	result.Metadata = metaResults
 
 	refVals, err := collectReferenceValues(metaResults.ManifestResults)
 	if err != nil {
-		log.Debugf("Failed to collect reference values: %v", err)
-		result.Success = false
-		result.ErrorCodes = append(result.ErrorCodes, ar.RefValTypeNotSupported)
+		result.SetErr(ar.RefValTypeNotSupported, err)
 	}
 
 	hwAttest := false
@@ -118,7 +115,7 @@ func Verify(
 			r, ok := verifyTpmMeasurements(m, nonce, metadataCas,
 				refVals["TPM Reference Value"], s)
 			if !ok {
-				result.Success = false
+				result.SetErr(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
@@ -127,7 +124,7 @@ func Verify(
 			r, ok := verifySnpMeasurements(m, nonce, &metaResults.ManifestResults[0],
 				refVals["SNP Reference Value"])
 			if !ok {
-				result.Success = false
+				result.SetErr(ar.VerifyMeasurement, errors.New("SNP measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
@@ -136,7 +133,7 @@ func Verify(
 			r, ok := verifyTdxMeasurements(m, nonce, &metaResults.ManifestResults[0],
 				refVals["TDX Reference Value"])
 			if !ok {
-				result.Success = false
+				result.SetErr(ar.VerifyMeasurement, errors.New("TDX measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
@@ -145,7 +142,7 @@ func Verify(
 			r, ok := verifySgxMeasurements(m, nonce, &metaResults.ManifestResults[0],
 				refVals["SGX Reference Value"])
 			if !ok {
-				result.Success = false
+				result.SetErr(ar.VerifyMeasurement, errors.New("SGX measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
@@ -154,7 +151,7 @@ func Verify(
 			r, ok := verifyIasMeasurements(m, nonce, &metaResults.ManifestResults[0],
 				refVals["IAS Reference Value"])
 			if !ok {
-				result.Success = false
+				result.SetErr(ar.VerifyMeasurement, errors.New("IAS measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
@@ -163,14 +160,12 @@ func Verify(
 			r, ok := verifySwMeasurements(m, nonce, metadataCas,
 				refVals["SW Reference Value"], s)
 			if !ok {
-				result.Success = false
+				result.SetErr(ar.VerifyMeasurement, errors.New("SW measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 
 		default:
-			log.Debugf("Unsupported measurement type '%v'", mtype)
-			result.Success = false
-			result.ErrorCodes = append(result.ErrorCodes, ar.MeasurementTypeNotSupported)
+			result.SetErr(ar.MeasurementTypeNotSupported, fmt.Errorf("unsupported measurement type %q", mtype))
 		}
 	}
 
@@ -189,28 +184,19 @@ func Verify(
 	// If there are reference values with a higher trust level present, the remote attestation
 	// must fail
 	if !hwAttest && aggCertLevel > 1 {
-		log.Debugf("No hardware trust anchor measurements present but claimed certification level is %v, which requires a hardware trust anchor", aggCertLevel)
-		result.ErrorCodes = append(result.ErrorCodes, ar.InvalidCertLevel)
-		result.Success = false
+		result.SetErr(ar.InvalidCertLevel, fmt.Errorf("certification level %v requires hw trust anchor", aggCertLevel))
 	}
 	result.CertLevel = aggCertLevel
 
 	// Validate policies if specified
-	result.PolicySuccess = true
 	if policies != nil {
 		p, ok := policyEngines[polEng]
 		if !ok {
-			log.Debugf("Internal error: policy engine %v not implemented", polEng)
-			result.Success = false
-			result.ErrorCodes = append(result.ErrorCodes, ar.PolicyEngineNotImplemented)
-			result.PolicySuccess = false
+			result.SetErr(ar.PolicyEngineNotImplemented)
 		} else {
 			ok = p.Validate(policies, result)
 			if !ok {
-				log.Debug("Custom policy validation failed")
-				result.Success = false
-				result.ErrorCodes = append(result.ErrorCodes, ar.VerifyPolicies)
-				result.PolicySuccess = false
+				result.SetErr(ar.VerifyPolicies)
 			}
 		}
 	} else {
@@ -224,7 +210,7 @@ func Verify(
 	}
 	result.Created = time.Now().Format(time.RFC3339Nano)
 
-	if result.Success {
+	if result.Summary.Success {
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
 	} else {
 		log.Infof("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
@@ -258,7 +244,7 @@ func verifyAr(attestationReport []byte, verifier interface{}, s ar.Serializer,
 		return nil, result, ar.InvalidVersion
 	}
 
-	return &report, result, ar.NotSet
+	return &report, result, ar.NotSpecified
 }
 
 // verifyMetadata takes the metadata map with keys being the hashes of the raw metadata items,
@@ -267,42 +253,49 @@ func verifyAr(attestationReport []byte, verifier interface{}, s ar.Serializer,
 // starting from an inherently trusted root manifest, all manifests must have a compatible
 // base layer.
 func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[string][]byte,
-) (ar.MetadataSummary, []ar.ErrorCode, bool) {
+) (ar.MetadataSummary, bool) {
 
 	results := ar.MetadataSummary{}
-	errCodes := make([]ar.ErrorCode, 0)
 	success := true
 	var err error
 
 	for hash, meta := range metadatamap {
 
+		log.Debugf("Validating metadata item %v...", hash)
+
 		result, payload, ok := s.Verify(meta, cas)
 		if !ok {
-			log.Debugf("Validation of metadata item %v failed", hash)
+			log.Debugf("Signature verification of metadata item %v failed", hash)
 			success = false
 			// Still unpack metadata item for validation-result diagnosis
 			payload, err = s.GetPayload(meta)
 			if err != nil {
-				// Summary and error code have already been set in verify
-				log.Debugf("Get unverified payload of metadata item %v failed: %v", hash, err)
+				result.Summary.SetErr(ar.ExtractPayload, err)
+			} else {
+				log.Debug("Extracted unverified JWS payload")
 			}
+		} else {
+			log.Debugf("Signature verification of metadata item %v successful", hash)
 		}
 
 		err := s.Unmarshal(payload, &result.Metadata)
 		if err != nil {
-			log.Debugf("Unpacking of metadata item %v failed: %v", hash, err)
-			result.Summary.Success = false
-			result.Summary.ErrorCode = ar.Parse
+			result.Summary.SetErr(ar.ParseMetadata, err)
 			success = false
+		} else {
+			log.Debugf("Parse metadata %v: %v successful", result.Metadata.Type, result.Metadata.Name)
 		}
 
 		result.ValidityCheck = checkValidity(result.Metadata.Validity)
 		if !result.ValidityCheck.Success {
-			log.Debugf("%v: %v expired (NotBefore: %v, NotAfter: %v)", result.Metadata.Type, result.Metadata.Name, result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
+			log.Debugf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
+				result.Metadata.Type, result.Metadata.Name,
+				result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
 			result.Summary.Success = false
 			success = false
 		} else {
-			log.Debugf("Checking validity of %v: %v successful", result.Metadata.Type, result.Metadata.Name)
+			log.Debugf("Checking expiration of %v: %v successful",
+				result.Metadata.Type, result.Metadata.Name)
 		}
 
 		switch result.Metadata.Type {
@@ -313,35 +306,34 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		case "Manifest":
 			results.ManifestResults = append(results.ManifestResults, result)
 		default:
+			results.UnknownResults = append(results.UnknownResults, result)
 			log.Debugf("Unknown manifest type %v", result.Metadata.Type)
 			success = false
-			errCodes = append(errCodes, ar.UnknownMetadata)
 		}
-
+		log.Debugf("Finished validation of metadata item %v: %v", hash, result.Summary.Success)
 	}
 
-	// Check metadata compatibility and update device description result
-	if results.DevDescResult.Name == "" {
-		log.Debugf("Device description not present")
-		success = false
-		errCodes = append(errCodes, ar.DeviceDescriptionNotPresent)
-	}
-
-	r, errCode, ok := checkMetadataCompatibility(&results)
-	if !ok {
+	r := checkMetadataCompatibility(&results)
+	if !r.Summary.Success {
 		success = false
 	}
 	results.CompatibilityResult = *r
-	if errCode != ar.NotSet {
-		errCodes = append(errCodes, errCode)
-	}
 
-	return results, errCodes, success
+	return results, success
 }
 
-func checkMetadataCompatibility(metadata *ar.MetadataSummary) (*ar.CompatibilityResult, ar.ErrorCode, bool) {
+func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityResult {
 
-	success := true
+	result := &ar.CompatibilityResult{
+		Summary: ar.Result{
+			Success: true,
+		},
+	}
+
+	// Check metadata compatibility and update device description result
+	if metadata.DevDescResult.Name == "" {
+		result.Summary.SetErr(ar.DeviceDescriptionNotPresent)
+	}
 
 	// Gather all manifest names referenced in the manifest descriptions
 	descManifests := make([]string, 0, len(metadata.DevDescResult.Descriptions))
@@ -363,7 +355,7 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) (*ar.Compatibility
 		ok := internal.Contains(desc.Manifest, manifestNames)
 		if !ok {
 			log.Debugf("No manifest for manifest description: %v", desc.Manifest)
-			success = false
+			result.Summary.SetErr(ar.NotSpecified)
 		}
 
 		r := ar.Result{
@@ -383,7 +375,7 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) (*ar.Compatibility
 		ok := internal.Contains(m.Name, descManifests)
 		if !ok {
 			log.Debugf("No manifest description for manifest: %v", m.Name)
-			success = false
+			result.Summary.SetErr(ar.NotSpecified)
 			r := ar.Result{
 				Success:       false,
 				Got:           m.Name,
@@ -397,22 +389,15 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) (*ar.Compatibility
 	// Check that each manifest has a compatible base layer
 	manifestResults, manifestCompatibility, errCode, ok := processManifests(metadata.ManifestResults)
 	if !ok {
-		log.Debug("Manifest check failed")
-		success = false
+		result.Summary.SetErr(errCode)
 	}
 	metadata.ManifestResults = manifestResults
 
-	result := &ar.CompatibilityResult{
-		Summary: ar.Result{
-			Success:   success,
-			ErrorCode: errCode,
-		},
-		DescriptionMatch:      descriptionMatch,
-		ManifestMatch:         manifestMatch,
-		ManifestCompatibility: manifestCompatibility,
-	}
+	result.DescriptionMatch = descriptionMatch
+	result.ManifestMatch = manifestMatch
+	result.ManifestCompatibility = manifestCompatibility
 
-	return result, errCode, success
+	return result
 }
 
 func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.Result, ar.ErrorCode, bool) {
@@ -493,7 +478,7 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 	// Add unplaced manifests to the end of the list
 	sorted = append(sorted, unplaced...)
 
-	return sorted, results, ar.NotSet, success
+	return sorted, results, ar.NotSpecified, success
 }
 
 func hasCompatibleBaseLayer(baseLayers []string, processed map[string]bool) bool {
@@ -511,30 +496,26 @@ func checkValidity(val ar.Validity) ar.Result {
 
 	notBefore, err := time.Parse(time.RFC3339, val.NotBefore)
 	if err != nil {
-		log.Debugf("Failed to parse NotBefore time. Time.Parse returned %v", err)
-		result.Success = false
-		result.ErrorCode = ar.ParseTime
+		result.SetErr(ar.ParseTime, err)
 		return result
 	}
 	notAfter, err := time.Parse(time.RFC3339, val.NotAfter)
 	if err != nil {
-		log.Debugf("Failed to parse NotAfter time. Time.Parse returned %v", err)
-		result.Success = false
-		result.ErrorCode = ar.ParseTime
+		result.SetErr(ar.ParseTime, err)
 		return result
 	}
 	currentTime := time.Now()
 
 	if notBefore.After(currentTime) {
-		log.Debug("Validity check failed: Artifact is not valid yet")
-		result.Success = false
-		result.ErrorCode = ar.NotYetValid
+		result.SetErr(ar.NotYetValid)
+		result.Got = currentTime.String()
+		result.ExpectedBetween = []string{notBefore.String(), notAfter.String()}
 	}
 
 	if currentTime.After(notAfter) {
-		log.Debug("Validity check failed: Artifact validity has expired")
-		result.Success = false
-		result.ErrorCode = ar.Expired
+		result.SetErr(ar.Expired)
+		result.Got = currentTime.String()
+		result.ExpectedBetween = []string{notBefore.String(), notAfter.String()}
 	}
 
 	return result
@@ -576,14 +557,16 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 		if ext.Id.String() == oid {
 			log.Debugf("Found %v, length %v, values %v", oid, len(ext.Value), ext.Value)
 			if len(ext.Value) != 3 && len(ext.Value) != 4 {
-				log.Debugf("extension %v value unexpected length %v (expected 3 or 4)",
-					oid, len(ext.Value))
-				return ar.Result{Success: false, ErrorCode: ar.OidLength}, false
+				result := ar.Result{}
+				result.SetErr(ar.OidLength, fmt.Errorf("extension %v value unexpected length %v (expected 3 or 4)",
+					oid, len(ext.Value)))
+				return result, false
 			}
 			if ext.Value[0] != 0x2 {
-				log.Debugf("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
-					oid, ext.Value[0])
-				return ar.Result{Success: false, ErrorCode: ar.OidTag}, false
+				result := ar.Result{}
+				result.SetErr(ar.OidTag, fmt.Errorf("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
+					oid, ext.Value[0]))
+				return result, false
 			}
 			if ext.Value[1] == 0x1 {
 				if ext.Value[2] != value {
@@ -609,9 +592,11 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 					}, false
 				}
 			} else {
-				log.Debugf("extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
-					oid, ext.Value[1])
-				return ar.Result{Success: false, ErrorCode: ar.OidLength}, false
+				result := ar.Result{}
+				result.SetErr(ar.OidLength, fmt.Errorf(
+					"extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
+					oid, ext.Value[1]))
+				return result, false
 			}
 			return ar.Result{
 				Success: true,
@@ -620,8 +605,10 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 		}
 	}
 
-	log.Debugf("extension %v not present in certificate", oid)
-	return ar.Result{Success: false, ErrorCode: ar.OidNotPresent}, false
+	result := ar.Result{}
+	result.SetErr(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
+
+	return result, false
 }
 
 func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Result, bool) {
@@ -645,8 +632,9 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 		}
 	}
 
-	log.Debugf("extension %v not present in certificate", oid)
-	return ar.Result{Success: false, ErrorCode: ar.OidNotPresent}, false
+	result := ar.Result{}
+	result.SetErr(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
+	return result, false
 }
 
 func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {

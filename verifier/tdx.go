@@ -167,7 +167,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 
 	// Match measurement root CAs against reference root CA fingerprint
 	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
-	if errCode != ar.NotSet {
+	if errCode != ar.NotSpecified {
 		result.Summary.SetErr(errCode)
 		return result, false
 	}
@@ -217,7 +217,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	// Verify the measurement registers (MRTD, RTMRs) against the reference values
 	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody,
 		measurement.Artifacts, referenceValues)
-	if errCode != ar.NotSet || !ok {
+	if errCode != ar.NotSpecified || !ok {
 		log.Debugf("Failed to recalculate measurement registers")
 		ok = false
 		result.Summary.SetErr(errCode)
@@ -580,7 +580,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		}
 	}
 
-	return mrResults, detailedResults, ar.NotSet, success
+	return mrResults, detailedResults, ar.NotSpecified, success
 }
 
 func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbInfo) ([]ar.DigestResult, bool) {
