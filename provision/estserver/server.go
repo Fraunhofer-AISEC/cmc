@@ -686,7 +686,7 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	// be created)
 	result := verifier.Verify(report, nonce[:], csr.PublicKey, cas, nil,
 		verifier.PolicyEngineSelect_None, internal.ConvertToMap(metadata))
-	if !result.Success {
+	if !result.Summary.Success {
 		result.PrintErr()
 		return fmt.Errorf("failed to verify attestation report")
 	}

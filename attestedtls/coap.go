@@ -170,7 +170,7 @@ func (a CoapApi) verifyAR(
 	}
 
 	// check results
-	if !verifyResp.Result.Success {
+	if !verifyResp.Result.Summary.Success {
 		return errors.New("attestation report verification failed")
 	}
 

@@ -140,7 +140,7 @@ func (a GrpcApi) verifyAR(
 	}
 
 	// check results
-	if !result.Success {
+	if !result.Summary.Success {
 		return errors.New("attestation report verification failed")
 	}
 	return nil
