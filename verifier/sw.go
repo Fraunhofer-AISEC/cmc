@@ -74,6 +74,8 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	}
 
 	// Check that reference values are reflected by mandatory measurements
+	log.Debugf("Validating %v reference value(s) against measurements..", len(refVals))
+
 	for _, ref := range refVals {
 		found := false
 		for _, swm := range measurement.Artifacts {
@@ -120,10 +122,13 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 			}
 		}
 	}
+	log.Debugf("Finished validating reference values")
 
 	// Check that every measurement is reflected by a reference value
+	log.Debugf("Validating %v artifact(s)..", len(measurement.Artifacts))
 	aggregatedHash := make([]byte, 32)
 	for _, swm := range measurement.Artifacts {
+		log.Debugf("Validating %v measurement(s)..", len(swm.Events))
 		for _, event := range swm.Events {
 			found := false
 			for _, ref := range refVals {
@@ -185,6 +190,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 			}
 		}
 	}
+	log.Debugf("Finished validating artifacts")
 
 	// Verify recalculated aggregated hash against evidence hash
 	if !bytes.Equal(aggregatedHash, evidence.Sha256) {
@@ -232,7 +238,7 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.
 		// TODO load rules
 		err = ValidateConfig(refConvSpec, measConvSpec, map[string]interface{}{})
 		if err != nil {
-			log.Debugf("Failed to validate specs: %v", err)
+			log.Debugf("Failed to validate OCI config: %v", err)
 			return nil, false, nil
 		}
 
