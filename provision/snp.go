@@ -221,8 +221,6 @@ func (s *SnpConfig) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
 	}
 }
 
-func cpuid(op uint32) (eax, ebx, ecx, edx uint32)
-
 func downloadVcek(url string) (*x509.Certificate, int, error) {
 
 	resp, err := http.Get(url)
