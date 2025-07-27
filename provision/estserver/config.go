@@ -309,7 +309,6 @@ func printConfig(c *config) {
 	log.Infof("Running estserver from working directory %v", wd)
 
 	log.Debug("Using the following configuration:")
-	log.Debugf("\tToken path          : %v", c.TokenPath)
 	log.Debugf("\tEST server address  : %v", c.EstAddr)
 	log.Debugf("\tEST CA key file     : %v", c.EstCaKey)
 	log.Debugf("\tEST CA cert chain   : %v", strings.Join(c.EstCaChain, ","))
