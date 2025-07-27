@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nodefaults || tdx
+//go:build amd64 && (!nodefaults || tdx)
 
 package cmc
 
