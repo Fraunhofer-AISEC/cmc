@@ -1,3 +1,4 @@
+//go:build amd64
 // +build amd64
 
 TEXT ·cpuid(SB), 7, $0
