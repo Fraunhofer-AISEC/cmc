@@ -211,6 +211,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									MrConfigId:    mrConfigId,
 								},
 								TdAttributes: ar.TDAttributes{
+									// Invalid debug value
 									Debug: true,
 								},
 								Xfam: validXFAM,
@@ -224,7 +225,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Invalid Collateral",
+			name: "Missing Collateral",
 			args: args{
 				measurement: &ar.Measurement{
 					Type:     "TDX Measurement",
@@ -249,8 +250,9 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 						},
 					},
 				},
-				refvals:        validTdxRefvals,
-				nonce:          validTDXNonce,
+				refvals: validTdxRefvals,
+				nonce:   validTDXNonce,
+				// Missing collateral
 				omitCollateral: true,
 			},
 			want: false,

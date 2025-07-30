@@ -531,6 +531,7 @@ const (
 	IllegalTdxMrIndex
 	ParseKey
 	ExtractPayload
+	TdxVerification
 )
 
 func (e ErrorCode) String() string {
@@ -699,6 +700,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Parse key)", int(e))
 	case ExtractPayload:
 		return fmt.Sprintf("%v (Extract Payload)", int(e))
+	case TdxVerification:
+		return fmt.Sprintf("%v (TDX Verification)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
