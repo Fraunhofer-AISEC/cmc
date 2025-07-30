@@ -70,7 +70,7 @@ type MetadataSummary struct {
 
 type MetadataResult struct {
 	Metadata
-	Summary        Result            `json:"result" cbor:"40,keyasint"`
+	Summary        Result            `json:"summary" cbor:"40,keyasint"`
 	ValidityCheck  Result            `json:"validityCheck,omitempty" cbor:"41,keyasint,omitempty"`
 	SignatureCheck []SignatureResult `json:"signatureValidation" cbor:"42,keyasint,omitempty"`
 }
@@ -187,7 +187,7 @@ type TdxResult struct {
 }
 
 type QeReportResult struct {
-	Summary        Result `json:"success" cbor:"0,keyasint"`
+	Summary        Result `json:"summary" cbor:"0,keyasint"`
 	MrSigner       Result `json:"mrsigner" cbor:"1,keyasint"`
 	IsvProdId      Result `json:"isvProdId" cbor:"2,keyasint"`
 	MiscSelect     Result `json:"miscSelect" cbor:"3,keyasint"`
@@ -197,7 +197,7 @@ type QeReportResult struct {
 }
 
 type TcbInfoResult struct {
-	Summary        Result `json:"success" cbor:"0,keyasint"`
+	Summary        Result `json:"summary" cbor:"0,keyasint"`
 	Id             Result `json:"id" cbor:"1,keyasint"`
 	Version        Result `json:"version" cbor:"2,keyasint"`
 	TcbLevelStatus string `json:"status" cbor:"5,keyasint"`
