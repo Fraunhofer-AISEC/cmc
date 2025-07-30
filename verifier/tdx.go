@@ -155,6 +155,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		return result, ok
 	} else {
 		result.Freshness.Success = true
+		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 	}
 
 	// Extract certificate chain from quote
