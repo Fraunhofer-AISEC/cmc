@@ -114,6 +114,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 		return result, false
 	} else {
 		result.Freshness.Success = true
+		result.Freshness.Got = hex.EncodeToString(nonce)
 	}
 
 	// Obtain collateral from measurements
