@@ -22,7 +22,9 @@ tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1
 tools/measure-bundle/measure-bundle
 tools/schema-generator/schema-generator
 tools/parsetdxmrs/parsetdxmrs
-tools/dump-tdx-quote/dump-tdx-quote
+tools/tdxtool/tdxtool
+tools/snptool/snptool
+tools/azuretool/azuretool
 tools/hextobin/hextobin
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
