@@ -134,7 +134,7 @@ func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 		return ar.Measurement{}, errors.New("internal error: SNP object is nil")
 	}
 
-	data, err := getMeasurement(nonce, snp.vmpl)
+	data, err := GetMeasurement(nonce, snp.vmpl)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to get SNP Measurement: %w", err)
 	}
@@ -194,7 +194,7 @@ func (snp *Snp) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func getMeasurement(nonce []byte, vmpl int) ([]byte, error) {
+func GetMeasurement(nonce []byte, vmpl int) ([]byte, error) {
 
 	if len(nonce) > 64 {
 		return nil, errors.New("user Data must be at most 64 bytes")
@@ -281,7 +281,7 @@ func (snp *Snp) provision(c *ar.DriverConfig) error {
 	}
 
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-	snp.akChain, err = fetchAk(c.Provisioner, c)
+	snp.akChain, err = fetchAk(c)
 	if err != nil {
 		return fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
@@ -296,7 +296,7 @@ func (snp *Snp) provision(c *ar.DriverConfig) error {
 	return nil
 }
 
-func fetchAk(provisioner provision.Provisioner, c *ar.DriverConfig) ([]*x509.Certificate, error) {
+func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Generate random nonce
 	nonce := make([]byte, 64)
@@ -308,7 +308,7 @@ func fetchAk(provisioner provision.Provisioner, c *ar.DriverConfig) ([]*x509.Cer
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
 	// Fetch an initial attestation report to determine which key is used.
-	arRaw, err := getMeasurement(nonce, c.Vmpl)
+	arRaw, err := GetMeasurement(nonce, c.Vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
@@ -333,7 +333,7 @@ func fetchAk(provisioner provision.Provisioner, c *ar.DriverConfig) ([]*x509.Cer
 	if akType == internal.VCEK {
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = provisioner.GetSnpVcek(s.ChipId, s.CurrentTcb)
+		akCert, err = c.Provisioner.GetSnpVcek(s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
@@ -355,7 +355,7 @@ func fetchAk(provisioner provision.Provisioner, c *ar.DriverConfig) ([]*x509.Cer
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
 	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := provisioner.GetSnpCa(akType)
+	ca, err := c.Provisioner.GetSnpCa(akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
