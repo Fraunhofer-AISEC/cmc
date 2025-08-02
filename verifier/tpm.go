@@ -59,6 +59,7 @@ func verifyTpmMeasurements(
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
 		result.Freshness.Success = true
+		result.Freshness.Got = hex.EncodeToString(nonce)
 		log.Debugf("Successfully verified nonce %v", hex.EncodeToString(nonce))
 	} else {
 		log.Debugf("Nonces mismatch: Supplied Nonce = %v, TPM Quote Nonce = %v)",

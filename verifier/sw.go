@@ -70,7 +70,8 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	} else {
 		result.Freshness.Success = true
-		log.Debugf("Successfully verified nonce %v", hex.EncodeToString(nonce))
+		result.Freshness.Got = hex.EncodeToString(nonce)
+		log.Debug("Successfully verified nonce")
 	}
 
 	// Check that reference values are reflected by mandatory measurements

@@ -141,6 +141,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		result.Freshness.Got = hex.EncodeToString(s.ReportData[:])
 		ok = false
 	} else {
+		result.Freshness.Got = hex.EncodeToString(nonce)
 		result.Freshness.Success = true
 	}
 

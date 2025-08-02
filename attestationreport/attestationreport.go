@@ -28,7 +28,7 @@ import (
 
 // The attestation report version
 const (
-	arVersion = "1.4.2"
+	arVersion = "1.4.3"
 )
 
 func GetVersion() string {
