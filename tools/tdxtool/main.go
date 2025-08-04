@@ -261,7 +261,7 @@ func parseTdReport(in string) error {
 		return fmt.Errorf("failed to read quote: %w", err)
 	}
 
-	tdReport, err := DecodeTdReport(data)
+	tdReport, err := verifier.DecodeTdReport(data)
 	if err != nil {
 		return fmt.Errorf("failed to decode TDREPORT: %w", err)
 	}

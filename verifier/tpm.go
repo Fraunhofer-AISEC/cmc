@@ -90,7 +90,7 @@ func verifyTpmMeasurements(
 		return result, false
 	}
 
-	result.Signature.SignCheck = verifyTpmQuoteSignature(measurement.Evidence, measurement.Signature, mCerts[0])
+	result.Signature.SignCheck = VerifyTpmQuoteSignature(measurement.Evidence, measurement.Signature, mCerts[0])
 	if !result.Signature.SignCheck.Success {
 		result.Summary.Success = false
 	}
@@ -371,7 +371,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 	return tpmResult, detailedResults, success
 }
 
-func verifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Result {
+func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Result {
 
 	buf := new(bytes.Buffer)
 	buf.Write((sig))
