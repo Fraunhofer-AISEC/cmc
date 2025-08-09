@@ -54,13 +54,15 @@ type MetadataDigest struct {
 
 // Measurement represents the attestation report
 // elements of type 'TPM Measurement', 'SNP Measurement', 'TDX Measurement',
-// 'SGX Measurement', 'IAS Measurement' or 'SW Measurement'
+// 'SGX Measurement', 'IAS Measurement', 'SW Measurement', 'Azure TDX Measurement',
+// 'Azure SNP Measurement', or 'Azure vTPM Measurement'
 type Measurement struct {
 	Type      string     `json:"type" cbor:"0,keyasint"`
 	Evidence  []byte     `json:"evidence,omitempty" cbor:"1,keyasint"`
 	Certs     [][]byte   `json:"certs,omitempty" cbor:"3,keyasint"`
 	Signature []byte     `json:"signature,omitempty" cbor:"2,keyasint,omitempty"`
 	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
+	Claims    []byte     `json:"claims,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // SwEvidence represents the CMC's own format for software-based container measurement
@@ -356,7 +358,7 @@ type Name struct {
 // For signing, the driver provides handles for identity keys.
 type Driver interface {
 	Init(c *DriverConfig) error
-	Measure(nonce []byte) (Measurement, error)
+	Measure(nonce []byte) ([]Measurement, error)
 	Lock() error
 	Unlock() error
 	GetKeyHandles(keyType KeySelection) (crypto.PrivateKey, crypto.PublicKey, error)
@@ -399,6 +401,7 @@ func (r *ReferenceValue) GetManifest() (*Metadata, error) {
 	if r.manifest == nil {
 		return nil, fmt.Errorf("internal error: manifest is nil")
 	}
+	log.Warnf("Found manifest for %v", r.SubType)
 	return r.manifest, nil
 }
 

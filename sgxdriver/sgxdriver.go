@@ -112,33 +112,33 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
-func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
+func (sgx *Sgx) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	log.Debug("Collecting SGX measurements")
 
 	if sgx == nil {
-		return ar.Measurement{}, errors.New("internal error: SGX object is nil")
+		return nil, errors.New("internal error: SGX object is nil")
 	}
 
 	data, err := getMeasurement(nonce)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get SGX Measurement: %w", err)
+		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}
 
 	quote, err := verifier.DecodeSgxReport(data)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode SGX quote: %w", err)
+		return nil, fmt.Errorf("failed to decode SGX quote: %w", err)
 	}
 
 	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
 	var quoteCerts verifier.SgxCertificates
 	if quote.QuoteSignatureData.QECertDataType != 5 {
-		return ar.Measurement{}, fmt.Errorf("quoting enclave cert data type not supported: %v",
+		return nil, fmt.Errorf("quoting enclave cert data type not supported: %v",
 			quote.QuoteSignatureData.QECertDataType)
 	}
 	quoteCerts, err = verifier.ParseCertificates(quote.QuoteSignatureData.QECertData, true)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to parse certificate chain from QECertData: %w", err)
+		return nil, fmt.Errorf("failed to parse certificate chain from QECertData: %w", err)
 	}
 	log.Tracef("PCK Leaf Certificate: %v",
 		string(internal.WriteCertPem(quoteCerts.PCKCert)))
@@ -146,14 +146,14 @@ func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
 	// Get FMSPC
 	exts, err := pcs.PckCertificateExtensions(quoteCerts.PCKCert)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+		return nil, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
 	}
 	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	// Fetch collateral
 	collateral, err := verifier.FetchCollateral(exts.FMSPC, quoteCerts.PCKCert, verifier.SGX_QUOTE_TYPE)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get SGX collateral: %w", err)
+		return nil, fmt.Errorf("failed to get SGX collateral: %w", err)
 	}
 
 	measurement := ar.Measurement{
@@ -172,7 +172,7 @@ func (sgx *Sgx) Measure(nonce []byte) (ar.Measurement, error) {
 		},
 	}
 
-	return measurement, nil
+	return []ar.Measurement{measurement}, nil
 }
 
 func getMeasurement(nonce []byte) ([]byte, error) {

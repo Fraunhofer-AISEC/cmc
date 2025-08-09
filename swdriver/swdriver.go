@@ -149,12 +149,12 @@ func (sw *Sw) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (sw *Sw) Measure(nonce []byte) (ar.Measurement, error) {
+func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	log.Debug("Collecting SW measurements")
 
 	if !sw.ctr {
-		return ar.Measurement{}, errors.New("sw driver specified but use containers equals false")
+		return nil, errors.New("sw driver specified but use containers equals false")
 	}
 
 	artifacts := make([]ar.Artifact, 0)
@@ -166,13 +166,13 @@ func (sw *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		// If CMC container measurements are used, add the list of executed containers
 		data, err := os.ReadFile(sw.ctrLog)
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to read container measurements: %w", err)
+			return nil, fmt.Errorf("failed to read container measurements: %w", err)
 		}
 
 		var measureList []ar.MeasureEvent
 		err = sw.serializer.Unmarshal(data, &measureList)
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to unmarshal measurement list: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 		}
 
 		artifact := ar.Artifact{
@@ -189,7 +189,7 @@ func (sw *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 	} else if errors.Is(err, os.ErrNotExist) {
 		log.Trace("No container measurements to read")
 	} else {
-		return ar.Measurement{}, fmt.Errorf("failed to check container measurement file: %w", err)
+		return nil, fmt.Errorf("failed to check container measurement file: %w", err)
 	}
 
 	// Generate Evidence = Nonce | Aggregated_Hash
@@ -198,11 +198,11 @@ func (sw *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		Sha256: aggregatedHash,
 	})
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to marshal evidence: %w", err)
+		return nil, fmt.Errorf("failed to marshal evidence: %w", err)
 	}
 	evidence, err := sw.serializer.Sign(data, sw, ar.AK)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to sign sw evidence: %w", err)
+		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
 	}
 
 	measurement := ar.Measurement{
@@ -212,7 +212,7 @@ func (sw *Sw) Measure(nonce []byte) (ar.Measurement, error) {
 		Certs:     internal.WriteCertsDer(sw.akChain),
 	}
 
-	return measurement, nil
+	return []ar.Measurement{measurement}, nil
 }
 
 func provisioningRequired(p string) bool {

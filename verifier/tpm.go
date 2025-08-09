@@ -46,7 +46,7 @@ func verifyTpmMeasurements(
 		TpmResult: &ar.TpmResult{},
 	}
 
-	log.Debug("Verifying TPM measurements")
+	log.Debug("Verifying TPM measurements...")
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(measurement.Evidence)
@@ -94,7 +94,6 @@ func verifyTpmMeasurements(
 	if !result.Signature.SignCheck.Success {
 		result.Summary.Success = false
 	}
-	log.Debug("Successfully verified TPM quote signature")
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
@@ -115,6 +114,12 @@ func verifyTpmMeasurements(
 		result.Signature.Certs = append(result.Signature.Certs, chainExtracted)
 	}
 
+	if result.Summary.Success {
+		log.Debugf("Successfully verified TPM measurements")
+	} else {
+		log.Debugf("Failed to verify TPM measurements")
+	}
+
 	return result, result.Summary.Success
 }
 
@@ -127,6 +132,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 	calculatedPcrs := make(map[int][]byte)
 
 	// Iterate over the provided measurement
+	log.Debugf("Recalculating PCRs with %v measurement artifacts...", len(measurement.Artifacts))
 	for _, measuredPcr := range measurement.Artifacts {
 
 		pcrResult := ar.DigestResult{
@@ -321,6 +327,8 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			}
 		}
 		if !foundPcr {
+			log.Debugf("Failed to find required PCR%v reference value %v: %v in measurements",
+				ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
 			result := ar.DigestResult{
 				Type:        "Reference Value",
 				SubType:     ref.SubType,
@@ -373,12 +381,15 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 
 func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Result {
 
+	log.Debugf("Verifying TPM quote (length %v) signature (length %v) against certificate %v...",
+		len(quote), len(sig), cert.Subject.CommonName)
+
 	buf := new(bytes.Buffer)
 	buf.Write((sig))
 	tpmtSig, err := tpm2.DecodeSignature(buf)
 	if err != nil {
 		result := ar.Result{}
-		result.SetErr(ar.Parse, err)
+		result.SetErr(ar.Parse, fmt.Errorf("failed to decode quote signature: %w", err))
 		return result
 	}
 
@@ -410,6 +421,9 @@ func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 		result.SetErr(ar.VerifySignature, err)
 		return result
 	}
+
+	log.Debugf("Successfully verified TPM quote signature")
+
 	return ar.Result{Success: true}
 }
 

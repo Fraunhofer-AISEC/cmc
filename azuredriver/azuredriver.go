@@ -16,85 +16,23 @@
 package azuredriver
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path"
+	"strings"
+	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
-	"github.com/go-jose/go-jose/v4"
 	"github.com/sirupsen/logrus"
-
-	"github.com/google/go-tdx-guest/pcs"
-	"github.com/google/go-tpm/legacy/tpm2"
-	"github.com/google/go-tpm/tpmutil"
 )
-
-type ReportType int
-
-const (
-	UNKNOWN ReportType = 0
-	SNP     ReportType = 2
-	TDX     ReportType = 4
-)
-
-type Azure struct {
-	akChain []*x509.Certificate
-	ikChain []*x509.Certificate
-	ikPriv  crypto.PrivateKey
-}
-
-type AzureReport struct {
-	Header        Header        // The Azure custom report header
-	ReportPayload [1184]byte    // The SNP attestation report or TDX TDREPORT
-	RuntimeData   RuntimeData   // Runtime data includes claims endorsed by hw report
-	RuntimeClaims RuntimeClaims // Runtime claims in JSON format
-}
-
-type Header struct {
-	Signature   [4]byte  // Expected: 0x414c4348 (HCLA)
-	Version     uint32   // Expected: 2
-	PayloadSize uint32   // Expected: 1184 (AMD SEV-SNP), 1024 (Intel TDX).
-	RequestType uint32   // Expected: 2
-	Status      [4]byte  // Reserved
-	Reserved    [12]byte // Reserved
-}
-
-type RuntimeData struct {
-	DataSize   uint32 // Size of runtime data
-	Version    uint32 // Format version. Expected: 1
-	ReportType uint32 // Expected: 2 (AMD SEV-SNP), 4 (Intel TDX)
-	HashType   uint32 // Runtime data hash. Expected: 1 (SHA-256), 2 (SHA-384), 3 (SHA-512)
-	ClaimSize  uint32 // The size of the runtime claims
-}
-
-type RuntimeClaims struct {
-	Keys     []jose.JSONWebKey `json:"keys"`             // Array JWK keys. Expected kid: HCLAkPub (vTPM AK public), HCLEkPub (vTPM EK public)
-	VmConfig VmConfig          `json:"vm-configuration"` // Azure confidential VM configuration.
-	UserData string            `json:"user-data"`        // Hardware report user data (nonce)
-}
-
-type VmConfig struct {
-	RootCertThumbPrint string `json:"root-cert-thumbprint"`
-	ConsoleEnabled     bool   `json:"console-enabled"`
-	SecureBoot         bool   `json:"secure-boot"`
-	TpmEnabled         bool   `json:"tpm-enabled"`
-	TpmPersisted       bool   `json:"tpm-persisted"`
-	VmUniqueId         string `json:"vmUniqueId"`
-}
 
 const (
 	akChainFile = "azure_ak_chain.pem"
@@ -102,23 +40,32 @@ const (
 	ikFile      = "azure_ik_private.key"
 )
 
-const (
-	imdsEndpoint = "http://169.254.169.254/acc"
-	quotePath    = "/tdquote"
-
-	nvIndexTdReport = tpmutil.Handle(0x01400001) // NV index to read
-	tpmDevicePath   = "/dev/tpm0"                // TODO reuse tpmdriver code to distinguish between tpmrm0 and tpm0
-)
-
 var log = logrus.WithField("service", "azuredriver")
+
+type Azure struct {
+	// Confidential Computing Parameters
+	ccAkChain []*x509.Certificate
+
+	// vTPM Parameters
+	mu         sync.Mutex
+	pcrs       []int
+	biosLog    bool
+	imaLog     bool
+	imaPcr     int
+	ctrLog     bool
+	ctrPcr     int
+	ctrLogFile string
+	serializer ar.Serializer
+
+	ikChain []*x509.Certificate
+	ikPriv  crypto.PrivateKey
+}
 
 func (azure *Azure) Name() string {
 	return "Azure Driver"
 }
 
 func (azure *Azure) Init(c *ar.DriverConfig) error {
-
-	var err error
 
 	// Initial checks
 	if azure == nil {
@@ -130,6 +77,14 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 	default:
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
+
+	azure.imaLog = c.Ima
+	azure.imaPcr = c.ImaPcr
+	azure.biosLog = c.MeasurementLog
+	azure.serializer = c.Serializer
+	azure.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
+	azure.ctrLogFile = c.CtrLog
+	azure.ctrPcr = c.CtrPcr
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
@@ -144,7 +99,7 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 	if provisioningRequired(c.StoragePath) {
 		log.Info("Performing Azure provisioning")
 
-		err = azure.provision(c)
+		err := azure.provision(c)
 		if err != nil {
 			return fmt.Errorf("failed to provision azure driver: %w", err)
 		}
@@ -156,7 +111,7 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 			}
 		}
 	} else {
-		err = azure.loadCredentials(c.StoragePath)
+		err := azure.loadCredentials(c.StoragePath)
 		if err != nil {
 			return fmt.Errorf("failed to load Azure credentials: %w", err)
 		}
@@ -165,82 +120,25 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-func (azure *Azure) Measure(nonce []byte) (ar.Measurement, error) {
+func (azure *Azure) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	log.Debug("Collecting azure measurements")
 
 	if azure == nil {
-		return ar.Measurement{}, errors.New("internal error: TDX object is nil")
+		return nil, errors.New("internal error: TDX object is nil")
 	}
 
-	// TODO JWKS
-	data, reportType, _, err := GetEvidence()
+	ccMeasurement, err := GetCcMeasurement(nonce, azure.ccAkChain)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get TDX Measurement: %w", err)
+		return nil, fmt.Errorf("failed to get TDX measurement: %w", err)
 	}
 
-	switch reportType {
-	case SNP:
-		return azure.createSnpMeasurement(data)
-	case TDX:
-		return azure.createTdxMeasurement(data)
-	}
-
-	return ar.Measurement{}, fmt.Errorf("failed to measure. Unknown report type %v", reportType)
-}
-
-func (azure *Azure) createSnpMeasurement(data []byte) (ar.Measurement, error) {
-	measurement := ar.Measurement{
-		Type:     "SNP Measurement",
-		Evidence: data,
-		Certs:    internal.WriteCertsDer(azure.akChain),
-	}
-	return measurement, nil
-}
-
-func (azure *Azure) createTdxMeasurement(data []byte) (ar.Measurement, error) {
-
-	// Decode attestation report to get FMSPC (required to fetch collateral)
-	quote, err := verifier.DecodeTdxReportV4(data)
+	vtpmMeasurement, err := azure.GetVtpmMeasurement(azure.pcrs, nonce)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode TDX quote: %w", err)
-	}
-	log.Tracef("PCK Leaf Certificate: %v",
-		string(internal.WriteCertPem(quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)))
-
-	// Get FMSPC
-	exts, err := pcs.PckCertificateExtensions(
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
-	}
-	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
-
-	// Fetch collateral
-	collateral, err := verifier.FetchCollateral(exts.FMSPC,
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert, verifier.TDX_QUOTE_TYPE)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get TDX collateral: %w", err)
+		return nil, fmt.Errorf("failed to get vTPM measurement: %w", err)
 	}
 
-	// Create measurement
-	measurement := ar.Measurement{
-		Type:     "TDX Measurement",
-		Evidence: data,
-		Certs:    internal.WriteCertsDer(azure.akChain),
-		Artifacts: []ar.Artifact{
-			{
-				Type: "TDX Collateral",
-				Events: []ar.MeasureEvent{
-					{
-						IntelCollateral: collateral,
-					},
-				},
-			},
-		},
-	}
-
-	return measurement, nil
+	return []ar.Measurement{ccMeasurement, vtpmMeasurement}, nil
 }
 
 func (azure *Azure) Lock() error {
@@ -257,11 +155,13 @@ func (azure *Azure) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypt
 	}
 
 	if sel == ar.AK {
-		if len(azure.akChain) == 0 {
+		// Return the CC AK chain, as it is required to establish trust. The TPM AK certificate
+		// is retrieved from the NVIndex if needed
+		if len(azure.ccAkChain) == 0 {
 			return nil, nil, fmt.Errorf("internal error: TDX AK certificate not present")
 		}
 		// Only return the public key, as the VCEK / VLEK is not directly accessible
-		return nil, azure.akChain[0].PublicKey, nil
+		return nil, azure.ccAkChain[0].PublicKey, nil
 	} else if sel == ar.IK {
 		return azure.ikPriv, &azure.ikPriv.(*ecdsa.PrivateKey).PublicKey, nil
 	}
@@ -269,229 +169,9 @@ func (azure *Azure) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypt
 }
 
 func (azure *Azure) GetCertChain(keyType ar.KeySelection) ([]*x509.Certificate, error) {
-	return nil, nil
-}
-
-func GetEvidence() ([]byte, ReportType, []jose.JSONWebKey, error) {
-
-	log.Debugf("Retrieving hardware report (SNP report or TDX quote)...")
-
-	report, reportType, jwks, err := GetAzureHwReport()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get TD report: %v\n", err)
-		os.Exit(1)
-	}
-
-	switch reportType {
-	case SNP:
-		return report, SNP, jwks, nil
-	case TDX:
-		quote, err := GetTdxQuote(report)
-		if err != nil {
-			return nil, 0, nil, fmt.Errorf("failed to get TDX quote: %w", err)
-		}
-		return quote, TDX, jwks, nil
-	}
-
-	return nil, 0, nil, fmt.Errorf("unknown report type %v. Expected %v or %v", reportType, SNP, TDX)
-}
-
-func GetTdxQuote(report []byte) ([]byte, error) {
-
-	encodedReport := base64.RawURLEncoding.EncodeToString(report)
-	imdsRequest := fmt.Sprintf(`{"report":"%s"}`, encodedReport)
-
-	quoteResponse, err := FetchTdxQuote(imdsRequest)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get quote from IMDS: %v\n", err)
-		os.Exit(1)
-	}
-
-	log.Debugf("Unmarshalling azure formatted TDX quote..")
-
-	var parsed struct {
-		Quote       string `json:"quote"`
-		RuntimeData struct {
-			Data string `json:"data"`
-		} `json:"runtimeData"`
-	}
-	if err := json.Unmarshal(quoteResponse, &parsed); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse quote JSON: %v\n", err)
-		os.Exit(1)
-	}
-
-	if parsed.Quote == "" {
-		fmt.Fprintf(os.Stderr, "Received empty quote from IMDS\n")
-		os.Exit(1)
-	}
-
-	quoteBytes, err := base64.RawURLEncoding.DecodeString(parsed.Quote)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to decode base64url quote: %v\n", err)
-		os.Exit(1)
-	}
-
-	log.Debugf("Successfully retrieved quote")
-
-	return quoteBytes, nil
-}
-
-func GetAzureReport() ([]byte, error) {
-
-	log.Debugf("Fetching azure report from vTPM NVIndex %x...", nvIndexTdReport)
-
-	// Open TPM device
-	rwc, err := os.OpenFile(tpmDevicePath, os.O_RDWR, 0)
-	if err != nil {
-		return nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
-	}
-	defer rwc.Close()
-
-	// Read NV index contents
-	data, err := tpm2.NVReadEx(rwc, nvIndexTdReport, tpm2.HandleOwner, "", 0)
-	if err != nil {
-		return nil, fmt.Errorf("NVRead failed: %w", err)
-	}
-
-	log.Debugf("Successfully fetched azure report")
-
-	return data, nil
-}
-
-func GetAzureHwReport() ([]byte, ReportType, []jose.JSONWebKey, error) {
-
-	data, err := GetAzureReport()
-	if err != nil {
-		return nil, UNKNOWN, nil, err
-	}
-
-	log.Debugf("Length of azure report: %v", len(data))
-
-	buf := bytes.NewBuffer(data)
-
-	// Parse header
-	var header Header
-	err = binary.Read(buf, binary.LittleEndian, &header)
-	if err != nil {
-		return nil, UNKNOWN, nil, fmt.Errorf("failed to decode Azure report header: %w", err)
-	}
-
-	log.Debug("Parsed header")
-	log.Debugf("\tHeader signature       : %v", string(header.Signature[:]))
-	log.Debugf("\tHeader version         : %v", header.Version)
-	log.Debugf("\tHeader payload size    : %v", header.PayloadSize)
-	log.Debugf("\tHeader request type    : %v", header.RequestType)
-
-	if string(header.Signature[:]) != "HCLA" {
-		return nil, UNKNOWN, nil, fmt.Errorf("unexpected header signature %q. Expected %q", string(header.Signature[:]), "HCLA")
-	}
-	if header.Version != 1 && header.Version != 2 {
-		return nil, UNKNOWN, nil, fmt.Errorf("unsupported header version %v. Expected %v, %v", header.Version, 1, 2)
-	}
-	if header.RequestType != 2 {
-		return nil, UNKNOWN, nil, fmt.Errorf("unsupported header request type %v. Expected %v", header.RequestType, 2)
-	}
-
-	// Parse payload
-	var payload [1184]byte
-	err = binary.Read(buf, binary.LittleEndian, &payload)
-	if err != nil {
-		return nil, UNKNOWN, nil, fmt.Errorf("failed to decode Azure report payload: %w", err)
-	}
-
-	// Parse runtime data
-	var rtdata RuntimeData
-	err = binary.Read(buf, binary.LittleEndian, &rtdata)
-	if err != nil {
-		return nil, UNKNOWN, nil, fmt.Errorf("failed to decode Azure report payload: %w", err)
-	}
-
-	log.Debug("Parsed runtime data")
-	log.Debugf("\tRuntimeData data size  : %v", rtdata.DataSize)
-	log.Debugf("\tRuntimeData version    : %v", rtdata.Version)
-	log.Debugf("\tRuntimeData report type: %v", rtdata.ReportType)
-	log.Debugf("\tRuntimeData hash type  : %v", rtdata.HashType)
-	log.Debugf("\tRuntimeData claim size : %v", rtdata.ClaimSize)
-
-	if rtdata.Version != 1 {
-		return nil, UNKNOWN, nil, fmt.Errorf("unsupported runtime data version %v. Expected %v", rtdata.Version, 1)
-	}
-
-	reportLen := 0
-	reportType := UNKNOWN
-	switch rtdata.ReportType {
-	case 2:
-		log.Debug("Detected AMD SEV-SNP report")
-		reportLen = 1184
-		reportType = SNP
-	case 4:
-		log.Debug("Detected Intel TDX report")
-		reportLen = 1024
-		reportType = TDX
-	default:
-		return nil, UNKNOWN, nil, fmt.Errorf("unsupported runtime data report type %v. Expected %v (SNP) or %v (TDX)", rtdata.ReportType, 2, 4)
-	}
-
-	// Parse runtime claims
-	rawClaims := buf.Bytes()[:rtdata.ClaimSize]
-	log.Debugf("Parsing claims size %v", len(rawClaims))
-	var claims RuntimeClaims
-	err = json.Unmarshal(rawClaims, &claims)
-	if err != nil {
-		return nil, UNKNOWN, nil, fmt.Errorf("failed to unmarshal claims: %w", err)
-	}
-
-	log.Debug("Parsed runtime claims")
-	log.Debugf("\tRoot cert thumbprint   : %q", claims.VmConfig.RootCertThumbPrint)
-	log.Debugf("\tConsole enabled        : %v", claims.VmConfig.ConsoleEnabled)
-	log.Debugf("\tSecure boot enabled    : %v", claims.VmConfig.SecureBoot)
-	log.Debugf("\tTPM enabled            : %v", claims.VmConfig.TpmEnabled)
-	log.Debugf("\tTPM persisted          : %v", claims.VmConfig.TpmPersisted)
-	log.Debugf("\tVM unique ID           : %q", claims.VmConfig.VmUniqueId)
-	log.Debugf("\tUser data              : %q", claims.UserData)
-	for _, key := range claims.Keys {
-		log.Debugf("\tJWK KeyID              : %v", key.KeyID)
-	}
-
-	return payload[:reportLen], reportType, claims.Keys, nil
-}
-
-func FetchTdxQuote(jsonRequest string) ([]byte, error) {
-
-	url := imdsEndpoint + quotePath
-
-	log.Debugf("Fetching quote from IMDS %v...", url)
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonRequest)))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request to IMDS failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("IMDS returned non-OK status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read IMDS response body: %w", err)
-	}
-
-	if len(body) == 0 {
-		return nil, fmt.Errorf("IMDS response was empty")
-	}
-
-	log.Debug("Successfully fetched quote")
-
-	return body, nil
+	// Return the CC AK chain, as it is required to establish trust. The TPM AK certificate
+	// is retrieved from the NVIndex if needed
+	return azure.ccAkChain, nil
 }
 
 func provisioningRequired(p string) bool {
@@ -535,8 +215,8 @@ func (azure *Azure) provision(c *ar.DriverConfig) error {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
-	// Fetch TDX certificate chain for TDX Attestation Key
-	azure.akChain, err = fetchAk(c)
+	// Fetch CC certificate chain for Attestation Key
+	azure.ccAkChain, err = azure.fetchAk(c)
 	if err != nil {
 		return fmt.Errorf("failed to get TDX cert chain: %w", err)
 	}
@@ -552,22 +232,22 @@ func (azure *Azure) provision(c *ar.DriverConfig) error {
 	return nil
 }
 
-func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
+func (azure *Azure) fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Fetch initial attestation report which contains AK cert chain
-	data, reportType, _, err := GetEvidence()
+	measurement, err := GetCcMeasurement(nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX Measurement: %w", err)
 	}
 
-	switch reportType {
-	case SNP:
-		return fetchSnpAk(c, data)
-	case TDX:
-		return fetchTdxAk(data)
+	switch measurement.Type {
+	case "Azure SNP Measurement":
+		return fetchSnpAk(c, measurement.Evidence)
+	case "Azure TDX Measurement":
+		return fetchTdxAk(measurement.Evidence)
 	}
 
-	return nil, fmt.Errorf("unknown report type %v. Expected %v or %v", reportType, SNP, TDX)
+	return nil, fmt.Errorf("unknown report type %v", measurement.Type)
 }
 
 func fetchSnpAk(c *ar.DriverConfig, data []byte) ([]*x509.Certificate, error) {
@@ -643,11 +323,11 @@ func (azure *Azure) loadCredentials(p string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read AK chain from %v: %w", p, err)
 	}
-	azure.akChain, err = internal.ParseCertsPem(data)
+	azure.ccAkChain, err = internal.ParseCertsPem(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Debugf("Parsed stored AK chain of length %v", len(azure.akChain))
+	log.Debugf("Parsed stored AK chain of length %v", len(azure.ccAkChain))
 
 	data, err = os.ReadFile(path.Join(p, ikChainFile))
 	if err != nil {
@@ -673,7 +353,7 @@ func (azure *Azure) loadCredentials(p string) error {
 
 func (azure *Azure) saveCredentials(p string) error {
 	akchainPem := make([]byte, 0)
-	for _, cert := range azure.akChain {
+	for _, cert := range azure.ccAkChain {
 		c := internal.WriteCertPem(cert)
 		akchainPem = append(akchainPem, c...)
 	}
