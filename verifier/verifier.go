@@ -164,6 +164,15 @@ func Verify(
 			}
 			result.Measurements = append(result.Measurements, *r)
 
+		case "Azure TDX Measurement", "Azure SNP Measurement", "Azure vTPM Measurement":
+			results, ok := verifyAzureMeasurements(report.Measurements, nonce, &metaResults.ManifestResults[0],
+				refVals["TDX Reference Value"], refVals["SNP Reference Value"], refVals["TPM Reference Value"],
+				s)
+			if !ok {
+				result.SetErr(ar.VerifyMeasurement, errors.New("Azure measurements"))
+			}
+			result.Measurements = append(result.Measurements, results...)
+
 		default:
 			result.SetErr(ar.MeasurementTypeNotSupported, fmt.Errorf("unsupported measurement type %q", mtype))
 		}

@@ -238,7 +238,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 func dec(s string) []byte {
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		log.Fatalf("Failed to decode: %v", err)
+		log.Fatalf("Failed to decode %v: %v", s, err)
 	}
 	return b
 }

@@ -126,17 +126,17 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
-func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
+func (snp *Snp) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	log.Debug("Collecting SNP measurements")
 
 	if snp == nil {
-		return ar.Measurement{}, errors.New("internal error: SNP object is nil")
+		return nil, errors.New("internal error: SNP object is nil")
 	}
 
 	data, err := GetMeasurement(nonce, snp.vmpl)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get SNP Measurement: %w", err)
+		return nil, fmt.Errorf("failed to get SNP Measurement: %w", err)
 	}
 
 	measurement := ar.Measurement{
@@ -145,7 +145,7 @@ func (snp *Snp) Measure(nonce []byte) (ar.Measurement, error) {
 		Certs:    internal.WriteCertsDer(snp.akChain),
 	}
 
-	return measurement, nil
+	return []ar.Measurement{measurement}, nil
 }
 
 // Lock implements the locking method for the attestation report signer interface

@@ -29,7 +29,7 @@ type TdReport struct {
 }
 
 type ReportMacStruct struct {
-	ReportType     ReportType
+	ReportType     TdReportType
 	Reserved1      [12]byte
 	CpuSvn         [16]byte
 	TeeTcbInfoHash [48]byte
@@ -62,7 +62,7 @@ type TdInfo struct {
 	Reserved      [64]byte
 }
 
-type ReportType struct {
+type TdReportType struct {
 	Type     byte
 	SubType  byte
 	Version  byte
