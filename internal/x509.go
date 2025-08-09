@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -180,15 +181,20 @@ func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x
 
 	leafCert := certs[0]
 
+	log.Debugf("Verifying cert %v", leafCert.Subject.CommonName)
+
 	intermediates := x509.NewCertPool()
 	for _, cert := range certs[1:] {
 		intermediates.AddCert(cert)
 	}
 
 	roots := x509.NewCertPool()
+	rootCns := make([]string, 0, len(cas))
 	for _, ca := range cas {
+		rootCns = append(rootCns, ca.Subject.CommonName)
 		roots.AddCert(ca)
 	}
+	log.Debugf("Verifying against root CAS: %v", strings.Join(rootCns, ","))
 
 	opts := x509.VerifyOptions{
 		Intermediates: intermediates,

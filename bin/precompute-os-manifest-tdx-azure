@@ -1,0 +1,144 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+# TODO set this to paths where your reproducible build outputs the required artifacts
+artifacts="${dir}/../../artifacts/azure-tdx"
+
+if [[ ! -d "${artifacts}" ]]; then
+  echo "Artifacts directory ${artifacts} does not exist. Abort.."
+  exit 1
+fi
+
+efi_shim="${artifacts}/shimx64.efi"
+cmdline="${artifacts}/cmdline"
+kernel="${artifacts}/vmlinuz"
+gpt="${artifacts}/ev_efi_gpt_event"
+efivars="${artifacts}/efivars"
+
+boot0000="${efivars}/Boot0000-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+secure_boot="${efivars}/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+pk="${efivars}/PK-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+kek="${efivars}/KEK-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+db="${efivars}/db-d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+dbx="${efivars}/dbx-d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+
+data="${dir}/data"
+input="${dir}/example-setup/metadata-templates"
+out="${data}/metadata-raw"
+
+
+device_description="${out}/device.description.json"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -d "${input}" ]]; then
+  echo "Data directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+mkdir -p "${out}"
+
+echo "Using ${data} as directory for local data"
+
+# Generate Intel SGX Root CA fingerprint
+echo "Calculating Intel SGX Root CA fingerprint"
+wget -O "${data}/pki/Intel_SGX_RootCA.pem" https://certificates.trustedservices.intel.com/Intel_SGX_Provisioning_Certification_RootCA.pem
+fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+
+# Generate reference values
+echo "Calculating reference values"
+
+set +e
+refs_tdx=$(calculate-tdx-mrs \
+    --mrs 2,3,4 \
+    --eventlog \
+    --format json \
+    --kernel "${kernel}" \
+    --cmdline "${cmdline}" \
+    --secureboot "${secure_boot}" \
+    --pk "${pk}" \
+    --kek "${kek}" \
+    --db "${db}" \
+    --dbx "${dbx}"
+)
+if [[ -z "${refs_tdx}" ]]; then
+    echo "calculate-tdx-mrs failed: empty reference values"
+    exit 1
+fi
+echo "${refs_tdx}" | jq empty 2>/dev/null || {
+    echo "calculate-tdx-mrs failed: '${refs_tdx}'"
+    exit 1
+}
+set -e
+
+mrowner="000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+xfam="e702060000000000"
+
+pcrs=9
+
+set +e
+refs_tpm=$(calculate-srtm-pcrs \
+        --format json \
+        --pcrs "${pcrs}" \
+        --eventlog \
+        --bootloader "${efi_shim}" \
+        --kernel "${kernel}" \
+        --cmdline "${cmdline}" \
+        --format json \
+)
+if [[ -z "${refs_tpm}" ]]; then
+    echo "calculate-srtm-pcrs failed: empty reference values"
+    exit 1
+fi
+set -e
+
+# Load manifest template and policy
+json=$(cat "${input}/manifest.json")
+
+name="de.test.os"
+
+# Insert manifest properties
+setjson "json" "name"                  "${name}"
+setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "json" "developerCommonName"   "test developer"
+setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "json" "description"           "OS Manifest"
+setarr  "json" "baseLayers"            "de.test.rtm"
+setjson "json" "certLevel"             3
+setjson "json" "caFingerprint"         "${fingerprint}"
+
+setarr    "json" "referenceValues"     "${refs_tdx}"
+extendarr "json" "referenceValues"     "${refs_tpm}"
+
+# Save the OS manifest
+echo "Writing ${out}/os.manifest.json"
+printf "%s\n" "${json}" > "${out}/os.manifest.json"
+
+# OS Manifest Description: Create corresponding OS manifest description
+osdesc=$(cat "${input}/manifest.description.json")
+osdesc=$(echo "${osdesc}" | jq ".name = \"${name}.description\"")
+osdesc=$(echo "${osdesc}" | jq ".manifest = \"${name}\"")
+
+# Device Description: Add/replace OS manifest description to/in device description
+devdesc=$(cat "${device_description}")
+exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
+if [[ "${exists}" = false ]]; then
+  echo "Adding OS manifest description to device description"
+else
+  echo "Replacing existing OS Manifest description"
+  devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+fi
+devdesc=$(echo "${devdesc}" | jq --argjson desc "[${osdesc}]" '.descriptions += $desc')
+
+# Device Description: Store
+echo "Writing ${device_description}"
+printf "%s\n" "${devdesc}" > "${device_description}"

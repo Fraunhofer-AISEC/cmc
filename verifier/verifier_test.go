@@ -257,7 +257,7 @@ var (
 
 // Variables for TestVerify
 var (
-	ArVersion = "1.4.2"
+	ArVersion = "1.4.3"
 	nonce     = []byte{0x01, 0x02, 0x03}
 )
 
@@ -346,8 +346,8 @@ func (s *SwSigner) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-func (s *SwSigner) Measure(nonce []byte) (ar.Measurement, error) {
-	return ar.Measurement{}, nil
+func (s *SwSigner) Measure(nonce []byte) ([]ar.Measurement, error) {
+	return []ar.Measurement{}, nil
 }
 
 func (s *SwSigner) Lock() error {

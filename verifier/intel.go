@@ -781,95 +781,127 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 func ValidateQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdentity,
 	qeIdentityBodyRaw []byte, signingCert, caCert *x509.Certificate,
 	teeType QuoteType,
-) (ar.QeReportResult, error) {
+) ar.QeReportResult {
 
-	result := ar.QeReportResult{}
-
-	if qeReportBody == nil {
-		return result, fmt.Errorf("internal error: QE report body is nil")
-	}
 	if qeIdentity == nil {
-		return result, fmt.Errorf("internal error: QE identity is nil")
+		result := ar.QeReportResult{}
+		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: QE identity is nil"))
+		return result
 	}
 	if signingCert == nil {
-		return result, fmt.Errorf("internal error: TCB key certificate is nil")
+		result := ar.QeReportResult{}
+		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: TCB key certificate is nil"))
+		return result
 	}
 
 	errCode := verifyCollateralElem(qeIdentityBodyRaw, qeIdentity.Signature, CN_TCB_SIGNING, QE_IDENTITY_JSON_KEY,
 		signingCert, caCert)
 	if errCode != ar.NotSpecified {
+		result := ar.QeReportResult{}
 		result.Summary.SetErr(errCode)
-		return result, errors.New("failed to verify QE identity")
+		return result
+	}
+
+	return validateQEIdentityProperties(qeReportBody, qeIdentity, teeType)
+}
+
+func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdentity, teeType QuoteType) ar.QeReportResult {
+
+	result := ar.QeReportResult{
+		Summary: ar.Result{
+			Success: true,
+		},
+	}
+
+	if qeReportBody == nil {
+		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: QE report body is nil"))
+		return result
+	}
+	if qeIdentity == nil {
+		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: QE identity is nil"))
+		return result
+	}
+
+	switch teeType {
+
+	case TDX_QUOTE_TYPE:
+		if qeIdentity.EnclaveIdentity.Version == 2 {
+			if qeIdentity.EnclaveIdentity.ID != QE_ID {
+				result.Summary.SetErr(ar.VerifyQEIdentityErr,
+					fmt.Errorf("enclave Identity is not generated for TDX and does not match Quote's TEE"))
+				return result
+			}
+		} else {
+			result.Summary.SetErr(ar.VerifyQEIdentityErr, fmt.Errorf("unsupported quote type %v", teeType))
+			return result
+		}
+
+	case SGX_QUOTE_TYPE:
+		if qeIdentity.EnclaveIdentity.ID != QE {
+			result.Summary.SetErr(ar.VerifyQEIdentityErr,
+				fmt.Errorf("enclave Identity is not generated for SGX and does not match Quote's TEE"))
+			return result
+		}
+
+	default:
+		result.Summary.SetErr(ar.VerifyQEIdentityErr, fmt.Errorf("unknown quote type %v", teeType))
+		return result
 	}
 
 	now := time.Now()
 	if now.After(qeIdentity.EnclaveIdentity.NextUpdate) {
-		return result, fmt.Errorf("qeIdentity has expired since: %v", qeIdentity.EnclaveIdentity.NextUpdate)
+		result.Summary.SetErr(ar.VerifyQEIdentityErr,
+			fmt.Errorf("qeIdentity has expired since: %v", qeIdentity.EnclaveIdentity.NextUpdate))
 	}
 
-	if teeType == TDX_QUOTE_TYPE {
-		if qeIdentity.EnclaveIdentity.Version == 1 {
-			return result, fmt.Errorf("enclave Identity version 1 is invalid for TDX TEE")
-		} else if qeIdentity.EnclaveIdentity.Version == 2 {
-			if qeIdentity.EnclaveIdentity.ID != QE_ID {
-				return result, fmt.Errorf("enclave Identity is not generated for TDX and does not match Quote's TEE")
-			}
-		}
-	} else if teeType == SGX_QUOTE_TYPE {
-		if qeIdentity.EnclaveIdentity.ID != QE {
-			return result, fmt.Errorf("enclave Identity is not generated for SGX and does not match Quote's TEE")
-		}
-	} else {
-		return result, fmt.Errorf("unknown Quote's TEE. Enclave Identity cannot be valid")
+	// Check MRSIGNER
+	result.MrSigner = ar.Result{
+		Expected: hex.EncodeToString(qeIdentity.EnclaveIdentity.Mrsigner.Bytes),
+		Got:      hex.EncodeToString(qeReportBody.MRSIGNER[:]),
 	}
-
-	// check mrsigner
 	if !bytes.Equal(qeIdentity.EnclaveIdentity.Mrsigner.Bytes, qeReportBody.MRSIGNER[:]) {
 		log.Debugf("MRSIGNER mismatch. Expected: %v, Got: %v",
-			qeIdentity.EnclaveIdentity.Mrsigner, qeReportBody.MRSIGNER)
+			hex.EncodeToString(qeIdentity.EnclaveIdentity.Mrsigner.Bytes),
+			hex.EncodeToString(qeReportBody.MRSIGNER[:]))
 		result.Summary.Success = false
-		result.MrSigner = ar.Result{
-			Success:  false,
-			Expected: hex.EncodeToString(qeIdentity.EnclaveIdentity.Mrsigner.Bytes),
-			Got:      hex.EncodeToString(qeReportBody.MRSIGNER[:]),
-		}
-		return result, nil
-	}
-	log.Tracef("MRSIGNER matches collateral (%v)",
-		hex.EncodeToString(qeReportBody.MRSIGNER[:]))
-	result.MrSigner = ar.Result{Success: true}
+		result.MrSigner.Success = false
 
-	// check isvProdId
+	} else {
+		log.Tracef("MRSIGNER matches collateral (%v)", hex.EncodeToString(qeReportBody.MRSIGNER[:]))
+		result.MrSigner.Success = true
+	}
+
+	// Check ISVPRODID
+	result.IsvProdId = ar.Result{
+		Expected: strconv.FormatUint(uint64(qeIdentity.EnclaveIdentity.IsvProdID), 10),
+		Got:      strconv.FormatUint(uint64(qeReportBody.ISVProdID), 10),
+	}
 	if qeReportBody.ISVProdID != uint16(qeIdentity.EnclaveIdentity.IsvProdID) {
 		log.Debugf("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdID, qeReportBody.ISVProdID)
 		result.Summary.Success = false
-		result.IsvProdId = ar.Result{
-			Success:  false,
-			Expected: strconv.FormatUint(uint64(qeIdentity.EnclaveIdentity.IsvProdID), 10),
-			Got:      strconv.FormatUint(uint64(qeReportBody.ISVProdID), 10),
-		}
-		return result, nil
+		result.IsvProdId.Success = false
+	} else {
+		result.IsvProdId.Success = true
 	}
-	result.IsvProdId = ar.Result{Success: true}
 
-	// check miscselect
+	// Check MISCSELECT
 	miscselectMask := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.MiscselectMask.Bytes)
 	refMiscSelect := binary.LittleEndian.Uint32(qeIdentity.EnclaveIdentity.Miscselect.Bytes)
 	reportMiscSelect := qeReportBody.MISCSELECT & miscselectMask
-	if refMiscSelect != reportMiscSelect {
-		log.Debugf("miscSelect value from QEIdentity: %v does not match miscSelect value from QE Report: %v",
-			qeIdentity.EnclaveIdentity.Miscselect, (qeReportBody.MISCSELECT & miscselectMask))
-		result.Summary.Success = false
-		result.MiscSelect = ar.Result{
-			Success:  false,
-			Expected: strconv.FormatUint(uint64(refMiscSelect), 10),
-			Got:      strconv.FormatUint(uint64(reportMiscSelect), 10),
-		}
-		return result, nil
+	result.MiscSelect = ar.Result{
+		Expected: strconv.FormatUint(uint64(refMiscSelect), 10),
+		Got:      strconv.FormatUint(uint64(reportMiscSelect), 10),
 	}
-	result.MiscSelect = ar.Result{Success: true}
+	if refMiscSelect != reportMiscSelect {
+		log.Debugf("miscSelect value from QEIdentity: 0x%x does not match miscSelect value from QE Report: 0x%x",
+			refMiscSelect, reportMiscSelect)
+		result.Summary.Success = false
+		result.MiscSelect.Success = false
+	} else {
+		result.MiscSelect.Success = true
+	}
 
-	// check attributes
+	// Check attributes
 	attributes_quote := qeReportBody.Attributes
 	attributes_mask := qeIdentity.EnclaveIdentity.AttributesMask
 	if len(attributes_mask.Bytes) == len(attributes_quote) {
@@ -877,39 +909,40 @@ func ValidateQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdent
 			attributes_quote[i] &= attributes_mask.Bytes[i]
 		}
 	}
-	if !bytes.Equal([]byte(qeIdentity.EnclaveIdentity.Attributes.Bytes), attributes_quote[:]) {
-		log.Debugf("attributes mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.Attributes, attributes_quote)
-		result.Summary.Success = false
-		result.Attributes = ar.Result{
-			Success:  false,
-			Expected: hex.EncodeToString(qeIdentity.EnclaveIdentity.Attributes.Bytes),
-			Got:      hex.EncodeToString(attributes_quote[:]),
-		}
-		return result, nil
+	result.Attributes = ar.Result{
+		Expected: hex.EncodeToString(qeIdentity.EnclaveIdentity.Attributes.Bytes),
+		Got:      hex.EncodeToString(attributes_quote[:]),
 	}
-	result.Attributes = ar.Result{Success: true}
+	if !bytes.Equal([]byte(qeIdentity.EnclaveIdentity.Attributes.Bytes), attributes_quote[:]) {
+		log.Debugf("attributes mismatch. Expected: %v, Got: %v",
+			hex.EncodeToString(qeIdentity.EnclaveIdentity.Attributes.Bytes),
+			hex.EncodeToString(attributes_quote[:]))
+		result.Summary.Success = false
+		result.Attributes.Success = false
+	} else {
+		result.Attributes.Success = true
+	}
 
 	tcbStatus, tcbDate, err := getTcbStatusAndDateQE(qeIdentity, qeReportBody)
 	if err != nil {
-		result.Summary.Success = false
+		result.Summary.SetErr(ar.VerifyQEIdentityErr, err)
 		result.TcbLevelStatus = "Unknown"
 		result.TcbLevelDate = "Unknown"
-		return result, err
 	}
-	log.Debugf("TcbStatus for Enclave's Identity tcbLevel (isvSvn: %v): '%v'", qeReportBody.ISVSVN, tcbStatus)
+	log.Debugf("TcbStatus for Enclave Identity TCB Level (ISVSVN: %v): %q",
+		qeReportBody.ISVSVN, tcbStatus)
 
 	switch tcbStatus {
 	case pcs.TcbComponentStatusRevoked:
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
-		result.Summary.Success = false
-		return result, fmt.Errorf("tcbStatus: %v", tcbStatus)
+		result.Summary.SetErr(ar.VerifyQEIdentityErr, fmt.Errorf("TCB status: %q", tcbStatus))
 	default:
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
-		result.Summary.Success = true
-		return result, nil
 	}
+
+	return result
 }
 
 // helper function for verifyTcbInfo

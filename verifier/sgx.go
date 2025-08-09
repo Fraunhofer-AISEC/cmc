@@ -114,6 +114,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 		return result, false
 	} else {
 		result.Freshness.Success = true
+		result.Freshness.Got = hex.EncodeToString(nonce)
 	}
 
 	// Obtain collateral from measurements
@@ -184,13 +185,12 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 
 	// Verify QE Identity
 	log.Debugf("Verifying quoting enclave identity")
-	qeIdentityResult, err := ValidateQEIdentity(
+	qeIdentityResult := ValidateQEIdentity(
 		&sgxQuote.QuoteSignatureData.QEReport,
 		&collateral.QeIdentity, collateralRaw.QeIdentity,
 		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
 		SGX_QUOTE_TYPE)
-	if err != nil {
-		log.Debugf("Failed to verify QE Identity structure: %v", err)
+	if !qeIdentityResult.Summary.Success {
 		result.Summary.SetErr(ar.VerifyQEIdentityErr)
 		return result, false
 	}

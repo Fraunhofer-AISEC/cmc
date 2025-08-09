@@ -155,6 +155,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		return result, ok
 	} else {
 		result.Freshness.Success = true
+		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 	}
 
 	// Extract certificate chain from quote
@@ -192,15 +193,14 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	}
 
 	// Verify Quoting Enclave Identity
-	qeIdentityResult, err := ValidateQEIdentity(
+	qeIdentityResult := ValidateQEIdentity(
 		&tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.QEReport,
 		&collateral.QeIdentity, collateralRaw.QeIdentity,
 		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
 		TDX_QUOTE_TYPE)
 	result.TdxResult.QeReportCheck = qeIdentityResult
-	if err != nil {
-		log.Debugf("Failed to validate QE Identity: %v", err)
-		result.Summary.SetErr(ar.VerifyQEIdentityErr)
+	if !qeIdentityResult.Summary.Success {
+		result.Summary.SetErr(ar.VerifyQEIdentityErr, err)
 		return result, false
 	}
 

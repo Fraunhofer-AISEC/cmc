@@ -70,7 +70,7 @@ type MetadataSummary struct {
 
 type MetadataResult struct {
 	Metadata
-	Summary        Result            `json:"result" cbor:"40,keyasint"`
+	Summary        Result            `json:"summary" cbor:"40,keyasint"`
 	ValidityCheck  Result            `json:"validityCheck,omitempty" cbor:"41,keyasint,omitempty"`
 	SignatureCheck []SignatureResult `json:"signatureValidation" cbor:"42,keyasint,omitempty"`
 }
@@ -187,7 +187,7 @@ type TdxResult struct {
 }
 
 type QeReportResult struct {
-	Summary        Result `json:"success" cbor:"0,keyasint"`
+	Summary        Result `json:"summary" cbor:"0,keyasint"`
 	MrSigner       Result `json:"mrsigner" cbor:"1,keyasint"`
 	IsvProdId      Result `json:"isvProdId" cbor:"2,keyasint"`
 	MiscSelect     Result `json:"miscSelect" cbor:"3,keyasint"`
@@ -197,7 +197,7 @@ type QeReportResult struct {
 }
 
 type TcbInfoResult struct {
-	Summary        Result `json:"success" cbor:"0,keyasint"`
+	Summary        Result `json:"summary" cbor:"0,keyasint"`
 	Id             Result `json:"id" cbor:"1,keyasint"`
 	Version        Result `json:"version" cbor:"2,keyasint"`
 	TcbLevelStatus string `json:"status" cbor:"5,keyasint"`
@@ -531,6 +531,7 @@ const (
 	IllegalTdxMrIndex
 	ParseKey
 	ExtractPayload
+	TdxVerification
 )
 
 func (e ErrorCode) String() string {
@@ -699,6 +700,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Parse key)", int(e))
 	case ExtractPayload:
 		return fmt.Sprintf("%v (Extract Payload)", int(e))
+	case TdxVerification:
+		return fmt.Sprintf("%v (TDX Verification)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -862,10 +865,9 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
 		return nil
 	}
 
-	// Get OCI runtime config from manifest
+	// Get OCI runtime config from manifest if present
 	m, err := r.GetManifest()
 	if err != nil {
-		log.Warnf("%v: %v: %v", r.Type, r.SubType, err)
 		return nil
 	}
 
