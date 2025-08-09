@@ -44,28 +44,40 @@ func main() {
 }
 
 const (
-	CMD_GET_QUOTE      = "get-quote"
-	CMD_GET_CERTCHAIN  = "get-certchain"
-	CMD_GET_TCBINFO    = "get-tcbinfo"
-	CMD_GET_QEIDENTITY = "get-qeidentity"
-	CMD_GET_FMSPC      = "get-fmspc"
-	CMD_PARSE_QUOTE    = "parse-quote"
-	CMD_PARSE_TDREPORT = "parse-tdreport"
+	CMD_GET_QUOTE               = "get-quote"
+	CMD_GET_TCBINFO             = "get-tcbinfo"
+	CMD_GET_QEIDENTITY          = "get-qeidentity"
+	CMD_PARSE_CERTCHAIN         = "parse-certchain"
+	CMD_PARSE_PCK_CERT          = "parse-pck-cert"
+	CMD_PARSE_INTERMEDIATE_CERT = "parse-intermediate-cert"
+	CMD_PARSE_ROOT_CA_CERT      = "parse-root-ca-cert"
+	CMD_PARSE_FMSPC             = "parse-fmspc"
+	CMD_PARSE_QUOTE             = "parse-quote"
+	CMD_PARSE_TDREPORT          = "parse-tdreport"
 )
 
 func run() error {
 
-	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v",
+	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
 		CMD_GET_QUOTE,
-		CMD_GET_CERTCHAIN,
 		CMD_GET_TCBINFO,
 		CMD_GET_QEIDENTITY,
-		CMD_GET_FMSPC,
+		CMD_PARSE_CERTCHAIN,
+		CMD_PARSE_PCK_CERT,
+		CMD_PARSE_INTERMEDIATE_CERT,
+		CMD_PARSE_ROOT_CA_CERT,
+		CMD_PARSE_FMSPC,
 		CMD_PARSE_QUOTE,
 		CMD_PARSE_TDREPORT,
 	))
 	in := flag.String("in", "", "input file")
 	flag.Parse()
+
+	if *cmd == CMD_PARSE_FMSPC || *cmd == CMD_PARSE_QUOTE || *cmd == CMD_PARSE_TDREPORT {
+		if *in == "" {
+			return fmt.Errorf("missing parameter -in")
+		}
+	}
 
 	switch *cmd {
 
@@ -75,13 +87,6 @@ func run() error {
 			return fmt.Errorf("failed to get TDX Quote: %w", err)
 		}
 		os.Stdout.Write(quote)
-
-	case CMD_GET_CERTCHAIN:
-		certChain, err := getQuoteCertChain()
-		if err != nil {
-			return fmt.Errorf("failed to get TDX cet chain: %w", err)
-		}
-		os.Stdout.Write(certChain)
 
 	case CMD_GET_TCBINFO:
 		collateral, err := getCollateral()
@@ -97,10 +102,38 @@ func run() error {
 		}
 		os.Stdout.Write(collateral.QeIdentity)
 
-	case CMD_GET_FMSPC:
-		fmspc, err := getFmspc()
+	case CMD_PARSE_CERTCHAIN:
+		certChain, err := parseQuoteCertChain(*in)
 		if err != nil {
-			return fmt.Errorf("failed to get FMSPC: %w", err)
+			return fmt.Errorf("failed to get TDX cert chain: %w", err)
+		}
+		os.Stdout.Write(certChain)
+
+	case CMD_PARSE_PCK_CERT:
+		certChain, err := parseQuotePCKCert(*in)
+		if err != nil {
+			return fmt.Errorf("failed to get TDX PCK cert: %w", err)
+		}
+		os.Stdout.Write(certChain)
+
+	case CMD_PARSE_INTERMEDIATE_CERT:
+		certChain, err := parseQuoteIntermediateCert(*in)
+		if err != nil {
+			return fmt.Errorf("failed to get TDX intermediate cert: %w", err)
+		}
+		os.Stdout.Write(certChain)
+
+	case CMD_PARSE_ROOT_CA_CERT:
+		certChain, err := parseQuoteRootCaCert(*in)
+		if err != nil {
+			return fmt.Errorf("failed to get TDX Root CA cert: %w", err)
+		}
+		os.Stdout.Write(certChain)
+
+	case CMD_PARSE_FMSPC:
+		fmspc, err := parseFmspc(*in)
+		if err != nil {
+			return fmt.Errorf("failed to parse FMSPC: %w", err)
 		}
 		fmt.Printf("%v\n", fmspc)
 
@@ -193,11 +226,16 @@ func getCollateral() (*ar.IntelCollateral, error) {
 	return collateral, nil
 }
 
-func getQuoteCertChain() ([]byte, error) {
+func parseQuoteCertChain(in string) ([]byte, error) {
 
-	quote, err := getQuote()
+	data, err := os.ReadFile(in)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get quote: %v", err)
+		return nil, fmt.Errorf("failed to read quote: %w", err)
+	}
+
+	quote, err := verifier.DecodeTdxReportV4(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
 	}
 
 	certs := []*x509.Certificate{
@@ -214,11 +252,71 @@ func getQuoteCertChain() ([]byte, error) {
 	return pems, nil
 }
 
-func getFmspc() (string, error) {
+func parseQuotePCKCert(in string) ([]byte, error) {
 
-	quote, err := getQuote()
+	data, err := os.ReadFile(in)
 	if err != nil {
-		return "", fmt.Errorf("failed to get quote: %v", err)
+		return nil, fmt.Errorf("failed to read quote: %w", err)
+	}
+
+	quote, err := verifier.DecodeTdxReportV4(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
+	}
+
+	cert := quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert
+	pem := internal.WriteCertPem(cert)
+
+	return pem, nil
+
+}
+
+func parseQuoteIntermediateCert(in string) ([]byte, error) {
+
+	data, err := os.ReadFile(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read quote: %w", err)
+	}
+
+	quote, err := verifier.DecodeTdxReportV4(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
+	}
+
+	cert := quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.IntermediateCert
+	pem := internal.WriteCertPem(cert)
+
+	return pem, nil
+}
+
+func parseQuoteRootCaCert(in string) ([]byte, error) {
+
+	data, err := os.ReadFile(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read quote: %w", err)
+	}
+
+	quote, err := verifier.DecodeTdxReportV4(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
+	}
+
+	cert := quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.RootCACert
+	pem := internal.WriteCertPem(cert)
+
+	return pem, nil
+}
+
+func parseFmspc(in string) (string, error) {
+
+	data, err := os.ReadFile(in)
+	if err != nil {
+		return "", fmt.Errorf("failed to read quote: %w", err)
+	}
+
+	quote, err := verifier.DecodeTdxReportV4(data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode TDX quote: %w", err)
 	}
 
 	exts, err := pcs.PckCertificateExtensions(
@@ -244,12 +342,21 @@ func parseQuote(in string) error {
 	body := quote.QuoteBody
 
 	log.Info("TDX Quote:")
-	log.Infof("\tREPORTDATA: %v", hex.EncodeToString(body.ReportData[:]))
-	log.Infof("\tMRTD      : %v", hex.EncodeToString(body.MrTd[:]))
-	log.Infof("\tRTMR0     : %v", hex.EncodeToString(body.RtMr0[:]))
-	log.Infof("\tRTMR2     : %v", hex.EncodeToString(body.RtMr1[:]))
-	log.Infof("\tRTMR2     : %v", hex.EncodeToString(body.RtMr2[:]))
-	log.Infof("\tRTMR3     : %v", hex.EncodeToString(body.RtMr3[:]))
+	log.Infof("\tREPORTDATA    : %v", hex.EncodeToString(body.ReportData[:]))
+	log.Infof("\tMRTD          : %v", hex.EncodeToString(body.MrTd[:]))
+	log.Infof("\tRTMR0         : %v", hex.EncodeToString(body.RtMr0[:]))
+	log.Infof("\tRTMR2         : %v", hex.EncodeToString(body.RtMr1[:]))
+	log.Infof("\tRTMR2         : %v", hex.EncodeToString(body.RtMr2[:]))
+	log.Infof("\tRTMR3         : %v", hex.EncodeToString(body.RtMr3[:]))
+	log.Infof("\tMRCONFIGID    : %v", hex.EncodeToString(body.MrConfigId[:]))
+	log.Infof("\tMROWNER       : %v", hex.EncodeToString(body.MrOwner[:]))
+	log.Infof("\tMROWNERCONFIG : %v", hex.EncodeToString(body.MrOwnerConfig[:]))
+	log.Infof("\tMRSEAM        : %v", hex.EncodeToString(body.MrSeam[:]))
+	log.Infof("\tMRSIGNERSEAM  : %v", hex.EncodeToString(body.MrSignerSeam[:]))
+	log.Infof("\tSEAMATTRIBUTES: %v", hex.EncodeToString(body.SeamAttributes[:]))
+	log.Infof("\tTDATTRIBUTES  : %v", hex.EncodeToString(body.TdAttributes[:]))
+	log.Infof("\tTEETCBSVN     : %v", hex.EncodeToString(body.TeeTcbSvn[:]))
+	log.Infof("\tXFAM          : %v", hex.EncodeToString(body.XFAM[:]))
 
 	return nil
 }

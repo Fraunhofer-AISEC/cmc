@@ -40,8 +40,8 @@ func (s *SwDriver) Init(c *DriverConfig) error {
 	return nil
 }
 
-func (s *SwDriver) Measure(nonce []byte) (Measurement, error) {
-	return Measurement{}, nil
+func (s *SwDriver) Measure(nonce []byte) ([]Measurement, error) {
+	return []Measurement{}, nil
 }
 
 func (s *SwDriver) Lock() error {

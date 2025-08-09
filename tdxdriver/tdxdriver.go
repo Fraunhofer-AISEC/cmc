@@ -123,23 +123,23 @@ func (tdx *Tdx) Init(c *ar.DriverConfig) error {
 
 // Measure implements the attestation reports generic Measure interface to be called
 // as a plugin during attestation report generation
-func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
+func (tdx *Tdx) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	log.Debug("Collecting TDX measurements")
 
 	if tdx == nil {
-		return ar.Measurement{}, errors.New("internal error: TDX object is nil")
+		return nil, errors.New("internal error: TDX object is nil")
 	}
 
 	data, err := GetMeasurement(nonce)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get TDX Measurement: %w", err)
+		return nil, fmt.Errorf("failed to get TDX Measurement: %w", err)
 	}
 
 	// Decode attestation report to get FMSPC (required to fetch collateral)
 	quote, err := verifier.DecodeTdxReportV4(data)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode TDX quote: %w", err)
+		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
 	}
 	log.Tracef("PCK Leaf Certificate: %v",
 		string(internal.WriteCertPem(quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)))
@@ -148,7 +148,7 @@ func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
 	exts, err := pcs.PckCertificateExtensions(
 		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+		return nil, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
 	}
 	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
@@ -156,7 +156,7 @@ func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
 	collateral, err := verifier.FetchCollateral(exts.FMSPC,
 		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert, verifier.TDX_QUOTE_TYPE)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get TDX collateral: %w", err)
+		return nil, fmt.Errorf("failed to get TDX collateral: %w", err)
 	}
 
 	// Create measurement
@@ -187,7 +187,7 @@ func (tdx *Tdx) Measure(nonce []byte) (ar.Measurement, error) {
 		measurement.Artifacts = append(measurement.Artifacts, ccel...)
 	}
 
-	return measurement, nil
+	return []ar.Measurement{measurement}, nil
 }
 
 // Lock implements the locking method for the attestation report signer interface

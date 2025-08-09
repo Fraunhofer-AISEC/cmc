@@ -117,13 +117,15 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 		// Collect the measurements/evidence with the specified nonce from hardware/software.
 		// The methods are implemented in the respective driver (TPM, SNP, ...)
 		log.Debugf("Getting measurements from measurement interface..")
-		measurement, err := driver.Measure(nonce)
+		measurements, err := driver.Measure(nonce)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get measurements: %v", err)
 		}
 
-		report.Measurements = append(report.Measurements, measurement)
-		log.Debugf("Added %v to attestation report", measurement.Type)
+		report.Measurements = append(report.Measurements, measurements...)
+		for _, measurement := range measurements {
+			log.Debugf("Added %v to attestation report", measurement.Type)
+		}
 	}
 
 	log.Debugf("Finished attestation report generation")

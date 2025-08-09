@@ -865,10 +865,9 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
 		return nil
 	}
 
-	// Get OCI runtime config from manifest
+	// Get OCI runtime config from manifest if present
 	m, err := r.GetManifest()
 	if err != nil {
-		log.Warnf("%v: %v: %v", r.Type, r.SubType, err)
 		return nil
 	}
 

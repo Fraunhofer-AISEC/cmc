@@ -346,8 +346,8 @@ func (s *SwSigner) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-func (s *SwSigner) Measure(nonce []byte) (ar.Measurement, error) {
-	return ar.Measurement{}, nil
+func (s *SwSigner) Measure(nonce []byte) ([]ar.Measurement, error) {
+	return []ar.Measurement{}, nil
 }
 
 func (s *SwSigner) Lock() error {
