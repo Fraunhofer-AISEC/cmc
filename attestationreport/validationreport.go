@@ -197,11 +197,18 @@ type QeReportResult struct {
 }
 
 type TcbInfoResult struct {
-	Summary        Result `json:"summary" cbor:"0,keyasint"`
-	Id             Result `json:"id" cbor:"1,keyasint"`
-	Version        Result `json:"version" cbor:"2,keyasint"`
-	TcbLevelStatus string `json:"status" cbor:"5,keyasint"`
-	TcbLevelDate   string `json:"date" cbor:"6,keyasint"`
+	Summary  Result         `json:"summary" cbor:"0,keyasint"`
+	Id       Result         `json:"id" cbor:"1,keyasint"`
+	Version  Result         `json:"version" cbor:"2,keyasint"`
+	TcbLevel TcbLevelResult `json:"tcbLevelResult" cbor:"3,keyasint"`
+}
+
+type TcbLevelResult struct {
+	Status        string   `json:"status" cbor:"5,keyasint"`
+	Date          string   `json:"date" cbor:"6,keyasint"`
+	PceSvn        Result   `json:"pceSvn" cbor:"7,keyasint"`
+	SgxComponents []Result `json:"sgxComponents" cbor:"8,keyasint"`
+	TdxComponents []Result `json:"tdxComponents" cbor:"9,keyasint"`
 }
 
 type SgxAttributesCheck struct {

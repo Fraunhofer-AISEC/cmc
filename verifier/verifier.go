@@ -169,7 +169,7 @@ func Verify(
 				refVals["TDX Reference Value"], refVals["SNP Reference Value"], refVals["TPM Reference Value"],
 				s)
 			if !ok {
-				result.SetErr(ar.VerifyMeasurement, errors.New("Azure measurements"))
+				result.SetErr(ar.VerifyMeasurement, errors.New("azure measurements"))
 			}
 			result.Measurements = append(result.Measurements, results...)
 

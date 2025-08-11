@@ -712,65 +712,85 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 	}
 	log.Tracef("Successfully verified TCB info PCE ID (%v)", tcbInfo.TcbInfo.PceID)
 
-	// Checking tcb level
+	// Checking TCB level: https://api.portal.trustedservices.intel.com/content/documentation.html
 	log.Tracef("Checking %v TCB info levels", len(tcbInfo.TcbInfo.TcbLevels))
+	tcbLevelCheck := false
 	for _, tcbLevel := range tcbInfo.TcbInfo.TcbLevels {
 
-		log.Tracef("Checking TCB level date %v, status %v", tcbLevel.TcbDate, tcbLevel.TcbStatus)
+		tcbLevelIteration := true
 
-		newer, err := isNewer(result.TcbLevelDate, tcbLevel.TcbDate)
-		if err != nil {
-			log.Debugf("Failed to compare TCB level dates: %v", err)
-			result.Summary.Success = false
-			return result
-		}
+		log.Tracef("Verifying against TCB level date %v, status %v", tcbLevel.TcbDate, tcbLevel.TcbStatus)
 
-		if newer {
-			log.Debugf("Current TCB level date (%q) is newer than previous (%q)",
-				tcbLevel.TcbDate, result.TcbLevelDate)
-			result.TcbLevelDate = tcbLevel.TcbDate
-			result.TcbLevelStatus = string(tcbLevel.TcbStatus)
-		}
+		result.TcbLevel.Date = tcbLevel.TcbDate
+		result.TcbLevel.Status = string(tcbLevel.TcbStatus)
 
 		// Compare SGX TCB Comp SVNs from PCK Certificate with TCB Level
-		if !compareSgxTcbCompSvns(sgxExtensions, tcbLevel) {
-			result.Summary.Success = false
-			// TODO detailed error
-			return result
+		sgxCompResult, ok := compareSgxTcbCompSvns(sgxExtensions, tcbLevel.Tcb.SgxTcbcomponents)
+		if !ok {
+			log.Debugf("\tComparison against current SGX TCB Info (component levels) not successful")
+			tcbLevelIteration = false
+		} else {
+			log.Debugf("\tSuccessfully verified SGX TCB component SVNs")
 		}
-		log.Tracef("Successfully verified SGX TCB component SVNs")
 
 		// Compare PCESVN value
-		if sgxExtensions.Tcb.Value.PceSvn.Value < int(tcbLevel.Tcb.Pcesvn) {
-			log.Debugf("PCK cert PCE SVN (%v) lower then expected TCB INFO PCE SVN (%v)",
-				sgxExtensions.Tcb.Value.PceSvn.Value, tcbLevel.Tcb.Pcesvn)
-			result.Summary.Success = false
-			// TODO detailed error
-			return result
+		pceSvnResult := ar.Result{
+			Success:  false,
+			Expected: fmt.Sprintf("%v", tcbLevel.Tcb.Pcesvn),
+			Got:      fmt.Sprintf("%v", sgxExtensions.Tcb.Value.PceSvn.Value),
 		}
-		log.Tracef("Successfully verified PCE SVN")
+		if sgxExtensions.Tcb.Value.PceSvn.Value < int(tcbLevel.Tcb.Pcesvn) {
+			log.Debugf("\tPCK cert PCE SVN (%v) lower then expected TCB INFO PCE SVN (%v)",
+				sgxExtensions.Tcb.Value.PceSvn.Value, tcbLevel.Tcb.Pcesvn)
+			log.Debugf("\tComparison against current TCB Info (PCE SVN) not successful")
+			tcbLevelIteration = false
+		} else {
+			log.Debugf("\tSuccessfully verified PCE SVN")
+			pceSvnResult.Success = true
+		}
 
 		// Only TDX: Compare TEE TCB SVNs from TDX Report with TCB Level and fail if the TCB
 		// component was revoked
+		var tdxCompResult []ar.Result
 		if quoteType == TDX_QUOTE_TYPE {
-			if !compareTeeTcbSvns(teeTcbSvn, tcbLevel) {
-				result.Summary.SetErr(ar.TcbLevelUnsupported)
-				return result
+			tdxCompResult, ok = compareTeeTcbSvns(teeTcbSvn, tcbLevel.Tcb.TdxTcbcomponents)
+			if !ok {
+				log.Debugf("\tComparison against current TDX TCB Info (component levels) not successful")
+				tcbLevelIteration = false
+			} else {
+				log.Debugf("\tSuccessfully verified Quote TEE TCB component SVNs")
 			}
-			log.Tracef("Successfully verified Quote TEE TCB SVNs")
+		}
 
-			if tcbLevel.TcbStatus == pcs.TcbComponentStatusRevoked {
-				log.Debugf("TCB component status revoked")
-				result.TcbLevelStatus = string(pcs.TcbComponentStatusRevoked)
-				result.TcbLevelDate = tcbLevel.TcbDate
-				result.Summary.SetErr(ar.TcbLevelRevoked)
-				return result
-			}
-			log.Tracef("Successfully checked TCB component revocation status")
+		// Check the revocation status of the component
+		if tcbLevel.TcbStatus != pcs.TcbComponentStatusUpToDate {
+			log.Debugf("\tCurrent TCB Info level status not up to date (%v)", tcbLevel.TcbStatus)
+			tcbLevelIteration = false
+		} else {
+			log.Debugf("\tSuccessfully verified TCB info status (%v)", tcbLevel.TcbStatus)
+		}
+
+		result.TcbLevel = ar.TcbLevelResult{
+			Date:          tcbLevel.TcbDate,
+			Status:        string(tcbLevel.TcbStatus),
+			SgxComponents: sgxCompResult,
+			PceSvn:        pceSvnResult,
+			TdxComponents: tdxCompResult,
+		}
+
+		if tcbLevelIteration {
+			tcbLevelCheck = true
+			break
+		} else {
+			log.Debugf("Failed to verify against TCB level date %v", tcbLevel.TcbDate)
 		}
 	}
+	if !tcbLevelCheck {
+		result.Summary.SetErr(ar.TcbLevelUnsupported)
+		return result
+	}
 
-	log.Tracef("Successfully validated TCB info")
+	log.Debugf("Successfully validated TCB info")
 
 	result.Summary.Success = true
 
@@ -946,35 +966,63 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 }
 
 // helper function for verifyTcbInfo
-func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, tcbLevel pcs.TcbLevel) bool {
+func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, sgxTcbComps []pcs.TcbComponent) ([]ar.Result, bool) {
+	if len(sgxTcbComps) != 16 {
+		log.Debugf("\tUnexpected SGX TCB components length %v", len(sgxTcbComps))
+		return nil, false
+	}
 	// Compare all of the SGX TCB Comp SVNs retrieved from the SGX PCK Certificate (from 01 to 16)
 	// with the corresponding values of SVNs in sgxtcbcomponents array of TCB Level.
 	ok := true
+	results := make([]ar.Result, 16)
 	for i := 0; i < 16; i++ {
 		tcbFromCert := getTCBCompByIndex(sgxExtensions.Tcb, i+1)
-		if byte(tcbFromCert.Value) < tcbLevel.Tcb.SgxTcbcomponents[i].Svn {
-			log.Tracef("Extension %v PCK cert SVN %v lower than TCB info SVN %v (Category: %q, Type: %q)",
-				i, tcbFromCert.Value, tcbLevel.Tcb.SgxTcbcomponents[i].Svn,
-				tcbLevel.Tcb.SgxTcbcomponents[i].Category, tcbLevel.Tcb.SgxTcbcomponents[i].Type)
+		results[i] = ar.Result{
+			Success:  true,
+			Got:      fmt.Sprintf("%v", tcbFromCert.Value),
+			Expected: fmt.Sprintf("%v", sgxTcbComps[i].Svn),
+		}
+		if sgxTcbComps[i].Category != "" {
+			results[i].Details = fmt.Sprintf("%v: %v", sgxTcbComps[i].Category, sgxTcbComps[i].Type)
+		}
+		if byte(tcbFromCert.Value) < sgxTcbComps[i].Svn {
+			log.Tracef("\tComp_%02v PCK cert SVN %v lower than TCB info SVN %v (Category: %q, Type: %q)",
+				i+1, tcbFromCert.Value, sgxTcbComps[i].Svn,
+				sgxTcbComps[i].Category, sgxTcbComps[i].Type)
 			ok = false
+			results[i].Success = false
 		}
 	}
-	return ok
+	return results, ok
 }
 
 // helper function for verifyTcbInfo
-func compareTeeTcbSvns(teeTcbSvn [16]byte, tcbLevel pcs.TcbLevel) bool {
+func compareTeeTcbSvns(teeTcbSvn [16]byte, tdxTcbComps []pcs.TcbComponent) ([]ar.Result, bool) {
+	if len(tdxTcbComps) != 16 {
+		log.Debugf("\tUnexpected TDX TCB components length %v", len(tdxTcbComps))
+		return nil, false
+	}
 	// Compare all of the SVNs in TEE TCB SVN array retrieved from TD Report in Quote (from index 0 to 15)
 	// with the corresponding values of SVNs in tdxtcbcomponents array of TCB Level
 	ok := true
+	results := make([]ar.Result, 16)
 	for i := 0; i < 16; i++ {
-		if teeTcbSvn[i] < tcbLevel.Tcb.TdxTcbcomponents[i].Svn {
-			log.Tracef("Quote TEE TCB SVN ID %v (%v) lower than expected TCB info SVN (%v)",
-				i, teeTcbSvn[i], tcbLevel.Tcb.TdxTcbcomponents[i].Svn)
+		results[i] = ar.Result{
+			Success:  true,
+			Got:      fmt.Sprintf("%v", teeTcbSvn[i]),
+			Expected: fmt.Sprintf("%v", tdxTcbComps[i].Svn),
+		}
+		if tdxTcbComps[i].Category != "" {
+			results[i].Details = fmt.Sprintf("%v: %v", tdxTcbComps[i].Category, tdxTcbComps[i].Type)
+		}
+		if teeTcbSvn[i] < tdxTcbComps[i].Svn {
+			log.Tracef("\tQuote TEE TCB SVN ID %v (%v) lower than expected TCB info SVN (%v)",
+				i, teeTcbSvn[i], tdxTcbComps[i].Svn)
 			ok = false
+			results[i].Success = false
 		}
 	}
-	return ok
+	return results, ok
 }
 
 func getTcbStatusAndDateQE(qeIdentity *pcs.QeIdentity, body *EnclaveReportBody) (pcs.TcbComponentStatus, string, error) {
@@ -1151,25 +1199,4 @@ func verifyRootCas(quoteCerts *SgxCertificates, collateral *Collateral, fingerpr
 	}
 
 	return ar.NotSpecified
-}
-
-// isNewer checks if s2 is newer (later) than s1
-func isNewer(s1, s2 string) (bool, error) {
-
-	// If the first date is yet to be defined, the second date is always newer
-	if s1 == "" {
-		return true, nil
-	}
-
-	t1, err1 := time.Parse(time.RFC3339, s1)
-	if err1 != nil {
-		return false, fmt.Errorf("failed to parse first time: %w", err1)
-	}
-
-	t2, err2 := time.Parse(time.RFC3339, s2)
-	if err2 != nil {
-		return false, fmt.Errorf("failed to parse second time: %w", err2)
-	}
-
-	return t2.After(t1), nil
 }
