@@ -16,11 +16,9 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -54,11 +52,12 @@ const (
 	CMD_PARSE_FMSPC             = "parse-fmspc"
 	CMD_PARSE_QUOTE             = "parse-quote"
 	CMD_PARSE_TDREPORT          = "parse-tdreport"
+	CMD_PARSE_PCKCERT_TCB       = "parse-pck-cert-tcb"
 )
 
 func run() error {
 
-	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
+	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
 		CMD_GET_QUOTE,
 		CMD_GET_TCBINFO,
 		CMD_GET_QEIDENTITY,
@@ -69,11 +68,17 @@ func run() error {
 		CMD_PARSE_FMSPC,
 		CMD_PARSE_QUOTE,
 		CMD_PARSE_TDREPORT,
+		CMD_PARSE_PCKCERT_TCB,
 	))
 	in := flag.String("in", "", "input file")
 	flag.Parse()
 
-	if *cmd == CMD_PARSE_FMSPC || *cmd == CMD_PARSE_QUOTE || *cmd == CMD_PARSE_TDREPORT {
+	if *cmd == CMD_GET_TCBINFO ||
+		*cmd == CMD_GET_QEIDENTITY ||
+		*cmd == CMD_PARSE_FMSPC ||
+		*cmd == CMD_PARSE_QUOTE ||
+		*cmd == CMD_PARSE_TDREPORT ||
+		*cmd == CMD_PARSE_PCKCERT_TCB {
 		if *in == "" {
 			return fmt.Errorf("missing parameter -in")
 		}
@@ -89,14 +94,14 @@ func run() error {
 		os.Stdout.Write(quote)
 
 	case CMD_GET_TCBINFO:
-		collateral, err := getCollateral()
+		collateral, err := getCollateral(*in)
 		if err != nil {
 			return fmt.Errorf("failed to get TDX collateral: %w", err)
 		}
 		os.Stdout.Write(collateral.TcbInfo)
 
 	case CMD_GET_QEIDENTITY:
-		collateral, err := getCollateral()
+		collateral, err := getCollateral(*in)
 		if err != nil {
 			return fmt.Errorf("failed to get TDX collateral: %w", err)
 		}
@@ -149,6 +154,12 @@ func run() error {
 			return fmt.Errorf("failed to parse TDREPORT")
 		}
 
+	case CMD_PARSE_PCKCERT_TCB:
+		err := parseQuotePCKCertTcb(*in)
+		if err != nil {
+			return fmt.Errorf("failed to get TDX PCK cert: %w", err)
+		}
+
 	default:
 		return fmt.Errorf("unknown cmd %q. See tdxtool -help", *cmd)
 
@@ -172,37 +183,16 @@ func getQuoteRaw() ([]byte, error) {
 	return data, nil
 }
 
-func getQuote() (*verifier.TdxReportV4, error) {
+func getCollateral(in string) (*ar.IntelCollateral, error) {
 
-	nonce := make([]byte, 64)
-	_, err := rand.Read(nonce)
+	data, err := os.ReadFile(in)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create nonce: %w", err)
-	}
-
-	data, err := tdxdriver.GetMeasurement(nonce)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get TDX Quote: %w", err)
+		return nil, fmt.Errorf("failed to read quote: %w", err)
 	}
 
 	quote, err := verifier.DecodeTdxReportV4(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
-	}
-
-	// Check nonce
-	if !bytes.Equal(quote.QuoteBody.ReportData[:], nonce) {
-		return nil, errors.New("freshness check failed for TDX quote")
-	}
-
-	return &quote, nil
-}
-
-func getCollateral() (*ar.IntelCollateral, error) {
-
-	quote, err := getQuote()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get quote: %v", err)
 	}
 
 	log.Tracef("PCK Leaf Certificate: %v",
@@ -382,4 +372,57 @@ func parseTdReport(in string) error {
 	log.Infof("\tRTMR3     : %v", hex.EncodeToString(tdReport.TdInfo.RtMr3[:]))
 
 	return nil
+}
+
+func parseQuotePCKCertTcb(in string) error {
+
+	data, err := os.ReadFile(in)
+	if err != nil {
+		return fmt.Errorf("failed to read quote: %w", err)
+	}
+
+	quote, err := verifier.DecodeTdxReportV4(data)
+	if err != nil {
+		return fmt.Errorf("failed to decode TDX quote: %w", err)
+	}
+
+	cert := quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert
+
+	// Skip the first value (not relevant)
+	exts, err := verifier.ParseSGXExtensions(cert.Extensions[verifier.SGX_EXTENSION_INDEX].Value[4:])
+	if err != nil {
+		return fmt.Errorf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+	}
+
+	log.Infof("PPID              : %v = %v", exts.Ppid.Id.String(), hex.EncodeToString(exts.Ppid.Value))
+	log.Infof("TCB ID            : %v", exts.Tcb.Id.String())
+	log.Infof("TCB Comp_01       : %v", getTcbComp(exts.Tcb.Value.Comp_01))
+	log.Infof("TCB Comp_02       : %v", getTcbComp(exts.Tcb.Value.Comp_02))
+	log.Infof("TCB Comp_03       : %v", getTcbComp(exts.Tcb.Value.Comp_03))
+	log.Infof("TCB Comp_04       : %v", getTcbComp(exts.Tcb.Value.Comp_04))
+	log.Infof("TCB Comp_05       : %v", getTcbComp(exts.Tcb.Value.Comp_05))
+	log.Infof("TCB Comp_06       : %v", getTcbComp(exts.Tcb.Value.Comp_06))
+	log.Infof("TCB Comp_07       : %v", getTcbComp(exts.Tcb.Value.Comp_07))
+	log.Infof("TCB Comp_08       : %v", getTcbComp(exts.Tcb.Value.Comp_08))
+	log.Infof("TCB Comp_09       : %v", getTcbComp(exts.Tcb.Value.Comp_09))
+	log.Infof("TCB Comp_10       : %v", getTcbComp(exts.Tcb.Value.Comp_10))
+	log.Infof("TCB Comp_11       : %v", getTcbComp(exts.Tcb.Value.Comp_11))
+	log.Infof("TCB Comp_12       : %v", getTcbComp(exts.Tcb.Value.Comp_12))
+	log.Infof("TCB Comp_13       : %v", getTcbComp(exts.Tcb.Value.Comp_13))
+	log.Infof("TCB Comp_14       : %v", getTcbComp(exts.Tcb.Value.Comp_14))
+	log.Infof("TCB Comp_15       : %v", getTcbComp(exts.Tcb.Value.Comp_15))
+	log.Infof("TCB Comp_16       : %v", getTcbComp(exts.Tcb.Value.Comp_16))
+	log.Infof("TCB PCESVN        : %v", getTcbComp(exts.Tcb.Value.PceSvn))
+	log.Infof("TCB CPUSVN        : %v = %v", exts.Tcb.Value.CpuSvn.Svn.String(), hex.EncodeToString(exts.Tcb.Value.CpuSvn.Value))
+	log.Infof("PCEID             : %v = %v", exts.PceId.Id.String(), hex.EncodeToString(exts.PceId.Value))
+	log.Infof("FMSPC             : %v = %v", exts.Fmspc.Id.String(), hex.EncodeToString(exts.Fmspc.Value))
+	log.Infof("SGX Type          : %v = %v", exts.SgxType.Id.String(), exts.SgxType.Value)
+	log.Infof("PlatformInstanceId: %v = %v", exts.PlatformInstanceId.Id.String(), hex.EncodeToString(exts.PlatformInstanceId.Value))
+
+	return nil
+
+}
+
+func getTcbComp(in verifier.TCBComp) string {
+	return fmt.Sprintf("%v = %v", in.Svn.String(), in.Value)
 }
