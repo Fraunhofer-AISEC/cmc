@@ -51,21 +51,26 @@ const (
 	CMD_GET_VTPM_AK_CERT   = "get-vtpm-ak-cert"   // Fetches the vTPM AK cert
 	CMD_VERIFY_VTPM        = "verify-vtpm"        // Verify that SHA256(runtimeclaims) == REPORTDATA && runtimeclaims.akpub == vTPM AK
 	CMD_VERIFY_VTPM_QUOTE  = "verify-vtpm-quote"  // Verify the quote signature
+	CMD_UPDATE_USER_DATA   = "update-user-data"   // Update azure report user data in NV index
+	CMD_GET_USER_DATA      = "get-user-data"      // Read user data from NV index
 )
 
 func run() error {
 
-	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v",
-		CMD_GET_HW_REPORT,
+	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
 		CMD_GET_AZURE_REPORT,
 		CMD_GET_AZURE_HWREPORT,
+		CMD_GET_HW_REPORT,
 		CMD_GET_AZURE_RTDATA,
 		CMD_GET_VTPM_QUOTE,
 		CMD_GET_VTPM_AK_CERT,
 		CMD_VERIFY_VTPM,
 		CMD_VERIFY_VTPM_QUOTE,
+		CMD_UPDATE_USER_DATA,
+		CMD_GET_USER_DATA,
 	))
 	pcrs := flag.String("pcrs", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", "PCRs to include in quote")
+	in := flag.String("userdata", "", "Azure User Data")
 	flag.Parse()
 
 	parts := strings.Split(*pcrs, ",")
@@ -78,10 +83,14 @@ func run() error {
 		pcrNums[i] = n
 	}
 
+	if *cmd == CMD_UPDATE_USER_DATA && *in == "" {
+		return fmt.Errorf("missing parameter -userdata")
+	}
+
 	switch *cmd {
 
 	case CMD_GET_HW_REPORT:
-		measurement, err := azuredriver.GetCcMeasurement(nil)
+		measurement, err := azuredriver.GetCcMeasurement(nil, nil)
 		if err != nil {
 			return fmt.Errorf("failed to get hwreport: %w", err)
 		}
@@ -121,10 +130,10 @@ func run() error {
 		os.Stdout.Write(rtdataRaw)
 
 	case CMD_GET_VTPM_QUOTE:
-		nonce := make([]byte, 4)
-		_, err := rand.Read(nonce)
+
+		nonce, err := azuredriver.GetAzureUserData()
 		if err != nil {
-			return fmt.Errorf("failed to generate nonce for quote: %w", err)
+			return fmt.Errorf("failed to get azure user data: %w", err)
 		}
 		quote, sig, _, err := azuredriver.GetVtpmQuote(pcrNums, nonce)
 		if err != nil {
@@ -154,6 +163,19 @@ func run() error {
 			return fmt.Errorf("failed to verify quote: %w", err)
 		}
 
+	case CMD_UPDATE_USER_DATA:
+		err := azuredriver.UpdateAzureUserData([]byte(*in))
+		if err != nil {
+			return fmt.Errorf("failed to update azure user data: %w", err)
+		}
+
+	case CMD_GET_USER_DATA:
+		data, err := azuredriver.GetAzureUserData()
+		if err != nil {
+			return fmt.Errorf("failed to get azure user data: %w", err)
+		}
+		os.Stdout.Write(data)
+
 	default:
 		return fmt.Errorf("unknown cmd %q. See azuretool -help", *cmd)
 
@@ -166,17 +188,25 @@ func verifyVtpm() error {
 
 	log.Debugf("Verifying vTPM Chain of Trust")
 
+	suppliedNonce := make([]byte, 64)
+	_, err := rand.Read(suppliedNonce)
+	if err != nil {
+		return fmt.Errorf("failed to create nonce: %w", err)
+	}
+	log.Debugf("Created nonce %v", hex.EncodeToString(suppliedNonce))
+
 	// Get azure report
-	measurement, err := azuredriver.GetCcMeasurement(nil)
+	measurement, err := azuredriver.GetCcMeasurement(suppliedNonce, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get azure CC measurement: %w", err)
 	}
 
 	// Extract the nonce (REPORTDATA) from TDX quote / SNP report
-	nonce, err := verifier.GetReportNonce(measurement)
+	reportNonce, err := verifier.GetReportNonce(measurement)
 	if err != nil {
 		return fmt.Errorf("failed to extract report nonce: %w", err)
 	}
+	log.Debugf("Extracted report nonce (HASH(runtime_claims): %v", hex.EncodeToString(reportNonce))
 
 	// Get vTPM AK cert
 	akRaw, err := azuredriver.GetVtpmAkCert()
@@ -189,7 +219,7 @@ func verifyVtpm() error {
 	}
 
 	// Verify the Azure CoT: vTPM AK public embedded into REPORTDATA
-	err = verifier.VerifyAzureCoT(measurement.Claims, nonce, ak)
+	err = verifier.VerifyAzureCoT(measurement.Claims, suppliedNonce, reportNonce, ak)
 	if err != nil {
 		return fmt.Errorf("failed to verify azure chain of trust: %w", err)
 	}
