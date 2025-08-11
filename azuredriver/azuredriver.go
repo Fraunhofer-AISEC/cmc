@@ -26,7 +26,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -47,7 +46,6 @@ type Azure struct {
 	ccAkChain []*x509.Certificate
 
 	// vTPM Parameters
-	mu         sync.Mutex
 	pcrs       []int
 	biosLog    bool
 	imaLog     bool
