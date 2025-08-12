@@ -34,9 +34,10 @@ func Test_verifySwMeasurements(t *testing.T) {
 		manifests     []ar.MetadataResult
 	}
 	tests := []struct {
-		name string
-		args args
-		want bool
+		name  string
+		args  args
+		want  ar.Status
+		want1 bool
 	}{
 		{
 			name: "Valid SW Measurement",
@@ -52,7 +53,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 				s:         ar.JsonSerializer{},
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
-			want: true,
+			want:  ar.StatusSuccess,
+			want1: true,
 		},
 		{
 			name: "Invalid Nonce",
@@ -68,7 +70,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 				s:         ar.JsonSerializer{},
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Refvals",
@@ -84,7 +87,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 				s:         ar.JsonSerializer{},
 				manifests: []ar.MetadataResult{invalidRefvalManifest},
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Artifacts",
@@ -100,7 +104,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 				s:         ar.JsonSerializer{},
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Evidence",
@@ -116,7 +121,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 				s:         ar.JsonSerializer{},
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid OCI Config",
@@ -132,7 +138,8 @@ func Test_verifySwMeasurements(t *testing.T) {
 				s:         ar.JsonSerializer{},
 				manifests: []ar.MetadataResult{invalidOciConfigUbuntuManifest},
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
@@ -152,10 +159,10 @@ func Test_verifySwMeasurements(t *testing.T) {
 				tt.args.cas,
 				refVals["SW Reference Value"],
 				tt.args.s)
-			if got.Summary.Success != tt.want {
-				t.Errorf("verifySwMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
+			if got.Summary.Status != tt.want {
+				t.Errorf("verifySwMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
 			}
-			if got1 != tt.want {
+			if got1 != tt.want1 {
 				t.Errorf("verifySwMeasurements() got = %v, want %v", got1, tt.want)
 			}
 		})

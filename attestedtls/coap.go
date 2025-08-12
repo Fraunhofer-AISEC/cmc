@@ -169,8 +169,12 @@ func (a CoapApi) verifyAR(
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
-	// check results
-	if !verifyResp.Result.Summary.Success {
+	// Check results
+	if verifyResp.Result.Summary.Status == ar.StatusSuccess {
+		log.Debugf("Attestation report verification successful")
+	} else if verifyResp.Result.Summary.Status == ar.StatusWarn {
+		log.Debugf("Attestation report verification passed with warnings")
+	} else {
 		return errors.New("attestation report verification failed")
 	}
 

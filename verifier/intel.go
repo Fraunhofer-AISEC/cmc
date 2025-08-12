@@ -435,7 +435,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	// Check signature type and size
 	if quoteType != SGX_QUOTE_TYPE && quoteType != TDX_QUOTE_TYPE {
 		log.Debugf("Quote type not supported %v", quoteType)
-		result.SignCheck.SetErr(ar.EvidenceType)
+		result.SignCheck.Fail(ar.EvidenceType)
 		return result, false
 	}
 	log.Tracef("Quote type is 0x%x", quoteType)
@@ -443,7 +443,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	// For now only ECDSA_P_256 support
 	if quoteSignatureType != ECDSA_P_256 {
 		log.Debugf("Signature Algorithm %v not supported", quoteSignatureType)
-		result.SignCheck.SetErr(ar.UnsupportedAlgorithm)
+		result.SignCheck.Fail(ar.UnsupportedAlgorithm)
 		return result, false
 	}
 	log.Tracef("Quote signature type is ECDSA P-256")
@@ -468,7 +468,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 
 	if len(ak_pub) == 0 {
 		log.Debugf("Failed to extract ECDSA public key from certificate")
-		result.SignCheck.SetErr(ar.ExtractPubKey)
+		result.SignCheck.Fail(ar.ExtractPubKey)
 		return result, false
 	}
 
@@ -488,11 +488,11 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	ok := ecdsa.Verify(ecdsa_ak_pub, digest[:], r, s)
 	if !ok {
 		log.Debugf("Failed to verify quote signature")
-		result.SignCheck.SetErr(ar.VerifySignature)
+		result.SignCheck.Fail(ar.VerifySignature)
 		return result, false
 	}
 	log.Debug("Successfully verified quote signature")
-	result.SignCheck.Success = true
+	result.SignCheck.Status = ar.StatusSuccess
 
 	// Verify QE Report Signature (Get QE Report from QE Report Signature Data)
 	switch quoteSig := quoteSignature.(type) {
@@ -514,7 +514,7 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	pckPub, ok := certs.PCKCert.PublicKey.(*ecdsa.PublicKey)
 	if !ok {
 		log.Debugf("Failed to extract PCK public key from certificate")
-		result.SignCheck.SetErr(ar.ExtractPubKey)
+		result.SignCheck.Fail(ar.ExtractPubKey)
 		return result, false
 	}
 
@@ -522,19 +522,19 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	ok = ecdsa.Verify(pckPub, digest[:], r, s)
 	if !ok {
 		log.Debugf("Failed to verify QE report signature")
-		result.SignCheck.SetErr(ar.VerifySignature)
+		result.SignCheck.Fail(ar.VerifySignature)
 		return result, false
 	}
 
 	log.Debug("Successfully verified QE report signature")
-	result.SignCheck.Success = true
+	result.SignCheck.Status = ar.StatusSuccess
 
 	// Verify Report Data: SHA256(ECDSA Attestation Key || QE Authentication Data) || 32-0x00’s)
 	reportDataRef := append(hash_ref[:], make([]byte, 32)...)
 
 	if !bytes.Equal(reportData[:], reportDataRef[:]) {
 		log.Debugf("invalid SHA256(ECDSA Attestation Key || QE Authentication Data) || 32*0x00) in QEReport.ReportData. expected: %v, got: %v\n", reportDataRef, reportData)
-		result.CertChainCheck.SetErr(ar.VerifyCertChain)
+		result.CertChainCheck.Fail(ar.VerifyCertChain)
 		return result, false
 	}
 
@@ -542,10 +542,10 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 	x509Chains, code := VerifyPckCertChain(certs, pckCrl, rootCrl)
 	if code != ar.NotSpecified {
 		log.Debugf("Failed to verify certificate chain: %v", err)
-		result.CertChainCheck.SetErr(code)
+		result.CertChainCheck.Fail(code)
 		return result, false
 	}
-	result.CertChainCheck.Success = true
+	result.CertChainCheck.Status = ar.StatusSuccess
 
 	// Store details from (all) validated certificate chain(s) in the report
 	for _, chain := range x509Chains {
@@ -643,31 +643,31 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 
 	if tcbInfo == nil {
 		log.Debugf("internal error: tcb info is nil")
-		result.Summary.SetErr(ar.Internal)
+		result.Summary.Fail(ar.Internal)
 		return result
 	}
 	if signingCert == nil {
 		log.Debugf("internal error: tcb key cert is nil")
-		result.Summary.SetErr(ar.Internal)
+		result.Summary.Fail(ar.Internal)
 		return result
 	}
 
 	errCode := verifyCollateralElem(tcbInfoBodyRaw, tcbInfo.Signature, CN_TCB_SIGNING, TCB_INFO_JSON_KEY, signingCert, caCert)
 	if errCode != ar.NotSpecified {
-		result.Summary.SetErr(errCode)
+		result.Summary.Fail(errCode)
 		return result
 	}
 
 	// Verify version
 	result.Version = ar.Result{
-		Success:  tcbInfo.TcbInfo.Version == TCB_INFO_VERSION,
+		Status:   ar.StatusFromBool(tcbInfo.TcbInfo.Version == TCB_INFO_VERSION),
 		Got:      fmt.Sprintf("%v", tcbInfo.TcbInfo.Version),
 		Expected: fmt.Sprintf("%v", TCB_INFO_VERSION),
 	}
 
 	// Verify ID
 	result.Id = ar.Result{
-		Success:  tcbInfo.TcbInfo.ID == TCB_INFO_ID,
+		Status:   ar.StatusFromBool(tcbInfo.TcbInfo.ID == TCB_INFO_ID),
 		Got:      tcbInfo.TcbInfo.ID,
 		Expected: TCB_INFO_ID,
 	}
@@ -676,7 +676,7 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 	now := time.Now()
 	if now.After(tcbInfo.TcbInfo.NextUpdate) {
 		log.Debugf("TCB info has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
-		result.Summary.SetErr(ar.TcbInfoExpired)
+		result.Summary.Fail(ar.TcbInfoExpired)
 		return result
 	}
 	log.Tracef("Successfully verified expiration status (next update due: %v)", tcbInfo.TcbInfo.NextUpdate)
@@ -684,30 +684,29 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 	tcbInfoFmspc, err := hex.DecodeString(tcbInfo.TcbInfo.Fmspc)
 	if err != nil {
 		log.Debugf("failed to deode TCB info FMSPC: %v", err)
-		result.Summary.SetErr(ar.Parse)
+		result.Summary.Fail(ar.Parse)
 		return result
 	}
-	log.Tracef("Successfully verified TCB info FMSPC (%v)", tcbInfo.TcbInfo.Fmspc)
-
 	if !bytes.Equal(tcbInfoFmspc, sgxExtensions.Fmspc.Value) {
 		log.Debugf("FMSPC value from TCB info (%v) and FMSPC value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.Fmspc, hex.EncodeToString(sgxExtensions.Fmspc.Value))
-		result.Summary.SetErr(ar.SgxFmpcMismatch)
+		result.Summary.Fail(ar.SgxFmpcMismatch)
 		return result
 
 	}
+	log.Tracef("Successfully verified TCB info FMSPC (%v)", tcbInfo.TcbInfo.Fmspc)
 
 	tcbInfoPceId, err := hex.DecodeString(tcbInfo.TcbInfo.PceID)
 	if err != nil {
 		log.Debugf("failed to deode TCB info PCE ID: %v", err)
-		result.Summary.SetErr(ar.Parse)
+		result.Summary.Fail(ar.Parse)
 		return result
 	}
 
 	if !bytes.Equal(tcbInfoPceId, sgxExtensions.PceId.Value) {
 		log.Debugf("PCEID value from TcbInfo (%v) and PCEID value from SGX Extensions in PCK Cert (%v) do not match",
 			tcbInfo.TcbInfo.PceID, sgxExtensions.PceId.Value)
-		result.Summary.SetErr(ar.SgxPceidMismatch)
+		result.Summary.Fail(ar.SgxPceidMismatch)
 		return result
 	}
 	log.Tracef("Successfully verified TCB info PCE ID (%v)", tcbInfo.TcbInfo.PceID)
@@ -735,7 +734,7 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 
 		// Compare PCESVN value
 		pceSvnResult := ar.Result{
-			Success:  false,
+			Status:   ar.StatusFail,
 			Expected: fmt.Sprintf("%v", tcbLevel.Tcb.Pcesvn),
 			Got:      fmt.Sprintf("%v", sgxExtensions.Tcb.Value.PceSvn.Value),
 		}
@@ -746,7 +745,7 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 			tcbLevelIteration = false
 		} else {
 			log.Debugf("\tSuccessfully verified PCE SVN")
-			pceSvnResult.Success = true
+			pceSvnResult.Status = ar.StatusSuccess
 		}
 
 		// Only TDX: Compare TEE TCB SVNs from TDX Report with TCB Level and fail if the TCB
@@ -786,13 +785,13 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 		}
 	}
 	if !tcbLevelCheck {
-		result.Summary.SetErr(ar.TcbLevelUnsupported)
+		result.Summary.Fail(ar.TcbLevelUnsupported)
 		return result
 	}
 
 	log.Debugf("Successfully validated TCB info")
 
-	result.Summary.Success = true
+	result.Summary.Status = ar.StatusSuccess
 
 	return result
 }
@@ -805,12 +804,12 @@ func ValidateQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdent
 
 	if qeIdentity == nil {
 		result := ar.QeReportResult{}
-		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: QE identity is nil"))
+		result.Summary.Fail(ar.Internal, fmt.Errorf("internal error: QE identity is nil"))
 		return result
 	}
 	if signingCert == nil {
 		result := ar.QeReportResult{}
-		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: TCB key certificate is nil"))
+		result.Summary.Fail(ar.Internal, fmt.Errorf("internal error: TCB key certificate is nil"))
 		return result
 	}
 
@@ -818,7 +817,7 @@ func ValidateQEIdentity(qeReportBody *EnclaveReportBody, qeIdentity *pcs.QeIdent
 		signingCert, caCert)
 	if errCode != ar.NotSpecified {
 		result := ar.QeReportResult{}
-		result.Summary.SetErr(errCode)
+		result.Summary.Fail(errCode)
 		return result
 	}
 
@@ -829,16 +828,16 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 
 	result := ar.QeReportResult{
 		Summary: ar.Result{
-			Success: true,
+			Status: ar.StatusSuccess,
 		},
 	}
 
 	if qeReportBody == nil {
-		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: QE report body is nil"))
+		result.Summary.Fail(ar.Internal, fmt.Errorf("internal error: QE report body is nil"))
 		return result
 	}
 	if qeIdentity == nil {
-		result.Summary.SetErr(ar.Internal, fmt.Errorf("internal error: QE identity is nil"))
+		result.Summary.Fail(ar.Internal, fmt.Errorf("internal error: QE identity is nil"))
 		return result
 	}
 
@@ -847,30 +846,30 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 	case TDX_QUOTE_TYPE:
 		if qeIdentity.EnclaveIdentity.Version == 2 {
 			if qeIdentity.EnclaveIdentity.ID != QE_ID {
-				result.Summary.SetErr(ar.VerifyQEIdentityErr,
+				result.Summary.Fail(ar.VerifyQEIdentityErr,
 					fmt.Errorf("enclave Identity is not generated for TDX and does not match Quote's TEE"))
 				return result
 			}
 		} else {
-			result.Summary.SetErr(ar.VerifyQEIdentityErr, fmt.Errorf("unsupported quote type %v", teeType))
+			result.Summary.Fail(ar.VerifyQEIdentityErr, fmt.Errorf("unsupported quote type %v", teeType))
 			return result
 		}
 
 	case SGX_QUOTE_TYPE:
 		if qeIdentity.EnclaveIdentity.ID != QE {
-			result.Summary.SetErr(ar.VerifyQEIdentityErr,
+			result.Summary.Fail(ar.VerifyQEIdentityErr,
 				fmt.Errorf("enclave Identity is not generated for SGX and does not match Quote's TEE"))
 			return result
 		}
 
 	default:
-		result.Summary.SetErr(ar.VerifyQEIdentityErr, fmt.Errorf("unknown quote type %v", teeType))
+		result.Summary.Fail(ar.VerifyQEIdentityErr, fmt.Errorf("unknown quote type %v", teeType))
 		return result
 	}
 
 	now := time.Now()
 	if now.After(qeIdentity.EnclaveIdentity.NextUpdate) {
-		result.Summary.SetErr(ar.VerifyQEIdentityErr,
+		result.Summary.Fail(ar.VerifyQEIdentityErr,
 			fmt.Errorf("qeIdentity has expired since: %v", qeIdentity.EnclaveIdentity.NextUpdate))
 	}
 
@@ -883,12 +882,12 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 		log.Debugf("MRSIGNER mismatch. Expected: %v, Got: %v",
 			hex.EncodeToString(qeIdentity.EnclaveIdentity.Mrsigner.Bytes),
 			hex.EncodeToString(qeReportBody.MRSIGNER[:]))
-		result.Summary.Success = false
-		result.MrSigner.Success = false
+		result.Summary.Status = ar.StatusFail
+		result.MrSigner.Status = ar.StatusFail
 
 	} else {
 		log.Tracef("MRSIGNER matches collateral (%v)", hex.EncodeToString(qeReportBody.MRSIGNER[:]))
-		result.MrSigner.Success = true
+		result.MrSigner.Status = ar.StatusSuccess
 	}
 
 	// Check ISVPRODID
@@ -898,10 +897,10 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 	}
 	if qeReportBody.ISVProdID != uint16(qeIdentity.EnclaveIdentity.IsvProdID) {
 		log.Debugf("IsvProdId mismatch. Expected: %v, Got: %v", qeIdentity.EnclaveIdentity.IsvProdID, qeReportBody.ISVProdID)
-		result.Summary.Success = false
-		result.IsvProdId.Success = false
+		result.Summary.Status = ar.StatusFail
+		result.IsvProdId.Status = ar.StatusFail
 	} else {
-		result.IsvProdId.Success = true
+		result.IsvProdId.Status = ar.StatusSuccess
 	}
 
 	// Check MISCSELECT
@@ -915,10 +914,10 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 	if refMiscSelect != reportMiscSelect {
 		log.Debugf("miscSelect value from QEIdentity: 0x%x does not match miscSelect value from QE Report: 0x%x",
 			refMiscSelect, reportMiscSelect)
-		result.Summary.Success = false
-		result.MiscSelect.Success = false
+		result.Summary.Status = ar.StatusFail
+		result.MiscSelect.Status = ar.StatusFail
 	} else {
-		result.MiscSelect.Success = true
+		result.MiscSelect.Status = ar.StatusSuccess
 	}
 
 	// Check attributes
@@ -937,15 +936,15 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 		log.Debugf("attributes mismatch. Expected: %v, Got: %v",
 			hex.EncodeToString(qeIdentity.EnclaveIdentity.Attributes.Bytes),
 			hex.EncodeToString(attributes_quote[:]))
-		result.Summary.Success = false
-		result.Attributes.Success = false
+		result.Summary.Status = ar.StatusFail
+		result.Attributes.Status = ar.StatusFail
 	} else {
-		result.Attributes.Success = true
+		result.Attributes.Status = ar.StatusSuccess
 	}
 
 	tcbStatus, tcbDate, err := getTcbStatusAndDateQE(qeIdentity, qeReportBody)
 	if err != nil {
-		result.Summary.SetErr(ar.VerifyQEIdentityErr, err)
+		result.Summary.Fail(ar.VerifyQEIdentityErr, err)
 		result.TcbLevelStatus = "Unknown"
 		result.TcbLevelDate = "Unknown"
 	}
@@ -956,7 +955,7 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 	case pcs.TcbComponentStatusRevoked:
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
-		result.Summary.SetErr(ar.VerifyQEIdentityErr, fmt.Errorf("TCB status: %q", tcbStatus))
+		result.Summary.Fail(ar.VerifyQEIdentityErr, fmt.Errorf("TCB status: %q", tcbStatus))
 	default:
 		result.TcbLevelStatus = string(tcbStatus)
 		result.TcbLevelDate = tcbDate
@@ -978,7 +977,7 @@ func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, sgxTcbComps []pcs.T
 	for i := 0; i < 16; i++ {
 		tcbFromCert := getTCBCompByIndex(sgxExtensions.Tcb, i+1)
 		results[i] = ar.Result{
-			Success:  true,
+			Status:   ar.StatusSuccess,
 			Got:      fmt.Sprintf("%v", tcbFromCert.Value),
 			Expected: fmt.Sprintf("%v", sgxTcbComps[i].Svn),
 		}
@@ -990,7 +989,7 @@ func compareSgxTcbCompSvns(sgxExtensions SGXExtensionsValue, sgxTcbComps []pcs.T
 				i+1, tcbFromCert.Value, sgxTcbComps[i].Svn,
 				sgxTcbComps[i].Category, sgxTcbComps[i].Type)
 			ok = false
-			results[i].Success = false
+			results[i].Status = ar.StatusFail
 		}
 	}
 	return results, ok
@@ -1008,7 +1007,7 @@ func compareTeeTcbSvns(teeTcbSvn [16]byte, tdxTcbComps []pcs.TcbComponent) ([]ar
 	results := make([]ar.Result, 16)
 	for i := 0; i < 16; i++ {
 		results[i] = ar.Result{
-			Success:  true,
+			Status:   ar.StatusSuccess,
 			Got:      fmt.Sprintf("%v", teeTcbSvn[i]),
 			Expected: fmt.Sprintf("%v", tdxTcbComps[i].Svn),
 		}
@@ -1019,7 +1018,7 @@ func compareTeeTcbSvns(teeTcbSvn [16]byte, tdxTcbComps []pcs.TcbComponent) ([]ar
 			log.Tracef("\tQuote TEE TCB SVN ID %v (%v) lower than expected TCB info SVN (%v)",
 				i, teeTcbSvn[i], tdxTcbComps[i].Svn)
 			ok = false
-			results[i].Success = false
+			results[i].Status = ar.StatusFail
 		}
 	}
 	return results, ok
@@ -1090,11 +1089,11 @@ func verifyQuoteVersion(quoteVersion, expectedVersion uint16) (ar.Result, bool) 
 	ok := quoteVersion == expectedVersion
 	if !ok {
 		log.Debugf("Quote version mismatch: Report = %v, supplied = %v", quoteVersion, expectedVersion)
-		r.Success = false
+		r.Status = ar.StatusFail
 		r.Expected = strconv.FormatUint(uint64(expectedVersion), 10)
 		r.Got = strconv.FormatUint(uint64(quoteVersion), 10)
 	} else {
-		r.Success = true
+		r.Status = ar.StatusSuccess
 	}
 
 	log.Tracef("Quote version %v matches expected version", quoteVersion)
@@ -1124,7 +1123,7 @@ func verifyRootCas(quoteCerts *SgxCertificates, collateral *Collateral, fingerpr
 		refFingerprints = append(refFingerprints, fp)
 	}
 
-	log.Debugf("Checking against %v fingerprints", len(refFingerprints))
+	log.Debugf("Verify root CAs against %v trusted fingerprints", len(refFingerprints))
 
 	// Verify that the quote CA fingerprint matches a reference CA fingerprint
 	pckCaFingerprint := sha256.Sum256(quoteCerts.RootCACert.Raw)

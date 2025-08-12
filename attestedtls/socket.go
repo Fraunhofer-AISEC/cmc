@@ -26,6 +26,7 @@ import (
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -178,9 +179,14 @@ func (a SocketApi) verifyAR(
 	}
 
 	// Check results
-	if !verifyResp.Result.Summary.Success {
+	if verifyResp.Result.Summary.Status == ar.StatusSuccess {
+		log.Debugf("Attestation report verification successful")
+	} else if verifyResp.Result.Summary.Status == ar.StatusWarn {
+		log.Debugf("Attestation report verification passed with warnings")
+	} else {
 		return errors.New("attestation report verification failed")
 	}
+
 	return nil
 }
 

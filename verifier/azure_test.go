@@ -118,8 +118,8 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifyAzureMeasurements(tt.args.measurements, tt.args.nonce, tt.args.rootManifest, tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals, tt.args.s)
 			for i := range got {
-				if got[i].Summary.Success != tt.want[i].Summary.Success {
-					t.Errorf("got %v: %v, want %v: %v", got[i].Type, got[i].Summary.Success, tt.want[i].Type, tt.want[i].Summary.Success)
+				if got[i].Summary.Status != tt.want[i].Summary.Status {
+					t.Errorf("got %v: %v, want %v: %v", got[i].Type, got[i].Summary.Status, tt.want[i].Type, tt.want[i].Summary.Status)
 				}
 			}
 			if got1 != tt.want1 {
@@ -138,13 +138,13 @@ var (
 	// 	{
 	// 		Type: "TDX Result",
 	// 		Summary: ar.Result{
-	// 			Success: true,
+	// 			Status: ar.StatusSuccess,
 	// 		},
 	// 	},
 	// 	{
 	// 		Type: "TPM Result",
 	// 		Summary: ar.Result{
-	// 			Success: true,
+	// 			Status: ar.StatusSuccess,
 	// 		},
 	// 	},
 	// }
@@ -153,13 +153,13 @@ var (
 		{
 			Type: "TDX Result",
 			Summary: ar.Result{
-				Success: false,
+				Status: ar.StatusFail,
 			},
 		},
 		{
 			Type: "TPM Result",
 			Summary: ar.Result{
-				Success: false,
+				Status: ar.StatusFail,
 			},
 		},
 	}
@@ -168,13 +168,13 @@ var (
 		{
 			Type: "TDX Result",
 			Summary: ar.Result{
-				Success: false,
+				Status: ar.StatusFail,
 			},
 		},
 		{
 			Type: "TPM Result",
 			Summary: ar.Result{
-				Success: true,
+				Status: ar.StatusSuccess,
 			},
 		},
 	}

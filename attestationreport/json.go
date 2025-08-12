@@ -179,7 +179,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	var err error
 	result := MetadataResult{
 		Summary: Result{
-			Success: true,
+			Status: StatusSuccess,
 		},
 	}
 	success := true
@@ -196,11 +196,11 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		jose.ES512,
 	})
 	if err != nil {
-		result.Summary.SetErr(ParseJSON, err)
+		result.Summary.Fail(ParseJSON, err)
 		return result, nil, false
 	}
 	if len(jwsData.Signatures) == 0 {
-		result.Summary.SetErr(JWSNoSignatures)
+		result.Summary.Fail(JWSNoSignatures)
 		return result, nil, false
 	}
 	index := make([]int, len(jwsData.Signatures))
@@ -224,11 +224,11 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		log.Trace("Using system certificate pool for JWS verification")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
-			result.Summary.SetErr(SetupSystemCA, err)
+			result.Summary.Fail(SetupSystemCA, err)
 			return result, nil, false
 		}
 	default:
-		result.Summary.SetErr(JWSUnknownVerifierType)
+		result.Summary.Fail(JWSUnknownVerifierType)
 		return result, nil, false
 	}
 
@@ -245,8 +245,8 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			// Verify the certificate chain present in the x5c header against the given roots
 			certs, err := sig.Protected.Certificates(opts)
 			if err != nil {
-				result.Summary.SetErr(NotSpecified)
-				result.SignatureCheck[i].CertChainCheck.SetErr(VerifyCertChain, err)
+				result.Summary.Fail(NotSpecified)
+				result.SignatureCheck[i].CertChainCheck.Fail(VerifyCertChain, err)
 				success = false
 				continue
 			}
@@ -258,7 +258,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 				}
 				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
 			}
-			result.SignatureCheck[i].CertChainCheck.Success = true
+			result.SignatureCheck[i].CertChainCheck.Status = StatusSuccess
 			verifyingKey = certs[0][0].PublicKey
 
 			log.Tracef("Using public key from cert %v for signature verification", certs[0][0].Subject.CommonName)
@@ -267,22 +267,22 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		// The JSONWebKey uses the certificates from the x5c header, already validated before
 		index[i], _, payloads[i], err = jwsData.VerifyMulti(verifyingKey)
 		if err == nil {
-			result.SignatureCheck[i].SignCheck.Success = true
+			result.SignatureCheck[i].SignCheck.Status = StatusSuccess
 		} else {
-			result.Summary.SetErr(NotSpecified)
-			result.SignatureCheck[i].SignCheck.SetErr(VerifySignature, err)
+			result.Summary.Fail(NotSpecified)
+			result.SignatureCheck[i].SignCheck.Fail(VerifySignature, err)
 			success = false
 		}
 
 		if index[i] != i {
-			result.Summary.SetErr(JWSSignatureOrder,
+			result.Summary.Fail(JWSSignatureOrder,
 				fmt.Errorf("order of signatures incorrect (index %v != iterator %v)", index[i], i))
 			success = false
 		}
 
 		if i > 0 {
 			if !bytes.Equal(payloads[i], payloads[i-1]) {
-				result.Summary.SetErr(JWSPayload)
+				result.Summary.Fail(JWSPayload)
 				success = false
 			}
 		}

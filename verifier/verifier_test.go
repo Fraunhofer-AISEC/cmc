@@ -34,6 +34,370 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func Test_collectReferenceValues(t *testing.T) {
+	type args struct {
+		metadata []ar.MetadataResult
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    map[string][]ar.ReferenceValue
+		wantErr bool
+	}{
+		{
+			name: "Success",
+			args: args{
+				metadata: []ar.MetadataResult{
+					rtmManifest,
+					osManifest,
+					appManifest1,
+					appManifest2,
+				},
+			},
+			want:    refMap,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := collectReferenceValues(tt.args.metadata)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("collectReferenceValues() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			for wantedkey, wantedrefvals := range tt.want {
+				for _, wantedrefval := range wantedrefvals {
+					found := false
+					for _, gotrefval := range got[wantedkey] {
+						if gotrefval.SubType == wantedrefval.SubType {
+							found = true
+						}
+					}
+					if !found {
+						t.Errorf("collectReferenceValues() failed to find %v", wantedrefval.SubType)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestVerify(t *testing.T) {
+	logrus.SetLevel(logrus.TraceLevel)
+
+	type args struct {
+		serializer        ar.Serializer
+		rtmManifest       ar.Metadata
+		osManifest        ar.Metadata
+		appManifest       ar.Metadata
+		deviceDescription ar.Metadata
+		nonce             []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want ar.Status
+	}{
+		{
+			name: "Valid Report JSON",
+			args: args{
+				serializer:        ar.JsonSerializer{},
+				rtmManifest:       validRtmManifest,
+				osManifest:        validOsManifest,
+				appManifest:       validAppManifest,
+				deviceDescription: validDeviceDescription,
+				nonce:             nonce,
+			},
+			want: ar.StatusSuccess,
+		},
+		{
+			name: "Valid Report CBOR",
+			args: args{
+				serializer:        ar.CborSerializer{},
+				rtmManifest:       validRtmManifest,
+				osManifest:        validOsManifest,
+				appManifest:       validAppManifest,
+				deviceDescription: validDeviceDescription,
+				nonce:             nonce,
+			},
+			want: ar.StatusSuccess,
+		},
+		{
+			// expected aggregated certification level in Manifests for
+			// empty measurement is max. 1 (here certification level = 3)
+			name: "Invalid Certification Level",
+			args: args{
+				serializer: ar.JsonSerializer{},
+				rtmManifest: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type:    "Manifest",
+						Name:    "de.test.rtm",
+						Version: "2023-04-10T20:00:00Z",
+						Validity: ar.Validity{
+							NotBefore: "2023-04-10T20:00:00Z",
+							NotAfter:  "2026-04-10T20:00:00Z",
+						},
+						Description: "de.test.rtm",
+					},
+					Manifest: ar.Manifest{
+						DevCommonName:   "Test Developer",
+						ReferenceValues: []ar.ReferenceValue{},
+						CertLevel:       3,
+					},
+				},
+				osManifest: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type:    "Manifest",
+						Name:    "de.test.os",
+						Version: "2023-04-10T20:00:00Z",
+						Validity: ar.Validity{
+							NotBefore: "2023-04-10T20:00:00Z",
+							NotAfter:  "2026-04-10T20:00:00Z",
+						},
+						Description: "PoC Fraunhofer AISEC Sample Report",
+					},
+					Manifest: ar.Manifest{
+						DevCommonName: "Test Developer",
+						BaseLayers: []string{
+							"de.test.rtm",
+						},
+						CertLevel: 3,
+					},
+				},
+				appManifest:       validAppManifest,
+				deviceDescription: validDeviceDescription,
+				nonce:             nonce,
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Invalid Device Description",
+			args: args{
+				serializer:        ar.JsonSerializer{},
+				rtmManifest:       validRtmManifest,
+				osManifest:        validOsManifest,
+				appManifest:       validAppManifest,
+				deviceDescription: invalidDeviceDescription,
+				nonce:             nonce,
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Incompatible RTM/OS Manifests",
+			args: args{
+				serializer:        ar.JsonSerializer{},
+				rtmManifest:       validRtmManifest,
+				osManifest:        incompatibleOsManifest,
+				appManifest:       validAppManifest,
+				deviceDescription: validDeviceDescription,
+				nonce:             nonce,
+			},
+			want: ar.StatusFail,
+		},
+	}
+
+	// Setup Test Keys and Certificates
+	log.Trace("Creating Keys and Certificates")
+	key, certchain, err := createCertsAndKeys()
+	if err != nil {
+		log.Errorf("Internal Error: Failed to create testing certs and keys: %v", err)
+		return
+	}
+
+	swSigner := &SwSigner{
+		priv:      key,
+		certChain: certchain,
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := tt.args.serializer
+
+			// Preparation: Generate a Sample Report
+			log.Trace("Generating a Sample Report")
+
+			// Preparation: create signed manifests and deviceDescription
+			rtmManifest, err := s.Marshal(tt.args.rtmManifest)
+			if err != nil {
+				t.Errorf("failed to marshal the RTM Manifest: %v", err)
+			}
+			osManifest, err := s.Marshal(tt.args.osManifest)
+			if err != nil {
+				t.Errorf("failed to marshal the OS Manifest: %v", err)
+			}
+			appManifest, err := s.Marshal(tt.args.appManifest)
+			if err != nil {
+				t.Errorf("failed to marshal the App Manifest: %v", err)
+			}
+			deviceDescription, err := s.Marshal(tt.args.deviceDescription)
+			if err != nil {
+				t.Errorf("failed to marshal the DeviceDescription: %v", err)
+			}
+
+			rtmManifest, err = prover.Sign(rtmManifest, swSigner, s, ar.IK)
+			if err != nil {
+				t.Errorf("failed to sign the RTM Manifest: %v", err)
+			}
+			osManifest, err = prover.Sign(osManifest, swSigner, s, ar.IK)
+			if err != nil {
+				t.Errorf("failed to sign the OS Manifest: %v", err)
+			}
+			appManifest, err = prover.Sign(appManifest, swSigner, s, ar.IK)
+			if err != nil {
+				t.Errorf("failed to sign the App Manifest: %v", err)
+			}
+			deviceDescription, err = prover.Sign(deviceDescription, swSigner, s, ar.IK)
+			if err != nil {
+				t.Errorf("failed to sign the DeviceDescription: %v", err)
+			}
+
+			rtmDigest := sha256.Sum256(rtmManifest)
+			rtmManifestDigest := ar.MetadataDigest{
+				Type:   "Manifest",
+				Digest: rtmDigest[:],
+			}
+
+			osDigest := sha256.Sum256(osManifest)
+			osManifestDigest := ar.MetadataDigest{
+				Type:   "Manifest",
+				Digest: osDigest[:],
+			}
+
+			appDigest := sha256.Sum256(appManifest)
+			appManifestDigest := ar.MetadataDigest{
+				Type:   "Manifest",
+				Digest: appDigest[:],
+			}
+
+			deviceDigest := sha256.Sum256(deviceDescription)
+			deviceDescriptionDigest := ar.MetadataDigest{
+				Type:   "Manifest",
+				Digest: deviceDigest[:],
+			}
+
+			report := ar.AttestationReport{
+				Type:    "Attestation Report",
+				Version: ar.GetVersion(),
+				Metadata: []ar.MetadataDigest{
+					rtmManifestDigest, osManifestDigest, appManifestDigest, deviceDescriptionDigest,
+				},
+			}
+
+			metadata := map[string][]byte{
+				hex.EncodeToString(rtmDigest[:]):    rtmManifest,
+				hex.EncodeToString(osDigest[:]):     osManifest,
+				hex.EncodeToString(appDigest[:]):    appManifest,
+				hex.EncodeToString(deviceDigest[:]): deviceDescription,
+			}
+
+			data, err := s.Marshal(report)
+			if err != nil {
+				t.Errorf("failed to marshal the Attestation Report: %v", err)
+			}
+
+			// Preparation: Sign the report
+			arSigned, err := prover.Sign(data, swSigner, s, ar.IK)
+			if err != nil {
+				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
+			}
+
+			// Run FUT
+			log.Info("Running FUT")
+			got := Verify(
+				arSigned, nonce,
+				[]*x509.Certificate{certchain[len(certchain)-1]},
+				[]*x509.Certificate{certchain[len(certchain)-1]},
+				nil,
+				PolicyEngineSelect_None,
+				metadata)
+			log.Info("Finished FUT")
+			if got.Summary.Status != tt.want {
+				log.Warnf("Printing Summary")
+				got.PrintErr()
+				t.Errorf("Result.Success = %v, want %v", got.Summary.Status, tt.want)
+			}
+		})
+	}
+}
+
+func Test_checkMetadataCompatibility(t *testing.T) {
+	logrus.SetLevel(logrus.TraceLevel)
+	type args struct {
+		metadata *ar.MetadataSummary
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  ar.Status
+		want1 []ar.ErrorCode
+	}{
+		{
+			name:  "Valid Metadata",
+			want:  ar.StatusSuccess,
+			want1: []ar.ErrorCode{},
+			args: args{
+				metadata: validMetadata,
+			},
+		},
+		{
+			name:  "No Root Manifest",
+			want:  ar.StatusFail,
+			want1: []ar.ErrorCode{ar.NoRootManifest},
+			args: args{
+				metadata: noRootManifestMetadata,
+			},
+		},
+		{
+			name:  "Multiple Root Manifests",
+			want:  ar.StatusFail,
+			want1: []ar.ErrorCode{ar.MultipleRootManifests},
+			args: args{
+				metadata: multipleRootManifestMetadata,
+			},
+		},
+		{
+			name:  "Missing Manifests",
+			want:  ar.StatusFail,
+			want1: []ar.ErrorCode{},
+			args: args{
+				metadata: missingManifestMetadata,
+			},
+		},
+		{
+			name:  "Missing Manifest Description",
+			want:  ar.StatusFail,
+			want1: []ar.ErrorCode{},
+			args: args{
+				metadata: missingDescriptionMetadata,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkMetadataCompatibility(tt.args.metadata)
+			if got.Summary.Status != tt.want {
+				t.Errorf("checkMetadataCompatibility() got = %v, want %v", got, tt.want)
+			}
+			if len(got.Summary.ErrorCodes) != len(tt.want1) {
+				t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
+			}
+			for _, ec1 := range got.Summary.ErrorCodes {
+				found := false
+				for _, ec2 := range tt.want1 {
+					if ec1 == ec2 {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
+				}
+			}
+		})
+	}
+}
+
 // variables for Test_collectReferenceValues
 var (
 	refs = []ar.ReferenceValue{
@@ -113,18 +477,6 @@ var (
 		Type:     "Manifest Description",
 		Name:     " Test App Manifest Description 1",
 		Manifest: "de.test.app",
-	}
-
-	successCompatibilityResult = &ar.CompatibilityResult{
-		Summary: ar.Result{
-			Success: true,
-		},
-	}
-
-	failedCompatibilityResult = &ar.CompatibilityResult{
-		Summary: ar.Result{
-			Success: false,
-		},
 	}
 
 	validRtmManifest = ar.Metadata{
@@ -257,8 +609,7 @@ var (
 
 // Variables for TestVerify
 var (
-	ArVersion = "1.4.3"
-	nonce     = []byte{0x01, 0x02, 0x03}
+	nonce = []byte{0x01, 0x02, 0x03}
 )
 
 // Variables for Test_checkMetadataCompatibility
@@ -431,388 +782,4 @@ func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
 	}
 
 	return priv, []*x509.Certificate{leaf, ca}, nil
-}
-
-func Test_collectReferenceValues(t *testing.T) {
-	type args struct {
-		metadata []ar.MetadataResult
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    map[string][]ar.ReferenceValue
-		wantErr bool
-	}{
-		{
-			name: "Success",
-			args: args{
-				metadata: []ar.MetadataResult{
-					rtmManifest,
-					osManifest,
-					appManifest1,
-					appManifest2,
-				},
-			},
-			want:    refMap,
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := collectReferenceValues(tt.args.metadata)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("collectReferenceValues() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			for wantedkey, wantedrefvals := range tt.want {
-				for _, wantedrefval := range wantedrefvals {
-					found := false
-					for _, gotrefval := range got[wantedkey] {
-						if gotrefval.SubType == wantedrefval.SubType {
-							found = true
-						}
-					}
-					if !found {
-						t.Errorf("collectReferenceValues() failed to find %v", wantedrefval.SubType)
-					}
-				}
-			}
-		})
-	}
-}
-
-func TestVerify(t *testing.T) {
-	logrus.SetLevel(logrus.TraceLevel)
-
-	type args struct {
-		serializer        ar.Serializer
-		rtmManifest       ar.Metadata
-		osManifest        ar.Metadata
-		appManifest       ar.Metadata
-		deviceDescription ar.Metadata
-		nonce             []byte
-	}
-	tests := []struct {
-		name string
-		args args
-		want ar.VerificationResult
-	}{
-		{
-			name: "Valid Report JSON",
-			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
-			},
-			want: ar.VerificationResult{
-				Summary: ar.Result{
-					Success: true,
-				},
-			},
-		},
-		{
-			name: "Valid Report CBOR",
-			args: args{
-				serializer:        ar.CborSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
-			},
-			want: ar.VerificationResult{
-				Summary: ar.Result{
-					Success: true,
-				},
-			},
-		},
-		{
-			// expected aggregated certification level in Manifests for
-			// empty measurement is max. 1 (here certification level = 3)
-			name: "Invalid Certification Level",
-			args: args{
-				serializer: ar.JsonSerializer{},
-				rtmManifest: ar.Metadata{
-					MetaInfo: ar.MetaInfo{
-						Type:    "Manifest",
-						Name:    "de.test.rtm",
-						Version: "2023-04-10T20:00:00Z",
-						Validity: ar.Validity{
-							NotBefore: "2023-04-10T20:00:00Z",
-							NotAfter:  "2026-04-10T20:00:00Z",
-						},
-						Description: "de.test.rtm",
-					},
-					Manifest: ar.Manifest{
-						DevCommonName:   "Test Developer",
-						ReferenceValues: []ar.ReferenceValue{},
-						CertLevel:       3,
-					},
-				},
-				osManifest: ar.Metadata{
-					MetaInfo: ar.MetaInfo{
-						Type:    "Manifest",
-						Name:    "de.test.os",
-						Version: "2023-04-10T20:00:00Z",
-						Validity: ar.Validity{
-							NotBefore: "2023-04-10T20:00:00Z",
-							NotAfter:  "2026-04-10T20:00:00Z",
-						},
-						Description: "PoC Fraunhofer AISEC Sample Report",
-					},
-					Manifest: ar.Manifest{
-						DevCommonName: "Test Developer",
-						BaseLayers: []string{
-							"de.test.rtm",
-						},
-						CertLevel: 3,
-					},
-				},
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
-			},
-			want: ar.VerificationResult{
-				Summary: ar.Result{
-					Success: false,
-				},
-			},
-		},
-		{
-			name: "Invalid Device Description",
-			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: invalidDeviceDescription,
-				nonce:             nonce,
-			},
-			want: ar.VerificationResult{
-				Summary: ar.Result{
-					Success: false,
-				},
-			},
-		},
-		{
-			name: "Incompatible RTM/OS Manifests",
-			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        incompatibleOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
-			},
-			want: ar.VerificationResult{
-				Summary: ar.Result{
-					Success: false,
-				},
-			},
-		},
-	}
-
-	// Setup Test Keys and Certificates
-	log.Trace("Creating Keys and Certificates")
-	key, certchain, err := createCertsAndKeys()
-	if err != nil {
-		log.Errorf("Internal Error: Failed to create testing certs and keys: %v", err)
-		return
-	}
-
-	swSigner := &SwSigner{
-		priv:      key,
-		certChain: certchain,
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := tt.args.serializer
-
-			// Preparation: Generate a Sample Report
-			log.Trace("Generating a Sample Report")
-
-			// Preparation: create signed manifests and deviceDescription
-			rtmManifest, err := s.Marshal(tt.args.rtmManifest)
-			if err != nil {
-				t.Errorf("failed to marshal the RTM Manifest: %v", err)
-			}
-			osManifest, err := s.Marshal(tt.args.osManifest)
-			if err != nil {
-				t.Errorf("failed to marshal the OS Manifest: %v", err)
-			}
-			appManifest, err := s.Marshal(tt.args.appManifest)
-			if err != nil {
-				t.Errorf("failed to marshal the App Manifest: %v", err)
-			}
-			deviceDescription, err := s.Marshal(tt.args.deviceDescription)
-			if err != nil {
-				t.Errorf("failed to marshal the DeviceDescription: %v", err)
-			}
-
-			rtmManifest, err = prover.Sign(rtmManifest, swSigner, s, ar.IK)
-			if err != nil {
-				t.Errorf("failed to sign the RTM Manifest: %v", err)
-			}
-			osManifest, err = prover.Sign(osManifest, swSigner, s, ar.IK)
-			if err != nil {
-				t.Errorf("failed to sign the OS Manifest: %v", err)
-			}
-			appManifest, err = prover.Sign(appManifest, swSigner, s, ar.IK)
-			if err != nil {
-				t.Errorf("failed to sign the App Manifest: %v", err)
-			}
-			deviceDescription, err = prover.Sign(deviceDescription, swSigner, s, ar.IK)
-			if err != nil {
-				t.Errorf("failed to sign the DeviceDescription: %v", err)
-			}
-
-			rtmDigest := sha256.Sum256(rtmManifest)
-			rtmManifestDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: rtmDigest[:],
-			}
-
-			osDigest := sha256.Sum256(osManifest)
-			osManifestDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: osDigest[:],
-			}
-
-			appDigest := sha256.Sum256(appManifest)
-			appManifestDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: appDigest[:],
-			}
-
-			deviceDigest := sha256.Sum256(deviceDescription)
-			deviceDescriptionDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: deviceDigest[:],
-			}
-
-			report := ar.AttestationReport{
-				Type:    "Attestation Report",
-				Version: ArVersion,
-				Metadata: []ar.MetadataDigest{
-					rtmManifestDigest, osManifestDigest, appManifestDigest, deviceDescriptionDigest,
-				},
-			}
-
-			metadata := map[string][]byte{
-				hex.EncodeToString(rtmDigest[:]):    rtmManifest,
-				hex.EncodeToString(osDigest[:]):     osManifest,
-				hex.EncodeToString(appDigest[:]):    appManifest,
-				hex.EncodeToString(deviceDigest[:]): deviceDescription,
-			}
-
-			data, err := s.Marshal(report)
-			if err != nil {
-				t.Errorf("failed to marshal the Attestation Report: %v", err)
-			}
-
-			// Preparation: Sign the report
-			arSigned, err := prover.Sign(data, swSigner, s, ar.IK)
-			if err != nil {
-				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
-			}
-
-			// Run FUT
-			log.Info("Running FUT")
-			got := Verify(
-				arSigned, nonce,
-				[]*x509.Certificate{certchain[len(certchain)-1]},
-				[]*x509.Certificate{certchain[len(certchain)-1]},
-				nil,
-				PolicyEngineSelect_None,
-				metadata)
-			log.Info("Finished FUT")
-			if got.Summary.Success != tt.want.Summary.Success {
-				log.Warnf("Printing Summary")
-				got.PrintErr()
-				t.Errorf("Result.Success = %v, want %v", got.Summary.Success, tt.want.Summary.Success)
-			}
-		})
-	}
-}
-
-func Test_checkMetadataCompatibility(t *testing.T) {
-	logrus.SetLevel(logrus.TraceLevel)
-	type args struct {
-		metadata *ar.MetadataSummary
-	}
-	tests := []struct {
-		name  string
-		args  args
-		want  *ar.CompatibilityResult
-		want1 []ar.ErrorCode
-	}{
-		{
-			name:  "Valid Metadata",
-			want:  successCompatibilityResult,
-			want1: []ar.ErrorCode{},
-			args: args{
-				metadata: validMetadata,
-			},
-		},
-		{
-			name:  "No Root Manifest",
-			want:  failedCompatibilityResult,
-			want1: []ar.ErrorCode{ar.NoRootManifest},
-			args: args{
-				metadata: noRootManifestMetadata,
-			},
-		},
-		{
-			name:  "Multiple Root Manifests",
-			want:  failedCompatibilityResult,
-			want1: []ar.ErrorCode{ar.MultipleRootManifests},
-			args: args{
-				metadata: multipleRootManifestMetadata,
-			},
-		},
-		{
-			name:  "Missing Manifests",
-			want:  failedCompatibilityResult,
-			want1: []ar.ErrorCode{},
-			args: args{
-				metadata: missingManifestMetadata,
-			},
-		},
-		{
-			name:  "Missing Manifest Description",
-			want:  failedCompatibilityResult,
-			want1: []ar.ErrorCode{},
-			args: args{
-				metadata: missingDescriptionMetadata,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := checkMetadataCompatibility(tt.args.metadata)
-			if got.Summary.Success != tt.want.Summary.Success {
-				t.Errorf("checkMetadataCompatibility() got = %v, want %v", got, tt.want)
-			}
-			if len(got.Summary.ErrorCodes) != len(tt.want1) {
-				t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
-			}
-			for _, ec1 := range got.Summary.ErrorCodes {
-				found := false
-				for _, ec2 := range tt.want1 {
-					if ec1 == ec2 {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
-				}
-			}
-		})
-	}
 }

@@ -92,25 +92,27 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 
 	var err error
 	result := &ar.MeasurementResult{
-		Type:      "TDX Result",
+		Type: "TDX Result",
+		Summary: ar.Result{
+			Status: ar.StatusSuccess,
+		},
 		TdxResult: &ar.TdxResult{},
 	}
-	ok := true
 
 	if len(referenceValues) == 0 {
 		log.Debugf("Could not find TDX reference values")
-		result.Summary.SetErr(ar.RefValNotPresent)
+		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
 	if rootManifest == nil {
 		log.Debugf("Internal error: root manifest not present")
-		result.Summary.SetErr((ar.Internal))
+		result.Summary.Fail((ar.Internal))
 		return result, false
 	}
 	tdxPolicy := rootManifest.TdxPolicy
 	if tdxPolicy == nil {
 		log.Debugf("TDX manifest does not contain TDX policy")
-		result.Summary.SetErr(ar.PolicyNotPresent)
+		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
 
@@ -122,13 +124,13 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 			collateralRaw = measurement.Artifacts[0].Events[0].IntelCollateral
 			if collateralRaw == nil {
 				log.Debugf("Could not find TDX collateral")
-				result.Summary.SetErr(ar.CollateralNotPresent)
+				result.Summary.Fail(ar.CollateralNotPresent)
 				return result, false
 			}
 			collateral, err = ParseCollateral(collateralRaw)
 			if err != nil {
 				log.Debugf("Could not parse TDX collateral artifact: %v", err)
-				result.Summary.SetErr(ar.ParseCollateral)
+				result.Summary.Fail(ar.ParseCollateral)
 				return result, false
 			}
 		}
@@ -138,7 +140,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	tdxQuote, err := DecodeTdxReportV4(measurement.Evidence)
 	if err != nil {
 		log.Debugf("Failed to decode TDX report: %v", err)
-		result.Summary.SetErr(ar.ParseEvidence)
+		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
@@ -148,28 +150,27 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	if !bytes.Equal(tdxQuote.QuoteBody.ReportData[:], nonce64) {
 		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:]))
-		result.Freshness.Success = false
+		result.Summary.Status = ar.StatusFail
+		result.Freshness.Status = ar.StatusFail
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
-		ok = false
-		return result, ok
 	} else {
-		result.Freshness.Success = true
+		log.Debugf("Successfully verified TDX quote nonce")
+		result.Freshness.Status = ar.StatusSuccess
 		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 	}
 
 	// Extract certificate chain from quote
 	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain
 	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
-		log.Debugf("incomplete certificate chain")
-		result.Summary.SetErr(ar.VerifyCertChain)
+		result.Summary.Fail(ar.VerifyCertChain)
 		return result, false
 	}
 
 	// Match measurement root CAs against reference root CA fingerprint
 	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
 	if errCode != ar.NotSpecified {
-		result.Summary.SetErr(errCode)
+		result.Summary.Fail(errCode)
 		return result, false
 	}
 
@@ -177,7 +178,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
 		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
-		result.Summary.SetErr(ar.ParseCert)
+		result.Summary.Fail(ar.ParseCert)
 		return result, false
 	}
 
@@ -186,9 +187,9 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		&collateral.TcbInfo, collateralRaw.TcbInfo,
 		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
-	if !result.TdxResult.TcbInfoCheck.Summary.Success {
+	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to validate TCB info")
-		result.Summary.SetErr(ar.VerifyTcbInfo)
+		result.Summary.Fail(ar.VerifyTcbInfo)
 		return result, false
 	}
 
@@ -199,8 +200,8 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
 		TDX_QUOTE_TYPE)
 	result.TdxResult.QeReportCheck = qeIdentityResult
-	if !qeIdentityResult.Summary.Success {
-		result.Summary.SetErr(ar.VerifyQEIdentityErr, err)
+	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
+		result.Summary.Fail(ar.VerifyQEIdentityErr)
 		return result, false
 	}
 
@@ -209,8 +210,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		TDX_QUOTE_TYPE, collateral.PckCrl, collateral.RootCaCrl)
 	if !ret {
-		log.Debug("Failed to verify Intel quote signature")
-		ok = false
+		result.Summary.Status = ar.StatusFail
 	}
 	result.Signature = sig
 
@@ -218,11 +218,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody,
 		measurement.Artifacts, referenceValues)
 	if errCode != ar.NotSpecified || !ok {
-		log.Debugf("Failed to recalculate measurement registers")
-		ok = false
-		result.Summary.SetErr(errCode)
-	} else {
-		log.Tracef("Successfully recalculated TDX MRs")
+		result.Summary.Fail(errCode)
 	}
 	result.TdxResult.MrMatch = mrResults
 	result.Artifacts = append(result.Artifacts, detailedResults...)
@@ -230,20 +226,20 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &tdxPolicy.TdId, &collateral.TcbInfo)
 	if !okTdId {
 		log.Debugf("Failed to verify TDX TD ID")
-		ok = false
+		result.Summary.Status = ar.StatusFail
 	}
 	result.Artifacts = append(result.Artifacts, tdIdResults...)
 
 	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], tdxPolicy.Xfam)
-	if !result.TdxResult.XfamCheck.Success {
+	if result.TdxResult.XfamCheck.Status != ar.StatusSuccess {
 		log.Debugf("TDX XFAM check failed")
-		ok = false
+		result.Summary.Status = ar.StatusFail
 	}
 
 	result.TdxResult.SeamAttributesCheck = verifyTdxSeamAttributes(tdxQuote.QuoteBody.SeamAttributes[:])
-	if !result.TdxResult.SeamAttributesCheck.Success {
+	if result.TdxResult.SeamAttributesCheck.Status != ar.StatusSuccess {
 		log.Debugf("TDX SEAM attributes check failed")
-		ok = false
+		result.Summary.Status = ar.StatusFail
 	}
 
 	// Verify Quote Body values against reference TDX policy
@@ -251,25 +247,23 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	result.TdxResult.TdAttributesCheck, okTdAttr = verifyTdxTdAttributes(tdxQuote.QuoteBody.TdAttributes, &tdxPolicy.TdAttributes)
 	if !okTdAttr {
 		log.Debugf("TDX TD Attributes check failed")
-		ok = false
+		result.Summary.Status = ar.StatusFail
 	}
 
 	// Check version
 	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader.Version, tdxPolicy.QuoteVersion)
 	if !ret {
-		return result, false
+		result.Summary.Status = ar.StatusFail
 	}
 	log.Tracef("Successfully validated TDX quote version")
 
-	if ok {
+	if result.Summary.Status == ar.StatusSuccess {
 		log.Debug("Successfully verified TDX measurements")
 	} else {
 		log.Debug("Failed to verify TDX measurements")
 	}
 
-	result.Summary.Success = ok
-
-	return result, ok
+	return result, result.Summary.Status == ar.StatusSuccess
 }
 
 // Parses the report into the TDReport structure
@@ -421,6 +415,8 @@ func parseECDSAQuoteSignatureDataStructV4(buf *bytes.Buffer, quoteSigStruct *ECD
 // 5           | MRSEAM (not in UEFI spec)
 func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.ReferenceValue,
 ) ([]ar.DigestResult, []ar.DigestResult, ar.ErrorCode, bool) {
+
+	log.Debug("Verifying TDX measurement registers")
 
 	success := true
 	detailedResults := make([]ar.DigestResult, 0)
@@ -580,6 +576,12 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		}
 	}
 
+	if success {
+		log.Debug("Succesfully verified TDX measurement registers")
+	} else {
+		log.Debug("Failed to verify TDX measurement registers")
+	}
+
 	return mrResults, detailedResults, ar.NotSpecified, success
 }
 
@@ -672,13 +674,11 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 }
 
 func verifyTdxXfam(measured, reference []byte) ar.Result {
-	success := bytes.Equal(measured, reference)
-	result := ar.Result{
-		Success:  success,
+	return ar.Result{
+		Status:   ar.StatusFromBool(bytes.Equal(measured, reference)),
 		Got:      hex.EncodeToString(measured),
 		Expected: hex.EncodeToString(reference),
 	}
-	return result
 }
 
 func verifyTdxSeamAttributes(measured []byte) ar.Result {
@@ -687,12 +687,11 @@ func verifyTdxSeamAttributes(measured []byte) ar.Result {
 	// SeamAttributes must be zero for Intel TDX 1.0
 	refAttributes := make([]byte, 8)
 	success := bytes.Equal(measured, refAttributes)
-	result := ar.Result{
-		Success:  success,
+	return ar.Result{
+		Status:   ar.StatusFromBool(success),
 		Got:      hex.EncodeToString(measured),
 		Expected: hex.EncodeToString(refAttributes),
 	}
-	return result
 }
 
 func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAttributes) (ar.TdAttributesCheck, bool) {

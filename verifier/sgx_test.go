@@ -34,9 +34,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		omitCollateral bool
 	}
 	tests := []struct {
-		name string
-		args args
-		want bool
+		name  string
+		args  args
+		want  ar.Status
+		want1 bool
 	}{
 		{
 			name: "Valid Attestation Report",
@@ -67,7 +68,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: true,
+			want:  ar.StatusSuccess,
+			want1: true,
 		},
 		{
 			name: "Invalid Certificate Chain",
@@ -98,7 +100,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Report Signature",
@@ -129,7 +132,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Missing Collateral",
@@ -161,7 +165,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				nonce:          validSGXNonce,
 				omitCollateral: true,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Measurement",
@@ -192,7 +197,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Attributes",
@@ -223,7 +229,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Nonce",
@@ -254,7 +261,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: []byte{},
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid MRSIGNER",
@@ -285,7 +293,8 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Missing SGX Policy",
@@ -309,13 +318,14 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				nonce: validSGXNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
 
 	log.Trace("Fetching TcbInfo")
-	collateral, err := FetchCollateral(fmspc_sgx, pck_cert_tdx, SGX_QUOTE_TYPE)
+	collateral, err := FetchCollateral(fmspc_sgx, pckCertTdx, SGX_QUOTE_TYPE)
 	if err != nil {
 		t.Errorf("failed to get SGX collateral: %v", err)
 	}
@@ -340,10 +350,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifySgxMeasurements(*tt.args.measurement, tt.args.nonce,
 				tt.args.rootManifest, tt.args.refvals)
-			if got.Summary.Success != tt.want {
-				t.Errorf("verifySgxMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
+			if got.Summary.Status != tt.want {
+				t.Errorf("verifySgxMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
 			}
-			if got1 != tt.want {
+			if got1 != tt.want1 {
 				t.Errorf("verifySgxMeasurements() got1 = %v, want %v", got1, tt.want)
 			}
 		})

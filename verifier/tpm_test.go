@@ -18,10 +18,8 @@ package verifier
 import (
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"math/big"
-	"reflect"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -40,7 +38,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 	tests := []struct {
 		name  string
 		args  args
-		want  *ar.MeasurementResult
+		want  ar.Status
 		want1 bool
 	}{
 		{
@@ -58,7 +56,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  &validTpmMeasurementResult,
+			want:  ar.StatusSuccess,
 			want1: true,
 		},
 		{
@@ -76,7 +74,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  &validTpmMeasurementResult,
+			want:  ar.StatusSuccess,
 			want1: true,
 		},
 		{
@@ -94,7 +92,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 		{
@@ -112,7 +110,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 		{
@@ -130,7 +128,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 		{
@@ -148,7 +146,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 		{
@@ -166,7 +164,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: invalidReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 		{
@@ -184,7 +182,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{invalidCaTpm},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 		{
@@ -202,7 +200,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 				referenceValues: validReferenceValues,
 				cas:             []*x509.Certificate{invalidCaTpm},
 			},
-			want:  nil,
+			want:  ar.StatusFail,
 			want1: false,
 		},
 	}
@@ -213,23 +211,11 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifyTpmMeasurements(*tt.args.measurements, tt.args.nonce,
 				tt.args.cas, tt.args.referenceValues, tt.args.s)
-			if got.Summary.Success != tt.want1 {
-				t.Errorf("verifyTpmMeasurements() --GOT-- = %v, --WANT1-- %v", got.Summary.Success, tt.want1)
+			if got.Summary.Status != tt.want {
+				t.Errorf("verifyTpmMeasurements() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want1)
 			}
 			if got1 != tt.want1 {
 				t.Errorf("verifyTpmMeasurements() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
-			}
-
-			if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
-				if !reflect.DeepEqual(got.Artifacts, tt.want.Artifacts) {
-					// Output result as json to make it easier to compare
-					g, _ := json.Marshal(got.Artifacts)
-					w, _ := json.Marshal(tt.want.Artifacts)
-					t.Errorf("verifyTpmMeasurements ARTIFACTS Mismatch \n---GOT = %v\n\n--WANT = %v", string(g), string(w))
-				}
-				if !reflect.DeepEqual(got.TpmResult, tt.want.TpmResult) {
-					t.Errorf("verifyTpmMeasurements TPMResult Mismatch \n---GOT = %v\n\n--WANT = %v", got.TpmResult, tt.want.TpmResult)
-				}
 			}
 		})
 	}
@@ -464,248 +450,6 @@ var (
 		},
 	}
 
-	validResult = ar.Result{
-		Success: true,
-	}
-
-	validArtifacts = []ar.DigestResult{
-		{
-			Digest:   "ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39",
-			SubType:  "EV_CPU_MICROCODE",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845",
-			SubType:  "Unknown Event Type",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b",
-			SubType:  "EV_NONHOST_CONFIG",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39",
-			SubType:  "EV_EFI_VARIABLE_BOOT",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69",
-			SubType:  "EV_EFI_VARIABLE_BOOT",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7",
-			SubType:  "EV_EFI_VARIABLE_BOOT",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8",
-			SubType:  "EV_EFI_VARIABLE_BOOT",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-			SubType:  "EV_SEPARATOR",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4",
-			SubType:  "EV_PLATFORM_CONFIG_FLAGS",
-			Index:    1,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba",
-			SubType:  "EV_EFI_ACTION",
-			Index:    4,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119",
-			SubType:  "EV_SEPARATOR",
-			Index:    4,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036",
-			SubType:  "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:    4,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05",
-			SubType:  "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:    4,
-			Success:  true,
-			Launched: true,
-		},
-		{
-			Digest:   "3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025",
-			SubType:  "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:    4,
-			Success:  true,
-			Launched: true,
-		},
-	}
-
 	deviceCertserial, _ = new(big.Int).SetString("1", 10)
 	caCertserial, _     = new(big.Int).SetString("634815014411613577372985193537194269253199433648", 10)
-
-	validSignatureResult = ar.SignatureResult{
-		Certs: [][]ar.X509CertExtracted{
-			{
-				{
-					Version:      3,
-					SerialNumber: deviceCertserial,
-					Issuer: ar.X509Name{
-						Country:            []string{"DE"},
-						Organization:       []string{"Test Company"},
-						OrganizationalUnit: []string{"Root CA"},
-						Locality:           []string{"Test City"},
-						CommonName:         "Test Root CA",
-					},
-					Subject: ar.X509Name{
-						Country:            []string{"DE"},
-						Organization:       []string{"Test Organization"},
-						OrganizationalUnit: []string{"device"},
-						Locality:           []string{"Munich"},
-						Province:           []string{"BY"},
-						StreetAddress:      []string{"teststreet 15"},
-						PostalCode:         []string{"85748"},
-						CommonName:         "de.test.ak.device0",
-					},
-					Validity: ar.Validity{
-						NotBefore: "2022-11-07 08:51:49 +0000 UTC",
-						NotAfter:  "2027-10-12 08:51:49 +0000 UTC",
-					},
-					KeyUsage:           []string{"Digital Signature"},
-					SignatureAlgorithm: "ECDSA-SHA256",
-					PublicKeyAlgorithm: "RSA",
-					PublicKey:          "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAszEASVD7GIFw2t+k813q\nSyah+290gDAEdpcle1rQlw3bxq94gvHaBa4CWGkH3SHQieBakRNRyTGYAn8q9O2w\n4fWWFFB5bBcuYVyJdzaUoPc2T/922notV3tZonPHwy00yWytiAb22mMaCAhJNDIU\nAJBieZqluq9/w5LRQ/3e9RN4CcIoFEMA4pPcWOlSXrLrpu4CdTW7Uj03tcFR6bqd\nBKXD0rKauBdIbQe9ul7t/pxaY0kLZ0k53HGk3nbcWr0j2Iwg6L4rYNd+zDZKHG0i\nPQ0RbH7+Ao2Gx1WWfkSdhqtJ5/s3Xa0dNJmeXqhNa2dMYxpKY59rVuQSleC4z3FX\n1wIDAQAB\n-----END PUBLIC KEY-----\n",
-					Extensions: []ar.PkixExtension{
-						{
-							Id:       "2.5.29.15",
-							Critical: true,
-							Value:    []byte{0x03, 0x02, 0x07, 0x80},
-						},
-						{
-							Id:       "2.5.29.19",
-							Critical: true,
-							Value:    []byte{0x30, 0x00},
-						},
-						{
-							Id:       "2.5.29.14",
-							Critical: false,
-							Value:    []byte{0x04, 0x14, 0xd2, 0xa0, 0x57, 0xf4, 0x44, 0xa1, 0x54, 0x29, 0xcb, 0xc7, 0x89, 0xfd, 0xc3, 0x91, 0x5e, 0xc1, 0x39, 0xf1, 0xb2, 0xd1},
-						},
-						{
-							Id:       "2.5.29.35",
-							Critical: false,
-							Value:    []byte{0x30, 0x16, 0x80, 0x14, 0x3f, 0x85, 0xc9, 0xcb, 0xb7, 0x24, 0x05, 0xf7, 0xb0, 0xd4, 0xd2, 0x44, 0xcb, 0xc0, 0x04, 0x34, 0x43, 0x78, 0xe2, 0x02},
-						},
-					},
-					ExtKeyUsage:           []string{},
-					BasicConstraintsValid: true,
-					MaxPathLen:            -1,
-					SubjectKeyId:          []byte{0xd2, 0xa0, 0x57, 0xf4, 0x44, 0xa1, 0x54, 0x29, 0xcb, 0xc7, 0x89, 0xfd, 0xc3, 0x91, 0x5e, 0xc1, 0x39, 0xf1, 0xb2, 0xd1},
-					AuthorityKeyId:        []byte{0x3f, 0x85, 0xc9, 0xcb, 0xb7, 0x24, 0x5, 0xf7, 0xb0, 0xd4, 0xd2, 0x44, 0xcb, 0xc0, 0x4, 0x34, 0x43, 0x78, 0xe2, 0x02},
-				},
-				{
-					Version:      3,
-					SerialNumber: caCertserial,
-					Issuer: ar.X509Name{
-						Country:            []string{"DE"},
-						Organization:       []string{"Test Company"},
-						OrganizationalUnit: []string{"Root CA"},
-						Locality:           []string{"Test City"},
-						CommonName:         "Test Root CA",
-					},
-					Subject: ar.X509Name{
-						Country:            []string{"DE"},
-						Organization:       []string{"Test Company"},
-						OrganizationalUnit: []string{"Root CA"},
-						Locality:           []string{"Test City"},
-						CommonName:         "Test Root CA",
-					},
-					Validity: ar.Validity{
-						NotBefore: "2022-10-23 17:01:00 +0000 UTC",
-						NotAfter:  "2027-10-22 17:01:00 +0000 UTC",
-					},
-					KeyUsage:           []string{"Cert Sign", "CRL Sign"},
-					SignatureAlgorithm: "ECDSA-SHA256",
-					PublicKeyAlgorithm: "ECDSA",
-					PublicKey:          "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAESpo2j3WJNJJtz0EvWIhAhWlkt3zx\nEvkt8fXlJW6AnLjd3SN4T4oe2lADwWkC/FdAcmbfXPlXr6gsbgxB9Uc38Q==\n-----END PUBLIC KEY-----\n",
-					Extensions: []ar.PkixExtension{
-						{
-							Id:       "2.5.29.15",
-							Critical: true,
-							Value:    []byte{0x03, 0x02, 0x01, 0x06},
-						},
-						{
-							Id:       "2.5.29.19",
-							Critical: true,
-							Value:    []byte{0x30, 0x03, 0x01, 0x01, 0xff},
-						},
-						{
-							Id:       "2.5.29.14",
-							Critical: false,
-							Value:    []byte{0x04, 0x14, 0x3f, 0x85, 0xc9, 0xcb, 0xb7, 0x24, 0x05, 0xf7, 0xb0, 0xd4, 0xd2, 0x44, 0xcb, 0xc0, 0x04, 0x34, 0x43, 0x78, 0xe2, 0x02},
-						},
-					},
-					ExtKeyUsage:           []string{},
-					BasicConstraintsValid: true,
-					IsCA:                  true,
-					MaxPathLen:            -1,
-					SubjectKeyId:          []byte{0x3f, 0x85, 0xc9, 0xcb, 0xb7, 0x24, 0x5, 0xf7, 0xb0, 0xd4, 0xd2, 0x44, 0xcb, 0xc0, 0x4, 0x34, 0x43, 0x78, 0xe2, 0x02},
-					AuthorityKeyId:        nil,
-				},
-			},
-		},
-		SignCheck:      validResult,
-		CertChainCheck: validResult,
-	}
-
-	validTpmMeasurementResult = ar.MeasurementResult{
-		Type:      "TPM Result",
-		Summary:   validResult,
-		Freshness: validResult,
-		Signature: validSignatureResult,
-		Artifacts: validArtifacts,
-		TpmResult: &ar.TpmResult{
-			PcrMatch: []ar.DigestResult{
-				{
-					Index:   1,
-					Digest:  "5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6",
-					Success: true,
-				},
-				{
-					Index:   4,
-					Digest:  "d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72",
-					Success: true,
-				},
-			},
-			AggPcrQuoteMatch: validResult,
-		},
-	}
 )

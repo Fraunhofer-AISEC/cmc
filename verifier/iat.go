@@ -62,13 +62,13 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 	certs, err := internal.ParseCertsDer(iasM.Certs)
 	if err != nil {
 		log.Debugf("failed to parse IAS certificates: %v", err)
-		result.Summary.SetErr(ar.ParseEvidence)
+		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
 	if len(referenceValues) == 0 {
 		log.Debugf("Could not find IAS Reference Value")
-		result.Summary.SetErr(ar.RefValNotPresent)
+		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
 	s := ar.CborSerializer{}
@@ -78,7 +78,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 	iatresult, payload, ok := verifyIat(iasM.Evidence, certs[0])
 	if !ok {
 		log.Debugf("IAS signature verification failed")
-		result.Summary.SetErr(ar.VerifySignature)
+		result.Summary.Fail(ar.VerifySignature)
 		return result, false
 	}
 	result.Signature.SignCheck = iatresult
@@ -89,7 +89,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 	err = s.Unmarshal(payload, iat)
 	if err != nil {
 		log.Debugf("Failed to unmarshal IAT: %v", err)
-		result.Summary.SetErr(ar.ParseEvidence)
+		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
@@ -97,10 +97,10 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 
 	// Verify nonce
 	if bytes.Equal(nonce, iat.AuthChallenge) {
-		result.Freshness.Success = true
+		result.Freshness.Status = ar.StatusSuccess
 	} else {
 		log.Debugf("Nonces mismatch: Supplied Nonce = %v, IAT Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(iat.AuthChallenge))
-		result.Freshness.Success = false
+		result.Freshness.Status = ar.StatusSuccess
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(iat.AuthChallenge)
 		ok = false
@@ -114,14 +114,14 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 	x509Chains, err := internal.VerifyCertChain(certs, []*x509.Certificate{ca})
 	if err != nil {
 		log.Debugf("Failed to verify certificate chain: %v", err)
-		result.Summary.SetErr(ar.VerifyCertChain)
+		result.Summary.Fail(ar.VerifyCertChain)
 		ok = false
 	}
 
 	// Verify that the certificate fingerprint matches one of the manifest fingerprints
 	result.Signature.CertChainCheck = verifyCaFingerprint(ca, rootManifest.CaFingerprints)
-	if !result.Signature.CertChainCheck.Success {
-		result.Summary.SetErr(ar.CaFingerprint)
+	if result.Signature.CertChainCheck.Status != ar.StatusSuccess {
+		result.Summary.Fail(ar.CaFingerprint)
 		ok = false
 	}
 
@@ -141,7 +141,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 		log.Tracef("Found reference value %v: %v", ref.SubType, hex.EncodeToString(ref.Sha256))
 		if ref.Type != "IAS Reference Value" {
 			log.Tracef("IAS Reference Value invalid type %v", ref.Type)
-			result.Summary.SetErr(ar.RefValType)
+			result.Summary.Fail(ar.RefValType)
 			return result, false
 		}
 		found := false
@@ -198,7 +198,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 		}
 	}
 
-	result.Summary.Success = ok
+	result.Summary.Status = ar.StatusSuccess
 
 	return result, ok
 }
@@ -210,14 +210,14 @@ func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
 	err := msgToVerify.UnmarshalCBOR(data)
 	if err != nil {
 		result := ar.Result{}
-		result.SetErr(ar.ParseEvidence, err)
+		result.Fail(ar.ParseEvidence, err)
 		return result, nil, false
 	}
 
 	publicKey, okKey := cert.PublicKey.(*ecdsa.PublicKey)
 	if !okKey {
 		result := ar.Result{}
-		result.SetErr(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate: %v", err))
+		result.Fail(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate: %v", err))
 		return result, nil, false
 	}
 
@@ -225,16 +225,16 @@ func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
 	verifier, err := cose.NewVerifier(cose.AlgorithmES256, publicKey)
 	if err != nil {
 		result := ar.Result{}
-		result.SetErr(ar.Internal, err)
+		result.Fail(ar.Internal, err)
 		return result, nil, false
 	}
 
 	err = msgToVerify.Verify(nil, verifier)
 	if err != nil {
 		result := ar.Result{}
-		result.SetErr(ar.VerifySignature, err)
+		result.Fail(ar.VerifySignature, err)
 		return result, nil, false
 	}
 
-	return ar.Result{Success: true}, msgToVerify.Payload, true
+	return ar.Result{Status: ar.StatusSuccess}, msgToVerify.Payload, true
 }
