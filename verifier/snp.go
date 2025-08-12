@@ -93,32 +93,32 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 
 	if len(referenceValues) == 0 {
 		log.Debug("Could not find SNP Reference Value")
-		result.Summary.SetErr(ar.RefValNotPresent)
+		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
 		log.Debugf("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
 			len(referenceValues))
-		result.Summary.SetErr(ar.RefValMultiple)
+		result.Summary.Fail(ar.RefValMultiple)
 		return result, false
 	}
 
 	snpReferenceValue := referenceValues[0]
 	if snpReferenceValue.Type != "SNP Reference Value" {
 		log.Debugf("SNP Reference Value invalid type %v", snpReferenceValue.Type)
-		result.Summary.SetErr(ar.RefValType)
+		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
 
 	if rootManifest == nil {
 		log.Debugf("Internal error: root manifest not present")
-		result.Summary.SetErr((ar.Internal))
+		result.Summary.Fail((ar.Internal))
 		return result, false
 	}
 
 	snpPolicy := rootManifest.SnpPolicy
 	if snpPolicy == nil {
 		log.Debugf("SNP manifest %v does not contain SNP policy", rootManifest.Name)
-		result.Summary.SetErr(ar.PolicyNotPresent)
+		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
 
@@ -126,7 +126,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	s, err := DecodeSnpReport(measurement.Evidence)
 	if err != nil {
 		log.Debugf("Failed to decode SNP report: %v", err)
-		result.Summary.SetErr(ar.ParseEvidence)
+		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
@@ -136,19 +136,19 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {
 		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
-		result.Freshness.Success = false
+		result.Freshness.Status = ar.StatusFail
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(s.ReportData[:])
 		ok = false
 	} else {
 		result.Freshness.Got = hex.EncodeToString(nonce)
-		result.Freshness.Success = true
+		result.Freshness.Status = ar.StatusSuccess
 	}
 
 	certs, err := internal.ParseCertsDer(measurement.Certs)
 	if err != nil {
 		log.Debugf("Failed to parse certificates: %v", err)
-		result.Summary.SetErr(ar.ParseCert)
+		result.Summary.Fail(ar.ParseCert)
 		return result, false
 	}
 
@@ -219,7 +219,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		ok = false
 	}
 
-	result.Summary.Success = ok
+	result.Summary.Status = ar.StatusFromBool(ok)
 
 	return result, ok
 }
@@ -229,11 +229,11 @@ func verifySnpVersion(expected, got uint32) (ar.Result, bool) {
 	ok := expected == got
 	if !ok {
 		log.Debugf("SNP report version mismatch: Report = %v, supplied = %v", got, expected)
-		r.Success = false
+		r.Status = ar.StatusFail
 		r.Expected = strconv.FormatUint(uint64(expected), 10)
 		r.Got = strconv.FormatUint(uint64(got), 10)
 	} else {
-		r.Success = true
+		r.Status = ar.StatusSuccess
 	}
 	return r, ok
 }
@@ -284,7 +284,7 @@ func verifySnpPolicy(policy uint64, v ar.SnpGuestPolicy) (ar.PolicyCheck, bool) 
 		log.Debugf("SNP policies do not match: Abi: %v, Smt: %v, Migration: %v, Debug: %v, SingleSocket: %v",
 			r.Abi.Success, r.Smt.Success, r.Migration.Success, r.Debug.Success, r.SingleSocket.Success)
 	}
-	r.Summary.Success = ok
+	r.Summary.Status = ar.StatusFromBool(ok)
 
 	return r, ok
 }
@@ -364,7 +364,7 @@ func verifySnpTcb(s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
 		log.Debugf("SNP TCB check failed: BL: %v, TEE: %v, SNP: %v, UCODE: %v",
 			r.Bl.Success, r.Tee.Success, r.Snp.Success, r.Ucode.Success)
 	}
-	r.Summary.Success = ok
+	r.Summary.Status = ar.StatusFromBool(ok)
 
 	return r, ok
 }
@@ -378,7 +378,7 @@ func verifySnpSignature(
 
 	if len(reportRaw) < signature_offset {
 		log.Warn("Internal Error: Report buffer too small")
-		result.SignCheck.SetErr(ar.Internal)
+		result.SignCheck.Fail(ar.Internal)
 		return result, false
 	}
 
@@ -405,7 +405,7 @@ func verifySnpSignature(
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
 		log.Debugf("Signature Algorithm %v not supported", report.SignatureAlgo)
-		result.SignCheck.SetErr(ar.UnsupportedAlgorithm)
+		result.SignCheck.Fail(ar.UnsupportedAlgorithm)
 		return result, false
 	}
 
@@ -413,7 +413,7 @@ func verifySnpSignature(
 	pub, ok := certs[0].PublicKey.(*ecdsa.PublicKey)
 	if !ok {
 		log.Debug("Failed to extract ECDSA public key from certificate")
-		result.SignCheck.SetErr(ar.ExtractPubKey)
+		result.SignCheck.Fail(ar.ExtractPubKey)
 		return result, false
 	}
 
@@ -421,26 +421,26 @@ func verifySnpSignature(
 	ok = ecdsa.Verify(pub, digest[:], r, s)
 	if !ok {
 		log.Debug("Failed to verify SNP report signature")
-		result.SignCheck.SetErr(ar.VerifySignature)
+		result.SignCheck.Fail(ar.VerifySignature)
 		return result, false
 	}
 	log.Debug("Successfully verified SNP report signature")
-	result.SignCheck.Success = true
+	result.SignCheck.Status = ar.StatusSuccess
 
 	// Verify the SNP certificate chain
 	ca := certs[len(certs)-1]
 	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
 	if err != nil {
 		log.Debugf("Failed to verify certificate chain: %v", err)
-		result.CertChainCheck.SetErr(ar.VerifyCertChain)
+		result.CertChainCheck.Fail(ar.VerifyCertChain)
 		return result, false
 	}
 	log.Debug("Successfully verified SNP certificate chain")
 
 	// Verify that the certificate fingerprint matches one of the manifest fingerprints
 	result.CertChainCheck = verifyCaFingerprint(ca, fingerprints)
-	if !result.CertChainCheck.Success {
-		result.CertChainCheck.SetErr(ar.CaFingerprint)
+	if result.CertChainCheck.Status != ar.StatusSuccess {
+		result.CertChainCheck.Fail(ar.CaFingerprint)
 		return result, false
 	}
 
@@ -543,7 +543,7 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 			success = false
 		}
 		log.Debugf("CSP ID extension present: %v", csp)
-		results = append(results, ar.Result{Success: ok, Got: csp})
+		results = append(results, ar.Result{Status: ar.StatusFromBool(ok), Got: csp})
 	}
 
 	return results, success

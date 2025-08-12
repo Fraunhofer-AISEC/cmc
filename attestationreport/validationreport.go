@@ -25,11 +25,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-// The validation report version
-const (
-	vrVersion = "1.3.0"
-)
-
 // VerificationResult represents the results of all steps taken during
 // the validation of an attestation report.
 type VerificationResult struct {
@@ -44,10 +39,18 @@ type VerificationResult struct {
 	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"10,keyasint"`
 }
 
+type Status string
+
+const (
+	StatusSuccess Status = "success"
+	StatusFail    Status = "fail"
+	StatusWarn    Status = "warn"
+)
+
 // Result is a generic struct do display if a verification of a measured/provided data structure
 // against a reference data structure was successful
 type Result struct {
-	Success         bool        `json:"success"`
+	Status          Status      `json:"status"`
 	Got             string      `json:"got,omitempty" cbor:"0,keyasint,omitempty"`
 	Expected        string      `json:"expected,omitempty" cbor:"1,keyasint,omitempty"`
 	ExpectedOneOf   []string    `json:"expectedOneOf,omitempty" cbor:"2,keyasint,omitempty"`
@@ -714,28 +717,64 @@ func (e ErrorCode) String() string {
 	}
 }
 
-func (r *Result) SetErr(code ErrorCode, errs ...error) {
-	r.Success = false
+func (r *Result) Fail(code ErrorCode, errs ...error) {
+	r.Status = StatusFail
 	if code != NotSpecified {
 		r.ErrorCodes = append(r.ErrorCodes, code)
 	}
 	if len(errs) > 0 {
 		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
-		log.Warnf("Verification failed with error code %v: %v", code.String(), r.Details)
+		log.Debugf("Verification failed with error code %v: %v", code.String(), r.Details)
 	} else if code != NotSpecified {
-		log.Warnf("Verification failed with error code %v", code.String())
+		log.Debugf("Verification failed with error code %v", code.String())
 	} else {
-		log.Warnf("Verification failed")
+		log.Debugf("Verification failed")
 	}
 }
 
-func (r *VerificationResult) SetErr(code ErrorCode, errs ...error) {
+func (r *Result) Warn(code ErrorCode, errs ...error) {
+	// Make sure, an already failed result is not set to warn
+	if r.Status != StatusFail {
+		r.Status = StatusWarn
+	}
+	if code != NotSpecified {
+		r.ErrorCodes = append(r.ErrorCodes, code)
+	}
+	if len(errs) > 0 {
+		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
+		log.Debugf("Verification passed with warning %v: %v", code.String(), r.Details)
+	} else if code != NotSpecified {
+		log.Debugf("Verification passed with warning %v", code.String())
+	} else {
+		log.Debugf("Verification passed with warning")
+	}
+}
+
+func StatusFromBool(ok bool) Status {
+	if ok {
+		return StatusSuccess
+	} else {
+		return StatusFail
+	}
+}
+
+func (r *VerificationResult) Fail(code ErrorCode, errs ...error) {
 	if len(errs) > 0 {
 		for _, err := range errs {
-			r.Summary.SetErr(code, err)
+			r.Summary.Fail(code, err)
 		}
 	} else {
-		r.Summary.SetErr(code)
+		r.Summary.Fail(code)
+	}
+}
+
+func (r *VerificationResult) Warn(code ErrorCode, errs ...error) {
+	if len(errs) > 0 {
+		for _, err := range errs {
+			r.Summary.Warn(code, err)
+		}
+	} else {
+		r.Summary.Warn(code)
 	}
 }
 
@@ -744,7 +783,7 @@ func (r *Result) PrintErr(format string, args ...interface{}) {
 		log.Warnf("%v is nil", fmt.Sprintf(format, args...))
 		return
 	}
-	if r.Success {
+	if r.Status == StatusSuccess {
 		return
 	}
 	if len(r.ErrorCodes) == 0 || len(r.ErrorCodes) == 1 && r.ErrorCodes[0] == NotSpecified {
@@ -777,92 +816,94 @@ func (r *SignatureResult) PrintErr(format string, args ...interface{}) {
 
 func (r *VerificationResult) PrintErr() {
 
-	if !r.Summary.Success {
+	if r.Summary.Status == StatusSuccess {
+		return
+	}
 
-		if len(r.Summary.ErrorCodes) == 0 {
-			log.Warn("Verification failed")
-		} else {
-			log.Warnf("Verification failed with error codes: %v", r.Summary.ErrorCodes)
+	if len(r.Summary.ErrorCodes) == 0 {
+		log.Warn("Verification failed")
+	} else {
+		log.Warnf("Verification failed with error codes: %v", r.Summary.ErrorCodes)
+	}
+
+	for _, m := range r.Measurements {
+		m.Summary.PrintErr("%v", m.Type)
+		m.Freshness.PrintErr("Measurement freshness check")
+		m.Signature.PrintErr("Measurement")
+		for _, a := range m.Artifacts {
+			if !a.Success {
+				header := ""
+				if m.Type == "TPM Measurement" {
+					header = fmt.Sprintf("PCR%v ", a.Index)
+				} else if m.Type == "TDX Measurement" {
+					header = fmt.Sprintf("%v ", internal.IndexToMr(a.Index))
+				}
+				log.Warnf("%vMeasurement Type %v, Subtype: %v: %v verification failed",
+					header, a.Type, a.SubType, a.Digest)
+			}
 		}
-
-		for _, m := range r.Measurements {
-			m.Summary.PrintErr("%v", m.Type)
-			m.Freshness.PrintErr("Measurement freshness check")
-			m.Signature.PrintErr("Measurement")
-			for _, a := range m.Artifacts {
-				if !a.Success {
-					header := ""
-					if m.Type == "TPM Measurement" {
-						header = fmt.Sprintf("PCR%v ", a.Index)
-					} else if m.Type == "TDX Measurement" {
-						header = fmt.Sprintf("%v ", internal.IndexToMr(a.Index))
-					}
-					log.Warnf("%vMeasurement Type %v, Subtype: %v: %v verification failed",
-						header, a.Type, a.SubType, a.Digest)
+		if m.TpmResult != nil {
+			m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
+			for _, p := range m.TpmResult.PcrMatch {
+				if !p.Success {
+					log.Warnf("PCR%v calculated: %v, measured: %v", p.Index, p.Digest,
+						p.Measured)
 				}
 			}
-			if m.TpmResult != nil {
-				m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
-				for _, p := range m.TpmResult.PcrMatch {
-					if !p.Success {
-						log.Warnf("PCR%v calculated: %v, measured: %v", p.Index, p.Digest,
-							p.Measured)
-					}
-				}
-			}
-			if m.SnpResult != nil {
-				m.SnpResult.VersionMatch.PrintErr("Version match")
-				// TODO
-				log.Warnf("Detailed SNP evaluation not yet implemented")
-			}
-			if m.SgxResult != nil {
-				m.SgxResult.VersionMatch.PrintErr("Version match")
-				// TODO
-				log.Warnf("Detailed SGX evaluation not yet implemented")
-			}
-			if m.TdxResult != nil {
-				m.TdxResult.VersionMatch.PrintErr("Version match")
-				// TODO
-				log.Warnf("Detailed TDX evaluation not yet implemented")
-			}
 		}
-
-		for _, s := range r.ReportSignature {
-			s.PrintErr("Report")
+		if m.SnpResult != nil {
+			m.SnpResult.VersionMatch.PrintErr("Version match")
+			// TODO
+			log.Warnf("Detailed SNP evaluation not yet implemented")
 		}
-
-		if r.Metadata.CompDescResult != nil {
-			r.Metadata.CompDescResult.Summary.PrintErr("Company description check")
-			for _, s := range r.Metadata.CompDescResult.SignatureCheck {
-				s.PrintErr("Company Description")
-			}
-			r.Metadata.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
+		if m.SgxResult != nil {
+			m.SgxResult.VersionMatch.PrintErr("Version match")
+			// TODO
+			log.Warnf("Detailed SGX evaluation not yet implemented")
 		}
-
-		for _, mr := range r.Metadata.ManifestResults {
-			mr.Summary.PrintErr("%v %v check", mr.Type, mr.Name)
-			for _, s := range mr.SignatureCheck {
-				s.PrintErr("%v", mr.Name)
-			}
-			mr.ValidityCheck.PrintErr("%v validity check", mr.Name)
-		}
-
-		r.Metadata.DevDescResult.Summary.PrintErr("Device Description check")
-		for _, s := range r.Metadata.DevDescResult.SignatureCheck {
-			s.PrintErr("Device Description")
-		}
-
-		r.Metadata.CompatibilityResult.Summary.PrintErr("Metadata compatibility check")
-		for _, mr := range r.Metadata.CompatibilityResult.ManifestCompatibility {
-			mr.PrintErr("Manifest compatibility check")
-		}
-		for _, dr := range r.Metadata.CompatibilityResult.DescriptionMatch {
-			dr.PrintErr("Description -> Manifest match")
-		}
-		for _, dr := range r.Metadata.CompatibilityResult.ManifestMatch {
-			dr.PrintErr("Manifest -> Description match")
+		if m.TdxResult != nil {
+			m.TdxResult.VersionMatch.PrintErr("Version match")
+			// TODO
+			log.Warnf("Detailed TDX evaluation not yet implemented")
 		}
 	}
+
+	for _, s := range r.ReportSignature {
+		s.PrintErr("Report")
+	}
+
+	if r.Metadata.CompDescResult != nil {
+		r.Metadata.CompDescResult.Summary.PrintErr("Company description check")
+		for _, s := range r.Metadata.CompDescResult.SignatureCheck {
+			s.PrintErr("Company Description")
+		}
+		r.Metadata.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
+	}
+
+	for _, mr := range r.Metadata.ManifestResults {
+		mr.Summary.PrintErr("%v %v check", mr.Type, mr.Name)
+		for _, s := range mr.SignatureCheck {
+			s.PrintErr("%v", mr.Name)
+		}
+		mr.ValidityCheck.PrintErr("%v validity check", mr.Name)
+	}
+
+	r.Metadata.DevDescResult.Summary.PrintErr("Device Description check")
+	for _, s := range r.Metadata.DevDescResult.SignatureCheck {
+		s.PrintErr("Device Description")
+	}
+
+	r.Metadata.CompatibilityResult.Summary.PrintErr("Metadata compatibility check")
+	for _, mr := range r.Metadata.CompatibilityResult.ManifestCompatibility {
+		mr.PrintErr("Manifest compatibility check")
+	}
+	for _, dr := range r.Metadata.CompatibilityResult.DescriptionMatch {
+		dr.PrintErr("Description -> Manifest match")
+	}
+	for _, dr := range r.Metadata.CompatibilityResult.ManifestMatch {
+		dr.PrintErr("Manifest -> Description match")
+	}
+
 }
 
 func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
@@ -881,14 +922,4 @@ func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
 	return &CtrData{
 		OciSpec: m.OciSpec,
 	}
-}
-
-func (result *VerificationResult) CheckVersion() error {
-	if result == nil {
-		return fmt.Errorf("internal error: VerificationResult is nil")
-	}
-	if !strings.EqualFold(vrVersion, result.Version) {
-		return fmt.Errorf("API version mismatch. Expected VerificationResult version %v, got %v", arVersion, result.Version)
-	}
-	return nil
 }

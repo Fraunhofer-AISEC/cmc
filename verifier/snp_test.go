@@ -35,9 +35,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		refvals      []ar.ReferenceValue
 	}
 	tests := []struct {
-		name string
-		args args
-		want bool
+		name  string
+		args  args
+		want  ar.Status
+		want1 bool
 	}{
 		{
 			name: "ValidAttestationReport",
@@ -68,7 +69,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: true,
+			want:  ar.StatusSuccess,
+			want1: true,
 		},
 		{
 			name: "Invalid Signature",
@@ -99,7 +101,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Certificate Chain",
@@ -130,7 +133,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid VCEK Certificate",
@@ -161,7 +165,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Report",
@@ -192,7 +197,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Measurement",
@@ -223,7 +229,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Policy Parameter Debug",
@@ -254,7 +261,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Nonce",
@@ -285,7 +293,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: invalidNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Reference Value Type",
@@ -316,7 +325,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: invalidNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "No Reference Values Present",
@@ -341,7 +351,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Firmware",
@@ -372,7 +383,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid TCB",
@@ -403,7 +415,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid CA Fingerprints",
@@ -434,7 +447,8 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Missing SNP Policy",
@@ -459,17 +473,18 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want: false,
+			want:  ar.StatusFail,
+			want1: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifySnpMeasurements(*tt.args.measurement, tt.args.nonce,
 				tt.args.rootManifest, tt.args.refvals)
-			if got.Summary.Success != tt.want {
-				t.Errorf("verifySnpMeasurements() got = %v, want %v", got.Summary.Success, tt.want)
+			if got.Summary.Status != tt.want {
+				t.Errorf("verifySnpMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
 			}
-			if got1 != tt.want {
+			if got1 != tt.want1 {
 				t.Errorf("verifySnpMeasurements() got1 = %v, want %v", got1, tt.want)
 			}
 		})

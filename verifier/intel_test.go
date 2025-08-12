@@ -44,7 +44,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: true,
+					Status: ar.StatusSuccess,
 				},
 			},
 		},
@@ -57,7 +57,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -70,7 +70,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -83,7 +83,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -96,7 +96,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -109,7 +109,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -122,7 +122,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -135,7 +135,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -148,7 +148,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -161,7 +161,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
-					Success: false,
+					Status: ar.StatusFail,
 				},
 			},
 		},
@@ -172,8 +172,8 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := validateQEIdentityProperties(tt.args.qeReportBody, tt.args.qeIdentity, tt.args.teeType)
-			if got.Summary.Success != tt.want.Summary.Success {
-				t.Errorf("validateQEIdentityProperties() success = %v, wantSuccess %v", got.Summary.Success, tt.want.Summary.Success)
+			if got.Summary.Status != tt.want.Summary.Status {
+				t.Errorf("validateQEIdentityProperties() success = %v, wantSuccess %v", got.Summary.Status, tt.want.Summary.Status)
 			}
 		})
 	}

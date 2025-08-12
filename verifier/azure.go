@@ -100,25 +100,25 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 			r := ar.MeasurementResult{
 				Type: measurements[i].Type,
 			}
-			r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure measurement type %v", measurements[i].Type))
+			r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure measurement type %v", measurements[i].Type))
 			return []ar.MeasurementResult{r}, false
 		}
 	}
 	if !foundCcMeasurement {
 		r := ar.MeasurementResult{}
-		r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("CC measurement missing"))
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("CC measurement missing"))
 		return []ar.MeasurementResult{r}, false
 	}
 	if !foundVtpmMeasurement {
 		r := ar.MeasurementResult{}
-		r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("vTPM measurement missing"))
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("vTPM measurement missing"))
 		return []ar.MeasurementResult{r}, false
 	}
 	if len(vtpmMeasurement.Certs) != 1 {
 		r := ar.MeasurementResult{
 			Type: vtpmMeasurement.Type,
 		}
-		r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("unexpected length of vTPM certs %v", len(vtpmMeasurement.Certs)))
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected length of vTPM certs %v", len(vtpmMeasurement.Certs)))
 		return []ar.MeasurementResult{r}, false
 	}
 	vtpmAkCert, err := x509.ParseCertificate(vtpmMeasurement.Certs[0])
@@ -126,7 +126,7 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 		r := ar.MeasurementResult{
 			Type: vtpmMeasurement.Type,
 		}
-		r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("failed to parse vTPM cert: %w", err))
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to parse vTPM cert: %w", err))
 		return []ar.MeasurementResult{r}, false
 	}
 
@@ -136,7 +136,7 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 		r := ar.MeasurementResult{
 			Type: ccMeasurement.Type,
 		}
-		r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("failed to extract CC report nonce: %w", err))
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to extract CC report nonce: %w", err))
 		return []ar.MeasurementResult{r}, false
 	}
 	log.Tracef("Extracted HW report nonce: %v", hex.EncodeToString(hwreportNonce))
@@ -148,7 +148,7 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 		r := ar.MeasurementResult{
 			Type: ccMeasurement.Type,
 		}
-		r.Summary.SetErr(ar.VerifyMeasurement, fmt.Errorf("failed to verify Azure CoT: %w", err))
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to verify Azure CoT: %w", err))
 		return []ar.MeasurementResult{r}, false
 	}
 	log.Debug("Successfully verified Azure Chain of Trust")

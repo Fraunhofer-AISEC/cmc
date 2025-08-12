@@ -45,7 +45,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	tr, payload, ok := s.Verify(measurement.Evidence, cas)
 	if !ok {
 		log.Debugf("Failed to verify sw evidence")
-		result.Summary.SetErr(ar.VerifyEvidence)
+		result.Summary.Fail(ar.VerifyEvidence)
 		return result, false
 	}
 	result.Signature = tr.SignatureCheck[0]
@@ -56,7 +56,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	err := s.Unmarshal(payload, evidence)
 	if err != nil {
 		log.Debugf("Failed to unmarshal sw evidence")
-		result.Summary.SetErr(ar.ParseEvidence)
+		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
@@ -65,11 +65,11 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 		log.Debugf("Nonces mismatch: supplied nonce: %v, report nonce = %v",
 			hex.EncodeToString(nonce), hex.EncodeToString(evidence.Nonce))
 		ok = false
-		result.Freshness.Success = false
+		result.Freshness.Status = ar.StatusFail
 		result.Freshness.Expected = hex.EncodeToString(evidence.Nonce)
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	} else {
-		result.Freshness.Success = true
+		result.Freshness.Status = ar.StatusSuccess
 		result.Freshness.Got = hex.EncodeToString(nonce)
 		log.Debug("Successfully verified nonce")
 	}
@@ -87,7 +87,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 					templateHash, ok, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
 						log.Errorf("Internal error: calculate template hash: %v", err)
-						result.Summary.SetErr(ar.Internal)
+						result.Summary.Fail(ar.Internal)
 						ok = false
 						continue
 					}
@@ -139,7 +139,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 					templateHash, validateOk, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
 						log.Errorf("Internal error: validate template hash: %v", err)
-						result.Summary.SetErr(ar.Internal)
+						result.Summary.Fail(ar.Internal)
 						ok = false
 						continue
 					}
@@ -198,12 +198,12 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 		log.Debugf("Aggregated hash does not match evidence hash (%v vs %v)",
 			hex.EncodeToString(aggregatedHash), hex.EncodeToString(evidence.Sha256))
 		ok = false
-		result.Summary.SetErr(ar.VerifyAggregatedSwHash)
+		result.Summary.Fail(ar.VerifyAggregatedSwHash)
 	} else {
 		log.Debugf("Aggregated SW measurement hash matches evidence hash")
 	}
 
-	result.Summary.Success = ok
+	result.Summary.Status = ar.StatusFromBool(ok)
 
 	log.Debugf("Finished verifying SW measurements. Success: %v", ok)
 

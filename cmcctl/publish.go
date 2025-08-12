@@ -50,8 +50,10 @@ func publishResult(addr, file string, result *ar.VerificationResult) error {
 	}
 
 	// Log the result
-	if result.Summary.Success {
+	if result.Summary.Status == ar.StatusSuccess {
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
+	} else if result.Summary.Status == ar.StatusWarn {
+		log.Warnf("WARN: Verification for Prover %v (%v)", result.Prover, result.Created)
 	} else {
 		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
 		result.PrintErr()

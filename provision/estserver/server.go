@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
@@ -686,12 +687,15 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	// be created)
 	result := verifier.Verify(report, nonce[:], csr.PublicKey, cas, nil,
 		verifier.PolicyEngineSelect_None, internal.ConvertToMap(metadata))
-	if !result.Summary.Success {
+	if result.Summary.Status == ar.StatusFail {
 		result.PrintErr()
 		return fmt.Errorf("failed to verify attestation report")
+	} else if result.Summary.Status == ar.StatusWarn {
+		result.PrintErr()
+		log.Debugf("Attestation report verification passed with warnings")
+	} else {
+		log.Debugf("Successfully verified attestation report")
 	}
-
-	log.Debugf("Successfully verified attestation report")
 
 	return nil
 }

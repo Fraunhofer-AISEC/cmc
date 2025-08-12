@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/azuredriver"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -273,7 +274,7 @@ func verifyVtpmQuote(pcrs []int) error {
 	log.Debugf("Verifying quote signature...")
 
 	result := verifier.VerifyTpmQuoteSignature(quote, sig, cert)
-	if !result.Success {
+	if result.Status != ar.StatusSuccess {
 		return fmt.Errorf("failed to verify tpm quote signature: %v", result.Details)
 	}
 
