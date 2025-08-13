@@ -26,6 +26,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -146,4 +147,33 @@ func UnflattenArray(data []byte) ([][]byte, error) {
 		result = append(result, chunk)
 	}
 	return result, nil
+}
+
+func StrToInt(strs []string) ([]int, error) {
+	ints := make([]int, len(strs))
+	for i, s := range strs {
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return nil, fmt.Errorf("invalid number %q: %w", s, err)
+		}
+		ints[i] = n
+	}
+	return ints, nil
+}
+
+func FilterInts(list, excludeList []int) []int {
+	filtered := make([]int, 0, len(list))
+	for _, p := range list {
+		found := false
+		for _, e := range excludeList {
+			if e == p {
+				found = true
+				break
+			}
+		}
+		if !found {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
 }

@@ -153,6 +153,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 			Metadata:         metadata,
 			Ima:              c.Ima,
 			ImaPcr:           c.ImaPcr,
+			ExcludePcrs:      c.ExcludePcrs,
 			MeasurementLog:   c.MeasurementLog,
 			Serializer:       s,
 			CtrPcr:           c.CtrPcr,

@@ -78,6 +78,7 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 
 	azure.imaLog = c.Ima
 	azure.imaPcr = c.ImaPcr
+	azure.pcrs = getQuotePcrs(c.ExcludePcrs)
 	azure.biosLog = c.MeasurementLog
 	azure.serializer = c.Serializer
 	azure.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
@@ -377,4 +378,14 @@ func (azure *Azure) saveCredentials(p string) error {
 	}
 
 	return nil
+}
+
+func getQuotePcrs(excludedPcrs []int) []int {
+
+	// Use all SRTM PCRs by default
+	pcrs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 23}
+
+	pcrs = internal.FilterInts(pcrs, excludedPcrs)
+
+	return pcrs
 }

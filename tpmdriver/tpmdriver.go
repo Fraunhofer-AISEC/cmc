@@ -50,17 +50,18 @@ import (
 // Tpm is a structure that implements the Measure method
 // of the attestation report Measurer interface
 type Tpm struct {
-	mu         sync.Mutex
-	pcrs       []int
-	ikChain    []*x509.Certificate
-	akChain    []*x509.Certificate
-	biosLog    bool
-	imaLog     bool
-	imaPcr     int
-	ctrLog     bool
-	ctrPcr     int
-	ctrLogFile string
-	serializer ar.Serializer
+	mu           sync.Mutex
+	pcrs         []int
+	ikChain      []*x509.Certificate
+	akChain      []*x509.Certificate
+	biosLog      bool
+	imaLog       bool
+	imaPcr       int
+	excludedPcrs []int
+	ctrLog       bool
+	ctrPcr       int
+	ctrLogFile   string
+	serializer   ar.Serializer
 }
 
 const (
@@ -106,6 +107,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 
 	t.imaLog = c.Ima
 	t.imaPcr = c.ImaPcr
+	t.excludedPcrs = c.ExcludePcrs
 	t.biosLog = c.MeasurementLog
 	t.serializer = c.Serializer
 	t.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
@@ -145,7 +147,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	// respective PCRs into the TPM quote
 	t.pcrs, err = getQuotePcrs(t)
 	if err != nil {
-		return fmt.Errorf("failed to determine TPM Quote CRs: %w", err)
+		return fmt.Errorf("failed to determine TPM Quote PCRs: %w", err)
 	}
 
 	if provisioningRequired {
@@ -960,7 +962,7 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 	}
 
 	// Assume an SRTM system by default and quote the static PCRs
-	pcrs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	pcrs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 23}
 
 	// Check if the system is a DRTM system
 	for _, pcr := range pcrValues {
@@ -977,6 +979,8 @@ func getQuotePcrs(t *Tpm) ([]int, error) {
 			}
 		}
 	}
+
+	pcrs = internal.FilterInts(pcrs, t.excludedPcrs)
 
 	log.Debugf("Using PCRs: %v", pcrs)
 
