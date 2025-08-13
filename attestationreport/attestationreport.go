@@ -374,6 +374,7 @@ type DriverConfig struct {
 	Metadata         map[string][]byte
 	Ima              bool
 	ImaPcr           int
+	ExcludePcrs      []int
 	Serializer       Serializer
 	MeasurementLog   bool
 	Ctr              bool

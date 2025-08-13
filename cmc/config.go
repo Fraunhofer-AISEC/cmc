@@ -39,6 +39,7 @@ type Config struct {
 	Drivers         []string `json:"drivers,omitempty"`
 	Ima             bool     `json:"ima,omitempty"`
 	ImaPcr          int      `json:"imaPcr,omitempty"`
+	ExcludePcrs     []int    `json:"excludePcrs,omitempty"`
 	KeyConfig       string   `json:"keyConfig,omitempty"`
 	Api             string   `json:"api,omitempty"`
 	PolicyEngine    string   `json:"policyEngine,omitempty"`
@@ -76,6 +77,7 @@ const (
 	DriversFlag         = "drivers"
 	ImaFlag             = "ima"
 	ImaPcrFlag          = "imapcr"
+	ExcludePcrsFlag     = "excludepcrs"
 	KeyConfigFlag       = "keyconfig"
 	ApiFlag             = "api"
 	PolicyEngineFlag    = "policyengine"
@@ -115,7 +117,9 @@ var (
 			"Possible: %v", strings.Join(maps.Keys(GetDrivers()), ",")))
 	ima = flag.Bool(ImaFlag, false,
 		"Specifies whether to use Integrity Measurement Architecture (IMA)")
-	imaPcr       = flag.Int(ImaPcrFlag, 0, "IMA PCR")
+	imaPcr      = flag.Int(ImaPcrFlag, 0, "IMA PCR")
+	excludePcrs = flag.String(ExcludePcrsFlag, "", "TPM PCRs to be excluded from the quote "+
+		"(comma-separated list)")
 	keyConfig    = flag.String(KeyConfigFlag, "", "Key configuration")
 	cmcApi       = flag.String(ApiFlag, "", "API to use. Possible: [coap grpc libapi socket]")
 	policyEngine = flag.String(PolicyEngineFlag, "",
@@ -170,6 +174,13 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(ImaPcrFlag) {
 		c.ImaPcr = *imaPcr
+	}
+	if internal.FlagPassed(ExcludePcrsFlag) {
+		excludePcrs, err := internal.StrToInt(strings.Split(*excludePcrs, ","))
+		if err != nil {
+			return fmt.Errorf("failed to convert excluded PCRs: %w", err)
+		}
+		c.ExcludePcrs = excludePcrs
 	}
 	if internal.FlagPassed(KeyConfigFlag) {
 		c.KeyConfig = *keyConfig
@@ -352,6 +363,9 @@ func (c *Config) Print() {
 	log.Debugf("\tUse IMA                        : %v", c.Ima)
 	if c.Ima {
 		log.Debugf("\tIMA PCR                        : %v", c.ImaPcr)
+	}
+	if len(c.ExcludePcrs) > 0 {
+		log.Debugf("\tExclude TPM PCRs               : %v", c.ExcludePcrs)
 	}
 	log.Debugf("\tAPI                            : %v", c.Api)
 	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)

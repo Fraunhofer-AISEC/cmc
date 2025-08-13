@@ -10,6 +10,7 @@
     "drivers": [ "tpm", "sw" ],
     "ima": true,
     "imaPcr": 10,
+    "excludePcrs": [ ],
     "keyConfig": "EC256",
     "api": "socket",
     "policyEngine": "js",
