@@ -19,7 +19,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -251,7 +250,7 @@ type SignatureResult struct {
 // It is based on the type Certificate from the crypto/x509 package.
 type X509CertExtracted struct {
 	Version            int      `json:"version" cbor:"0,keyasint"`
-	SerialNumber       *big.Int `json:"serialNumber" cbor:"1,keyasint"`
+	SerialNumber       string   `json:"serialNumber" cbor:"1,keyasint"`
 	Issuer             X509Name `json:"issuer" cbor:"2,keyasint"`
 	Subject            X509Name `json:"subject" cbor:"3,keyasint"`
 	Validity           Validity `json:"validity" cbor:"4,keyasint"`
@@ -380,7 +379,7 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 	certExtracted := X509CertExtracted{}
 
 	certExtracted.Version = cert.Version
-	certExtracted.SerialNumber = cert.SerialNumber
+	certExtracted.SerialNumber = cert.SerialNumber.Text(16)
 
 	certExtracted.Issuer = X509Name{
 		Country:            cert.Issuer.Country,

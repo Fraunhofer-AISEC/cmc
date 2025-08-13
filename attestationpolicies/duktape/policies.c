@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
 
 #include "duktape.h"
 
@@ -26,33 +28,39 @@ static duk_ret_t native_print(duk_context *ctx) {
     return 0;
 }
 
-bool Validate(uint8_t *ar, size_t ar_size, uint8_t *policies, size_t policies_size) {
-
-    char ar_str[ar_size+1];
+char* Validate(uint8_t *ar, size_t ar_size, uint8_t *policies, size_t policies_size) {
+    char ar_str[ar_size + 1];
     memcpy(ar_str, ar, ar_size);
     ar_str[ar_size] = '\0';
 
-    char policies_str[policies_size+1];
+    char policies_str[policies_size + 1];
     memcpy(policies_str, policies, policies_size);
     policies_str[policies_size] = '\0';
 
     duk_context *ctx = duk_create_heap_default();
 
+    // Optional: provide print() in JS
     duk_push_c_function(ctx, native_print, 1);
     duk_put_global_string(ctx, "print");
 
-    // Push attestation result as a string
+    // Push `json` variable for policy
     duk_push_global_object(ctx);
     duk_push_string(ctx, "json");
-    duk_push_string(ctx, (const char  *)ar_str);
+    duk_push_string(ctx, ar_str);
     duk_def_prop(ctx, -3, DUK_DEFPROP_HAVE_VALUE);
 
-    // Run policies
-    duk_eval_string(ctx, policies_str);
-    bool success = (bool)duk_get_boolean(ctx, -1);
-    printf("Duktape Policy Verification: %s\n", success ? "SUCCESS" : "FAIL");
+    // Evaluate policies
+    if (duk_peval_string(ctx, policies_str) != 0) {
+        const char *err = duk_safe_to_string(ctx, -1);
+        fprintf(stderr, "Policy error: %s\n", err);
+        duk_destroy_heap(ctx);
+        return strdup("false");
+    }
+
+    // Convert result to string
+    const char *result_str = duk_safe_to_string(ctx, -1);
+    char *ret = strdup(result_str);
 
     duk_destroy_heap(ctx);
-
-    return success;
+    return ret;
 }

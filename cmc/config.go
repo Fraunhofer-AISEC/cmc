@@ -30,34 +30,35 @@ import (
 )
 
 type Config struct {
-	CmcAddr        string   `json:"cmcAddr,omitempty"`
-	ProvisionAddr  string   `json:"provisionAddr,omitempty"`
-	ProvisionMode  string   `json:"provisionMode,omitempty"`
-	ProvisionToken string   `json:"provisionToken,omitempty"`
-	ProvisionAuth  []string `json:"provisionAuth,omitempty"`
-	Metadata       []string `json:"metadata,omitempty"`
-	Drivers        []string `json:"drivers,omitempty"`
-	Ima            bool     `json:"ima,omitempty"`
-	ImaPcr         int      `json:"imaPcr,omitempty"`
-	KeyConfig      string   `json:"keyConfig,omitempty"`
-	Api            string   `json:"api,omitempty"`
-	PolicyEngine   string   `json:"policyEngine,omitempty"`
-	Storage        string   `json:"storage,omitempty"`
-	Cache          string   `json:"cache,omitempty"`
-	PeerCache      string   `json:"peerCache,omitempty"`
-	MeasurementLog bool     `json:"measurementLog,omitempty"`
-	Ctr            bool     `json:"ctr,omitempty"`
-	CtrDriver      string   `json:"ctrDriver,omitempty"`
-	CtrPcr         int      `json:"ctrPcr,omitempty"`
-	CtrLog         string   `json:"ctrLog,omitempty"`
-	IdentityCas    []string `json:"identityCas,omitempty"`
-	MetadataCas    []string `json:"metadataCas,omitempty"`
-	EstTlsCas      []string `json:"estTlsCas,omitempty"`
-	EstTlsSysRoots bool     `json:"estTlsSysRoots"`
-	Vmpl           int      `json:"vmpl,omitempty"`
-	VerifyEkCert   bool     `json:"verifyEkCert,omitempty"`
-	TpmEkCertDb    string   `json:"tpmEkCertDb,omitempty"`
-	CaKey          string   `json:"caKey,omitempty"`
+	CmcAddr         string   `json:"cmcAddr,omitempty"`
+	ProvisionAddr   string   `json:"provisionAddr,omitempty"`
+	ProvisionMode   string   `json:"provisionMode,omitempty"`
+	ProvisionToken  string   `json:"provisionToken,omitempty"`
+	ProvisionAuth   []string `json:"provisionAuth,omitempty"`
+	Metadata        []string `json:"metadata,omitempty"`
+	Drivers         []string `json:"drivers,omitempty"`
+	Ima             bool     `json:"ima,omitempty"`
+	ImaPcr          int      `json:"imaPcr,omitempty"`
+	KeyConfig       string   `json:"keyConfig,omitempty"`
+	Api             string   `json:"api,omitempty"`
+	PolicyEngine    string   `json:"policyEngine,omitempty"`
+	PolicyOverwrite bool     `json:"policyOverwrite,omitempty"`
+	Storage         string   `json:"storage,omitempty"`
+	Cache           string   `json:"cache,omitempty"`
+	PeerCache       string   `json:"peerCache,omitempty"`
+	MeasurementLog  bool     `json:"measurementLog,omitempty"`
+	Ctr             bool     `json:"ctr,omitempty"`
+	CtrDriver       string   `json:"ctrDriver,omitempty"`
+	CtrPcr          int      `json:"ctrPcr,omitempty"`
+	CtrLog          string   `json:"ctrLog,omitempty"`
+	IdentityCas     []string `json:"identityCas,omitempty"`
+	MetadataCas     []string `json:"metadataCas,omitempty"`
+	EstTlsCas       []string `json:"estTlsCas,omitempty"`
+	EstTlsSysRoots  bool     `json:"estTlsSysRoots"`
+	Vmpl            int      `json:"vmpl,omitempty"`
+	VerifyEkCert    bool     `json:"verifyEkCert,omitempty"`
+	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
+	CaKey           string   `json:"caKey,omitempty"`
 }
 
 const (
@@ -66,48 +67,52 @@ const (
 )
 
 const (
-	cmcAddrFlag        = "cmcaddr"
-	ProvisionModeFlag  = "provisionmode"
-	provisionAddrFlag  = "provisionaddr"
-	ProvisionTokenFlag = "provisiontoken"
-	ProvisionAuthFlag  = "provisionauth"
-	metadataFlag       = "metadata"
-	DriversFlag        = "drivers"
-	ImaFlag            = "ima"
-	ImaPcrFlag         = "imapcr"
-	KeyConfigFlag      = "keyconfig"
-	ApiFlag            = "api"
-	PolicyEngineFlag   = "policyengine"
-	StorageFlag        = "storage"
-	CacheFlag          = "cache"
-	PeerCacheFlag      = "peercache"
-	MeasurementLogFlag = "measurementlog"
-	CtrFlag            = "ctr"
-	CtrDriverFlag      = "ctrdriver"
-	CtrPcrFlag         = "ctrpcr"
-	CtrLogFlag         = "ctrlog"
-	IdentityCasFlag    = "identityCasFlag"
-	MetadataCasFlag    = "metadataCasFlag"
-	EstTlsCasFlag      = "esttlscas"
-	EstTlsSysRootsFlag = "esttlssysroots"
-	VmplFlag           = "vmpl"
-	verifyEkCertFlag   = "verifyekcert"
-	tpmEkCertDbFlag    = "tpmekcertdb"
-	caKeyFlag          = "cakey"
+	cmcAddrFlag         = "cmcaddr"
+	ProvisionModeFlag   = "provisionmode"
+	provisionAddrFlag   = "provisionaddr"
+	ProvisionTokenFlag  = "provisiontoken"
+	ProvisionAuthFlag   = "provisionauth"
+	metadataFlag        = "metadata"
+	DriversFlag         = "drivers"
+	ImaFlag             = "ima"
+	ImaPcrFlag          = "imapcr"
+	KeyConfigFlag       = "keyconfig"
+	ApiFlag             = "api"
+	PolicyEngineFlag    = "policyengine"
+	PolicyOverwriteFlag = "policyoverwrite"
+	StorageFlag         = "storage"
+	CacheFlag           = "cache"
+	PeerCacheFlag       = "peercache"
+	MeasurementLogFlag  = "measurementlog"
+	CtrFlag             = "ctr"
+	CtrDriverFlag       = "ctrdriver"
+	CtrPcrFlag          = "ctrpcr"
+	CtrLogFlag          = "ctrlog"
+	IdentityCasFlag     = "identityCasFlag"
+	MetadataCasFlag     = "metadataCasFlag"
+	EstTlsCasFlag       = "esttlscas"
+	EstTlsSysRootsFlag  = "esttlssysroots"
+	VmplFlag            = "vmpl"
+	verifyEkCertFlag    = "verifyekcert"
+	tpmEkCertDbFlag     = "tpmekcertdb"
+	caKeyFlag           = "cakey"
 )
 
 var (
 	cmcAddr       = flag.String(cmcAddrFlag, "", "CMC server address")
 	provisionMode = flag.String(ProvisionModeFlag, "",
-		fmt.Sprintf("Provisioning Mode. Possible: [%v %v]", provisionModeEst, provisionModeSelfSigned))
+		fmt.Sprintf("Provisioning Mode. Possible: [%v %v]",
+			provisionModeEst, provisionModeSelfSigned))
 	provisionAddr  = flag.String(provisionAddrFlag, "", "Address of the provisioning server")
-	provisionToken = flag.String(ProvisionTokenFlag, "", "Bootstrap token for EST client authentication")
-	provisionAuth  = flag.String(ProvisionAuthFlag, "", "Provisioning authentication methods (none,token,certificate,attestation)")
-	metadata       = flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
+	provisionToken = flag.String(ProvisionTokenFlag, "",
+		"Bootstrap token for EST client authentication")
+	provisionAuth = flag.String(ProvisionAuthFlag, "",
+		"Provisioning authentication methods (none,token,certificate,attestation)")
+	metadata = flag.String(metadataFlag, "", "List of locations with metadata, starting either "+
 		"with file:// for local locations or https:// for remote locations (can be mixed)")
 	driversList = flag.String(DriversFlag, "",
-		fmt.Sprintf("Drivers (comma separated list). Possible: %v",
-			strings.Join(maps.Keys(GetDrivers()), ",")))
+		fmt.Sprintf("Drivers for generating attestation reports (comma separated list). "+
+			"Possible: %v", strings.Join(maps.Keys(GetDrivers()), ",")))
 	ima = flag.Bool(ImaFlag, false,
 		"Specifies whether to use Integrity Measurement Architecture (IMA)")
 	imaPcr       = flag.Int(ImaPcrFlag, 0, "IMA PCR")
@@ -116,6 +121,9 @@ var (
 	policyEngine = flag.String(PolicyEngineFlag, "",
 		fmt.Sprintf("Possible policy engines: %v",
 			strings.Join(maps.Keys(GetPolicyEngines()), ",")))
+	policyOverwrite = flag.Bool(PolicyOverwriteFlag, false,
+		"Specifies whether attestation policies can overwrite verification result properties. "+
+			"This should be used with care, as it can overwrite the entire attestation process")
 	storage   = flag.String(StorageFlag, "", "Optional folder to store internal CMC data in")
 	cache     = flag.String(CacheFlag, "", "Optional folder to cache metadata for offline backup")
 	peerCache = flag.String(PeerCacheFlag, "",
@@ -134,8 +142,9 @@ var (
 	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
 	verifyEkCert   = flag.Bool(verifyEkCertFlag, false,
 		"Self-signed mode only: Indicates whether to verify TPM EK certificate chains")
-	tpmEkCertDb = flag.String(tpmEkCertDbFlag, "", "Self-signed mode only: Database for EK cert chain verification")
-	caKey       = flag.String(caKeyFlag, "", "Self-signed mode only: CA key")
+	tpmEkCertDb = flag.String(tpmEkCertDbFlag, "",
+		"Self-signed mode only: Database for EK cert chain verification")
+	caKey = flag.String(caKeyFlag, "", "Self-signed mode only: CA key")
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -170,6 +179,9 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(PolicyEngineFlag) {
 		c.PolicyEngine = *policyEngine
+	}
+	if internal.FlagPassed(PolicyOverwriteFlag) {
+		c.PolicyOverwrite = *policyOverwrite
 	}
 	if internal.FlagPassed(StorageFlag) {
 		c.Storage = *storage
@@ -343,6 +355,7 @@ func (c *Config) Print() {
 	}
 	log.Debugf("\tAPI                            : %v", c.Api)
 	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)
+	log.Debugf("\tPolicy overwrite enabled       : %v", c.PolicyOverwrite)
 	log.Debugf("\tKey config                     : %v", c.KeyConfig)
 	log.Debugf("\tDrivers                        : %v", strings.Join(c.Drivers, ","))
 	log.Debugf("\tMeasurement log                : %v", c.MeasurementLog)
