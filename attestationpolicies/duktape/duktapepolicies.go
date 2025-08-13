@@ -13,21 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jspolicies
+package duktape
+
+// #cgo CFLAGS: -Wall -std=c99
+// #cgo LDFLAGS: -lm
+// #include <stdint.h>
+// #include <stdbool.h>
+// #include <stdlib.h>
+// #include <string.h>
+// #include "policies.h"
+import "C"
 
 import (
 	"encoding/json"
+	"unsafe"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/robertkrimen/otto"
 	"github.com/sirupsen/logrus"
 )
 
-var log = logrus.WithField("service", "jspolicies")
+var log = logrus.WithField("service", "duktape-policies")
 
-// JsPolicyEngine is an implementation of the generic PolicyEngine interface for JavaScript policies
-// based on the golang otto JavaScript engine
-type JsPolicyEngine struct{}
+// DukTypePolicyEngine is an implementation of the generic PolicyEngine interface for JavaScript
+// policies based on the C duktape JavaScript engine
+type DukTapePolicyEngine struct {
+}
 
 // Validate uses a javascript engine to validate custom policies against the verification result.
 // Custom policies are handed over as a string. This implementation accepts custom policies
@@ -53,7 +63,7 @@ type JsPolicyEngine struct{}
 //	obj.summary.status = "warn"
 //	var ret = JSON.stringify(obj);
 //	ret
-func (p *JsPolicyEngine) Validate(result *ar.VerificationResult, policies []byte, policyOverwrite bool) bool {
+func (p *DukTapePolicyEngine) Validate(result *ar.VerificationResult, policies []byte, policyOverwrite bool) bool {
 
 	log.Debugf("Validating custom javascript policies against verification result %q: %q",
 		result.Prover, result.Summary.Status)
@@ -64,60 +74,41 @@ func (p *JsPolicyEngine) Validate(result *ar.VerificationResult, policies []byte
 		return false
 	}
 
-	// Create new javascript engine
-	vm := otto.New()
+	cResult := (*C.uint8_t)(C.CBytes(vr))
+	cResultLen := (C.size_t)(len(vr))
 
-	// Set variable json = vr
-	vm.Set("json", string(vr))
+	cPolicies := (*C.uint8_t)(C.CBytes(policies))
+	cPoliciesLen := (C.size_t)(len(policies))
 
-	// Run javascript validation
-	val, err := vm.Run(policies)
-	if err != nil {
-		log.Errorf("Failed run policy validation: %v", err)
-		return false
-	}
+	// Call C duktape policy validation
+	cRet := C.Validate(cResult, cResultLen, cPolicies, cPoliciesLen)
+	defer C.free(unsafe.Pointer(cRet))
+
+	goStr := C.GoString(cRet)
 
 	// Results can be boolean: In this case, the input result is not modified, but
 	// just checked against the policies
-	if val.IsBoolean() {
+	if goStr == "true" || goStr == "false" {
 		log.Debug("Received boolean policy validation")
-		ok, err := val.ToBoolean()
-		if err != nil {
-			log.Errorf("failed convert policy validation result to bool: %v", err)
-			return false
-		}
-
-		log.Debugf("Policy Validation: %v", ok)
-
-		return ok
+		ret := goStr == "true"
+		log.Debugf("Policy Validation: %v", ret)
+		return ret
 	}
 
-	// Results can also be the modified result marshalled via
+	// If explicitely configured, results can also be the modified result marshalled via
 	// JSON.stringify(). In this case all properties of the result can be modified via policies
 	// and we need to read back the result. This means, the policies engine can overwrite the
 	// entire result
-	if val.IsString() {
-		// Overwriting results must explicitely be configured
-		if policyOverwrite {
-			log.Debug("Received verification result policy validation")
-			r, err := val.ToString()
-			if err != nil {
-				log.Errorf("Failed convert policy validation result to bool: %v", err)
-				return false
-			}
-			err = json.Unmarshal([]byte(r), result)
-			if err != nil {
-				log.Errorf("Failed to unmarshal policy validation to verification result: %v", err)
-				return false
-			}
-			return true
-		} else {
-			log.Debug("Policy overwrite is not configured. Only boolean return allowed")
+	if policyOverwrite {
+		log.Debug("Received verification result policy validation")
+
+		if err := json.Unmarshal([]byte(goStr), &result); err != nil {
+			log.Errorf("Failed to unmarshal policy validation to verification result: %v", err)
 			return false
 		}
+		return true
+	} else {
+		log.Debug("Policy overwrite is not configured. Only boolean return allowed")
+		return false
 	}
-
-	log.Debugf("Failed to convert policy validation result: unsupported type")
-
-	return false
 }

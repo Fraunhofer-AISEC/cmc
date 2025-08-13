@@ -13,6 +13,7 @@
     "keyConfig": "EC256",
     "api": "socket",
     "policyEngine": "js",
+    "policyOverwrite": false,
     "logLevel": "trace",
     "storage": "../data/cmc-internal/",
     "cache": "../data/cmc-cache/",

@@ -40,14 +40,14 @@ const (
 	PolicyEngineSelect_DukTape PolicyEngineSelect = 2
 )
 
-type PolicyValidator interface {
-	Validate(policies []byte, result *ar.VerificationResult) bool
+type PolicyEngine interface {
+	Validate(result *ar.VerificationResult, policies []byte, policyOverwrite bool) bool
 }
 
 var (
 	log = logrus.WithField("service", "ar")
 
-	policyEngines = map[PolicyEngineSelect]PolicyValidator{}
+	policyEngines = map[PolicyEngineSelect]PolicyEngine{}
 )
 
 // Verify verifies an attestation report in full serialized JWS
@@ -55,15 +55,12 @@ var (
 // chains of all attestation report elements as well as the measurements against
 // the reference values and the compatibility of software artefacts.
 func Verify(
-	arRaw, nonce []byte,
-	verifier interface{},
-	metadataCas []*x509.Certificate,
-	policies []byte,
-	polEng PolicyEngineSelect,
-	metadatamap map[string][]byte,
+	arRaw, nonce []byte, verifier interface{},
+	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
+	metadataCas []*x509.Certificate, metadataMap map[string][]byte,
 ) *ar.VerificationResult {
 
-	if len(metadatamap) == 0 {
+	if len(metadataMap) == 0 {
 		log.Warnf("No metadata specified")
 	}
 
@@ -95,7 +92,7 @@ func Verify(
 	}
 
 	// Verify and unpack metadata from attestation report
-	metaResults, ok := verifyMetadata(metadataCas, s, metadatamap)
+	metaResults, ok := verifyMetadata(metadataCas, s, metadataMap)
 	if !ok {
 		result.Fail(ar.VerifyMetadata)
 	}
@@ -197,13 +194,20 @@ func Verify(
 	}
 	result.CertLevel = aggCertLevel
 
+	// Add additional information
+	result.Prover = metaResults.DevDescResult.Name
+	if result.Prover == "" {
+		result.Prover = "Unknown"
+	}
+	result.Created = time.Now().Format(time.RFC3339Nano)
+
 	// Validate policies if specified
 	if policies != nil {
-		p, ok := policyEngines[polEng]
+		p, ok := policyEngines[policyEngine]
 		if !ok {
 			result.Fail(ar.PolicyEngineNotImplemented)
 		} else {
-			ok = p.Validate(policies, result)
+			ok = p.Validate(result, policies, policyOverwrite)
 			if !ok {
 				result.Fail(ar.VerifyPolicies)
 			}
@@ -211,13 +215,6 @@ func Verify(
 	} else {
 		log.Debugf("No custom policies specified")
 	}
-
-	// Add additional information
-	result.Prover = metaResults.DevDescResult.Name
-	if result.Prover == "" {
-		result.Prover = "Unknown"
-	}
-	result.Created = time.Now().Format(time.RFC3339Nano)
 
 	switch result.Summary.Status {
 	case ar.StatusSuccess:

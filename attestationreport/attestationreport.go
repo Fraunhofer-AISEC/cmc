@@ -401,7 +401,6 @@ func (r *ReferenceValue) GetManifest() (*Metadata, error) {
 	if r.manifest == nil {
 		return nil, fmt.Errorf("internal error: manifest is nil")
 	}
-	log.Warnf("Found manifest for %v", r.SubType)
 	return r.manifest, nil
 }
 

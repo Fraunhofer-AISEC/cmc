@@ -18,24 +18,9 @@
 package verifier
 
 import (
-	"encoding/json"
-
 	"github.com/Fraunhofer-AISEC/cmc/attestationpolicies/jspolicies"
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-type JsPolicyEngine struct{}
-
 func init() {
-	policyEngines[PolicyEngineSelect_JS] = JsPolicyEngine{}
-}
-
-func (p JsPolicyEngine) Validate(policies []byte, result *ar.VerificationResult) bool {
-	vr, err := json.Marshal(result)
-	if err != nil {
-		log.Errorf("Failed to marshal verification result: %v", err)
-		return false
-	}
-	engine := jspolicies.NewJsPolicyEngine(policies)
-	return engine.Validate(vr)
+	policyEngines[PolicyEngineSelect_JS] = &jspolicies.JsPolicyEngine{}
 }

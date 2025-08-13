@@ -49,6 +49,7 @@ type Cmc struct {
 	Metadata           map[string][]byte
 	CachedPeerMetadata map[string]map[string][]byte
 	PolicyEngineSelect verifier.PolicyEngineSelect
+	PolicyOverwrite    bool
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
 	PeerCache          string
@@ -188,12 +189,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 			}
 		}
 
-		// Get policy engine
+		// Get policy engine and overwrite policies
 		sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
 		if !ok {
 			log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
 		}
 		cmc.PolicyEngineSelect = sel
+		cmc.PolicyOverwrite = c.PolicyOverwrite
 	}
 
 	// Load cached metadata from known peers

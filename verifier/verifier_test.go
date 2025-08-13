@@ -306,9 +306,10 @@ func TestVerify(t *testing.T) {
 			got := Verify(
 				arSigned, nonce,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
-				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
 				PolicyEngineSelect_None,
+				false,
+				[]*x509.Certificate{certchain[len(certchain)-1]},
 				metadata)
 			log.Info("Finished FUT")
 			if got.Summary.Status != tt.want {

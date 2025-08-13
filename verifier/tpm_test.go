@@ -19,7 +19,6 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
-	"math/big"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -449,7 +448,4 @@ var (
 			Index:   4,
 		},
 	}
-
-	deviceCertserial, _ = new(big.Int).SetString("1", 10)
-	caCertserial, _     = new(big.Int).SetString("634815014411613577372985193537194269253199433648", 10)
 )

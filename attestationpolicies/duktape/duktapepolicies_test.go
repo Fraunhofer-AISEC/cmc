@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jspolicies
+package duktape
 
 import (
 	"testing"
@@ -84,7 +84,7 @@ func TestValidate(t *testing.T) {
 
 			log.Infof("Running unit test %q", tt.name)
 
-			p := JsPolicyEngine{}
+			p := DukTapePolicyEngine{}
 
 			// Test policy validaton
 			got := p.Validate(tt.args.result, tt.args.policies, tt.args.policyOverwrite)
@@ -113,7 +113,7 @@ var (
 							{
 								{
 									Subject: ar.X509Name{
-										CommonName: "Test Cert",
+										CommonName: "CMC Test Leaf Certificate",
 									},
 								},
 							},
@@ -174,11 +174,9 @@ var (
 
 		// Basic checks
 		if (obj.type != "Verification Result") {
-			console.log("POLICIES: Invalid type");
 			success = false;
 		}
 		if (obj.summary.status != "success") {
-			console.log("POLICIES: Attestation not successful")
 			success = false;
 		}
 
@@ -187,14 +185,13 @@ var (
 		for (var i = 0; i < obj.metadata.devDescResult.signatureValidation.length; i++) {
 			for (var j = 0; j < obj.metadata.devDescResult.signatureValidation[i].certs.length; j++) {
 				for (var k = 0; k < obj.metadata.devDescResult.signatureValidation[i].certs[j].length; k++) {
-					if (obj.metadata.devDescResult.signatureValidation[i].certs[j][k].subject.commonName == "Test Cert") {
+					if (obj.metadata.devDescResult.signatureValidation[i].certs[j][k].subject.commonName == "CMC Test Leaf Certificate") {
 						found = true;
 					}
 				}
 			}
 		}
 		if (!found) {
-			console.log("POLICIES: Failed to find certificate 'Test Cert'");
 			success = false;
 		}
 
@@ -207,12 +204,10 @@ var (
 
 		// Basic checks
 		if (obj.type != "Verification Result") {
-			console.log("POLICIES: Invalid type");
 			success = false;
 		}
 
-		// Change the
-		console.log("POLICIES: Changing result to WARN")
+		// Change the overall result to warn
 		obj.summary.status = "warn"
 
 		var ret = JSON.stringify(obj);

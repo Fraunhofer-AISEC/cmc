@@ -74,8 +74,9 @@ func Verify(
 	UpdateCacheMetadata(peer, cmc.CachedPeerMetadata, metadata, cacheMisses)
 
 	// Verify attetation report
-	result := verifier.Verify(ar, nonce, cmc.IdentityCas, cmc.MetadataCas, policies,
-		cmc.PolicyEngineSelect, cmc.CachedPeerMetadata[peer])
+	result := verifier.Verify(ar, nonce, cmc.IdentityCas,
+		policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
+		cmc.MetadataCas, cmc.CachedPeerMetadata[peer])
 
 	// Update persistent peer cache
 	err := StoreCacheMetadata(cmc.PeerCache, peer, cmc.CachedPeerMetadata[peer], cacheMisses)

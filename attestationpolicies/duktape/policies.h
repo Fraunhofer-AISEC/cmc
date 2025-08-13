@@ -14,4 +14,4 @@
 // limitations under the License.
 
 
-bool Validate(uint8_t *ar, size_t ar_size, uint8_t *policies, size_t policies_size);
+char* Validate(uint8_t *ar, size_t ar_size, uint8_t *policies, size_t policies_size);

@@ -18,24 +18,9 @@
 package verifier
 
 import (
-	"encoding/json"
-
 	"github.com/Fraunhofer-AISEC/cmc/attestationpolicies/duktape"
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-type DukTapePolicyEngine struct{}
-
 func init() {
-	policyEngines[PolicyEngineSelect_DukTape] = DukTapePolicyEngine{}
-}
-
-func (p DukTapePolicyEngine) Validate(policies []byte, result *ar.VerificationResult) bool {
-	vr, err := json.Marshal(result)
-	if err != nil {
-		log.Errorf("Failed to marshal verification result: %v", err)
-		return false
-	}
-	engine := duktape.NewDukTapePolicyEngine(policies)
-	return engine.Validate(vr)
+	policyEngines[PolicyEngineSelect_DukTape] = &duktape.DukTapePolicyEngine{}
 }
