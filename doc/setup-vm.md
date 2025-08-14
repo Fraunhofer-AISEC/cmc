@@ -124,3 +124,10 @@ cmcctl -config /etc/cmcctl-conf-vm.json
 cloud-init does only run on the first boot. If any cloud-init provisioned data is changed, the
 simplest approach is to delete `cmc/vm/images/noble-server-cloudimg-amd64.img` and re-run
 `cmc-docker vm-setup`.
+
+## Further Documentation
+
+Building the individual components with various flags is described in the [Build](./build.md)
+documentation. A more detailed description on how to configure and run the components
+is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
+refer to the [Developer Documentation](./dev.md).

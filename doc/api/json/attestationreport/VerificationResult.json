@@ -499,10 +499,6 @@
         "uefidevicepath"
       ]
     },
-    "Int": {
-      "properties": {},
-      "type": "object"
-    },
     "Linux": {
       "properties": {
         "uidMappings": {
@@ -1215,8 +1211,11 @@
         "certLevel": {
           "type": "integer"
         },
-        "caFingerprint": {
-          "type": "string"
+        "caFingerprints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "snpPolicy": {
           "$ref": "#/$defs/SnpPolicy"
@@ -1274,7 +1273,7 @@
           },
           "type": "object"
         },
-        "result": {
+        "summary": {
           "$ref": "#/$defs/Result"
         },
         "validityCheck": {
@@ -1294,33 +1293,40 @@
         "version",
         "validity",
         "SgxValues",
-        "result",
+        "summary",
         "signatureValidation"
       ]
     },
     "MetadataSummary": {
       "properties": {
-        "deviceDescValidation": {
+        "devDescResult": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "manifestValidation": {
+        "manifestResults": {
           "items": {
             "$ref": "#/$defs/MetadataResult"
           },
           "type": "array"
         },
-        "companyValidation": {
+        "compDescResult": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "compatibilityValidation": {
+        "unknownResults": {
+          "items": {
+            "$ref": "#/$defs/MetadataResult"
+          },
+          "type": "array"
+        },
+        "compatibilityResult": {
           "$ref": "#/$defs/CompatibilityResult"
         }
       },
       "type": "object",
       "required": [
-        "deviceDescValidation",
-        "manifestValidation",
-        "compatibilityValidation"
+        "devDescResult",
+        "manifestResults",
+        "unknownResults",
+        "compatibilityResult"
       ]
     },
     "Mount": {
@@ -1541,7 +1547,7 @@
     },
     "QeReportResult": {
       "properties": {
-        "success": {
+        "summary": {
           "$ref": "#/$defs/Result"
         },
         "mrsigner": {
@@ -1565,7 +1571,7 @@
       },
       "type": "object",
       "required": [
-        "success",
+        "summary",
         "mrsigner",
         "isvProdId",
         "miscSelect",
@@ -1613,8 +1619,8 @@
     },
     "Result": {
       "properties": {
-        "success": {
-          "type": "boolean"
+        "status": {
+          "type": "string"
         },
         "got": {
           "type": "string"
@@ -1634,13 +1640,19 @@
           },
           "type": "array"
         },
-        "errorCode": {
-          "type": "integer"
+        "errorCodes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "details": {
+          "type": "string"
         }
       },
       "type": "object",
       "required": [
-        "success"
+        "status"
       ]
     },
     "Root": {
@@ -2189,7 +2201,7 @@
     },
     "TcbInfoResult": {
       "properties": {
-        "success": {
+        "summary": {
           "$ref": "#/$defs/Result"
         },
         "id": {
@@ -2198,20 +2210,49 @@
         "version": {
           "$ref": "#/$defs/Result"
         },
+        "tcbLevelResult": {
+          "$ref": "#/$defs/TcbLevelResult"
+        }
+      },
+      "type": "object",
+      "required": [
+        "summary",
+        "id",
+        "version",
+        "tcbLevelResult"
+      ]
+    },
+    "TcbLevelResult": {
+      "properties": {
         "status": {
           "type": "string"
         },
         "date": {
           "type": "string"
+        },
+        "pceSvn": {
+          "$ref": "#/$defs/Result"
+        },
+        "sgxComponents": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
+        },
+        "tdxComponents": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
         }
       },
       "type": "object",
       "required": [
-        "success",
-        "id",
-        "version",
         "status",
-        "date"
+        "date",
+        "pceSvn",
+        "sgxComponents",
+        "tdxComponents"
       ]
     },
     "TdAttributesCheck": {
@@ -2547,14 +2588,8 @@
         "type": {
           "type": "string"
         },
-        "success": {
-          "type": "boolean"
-        },
-        "errorCodes": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
+        "summary": {
+          "$ref": "#/$defs/Result"
         },
         "prover": {
           "type": "string"
@@ -2574,9 +2609,6 @@
         "metadata": {
           "$ref": "#/$defs/MetadataSummary"
         },
-        "policySuccess": {
-          "type": "boolean"
-        },
         "reportSignatureCheck": {
           "items": {
             "$ref": "#/$defs/SignatureResult"
@@ -2588,7 +2620,7 @@
       "required": [
         "version",
         "type",
-        "success",
+        "summary",
         "certLevel",
         "measurements",
         "metadata",
@@ -2761,7 +2793,7 @@
           "type": "integer"
         },
         "serialNumber": {
-          "$ref": "#/$defs/Int"
+          "type": "string"
         },
         "issuer": {
           "$ref": "#/$defs/X509Name"

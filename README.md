@@ -50,16 +50,10 @@ An overview of the architecture is given in [Architecture](./doc/architecture.md
 Detailed information on how to generate, sign and parse metadata is given in
 [Metadata](./doc/metadata.md).
 
-### APIs and Protocols
+### Developer Documentation
 
-For a description of the `cmcd` gRPC, CoaP and socket APIs, refer to [CMCD API](./doc/cmcd-api.md).
-For a description of the attested TLS attestation protocol, refer to
-[Attestation Protocol](./doc/attestation-protocol.md).
-
-### Integration
-
-Usually, the attested TLS or HTTPS libraries are used within own projects to provide attestation
-for TLS or HTTPS connections, as described in [Integration](./doc/go-integration.md)
+Refer to [Developer Documentation](./doc/dev.md) for instructions on developing custom applications
+using attested TLS or attested HTTPS, as well as for developing the CMC.
 
 ### Additional Demo Setups
 

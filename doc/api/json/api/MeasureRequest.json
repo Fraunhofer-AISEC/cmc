@@ -348,10 +348,6 @@
         "uefidevicepath"
       ]
     },
-    "Int": {
-      "properties": {},
-      "type": "object"
-    },
     "IntelCollateral": {
       "properties": {
         "TcbInfo": {
@@ -1016,11 +1012,20 @@
         "sha256": {
           "$ref": "#/$defs/HexByte"
         },
+        "sha384": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "sha512": {
+          "$ref": "#/$defs/HexByte"
+        },
         "eventname": {
           "type": "string"
         },
         "eventdata": {
           "$ref": "#/$defs/EventData"
+        },
+        "description": {
+          "type": "string"
         },
         "ctrData": {
           "$ref": "#/$defs/CtrData"
@@ -1029,10 +1034,7 @@
           "$ref": "#/$defs/IntelCollateral"
         }
       },
-      "type": "object",
-      "required": [
-        "sha256"
-      ]
+      "type": "object"
     },
     "MeasureRequest": {
       "properties": {
@@ -1758,7 +1760,7 @@
           "type": "integer"
         },
         "serialNumber": {
-          "$ref": "#/$defs/Int"
+          "type": "string"
         },
         "issuer": {
           "$ref": "#/$defs/X509Name"

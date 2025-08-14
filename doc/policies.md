@@ -11,7 +11,8 @@ engine. This allows passing arbitrary javascript files via the `cmcctl` `-polici
 The policies javascript file is then used to evaluate arbitrary attributes of the JSON
 attestation result output by the `cmcd` and stored by the `cmcctl`. The attestation result
 can be referenced via the `json` variable in the script. The javascript code must return a single
-boolean indicating success or failure of the custom policy validation. A minimal policies file, verifying only the `type` field of the attesation result could look as follows:
+boolean indicating success or failure of the custom policy validation. A minimal policies file,
+verifying only the `type` field of the attesation result could look as follows:
 
 ```js
 // Parse the verification result
@@ -27,3 +28,6 @@ if (obj.type != "Verification Result") {
 success
 ```
 
+Via the `overwritePolicies` configuration parameter, fields of the verification result can even
+be overwritten, e.g. from `fail` to `warn` to allow less strict checking. This should be used
+with care.

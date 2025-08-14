@@ -59,3 +59,10 @@ cmdline and configuration parameters as input.
 For a complete setup including precomputing all measurement registers, see
 [generate-rtm-manifest-tdx](../bin/generate-rtm-manifest-sgx) and
 [generate-os-manifest-tdx](../bin/generate-os-manifest-tdx).
+
+### Further documentation
+
+Building the individual components with various flags is described in the [Build](./build.md)
+documentation. A more detailed description on how to configure and run the components
+is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
+refer to the [Developer Documentation](./dev.md).
