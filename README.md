@@ -17,55 +17,15 @@ include signed metadata and reference hash values.
 
 ## Quick Start
 
-> Note: If you want to run the *cmc* on actual hardware, refer to the [Setup](./doc/setup.md),
-> [Build](./doc/build.md) and [Run](./doc/run.md) documentation.
+Refer to [Setup](./doc/setup.md) for instructions on how to setup, configure and run the CMC
+on various hardware platforms.
 
-For demonstration purposes only, we provide a docker container for building the software and a
-Virtual Machine (VM) with attached software TPM.
+For a quick demo without installing software or requiring actual hardware, use Docker and the
+Virtual Machine (VM) with attached swTPM as described in [Setup](./doc/setup.md).
 
-If you choose to use the Docker container, simply ensure that
-[Docker is installed](https://docs.docker.com/engine/install/). The container bind-mounts the
-repository root directory and runs as the current user, meaning all artifacts are built in
-the same location as they would be without Docker.
-
-If you prefer not to use Docker, make sure all [prerequisites](./doc/setup.md#prerequisites) are
-installed, and omit the `cmc-docker` prefix from each command.
-
-Create and launch the VM with attached swTPM, establish server-side attested TLS connection to VM:
-```sh
-# Setup environment
-source env.bash
-
-# Download and configure image and tools
-cmc-docker vm-setup
-
-# Start swTPM (separate terminal )
-cmc-docker vm-swtpm
-
-# Start estserver
-cmc-docker vm-estserver
-
-# Start VM
-cmc-docker vm-start
-
-# Establish attested TLS connection to Ubuntu VM
-cmc-docker vm-cmcctl
-```
-
-[cmcctl](./doc/architecture.md#cmcctl) on the host establishes an attested TLS connection
-to the cmcctl running within the ubuntu VM with server-side authentication and server-side
-attestation. Find the generated attestation result in `cmc/data/attestation-result`.
-
-> Note: This demo is not secure and attestation might fail. Refer to [VM Setup](./doc/setup-vm.md)
-> for more information and how to fix.
-
-## Further Documentation
+## Documentation
 
 The following contents can be found in the [doc](./doc/) folder:
-
-### Architecture
-
-An overview of the architecture is given in [Architecture](./doc/architecture.md).
 
 ### Setup
 
@@ -80,6 +40,15 @@ See [Build Documentation](./doc/build.md) for instructions on how to build the g
 
 For configuring and running the go binaries, refer to the
 [Run Documentation](./doc/configuration.md).
+
+### Architecture
+
+An overview of the architecture is given in [Architecture](./doc/architecture.md).
+
+### Metadata
+
+Detailed information on how to generate, sign and parse metadata is given in
+[Metadata](./doc/metadata.md).
 
 ### APIs and Protocols
 
