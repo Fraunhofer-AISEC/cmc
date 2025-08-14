@@ -1,6 +1,8 @@
 {
     "cmcAddr": "0.0.0.0:9955",
-    "provAddr": "https://10.0.2.2:9000/",
+    "provisionAddr": "https://10.0.2.2:9000/",
+    "provisionAuth": [ "none" ],
+    "provisionMode": "est",
     "metadata": [
         "https://10.0.2.2:9000/vm-metadata"
     ],
@@ -19,6 +21,13 @@
     "ctrLog": "/tmp/container_measurements",
     "ctrPcr": 11,
     "estTlsCas": [
+        "/var/ca.pem"
+    ],
+    "identityCas": [
+        "/var/ca.pem"
+    ],
+    "metadataCas": [
+        "/var/metadata-ca.pem",
         "/var/ca.pem"
     ]
 }

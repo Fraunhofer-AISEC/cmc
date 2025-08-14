@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+cd "${dir}"
+
+generate-metadata-vm
+
+sign-metadata json
+
+cp "${dir}/data/metadata-signed/"* "${dir}/example-setup/vm-config/vm-metadata/"
+cp "${dir}/data/pki/ca.pem" "${dir}/example-setup/vm-config/metadata-ca.pem"
+
+# Restarting cmcd is required for fetching the updated metadata
+vm-ssh systemctl restart cmcd

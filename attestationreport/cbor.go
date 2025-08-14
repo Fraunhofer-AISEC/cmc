@@ -176,7 +176,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			// Only verify certificate chain(s) if roots are given
 			x5Chain, ok := sig.Headers.Unprotected[cose.HeaderLabelX5Chain].([]interface{})
 			if !ok {
-				result.Summary.Fail(NotSpecified)
+				result.Summary.Status = StatusFail
 				result.SignatureCheck[i].CertChainCheck.Fail(ParseX5C)
 				success = false
 				continue
@@ -194,7 +194,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 				x509Cert, err := x509.ParseCertificate(cert)
 				if err != nil {
 					log.Warnf("failed to parse leaf certificate: %v", err)
-					result.Summary.Fail(NotSpecified)
+					result.Summary.Status = StatusFail
 					result.SignatureCheck[i].CertChainCheck.Fail(ParseCert, err)
 					success = false
 					continue
@@ -205,7 +205,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 
 			x509Chains, err := internal.VerifyCertChain(certChain, roots)
 			if err != nil {
-				result.Summary.Fail(NotSpecified)
+				result.Summary.Status = StatusFail
 				result.SignatureCheck[i].CertChainCheck.Fail(VerifyCertChain, err)
 				success = false
 
@@ -229,7 +229,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			}
 			verifyingKey, ok = certChain[0].PublicKey.(*ecdsa.PublicKey)
 			if !ok {
-				result.Summary.Fail(NotSpecified)
+				result.Summary.Status = StatusFail
 				result.SignatureCheck[i].SignCheck.Fail(ExtractPubKey)
 				success = false
 				continue
@@ -251,7 +251,7 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	if err != nil {
 		// Can only be set for all signatures here
 		for i := range result.SignatureCheck {
-			result.Summary.Fail(NotSpecified)
+			result.Summary.Status = StatusFail
 			result.SignatureCheck[i].SignCheck.Fail(VerifySignature)
 			success = false
 		}

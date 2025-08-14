@@ -11,9 +11,10 @@
         "data/pki/ca.pem"
     ],
     "metadataCas": [
-        "example-setup/vm-config/ca.pem"
+        "data/pki/ca.pem",
+        "example-setup/vm-config/metadata-ca.pem"
     ],
-    "httpFolder": "example-setup/vm-config",
+    "httpFolder": "example-setup/vm-config/vm-metadata",
     "verifyEkCert": false,
     "tpmEkCertDb": "data/tpm-ek-certs.db",
     "logLevel": "trace",

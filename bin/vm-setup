@@ -262,7 +262,8 @@ genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${dir}/cmcctl/cmcctl" \
     "${dir}/vm/measured-boot-tools/parse-srtm-pcrs/parse-srtm-pcrs" \
     "${dir}/vm/measured-boot-tools/parse-ima-pcr/parse-ima-pcr" \
-    "${dir}/data/pki/ca.pem"
+    "${dir}/data/pki/ca.pem" \
+    "${dir}/example-setup/vm-config/metadata-ca.pem"
 
 # Finished successfully
 printf "[\033[32;1m  OK  \033[0m] $0\n"
