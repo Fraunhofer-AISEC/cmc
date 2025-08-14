@@ -84,3 +84,10 @@ The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CL
 commands `ego uniqueid $ENCLAVE_PROGRAM` and `ego signerid $ENCLAVE_PROGRAM`.
 
 For a complete example, see [generate-rtm-manifest-sgx](../bin/generate-rtm-manifest-sgx).
+
+### Further documentation
+
+Building the individual components with various flags is described in the [Build](./build.md)
+documentation. A more detailed description on how to configure and run the components
+is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
+refer to the [Developer Documentation](./dev.md).

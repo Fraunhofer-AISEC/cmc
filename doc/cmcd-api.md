@@ -167,12 +167,9 @@ VerificationRequest = {
   1: bstr,                          ; Nonce as a byte string
   2: bstr,                          ; Report as a byte string
   3: { tstr => bstr },              ; Metadata as a map of strings to byte strings
-  4: bstr,                          ; CA as a byte string
-  4: [* bstr],                      ; Metadata CAs as an array of byte strings
-  5: [* bstr],                      ; Identity CAs as an array of byte strings
-  ? 5: tstr,                        ; Optional peer string
-  ? 6: [* tstr],                    ; Optional cache misses array of text strings
-  ? 7: bstr                         ; Optional policies as a byte string
+  ? 6: tstr,                        ; Optional peer string
+  ? 7: [* tstr],                    ; Optional cache misses array of text strings
+  ? 8: bstr                         ; Optional policies as a byte string
 }
 ```
 
@@ -183,8 +180,6 @@ message VerificationRequest {
   bytes nonce = 2;
   bytes report = 3;
   map<string, bytes> metadata = 4;
-  repeated bytes metadataCas = 5;
-  repeated bytes identityCas = 6;
   string peer = 7;
   repeated string cache_misses = 8;
   bytes policies = 9;
