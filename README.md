@@ -39,7 +39,7 @@ See [Build Documentation](./doc/build.md) for instructions on how to build the g
 ### Run
 
 For configuring and running the go binaries, refer to the
-[Run Documentation](./doc/configuration.md).
+[Run Documentation](./doc/run.md).
 
 ### Architecture
 

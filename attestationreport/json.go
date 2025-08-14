@@ -213,6 +213,8 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		log.Tracef("Using %v provided root CAs for JWS verification", len(roots))
 		rootpool = x509.NewCertPool()
 		for _, cert := range roots {
+			log.Tracef("Adding %q with SubjectKeyID %q to trusted root pool",
+				cert.Subject.CommonName, hex.EncodeToString(cert.SubjectKeyId))
 			rootpool.AddCert(cert)
 		}
 	case crypto.PublicKey:
@@ -245,7 +247,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 			// Verify the certificate chain present in the x5c header against the given roots
 			certs, err := sig.Protected.Certificates(opts)
 			if err != nil {
-				result.Summary.Fail(NotSpecified)
+				result.Summary.Status = StatusFail
 				result.SignatureCheck[i].CertChainCheck.Fail(VerifyCertChain, err)
 				success = false
 				continue
@@ -269,7 +271,7 @@ func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		if err == nil {
 			result.SignatureCheck[i].SignCheck.Status = StatusSuccess
 		} else {
-			result.Summary.Fail(NotSpecified)
+			result.Summary.Status = StatusFail
 			result.SignatureCheck[i].SignCheck.Fail(VerifySignature, err)
 			success = false
 		}

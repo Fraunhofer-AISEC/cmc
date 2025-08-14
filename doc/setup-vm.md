@@ -29,6 +29,12 @@ cmc-docker vm-start
 
 # Establish attested TLS connection to Ubuntu VM server
 cmc-docker vm-cmcctl
+
+# Attestation will likely fail because of outdated artifacts. Update
+cmc-docker vm-update-metadata
+
+# Run again
+cmc-docker vm-cmcctl
 ```
 
 The [cmcctl](./architecture.md#cmcctl) on the host establishes an attested TLS connection to
@@ -50,36 +56,9 @@ Find the generated attestation result in `cmc/data/attestation-result.json`.
 ---
 
 
-## Troubleshooting
+## Diagnostics and Troubleshooting
 
 Below you can find some guidance on updating metadata and inspecting the VM.
-
-### Manually Update Metadata
-
-If attestation fails, the metadata must be updated. This is an experimental guide
-on how this could be achieved.
-
-#### Parsing the Reference Values
-
-Simply parses the reference values from a running VM:
-```sh
-cmc-docker vm-swtpm
-cmc-docker vm-start
-cmc-docker generate-metadata-vm
-sign-metadata json
-cp data/metadata-signed/* example-setup/vm-config/vm-metadata/
-cp data/pki/ca.pem example-setup/vm-config/
-```
-
-#### Precomputing the Reference Values
-
-Precomputes the metadata based on software artifacts. Not yet working!
-```sh
-vm-extract-data
-precompute-metadata-vm
-cp data/metadata-signed/* example-setup/vm-config/vm-metadata/
-cp data/pki/ca.pem example-setup/vm-config/
-```
 
 ### Access VM
 
@@ -105,6 +84,30 @@ journalctl [-f] -u cmcd
 journalctl [-f] -u cmcctl
 ```
 
+### Manually Update Metadata
+
+If attestation fails, the metadata must be updated. This is an experimental guide
+on how this can be achieved.
+
+#### Parsing the Reference Values
+
+Simply parses the reference values from a running VM:
+```sh
+cmc-docker vm-swtpm
+cmc-docker vm-start
+cmc-docker update-metadata-vm
+```
+
+#### Precomputing the Reference Values
+
+Precomputes the metadata based on software artifacts. Not yet working!
+```sh
+vm-extract-data
+precompute-metadata-vm
+cp data/metadata-signed/* example-setup/vm-config/vm-metadata/
+cp data/pki/ca.pem example-setup/vm-config/metadata-ca.pem
+```
+
 ### Manually Run Services
 
 The services can also be stopped and manually run:
@@ -115,3 +118,9 @@ systemctl stop cmcctl
 cmcd -config /etc/cmcd-conf.json
 cmcctl -config /etc/cmcctl-conf-vm.json
 ```
+
+### Update VM Configuration
+
+cloud-init does only run on the first boot. If any cloud-init provisioned data is changed, the
+simplest approach is to delete `cmc/vm/images/noble-server-cloudimg-amd64.img` and re-run
+`cmc-docker vm-setup`.

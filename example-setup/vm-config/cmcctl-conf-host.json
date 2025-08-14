@@ -9,10 +9,7 @@
     "identityCas": [
         "data/pki/ca.pem"
     ],
-    "metadataCas": [
-        "example-setup/vm-config/ca.pem"
-    ],
-    "estCa": "data/pki/ca.pem",
+    "estTlsCa": "data/pki/ca.pem",
     "mtls": false,
     "attest": "server",
     "measurementLog": true,

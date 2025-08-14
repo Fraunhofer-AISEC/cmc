@@ -1,6 +1,6 @@
 # CMC API
 
-This document described the *cmcd* APIs. For documentation, where this API is used, refer to
+This document describes the *cmcd* APIs. For documentation, where this API is used, refer to
 [Architecture](./architecture.md). The *cmcd* provides a [gRPC](https://grpc.io/),
 [CoAP](https://datatracker.ietf.org/doc/html/rfc7252), and socket API.
 The socket api supports TCP as well as
@@ -35,7 +35,7 @@ for the specific APIs. For generating and verifying attestation reports, only th
 
 ### gRPC
 
-The CoAP API provides the following services:
+The gRPC API provides the following services:
 
 - `rpc Attest(AttestationRequest) returns (AttestationResponse)`
 - `rpc Verify(VerificationRequest) returns (VerificationResponse)`

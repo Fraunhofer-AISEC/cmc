@@ -10,10 +10,7 @@
     "identityCas": [
         "/var/ca.pem"
     ],
-    "metadataCas": [
-        "/var/ca.pem"
-    ],
-    "estCa": "/var/ca.pem",
+    "estTlsCa": "/var/ca.pem",
     "attest": "server",
     "measurementLog": true,
     "logLevel": "trace",
