@@ -4,7 +4,7 @@ This setup shows step-by-step how to install the tools and generate the metadata
 running the *cmcd*.  It was tested on Ubuntu 24.04 LTS.
 
 > Note: For general information on the attestation metadata formats and an explanation of the different
-> components, see [Architecture](./architecture.md)
+> components, see [Architecture](./architecture.md) and [Metadata](./metadata.md).
 
 ## Setup environment
 
@@ -16,7 +16,8 @@ source env.bash
 ## Requirements
 
 - A Linux platform
-- For TPM attestation, access to `/dev/tpmrm0` or `/dev/tpm0`.
+- For the VM with attached swTPM demo, no hardware is required
+- For TPM attestation, access to `/dev/tpmrm0` or `/dev/tpm0`
 - For AMD SEV-SNP an SNP-capable AMD server and an SNP VM with access to `/dev/sev-guest`
 - for Intel SGX an Intel SGX-capable machine with all required Intel SGX software installed
 - for Intel TDX an Intel TDX-capable machine with all required Intel TDX software installed
@@ -65,39 +66,18 @@ sudo make install
 
 ## Platform-specific Setup and Metadata Generation
 
-As the setup differs between the different hardware attestation technologies, the platform-specific
-setup is summarized in
+Because setup, metadata generation, and operational steps vary across different hardware
+attestation technologies, detailed instructions are provided in the following platform-specific
+guides:
 - [VM-Setup](./setup-vm.md)
 - [TPM-Setup](./setup-tpm.md)
 - [SNP-Setup](./setup-snp.md)
 - [SGX-Setup](./setup-sgx.md)
 - [TDX-Setup](./setup-tdx.md)
 
-## Sign the metadata
 
-As soon as the platform-specific metadata has been generated, it must be signed.
+### Further documentation
 
-By default, the metadata is in JSON format. If the demo-setup is used, the metadata can
-be signed with:
-```sh
-sign-metadata json
-```
-This signs all metadata in `data/metadata-raw` and puts it in `data/metadata-signed`. If
-`CBOR` serialization shall be used, simply replace `json` with `cbor`.
-
-If an own setup and PKI are used, metadata can be signed with the `metasign` tool:
-```sh
-metasign -in <metadata.json> -out <metadata-signed.json> -keys <private-key(s)> -x5cs <certificate-chain(s)>
-```
-
-If the CMC shall work with CBOR metadata, first convert the metadata and then sign as described
-above:
-```sh
-# Convert JSON to CBOR using the converter-tool
-metaconv -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
-```
-
-### Build and Run the CMC
-
-Refer to [Build](./build.md) and [Run](./run.md) for building and running the go binaries to
-perform remote attestation and establish attested secure channels.
+Building the individual components with various flags is described in the [Build](./build.md)
+documentation. A more detailed description on how to configure and run the components
+is described in the [Run](./run.md) documentation.

@@ -35,7 +35,7 @@ The [cmcctl](./architecture.md#cmcctl) on the host establishes an attested TLS c
 the cmcctl running within the ubuntu VM with server-side authentication and server-side
 attestation.
 
-Find the generated attestation result in `cmc/data/attestation-result`.
+Find the generated attestation result in `cmc/data/attestation-result.json`.
 
 > **Note:** The **attestation might fail**, as this simple demo setup does not aim for a full
 > reproducible build of all components. For a successful attestation, you can update the metadata as
