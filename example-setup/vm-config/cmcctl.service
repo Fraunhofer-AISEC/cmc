@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=10
 User=root
-ExecStart=cmcctl listen -config /etc/cmcctl-conf-vm.json
+ExecStart=cmcctl serve -config /etc/cmcctl-conf-vm.json
 
 [Install]
 WantedBy=multi-user.target

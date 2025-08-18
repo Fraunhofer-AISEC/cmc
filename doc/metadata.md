@@ -101,13 +101,13 @@ metaconv -in <input-file>.json -out <output-file.cbor> -inform json -outform cbo
 
 The unsigned JSON metadata can simply be viewed in any editor or via `jq`:
 ```sh
-jq . metadata.json
+jq . <metadata.json>
 ```
 
 Signed metadata in JWS format has `base64`-formatted payload. Inspecting the metadata can be done
 with `jq` and `base64`:
 ```sh
-jq -r .payload | base64 -di | jq .
+jq -r .payload <metadata.json> | base64 -di | jq .
 ```
 
 Usually, all relevant data is displayed in the `Verification Result`, which is produced on every

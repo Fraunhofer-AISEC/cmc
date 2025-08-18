@@ -1,5 +1,4 @@
 {
-    "mode": "listen",
     "addr": [
         "0.0.0.0:4443"
     ],
@@ -15,7 +14,7 @@
     "measurementLog": true,
     "logLevel": "trace",
     "api": "socket",
-    "apiSerializer": "cbor",
+    "apiSerializer": "json",
     "cmcAddr": "localhost:9955",
     "keyConfig": "EC256"
 }
