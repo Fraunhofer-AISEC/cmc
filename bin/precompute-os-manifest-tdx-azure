@@ -56,29 +56,6 @@ fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -
 # Generate reference values
 echo "Calculating reference values"
 
-set +e
-refs_tdx=$(calculate-tdx-mrs \
-    --mrs 2,3,4 \
-    --eventlog \
-    --format json \
-    --kernel "${kernel}" \
-    --cmdline "${cmdline}" \
-    --secureboot "${secure_boot}" \
-    --pk "${pk}" \
-    --kek "${kek}" \
-    --db "${db}" \
-    --dbx "${dbx}"
-)
-if [[ -z "${refs_tdx}" ]]; then
-    echo "calculate-tdx-mrs failed: empty reference values"
-    exit 1
-fi
-echo "${refs_tdx}" | jq empty 2>/dev/null || {
-    echo "calculate-tdx-mrs failed: '${refs_tdx}'"
-    exit 1
-}
-set -e
-
 mrowner="000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 xfam="e702060000000000"
 
@@ -116,7 +93,8 @@ setarr  "json" "baseLayers"            "de.test.rtm"
 setjson "json" "certLevel"             3
 setjson "json" "caFingerprint"         "${fingerprint}"
 
-setarr    "json" "referenceValues"     "${refs_tdx}"
+echo "$refs_tpm"
+
 extendarr "json" "referenceValues"     "${refs_tpm}"
 
 # Save the OS manifest

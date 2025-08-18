@@ -720,9 +720,6 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 
 		log.Tracef("Verifying against TCB level date %v, status %v", tcbLevel.TcbDate, tcbLevel.TcbStatus)
 
-		result.TcbLevel.Date = tcbLevel.TcbDate
-		result.TcbLevel.Status = string(tcbLevel.TcbStatus)
-
 		// Compare SGX TCB Comp SVNs from PCK Certificate with TCB Level
 		sgxCompResult, ok := compareSgxTcbCompSvns(sgxExtensions, tcbLevel.Tcb.SgxTcbcomponents)
 		if !ok {

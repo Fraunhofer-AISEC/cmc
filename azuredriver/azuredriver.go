@@ -168,9 +168,22 @@ func (azure *Azure) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypt
 }
 
 func (azure *Azure) GetCertChain(keyType ar.KeySelection) ([]*x509.Certificate, error) {
-	// Return the CC AK chain, as it is required to establish trust. The TPM AK certificate
-	// is retrieved from the NVIndex if needed
-	return azure.ccAkChain, nil
+	if azure == nil {
+		return nil, errors.New("internal error: azure object is nil")
+	}
+
+	switch keyType {
+	case ar.AK:
+		// Return the CC AK chain, as it is required to establish trust. The TPM AK certificate
+		// is retrieved from the NVIndex if needed
+		internal.TraceCertsShort("Returning CC AK cert", azure.ccAkChain)
+		return azure.ccAkChain, nil
+	case ar.IK:
+		internal.TraceCertsShort("Returning IK cert", azure.ikChain)
+		return azure.ikChain, nil
+	default:
+		return nil, fmt.Errorf("internal error: unknown key selection %v", keyType)
+	}
 }
 
 func provisioningRequired(p string) bool {
@@ -213,12 +226,16 @@ func (azure *Azure) provision(c *ar.DriverConfig) error {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
+	for _, c := range caCerts {
+		internal.TraceCertShort("Provisioned CA cert", c)
+	}
 
 	// Fetch CC certificate chain for Attestation Key
 	azure.ccAkChain, err = azure.fetchAk(c)
 	if err != nil {
 		return fmt.Errorf("failed to get TDX cert chain: %w", err)
 	}
+	internal.TraceCertsShort("Provisioned AK cert", azure.ccAkChain)
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
 	ikCert, err := azure.provisionIk(azure.ikPriv, c)
@@ -227,6 +244,8 @@ func (azure *Azure) provision(c *ar.DriverConfig) error {
 	}
 
 	azure.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
+
+	internal.TraceCertsShort("Provisioned IK cert", azure.ikChain)
 
 	return nil
 }

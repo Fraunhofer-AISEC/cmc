@@ -221,19 +221,21 @@ func (tdx *Tdx) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.Pu
 }
 
 // GetCertChain returns the certificate chain for the specified key
-func (tdx *Tdx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
+func (tdx *Tdx) GetCertChain(keyType ar.KeySelection) ([]*x509.Certificate, error) {
 	if tdx == nil {
-		return nil, errors.New("internal error: SW object is nil")
+		return nil, errors.New("internal error: tdx object is nil")
 	}
 
-	if sel == ar.AK {
-		log.Debugf("Returning %v AK certificates", len(tdx.akChain))
+	switch keyType {
+	case ar.AK:
+		internal.TraceCertsShort("Returning AK cert", tdx.akChain)
 		return tdx.akChain, nil
-	} else if sel == ar.IK {
-		log.Debugf("Returning %v IK certificates", len(tdx.ikChain))
+	case ar.IK:
+		internal.TraceCertsShort("Returning IK cert", tdx.ikChain)
 		return tdx.ikChain, nil
+	default:
+		return nil, fmt.Errorf("internal error: unknown key selection %v", keyType)
 	}
-	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
 func GetMeasurement(nonce []byte) ([]byte, error) {
