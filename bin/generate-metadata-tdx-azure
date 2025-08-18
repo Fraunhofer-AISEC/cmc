@@ -8,7 +8,7 @@ source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
-"${bin}/generate-device-description"
+"${bin}/generate-device-description" "azure-device.test.de"
 
 "${bin}/precompute-rtm-manifest-tdx-azure"
 

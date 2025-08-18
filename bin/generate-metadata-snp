@@ -35,6 +35,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-"${bin}/generate-device-description"
+"${bin}/generate-device-description" "snp-device.test.de"
 
 "${bin}/precompute-rtm-manifest-snp" --vcpus "${vcpus}" --vmm-type "${vmm_type}" --ovmf "${ovmf}"
