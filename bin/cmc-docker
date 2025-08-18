@@ -34,6 +34,8 @@ if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
     -it \
     --mount type=bind,src="${dir}",dst="${dir}" \
     --network "${name}" \
+    -p 9955:9955 \
+    -p 4443:4443 \
     ${kvm} \
     ${sgx_enclave} \
     ${sgx_provision} \

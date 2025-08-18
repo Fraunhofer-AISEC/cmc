@@ -14,7 +14,7 @@ and `verify` endpoint of the *cmcd*. See [APIs and Protocols](#apis-and-protocol
 
 ### APIs and Protocols
 
-For a description of the `cmcd` gRPC, CoaP and socket APIs, refer to [CMCD API](./doc/cmcd-api.md).
+For a description of the `cmcd` gRPC, CoaP and socket APIs, refer to [CMCD API](./cmcd-api.md).
 These can be used to get certificates and generate and verify attestation reports.
 
 For a description of the attested TLS attestation protocol, refer to
