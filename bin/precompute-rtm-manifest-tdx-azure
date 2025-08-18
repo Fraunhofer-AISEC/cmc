@@ -58,17 +58,10 @@ echo "Calculating TDX reference values"
 set +e
 refs_tdx=$(calculate-tdx-mrs \
         --format json \
-        --mrs 1 \
+        --mrs 0,5 \
+        --mrtd "a2320d5ee0caf73db02cef3993208f9ae4d19e70511ee00d2e03963c50495a958a5f063994cd6a9cab4b4f99c8e159af" \
+        --mrseam "49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6" \
         --eventlog \
-        --kernel "${kernel}" \
-        --cmdline "${cmdline}" \
-        --bootorder 0 \
-        --bootxxxx "${boot0000}" \
-        --secureboot "${secure_boot}" \
-        --pk "${pk}" \
-        --kek "${kek}" \
-        --db "${db}" \
-        --dbx "${dbx}" \
 )
 if [[ -z "${refs_tdx}" ]]; then
     echo "calculate-tdx-mrs failed: empty reference values"
@@ -128,7 +121,7 @@ setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 y
 setjson "json" "description"           "RTM Manifest"
 setarr  "json" "baseLayers"            "${name}"
 setjson "json" "certLevel"             3
-setjson "json" "caFingerprint"         "${fingerprint}"
+setarr  "json" "caFingerprints"        "${fingerprint}"
 
 setarr    "json" "referenceValues"       "${refs_tdx}"
 extendarr "json" "referenceValues"       "${refs_tpm}"

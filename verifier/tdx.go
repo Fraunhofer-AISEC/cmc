@@ -190,7 +190,6 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to validate TCB info")
 		result.Summary.Fail(ar.VerifyTcbInfo)
-		return result, false
 	}
 
 	// Verify Quoting Enclave Identity
@@ -202,7 +201,6 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	result.TdxResult.QeReportCheck = qeIdentityResult
 	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
 		result.Summary.Fail(ar.VerifyQEIdentityErr)
-		return result, false
 	}
 
 	// Verify Quote Signature including certificate chains and CRLs

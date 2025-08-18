@@ -104,6 +104,7 @@ func Verify(
 	}
 
 	hwAttest := false
+Loop:
 	for _, m := range report.Measurements {
 
 		switch mtype := m.Type; mtype {
@@ -169,6 +170,8 @@ func Verify(
 				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
 			}
 			result.Measurements = append(result.Measurements, results...)
+			hwAttest = true
+			break Loop
 
 		default:
 			result.Fail(ar.MeasurementTypeNotSupported, fmt.Errorf("unsupported measurement type %q", mtype))

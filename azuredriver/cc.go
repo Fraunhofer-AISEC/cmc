@@ -84,7 +84,7 @@ func GetCcMeasurement(nonce []byte, akchain []*x509.Certificate) (ar.Measurement
 func UpdateAzureUserData(nonce []byte) error {
 
 	if nonce == nil {
-		log.Debug("Omit updating azure user as nonce was not provided")
+		log.Debug("Omit updating azure user data as nonce was not provided")
 		return nil
 	}
 	if len(nonce) > 32 {

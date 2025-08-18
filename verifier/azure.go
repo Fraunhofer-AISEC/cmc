@@ -80,6 +80,8 @@ type AzureVmConfig struct {
 func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
 	tdxRefVals, snpRefVals, vtpmRefVals []ar.ReferenceValue, s ar.Serializer) ([]ar.MeasurementResult, bool) {
 
+	log.Debug("Verifying Azure measurements...")
+
 	// Extract measurements and nonce, perform basic sanity checks
 	foundCcMeasurement := false
 	foundVtpmMeasurement := false
@@ -151,7 +153,6 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to verify Azure CoT: %w", err))
 		return []ar.MeasurementResult{r}, false
 	}
-	log.Debug("Successfully verified Azure Chain of Trust")
 
 	// Create results structure and verify all measurements
 	success := true
@@ -245,6 +246,8 @@ func DecodeAzureRtData(data []byte) (*AzureRuntimeData, *AzureRuntimeClaims, err
 // Quote := GenerateQuote(nonce: RuntimeClaims)
 func VerifyAzureCoT(rtdataRaw, suppliedNonce, reportNonce []byte, vtpmAkCert *x509.Certificate) error {
 
+	log.Debug("Verifying Azure Chain of Trust...")
+
 	// Make sure we compare the full 64 bytes, even if nonce is shorter
 	fullSuppliedNonce := make([]byte, 64)
 	copy(fullSuppliedNonce, suppliedNonce)
@@ -298,13 +301,17 @@ func VerifyAzureCoT(rtdataRaw, suppliedNonce, reportNonce []byte, vtpmAkCert *x5
 	if !reflect.DeepEqual(claimAkPub, vTpmAkPub) {
 		return fmt.Errorf("vTPM AK pub does not match claims AK pub")
 	}
-
 	log.Debugf("vTPM AK pub matches claims AK pub")
+
+	log.Debugf("Successfully verified Azure Chain of Trust")
 
 	return nil
 }
 
 func GetReportNonce(measurement ar.Measurement) ([]byte, error) {
+
+	log.Debug("Extracting nonce from hardware report...")
+
 	switch measurement.Type {
 	case "Azure SNP Measurement":
 		return getSnpNonce(measurement.Evidence)
@@ -316,17 +323,21 @@ func GetReportNonce(measurement ar.Measurement) ([]byte, error) {
 }
 
 func getSnpNonce(data []byte) ([]byte, error) {
+	log.Debug("Detected SNP report")
 	report, err := DecodeSnpReport(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
+	log.Debug("Successfully extracted nonce")
 	return report.ReportData[:], nil
 }
 
 func getTdxNonce(data []byte) ([]byte, error) {
+	log.Debug("Detected TDX report")
 	quote, err := DecodeTdxReportV4(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
 	}
+	log.Debug("Successfully extracted nonce")
 	return quote.QuoteBody.ReportData[:], nil
 }

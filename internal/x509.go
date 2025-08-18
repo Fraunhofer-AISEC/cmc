@@ -374,3 +374,18 @@ func parseCertBlobPem(data []byte) ([]*x509.Certificate, error) {
 	}
 	return certs, nil
 }
+
+func TraceCertShort(prefix string, cert *x509.Certificate) {
+	log.Tracef("%v", prefix)
+	log.Tracef("\tCommonName    : %v", cert.Subject.CommonName)
+	log.Tracef("\tSubjectKeyID  : %v", hex.EncodeToString(cert.SubjectKeyId))
+	if len(cert.AuthorityKeyId) > 0 {
+		log.Tracef("\tAuthorityKeyID: %v", hex.EncodeToString(cert.AuthorityKeyId))
+	}
+}
+
+func TraceCertsShort(prefix string, certs []*x509.Certificate) {
+	for i, cert := range certs {
+		TraceCertShort(fmt.Sprintf("%v %v", prefix, i), cert)
+	}
+}
