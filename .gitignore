@@ -26,6 +26,7 @@ tools/tdxtool/tdxtool
 tools/snptool/snptool
 tools/azuretool/azuretool
 tools/hextobin/hextobin
+tools/mrtool/mrtool
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor

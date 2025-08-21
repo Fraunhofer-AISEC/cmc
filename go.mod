@@ -10,7 +10,6 @@ require (
 	github.com/edgelesssys/ego v1.4.1
 	github.com/fxamacker/cbor/v2 v2.5.0
 	github.com/go-jose/go-jose/v4 v4.0.5
-	github.com/google/go-attestation v0.5.2-0.20241212142452-9cc576ead1a9
 	github.com/google/go-configfs-tsm v0.3.2
 	github.com/google/go-eventlog v0.0.2
 	github.com/google/go-sev-guest v0.11.1
@@ -22,11 +21,13 @@ require (
 	github.com/plgd-dev/go-coap/v3 v3.1.2
 	github.com/robertkrimen/otto v0.2.1
 	github.com/sirupsen/logrus v1.9.3
+	github.com/urfave/cli/v3 v3.4.1
 	github.com/veraison/go-cose v1.3.0
 	go.mozilla.org/pkcs7 v0.0.0-20210826202110-33d05740a352
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	google.golang.org/grpc v1.56.3
 	google.golang.org/protobuf v1.34.2
+	gopkg.in/square/go-jose.v2 v2.6.0
 )
 
 require (
@@ -58,6 +59,5 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
-	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
