@@ -557,7 +557,7 @@ func GetEventLogs(serializer ar.Serializer,
 		// If the IMA is used, not the final PCR value is sent but instead
 		// a list of the kernel modules which are extended during verification
 		// to result in the final value
-		imaEvents, err := ima.GetImaRuntimeDigests()
+		imaEvents, err := ima.GetImaRuntimeDigests(ima.DEFAULT_BINARY_RUNTIME_MEASUREMENTS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get IMA runtime digests: %v", err)
 		}

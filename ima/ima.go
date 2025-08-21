@@ -30,6 +30,10 @@ import (
 
 var log = logrus.WithField("service", "ima")
 
+const (
+	DEFAULT_BINARY_RUNTIME_MEASUREMENTS = "/sys/kernel/security/ima/binary_runtime_measurements"
+)
+
 // Constants for digests and TCG Events
 const (
 	SHA1_DIGEST_LEN   = 20
@@ -53,8 +57,7 @@ type imaTemplate struct {
 
 // GetImaRuntimeDigests returns all hashes extended by the IMA into the TPM
 // IMA PCR as read from the sysfs
-func GetImaRuntimeDigests() ([]ar.MeasureEvent, error) {
-	file := "/sys/kernel/security/ima/binary_runtime_measurements"
+func GetImaRuntimeDigests(file string) ([]ar.MeasureEvent, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
