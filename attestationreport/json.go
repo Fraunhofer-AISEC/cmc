@@ -40,8 +40,8 @@ import (
 type HexByte []byte
 
 // MarshalJSON marshalls a byte array into a hex string
-func (h *HexByte) MarshalJSON() ([]byte, error) {
-	return json.Marshal(hex.EncodeToString(*h))
+func (h HexByte) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hex.EncodeToString(h))
 }
 
 // UnmarshalJSON unmarshalls JSON hex strings into
