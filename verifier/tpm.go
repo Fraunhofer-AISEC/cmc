@@ -167,14 +167,15 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 				ref := getReferenceValue(event.Sha256, pcr, referenceValues)
 				if ref == nil {
 					measResult := ar.DigestResult{
-						Type:       "Measurement",
-						Index:      pcr,
-						Digest:     hex.EncodeToString(event.Sha256),
-						Success:    false,
-						Launched:   true,
-						SubType:    event.EventName,
-						EventData:  event.EventData,
-						CtrDetails: event.CtrData,
+						Type:        "Measurement",
+						Index:       pcr,
+						Digest:      hex.EncodeToString(event.Sha256),
+						Success:     false,
+						Launched:    true,
+						SubType:     event.EventName,
+						EventData:   event.EventData,
+						CtrDetails:  event.CtrData,
+						Description: event.Description,
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Debugf("Failed to find PCR%v measurement %v: %v in reference values",
@@ -194,6 +195,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 				}
 
 				measResult := ar.DigestResult{
+					Type:        "Verified",
 					Index:       pcr,
 					Digest:      hex.EncodeToString(event.Sha256),
 					Success:     true,
@@ -229,7 +231,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 					}
 					calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr], ref.Sha256)
 
-					// As we only have the PCR summary, we will later  set all reference values
+					// As we only have the PCR summary, we will later set all reference values
 					// to true/false depending on whether the calculation matches the PCR summary
 					measResult := ar.DigestResult{
 						Index:       pcr,
@@ -315,6 +317,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 						Digest:      hex.EncodeToString(ref.Sha256),
 						Description: ref.Description,
 						CtrDetails:  ar.GetCtrDetailsFromRefVal(&ref, s),
+						EventData:   ref.EventData,
 					}
 					detailedResults = append(detailedResults, result)
 					if !ref.Optional {

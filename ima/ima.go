@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -132,8 +133,9 @@ func parseImaRuntimeDigests(data []byte) ([]ar.MeasureEvent, error) {
 		}
 
 		event := ar.MeasureEvent{
-			Sha256:    digest[:],
-			EventName: eventName,
+			Sha256:      digest[:],
+			EventName:   filepath.Base(eventName),
+			Description: eventName,
 		}
 
 		log.Tracef("Parsed IMA PCR%v %v event %v", header.Pcr,
