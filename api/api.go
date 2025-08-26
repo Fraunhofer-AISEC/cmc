@@ -130,8 +130,8 @@ type SocketError struct {
 }
 
 const (
-	// Set maximum message length to 10 MB
-	MaxMsgLen = 1024 * 1024 * 10
+	// Set maximum message length for unix domain sockets to 10 MB
+	MaxUnixMsgLen = 1024 * 1024 * 10
 )
 
 type PSSOptions struct {
