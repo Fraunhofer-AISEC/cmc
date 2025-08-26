@@ -6,8 +6,14 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-# TODO set this to paths where your reproducible build outputs the required artifacts
-artifacts="${dir}/../../artifacts/azure-tdx"
+[[ $# -eq 1 ]] || {
+    # Script requires path to artifacts folder containing all required artifacts such as
+    # bootloader, kernel, and cmdline
+    echo "Usage: precompute-os-manifest-tdx-azure <artifacts>"
+    exit 1
+}
+
+artifacts="$1"
 
 if [[ ! -d "${artifacts}" ]]; then
   echo "Artifacts directory ${artifacts} does not exist. Abort.."
@@ -17,15 +23,6 @@ fi
 efi_shim="${artifacts}/shimx64.efi"
 cmdline="${artifacts}/cmdline"
 kernel="${artifacts}/vmlinuz"
-gpt="${artifacts}/ev_efi_gpt_event"
-efivars="${artifacts}/efivars"
-
-boot0000="${efivars}/Boot0000-8be4df61-93ca-11d2-aa0d-00e098032b8c"
-secure_boot="${efivars}/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
-pk="${efivars}/PK-8be4df61-93ca-11d2-aa0d-00e098032b8c"
-kek="${efivars}/KEK-8be4df61-93ca-11d2-aa0d-00e098032b8c"
-db="${efivars}/db-d719b2cb-3d3a-4596-a3bc-dad00e67656f"
-dbx="${efivars}/dbx-d719b2cb-3d3a-4596-a3bc-dad00e67656f"
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
@@ -92,8 +89,6 @@ setjson "json" "description"           "OS Manifest"
 setarr  "json" "baseLayers"            "de.test.rtm"
 setjson "json" "certLevel"             3
 setjson "json" "caFingerprint"         "${fingerprint}"
-
-echo "$refs_tpm"
 
 extendarr "json" "referenceValues"     "${refs_tpm}"
 
