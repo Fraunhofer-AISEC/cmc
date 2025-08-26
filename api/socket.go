@@ -34,9 +34,9 @@ import (
 func Receive(conn net.Conn) ([]byte, uint32, error) {
 
 	// If unix domain sockets are used, set the write buffer size
-	_, ok := conn.(*net.UnixConn)
-	if ok {
-		err := conn.(*net.UnixConn).SetReadBuffer(MaxMsgLen)
+	_, isUnixConn := conn.(*net.UnixConn)
+	if isUnixConn {
+		err := conn.(*net.UnixConn).SetReadBuffer(MaxUnixMsgLen)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to socket write buffer size %v", err)
 		}
@@ -59,9 +59,9 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 	payloadLen := int(binary.BigEndian.Uint32(buf[0:4]))
 	msgType := binary.BigEndian.Uint32(buf[4:8])
 
-	if payloadLen > MaxMsgLen {
+	if isUnixConn && payloadLen > MaxUnixMsgLen {
 		return nil, 0, fmt.Errorf("cannot receive: payload size %v exceeds maximum size %v",
-			payloadLen, MaxMsgLen)
+			payloadLen, MaxUnixMsgLen)
 	}
 
 	log.Tracef("Received header type %v. Receiving payload length %v", TypeToString(msgType), payloadLen)
@@ -95,15 +95,14 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 //	payload []byte -> encoded payload
 func Send(conn net.Conn, payload []byte, t uint32) error {
 
-	if len(payload) > MaxMsgLen {
-		return fmt.Errorf("cannot send: payload size %v exceeds maximum size %v",
-			len(payload), MaxMsgLen)
-	}
-
 	// If unix domain sockets are used, set the write buffer size
 	_, ok := conn.(*net.UnixConn)
 	if ok {
-		err := conn.(*net.UnixConn).SetWriteBuffer(MaxMsgLen)
+		if len(payload) > MaxUnixMsgLen {
+			return fmt.Errorf("cannot send: payload size %v exceeds maximum size %v",
+				len(payload), MaxUnixMsgLen)
+		}
+		err := conn.(*net.UnixConn).SetWriteBuffer(MaxUnixMsgLen)
 		if err != nil {
 			return fmt.Errorf("failed to socket write buffer size %v", err)
 		}
