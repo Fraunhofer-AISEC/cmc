@@ -202,6 +202,11 @@ func (s *SnpConfig) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool)
 // cacheVcek caches VCEKs in DER format
 func (s *SnpConfig) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
 	if s.VcekCacheFolder != "" {
+		if _, err := os.Stat(s.VcekCacheFolder); err != nil {
+			if err := os.MkdirAll(s.VcekCacheFolder, 0755); err != nil {
+				return fmt.Errorf("failed to create VCEK cache %q: %v", s.VcekCacheFolder, err)
+			}
+		}
 		filePath := path.Join(s.VcekCacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
 		err := os.WriteFile(filePath, vcek, 0644)
