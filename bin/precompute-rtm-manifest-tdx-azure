@@ -74,7 +74,7 @@ if [[ -z "${refs_tdx}" ]]; then
     exit 1
 fi
 echo "${refs_tdx}" | jq empty 2>/dev/null || {
-    echo "calculate-calculate-tdx-mrs failed: '${refs_tdx}'"
+    echo "calculate-tdx-mrs failed: '${refs_tdx}'"
     exit 1
 }
 set -e
@@ -103,11 +103,11 @@ refs_tpm=$(calculate-srtm-pcrs \
         --dbx "${dbx}" \
 )
 if [[ -z "${refs_tpm}" ]]; then
-    echo "calculate-tdx-mrs failed: empty reference values"
+    echo "calculate-srtm-pcrs failed: empty reference values"
     exit 1
 fi
 echo "${refs_tpm}" | jq empty 2>/dev/null || {
-    echo "calculate-calculate-tdx-mrs failed: '${refs_tpm}'"
+    echo "calculate-srtm-pcrs failed: '${refs_tpm}'"
     exit 1
 }
 set -e

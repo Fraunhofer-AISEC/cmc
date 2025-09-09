@@ -21,8 +21,8 @@ packages:
   - tpm2-tools
 
 runcmd:
-  - mkdir /var/cmcctl
   - mount /dev/sr0 /mnt/
+  - mkdir /var/cmcctl
   - cp /mnt/cmcd /usr/bin/
   - cp /mnt/cmcctl /usr/bin/
   - cp /mnt/parse-srtm-pcrs /usr/bin/
