@@ -6,13 +6,32 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-# TODO set this to paths where your reproducible build outputs the required artifacts
-artifacts="${dir}/artifacts"
+[[ $# -eq 1 ]] || {
+    # Script requires path to artifacts folder containing all required artifacts such as
+    # firmware, UEFI secure boot variables, GPT tables, and kernel
+    echo "Usage: precompute-rtm-manifest-tdx-azure <artifacts>"
+    exit 1
+}
+
+artifacts="$1"
+
+if [[ ! -d "${artifacts}" ]]; then
+  echo "Artifacts directory ${artifacts} does not exist. Abort.."
+  exit 1
+fi
+
+tdx_module="${artifacts}/intel_tdx_module.so"
+ovmf="${artifacts}/OVMF.fd"
+kernel="${artifacts}/linux-amd64-tdx-systemd-debug.bzImage"
+cmdline="${artifacts}/linux-amd64-tdx-systemd-debug.cmdline"
+config="${artifacts}/calculate-pcrs.cfg"
+acpi_rsdp="${artifacts}/etc-acpi-rsdp"
+acpi_tables="${artifacts}/etc-acpi-tables"
+table_loader="${artifacts}/etc-table-loader"
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
-
 
 device_description="${out}/device.description.json"
 
@@ -43,21 +62,21 @@ refs=$(calculate-tdx-mrs \
     --mrs 0,1,5 \
     --eventlog \
     --format json \
-    --tdxmodule "${artifacts}/intel_tdx_module.so" \
-    --ovmf "${artifacts}/OVMF.fd" \
-    --kernel "${artifacts}/linux-amd64-tdx-systemd-debug.bzImage" \
-    --cmdline "${artifacts}/linux-amd64-tdx-systemd-debug.cmdline" \
-    --config "${artifacts}/calculate-pcrs.cfg" \
-    --acpirsdp "${artifacts}/etc-acpi-rsdp" \
-    --acpitables "${artifacts}/etc-acpi-tables" \
-    --tableloader "${artifacts}/etc-table-loader" \
+    --tdxmodule "${tdx_module}" \
+    --ovmf "${ovmf}" \
+    --kernel "${kernel}" \
+    --cmdline "${cmdline}" \
+    --config "${config}" \
+    --acpirsdp "${acpi_rsdp}" \
+    --acpitables "${acpi_tables}" \
+    --tableloader "${table_loader}" \
 )
 if [[ -z "${refs}" ]]; then
     echo "calculate-tdx-mrs failed: empty reference values"
     exit 1
 fi
 echo "${refs}" | jq empty 2>/dev/null || {
-    echo "calculate-calculate-tdx-mrs failed: '${refs}'"
+    echo "calculate-tdx-mrs failed: '${refs}'"
     exit 1
 }
 set -e

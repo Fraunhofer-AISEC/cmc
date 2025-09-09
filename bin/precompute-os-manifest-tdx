@@ -57,7 +57,7 @@ if [[ -z "${refs}" ]]; then
     exit 1
 fi
 echo "${refs}" | jq empty 2>/dev/null || {
-    echo "calculate-calculate-tdx-mrs failed: '${refs}'"
+    echo "calculate-tdx-mrs failed: '${refs}'"
     exit 1
 }
 set -e
