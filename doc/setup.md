@@ -64,11 +64,11 @@ make
 sudo make install
 ```
 
-## Platform-specific Setup and Metadata Generation
+## Platform-specific Example Setup and Metadata Generation
 
 Because setup, metadata generation, and operational steps vary across different hardware
 attestation technologies, detailed instructions are provided in the following platform-specific
-guides:
+example guides:
 - [VM-Setup](./setup-vm.md)
 - [TPM-Setup](./setup-tpm.md)
 - [SNP-Setup](./setup-snp.md)
@@ -78,8 +78,8 @@ guides:
 
 ### Further documentation
 
-Building the individual components with various flags is described in the [Build](./build.md)
-documentation. A more detailed description on how to configure and run the components
-is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
-refer to the [Developer Documentation](./dev.md).
+Building and installing the individual components with various flags is described in the
+[Build](./build-and-install.md) documentation. A more detailed description on how to configure and
+run the components is described in the [Run](./run.md) documentation. For building own applications
+using the *cmcd*, refer to the [Developer Documentation](./dev.md).
 

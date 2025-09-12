@@ -76,7 +76,7 @@ mkdir -p "${data}"
 # Generate an example PKI
 "${dir}/bin/setup-pki${script_suffix}"
 
-# Generate example SGX metadata for the current machine
+# Generate example metadata for the current machine
 "${dir}/bin/generate-metadata-${driver}"
 
 echo "signing metadata with serializer ${serializer}"

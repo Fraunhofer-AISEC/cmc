@@ -17,7 +17,7 @@ include signed metadata and reference hash values.
 
 ## Quick Start
 
-Refer to [Setup](./doc/setup.md) for instructions on how to setup, configure and run the CMC
+Refer to [Setup](./doc/setup.md) for instructions on how to setup, build, configure and run the CMC
 on various hardware platforms.
 
 For a quick demo without installing software or requiring actual hardware, use Docker and the
@@ -32,9 +32,10 @@ The following contents can be found in the [doc](./doc/) folder:
 For detailed instructions on how to setup TPM, Intel SGX, Intel TDX or AMD SEV-SNP platforms
 including PKI and metadata generation, refer to the [Setup Documentation](./doc/setup.md)
 
-### Build
+### Build And Install
 
-See [Build Documentation](./doc/build.md) for instructions on how to build the go binaries.
+See [Build And Install Documentation](./doc/build-and-install.md) for instructions on how to build
+and install the go binaries.
 
 ### Run
 

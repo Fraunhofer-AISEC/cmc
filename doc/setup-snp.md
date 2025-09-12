@@ -29,7 +29,8 @@ cmc-docker generate-metadata-snp [--vcpus NUM] [--vmm-type ec2]
 
 ## SNP Build
 
-To run within a CVM, everything can be [built as usual](./build.md).
+Everything can be built and installed according to the
+[Build Documentation](./build-and-install.md).
 
 ## SNP Run
 
@@ -50,7 +51,7 @@ An example  can be found in the [generate-rtm-manifest-snp](../bin/generate-rtm-
 
 ### Further documentation
 
-Building the individual components with various flags is described in the [Build](./build.md)
-documentation. A more detailed description on how to configure and run the components
-is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
-refer to the [Developer Documentation](./dev.md).
+Building and installing the individual components with various flags is described in the
+[Build](./build-and-install.md) documentation. A more detailed description on how to configure and
+run the components is described in the [Run](./run.md) documentation. For building own applications
+using the *cmcd*, refer to the [Developer Documentation](./dev.md).

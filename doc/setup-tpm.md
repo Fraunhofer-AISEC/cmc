@@ -5,6 +5,10 @@ Describes the setup to run the CMC on platforms with a Trusted Platform Module (
 > **Note:** For testing the CMC, we provide a readily configured Ubuntu-VM with attached swTPM.
 > For the VM-setup see [Setup-VM](./setup-vm.md).
 
+> **Note:** This setup sets up an example PKI and parses the current platform’s metadata from the
+> TPM event logs. For production setups, the metadata should be precomputed based on a
+> reproducible build and a production-grade PKI should be used.
+
 ## Prerequisites
 
 You need a machine with a TPM and `/dev/tpmrm0` or `/dev/tpm0` present.
@@ -12,24 +16,22 @@ You need a machine with a TPM and `/dev/tpmrm0` or `/dev/tpm0` present.
 > :warning: **Note:** You should run the CMC on a testing/development machine as the software
 > directly interacts with the TPM.
 
-## TPM Setup
+## Setup
 
 Creates the PKI and metadata for running the CMC on TPM platforms
 ```sh
 source env.bash
 
-# For platforms with hardware TPM
+# Builds the CMC, generates a PKI, and generates example metadata for the platform
 setup-cmc tpm
-
-# For VM with swTPM
-setup-cmc vm
 ```
 
-## TPM Build
+## Build
 
-Everything can be [built as usual](./build.md).
+Everything can be built and installed according to the
+[Build Documentation](./build-and-install.md).
 
-## TPM Run
+## Run
 
 the `cmcd` and the `cmcctl` including their [configuration files](./run.md) must be installed
 into the TPM platform or VM with attached swTPM. Then the CMC can be run as described in
@@ -241,7 +243,7 @@ More information on how to configure the IMA can be found
 
 ### Further documentation
 
-Building the individual components with various flags is described in the [Build](./build.md)
-documentation. A more detailed description on how to configure and run the components
-is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
-refer to the [Developer Documentation](./dev.md).
+Building and installing the individual components with various flags is described in the
+[Build](./build-and-install.md) documentation. A more detailed description on how to configure and
+run the components is described in the [Run](./run.md) documentation. For building own applications
+using the *cmcd*, refer to the [Developer Documentation](./dev.md).

@@ -1,6 +1,6 @@
 # Build
 
-All binaries can be built with the *go*-compiler.
+All binaries can be built with the [*go*-toolchain](https://go.dev/doc/install).
 
 > Note: Building SGX enclaves requires a custom compiler and different commands,
 > see [SGX Setup](./setup-sgx.md)
@@ -11,29 +11,36 @@ All binaries can be built with the *go*-compiler.
 # Clone the CMC repo
 git clone https://github.com/Fraunhofer-AISEC/cmc
 
-# Build CMC
+# Build all components
 cd cmc
 go build ./...
 
-# Install CMC $GOPATH/bin
+# Install all components to $GOPATH/bin
 go install ./...
 ```
 
-## Build the Provisioning Server
+You can run all binaries by adding the following line to your `$HOME/.profile`:
+```sh
+export PATH=$PATH:$HOME/go/bin
+```
+
+## Build the single artifacts
+
+### Build the Provisioning Server
 
 ```sh
 cd provision/estserver
 go build
 ```
 
-## Build the CMC Daemon
+### Build the cmcd
 
 ```sh
 cd cmcd
 go build
 ```
 
-## Build the Test Tool
+### Build cmcctl
 
 ```sh
 cd cmcctl
@@ -41,6 +48,13 @@ go build
 
 # Build cmcctl as SGX enclave
 make egocmc
+```
+
+### Build the mrtool
+
+```sh
+cd tools/mrtool
+go build
 ```
 
 ## Customize Builds
