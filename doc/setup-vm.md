@@ -10,6 +10,7 @@ for running in docker, or `cmc-docker` can simply be omitted.
 Creates an ubuntu server VM image with attached swTPM:
 ```sh
 source env.bash
+
 cmc-docker vm-setup
 ```
 
@@ -127,7 +128,7 @@ simplest approach is to delete `cmc/vm/images/noble-server-cloudimg-amd64.img` a
 
 ## Further Documentation
 
-Building the individual components with various flags is described in the [Build](./build.md)
-documentation. A more detailed description on how to configure and run the components
-is described in the [Run](./run.md) documentation. For building own applications using the *cmcd*,
-refer to the [Developer Documentation](./dev.md).
+Building and installing the individual components with various flags is described in the
+[Build](./build-and-install.md) documentation. A more detailed description on how to configure and
+run the components is described in the [Run](./run.md) documentation. For building own applications
+using the *cmcd*, refer to the [Developer Documentation](./dev.md).
