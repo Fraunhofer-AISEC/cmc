@@ -36,20 +36,20 @@ const (
 //structs for additional eventlog content --------------------------------
 
 type EventData struct {
-	//for certain Uefi variable information events
+	// For certain Uefi variable information events
 	Uefivariabledata *UefiVariableData `json:"uefivariabledata,omitempty" cbor:"0,keyasint,omitempty"`
 
-	//for the GPT_Event
+	// For the GPT_Event
 	GPTHeader *GPTHeader `json:"gptheader,omitempty" cbor:"1,keyasint,omitempty"`
-	//for PCClientTaggedEvent
+	// For PCClientTaggedEvent
 	PCClientTaggedEvent      *PCClientTaggedEvent      `json:"pcclienttaggedevent,omitempty" cbor:"2,keyasint,omitempty"`
 	ImageLoadEvent           *ImageLoadEvent           `json:"imageloadevent,omitempty" cbor:"3,keyasint,omitempty"`
 	UefiHandoffTablePointer  *UefiHandoffTablePointer  `json:"uefihandofftablepointer,omitempty" cbor:"4,keyasint,omitempty"`
 	UefiPlatformFirmwareBlob *UefiPlatformFirmwareBlob `json:"uefiplatformfirmwareblob,omitempty" cbor:"5,keyasint,omitempty"`
-	//used e.g. for EFI_IPL event
+	// Used e.g. for EFI_IPL event
 	StringContent string `json:"stringcontent,omitempty" cbor:"6,keyasint,omitempty"`
-	//generic data (when no further differentiation is implemented)
-	GenericData HexByte `json:"genericdata,omitempty" cbor:"7,keyasint,omitempty"`
+	// Generic data (when no further differentiation is implemented)
+	RawData HexByte `json:"rawdata,omitempty" cbor:"7,keyasint,omitempty"`
 }
 
 type UefiVariableData struct {
@@ -210,7 +210,7 @@ type UefiPlatformFirmwareBlob struct {
 
 //main method for parsing the eventData --------------------------------------
 
-func ParseEventData(eventBytes []uint8, eventName string) *EventData {
+func ParseEventData(eventBytes []uint8, eventName string, addRawEventData bool) *EventData {
 	exInfo := new(EventData)
 	switch eventName {
 	case "EV_EFI_VARIABLE_DRIVER_CONFIG", "EV_EFI_VARIABLE_BOOT", "EV_EFI_VARIABLE_AUTHORITY":
@@ -227,8 +227,10 @@ func ParseEventData(eventBytes []uint8, eventName string) *EventData {
 		exInfo.UefiHandoffTablePointer = parseEFIHandoffTables(bytes.NewBuffer(eventBytes))
 	case "EV_IPL", "EV_EFI_ACTION", "EV_POST_CODE", "EV_S_CRTM_VERSION", "EV_OMIT_BOOT_DEVICE_EVENTS":
 		exInfo.StringContent = bytesToString(eventBytes)
-	default:
-		exInfo.GenericData = (eventBytes)
+	}
+
+	if addRawEventData {
+		exInfo.RawData = eventBytes
 	}
 
 	if EmptyEventdata(exInfo) {
@@ -249,7 +251,7 @@ func EmptyEventdata(evData *EventData) bool {
 		evData.UefiHandoffTablePointer == nil &&
 		evData.UefiPlatformFirmwareBlob == nil &&
 		len(evData.StringContent) == 0 &&
-		evData.GenericData == nil
+		evData.RawData == nil
 }
 
 // read the GUID from a buffer
@@ -309,7 +311,6 @@ func readUTF16UntilNull(buffer *bytes.Buffer) (string, error) {
 
 	// Convert UTF-16 buffer to string
 	utf16String := string(utf16.Decode(utf16buf[:]))
-	// = string(utf16.Decode(paritionName[:]))
 
 	return utf16String, nil
 }

@@ -19,35 +19,56 @@ import (
 	"encoding/json"
 	"testing"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/sirupsen/logrus"
 )
 
 func Test_parseBiosMeasurements(t *testing.T) {
 	type args struct {
-		data []byte
+		data            []byte
+		addRawEventData bool
 	}
 	tests := []struct {
 		name    string
 		args    args
-		want    []ar.ReferenceValue
 		wantErr bool
 	}{
-		{"Test parseBiosMeasurements", args{BinaryBiosMeasurements}, nil, false},
+		{
+			name: "Test parseBiosMeasurements success",
+			args: args{
+				data:            BinaryBiosMeasurements,
+				addRawEventData: false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Test parseBiosMeasurements extended success",
+			args: args{
+				data:            BinaryBiosMeasurements,
+				addRawEventData: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Test parseBiosMeasurements fail",
+			args: args{
+				data:            InvalidBinaryBiosMeasuremens,
+				addRawEventData: false,
+			},
+			wantErr: true,
+		},
 	}
 
 	logrus.SetLevel(logrus.TraceLevel)
-	logrus.Print("test")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			attestationreport, err := parseBiosMeasurements(tt.args.data)
+			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.addRawEventData)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseBiosMeasurements() error = %v, wantErr %v", err, tt.wantErr)
 				//maybe print the return value of the BIOS Measurements
 				return
 			}
-			val, _ := json.MarshalIndent(attestationreport, "", " ")
+			val, _ := json.MarshalIndent(refvals, "", " ")
 			logrus.Tracef("%v", string(val))
 		})
 	}
@@ -3792,5 +3813,16 @@ var (
 		0x1e, 0x00, 0x00, 0x00, 0x2f, 0x69, 0x6e, 0x69, 0x74, 0x72, 0x64, 0x2e,
 		0x69, 0x6d, 0x67, 0x2d, 0x35, 0x2e, 0x31, 0x31, 0x2e, 0x30, 0x2d, 0x34,
 		0x33, 0x2d, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x69, 0x63, 0x00,
+	}
+
+	InvalidBinaryBiosMeasuremens = []byte{
+		0x01, 0x02, 0x03, 0x04, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x25, 0x00, 0x00, 0x00, 0x53, 0x70, 0x65, 0x63,
+		0x20, 0x49, 0x44, 0x20, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x30, 0x33, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x00, 0x00,
+		0x04, 0x00, 0x14, 0x00, 0x0b, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x08, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0xbb,
+		0x51, 0x41, 0xd1, 0x81, 0x04, 0xfe, 0x38, 0x28,
 	}
 )

@@ -121,13 +121,13 @@ type TPMT_HA struct {
 // the TPM PCRs by BIOS, UEFI and IPL. The file with the binary
 // measurements (usually /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
+func GetBiosMeasurements(file string, addRawEventData bool) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseBiosMeasurements(data)
+	digests, err := parseBiosMeasurements(data, addRawEventData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
@@ -135,7 +135,7 @@ func GetBiosMeasurements(file string) ([]ar.ReferenceValue, error) {
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurements(data []byte, addRawEventData bool) ([]ar.ReferenceValue, error) {
 
 	extends := make([]ar.ReferenceValue, 0)
 	initializedPCR := make([]bool, 24) //bool array track of what pcrs have been initialized
@@ -204,6 +204,8 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 		//bytes of the event should be added to the array
 		eventData := make([]uint8, eventSize)
 		binary.Read(buf, binary.LittleEndian, &eventData)
+		var eventDataRaw []byte
+		copy(eventDataRaw, eventData)
 
 		parseEvent := true
 
@@ -225,7 +227,7 @@ func parseBiosMeasurements(data []byte) ([]ar.ReferenceValue, error) {
 
 		}
 		if parseEvent {
-			extendedeventData = ar.ParseEventData(eventData, eventName)
+			extendedeventData = ar.ParseEventData(eventData, eventName, addRawEventData)
 		}
 
 		//either Sha256 or Sha384 must be present
