@@ -33,6 +33,7 @@ import (
 type ParsePcrsConf struct {
 	Eventlog       string
 	PrintAggregate bool
+	RawEventData   bool
 }
 
 const (
@@ -42,12 +43,14 @@ const (
 const (
 	tpmEventlogFlag    = "eventlog"
 	printAggregateFlag = "print-aggregate"
+	rawEventDataFlag   = "raw-event-data"
 )
 
 func getParsePcrsConf(cmd *cli.Command) (*ParsePcrsConf, error) {
 	c := &ParsePcrsConf{
 		Eventlog:       cmd.String(tpmEventlogFlag),
 		PrintAggregate: cmd.Bool(printAggregateFlag),
+		RawEventData:   cmd.Bool(rawEventDataFlag),
 	}
 	return c, nil
 }
@@ -78,6 +81,10 @@ var parseTpmPcrCommand = &cli.Command{
 			Name:  printAggregateFlag,
 			Usage: "Print the aggregated PCR value over the selected PCRs",
 		},
+		&cli.BoolFlag{
+			Name:  rawEventDataFlag,
+			Usage: "Additionally print the raw event data as it was extended if available",
+		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		err := ParsePcrs(cmd)
@@ -107,7 +114,7 @@ func ParsePcrs(cmd *cli.Command) error {
 
 	log.Debug("Parsing tpm srtm pcr eventlog...")
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog)
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, pcrConf.RawEventData)
 	if err != nil {
 		log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
 			err)
