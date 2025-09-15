@@ -170,12 +170,12 @@ type GPTHeader struct {
 }
 
 type GPTPartitionEntry struct {
-	PartitionTypeGUID   string `json:"paritiontypeguid,omitempty" cbor:"0,keyasint,omitempty"`
+	PartitionTypeGUID   string `json:"partitiontypeguid,omitempty" cbor:"0,keyasint,omitempty"`
 	UniquePartitionGUID string `json:"uniquepartitionguid,omitempty" cbor:"0,keyasint,omitempty"`
 	StartingLBA         uint64 `json:"startinglba,omitempty" cbor:"0,keyasint,omitempty"`
 	EndingLBA           uint64 `json:"endinglba,omitempty" cbor:"0,keyasint,omitempty"`
 	Attributes          uint64 `json:"attributes,omitempty" cbor:"0,keyasint,omitempty"`
-	ParitionName        string `json:"partitionname,omitempty" cbor:"0,keyasint,omitempty"` //ParitionName parsed in [36] UTF16
+	PartitionName       string `json:"partitionname,omitempty" cbor:"0,keyasint,omitempty"` //PartitionName parsed in [36] UTF16
 }
 
 type PCClientTaggedEvent struct {
@@ -736,10 +736,11 @@ func parseUefiGPTEvent(buf *bytes.Buffer) *GPTHeader {
 					binary.Read(buf, binary.LittleEndian, &partition.EndingLBA)
 					binary.Read(buf, binary.LittleEndian, &partition.Attributes)
 
-					var paritionName [36]uint16
-					binary.Read(buf, binary.LittleEndian, &paritionName)
+					var partitionName [36 * 2]byte
+					binary.Read(buf, binary.LittleEndian, &partitionName)
+					partitionNameBuf := bytes.NewBuffer(partitionName[:])
 
-					partition.ParitionName = string(utf16.Decode(paritionName[:]))
+					partition.PartitionName, _ = readUTF16UntilNull(partitionNameBuf)
 
 					//appending the partition
 					gptPartitions = append(gptPartitions, partition)
