@@ -23,6 +23,7 @@ fi
 efi_shim="${artifacts}/shimx64.efi"
 cmdline="${artifacts}/cmdline"
 kernel="${artifacts}/vmlinuz"
+initrd="${artifacts}/initrd"
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
@@ -58,6 +59,8 @@ refs_tpm=$(calculate-srtm-pcrs \
         --bootloader "${efi_shim}" \
         --kernel "${kernel}" \
         --cmdline "${cmdline}" \
+        --stripnewline \
+        --initrd "${initrd}" \
         --format json \
 )
 if [[ -z "${refs_tpm}" ]]; then
