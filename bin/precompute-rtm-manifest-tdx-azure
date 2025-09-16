@@ -25,6 +25,7 @@ cmdline="${artifacts}/cmdline"
 kernel="${artifacts}/vmlinuz"
 gpt="${artifacts}/ev_efi_gpt_event"
 efivars="${artifacts}/efivars"
+system_uuid="${artifacts}/system_uuid"
 
 boot0000="${efivars}/Boot0000-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 secure_boot="${efivars}/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
@@ -86,7 +87,7 @@ pcrs=1,2,3,4,5,6,7
 
 set +e
 refs_tpm=$(calculate-srtm-pcrs \
-       --format json \
+        --format json \
         --pcrs "${pcrs}" \
         --eventlog \
         --bootloader "${efi_shim}" \
@@ -101,6 +102,7 @@ refs_tpm=$(calculate-srtm-pcrs \
         --kek "${kek}" \
         --db "${db}" \
         --dbx "${dbx}" \
+        --systemuuid "${system_uuid}" \
 )
 if [[ -z "${refs_tpm}" ]]; then
     echo "calculate-srtm-pcrs failed: empty reference values"
