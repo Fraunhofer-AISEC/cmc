@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 type address uint64
@@ -93,39 +94,46 @@ type Hash struct {
 	Hash               HexByte `json:"hash,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
+// UEFI Specification Release 2.11, 3.1.3 Load Options EFI_LOAD_OPTION
 type EFILoadOption struct {
 	Attributes uint32 `json:"attributes" cbor:"0,keyasint"`
 	// - could also get resolved to the different options UEFISpec:73
 	//-ex filePathListLength uint16
-	Description  string         `json:"description" cbor:"1,keyasint"`
-	FilepathList []FilePathList `json:"filepathlist" cbor:"2,keyasint"`
+	Description  string          `json:"description" cbor:"1,keyasint"`
+	FilepathList []EFIDevicePath `json:"filepathlist" cbor:"2,keyasint"`
 	// optional Data
-	OptionalData HexByte `json:"optionaldata,omitempty" cbor:"3,keyasint,omitempty"`
+	OptionalData string `json:"optionaldata,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
-type FilePathList struct {
+// UEFI Specification Release 2.11, 10.2 EFI Device Path Protocol EFI_DEVICE_PATH_PROTOCOL
+type EFIDevicePath struct {
 	Type    string `json:"type" cbor:"0,keyasint"`
 	Subtype string `json:"subtype" cbor:"1,keyasint"`
+	// Omit Length
 
-	//optional stuff
+	//     - 1.3 (Memory Mapped Device Path)
+	MemoryType   uint32 `json:"memorytype,omitempty" cbor:"2,keyasint,omitempty"`
+	StartAddress uint64 `json:"startaddress,omitempty" cbor:"3,keyasint,omitempty"`
+	EndAddress   uint64 `json:"endaddress,omitempty" cbor:"4,keyasint,omitempty"`
+
+	//     - 1.4 (Vendor Device Path), 3.a (Vendor-defined Messaging Device Path)
+	VendorGUID        string  `json:"vendorguid,omitempty" cbor:"5,keyasint,omitempty"`
+	VendorDefinedData HexByte `json:"vendordefineddata,omitempty" cbor:"6,keyasint,omitempty"`
+
 	//     - 2.1 (ACPI Device Path)
-	HID HexByte `json:"hid,omitempty" cbor:"2,keyasint,omitempty"`
-	UID HexByte `json:"uid,omitempty" cbor:"3,keyasint,omitempty"`
-
-	//     - 3.a (messaging device path: vendor-defined messaging device path)
-	VendorGUID        string  `json:"vendorguid,omitempty" cbor:"4,keyasint,omitempty"`
-	VendorDefinedData HexByte `json:"vendordefineddata,omitempty" cbor:"4,keyasint,omitempty"`
+	HID HexByte `json:"hid,omitempty" cbor:"7,keyasint,omitempty"`
+	UID HexByte `json:"uid,omitempty" cbor:"8,keyasint,omitempty"`
 
 	//     - 4.1 (media device path: hard drive)
-	PartitionNumber    uint32  `json:"partitionnumber,omitempty" cbor:"5,keyasint,omitempty"`
-	PartitionStart     uint64  `json:"partitionstart,omitempty" cbor:"6,keyasint,omitempty"`
-	PartitionSize      uint64  `json:"partitionsize,omitempty" cbor:"7,keyasint,omitempty"`
-	PartitionSignature HexByte `json:"partitionsignature,omitempty" cbor:"8,keyasint,omitempty"` //[16]byte
-	PartitionFormat    byte    `json:"partitionformat,omitempty" cbor:"9,keyasint,omitempty"`
-	SignaturType       byte    `json:"signaturetype,omitempty" cbor:"10,keyasint,omitempty"`
+	PartitionNumber    uint32  `json:"partitionnumber,omitempty" cbor:"9,keyasint,omitempty"`
+	PartitionStart     uint64  `json:"partitionstart,omitempty" cbor:"10,keyasint,omitempty"`
+	PartitionSize      uint64  `json:"partitionsize,omitempty" cbor:"11,keyasint,omitempty"`
+	PartitionSignature HexByte `json:"partitionsignature,omitempty" cbor:"12,keyasint,omitempty"` //[16]byte
+	PartitionFormat    byte    `json:"partitionformat,omitempty" cbor:"13,keyasint,omitempty"`
+	SignaturType       byte    `json:"signaturetype,omitempty" cbor:"14,keyasint,omitempty"`
 
 	//	- 4.2 (media device path: CD-ROM Media Device Path)
-	BootEntry uint32 `json:"bootentry,omitempty" cbor:"11,keyasint,omitempty"`
+	BootEntry uint32 `json:"bootentry,omitempty" cbor:"15,keyasint,omitempty"`
 	//PartitionStart
 	//PartitionSize
 
@@ -134,21 +142,25 @@ type FilePathList struct {
 	//VendorDefinedData
 
 	//     - 4.4 (media device path: file path media device path)
-	PathName string `json:"pathname,omitempty" cbor:"12,keyasint,omitempty"`
+	PathName string `json:"pathname,omitempty" cbor:"16,keyasint,omitempty"`
 
 	//     - 4.5 (media device path: Media Protocol Device Path)
-	ProtocolGUID string `json:"protocolguid,omitempty" cbor:"13,keyasint,omitempty"`
+	ProtocolGUID string `json:"protocolguid,omitempty" cbor:"17,keyasint,omitempty"`
+
+	//    - 4.6 (media device path: PIWG Firmware file)
+	// Content defined in UEFI PI Specification II-8.3 Firmware File Media Device Path
+	FirmwareFileName string `json:"firmwareFileName,omitempty" cbor:"18,keyasint,omitempty"`
 
 	//     - 4.9 (media device path: RAM Disk)
-	StartingAddress uint64 `json:"startingaddress,omitempty" cbor:"14,keyasint,omitempty"`
-	EndingAddress   uint64 `json:"endingaddress,omitempty" cbor:"15,keyasint,omitempty"`
-	DiskTypeGUID    string `json:"disktypeguid,omitempty" cbor:"16,keyasint,omitempty"`
-	DiskInstance    uint16 `json:"diskinstance,omitempty" cbor:"17,keyasint,omitempty"`
+	StartingAddress uint64 `json:"startingaddress,omitempty" cbor:"19,keyasint,omitempty"`
+	EndingAddress   uint64 `json:"endingaddress,omitempty" cbor:"20,keyasint,omitempty"`
+	DiskTypeGUID    string `json:"disktypeguid,omitempty" cbor:"21,keyasint,omitempty"`
+	DiskInstance    uint16 `json:"diskinstance,omitempty" cbor:"22,keyasint,omitempty"`
 
 	//	- 5.1 (BIOS Boot Specification Device Path)
-	DeviceType        uint16 `json:"devicetype,omitempty" cbor:"18,keyasint,omitempty"`
-	StatusFlag        uint16 `json:"statusflag,omitempty" cbor:"19,keyasint,omitempty"`
-	DescriptionString string `json:"descriptionstring,omitempty" cbor:"20,keyasint,omitempty"`
+	DeviceType        uint16 `json:"devicetype,omitempty" cbor:"23,keyasint,omitempty"`
+	StatusFlag        uint16 `json:"statusflag,omitempty" cbor:"24,keyasint,omitempty"`
+	DescriptionString string `json:"descriptionstring,omitempty" cbor:"25,keyasint,omitempty"`
 }
 
 type GPTHeader struct {
@@ -178,19 +190,20 @@ type GPTPartitionEntry struct {
 	PartitionName       string `json:"partitionname,omitempty" cbor:"0,keyasint,omitempty"` //PartitionName parsed in [36] UTF16
 }
 
+// TCG PC Client Platform Firmware Profile Specification 10.4.2 TCG_PCClientTaggedEvent
 type PCClientTaggedEvent struct {
-	TaggedEventID uint32 `json:"taggedeventid" cbor:"0,keyasint"`
-	// TaggedEventDataSize uint32
-	TaggedEventData HexByte `json:"taggedeventdata" cbor:"0,keyasint"`
+	TaggedEventID string `json:"taggedeventid" cbor:"0,keyasint"`
+	// Omit TaggedEventDataSize uint32
+	TaggedEventData string `json:"taggedeventdata" cbor:"0,keyasint"`
 }
 
+// TCG PC Client Platform Firmware Profile Specification 10.2.3 UEFI_IMAGE_LOAD_EVENT
 type ImageLoadEvent struct {
-	ImageLocationInMemory address `json:"imagelocationinmemory" cbor:"0,keyasint"` //(assume 64 bit architecture)
+	ImageLocationInMemory address `json:"imagelocationinmemory" cbor:"0,keyasint"`
 	ImageLengthInMemory   uint64  `json:"imagelengthinmemory" cbor:"1,keyasint"`
 	ImageLinkTimeAddress  uint64  `json:"imagelinktimeaddress" cbor:"2,keyasint"`
-	// LengthOfDevicePath uint64
-	//device path
-	UefiDevicePath *FilePathList `json:"uefidevicepath" cbor:"3,keyasint"`
+	// Omit LengthOfDevicePath uint64 (parsed as part of FilePathList)
+	UefiDevicePaths []EFIDevicePath `json:"uefidevicepath,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type UefiHandoffTablePointer struct {
@@ -315,6 +328,40 @@ func readUTF16UntilNull(buffer *bytes.Buffer) (string, error) {
 	return utf16String, nil
 }
 
+func maybeUTF16(b []byte) string {
+	// Must be even length for UTF-16
+	if len(b)%2 != 0 {
+		return hex.EncodeToString(b)
+	}
+
+	// Try little-endian UTF-16 first
+	u16s := make([]uint16, len(b)/2)
+	if err := binary.Read(bytes.NewReader(b), binary.LittleEndian, &u16s); err != nil {
+		return hex.EncodeToString(b)
+	}
+	runes := utf16.Decode(u16s)
+
+	// Convert to UTF-8
+	str := string(runes)
+
+	// Check if it's valid UTF-8 once converted
+	if utf8.ValidString(str) {
+		return str
+	}
+
+	// If not valid, fallback to hex
+	return hex.EncodeToString(b)
+}
+
+func maybeUTF8(b []byte) string {
+	str := string(b)
+	if utf8.ValidString(str) {
+		return str
+	}
+	// If not valid, fallback to hex
+	return hex.EncodeToString(b)
+}
+
 // simple convert function, that interprets bytes as string (does not dispose)
 func bytesToString(uint8Array []uint8) string {
 	result := ""
@@ -330,20 +377,21 @@ func bytesToString(uint8Array []uint8) string {
 
 func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 
+	// TCG PC Client Platform Firmware Profile Specification 10.2.6 Measuring UEFI Variables
+	// And UEFI GPT Data struct UEFI_VARIABLE_DATA
 	if buf.Len() >= 32 {
 		uefiVariableData := new(UefiVariableData)
 		var unicodeNameLength, variableDataLength uint64
 
-		//1. Part: read binary data into variables
+		// Read binary data into variables
 		variableName := readGUID(buf)
 		binary.Read(buf, binary.LittleEndian, &unicodeNameLength)
 		binary.Read(buf, binary.LittleEndian, &variableDataLength)
 
 		//read the amount of data into the []data fields
-
 		if buf.Len() < 2*int(unicodeNameLength) {
 			// return output
-			log.Error("incomplete UEFI Variable Data field")
+			log.Debug("Skipping incomplete UEFI Variable Data field")
 			return uefiVariableData
 		}
 
@@ -353,11 +401,11 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 
 		if buf.Len() < int(variableDataLength) {
 			//just stop reading
-			log.Error("incomplete UEFI Variable Data field")
+			log.Debug("incomplete UEFI Variable Data field")
 			return uefiVariableData
 		}
 
-		//2. Part: put data into struct
+		// Put data into struct
 		uefiVariableData.VariableNameGUID = variableName
 		uefiVariableData.UnicodeName = unicodeName
 
@@ -397,6 +445,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 			}
 		}
 
+		return uefiVariableData
 	}
 
 	return nil
@@ -406,6 +455,7 @@ func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
 	efiloadoption := new(EFILoadOption)
 	var filePathListLength uint16
 
+	// UEFI Specification Release 2.11, 3.1.3 Load Options EFI_LOAD_OPTION
 	binary.Read(buf, binary.LittleEndian, &efiloadoption.Attributes)
 	binary.Read(buf, binary.LittleEndian, &filePathListLength)
 	descr, err := readUTF16UntilNull(buf)
@@ -416,159 +466,279 @@ func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
 
 	//start parsing the file path list
 	//loop that checks if the buffer still contains a minimum number of possible filepaths
-	efiloadoption.FilepathList = make([]FilePathList, 0) //if they are empty, dispose
+	efiloadoption.FilepathList = make([]EFIDevicePath, 0) //if they are empty, dispose
 
-	// buffer needs to stop at sizeof(UINT32) + sizeof(UINT16) + StrSize(Description) + FilePathListLength of the EFI_LOAD_OPTION
-	bufferLengthPreParsing := buf.Len()
-	parsedBytes := 0
-	for parsedBytes < int(filePathListLength) {
-		fpl := parseFilePathList(buf)
-		if fpl != nil {
-			efiloadoption.FilepathList = append(efiloadoption.FilepathList, *fpl)
+	for {
+		fpl, err := parseEfiDevicePath(buf)
+		if err != nil {
+			log.Debugf("failed to parse UEFI device path: %v", err)
 			break
 		}
-
-		//sets the buffer length to correct parsing structure
-		parsedBytes = bufferLengthPreParsing - buf.Len()
+		if fpl != nil {
+			efiloadoption.FilepathList = append(efiloadoption.FilepathList, *fpl)
+		} else {
+			break
+		}
 	}
 	if buf.Len() > 0 {
 		//contains optional data
-
-		efiloadoption.OptionalData = (buf.Next(buf.Len()))
+		efiloadoption.OptionalData = maybeUTF16(buf.Next(buf.Len()))
 	}
 
 	return efiloadoption
 }
 
-func parseFilePathList(buf *bytes.Buffer) *FilePathList {
-	filepathlist := new(FilePathList)
+// UEFI Specification Release 2.11, 10.3.1 Generic Device Path Structures
+func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
+	devicePath := new(EFIDevicePath)
 	var fplType, fplSubtype byte
 	var length uint16
 
+	// UEFI Specification Release 2.11, 10.3.1 Generic Device Path Structures, Table 10.1
 	binary.Read(buf, binary.LittleEndian, &fplType)
 	binary.Read(buf, binary.LittleEndian, &fplSubtype)
 	binary.Read(buf, binary.LittleEndian, &length)
 
-	//end of entries marked with filetype:= 127 (0x7f); subtype:=255 (0xff); length := 4
-	if fplType == 127 && fplSubtype == 255 {
-		buf.Next(1)
-		//return nothing
-		return nil
-	}
+	log.Tracef("Parse UEFI Device Path Type: %v, Subtype: %v, length: %v", fplType, fplSubtype, length)
 
-	//example!, the UEFI specification contains more file types
 	switch fplType {
-	case 2:
-		filepathlist.Type = "ACPI Device Path"
+	case 1: // Hardware Device Path
+		devicePath.Type = "Hardware Device Path"
 		switch fplSubtype {
-		case 1:
-			if length == 12 { //Always 12 Bytes long
-				filepathlist.Subtype = "ACPI Device Path"
-				filepathlist.HID = buf.Next(4)
-				filepathlist.UID = buf.Next(4)
+		// case 1: // PCI Device Path
+		// case 2: // PCCARD Device Path
+		case 3: // Memory Mapped Device Path
+			devicePath.Subtype = "Memory Mapped Device Path"
+			if length != 24 {
+				return nil, fmt.Errorf("invalid memory mapped device path length %v", length)
 			}
+			binary.Read(buf, binary.LittleEndian, &devicePath.MemoryType)
+			binary.Read(buf, binary.LittleEndian, &devicePath.StartAddress)
+			binary.Read(buf, binary.LittleEndian, &devicePath.EndAddress)
+		case 4: // Vendor Device Path
+			devicePath.Subtype = "Vendor Device Path"
+			if length < 20 {
+				return nil, fmt.Errorf("invalid vendor device path length %v", length)
+			}
+			devicePath.VendorGUID = readGUID(buf)
+			vendorData := make([]byte, length-20)
+			binary.Read(buf, binary.LittleEndian, &vendorData)
+			devicePath.VendorDefinedData = HexByte(vendorData)
+		// case 5: // Controller Device Path
+		// case 6: // BMD Device Path
+		default:
+			buf.Next(int(length - 4))
+			log.Tracef("Skipping unsupported device path type %v, subtype %v", fplType, fplSubtype)
 		}
 
-	case 3:
-		filepathlist.Type = "messaging device path"
+	case 2: // ACPI Device Path
+		devicePath.Type = "ACPI Device Path"
 		switch fplSubtype {
-		case 0xa:
-			filepathlist.Subtype = "vendor-defined messaging device path"
-			//parsing the GUID
-			filepathlist.VendorGUID = readGUID(buf)
-			filepathlist.VendorDefinedData = (buf.Next(int(length) - 20))
+		case 1: // ACPI_DEVICE_PATH
+			if length != 12 {
+				return nil, fmt.Errorf("invalid ACPI HID Device Path length: %d", length)
+			}
+			var hid, uid uint32
+			if err := binary.Read(buf, binary.LittleEndian, &hid); err != nil {
+				log.Debugf("failed to read HID: %v", err)
+			}
+			if err := binary.Read(buf, binary.LittleEndian, &uid); err != nil {
+				log.Debugf("failed to read UID: %v", err)
+			}
+			devicePath.PathName += fmt.Sprintf("ACPI(HID=0x%08X,UID=0x%08X)", hid, uid)
+
+		case 2: // ACPI_EXPANDED_DEVICE_PATH
+			if length < 19 {
+				return nil, fmt.Errorf("invalid ACPI Extended Device Path length: %d", length)
+			}
+			var hid, uid, cid uint32
+			if err := binary.Read(buf, binary.LittleEndian, &hid); err != nil {
+				return nil, fmt.Errorf("failed to read HID: %w", err)
+			}
+			if err := binary.Read(buf, binary.LittleEndian, &uid); err != nil {
+				return nil, fmt.Errorf("failed to read UID: %w", err)
+			}
+			if err := binary.Read(buf, binary.LittleEndian, &cid); err != nil {
+				return nil, fmt.Errorf("failed to read CID: %w", err)
+			}
+
+			// _HIDSTR, _UIDSTR and _CIDSTR are null, we are finished
+			if length == 19 {
+				// Just read the 3 null-terminators
+				b := make([]byte, 3)
+				if err := binary.Read(buf, binary.LittleEndian, &b); err != nil {
+					return nil, fmt.Errorf("failed to read extended ACPI strings: %v", err)
+				}
+			}
+
+			// Remaining bytes are strings (HIDSTR, UIDSTR, CIDSTR)
+			strLen := int(length) - 16
+			if strLen < 0 {
+				log.Debugf("malformed ACPI ext HID path length: %d", length)
+			}
+			strData := make([]byte, strLen)
+			if _, err := buf.Read(strData); err != nil {
+				log.Debugf("failed to read ACPI extended HID strings: %v", err)
+			}
+
+			parts := readNullStrings(strData, 3)
+
+			devicePath.PathName = "ACPI_EXT("
+
+			if len(parts) > 0 && len(parts[0]) > 0 {
+				devicePath.PathName += fmt.Sprintf("HIDSTR=%v,", string(parts[0]))
+			} else {
+				devicePath.PathName += fmt.Sprintf("HID=0x%08X,", hid)
+			}
+
+			if len(parts) > 1 && len(parts[1]) > 0 {
+				devicePath.PathName += fmt.Sprintf("UIDSTR=%v,", string(parts[1]))
+			} else {
+				devicePath.PathName += fmt.Sprintf("UID=0x%08X,", uid)
+			}
+
+			if len(parts) > 2 && len(parts[2]) > 0 {
+				devicePath.PathName += fmt.Sprintf("CIDSTR=%v", string(parts[2]))
+			} else {
+				devicePath.PathName += fmt.Sprintf("CID=0x%08X", uid)
+			}
+
+			devicePath.PathName += ")"
+
+		default:
+			log.Tracef("Skipping unsupported ACPI Device Path subtype: %d", fplSubtype)
+			buf.Next(int(length - 4))
 		}
-	case 4: //(media device path)
-		filepathlist.Type = "media device path"
+
+	case 3: // Messaging Device Path
+		devicePath.Type = "messaging device path"
+		switch fplSubtype {
+		case 10:
+			devicePath.Subtype = "vendor-defined messaging device path"
+			//parsing the GUID
+			devicePath.VendorGUID = readGUID(buf)
+			devicePath.VendorDefinedData = (buf.Next(int(length) - 20))
+		default:
+			log.Tracef("Skipping unsupported Message Device Path subtype: %d", fplSubtype)
+			buf.Next(int(length - 4))
+
+		}
+	case 4: // Media Device Path
+		devicePath.Type = "media device path"
 		switch fplSubtype {
 		case 1:
 			if length == 42 { //always 42 Bytes long
-				filepathlist.Subtype = "hard drive"
+				devicePath.Subtype = "hard drive"
 				//parsing of remaining attributes
-				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionNumber)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionStart)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionSize)
-				filepathlist.PartitionSignature = buf.Next(16)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionFormat)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.SignaturType)
+				binary.Read(buf, binary.LittleEndian, &devicePath.PartitionNumber)
+				binary.Read(buf, binary.LittleEndian, &devicePath.PartitionStart)
+				binary.Read(buf, binary.LittleEndian, &devicePath.PartitionSize)
+				devicePath.PartitionSignature = buf.Next(16)
+				binary.Read(buf, binary.LittleEndian, &devicePath.PartitionFormat)
+				binary.Read(buf, binary.LittleEndian, &devicePath.SignaturType)
 
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
 		case 2:
 			if length == 24 { //always 24 Bytes long
-				filepathlist.Subtype = "CD-ROM “El Torito” Format"
-				binary.Read(buf, binary.LittleEndian, &filepathlist.BootEntry)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionStart)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.PartitionSize)
+				devicePath.Subtype = "CD-ROM “El Torito” Format"
+				binary.Read(buf, binary.LittleEndian, &devicePath.BootEntry)
+				binary.Read(buf, binary.LittleEndian, &devicePath.PartitionStart)
+				binary.Read(buf, binary.LittleEndian, &devicePath.PartitionSize)
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
 		case 3:
 			if length >= 20 { //20 + n Bytes long
-				filepathlist.Subtype = "Vendor"
+				devicePath.Subtype = "Vendor"
 				//readVendor guid
-				filepathlist.VendorGUID = readGUID(buf)
-				filepathlist.VendorDefinedData = (buf.Next(int(length) - 20))
+				devicePath.VendorGUID = readGUID(buf)
+				devicePath.VendorDefinedData = (buf.Next(int(length) - 20))
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
-
 		case 4:
-			filepathlist.Subtype = "file path media device path"
+			devicePath.Subtype = "file path media device path"
 			bufferLengthPreParsing := buf.Len()
 			parsedBytes := 0
 			for parsedBytes < int(length)-4 {
 				str, _ := readUTF16UntilNull(buf)
-				filepathlist.PathName += str
+				devicePath.PathName += str
 				parsedBytes = bufferLengthPreParsing - buf.Len()
 			}
 		case 5:
 			if length == 20 { //20 Bytes long
-				filepathlist.Subtype = "Media Protocol"
-				filepathlist.ProtocolGUID = readGUID(buf)
+				devicePath.Subtype = "Media Protocol"
+				devicePath.ProtocolGUID = readGUID(buf)
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
+			}
+		case 6:
+			if length >= 4 { //4 + n Bytes long
+				devicePath.Subtype = "PIWG Firmware File"
+				if length-4 == 16 {
+					devicePath.FirmwareFileName = readGUID(buf)
+				} else {
+					devicePath.VendorDefinedData = (buf.Next(int(length) - 4))
+				}
 			}
 		case 7:
 			if length >= 4 { //4 + n Bytes long
-				filepathlist.Subtype = "PIWG Firmware Volume"
-				filepathlist.VendorDefinedData = (buf.Next(int(length) - 4))
+				devicePath.Subtype = "PIWG Firmware Volume"
+				devicePath.VendorDefinedData = (buf.Next(int(length) - 4))
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
 		case 9:
 			if length == 38 { //20 Bytes long
-				filepathlist.Subtype = "RAM Disk Device Path"
-				binary.Read(buf, binary.LittleEndian, &filepathlist.StartingAddress)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.EndingAddress)
-				filepathlist.DiskTypeGUID = readGUID(buf)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.DiskInstance)
+				devicePath.Subtype = "RAM Disk Device Path"
+				binary.Read(buf, binary.LittleEndian, &devicePath.StartingAddress)
+				binary.Read(buf, binary.LittleEndian, &devicePath.EndingAddress)
+				devicePath.DiskTypeGUID = readGUID(buf)
+				binary.Read(buf, binary.LittleEndian, &devicePath.DiskInstance)
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
+		default:
+			log.Tracef("Skipping unsupported Media Device Path subtype: %d", fplSubtype)
+			buf.Next(int(length - 4))
 		}
-	case 5:
-		filepathlist.Type = "BIOS Boot Specification Device Path."
-		if fplSubtype == 1 {
+
+	case 5: // BIOS Boot Specification Device Path
+		devicePath.Type = "BIOS Boot Specification Device Path."
+		switch fplSubtype {
+		case 1:
 			if length >= 8 { //8 + n Bytes long
-				filepathlist.Subtype = "BIOS Boot Specification Version 1.01"
-				binary.Read(buf, binary.LittleEndian, &filepathlist.DeviceType)
-				binary.Read(buf, binary.LittleEndian, &filepathlist.StatusFlag)
+				devicePath.Subtype = "BIOS Boot Specification Version 1.01"
+				binary.Read(buf, binary.LittleEndian, &devicePath.DeviceType)
+				binary.Read(buf, binary.LittleEndian, &devicePath.StatusFlag)
 
 				asciiString := make([]byte, length-8)
 				binary.Read(buf, binary.LittleEndian, &asciiString)
-				filepathlist.DescriptionString = string(asciiString)
+				devicePath.DescriptionString = string(asciiString)
 
 			} else {
-				log.Error("incompatible length of file path argument")
+				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
+		default:
+			log.Tracef("Skipping unsupported Boot Specification Device Path subtype: %d", fplSubtype)
+			buf.Next(int(length - 4))
 		}
+
+	case 0x7F: // End of Hardware Device Path
+		switch fplSubtype {
+		case 0xFF:
+			return nil, nil
+		default:
+			return nil, fmt.Errorf("unexpected end of hardware device path sub-type %v", fplSubtype)
+		}
+
 	default:
-		log.Tracef("Type: %v, Subtype %v", fplType, fplSubtype)
+		return nil, fmt.Errorf("invalid device path type %v", fplType)
 
 	}
-	return filepathlist
+	return devicePath, nil
 }
 
 func parseSingleUint16(buf *bytes.Buffer) *uint16 {
@@ -577,7 +747,7 @@ func parseSingleUint16(buf *bytes.Buffer) *uint16 {
 		binary.Read(buf, binary.LittleEndian, &out)
 		return &out
 	}
-	log.Error("incomplete Datafield")
+	log.Debug("Skipping incomplete Datafield")
 	return nil
 }
 
@@ -587,7 +757,7 @@ func parseSingleUint32(buf *bytes.Buffer) *uint32 {
 		binary.Read(buf, binary.LittleEndian, &out)
 		return &out
 	}
-	log.Error("incomplete Datafield")
+	log.Debug("Skipping incomplete Datafield")
 	return nil
 }
 
@@ -597,7 +767,7 @@ func parseEFIBootOrder(buf *bytes.Buffer, size int) []uint16 {
 		binary.Read(buf, binary.LittleEndian, &order)
 		return order
 	}
-	log.Error("incomplete Datafield")
+	log.Debug("Skipping incomplete Datafield")
 	return nil
 }
 
@@ -681,7 +851,7 @@ func parseVariableDataX509_GUID(buf *bytes.Buffer, certsize int) X509CertExtract
 
 	cert, err := x509.ParseCertificate(certBuf)
 	if err != nil {
-		log.Error("Failed to parse certificate:")
+		log.Debug("Failed to parse certificate:")
 	}
 
 	//extract the cert
@@ -756,36 +926,66 @@ func parseUefiGPTEvent(buf *bytes.Buffer) *GPTHeader {
 }
 
 func parsePCClientTaggedEvent(buf *bytes.Buffer) *PCClientTaggedEvent {
-	//minimum length parsePCClientTaggedEvent 4 B + 4 B
-	if buf.Len() >= 8 {
-		taggedEvent := new(PCClientTaggedEvent)
-		var taggedEventDataSize uint32
-		binary.Read(buf, binary.LittleEndian, &taggedEvent.TaggedEventID)
-		binary.Read(buf, binary.LittleEndian, &taggedEventDataSize)
 
-		//reading of TaggedEventData
-		if buf.Len() >= int(taggedEventDataSize) {
-			taggedEvent.TaggedEventData = (buf.Next(int(taggedEventDataSize)))
-		} else {
-			log.Error("incomplete PCClientTaggedEvent data")
-		}
-		return taggedEvent
+	//minimum length parsePCClientTaggedEvent 4 B + 4 B
+	if buf.Len() < 8 {
+		log.Debugf("invalid PCClientTaggedEvent data size %v", buf.Len())
+		return nil
 	}
-	log.Error("incomplete PCClientTaggedEvent data")
-	return nil
+
+	taggedEvent := new(PCClientTaggedEvent)
+	var taggedEventDataSize uint32
+	var taggedEventId uint32
+	binary.Read(buf, binary.LittleEndian, &taggedEventId)
+	binary.Read(buf, binary.LittleEndian, &taggedEventDataSize)
+
+	taggedEvent.TaggedEventID = fmt.Sprintf("0x%08X", taggedEventId)
+
+	if buf.Len() < int(taggedEventDataSize) {
+		log.Debugf("skipping incomplete PCClientTaggedEvent buf size %v (expected %v)",
+			buf.Len(), taggedEventId)
+		return nil
+	}
+
+	var taggedEventData = make([]byte, taggedEventDataSize)
+	binary.Read(buf, binary.LittleEndian, taggedEventData)
+
+	// TCG PC Client Platform Firmware Profile Specification 10.4.2 does not specify
+	// the data type. Encode it as string if it is UTF-8, or hex otherwise
+	taggedEvent.TaggedEventData = maybeUTF8(taggedEventData)
+
+	return taggedEvent
+
 }
 
 func parseImageLoadEvent(buf *bytes.Buffer) *ImageLoadEvent {
+
 	if buf.Len() >= 20 {
-		imagelevent := new(ImageLoadEvent)
-		binary.Read(buf, binary.LittleEndian, &imagelevent.ImageLocationInMemory)
-		binary.Read(buf, binary.LittleEndian, &imagelevent.ImageLengthInMemory)
-		binary.Read(buf, binary.LittleEndian, &imagelevent.ImageLinkTimeAddress)
+
+		event := new(ImageLoadEvent)
+		binary.Read(buf, binary.LittleEndian, &event.ImageLocationInMemory)
+		binary.Read(buf, binary.LittleEndian, &event.ImageLengthInMemory)
+		binary.Read(buf, binary.LittleEndian, &event.ImageLinkTimeAddress)
+
 		var lengthOfDevicePath uint64
 		binary.Read(buf, binary.LittleEndian, &lengthOfDevicePath)
-		imagelevent.UefiDevicePath = parseFilePathList(buf)
-		return imagelevent
+
+		for {
+			uefiDevicePath, err := parseEfiDevicePath(buf)
+			if err != nil {
+				log.Debugf("failed to retrieve device path: %v", err)
+				break
+			}
+			if uefiDevicePath != nil {
+				event.UefiDevicePaths = append(event.UefiDevicePaths, *uefiDevicePath)
+			} else {
+				break // End of Device Path List
+			}
+		}
+
+		return event
 	}
+
 	return nil
 }
 
@@ -838,4 +1038,24 @@ func parseUefiPlatformFirmwareBlob(buf *bytes.Buffer) *UefiPlatformFirmwareBlob 
 	return nil
 }
 
-//-------------------------------------
+func readNullStrings(data []byte, count int) []string {
+	out := make([]string, count)
+	off := 0
+	for i := 0; i < count; i++ {
+		if off >= len(data) {
+			// No more bytes -> remaining strings are empty
+			out[i] = ""
+			continue
+		}
+		j := bytes.IndexByte(data[off:], 0)
+		if j == -1 {
+			// No NULL found -> take the remainder as the final string
+			out[i] = string(data[off:])
+			off = len(data)
+		} else {
+			out[i] = string(data[off : off+j])
+			off += j + 1 // Skip the NULL
+		}
+	}
+	return out
+}
