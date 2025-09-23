@@ -11,7 +11,7 @@ print_usage() {
   echo "       -h: print help"
   echo "       -i: use ids pki instead of simple pki"
   echo "       -c: use cbor instead of json for metadata"
-  echo "       driver: tpm, sgx, snp, tdx"
+  echo "       driver: tpm, sgx, snp, tdx, tdx-azure, ec2, vm"
 }
 
 script_suffix=""
@@ -42,8 +42,8 @@ fi
 
 driver="${1}"
 
-if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx|vm)$ ]]; then
-    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx"
+if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx|tdx-azure|ec2|vm)$ ]]; then
+    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx, tdx-azure, ec2, vm"
     exit 1
 fi
 

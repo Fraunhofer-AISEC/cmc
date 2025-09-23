@@ -12,6 +12,8 @@ gidn=$(id -gn)
 
 name="cmc$(printf "%s" "${dir}" | tr '/' '-')"
 
+qgs_path="/var/run/tdx-qgs"
+
 cd "${dir}"
 
 docker network ls | grep -q "${name}" || docker network create "${name}"
@@ -23,8 +25,10 @@ if [[ -z "$(docker images -q ${name})" ]]; then
 fi
 
 test -c "/dev/kvm" && kvm="--device /dev/kvm" || kvm=""
+test -c "/dev/sev" && sev="--device /dev/sev" || sev=""
 test -c "/dev/sgx_enclave" && sgx_enclave="--device /dev/sgx_enclave" || sgx_enclave=""
 test -c "/dev/sgx_provision" && sgx_provision="--device /dev/sgx_provision" || sgx_provision=""
+test -d "${qgs_path}" && qgs="--mount type=bind,src=${qgs_path},dst=${qgs_path}" || qgs=""
 
 # If container does not exist, create it
 if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
@@ -37,8 +41,10 @@ if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
     -p 9955:9955 \
     -p 4443:4443 \
     ${kvm} \
+    ${sev} \
     ${sgx_enclave} \
     ${sgx_provision} \
+    ${qgs} \
     "${name}" /bin/bash -c "/bin/sleep infinity"
 fi
 
@@ -51,6 +57,7 @@ if [[ -z "$(docker ps -q -f name=${name})" ]]; then
     docker exec "${name}" mkdir -p "${HOME}"
     docker exec "${name}" chown "${uid}":"${gid}" "${HOME}"
     docker exec "${name}" chown "${uid}":"${gid}" /dev/kvm || true
+    docker exec "${name}" chown "${uid}":"${gid}" /dev/sev || true
     docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_enclave || true
     docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_provision || true
     docker exec \

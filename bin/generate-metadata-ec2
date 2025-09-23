@@ -8,9 +8,9 @@ source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
-ovmf="${dir}/vm/images/OVMF.fd"
+ovmf="${dir}/vm/images/OVMF-AWS.fd"
 vcpus=2
-vmm_type=qemu
+vmm_type=ec2
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
