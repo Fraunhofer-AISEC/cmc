@@ -116,7 +116,9 @@ est_params=(
 
 cmc_params=(
     "-cmcaddr" "localhost:9955" \
-    "-provaddr" "https://localhost:9000" \
+    "-provisionmode" "est" \
+    "-provisionauth" "none" \
+    "-provisionaddr" "https://localhost:9000" \
     "-metadata" "file://${metadata_signed}" \
     "-drivers" "tpm,sw" \
     "-ima=true" \
@@ -131,6 +133,8 @@ cmc_params=(
     "-ctrdriver" "sw" \
     "-ctrlog" "${ctrlog}" \
     "-esttlscas" "${data}/pki/ca.pem" \
+    "-identitycas" "${data}/pki/ca.pem" \
+    "-metadatacas" "${data}/pki/ca.pem" \
 )
 
 cmcctl_params=(
@@ -138,8 +142,7 @@ cmcctl_params=(
     "-result" "attestation-result.json" \
     "-nonce" "nonce" \
     "-identitycas" "${data}/pki/ca.pem" \
-    "-metadatacas" "${data}/pki/ca.pem" \
-    "-estca" "${data}/pki/ca.pem" \
+    "-esttlscas" "${data}/pki/ca.pem" \
     "-mtls=true" \
     "-attest" "mutual" \
     "-loglevel" "trace" \
