@@ -22,13 +22,13 @@ server mode and then establishes server-side attested TLS connection from the ho
 # Start swTPM (separate terminal)
 cmc-docker vm-swtpm
 
-# Start estserver
+# Start estserver (separate terminal)
 cmc-docker vm-estserver
 
-# Start VM
+# Start VM (separate terminal)
 cmc-docker vm-start
 
-# Establish attested TLS connection to Ubuntu VM server
+# Establish attested TLS connection to Ubuntu VM server (separate terminal)
 cmc-docker vm-cmcctl
 
 # Attestation will likely fail because of outdated artifacts. Update
