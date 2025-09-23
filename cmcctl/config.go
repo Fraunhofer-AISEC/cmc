@@ -74,7 +74,6 @@ type config struct {
 	ReportFile    string   `json:"report"`
 	ResultFile    string   `json:"result"`
 	NonceFile     string   `json:"nonce"`
-	IdentityCas   []string `json:"identityCas"`
 	EstTlsCa      string   `json:"estTlsCa"`
 	Mtls          bool     `json:"mtls"`
 	Attest        string   `json:"attest"`
@@ -110,7 +109,6 @@ const (
 	reportFlag        = "report"
 	resultFlag        = "result"
 	nonceFlag         = "nonce"
-	identityCasFlag   = "identitycas"
 	estTlsCaFlag      = "esttlsca"
 	policiesFlag      = "policies"
 	mtlsFlag          = "mtls"
@@ -137,7 +135,6 @@ var (
 	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
 	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
 	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
-	identityCas  = flag.String(identityCasFlag, "", "Trusted certificate authorities for attestation reports")
 	estTlsCa     = flag.String(estTlsCaFlag, "", "Path to store retrieved CA certificates")
 	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
@@ -212,9 +209,6 @@ func getConfig(cmd string) (*config, error) {
 	}
 	if internal.FlagPassed(nonceFlag) {
 		c.NonceFile = *nonceFile
-	}
-	if internal.FlagPassed(identityCasFlag) {
-		c.IdentityCas = strings.Split(*identityCas, ",")
 	}
 	if internal.FlagPassed(estTlsCaFlag) {
 		c.EstTlsCa = *estTlsCa
