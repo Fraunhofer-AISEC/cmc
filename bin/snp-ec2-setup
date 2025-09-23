@@ -7,7 +7,6 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
 data="${dir}/vm"
-vm_config="${dir}/example-setup/vm-config"
 
 edk2="${data}/edk2-aws"
 measured_boot_tools="${data}/measured-boot-tools"

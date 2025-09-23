@@ -17,6 +17,8 @@ source env.bash
 
 ### QEMU VMs
 ```sh
+cmc-docker vm-setup
+
 cmc-docker setup-cmc snp
 ```
 
@@ -24,7 +26,7 @@ cmc-docker setup-cmc snp
 ```sh
 cmc-docker snp-ec2-setup
 
-cmc-docker generate-metadata-snp [--vcpus NUM] [--vmm-type ec2]
+cmc-docker setup-cmc-ec2
 ```
 
 ## SNP Build
