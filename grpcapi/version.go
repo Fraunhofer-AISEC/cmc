@@ -17,7 +17,7 @@ package grpcapi
 
 // The version of the API
 const (
-	apiVersion = "1.1.0"
+	apiVersion = "1.2.0"
 )
 
 func GetVersion() string {
