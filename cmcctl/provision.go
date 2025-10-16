@@ -29,8 +29,15 @@ import (
 )
 
 const (
-	devices     = "/dev/vd*"
 	cmdlineFile = "/proc/cmdline"
+)
+
+var (
+	devicePatterns = []string{
+		"/dev/vd*",     // virtio disks
+		"/dev/sd*",     // SCSI/SATA disks
+		"/dev/nvme*n*", // NVMe devices (e.g. /dev/nvme0n1)
+	}
 )
 
 func retrieveProvisioningData(c *config) error {
@@ -149,9 +156,13 @@ func configSize(cmdline string) (int, error) {
 
 func getProvisioningData(expectedSize int, expectedHash []byte) ([]byte, error) {
 
-	matches, err := filepath.Glob(devices)
-	if err != nil {
-		return nil, fmt.Errorf("glob error: %w", err)
+	var matches []string
+	for _, p := range devicePatterns {
+		files, err := filepath.Glob(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get devices: %w", err)
+		}
+		matches = append(matches, files...)
 	}
 
 	for _, dev := range matches {
