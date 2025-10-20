@@ -148,6 +148,93 @@
         "index"
       ]
     },
+    "EFIDevicePath": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "subtype": {
+          "type": "string"
+        },
+        "memorytype": {
+          "type": "integer"
+        },
+        "startaddress": {
+          "type": "integer"
+        },
+        "endaddress": {
+          "type": "integer"
+        },
+        "vendorguid": {
+          "type": "string"
+        },
+        "vendordefineddata": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "hid": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "uid": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "partitionnumber": {
+          "type": "integer"
+        },
+        "partitionstart": {
+          "type": "integer"
+        },
+        "partitionsize": {
+          "type": "integer"
+        },
+        "partitionsignature": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "partitionformat": {
+          "type": "integer"
+        },
+        "signaturetype": {
+          "type": "integer"
+        },
+        "bootentry": {
+          "type": "integer"
+        },
+        "pathname": {
+          "type": "string"
+        },
+        "protocolguid": {
+          "type": "string"
+        },
+        "firmwareFileName": {
+          "type": "string"
+        },
+        "startingaddress": {
+          "type": "integer"
+        },
+        "endingaddress": {
+          "type": "integer"
+        },
+        "disktypeguid": {
+          "type": "string"
+        },
+        "diskinstance": {
+          "type": "integer"
+        },
+        "devicetype": {
+          "type": "integer"
+        },
+        "statusflag": {
+          "type": "integer"
+        },
+        "descriptionstring": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type",
+        "subtype"
+      ]
+    },
     "EFILoadOption": {
       "properties": {
         "attributes": {
@@ -158,12 +245,12 @@
         },
         "filepathlist": {
           "items": {
-            "$ref": "#/$defs/FilePathList"
+            "$ref": "#/$defs/EFIDevicePath"
           },
           "type": "array"
         },
         "optionaldata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string"
         }
       },
       "type": "object",
@@ -211,7 +298,7 @@
         "stringcontent": {
           "type": "string"
         },
-        "genericdata": {
+        "rawdata": {
           "$ref": "#/$defs/HexByte"
         }
       },
@@ -238,81 +325,6 @@
         "appEndpoint",
         "interface",
         "port"
-      ]
-    },
-    "FilePathList": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "subtype": {
-          "type": "string"
-        },
-        "hid": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "uid": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "vendorguid": {
-          "type": "string"
-        },
-        "vendordefineddata": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "partitionnumber": {
-          "type": "integer"
-        },
-        "partitionstart": {
-          "type": "integer"
-        },
-        "partitionsize": {
-          "type": "integer"
-        },
-        "partitionsignature": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "partitionformat": {
-          "type": "integer"
-        },
-        "signaturetype": {
-          "type": "integer"
-        },
-        "bootentry": {
-          "type": "integer"
-        },
-        "pathname": {
-          "type": "string"
-        },
-        "protocolguid": {
-          "type": "string"
-        },
-        "startingaddress": {
-          "type": "integer"
-        },
-        "endingaddress": {
-          "type": "integer"
-        },
-        "disktypeguid": {
-          "type": "string"
-        },
-        "diskinstance": {
-          "type": "integer"
-        },
-        "devicetype": {
-          "type": "integer"
-        },
-        "statusflag": {
-          "type": "integer"
-        },
-        "descriptionstring": {
-          "type": "string"
-        }
-      },
-      "type": "object",
-      "required": [
-        "type",
-        "subtype"
       ]
     },
     "GPTHeader": {
@@ -370,7 +382,7 @@
     },
     "GPTPartitionEntry": {
       "properties": {
-        "paritiontypeguid": {
+        "partitiontypeguid": {
           "type": "string"
         },
         "uniquepartitionguid": {
@@ -488,15 +500,17 @@
           "type": "integer"
         },
         "uefidevicepath": {
-          "$ref": "#/$defs/FilePathList"
+          "items": {
+            "$ref": "#/$defs/EFIDevicePath"
+          },
+          "type": "array"
         }
       },
       "type": "object",
       "required": [
         "imagelocationinmemory",
         "imagelengthinmemory",
-        "imagelinktimeaddress",
-        "uefidevicepath"
+        "imagelinktimeaddress"
       ]
     },
     "Linux": {
@@ -1400,10 +1414,10 @@
     "PCClientTaggedEvent": {
       "properties": {
         "taggedeventid": {
-          "type": "integer"
+          "type": "string"
         },
         "taggedeventdata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string"
         }
       },
       "type": "object",
