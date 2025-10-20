@@ -44,15 +44,26 @@ attestation.
 
 Find the generated attestation result in `cmc/data/attestation-result.json`.
 
-> **Note:** The **attestation might fail**, as this simple demo setup does not aim for a full
-> reproducible build of all components. For a successful attestation, you can update the metadata as
-> described in [parsing the reference values](#parsing-the-reference-values).
-
 > **Note:** This demo VM is just for demonstration purposes and **not secure**, as secure boot is
 > not enabled, the user has root access, and neither file systems nor user space applications are
 > measured. [Platform Configuration](./setup-tpm.md#platform-configuration) provides some guidance,
 > especially how to activate the IMA to extend the measured boot to the user space.
 
+## Connecting to the CMC
+
+The VM exposes the CMC via QEMU port forwarding. You can connect to the CMC from the host, as well
+as from within the VM. The CMC exposes the [cmcd socket api](./cmcd-api.md) on port `9955` and the
+[attested https api](./attestation-protocol.md) on port `4443`.
+
+To connect to the CMC API, simply send a `TCP` request with a payload as documented in
+[cmcd socket api](./cmcd-api.md) to `127.0.0.1:9955`. To perform an attestedHTTPS request,
+send a request according to [attested https api](./attestation-protocol.md) to
+`https://127.0.0.1:4443`.
+
+You can test, that the connection works through either running `cmc-docker vm-cmcctl` or
+`openssl s_client -connect 127.0.0.1:4443`. When using the latter, you will get errors because of
+unknown certificates, but you will be able to see the certificates and the first post-handshake
+attestation protocol response (e.g., `{"version":"1.0.0","attest":2}`).
 
 ---
 
