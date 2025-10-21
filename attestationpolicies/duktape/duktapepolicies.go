@@ -95,7 +95,7 @@ func (p *DukTapePolicyEngine) Validate(result *ar.VerificationResult, policies [
 		return ret
 	}
 
-	// If explicitely configured, results can also be the modified result marshalled via
+	// If explicitly configured, results can also be the modified result marshalled via
 	// JSON.stringify(). In this case all properties of the result can be modified via policies
 	// and we need to read back the result. This means, the policies engine can overwrite the
 	// entire result

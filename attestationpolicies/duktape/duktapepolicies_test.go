@@ -149,7 +149,7 @@ var (
 		},
 	}
 
-	// This variable is acutally manipulated and cannot be reused
+	// This variable is actually manipulated and cannot be reused
 	vrFailModifiable = &ar.VerificationResult{
 		Prover: "Test Prover",
 		Type:   "Verification Result",

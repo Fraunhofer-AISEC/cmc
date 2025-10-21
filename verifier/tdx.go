@@ -575,7 +575,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 	}
 
 	if success {
-		log.Debug("Succesfully verified TDX measurement registers")
+		log.Debug("Successfully verified TDX measurement registers")
 	} else {
 		log.Debug("Failed to verify TDX measurement registers")
 	}

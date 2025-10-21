@@ -97,7 +97,7 @@ func (p *JsPolicyEngine) Validate(result *ar.VerificationResult, policies []byte
 	// and we need to read back the result. This means, the policies engine can overwrite the
 	// entire result
 	if val.IsString() {
-		// Overwriting results must explicitely be configured
+		// Overwriting results must explicitly be configured
 		if policyOverwrite {
 			log.Debug("Received verification result policy validation")
 			r, err := val.ToString()
