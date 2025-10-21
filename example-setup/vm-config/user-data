@@ -15,10 +15,27 @@ disable_root: false
 
 ssh_pwauth: false
 
+apt:
+  sources:
+    docker:
+      keyid: '9DC858229FC7DD38854AE2D88D81803C0EBFCD88'
+      keyserver: 'https://download.docker.com/linux/ubuntu/gpg'
+      source: 'deb [ signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable'
+
+# will be done anyway since packages and apt source provided
 package_update: true
 
 packages:
   - tpm2-tools
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+# enable ipv4 forwarding for docker
+write_files:
+  - path: /etc/sysctl.d/enabled_ipv4_forwarding.conf
+    content: |
+      net.ipv4.conf.all.forwarding=1
 
 runcmd:
   - mount /dev/sr0 /mnt/
