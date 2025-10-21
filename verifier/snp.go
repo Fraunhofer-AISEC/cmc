@@ -194,7 +194,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	}
 
 	// Verify the SNP report version
-	result.SnpResult.VersionMatch, ret = verifySnpVersion(s.Version, snpPolicy.ReportVersion)
+	result.SnpResult.VersionMatch, ret = verifySnpVersion(snpPolicy.ReportVersion, s.Version)
 	if !ret {
 		ok = false
 	}
@@ -228,7 +228,7 @@ func verifySnpVersion(expected, got uint32) (ar.Result, bool) {
 	r := ar.Result{}
 	ok := expected == got
 	if !ok {
-		log.Debugf("SNP report version mismatch: Report = %v, supplied = %v", got, expected)
+		log.Debugf("SNP report version mismatch: Report = %v, reference = %v", got, expected)
 		r.Status = ar.StatusFail
 		r.Expected = strconv.FormatUint(uint64(expected), 10)
 		r.Got = strconv.FormatUint(uint64(got), 10)

@@ -88,6 +88,8 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
+	snp.vmpl = c.Vmpl
+
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
 		if _, err := os.Stat(c.StoragePath); err != nil {
@@ -118,8 +120,6 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 			return fmt.Errorf("failed to load SNP credentials: %w", err)
 		}
 	}
-
-	snp.vmpl = c.Vmpl
 
 	return nil
 }
