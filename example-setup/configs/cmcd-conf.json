@@ -1,6 +1,6 @@
 {
     "cmcAddr": "localhost:9955",
-    "provisionMode": "selfsigned",
+    "provisionMode": "est",
     "provisionAuth": [ "none" ],
     "provisionAddr": "https://localhost:9000/",
     "provisionToken": "../data/provision_token",
