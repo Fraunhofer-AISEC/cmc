@@ -29,6 +29,7 @@ import (
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
 // Creates TLS connection between this client and a server and performs a remote
@@ -49,7 +50,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
-				go publishResultAsync(c.Publish, c.ResultFile, result, wg)
+				go pub.PublishResultAsync(c.Publish, c.ResultFile, result, wg)
 			}
 		}),
 		atls.WithCmc(cmc))
@@ -195,7 +196,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go publishResult(c.Publish, c.ResultFile, result)
+				go pub.PublishResult(c.Publish, c.ResultFile, result)
 			}
 		}),
 		atls.WithCmc(cmc))

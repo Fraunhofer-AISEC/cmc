@@ -31,6 +31,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
 type LibApi struct {
@@ -83,7 +84,7 @@ func (a LibApi) generate(c *config) {
 	}
 
 	// Save the attestation report for the verifier
-	err = saveReport(c, data, nonce)
+	err = pub.SaveReport(c.ReportFile, c.NonceFile, data, nonce)
 	if err != nil {
 		log.Fatalf("failed to save report: %v", err)
 	}
@@ -100,7 +101,7 @@ func (a LibApi) verify(c *config) {
 	}
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := loadReport(c)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
 	if err != nil {
 		log.Fatalf("Failed to load report: %v", err)
 	}
@@ -115,7 +116,7 @@ func (a LibApi) verify(c *config) {
 		return
 	}
 
-	err = publishResult(c.Publish, c.ResultFile, resp)
+	err = pub.PublishResult(c.Publish, c.ResultFile, resp)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}

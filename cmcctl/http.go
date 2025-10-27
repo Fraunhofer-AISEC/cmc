@@ -33,6 +33,7 @@ import (
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
 // HTTP header constants
@@ -107,7 +108,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
-				go publishResultAsync(c.Publish, c.ResultFile, result, wg)
+				go pub.PublishResultAsync(c.Publish, c.ResultFile, result, wg)
 			}
 		},
 	}
@@ -227,7 +228,7 @@ func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go publishResult(c.Publish, c.ResultFile, result)
+				go pub.PublishResult(c.Publish, c.ResultFile, result)
 			}
 		},
 	}

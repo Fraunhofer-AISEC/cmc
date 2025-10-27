@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package publish
 
 import (
 	"bytes"
@@ -30,17 +30,22 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/sirupsen/logrus"
 )
 
-func publishResultAsync(addr, file string, result *ar.VerificationResult, wg *sync.WaitGroup) {
+var (
+	log = logrus.WithField("service", "publish")
+)
+
+func PublishResultAsync(addr, file string, result *ar.VerificationResult, wg *sync.WaitGroup) {
 	defer wg.Done()
-	err := publishResult(addr, file, result)
+	err := PublishResult(addr, file, result)
 	if err != nil {
 		log.Warnf("Failed to asynchronously publish result: %v", err)
 	}
 }
 
-func publishResult(addr, file string, result *ar.VerificationResult) error {
+func PublishResult(addr, file string, result *ar.VerificationResult) error {
 
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
@@ -50,11 +55,12 @@ func publishResult(addr, file string, result *ar.VerificationResult) error {
 	}
 
 	// Log the result
-	if result.Summary.Status == ar.StatusSuccess {
+	switch result.Summary.Status {
+	case ar.StatusSuccess:
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
-	} else if result.Summary.Status == ar.StatusWarn {
+	case ar.StatusWarn:
 		log.Warnf("WARN: Verification for Prover %v (%v)", result.Prover, result.Created)
-	} else {
+	default:
 		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
 		result.PrintErr()
 	}
@@ -132,37 +138,37 @@ func sendResult(addr string, result []byte) error {
 	return nil
 }
 
-func saveReport(c *config, report []byte, nonce []byte) error {
+func SaveReport(reportFile, nonceFile string, report []byte, nonce []byte) error {
 
-	err := os.WriteFile(c.ReportFile, report, 0644)
+	err := os.WriteFile(reportFile, report, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to write file %v: %v", c.ReportFile, err)
+		return fmt.Errorf("failed to write file %v: %v", reportFile, err)
 	}
-	log.Infof("Wrote attestation response length %v: %v", len(report), c.ReportFile)
+	log.Infof("Wrote attestation response length %v: %v", len(report), reportFile)
 
 	// Save the nonce for the verifier
-	err = os.WriteFile(c.NonceFile, nonce, 0644)
+	err = os.WriteFile(nonceFile, nonce, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to write file %v: %v", c.NonceFile, err)
+		return fmt.Errorf("failed to write file %v: %v", nonceFile, err)
 	}
-	log.Infof("Wrote nonce: %v", c.NonceFile)
+	log.Infof("Wrote nonce: %v", nonceFile)
 
 	return nil
 }
 
-func loadReport(c *config) (*api.AttestationResponse, []byte, error) {
-	nonce, err := os.ReadFile(c.NonceFile)
+func LoadReport(reportFile, nonceFile string, s ar.Serializer) (*api.AttestationResponse, []byte, error) {
+	nonce, err := os.ReadFile(nonceFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read faile %v: %w", c.NonceFile, err)
+		return nil, nil, fmt.Errorf("failed to read faile %v: %w", nonceFile, err)
 	}
 
-	data, err := os.ReadFile(c.ReportFile)
+	data, err := os.ReadFile(reportFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read file %v: %w", c.ReportFile, err)
+		return nil, nil, fmt.Errorf("failed to read file %v: %w", reportFile, err)
 	}
 
 	resp := new(api.AttestationResponse)
-	err = c.apiSerializer.Unmarshal(data, resp)
+	err = s.Unmarshal(data, resp)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal: %w", err)
 	}

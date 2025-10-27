@@ -59,6 +59,8 @@ type config struct {
 	LogFile         string   `json:"logFile,omitempty"`
 	AuthMethods     []string `json:"authMethods,omitempty"`
 	TokenPath       string   `json:"tokenPath"`
+	PublishAddr     string   `json:"publishAddr"`
+	PublishFile     string   `json:"publishFile"`
 
 	estCaKey    *ecdsa.PrivateKey
 	estCaChain  []*x509.Certificate
@@ -85,6 +87,8 @@ const (
 	logLevelFlag        = "loglevel"
 	logFileFlag         = "logfile"
 	authMethodsFlag     = "authmethods"
+	publishAddrFlag     = "publishaddr"
+	publishFileFlag     = "publishfile"
 )
 
 func getConfig() (*config, error) {
@@ -110,6 +114,8 @@ func getConfig() (*config, error) {
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	logFile := flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	authMethods := flag.String(authMethodsFlag, "", "Client authentication methods (none,token,certificate,attestation)")
+	publishAddr := flag.String(publishAddrFlag, "", "Optional HTTP address to publish attestation reports to when provisioning mode is set to 'attestation'")
+	publishFile := flag.String(publishFileFlag, "", "Optional file to publish attestation reports to when provisioning mode is set to 'attestation'")
 	flag.Parse()
 
 	// Create default configuration
@@ -177,6 +183,12 @@ func getConfig() (*config, error) {
 	}
 	if internal.FlagPassed(authMethodsFlag) {
 		c.AuthMethods = strings.Split(*authMethods, ",")
+	}
+	if internal.FlagPassed(publishAddrFlag) {
+		c.PublishAddr = *publishAddr
+	}
+	if internal.FlagPassed(publishFileFlag) {
+		c.PublishFile = *publishFile
 	}
 
 	// Configure the logger
@@ -325,4 +337,6 @@ func printConfig(c *config) {
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
 	log.Debugf("\tToken Path          : %v", c.TokenPath)
+	log.Debugf("\tPublish Address     : %v", c.PublishAddr)
+	log.Debugf("\tPublish File        : %v", c.PublishFile)
 }
