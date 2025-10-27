@@ -19,5 +19,7 @@
     "authMethods": [
         "none"
     ],
-    "tokenPath": "../../data/token_store"
+    "tokenPath": "../../data/token_store",
+    "publishAddr": "http://localhost:8080/results",
+    "publishFile": "attestation-result.json"
 }

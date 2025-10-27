@@ -32,6 +32,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
@@ -49,6 +50,8 @@ type Server struct {
 	tpmConf     provision.TpmConfig
 	authMethods provision.AuthMethod
 	tokenPath   string
+	publishAddr string
+	publishFile string
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -110,6 +113,8 @@ func NewServer(c *config) (*Server, error) {
 		},
 		authMethods: c.authMethods,
 		tokenPath:   c.TokenPath,
+		publishAddr: c.PublishAddr,
+		publishFile: c.PublishFile,
 	}
 
 	cacertsEndpoint := est.EndpointPrefix + est.CacertsEndpoint
@@ -405,7 +410,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(provision.AuthAttestation) {
 		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
-		err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
+		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
@@ -468,7 +473,7 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(provision.AuthAttestation) {
-		err = verifyAttestationReport(csr, s.metadataCas, report, metadata)
+		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
@@ -665,8 +670,13 @@ func enrollCert(csr *x509.CertificateRequest, key *ecdsa.PrivateKey, parent *x50
 }
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
-	report, metadataFlattened []byte,
+	report, metadataFlattened []byte, publishAddr, publishFile string,
 ) error {
+
+	if len(report) == 0 {
+		return fmt.Errorf("failed to verify attestation report: no report was provided")
+	}
+
 	metadata, err := internal.UnflattenArray(metadataFlattened)
 	if err != nil {
 		return fmt.Errorf("failed to decode metadata: %w", err)
@@ -688,15 +698,18 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	result := verifier.Verify(report, nonce[:], csr.PublicKey,
 		nil, verifier.PolicyEngineSelect_None, false,
 		cas, internal.ConvertToMap(metadata))
-	if result.Summary.Status == ar.StatusFail {
+	switch result.Summary.Status {
+	case ar.StatusFail:
 		result.PrintErr()
 		return fmt.Errorf("failed to verify attestation report")
-	} else if result.Summary.Status == ar.StatusWarn {
+	case ar.StatusWarn:
 		result.PrintErr()
 		log.Debugf("Attestation report verification passed with warnings")
-	} else {
+	default:
 		log.Debugf("Successfully verified attestation report")
 	}
+
+	go pub.PublishResult(publishAddr, publishFile, result)
 
 	return nil
 }

@@ -179,11 +179,12 @@ func (a SocketApi) verifyAR(
 	}
 
 	// Check results
-	if verifyResp.Result.Summary.Status == ar.StatusSuccess {
+	switch verifyResp.Result.Summary.Status {
+	case ar.StatusSuccess:
 		log.Debugf("Attestation report verification successful")
-	} else if verifyResp.Result.Summary.Status == ar.StatusWarn {
+	case ar.StatusWarn:
 		log.Debugf("Attestation report verification passed with warnings")
-	} else {
+	default:
 		return errors.New("attestation report verification failed")
 	}
 

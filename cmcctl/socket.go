@@ -28,6 +28,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
@@ -87,7 +88,7 @@ func (a SocketApi) generate(c *config) {
 	checkError(msgType, payload, c.apiSerializer)
 
 	// Save the attestation response for the verifier
-	err = saveReport(c, payload, nonce)
+	err = pub.SaveReport(c.ReportFile, c.NonceFile, payload, nonce)
 	if err != nil {
 		log.Fatalf("failed to save report: %v", err)
 	}
@@ -98,7 +99,7 @@ func (a SocketApi) verify(c *config) {
 
 	log.Infof("Sending socket request type 'Verify' to %v", c.CmcAddr)
 
-	report, nonce, err := loadReport(c)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
 	if err != nil {
 		log.Fatalf("Failed to load report: %v", err)
 	}
@@ -117,7 +118,7 @@ func (a SocketApi) verify(c *config) {
 		log.Fatalf("Failed to verify: %v", err)
 	}
 
-	err = publishResult(c.Publish, c.ResultFile, &resp.Result)
+	err = pub.PublishResult(c.Publish, c.ResultFile, &resp.Result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}

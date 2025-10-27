@@ -35,6 +35,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
 type CoapApi struct{}
@@ -94,7 +95,7 @@ func (a CoapApi) generate(c *config) {
 	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	// Save the attestation report for the verifier
-	err = saveReport(c, payload, nonce)
+	err = pub.SaveReport(c.ReportFile, c.NonceFile, payload, nonce)
 	if err != nil {
 		log.Fatalf("failed to save report: %v", err)
 	}
@@ -106,7 +107,7 @@ func (a CoapApi) verify(c *config) {
 	log.Infof("Sending coap request type 'Verify' to %v", c.CmcAddr)
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := loadReport(c)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
 	if err != nil {
 		log.Fatalf("Failed to load report: %v", err)
 	}
@@ -129,7 +130,7 @@ func (a CoapApi) verify(c *config) {
 		log.Fatalf("%v", err)
 	}
 
-	err = publishResult(c.Publish, c.ResultFile, &resp.Result)
+	err = pub.PublishResult(c.Publish, c.ResultFile, &resp.Result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
