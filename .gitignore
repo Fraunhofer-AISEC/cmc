@@ -27,6 +27,7 @@ tools/snptool/snptool
 tools/azuretool/azuretool
 tools/hextobin/hextobin
 tools/mrtool/mrtool
+tools/pkghasher/pkghasher
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
