@@ -163,7 +163,7 @@ func PrecomputeImaPcr(cmd *cli.Command) error {
 	log.Debug("Precomputing IMA PCR...")
 
 	// Precompute all IMA measurements
-	refvals, err := precompute(globConf.Mrs[0], imaConf.BootAggregate, imaConf.Paths, imaConf.Strip, imaConf.ImaTemplate)
+	refvals, err := performImaPrecomputation(globConf.Mrs[0], imaConf.BootAggregate, imaConf.Paths, imaConf.Strip, imaConf.ImaTemplate)
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func PrecomputeImaPcr(cmd *cli.Command) error {
 	return nil
 }
 
-func precompute(pcr int, bootAggregate []byte, paths []string, strip string, imaTemplate string) ([]*ar.ReferenceValue, error) {
+func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, strip string, imaTemplate string) ([]*ar.ReferenceValue, error) {
 
 	refvals := make([]*ar.ReferenceValue, 0)
 	fileCh := make(chan string, 100)
