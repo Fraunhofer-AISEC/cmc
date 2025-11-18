@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package precomputesnp
 
 import (
 	"bytes"
@@ -26,10 +26,16 @@ import (
 	"os"
 
 	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
-var precomputeSnpMrCommand = &cli.Command{
+var (
+	log = logrus.WithField("service", "mrtool")
+)
+
+var Command = &cli.Command{
 	Name:  "snp",
 	Usage: "precompute the values of the AMD SEV-SNP measurement register based on the OVMF and other optional files",
 	Flags: []cli.Flag{
@@ -255,7 +261,7 @@ func getSnpConf(cmd *cli.Command) (*PrecomputedSnpConf, error) {
 }
 
 func PrecomputeSnp(cmd *cli.Command) error {
-	globConf, err := getGlobalConfig(cmd)
+	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}
@@ -272,7 +278,7 @@ func PrecomputeSnp(cmd *cli.Command) error {
 
 	// setup the reference value for the event log (as slice with single value)
 	refValue := [1]attestationreport.ReferenceValue{
-		attestationreport.ReferenceValue{
+		{
 			Type:        "SNP Reference Value",
 			SubType:     "SNP Launch Digest",
 			Index:       0,

@@ -33,7 +33,6 @@ const (
 	SHA512_DIGEST_LEN  = 64
 	SM3_256_DIGEST_LEN = 32
 	MAX_TCG_EVENT_LEN  = 1024
-	EVENT_TYPE         = "Bios Measurement"
 )
 
 // Constants
@@ -121,13 +120,13 @@ type TPMT_HA struct {
 // the TPM PCRs by BIOS, UEFI and IPL. The file with the binary
 // measurements (usually /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file string, addRawEventData bool) ([]ar.ReferenceValue, error) {
+func GetBiosMeasurements(file, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseBiosMeasurements(data, addRawEventData)
+	digests, err := parseBiosMeasurements(data, refvalType, addRawEventData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
@@ -135,7 +134,7 @@ func GetBiosMeasurements(file string, addRawEventData bool) ([]ar.ReferenceValue
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte, addRawEventData bool) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurements(data []byte, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
 
 	extends := make([]ar.ReferenceValue, 0)
 	initializedPCR := make([]bool, 24) //bool array track of what pcrs have been initialized
@@ -242,7 +241,7 @@ func parseBiosMeasurements(data []byte, addRawEventData bool) ([]ar.ReferenceVal
 
 		//add to extends
 		extends = append(extends, ar.ReferenceValue{
-			Type:      EVENT_TYPE,
+			Type:      refvalType,
 			Index:     int(pcrIndex),
 			Sha256:    sha256Digest,
 			Sha384:    sha384Digest,

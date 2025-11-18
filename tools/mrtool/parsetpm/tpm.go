@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package parsetpm
 
 import (
 	"context"
@@ -26,7 +26,9 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
@@ -46,29 +48,11 @@ const (
 	rawEventDataFlag   = "raw-event-data"
 )
 
-func getParsePcrsConf(cmd *cli.Command) (*ParsePcrsConf, error) {
-	c := &ParsePcrsConf{
-		Eventlog:       cmd.String(tpmEventlogFlag),
-		PrintAggregate: cmd.Bool(printAggregateFlag),
-		RawEventData:   cmd.Bool(rawEventDataFlag),
-	}
-	return c, nil
-}
+var (
+	log = logrus.WithField("service", "mrtool")
+)
 
-func checkParsePcrsConf(globConf *GlobalConfig, parsePcrsConf *ParsePcrsConf) error {
-
-	if !globConf.PrintEventLog && !globConf.PrintSummary && !parsePcrsConf.PrintAggregate {
-		return fmt.Errorf("neither eventlog nor summary or aggregate are set. Do nothing")
-	}
-	for _, mr := range globConf.Mrs {
-		if mr > 23 {
-			return fmt.Errorf("invalid PCR value: %v. Only 0-23 are allowed", mr)
-		}
-	}
-	return nil
-}
-
-var parseTpmPcrCommand = &cli.Command{
+var Command = &cli.Command{
 	Name:  "tpm",
 	Usage: "parses the SRTM TPM eventlog from the Linux kernel securityfs binary_bios_measurements",
 	Flags: []cli.Flag{
@@ -95,9 +79,31 @@ var parseTpmPcrCommand = &cli.Command{
 	},
 }
 
+func getParsePcrsConf(cmd *cli.Command) (*ParsePcrsConf, error) {
+	c := &ParsePcrsConf{
+		Eventlog:       cmd.String(tpmEventlogFlag),
+		PrintAggregate: cmd.Bool(printAggregateFlag),
+		RawEventData:   cmd.Bool(rawEventDataFlag),
+	}
+	return c, nil
+}
+
+func checkParsePcrsConf(globConf *global.Config, parsePcrsConf *ParsePcrsConf) error {
+
+	if !globConf.PrintEventLog && !globConf.PrintSummary && !parsePcrsConf.PrintAggregate {
+		return fmt.Errorf("neither eventlog nor summary or aggregate are set. Do nothing")
+	}
+	for _, mr := range globConf.Mrs {
+		if mr > 23 {
+			return fmt.Errorf("invalid PCR value: %v. Only 0-23 are allowed", mr)
+		}
+	}
+	return nil
+}
+
 func ParsePcrs(cmd *cli.Command) error {
 
-	globConf, err := getGlobalConfig(cmd)
+	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}
@@ -114,7 +120,7 @@ func ParsePcrs(cmd *cli.Command) error {
 
 	log.Debug("Parsing tpm srtm pcr eventlog...")
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, pcrConf.RawEventData)
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, "TPM Reference Value", pcrConf.RawEventData)
 	if err != nil {
 		log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
 			err)
@@ -215,4 +221,13 @@ func calculatePcrValues(refvals []ar.ReferenceValue) ([]ar.ReferenceValue, error
 	})
 
 	return summaries, nil
+}
+
+func contains(slice []int, item int) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

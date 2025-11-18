@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package parseima
 
 import (
 	"context"
@@ -24,6 +24,8 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
@@ -39,6 +41,10 @@ const (
 	imaEventlogFlag = "eventlog"
 )
 
+var (
+	log = logrus.WithField("service", "mrtool")
+)
+
 func getParseImaPcrConf(cmd *cli.Command) (*ParseImaPcrConf, error) {
 	c := &ParseImaPcrConf{
 		Eventlog: cmd.String(imaEventlogFlag),
@@ -46,7 +52,7 @@ func getParseImaPcrConf(cmd *cli.Command) (*ParseImaPcrConf, error) {
 	return c, nil
 }
 
-func checkParseImaPcrConf(globConf *GlobalConfig) error {
+func checkParseImaPcrConf(globConf *global.Config) error {
 
 	if !globConf.PrintEventLog && !globConf.PrintSummary {
 		return fmt.Errorf("neither eventlog nor summary have been provided. See mrtool parse ima --help")
@@ -60,7 +66,7 @@ func checkParseImaPcrConf(globConf *GlobalConfig) error {
 	return nil
 }
 
-var parseImaPcrCommand = &cli.Command{
+var Command = &cli.Command{
 	Name:  "ima",
 	Usage: "Parses the Linux kernel's Integrity Measurement Architecture (IMA) eventlog from the securityfs and prints the output",
 	Flags: []cli.Flag{
@@ -81,7 +87,7 @@ var parseImaPcrCommand = &cli.Command{
 
 func ParseImaPcr(cmd *cli.Command) error {
 
-	globConf, err := getGlobalConfig(cmd)
+	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}
