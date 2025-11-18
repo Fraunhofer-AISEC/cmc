@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package parsetdx
 
 import (
 	"context"
@@ -26,8 +26,10 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/google/go-eventlog/register"
 	"github.com/google/go-eventlog/tcg"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
@@ -43,7 +45,11 @@ const (
 	ccEventlogFlag = "eventlog"
 )
 
-var parseTdxMrCommand = &cli.Command{
+var (
+	log = logrus.WithField("service", "mrtool")
+)
+
+var Command = &cli.Command{
 	Name:  "tdx",
 	Usage: "Parses the Intel TDX Runtime Measurement Registers (RTMRs) from the CC eventlog ACPI table",
 	Flags: []cli.Flag{
@@ -70,7 +76,7 @@ func getParseTdxConf(cmd *cli.Command) (*ParseTdxConf, error) {
 	return c, nil
 }
 
-func checkParseTdxConf(globConf *GlobalConfig) error {
+func checkParseTdxConf(globConf *global.Config) error {
 
 	if !globConf.PrintEventLog && !globConf.PrintSummary {
 		return fmt.Errorf("neither print-eventlog nor print-summary have been provided.  See mrtool parse tdx --help")
@@ -88,7 +94,7 @@ func checkParseTdxConf(globConf *GlobalConfig) error {
 
 func ParseTdxMrs(cmd *cli.Command) error {
 
-	globConf, err := getGlobalConfig(cmd)
+	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}

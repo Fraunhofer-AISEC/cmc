@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package precomputeima
 
 import (
 	"context"
@@ -29,9 +29,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 )
 
 type PrecomputeImaConf struct {
@@ -48,7 +50,11 @@ const (
 	bootAggregateFlag = "boot-aggregate"
 )
 
-var precomputeImaPcrCommand = &cli.Command{
+var (
+	log = logrus.WithField("service", "mrtool")
+)
+
+var Command = &cli.Command{
 	Name:  "ima",
 	Usage: "Calculates the expected IMA eventlog based on a list of user space software components and configuration files",
 	Flags: []cli.Flag{
@@ -104,7 +110,7 @@ func getImaConf(cmd *cli.Command) (*PrecomputeImaConf, error) {
 	return c, nil
 }
 
-func checkImaConf(globConf *GlobalConfig, c *PrecomputeImaConf) error {
+func checkImaConf(globConf *global.Config, c *PrecomputeImaConf) error {
 	if c.ImaTemplate != "ima-sig" && c.ImaTemplate != "ima-ng" {
 		return fmt.Errorf("unsupported ima template %q. Expect ima-sig or ima-ng. See mrtool precompute ima --help",
 			c.ImaTemplate)
@@ -145,7 +151,7 @@ func printImaConf(c *PrecomputeImaConf) {
 
 func PrecomputeImaPcr(cmd *cli.Command) error {
 
-	globConf, err := getGlobalConfig(cmd)
+	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}

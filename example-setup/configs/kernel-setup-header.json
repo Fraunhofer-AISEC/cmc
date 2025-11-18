@@ -1,0 +1,14 @@
+{
+  "typeOfLoader": 176,
+  "loadFlags": 129,
+  "setupMoveSize": 32768,
+  "code32Start": 1048576,
+  "ramdiskImage": 0,
+  "ramdiskSize": 0,
+  "bootsectKludge": 0,
+  "heapEndPtr": 65024,
+  "extLoaderVer": 0,
+  "extLoaderType": 0,
+  "cmdLinePtr": 131072,
+  "ramdiskMax": 0
+}

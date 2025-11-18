@@ -71,6 +71,7 @@ const (
 	ikFile      = "tpm_ik_encrypted.json"
 
 	DEFAULT_BINARY_BIOS_MEASUREMENTS = "/sys/kernel/security/tpm0/binary_bios_measurements"
+	DEFAULT_EVENT_TYPE               = "TPM Measurement"
 
 	tpmResourceManagerPath = "/dev/tpmrm0"
 	tpmDevicePath          = "/dev/tpm0"
@@ -506,7 +507,7 @@ func GetEventLogs(serializer ar.Serializer,
 	var err error
 	if biosLog {
 		log.Debug("Collecting binary bios measurements")
-		biosMeasurements, err = GetBiosMeasurements(DEFAULT_BINARY_BIOS_MEASUREMENTS, false)
+		biosMeasurements, err = GetBiosMeasurements(DEFAULT_BINARY_BIOS_MEASUREMENTS, DEFAULT_EVENT_TYPE, false)
 		if err != nil {
 			log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
 				err)

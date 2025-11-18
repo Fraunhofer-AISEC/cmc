@@ -13,19 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package precomputetpm
 
 import (
-	"context"
 	"fmt"
-
-	"github.com/urfave/cli/v3"
+	"os"
 )
 
-var precomputeTpmPcrsCommand = &cli.Command{
-	Name:  "tpm",
-	Usage: "precompute TPM measurement",
-	Action: func(ctx context.Context, c *cli.Command) error {
-		return fmt.Errorf("precompute tpm not yet implemented")
-	},
+func detectDriverFileType(file string) (DriverFileType, error) {
+
+	f, err := os.Open(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	buf := make([]byte, 2)
+	if _, err := f.Read(buf); err != nil {
+		log.Fatal(err)
+	}
+
+	switch {
+	case buf[0] == 0x4D && buf[1] == 0x5A:
+		log.Debug("Detected file type: PE/COFF")
+		return PECOFF, nil
+	case buf[0] == 0x55 && buf[1] == 0xAA:
+		log.Debug("Detected file type: Option ROM")
+		return OptionROM, nil
+	default:
+		return Unknown, fmt.Errorf("unknown driver file type %02x %02x", buf[0], buf[1])
+	}
+
 }
