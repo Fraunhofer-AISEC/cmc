@@ -18,6 +18,7 @@ package verifier
 import (
 	"testing"
 
+	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -59,6 +60,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -91,6 +96,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -123,6 +132,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -155,6 +168,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -187,6 +204,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -220,6 +241,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									Debug: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -252,6 +277,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -287,6 +316,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 								},
 
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -319,6 +352,10 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 									SeptVEDisable: true,
 								},
 								Xfam: validXFAM,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},

@@ -186,7 +186,8 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	result.TdxResult.TcbInfoCheck = ValidateTcbInfo(
 		&collateral.TcbInfo, collateralRaw.TcbInfo,
 		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
-		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE)
+		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE,
+		tdxPolicy.AcceptedTcbStatuses)
 	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to validate TCB info")
 		result.Summary.Fail(ar.VerifyTcbInfo)

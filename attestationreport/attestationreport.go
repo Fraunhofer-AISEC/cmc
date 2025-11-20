@@ -270,18 +270,20 @@ type RtMrHashChainElem struct {
 }
 
 type TdxPolicy struct {
-	QuoteVersion uint16       `json:"quoteVersion" cbor:"0,keyasint"`
-	TdId         TDId         `json:"tdId" cbor:"3,keyasint"`
-	Xfam         HexByte      `json:"xfam" cbor:"5,keyasint"`
-	TdAttributes TDAttributes `json:"tdAttributes" cbor:"6,keyasint"`
+	QuoteVersion        uint16       `json:"quoteVersion" cbor:"0,keyasint"`
+	TdId                TDId         `json:"tdId" cbor:"3,keyasint"`
+	Xfam                HexByte      `json:"xfam" cbor:"5,keyasint"`
+	TdAttributes        TDAttributes `json:"tdAttributes" cbor:"6,keyasint"`
+	AcceptedTcbStatuses []string     `json:"acceptedTcbStatuses,omitempty" cbor:"7,keyasint"`
 }
 
 type SgxPolicy struct {
-	QuoteVersion uint16        `json:"quoteVersion" cbor:"0,keyasint"`
-	IsvProdId    uint16        `json:"isvProdId" cbor:"3,keyasint"`
-	MrSigner     string        `json:"mrSigner" cbor:"4,keyasint"`
-	IsvSvn       uint16        `json:"isvSvn" cbor:"5,keyasint"`
-	Attributes   SGXAttributes `json:"attributes" cbor:"6,keyasint"`
+	QuoteVersion        uint16        `json:"quoteVersion" cbor:"0,keyasint"`
+	IsvProdId           uint16        `json:"isvProdId" cbor:"3,keyasint"`
+	MrSigner            string        `json:"mrSigner" cbor:"4,keyasint"`
+	IsvSvn              uint16        `json:"isvSvn" cbor:"5,keyasint"`
+	Attributes          SGXAttributes `json:"attributes" cbor:"6,keyasint"`
+	AcceptedTcbStatuses []string      `json:"acceptedTcbStatuses,omitempty" cbor:"7,keyasint"`
 }
 
 // SGX attributes according to

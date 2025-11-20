@@ -67,7 +67,7 @@ func MeasurePeImage(alg HashAlg, buf []byte) ([]byte, error) {
 			return nil, fmt.Errorf("failed to measure PE image. Error Code: %x", uint64(v))
 		}
 	default:
-		return nil, fmt.Errorf("Unknown hash algorithm %v", alg)
+		return nil, fmt.Errorf("unknown hash algorithm %v", alg)
 	}
 
 	return hash[:], nil

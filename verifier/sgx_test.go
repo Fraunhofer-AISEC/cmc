@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -56,6 +57,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -88,6 +93,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -120,6 +129,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -152,6 +165,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -185,6 +202,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -217,6 +238,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -249,6 +274,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     validMRSIGNER,
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
@@ -281,6 +310,10 @@ func Test_verifySgxMeasurements(t *testing.T) {
 								IsvProdId:    validIsvProdId,
 								IsvSvn:       validIsvSvn,
 								MrSigner:     "00000",
+								AcceptedTcbStatuses: []string{
+									string(pcs.TcbComponentStatusUpToDate),
+									string(pcs.TcbComponentStatusOutOfDate),
+								},
 							},
 						},
 					},
