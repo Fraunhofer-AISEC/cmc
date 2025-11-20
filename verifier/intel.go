@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -637,6 +638,7 @@ func extractTbsArea(elem []byte, key string) ([]byte, error) {
 func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 	signingCert, caCert *x509.Certificate,
 	sgxExtensions SGXExtensionsValue, teeTcbSvn [16]byte, quoteType QuoteType,
+	acceptedTcbStatuses []string,
 ) ar.TcbInfoResult {
 
 	result := ar.TcbInfoResult{}
@@ -759,11 +761,8 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 		}
 
 		// Check the revocation status of the component
-		if tcbLevel.TcbStatus != pcs.TcbComponentStatusUpToDate {
-			log.Debugf("\tCurrent TCB Info level status not up to date (%v)", tcbLevel.TcbStatus)
+		if !statusAccepted(tcbLevel.TcbStatus, acceptedTcbStatuses) {
 			tcbLevelIteration = false
-		} else {
-			log.Debugf("\tSuccessfully verified TCB info status (%v)", tcbLevel.TcbStatus)
 		}
 
 		result.TcbLevel = ar.TcbLevelResult{
@@ -1195,4 +1194,26 @@ func verifyRootCas(quoteCerts *SgxCertificates, collateral *Collateral, fingerpr
 	}
 
 	return ar.NotSpecified
+}
+
+func statusAccepted(status pcs.TcbComponentStatus, list []string) bool {
+
+	var l []string
+	if len(list) == 0 {
+		// Status UpToDate is always accepted
+		l = []string{string(pcs.TcbComponentStatusUpToDate)}
+	} else {
+		l = list
+	}
+
+	for _, s := range l {
+		if strings.EqualFold(s, string(status)) {
+			log.Debugf("\tAccepted TCB info status %v (accepted statuses: %v)",
+				status, strings.Join(l, ","))
+			return true
+		}
+	}
+	log.Debugf("\tDeclined TCB info status %v (accepted statuses: %v)",
+		status, strings.Join(l, ","))
+	return false
 }

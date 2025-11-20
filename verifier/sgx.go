@@ -176,7 +176,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	result.SgxResult.TcbInfoCheck = ValidateTcbInfo(
 		&collateral.TcbInfo, collateralRaw.TcbInfo,
 		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
-		sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE)
+		sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE, sgxReferencePolicy.AcceptedTcbStatuses)
 	if result.SgxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to verify TCB info structure")
 		result.Summary.Fail(ar.VerifyTcbInfo)
