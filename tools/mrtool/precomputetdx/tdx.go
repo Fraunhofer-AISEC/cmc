@@ -198,7 +198,7 @@ func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.Referen
 		case pcrNum < MR_LEN:
 			return nil, nil, fmt.Errorf("MR%v precomputation not yet implemented", pcrNum)
 		default:
-			return nil, nil, fmt.Errorf("Specification does not define MR%v", pcrNum)
+			return nil, nil, fmt.Errorf("specification does not define MR%v", pcrNum)
 		}
 	}
 
