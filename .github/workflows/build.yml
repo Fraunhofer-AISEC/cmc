@@ -18,7 +18,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: 1.23.7
+          go-version: 1.24.0
       - name: Build
         run: |
           pushd cmcd
@@ -38,7 +38,7 @@ jobs:
       - name: Format Check
         run: go fmt ./...
       - name: Static Check
-        uses: dominikh/staticcheck-action@v1.3.1
+        uses: dominikh/staticcheck-action@v1
         with:
           version: "latest"
           install-go: false

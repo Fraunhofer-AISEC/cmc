@@ -136,7 +136,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendError(conn, s, err.Error())
+		sendError(conn, s, "%v", err)
 		return
 	}
 
@@ -183,7 +183,7 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendError(conn, s, err.Error())
+		sendError(conn, s, "%v", err)
 		return
 	}
 
@@ -228,7 +228,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendError(conn, s, err.Error())
+		sendError(conn, s, "%v", err)
 		return
 	}
 
@@ -287,7 +287,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendError(conn, s, err.Error())
+		sendError(conn, s, "%v", err)
 		return
 	}
 
@@ -352,7 +352,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendError(conn, s, err.Error())
+		sendError(conn, s, "%v", err)
 		return
 	}
 
@@ -396,7 +396,7 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendError(conn, s, err.Error())
+		sendError(conn, s, "%v", err)
 		return
 	}
 
