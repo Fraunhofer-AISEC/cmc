@@ -127,7 +127,7 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			for _, addr := range c.Addr {
 				err := dialInternalAddr(c, api, addr, tlsConf, cmc)
 				if err != nil {
-					log.Warnf(err.Error())
+					log.Warnf("%v", err)
 				}
 			}
 			<-ticker.C
@@ -136,7 +136,7 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		for _, addr := range c.Addr {
 			err := dialInternalAddr(c, api, addr, tlsConf, cmc)
 			if err != nil {
-				log.Warnf(err.Error())
+				log.Warnf("%v", err)
 			}
 		}
 	}

@@ -93,7 +93,7 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
 		return
 	}
 
@@ -190,7 +190,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
 		return
 	}
 
@@ -249,7 +249,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
 		return
 	}
 
@@ -315,7 +315,7 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
 		return
 	}
 
@@ -358,7 +358,7 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 
 	err = req.CheckVersion()
 	if err != nil {
-		sendCoapError(w, r, codes.UnsupportedMediaType, err.Error())
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
 		return
 	}
 
