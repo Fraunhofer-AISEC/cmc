@@ -86,7 +86,7 @@ wait_for_message() {
 
 
 if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
