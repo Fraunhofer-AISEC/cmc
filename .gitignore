@@ -14,6 +14,8 @@ provision/estserver/estserver
 **/nonce
 **/attestation-report
 **/attestation-result.json
+tools/backend/backend
+tools/backend/monitoring.db
 tools/metasign/metasign
 tools/metaconv/metaconv
 tools/fmspc-retrieval-tool/fmspc-retrieval-tool

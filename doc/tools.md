@@ -3,6 +3,12 @@
 Helper programs that support generating and signing reference values and interacting with trusted
 and confidential computing hardware.
 
+## backend
+
+A simple HTTP web server with attached database for storing attestation results. This app is for
+demonstration purposes only and not to be used in production.
+For more information, see the [README](../tools/backend/README.md)
+
 ## mrtool
 
 Parse and precompute reference hashes (TPM PCRs, Intel TDX RTMR/MRTD, AMD SEV-SNP measurements).
