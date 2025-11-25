@@ -41,16 +41,14 @@ func init() {
 }
 
 // Creates connection with cmcd at specified address
-func getCMCServiceConn(cc CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
-	conn, err := grpc.DialContext(ctx, cc.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+func getCMCServiceConn(cc CmcConfig) (api.CMCServiceClient, *grpc.ClientConn) {
+	conn, err := grpc.NewClient(cc.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Errorf("failed to connect: %v", err)
-		cancel()
-		return nil, nil, nil
+		return nil, nil
 	}
 
-	return api.NewCMCServiceClient(conn), conn, cancel
+	return api.NewCMCServiceClient(conn), conn
 }
 
 // Obtains attestation report from CMCd
@@ -58,12 +56,12 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 
 	// Get backend connection
 	log.Debugf("Sending attestation request to cmcd on %v", cc.CmcAddr)
-	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
+	cmcClient, cmcconn := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, nil, nil, errors.New("failed to establish connection to obtain AR")
 	}
 	defer cmcconn.Close()
-	defer cancel()
+
 	log.Debug("Contacting backend to obtain AR.")
 
 	req := &api.AttestationRequest{
@@ -73,7 +71,9 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 	}
 
 	// Call Attest request
-	resp, err := cmcClient.Attest(context.Background(), req)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+	resp, err := cmcClient.Attest(ctx, req)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to obtain AR: %w", err)
 	}
@@ -97,12 +97,11 @@ func (a GrpcApi) verifyAR(
 
 	// Get backend connection
 	log.Debugf("Sending verification request to cmcd on %v", cc.CmcAddr)
-	cmcClient, conn, cancel := getCMCServiceConn(cc)
+	cmcClient, conn := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return errors.New("failed to establish connection to obtain attestation result")
 	}
 	defer conn.Close()
-	defer cancel()
 	log.Debug("Contacting backend for AR verification")
 
 	req := &api.VerificationRequest{
@@ -116,7 +115,9 @@ func (a GrpcApi) verifyAR(
 	}
 
 	// Perform Verify request
-	resp, err := cmcClient.Verify(context.Background(), req)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+	resp, err := cmcClient.Verify(ctx, req)
 	if err != nil {
 		return fmt.Errorf("could not obtain verification result: %w", err)
 	}
@@ -153,12 +154,11 @@ func (a GrpcApi) verifyAR(
 func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// Get backend connection
 	log.Debugf("Sending TLS sign request to cmcd on %v", cc.CmcAddr)
-	cmcClient, conn, cancel := getCMCServiceConn(cc)
+	cmcClient, conn := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("connection failed. No signing performed")
 	}
 	defer conn.Close()
-	defer cancel()
 	log.Debug("contacting backend for Sign Operation")
 
 	// Create Sign request
@@ -178,7 +178,9 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	}
 
 	// Send Sign request
-	resp, err := cmcClient.TLSSign(context.Background(), &req)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+	resp, err := cmcClient.TLSSign(ctx, &req)
 	if err != nil {
 		return nil, fmt.Errorf("sign request failed: %w", err)
 	}
@@ -194,12 +196,11 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	// Get backend connection
 	log.Debugf("Sending TLS certificate request to cmcd on %v", cc.CmcAddr)
-	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
+	cmcClient, cmcconn := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to cmcd")
 	}
 	defer cmcconn.Close()
-	defer cancel()
 
 	// Create TLSCert request
 	req := api.TLSCertRequest{
@@ -207,7 +208,9 @@ func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	}
 
 	// Call TLSCert request
-	resp, err := cmcClient.TLSCert(context.Background(), &req)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+	resp, err := cmcClient.TLSCert(ctx, &req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request TLS certificate: %w", err)
 	}
@@ -228,12 +231,11 @@ func (a GrpcApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 
 	// Get backend connection
 	log.Debugf("Sending peer cache request for peer %v to cmcd on %v", fingerprint, cc.CmcAddr)
-	cmcClient, cmcconn, cancel := getCMCServiceConn(cc)
+	cmcClient, cmcconn := getCMCServiceConn(cc)
 	if cmcClient == nil {
 		return nil, errors.New("failed to establish connection to obtain AR")
 	}
 	defer cmcconn.Close()
-	defer cancel()
 
 	req := &api.PeerCacheRequest{
 		Version: api.GetVersion(),
@@ -241,7 +243,9 @@ func (a GrpcApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, err
 	}
 
 	// Call peer cache API
-	resp, err := cmcClient.PeerCache(context.Background(), req)
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+	resp, err := cmcClient.PeerCache(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch peer cache: %w", err)
 	}

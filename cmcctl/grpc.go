@@ -52,7 +52,7 @@ func (a GrpcApi) generate(c *config) {
 
 	log.Infof("Sending grpc request type 'Attest' to %v", c.CmcAddr)
 
-	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -107,7 +107,7 @@ func (a GrpcApi) verify(c *config) {
 
 	log.Infof("Sending grpc request type 'Verify' to %v", c.CmcAddr)
 
-	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -155,13 +155,9 @@ func (a GrpcApi) verify(c *config) {
 
 func (a GrpcApi) measure(c *config) {
 
-	// Establish connection
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
-	defer cancel()
-
 	log.Infof("Sending grpc request type 'Measure' to %v", c.CmcAddr)
 
-	conn, err := grpc.DialContext(ctx, c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Failed to connect to cmcd: %v", err)
 	}
@@ -202,6 +198,8 @@ func (a GrpcApi) measure(c *config) {
 		},
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
 	response, err := client.Measure(ctx, req)
 	if err != nil {
 		log.Fatalf("GRPC Measure Call failed: %v", err)
