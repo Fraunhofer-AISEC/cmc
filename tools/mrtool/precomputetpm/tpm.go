@@ -129,19 +129,26 @@ func run(cmd *cli.Command) error {
 	log.Debug("Precomputing TPM PCRs...")
 
 	// Precompute all TPM measurements
-	_, refvals, err := precompute(globConf.Mrs, tpmConf)
+	pcrs, refvals, err := precompute(globConf.Mrs, tpmConf)
 	if err != nil {
 		return err
 	}
 
-	// Marshal eventlog
-	data, err := json.MarshalIndent(refvals, "", "     ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal reference values: %w", err)
+	// Write eventlog to stdout if requested
+	if globConf.PrintEventLog {
+		data, err := json.MarshalIndent(refvals, "", "     ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal reference values: %w", err)
+		}
+		os.Stdout.Write(append(data, []byte("\n")...))
 	}
 
-	// Write eventlog to stdout
-	if globConf.PrintEventLog {
+	// Write final extended PCR values to stdout if requested
+	if globConf.PrintSummary {
+		data, err := json.MarshalIndent(pcrs, "", "     ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal reference values: %w", err)
+		}
 		os.Stdout.Write(append(data, []byte("\n")...))
 	}
 

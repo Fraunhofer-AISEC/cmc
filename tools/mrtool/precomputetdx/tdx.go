@@ -160,19 +160,26 @@ func run(cmd *cli.Command) error {
 	log.Debug("Precomputing Intel TDX measurement registers...")
 
 	// Precompute all TPM measurements
-	_, refvals, err := precompute(globConf.Mrs, tpmConf)
+	rtmrs, refvals, err := precompute(globConf.Mrs, tpmConf)
 	if err != nil {
 		return err
 	}
 
-	// Marshal eventlog
-	data, err := json.MarshalIndent(refvals, "", "     ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal reference values: %w", err)
+	// Write eventlog to stdout if requested
+	if globConf.PrintEventLog {
+		data, err := json.MarshalIndent(refvals, "", "     ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal reference values: %w", err)
+		}
+		os.Stdout.Write(append(data, []byte("\n")...))
 	}
 
-	// Write eventlog to stdout
-	if globConf.PrintEventLog {
+	// Write final RTMR values to stdout if requested
+	if globConf.PrintSummary {
+		data, err := json.MarshalIndent(rtmrs, "", "     ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal reference values: %w", err)
+		}
 		os.Stdout.Write(append(data, []byte("\n")...))
 	}
 
@@ -184,23 +191,23 @@ func run(cmd *cli.Command) error {
 func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
 	refvals := make([]*ar.ReferenceValue, 0)
-	pcrs := make([]*ar.ReferenceValue, 0)
+	rtmrs := make([]*ar.ReferenceValue, 0)
 
-	for _, pcrNum := range mrNums {
+	for _, rtmrNum := range mrNums {
 		switch {
-		case pcrNum == INDEX_RTMR1:
-			pcr, rv, err := PrecomputeRtmr1(conf)
+		case rtmrNum == INDEX_RTMR1:
+			rtmr, rv, err := PrecomputeRtmr1(conf)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
+				return nil, nil, fmt.Errorf("failed to precompute RTMR1: %w", err)
 			}
-			pcrs = append(pcrs, pcr)
+			rtmrs = append(rtmrs, rtmr)
 			refvals = append(refvals, rv...)
-		case pcrNum < MR_LEN:
-			return nil, nil, fmt.Errorf("MR%v precomputation not yet implemented", pcrNum)
+		case rtmrNum < MR_LEN:
+			return nil, nil, fmt.Errorf("MR%v precomputation not yet implemented", rtmrNum)
 		default:
-			return nil, nil, fmt.Errorf("specification does not define MR%v", pcrNum)
+			return nil, nil, fmt.Errorf("specification does not define MR%v", rtmrNum)
 		}
 	}
 
-	return pcrs, refvals, nil
+	return rtmrs, refvals, nil
 }
