@@ -40,7 +40,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	log.Debugf("Precomputing RTMR1...")
 
-	pcr := make([]byte, 48)
+	rtmr := make([]byte, 48)
 	refvals := make([]*ar.ReferenceValue, 0)
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
@@ -76,7 +76,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			Sha384:      hash[:],
 			Description: fmt.Sprintf("RTMR1: %v", filepath.Base(c.Kernel)),
 		})
-		pcr = internal.ExtendSha384(hash[:], pcr)
+		rtmr = internal.ExtendSha384(rtmr, hash[:])
 
 		if c.DumpKernel != "" {
 			err = os.WriteFile(c.DumpKernel, data, 0644)
@@ -98,7 +98,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		Sha384:      h1[:],
 		Description: fmt.Sprintf("RTMR1: %v", EFI_CALLING_EFI_APPLICATION),
 	})
-	pcr = internal.ExtendSha384(h1[:], pcr)
+	rtmr = internal.ExtendSha384(rtmr, h1[:])
 
 	// EV_SEPARATOR (extended only in some OVMF versions)
 	if !strings.EqualFold(c.OvmfVersion, "edk2-stable202408.01") {
@@ -111,7 +111,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			Sha384:      hashSep[:],
 			Description: "RTMR1: HASH(0000)",
 		})
-		pcr = internal.ExtendSha384(hashSep[:], pcr)
+		rtmr = internal.ExtendSha384(rtmr, hashSep[:])
 	}
 
 	// EV_EFI_ACTION
@@ -123,7 +123,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		Sha384:      h2[:],
 		Description: fmt.Sprintf("RTMR1: %v", EFI_EXIT_BOOT_SERVICES_INVOCATION),
 	})
-	pcr = internal.ExtendSha384(h2[:], pcr)
+	rtmr = internal.ExtendSha384(rtmr, h2[:])
 
 	// EV_EFI_ACTION
 	h3 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_SUCCEEDED))
@@ -134,17 +134,17 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		Sha384:      h3[:],
 		Description: fmt.Sprintf("RTMR1: %v", EFI_EXIT_BOOT_SERVICES_SUCCEEDED),
 	})
-	pcr = internal.ExtendSha384(h3[:], pcr)
+	rtmr = internal.ExtendSha384(rtmr, h3[:])
 
-	// Create PCR4 final reference value
-	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
-		Description: "PCR4",
-		Index:       4,
-		Sha384:      pcr,
+	// Create RTMR1 final reference value
+	rtmrSummary := &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "RTMR Summary",
+		Description: "RTMR1",
+		Index:       1,
+		Sha384:      rtmr,
 	}
 
-	return pcrSummary, refvals, nil
+	return rtmrSummary, refvals, nil
 
 }

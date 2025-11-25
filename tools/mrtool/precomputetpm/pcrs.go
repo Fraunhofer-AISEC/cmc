@@ -75,7 +75,7 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			Sha256:      hash[:],
 			Description: filepath.Base(f),
 		})
-		pcr = internal.ExtendSha256(hash[:], pcr)
+		pcr = internal.ExtendSha256(pcr, hash[:])
 	}
 
 	// EV_SEPARATOR
@@ -88,7 +88,7 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		Sha256:      hashSep[:],
 		Description: "HASH(0000)",
 	})
-	pcr = internal.ExtendSha256(hashSep[:], pcr)
+	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create PCR4 final reference value
 	pcrSummary := &ar.ReferenceValue{
@@ -127,7 +127,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			Sha256:      hash[:],
 			Description: filepath.Base(f),
 		})
-		pcr = internal.ExtendSha256(hash[:], pcr)
+		pcr = internal.ExtendSha256(pcr, hash[:])
 	}
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
@@ -164,7 +164,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			Sha256:      hash[:],
 			Description: filepath.Base(c.Kernel),
 		})
-		pcr = internal.ExtendSha256(hash[:], pcr)
+		pcr = internal.ExtendSha256(pcr, hash[:])
 
 		if c.DumpKernel != "" {
 			err = os.WriteFile(c.DumpKernel, data, 0644)
@@ -177,15 +177,15 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_EFI_ACTION: "Calling EFI Application from Boot Option"
 	// TCG PCClient Firmware Spec: https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
 	actionData := []byte("Calling EFI Application from Boot Option")
-	achtionHash := sha256.Sum256(actionData)
+	actionHash := sha256.Sum256(actionData)
 	refvals = append(refvals, &ar.ReferenceValue{
 		Type:        "TPM Reference Value",
 		SubType:     "EV_EFI_ACTION",
 		Index:       4,
-		Sha256:      achtionHash[:],
+		Sha256:      actionHash[:],
 		Description: "Calling EFI Application from Boot Option",
 	})
-	pcr = internal.ExtendSha256(achtionHash[:], pcr)
+	pcr = internal.ExtendSha256(pcr, actionHash[:])
 
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
@@ -196,7 +196,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		Index:   4,
 		Sha256:  hashSep[:],
 	})
-	pcr = internal.ExtendSha256(hashSep[:], pcr)
+	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create PCR4 final reference value
 	pcrSummary := &ar.ReferenceValue{
