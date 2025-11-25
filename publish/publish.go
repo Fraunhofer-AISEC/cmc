@@ -37,15 +37,15 @@ var (
 	log = logrus.WithField("service", "publish")
 )
 
-func PublishResultAsync(addr, file string, result *ar.VerificationResult, wg *sync.WaitGroup) {
+func PublishResultAsync(addr string, token []byte, file string, result *ar.VerificationResult, wg *sync.WaitGroup) {
 	defer wg.Done()
-	err := PublishResult(addr, file, result)
+	err := PublishResult(addr, token, file, result)
 	if err != nil {
 		log.Warnf("Failed to asynchronously publish result: %v", err)
 	}
 }
 
-func PublishResult(addr, file string, result *ar.VerificationResult) error {
+func PublishResult(addr string, token []byte, file string, result *ar.VerificationResult) error {
 
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
@@ -91,7 +91,7 @@ func PublishResult(addr, file string, result *ar.VerificationResult) error {
 			return fmt.Errorf("failed to marshal result: %v", err)
 		}
 
-		err = sendResult(addr, data)
+		err = sendResult(addr, token, data)
 		if err != nil {
 			log.Warnf("Failed to publish: %v", err)
 		}
@@ -102,7 +102,7 @@ func PublishResult(addr, file string, result *ar.VerificationResult) error {
 	return nil
 }
 
-func sendResult(addr string, result []byte) error {
+func sendResult(addr string, token []byte, result []byte) error {
 
 	if addr == "" {
 		return nil
@@ -116,6 +116,11 @@ func sendResult(addr string, result []byte) error {
 		return fmt.Errorf("failed to create new http request with context: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+
+	if token != nil {
+		log.Trace("Adding bootstrap token to authorization header")
+		req.Header.Set("Authorization", "Bearer "+string(token))
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

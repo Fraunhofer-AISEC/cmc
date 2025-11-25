@@ -411,7 +411,7 @@ func request(
 		req.Header.Set(est.TransferEncodingHeader, transferEncoding)
 	}
 	if token != nil {
-		log.Tracef("Adding bootstrap token %v to authorization header", string(token))
+		log.Trace("Adding bootstrap token to authorization header")
 		req.Header.Set("Authorization", "Bearer "+string(token))
 	} else {
 		log.Tracef("Sending request without authorization token")

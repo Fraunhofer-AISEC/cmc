@@ -30,8 +30,8 @@ func ExtendSha256(hash []byte, data []byte) []byte {
 	return ret
 }
 
-// ExtendSha256 performs the extend operation Digest = HASH(Digest | Data) using the
-// SHA256 hashing algorithm, as performed e.g. by Trusted Platform Modules (TPMs)
+// ExtendSha384 performs the extend operation Digest = HASH(Digest | Data) using the
+// SHA384 hashing algorithm, as performed e.g. by Trusted Platform Modules (TPMs)
 func ExtendSha384(hash []byte, data []byte) []byte {
 	concat := append(hash, data...)
 	h := sha512.Sum384(concat)
