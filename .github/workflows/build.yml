@@ -27,6 +27,21 @@ jobs:
           pushd cmcctl
           go build -ldflags="-s -w" -trimpath
           popd
+          pushd provision/estserver
+          go build -ldflags="-s -w" -trimpath
+          popd
+          pushd tools/backend
+          go build -ldflags="-s -w" -trimpath
+          popd
+          pushd tools/snptool
+          go build -ldflags="-s -w" -trimpath
+          popd
+          pushd tools/tdxtool
+          go build -ldflags="-s -w" -trimpath
+          popd
+          pushd tools/azuretool
+          go build -ldflags="-s -w" -trimpath
+          popd
           pushd tools/metasign
           go build -ldflags="-s -w" -trimpath
           popd
@@ -58,6 +73,11 @@ jobs:
         with:
           name: cmcctl
           path: cmcctl/cmcctl
+      - name: "Upload estserver"
+        uses: actions/upload-artifact@v4
+        with:
+          name: estserver
+          path: provision/estserver/estserver
       - name: "Upload metaconv"
         uses: actions/upload-artifact@v4
         with:
@@ -68,6 +88,26 @@ jobs:
         with:
           name: metasign
           path: tools/metasign/metasign
+      - name: "Upload backend"
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend
+          path: tools/backend/backend
+      - name: "Upload tdxtool"
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdxtool
+          path: tools/tdxtool/tdxtool
+      - name: "Upload snptool"
+        uses: actions/upload-artifact@v4
+        with:
+          name: snptool
+          path: tools/snptool/snptool
+      - name: "Upload azuretool"
+        uses: actions/upload-artifact@v4
+        with:
+          name: azuretool
+          path: tools/azuretool/azuretool
       - name: Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -75,7 +115,12 @@ jobs:
           files: |
             cmcd/cmcd
             cmcctl/cmcctl
+            provision/estserver/estserver
             tools/metaconv/metaconv
             tools/metasign/metasign
+            tools/backend/backend
+            tools/tdxtool/tdxtool
+            tools/snptool/snptool
+            tools/azuretool/azuretool
 
 
