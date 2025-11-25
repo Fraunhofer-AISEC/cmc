@@ -61,3 +61,7 @@ using attested TLS or attested HTTPS, as well as for developing the CMC.
 For an alternative demo setup with a more complex PKI and policies based on the requirements of
 the International Data Spaces (IDS), see [IDS Example Setup](./doc/ids-example-setup.md)
 
+### Tools
+
+A description of tools and helper programs can be found in the
+[Tools Documentation](./doc/tools.md).
