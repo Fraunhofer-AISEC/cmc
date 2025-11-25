@@ -70,23 +70,24 @@ type Api interface {
 
 type config struct {
 	// Generic config
-	Addr          []string `json:"addr"`
-	ReportFile    string   `json:"report"`
-	ResultFile    string   `json:"result"`
-	NonceFile     string   `json:"nonce"`
-	EstTlsCa      string   `json:"estTlsCa"`
-	Mtls          bool     `json:"mtls"`
-	Attest        string   `json:"attest"`
-	PoliciesFile  string   `json:"policies"`
-	Publish       string   `json:"publish"`
-	IntervalStr   string   `json:"interval"`
-	Header        []string `json:"header"`
-	Method        string   `json:"method"`
-	Data          string   `json:"data"`
-	ApiSerializer string   `json:"apiSerializer"`
-	LogLevel      string   `json:"logLevel"`
-	LogFile       string   `json:"logFile"`
-	TokenStore    string   `json:"tokenStore"`
+	Addr             []string `json:"addr"`
+	ReportFile       string   `json:"report"`
+	ResultFile       string   `json:"result"`
+	NonceFile        string   `json:"nonce"`
+	EstTlsCa         string   `json:"estTlsCa"`
+	Mtls             bool     `json:"mtls"`
+	Attest           string   `json:"attest"`
+	PoliciesFile     string   `json:"policies"`
+	Publish          string   `json:"publish"`
+	IntervalStr      string   `json:"interval"`
+	Header           []string `json:"header"`
+	Method           string   `json:"method"`
+	Data             string   `json:"data"`
+	ApiSerializer    string   `json:"apiSerializer"`
+	LogLevel         string   `json:"logLevel"`
+	LogFile          string   `json:"logFile"`
+	TokenStore       string   `json:"tokenStore"`
+	PublishTokenFile string   `json:"publishToken"`
 	cmc.Config
 	// Only to test cmcd measure API
 	CtrName   string `json:"ctrName"`
@@ -99,6 +100,7 @@ type config struct {
 	interval      time.Duration
 	apiSerializer ar.Serializer
 	attest        atls.AttestSelect
+	publishToken  []byte
 }
 
 // Defines the testool specic flags. CMC flags are defined in cmc/config.go
@@ -122,6 +124,7 @@ const (
 	logLevelFlag      = "loglevel"
 	logFileFlag       = "logfile"
 	tokenStoreFlag    = "tokenstore"
+	publishTokenFlag  = "publishtoken"
 	// Only to test cmcd measure API
 	ctrNameFlag   = "ctrname"
 	ctrRootfsFlag = "ctrrootfs"
@@ -151,8 +154,9 @@ var (
 	data     = flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
 	logLevel = flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
-	logFile    = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
-	tokenStore = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
+	logFile      = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
+	tokenStore   = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
+	publishtoken = flag.String(publishTokenFlag, "", "Path to token for backend authorization")
 	//  Only to test cmcd measure API
 	ctrName   = flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
 	ctrRootfs = flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
@@ -249,6 +253,9 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(tokenStoreFlag) {
 		c.TokenStore = *tokenStore
 	}
+	if internal.FlagPassed(publishTokenFlag) {
+		c.PublishTokenFile = *publishtoken
+	}
 	//  Only to test cmcd measure API
 	if internal.FlagPassed(ctrNameFlag) {
 		c.CtrName = *ctrName
@@ -327,7 +334,15 @@ func getConfig(cmd string) (*config, error) {
 		log.Debug("Adding specified policies")
 		c.policies, err = os.ReadFile(c.PoliciesFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read policies file: %v", err)
+			return nil, fmt.Errorf("failed to read policies file: %w", err)
+		}
+	}
+
+	if c.PublishTokenFile != "" {
+		log.Debugf("Retrieving publish token %v", c.PublishTokenFile)
+		c.publishToken, err = os.ReadFile(c.PublishTokenFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read publish token: %w", err)
 		}
 	}
 
@@ -462,6 +477,7 @@ func (c *config) Print() {
 	log.Debugf("\tHTTP Header              : %v", c.Header)
 	log.Debugf("\tHTTP Method              : %v", c.Method)
 	log.Debugf("\tToken Store              : %v", c.TokenStore)
+	log.Debugf("\tBackend Token            : %v", c.PublishTokenFile)
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
 	}

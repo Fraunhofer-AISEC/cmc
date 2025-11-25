@@ -50,7 +50,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
-				go pub.PublishResultAsync(c.Publish, c.ResultFile, result, wg)
+				go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
 			}
 		}),
 		atls.WithCmc(cmc))
@@ -196,7 +196,7 @@ func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go pub.PublishResult(c.Publish, c.ResultFile, result)
+				go pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, result)
 			}
 		}),
 		atls.WithCmc(cmc))

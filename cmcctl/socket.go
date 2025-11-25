@@ -118,7 +118,7 @@ func (a SocketApi) verify(c *config) {
 		log.Fatalf("Failed to verify: %v", err)
 	}
 
-	err = pub.PublishResult(c.Publish, c.ResultFile, &resp.Result)
+	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, &resp.Result)
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}

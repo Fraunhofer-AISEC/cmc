@@ -61,6 +61,7 @@ type config struct {
 	TokenPath       string   `json:"tokenPath"`
 	PublishAddr     string   `json:"publishAddr"`
 	PublishFile     string   `json:"publishFile"`
+	PublishToken    string   `json:"publishToken"`
 
 	estCaKey    *ecdsa.PrivateKey
 	estCaChain  []*x509.Certificate
@@ -89,6 +90,7 @@ const (
 	authMethodsFlag     = "authmethods"
 	publishAddrFlag     = "publishaddr"
 	publishFileFlag     = "publishfile"
+	publishTokenFlag    = "publishTokenFlag"
 )
 
 func getConfig() (*config, error) {
@@ -116,6 +118,7 @@ func getConfig() (*config, error) {
 	authMethods := flag.String(authMethodsFlag, "", "Client authentication methods (none,token,certificate,attestation)")
 	publishAddr := flag.String(publishAddrFlag, "", "Optional HTTP address to publish attestation reports to when provisioning mode is set to 'attestation'")
 	publishFile := flag.String(publishFileFlag, "", "Optional file to publish attestation reports to when provisioning mode is set to 'attestation'")
+	publishToken := flag.String(publishTokenFlag, "", "HTTP Authorization token for publishing attestation results")
 	flag.Parse()
 
 	// Create default configuration
@@ -189,6 +192,9 @@ func getConfig() (*config, error) {
 	}
 	if internal.FlagPassed(publishFileFlag) {
 		c.PublishFile = *publishFile
+	}
+	if internal.FlagPassed(publishTokenFlag) {
+		c.PublishToken = *publishToken
 	}
 
 	// Configure the logger
@@ -310,6 +316,13 @@ func pathsToAbs(c *config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
 		}
 	}
+
+	if c.PublishToken != "" {
+		c.PublishToken, err = filepath.Abs(c.PublishToken)
+		if err != nil {
+			log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
+		}
+	}
 }
 
 func printConfig(c *config) {
@@ -339,4 +352,5 @@ func printConfig(c *config) {
 	log.Debugf("\tToken Path          : %v", c.TokenPath)
 	log.Debugf("\tPublish Address     : %v", c.PublishAddr)
 	log.Debugf("\tPublish File        : %v", c.PublishFile)
+	log.Debugf("\tPublish Token       : %v", c.PublishToken)
 }

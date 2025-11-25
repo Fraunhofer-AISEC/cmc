@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -42,16 +43,17 @@ import (
 )
 
 type Server struct {
-	server      *http.Server
-	estCaKey    *ecdsa.PrivateKey
-	estCaChain  []*x509.Certificate
-	metadataCas []*x509.Certificate
-	snpConf     *provision.SnpConfig
-	tpmConf     provision.TpmConfig
-	authMethods provision.AuthMethod
-	tokenPath   string
-	publishAddr string
-	publishFile string
+	server       *http.Server
+	estCaKey     *ecdsa.PrivateKey
+	estCaChain   []*x509.Certificate
+	metadataCas  []*x509.Certificate
+	snpConf      *provision.SnpConfig
+	tpmConf      provision.TpmConfig
+	authMethods  provision.AuthMethod
+	tokenPath    string
+	publishAddr  string
+	publishFile  string
+	publishToken []byte
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -92,6 +94,15 @@ func NewServer(c *config) (*Server, error) {
 		tlsCfg.ClientCAs = clientRoots
 	}
 
+	var publishToken []byte
+	if c.PublishToken != "" {
+		var err error
+		publishToken, err = os.ReadFile(c.PublishToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read publish token: %w", err)
+		}
+	}
+
 	s := &http.Server{
 		Addr:      c.EstAddr,
 		Handler:   nil,
@@ -111,10 +122,11 @@ func NewServer(c *config) (*Server, error) {
 			VcekCacheFolder: c.VcekCacheFolder,
 			Vceks:           make(map[provision.VcekInfo][]byte),
 		},
-		authMethods: c.authMethods,
-		tokenPath:   c.TokenPath,
-		publishAddr: c.PublishAddr,
-		publishFile: c.PublishFile,
+		authMethods:  c.authMethods,
+		tokenPath:    c.TokenPath,
+		publishAddr:  c.PublishAddr,
+		publishFile:  c.PublishFile,
+		publishToken: publishToken,
 	}
 
 	cacertsEndpoint := est.EndpointPrefix + est.CacertsEndpoint
@@ -410,7 +422,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(provision.AuthAttestation) {
 		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
-		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile)
+		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
@@ -473,7 +485,7 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(provision.AuthAttestation) {
-		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile)
+		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
@@ -670,7 +682,7 @@ func enrollCert(csr *x509.CertificateRequest, key *ecdsa.PrivateKey, parent *x50
 }
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
-	report, metadataFlattened []byte, publishAddr, publishFile string,
+	report, metadataFlattened []byte, publishAddr, publishFile string, publishToken []byte,
 ) error {
 
 	if len(report) == 0 {
@@ -709,7 +721,7 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 		log.Debugf("Successfully verified attestation report")
 	}
 
-	go pub.PublishResult(publishAddr, publishFile, result)
+	go pub.PublishResult(publishAddr, publishToken, publishFile, result)
 
 	return nil
 }
