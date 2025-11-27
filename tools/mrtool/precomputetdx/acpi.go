@@ -20,19 +20,28 @@ import (
 	"fmt"
 	"os"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-func CalculateAcpiTables(digest []byte, index int, acpiRspd, acpiTables, tableLoader, tpmLog string) ([]byte, error) {
+func CalculateAcpiTables(digest []byte, refvals []*ar.ReferenceValue, index int, acpiRspd, acpiTables, tableLoader, tpmLog string) ([]byte, []*ar.ReferenceValue, error) {
 	// EV_PLATFORM_CONFIG_FLAGS: etc/table-loader
 	if tableLoader != "" {
 		data, err := os.ReadFile(tableLoader)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read table loader file: %w", err)
+			return nil, nil, fmt.Errorf("Failed to read table loader file: %w", err)
 		}
 		if len(data) > 0 {
 			hash := sha512.Sum384(data)
+
 			digest = internal.ExtendSha384(digest, hash[:])
+			refvals = append(refvals, &ar.ReferenceValue{
+				Type:        "TDX Reference Value",
+				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
+				Index:       index,
+				Sha384:      hash[:],
+				Description: fmt.Sprintf("%v: etc/table-loader", IndexToMr(index)),
+			})
 		}
 	}
 
@@ -40,11 +49,19 @@ func CalculateAcpiTables(digest []byte, index int, acpiRspd, acpiTables, tableLo
 	if acpiRspd != "" {
 		data, err := os.ReadFile(acpiRspd)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read ACPI RSPD file: %w", err)
+			return nil, nil, fmt.Errorf("Failed to read ACPI RSPD file: %w", err)
 		}
 		if len(data) > 0 {
 			hash := sha512.Sum384(data)
+
 			digest = internal.ExtendSha384(digest, hash[:])
+			refvals = append(refvals, &ar.ReferenceValue{
+				Type:        "TDX Reference Value",
+				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
+				Index:       index,
+				Sha384:      hash[:],
+				Description: fmt.Sprintf("%v: etc/acpi/rsdp", IndexToMr(index)),
+			})
 		}
 	}
 
@@ -52,11 +69,19 @@ func CalculateAcpiTables(digest []byte, index int, acpiRspd, acpiTables, tableLo
 	if tpmLog != "" {
 		data, err := os.ReadFile(tpmLog)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read TPM log file: %w", err)
+			return nil, nil, fmt.Errorf("Failed to read TPM log file: %w", err)
 		}
 		if len(data) > 0 {
 			hash := sha512.Sum384(data)
+
 			digest = internal.ExtendSha384(digest, hash[:])
+			refvals = append(refvals, &ar.ReferenceValue{
+				Type:        "TDX Reference Value",
+				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
+				Index:       index,
+				Sha384:      hash[:],
+				Description: fmt.Sprintf("%v: etc/tpm/log", IndexToMr(index)),
+			})
 		}
 	}
 
@@ -64,13 +89,21 @@ func CalculateAcpiTables(digest []byte, index int, acpiRspd, acpiTables, tableLo
 	if acpiTables != "" {
 		data, err := os.ReadFile(acpiTables)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to read ACPI tables file: %w", err)
+			return nil, nil, fmt.Errorf("Failed to read ACPI tables file: %w", err)
 		}
 		if len(data) > 0 {
 			hash := sha512.Sum384(data)
+
 			digest = internal.ExtendSha384(digest, hash[:])
+			refvals = append(refvals, &ar.ReferenceValue{
+				Type:        "TDX Reference Value",
+				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
+				Index:       index,
+				Sha384:      hash[:],
+				Description: fmt.Sprintf("%v: etc/acpi/tables", IndexToMr(index)),
+			})
 		}
 	}
 
-	return digest, nil
+	return digest, refvals, nil
 }

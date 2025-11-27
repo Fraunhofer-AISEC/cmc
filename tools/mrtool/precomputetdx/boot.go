@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"unicode/utf16"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -46,11 +47,11 @@ const (
 )
 
 type SecBootVariableType struct {
-	eventType    string
-	variableName string
+	EventType    string
+	VariableName string
 	VendorGuid   [16]byte
 	Path         string
-	data         []byte
+	Data         []byte
 }
 
 //
@@ -65,7 +66,7 @@ type SecBootVariableType struct {
 func measureVariable(val SecBootVariableType) ([sha512.Size384]byte, error) {
 	var err error
 
-	data := val.data
+	data := val.Data
 	if val.Path != "" {
 		data, err = os.ReadFile(val.Path)
 		if err != nil {
@@ -74,7 +75,7 @@ func measureVariable(val SecBootVariableType) ([sha512.Size384]byte, error) {
 	}
 
 	// encode name as utf-16
-	utf16Units := utf16.Encode([]rune(val.variableName))
+	utf16Units := utf16.Encode([]rune(val.VariableName))
 
 	// write the guid to the data buffer (reconstructing UEFI_VARIABLE_DATA)
 	buffer := []byte{}
@@ -95,24 +96,32 @@ func measureVariable(val SecBootVariableType) ([sha512.Size384]byte, error) {
 	return sha512.Sum384(buffer), nil
 }
 
-func MeasureSecureBootVariables(digest []byte, secureBoot, pk, kek, db, dbx string) ([]byte, error) {
+func MeasureSecureBootVariables(digest []byte, refvals []*ar.ReferenceValue, index int, secureBoot, pk, kek, db, dbx string) ([]byte, []*ar.ReferenceValue, error) {
 	vars := []SecBootVariableType{
-		SecBootVariableType{eventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", variableName: "SecureBoot", VendorGuid: EfiGlobalVariableGuid, Path: secureBoot},
-		SecBootVariableType{eventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", variableName: "PK", VendorGuid: EfiGlobalVariableGuid, Path: pk},
-		SecBootVariableType{eventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", variableName: "KEK", VendorGuid: EfiGlobalVariableGuid, Path: kek},
-		SecBootVariableType{eventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", variableName: "db", VendorGuid: EfiImageSecurityDatabaseGuid, Path: db},
-		SecBootVariableType{eventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", variableName: "dbx", VendorGuid: EfiImageSecurityDatabaseGuid, Path: dbx},
+		SecBootVariableType{EventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", VariableName: "SecureBoot", VendorGuid: EfiGlobalVariableGuid, Path: secureBoot},
+		SecBootVariableType{EventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", VariableName: "PK", VendorGuid: EfiGlobalVariableGuid, Path: pk},
+		SecBootVariableType{EventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", VariableName: "KEK", VendorGuid: EfiGlobalVariableGuid, Path: kek},
+		SecBootVariableType{EventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", VariableName: "db", VendorGuid: EfiImageSecurityDatabaseGuid, Path: db},
+		SecBootVariableType{EventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", VariableName: "dbx", VendorGuid: EfiImageSecurityDatabaseGuid, Path: dbx},
 	}
 
-	for i := 0; i < len(vars); i++ {
-		varHash, err := measureVariable(vars[i])
+	for _, val := range vars {
+		varHash, err := measureVariable(val)
 		if err != nil {
-			return digest, fmt.Errorf("Failed to measure variable: %w", err)
+			return nil, nil, fmt.Errorf("Failed to measure variable: %w", err)
 		}
+
 		digest = internal.ExtendSha384(digest, varHash[:])
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     val.EventType,
+			Index:       index,
+			Sha384:      varHash[:],
+			Description: fmt.Sprintf("%v: %v", IndexToMr(index), val.VariableName),
+		})
 	}
 
-	return digest, nil
+	return digest, refvals, nil
 }
 
 func createNode(baseType, subType uint8, data []byte) []byte {
@@ -161,13 +170,13 @@ func calculateEfiLoadOption() []byte {
 	return buffer
 }
 
-func CalculateEfiBootVars(digest []byte, index int, bootOrder []string, bootXxxx []string) ([]byte, error) {
+func CalculateEfiBootVars(digest []byte, refvals []*ar.ReferenceValue, index int, bootOrder []string, bootXxxx []string) ([]byte, []*ar.ReferenceValue, error) {
 	// parse the boot order to uint16
 	bootOrderParsed := make([]uint16, len(bootOrder))
 	for i, s := range bootOrder {
 		val, err := strconv.ParseUint(s, 10, 16)
 		if err != nil {
-			return nil, fmt.Errorf("invalid boot order value: %w", err)
+			return nil, nil, fmt.Errorf("invalid boot order value: %w", err)
 		}
 		bootOrderParsed[i] = uint16(val)
 	}
@@ -175,13 +184,29 @@ func CalculateEfiBootVars(digest []byte, index int, bootOrder []string, bootXxxx
 	// EV_EFI_VARIABLE_BOOT Boot order
 	bootOrderSerialized, _ := binary.Append(nil, binary.LittleEndian, bootOrderParsed)
 	bootOrderHash := sha512.Sum384(bootOrderSerialized)
+
 	digest = internal.ExtendSha384(digest, bootOrderHash[:])
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "EV_EFI_VARIABLE_BOOT",
+		Index:       index,
+		Sha384:      bootOrderHash[:],
+		Description: fmt.Sprintf("%v: VariableName - BootOrder, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C", IndexToMr(index)),
+	})
 
 	// Default EV_EFI_VARIABLE_BOOT Boot0000 variable
 	if len(bootXxxx) == 0 {
 		efiVariableBoot0000 := calculateEfiLoadOption()
 		dataHash := sha512.Sum384(efiVariableBoot0000)
+
 		digest = internal.ExtendSha384(digest, dataHash[:])
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "EV_EFI_VARIABLE_BOOT",
+			Index:       index,
+			Sha384:      dataHash[:],
+			Description: fmt.Sprintf("%v: VariableName - Boot0000, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C", IndexToMr(index)),
+		})
 	} else {
 		for _, path := range bootXxxx {
 			// Read file with binary efi variable data. Variable data can either be with a
@@ -189,7 +214,7 @@ func CalculateEfiBootVars(digest []byte, index int, bootOrder []string, bootXxxx
 			// as written to /sys/firmware/efi/efivars
 			data, err := os.ReadFile(path)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read bootxxxx file: %w", err)
+				return nil, nil, fmt.Errorf("failed to read bootxxxx file: %w", err)
 			}
 
 			// Data in the format as written to /sys/firmware/efi/efivars has a 4-byte
@@ -205,12 +230,20 @@ func CalculateEfiBootVars(digest []byte, index int, bootOrder []string, bootXxxx
 			}
 
 			if offset > uint64(len(data)) {
-				return nil, fmt.Errorf("data offset in bootxxxx outside of file: %d > %d", offset, len(data))
+				return nil, nil, fmt.Errorf("data offset in bootxxxx outside of file: %d > %d", offset, len(data))
 			}
 			dataHash := sha512.Sum384(data[offset:])
+
 			digest = internal.ExtendSha384(digest, dataHash[:])
+			refvals = append(refvals, &ar.ReferenceValue{
+				Type:        "TDX Reference Value",
+				SubType:     "EV_EFI_VARIABLE_BOOT",
+				Index:       index,
+				Sha384:      dataHash[:],
+				Description: fmt.Sprintf("%v: VariableName - Boot####, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C", IndexToMr(index)),
+			})
 		}
 	}
 
-	return digest, nil
+	return digest, refvals, nil
 }

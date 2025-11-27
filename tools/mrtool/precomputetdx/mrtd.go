@@ -92,7 +92,7 @@ func isValidDescriptor(descriptor *TdxMetadataDescriptor) error {
 	return nil
 }
 
-func measureCfv(ovmf []byte) ([]byte, error) {
+func MeasureCfv(ovmf []byte) ([]byte, error) {
 	metadataOffset, err := getOvmfMetadataOffset(ovmf)
 	if err != nil {
 		fmt.Println("")

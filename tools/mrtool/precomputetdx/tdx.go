@@ -48,6 +48,25 @@ const (
 	INDEX_MRSEAM = 5 // Additional reference value, not part of UEFI spec
 )
 
+func IndexToMr(index int) string {
+	switch index {
+	case INDEX_MRTD:
+		return "MRTD"
+	case INDEX_RTMR0:
+		return "RTMR0"
+	case INDEX_RTMR1:
+		return "RTMR1"
+	case INDEX_RTMR2:
+		return "RTMR2"
+	case INDEX_RTMR3:
+		return "RTMR3"
+	case INDEX_MRSEAM:
+		return "MRSEAM"
+	default:
+		return "unknown"
+	}
+}
+
 type Config struct {
 	*tcg.Conf
 	TdxModule   string
@@ -198,7 +217,7 @@ func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.Referen
 		case rtmrNum == INDEX_RTMR0:
 			rtmr, rv, err := PrecomputeRtmr0(conf)
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to precompute RTMR1: %w", err)
+				return nil, nil, fmt.Errorf("failed to precompute RTMR0: %w", err)
 			}
 			rtmrs = append(rtmrs, rtmr)
 			refvals = append(refvals, rv...)

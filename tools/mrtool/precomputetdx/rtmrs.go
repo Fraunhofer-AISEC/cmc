@@ -49,7 +49,9 @@ const (
 func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
 	log.Debugf("Precomputing RTMR0...")
+
 	rtmr := make([]byte, sha512.Size384)
+	refvals := make([]*ar.ReferenceValue, 0)
 
 	// Measure EFI TD Handoff Block: UEFI Platform Initialization Specification, Vol. 3, Chapter 5 5 HOB Code Definitions
 	tbHob, err := CreateTbHob()
@@ -57,7 +59,15 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		return nil, nil, err
 	}
 	tbHobHash := sha512.Sum384(tbHob)
+
 	rtmr = internal.ExtendSha384(rtmr, tbHobHash[:])
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "TD Hob",
+		Index:       INDEX_RTMR0,
+		Sha384:      tbHobHash[:],
+		Description: fmt.Sprintf("RTMR0: TD Hob passed from host VMM to guest firmware"),
+	})
 
 	// Configuration Firmware Volume (CFV)
 	if c.Ovmf != "" {
@@ -66,16 +76,23 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			return nil, nil, fmt.Errorf("failed to read file: %w", err)
 		}
 
-		cfvHash, err := measureCfv(data)
+		cfvHash, err := MeasureCfv(data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
 		}
 
 		rtmr = internal.ExtendSha384(rtmr, cfvHash[:])
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "Configuration FV",
+			Index:       INDEX_RTMR0,
+			Sha384:      cfvHash[:],
+			Description: fmt.Sprintf("RTMR0: Configuration Firmware Volume"),
+		})
 	}
 
 	// Measure UEFI Secure Boot Variables: SecureBoot, PK, KEK, db, dbx
-	rtmr, err = MeasureSecureBootVariables(rtmr, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
+	rtmr, refvals, err = MeasureSecureBootVariables(rtmr, refvals, INDEX_RTMR0, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure secure boot variables: %w", err)
 	}
@@ -83,16 +100,24 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	// EV_SEPARATOR
 	evSeparator := []byte{0x00, 0x00, 0x00, 0x00}
 	evHash := sha512.Sum384(evSeparator)
+
 	rtmr = internal.ExtendSha384(rtmr, evHash[:])
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "EV_SEPARATOR",
+		Index:       INDEX_RTMR0,
+		Sha384:      evHash[:],
+		Description: fmt.Sprintf("RTMR0: HASH(00000000)"),
+	})
 
 	// EV_PLATFORM_CONFIG_FLAGS: ACPI tables
-	rtmr, err = CalculateAcpiTables(rtmr, INDEX_RTMR0, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
+	rtmr, refvals, err = CalculateAcpiTables(rtmr, refvals, INDEX_RTMR0, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
 	}
 
 	// EV_EFI_VARIABLE_BOOT boot variables
-	rtmr, err = CalculateEfiBootVars(rtmr, INDEX_RTMR0, c.BootOrder, c.BootXxxx)
+	rtmr, refvals, err = CalculateEfiBootVars(rtmr, refvals, INDEX_RTMR0, c.BootOrder, c.BootXxxx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
 	}
@@ -101,9 +126,25 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	if c.OvmfVersion == "edk2-stable202408.01" {
 		// EV_SEPARATOR
 		rtmr = internal.ExtendSha384(rtmr, evHash[:])
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "EV_SEPARATOR",
+			Index:       INDEX_RTMR0,
+			Sha384:      evHash[:],
+			Description: fmt.Sprintf("RTMR0: HASH(00000000)"),
+		})
 	}
 
-	return nil, nil, nil
+	// Create RTMR0 final reference value
+	rtmrSummary := &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "RTMR Summary",
+		Description: "RTMR0",
+		Index:       INDEX_RTMR0,
+		Sha384:      rtmr,
+	}
+
+	return rtmrSummary, refvals, nil
 }
 
 func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
@@ -211,7 +252,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		Type:        "TDX Reference Value",
 		SubType:     "RTMR Summary",
 		Description: "RTMR1",
-		Index:       1,
+		Index:       INDEX_RTMR1,
 		Sha384:      rtmr,
 	}
 
