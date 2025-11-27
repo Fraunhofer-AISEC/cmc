@@ -195,6 +195,13 @@ func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.Referen
 
 	for _, rtmrNum := range mrNums {
 		switch {
+		case rtmrNum == INDEX_RTMR0:
+			rtmr, rv, err := PrecomputeRtmr0(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute RTMR1: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
 		case rtmrNum == INDEX_RTMR1:
 			rtmr, rv, err := PrecomputeRtmr1(conf)
 			if err != nil {

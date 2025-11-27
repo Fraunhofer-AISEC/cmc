@@ -36,6 +36,76 @@ const (
 	EFI_EXIT_BOOT_SERVICES_SUCCEEDED   = "Exit Boot Services Returned with Success"
 )
 
+/**
+ * Calculates RTMR0
+ *
+ * RTMR0 contains the following artifacts:
+ * - EFI TD handoff block
+ * - EFI Configuration FV
+ * - EFI Secure Boot variables
+ * - QEMU FW Cfg Files as passed to OVMF
+ * - EFI Boot variables
+ */
+func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+
+	log.Debugf("Precomputing RTMR0...")
+	rtmr := make([]byte, sha512.Size384)
+
+	// Measure EFI TD Handoff Block: UEFI Platform Initialization Specification, Vol. 3, Chapter 5 5 HOB Code Definitions
+	tbHob, err := CreateTbHob()
+	if err != nil {
+		return nil, nil, err
+	}
+	tbHobHash := sha512.Sum384(tbHob)
+	rtmr = internal.ExtendSha384(rtmr, tbHobHash[:])
+
+	// Configuration Firmware Volume (CFV)
+	if c.Ovmf != "" {
+		data, err := os.ReadFile(c.Ovmf)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		cfvHash, err := measureCfv(data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
+		}
+
+		rtmr = internal.ExtendSha384(rtmr, cfvHash[:])
+	}
+
+	// Measure UEFI Secure Boot Variables: SecureBoot, PK, KEK, db, dbx
+	rtmr, err = MeasureSecureBootVariables(rtmr, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure secure boot variables: %w", err)
+	}
+
+	// EV_SEPARATOR
+	evSeparator := []byte{0x00, 0x00, 0x00, 0x00}
+	evHash := sha512.Sum384(evSeparator)
+	rtmr = internal.ExtendSha384(rtmr, evHash[:])
+
+	// EV_PLATFORM_CONFIG_FLAGS: ACPI tables
+	rtmr, err = CalculateAcpiTables(rtmr, INDEX_RTMR0, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
+	}
+
+	// EV_EFI_VARIABLE_BOOT boot variables
+	rtmr, err = CalculateEfiBootVars(rtmr, INDEX_RTMR0, c.BootOrder, c.BootXxxx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
+	}
+
+	// Terminating EV_SEPARATOR is extended only in edk2-stable202408.01
+	if c.OvmfVersion == "edk2-stable202408.01" {
+		// EV_SEPARATOR
+		rtmr = internal.ExtendSha384(rtmr, evHash[:])
+	}
+
+	return nil, nil, nil
+}
+
 func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
 	log.Debugf("Precomputing RTMR1...")
