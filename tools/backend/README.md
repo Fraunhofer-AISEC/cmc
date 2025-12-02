@@ -43,6 +43,7 @@ Add new device with:
 curl http://localhost:8080/results \
     --include \
     --header "Content-Type: application/json" \
+    --header "Authorization: Bearer <HEXSTRING>" \
     --request "POST" \
-    --data @test/attestation-result.json
+    --data @attestation-result.json
 ```
