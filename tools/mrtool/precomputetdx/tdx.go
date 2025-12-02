@@ -228,6 +228,20 @@ func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.Referen
 			}
 			rtmrs = append(rtmrs, rtmr)
 			refvals = append(refvals, rv...)
+		case rtmrNum == INDEX_RTMR2:
+			rtmr, rv, err := PrecomputeRtmr2(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute RTMR2: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
+		case rtmrNum == INDEX_RTMR3:
+			rtmr, rv, err := PrecomputeRtmr3(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute RTMR3: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
 		case rtmrNum < MR_LEN:
 			return nil, nil, fmt.Errorf("MR%v precomputation not yet implemented", rtmrNum)
 		default:

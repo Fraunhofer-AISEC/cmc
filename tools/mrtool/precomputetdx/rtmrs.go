@@ -17,10 +17,12 @@ package precomputetdx
 
 import (
 	"crypto/sha512"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -147,6 +149,11 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	return rtmrSummary, refvals, nil
 }
 
+/**
+ * Calculates RTMR1
+ *
+ * RTMR1 contains the Linux kernel PE/COFF image measurement as well as some boot strings.
+ */
 func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
 	log.Debugf("Precomputing RTMR1...")
@@ -257,5 +264,90 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	}
 
 	return rtmrSummary, refvals, nil
+}
 
+/**
+ * Calculates RTMR2
+ *
+ * RTMR2 contains the Linux kernel command line.
+ */
+func PrecomputeRtmr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+	log.Debugf("Precomputing RTMR2...")
+
+	rtmr := make([]byte, sha512.Size384)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	// read the commandline
+	if c.Cmdline == "" {
+		return nil, nil, fmt.Errorf("kernel commandline must be specified")
+	}
+	cmdLineData, err := os.ReadFile(c.Cmdline)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read commandline: %w", err)
+	}
+	if len(cmdLineData) == 0 {
+		return nil, nil, fmt.Errorf("empty commandline found")
+	}
+
+	// sanitize the data
+	if c.StripNewline && cmdLineData[len(cmdLineData)-1] == '\n' {
+		cmdLineData = cmdLineData[:len(cmdLineData)-1]
+	}
+
+	// interpret the cmdline as utf-8
+	cmdLineStr := string(cmdLineData)
+
+	// interpret bytes as ascii/utf-8 and encode as utf-16
+	utf16Line := []uint16{}
+	for _, val := range utf16.Encode([]rune(cmdLineStr)) {
+		utf16Line = append(utf16Line, val)
+	}
+	utf16Line = append(utf16Line, make([]uint16, c.AddZeros)...)
+
+	// add the final hash
+	buffer, _ := binary.Append(nil, binary.LittleEndian, utf16Line)
+	hash := sha512.Sum384(buffer)
+
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "EV_EVENT_TAG",
+		Index:       INDEX_RTMR2,
+		Sha384:      hash[:],
+		Description: fmt.Sprintf("RTMR2: %v", cmdLineStr),
+	})
+	rtmr = internal.ExtendSha384(rtmr, hash[:])
+
+	// Create RTMR2 final reference value
+	rtmrSummary := &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "RTMR Summary",
+		Description: "RTMR2",
+		Index:       INDEX_RTMR2,
+		Sha384:      rtmr,
+	}
+
+	return rtmrSummary, refvals, nil
+}
+
+/**
+ * Calculates RTMR3
+ *
+ * RTMR3 is currently empty.
+ */
+func PrecomputeRtmr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+	log.Debugf("Precomputing RTMR3...")
+
+	rtmr := make([]byte, sha512.Size384)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	// Create RTMR3 final reference value
+	rtmrSummary := &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "RTMR Summary",
+		Description: "RTMR3",
+		Index:       INDEX_RTMR3,
+		Sha384:      rtmr,
+	}
+
+	return rtmrSummary, refvals, nil
 }
