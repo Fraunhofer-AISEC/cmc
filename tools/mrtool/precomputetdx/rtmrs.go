@@ -40,6 +40,65 @@ const (
 )
 
 /**
+ * Calculates the measurement register for the TDX SEAM module (MRSEAM)
+ *
+ * The MRTD contains the digest of the TDX-module as measured by the SEAM loader
+ */
+func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+	log.Debugf("Precomputing MRSEAM...")
+
+	mrseam := make([]byte, sha512.Size384)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	if c.TdxModule != "" {
+		data, err := os.ReadFile(c.TdxModule)
+		if err != nil {
+			return nil, nil, fmt.Errorf("faild to read tdx-module: %w", err)
+		}
+		hash := sha512.Sum384(data)
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "TDX-Module",
+			Index:       INDEX_MRSEAM,
+			Sha384:      hash[:],
+			Description: fmt.Sprintf("MRSEAM: SEAMLDR Measurement: TDX-Module"),
+		})
+		mrseam = hash[:]
+	} else if c.MrSeam != "" {
+		hash, err := hex.DecodeString(c.MrSeam)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decode hash: %w", err)
+		}
+		if len(hash) != sha512.Size384 {
+			return nil, nil, fmt.Errorf("malformed sha384 hash length: (is: %v, expected: %v)", len(hash), sha512.Size384)
+		}
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "TDX-Module",
+			Index:       INDEX_MRSEAM,
+			Sha384:      hash[:],
+			Description: fmt.Sprintf("MRSEAM: TDX Module Measurement: SEAMLDR Measurement: TDX-Module"),
+		})
+		mrseam = hash[:]
+	} else {
+		return nil, nil, fmt.Errorf("tdx-module or mrseam must be specified for MRSEAM")
+	}
+
+	// Create MRSEAM final reference value
+	mrseamSummary := &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "MRSEAM Summary",
+		Description: "MRSEAM",
+		Index:       INDEX_MRSEAM,
+		Sha384:      mrseam,
+	}
+
+	return mrseamSummary, refvals, nil
+}
+
+/**
  * Calculates the TDX Build-Time Measurement Register (MRTD)
  *
  * The MRTD contains the digest of the OVMF as hashed by the Intel TDX module.
@@ -265,7 +324,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			}
 		}
 	} else {
-		log.Warnf("No kernel specified. Omitting kernel")
+		return nil, nil, fmt.Errorf("kernel must be specified for RTMR1")
 	}
 
 	// EV_EFI_ACTION
