@@ -32,6 +32,7 @@ type server struct {
 	addr  string
 	db    *Db
 	token []byte
+	debug bool
 }
 
 func newServer(c *config) server {
@@ -52,6 +53,7 @@ func newServer(c *config) server {
 		addr:  c.Addr,
 		db:    db,
 		token: token,
+		debug: c.Debug,
 	}
 }
 
@@ -90,7 +92,15 @@ func (s *server) handleGetDevices(c *gin.Context) {
 func (s *server) serve() {
 	defer s.db.Close()
 
+	if s.debug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	router := gin.Default()
+
+	router.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{"*"},

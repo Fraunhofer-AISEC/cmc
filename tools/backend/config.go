@@ -35,6 +35,7 @@ type config struct {
 	MaxRows          int    `json:"maxRows"`
 	MaxRowsPerProver int    `json:"maxRowsPerProver"`
 	Token            string `json:"token"`
+	Debug            bool   `json:"debug"`
 }
 
 const (
@@ -45,6 +46,7 @@ const (
 	maxRowsFlag          = "maxrows"
 	maxRowsPerProverFlag = "maxrowsperprover"
 	tokenFlag            = "token"
+	debugFlag            = "debug"
 )
 
 var (
@@ -70,6 +72,7 @@ func getConfig() (*config, error) {
 	maxRows := flag.Int(maxRowsFlag, 0, "Maximum number of results which can be stored in the database (default: 100)")
 	maxRowsPerProver := flag.Int(maxRowsPerProverFlag, 0, "Maximum number of results which can be stored in the database (default: 100)")
 	token := flag.String(tokenFlag, "", "Optional HTTP authorization token")
+	debug := flag.Bool(debugFlag, false, "Set this to true to activate GIN debug mode")
 	flag.Parse()
 
 	// Create default configuration
@@ -79,6 +82,7 @@ func getConfig() (*config, error) {
 		LogLevel:         "trace",
 		MaxRows:          400,
 		MaxRowsPerProver: 20,
+		Debug:            false,
 	}
 
 	// Obtain custom configuration from file if specified
@@ -112,6 +116,9 @@ func getConfig() (*config, error) {
 	}
 	if flagPassed(tokenFlag) {
 		c.Token = *token
+	}
+	if flagPassed(debugFlag) {
+		c.Debug = *debug
 	}
 
 	// Configure the logger
@@ -153,6 +160,7 @@ func printConfig(c *config) {
 	log.Debugf("\tMaximum Entries           : %v", c.MaxRows)
 	log.Debugf("\tMaximum Entries per Prover: %v", c.MaxRowsPerProver)
 	log.Debugf("\tToken                     : %v", c.Token)
+	log.Debugf("\tGIN Debug                 : %v", c.Debug)
 }
 
 func flagPassed(name string) bool {
