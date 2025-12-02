@@ -20,11 +20,13 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -49,21 +51,47 @@ func GetCcMeasurement(nonce []byte, akchain []*x509.Certificate) (ar.Measurement
 		return ar.Measurement{}, fmt.Errorf("failed to update azure user data")
 	}
 
-	data, err := GetAzureReport()
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get azure report: %w", err)
+	var reportType verifier.AzureReportType
+	var reportRaw []byte
+	var rtdataRaw []byte
+	success := false
+	for i := 0; i < 3; i++ {
+
+		data, err := GetAzureReport()
+		if err != nil {
+			return ar.Measurement{}, fmt.Errorf("failed to get azure report: %w", err)
+		}
+
+		reportRaw, rtdataRaw, err = DecodeAzureReport(data)
+		if err != nil {
+			return ar.Measurement{}, fmt.Errorf("failed to decode azure report: %w", err)
+		}
+
+		rtdata, claims, err := verifier.DecodeAzureRtData(rtdataRaw)
+		if err != nil {
+			return ar.Measurement{}, fmt.Errorf("failed to decode runtime data: %w", err)
+		}
+		reportType = verifier.AzureReportType(rtdata.ReportType)
+
+		userData, err := hex.DecodeString(claims.UserData)
+		if err != nil {
+			return ar.Measurement{}, fmt.Errorf("failed to decode user data: %w", err)
+		}
+		fullNonce := make([]byte, 64)
+		copy(fullNonce, nonce)
+		if bytes.Equal(userData, fullNonce) {
+			success = true
+			break
+		}
+		// Sometimes, the nonce written to the NVindex is not effective immediately
+		log.Warnf("Nonce does not match NVIndex nonce (%x vs. %x). Trying again...",
+			userData, fullNonce)
+		time.Sleep(3 * time.Second)
 	}
 
-	reportRaw, rtdataRaw, err := DecodeAzureReport(data)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode azure report: %w", err)
+	if !success {
+		return ar.Measurement{}, fmt.Errorf("failed to create report nonce specified via NVIndex")
 	}
-
-	rtdata, _, err := verifier.DecodeAzureRtData(rtdataRaw)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode runtime data: %w", err)
-	}
-	reportType := verifier.AzureReportType(rtdata.ReportType)
 
 	switch reportType {
 	case verifier.SnpReport:
@@ -83,17 +111,13 @@ func GetCcMeasurement(nonce []byte, akchain []*x509.Certificate) (ar.Measurement
 
 func UpdateAzureUserData(nonce []byte) error {
 
-	if nonce == nil {
-		log.Debug("Omit updating azure user data as nonce was not provided")
-		return nil
-	}
 	if len(nonce) > 32 {
 		return fmt.Errorf("nonce length %v exceeds maximum length (32 bytes)", len(nonce))
 	}
 	fullNonce := make([]byte, 64)
 	copy(fullNonce, nonce)
 
-	log.Debugf("Updating azure user data via NV index 0x%x", nvIndexTdUserData)
+	log.Debugf("Updating azure user data via NV index 0x%x: %x", nvIndexTdUserData, nonce)
 
 	rwc, err := OpenTpm()
 	if err != nil {
@@ -138,7 +162,17 @@ func UpdateAzureUserData(nonce []byte) error {
 		return fmt.Errorf("NVWrite failed: %w", err)
 	}
 
-	log.Debugf("Successfully updated azure user data at NV index 0x%x", nvIndexTdUserData)
+	// Read back NV index to ensure update was effective
+	retNonce, err := GetAzureUserData()
+	if err != nil {
+		return fmt.Errorf("failed to read back azure user data: %w", err)
+	}
+
+	if !bytes.Equal(retNonce, fullNonce[:32]) {
+		return fmt.Errorf("read back nonce does not match set nonce (%x vs. %x)", retNonce, fullNonce[:32])
+	}
+
+	log.Debugf("Successfully updated azure user data at NV index 0x%x to %x", nvIndexTdUserData, retNonce)
 
 	return nil
 }

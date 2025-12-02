@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/sirupsen/logrus"
 )
@@ -281,16 +283,17 @@ func fetchSnpAk(c *ar.DriverConfig, data []byte) ([]*x509.Certificate, error) {
 	}
 
 	var akCert *x509.Certificate
-	if akType == internal.VCEK {
+	switch akType {
+	case internal.VCEK:
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
 		akCert, err = c.Provisioner.GetSnpVcek(s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
-	} else if akType == internal.VLEK {
+	case internal.VLEK:
 		return nil, fmt.Errorf("VLEK is currently not supported for Azure")
-	} else {
+	default:
 		return nil, fmt.Errorf("internal error: signing cert not initialized")
 	}
 
@@ -327,8 +330,30 @@ func (azure *Azure) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) (*x5
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
+	// Use Subject Key Identifier (SKI) as nonce for attestation report
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CSR public key: %v", err)
+	}
+	nonce := sha1.Sum(pubKey)
+	log.Tracef("Created nonce from IK public: %x", nonce)
+
+	// Fetch attestation report as part of client authentication
+	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{azure}, c.Serializer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+	}
+	r, err := c.Serializer.Marshal(report)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+	}
+	signedReport, err := prover.Sign(r, azure, c.Serializer, ar.IK)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
+	}
+
 	// Request IK certificate from EST server
-	cert, err := c.Provisioner.SimpleEnroll(csr)
+	cert, err := c.Provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

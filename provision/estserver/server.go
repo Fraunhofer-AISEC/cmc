@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -710,6 +711,13 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	result := verifier.Verify(report, nonce[:], csr.PublicKey,
 		nil, verifier.PolicyEngineSelect_None, false,
 		cas, internal.ConvertToMap(metadata))
+
+	log.Debug("Publishing result...")
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
+	defer wg.Wait()
+	go pub.PublishResultAsync(publishAddr, publishToken, publishFile, result, wg)
+
 	switch result.Summary.Status {
 	case ar.StatusFail:
 		result.PrintErr()
@@ -720,8 +728,6 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	default:
 		log.Debugf("Successfully verified attestation report")
 	}
-
-	go pub.PublishResult(publishAddr, publishToken, publishFile, result)
 
 	return nil
 }
