@@ -18,6 +18,7 @@ package precomputetdx
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,6 +40,69 @@ const (
 )
 
 /**
+ * Calculates the TDX Build-Time Measurement Register (MRTD)
+ *
+ * The MRTD contains the digest of the OVMF as hashed by the Intel TDX module.
+ */
+func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+	log.Debugf("Precomputing MRTD...")
+
+	mrtd := make([]byte, sha512.Size384)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	if c.Ovmf != "" {
+		data, err := os.ReadFile(c.Ovmf)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read ovmf: %w", err)
+		}
+
+		hash, err := MeasureOvmf(data, c.QemuVersion)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
+		}
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "OVMF",
+			Index:       INDEX_MRTD,
+			Sha384:      hash[:],
+			Description: fmt.Sprintf("MRTD: TDX Module Measurement: Initial TD contents (OVMF)"),
+		})
+		mrtd = hash[:]
+	} else if c.Mrtd != "" {
+		hash, err := hex.DecodeString(c.Mrtd)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decode hash: %w", err)
+		}
+		if len(hash) != sha512.Size384 {
+			return nil, nil, fmt.Errorf("malformed sha384 hash length: (is: %v, expected: %v)", len(hash), sha512.Size384)
+		}
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "OVMF",
+			Index:       INDEX_MRTD,
+			Sha384:      hash[:],
+			Description: fmt.Sprintf("MRTD: TDX Module Measurement: Initial TD contents (firmware)"),
+		})
+		mrtd = hash[:]
+	} else {
+		return nil, nil, fmt.Errorf("ovmf or mrtd must be specified for MRTD")
+	}
+
+	// Create MRTD final reference value
+	mrtdSummary := &ar.ReferenceValue{
+		Type:        "TDX Reference Value",
+		SubType:     "MRTD Summary",
+		Description: "MRTD",
+		Index:       INDEX_MRTD,
+		Sha384:      mrtd,
+	}
+
+	return mrtdSummary, refvals, nil
+}
+
+/**
  * Calculates RTMR0
  *
  * RTMR0 contains the following artifacts:
@@ -49,7 +113,6 @@ const (
  * - EFI Boot variables
  */
 func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
-
 	log.Debugf("Precomputing RTMR0...")
 
 	rtmr := make([]byte, sha512.Size384)
@@ -155,7 +218,6 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
  * RTMR1 contains the Linux kernel PE/COFF image measurement as well as some boot strings.
  */
 func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
-
 	log.Debugf("Precomputing RTMR1...")
 
 	rtmr := make([]byte, 48)
