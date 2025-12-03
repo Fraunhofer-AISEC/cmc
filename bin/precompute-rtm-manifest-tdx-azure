@@ -20,6 +20,8 @@ if [[ ! -d "${artifacts}" ]]; then
   exit 1
 fi
 
+echo "Using artifacts directory ${artifacts}..."
+
 efi_shim="${artifacts}/shimx64.efi"
 cmdline="${artifacts}/cmdline"
 kernel="${artifacts}/vmlinuz"
@@ -27,12 +29,13 @@ gpt="${artifacts}/ev_efi_gpt_event"
 efivars="${artifacts}/efivars"
 system_uuid="${artifacts}/system_uuid"
 
-boot0000="${efivars}/Boot0000-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 secure_boot="${efivars}/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 pk="${efivars}/PK-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 kek="${efivars}/KEK-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 db="${efivars}/db-d719b2cb-3d3a-4596-a3bc-dad00e67656f"
 dbx="${efivars}/dbx-d719b2cb-3d3a-4596-a3bc-dad00e67656f"
+
+bootorder_file="${efivars}/BootOrder-8be4df61-93ca-11d2-aa0d-00e098032b8c"
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
@@ -83,6 +86,30 @@ set -e
 mrowner="000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 xfam="e702060000000000"
 
+echo "Fetching efi boot vars from ${bootorder_file}..."
+hex=$(xxd -p "${bootorder_file}" | tr -d '\n' | cut -c9-)
+ids=()
+while [[ ${#hex} -ge 4 ]]; do
+    lo=${hex:0:2}
+    hi=${hex:2:2}
+    # LE 16-bit → decimal ID
+    id_hex="${hi}${lo}"
+    id_dec=$(( 0x$id_hex ))
+    ids+=( "${id_dec}" )
+    hex=${hex:4}
+done
+echo "Fetched BootOrder: ${ids[@]}"
+
+bootorder_arg=$(printf "%s," "${ids[@]}")
+bootorder_arg=${bootorder_arg%,}
+bootargs=()
+for n in "${ids[@]}"; do
+    bootargs+=( "--bootxxxx" "${efivars}/Boot$(printf '%04X' "$n")-8be4df61-93ca-11d2-aa0d-00e098032b8c" )
+done
+echo "Fetched Boot### variables: ${bootargs[@]}"
+
+echo "Calculating vTPM reference values"
+
 pcrs=1,2,3,4,5,6,7
 
 set +e
@@ -95,8 +122,8 @@ refs_tpm=$(calculate-srtm-pcrs \
         --cmdline "${cmdline}" \
         --gpt "${gpt}" \
         --format json \
-        --bootorder 0 \
-        --bootxxxx "${boot0000}" \
+        --bootorder "${bootorder_arg}" \
+        "${bootargs[@]}" \
         --secureboot "${secure_boot}" \
         --pk "${pk}" \
         --kek "${kek}" \
