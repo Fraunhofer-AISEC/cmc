@@ -21,14 +21,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Fraunhofer-AISEC/cmc/provision"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	oci "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
 // The attestation report version
 const (
-	arVersion = "1.5.0"
+	arVersion = "1.6.0"
 )
 
 func GetVersion() string {
@@ -247,17 +247,24 @@ type SnpFw struct {
 }
 
 type SnpTcb struct {
-	Bl    uint8 `json:"bl" cbor:"0,keyasint"`
-	Tee   uint8 `json:"tee" cbor:"1,keyasint"`
-	Snp   uint8 `json:"snp" cbor:"2,keyasint"`
-	Ucode uint8 `json:"ucode" cbor:"3,keyasint"`
+	Fmc   uint8 `json:"fmc" cbor:"0,keyasint"`
+	Bl    uint8 `json:"bl" cbor:"1,keyasint"`
+	Tee   uint8 `json:"tee" cbor:"2,keyasint"`
+	Snp   uint8 `json:"snp" cbor:"3,keyasint"`
+	Ucode uint8 `json:"ucode" cbor:"4,keyasint"`
+}
+
+type SnpVersion struct {
+	Name string `json:"name" cbor:"0,keyasint"`
+	Fw   SnpFw  `json:"fw" cbor:"1,keyasint"`
+	Tcb  SnpTcb `json:"tcb" cbor:"2,keyasint"`
 }
 
 type SnpPolicy struct {
-	ReportVersion uint32         `json:"reportVersion" cbor:"0,keyasint"`
-	GuestPolicy   SnpGuestPolicy `json:"policy" cbor:"1,keyasint"`
-	Fw            SnpFw          `json:"fw" cbor:"2,keyasint"`
-	Tcb           SnpTcb         `json:"tcb" cbor:"3,keyasint"`
+	ReportMinVersion uint32         `json:"reportMinVersion" cbor:"0,keyasint"`
+	ReportMaxVersion uint32         `json:"reportMaxVersion" cbor:"1,keyasint"`
+	GuestPolicy      SnpGuestPolicy `json:"policy" cbor:"2,keyasint"`
+	VersionPolicy    []SnpVersion   `json:"versions" cbor:"3,keyasint"`
 }
 
 // RtMrHashChainElem represents the attestation report
@@ -388,8 +395,8 @@ type DriverConfig struct {
 	EstTlsCas        []*x509.Certificate
 	UseSystemRootCas bool
 	Vmpl             int
-	ProvisionAuth    provision.AuthMethod
-	Provisioner      provision.Provisioner
+	ProvisionAuth    internal.AuthMethod
+	Provisioner      Provisioner
 }
 
 type KeySelection int
@@ -419,4 +426,25 @@ func (report *AttestationReport) CheckVersion() error {
 		return fmt.Errorf("API version mismatch. Expected AttestationReport version %v, got %v", arVersion, report.Version)
 	}
 	return nil
+}
+
+func GetSnpTcb(codeName string, tcb uint64) SnpTcb {
+	if strings.EqualFold(codeName, "Milan") || strings.EqualFold(codeName, "Genoa") {
+		return SnpTcb{
+			Fmc:   0,
+			Bl:    uint8(tcb & 0xFF),
+			Tee:   uint8((tcb >> 8) & 0xFF),
+			Snp:   uint8((tcb >> 48) & 0xFF),
+			Ucode: uint8((tcb >> 56) & 0xFF),
+		}
+
+	} else { // Turin
+		return SnpTcb{
+			Fmc:   uint8(tcb & 0xFF),
+			Bl:    uint8((tcb >> 8) & 0xFF),
+			Tee:   uint8((tcb >> 16) & 0xFF),
+			Snp:   uint8((tcb >> 24) & 0xFF),
+			Ucode: uint8((tcb >> 56) & 0xFF),
+		}
+	}
 }

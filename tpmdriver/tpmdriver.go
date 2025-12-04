@@ -44,7 +44,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
 )
 
 // Tpm is a structure that implements the Measure method
@@ -737,7 +736,7 @@ func (t *Tpm) provisionIk(c *ar.DriverConfig) (*x509.Certificate, error) {
 	// Fetch attestation report as part of client authentication if configured
 	var report []byte
 	var metadata [][]byte
-	if c.ProvisionAuth.Has(provision.AuthAttestation) {
+	if c.ProvisionAuth.Has(internal.AuthAttestation) {
 		r, m, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{t}, c.Serializer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate attestation report: %w", err)

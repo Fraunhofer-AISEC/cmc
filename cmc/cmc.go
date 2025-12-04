@@ -26,7 +26,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/provision/selfsigned"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -110,16 +109,16 @@ func NewCmc(c *Config) (*Cmc, error) {
 			return nil, fmt.Errorf("failed to get signed device config: %v", err)
 		}
 
-		authMethods, err := provision.ParseAuthMethods(c.ProvisionAuth)
+		authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 		}
 
-		var provisioner provision.Provisioner
+		var provisioner ar.Provisioner
 		switch c.ProvisionMode {
 		case "est":
 			var token []byte
-			if authMethods.Has(provision.AuthToken) {
+			if authMethods.Has(internal.AuthToken) {
 				token, err = os.ReadFile(c.ProvisionToken)
 				if err != nil {
 					return nil, fmt.Errorf("failed to read token: %v", err)
