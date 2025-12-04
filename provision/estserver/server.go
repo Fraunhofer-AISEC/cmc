@@ -50,7 +50,7 @@ type Server struct {
 	metadataCas  []*x509.Certificate
 	snpConf      *provision.SnpConfig
 	tpmConf      provision.TpmConfig
-	authMethods  provision.AuthMethod
+	authMethods  internal.AuthMethod
 	tokenPath    string
 	publishAddr  string
 	publishFile  string
@@ -81,7 +81,7 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	// The client does authenticate itself via a certificate if configured
-	if c.authMethods.Has(provision.AuthCertificate) {
+	if c.authMethods.Has(internal.AuthCertificate) {
 		log.Debugf("Enforcing client authentication via certificate")
 		clientRoots := x509.NewCertPool()
 		for _, ca := range c.ClientTlsCas {
@@ -195,7 +195,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(provision.AuthToken) {
+	if s.authMethods.Has(internal.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -250,7 +250,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if s.authMethods.Has(provision.AuthToken) {
+	if s.authMethods.Has(internal.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -366,7 +366,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if s.authMethods.Has(provision.AuthToken) {
+	if s.authMethods.Has(internal.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -421,7 +421,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 
 	// Verify attestation report if authentication method attestation is activated
-	if s.authMethods.Has(provision.AuthAttestation) {
+	if s.authMethods.Has(internal.AuthAttestation) {
 		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
 		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile, s.publishToken)
 		if err != nil {
@@ -459,7 +459,7 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(provision.AuthToken) {
+	if s.authMethods.Has(internal.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -485,7 +485,7 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Verify attestation report if authentication method attestation is activated
-	if s.authMethods.Has(provision.AuthAttestation) {
+	if s.authMethods.Has(internal.AuthAttestation) {
 		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
@@ -524,7 +524,7 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(provision.AuthToken) {
+	if s.authMethods.Has(internal.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -533,12 +533,14 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 
 	var chipId []byte
 	var tcb uint64
+	var codeName string
 
 	_, err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: &chipId},
 			{ContentType: est.MimeTypeOctetStream, Data: &tcb},
+			{ContentType: est.MimeTypeOctetStream, Data: &codeName},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -547,7 +549,7 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vcek, err := s.snpConf.GetVcek(chipId, tcb)
+	vcek, err := s.snpConf.GetVcek(codeName, chipId, tcb)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return
@@ -576,7 +578,7 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(provision.AuthToken) {
+	if s.authMethods.Has(internal.AuthToken) {
 		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
 			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
 			return
@@ -584,11 +586,13 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var akTypeRaw []byte
+	var codeName string
 
 	_, err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: &akTypeRaw},
+			{ContentType: est.MimeTypeOctetStream, Data: &codeName},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -599,7 +603,9 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 
 	akType := internal.AkType(akTypeRaw[0])
 
-	ca, err := s.snpConf.GetSnpCa(akType)
+	log.Debugf("Get SNP CA for %q, ak type %d", codeName, akType)
+
+	ca, err := s.snpConf.GetSnpCa(codeName, akType)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return

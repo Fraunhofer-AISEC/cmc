@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/maps"
 )
@@ -68,7 +67,7 @@ type config struct {
 	tlsKey      *ecdsa.PrivateKey
 	tlsCaChain  []*x509.Certificate
 	metadataCas []*x509.Certificate
-	authMethods provision.AuthMethod
+	authMethods internal.AuthMethod
 }
 
 const (
@@ -249,7 +248,7 @@ func getConfig() (*config, error) {
 		log.Warn("UNSAFE: Verification of EK certificate chain turned off via config")
 	}
 
-	c.authMethods, err = provision.ParseAuthMethods(c.AuthMethods)
+	c.authMethods, err = internal.ParseAuthMethods(c.AuthMethods)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}

@@ -25,50 +25,54 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type snpreport struct {
-	// Table 23 @ https://www.amd.com/system/files/TechDocs/56860.pdf
-	Version         uint32
-	GuestSvn        uint32
-	Policy          uint64
-	FamilyId        [16]byte
-	ImageId         [16]byte
-	Vmpl            uint32
-	SignatureAlgo   uint32
-	CurrentTcb      uint64 // platform_version
-	PlatformInfo    uint64
-	KeySelection    uint32
-	Reserved1       uint32
-	ReportData      [64]byte
-	Measurement     [48]byte
-	HostData        [32]byte
-	IdKeyDigest     [48]byte
-	AuthorKeyDigest [48]byte
-	ReportId        [32]byte
-	ReportIdMa      [32]byte
-	ReportedTcb     uint64
-	Reserved2       [24]byte
-	ChipId          [64]byte
-	//Reserved3 [192]byte
-	CommittedTcb   uint64
-	CurrentBuild   uint8
-	CurrentMinor   uint8
-	CurrentMajor   uint8
-	Reserved3a     uint8
-	CommittedBuild uint8
-	CommittedMinor uint8
-	CommittedMajor uint8
-	Reserved3b     uint8
-	LaunchTcb      uint64
-	Reserved3c     [168]byte
-	// Table 119 @ https://www.amd.com/system/files/TechDocs/56860.pdf
-	SignatureR [72]byte
-	SignatureS [72]byte
-	Reserved4  [368]byte
+	// Table 23 @ https://www.amd.com/content/dam/amd/en/documents/developer/56860.pdf
+	Version         uint32    // 000h
+	GuestSvn        uint32    // 004h
+	Policy          uint64    // 008h
+	FamilyId        [16]byte  // 010h
+	ImageId         [16]byte  // 020h
+	Vmpl            uint32    // 030h
+	SignatureAlgo   uint32    // 034h
+	CurrentTcb      uint64    // 038h, platform_version
+	PlatformInfo    uint64    // 040h
+	KeySelection    uint32    // 048h
+	Reserved1       uint32    // 04Ch
+	ReportData      [64]byte  // 040h
+	Measurement     [48]byte  // 090h
+	HostData        [32]byte  // 0C0h
+	IdKeyDigest     [48]byte  // 0E0h
+	AuthorKeyDigest [48]byte  // 110h
+	ReportId        [32]byte  // 140h
+	ReportIdMa      [32]byte  // 160h
+	ReportedTcb     uint64    // 180h
+	CpuFamilyId     uint8     // 188h (Only Report Version >= 3)
+	CpuModelId      uint8     // 189h (Only Report Version >= 3)
+	CpuStepping     uint8     // 18Ah (Only Report Version >= 3)
+	Reserved2       [21]byte  // 18bh (Offset 188h, Length 24 for Report Version < 3)
+	ChipId          [64]byte  // 1A0h
+	CommittedTcb    uint64    // 1E0h
+	CurrentBuild    uint8     // 1E8h
+	CurrentMinor    uint8     // 1E9h
+	CurrentMajor    uint8     // 1EAh
+	Reserved3a      uint8     // 1EBh
+	CommittedBuild  uint8     // 1ECh
+	CommittedMinor  uint8     // 1EDh
+	CommittedMajor  uint8     // 1EEh
+	Reserved3b      uint8     // 1EFh
+	LaunchTcb       uint64    // 1F0h
+	LaunchMitVector uint64    // 1F8h (Only Report Version >= 5)
+	CurrMitVector   uint64    // 200h (Only Report Version >= 5)
+	Reserved3c      [152]byte // 208h (Offset 1F8h, Length 168 for Report Version < 5)
+	SignatureR      [72]byte  // 2A0h
+	SignatureS      [72]byte
+	Reserved4       [368]byte
 }
 
 const (
@@ -90,6 +94,21 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		SnpResult: &ar.SnpResult{},
 	}
 	ok := true
+
+	// Extract the SNP attestation report data structure
+	s, err := DecodeSnpReport(measurement.Evidence)
+	if err != nil {
+		log.Debugf("Failed to decode SNP report: %v", err)
+		result.Summary.Fail(ar.ParseEvidence)
+		return result, false
+	}
+
+	certs, err := internal.ParseCertsDer(measurement.Certs)
+	if err != nil {
+		log.Debugf("Failed to parse certificates: %v", err)
+		result.Summary.Fail(ar.ParseCert)
+		return result, false
+	}
 
 	if len(referenceValues) == 0 {
 		log.Debug("Could not find SNP Reference Value")
@@ -115,18 +134,17 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		return result, false
 	}
 
-	snpPolicy := rootManifest.SnpPolicy
-	if snpPolicy == nil {
+	if rootManifest.SnpPolicy == nil {
 		log.Debugf("SNP manifest %v does not contain SNP policy", rootManifest.Name)
 		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
 
-	// Extract the SNP attestation report data structure
-	s, err := DecodeSnpReport(measurement.Evidence)
+	// Determine AMD EPYC CPU generation and fetch corresponding version policy
+	versionPolicy, codeName, err := getSnpVersionPolicy(&s, certs[0], rootManifest.SnpPolicy)
 	if err != nil {
-		log.Debugf("Failed to decode SNP report: %v", err)
-		result.Summary.Fail(ar.ParseEvidence)
+		log.Debugf("SNP manifest %v does not contain SNP policy: %v", rootManifest.Name, err)
+		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
 
@@ -143,13 +161,6 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	} else {
 		result.Freshness.Got = hex.EncodeToString(nonce)
 		result.Freshness.Status = ar.StatusSuccess
-	}
-
-	certs, err := internal.ParseCertsDer(measurement.Certs)
-	if err != nil {
-		log.Debugf("Failed to parse certificates: %v", err)
-		result.Summary.Fail(ar.ParseCert)
-		return result, false
 	}
 
 	// Verify Signature, created with SNP VCEK private key
@@ -194,27 +205,28 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	}
 
 	// Verify the SNP report version
-	result.SnpResult.VersionMatch, ret = verifySnpVersion(snpPolicy.ReportVersion, s.Version)
+	result.SnpResult.VersionMatch, ret = verifySnpVersion(rootManifest.SnpPolicy.ReportMinVersion,
+		rootManifest.SnpPolicy.ReportMaxVersion, s.Version)
 	if !ret {
 		ok = false
 	}
 	// Verify SNP VM configuration
-	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, snpPolicy.GuestPolicy)
+	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, rootManifest.SnpPolicy.GuestPolicy)
 	if !ret {
 		ok = false
 	}
 	// Verify the SNP firmware version
-	result.SnpResult.FwCheck, ret = verifySnpFw(s, snpPolicy.Fw)
+	result.SnpResult.FwCheck, ret = verifySnpFw(s, versionPolicy.Fw)
 	if !ret {
 		ok = false
 	}
 	// Verify the SNP TCB against the specified minimum versions
-	result.SnpResult.TcbCheck, ret = verifySnpTcb(s, snpPolicy.Tcb)
+	result.SnpResult.TcbCheck, ret = verifySnpTcb(codeName, s, versionPolicy.Tcb)
 	if !ret {
 		ok = false
 	}
 	// Examine SNP x509 extensions
-	result.SnpResult.ExtensionsCheck, ret = verifySnpExtensions(certs[0], &s)
+	result.SnpResult.ExtensionsCheck, ret = verifySnpExtensions(codeName, certs[0], &s)
 	if !ret {
 		ok = false
 	}
@@ -224,13 +236,16 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	return result, ok
 }
 
-func verifySnpVersion(expected, got uint32) (ar.Result, bool) {
+func verifySnpVersion(min, max, got uint32) (ar.Result, bool) {
 	r := ar.Result{}
-	ok := expected == got
+	ok := (got >= min && got <= max)
 	if !ok {
-		log.Debugf("SNP report version mismatch: Report = %v, reference = %v", got, expected)
+		log.Debugf("SNP report version mismatch: Report = %v, min = %v, max = %v", got, min, max)
 		r.Status = ar.StatusFail
-		r.Expected = strconv.FormatUint(uint64(expected), 10)
+		r.ExpectedBetween = []string{
+			strconv.FormatUint(uint64(min), 10),
+			strconv.FormatUint(uint64(max), 10),
+		}
 		r.Got = strconv.FormatUint(uint64(got), 10)
 	} else {
 		r.Status = ar.StatusSuccess
@@ -310,34 +325,34 @@ func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
 	return r, ok
 }
 
-func verifySnpTcb(s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
+func verifySnpTcb(codeName string, s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
 
-	// TODO refactor into function and use it also in
-	// extension function
-	currBl := uint8(s.CurrentTcb & 0xFF)
-	commBl := uint8(s.CommittedTcb & 0xFF)
-	launBl := uint8(s.LaunchTcb & 0xFF)
-	repoBl := uint8(s.ReportedTcb & 0xFF)
-	currTee := uint8((s.CurrentTcb >> 8) & 0xFF)
-	commTee := uint8((s.CommittedTcb >> 8) & 0xFF)
-	launTee := uint8((s.LaunchTcb >> 8) & 0xFF)
-	repoTee := uint8((s.ReportedTcb >> 8) & 0xFF)
-	currSnp := uint8((s.CurrentTcb >> 48) & 0xFF)
-	commSnp := uint8((s.CommittedTcb >> 48) & 0xFF)
-	launSnp := uint8((s.LaunchTcb >> 48) & 0xFF)
-	repoSnp := uint8((s.ReportedTcb >> 48) & 0xFF)
-	currUcode := uint8((s.CurrentTcb >> 56) & 0xFF)
-	commUcode := uint8((s.CommittedTcb >> 56) & 0xFF)
-	launUcode := uint8((s.LaunchTcb >> 56) & 0xFF)
-	repoUcode := uint8((s.ReportedTcb >> 56) & 0xFF)
+	log.Tracef("Verifying %q TCB", codeName)
 
-	bl := min([]uint8{currBl, commBl, launBl, repoBl})
-	tee := min([]uint8{currTee, commTee, launTee, repoTee})
-	snp := min([]uint8{currSnp, commSnp, launSnp, repoSnp})
-	ucode := min([]uint8{currUcode, commUcode, launUcode, repoUcode})
+	curr := ar.GetSnpTcb(codeName, s.CurrentTcb)
+	comm := ar.GetSnpTcb(codeName, s.CommittedTcb)
+	laun := ar.GetSnpTcb(codeName, s.LaunchTcb)
+	repo := ar.GetSnpTcb(codeName, s.ReportedTcb)
+
+	fmc := min([]uint8{curr.Fmc, comm.Fmc, laun.Fmc, repo.Fmc})
+	bl := min([]uint8{curr.Bl, comm.Bl, laun.Bl, repo.Bl})
+	tee := min([]uint8{curr.Tee, comm.Tee, laun.Tee, repo.Tee})
+	snp := min([]uint8{curr.Snp, comm.Snp, laun.Snp, repo.Snp})
+	ucode := min([]uint8{curr.Ucode, comm.Ucode, laun.Ucode, repo.Ucode})
+
+	log.Tracef("Using minimum report TCB: FMC %v, BL %v, TEE %v, SNP %v, UCode %v",
+		fmc, bl, tee, snp, ucode)
+
+	log.Tracef("Verifiying against TCB: FMC %v, BL %v, TEE %v, SNP %v, UCode %v",
+		v.Fmc, v.Bl, v.Tee, v.Snp, v.Ucode)
 
 	// Convert to int, as json.Marshal otherwise interprets the values as strings
 	r := ar.TcbCheck{
+		Fmc: ar.VersionCheck{
+			Success:  fmc >= v.Fmc,
+			Claimed:  []int{int(v.Fmc)},
+			Measured: []int{int(fmc)},
+		},
 		Bl: ar.VersionCheck{
 			Success:  bl >= v.Bl,
 			Claimed:  []int{int(v.Bl)},
@@ -457,16 +472,21 @@ func verifySnpSignature(
 }
 
 const (
-	oidBl     = "1.3.6.1.4.1.3704.1.3.1"
-	oidTee    = "1.3.6.1.4.1.3704.1.3.2"
-	oidSnp    = "1.3.6.1.4.1.3704.1.3.3"
-	oidUcode  = "1.3.6.1.4.1.3704.1.3.8"
-	oidChipId = "1.3.6.1.4.1.3704.1.4"
-	oidCspId  = "1.3.6.1.4.1.3704.1.5"
+	structVersion = "1.3.6.1.4.1.3704.1.1"
+	productName   = "1.3.6.1.4.1.3704.1.2"
+	oidFmc        = "1.3.6.1.4.1.3704.1.3.9" // Only structVersion = 1 (Turin)
+	oidBl         = "1.3.6.1.4.1.3704.1.3.1"
+	oidTee        = "1.3.6.1.4.1.3704.1.3.2"
+	oidSnp        = "1.3.6.1.4.1.3704.1.3.3"
+	oidUcode      = "1.3.6.1.4.1.3704.1.3.8"
+	oidChipId     = "1.3.6.1.4.1.3704.1.4"
+	oidCspId      = "1.3.6.1.4.1.3704.1.5" // Only VLEK
 )
 
 func oidDesc(oid string) string {
 	switch oid {
+	case oidFmc:
+		return "OID FMC SPL"
 	case oidBl:
 		return "OID BL SPL"
 	case oidTee:
@@ -484,7 +504,7 @@ func oidDesc(oid string) string {
 	}
 }
 
-func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result, bool) {
+func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snpreport) ([]ar.Result, bool) {
 	success := true
 	var ok bool
 	var r ar.Result
@@ -497,46 +517,62 @@ func verifySnpExtensions(cert *x509.Certificate, report *snpreport) ([]ar.Result
 	}
 
 	// The x509 extensions must match the reported TCB
-	tcb := report.ReportedTcb
+	tcb := ar.GetSnpTcb(codeName, report.ReportedTcb)
 
 	results := make([]ar.Result, 0)
 
-	if r, ok = checkExtensionUint8(cert, oidBl, uint8(tcb)); !ok {
+	if codeName == "Turin" {
+		if r, ok = checkExtensionUint8(cert, oidFmc, tcb.Fmc); !ok {
+			log.Debugf("SEV FMC extension check failed")
+			success = false
+		}
+		results = append(results, r)
+	}
+
+	if r, ok = checkExtensionUint8(cert, oidBl, tcb.Bl); !ok {
 		log.Debugf("SEV BL extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, oidTee, uint8(tcb>>8)); !ok {
+	if r, ok = checkExtensionUint8(cert, oidTee, tcb.Tee); !ok {
 		log.Debugf("SEV TEE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, oidSnp, uint8(tcb>>48)); !ok {
+	if r, ok = checkExtensionUint8(cert, oidSnp, tcb.Snp); !ok {
 		log.Debugf("SEV SNP extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, oidUcode, uint8(tcb>>56)); !ok {
+	if r, ok = checkExtensionUint8(cert, oidUcode, tcb.Ucode); !ok {
 		log.Debugf("SEV UCODE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
+	// If the VCEK was used, we must compare the reported Chip ID against the extension Chip ID
 	if akType == internal.VCEK {
-		// If the VCEK was used, we must compare the reported Chip ID against the extension Chip ID
-		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:]); !ok {
+		// For Milan and Genoa, the ChipID is 64 bytes. For Turin and later, it
+		// is 8 bytes
+		log.Debugf("VCEK Issuer CN=%q", cert.Issuer.CommonName)
+		len := 64
+		if strings.Contains(cert.Issuer.CommonName, "Turin") {
+			log.Debug("set chip ID length to 8 for Turin")
+			len = 8
+		}
+		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:len]); !ok {
 			log.Debugf("Chip ID extension check failed")
 			success = false
 		}
 		results = append(results, r)
 	}
 
+	// If the VLEK was used, the CSP extensions must be present
+	// TODO currently we simply accept all CSPs, discuss if we need to match here
 	if akType == internal.VLEK {
-		// If the VLEK was used, the CSP extensions must be present
-		// TODO currently we simply accept all CSPs, discuss if we need to match here
 		csp, ok := getExtensionString(cert, oidCspId)
 		if !ok {
 			log.Debug("CSP ID extension check failed")
@@ -557,6 +593,39 @@ func DecodeSnpReport(report []byte) (snpreport, error) {
 		return snpreport{}, fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 	return s, nil
+}
+
+func GetSnpCodeName(familyId, modelId uint8) string {
+
+	log.Debugf("Get code name for combined family ID 0x%x, combined model id 0x%x",
+		familyId, modelId)
+
+	// Siena/Bergamo use the same root keys as Genoa:
+	// https://www.amd.com/content/dam/amd/en/documents/epyc-technical-docs/specifications/57230.pdf
+	// The expected family is the combined family, which is extendedFamily + baseFamily
+	// The expected model is the combined model, which is (extendedModel << 4) | baseModel
+	switch familyId {
+	case 0x19:
+		switch {
+		case modelId <= 0xF:
+			return "Milan"
+		case modelId >= 0x10 && modelId <= 0x1F:
+			return "Genoa"
+		case modelId >= 0xA0 && modelId <= 0xAF:
+			// Bergamo and Siena also use Genoa PKI
+			return "Genoa"
+		}
+	case 0x1A:
+		if modelId < 0x1F {
+			return "Turin"
+		}
+	default:
+		return "Milan"
+	}
+
+	// Use default Milan (Milan servers do not support these attestation report fields
+	// and are the oldest servers we support)
+	return "Milan"
 }
 
 func min(v []uint8) uint8 {
@@ -585,4 +654,127 @@ func checkMinVersion(version []uint8, ref []uint8) bool {
 		}
 	}
 	return true
+}
+
+func getSnpVersionPolicy(report *snpreport, cert *x509.Certificate, policy *ar.SnpPolicy) (*ar.SnpVersion, string, error) {
+
+	if cert == nil {
+		return nil, "", fmt.Errorf("failed to get versioned SNP policy: certificate is nil")
+	}
+
+	codeName := strings.ToLower(GetSnpCodeName(report.CpuFamilyId, report.CpuModelId))
+	codeNameCert := strings.ToLower(cert.Issuer.CommonName)
+	log.Debugf("EPYC Code Name: %v / %v", codeName, codeNameCert)
+
+	if !strings.Contains(codeNameCert, codeName) {
+		return nil, "", fmt.Errorf("report code name (%v) does not match VCEK code name (%v)", codeName, codeNameCert)
+	}
+
+	// Extract correct policy for AMD EPYC generation
+	for _, version := range policy.VersionPolicy {
+		log.Tracef("Found policy for %v", version.Name)
+		if strings.EqualFold(codeName, version.Name) {
+			log.Tracef("Returning policy for %v", version.Name)
+			return &version, codeName, nil
+		}
+	}
+	return nil, "", fmt.Errorf("failed to find SNP policy for code name %v", codeName)
+}
+
+func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Result, bool) {
+
+	for _, ext := range cert.Extensions {
+
+		if ext.Id.String() == oid {
+			log.Debugf("Found %v, length %v, values %v", oid, len(ext.Value), ext.Value)
+			if len(ext.Value) != 3 && len(ext.Value) != 4 {
+				result := ar.Result{}
+				result.Fail(ar.OidLength, fmt.Errorf("extension %v value unexpected length %v (expected 3 or 4)",
+					oid, len(ext.Value)))
+				return result, false
+			}
+			if ext.Value[0] != 0x2 {
+				result := ar.Result{}
+				result.Fail(ar.OidTag, fmt.Errorf("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
+					oid, ext.Value[0]))
+				return result, false
+			}
+			if ext.Value[1] == 0x1 {
+				if ext.Value[2] != value {
+					log.Debugf("extension %v value[2]: %v does not match expected value %v",
+						oid, ext.Value[2], value)
+					return ar.Result{
+						Status:   ar.StatusFail,
+						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
+						Got:      strconv.FormatUint(uint64(ext.Value[2]), 10),
+					}, false
+				}
+			} else if ext.Value[1] == 0x2 {
+				// Due to openssl, the sign bit must remain zero for positive integers
+				// even though this field is defined as unsigned int in the AMD spec
+				// Thus, if the most significant bit is required, one byte of additional 0x00 padding is added
+				if ext.Value[2] != 0x00 || ext.Value[3] != value {
+					log.Debugf("extension %v value = %v%v does not match expected value  %v",
+						oid, ext.Value[2], ext.Value[3], value)
+					return ar.Result{
+						Status:   ar.StatusFail,
+						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
+						Got:      strconv.FormatUint(uint64(ext.Value[3]), 10),
+					}, false
+				}
+			} else {
+				result := ar.Result{}
+				result.Fail(ar.OidLength, fmt.Errorf(
+					"extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
+					oid, ext.Value[1]))
+				return result, false
+			}
+			return ar.Result{
+				Status: ar.StatusSuccess,
+				Got:    fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
+			}, true
+		}
+	}
+
+	result := ar.Result{}
+	result.Fail(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
+
+	return result, false
+}
+
+func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Result, bool) {
+
+	for _, ext := range cert.Extensions {
+
+		if ext.Id.String() == oid {
+			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
+				log.Debugf("extension %v value %v does not match expected value %v",
+					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
+				return ar.Result{
+					Status:   ar.StatusFail,
+					Expected: fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(buf)),
+					Got:      hex.EncodeToString(ext.Value),
+				}, false
+			}
+			return ar.Result{
+				Status: ar.StatusSuccess,
+				Got:    fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(ext.Value)),
+			}, true
+		}
+	}
+
+	result := ar.Result{}
+	result.Fail(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
+	return result, false
+}
+
+func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
+
+	for _, ext := range cert.Extensions {
+		if ext.Id.String() == oid {
+			return string(ext.Value), true
+		}
+	}
+	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
+	return "", false
 }

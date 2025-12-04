@@ -308,11 +308,12 @@ func (c *Client) CcEnroll(
 	return certs[0], nil
 }
 
-func (c *Client) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
+func (c *Client) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: []byte{byte(akType)}},
+			{ContentType: est.MimeTypeOctetStream, Data: codeName},
 		},
 	)
 	if err != nil {
@@ -346,13 +347,14 @@ func (c *Client) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
-func (c *Client) GetSnpVcek(chipId [64]byte, tcb uint64,
+func (c *Client) GetSnpVcek(codeName string, chipId [64]byte, tcb uint64,
 ) (*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: chipId[:]},
 			{ContentType: est.MimeTypeOctetStream, Data: tcb},
+			{ContentType: est.MimeTypeOctetStream, Data: codeName},
 		},
 	)
 	if err != nil {

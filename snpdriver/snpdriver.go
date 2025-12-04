@@ -35,7 +35,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
@@ -50,7 +49,7 @@ const (
 )
 
 var (
-	vlekUuid = []byte{0xa8, 0x07, 0x4b, 0xc2, 0xa2, 0x5a, 0x48, 0x3e, 0xaa, 0xe6, 0x39, 0xc0, 0x45, 0xa0, 0xb8, 0xa1}
+	VlekUuid = []byte{0xa8, 0x07, 0x4b, 0xc2, 0xa2, 0x5a, 0x48, 0x3e, 0xaa, 0xe6, 0x39, 0xc0, 0x45, 0xa0, 0xb8, 0xa1}
 )
 
 // Snp is a structure required for implementing the Measure method
@@ -203,16 +202,14 @@ func GetMeasurement(nonce []byte, vmpl int) ([]byte, error) {
 	log.Debugf("Generating SNP attestation report on VMPL %v with nonce: %v", vmpl,
 		hex.EncodeToString(nonce))
 
-	d, err := client.OpenDevice()
+	qp, err := client.GetLeveledQuoteProvider()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open /dev/sev-guest")
+		return nil, fmt.Errorf("failed to get quote provider: %w", err)
 	}
-	defer d.Close()
 
 	var ud [64]byte
 	copy(ud[:], nonce)
-	//lint:ignore SA1019 will be updated later
-	buf, err := client.GetRawReportAtVmpl(d, ud, vmpl)
+	buf, err := qp.GetRawQuoteAtLevel(ud, uint(vmpl))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP attestation report")
 	}
@@ -256,7 +253,7 @@ func getVlek(vmpl int) ([]byte, error) {
 
 		log.Debugf("Found cert table entry with UUID %v", hex.EncodeToString(entry.Uuid[:]))
 
-		if bytes.Equal(entry.Uuid[:], vlekUuid) {
+		if bytes.Equal(entry.Uuid[:], VlekUuid) {
 			log.Debugf("Found VLEK offset %v length %v", entry.Offset, entry.Length)
 			return certs[entry.Offset : entry.Offset+entry.Length], nil
 		}
@@ -329,15 +326,22 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
+	log.Debugf("Fetched Chip ID from attestation report: %x", s.ChipId[:])
+
+	codeName := verifier.GetSnpCodeName(s.CpuFamilyId, s.CpuModelId)
+
+	log.Debugf("Fetched EPYC code name from attestation report: %q", codeName)
+
 	var akCert *x509.Certificate
-	if akType == internal.VCEK {
+	switch akType {
+	case internal.VCEK:
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = c.Provisioner.GetSnpVcek(s.ChipId, s.CurrentTcb)
+		akCert, err = c.Provisioner.GetSnpVcek(codeName, s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
-	} else if akType == internal.VLEK {
+	case internal.VLEK:
 		// VLEK is used, in this case we fetch the VLEK from the host
 		vlek, err := getVlek(c.Vmpl)
 		if err != nil {
@@ -349,13 +353,13 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 			return nil, fmt.Errorf("failed to parse VLEK")
 		}
 		log.Debugf("Successfully parsed VLEK CN=%v", akCert.Subject.CommonName)
-	} else {
+	default:
 		return nil, fmt.Errorf("internal error: signing cert not initialized")
 	}
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
 	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := c.Provisioner.GetSnpCa(akType)
+	ca, err := c.Provisioner.GetSnpCa(codeName, akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
@@ -363,7 +367,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	return append([]*x509.Certificate{akCert}, ca...), nil
 }
 
-func (snp *Snp) provisionIk(provisioner provision.Provisioner, priv crypto.PrivateKey, c *ar.DriverConfig,
+func (snp *Snp) provisionIk(provisioner ar.Provisioner, priv crypto.PrivateKey, c *ar.DriverConfig,
 ) (*x509.Certificate, error) {
 
 	// Create IK CSR for authentication

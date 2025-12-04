@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -566,104 +565,6 @@ func collectReferenceValues(metadata []ar.MetadataResult) (map[string][]ar.Refer
 	return refmap, nil
 }
 
-func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Result, bool) {
-
-	for _, ext := range cert.Extensions {
-
-		if ext.Id.String() == oid {
-			log.Debugf("Found %v, length %v, values %v", oid, len(ext.Value), ext.Value)
-			if len(ext.Value) != 3 && len(ext.Value) != 4 {
-				result := ar.Result{}
-				result.Fail(ar.OidLength, fmt.Errorf("extension %v value unexpected length %v (expected 3 or 4)",
-					oid, len(ext.Value)))
-				return result, false
-			}
-			if ext.Value[0] != 0x2 {
-				result := ar.Result{}
-				result.Fail(ar.OidTag, fmt.Errorf("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
-					oid, ext.Value[0]))
-				return result, false
-			}
-			if ext.Value[1] == 0x1 {
-				if ext.Value[2] != value {
-					log.Debugf("extension %v value[2]: %v does not match expected value %v",
-						oid, ext.Value[2], value)
-					return ar.Result{
-						Status:   ar.StatusFail,
-						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
-						Got:      strconv.FormatUint(uint64(ext.Value[2]), 10),
-					}, false
-				}
-			} else if ext.Value[1] == 0x2 {
-				// Due to openssl, the sign bit must remain zero for positive integers
-				// even though this field is defined as unsigned int in the AMD spec
-				// Thus, if the most significant bit is required, one byte of additional 0x00 padding is added
-				if ext.Value[2] != 0x00 || ext.Value[3] != value {
-					log.Debugf("extension %v value = %v%v does not match expected value  %v",
-						oid, ext.Value[2], ext.Value[3], value)
-					return ar.Result{
-						Status:   ar.StatusFail,
-						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
-						Got:      strconv.FormatUint(uint64(ext.Value[3]), 10),
-					}, false
-				}
-			} else {
-				result := ar.Result{}
-				result.Fail(ar.OidLength, fmt.Errorf(
-					"extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
-					oid, ext.Value[1]))
-				return result, false
-			}
-			return ar.Result{
-				Status: ar.StatusSuccess,
-				Got:    fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
-			}, true
-		}
-	}
-
-	result := ar.Result{}
-	result.Fail(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
-
-	return result, false
-}
-
-func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Result, bool) {
-
-	for _, ext := range cert.Extensions {
-
-		if ext.Id.String() == oid {
-			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
-				log.Debugf("extension %v value %v does not match expected value %v",
-					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
-				return ar.Result{
-					Status:   ar.StatusFail,
-					Expected: fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(buf)),
-					Got:      hex.EncodeToString(ext.Value),
-				}, false
-			}
-			return ar.Result{
-				Status: ar.StatusSuccess,
-				Got:    fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(ext.Value)),
-			}, true
-		}
-	}
-
-	result := ar.Result{}
-	result.Fail(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
-	return result, false
-}
-
-func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
-
-	for _, ext := range cert.Extensions {
-		if ext.Id.String() == oid {
-			return string(ext.Value), true
-		}
-	}
-	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
-	return "", false
-}
-
 func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Result {
 
 	result := ar.Result{}
@@ -680,13 +581,13 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 			return result
 		}
 		if bytes.Equal(refFingerprint, caFingerprint[:]) {
-			log.Debugf("Found matching CA fingerprint %q", hex.EncodeToString(refFingerprint))
+			log.Debugf("Found matching CA fingerprint %x", refFingerprint)
 			result.Got = fp
 			result.Status = ar.StatusSuccess
 			return result
 		} else {
-			log.Debugf("Root Manifest CA fingerprint %q does not match measurement CA fingerprint %q. Continue..",
-				refFingerprint, hex.EncodeToString(caFingerprint[:]))
+			log.Tracef("Root Manifest CA fingerprint %x does not match measurement CA fingerprint %x. Continue..",
+				refFingerprint, caFingerprint[:])
 			continue
 		}
 	}

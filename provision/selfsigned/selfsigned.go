@@ -190,9 +190,9 @@ func (c *Client) CcEnroll(
 	return c.SimpleEnroll(csr)
 }
 
-func (c *Client) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
+func (c *Client) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
 
-	ca, err := c.snpConf.GetSnpCa(akType)
+	ca, err := c.snpConf.GetSnpCa(codeName, akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VCEK: %w", err)
 	}
@@ -200,9 +200,9 @@ func (c *Client) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
 	return ca, nil
 }
 
-func (c *Client) GetSnpVcek(chipId [64]byte, tcb uint64) (*x509.Certificate, error) {
+func (c *Client) GetSnpVcek(codeName string, chipId [64]byte, tcb uint64) (*x509.Certificate, error) {
 
-	vcek, err := c.snpConf.GetVcek(chipId[:], tcb)
+	vcek, err := c.snpConf.GetVcek(codeName, chipId[:], tcb)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get VCEK: %w", err)
 	}

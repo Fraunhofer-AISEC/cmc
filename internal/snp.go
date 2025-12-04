@@ -15,7 +15,9 @@
 
 package internal
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type AkType byte
 
