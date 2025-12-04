@@ -40,6 +40,6 @@ type Provisioner interface {
 		metadata [][]byte,
 	) (*x509.Certificate, error)
 	CcEnroll(csr *x509.CertificateRequest, report []byte, metadata [][]byte) (*x509.Certificate, error)
-	GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error)
-	GetSnpVcek(chipId [64]byte, tcb uint64) (*x509.Certificate, error)
+	GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error)
+	GetSnpVcek(codeName string, chipId [64]byte, tcb uint64) (*x509.Certificate, error)
 }

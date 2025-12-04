@@ -152,6 +152,7 @@ type VersionCheck struct {
 
 type TcbCheck struct {
 	Summary Result       `json:"result" cbor:"0,keyasint"`
+	Fmc     VersionCheck `json:"fmc" cbor:"5,keyasint"`
 	Bl      VersionCheck `json:"bl" cbor:"1,keyasint"`
 	Tee     VersionCheck `json:"tee" cbor:"2,keyasint"`
 	Snp     VersionCheck `json:"snp" cbor:"3,keyasint"`

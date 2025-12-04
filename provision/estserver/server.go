@@ -533,12 +533,14 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 
 	var chipId []byte
 	var tcb uint64
+	var codeName string
 
 	_, err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: &chipId},
 			{ContentType: est.MimeTypeOctetStream, Data: &tcb},
+			{ContentType: est.MimeTypeOctetStream, Data: &codeName},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -547,7 +549,7 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vcek, err := s.snpConf.GetVcek(chipId, tcb)
+	vcek, err := s.snpConf.GetVcek(codeName, chipId, tcb)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return
@@ -584,11 +586,13 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var akTypeRaw []byte
+	var codeName string
 
 	_, err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeOctetStream, Data: &akTypeRaw},
+			{ContentType: est.MimeTypeOctetStream, Data: codeName},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -599,7 +603,9 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 
 	akType := internal.AkType(akTypeRaw[0])
 
-	ca, err := s.snpConf.GetSnpCa(akType)
+	log.Debugf("Get SNP CA for %q, ak type %d", codeName, akType)
+
+	ca, err := s.snpConf.GetSnpCa(codeName, akType)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return

@@ -53,10 +53,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -85,10 +91,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -117,10 +129,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -149,10 +167,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -181,10 +205,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -213,10 +243,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -245,10 +281,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   invalidSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      invalidSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -277,10 +319,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -309,10 +357,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -341,10 +395,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -367,10 +427,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            invalidFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   invalidFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -399,10 +465,54 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: validFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           invalidTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  invalidTcb,
+									},
+								},
+							},
+						},
+					},
+				},
+				refvals: []ar.ReferenceValue{
+					{
+						Type:   "SNP Reference Value",
+						Sha384: validMeasurement,
+					},
+				},
+				nonce: validNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			name: "Invalid Policy Code Name",
+			args: args{
+				measurement: &ar.Measurement{
+					Type:     "SNP Measurement",
+					Evidence: validReport,
+					Certs:    validCertChain,
+				},
+				rootManifest: &ar.MetadataResult{
+					Metadata: ar.Metadata{
+						Manifest: ar.Manifest{
+							CaFingerprints: validFingerprints,
+							SnpPolicy: &ar.SnpPolicy{
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Berlin",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -431,10 +541,16 @@ func Test_verifySnpMeasurements(t *testing.T) {
 						Manifest: ar.Manifest{
 							CaFingerprints: invalidFingerprints,
 							SnpPolicy: &ar.SnpPolicy{
-								ReportVersion: validVersion,
-								GuestPolicy:   validSnpPolicy,
-								Fw:            validFw,
-								Tcb:           validTcb,
+								ReportMinVersion: validMinVersion,
+								ReportMaxVersion: validMaxVersion,
+								GuestPolicy:      validSnpPolicy,
+								VersionPolicy: []ar.SnpVersion{
+									{
+										Name: "Milan",
+										Fw:   validFw,
+										Tcb:  validTcb,
+									},
+								},
 							},
 						},
 					},
@@ -994,7 +1110,8 @@ AFZEAwoKCQ==
 		AbiMinor:     0,
 	}
 
-	validVersion = uint32(2)
+	validMinVersion = uint32(2)
+	validMaxVersion = uint32(5)
 
 	validFw = ar.SnpFw{
 		Build: 3,

@@ -62,10 +62,18 @@ func SnpCaUrl(aktype internal.AkType, codeName string) string {
 }
 
 func SnpVcekUrl(codeName string, chipId []byte, tcb uint64) string {
+
+	// Default chip ID length for Milan and Genoa is 64
+	len := lenChipId
+	// Turin and later chip IP length is 8
+	if codeName == "Turin" {
+		len = 8
+	}
+
 	return fmt.Sprintf("%s/vcek/v1/%s/%s?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
 		snpBaseUrl,
 		codeName,
-		hex.EncodeToString(chipId),
+		hex.EncodeToString(chipId[:len]),
 		tcb&0xFF,
 		(tcb>>8)&0xFF,
 		(tcb>>48)&0xFF,
@@ -74,14 +82,9 @@ func SnpVcekUrl(codeName string, chipId []byte, tcb uint64) string {
 
 // Get Vcek takes the TCB and chip ID, calculates the VCEK URL and gets the certificate
 // in DER format from the cache or downloads it from the AMD server if not present
-func (s *SnpConfig) GetVcek(chipId []byte, tcb uint64) (*x509.Certificate, error) {
+func (s *SnpConfig) GetVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error) {
 
-	codeName, err := getSnpCodeName()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP code name: %w", err)
-	}
-
-	log.Tracef("Fetching %v VCEK for chip ID %v, TCB %x", codeName, hex.EncodeToString(chipId), tcb)
+	log.Tracef("Fetching %q VCEK for chip ID %v, TCB %x", codeName, hex.EncodeToString(chipId), tcb)
 
 	// Allow only one download and caching of the VCEK certificate in parallel
 	// as the AMD KDF server allows only one request in 10s
@@ -108,7 +111,7 @@ func (s *SnpConfig) GetVcek(chipId []byte, tcb uint64) (*x509.Certificate, error
 
 	for i := 0; i < snpMaxRetries; i++ {
 		log.Tracef("Requesting SNP VCEK certificate from: %v", url)
-		vcek, statusCode, err := downloadVcek(url)
+		vcek, statusCode, err := DownloadVcek(url)
 		if err == nil {
 			log.Tracef("Successfully downloaded VCEK certificate")
 			if err := s.cacheVcek(vcek.Raw, id, tcb); err != nil {
@@ -129,12 +132,7 @@ func (s *SnpConfig) GetVcek(chipId []byte, tcb uint64) (*x509.Certificate, error
 	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
 }
 
-func (s *SnpConfig) GetSnpCa(akType internal.AkType) ([]*x509.Certificate, error) {
-
-	codeName, err := getSnpCodeName()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP code name: %w", err)
-	}
+func (s *SnpConfig) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
 
 	log.Debugf("Fetching AMD SNP %v CA", codeName)
 
@@ -226,7 +224,7 @@ func (s *SnpConfig) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
 	}
 }
 
-func downloadVcek(url string) (*x509.Certificate, int, error) {
+func DownloadVcek(url string) (*x509.Certificate, int, error) {
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -247,35 +245,6 @@ func downloadVcek(url string) (*x509.Certificate, int, error) {
 		return nil, resp.StatusCode, fmt.Errorf("failed to parse x509 Certificate: %w", err)
 	}
 	return cert, resp.StatusCode, nil
-}
-
-func getSnpCodeName() (string, error) {
-
-	eax, _, _, _ := cpuid(1)
-
-	basicFamily := (eax >> 8) & 0xF
-	extendedModel := (eax >> 16) & 0xF
-	extendedFamily := (eax >> 20) & 0xFF
-	finalFamily := basicFamily + extendedFamily
-
-	// Siena/Bergamo use the same root keys as Genoa:
-	// https://www.amd.com/content/dam/amd/en/documents/epyc-technical-docs/specifications/57230.pdf
-	if finalFamily == 0x19 {
-		switch extendedModel {
-		case 0x0:
-			return "Milan", nil
-		case 0x1:
-			return "Genoa", nil
-		case 0xA:
-			return "Genoa", nil
-		}
-	} else if finalFamily == 0x1A {
-		if extendedModel == 0x0 || extendedModel == 0x1 {
-			return "Turin", nil
-		}
-	}
-
-	return "", nil
 }
 
 // tryGetCachedCa returns the cached CA chain in DER format if available

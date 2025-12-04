@@ -282,12 +282,18 @@ func fetchSnpAk(c *ar.DriverConfig, data []byte) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
+	log.Debugf("Fetched Chip ID from attestation report: %x", s.ChipId[:])
+
+	codeName := verifier.GetSnpCodeName(s.CpuFamilyId, s.CpuModelId)
+
+	log.Debugf("Fetched EPYC code name from attestation report: %q", codeName)
+
 	var akCert *x509.Certificate
 	switch akType {
 	case internal.VCEK:
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = c.Provisioner.GetSnpVcek(s.ChipId, s.CurrentTcb)
+		akCert, err = c.Provisioner.GetSnpVcek(codeName, s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
@@ -299,7 +305,7 @@ func fetchSnpAk(c *ar.DriverConfig, data []byte) ([]*x509.Certificate, error) {
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
 	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := c.Provisioner.GetSnpCa(akType)
+	ca, err := c.Provisioner.GetSnpCa(codeName, akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
