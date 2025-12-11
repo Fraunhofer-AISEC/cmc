@@ -1,0 +1,59 @@
+#!/bin/bash
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+set -e
+
+[[ $# -eq 0 ]] || {
+    echo "Usage: $(basename $0)"
+    exit 1
+}
+
+user="root"
+artifacts="${dir}/vm/artifacts/"
+
+echo "Writing artifacts to ${artifacts}"
+
+cmdline="${artifacts}/cmdline"
+initrd="initrd.img"
+efi_shim="shimx64.efi"
+grub="grubx64.efi"
+kernel_version=$(vm-ssh uname -r)
+kernel="vmlinuz-${kernel_version}"
+
+echo "Retrieved kernel version ${kernel_version}"
+
+# Retrieve artifacts
+mkdir -p "${artifacts}"
+
+# Fetch efivars
+echo "Fetching efivars..."
+vm-ssh 'tar czf - -C /sys/firmware/efi efivars' | tar xzf - -C "${artifacts}"
+
+# Fetch commandline
+echo "Fetching cmdline..."
+vm-ssh cat /proc/cmdline > "${artifacts}/cmdline"
+
+# Fetch GPT table
+vm-retrieve-gpt
+
+# Fetch kernel image
+echo "Fetching kernel..."
+vm-ssh "cat /boot/${kernel}" > "${artifacts}/vmlinuz"
+
+# Fetch initrd
+echo "Fetching initrd..."
+vm-ssh "cat /boot/${initrd}" > "${artifacts}/initrd"
+
+# Fetch shim
+echo "Fetching shim..."
+vm-ssh "cat /boot/efi/EFI/ubuntu/${efi_shim}" > "${artifacts}/${efi_shim}"
+
+# Fetch GRUB
+echo "Fetching grub..."
+vm-ssh "cat /boot/efi/EFI/ubuntu/${grub}" > "${artifacts}/${grub}"
+
+# Get grub files
+echo "Fetching grub files"
+vm-ssh 'tar czf - -C /boot/ grub' | tar xzf - -C "${artifacts}"

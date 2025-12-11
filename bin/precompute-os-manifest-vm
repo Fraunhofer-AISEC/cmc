@@ -15,6 +15,7 @@ device_description="${out}/device.description.json"
 
 images="${dir}/vm/images"
 vm_config="${dir}/example-setup/vm-config"
+artifacts="${dir}/vm/artifacts"
 
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
@@ -37,26 +38,28 @@ os=$(lsb_release -sd 2>/dev/null)
 set -e
 
 # Precompute the values of the OS PCRs
-referenceValues=$(calculate-srtm-pcrs \
+set +e
+refs_tpm=$(calculate-srtm-pcrs \
     --format json \
     --eventlog \
     --pcrs 8,9 \
-    --kernel "${images}/boot/vmlinuz" \
-    --initrd "${images}/boot/initrd.img" \
+    --kernel "${artifacts}/vmlinuz" \
+    --initrd "${artifacts}/initrd" \
     --cmdline "${vm_config}/cmdline" \
     --grubcmds "${vm_config}/grub_cmds" \
-    --path "${images}/boot/efi/EFI/ubuntu/grub.cfg" \
-    --path "${images}/boot/grub/x86_64-efi/command.lst" \
-    --path "${images}/boot/grub/x86_64-efi/fs.lst" \
-    --path "${images}/boot/grub/x86_64-efi/crypto.lst" \
-    --path "${images}/boot/grub/x86_64-efi/terminal.lst" \
-    --path "${images}/boot/grub/grub.cfg" \
-    --path "${images}/boot/grub/grubenv" \
-    --path "${images}/boot/grub/x86_64-efi/bli.mod" \
-    --path "${images}/boot/vmlinuz" \
-    --path "${images}/boot/initrd.img" \
+    --path "${artifacts}/grub" \
+    --path "${artifacts}/vmlinuz" \
+    --path "${artifacts}/initrd" \
 )
-
+if [[ -z "${refs_tpm}" ]]; then
+    echo "calculate-srtm-pcrs failed: empty reference values"
+    exit 1
+fi
+echo "${refs_tpm}" | jq empty 2>/dev/null || {
+    echo "calculate-srtm-pcrs failed: '${refs_tpm}'"
+    exit 1
+}
+set -e
 
 # Load OS manifest
 json=$(cat "${input}/manifest.json")
@@ -79,7 +82,7 @@ json=$(echo "${json}" | jq ".details.os = \"${os}\"")
 
 # Insert reference values in the OS Manifest
 json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+json=$(jq --slurpfile ver <(echo "${refs_tpm}") '.referenceValues += $ver[0]' <<<"${json}")
 
 # Save manifest
 echo "Writing ${out}/rtm.manifest.json"
