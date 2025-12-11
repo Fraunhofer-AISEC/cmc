@@ -319,8 +319,8 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 						CtrDetails:  ar.GetCtrDetailsFromRefVal(&ref, s),
 						EventData:   ref.EventData,
 					}
-					detailedResults = append(detailedResults, result)
 					if !ref.Optional {
+						detailedResults = append(detailedResults, result)
 						success = false
 						log.Debugf("Failed to find required PCR%v reference value %v: %v in measurements",
 							ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
