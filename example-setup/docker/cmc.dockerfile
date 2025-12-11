@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y wget lsb-release moreutils golang-cfssl
 	build-essential sqlite3 zlib1g-dev libssl-dev jq yq git curl ca-certificates \
 	python3-venv libjson-glib-dev libjson-glib-1.0-0 nasm acpica-tools uuid-dev \
 	genisoimage gnutls-bin guestfs-tools guestmount libtasn1-dev libgnutls28-dev \
-	socat libseccomp-dev python-is-python3 libtool expect clang llvm lld
+	socat libseccomp-dev python-is-python3 libtool expect clang llvm lld xxd
 
 # Required for QEMU
 RUN apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev \

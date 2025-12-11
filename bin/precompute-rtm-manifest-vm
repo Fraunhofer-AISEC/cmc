@@ -14,6 +14,7 @@ out="${data}/metadata-raw"
 
 images="${dir}/vm/images"
 vm_config="${dir}/example-setup/vm-config"
+artifacts="${dir}/vm/artifacts"
 
 device_description="${out}/device.description.json"
 
@@ -34,7 +35,7 @@ echo "Using ${data} as directory for local data"
 # Retrieve platform details
 set +e
 firmware="OVMF"
-bootloader=$(grub-install --version)
+bootloader="GRUB"
 set -e
 
 # Get the fingerprint of the TPM privacy CA that was used for credential activation
@@ -42,24 +43,31 @@ fingerprint=$(openssl x509 -in "${data}/pki/ca.pem" -fingerprint -noout -sha256 
 
 # Precompute the values of the RTM PCRs
 printf "[\033[34;1m EXEC \033[0m] Precompute PCRs\n"
-referenceValues=$(calculate-srtm-pcrs \
+set +e
+refs_tpm=$(calculate-srtm-pcrs \
     --format json \
     --eventlog \
     --pcrs 0,1,2,3,4,5,6,7 \
     --ovmf "${images}/OVMF.fd" \
-    --bootloader "${images}/boot/efi/EFI/ubuntu/shimx64.efi" \
-    --bootloader "${images}/boot/efi/EFI/ubuntu/grubx64.efi" \
+    --bootloader "${artifacts}/shimx64.efi" \
+    --bootloader "${artifacts}/grubx64.efi" \
     --config "${vm_config}/calculate-srtm-pcrs.cfg" \
-    --kernel "${images}/boot/vmlinuz" \
-    --initrd "${images}/boot/initrd.img" \
-    --cmdline "${vm_config}/cmdline" \
     --acpirsdp "${vm_config}/etc-acpi-rsdp" \
     --acpitables "${vm_config}/etc-acpi-tables" \
     --tableloader "${vm_config}/etc-table-loader" \
     --tpmlog "${vm_config}/etc-tpm-log" \
     --sbatlevel "sbat,1,2021030218\n" \
-    --gpt "${images}/ev_efi_gpt_event" \
+    --gpt "${artifacts}/ev_efi_gpt_event" \
 )
+if [[ -z "${refs_tpm}" ]]; then
+    echo "calculate-srtm-pcrs failed: empty reference values"
+    exit 1
+fi
+echo "${refs_tpm}" | jq empty 2>/dev/null || {
+    echo "calculate-srtm-pcrs failed: '${refs_tpm}'"
+    exit 1
+}
+set -e
 
 
 # Load manifest template
@@ -84,7 +92,7 @@ json=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
 
 # Replace existing reference values with new reference values in the RTM Manifest
 json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+json=$(echo "${json}" | jq --argjson ver "${refs_tpm}" '.referenceValues += $ver')
 
 # Save the RTM manifest
 echo "Writing ${out}/rtm.manifest.json"

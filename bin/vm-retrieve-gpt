@@ -1,0 +1,70 @@
+
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+set -euo pipefail
+
+[[ $# -eq 0 ]] || {
+    echo "Usage: $(basename $0)"
+    exit 1
+}
+
+vm="vm-ubuntu"
+device="/dev/sda"
+target="${dir}/vm/artifacts/"
+user="root"
+
+echo "Fetching GPT header and table..."
+gpt_header_vm="/${user}/gpt_header"
+gpt_table_vm="/${user}/gpt_part_table"
+gpt_header="${target}/gpt_header"
+gpt_table="${target}/gpt_table"
+tmp_entry="${target}/tmp_entry"
+ev_efi_gpt_event="${target}/ev_efi_gpt_event"
+entry_size=128
+gpt_entries=128
+
+# Extract GPT header and partition entries from image
+vm-ssh dd if="${device}" of="${gpt_header_vm}" bs=1 skip=512 count=92
+vm-ssh dd if="${device}" of="${gpt_table_vm}" bs=512 skip=2 count=32
+
+vm-scp "${vm}:${gpt_header_vm}" "${gpt_header}"
+vm-scp "${vm}:${gpt_table_vm}" "${gpt_table}"
+
+# Add GPT header to reference measurement
+cat "${gpt_header}" > "${ev_efi_gpt_event}"
+
+# Get number of entries
+num_entries=0
+for i in $(seq 0 $((gpt_entries - 1))); do
+    offset=$((i * entry_size))
+    # Extract entry
+    dd if="${gpt_table}" bs=1 skip=${offset} count="${entry_size}" of="${tmp_entry}" status=none
+    # Add if non-zero
+    if ! cmp -s "${tmp_entry}" <(head -c ${entry_size} < /dev/zero); then
+        let num_entries=num_entries+1
+    fi
+done
+
+# Add number of entries
+echo "Adding ${num_entries} entries..."
+printf '%016x\n' "${num_entries}" | \
+  sed 's/../& /g' | \
+  awk '{for(i=8;i>=1;i--) printf "%s", $i}' | \
+  xxd -r -p >> "${ev_efi_gpt_event}"
+
+# Add non-zero GPT partition table entries to reference measurement
+for i in $(seq 0 $((gpt_entries - 1))); do
+    offset=$((i * entry_size))
+    # Extract entry
+    dd if="${gpt_table}" bs=1 skip=${offset} count="${entry_size}" of="${tmp_entry}" status=none
+    # Add if non-zero
+    if ! cmp -s "${tmp_entry}" <(head -c ${entry_size} < /dev/zero); then
+        cat "${tmp_entry}" >> "${ev_efi_gpt_event}"
+    fi
+done
+rm "${tmp_entry}" "${gpt_table}" "${gpt_header}"

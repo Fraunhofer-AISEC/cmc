@@ -7,7 +7,23 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 cd "${dir}"
 
-generate-metadata-vm
+[[ $# -lt 2 ]] || {
+    echo "Usage: $(basename $0) <parse|precompute>"
+    exit 1
+}
+
+mode="${1:-parse}"
+
+if [[ "${mode}" == "parse" ]]; then
+    echo "Parsing metadata..."
+  generate-metadata-vm
+elif [[ "${mode}" == "precompute" ]]; then
+    echo "Precomputing metadata..."
+  precompute-metadata-vm
+else
+  echo "Unknown mode ${mode}"
+  exit 1
+fi
 
 sign-metadata json
 

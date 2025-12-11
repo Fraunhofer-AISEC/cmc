@@ -211,6 +211,7 @@ go build -C "${dir}/cmcd"
 go build -C "${dir}/provision/estserver"
 go build -C "${dir}/tools/metaconv"
 go build -C "${dir}/tools/metasign"
+go build -C "${dir}/tools/mrtool"
 
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"
@@ -268,6 +269,7 @@ genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${vm_config}/cmcd-conf.json" \
     "${dir}/cmcd/cmcd" \
     "${dir}/cmcctl/cmcctl" \
+    "${dir}/tools/mrtool/mrtool" \
     "${dir}/vm/measured-boot-tools/parse-srtm-pcrs/parse-srtm-pcrs" \
     "${dir}/vm/measured-boot-tools/parse-ima-pcr/parse-ima-pcr" \
     "${dir}/data/pki/ca.pem" \
