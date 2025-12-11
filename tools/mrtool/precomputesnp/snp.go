@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,20 +41,20 @@ var Command = &cli.Command{
 	Usage: "precompute the values of the AMD SEV-SNP measurement register based on the OVMF and other optional files",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
+			Name:  ovmfFlag,
+			Usage: "Filename of the OVMF.fd file",
+		},
+		&cli.StringFlag{
 			Name:  kernelFlag,
-			Usage: "Optional filename of the kernel image",
+			Usage: "Filename of the kernel image (if it should be included in the measurement)",
 		},
 		&cli.StringFlag{
 			Name:  initRfsFlag,
-			Usage: "Optional filename of the initramfs",
+			Usage: "Filename of the initramfs (if it should be included in the measurement)",
 		},
 		&cli.StringFlag{
 			Name:  cmdFlag,
-			Usage: "Optional filename of the kernel commandline",
-		},
-		&cli.StringFlag{
-			Name:  ovmfFlag,
-			Usage: "Optional filename of the OVMF.fd file",
+			Usage: "Filename of the kernel commandline (if it should be included in the measurement)",
 		},
 		&cli.UintFlag{
 			Name:  vcpuCountFlag,
@@ -64,6 +65,10 @@ var Command = &cli.Command{
 			Name:  vmmTypeFlag,
 			Usage: fmt.Sprintf("VMM type to use [%s, %s]", VmmTypeQemu.Label, VmmTypeEc2.Label),
 			Value: VmmTypeQemu.Label,
+		},
+		&cli.StringFlag{
+			Name:  snpDigestFlag,
+			Usage: "Already precomputed hexadecimal SNP launch digest to generate a reference value for (alternative to specifying OVMF)",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -84,6 +89,7 @@ const (
 	ovmfFlag      = "ovmf"
 	vcpuCountFlag = "vcpus"
 	vmmTypeFlag   = "vmm-type"
+	snpDigestFlag = "snp-digest"
 )
 
 type VmmType = int
@@ -127,6 +133,7 @@ type PrecomputedSnpConf struct {
 	OvmfFile  string
 	vcpuCount int
 	vmmType   VmmType
+	SnpDigest []byte
 }
 type snpSevHashTableEntry struct {
 	Guid   [16]byte
@@ -209,7 +216,7 @@ type snpVmcbSaveArea struct {
 }
 
 func getSnpConf(cmd *cli.Command) (*PrecomputedSnpConf, error) {
-	// parse the config (default to empty string)
+
 	config := &PrecomputedSnpConf{}
 	if cmd.IsSet(kernelFlag) {
 		config.Kernel = cmd.String(kernelFlag)
@@ -223,13 +230,24 @@ func getSnpConf(cmd *cli.Command) (*PrecomputedSnpConf, error) {
 	if cmd.IsSet(ovmfFlag) {
 		config.OvmfFile = cmd.String(ovmfFlag)
 	}
+	if cmd.IsSet(snpDigestFlag) {
+		s := cmd.String(snpDigestFlag)
+		digest, err := hex.DecodeString(s)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode provided SNP launch digest %q: %w", s, err)
+		}
+		config.SnpDigest = digest
+	}
 
 	// [vcpuCountFlag] must be available, as its defaulted
 	config.vcpuCount = int(cmd.Uint(vcpuCountFlag))
 
 	// validate the config
-	if len(config.OvmfFile) == 0 {
-		return nil, fmt.Errorf("OVMF must be specified and must not be an empty string. See mrtool precompute snp --help")
+	if cmd.IsSet(ovmfFlag) && cmd.IsSet(snpDigestFlag) {
+		return nil, fmt.Errorf("flags %q and %q cannot both be set", ovmfFlag, snpDigestFlag)
+	}
+	if len(config.OvmfFile) == 0 && len(config.SnpDigest) == 0 {
+		return nil, fmt.Errorf("either OVMF must or precomputed SNP launch digest must be specified. See mrtool precompute snp --help")
 	}
 	if config.vcpuCount <= 0 {
 		return nil, fmt.Errorf("number of vcpus must be greater than zero. See mrtool precompute snp --help")
@@ -256,7 +274,12 @@ func getSnpConf(cmd *cli.Command) (*PrecomputedSnpConf, error) {
 	if len(config.CmdLine) > 0 {
 		log.Debugf("\tKernel commandline: %q", config.CmdLine)
 	}
-	log.Debugf("\tOVMF file         : %q", config.OvmfFile)
+	if len(config.OvmfFile) > 0 {
+		log.Debugf("\tOVMF file         : %q", config.OvmfFile)
+	}
+	if len(config.SnpDigest) > 0 {
+		log.Debugf("\tSNP Launch Digest: %x", config.SnpDigest)
+	}
 	return config, nil
 }
 
@@ -271,9 +294,17 @@ func PrecomputeSnp(cmd *cli.Command) error {
 		return fmt.Errorf("invalid snp config: %w", err)
 	}
 
-	hash, err := performSnpPrecomputation(snpConfig)
-	if err != nil {
-		return err
+	var hash []byte
+	var description string
+	if len(snpConfig.SnpDigest) > 0 {
+		hash = snpConfig.SnpDigest
+		description = "SNP launch digest"
+	} else {
+		hash, err = performSnpPrecomputation(snpConfig)
+		if err != nil {
+			return err
+		}
+		description = fmt.Sprintf("SNP launch digest for %d vCPUs", snpConfig.vcpuCount)
 	}
 
 	// setup the reference value for the event log (as slice with single value)
@@ -283,7 +314,7 @@ func PrecomputeSnp(cmd *cli.Command) error {
 			SubType:     "SNP Launch Digest",
 			Index:       0,
 			Sha384:      hash[:],
-			Description: fmt.Sprintf("SNP launch digest for %d vCPUs", snpConfig.vcpuCount),
+			Description: description,
 		},
 	}
 
@@ -476,16 +507,16 @@ func performSnpSetupVmcbSaveAreaPage(eip uint64, vmmType VmmType) ([]byte, error
 	return tempPage[:], nil
 }
 
-func performSnpPrecomputation(config *PrecomputedSnpConf) (SnpHash, error) {
+func performSnpPrecomputation(config *PrecomputedSnpConf) ([]byte, error) {
 	log.Debug("Precomputing SNP measurement registers...")
 
 	// read the ovmf data
 	ovmfData, err := os.ReadFile(config.OvmfFile)
 	if err != nil {
-		return SnpHash{}, fmt.Errorf("failed to read ofmv file: %w", err)
+		return nil, fmt.Errorf("failed to read ofmv file: %w", err)
 	}
 	if (len(ovmfData) % 4096) != 0 {
-		return SnpHash{}, fmt.Errorf("OVMF data are expected to be page aligned: %x", len(ovmfData))
+		return nil, fmt.Errorf("OVMF data are expected to be page aligned: %x", len(ovmfData))
 	}
 	log.Debugf("OVMF data size: %d", len(ovmfData))
 
@@ -508,7 +539,7 @@ func performSnpPrecomputation(config *PrecomputedSnpConf) (SnpHash, error) {
 		hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeZero, 0x80f000)
 		hashTablePage, err := performSnpSetupHashTablePage(config.CmdLine, config.Kernel, config.InitRfs)
 		if err != nil {
-			return SnpHash{}, fmt.Errorf("failed to read commandline file: %w", err)
+			return nil, fmt.Errorf("failed to read commandline file: %w", err)
 		}
 		hashDigest = performSnpUpdatePageInfo(hashDigest, hashTablePage, snpPageTypeNormal, 0x810000)
 		for gpa := uint64(0x00811000); gpa < 0x00820000; gpa += 4096 {
@@ -526,13 +557,13 @@ func performSnpPrecomputation(config *PrecomputedSnpConf) (SnpHash, error) {
 
 	tempPage, err := performSnpSetupVmcbSaveAreaPage(0xfffffff0, config.vmmType)
 	if err != nil {
-		return SnpHash{}, fmt.Errorf("failed to setup vmcb save area: %w", err)
+		return nil, fmt.Errorf("failed to setup vmcb save area: %w", err)
 	}
 	hashDigest = performSnpUpdatePageInfo(hashDigest, tempPage, snpPageTypeVmsa, 0xfffffffff000)
 
 	tempPage, err = performSnpSetupVmcbSaveAreaPage(0x80b004, config.vmmType)
 	if err != nil {
-		return SnpHash{}, fmt.Errorf("failed to setup vmcb save area: %w", err)
+		return nil, fmt.Errorf("failed to setup vmcb save area: %w", err)
 	}
 	for i := 1; i < config.vcpuCount; i += 1 {
 		hashDigest = performSnpUpdatePageInfo(hashDigest, tempPage, snpPageTypeVmsa, 0xfffffffff000)
@@ -541,5 +572,5 @@ func performSnpPrecomputation(config *PrecomputedSnpConf) (SnpHash, error) {
 	log.Debugf("Calculated Hash: %x", hashDigest)
 
 	// return the accumulative hash
-	return hashDigest, nil
+	return hashDigest[:], nil
 }
