@@ -1,5 +1,6 @@
 {
-    "reportVersion": 0,
+    "reportMinVersion": 0,
+    "reportMaxVersion": 0,
     "policy": {
         "type": "SNP Policy",
         "SingleSocket": false,
@@ -9,15 +10,6 @@
         "AbiMajor":     0,
         "AbiMinor":     0
     },
-    "fw": {
-        "build": 0,
-        "major": 0,
-        "minor": 0
-    },
-    "tcb": {
-        "bl": 0,
-        "tee": 0,
-        "snp": 0,
-        "ucode": 0
-    }
+    "versions": [
+    ]
 }

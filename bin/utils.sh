@@ -72,8 +72,8 @@ setarr() {
 # given in the second argument with the value given in the third argument
 extendarr() {
   if [[ "$#" -ne 3 ]]; then
-    echo "Error: provided invalid number of parameters: $#: $@"
-    echo "Usage: extendarr <json-input> <key> <value-or-array>"
+    echo "Error: provided invalid number of parameters: $#"
+    echo "Usage: extendarr <json-input> <key> <value>"
     return 1
   fi
 
@@ -81,12 +81,10 @@ extendarr() {
   local key=$2
   local param=$3
 
-  # Check if param is a JSON array
-  if [[ "$param" =~ ^\[[[:space:]]*.*[[:space:]]*\]$ ]]; then
-    # Concatenate arrays
-    ref="$(echo "${ref}" | jq ".${key} += ${param}")"
+  # Determine if value is a valid JSON array
+  if echo "${param}" | jq -e type >/dev/null 2>&1; then
+    ref="$(echo "${ref}" | jq --argjson newval "${param}" ".${key} += (if \$newval | type == \"array\" then \$newval else [\$newval] end)")"
   else
-    # Append single value by wrapping in an array
-    ref="$(echo "${ref}" | jq ".${key} += [${param}]")"
+    ref="$(echo "${ref}" | jq --arg newval "${param}" ".${key} += [\$newval]")"
   fi
 }
