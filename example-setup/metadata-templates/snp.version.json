@@ -1,0 +1,15 @@
+{
+    "name": "",
+    "fw": {
+        "build": 0,
+        "major": 0,
+        "minor": 0
+    },
+    "tcb": {
+        "bl": 0,
+        "tee": 0,
+        "snp": 0,
+        "ucode": 0,
+        "fmc": 0
+    }
+}

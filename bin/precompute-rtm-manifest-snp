@@ -37,6 +37,7 @@ done
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
+pki="${data}/pki"
 
 device_description="${out}/device.description.json"
 
@@ -54,6 +55,9 @@ mkdir -p "${out}"
 
 echo "Using ${data} as directory for local data"
 
+# Load manifest template
+manifest=$(cat "${input}/manifest.json")
+
 # Retrieve high level details
 set +e
 firmware="unknown"
@@ -62,11 +66,23 @@ kernel=$(uname -r)
 os=$(lsb_release -sd 2>/dev/null)
 set -e
 
-# Get AMD cert chain for milan
-wget -O "${dir}/cert_chain" https://kdsintf.amd.com/vlek/v1/Milan/cert_chain
-awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${dir}/cert_chain" > "${dir}/ark_milan.pem"
+# Get AMD cert chains
+snp_code_names=("Milan" "Genoa" "Turin")
+snp_ark_names=("ark_milan.pem" "ark_genoa.pem" "ark_turin.pem")
 
-fingerprint=$(openssl x509 -in "${dir}"/ark_milan.pem -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+for i in "${!snp_code_names[@]}"; do
+    code="${snp_code_names[$i]}"
+    ark="${snp_ark_names[$i]}"
+    ark_file="${pki}/${ark}"
+
+    if [[ ! -f "${ark_file}" ]]; then
+      echo "Fetching AMD SEV-SNP ${code} CA..."
+      wget -qO "${pki}/Cert_Chain_${code}" "https://kdsintf.amd.com/vlek/v1/${code}/cert_chain"
+      awk '/-----BEGIN CERTIFICATE-----/{n++} n==2' "${pki}/Cert_Chain_${code}" > "${ark_file}"
+    fi
+    fingerprint=$(openssl x509 -in "${ark_file}" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
+    extendarr "manifest" "caFingerprints" "${fingerprint}"
+done
 
 set +e
 ref=$(calculate-snp-mr \
@@ -84,8 +100,7 @@ echo "${ref}" | jq empty 2>/dev/null || {
 }
 set -e
 
-# Load manifest template
-manifest=$(cat "${input}/manifest.json")
+
 
 name="de.test.rtm"
 
@@ -98,7 +113,6 @@ setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "
 setjson "manifest" "description"           "RTM Manifest"
 setarr  "manifest" "baseLayers"            "${name}"
 setjson "manifest" "certLevel"             3
-setjson "manifest" "caFingerprint"         "${fingerprint}"
 setarr  "manifest" "referenceValues"       "${ref}"
 
 # Insert platform details
@@ -110,20 +124,51 @@ setjson "manifest" "details.os" "${os}"
 policy=$(cat "${input}/snp.policy.json")
 
 # Create policy
-setjson "policy" "reportVersion" 2
+setjson "policy" "reportMinVersion" 2
+setjson "policy" "reportMaxVersion" 5
 setjson "policy" "policy.SingleSocket" false
 setjson "policy" "policy.Debug" false
 setjson "policy" "policy.Migration" false
 setjson "policy" "policy.Smt" true
 setjson "policy" "policy.AbiMajor" 0
 setjson "policy" "policy.AbiMinor" 0
-setjson "policy" "fw.build" 3
-setjson "policy" "fw.major" 1
-setjson "policy" "fw.minor" 49
-setjson "policy" "tcb.bl" 2
-setjson "policy" "tcb.tee" 0
-setjson "policy" "tcb.snp" 5
-setjson "policy" "tcb.ucode" 55
+
+# Minimum TCB versions for milan processors
+milan=$(cat "${input}/snp.version.json")
+setjson "milan" "name" "milan"
+setjson "milan" "fw.major" 1
+setjson "milan" "fw.minor" 55
+setjson "milan" "fw.build" 17
+setjson "milan" "tcb.bl" 4
+setjson "milan" "tcb.tee" 0
+setjson "milan" "tcb.snp" 21
+setjson "milan" "tcb.ucode" 211
+extendarr "policy" "versions" "${milan}"
+
+# Minimum TCB versions for genoa processors
+genoa=$(cat "${input}/snp.version.json")
+setjson "genoa" "name" "genoa"
+setjson "genoa" "fw.major" 1
+setjson "genoa" "fw.minor" 55
+setjson "genoa" "fw.build" 39
+setjson "genoa" "tcb.bl" 8
+setjson "genoa" "tcb.tee" 0
+setjson "genoa" "tcb.snp" 23
+setjson "genoa" "tcb.ucode" 21
+extendarr "policy" "versions" "${genoa}"
+
+# Minimum TCB versions for turin processors
+turin=$(cat "${input}/snp.version.json")
+setjson "turin" "name" "turin"
+setjson "turin" "fw.major" 1
+setjson "turin" "fw.minor" 55
+setjson "turin" "fw.build" 61
+setjson "turin" "tcb.fmc" 0
+setjson "turin" "tcb.bl" 1
+setjson "turin" "tcb.tee" 0
+setjson "turin" "tcb.snp" 2
+setjson "turin" "tcb.ucode" 71
+extendarr "policy" "versions" "${turin}"
 
 setjson "manifest" "snpPolicy" "${policy}"
 
