@@ -6,6 +6,11 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
+[[ $# -lt 2 ]] || {
+    echo "Usage: $(basename $0) [-d|--debug]"
+    exit 1
+}
+
 data="${dir}/vm"
 vm_config="${dir}/example-setup/vm-config"
 

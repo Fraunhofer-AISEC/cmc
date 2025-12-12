@@ -56,7 +56,7 @@ refs_tpm=$(calculate-srtm-pcrs \
     --acpitables "${vm_config}/etc-acpi-tables" \
     --tableloader "${vm_config}/etc-table-loader" \
     --tpmlog "${vm_config}/etc-tpm-log" \
-    --sbatlevel "sbat,1,2021030218\n" \
+    --sbatlevel "${artifacts}/efivars/SbatLevelRT-605dab50-e046-4300-abb6-3dd810dd8b23" \
     --gpt "${artifacts}/ev_efi_gpt_event" \
 )
 if [[ -z "${refs_tpm}" ]]; then
