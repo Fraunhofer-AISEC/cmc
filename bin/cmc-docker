@@ -21,7 +21,7 @@ docker network ls | grep -q "${name}" || docker network create "${name}"
 # Build the image
 if [[ -z "$(docker images -q ${name})" ]]; then
     echo "Building docker image ${name}.."
-    docker build --tag "${name}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
+    docker build --no-cache --tag "${name}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
 fi
 
 test -c "/dev/kvm" && kvm="--device /dev/kvm" || kvm=""
