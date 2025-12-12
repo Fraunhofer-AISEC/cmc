@@ -458,19 +458,22 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		successMrs[i] = bytes.Equal(calculatedMrs[i], measuredMrs[i])
 		if !successMrs[i] {
 			success = false
-			detailedResults = append(detailedResults,
-				ar.DigestResult{
-					Type:     "Measurement",
-					Digest:   hex.EncodeToString(measuredMrs[i]),
-					Index:    i,
-					Success:  false,
-					Launched: true,
-				})
-			log.Debugf("%v: Measurement %q does not match reference %q",
+			if !ccelPresent(artifacts, refvals) {
+				detailedResults = append(detailedResults,
+					ar.DigestResult{
+						Type:     "Measurement",
+						SubType:  internal.IndexToMr(i),
+						Digest:   hex.EncodeToString(measuredMrs[i]),
+						Index:    i,
+						Success:  false,
+						Launched: true,
+					})
+			}
+			log.Debugf("%v: Measurement %q does not match recalculation %q",
 				internal.IndexToMr(i),
 				hex.EncodeToString(measuredMrs[i]), hex.EncodeToString(calculatedMrs[i]))
 		} else {
-			log.Tracef("%v: Measurement %q does match reference", internal.IndexToMr(i),
+			log.Tracef("%v: Measurement %q does match recalculation", internal.IndexToMr(i),
 				hex.EncodeToString(measuredMrs[i]))
 		}
 
@@ -485,14 +488,18 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 	}
 
 	if !ccelPresent(artifacts, refvals) {
-		// Without the CC eventlog, we cannot display, which individual measurements
+		// Without the CC eventlog, we cannot display which individual measurements
 		// did not match. Instead, we set all reference values of a certain MR to false in case the
 		// comparison of the recalculated MR with the measured MR fails
 		log.Debug("Verifying reference values based on MR")
 		for _, refval := range refvals {
+			t := "Reference Value"
+			if successMrs[refval.Index] {
+				t = "Verified"
+			}
 			detailedResults = append(detailedResults,
 				ar.DigestResult{
-					Type:        "Reference Value",
+					Type:        t,
 					SubType:     refval.SubType,
 					Index:       refval.Index,
 					Digest:      hex.EncodeToString(refval.Sha384),
@@ -514,8 +521,12 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 							break
 						}
 					}
+					t := "Measurement"
+					if found {
+						t = "Verified"
+					}
 					r := ar.DigestResult{
-						Type:        "Measurement",
+						Type:        t,
 						SubType:     event.EventName,
 						Index:       artifact.Index,
 						Digest:      hex.EncodeToString(event.Sha384),
@@ -549,27 +560,24 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 							break
 						}
 					}
-					r := ar.DigestResult{
-						Type:        "Reference Value",
-						SubType:     refval.SubType,
-						Index:       refval.Index,
-						Digest:      hex.EncodeToString(refval.Sha384),
-						Description: refval.Description,
+					if !found {
+						r := ar.DigestResult{
+							Type:        "Reference Value",
+							SubType:     refval.SubType,
+							Index:       refval.Index,
+							Success:     false,
+							Launched:    false,
+							Digest:      hex.EncodeToString(refval.Sha384),
+							Description: refval.Description,
+						}
+						detailedResults = append(detailedResults, r)
 					}
-					r.Success = found
-					r.Launched = found
-					detailedResults = append(detailedResults, r)
 
-					if r.Success {
-						log.Tracef("Successfully verified reference value %v: %v = %v",
-							internal.IndexToMr(refval.Index), refval.SubType,
-							hex.EncodeToString(refval.Sha384))
-					} else {
-						success = false
-						log.Tracef("Failed to verify reference value %v: %v = %v",
-							internal.IndexToMr(refval.Index), refval.SubType,
-							hex.EncodeToString(refval.Sha384))
-					}
+					success = false
+					log.Tracef("Failed to verify reference value %v: %v = %v",
+						internal.IndexToMr(refval.Index), refval.SubType,
+						hex.EncodeToString(refval.Sha384))
+
 				}
 			}
 		}
