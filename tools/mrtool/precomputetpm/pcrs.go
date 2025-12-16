@@ -209,3 +209,93 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	return pcrSummary, refvals, nil
 }
+
+func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+
+	pcr := make([]byte, 32)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	// EV_SEPARATOR
+	sep := []byte{0x0, 0x0, 0x0, 0x0}
+	hashSep := sha256.Sum256(sep)
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:    "TPM Reference Value",
+		SubType: "EV_SEPARATOR",
+		Index:   5,
+		Sha256:  hashSep[:],
+	})
+	pcr = internal.ExtendSha256(pcr, hashSep[:])
+
+	// EV_EFI_GPT
+	// Calculate UEFI GPT partition table if provided. The raw disk data can be
+	// provided, the function will find the GPT partition table if present
+	if c.Gpt != "" {
+		hash, description, err := tcg.MeasureGptFromFile(sha256.New(), c.Gpt, c.DumpGpt)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
+		}
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TPM Reference Value",
+			SubType:     "EV_EFI_GPT_EVENT",
+			Index:       5,
+			Sha256:      hash[:],
+			Description: description,
+		})
+		pcr = internal.ExtendSha256(pcr, hash[:])
+	}
+
+	// EV_EVENT_TAG
+	// Bootloader configuration files if present (e.g, systemd-boot loader.conf)
+	for _, bl := range c.Bootloaders {
+
+		data, err := os.ReadFile(bl)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read bootloader file: %w", err)
+		}
+
+		hash := sha256.Sum256(data)
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:    "TPM Reference Value",
+			SubType: "EV_EVENT_TAG",
+			Index:   5,
+			Sha256:  hash[:],
+		})
+		pcr = internal.ExtendSha256(pcr, hash[:])
+	}
+
+	// EV_EFI_ACTION "Exit Boot Services Invocation"
+	actionData1 := []byte("Exit Boot Services Invocation")
+	actionHash1 := sha256.Sum256(actionData1)
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TPM Reference Value",
+		SubType:     "EV_EFI_ACTION",
+		Index:       5,
+		Sha256:      actionHash1[:],
+		Description: "Exit Boot Services Invocation",
+	})
+	pcr = internal.ExtendSha256(pcr, actionHash1[:])
+
+	// EV_EFI_ACTION "Exit Boot Services Returned with Success"
+	actionData2 := []byte("Exit Boot Services Returned with Success")
+	actionHash2 := sha256.Sum256(actionData2)
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TPM Reference Value",
+		SubType:     "EV_EFI_ACTION",
+		Index:       5,
+		Sha256:      actionHash2[:],
+		Description: "Exit Boot Services Returned with Success",
+	})
+	pcr = internal.ExtendSha256(pcr, actionHash2[:])
+
+	// Create PCR5 final reference value
+	pcrSummary := &ar.ReferenceValue{
+		Type:        "TPM Reference Value",
+		SubType:     "PCR Summary",
+		Description: "PCR5",
+		Index:       5,
+		Sha256:      pcr,
+	}
+
+	return pcrSummary, refvals, nil
+}
