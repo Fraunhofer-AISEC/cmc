@@ -35,19 +35,16 @@ var (
 
 type Config struct {
 	*tcg.Conf
-	Gpt      string
 	GrubCmds string
 	Path     []string
 }
 
 const (
-	gptFlag      = "gpt"
 	grubcmdsFlag = "grubcmds"
 	pathFlag     = "path"
 )
 
 var flags = []cli.Flag{
-	&cli.StringFlag{Name: gptFlag, Usage: "Path to EFI GPT partition table file to be extended into PCR5"},
 	&cli.StringFlag{Name: grubcmdsFlag, Usage: "Path to GRUB command file for PCR8"},
 	&cli.StringFlag{Name: pathFlag, Usage: "Comma-separated list of folders/files to be extended into PCR9"},
 }
@@ -73,10 +70,6 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	c.Conf, err = tcg.GetTcgConf(cmd)
 	if err != nil {
 		return nil, err
-	}
-
-	if cmd.IsSet(gptFlag) {
-		c.Gpt = cmd.String(gptFlag)
 	}
 
 	if cmd.IsSet(grubcmdsFlag) {
@@ -107,9 +100,6 @@ func (c *Config) print() {
 		for _, p := range c.Path {
 			log.Debugf("\t\t%q", p)
 		}
-	}
-	if c.Gpt != "" {
-		log.Debugf("\tGPT: %q", c.Gpt)
 	}
 
 }
@@ -173,6 +163,13 @@ func precompute(pcrNums []int, tpmConf *Config) ([]*ar.ReferenceValue, []*ar.Ref
 			refvals = append(refvals, rv...)
 		case pcrNum == 4:
 			pcr, rv, err := PrecomputePcr4(tpmConf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
+			}
+			pcrs = append(pcrs, pcr)
+			refvals = append(refvals, rv...)
+		case pcrNum == 5:
+			pcr, rv, err := PrecomputePcr5(tpmConf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
 			}

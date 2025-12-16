@@ -46,6 +46,7 @@ type Conf struct {
 	Qemu         bool
 	AddZeros     int
 	StripNewline bool
+	Gpt          string
 	SystemUUID   string
 	SecureBoot   string
 	Pk           string
@@ -56,6 +57,7 @@ type Conf struct {
 	DumpPei      string
 	DumpDxe      string
 	DumpKernel   string
+	DumpGpt      string
 }
 
 const (
@@ -77,18 +79,19 @@ const (
 	qemuFlag         = "qemu"
 	addzerosFlag     = "addzeros"
 	stripnewlineFlag = "stripnewline"
-
-	systemuuidFlag = "systemuuid"
-	securebootFlag = "secureboot"
-	pkFlag         = "pk"
-	kekFlag        = "kek"
-	dbFlag         = "db"
-	dbxFlag        = "dbx"
-	sbatlevelFlag  = "sbatlevel"
+	gptFlag          = "gpt"
+	systemuuidFlag   = "systemuuid"
+	securebootFlag   = "secureboot"
+	pkFlag           = "pk"
+	kekFlag          = "kek"
+	dbFlag           = "db"
+	dbxFlag          = "dbx"
+	sbatlevelFlag    = "sbatlevel"
 
 	dumppeiFlag    = "dumppei"
 	dumpdxeFlag    = "dumpdxe"
 	dumpkernelFlag = "dumpkernel"
+	dumpgptFlag    = "dumpgpt"
 )
 
 var Flags = []cli.Flag{
@@ -110,6 +113,7 @@ var Flags = []cli.Flag{
 	&cli.BoolFlag{Name: qemuFlag, Usage: "QEMU VM (appends initrd=initrd to kernel cmdline)"},
 	&cli.IntFlag{Name: addzerosFlag, Usage: "Add <num> trailing zeros to kernel cmdline", Value: 1},
 	&cli.BoolFlag{Name: stripnewlineFlag, Usage: "Strip potential newline character from the cmdline"},
+	&cli.StringFlag{Name: gptFlag, Usage: "Path to EFI GPT partition table file to be extended into PCR5"},
 	&cli.StringFlag{Name: systemuuidFlag, Usage: "Path to DMI System-UUID file to be extended into PCR6"},
 	&cli.StringFlag{Name: securebootFlag, Usage: "UEFI secure boot SecureBoot variable data file to be measured into PCR7/RTMR0"},
 	&cli.StringFlag{Name: pkFlag, Usage: "UEFI secure boot Platform Key (PK) variable data file to be measured into PCR7/RTMR0"},
@@ -120,6 +124,7 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{Name: dumppeiFlag, Usage: "Optional path to folder to dump the measured PEIFV"},
 	&cli.StringFlag{Name: dumpdxeFlag, Usage: "Optional path to folder to dump the measured DXEFV"},
 	&cli.StringFlag{Name: dumpkernelFlag, Usage: "Optional path to folder to dump the measured kernel"},
+	&cli.StringFlag{Name: dumpgptFlag, Usage: "Optional path to folder to dump the measured GPT"},
 }
 
 func GetTcgConf(cmd *cli.Command) (*Conf, error) {
@@ -178,6 +183,9 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	}
 	c.StripNewline = cmd.Bool(stripnewlineFlag)
 
+	if cmd.IsSet(gptFlag) {
+		c.Gpt = cmd.String(gptFlag)
+	}
 	if cmd.IsSet(systemuuidFlag) {
 		c.SystemUUID = cmd.String(systemuuidFlag)
 	}
@@ -208,6 +216,9 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	}
 	if cmd.IsSet(dumpkernelFlag) {
 		c.DumpKernel = cmd.String(dumpkernelFlag)
+	}
+	if cmd.IsSet(dumpgptFlag) {
+		c.DumpGpt = cmd.String(dumpgptFlag)
 	}
 
 	return c, nil
@@ -284,11 +295,12 @@ func (c *Conf) Print() {
 	if c.StripNewline {
 		log.Debugf("\tStripNewline: true")
 	}
-
+	if c.Gpt != "" {
+		log.Debugf("\tGPT: %q", c.Gpt)
+	}
 	if c.SystemUUID != "" {
 		log.Debugf("\tSystem UUID: %q", c.SystemUUID)
 	}
-
 	if c.SecureBoot != "" {
 		log.Debugf("\tSecureBoot: %q", c.SecureBoot)
 	}
@@ -316,5 +328,8 @@ func (c *Conf) Print() {
 	}
 	if c.DumpKernel != "" {
 		log.Debugf("\tDump Kernel: %q", c.DumpKernel)
+	}
+	if c.DumpGpt != "" {
+		log.Debugf("\tDump GPT: %q", c.DumpGpt)
 	}
 }
