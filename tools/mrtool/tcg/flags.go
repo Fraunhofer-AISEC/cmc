@@ -175,8 +175,12 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	}
 
 	c.Qemu = cmd.Bool(qemuFlag)
+
+	// default initialize to 1
 	if cmd.IsSet(addzerosFlag) {
 		c.AddZeros = cmd.Int(addzerosFlag)
+	} else {
+		c.AddZeros = 1
 	}
 	c.StripNewline = cmd.Bool(stripnewlineFlag)
 

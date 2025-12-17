@@ -32,22 +32,6 @@ var (
 	log = logrus.WithField("service", "mrtool")
 )
 
-// UEFI Spec 2.10 Section 38.4.1:
-// TPM PCR Index | CC Measurement Register Index | TDX-measurement register
-// 0             |   0                           |   MRTD
-// 1, 7          |   1                           |   RTMR[0]
-// 2~6           |   2                           |   RTMR[1]
-// 8~15          |   3                           |   RTMR[2]
-const (
-	MR_LEN       = 6
-	INDEX_MRTD   = 0
-	INDEX_RTMR0  = 1
-	INDEX_RTMR1  = 2
-	INDEX_RTMR2  = 3
-	INDEX_RTMR3  = 4
-	INDEX_MRSEAM = 5 // Additional reference value, not part of UEFI spec
-)
-
 type Config struct {
 	*tcg.Conf
 	TdxModule   string
@@ -195,14 +179,49 @@ func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.Referen
 
 	for _, rtmrNum := range mrNums {
 		switch {
-		case rtmrNum == INDEX_RTMR1:
+		case rtmrNum == tcg.INDEX_MRSEAM:
+			rtmr, rv, err := PrecomputeMrSeam(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute MRSEAM: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
+		case rtmrNum == tcg.INDEX_MRTD:
+			rtmr, rv, err := PrecomputeMrtd(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute MRTD: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
+		case rtmrNum == tcg.INDEX_RTMR0:
+			rtmr, rv, err := PrecomputeRtmr0(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute RTMR0: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
+		case rtmrNum == tcg.INDEX_RTMR1:
 			rtmr, rv, err := PrecomputeRtmr1(conf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute RTMR1: %w", err)
 			}
 			rtmrs = append(rtmrs, rtmr)
 			refvals = append(refvals, rv...)
-		case rtmrNum < MR_LEN:
+		case rtmrNum == tcg.INDEX_RTMR2:
+			rtmr, rv, err := PrecomputeRtmr2(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute RTMR2: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
+		case rtmrNum == tcg.INDEX_RTMR3:
+			rtmr, rv, err := PrecomputeRtmr3(conf)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to precompute RTMR3: %w", err)
+			}
+			rtmrs = append(rtmrs, rtmr)
+			refvals = append(refvals, rv...)
+		case rtmrNum < tcg.MR_LEN:
 			return nil, nil, fmt.Errorf("MR%v precomputation not yet implemented", rtmrNum)
 		default:
 			return nil, nil, fmt.Errorf("specification does not define MR%v", rtmrNum)
