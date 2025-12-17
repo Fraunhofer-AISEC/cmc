@@ -16,8 +16,11 @@
 package internal
 
 import (
+	"crypto"
 	"crypto/sha256"
 	"crypto/sha512"
+	"fmt"
+	"hash"
 )
 
 // ExtendSha256 performs the extend operation Digest = HASH(Digest | Data) using the
@@ -38,4 +41,31 @@ func ExtendSha384(hash []byte, data []byte) []byte {
 	ret := make([]byte, 48)
 	copy(ret, h[:])
 	return ret
+}
+
+func Extend(alg crypto.Hash, digest, data []byte) ([]byte, error) {
+	if !alg.Available() {
+		return nil, fmt.Errorf("hash algorithm not available: %v", alg)
+	}
+
+	var h hash.Hash = alg.New()
+	if _, err := h.Write(digest); err != nil {
+		return nil, fmt.Errorf("hashing failed: %w", err)
+	}
+	if _, err := h.Write(data); err != nil {
+		return nil, fmt.Errorf("hashing failed: %w", err)
+	}
+	return h.Sum(nil), nil
+}
+
+func Hash(alg crypto.Hash, data []byte) ([]byte, error) {
+	if !alg.Available() {
+		return nil, fmt.Errorf("hash algorithm not available: %v", alg)
+	}
+
+	var h hash.Hash = alg.New()
+	if _, err := h.Write(data); err != nil {
+		return nil, fmt.Errorf("hashing failed: %w", err)
+	}
+	return h.Sum(nil), nil
 }

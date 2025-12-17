@@ -39,7 +39,6 @@ type KernelSetupHdr struct {
 }
 
 func LoadKernelSetupHeader(config string) (*KernelSetupHdr, error) {
-
 	data, err := os.ReadFile(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read: %w", err)
