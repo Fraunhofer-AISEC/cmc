@@ -35,18 +35,25 @@ var (
 
 type Config struct {
 	*tcg.Conf
-	GrubCmds string
-	Path     []string
+	SystemUuid string
+	GrubCmds   string
+	Path       []string
+	MokLists   []string
 }
 
 const (
-	grubcmdsFlag = "grubcmds"
-	pathFlag     = "path"
+	systemUuidFlag = "systemuuid"
+	grubcmdsFlag   = "grubcmds"
+	pathFlag       = "path"
+	mokListsFlag   = "moklists"
 )
 
 var flags = []cli.Flag{
+	&cli.StringFlag{Name: systemUuidFlag, Usage: "Path to GRUB command file for PCR8"},
 	&cli.StringFlag{Name: grubcmdsFlag, Usage: "Path to GRUB command file for PCR8"},
 	&cli.StringFlag{Name: pathFlag, Usage: "Comma-separated list of folders/files to be extended into PCR9"},
+	&cli.StringFlag{Name: mokListsFlag, Usage: "Comma-separated list of UEFI MokList variable data files as written to " +
+		"/sys/firmware/efi/efivars to be extended into PCR14"},
 }
 
 var Command = &cli.Command{
@@ -72,12 +79,18 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 		return nil, err
 	}
 
+	if cmd.IsSet(systemUuidFlag) {
+		c.SystemUuid = cmd.String(systemUuidFlag)
+	}
 	if cmd.IsSet(grubcmdsFlag) {
 		c.GrubCmds = cmd.String(grubcmdsFlag)
 	}
 
 	if cmd.IsSet(pathFlag) {
 		c.Path = strings.Split(cmd.String(pathFlag), ",")
+	}
+	if cmd.IsSet(mokListsFlag) {
+		c.MokLists = strings.Split(cmd.String(mokListsFlag), ",")
 	}
 
 	c.print()
@@ -91,6 +104,10 @@ func (c *Config) print() {
 
 	c.Conf.Print()
 
+	if c.SystemUuid != "" {
+		log.Debugf("\tSystem UUID: %q", c.SystemUuid)
+	}
+
 	if c.GrubCmds != "" {
 		log.Debugf("\tGRUB cmds: %q", c.GrubCmds)
 	}
@@ -99,6 +116,13 @@ func (c *Config) print() {
 		log.Debugf("\tPath entries:")
 		for _, p := range c.Path {
 			log.Debugf("\t\t%q", p)
+		}
+	}
+
+	if len(c.MokLists) > 0 {
+		log.Debugf("\tMOK List entries:")
+		for _, m := range c.MokLists {
+			log.Debugf("\t\t%q", m)
 		}
 	}
 
@@ -149,37 +173,37 @@ func run(cmd *cli.Command) error {
 
 func precompute(pcrNums []int, tpmConf *Config) ([]*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
+	var err error
 	refvals := make([]*ar.ReferenceValue, 0)
 	pcrs := make([]*ar.ReferenceValue, 0)
 
 	for _, pcrNum := range pcrNums {
+
+		var pcr *ar.ReferenceValue
+		var rv []*ar.ReferenceValue
+
 		switch {
 		case pcrNum == 2:
-			pcr, rv, err := PrecomputePcr2(tpmConf)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
-			}
-			pcrs = append(pcrs, pcr)
-			refvals = append(refvals, rv...)
+			pcr, rv, err = PrecomputePcr2(tpmConf)
+		case pcrNum == 3:
+			pcr, rv, err = PrecomputePcr3(tpmConf)
 		case pcrNum == 4:
-			pcr, rv, err := PrecomputePcr4(tpmConf)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
-			}
-			pcrs = append(pcrs, pcr)
-			refvals = append(refvals, rv...)
+			pcr, rv, err = PrecomputePcr4(tpmConf)
 		case pcrNum == 5:
-			pcr, rv, err := PrecomputePcr5(tpmConf)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
-			}
-			pcrs = append(pcrs, pcr)
-			refvals = append(refvals, rv...)
+			pcr, rv, err = PrecomputePcr5(tpmConf)
+		case pcrNum == 6:
+			pcr, rv, err = PrecomputePcr6(tpmConf)
 		case pcrNum < 24:
 			return nil, nil, fmt.Errorf("PCR%v precomputation not yet implemented", pcrNum)
 		default:
 			return nil, nil, fmt.Errorf("PCR specification does not define PCR%v", pcrNum)
 		}
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to precompute PCR%v: %w", pcrNum, err)
+		}
+		pcrs = append(pcrs, pcr)
+		refvals = append(refvals, rv...)
 	}
 
 	return pcrs, refvals, nil
