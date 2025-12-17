@@ -16,10 +16,12 @@
 package precomputetpm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -34,6 +36,35 @@ const (
 	PECOFF
 	OptionROM
 )
+
+func PrecomputePcr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+
+	pcr := make([]byte, 32)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	// EV_SEPARATOR
+	sep := []byte{0x0, 0x0, 0x0, 0x0}
+	hashSep := sha256.Sum256(sep)
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:        "TPM Reference Value",
+		SubType:     "EV_SEPARATOR",
+		Index:       3,
+		Sha256:      hashSep[:],
+		Description: "HASH(0000)",
+	})
+	pcr = internal.ExtendSha256(pcr, hashSep[:])
+
+	// Create final reference value
+	pcrSummary := &ar.ReferenceValue{
+		Type:        "TPM Reference Value",
+		SubType:     "PCR Summary",
+		Description: "PCR2",
+		Index:       3,
+		Sha256:      pcr,
+	}
+
+	return pcrSummary, refvals, nil
+}
 
 func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
@@ -90,7 +121,7 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
-	// Create PCR4 final reference value
+	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
 		Type:        "TPM Reference Value",
 		SubType:     "PCR Summary",
@@ -198,7 +229,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
-	// Create PCR4 final reference value
+	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
 		Type:        "TPM Reference Value",
 		SubType:     "PCR Summary",
@@ -288,11 +319,70 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	})
 	pcr = internal.ExtendSha256(pcr, actionHash2[:])
 
-	// Create PCR5 final reference value
+	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
 		Type:        "TPM Reference Value",
 		SubType:     "PCR Summary",
 		Description: "PCR5",
+		Index:       5,
+		Sha256:      pcr,
+	}
+
+	return pcrSummary, refvals, nil
+}
+
+func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+
+	pcr := make([]byte, 32)
+	refvals := make([]*ar.ReferenceValue, 0)
+
+	// EV_COMPACT_HASH
+	if c.SystemUuid != "" {
+
+		uuid, err := os.ReadFile(c.SystemUuid)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read UUID file: %w", err)
+		}
+
+		// Strip newline if present
+		uuid = bytes.TrimRight(uuid, "\n")
+
+		uuidString := string(uuid)
+
+		// UUID is measured uppercase
+		uuidString = strings.ToUpper(uuidString)
+
+		// Prepend "UUID: "
+		uuidString = fmt.Sprintf("UUID: %s", uuidString)
+
+		log.Debugf("Hashing UUID: %q", uuidString)
+
+		hash := sha256.Sum256([]byte(uuidString))
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:    "TPM Reference Value",
+			SubType: "EV_COMPACT_HASH",
+			Index:   6,
+			Sha256:  hash[:],
+		})
+		pcr = internal.ExtendSha256(pcr, hash[:])
+	}
+
+	// EV_SEPARATOR
+	sep := []byte{0x0, 0x0, 0x0, 0x0}
+	hashSep := sha256.Sum256(sep)
+	refvals = append(refvals, &ar.ReferenceValue{
+		Type:    "TPM Reference Value",
+		SubType: "EV_SEPARATOR",
+		Index:   5,
+		Sha256:  hashSep[:],
+	})
+	pcr = internal.ExtendSha256(pcr, hashSep[:])
+
+	// Create final reference value
+	pcrSummary := &ar.ReferenceValue{
+		Type:        "TPM Reference Value",
+		SubType:     "PCR Summary",
+		Description: "PCR6",
 		Index:       5,
 		Sha256:      pcr,
 	}

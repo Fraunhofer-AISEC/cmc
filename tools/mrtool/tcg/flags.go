@@ -47,7 +47,6 @@ type Conf struct {
 	AddZeros     int
 	StripNewline bool
 	Gpt          string
-	SystemUUID   string
 	SecureBoot   string
 	Pk           string
 	Kek          string
@@ -80,7 +79,6 @@ const (
 	addzerosFlag     = "addzeros"
 	stripnewlineFlag = "stripnewline"
 	gptFlag          = "gpt"
-	systemuuidFlag   = "systemuuid"
 	securebootFlag   = "secureboot"
 	pkFlag           = "pk"
 	kekFlag          = "kek"
@@ -113,8 +111,7 @@ var Flags = []cli.Flag{
 	&cli.BoolFlag{Name: qemuFlag, Usage: "QEMU VM (appends initrd=initrd to kernel cmdline)"},
 	&cli.IntFlag{Name: addzerosFlag, Usage: "Add <num> trailing zeros to kernel cmdline", Value: 1},
 	&cli.BoolFlag{Name: stripnewlineFlag, Usage: "Strip potential newline character from the cmdline"},
-	&cli.StringFlag{Name: gptFlag, Usage: "Path to EFI GPT partition table file to be extended into PCR5"},
-	&cli.StringFlag{Name: systemuuidFlag, Usage: "Path to DMI System-UUID file to be extended into PCR6"},
+	&cli.StringFlag{Name: gptFlag, Usage: "Path to EFI GPT partition table file to be extended into PCR5/RTMR1"},
 	&cli.StringFlag{Name: securebootFlag, Usage: "UEFI secure boot SecureBoot variable data file to be measured into PCR7/RTMR0"},
 	&cli.StringFlag{Name: pkFlag, Usage: "UEFI secure boot Platform Key (PK) variable data file to be measured into PCR7/RTMR0"},
 	&cli.StringFlag{Name: kekFlag, Usage: "UEFI secure boot Key Exchange Key (KEK) variable data file to be measured into PCR7/RTMR0"},
@@ -186,9 +183,7 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	if cmd.IsSet(gptFlag) {
 		c.Gpt = cmd.String(gptFlag)
 	}
-	if cmd.IsSet(systemuuidFlag) {
-		c.SystemUUID = cmd.String(systemuuidFlag)
-	}
+
 	if cmd.IsSet(securebootFlag) {
 		c.SecureBoot = cmd.String(securebootFlag)
 	}
@@ -297,9 +292,6 @@ func (c *Conf) Print() {
 	}
 	if c.Gpt != "" {
 		log.Debugf("\tGPT: %q", c.Gpt)
-	}
-	if c.SystemUUID != "" {
-		log.Debugf("\tSystem UUID: %q", c.SystemUUID)
 	}
 	if c.SecureBoot != "" {
 		log.Debugf("\tSecureBoot: %q", c.SecureBoot)
