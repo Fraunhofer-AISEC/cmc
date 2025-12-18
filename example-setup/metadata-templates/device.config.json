@@ -26,7 +26,8 @@
                 "streetAddress": "teststreet 16",
                 "postalCode": "85748"
             },
-            "sans": [ "127.0.0.1", "localhost", "nuc-02.aisec.fraunhofer.de" ]
+            "dnsNames": [ "localhost" ],
+            "ipAddresses": [ "127.0.0.1" ]
         }
     },
     "sw": {
@@ -53,7 +54,8 @@
                 "streetAddress": "teststreet 16",
                 "postalCode": "85748"
             },
-            "sans": [ "127.0.0.1", "localhost", "nuc-02.aisec.fraunhofer.de" ]
+            "dnsNames": [ "localhost" ],
+            "ipAddresses": [ "127.0.0.1" ]
         }
     },
     "azure": {
@@ -68,7 +70,8 @@
                 "streetAddress": "teststreet 16",
                 "postalCode": "85748"
             },
-            "sans": [ "127.0.0.1", "localhost", "azure-tdx.aisec.fraunhofer.de" ]
+            "dnsNames": [ "localhost" ],
+            "ipAddresses": [ "127.0.0.1" ]
         }
     },
     "tdx": {
@@ -83,7 +86,8 @@
                 "streetAddress": "teststreet 16",
                 "postalCode": "85748"
             },
-            "sans": [ "127.0.0.1", "localhost", "xeon-01.aisec.fraunhofer.de" ]
+            "dnsNames": [ "localhost" ],
+            "ipAddresses": [ "127.0.0.1" ]
         }
     },
     "snp": {
@@ -98,7 +102,8 @@
                 "streetAddress": "teststreet 16",
                 "postalCode": "85748"
             },
-            "sans": [ "127.0.0.1", "localhost", "epyc-06.aisec.fraunhofer.de" ]
+            "dnsNames": [ "localhost" ],
+            "ipAddresses": [ "127.0.0.1" ]
         }
     }
 }

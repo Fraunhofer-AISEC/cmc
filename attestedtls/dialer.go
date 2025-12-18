@@ -49,7 +49,12 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	if err != nil {
 		details := fmt.Sprintf("%v certificate chain(s) provided: ", len(config.Certificates))
 		for _, cert := range config.Certificates {
-			details = details + fmt.Sprintf("%v with SANS %v; ", cert.Leaf.Subject.CommonName, cert.Leaf.DNSNames)
+			strIPs := make([]string, len(cert.Leaf.IPAddresses))
+			for i, ip := range cert.Leaf.IPAddresses {
+				strIPs[i] = ip.String()
+			}
+			details = details + fmt.Sprintf("CN=%v with DNSNames %v, IPAddresses %v; ",
+				cert.Leaf.Subject.CommonName, cert.Leaf.DNSNames, strIPs)
 		}
 		return nil, fmt.Errorf("failed to establish tls connection: %w. %v", err, details)
 	}

@@ -340,8 +340,9 @@ type Environment struct {
 
 // CsrParams contains certificate signing request parameters
 type CsrParams struct {
-	Subject Name     `json:"subject,omitempty" cbor:"0,keyasint,omitempty"`
-	SANs    []string `json:"sans,omitempty" cbor:"1,keyasint,omitempty"`
+	Subject     Name     `json:"subject,omitempty" cbor:"0,keyasint,omitempty"`
+	DnsNames    []string `json:"dnsNames,omitempty" cbor:"1,keyasint,omitempty"`
+	IpAddresses []string `json:"ipAddresses,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 // Name is the PKIX Name for CsrParams
