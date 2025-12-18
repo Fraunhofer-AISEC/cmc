@@ -257,6 +257,7 @@ func CreateCert(csr *x509.CertificateRequest) (*x509.Certificate, error) {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		DNSNames:              csr.DNSNames,
+		IPAddresses:           csr.IPAddresses,
 	}
 
 	return tmpl, nil

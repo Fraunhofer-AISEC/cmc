@@ -22,6 +22,7 @@ import (
 	"crypto/x509/pkix"
 	"errors"
 	"fmt"
+	"net"
 )
 
 func GetDeviceConfig(s Serializer, metadata map[string][]byte, cas []*x509.Certificate,
@@ -65,6 +66,15 @@ func GetDeviceConfig(s Serializer, metadata map[string][]byte, cas []*x509.Certi
 func CreateCsr(priv crypto.PrivateKey, params CsrParams,
 ) (*x509.CertificateRequest, error) {
 
+	var ipAddresses []net.IP
+	for _, s := range params.IpAddresses {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			return nil, fmt.Errorf("failed to parse IP %v", s)
+		}
+		ipAddresses = append(ipAddresses, ip)
+	}
+
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{
 			CommonName:         params.Subject.CommonName,
@@ -76,7 +86,8 @@ func CreateCsr(priv crypto.PrivateKey, params CsrParams,
 			StreetAddress:      []string{params.Subject.StreetAddress},
 			PostalCode:         []string{params.Subject.PostalCode},
 		},
-		DNSNames: params.SANs,
+		DNSNames:    params.DnsNames,
+		IPAddresses: ipAddresses,
 	}
 
 	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)

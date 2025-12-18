@@ -148,93 +148,6 @@
         "index"
       ]
     },
-    "EFIDevicePath": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "subtype": {
-          "type": "string"
-        },
-        "memorytype": {
-          "type": "integer"
-        },
-        "startaddress": {
-          "type": "integer"
-        },
-        "endaddress": {
-          "type": "integer"
-        },
-        "vendorguid": {
-          "type": "string"
-        },
-        "vendordefineddata": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "hid": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "uid": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "partitionnumber": {
-          "type": "integer"
-        },
-        "partitionstart": {
-          "type": "integer"
-        },
-        "partitionsize": {
-          "type": "integer"
-        },
-        "partitionsignature": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "partitionformat": {
-          "type": "integer"
-        },
-        "signaturetype": {
-          "type": "integer"
-        },
-        "bootentry": {
-          "type": "integer"
-        },
-        "pathname": {
-          "type": "string"
-        },
-        "protocolguid": {
-          "type": "string"
-        },
-        "firmwareFileName": {
-          "type": "string"
-        },
-        "startingaddress": {
-          "type": "integer"
-        },
-        "endingaddress": {
-          "type": "integer"
-        },
-        "disktypeguid": {
-          "type": "string"
-        },
-        "diskinstance": {
-          "type": "integer"
-        },
-        "devicetype": {
-          "type": "integer"
-        },
-        "statusflag": {
-          "type": "integer"
-        },
-        "descriptionstring": {
-          "type": "string"
-        }
-      },
-      "type": "object",
-      "required": [
-        "type",
-        "subtype"
-      ]
-    },
     "EFILoadOption": {
       "properties": {
         "attributes": {
@@ -245,12 +158,12 @@
         },
         "filepathlist": {
           "items": {
-            "$ref": "#/$defs/EFIDevicePath"
+            "$ref": "#/$defs/FilePathList"
           },
           "type": "array"
         },
         "optionaldata": {
-          "type": "string"
+          "$ref": "#/$defs/HexByte"
         }
       },
       "type": "object",
@@ -298,7 +211,7 @@
         "stringcontent": {
           "type": "string"
         },
-        "rawdata": {
+        "genericdata": {
           "$ref": "#/$defs/HexByte"
         }
       },
@@ -325,6 +238,81 @@
         "appEndpoint",
         "interface",
         "port"
+      ]
+    },
+    "FilePathList": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "subtype": {
+          "type": "string"
+        },
+        "hid": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "uid": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "vendorguid": {
+          "type": "string"
+        },
+        "vendordefineddata": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "partitionnumber": {
+          "type": "integer"
+        },
+        "partitionstart": {
+          "type": "integer"
+        },
+        "partitionsize": {
+          "type": "integer"
+        },
+        "partitionsignature": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "partitionformat": {
+          "type": "integer"
+        },
+        "signaturetype": {
+          "type": "integer"
+        },
+        "bootentry": {
+          "type": "integer"
+        },
+        "pathname": {
+          "type": "string"
+        },
+        "protocolguid": {
+          "type": "string"
+        },
+        "startingaddress": {
+          "type": "integer"
+        },
+        "endingaddress": {
+          "type": "integer"
+        },
+        "disktypeguid": {
+          "type": "string"
+        },
+        "diskinstance": {
+          "type": "integer"
+        },
+        "devicetype": {
+          "type": "integer"
+        },
+        "statusflag": {
+          "type": "integer"
+        },
+        "descriptionstring": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type",
+        "subtype"
       ]
     },
     "GPTHeader": {
@@ -382,7 +370,7 @@
     },
     "GPTPartitionEntry": {
       "properties": {
-        "partitiontypeguid": {
+        "paritiontypeguid": {
           "type": "string"
         },
         "uniquepartitionguid": {
@@ -500,18 +488,20 @@
           "type": "integer"
         },
         "uefidevicepath": {
-          "items": {
-            "$ref": "#/$defs/EFIDevicePath"
-          },
-          "type": "array"
+          "$ref": "#/$defs/FilePathList"
         }
       },
       "type": "object",
       "required": [
         "imagelocationinmemory",
         "imagelengthinmemory",
-        "imagelinktimeaddress"
+        "imagelinktimeaddress",
+        "uefidevicepath"
       ]
+    },
+    "Int": {
+      "properties": {},
+      "type": "object"
     },
     "Linux": {
       "properties": {
@@ -1225,11 +1215,8 @@
         "certLevel": {
           "type": "integer"
         },
-        "caFingerprints": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+        "caFingerprint": {
+          "type": "string"
         },
         "snpPolicy": {
           "$ref": "#/$defs/SnpPolicy"
@@ -1287,7 +1274,7 @@
           },
           "type": "object"
         },
-        "summary": {
+        "result": {
           "$ref": "#/$defs/Result"
         },
         "validityCheck": {
@@ -1307,40 +1294,33 @@
         "version",
         "validity",
         "SgxValues",
-        "summary",
+        "result",
         "signatureValidation"
       ]
     },
     "MetadataSummary": {
       "properties": {
-        "devDescResult": {
+        "deviceDescValidation": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "manifestResults": {
+        "manifestValidation": {
           "items": {
             "$ref": "#/$defs/MetadataResult"
           },
           "type": "array"
         },
-        "compDescResult": {
+        "companyValidation": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "unknownResults": {
-          "items": {
-            "$ref": "#/$defs/MetadataResult"
-          },
-          "type": "array"
-        },
-        "compatibilityResult": {
+        "compatibilityValidation": {
           "$ref": "#/$defs/CompatibilityResult"
         }
       },
       "type": "object",
       "required": [
-        "devDescResult",
-        "manifestResults",
-        "unknownResults",
-        "compatibilityResult"
+        "deviceDescValidation",
+        "manifestValidation",
+        "compatibilityValidation"
       ]
     },
     "Mount": {
@@ -1414,10 +1394,10 @@
     "PCClientTaggedEvent": {
       "properties": {
         "taggedeventid": {
-          "type": "string"
+          "type": "integer"
         },
         "taggedeventdata": {
-          "type": "string"
+          "$ref": "#/$defs/HexByte"
         }
       },
       "type": "object",
@@ -1561,7 +1541,7 @@
     },
     "QeReportResult": {
       "properties": {
-        "summary": {
+        "success": {
           "$ref": "#/$defs/Result"
         },
         "mrsigner": {
@@ -1585,7 +1565,7 @@
       },
       "type": "object",
       "required": [
-        "summary",
+        "success",
         "mrsigner",
         "isvProdId",
         "miscSelect",
@@ -1633,8 +1613,8 @@
     },
     "Result": {
       "properties": {
-        "status": {
-          "type": "string"
+        "success": {
+          "type": "boolean"
         },
         "got": {
           "type": "string"
@@ -1654,19 +1634,13 @@
           },
           "type": "array"
         },
-        "errorCodes": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "details": {
-          "type": "string"
+        "errorCode": {
+          "type": "integer"
         }
       },
       "type": "object",
       "required": [
-        "status"
+        "success"
       ]
     },
     "Root": {
@@ -2215,7 +2189,7 @@
     },
     "TcbInfoResult": {
       "properties": {
-        "summary": {
+        "success": {
           "$ref": "#/$defs/Result"
         },
         "id": {
@@ -2224,49 +2198,20 @@
         "version": {
           "$ref": "#/$defs/Result"
         },
-        "tcbLevelResult": {
-          "$ref": "#/$defs/TcbLevelResult"
-        }
-      },
-      "type": "object",
-      "required": [
-        "summary",
-        "id",
-        "version",
-        "tcbLevelResult"
-      ]
-    },
-    "TcbLevelResult": {
-      "properties": {
         "status": {
           "type": "string"
         },
         "date": {
           "type": "string"
-        },
-        "pceSvn": {
-          "$ref": "#/$defs/Result"
-        },
-        "sgxComponents": {
-          "items": {
-            "$ref": "#/$defs/Result"
-          },
-          "type": "array"
-        },
-        "tdxComponents": {
-          "items": {
-            "$ref": "#/$defs/Result"
-          },
-          "type": "array"
         }
       },
       "type": "object",
       "required": [
+        "success",
+        "id",
+        "version",
         "status",
-        "date",
-        "pceSvn",
-        "sgxComponents",
-        "tdxComponents"
+        "date"
       ]
     },
     "TdAttributesCheck": {
@@ -2617,8 +2562,14 @@
         "type": {
           "type": "string"
         },
-        "summary": {
-          "$ref": "#/$defs/Result"
+        "success": {
+          "type": "boolean"
+        },
+        "errorCodes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
         },
         "prover": {
           "type": "string"
@@ -2638,6 +2589,9 @@
         "metadata": {
           "$ref": "#/$defs/MetadataSummary"
         },
+        "policySuccess": {
+          "type": "boolean"
+        },
         "reportSignatureCheck": {
           "items": {
             "$ref": "#/$defs/SignatureResult"
@@ -2649,7 +2603,7 @@
       "required": [
         "version",
         "type",
-        "summary",
+        "success",
         "certLevel",
         "measurements",
         "metadata",
@@ -2822,7 +2776,7 @@
           "type": "integer"
         },
         "serialNumber": {
-          "type": "string"
+          "$ref": "#/$defs/Int"
         },
         "issuer": {
           "$ref": "#/$defs/X509Name"
