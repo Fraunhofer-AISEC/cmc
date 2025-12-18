@@ -105,9 +105,17 @@ on how this can be achieved.
 
 Simply parses the reference values from a running VM:
 ```sh
+cmc-docker vm-estserver
 cmc-docker vm-swtpm
 cmc-docker vm-start
 cmc-docker update-metadata-vm
+```
+
+The `update-metadata-vm` script also deletes the cmc internal data folder so that the
+generation of new certificates is enforced. This can also be done manually in the vm:
+```sh
+rm -r /var/cmc
+systemctl restart cmcd
 ```
 
 #### Precomputing the Reference Values
