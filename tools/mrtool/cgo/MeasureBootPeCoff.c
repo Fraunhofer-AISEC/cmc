@@ -1017,6 +1017,8 @@ MeasurePeImage (
   mTcg2DxeImageSize      = buf_size;
   ImageContext.ImageRead = (PE_COFF_LOADER_READ_FILE) Tcg2DxeImageRead;
 
+  DEBUG("\tBufferSize: 0x%llx\n", mTcg2DxeImageSize);
+
   //
   // Get information about the image being loaded
   //
@@ -1030,6 +1032,7 @@ MeasurePeImage (
   }
 
   DEBUG("\tImageAddress: 0x%llx\n", ImageContext.ImageAddress);
+  DEBUG("\tImageSize: 0x%llx\n", ImageContext.ImageSize);
   DEBUG("\tImageType: 0x%x\n", ImageContext.ImageType);
   DEBUG("\tPeCoffHeaderOffset: 0x%x\n", ImageContext.PeCoffHeaderOffset);
   DEBUG("\tSizeOfHeaders: 0x%llx\n", ImageContext.SizeOfHeaders);

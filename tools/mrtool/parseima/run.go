@@ -45,27 +45,6 @@ var (
 	log = logrus.WithField("service", "mrtool")
 )
 
-func getParseImaPcrConf(cmd *cli.Command) (*ParseImaPcrConf, error) {
-	c := &ParseImaPcrConf{
-		Eventlog: cmd.String(imaEventlogFlag),
-	}
-	return c, nil
-}
-
-func checkParseImaPcrConf(globConf *global.Config) error {
-
-	if !globConf.PrintEventLog && !globConf.PrintSummary {
-		return fmt.Errorf("neither eventlog nor summary have been provided. See mrtool parse ima --help")
-	}
-	if len(globConf.Mrs) != 1 {
-		return fmt.Errorf("unexpected number of PCRs: %v. See mrtool parse ima --help", len(globConf.Mrs))
-	}
-	if globConf.Mrs[0] > 23 {
-		return fmt.Errorf("unexpected PCR index %v. See mrtool parse ima --help", globConf.Mrs[0])
-	}
-	return nil
-}
-
 var Command = &cli.Command{
 	Name:  "ima",
 	Usage: "Parses the Linux kernel's Integrity Measurement Architecture (IMA) eventlog from the securityfs and prints the output",
@@ -77,7 +56,7 @@ var Command = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		err := ParseImaPcr(cmd)
+		err := run(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to parse ima pcr: %w", err)
 		}
@@ -85,24 +64,24 @@ var Command = &cli.Command{
 	},
 }
 
-func ParseImaPcr(cmd *cli.Command) error {
+func run(cmd *cli.Command) error {
 
 	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}
 
-	pcrConf, err := getParseImaPcrConf(cmd)
+	pcrConf, err := getConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid tdx config: %w", err)
 	}
 
-	err = checkParseImaPcrConf(globConf)
+	err = checkConfig(globConf)
 	if err != nil {
 		return fmt.Errorf("failed to check IMA config: %w", err)
 	}
 
-	log.Debugf("Parsing ima tpm pcr eventlog %q...", pcrConf.Eventlog)
+	log.Infof("Parsing IMA TPM PCR eventlog %q...", pcrConf.Eventlog)
 
 	events, err := ima.GetImaRuntimeDigests(pcrConf.Eventlog)
 	if err != nil {
@@ -134,5 +113,28 @@ func ParseImaPcr(cmd *cli.Command) error {
 		os.Stdout.Write(append(data, []byte("\n")...))
 	}
 
+	log.Info("Finished")
+
+	return nil
+}
+
+func getConfig(cmd *cli.Command) (*ParseImaPcrConf, error) {
+	c := &ParseImaPcrConf{
+		Eventlog: cmd.String(imaEventlogFlag),
+	}
+	return c, nil
+}
+
+func checkConfig(globConf *global.Config) error {
+
+	if !globConf.PrintEventLog && !globConf.PrintSummary {
+		return fmt.Errorf("neither eventlog nor summary have been provided. See mrtool parse ima --help")
+	}
+	if len(globConf.Mrs) != 1 {
+		return fmt.Errorf("unexpected number of PCRs: %v. See mrtool parse ima --help", len(globConf.Mrs))
+	}
+	if globConf.Mrs[0] > 23 {
+		return fmt.Errorf("unexpected PCR index %v. See mrtool parse ima --help", globConf.Mrs[0])
+	}
 	return nil
 }

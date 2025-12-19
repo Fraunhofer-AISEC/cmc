@@ -22,6 +22,7 @@ import (
 
 	"golang.org/x/exp/maps"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
@@ -116,6 +117,7 @@ func GetConfig(cmd *cli.Command) (*Config, error) {
 }
 
 func (c *Config) Print() {
+	log.Infof("Running mrtool version %v", internal.GetVersion())
 	log.Debugf("Global Config")
 	log.Debugf("\tMRs      : %v\n", c.Mrs)
 	log.Debugf("\tLogLevel : %v\n", c.LogLevel)

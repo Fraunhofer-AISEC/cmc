@@ -17,16 +17,13 @@ package parsetpm
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
@@ -71,7 +68,7 @@ var Command = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		err := ParsePcrs(cmd)
+		err := run(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to parse tpm srtm pcrs: %w", err)
 		}
@@ -79,46 +76,24 @@ var Command = &cli.Command{
 	},
 }
 
-func getParsePcrsConf(cmd *cli.Command) (*ParsePcrsConf, error) {
-	c := &ParsePcrsConf{
-		Eventlog:       cmd.String(tpmEventlogFlag),
-		PrintAggregate: cmd.Bool(printAggregateFlag),
-		RawEventData:   cmd.Bool(rawEventDataFlag),
-	}
-	return c, nil
-}
-
-func checkParsePcrsConf(globConf *global.Config, parsePcrsConf *ParsePcrsConf) error {
-
-	if !globConf.PrintEventLog && !globConf.PrintSummary && !parsePcrsConf.PrintAggregate {
-		return fmt.Errorf("neither eventlog nor summary or aggregate are set. Do nothing")
-	}
-	for _, mr := range globConf.Mrs {
-		if mr > 23 {
-			return fmt.Errorf("invalid PCR value: %v. Only 0-23 are allowed", mr)
-		}
-	}
-	return nil
-}
-
-func ParsePcrs(cmd *cli.Command) error {
+func run(cmd *cli.Command) error {
 
 	globConf, err := global.GetConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid global config: %w", err)
 	}
 
-	pcrConf, err := getParsePcrsConf(cmd)
+	pcrConf, err := getConfig(cmd)
 	if err != nil {
 		return fmt.Errorf("invalid tdx config: %w", err)
 	}
 
-	err = checkParsePcrsConf(globConf, pcrConf)
+	err = checkConfig(globConf, pcrConf)
 	if err != nil {
 		return fmt.Errorf("failed to check parse pcrs config: %w", err)
 	}
 
-	log.Debug("Parsing tpm srtm pcr eventlog...")
+	log.Info("Parsing TPM SRTM PCR eventlog...")
 
 	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, "TPM Reference Value", pcrConf.RawEventData)
 	if err != nil {
@@ -128,17 +103,16 @@ func ParsePcrs(cmd *cli.Command) error {
 	log.Debugf("Collected %v binary bios measurements", len(refvals))
 
 	// Only return requested PCRs
-	filteredRefvals := make([]ar.ReferenceValue, 0, len(refvals))
+	filteredRefvals := make([]*ar.ReferenceValue, 0, len(refvals))
 	for _, refval := range refvals {
 		if contains(globConf.Mrs, refval.Index) {
-			filteredRefvals = append(filteredRefvals, refval)
+			filteredRefvals = append(filteredRefvals, &refval)
 		}
 	}
-	refvals = filteredRefvals
 
 	// Write eventlog to stdout
 	if globConf.PrintEventLog {
-		data, err := json.MarshalIndent(refvals, "", "     ")
+		data, err := json.MarshalIndent(filteredRefvals, "", "     ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal reference values: %w", err)
 		}
@@ -147,7 +121,7 @@ func ParsePcrs(cmd *cli.Command) error {
 
 	// Calculate summary and write to stdout
 	if globConf.PrintSummary {
-		pcrValues, err := calculatePcrValues(refvals)
+		pcrValues, err := tcg.PrecomputeFinalPcrValues(filteredRefvals)
 		if err != nil {
 			return fmt.Errorf("failed to calculate final PCR values")
 		}
@@ -160,21 +134,11 @@ func ParsePcrs(cmd *cli.Command) error {
 
 	// Calculate aggregate and write to stdout
 	if pcrConf.PrintAggregate {
-		pcrValues, err := calculatePcrValues(refvals)
+		aggregate, err := tcg.PrecomputeAggregatePcrValue(filteredRefvals)
 		if err != nil {
-			return fmt.Errorf("failed to calculate final PCR values")
+			return fmt.Errorf("failed to calculate aggregate PCR value")
 		}
-		hash := sha256.New()
 
-		for _, val := range pcrValues {
-			hash.Write(val.Sha256)
-		}
-		aggregateHash := hash.Sum(nil)
-		aggregate := ar.ReferenceValue{
-			Type:   "TPM PCR Aggregate",
-			Index:  0,
-			Sha256: aggregateHash,
-		}
 		data, err := json.MarshalIndent(aggregate, "", "     ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal reference values: %w", err)
@@ -182,45 +146,31 @@ func ParsePcrs(cmd *cli.Command) error {
 		os.Stdout.Write(append(data, []byte("\n")...))
 	}
 
-	log.Debug("Finished")
+	log.Info("Finished")
 
 	return nil
 }
 
-func calculatePcrValues(refvals []ar.ReferenceValue) ([]ar.ReferenceValue, error) {
+func getConfig(cmd *cli.Command) (*ParsePcrsConf, error) {
+	c := &ParsePcrsConf{
+		Eventlog:       cmd.String(tpmEventlogFlag),
+		PrintAggregate: cmd.Bool(printAggregateFlag),
+		RawEventData:   cmd.Bool(rawEventDataFlag),
+	}
+	return c, nil
+}
 
-	summaryMap := make(map[int][]byte)
+func checkConfig(globConf *global.Config, parsePcrsConf *ParsePcrsConf) error {
 
-	for _, rv := range refvals {
-		old, ok := summaryMap[rv.Index]
-		if !ok {
-			// Initialize old value with init value (can be different from zero in PCR0)
-			summaryMap[rv.Index] = rv.Sha256
-			continue
+	if !globConf.PrintEventLog && !globConf.PrintSummary && !parsePcrsConf.PrintAggregate {
+		return fmt.Errorf("neither eventlog nor summary or aggregate are set. Do nothing")
+	}
+	for _, mr := range globConf.Mrs {
+		if mr > 23 {
+			return fmt.Errorf("invalid PCR value: %v. Only 0-23 are allowed", mr)
 		}
-		log.Tracef("extending hash: %v", hex.EncodeToString(old))
-		summaryMap[rv.Index] = internal.ExtendSha256(old, rv.Sha256)
-		log.Tracef("data          : %v", hex.EncodeToString(rv.Sha256))
-		log.Tracef("extended hash : %v", hex.EncodeToString(summaryMap[rv.Index]))
 	}
-
-	// Convert map back to slice
-	var summaries []ar.ReferenceValue
-	for idx, val := range summaryMap {
-		summaries = append(summaries, ar.ReferenceValue{
-			Type:    "TPM Reference Value",
-			SubType: "PCR Summary",
-			Index:   idx,
-			Sha256:  val,
-		})
-	}
-
-	// Sort summaries by index
-	sort.Slice(summaries, func(i, j int) bool {
-		return summaries[i].Index < summaries[j].Index
-	})
-
-	return summaries, nil
+	return nil
 }
 
 func contains(slice []int, item int) bool {

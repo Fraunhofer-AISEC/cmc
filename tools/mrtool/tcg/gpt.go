@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash"
-	"io"
 	"math"
 	"os"
 	"unicode/utf16"
@@ -36,14 +35,6 @@ type EfiTableHeader struct {
 	HeaderSize uint32 // Size of the table including this header
 	CRC32      uint32 // 32-bit CRC of the table
 	Reserved   uint32
-}
-
-// EfiGuid represents a GUID/UUID.
-type EfiGuid struct {
-	Data1 uint32
-	Data2 uint16
-	Data3 uint16
-	Data4 [8]uint8
 }
 
 // GptPartitionTableHeader represents the GPT Partition Table Header.
@@ -97,7 +88,7 @@ func MeasureGptFromFile(h hash.Hash, path, dump string) ([]byte, string, error) 
 	}
 
 	var header GptPartitionTableHeader
-	if err := readStructAt(f, headerOffset, &header); err != nil {
+	if err := ReadStructAt(f, headerOffset, &header); err != nil {
 		return nil, "", fmt.Errorf("read GPT header: %w", err)
 	}
 
@@ -121,7 +112,7 @@ func MeasureGptFromFile(h hash.Hash, path, dump string) ([]byte, string, error) 
 	for i := uint32(0); i < entryCount; i++ {
 		var entry EfiPartitionEntry
 		offset := entryArrayOffset + int64(i*entrySize)
-		if err := readStructAt(f, offset, &entry); err != nil {
+		if err := ReadStructAt(f, offset, &entry); err != nil {
 			return nil, "", fmt.Errorf("read partition entry %v: %w", i, err)
 		}
 		// Only measure non-zero PartitionTypeGUID
@@ -141,7 +132,7 @@ func MeasureGptFromFile(h hash.Hash, path, dump string) ([]byte, string, error) 
 		var entry EfiPartitionEntry
 
 		offset := entryArrayOffset + int64(i*entrySize)
-		if err := readStructAt(f, offset, &entry); err != nil {
+		if err := ReadStructAt(f, offset, &entry); err != nil {
 			return nil, "", fmt.Errorf("read partition entry %v: %w", i, err)
 		}
 
@@ -178,7 +169,7 @@ func findGptHeaderOffset(f *os.File) (int64, error) {
 	canonical := int64(PrimaryPartHeaderLBA * LogicalBlockSize)
 
 	var header GptPartitionTableHeader
-	if err := readStructAt(f, canonical, &header); err == nil {
+	if err := ReadStructAt(f, canonical, &header); err == nil {
 		if header.Header.Signature == EfiPtabHeaderID {
 			return canonical, nil
 		}
@@ -348,11 +339,6 @@ func checkEFIPartitionTableHeader(header GptPartitionTableHeader) error {
 	}
 
 	return nil
-}
-
-func readStructAt[T any](r io.ReaderAt, offset int64, out *T) error {
-	sr := io.NewSectionReader(r, offset, int64(binary.Size(out)))
-	return binary.Read(sr, binary.LittleEndian, out)
 }
 
 func isZeroGuid(g EfiGuid) bool {

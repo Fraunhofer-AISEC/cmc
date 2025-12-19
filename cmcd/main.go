@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,7 +34,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	log.Infof("Running cmc %v", cmc.GetVersion())
+	log.Infof("Running cmc %v", internal.GetVersion())
 
 	cmc, err := cmc.NewCmc(&c.Config)
 	if err != nil {

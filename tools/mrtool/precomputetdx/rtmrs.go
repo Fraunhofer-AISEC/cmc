@@ -18,12 +18,10 @@ package precomputetdx
 import (
 	"crypto"
 	"crypto/sha512"
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode/utf16"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -94,7 +92,8 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	}
 
 	// Measure UEFI Secure Boot Variables: SecureBoot, PK, KEK, db, dbx
-	rtmr, refvals, err = MeasureSecureBootVariables(rtmr, refvals, tcg.INDEX_RTMR0, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
+	rtmr, refvals, err = tcg.MeasureSecureBootVariables(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure secure boot variables: %w", err)
 	}
@@ -113,15 +112,26 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	})
 
 	// EV_PLATFORM_CONFIG_FLAGS: ACPI tables
-	rtmr, refvals, err = tcg.CalculateAcpiTables(crypto.SHA384, rtmr, refvals, tcg.INDEX_RTMR0, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
+	rtmr, refvals, err = tcg.CalculateAcpiTables(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
 	}
 
 	// EV_EFI_VARIABLE_BOOT boot variables
-	rtmr, refvals, err = CalculateEfiBootVars(rtmr, refvals, tcg.INDEX_RTMR0, c.BootOrder, c.BootXxxx)
+	rtmr, refvals, err = tcg.MeasureEfiBootVars(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, c.BootOrder, c.BootXxxx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
+	}
+
+	// EV_EFI_VARIABLE_AUTHORITY: SbatLevel
+	if c.SbatLevel != "" {
+		rtmr, refvals, err = tcg.MeasureSbatLevel(crypto.SHA384, tcg.TDX, rtmr, refvals,
+			tcg.INDEX_RTMR0, c.SbatLevel)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure SbatLevel: %w", err)
+		}
 	}
 
 	// Terminating EV_SEPARATOR is extended only in edk2-stable202408.01
@@ -231,6 +241,48 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		rtmr = internal.ExtendSha384(rtmr, hashSep[:])
 	}
 
+	// EV_EFI_GPT_EVENT
+	// Calculate UEFI GPT partition table if provided. The raw disk data can be
+	// provided, the function will find the GPT partition table if present
+	if c.Gpt != "" {
+		hash, description, err := tcg.MeasureGptFromFile(sha512.New384(), c.Gpt, c.DumpGpt)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
+		}
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "EV_EFI_GPT_EVENT",
+			Index:       tcg.INDEX_RTMR1,
+			Sha384:      hash[:],
+			Description: description,
+		})
+		rtmr = internal.ExtendSha384(rtmr, hash[:])
+	}
+
+	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure bootloaders if present
+	for _, f := range c.Bootloaders {
+
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		hash, err := cgo.MeasurePeImage(cgo.SHA384, data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
+		}
+
+		refvals = append(refvals, &ar.ReferenceValue{
+			Type:        "TDX Reference Value",
+			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index:       tcg.INDEX_RTMR1,
+			Sha384:      hash[:],
+			Description: filepath.Base(f),
+		})
+		rtmr = internal.ExtendSha384(rtmr, hash[:])
+	}
+
 	// EV_EFI_ACTION
 	h2 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_INVOCATION))
 	refvals = append(refvals, &ar.ReferenceValue{
@@ -276,42 +328,11 @@ func PrecomputeRtmr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	rtmr := make([]byte, sha512.Size384)
 	refvals := make([]*ar.ReferenceValue, 0)
 
-	// read the commandline
-	if c.Cmdline == "" {
-		return nil, nil, fmt.Errorf("kernel commandline must be specified")
-	}
-	cmdLineData, err := os.ReadFile(c.Cmdline)
+	rtmr, refvals, err := tcg.MeasureCmdline(crypto.SHA384, tcg.TDX, rtmr, refvals, tcg.INDEX_RTMR2,
+		c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, false)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read commandline: %w", err)
+		return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
 	}
-	if len(cmdLineData) == 0 {
-		return nil, nil, fmt.Errorf("empty commandline found")
-	}
-
-	// sanitize the data
-	if c.StripNewline && cmdLineData[len(cmdLineData)-1] == '\n' {
-		cmdLineData = cmdLineData[:len(cmdLineData)-1]
-	}
-
-	// interpret the cmdline as utf-8
-	cmdLineStr := string(cmdLineData)
-
-	// interpret bytes as ascii/utf-8 and encode as utf-16
-	utf16Line := utf16.Encode([]rune(cmdLineStr))
-	utf16Line = append(utf16Line, make([]uint16, c.AddZeros)...)
-
-	// add the final hash
-	buffer, _ := binary.Append(nil, binary.LittleEndian, utf16Line)
-	hash := sha512.Sum384(buffer)
-
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
-		SubType:     "EV_EVENT_TAG",
-		Index:       tcg.INDEX_RTMR2,
-		Sha384:      hash[:],
-		Description: fmt.Sprintf("RTMR2: %v", cmdLineStr),
-	})
-	rtmr = internal.ExtendSha384(rtmr, hash[:])
 
 	// Create RTMR2 final reference value
 	rtmrSummary := &ar.ReferenceValue{

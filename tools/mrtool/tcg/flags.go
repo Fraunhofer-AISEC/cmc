@@ -39,6 +39,7 @@ type Conf struct {
 	NoBootVars   bool
 	Drivers      []string
 	Bootloaders  []string
+	LoaderConfs  []string
 	Config       string
 	Kernel       string
 	Initrd       string
@@ -71,6 +72,7 @@ const (
 	nobootvarsFlag   = "nobootvars"
 	driversFlag      = "drivers"
 	bootloadersFlag  = "bootloaders"
+	loaderConfsFlag  = "loaderconfs"
 	configFlag       = "config"
 	kernelFlag       = "kernel"
 	initrdFlag       = "initrd"
@@ -98,12 +100,13 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{Name: acpitablesFlag, Usage: "Path to QEMU etc/acpi/tables file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tableloaderFlag, Usage: "Path to QEMU etc/table-loader file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tpmlogFlag, Usage: "Path to QEMU etc/tpm/log file for PCR1/RTMR0"},
-	&cli.StringFlag{Name: efihobFlag, Usage: "Path to an EFI handoff table optionally measured into PCR1/RTMR0"},
+	&cli.StringFlag{Name: efihobFlag, Usage: "Path to an EFI handoff table optionally measured into PCR1"},
 	&cli.StringFlag{Name: bootorderFlag, Usage: "Comma-separated list of UEFI boot order numbers to be measured into PCR1/RTMR0"},
 	&cli.StringFlag{Name: bootxxxxFlag, Usage: "Comma-separated list of UEFI Boot#### variable data files to be measured into PCR1/RTMR0"},
 	&cli.BoolFlag{Name: nobootvarsFlag, Usage: "Do not measure UEFI boot variables into PCR1/RTMR0"},
 	&cli.StringFlag{Name: driversFlag, Usage: "Comma-separated list of driver EFI files (PE/COFF or Option ROM format) to be measured into PCR2"},
 	&cli.StringFlag{Name: bootloadersFlag, Usage: "Comma-separated list of bootloader EFI images to be measured into PCR4/RTMR1"},
+	&cli.StringFlag{Name: loaderConfsFlag, Usage: "Comma-separated list of bootloader configuration files to be measured into PCR5"},
 	&cli.StringFlag{Name: kernelFlag, Usage: "Path to a direct boot kernel image (PE/COFF format) measured into PCR4/RTMR1"},
 	&cli.StringFlag{Name: configFlag, Usage: "Path to kernel configuration file"},
 	&cli.StringFlag{Name: initrdFlag, Usage: "The filename of the initrd/initramfs"},
@@ -160,6 +163,9 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	}
 	if cmd.IsSet(bootloadersFlag) {
 		c.Bootloaders = strings.Split(cmd.String(bootloadersFlag), ",")
+	}
+	if cmd.IsSet(loaderConfsFlag) {
+		c.LoaderConfs = strings.Split(cmd.String(loaderConfsFlag), ",")
 	}
 	if cmd.IsSet(configFlag) {
 		c.Config = cmd.String(configFlag)

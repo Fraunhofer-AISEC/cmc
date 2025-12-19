@@ -14,38 +14,3 @@
 // limitations under the License.
 
 package tcg
-
-// UEFI Spec 2.10 Section 38.4.1:
-// TPM PCR Index | CC Measurement Register Index | TDX-measurement register
-// 0             |   0                           |   MRTD
-// 1, 7          |   1                           |   RTMR[0]
-// 2~6           |   2                           |   RTMR[1]
-// 8~15          |   3                           |   RTMR[2]
-const (
-	MR_LEN       = 6
-	INDEX_MRTD   = 0
-	INDEX_RTMR0  = 1
-	INDEX_RTMR1  = 2
-	INDEX_RTMR2  = 3
-	INDEX_RTMR3  = 4
-	INDEX_MRSEAM = 5 // Additional reference value, not part of UEFI spec
-)
-
-func IndexToMr(index int) string {
-	switch index {
-	case INDEX_MRTD:
-		return "MRTD"
-	case INDEX_RTMR0:
-		return "RTMR0"
-	case INDEX_RTMR1:
-		return "RTMR1"
-	case INDEX_RTMR2:
-		return "RTMR2"
-	case INDEX_RTMR3:
-		return "RTMR3"
-	case INDEX_MRSEAM:
-		return "MRSEAM"
-	default:
-		return "unknown"
-	}
-}
