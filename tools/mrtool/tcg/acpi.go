@@ -21,116 +21,78 @@ import (
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-func CalculateAcpiTables(alg crypto.Hash, digest []byte, refvals []*ar.ReferenceValue, index int, acpiRspd, acpiTables, tableLoader, tpmLog string) ([]byte, []*ar.ReferenceValue, error) {
-	// EV_PLATFORM_CONFIG_FLAGS: etc/table-loader
+func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.ReferenceValue,
+	index int, acpiRspd, acpiTables, tableLoader, tpmLog string,
+) ([]byte, []*ar.ReferenceValue, error) {
+
+	// EV_PLATFORM_CONFIG_FLAGS: /etc/table-loader
 	if tableLoader != "" {
 		data, err := os.ReadFile(tableLoader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read table loader file: %w", err)
 		}
-		if len(data) > 0 {
-			hash, err := internal.Hash(alg, data)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to compute table loader hash: %w", err)
-			}
 
-			digest, err = internal.Extend(alg, digest, hash[:])
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to extend hash: %w", err)
-			}
-
-			refvals = append(refvals, &ar.ReferenceValue{
-				Type:        "TDX Reference Value",
-				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
-				Index:       index,
-				Sha384:      hash[:],
-				Description: fmt.Sprintf("%v: etc/table-loader", IndexToMr(index)),
-			})
+		var rv *ar.ReferenceValue
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
+			"EV_PLATFORM_CONFIG_FLAGS", "/etc/table-loader")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create table-loader reference value: %w", err)
 		}
+
+		refvals = append(refvals, rv)
 	}
 
-	// EV_PLATFORM_CONFIG_FLAGS: etc/acpi/rsdp
+	// EV_PLATFORM_CONFIG_FLAGS: /etc/acpi/rsdp
 	if acpiRspd != "" {
 		data, err := os.ReadFile(acpiRspd)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read ACPI RSPD file: %w", err)
 		}
-		if len(data) > 0 {
-			hash, err := internal.Hash(alg, data)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to compute ACPI RSPD hash: %w", err)
-			}
 
-			digest, err = internal.Extend(alg, digest, hash[:])
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to extend hash: %w", err)
-			}
-
-			refvals = append(refvals, &ar.ReferenceValue{
-				Type:        "TDX Reference Value",
-				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
-				Index:       index,
-				Sha384:      hash[:],
-				Description: fmt.Sprintf("%v: etc/acpi/rsdp", IndexToMr(index)),
-			})
+		var rv *ar.ReferenceValue
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
+			"EV_PLATFORM_CONFIG_FLAGS", "/etc/acpi/rsdp")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create /etc/acpi/rsdp reference value: %w", err)
 		}
+
+		refvals = append(refvals, rv)
 	}
 
-	// EV_PLATFORM_CONFIG_FLAGS: etc/tpm/log
+	// EV_PLATFORM_CONFIG_FLAGS: /etc/tpm/log
 	if tpmLog != "" {
 		data, err := os.ReadFile(tpmLog)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read TPM log file: %w", err)
 		}
-		if len(data) > 0 {
-			hash, err := internal.Hash(alg, data)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to compute TPM log hash: %w", err)
-			}
 
-			digest, err = internal.Extend(alg, digest, hash[:])
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to extend hash: %w", err)
-			}
-
-			refvals = append(refvals, &ar.ReferenceValue{
-				Type:        "TDX Reference Value",
-				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
-				Index:       index,
-				Sha384:      hash[:],
-				Description: fmt.Sprintf("%v: etc/tpm/log", IndexToMr(index)),
-			})
+		var rv *ar.ReferenceValue
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
+			"EV_PLATFORM_CONFIG_FLAGS", "/etc/tpm/log")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create /etc/tpm/log reference value: %w", err)
 		}
+
+		refvals = append(refvals, rv)
 	}
 
-	// EV_PLATFORM_CONFIG_FLAGS: etc/acpi/tables
+	// EV_PLATFORM_CONFIG_FLAGS: /etc/acpi/tables
 	if acpiTables != "" {
 		data, err := os.ReadFile(acpiTables)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read ACPI tables file: %w", err)
 		}
-		if len(data) > 0 {
-			hash, err := internal.Hash(alg, data)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to compute ACPI tables hash: %w", err)
-			}
 
-			digest, err = internal.Extend(alg, digest, hash[:])
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to extend hash: %w", err)
-			}
-
-			refvals = append(refvals, &ar.ReferenceValue{
-				Type:        "TDX Reference Value",
-				SubType:     "EV_PLATFORM_CONFIG_FLAGS",
-				Index:       index,
-				Sha384:      hash[:],
-				Description: fmt.Sprintf("%v: etc/acpi/tables", IndexToMr(index)),
-			})
+		var rv *ar.ReferenceValue
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
+			"EV_PLATFORM_CONFIG_FLAGS", "/etc/acpi/tables")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create /etc/acpi/tables reference value: %w", err)
 		}
+
+		refvals = append(refvals, rv)
 	}
 
 	return digest, refvals, nil

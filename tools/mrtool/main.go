@@ -26,7 +26,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parseima"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetdx"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetpm"
-	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputeima"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputesnp"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputetdx"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputetpm"
@@ -62,7 +61,6 @@ func main() {
 					precomputetpm.Command,
 					precomputesnp.Command,
 					precomputetdx.Command,
-					precomputeima.Command,
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
 					return cli.ShowSubcommandHelp(c)

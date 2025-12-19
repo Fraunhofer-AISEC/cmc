@@ -16,7 +16,6 @@
 package parsetdx
 
 import (
-	"context"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
@@ -26,103 +25,13 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/google/go-eventlog/register"
 	"github.com/google/go-eventlog/tcg"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v3"
 )
-
-type ParseTdxConf struct {
-	Eventlog string
-}
 
 const (
 	DEFAULT_CCEL_ACPI_TABLE = "/sys/firmware/acpi/tables/data/CCEL"
 )
-
-const (
-	ccEventlogFlag = "eventlog"
-)
-
-var (
-	log = logrus.WithField("service", "mrtool")
-)
-
-var Command = &cli.Command{
-	Name:  "tdx",
-	Usage: "Parses the Intel TDX Runtime Measurement Registers (RTMRs) from the CC eventlog ACPI table",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:  ccEventlogFlag,
-			Usage: "ACPI table CCEL event log path",
-			Value: DEFAULT_CCEL_ACPI_TABLE,
-		},
-	},
-	Action: func(ctx context.Context, c *cli.Command) error {
-		err := ParseTdxMrs(c)
-		if err != nil {
-			return fmt.Errorf("failed to parse TDX event log: %w", err)
-		}
-		return nil
-	},
-}
-
-func getParseTdxConf(cmd *cli.Command) (*ParseTdxConf, error) {
-
-	c := &ParseTdxConf{
-		Eventlog: cmd.String(ccEventlogFlag),
-	}
-	return c, nil
-}
-
-func checkParseTdxConf(globConf *global.Config) error {
-
-	if !globConf.PrintEventLog && !globConf.PrintSummary {
-		return fmt.Errorf("neither print-eventlog nor print-summary have been provided.  See mrtool parse tdx --help")
-	}
-	if len(globConf.Mrs) == 0 {
-		return fmt.Errorf("no mrs specified. See mrtool parse tdx --help")
-	}
-	for _, mr := range globConf.Mrs {
-		if mr < 1 || mr > 4 {
-			return fmt.Errorf("invalid MRS value: %v. Only 1-4 are allowed. See mrtool parse tdx --help", mr)
-		}
-	}
-	return nil
-}
-
-func ParseTdxMrs(cmd *cli.Command) error {
-
-	globConf, err := global.GetConfig(cmd)
-	if err != nil {
-		return fmt.Errorf("invalid global config: %w", err)
-	}
-
-	tdxConf, err := getParseTdxConf(cmd)
-	if err != nil {
-		return fmt.Errorf("invalid tdx config: %w", err)
-	}
-
-	err = checkParseTdxConf(globConf)
-	if err != nil {
-		return fmt.Errorf("failed to check IMA config: %w", err)
-	}
-
-	log.Debug("Parsing TDX MRs...")
-
-	data, err := os.ReadFile(tdxConf.Eventlog)
-	if err != nil {
-		log.Fatalf("Failed to read input file: %v", err)
-	}
-
-	err = parseEventlog(data, globConf.PrintEventLog, globConf.PrintSummary, globConf.Mrs)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	return nil
-}
 
 func parseEventlog(data []byte, eventlogFlag, summaryFlag bool, mrs []int) error {
 	eventlog, err := tcg.ParseEventLog(data, tcg.ParseOpts{AllowPadding: true})

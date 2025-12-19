@@ -70,6 +70,49 @@ var Command = &cli.Command{
 	},
 }
 
+func run(cmd *cli.Command) error {
+
+	globConf, err := global.GetConfig(cmd)
+	if err != nil {
+		return fmt.Errorf("invalid global config: %w", err)
+	}
+
+	tpmConf, err := getConfig(cmd)
+	if err != nil {
+		return fmt.Errorf("invalid precompute tpm config: %w", err)
+	}
+
+	log.Info("Precomputing Intel TDX measurement registers...")
+
+	// Precompute all TPM measurements
+	rtmrs, refvals, err := precompute(globConf.Mrs, tpmConf)
+	if err != nil {
+		return err
+	}
+
+	// Write eventlog to stdout if requested
+	if globConf.PrintEventLog {
+		data, err := json.MarshalIndent(refvals, "", "     ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal reference values: %w", err)
+		}
+		os.Stdout.Write(append(data, []byte("\n")...))
+	}
+
+	// Write final RTMR values to stdout if requested
+	if globConf.PrintSummary {
+		data, err := json.MarshalIndent(rtmrs, "", "     ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal reference values: %w", err)
+		}
+		os.Stdout.Write(append(data, []byte("\n")...))
+	}
+
+	log.Info("Finished")
+
+	return nil
+}
+
 func getConfig(cmd *cli.Command) (*Config, error) {
 
 	var err error
@@ -127,49 +170,6 @@ func (c *Config) print() {
 		log.Debugf("\tQEMU Version: %q", c.QemuVersion)
 	}
 
-}
-
-func run(cmd *cli.Command) error {
-
-	globConf, err := global.GetConfig(cmd)
-	if err != nil {
-		return fmt.Errorf("invalid global config: %w", err)
-	}
-
-	tpmConf, err := getConfig(cmd)
-	if err != nil {
-		return fmt.Errorf("invalid precompute tpm config: %w", err)
-	}
-
-	log.Debug("Precomputing Intel TDX measurement registers...")
-
-	// Precompute all TPM measurements
-	rtmrs, refvals, err := precompute(globConf.Mrs, tpmConf)
-	if err != nil {
-		return err
-	}
-
-	// Write eventlog to stdout if requested
-	if globConf.PrintEventLog {
-		data, err := json.MarshalIndent(refvals, "", "     ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal reference values: %w", err)
-		}
-		os.Stdout.Write(append(data, []byte("\n")...))
-	}
-
-	// Write final RTMR values to stdout if requested
-	if globConf.PrintSummary {
-		data, err := json.MarshalIndent(rtmrs, "", "     ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal reference values: %w", err)
-		}
-		os.Stdout.Write(append(data, []byte("\n")...))
-	}
-
-	log.Debug("Finished")
-
-	return nil
 }
 
 func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.ReferenceValue, error) {
