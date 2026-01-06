@@ -1,4 +1,4 @@
-dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)"
+dir="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 
 case "${PATH}" in ""|"${dir}/bin"*) ;; *) PATH="${dir}/bin:${PATH}";; esac
 
