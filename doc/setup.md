@@ -56,14 +56,6 @@ sudo apt install -y moreutils sqlite3 zlib1g-dev libssl-dev protoc-gen-go protoc
                     libtool expect
 ```
 
-Generating reference values for TDX/TPM-based attestation requires the `measured-boot-tools`:
-```sh
-git clone https://github.com/Fraunhofer-AISEC/measured-boot-tools.git
-cd measured-boot-tools
-make
-sudo make install
-```
-
 ## Platform-specific Example Setup and Metadata Generation
 
 Because setup, metadata generation, and operational steps vary across different hardware

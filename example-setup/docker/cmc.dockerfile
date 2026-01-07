@@ -37,12 +37,6 @@ RUN mkdir -p /etc/apt/keyrings && \
     apt-get install -y ./$EGO_DEB build-essential libssl-dev && \
     apt-get install -y libsgx-dcap-default-qpl
 
-# Install measured-boot-tools
-RUN git clone https://github.com/Fraunhofer-AISEC/measured-boot-tools.git && \
-    cd measured-boot-tools && \
-    make && \
-    make install
-
 # Download Intel SGX/TDX API services Sectigo public trusted CA to /etc/ssl/certs
 RUN wget -q \
     http://crt.sectigo.com/SectigoRSAOrganizationValidationSecureServerCA.crt \

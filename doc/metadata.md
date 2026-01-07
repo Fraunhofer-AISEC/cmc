@@ -36,8 +36,7 @@ the Certificate Signing Requests for the attestation and identity keys
 
 Metadata can be generated and populated manually or automatically from the templates. Refer to
 e.g. [generate-rtm-manifest-tpm](../bin/generate-rtm-manifest-tpm) for an example on how to
-populate the metadata automatically via `jq` and the
-[measured-boot-tools](https://github.com/Fraunhofer-AISEC/measured-boot-tools).
+populate the metadata automatically via `jq` and the [mrtool](../tools/mrtool/README.md).
 
 ### Manifest Names
 
@@ -53,22 +52,14 @@ applications and containers.
 
 The reference values, i.e. the hashes of software allowed to run on the platform are the core of
 each manifest. Ideally, the reference values are generated from the artifacts of a reproducible
-build comprising all software running on a platform. The tools
-- [calculate-srtm-pcrs](https://github.com/Fraunhofer-AISEC/measured-boot-tools/tree/main/calculate-srtm-pcrs)
-- [calculate-ima-pcr](https://github.com/Fraunhofer-AISEC/measured-boot-tools/tree/main/calculate-ima-pcr)
-- [calculate-tdx-mr](https://github.com/Fraunhofer-AISEC/measured-boot-tools/tree/main/calculate-tdx-mrs)
-- [calculate-snp-mr](https://github.com/Fraunhofer-AISEC/measured-boot-tools/tree/main/calculate-snp-mr)
-
-can be used to generate the reference values in the correct format.
+build comprising all software running on a platform. The [mrtool](../tools/mrtool/README.md) can be
+used to generate the reference values in the correct format.
 
 If it is not possible to precompute all reference values, they can be parsed from the UEFI
 (`/sys/kernel/security/tpm0/binary_bios_measurements`),
 IMA (`/sys/kernel/security/ima/binary_runtime_measurements`) and
-CCEL (`/sys/firmware/acpi/tables/data/CCEL`) event logs of a known-good reference platform
-with the following tools:
-- [parse-srtm-pcrs](https://github.com/Fraunhofer-AISEC/measured-boot-tools/tree/main/parse-srtm-pcrs)
-- [parse-ima-pcr](https://github.com/Fraunhofer-AISEC/measured-boot-tools/tree/main/parse-ima-pcr)
-- [parsetdxmrs](https://github.com/Fraunhofer-AISEC/cmc/tree/main/tools/parsetdxmrs)
+CCEL (`/sys/firmware/acpi/tables/data/CCEL`) event logs of a known-good reference platform,
+also with the [mrtool](../tools/mrtool/README.md)
 
 See the metadata generation and precomputation scripts in the [bin](../bin/) folder for various
 examples.

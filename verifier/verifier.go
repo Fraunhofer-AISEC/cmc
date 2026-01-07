@@ -97,9 +97,15 @@ func Verify(
 	}
 	result.Metadata = metaResults
 
+	result.Prover = metaResults.DevDescResult.Name
+	if result.Prover == "" {
+		result.Prover = "Unknown"
+	}
+
 	refVals, err := collectReferenceValues(metaResults.ManifestResults)
 	if err != nil {
 		result.Fail(ar.RefValTypeNotSupported, err)
+		return result
 	}
 
 	hwAttest := false
@@ -197,10 +203,6 @@ Loop:
 	result.CertLevel = aggCertLevel
 
 	// Add additional information
-	result.Prover = metaResults.DevDescResult.Name
-	if result.Prover == "" {
-		result.Prover = "Unknown"
-	}
 	result.Created = time.Now().Format(time.RFC3339Nano)
 
 	// Validate policies if specified

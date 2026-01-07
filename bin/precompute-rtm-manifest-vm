@@ -6,8 +6,6 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-parse_srtm_pcrs_prefix="${1:-sudo}"
-
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
@@ -43,15 +41,12 @@ fingerprint=$(openssl x509 -in "${data}/pki/ca.pem" -fingerprint -noout -sha256 
 
 # Precompute the values of the RTM PCRs
 printf "[\033[34;1m EXEC \033[0m] Precompute PCRs\n"
-set +e
-refs_tpm=$(calculate-srtm-pcrs \
-    --format json \
-    --eventlog \
-    --pcrs 0,1,2,3,4,5,6,7 \
+refs_tpm=$(mrtool precompute tpm \
+    --mrs 0,1,2,3,4,5,6,7 \
     --ovmf "${images}/OVMF.fd" \
     --bootloader "${artifacts}/shimx64.efi" \
     --bootloader "${artifacts}/grubx64.efi" \
-    --config "${vm_config}/calculate-srtm-pcrs.cfg" \
+    --config "${vm_config}/mrtool.json" \
     --acpirsdp "${vm_config}/etc-acpi-rsdp" \
     --acpitables "${vm_config}/etc-acpi-tables" \
     --tableloader "${vm_config}/etc-table-loader" \
@@ -59,16 +54,6 @@ refs_tpm=$(calculate-srtm-pcrs \
     --sbatlevel "${artifacts}/efivars/SbatLevelRT-605dab50-e046-4300-abb6-3dd810dd8b23" \
     --gpt "${artifacts}/ev_efi_gpt_event" \
 )
-if [[ -z "${refs_tpm}" ]]; then
-    echo "calculate-srtm-pcrs failed: empty reference values"
-    exit 1
-fi
-echo "${refs_tpm}" | jq empty 2>/dev/null || {
-    echo "calculate-srtm-pcrs failed: '${refs_tpm}'"
-    exit 1
-}
-set -e
-
 
 # Load manifest template
 json=$(cat "${input}/manifest.json")

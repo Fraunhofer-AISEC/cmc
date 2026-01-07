@@ -50,7 +50,7 @@ type Config struct {
 const (
 	systemUuidFlag     = "systemuuid"
 	grubcmdsFlag       = "grubcmds"
-	pathFlag           = "path"
+	pathFlag           = "ima-path"
 	imaPathFlag        = "ima-path"
 	imaStripFlag       = "ima-strip"
 	imaTemplateFlag    = "ima-template"

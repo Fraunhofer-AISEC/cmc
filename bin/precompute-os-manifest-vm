@@ -6,8 +6,6 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-parse_srtm_pcrs_prefix="${1:-sudo}"
-
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
@@ -38,11 +36,8 @@ os=$(lsb_release -sd 2>/dev/null)
 set -e
 
 # Precompute the values of the OS PCRs
-set +e
-refs_tpm=$(calculate-srtm-pcrs \
-    --format json \
-    --eventlog \
-    --pcrs 8,9 \
+refs_tpm=$(mrtool precompute tpm \
+    --mrs 8,9 \
     --kernel "${artifacts}/vmlinuz" \
     --initrd "${artifacts}/initrd" \
     --cmdline "${vm_config}/cmdline" \
@@ -51,15 +46,6 @@ refs_tpm=$(calculate-srtm-pcrs \
     --path "${artifacts}/vmlinuz" \
     --path "${artifacts}/initrd" \
 )
-if [[ -z "${refs_tpm}" ]]; then
-    echo "calculate-srtm-pcrs failed: empty reference values"
-    exit 1
-fi
-echo "${refs_tpm}" | jq empty 2>/dev/null || {
-    echo "calculate-srtm-pcrs failed: '${refs_tpm}'"
-    exit 1
-}
-set -e
 
 # Load OS manifest
 json=$(cat "${input}/manifest.json")

@@ -108,32 +108,39 @@ type EFILoadOption struct {
 // UEFI Specification Release 2.11, 10.2 EFI Device Path Protocol EFI_DEVICE_PATH_PROTOCOL
 type EFIDevicePath struct {
 	Type    string `json:"type" cbor:"0,keyasint"`
-	Subtype string `json:"subtype" cbor:"1,keyasint"`
+	Subtype string `json:"subtype,omitempty" cbor:"1,keyasint,omitempty"`
 	// Omit Length
 
+	//     - 1.1 (PCI Device Path)
+	Function uint8 `json:"function,omitempty" cbor:"2,keyasint,omitempty"`
+	Device   uint8 `json:"device,omitempty" cbor:"3,keyasint,omitempty"`
+
+	//     - 1.2 (PCCART Device Path)
+	FunctionNumber uint8 `json:"functionnumber,omitempty" cbor:"4,keyasint,omitempty"`
+
 	//     - 1.3 (Memory Mapped Device Path)
-	MemoryType   uint32 `json:"memorytype,omitempty" cbor:"2,keyasint,omitempty"`
-	StartAddress uint64 `json:"startaddress,omitempty" cbor:"3,keyasint,omitempty"`
-	EndAddress   uint64 `json:"endaddress,omitempty" cbor:"4,keyasint,omitempty"`
+	MemoryType   uint32 `json:"memorytype,omitempty" cbor:"5,keyasint,omitempty"`
+	StartAddress uint64 `json:"startaddress,omitempty" cbor:"6,keyasint,omitempty"`
+	EndAddress   uint64 `json:"endaddress,omitempty" cbor:"7,keyasint,omitempty"`
 
 	//     - 1.4 (Vendor Device Path), 3.a (Vendor-defined Messaging Device Path)
-	VendorGUID        string  `json:"vendorguid,omitempty" cbor:"5,keyasint,omitempty"`
-	VendorDefinedData HexByte `json:"vendordefineddata,omitempty" cbor:"6,keyasint,omitempty"`
+	VendorGUID        string  `json:"vendorguid,omitempty" cbor:"8,keyasint,omitempty"`
+	VendorDefinedData HexByte `json:"vendordefineddata,omitempty" cbor:"9,keyasint,omitempty"`
 
 	//     - 2.1 (ACPI Device Path)
-	HID HexByte `json:"hid,omitempty" cbor:"7,keyasint,omitempty"`
-	UID HexByte `json:"uid,omitempty" cbor:"8,keyasint,omitempty"`
+	HID HexByte `json:"hid,omitempty" cbor:"10,keyasint,omitempty"`
+	UID HexByte `json:"uid,omitempty" cbor:"11,keyasint,omitempty"`
 
 	//     - 4.1 (media device path: hard drive)
-	PartitionNumber    uint32  `json:"partitionnumber,omitempty" cbor:"9,keyasint,omitempty"`
-	PartitionStart     uint64  `json:"partitionstart,omitempty" cbor:"10,keyasint,omitempty"`
-	PartitionSize      uint64  `json:"partitionsize,omitempty" cbor:"11,keyasint,omitempty"`
-	PartitionSignature HexByte `json:"partitionsignature,omitempty" cbor:"12,keyasint,omitempty"` //[16]byte
-	PartitionFormat    byte    `json:"partitionformat,omitempty" cbor:"13,keyasint,omitempty"`
-	SignaturType       byte    `json:"signaturetype,omitempty" cbor:"14,keyasint,omitempty"`
+	PartitionNumber    uint32  `json:"partitionnumber,omitempty" cbor:"12,keyasint,omitempty"`
+	PartitionStart     uint64  `json:"partitionstart,omitempty" cbor:"13,keyasint,omitempty"`
+	PartitionSize      uint64  `json:"partitionsize,omitempty" cbor:"14,keyasint,omitempty"`
+	PartitionSignature HexByte `json:"partitionsignature,omitempty" cbor:"15,keyasint,omitempty"`
+	PartitionFormat    byte    `json:"partitionformat,omitempty" cbor:"16,keyasint,omitempty"`
+	SignaturType       byte    `json:"signaturetype,omitempty" cbor:"17,keyasint,omitempty"`
 
 	//	- 4.2 (media device path: CD-ROM Media Device Path)
-	BootEntry uint32 `json:"bootentry,omitempty" cbor:"15,keyasint,omitempty"`
+	BootEntry uint32 `json:"bootentry,omitempty" cbor:"18,keyasint,omitempty"`
 	//PartitionStart
 	//PartitionSize
 
@@ -142,25 +149,25 @@ type EFIDevicePath struct {
 	//VendorDefinedData
 
 	//     - 4.4 (media device path: file path media device path)
-	PathName string `json:"pathname,omitempty" cbor:"16,keyasint,omitempty"`
+	PathName string `json:"pathname,omitempty" cbor:"19,keyasint,omitempty"`
 
 	//     - 4.5 (media device path: Media Protocol Device Path)
-	ProtocolGUID string `json:"protocolguid,omitempty" cbor:"17,keyasint,omitempty"`
+	ProtocolGUID string `json:"protocolguid,omitempty" cbor:"20,keyasint,omitempty"`
 
 	//    - 4.6 (media device path: PIWG Firmware file)
 	// Content defined in UEFI PI Specification II-8.3 Firmware File Media Device Path
-	FirmwareFileName string `json:"firmwareFileName,omitempty" cbor:"18,keyasint,omitempty"`
+	FirmwareFileName string `json:"firmwareFileName,omitempty" cbor:"21,keyasint,omitempty"`
 
 	//     - 4.9 (media device path: RAM Disk)
-	StartingAddress uint64 `json:"startingaddress,omitempty" cbor:"19,keyasint,omitempty"`
-	EndingAddress   uint64 `json:"endingaddress,omitempty" cbor:"20,keyasint,omitempty"`
-	DiskTypeGUID    string `json:"disktypeguid,omitempty" cbor:"21,keyasint,omitempty"`
-	DiskInstance    uint16 `json:"diskinstance,omitempty" cbor:"22,keyasint,omitempty"`
+	StartingAddress uint64 `json:"startingaddress,omitempty" cbor:"22,keyasint,omitempty"`
+	EndingAddress   uint64 `json:"endingaddress,omitempty" cbor:"23,keyasint,omitempty"`
+	DiskTypeGUID    string `json:"disktypeguid,omitempty" cbor:"24,keyasint,omitempty"`
+	DiskInstance    uint16 `json:"diskinstance,omitempty" cbor:"25,keyasint,omitempty"`
 
 	//	- 5.1 (BIOS Boot Specification Device Path)
-	DeviceType        uint16 `json:"devicetype,omitempty" cbor:"23,keyasint,omitempty"`
-	StatusFlag        uint16 `json:"statusflag,omitempty" cbor:"24,keyasint,omitempty"`
-	DescriptionString string `json:"descriptionstring,omitempty" cbor:"25,keyasint,omitempty"`
+	DeviceType        uint16 `json:"devicetype,omitempty" cbor:"26,keyasint,omitempty"`
+	StatusFlag        uint16 `json:"statusflag,omitempty" cbor:"27,keyasint,omitempty"`
+	DescriptionString string `json:"descriptionstring,omitempty" cbor:"28,keyasint,omitempty"`
 }
 
 type GPTHeader struct {
@@ -227,7 +234,7 @@ func ParseEventData(eventBytes []uint8, eventName string, addRawEventData bool) 
 	exInfo := new(EventData)
 	switch eventName {
 	case "EV_EFI_VARIABLE_DRIVER_CONFIG", "EV_EFI_VARIABLE_BOOT", "EV_EFI_VARIABLE_AUTHORITY":
-		exInfo.Uefivariabledata = parseUefiVariableData(bytes.NewBuffer(eventBytes))
+		exInfo.Uefivariabledata = parseUefiVariableData(bytes.NewBuffer(eventBytes), addRawEventData)
 	case "EV_EFI_GPT_EVENT":
 		exInfo.GPTHeader = parseUefiGPTEvent(bytes.NewBuffer(eventBytes))
 	case "EV_EFI_BOOT_SERVICES_APPLICATION", "EV_EFI_BOOT_SERVICES_DRIVER", "EV_EFI_RUNTIME_SERVICES_DRIVER":
@@ -375,7 +382,7 @@ func bytesToString(uint8Array []uint8) string {
 	return result
 }
 
-func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
+func parseUefiVariableData(buf *bytes.Buffer, addRawEventData bool) *UefiVariableData {
 
 	// TCG PC Client Platform Firmware Profile Specification 10.2.6 Measuring UEFI Variables
 	// And UEFI GPT Data struct UEFI_VARIABLE_DATA
@@ -438,7 +445,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 		default:
 			//if string is of type BootXXXX
 			if (strings.Contains(unicodeName, "Boot")) || strings.Contains(unicodeName, "PlatformRecovery") || strings.Contains(unicodeName, "Driver") { //for BootXXXX, PlatformRecoveryXXXX, and DriverXXXX entries
-				uefiVariableData.EFILoadOption = parseEFILoadOption(buf)
+				uefiVariableData.EFILoadOption = parseEFILoadOption(buf, addRawEventData)
 			} else {
 				hexString := (buf.Next(int(variableDataLength)))
 				uefiVariableData.VariableData = hexString
@@ -451,7 +458,7 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 	return nil
 }
 
-func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
+func parseEFILoadOption(buf *bytes.Buffer, addRawEventData bool) *EFILoadOption {
 	efiloadoption := new(EFILoadOption)
 	var filePathListLength uint16
 
@@ -482,7 +489,10 @@ func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
 	}
 	if buf.Len() > 0 {
 		//contains optional data
-		efiloadoption.OptionalData = maybeUTF16(buf.Next(buf.Len()))
+		optionalData := maybeUTF16(buf.Next(buf.Len()))
+		if addRawEventData {
+			efiloadoption.OptionalData = optionalData
+		}
 	}
 
 	return efiloadoption
@@ -505,8 +515,19 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 	case 1: // Hardware Device Path
 		devicePath.Type = "Hardware Device Path"
 		switch fplSubtype {
-		// case 1: // PCI Device Path
-		// case 2: // PCCARD Device Path
+		case 1: // PCI Device Path
+			devicePath.Subtype = "PCI Device Path"
+			if length != 6 {
+				return nil, fmt.Errorf("invalid PCI device path length %v", length)
+			}
+			binary.Read(buf, binary.LittleEndian, &devicePath.Function)
+			binary.Read(buf, binary.LittleEndian, &devicePath.Device)
+		case 2: // PCCARD Device Path
+			devicePath.Subtype = "PCCARD Device Path"
+			if length != 5 {
+				return nil, fmt.Errorf("invalid PCCARD device path length %v", length)
+			}
+			binary.Read(buf, binary.LittleEndian, &devicePath.FunctionNumber)
 		case 3: // Memory Mapped Device Path
 			devicePath.Subtype = "Memory Mapped Device Path"
 			if length != 24 {

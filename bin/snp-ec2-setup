@@ -9,7 +9,6 @@ source "${dir}/bin/utils.sh"
 data="${dir}/vm"
 
 edk2="${data}/edk2-aws"
-measured_boot_tools="${data}/measured-boot-tools"
 
 # Install prerequisites
 printf "[\033[34;1m EXEC \033[0m] Checking prerequisites..\n"

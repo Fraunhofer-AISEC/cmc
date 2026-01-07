@@ -57,11 +57,8 @@ fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -
 # Generate reference values
 echo "Calculating reference values"
 
-set +e
-refs=$(calculate-tdx-mrs \
+refs=$(mrtool precompute tdx \
     --mrs 0,1,5 \
-    --eventlog \
-    --format json \
     --tdxmodule "${tdx_module}" \
     --ovmf "${ovmf}" \
     --kernel "${kernel}" \
@@ -71,15 +68,6 @@ refs=$(calculate-tdx-mrs \
     --acpitables "${acpi_tables}" \
     --tableloader "${table_loader}" \
 )
-if [[ -z "${refs}" ]]; then
-    echo "calculate-tdx-mrs failed: empty reference values"
-    exit 1
-fi
-echo "${refs}" | jq empty 2>/dev/null || {
-    echo "calculate-tdx-mrs failed: '${refs}'"
-    exit 1
-}
-set -e
 
 mrowner="000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 xfam="e702060000000000"
