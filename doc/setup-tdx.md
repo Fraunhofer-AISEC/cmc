@@ -5,10 +5,6 @@ Describes the setup to run the CMC within Intel TDX Confidential VMs, also calle
 All commands can be run in docker with `cmc-docker` prepended (e.g. `cmc-docker setup-cmc tdx`
 instead of `setup-cmc tdx`). This omits installing prerequisites.
 
-## Prerequisites
-
-Install the measured-boot-tools as described in [prerequisites](./setup.md#prerequisites)
-
 ## TDX Setup
 
 Creates the PKI and metadata for running the CMC within TDX Confidential VMs (also called

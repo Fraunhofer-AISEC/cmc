@@ -286,7 +286,7 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (a
 	digest[31] = locality
 
 	entry := ar.ReferenceValue{
-		Type:    "INITVAL",
+		Type:    "TPM Reference Value",
 		Sha256:  digest,
 		SubType: "TPM_PCR_INIT_VALUE",
 		Index:   pcrIndex,

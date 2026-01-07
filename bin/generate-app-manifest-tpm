@@ -6,7 +6,18 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-parse_srtm_pcrs_prefix="${1:-sudo}"
+# If ssh is not specified, the reference values are parsed from the local machine. If SSH is
+# specified, the reference values are parsed from the remote, where the mrtool must be installed
+if [[ $# -eq 0 ]]; then
+  mrtool=(sudo "${dir}/tools/mrtool/mrtool")
+elif [[ $# -eq 1 ]]; then
+  mrtool=("$1" mrtool)
+elif [[ $# -eq 2 ]]; then
+  mrtool=("$1" "$2" mrtool)
+else
+  echo "Usage: $(basename $0) [ssh]"
+  exit 1
+fi
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
@@ -28,7 +39,7 @@ fi
 echo "Using ${data} as directory for local data"
 
 # Parse the IMA measurement lists
-referenceValues=$("${parse_srtm_pcrs_prefix}" parse-ima-pcr)
+referenceValues=$("${mrtool[@]}" parse ima --mrs 10)
 
 # App Manifest: load
 json=$(cat "${input}/manifest.json")

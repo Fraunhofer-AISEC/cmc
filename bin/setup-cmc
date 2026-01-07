@@ -64,11 +64,16 @@ echo "Using CMC: ${cmc}"
 echo "Using ${data} as directory for local data"
 
 # Build CMC
-go build -C "${dir}/cmcctl"
+echo "Building CMC"
 go build -C "${dir}/cmcd"
+go build -C "${dir}/cmcctl"
 go build -C "${dir}/provision/estserver"
+go build -C "${dir}/tools/mrtool"
 go build -C "${dir}/tools/metaconv"
 go build -C "${dir}/tools/metasign"
+go build -C "${dir}/tools/tdxtool"
+go build -C "${dir}/tools/snptool"
+go build -C "${dir}/tools/tdxtool"
 
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"

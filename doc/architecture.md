@@ -38,9 +38,8 @@ knowing the platform in advance. Examples and tools for creating the metadata ca
 in the [Example Setup](../example-setup/).
 
 Core of the *Manifests* are the reference values, which contain the hashes of the software
-artifacts running on the platform. We aim to provide
-[tools](https://github.com/Fraunhofer-AISEC/measured-boot-tools) to precompute the hashes of all
-artifacts based on reproducible software builds.
+artifacts running on the platform. We provide the [mrtool](../tools/mrtool/README.md) to precompute
+the hashes of all artifacts based on reproducible software builds.
 
 The overall structure of the attestation report can be seen in the following figure and is
 described in detail in our [paper](https://dl.acm.org/doi/pdf/10.1145/3600160.3600171):
@@ -54,8 +53,8 @@ to be running on the platform. The trust in the measurements comes from hardware
 technologies, such as TPMs or Confidential Computing technologies. The reference values for the
 proving platform must be generated based on the used technology (TPM, Intel TDX/SGX, AMD SEV-SNP).
 
-We provide [tools](https://github.com/Fraunhofer-AISEC/measured-boot-tools) for parsing and
-precomputing the reference values based on reproducible builds.
+We provide the [mrtool](../tools/mrtool/README.md) for parsing and precomputing the reference values
+based on reproducible builds.
 
 ### Metadata
 

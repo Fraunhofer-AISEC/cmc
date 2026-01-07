@@ -43,8 +43,6 @@ runcmd:
   - cp /mnt/cmcd /usr/bin/
   - cp /mnt/cmcctl /usr/bin/
   - cp /mnt/mrtool /usr/bin/
-  - cp /mnt/parse-srtm-pcrs /usr/bin/
-  - cp /mnt/parse-ima-pcr /usr/bin/
   - cp /mnt/cmcd-conf.json /etc/cmcd-conf.json
   - cp /mnt/cmcctl-conf-vm.json /etc/cmcctl-conf-vm.json
   - cp /mnt/cmcd.service /etc/systemd/system/cmcd.service
