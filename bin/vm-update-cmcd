@@ -7,14 +7,22 @@ dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 
 data="${dir}/vm"
 
+# Build binaries
+go build -C "${dir}/cmcd"
+go build -C "${dir}/cmcctl"
+go build -C "${dir}/provision/est/estserver"
+
+# Stop running services in VM
 vm-ssh systemctl stop cmcd
 vm-ssh systemctl stop cmcctl
 
-go build -C "${dir}/cmcd"
-go build -C "${dir}/cmcctl"
+# Remove cmc internal folder to enforce generation of new certs
+vm-ssh rm -r /var/cmc/internal
 
+# Copy new binaries into VM
 vm-scp cmcd/cmcd vm-ubuntu:/usr/bin/
 vm-scp cmcctl/cmcctl vm-ubuntu:/usr/bin/
 
+# Restart services
 vm-ssh systemctl start cmcd
 vm-ssh systemctl start cmcctl
