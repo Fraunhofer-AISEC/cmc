@@ -121,7 +121,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 	var collateral *Collateral
 	for _, artifact := range measurement.Artifacts {
 		if artifact.Type == ar.ARTIFACT_TYPE_TDX_COLLATERAL {
-			collateralRaw = measurement.Artifacts[0].Events[0].IntelCollateral
+			collateralRaw = artifact.Events[0].IntelCollateral
 			if collateralRaw == nil {
 				log.Debugf("Could not find TDX collateral")
 				result.Summary.Fail(ar.CollateralNotPresent)
@@ -421,6 +421,8 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 	detailedResults := make([]ar.DigestResult, 0)
 	mrResults := make([]ar.DigestResult, 0, NUM_TDX_MRS)
 
+	elPresent := ccelPresent(artifacts)
+
 	// Recalculate the expected MR values based on the reference values
 	calculatedMrs := make([][]byte, NUM_TDX_MRS)
 	for i := 0; i < NUM_TDX_MRS; i++ {
@@ -458,7 +460,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		successMrs[i] = bytes.Equal(calculatedMrs[i], measuredMrs[i])
 		if !successMrs[i] {
 			success = false
-			if !ccelPresent(artifacts, refvals) {
+			if !elPresent {
 				detailedResults = append(detailedResults,
 					ar.DigestResult{
 						Type:     "Measurement",
@@ -487,7 +489,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		})
 	}
 
-	if !ccelPresent(artifacts, refvals) {
+	if !elPresent {
 		// Without the CC eventlog, we cannot display which individual measurements
 		// did not match. Instead, we set all reference values of a certain MR to false in case the
 		// comparison of the recalculated MR with the measured MR fails
@@ -510,9 +512,10 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		}
 	} else {
 		// If the CC eventlog is present, we can display the individual measurements
-		log.Debug("Verifying reference values based on eventlog")
+		log.Debug("Verifying eventlog against reference values")
 		for _, artifact := range artifacts {
 			if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG {
+				log.Debugf("Verifying %v %v eventlog events", len(artifact.Events), internal.IndexToMr(artifact.Index))
 				for _, event := range artifact.Events {
 					found := false
 					for _, refval := range refvals {
@@ -550,35 +553,38 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 				}
 			}
 		}
+		log.Debugf("Verifying reference values against eventlog measurements")
 		for _, refval := range refvals {
+			if refval.Index < 1 || refval.Index > 4 {
+				// Only check RTMRs
+				continue
+			}
+			found := false
 			for _, artifact := range artifacts {
 				if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
-					found := false
 					for _, event := range artifact.Events {
 						if bytes.Equal(refval.Sha384, event.Sha384) {
 							found = true
 							break
 						}
 					}
-					if !found {
-						r := ar.DigestResult{
-							Type:        "Reference Value",
-							SubType:     refval.SubType,
-							Index:       refval.Index,
-							Success:     false,
-							Launched:    false,
-							Digest:      hex.EncodeToString(refval.Sha384),
-							Description: refval.Description,
-						}
-						detailedResults = append(detailedResults, r)
-					}
-
-					success = false
-					log.Tracef("Failed to verify reference value %v: %v = %v",
-						internal.IndexToMr(refval.Index), refval.SubType,
-						hex.EncodeToString(refval.Sha384))
-
 				}
+			}
+			if !found {
+				r := ar.DigestResult{
+					Type:        "Reference Value",
+					SubType:     refval.SubType,
+					Index:       refval.Index,
+					Success:     false,
+					Launched:    false,
+					Digest:      hex.EncodeToString(refval.Sha384),
+					Description: refval.Description,
+				}
+				detailedResults = append(detailedResults, r)
+				success = false
+				log.Tracef("Failed to verify reference value %v: %v = %v",
+					internal.IndexToMr(refval.Index), refval.SubType,
+					hex.EncodeToString(refval.Sha384))
 			}
 		}
 	}
@@ -745,26 +751,16 @@ func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAtt
 	return result, ok
 }
 
-// ccelPresent checks if the CCEL is present and complete
-func ccelPresent(artifacts []ar.Artifact, refvals []ar.ReferenceValue) bool {
-	log.Tracef("Checking if CC eventlog is present and complete")
-	for _, refval := range refvals {
-		// Only check RTMRs
-		if refval.Index < 1 || refval.Index > 4 {
-			continue
-		}
-		found := false
-		for _, artifact := range artifacts {
-			if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
-				found = true
-				break
-			}
-		}
-		if !found {
-			log.Tracef("Failed to find CC eventlog entry for %v", internal.IndexToMr(refval.Index))
-			return false
+// ccelPresent checks if there are CC Eventlog artifacts in the measurement
+func ccelPresent(artifacts []ar.Artifact) bool {
+	log.Tracef("Checking if CC eventlog is present")
+	for _, artifact := range artifacts {
+		if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG {
+			log.Tracef("CC eventlog is present and complete")
+			return true
 		}
 	}
-	log.Tracef("CC eventlog is present and complete")
-	return true
+	log.Tracef("CC eventlog is not present. Using final MR values")
+	return false
+
 }

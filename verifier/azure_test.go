@@ -392,8 +392,7 @@ var (
 	// Run: tdxtool -cmd parse-fmspc -in quote > fmspc
 	fmspc_azure = "90c06f000000"
 
-	// Run: tdxtool -cmd parse-pck-cert -in quote > pckcert
-	// Run: cat pckcert
+	// Run: tdxtool -cmd parse-pck-cert -in quote
 	pck_cert_azure = conv([]byte(`
 -----BEGIN CERTIFICATE-----
 MIIE8jCCBJegAwIBAgIVAKtrcJn/2jxbyrCl++8ugc0GtYI9MAoGCCqGSM49BAMC

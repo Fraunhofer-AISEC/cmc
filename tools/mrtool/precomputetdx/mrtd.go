@@ -293,7 +293,7 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 		refvals = append(refvals, &ar.ReferenceValue{
 			Type:        "TDX Reference Value",
-			SubType:     "OVMF",
+			SubType:     "EV_EFI_PLATFORM_FIRMWARE_BLOB",
 			Index:       tcg.INDEX_MRTD,
 			Sha384:      hash[:],
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
