@@ -38,7 +38,7 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 		switch {
 		case info.Mode().IsRegular():
 			// Regular file
-			return MeasureFile(alg, ta, digest, refvals, index, p)
+			return MeasureFile(alg, ta, "EV_IPL", digest, refvals, index, p)
 
 		case info.IsDir():
 			// Directory: walk recursively
@@ -50,7 +50,7 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 					return nil // Skip dirs, symlinks, devices, etc.
 				}
 				var err2 error
-				digest, refvals, err2 = MeasureFile(alg, ta, digest, refvals, index, path)
+				digest, refvals, err2 = MeasureFile(alg, ta, "EV_IPL", digest, refvals, index, path)
 				if err2 != nil {
 					return err2
 				}
@@ -69,7 +69,7 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 
 }
 
-func MeasureFile(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.ReferenceValue,
+func MeasureFile(alg crypto.Hash, ta TrustAnchor, eventType string, digest []byte, refvals []*ar.ReferenceValue,
 	index int, file string,
 ) ([]byte, []*ar.ReferenceValue, error) {
 
@@ -79,7 +79,7 @@ func MeasureFile(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.R
 	}
 
 	var rv *ar.ReferenceValue
-	rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data, "EV_IPL", filepath.Base(file))
+	rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data, eventType, filepath.Base(file))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create reference value: %w", err)
 	}

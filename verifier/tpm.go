@@ -178,7 +178,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 						Description: event.Description,
 					}
 					detailedResults = append(detailedResults, measResult)
-					log.Debugf("Failed to find PCR%v measurement %v: %v in reference values",
+					log.Debugf("Failed to find refval for PCR%v measurement %v: %v",
 						measuredPcr.Index, event.EventName, hex.EncodeToString(event.Sha256))
 					success = false
 					pcrResult.Success = false
@@ -322,7 +322,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 					if !ref.Optional {
 						detailedResults = append(detailedResults, result)
 						success = false
-						log.Debugf("Failed to find required PCR%v reference value %v: %v in measurements",
+						log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
 							ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
 					}
 					continue
@@ -330,7 +330,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			}
 		}
 		if !foundPcr {
-			log.Debugf("Failed to find required PCR%v reference value %v: %v in measurements",
+			log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
 				ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
 			result := ar.DigestResult{
 				Type:        "Reference Value",
