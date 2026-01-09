@@ -63,7 +63,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	rtmr = internal.ExtendSha384(rtmr, tbHobHash[:])
 	refvals = append(refvals, &ar.ReferenceValue{
 		Type:        "TDX Reference Value",
-		SubType:     "TD Hob",
+		SubType:     "EV_EFI_HANDOFF_TABLES",
 		Index:       tcg.INDEX_RTMR0,
 		Sha384:      tbHobHash[:],
 		Description: "RTMR0: TD Hob passed from host VMM to guest firmware",
@@ -84,7 +84,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		rtmr = internal.ExtendSha384(rtmr, cfvHash[:])
 		refvals = append(refvals, &ar.ReferenceValue{
 			Type:        "TDX Reference Value",
-			SubType:     "Configuration FV",
+			SubType:     "EV_EFI_PLATFORM_FIRMWARE_BLOB2",
 			Index:       tcg.INDEX_RTMR0,
 			Sha384:      cfvHash[:],
 			Description: "RTMR0: Configuration Firmware Volume",
