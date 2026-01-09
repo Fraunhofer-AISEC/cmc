@@ -46,6 +46,11 @@ const (
 	PiwgFirmwareFileSubType   = 6
 	piwgFirmwareVolumeSubType = 7
 
+	// EFI_GUID    VariableName;
+	// UINT64      UnicodeNameLength;
+	// UINT64      VariableDataLength;
+	// CHAR16      UnicodeName[1];
+	// INT8        VariableData[1];
 	UefiVariableDataMinSize = 16 + 8 + 8
 )
 
@@ -313,9 +318,12 @@ func readEfiVariableFromFile(path string, efiGuid [16]byte) ([]byte, error) {
 			nameLength := binary.LittleEndian.Uint64(data[16:])
 
 			// In this case, adjust the offset to the start of the variable data
-			offset = UefiVariableDataMinSize + nameLength
+			// which is the minimum size, plus the length of the name, which is CHAR16
+			offset = UefiVariableDataMinSize + (nameLength * 2)
 		}
 	}
+
+	log.Tracef("Calculate EFI variable offset: %v", offset)
 
 	if offset > uint64(len(data)) {
 		return nil, fmt.Errorf("efi variable offset exceeds file: %d > %d", offset, len(data))
