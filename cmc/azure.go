@@ -17,7 +17,7 @@
 
 package cmc
 
-import "github.com/Fraunhofer-AISEC/cmc/azuredriver"
+import "github.com/Fraunhofer-AISEC/cmc/drivers/azuredriver"
 
 func init() {
 	drivers["azure"] = &azuredriver.Azure{}

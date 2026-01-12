@@ -17,7 +17,7 @@
 
 package cmc
 
-import "github.com/Fraunhofer-AISEC/cmc/tdxdriver"
+import "github.com/Fraunhofer-AISEC/cmc/drivers/tdxdriver"
 
 func init() {
 	drivers["tdx"] = &tdxdriver.Tdx{}

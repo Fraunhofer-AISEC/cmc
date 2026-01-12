@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/azuredriver"
+	"github.com/Fraunhofer-AISEC/cmc/drivers/azuredriver"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tpm/legacy/tpm2"
 	log "github.com/sirupsen/logrus"

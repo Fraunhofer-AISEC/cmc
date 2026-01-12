@@ -22,9 +22,9 @@ import (
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
-	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
