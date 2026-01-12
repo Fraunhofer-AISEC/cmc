@@ -29,7 +29,7 @@ import (
 
 // The version of the API
 const (
-	apiVersion = "1.2.0"
+	apiVersion = "1.2.1"
 )
 
 func GetVersion() string {
@@ -37,22 +37,26 @@ func GetVersion() string {
 }
 
 const (
-	EndpointAttest    = "/Attest"
-	EndpointVerify    = "/Verify"
-	EndpointTLSSign   = "/TLSSign"
-	EndpointTLSCert   = "/TLSCert"
-	EndpointPeerCache = "/PeerCache"
-	EndpointMeasure   = "/Measure"
+	EndpointAttest         = "/Attest"
+	EndpointVerify         = "/Verify"
+	EndpointTLSSign        = "/TLSSign"
+	EndpointTLSCert        = "/TLSCert"
+	EndpointPeerCache      = "/PeerCache"
+	EndpointMeasure        = "/Measure"
+	EndpointUpdateCerts    = "/UpdateCerts"
+	EndpointUpdateMetadata = "/UpdateMetadata"
 )
 
 const (
-	TypeError     uint32 = 0
-	TypeAttest    uint32 = 1
-	TypeVerify    uint32 = 2
-	TypeTLSSign   uint32 = 3
-	TypeTLSCert   uint32 = 4
-	TypePeerCache uint32 = 5
-	TypeMeasure   uint32 = 6
+	TypeError          uint32 = 0
+	TypeAttest         uint32 = 1
+	TypeVerify         uint32 = 2
+	TypeTLSSign        uint32 = 3
+	TypeTLSCert        uint32 = 4
+	TypePeerCache      uint32 = 5
+	TypeMeasure        uint32 = 6
+	TypeUpdateCerts    uint32 = 7
+	TypeUpdateMetadata uint32 = 8
 )
 
 type AttestationRequest struct {
@@ -124,6 +128,24 @@ type MeasureResponse struct {
 	Success bool   `json:"success" cbor:"1,keyasint"`
 }
 
+type UpdateCertsRequest struct {
+	Version string `json:"version" cbor:"0,keyasint"`
+}
+
+type UpdateCertsResponse struct {
+	Version string `json:"version" cbor:"0,keyasint"`
+	Success bool   `json:"success" cbor:"1,keyasint"`
+}
+
+type UpdateMetadataRequest struct {
+	Version string `json:"version" cbor:"0,keyasint"`
+}
+
+type UpdateMetadataResponse struct {
+	Version string `json:"version" cbor:"0,keyasint"`
+	Success bool   `json:"success" cbor:"1,keyasint"`
+}
+
 type SocketError struct {
 	Version string `json:"version" cbor:"0,keyasint"`
 	Msg     string `json:"msg" cbor:"1,keyasint"`
@@ -178,6 +200,10 @@ func TypeToString(t uint32) string {
 		return "TLSCert"
 	case TypePeerCache:
 		return "PeerCache"
+	case TypeUpdateCerts:
+		return "UpdateCerts"
+	case TypeUpdateMetadata:
+		return "UpdateMetadata"
 	default:
 		return "Unknown"
 	}
@@ -262,7 +288,7 @@ func (req *AttestationRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: AttestationRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected AttestationRequest version '%v', got '%v'", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected AttestationRequest version %q, got %q", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -272,7 +298,7 @@ func (resp *AttestationResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: AttestationResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected AttestationResponse version '%v', got '%v'", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected AttestationResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -282,7 +308,7 @@ func (req *VerificationRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: VerificationRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected VerificationRequest version '%v', got '%v'", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected VerificationRequest version %q, got %q", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -292,7 +318,7 @@ func (resp *VerificationResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: VerificationResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected VerificationResponse version '%v', got '%v'", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected VerificationResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -302,7 +328,7 @@ func (req *TLSSignRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSSignRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSSignRequest version '%v', got '%v'", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSSignRequest version %q, got %q", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -312,7 +338,7 @@ func (resp *TLSSignResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSSignResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSSignResponse version '%v', got '%v'", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSSignResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -322,7 +348,7 @@ func (req *TLSCertRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSCertRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSCertRequest version '%v', got '%v'", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSCertRequest version %q, got %q", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -332,7 +358,7 @@ func (resp *TLSCertResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: TLSCertResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected TLSCertResponse version '%v', got '%v'", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected TLSCertResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -342,7 +368,7 @@ func (req *PeerCacheRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: PeerCacheRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected PeerCacheRequest version '%v', got '%v'", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected PeerCacheRequest version %q, got %q", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -352,7 +378,7 @@ func (resp *PeerCacheResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: PeerCacheResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected PeerCacheResponse version '%v', got '%v'", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected PeerCacheResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -362,7 +388,7 @@ func (req *MeasureRequest) CheckVersion() error {
 		return fmt.Errorf("internal error: MeasureRequest is nil")
 	}
 	if !strings.EqualFold(apiVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected MeasureRequest version '%v', got '%v'", apiVersion, req.Version)
+		return fmt.Errorf("API version mismatch. Expected MeasureRequest version %q, got %q", apiVersion, req.Version)
 	}
 	return nil
 }
@@ -372,7 +398,47 @@ func (resp *MeasureResponse) CheckVersion() error {
 		return fmt.Errorf("internal error: MeasureResponse is nil")
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected MeasureResponse version '%v', got '%v'", apiVersion, resp.Version)
+		return fmt.Errorf("API version mismatch. Expected MeasureResponse version %q, got %q", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *UpdateCertsRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: UpdateCertsRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected UpdateCertsRequest version %q, got %q", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *UpdateCertsResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: UpdateCertsResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected UpdateCertsResponse version %q, got %q", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *UpdateMetadataRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: UpdateMetadataRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected UpdateMetadataRequest version %q, got %q", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *UpdateMetadataResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: UpdateMetadataResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected UpdateMetadataResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }
@@ -382,7 +448,7 @@ func (err *SocketError) CheckVersion() error {
 		return fmt.Errorf("internal error: SocketError is nil")
 	}
 	if !strings.EqualFold(apiVersion, err.Version) {
-		return fmt.Errorf("API version mismatch. Expected SocketError version '%v', got '%v'", apiVersion, err.Version)
+		return fmt.Errorf("API version mismatch. Expected SocketError version %q, got %q", apiVersion, err.Version)
 	}
 	return nil
 }

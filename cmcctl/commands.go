@@ -23,10 +23,6 @@ func verify(c *config) {
 	c.api.verify(c)
 }
 
-func measure(c *config) {
-	c.api.measure(c)
-}
-
 func dial(c *config) {
 	c.api.dial(c)
 }
@@ -41,6 +37,18 @@ func request(c *config) {
 
 func serve(c *config) {
 	c.api.serve(c)
+}
+
+func updateMetadata(c *config) {
+	c.api.updateMetadata(c)
+}
+
+func updateCerts(c *config) {
+	c.api.updateCerts(c)
+}
+
+func measure(c *config) {
+	c.api.measure(c)
 }
 
 func token(c *config) {

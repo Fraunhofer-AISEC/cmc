@@ -109,6 +109,10 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 		tlssign(conn, payload, cmc, s)
 	case api.TypePeerCache:
 		fetchPeerCache(conn, payload, cmc, s)
+	case api.TypeUpdateCerts:
+		updateCerts(conn, payload, cmc, s)
+	case api.TypeUpdateMetadata:
+		updateMetadata(conn, payload, cmc, s)
 	default:
 		sendError(conn, s, "Invalid Type: %v", reqType)
 	}
@@ -147,6 +151,8 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
 	}
+
+	log.Debugf("Generated attestation report with %v metadata items", len(metadata))
 
 	resp := &api.AttestationResponse{
 		Version:     api.GetVersion(),
@@ -425,6 +431,106 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 	}
 
 	log.Infof("Sent socket response type 'PeerCache' to %v", conn.RemoteAddr().String())
+}
+
+func updateCerts(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
+
+	log.Infof("Received socket request type 'UpdateCerts' from %v", conn.RemoteAddr().String())
+
+	if len(cmc.Drivers) == 0 {
+		sendError(conn, s, "attest: no drivers configured")
+		return
+	}
+
+	req := new(api.UpdateCertsRequest)
+	err := s.Unmarshal(payload, req)
+	if err != nil {
+		sendError(conn, s, "failed to unmarshal attestation request: %v", err)
+		return
+	}
+
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, "%v", err)
+		return
+	}
+
+	log.Debugf("Updating certs")
+
+	err = c.UpdateCerts(cmc)
+	if err != nil {
+		sendError(conn, s, "%v", err)
+		return
+	}
+
+	resp := &api.UpdateCertsResponse{
+		Version: api.GetVersion(),
+		Success: true,
+	}
+
+	// Serialize payload
+	data, err := s.Marshal(resp)
+	if err != nil {
+		sendError(conn, s, "failed to marshal message: %v", err)
+		return
+	}
+
+	err = api.Send(conn, data, api.TypeUpdateCerts)
+	if err != nil {
+		sendError(conn, s, "failed to send: %v", err)
+	}
+
+	log.Infof("Sent socket response type 'UpdateCerts' to %v", conn.RemoteAddr().String())
+}
+
+func updateMetadata(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
+
+	log.Infof("Received socket request type 'UpdateMetadata' from %v", conn.RemoteAddr().String())
+
+	if len(cmc.Drivers) == 0 {
+		sendError(conn, s, "attest: no drivers configured")
+		return
+	}
+
+	req := new(api.UpdateMetadataRequest)
+	err := s.Unmarshal(payload, req)
+	if err != nil {
+		sendError(conn, s, "failed to unmarshal attestation request: %v", err)
+		return
+	}
+
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, "%v", err)
+		return
+	}
+
+	log.Debugf("Updating metadata")
+
+	err = c.UpdateMetadata(cmc)
+	if err != nil {
+		sendError(conn, s, "%v", err)
+		return
+	}
+
+	resp := &api.UpdateMetadataResponse{
+		Version: api.GetVersion(),
+		Success: true,
+	}
+
+	// Serialize payload
+	data, err := s.Marshal(resp)
+	if err != nil {
+		sendError(conn, s, "failed to marshal message: %v", err)
+		return
+	}
+
+	err = api.Send(conn, data, api.TypeUpdateMetadata)
+	if err != nil {
+		sendError(conn, s, "failed to send: %v", err)
+	}
+
+	log.Infof("Sent socket response type 'UpdateMetadata' to %v", conn.RemoteAddr().String())
 }
 
 func sendError(conn net.Conn, s ar.Serializer, format string, args ...interface{}) error {

@@ -29,36 +29,36 @@ import (
 )
 
 type Config struct {
-	CmcAddr         string   `json:"cmcAddr,omitempty"`
-	ProvisionAddr   string   `json:"provisionAddr,omitempty"`
-	ProvisionMode   string   `json:"provisionMode,omitempty"`
-	ProvisionToken  string   `json:"provisionToken,omitempty"`
-	ProvisionAuth   []string `json:"provisionAuth,omitempty"`
-	Metadata        []string `json:"metadata,omitempty"`
-	Drivers         []string `json:"drivers,omitempty"`
-	Ima             bool     `json:"ima,omitempty"`
-	ImaPcr          int      `json:"imaPcr,omitempty"`
-	ExcludePcrs     []int    `json:"excludePcrs,omitempty"`
-	KeyConfig       string   `json:"keyConfig,omitempty"`
-	Api             string   `json:"api,omitempty"`
-	PolicyEngine    string   `json:"policyEngine,omitempty"`
-	PolicyOverwrite bool     `json:"policyOverwrite,omitempty"`
-	Storage         string   `json:"storage,omitempty"`
-	Cache           string   `json:"cache,omitempty"`
-	PeerCache       string   `json:"peerCache,omitempty"`
-	MeasurementLog  bool     `json:"measurementLog,omitempty"`
-	Ctr             bool     `json:"ctr,omitempty"`
-	CtrDriver       string   `json:"ctrDriver,omitempty"`
-	CtrPcr          int      `json:"ctrPcr,omitempty"`
-	CtrLog          string   `json:"ctrLog,omitempty"`
-	IdentityCas     []string `json:"identityCas,omitempty"`
-	MetadataCas     []string `json:"metadataCas,omitempty"`
-	EstTlsCas       []string `json:"estTlsCas,omitempty"`
-	EstTlsSysRoots  bool     `json:"estTlsSysRoots"`
-	Vmpl            int      `json:"vmpl,omitempty"`
-	VerifyEkCert    bool     `json:"verifyEkCert,omitempty"`
-	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
-	CaKey           string   `json:"caKey,omitempty"`
+	CmcAddr          string   `json:"cmcAddr,omitempty"`
+	ProvisionAddr    string   `json:"provisionAddr,omitempty"`
+	ProvisionMode    string   `json:"provisionMode,omitempty"`
+	ProvisionToken   string   `json:"provisionToken,omitempty"`
+	ProvisionAuth    []string `json:"provisionAuth,omitempty"`
+	MetadataLocation []string `json:"metadata,omitempty"`
+	Drivers          []string `json:"drivers,omitempty"`
+	Ima              bool     `json:"ima,omitempty"`
+	ImaPcr           int      `json:"imaPcr,omitempty"`
+	ExcludePcrs      []int    `json:"excludePcrs,omitempty"`
+	KeyConfig        string   `json:"keyConfig,omitempty"`
+	Api              string   `json:"api,omitempty"`
+	PolicyEngine     string   `json:"policyEngine,omitempty"`
+	PolicyOverwrite  bool     `json:"policyOverwrite,omitempty"`
+	Storage          string   `json:"storage,omitempty"`
+	Cache            string   `json:"cache,omitempty"`
+	PeerCache        string   `json:"peerCache,omitempty"`
+	MeasurementLog   bool     `json:"measurementLog,omitempty"`
+	Ctr              bool     `json:"ctr,omitempty"`
+	CtrDriver        string   `json:"ctrDriver,omitempty"`
+	CtrPcr           int      `json:"ctrPcr,omitempty"`
+	CtrLog           string   `json:"ctrLog,omitempty"`
+	IdentityCas      []string `json:"identityCas,omitempty"`
+	MetadataCas      []string `json:"metadataCas,omitempty"`
+	EstTlsCas        []string `json:"estTlsCas,omitempty"`
+	EstTlsSysRoots   bool     `json:"estTlsSysRoots"`
+	Vmpl             int      `json:"vmpl,omitempty"`
+	VerifyEkCert     bool     `json:"verifyEkCert,omitempty"`
+	TpmEkCertDb      string   `json:"tpmEkCertDb,omitempty"`
+	CaKey            string   `json:"caKey,omitempty"`
 }
 
 const (
@@ -163,7 +163,7 @@ func GetConfig(c *Config) error {
 		c.ProvisionAddr = *provisionAddr
 	}
 	if internal.FlagPassed(metadataFlag) {
-		c.Metadata = strings.Split(*metadata, ",")
+		c.MetadataLocation = strings.Split(*metadata, ",")
 	}
 	if internal.FlagPassed(DriversFlag) {
 		c.Drivers = strings.Split(*driversList, ",")
@@ -277,15 +277,15 @@ func pathsToAbs(c *Config) {
 			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
 		}
 	}
-	for i := 0; i < len(c.Metadata); i++ {
-		if strings.HasPrefix(c.Metadata[i], "file://") {
-			f := strings.TrimPrefix(c.Metadata[i], "file://")
+	for i := 0; i < len(c.MetadataLocation); i++ {
+		if strings.HasPrefix(c.MetadataLocation[i], "file://") {
+			f := strings.TrimPrefix(c.MetadataLocation[i], "file://")
 			f, err = filepath.Abs(f)
 			if err != nil {
 				log.Warnf("Failed to get absolute path for %v: %v", f, err)
 				continue
 			}
-			c.Metadata[i] = "file://" + f
+			c.MetadataLocation[i] = "file://" + f
 		}
 	}
 	if c.CtrLog != "" {
@@ -336,7 +336,7 @@ func (c *Config) Print() {
 	if c.ProvisionToken != "" {
 		log.Debugf("\tProvisioning token             : %v", c.ProvisionToken)
 	}
-	log.Debugf("\tMetadata locations             : %v", strings.Join(c.Metadata, ","))
+	log.Debugf("\tMetadata locations             : %v", strings.Join(c.MetadataLocation, ","))
 	log.Debugf("\tUse IMA                        : %v", c.Ima)
 	if c.Ima {
 		log.Debugf("\tIMA PCR                        : %v", c.ImaPcr)

@@ -47,10 +47,10 @@ func (azure *Azure) GetVtpmMeasurement(pcrs []int, nonce []byte) (ar.Measurement
 		return ar.Measurement{}, fmt.Errorf("failed to get vTPM quote: %w", err)
 	}
 
-	artifacts, err := tpmdriver.GetEventLogs(azure.serializer,
-		azure.biosLog, azure.imaLog, azure.ctrLog,
-		azure.pcrs, azure.imaPcr, azure.ctrPcr,
-		azure.ctrLogFile, pcrValues)
+	artifacts, err := tpmdriver.GetEventLogs(azure.Serializer,
+		azure.MeasurementLog, azure.Ima, azure.ctrLog,
+		azure.pcrs, azure.ImaPcr, azure.CtrPcr,
+		azure.CtrLog, pcrValues)
 	if err != nil {
 		return ar.Measurement{}, fmt.Errorf("failed to get event logs: %w", err)
 	}

@@ -205,6 +205,122 @@ func (a CoapApi) serve(c *config) {
 	serveInternal(c, attestedtls.CmcApi_COAP, nil)
 }
 
+func (a CoapApi) updateCerts(c *config) {
+
+	log.Infof("Sending coap request type 'UpdateCerts' to %v", c.CmcAddr)
+
+	// Establish connection
+	conn, err := udp.Dial(c.CmcAddr)
+	if err != nil {
+		log.Fatalf("Error dialing: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Generate attestation request
+	req := &api.UpdateCertsRequest{
+		Version: api.GetVersion(),
+	}
+
+	// Marshal CoAP payload
+	payload, err := c.apiSerializer.Marshal(req)
+	if err != nil {
+		log.Fatalf("failed to marshal payload: %v", err)
+	}
+
+	// Send CoAP POST request
+	resp, err := conn.Post(ctx, api.EndpointUpdateCerts, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	if err != nil {
+		log.Fatalf("failed to send request: %v", err)
+	}
+
+	// Read CoAP reply body
+	payload, err = resp.ReadBody()
+	if err != nil {
+		log.Fatalf("failed to read body: %v", err)
+	}
+
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		log.Fatalf("Server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
+
+	// Unmarshal response
+	updateResp := new(api.UpdateCertsResponse)
+	err = c.apiSerializer.Unmarshal(payload, updateResp)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal verification response: %w", err)
+	}
+
+	err = updateResp.CheckVersion()
+	if err != nil {
+		log.Fatal("Failed to update certs: %v", err)
+	}
+	if !updateResp.Success {
+		log.Fatalf("UpdateCerts response returned success: %v", updateResp.Success)
+	}
+}
+
+func (a CoapApi) updateMetadata(c *config) {
+
+	log.Infof("Sending coap request type 'UpdateMetadata' to %v", c.CmcAddr)
+
+	// Establish connection
+	conn, err := udp.Dial(c.CmcAddr)
+	if err != nil {
+		log.Fatalf("Error dialing: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Generate attestation request
+	req := &api.UpdateMetadataResponse{
+		Version: api.GetVersion(),
+	}
+
+	// Marshal CoAP payload
+	payload, err := c.apiSerializer.Marshal(req)
+	if err != nil {
+		log.Fatalf("failed to marshal payload: %v", err)
+	}
+
+	// Send CoAP POST request
+	resp, err := conn.Post(ctx, api.EndpointUpdateMetadata, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	if err != nil {
+		log.Fatalf("failed to send request: %v", err)
+	}
+
+	// Read CoAP reply body
+	payload, err = resp.ReadBody()
+	if err != nil {
+		log.Fatalf("failed to read body: %v", err)
+	}
+
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		log.Fatalf("Server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
+
+	// Unmarshal response
+	updateResp := new(api.UpdateMetadataResponse)
+	err = c.apiSerializer.Unmarshal(payload, updateResp)
+	if err != nil {
+		log.Fatalf("Failed to unmarshal verification response: %w", err)
+	}
+
+	err = updateResp.CheckVersion()
+	if err != nil {
+		log.Fatal("Failed to update metadata: %v", err)
+	}
+	if !updateResp.Success {
+		log.Fatalf("UpdateMetadata response returned success: %v", updateResp.Success)
+	}
+}
+
 func verifyInternal(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 

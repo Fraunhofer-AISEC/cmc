@@ -50,6 +50,7 @@ const (
 // Sgx is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
 type Sgx struct {
+	*ar.DriverConfig
 	akChain []*x509.Certificate
 	ikChain []*x509.Certificate
 	ikPriv  crypto.PrivateKey
@@ -66,7 +67,7 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 
 	// Initial checks
 	if sgx == nil {
-		return errors.New("internal error: SNP object is nil")
+		return errors.New("internal error: SGX object is nil")
 	}
 	switch c.Serializer.(type) {
 	case ar.JsonSerializer:
@@ -74,6 +75,8 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 	default:
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
+
+	sgx.DriverConfig = c
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
@@ -89,19 +92,19 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 
 		// Create CSRs and fetch IK and AK certificates
 		log.Info("Performing SGX provisioning")
-		err = sgx.provision(c)
+		err = sgx.provision()
 		if err != nil {
 			return fmt.Errorf("failed to provision sgx driver: %w", err)
 		}
 
 		if c.StoragePath != "" {
-			err = saveCredentials(c.StoragePath, sgx)
+			err = sgx.saveCredentials()
 			if err != nil {
 				return fmt.Errorf("failed to save SGX credentials: %w", err)
 			}
 		}
 	} else {
-		sgx.akChain, sgx.ikChain, sgx.ikPriv, err = loadCredentials(c.StoragePath)
+		err = sgx.loadCredentials()
 		if err != nil {
 			return fmt.Errorf("failed to load SGX credentials: %w", err)
 		}
@@ -230,7 +233,46 @@ func (sgx *Sgx) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (sgx *Sgx) provision(c *ar.DriverConfig) error {
+func (sgx *Sgx) UpdateCerts() error {
+	var err error
+
+	// Initial checks
+	if sgx == nil {
+		return errors.New("internal error: sgx object is nil")
+	}
+
+	log.Info("Updating sgx certificates")
+
+	err = sgx.provision()
+	if err != nil {
+		return fmt.Errorf("failed to provision sgx driver: %w", err)
+	}
+
+	if sgx.StoragePath != "" {
+		err = sgx.saveCredentials()
+		if err != nil {
+			return fmt.Errorf("failed to save sgx credentials: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (sgx *Sgx) UpdateMetadata(metadata map[string][]byte) error {
+
+	// Initial checks
+	if sgx == nil {
+		return errors.New("internal error: sgx object is nil")
+	}
+
+	log.Info("Updating sgx driver metadata")
+
+	sgx.Metadata = metadata
+
+	return nil
+}
+
+func (sgx *Sgx) provision() error {
 	var err error
 
 	// Create new IK private key
@@ -240,7 +282,7 @@ func (sgx *Sgx) provision(c *ar.DriverConfig) error {
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := c.Provisioner.CaCerts()
+	caCerts, err := sgx.Provisioner.CaCerts()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -252,7 +294,7 @@ func (sgx *Sgx) provision(c *ar.DriverConfig) error {
 	}
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikCert, err := provisionIk(sgx.ikPriv, c)
+	ikCert, err := provisionIk(sgx.ikPriv, sgx.DriverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -350,49 +392,47 @@ func provisioningRequired(p string) bool {
 	return false
 }
 
-func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
-	crypto.PrivateKey, error,
-) {
-	data, err := os.ReadFile(path.Join(p, sgxChainFile))
+func (sgx *Sgx) loadCredentials() error {
+	data, err := os.ReadFile(path.Join(sgx.StoragePath, sgxChainFile))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read AK chain from %v: %w", sgx.StoragePath, err)
 	}
-	akchain, err := internal.ParseCertsPem(data)
+	sgx.akChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored AK chain of length %v", len(sgx.akChain))
 
-	data, err = os.ReadFile(path.Join(p, signingChainFile))
+	data, err = os.ReadFile(path.Join(sgx.StoragePath, signingChainFile))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read IK chain from %v: %w", sgx.StoragePath, err)
 	}
-	ikchain, err := internal.ParseCertsPem(data)
+	sgx.ikChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+		return fmt.Errorf("failed to parse IK certs: %w", err)
 	}
-	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored IK chain of length %v", len(sgx.ikChain))
 
-	data, err = os.ReadFile(path.Join(p, sgxPrivFile))
+	data, err = os.ReadFile(path.Join(sgx.StoragePath, sgxPrivFile))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read SGX private key from %v: %w", p, err)
+		return fmt.Errorf("failed to read SGX private key from %v: %w", sgx.StoragePath, err)
 	}
-	priv, err := x509.ParsePKCS8PrivateKey(data)
+	sgx.ikPriv, err = x509.ParsePKCS8PrivateKey(data)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse SGX private key: %w", err)
+		return fmt.Errorf("failed to parse SGX private key: %w", err)
 	}
 
-	return akchain, ikchain, priv, nil
+	return nil
 }
 
-func saveCredentials(p string, sgx *Sgx) error {
+func (sgx *Sgx) saveCredentials() error {
 	akchainPem := make([]byte, 0)
 	for _, cert := range sgx.akChain {
 		c := internal.WriteCertPem(cert)
 		akchainPem = append(akchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, sgxChainFile), akchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, sgxChainFile), err)
+	if err := os.WriteFile(path.Join(sgx.StoragePath, sgxChainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(sgx.StoragePath, sgxChainFile), err)
 	}
 
 	ikchainPem := make([]byte, 0)
@@ -400,16 +440,16 @@ func saveCredentials(p string, sgx *Sgx) error {
 		c := internal.WriteCertPem(cert)
 		ikchainPem = append(ikchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, signingChainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, signingChainFile), err)
+	if err := os.WriteFile(path.Join(sgx.StoragePath, signingChainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(sgx.StoragePath, signingChainFile), err)
 	}
 
 	key, err := x509.MarshalPKCS8PrivateKey(sgx.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}
-	if err := os.WriteFile(path.Join(p, sgxPrivFile), key, 0600); err != nil {
-		return fmt.Errorf("failed to write %v: %w", path.Join(p, sgxPrivFile), err)
+	if err := os.WriteFile(path.Join(sgx.StoragePath, sgxPrivFile), key, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(sgx.StoragePath, sgxPrivFile), err)
 	}
 
 	return nil

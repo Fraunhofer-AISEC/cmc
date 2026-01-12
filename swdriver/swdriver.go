@@ -39,15 +39,12 @@ var (
 // Sw is a struct required for implementing the signer and measurer interfaces
 // of the attestation report to perform software measurements and signing
 type Sw struct {
-	akChain    []*x509.Certificate
-	ikChain    []*x509.Certificate
-	akPriv     crypto.PrivateKey
-	ikPriv     crypto.PrivateKey
-	ctr        bool
-	ctrPcr     int
-	ctrLog     string
-	extCtrLog  bool
-	serializer ar.Serializer
+	*ar.DriverConfig
+	akChain []*x509.Certificate
+	ikChain []*x509.Certificate
+	akPriv  crypto.PrivateKey
+	ikPriv  crypto.PrivateKey
+	ctr     bool
 }
 
 const (
@@ -78,33 +75,30 @@ func (sw *Sw) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
+	sw.DriverConfig = c
+	sw.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "sw")
+
 	if provisioningRequired(c.StoragePath) {
 		log.Info("Performing SW provisioning")
 
 		// Create CSR and fetch new certificate including its chain from EST server
-		err = sw.provision(c)
+		err = sw.provision()
 		if err != nil {
 			return fmt.Errorf("failed to provision sw driver: %w", err)
 		}
 
 		if c.StoragePath != "" {
-			err = saveCredentials(c.StoragePath, sw)
+			err = sw.saveCredentials()
 			if err != nil {
-				return fmt.Errorf("failed to save SNP credentials: %w", err)
+				return fmt.Errorf("failed to save sw credentials: %w", err)
 			}
 		}
 	} else {
-		sw.akChain, sw.ikChain, sw.akPriv, sw.ikPriv, err = loadCredentials(c.StoragePath)
+		err = sw.loadCredentials()
 		if err != nil {
 			return fmt.Errorf("failed to load SW credentials: %w", err)
 		}
 	}
-
-	sw.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "sw")
-	sw.ctrLog = c.CtrLog
-	sw.extCtrLog = c.ExtCtrLog
-	sw.ctrPcr = c.CtrPcr
-	sw.serializer = c.Serializer
 
 	return nil
 }
@@ -159,18 +153,18 @@ func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	artifacts := make([]ar.Artifact, 0)
 	aggregatedHash := make([]byte, 32)
-	if _, err := os.Stat(sw.ctrLog); err == nil {
+	if _, err := os.Stat(sw.CtrLog); err == nil {
 
 		log.Debugf("Reading container measurements")
 
 		// If CMC container measurements are used, add the list of executed containers
-		data, err := os.ReadFile(sw.ctrLog)
+		data, err := os.ReadFile(sw.CtrLog)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read container measurements: %w", err)
 		}
 
 		var measureList []ar.MeasureEvent
-		err = sw.serializer.Unmarshal(data, &measureList)
+		err = sw.Serializer.Unmarshal(data, &measureList)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 		}
@@ -193,14 +187,14 @@ func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 	}
 
 	// Generate Evidence = Nonce | Aggregated_Hash
-	data, err := sw.serializer.Marshal(&ar.SwEvidence{
+	data, err := sw.Serializer.Marshal(&ar.SwEvidence{
 		Nonce:  nonce,
 		Sha256: aggregatedHash,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal evidence: %w", err)
 	}
-	evidence, err := sw.serializer.Sign(data, sw, ar.AK)
+	evidence, err := sw.Serializer.Sign(data, sw, ar.AK)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
 	}
@@ -213,6 +207,45 @@ func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 	}
 
 	return []ar.Measurement{measurement}, nil
+}
+
+func (sw *Sw) UpdateCerts() error {
+	var err error
+
+	// Initial checks
+	if sw == nil {
+		return errors.New("internal error: sw object is nil")
+	}
+
+	log.Info("Updating sw certificates")
+
+	err = sw.provision()
+	if err != nil {
+		return fmt.Errorf("failed to provision sw driver: %w", err)
+	}
+
+	if sw.StoragePath != "" {
+		err = sw.saveCredentials()
+		if err != nil {
+			return fmt.Errorf("failed to save sw credentials: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (sw *Sw) UpdateMetadata(metadata map[string][]byte) error {
+
+	// Initial checks
+	if sw == nil {
+		return errors.New("internal error: sw object is nil")
+	}
+
+	log.Info("Updating sw driver metadata")
+
+	sw.Metadata = metadata
+
+	return nil
 }
 
 func provisioningRequired(p string) bool {
@@ -245,7 +278,7 @@ func provisioningRequired(p string) bool {
 	return false
 }
 
-func (sw *Sw) provision(c *ar.DriverConfig) error {
+func (sw *Sw) provision() error {
 	var err error
 
 	// Create new IK private key
@@ -261,19 +294,19 @@ func (sw *Sw) provision(c *ar.DriverConfig) error {
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := c.Provisioner.CaCerts()
+	caCerts, err := sw.Provisioner.CaCerts()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
 	// Perform AK enrollment
-	akCsr, err := ar.CreateCsr(sw.akPriv, c.DeviceConfig.Sw.AkCsr)
+	akCsr, err := ar.CreateCsr(sw.akPriv, sw.DeviceConfig.Sw.AkCsr)
 	if err != nil {
 		return fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
 	log.Debugf("Performing simple AK enroll for CN=%v", akCsr.Subject.CommonName)
-	akCert, err := c.Provisioner.SimpleEnroll(akCsr)
+	akCert, err := sw.Provisioner.SimpleEnroll(akCsr)
 	if err != nil {
 		return fmt.Errorf("failed to enroll AK cert: %w", err)
 	}
@@ -282,13 +315,13 @@ func (sw *Sw) provision(c *ar.DriverConfig) error {
 	log.Debugf("Received certificate CN=%v", akCert.Subject.CommonName)
 
 	// Perform IK enrollment
-	ikCsr, err := ar.CreateCsr(sw.ikPriv, c.DeviceConfig.Sw.IkCsr)
+	ikCsr, err := ar.CreateCsr(sw.ikPriv, sw.DeviceConfig.Sw.IkCsr)
 	if err != nil {
 		return fmt.Errorf("failed to create IK CSR: %w", err)
 	}
 
 	log.Debugf("Performing simple IK enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := c.Provisioner.SimpleEnroll(ikCsr)
+	ikCert, err := sw.Provisioner.SimpleEnroll(ikCsr)
 	if err != nil {
 		return fmt.Errorf("failed to enroll cert: %w", err)
 	}
@@ -299,58 +332,56 @@ func (sw *Sw) provision(c *ar.DriverConfig) error {
 	return nil
 }
 
-func loadCredentials(p string) ([]*x509.Certificate, []*x509.Certificate,
-	crypto.PrivateKey, crypto.PrivateKey, error,
-) {
-	data, err := os.ReadFile(path.Join(p, akchainFile))
+func (sw *Sw) loadCredentials() error {
+	data, err := os.ReadFile(path.Join(sw.StoragePath, akchainFile))
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read AK chain from %v: %w", sw.StoragePath, err)
 	}
-	akchain, err := internal.ParseCertsPem(data)
+	sw.akChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to parse AK certs: %w", err)
+		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
-	log.Debugf("Parsed stored AK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored AK chain of length %v", len(sw.akChain))
 
-	data, err = os.ReadFile(path.Join(p, ikchainFile))
+	data, err = os.ReadFile(path.Join(sw.StoragePath, ikchainFile))
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read IK chain from %v: %w", sw.StoragePath, err)
 	}
-	ikchain, err := internal.ParseCertsPem(data)
+	sw.ikChain, err = internal.ParseCertsPem(data)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to parse IK certs: %w", err)
+		return fmt.Errorf("failed to parse IK certs: %w", err)
 	}
-	log.Debugf("Parsed stored IK chain of length %v", len(akchain))
+	log.Debugf("Parsed stored IK chain of length %v", len(sw.ikChain))
 
-	data, err = os.ReadFile(path.Join(p, akFile))
+	data, err = os.ReadFile(path.Join(sw.StoragePath, akFile))
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to read AK private key from %v: %w", p, err)
+		return fmt.Errorf("failed to read AK private key from %v: %w", sw.StoragePath, err)
 	}
-	ak, err := x509.ParsePKCS8PrivateKey(data)
+	sw.akPriv, err = x509.ParsePKCS8PrivateKey(data)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to parse AK private key: %w", err)
+		return fmt.Errorf("failed to parse AK private key: %w", err)
 	}
 
-	data, err = os.ReadFile(path.Join(p, ikFile))
+	data, err = os.ReadFile(path.Join(sw.StoragePath, ikFile))
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to read IK private key from %v: %w", p, err)
+		return fmt.Errorf("failed to read IK private key from %v: %w", sw.StoragePath, err)
 	}
-	ik, err := x509.ParsePKCS8PrivateKey(data)
+	sw.ikPriv, err = x509.ParsePKCS8PrivateKey(data)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to parse IK private key: %w", err)
+		return fmt.Errorf("failed to parse IK private key: %w", err)
 	}
 
-	return akchain, ikchain, ak, ik, nil
+	return nil
 }
 
-func saveCredentials(p string, sw *Sw) error {
+func (sw *Sw) saveCredentials() error {
 	akchainPem := make([]byte, 0)
 	for _, cert := range sw.akChain {
 		c := internal.WriteCertPem(cert)
 		akchainPem = append(akchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, akchainFile), akchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, akchainFile), err)
+	if err := os.WriteFile(path.Join(sw.StoragePath, akchainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(sw.StoragePath, akchainFile), err)
 	}
 
 	ikchainPem := make([]byte, 0)
@@ -358,24 +389,24 @@ func saveCredentials(p string, sw *Sw) error {
 		c := internal.WriteCertPem(cert)
 		ikchainPem = append(ikchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, ikchainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, ikchainFile), err)
+	if err := os.WriteFile(path.Join(sw.StoragePath, ikchainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(sw.StoragePath, ikchainFile), err)
 	}
 
 	ak, err := x509.MarshalPKCS8PrivateKey(sw.akPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}
-	if err := os.WriteFile(path.Join(p, akFile), ak, 0600); err != nil {
-		return fmt.Errorf("failed to write %v: %w", path.Join(p, akFile), err)
+	if err := os.WriteFile(path.Join(sw.StoragePath, akFile), ak, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(sw.StoragePath, akFile), err)
 	}
 
 	ik, err := x509.MarshalPKCS8PrivateKey(sw.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}
-	if err := os.WriteFile(path.Join(p, ikFile), ik, 0600); err != nil {
-		return fmt.Errorf("failed to write %v: %w", path.Join(p, ikFile), err)
+	if err := os.WriteFile(path.Join(sw.StoragePath, ikFile), ik, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(sw.StoragePath, ikFile), err)
 	}
 
 	return nil
