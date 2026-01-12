@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+go build -C "${dir}/tools/schema-generator"
+
+"${dir}/tools/schema-generator/schema-generator" -package api -out "${dir}/doc/api/json"
+"${dir}/tools/schema-generator/schema-generator" -package attestationreport -out "${dir}/doc/api/json"
+"${dir}/tools/schema-generator/schema-generator" -package attestedtls -out "${dir}/doc/api/json"
