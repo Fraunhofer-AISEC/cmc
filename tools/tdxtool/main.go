@@ -24,8 +24,8 @@ import (
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers/tdxdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/tdxdriver"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tdx-guest/pcs"
 	log "github.com/sirupsen/logrus"

@@ -17,7 +17,7 @@
 
 package cmc
 
-import "github.com/Fraunhofer-AISEC/cmc/sgxdriver"
+import "github.com/Fraunhofer-AISEC/cmc/drivers/sgxdriver"
 
 func init() {
 	drivers["sgx"] = &sgxdriver.Sgx{}

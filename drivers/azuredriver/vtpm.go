@@ -24,7 +24,7 @@ import (
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/tpmdriver"
+	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )

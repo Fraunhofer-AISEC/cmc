@@ -17,7 +17,7 @@
 
 package cmc
 
-import "github.com/Fraunhofer-AISEC/cmc/tpmdriver"
+import "github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
 
 func init() {
 	drivers["tpm"] = &tpmdriver.Tpm{}

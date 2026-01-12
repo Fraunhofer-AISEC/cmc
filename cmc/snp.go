@@ -17,7 +17,7 @@
 
 package cmc
 
-import "github.com/Fraunhofer-AISEC/cmc/snpdriver"
+import "github.com/Fraunhofer-AISEC/cmc/drivers/snpdriver"
 
 func init() {
 	drivers["snp"] = &snpdriver.Snp{}

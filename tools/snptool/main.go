@@ -30,9 +30,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Fraunhofer-AISEC/cmc/drivers/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
-	"github.com/Fraunhofer-AISEC/cmc/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
