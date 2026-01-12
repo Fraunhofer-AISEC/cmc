@@ -70,7 +70,8 @@ func Verify(
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},
-		CertLevel: 0,
+		Measurements: []ar.MeasurementResult{},
+		CertLevel:    0,
 	}
 
 	// Detect serialization format
