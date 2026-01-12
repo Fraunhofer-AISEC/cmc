@@ -36,6 +36,17 @@
         "width"
       ]
     },
+    "CPUAffinity": {
+      "properties": {
+        "initial": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "CertConfig": {
       "properties": {
         "akCsr": {
@@ -81,7 +92,13 @@
         "subject": {
           "$ref": "#/$defs/Name"
         },
-        "sans": {
+        "dnsNames": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ipAddresses": {
           "items": {
             "type": "string"
           },
@@ -148,6 +165,101 @@
         "index"
       ]
     },
+    "EFIDevicePath": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "subtype": {
+          "type": "string"
+        },
+        "function": {
+          "type": "integer"
+        },
+        "device": {
+          "type": "integer"
+        },
+        "functionnumber": {
+          "type": "integer"
+        },
+        "memorytype": {
+          "type": "integer"
+        },
+        "startaddress": {
+          "type": "integer"
+        },
+        "endaddress": {
+          "type": "integer"
+        },
+        "vendorguid": {
+          "type": "string"
+        },
+        "vendordefineddata": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "hid": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "uid": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "partitionnumber": {
+          "type": "integer"
+        },
+        "partitionstart": {
+          "type": "integer"
+        },
+        "partitionsize": {
+          "type": "integer"
+        },
+        "partitionsignature": {
+          "$ref": "#/$defs/HexByte"
+        },
+        "partitionformat": {
+          "type": "integer"
+        },
+        "signaturetype": {
+          "type": "integer"
+        },
+        "bootentry": {
+          "type": "integer"
+        },
+        "pathname": {
+          "type": "string"
+        },
+        "protocolguid": {
+          "type": "string"
+        },
+        "firmwareFileName": {
+          "type": "string"
+        },
+        "startingaddress": {
+          "type": "integer"
+        },
+        "endingaddress": {
+          "type": "integer"
+        },
+        "disktypeguid": {
+          "type": "string"
+        },
+        "diskinstance": {
+          "type": "integer"
+        },
+        "devicetype": {
+          "type": "integer"
+        },
+        "statusflag": {
+          "type": "integer"
+        },
+        "descriptionstring": {
+          "type": "string"
+        }
+      },
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
     "EFILoadOption": {
       "properties": {
         "attributes": {
@@ -158,12 +270,12 @@
         },
         "filepathlist": {
           "items": {
-            "$ref": "#/$defs/FilePathList"
+            "$ref": "#/$defs/EFIDevicePath"
           },
           "type": "array"
         },
         "optionaldata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string"
         }
       },
       "type": "object",
@@ -211,7 +323,7 @@
         "stringcontent": {
           "type": "string"
         },
-        "genericdata": {
+        "rawdata": {
           "$ref": "#/$defs/HexByte"
         }
       },
@@ -240,80 +352,124 @@
         "port"
       ]
     },
-    "FilePathList": {
+    "FreeBSD": {
       "properties": {
-        "type": {
+        "devices": {
+          "items": {
+            "$ref": "#/$defs/FreeBSDDevice"
+          },
+          "type": "array"
+        },
+        "jail": {
+          "$ref": "#/$defs/FreeBSDJail"
+        }
+      },
+      "type": "object"
+    },
+    "FreeBSDDevice": {
+      "properties": {
+        "path": {
           "type": "string"
         },
-        "subtype": {
-          "type": "string"
-        },
-        "hid": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "uid": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "vendorguid": {
-          "type": "string"
-        },
-        "vendordefineddata": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "partitionnumber": {
+        "mode": {
           "type": "integer"
-        },
-        "partitionstart": {
-          "type": "integer"
-        },
-        "partitionsize": {
-          "type": "integer"
-        },
-        "partitionsignature": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "partitionformat": {
-          "type": "integer"
-        },
-        "signaturetype": {
-          "type": "integer"
-        },
-        "bootentry": {
-          "type": "integer"
-        },
-        "pathname": {
-          "type": "string"
-        },
-        "protocolguid": {
-          "type": "string"
-        },
-        "startingaddress": {
-          "type": "integer"
-        },
-        "endingaddress": {
-          "type": "integer"
-        },
-        "disktypeguid": {
-          "type": "string"
-        },
-        "diskinstance": {
-          "type": "integer"
-        },
-        "devicetype": {
-          "type": "integer"
-        },
-        "statusflag": {
-          "type": "integer"
-        },
-        "descriptionstring": {
-          "type": "string"
         }
       },
       "type": "object",
       "required": [
-        "type",
-        "subtype"
+        "path"
       ]
+    },
+    "FreeBSDJail": {
+      "properties": {
+        "parent": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "ip4": {
+          "type": "string"
+        },
+        "ip4Addr": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ip6": {
+          "type": "string"
+        },
+        "ip6Addr": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "vnet": {
+          "type": "string"
+        },
+        "interface": {
+          "type": "string"
+        },
+        "vnetInterfaces": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sysvmsg": {
+          "type": "string"
+        },
+        "sysvsem": {
+          "type": "string"
+        },
+        "sysvshm": {
+          "type": "string"
+        },
+        "enforceStatfs": {
+          "type": "integer"
+        },
+        "allow": {
+          "$ref": "#/$defs/FreeBSDJailAllow"
+        }
+      },
+      "type": "object"
+    },
+    "FreeBSDJailAllow": {
+      "properties": {
+        "setHostname": {
+          "type": "boolean"
+        },
+        "rawSockets": {
+          "type": "boolean"
+        },
+        "chflags": {
+          "type": "boolean"
+        },
+        "mount": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "quotas": {
+          "type": "boolean"
+        },
+        "socketAf": {
+          "type": "boolean"
+        },
+        "mlock": {
+          "type": "boolean"
+        },
+        "reservedPorts": {
+          "type": "boolean"
+        },
+        "suser": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
     },
     "GPTHeader": {
       "properties": {
@@ -370,7 +526,7 @@
     },
     "GPTPartitionEntry": {
       "properties": {
-        "paritiontypeguid": {
+        "partitiontypeguid": {
           "type": "string"
         },
         "uniquepartitionguid": {
@@ -387,6 +543,38 @@
         },
         "partitionname": {
           "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "HWConfig": {
+      "properties": {
+        "deviceTree": {
+          "type": "string"
+        },
+        "vcpus": {
+          "type": "integer"
+        },
+        "memory": {
+          "type": "integer"
+        },
+        "dtdevs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "iomems": {
+          "items": {
+            "$ref": "#/$defs/IOMems"
+          },
+          "type": "array"
+        },
+        "irqs": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -476,6 +664,24 @@
       },
       "type": "object"
     },
+    "IOMems": {
+      "properties": {
+        "firstGFN": {
+          "type": "integer"
+        },
+        "firstMFN": {
+          "type": "integer"
+        },
+        "nrMFNs": {
+          "type": "integer"
+        }
+      },
+      "type": "object",
+      "required": [
+        "firstMFN",
+        "nrMFNs"
+      ]
+    },
     "ImageLoadEvent": {
       "properties": {
         "imagelocationinmemory": {
@@ -488,20 +694,18 @@
           "type": "integer"
         },
         "uefidevicepath": {
-          "$ref": "#/$defs/FilePathList"
+          "items": {
+            "$ref": "#/$defs/EFIDevicePath"
+          },
+          "type": "array"
         }
       },
       "type": "object",
       "required": [
         "imagelocationinmemory",
         "imagelengthinmemory",
-        "imagelinktimeaddress",
-        "uefidevicepath"
+        "imagelinktimeaddress"
       ]
-    },
-    "Int": {
-      "properties": {},
-      "type": "object"
     },
     "Linux": {
       "properties": {
@@ -541,6 +745,12 @@
           },
           "type": "array"
         },
+        "netDevices": {
+          "additionalProperties": {
+            "$ref": "#/$defs/LinuxNetDevice"
+          },
+          "type": "object"
+        },
         "seccomp": {
           "$ref": "#/$defs/LinuxSeccomp"
         },
@@ -564,6 +774,9 @@
         },
         "intelRdt": {
           "$ref": "#/$defs/LinuxIntelRdt"
+        },
+        "memoryPolicy": {
+          "$ref": "#/$defs/LinuxMemoryPolicy"
         },
         "personality": {
           "$ref": "#/$defs/LinuxPersonality"
@@ -794,16 +1007,19 @@
         "closID": {
           "type": "string"
         },
+        "schemata": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "l3CacheSchema": {
           "type": "string"
         },
         "memBwSchema": {
           "type": "string"
         },
-        "enableCMT": {
-          "type": "boolean"
-        },
-        "enableMBM": {
+        "enableMonitoring": {
           "type": "boolean"
         }
       },
@@ -856,6 +1072,27 @@
       },
       "type": "object"
     },
+    "LinuxMemoryPolicy": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "string"
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object",
+      "required": [
+        "mode",
+        "nodes"
+      ]
+    },
     "LinuxNamespace": {
       "properties": {
         "type": {
@@ -869,6 +1106,14 @@
       "required": [
         "type"
       ]
+    },
+    "LinuxNetDevice": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
     },
     "LinuxNetwork": {
       "properties": {
@@ -907,10 +1152,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "limit"
-      ]
+      "type": "object"
     },
     "LinuxRdma": {
       "properties": {
@@ -1215,8 +1457,11 @@
         "certLevel": {
           "type": "integer"
         },
-        "caFingerprint": {
-          "type": "string"
+        "caFingerprints": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "snpPolicy": {
           "$ref": "#/$defs/SnpPolicy"
@@ -1274,7 +1519,7 @@
           },
           "type": "object"
         },
-        "result": {
+        "summary": {
           "$ref": "#/$defs/Result"
         },
         "validityCheck": {
@@ -1294,33 +1539,40 @@
         "version",
         "validity",
         "SgxValues",
-        "result",
+        "summary",
         "signatureValidation"
       ]
     },
     "MetadataSummary": {
       "properties": {
-        "deviceDescValidation": {
+        "devDescResult": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "manifestValidation": {
+        "manifestResults": {
           "items": {
             "$ref": "#/$defs/MetadataResult"
           },
           "type": "array"
         },
-        "companyValidation": {
+        "compDescResult": {
           "$ref": "#/$defs/MetadataResult"
         },
-        "compatibilityValidation": {
+        "unknownResults": {
+          "items": {
+            "$ref": "#/$defs/MetadataResult"
+          },
+          "type": "array"
+        },
+        "compatibilityResult": {
           "$ref": "#/$defs/CompatibilityResult"
         }
       },
       "type": "object",
       "required": [
-        "deviceDescValidation",
-        "manifestValidation",
-        "compatibilityValidation"
+        "devDescResult",
+        "manifestResults",
+        "unknownResults",
+        "compatibilityResult"
       ]
     },
     "Mount": {
@@ -1394,10 +1646,10 @@
     "PCClientTaggedEvent": {
       "properties": {
         "taggedeventid": {
-          "type": "integer"
+          "type": "string"
         },
         "taggedeventdata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string"
         }
       },
       "type": "object",
@@ -1531,6 +1783,9 @@
         },
         "ioPriority": {
           "$ref": "#/$defs/LinuxIOPriority"
+        },
+        "execCPUAffinity": {
+          "$ref": "#/$defs/CPUAffinity"
         }
       },
       "type": "object",
@@ -1541,7 +1796,7 @@
     },
     "QeReportResult": {
       "properties": {
-        "success": {
+        "summary": {
           "$ref": "#/$defs/Result"
         },
         "mrsigner": {
@@ -1565,7 +1820,7 @@
       },
       "type": "object",
       "required": [
-        "success",
+        "summary",
         "mrsigner",
         "isvProdId",
         "miscSelect",
@@ -1613,8 +1868,8 @@
     },
     "Result": {
       "properties": {
-        "success": {
-          "type": "boolean"
+        "status": {
+          "type": "string"
         },
         "got": {
           "type": "string"
@@ -1634,13 +1889,19 @@
           },
           "type": "array"
         },
-        "errorCode": {
-          "type": "integer"
+        "errorCodes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "details": {
+          "type": "string"
         }
       },
       "type": "object",
       "required": [
-        "success"
+        "status"
       ]
     },
     "Root": {
@@ -1783,6 +2044,12 @@
         },
         "attributes": {
           "$ref": "#/$defs/SGXAttributes"
+        },
+        "acceptedTcbStatuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "type": "object",
@@ -1920,25 +2187,28 @@
     },
     "SnpPolicy": {
       "properties": {
-        "reportVersion": {
+        "reportMinVersion": {
+          "type": "integer"
+        },
+        "reportMaxVersion": {
           "type": "integer"
         },
         "policy": {
           "$ref": "#/$defs/SnpGuestPolicy"
         },
-        "fw": {
-          "$ref": "#/$defs/SnpFw"
-        },
-        "tcb": {
-          "$ref": "#/$defs/SnpTcb"
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/SnpVersion"
+          },
+          "type": "array"
         }
       },
       "type": "object",
       "required": [
-        "reportVersion",
+        "reportMinVersion",
+        "reportMaxVersion",
         "policy",
-        "fw",
-        "tcb"
+        "versions"
       ]
     },
     "SnpResult": {
@@ -1973,6 +2243,9 @@
     },
     "SnpTcb": {
       "properties": {
+        "fmc": {
+          "type": "integer"
+        },
         "bl": {
           "type": "integer"
         },
@@ -1988,10 +2261,30 @@
       },
       "type": "object",
       "required": [
+        "fmc",
         "bl",
         "tee",
         "snp",
         "ucode"
+      ]
+    },
+    "SnpVersion": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "fw": {
+          "$ref": "#/$defs/SnpFw"
+        },
+        "tcb": {
+          "$ref": "#/$defs/SnpTcb"
+        }
+      },
+      "type": "object",
+      "required": [
+        "name",
+        "fw",
+        "tcb"
       ]
     },
     "Solaris": {
@@ -2111,6 +2404,9 @@
         },
         "zos": {
           "$ref": "#/$defs/ZOS"
+        },
+        "freebsd": {
+          "$ref": "#/$defs/FreeBSD"
         }
       },
       "type": "object",
@@ -2165,6 +2461,9 @@
         "result": {
           "$ref": "#/$defs/Result"
         },
+        "fmc": {
+          "$ref": "#/$defs/VersionCheck"
+        },
         "bl": {
           "$ref": "#/$defs/VersionCheck"
         },
@@ -2181,6 +2480,7 @@
       "type": "object",
       "required": [
         "result",
+        "fmc",
         "bl",
         "tee",
         "snp",
@@ -2189,7 +2489,7 @@
     },
     "TcbInfoResult": {
       "properties": {
-        "success": {
+        "summary": {
           "$ref": "#/$defs/Result"
         },
         "id": {
@@ -2198,20 +2498,49 @@
         "version": {
           "$ref": "#/$defs/Result"
         },
+        "tcbLevelResult": {
+          "$ref": "#/$defs/TcbLevelResult"
+        }
+      },
+      "type": "object",
+      "required": [
+        "summary",
+        "id",
+        "version",
+        "tcbLevelResult"
+      ]
+    },
+    "TcbLevelResult": {
+      "properties": {
         "status": {
           "type": "string"
         },
         "date": {
           "type": "string"
+        },
+        "pceSvn": {
+          "$ref": "#/$defs/Result"
+        },
+        "sgxComponents": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
+        },
+        "tdxComponents": {
+          "items": {
+            "$ref": "#/$defs/Result"
+          },
+          "type": "array"
         }
       },
       "type": "object",
       "required": [
-        "success",
-        "id",
-        "version",
         "status",
-        "date"
+        "date",
+        "pceSvn",
+        "sgxComponents",
+        "tdxComponents"
       ]
     },
     "TdAttributesCheck": {
@@ -2250,6 +2579,12 @@
         },
         "tdAttributes": {
           "$ref": "#/$defs/TDAttributes"
+        },
+        "acceptedTcbStatuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "type": "object",
@@ -2465,6 +2800,9 @@
         },
         "image": {
           "$ref": "#/$defs/VMImage"
+        },
+        "hwconfig": {
+          "$ref": "#/$defs/HWConfig"
         }
       },
       "type": "object",
@@ -2547,14 +2885,8 @@
         "type": {
           "type": "string"
         },
-        "success": {
-          "type": "boolean"
-        },
-        "errorCodes": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
+        "summary": {
+          "$ref": "#/$defs/Result"
         },
         "prover": {
           "type": "string"
@@ -2574,9 +2906,6 @@
         "metadata": {
           "$ref": "#/$defs/MetadataSummary"
         },
-        "policySuccess": {
-          "type": "boolean"
-        },
         "reportSignatureCheck": {
           "items": {
             "$ref": "#/$defs/SignatureResult"
@@ -2588,7 +2917,7 @@
       "required": [
         "version",
         "type",
-        "success",
+        "summary",
         "certLevel",
         "measurements",
         "metadata",
@@ -2656,6 +2985,17 @@
         "layerFolders"
       ]
     },
+    "WindowsCPUGroupAffinity": {
+      "properties": {
+        "mask": {
+          "type": "integer"
+        },
+        "group": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "WindowsCPUResources": {
       "properties": {
         "count": {
@@ -2666,6 +3006,12 @@
         },
         "maximum": {
           "type": "integer"
+        },
+        "affinity": {
+          "items": {
+            "$ref": "#/$defs/WindowsCPUGroupAffinity"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -2761,7 +3107,7 @@
           "type": "integer"
         },
         "serialNumber": {
-          "$ref": "#/$defs/Int"
+          "type": "string"
         },
         "issuer": {
           "$ref": "#/$defs/X509Name"
@@ -2919,45 +3265,27 @@
     },
     "ZOS": {
       "properties": {
-        "devices": {
+        "namespaces": {
           "items": {
-            "$ref": "#/$defs/ZOSDevice"
+            "$ref": "#/$defs/ZOSNamespace"
           },
           "type": "array"
         }
       },
       "type": "object"
     },
-    "ZOSDevice": {
+    "ZOSNamespace": {
       "properties": {
-        "path": {
-          "type": "string"
-        },
         "type": {
           "type": "string"
         },
-        "major": {
-          "type": "integer"
-        },
-        "minor": {
-          "type": "integer"
-        },
-        "fileMode": {
-          "type": "integer"
-        },
-        "uid": {
-          "type": "integer"
-        },
-        "gid": {
-          "type": "integer"
+        "path": {
+          "type": "string"
         }
       },
       "type": "object",
       "required": [
-        "path",
-        "type",
-        "major",
-        "minor"
+        "type"
       ]
     }
   }

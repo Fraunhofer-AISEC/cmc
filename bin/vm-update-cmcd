@@ -10,7 +10,7 @@ data="${dir}/vm"
 # Build binaries
 go build -C "${dir}/cmcd"
 go build -C "${dir}/cmcctl"
-go build -C "${dir}/provision/est/estserver"
+go build -C "${dir}/provision/estserver"
 
 # Stop running services in VM
 vm-ssh systemctl stop cmcd

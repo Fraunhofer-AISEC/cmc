@@ -20,8 +20,4 @@ exists, content will be overwritten.
 
 ## Update CMC documentation
 
-```
-./schema-generator -package api -out ../../doc/api/json && \
-./schema-generator -package attestationreport -out ../../doc/api/json && \
-./schema-generator -package attestedtls -out ../../doc/api/json
-```
+See [update-api](../../bin/update-api)
