@@ -722,6 +722,10 @@ func (s *SwSigner) Name() string {
 	return "SW Driver"
 }
 
+func (s *SwSigner) UpdateCerts() error {
+	return nil
+}
+
 func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
 
 	// Generate private key and public key for test CA

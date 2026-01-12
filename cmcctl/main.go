@@ -24,15 +24,17 @@ import (
 
 var (
 	cmds = map[string]func(*config){
-		"generate":  generate,
-		"verify":    verify,
-		"measure":   measure,
-		"dial":      dial,
-		"listen":    listen,
-		"request":   request,
-		"serve":     serve,
-		"token":     token,
-		"provision": provision,
+		"generate":        generate,
+		"verify":          verify,
+		"measure":         measure,
+		"dial":            dial,
+		"listen":          listen,
+		"request":         request,
+		"serve":           serve,
+		"token":           token,
+		"provision":       provision,
+		"update-certs":    updateCerts,
+		"update-metadata": updateMetadata,
 	}
 )
 
@@ -49,6 +51,8 @@ func init() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  token\t\tRequest a bootstrap token for EST certificate requests\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  measure\tRecord measurements\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  provision\tRetrieve provisioning data for CVMs\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  update-certs\tTriggers updating the CMC AK and IK certificates\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  update-metadata\tTriggers updating the CMC metadata\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\nOPTIONS:\n")
 		flag.PrintDefaults()
 	}

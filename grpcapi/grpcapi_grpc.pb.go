@@ -34,12 +34,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CMCService_Attest_FullMethodName    = "/grpcapi.CMCService/Attest"
-	CMCService_Verify_FullMethodName    = "/grpcapi.CMCService/Verify"
-	CMCService_TLSSign_FullMethodName   = "/grpcapi.CMCService/TLSSign"
-	CMCService_TLSCert_FullMethodName   = "/grpcapi.CMCService/TLSCert"
-	CMCService_PeerCache_FullMethodName = "/grpcapi.CMCService/PeerCache"
-	CMCService_Measure_FullMethodName   = "/grpcapi.CMCService/Measure"
+	CMCService_Attest_FullMethodName         = "/grpcapi.CMCService/Attest"
+	CMCService_Verify_FullMethodName         = "/grpcapi.CMCService/Verify"
+	CMCService_TLSSign_FullMethodName        = "/grpcapi.CMCService/TLSSign"
+	CMCService_TLSCert_FullMethodName        = "/grpcapi.CMCService/TLSCert"
+	CMCService_PeerCache_FullMethodName      = "/grpcapi.CMCService/PeerCache"
+	CMCService_Measure_FullMethodName        = "/grpcapi.CMCService/Measure"
+	CMCService_UpdateCerts_FullMethodName    = "/grpcapi.CMCService/UpdateCerts"
+	CMCService_UpdateMetadata_FullMethodName = "/grpcapi.CMCService/UpdateMetadata"
 )
 
 // CMCServiceClient is the client API for CMCService service.
@@ -52,6 +54,8 @@ type CMCServiceClient interface {
 	TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error)
 	PeerCache(ctx context.Context, in *PeerCacheRequest, opts ...grpc.CallOption) (*PeerCacheResponse, error)
 	Measure(ctx context.Context, in *MeasureRequest, opts ...grpc.CallOption) (*MeasureResponse, error)
+	UpdateCerts(ctx context.Context, in *UpdateCertsRequest, opts ...grpc.CallOption) (*UpdateCertsResponse, error)
+	UpdateMetadata(ctx context.Context, in *UpdateMetadataRequest, opts ...grpc.CallOption) (*UpdateMetadataResponse, error)
 }
 
 type cMCServiceClient struct {
@@ -122,6 +126,26 @@ func (c *cMCServiceClient) Measure(ctx context.Context, in *MeasureRequest, opts
 	return out, nil
 }
 
+func (c *cMCServiceClient) UpdateCerts(ctx context.Context, in *UpdateCertsRequest, opts ...grpc.CallOption) (*UpdateCertsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateCertsResponse)
+	err := c.cc.Invoke(ctx, CMCService_UpdateCerts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cMCServiceClient) UpdateMetadata(ctx context.Context, in *UpdateMetadataRequest, opts ...grpc.CallOption) (*UpdateMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateMetadataResponse)
+	err := c.cc.Invoke(ctx, CMCService_UpdateMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CMCServiceServer is the server API for CMCService service.
 // All implementations must embed UnimplementedCMCServiceServer
 // for forward compatibility.
@@ -132,6 +156,8 @@ type CMCServiceServer interface {
 	TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error)
 	PeerCache(context.Context, *PeerCacheRequest) (*PeerCacheResponse, error)
 	Measure(context.Context, *MeasureRequest) (*MeasureResponse, error)
+	UpdateCerts(context.Context, *UpdateCertsRequest) (*UpdateCertsResponse, error)
+	UpdateMetadata(context.Context, *UpdateMetadataRequest) (*UpdateMetadataResponse, error)
 	mustEmbedUnimplementedCMCServiceServer()
 }
 
@@ -159,6 +185,12 @@ func (UnimplementedCMCServiceServer) PeerCache(context.Context, *PeerCacheReques
 }
 func (UnimplementedCMCServiceServer) Measure(context.Context, *MeasureRequest) (*MeasureResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Measure not implemented")
+}
+func (UnimplementedCMCServiceServer) UpdateCerts(context.Context, *UpdateCertsRequest) (*UpdateCertsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateCerts not implemented")
+}
+func (UnimplementedCMCServiceServer) UpdateMetadata(context.Context, *UpdateMetadataRequest) (*UpdateMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateMetadata not implemented")
 }
 func (UnimplementedCMCServiceServer) mustEmbedUnimplementedCMCServiceServer() {}
 func (UnimplementedCMCServiceServer) testEmbeddedByValue()                    {}
@@ -289,6 +321,42 @@ func _CMCService_Measure_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CMCService_UpdateCerts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateCertsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CMCServiceServer).UpdateCerts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CMCService_UpdateCerts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CMCServiceServer).UpdateCerts(ctx, req.(*UpdateCertsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CMCService_UpdateMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CMCServiceServer).UpdateMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CMCService_UpdateMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CMCServiceServer).UpdateMetadata(ctx, req.(*UpdateMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CMCService_ServiceDesc is the grpc.ServiceDesc for CMCService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -319,6 +387,14 @@ var CMCService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Measure",
 			Handler:    _CMCService_Measure_Handler,
+		},
+		{
+			MethodName: "UpdateCerts",
+			Handler:    _CMCService_UpdateCerts_Handler,
+		},
+		{
+			MethodName: "UpdateMetadata",
+			Handler:    _CMCService_UpdateMetadata_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

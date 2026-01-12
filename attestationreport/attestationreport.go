@@ -368,6 +368,8 @@ type Driver interface {
 	GetKeyHandles(keyType KeySelection) (crypto.PrivateKey, crypto.PublicKey, error)
 	GetCertChain(keyType KeySelection) ([]*x509.Certificate, error)
 	Name() string
+	UpdateCerts() error
+	UpdateMetadata(map[string][]byte) error
 }
 
 // DriverConfig contains all configuration values required for the different drivers

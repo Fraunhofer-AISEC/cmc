@@ -25,6 +25,8 @@ service CMCService {
     rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
     rpc PeerCache(PeerCacheRequest) returns (PeerCacheResponse) {}
     rpc Measure(MeasureRequest) returns (MeasureResponse) {}
+    rpc UpdateCerts(UpdateCertsRequest) returns (UpdateCertsResponse) {}
+    rpc UpdateMetadata(UpdateMetadataRequest) returns (UpdateMetadataResponse) {}
 }
 
 
@@ -92,8 +94,25 @@ message MeasureRequest {
   MeasureEvent measure_event = 2;
 }
 
-
 message MeasureResponse {
+  string version = 1;
+  bool success = 2;
+}
+
+message UpdateCertsRequest {
+  string version = 1;
+}
+
+message UpdateCertsResponse {
+  string version = 1;
+  bool success = 2;
+}
+
+message UpdateMetadataRequest {
+  string version = 1;
+}
+
+message UpdateMetadataResponse {
   string version = 1;
   bool success = 2;
 }

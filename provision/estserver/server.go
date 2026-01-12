@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -220,6 +221,24 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		writeHttpErrorf(w, "Failed to parse CSR: %v", err)
 		return
 	}
+
+	// Validate CSR
+	remoteAddr := req.RemoteAddr
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		log.Warnf("Failed to split host:port from %v: %v", remoteAddr, err)
+		host = remoteAddr // fallback
+	}
+	log.Debugf("Request from host %v", host)
+	names, err := net.LookupAddr(host)
+	if err != nil || len(names) == 0 {
+		log.Warnf("Reverse lookup failed for IP %s: %v", host, err)
+	}
+	hostname := host // fallback
+	if len(names) > 0 {
+		hostname = strings.TrimSuffix(names[0], ".") // remove trailing dot
+	}
+	log.Debugf("Got hostname: %v", hostname)
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
 	if err != nil {
@@ -492,6 +511,24 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+
+	// Validate CSR
+	remoteAddr := req.RemoteAddr
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		log.Warnf("Failed to split host:port from %v: %v", remoteAddr, err)
+		host = remoteAddr // fallback
+	}
+	log.Debugf("Request from host %v", host)
+	names, err := net.LookupAddr(host)
+	if err != nil || len(names) == 0 {
+		log.Warnf("Reverse lookup failed for IP %s: %v", host, err)
+	}
+	hostname := host // fallback
+	if len(names) > 0 {
+		hostname = strings.TrimSuffix(names[0], ".") // remove trailing dot
+	}
+	log.Debugf("Got hostname: %v", hostname)
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
 	if err != nil {

@@ -232,3 +232,69 @@ func (a GrpcApi) request(c *config) {
 func (a GrpcApi) serve(c *config) {
 	serveInternal(c, attestedtls.CmcApi_GRPC, nil)
 }
+
+func (a GrpcApi) updateCerts(c *config) {
+
+	// Establish connection
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+
+	log.Infof("Sending grpc request type 'UpdateCerts' to %v", c.CmcAddr)
+
+	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect to cmcd: %v", err)
+	}
+	defer conn.Close()
+	client := grpcapi.NewCMCServiceClient(conn)
+
+	request := grpcapi.UpdateCertsRequest{
+		Version: api.GetVersion(),
+	}
+	response, err := client.UpdateCerts(ctx, &request)
+	if err != nil {
+		log.Fatalf("GRPC UpdateCerts Call failed: %v", err)
+	}
+
+	if response.Version != api.GetVersion() {
+		log.Fatalf("API version mismatch. Expected UpdateCertsRequest version %v, got %v",
+			api.GetVersion(), response.Version)
+	}
+
+	if !response.Success {
+		log.Fatalf("UpdateCerts response returned success: %v", response.Success)
+	}
+}
+
+func (a GrpcApi) updateMetadata(c *config) {
+
+	// Establish connection
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+
+	log.Infof("Sending grpc request type 'UpdateMetadata' to %v", c.CmcAddr)
+
+	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("Failed to connect to cmcd: %v", err)
+	}
+	defer conn.Close()
+	client := grpcapi.NewCMCServiceClient(conn)
+
+	request := grpcapi.UpdateMetadataRequest{
+		Version: api.GetVersion(),
+	}
+	response, err := client.UpdateMetadata(ctx, &request)
+	if err != nil {
+		log.Fatalf("GRPC UpdateMetadata Call failed: %v", err)
+	}
+
+	if response.Version != api.GetVersion() {
+		log.Fatalf("API version mismatch. Expected UpdateMetadataRequest version %v, got %v",
+			api.GetVersion(), response.Version)
+	}
+
+	if !response.Success {
+		log.Fatalf("UpdateMetadata response returned success: %v", response.Success)
+	}
+}

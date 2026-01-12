@@ -829,6 +829,198 @@ func (x *MeasureResponse) GetSuccess() bool {
 	return false
 }
 
+type UpdateCertsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCertsRequest) Reset() {
+	*x = UpdateCertsRequest{}
+	mi := &file_grpcapi_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCertsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCertsRequest) ProtoMessage() {}
+
+func (x *UpdateCertsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCertsRequest.ProtoReflect.Descriptor instead.
+func (*UpdateCertsRequest) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateCertsRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type UpdateCertsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCertsResponse) Reset() {
+	*x = UpdateCertsResponse{}
+	mi := &file_grpcapi_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCertsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCertsResponse) ProtoMessage() {}
+
+func (x *UpdateCertsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCertsResponse.ProtoReflect.Descriptor instead.
+func (*UpdateCertsResponse) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UpdateCertsResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *UpdateCertsResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type UpdateMetadataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateMetadataRequest) Reset() {
+	*x = UpdateMetadataRequest{}
+	mi := &file_grpcapi_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateMetadataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateMetadataRequest) ProtoMessage() {}
+
+func (x *UpdateMetadataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateMetadataRequest.ProtoReflect.Descriptor instead.
+func (*UpdateMetadataRequest) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UpdateMetadataRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type UpdateMetadataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateMetadataResponse) Reset() {
+	*x = UpdateMetadataResponse{}
+	mi := &file_grpcapi_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateMetadataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateMetadataResponse) ProtoMessage() {}
+
+func (x *UpdateMetadataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateMetadataResponse.ProtoReflect.Descriptor instead.
+func (*UpdateMetadataResponse) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UpdateMetadataResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *UpdateMetadataResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type MeasureEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sha256        []byte                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
@@ -840,7 +1032,7 @@ type MeasureEvent struct {
 
 func (x *MeasureEvent) Reset() {
 	*x = MeasureEvent{}
-	mi := &file_grpcapi_proto_msgTypes[12]
+	mi := &file_grpcapi_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +1044,7 @@ func (x *MeasureEvent) String() string {
 func (*MeasureEvent) ProtoMessage() {}
 
 func (x *MeasureEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[12]
+	mi := &file_grpcapi_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +1057,7 @@ func (x *MeasureEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeasureEvent.ProtoReflect.Descriptor instead.
 func (*MeasureEvent) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{12}
+	return file_grpcapi_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MeasureEvent) GetSha256() []byte {
@@ -898,7 +1090,7 @@ type PSSOptions struct {
 
 func (x *PSSOptions) Reset() {
 	*x = PSSOptions{}
-	mi := &file_grpcapi_proto_msgTypes[13]
+	mi := &file_grpcapi_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -910,7 +1102,7 @@ func (x *PSSOptions) String() string {
 func (*PSSOptions) ProtoMessage() {}
 
 func (x *PSSOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[13]
+	mi := &file_grpcapi_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -923,7 +1115,7 @@ func (x *PSSOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PSSOptions.ProtoReflect.Descriptor instead.
 func (*PSSOptions) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{13}
+	return file_grpcapi_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PSSOptions) GetSaltLength() int32 {
@@ -944,7 +1136,7 @@ type CtrData struct {
 
 func (x *CtrData) Reset() {
 	*x = CtrData{}
-	mi := &file_grpcapi_proto_msgTypes[14]
+	mi := &file_grpcapi_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -956,7 +1148,7 @@ func (x *CtrData) String() string {
 func (*CtrData) ProtoMessage() {}
 
 func (x *CtrData) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[14]
+	mi := &file_grpcapi_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -969,7 +1161,7 @@ func (x *CtrData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CtrData.ProtoReflect.Descriptor instead.
 func (*CtrData) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{14}
+	return file_grpcapi_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CtrData) GetConfigSha256() []byte {
@@ -1048,6 +1240,16 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\rmeasure_event\x18\x02 \x01(\v2\x15.grpcapi.MeasureEventR\fmeasureEvent\"E\n" +
 	"\x0fMeasureResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\".\n" +
+	"\x12UpdateCertsRequest\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"I\n" +
+	"\x13UpdateCertsResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\"1\n" +
+	"\x15UpdateMetadataRequest\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\"L\n" +
+	"\x16UpdateMetadataResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\"r\n" +
 	"\fMeasureEvent\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\fR\x06sha256\x12\x1d\n" +
@@ -1088,7 +1290,7 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\vBLAKE2s_256\x10\x0f\x12\x0f\n" +
 	"\vBLAKE2b_256\x10\x10\x12\x0f\n" +
 	"\vBLAKE2b_384\x10\x11\x12\x0f\n" +
-	"\vBLAKE2b_512\x10\x122\xa2\x03\n" +
+	"\vBLAKE2b_512\x10\x122\xc3\x04\n" +
 	"\n" +
 	"CMCService\x12E\n" +
 	"\x06Attest\x12\x1b.grpcapi.AttestationRequest\x1a\x1c.grpcapi.AttestationResponse\"\x00\x12G\n" +
@@ -1096,7 +1298,9 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\aTLSSign\x12\x17.grpcapi.TLSSignRequest\x1a\x18.grpcapi.TLSSignResponse\"\x00\x12>\n" +
 	"\aTLSCert\x12\x17.grpcapi.TLSCertRequest\x1a\x18.grpcapi.TLSCertResponse\"\x00\x12D\n" +
 	"\tPeerCache\x12\x19.grpcapi.PeerCacheRequest\x1a\x1a.grpcapi.PeerCacheResponse\"\x00\x12>\n" +
-	"\aMeasure\x12\x17.grpcapi.MeasureRequest\x1a\x18.grpcapi.MeasureResponse\"\x00B\fZ\n" +
+	"\aMeasure\x12\x17.grpcapi.MeasureRequest\x1a\x18.grpcapi.MeasureResponse\"\x00\x12J\n" +
+	"\vUpdateCerts\x12\x1b.grpcapi.UpdateCertsRequest\x1a\x1c.grpcapi.UpdateCertsResponse\"\x00\x12S\n" +
+	"\x0eUpdateMetadata\x12\x1e.grpcapi.UpdateMetadataRequest\x1a\x1f.grpcapi.UpdateMetadataResponse\"\x00B\fZ\n" +
 	"./;grpcapib\x06proto3"
 
 var (
@@ -1112,48 +1316,56 @@ func file_grpcapi_proto_rawDescGZIP() []byte {
 }
 
 var file_grpcapi_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_grpcapi_proto_goTypes = []any{
-	(HashFunction)(0),            // 0: grpcapi.HashFunction
-	(*AttestationRequest)(nil),   // 1: grpcapi.AttestationRequest
-	(*AttestationResponse)(nil),  // 2: grpcapi.AttestationResponse
-	(*VerificationRequest)(nil),  // 3: grpcapi.VerificationRequest
-	(*VerificationResponse)(nil), // 4: grpcapi.VerificationResponse
-	(*TLSSignRequest)(nil),       // 5: grpcapi.TLSSignRequest
-	(*TLSSignResponse)(nil),      // 6: grpcapi.TLSSignResponse
-	(*TLSCertRequest)(nil),       // 7: grpcapi.TLSCertRequest
-	(*TLSCertResponse)(nil),      // 8: grpcapi.TLSCertResponse
-	(*PeerCacheRequest)(nil),     // 9: grpcapi.PeerCacheRequest
-	(*PeerCacheResponse)(nil),    // 10: grpcapi.PeerCacheResponse
-	(*MeasureRequest)(nil),       // 11: grpcapi.MeasureRequest
-	(*MeasureResponse)(nil),      // 12: grpcapi.MeasureResponse
-	(*MeasureEvent)(nil),         // 13: grpcapi.MeasureEvent
-	(*PSSOptions)(nil),           // 14: grpcapi.PSSOptions
-	(*CtrData)(nil),              // 15: grpcapi.CtrData
-	nil,                          // 16: grpcapi.AttestationResponse.MetadataEntry
-	nil,                          // 17: grpcapi.VerificationRequest.MetadataEntry
+	(HashFunction)(0),              // 0: grpcapi.HashFunction
+	(*AttestationRequest)(nil),     // 1: grpcapi.AttestationRequest
+	(*AttestationResponse)(nil),    // 2: grpcapi.AttestationResponse
+	(*VerificationRequest)(nil),    // 3: grpcapi.VerificationRequest
+	(*VerificationResponse)(nil),   // 4: grpcapi.VerificationResponse
+	(*TLSSignRequest)(nil),         // 5: grpcapi.TLSSignRequest
+	(*TLSSignResponse)(nil),        // 6: grpcapi.TLSSignResponse
+	(*TLSCertRequest)(nil),         // 7: grpcapi.TLSCertRequest
+	(*TLSCertResponse)(nil),        // 8: grpcapi.TLSCertResponse
+	(*PeerCacheRequest)(nil),       // 9: grpcapi.PeerCacheRequest
+	(*PeerCacheResponse)(nil),      // 10: grpcapi.PeerCacheResponse
+	(*MeasureRequest)(nil),         // 11: grpcapi.MeasureRequest
+	(*MeasureResponse)(nil),        // 12: grpcapi.MeasureResponse
+	(*UpdateCertsRequest)(nil),     // 13: grpcapi.UpdateCertsRequest
+	(*UpdateCertsResponse)(nil),    // 14: grpcapi.UpdateCertsResponse
+	(*UpdateMetadataRequest)(nil),  // 15: grpcapi.UpdateMetadataRequest
+	(*UpdateMetadataResponse)(nil), // 16: grpcapi.UpdateMetadataResponse
+	(*MeasureEvent)(nil),           // 17: grpcapi.MeasureEvent
+	(*PSSOptions)(nil),             // 18: grpcapi.PSSOptions
+	(*CtrData)(nil),                // 19: grpcapi.CtrData
+	nil,                            // 20: grpcapi.AttestationResponse.MetadataEntry
+	nil,                            // 21: grpcapi.VerificationRequest.MetadataEntry
 }
 var file_grpcapi_proto_depIdxs = []int32{
-	16, // 0: grpcapi.AttestationResponse.metadata:type_name -> grpcapi.AttestationResponse.MetadataEntry
-	17, // 1: grpcapi.VerificationRequest.metadata:type_name -> grpcapi.VerificationRequest.MetadataEntry
+	20, // 0: grpcapi.AttestationResponse.metadata:type_name -> grpcapi.AttestationResponse.MetadataEntry
+	21, // 1: grpcapi.VerificationRequest.metadata:type_name -> grpcapi.VerificationRequest.MetadataEntry
 	0,  // 2: grpcapi.TLSSignRequest.hashtype:type_name -> grpcapi.HashFunction
-	14, // 3: grpcapi.TLSSignRequest.pssOpts:type_name -> grpcapi.PSSOptions
-	13, // 4: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
-	15, // 5: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
+	18, // 3: grpcapi.TLSSignRequest.pssOpts:type_name -> grpcapi.PSSOptions
+	17, // 4: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
+	19, // 5: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
 	1,  // 6: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
 	3,  // 7: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
 	5,  // 8: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
 	7,  // 9: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
 	9,  // 10: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
 	11, // 11: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
-	2,  // 12: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
-	4,  // 13: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
-	6,  // 14: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
-	8,  // 15: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
-	10, // 16: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
-	12, // 17: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
-	12, // [12:18] is the sub-list for method output_type
-	6,  // [6:12] is the sub-list for method input_type
+	13, // 12: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
+	15, // 13: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
+	2,  // 14: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
+	4,  // 15: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
+	6,  // 16: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
+	8,  // 17: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
+	10, // 18: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
+	12, // 19: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
+	14, // 20: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
+	16, // 21: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
+	14, // [14:22] is the sub-list for method output_type
+	6,  // [6:14] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1170,7 +1382,7 @@ func file_grpcapi_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpcapi_proto_rawDesc), len(file_grpcapi_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

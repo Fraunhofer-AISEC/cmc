@@ -60,6 +60,10 @@ func (s *SwDriver) GetCertChain(sel KeySelection) ([]*x509.Certificate, error) {
 	return s.certChain, nil
 }
 
+func (s *SwDriver) UpdateCerts() error {
+	return nil
+}
+
 func TestSign(t *testing.T) {
 	type args struct {
 		ar     AttestationReport

@@ -237,6 +237,44 @@ func (a LibApi) serve(c *config) {
 	serveInternal(c, attestedtls.CmcApi_Lib, a.cmc)
 }
 
+func (a LibApi) updateCerts(c *config) {
+
+	if a.cmc == nil {
+		cmc, err := initialize(c)
+		if err != nil {
+			log.Errorf("failed to initialize CMC: %v", err)
+			return
+		}
+		a.cmc = cmc
+	}
+
+	// Generate attestation report
+	err := cmc.UpdateCerts(a.cmc)
+	if err != nil {
+		log.Errorf("Failed to update certs: %v", err)
+		return
+	}
+}
+
+func (a LibApi) updateMetadata(c *config) {
+
+	if a.cmc == nil {
+		cmc, err := initialize(c)
+		if err != nil {
+			log.Errorf("failed to initialize CMC: %v", err)
+			return
+		}
+		a.cmc = cmc
+	}
+
+	// Generate attestation report
+	err := cmc.UpdateMetadata(a.cmc)
+	if err != nil {
+		log.Errorf("Failed to update certs: %v", err)
+		return
+	}
+}
+
 func initialize(c *config) (*cmc.Cmc, error) {
 
 	if len(c.Addr) == 0 {
@@ -244,23 +282,23 @@ func initialize(c *config) (*cmc.Cmc, error) {
 	}
 
 	cmcConf := &cmc.Config{
-		CmcAddr:        c.CmcAddr,
-		ProvisionAddr:  c.ProvisionAddr,
-		Metadata:       c.Metadata,
-		Drivers:        c.Drivers,
-		Ima:            c.Ima,
-		ImaPcr:         c.ImaPcr,
-		KeyConfig:      c.KeyConfig,
-		Api:            "libapi",
-		PolicyEngine:   c.PolicyEngine,
-		Storage:        c.Storage,
-		Cache:          c.Cache,
-		PeerCache:      c.PeerCache,
-		MeasurementLog: c.MeasurementLog,
-		Ctr:            c.Ctr,
-		CtrDriver:      c.CtrDriver,
-		CtrPcr:         c.CtrPcr,
-		CtrLog:         c.CtrLog,
+		CmcAddr:          c.CmcAddr,
+		ProvisionAddr:    c.ProvisionAddr,
+		MetadataLocation: c.MetadataLocation,
+		Drivers:          c.Drivers,
+		Ima:              c.Ima,
+		ImaPcr:           c.ImaPcr,
+		KeyConfig:        c.KeyConfig,
+		Api:              "libapi",
+		PolicyEngine:     c.PolicyEngine,
+		Storage:          c.Storage,
+		Cache:            c.Cache,
+		PeerCache:        c.PeerCache,
+		MeasurementLog:   c.MeasurementLog,
+		Ctr:              c.Ctr,
+		CtrDriver:        c.CtrDriver,
+		CtrPcr:           c.CtrPcr,
+		CtrLog:           c.CtrLog,
 	}
 
 	return cmc.NewCmc(cmcConf)

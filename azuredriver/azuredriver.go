@@ -44,18 +44,14 @@ const (
 var log = logrus.WithField("service", "azuredriver")
 
 type Azure struct {
+	*ar.DriverConfig
+
 	// Confidential Computing Parameters
 	ccAkChain []*x509.Certificate
 
 	// vTPM Parameters
-	pcrs       []int
-	biosLog    bool
-	imaLog     bool
-	imaPcr     int
-	ctrLog     bool
-	ctrPcr     int
-	ctrLogFile string
-	serializer ar.Serializer
+	pcrs   []int
+	ctrLog bool
 
 	ikChain []*x509.Certificate
 	ikPriv  crypto.PrivateKey
@@ -78,14 +74,9 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
-	azure.imaLog = c.Ima
-	azure.imaPcr = c.ImaPcr
+	azure.DriverConfig = c
 	azure.pcrs = getQuotePcrs(c.ExcludePcrs)
-	azure.biosLog = c.MeasurementLog
-	azure.serializer = c.Serializer
 	azure.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
-	azure.ctrLogFile = c.CtrLog
-	azure.ctrPcr = c.CtrPcr
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
@@ -100,19 +91,19 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 	if provisioningRequired(c.StoragePath) {
 		log.Info("Performing Azure provisioning")
 
-		err := azure.provision(c)
+		err := azure.provision()
 		if err != nil {
 			return fmt.Errorf("failed to provision azure driver: %w", err)
 		}
 
 		if c.StoragePath != "" {
-			err = azure.saveCredentials(c.StoragePath)
+			err = azure.saveCredentials()
 			if err != nil {
 				return fmt.Errorf("failed to save Azure credentials: %w", err)
 			}
 		}
 	} else {
-		err := azure.loadCredentials(c.StoragePath)
+		err := azure.loadCredentials()
 		if err != nil {
 			return fmt.Errorf("failed to load Azure credentials: %w", err)
 		}
@@ -126,12 +117,12 @@ func (azure *Azure) Measure(nonce []byte) ([]ar.Measurement, error) {
 	log.Debug("Collecting azure measurements")
 
 	if azure == nil {
-		return nil, errors.New("internal error: TDX object is nil")
+		return nil, errors.New("internal error: azure object is nil")
 	}
 
 	ccMeasurement, err := GetCcMeasurement(nonce, azure.ccAkChain)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get TDX measurement: %w", err)
+		return nil, fmt.Errorf("failed to get azure measurement: %w", err)
 	}
 
 	vtpmMeasurement, err := azure.GetVtpmMeasurement(azure.pcrs, nonce)
@@ -152,14 +143,14 @@ func (azure *Azure) Unlock() error {
 
 func (azure *Azure) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	if azure == nil {
-		return nil, nil, errors.New("internal error: TDX object is nil")
+		return nil, nil, errors.New("internal error: azure object is nil")
 	}
 
 	if sel == ar.AK {
 		// Return the CC AK chain, as it is required to establish trust. The TPM AK certificate
 		// is retrieved from the NVIndex if needed
 		if len(azure.ccAkChain) == 0 {
-			return nil, nil, fmt.Errorf("internal error: TDX AK certificate not present")
+			return nil, nil, fmt.Errorf("internal error: AK certificate not present")
 		}
 		// Only return the public key, as the VCEK / VLEK is not directly accessible
 		return nil, azure.ccAkChain[0].PublicKey, nil
@@ -188,6 +179,45 @@ func (azure *Azure) GetCertChain(keyType ar.KeySelection) ([]*x509.Certificate, 
 	}
 }
 
+func (azure *Azure) UpdateCerts() error {
+	var err error
+
+	// Initial checks
+	if azure == nil {
+		return errors.New("internal error: azure object is nil")
+	}
+
+	log.Info("Updating azure certificates")
+
+	err = azure.provision()
+	if err != nil {
+		return fmt.Errorf("failed to provision azure driver: %w", err)
+	}
+
+	if azure.StoragePath != "" {
+		err = azure.saveCredentials()
+		if err != nil {
+			return fmt.Errorf("failed to save azure credentials: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (azure *Azure) UpdateMetadata(metadata map[string][]byte) error {
+
+	// Initial checks
+	if azure == nil {
+		return errors.New("internal error: azure object is nil")
+	}
+
+	log.Info("Updating azure driver metadata")
+
+	azure.Metadata = metadata
+
+	return nil
+}
+
 func provisioningRequired(p string) bool {
 	// Stateless operation always requires provisioning
 	if p == "" {
@@ -214,7 +244,7 @@ func provisioningRequired(p string) bool {
 	return false
 }
 
-func (azure *Azure) provision(c *ar.DriverConfig) error {
+func (azure *Azure) provision() error {
 	var err error
 
 	// Create new private key for signing
@@ -224,7 +254,7 @@ func (azure *Azure) provision(c *ar.DriverConfig) error {
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := c.Provisioner.CaCerts()
+	caCerts, err := azure.DriverConfig.Provisioner.CaCerts()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -233,14 +263,14 @@ func (azure *Azure) provision(c *ar.DriverConfig) error {
 	}
 
 	// Fetch CC certificate chain for Attestation Key
-	azure.ccAkChain, err = azure.fetchAk(c)
+	azure.ccAkChain, err = azure.fetchAk(azure.DriverConfig)
 	if err != nil {
-		return fmt.Errorf("failed to get TDX cert chain: %w", err)
+		return fmt.Errorf("failed to get azure cert chain: %w", err)
 	}
 	internal.TraceCertsShort("Provisioned AK cert", azure.ccAkChain)
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikCert, err := azure.provisionIk(azure.ikPriv, c)
+	ikCert, err := azure.provisionIk(azure.ikPriv, azure.DriverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -257,7 +287,7 @@ func (azure *Azure) fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	// Fetch initial attestation report which contains AK cert chain
 	measurement, err := GetCcMeasurement(nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get TDX Measurement: %w", err)
+		return nil, fmt.Errorf("failed to get azure Measurement: %w", err)
 	}
 
 	switch measurement.Type {
@@ -367,10 +397,10 @@ func (azure *Azure) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) (*x5
 	return cert, nil
 }
 
-func (azure *Azure) loadCredentials(p string) error {
-	data, err := os.ReadFile(path.Join(p, akChainFile))
+func (azure *Azure) loadCredentials() error {
+	data, err := os.ReadFile(path.Join(azure.StoragePath, akChainFile))
 	if err != nil {
-		return fmt.Errorf("failed to read AK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read AK chain from %v: %w", azure.StoragePath, err)
 	}
 	azure.ccAkChain, err = internal.ParseCertsPem(data)
 	if err != nil {
@@ -378,9 +408,9 @@ func (azure *Azure) loadCredentials(p string) error {
 	}
 	log.Debugf("Parsed stored AK chain of length %v", len(azure.ccAkChain))
 
-	data, err = os.ReadFile(path.Join(p, ikChainFile))
+	data, err = os.ReadFile(path.Join(azure.StoragePath, ikChainFile))
 	if err != nil {
-		return fmt.Errorf("failed to read IK chain from %v: %w", p, err)
+		return fmt.Errorf("failed to read IK chain from %v: %w", azure.StoragePath, err)
 	}
 	azure.ikChain, err = internal.ParseCertsPem(data)
 	if err != nil {
@@ -388,26 +418,26 @@ func (azure *Azure) loadCredentials(p string) error {
 	}
 	log.Debugf("Parsed stored IK chain of length %v", len(azure.ikChain))
 
-	data, err = os.ReadFile(path.Join(p, ikFile))
+	data, err = os.ReadFile(path.Join(azure.StoragePath, ikFile))
 	if err != nil {
-		return fmt.Errorf("failed to read TDX IK private key from %v: %w", p, err)
+		return fmt.Errorf("failed to read IK private key from %v: %w", azure.StoragePath, err)
 	}
 	azure.ikPriv, err = x509.ParsePKCS8PrivateKey(data)
 	if err != nil {
-		return fmt.Errorf("failed to parse TDX IK private key: %w", err)
+		return fmt.Errorf("failed to parse IK private key: %w", err)
 	}
 
 	return nil
 }
 
-func (azure *Azure) saveCredentials(p string) error {
+func (azure *Azure) saveCredentials() error {
 	akchainPem := make([]byte, 0)
 	for _, cert := range azure.ccAkChain {
 		c := internal.WriteCertPem(cert)
 		akchainPem = append(akchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, akChainFile), akchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, akChainFile), err)
+	if err := os.WriteFile(path.Join(azure.StoragePath, akChainFile), akchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(azure.StoragePath, akChainFile), err)
 	}
 
 	ikchainPem := make([]byte, 0)
@@ -415,16 +445,16 @@ func (azure *Azure) saveCredentials(p string) error {
 		c := internal.WriteCertPem(cert)
 		ikchainPem = append(ikchainPem, c...)
 	}
-	if err := os.WriteFile(path.Join(p, ikChainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(p, ikChainFile), err)
+	if err := os.WriteFile(path.Join(azure.StoragePath, ikChainFile), ikchainPem, 0644); err != nil {
+		return fmt.Errorf("failed to write  %v: %w", path.Join(azure.StoragePath, ikChainFile), err)
 	}
 
 	key, err := x509.MarshalPKCS8PrivateKey(azure.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed marshal private key: %w", err)
 	}
-	if err := os.WriteFile(path.Join(p, ikFile), key, 0600); err != nil {
-		return fmt.Errorf("failed to write %v: %w", path.Join(p, ikFile), err)
+	if err := os.WriteFile(path.Join(azure.StoragePath, ikFile), key, 0600); err != nil {
+		return fmt.Errorf("failed to write %v: %w", path.Join(azure.StoragePath, ikFile), err)
 	}
 
 	return nil

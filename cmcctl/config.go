@@ -66,6 +66,8 @@ type Api interface {
 	listen(c *config)
 	request(c *config)
 	serve(c *config)
+	updateMetadata(c *config)
+	updateCerts(c *config)
 }
 
 type config struct {

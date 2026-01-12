@@ -43,6 +43,7 @@ var (
 )
 
 type Cmc struct {
+	EstTlsCas          []*x509.Certificate
 	IdentityCas        []*x509.Certificate
 	MetadataCas        []*x509.Certificate
 	Metadata           map[string][]byte
@@ -51,11 +52,7 @@ type Cmc struct {
 	PolicyOverwrite    bool
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
-	PeerCache          string
-	Ctr                bool
-	CtrDriver          string
-	CtrPcr             int
-	CtrLog             string
+	*Config
 }
 
 func GetDrivers() map[string]ar.Driver {
@@ -83,17 +80,14 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	cmc := &Cmc{
+		EstTlsCas:   estTlsCas,
 		IdentityCas: identityCas,
 		MetadataCas: metadataCas,
-		PeerCache:   c.PeerCache,
-		Ctr:         c.Ctr,
-		CtrDriver:   c.CtrDriver,
-		CtrPcr:      c.CtrPcr,
-		CtrLog:      c.CtrLog,
+		Config:      c,
 	}
 
 	// Read metadata and device config from the file system
-	metadata, s, err := GetMetadata(c.Metadata, c.Cache, estTlsCas, c.EstTlsSysRoots)
+	metadata, s, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
