@@ -369,6 +369,8 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)
+	} else {
+		resp.Cache = []string{}
 	}
 
 	payload, err := ser.Marshal(&resp)

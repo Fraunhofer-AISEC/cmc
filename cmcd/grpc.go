@@ -301,6 +301,8 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (
 	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)
+	} else {
+		resp.Cache = []string{}
 	}
 
 	log.Info("Served grpc request type 'PeerCache'")

@@ -407,6 +407,8 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 	c, ok := cmc.CachedPeerMetadata[req.Peer]
 	if ok {
 		resp.Cache = maps.Keys(c)
+	} else {
+		resp.Cache = []string{}
 	}
 
 	log.Tracef("Collected peer cache with %v elements", len(cmc.CachedPeerMetadata[req.Peer]))
