@@ -111,17 +111,11 @@ type DeviceDescription struct {
 
 // DeviceConfig contains the local device configuration parameters
 type DeviceConfig struct {
-	Tpm       CertConfig `json:"tpm,omitempty" cbor:"30,keyasint,omitempty"`
-	Snp       CertConfig `json:"snp,omitempty" cbor:"31,keyasint,omitempty"`
-	Tdx       CertConfig `json:"tdx,omitempty" cbor:"31,keyasint,omitempty"`
-	Sgx       CertConfig `json:"sgx,omitempty" cbor:"32,keyasint,omitempty"`
-	Sw        CertConfig `json:"sw,omitempty" cbor:"33,keyasint,omitempty"`
-	SgxValues struct {
-		EncryptedPPID HexByte `json:"encryptedPPID,omitempty" cbor:"34,keyasint,omitempty"`
-		Pceid         HexByte `json:"pceid,omitempty" cbor:"35,keyasint,omitempty"`
-		Cpusvn        HexByte `json:"cpusvn,omitempty" cbor:"36,keyasint,omitempty"`
-		Pcesvn        HexByte `json:"pcesvn,omitempty" cbor:"37,keyasint,omitempty"`
-	}
+	Tpm CertConfig `json:"tpm,omitempty" cbor:"30,keyasint,omitempty"`
+	Snp CertConfig `json:"snp,omitempty" cbor:"31,keyasint,omitempty"`
+	Tdx CertConfig `json:"tdx,omitempty" cbor:"31,keyasint,omitempty"`
+	Sgx CertConfig `json:"sgx,omitempty" cbor:"32,keyasint,omitempty"`
+	Sw  CertConfig `json:"sw,omitempty" cbor:"33,keyasint,omitempty"`
 }
 
 // ManifestDescription represents the attestation report

@@ -66,7 +66,7 @@ type MetadataSummary struct {
 	DevDescResult       MetadataResult      `json:"devDescResult" cbor:"0,keyasint"`
 	ManifestResults     []MetadataResult    `json:"manifestResults" cbor:"1,keyasint"`
 	CompDescResult      *MetadataResult     `json:"compDescResult,omitempty" cbor:"2,keyasint,omitempty"`
-	UnknownResults      []MetadataResult    `json:"unknownResults" cbor:"3,keyasint"`
+	UnknownResults      []MetadataResult    `json:"unknownResults,omitempty" cbor:"3,keyasint"`
 	CompatibilityResult CompatibilityResult `json:"compatibilityResult" cbor:"4,keyasint"`
 }
 

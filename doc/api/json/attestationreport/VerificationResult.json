@@ -1502,23 +1502,6 @@
         "sw": {
           "$ref": "#/$defs/CertConfig"
         },
-        "SgxValues": {
-          "properties": {
-            "encryptedPPID": {
-              "$ref": "#/$defs/HexByte"
-            },
-            "pceid": {
-              "$ref": "#/$defs/HexByte"
-            },
-            "cpusvn": {
-              "$ref": "#/$defs/HexByte"
-            },
-            "pcesvn": {
-              "$ref": "#/$defs/HexByte"
-            }
-          },
-          "type": "object"
-        },
         "summary": {
           "$ref": "#/$defs/Result"
         },
@@ -1538,7 +1521,6 @@
         "name",
         "version",
         "validity",
-        "SgxValues",
         "summary",
         "signatureValidation"
       ]
@@ -1571,7 +1553,6 @@
       "required": [
         "devDescResult",
         "manifestResults",
-        "unknownResults",
         "compatibilityResult"
       ]
     },
