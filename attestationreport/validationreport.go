@@ -93,7 +93,7 @@ type MeasurementResult struct {
 	Summary   Result          `json:"summary" cbor:"1,keyasint"`
 	Freshness Result          `json:"freshness" cbor:"2,keyasint"`
 	Signature SignatureResult `json:"signature" cbor:"3,keyasint"`
-	Artifacts []DigestResult  `json:"artifacts" cbor:"4,keyasint"`
+	Artifacts []DigestResult  `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
 	TpmResult *TpmResult      `json:"tpmResult,omitempty" cbor:"5,keyasint,omitempty"`
 	SnpResult *SnpResult      `json:"snpResult,omitempty" cbor:"6,keyasint,omitempty"`
 	SgxResult *SgxResult      `json:"sgxResult,omitempty" cbor:"7,keyasint,omitempty"`

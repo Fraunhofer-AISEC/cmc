@@ -1418,8 +1418,7 @@
         "type",
         "summary",
         "freshness",
-        "signature",
-        "artifacts"
+        "signature"
       ]
     },
     "MetadataResult": {
