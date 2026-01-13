@@ -23,6 +23,7 @@ vm-ssh rm -r /var/cmc/internal
 # Copy new binaries into VM
 vm-scp cmcd/cmcd vm-ubuntu:/usr/bin/
 vm-scp cmcctl/cmcctl vm-ubuntu:/usr/bin/
+vm-scp tools/mrtool/mrtool vm-ubuntu:/usr/bin/
 
 # Restart services
 vm-ssh systemctl start cmcd
