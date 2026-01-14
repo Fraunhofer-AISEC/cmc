@@ -35,8 +35,10 @@ func Generate(nonce []byte, cached []string, cmc *Cmc) ([]byte, map[string][]byt
 		return nil, nil, nil, fmt.Errorf("failed to generate: %w", err)
 	}
 
+	log.Debugf("Generated report with %v metadata digests", len(report.Metadata))
+
 	// Return cache misses, so that verifier can discard obsolete metadata
-	cacheMisses := GetCacheMisses(cached, cmc.Metadata)
+	cacheMisses := GetPeerCacheMisses(cached, cmc.Metadata)
 
 	// Marshal data to bytes
 	r, err := cmc.Serializer.Marshal(report)
@@ -70,16 +72,18 @@ func Verify(
 		return nil, fmt.Errorf("internal error: cmc is nil")
 	}
 
-	// Update volatile peer cache
-	UpdateCacheMetadata(peer, cmc.CachedPeerMetadata, metadata, cacheMisses)
+	// Update volatile peer cache, gathering cached and received metadata
+	collectedMetadata := UpdatePeerCacheMetadata(peer, cmc.CachedPeerMetadata, metadata, cacheMisses)
 
-	// Verify attetation report
+	log.Debugf("Verifying report with %v metadata items", len(collectedMetadata))
+
+	// Verify attestation report
 	result := verifier.Verify(ar, nonce, cmc.IdentityCas,
 		policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
-		cmc.MetadataCas, cmc.CachedPeerMetadata[peer])
+		cmc.MetadataCas, collectedMetadata)
 
 	// Update persistent peer cache
-	err := StoreCacheMetadata(cmc.PeerCache, peer, cmc.CachedPeerMetadata[peer], cacheMisses)
+	err := StorePeerCacheMetadata(cmc.PeerCache, peer, cmc.CachedPeerMetadata[peer], cacheMisses)
 	if err != nil {
 		log.Warnf("Internal error: failed to cache metadata: %v", err)
 	}

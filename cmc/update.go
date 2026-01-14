@@ -50,7 +50,7 @@ func UpdateMetadata(cmc *Cmc) error {
 	cmc.Metadata = metadata
 	cmc.Serializer = s
 
-	log.Tracef("Updated metadata. New number of metadata items: %v", len(cmc.Metadata))
+	log.Debugf("Updated metadata. New number of metadata items: %v", len(cmc.Metadata))
 
 	// Update metadata in drivers as well
 	for _, driver := range cmc.Drivers {

@@ -102,6 +102,7 @@ func Verify(
 	if result.Prover == "" {
 		result.Prover = "Unknown"
 	}
+	log.Debugf("Decoded attestation report and metadata from prover %v", result.Prover)
 
 	refVals, err := collectReferenceValues(metaResults.ManifestResults)
 	if err != nil {

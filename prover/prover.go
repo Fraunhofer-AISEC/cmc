@@ -99,7 +99,7 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 			metadataReturn[hash] = m
 		}
 
-		log.Debugf("Adding %v", metadataDigest.Type)
+		log.Tracef("Adding metadata digest type %v: %x", metadataDigest.Type, metadataDigest.Digest)
 		report.Metadata = append(report.Metadata, metadataDigest)
 		num++
 	}

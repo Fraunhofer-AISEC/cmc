@@ -193,7 +193,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	// Load cached metadata from known peers
-	cachedPeerMetadata, err := LoadCacheMetadata(c.PeerCache)
+	cachedPeerMetadata, err := LoadPeerCacheMetadata(c.PeerCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load peer cache: %w", err)
 	}

@@ -64,6 +64,10 @@ func (s *SwDriver) UpdateCerts() error {
 	return nil
 }
 
+func (s *SwDriver) UpdateMetadata(map[string][]byte) error {
+	return nil
+}
+
 func TestSign(t *testing.T) {
 	type args struct {
 		ar     AttestationReport
