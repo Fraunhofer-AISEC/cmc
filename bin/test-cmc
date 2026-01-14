@@ -94,7 +94,7 @@ log_dir="${data}/logs"
 
 metadata_raw="${data}/metadata-raw"
 metadata_signed="${data}/metadata-signed"
-storage="${data}/cmc-storage"
+storage="${data}/cmc-internal"
 cache="${data}/cmc-cache"
 peercache="${data}/cmc-peer-cache"
 ctrlog="${data}/cmc-container-measurements"
@@ -174,7 +174,17 @@ commands_client_success_msg=("SUCCESS: Verification for Prover" "Client-side aTL
 commands_server_fail_msg=("Wrote attestation response" "attestation report verification failed" "attestation report verification failed")
 commands_client_fail_msg=("FAILED: Verification for Prover" "attestation report verification failed" "attestation report verification failed")
 
+# Update binaries
+echo "Updating binaries..."
+go build -C "${dir}/cmcd"
+go build -C "${dir}/cmcctl"
+go build -C "${dir}/provision/estserver"
+go build -C "${dir}/tools/mrtool"
+go build -C "${dir}/tools/metaconv"
+go build -C "${dir}/tools/metasign"
+
 # Clean start
+echo "Wiping internal folders for fresh start..."
 sudo rm -rf "${metadata_raw}"
 sudo rm -rf "${metadata_signed}"
 sudo rm -rf "${storage}"
@@ -185,12 +195,15 @@ sudo rm -rf "${log_dir}"
 mkdir -p "${log_dir}"
 
 # Start est server
+echo "Starting est server..."
 sudo "${dir}/provision/estserver/estserver" "${est_params[@]}" &
 disown
 sleep 0.2
 stty sane
 
-# Iterate over the array
+echo "Performing tests"
+
+# Test matrix
 for success in "${attest_success[@]}"
 do
     for ar_serializer in "${ar_serializers[@]}"
@@ -198,7 +211,7 @@ do
         metadata_log="${log_dir}/metadata_${ar_serializer}.log"
 
         # Generate metadata for serializer (do not generate app manifest for failed attestation test)
-        echo "Generating ${ar_serializer} metadata =================================================="
+        echo "Generating ${ar_serializer} metadata ======================================================="
         generate-device-description > "${metadata_log}" 2>&1
         generate-rtm-manifest-tpm >> "${metadata_log}" 2>&1
         generate-os-manifest-tpm >> "${metadata_log}" 2>&1
@@ -224,14 +237,14 @@ do
                 disown
                 wait_for_message "$cmc_pid" "${cmc_log}" "Waiting for.*requests"
                 stty sane
-                echo "Restarted cmcd ----------------------------------------------------------------"
+                echo "Restarted cmcd -----------------------------------------------------------------"
 
                 for j in "${!commands_server[@]}"
                 do
                     server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${commands_server[j]}.log"
                     client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${commands_client[j]}.log"
 
-                    printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | API %s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
+                    printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | API %-6s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
 
                     "${dir}/cmcctl/cmcctl" \
                         "${commands_server[j]}" \
