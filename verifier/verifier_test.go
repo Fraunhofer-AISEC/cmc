@@ -204,7 +204,7 @@ func TestVerify(t *testing.T) {
 		return
 	}
 
-	swSigner := &SwSigner{
+	swDriver := &SwDriver{
 		priv:      key,
 		certChain: certchain,
 	}
@@ -234,19 +234,19 @@ func TestVerify(t *testing.T) {
 				t.Errorf("failed to marshal the DeviceDescription: %v", err)
 			}
 
-			rtmManifest, err = prover.Sign(rtmManifest, swSigner, s, ar.IK)
+			rtmManifest, err = prover.Sign(rtmManifest, swDriver, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the RTM Manifest: %v", err)
 			}
-			osManifest, err = prover.Sign(osManifest, swSigner, s, ar.IK)
+			osManifest, err = prover.Sign(osManifest, swDriver, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the OS Manifest: %v", err)
 			}
-			appManifest, err = prover.Sign(appManifest, swSigner, s, ar.IK)
+			appManifest, err = prover.Sign(appManifest, swDriver, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the App Manifest: %v", err)
 			}
-			deviceDescription, err = prover.Sign(deviceDescription, swSigner, s, ar.IK)
+			deviceDescription, err = prover.Sign(deviceDescription, swDriver, s, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the DeviceDescription: %v", err)
 			}
@@ -296,7 +296,7 @@ func TestVerify(t *testing.T) {
 			}
 
 			// Preparation: Sign the report
-			arSigned, err := prover.Sign(data, swSigner, s, ar.IK)
+			arSigned, err := prover.Sign(data, swDriver, s, ar.IK)
 			if err != nil {
 				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
 			}
@@ -689,40 +689,44 @@ var (
 	}
 )
 
-type SwSigner struct {
+type SwDriver struct {
 	certChain []*x509.Certificate
 	priv      crypto.PrivateKey
 }
 
-func (s *SwSigner) Init(c *ar.DriverConfig) error {
+func (s *SwDriver) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-func (s *SwSigner) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (s *SwDriver) Measure(nonce []byte) ([]ar.Measurement, error) {
 	return []ar.Measurement{}, nil
 }
 
-func (s *SwSigner) Lock() error {
+func (s *SwDriver) Lock() error {
 	return nil
 }
 
-func (s *SwSigner) Unlock() error {
+func (s *SwDriver) Unlock() error {
 	return nil
 }
 
-func (s *SwSigner) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
+func (s *SwDriver) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
 	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
 }
 
-func (s *SwSigner) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
+func (s *SwDriver) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return s.certChain, nil
 }
 
-func (s *SwSigner) Name() string {
+func (s *SwDriver) Name() string {
 	return "SW Driver"
 }
 
-func (s *SwSigner) UpdateCerts() error {
+func (s *SwDriver) UpdateCerts() error {
+	return nil
+}
+
+func (s *SwDriver) UpdateMetadata(map[string][]byte) error {
 	return nil
 }
 

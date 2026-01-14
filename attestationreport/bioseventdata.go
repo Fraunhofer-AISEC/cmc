@@ -509,8 +509,6 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 	binary.Read(buf, binary.LittleEndian, &fplSubtype)
 	binary.Read(buf, binary.LittleEndian, &length)
 
-	log.Tracef("Parse UEFI Device Path Type: %v, Subtype: %v, length: %v", fplType, fplSubtype, length)
-
 	switch fplType {
 	case 1: // Hardware Device Path
 		devicePath.Type = "Hardware Device Path"

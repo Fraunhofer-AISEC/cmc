@@ -138,6 +138,8 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
+	log.Debugf("Peer sent request with %v cached items", len(req.Cached))
+
 	err = req.CheckVersion()
 	if err != nil {
 		sendError(conn, s, "%v", err)
@@ -152,7 +154,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	log.Debugf("Generated attestation report with %v metadata items", len(metadata))
+	log.Debugf("Generated attestation report with %v embedded metadata items", len(metadata))
 
 	resp := &api.AttestationResponse{
 		Version:     api.GetVersion(),
@@ -193,7 +195,7 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	log.Debug("verifying attestation report")
+	log.Debugf("verifying attestation report from peer %q", req.Peer)
 	result, err := c.Verify(req.Report, req.Nonce, req.Policies,
 		req.Peer, req.CacheMisses, req.Metadata, cmc)
 	if err != nil {

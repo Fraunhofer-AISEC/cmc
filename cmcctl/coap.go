@@ -251,12 +251,12 @@ func (a CoapApi) updateCerts(c *config) {
 	updateResp := new(api.UpdateCertsResponse)
 	err = c.apiSerializer.Unmarshal(payload, updateResp)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal verification response: %w", err)
+		log.Fatalf("Failed to unmarshal verification response: %v", err)
 	}
 
 	err = updateResp.CheckVersion()
 	if err != nil {
-		log.Fatal("Failed to update certs: %v", err)
+		log.Fatalf("Failed to update certs: %v", err)
 	}
 	if !updateResp.Success {
 		log.Fatalf("UpdateCerts response returned success: %v", updateResp.Success)
@@ -309,12 +309,12 @@ func (a CoapApi) updateMetadata(c *config) {
 	updateResp := new(api.UpdateMetadataResponse)
 	err = c.apiSerializer.Unmarshal(payload, updateResp)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal verification response: %w", err)
+		log.Fatalf("Failed to unmarshal verification response: %v", err)
 	}
 
 	err = updateResp.CheckVersion()
 	if err != nil {
-		log.Fatal("Failed to update metadata: %v", err)
+		log.Fatalf("Failed to update metadata: %v", err)
 	}
 	if !updateResp.Success {
 		log.Fatalf("UpdateMetadata response returned success: %v", updateResp.Success)

@@ -28,7 +28,7 @@ var (
 	peerCacheMutex sync.Mutex
 )
 
-func LoadCacheMetadata(path string) (map[string]map[string][]byte, error) {
+func LoadPeerCacheMetadata(path string) (map[string]map[string][]byte, error) {
 
 	log.Debug("Loading cached peer metadata")
 
@@ -76,8 +76,8 @@ func LoadCacheMetadata(path string) (map[string]map[string][]byte, error) {
 	return peerCache, nil
 }
 
-// GetCached iterates the cache sent by the verifier and returns hits and misses
-func GetCacheMisses(cached []string, metadata map[string][]byte) []string {
+// GetPeerCacheMisses iterates the cache sent by the verifier and returns hits and misses
+func GetPeerCacheMisses(cached []string, metadata map[string][]byte) []string {
 
 	misses := make([]string, 0)
 
@@ -90,35 +90,52 @@ func GetCacheMisses(cached []string, metadata map[string][]byte) []string {
 	return misses
 }
 
-func UpdateCacheMetadata(peer string, cmcCache map[string]map[string][]byte, reqCache map[string][]byte, misses []string) {
+func UpdatePeerCacheMetadata(peer string, cmcCache map[string]map[string][]byte,
+	reqMetadata map[string][]byte, misses []string,
+) map[string][]byte {
+
+	if peer == "" {
+		log.Debugf("No peer specified. Do not update peer cache")
+		// If the request does not specify the peer, the attestation report is self-contained
+		// with all metadata being part of the verification request
+		return reqMetadata
+	}
+
+	log.Debugf("Updating peer cache metadata")
 
 	// Remove cache misses
-	if _, exists := cmcCache[peer]; exists {
+	if _, exists := cmcCache[peer]; exists && len(misses) > 0 {
+		log.Debugf("Removing %v cache misses from peer cache metadata", len(misses))
 		for _, miss := range misses {
 			delete(cmcCache[peer], miss)
 		}
 	}
 
 	// Add newly received metadata
+	log.Debugf("Updating peer metadata with %v cached items, %v sent items", len(cmcCache[peer]),
+		len(reqMetadata))
 	peerCacheMutex.Lock()
 	if _, exists := cmcCache[peer]; !exists {
 		cmcCache[peer] = map[string][]byte{}
 	}
-	maps.Copy(cmcCache[peer], reqCache)
+	maps.Copy(cmcCache[peer], reqMetadata)
 	peerCacheMutex.Unlock()
+
+	// Return the updated metadata collected from cache and request
+	return cmcCache[peer]
 }
 
-func StoreCacheMetadata(peerCache, prover string, cached map[string][]byte, misses []string) error {
+func StorePeerCacheMetadata(peerCache, peer string, cached map[string][]byte, misses []string) error {
 
-	log.Debugf("Updating peer cache for peer %v", prover)
+	log.Debugf("Updating peer cache for peer %v", peer)
 
 	// Return if peer cache is not configured
 	if peerCache == "" {
 		log.Debugf("No peer cache configured. Do not store persistently")
 		return nil
 	}
-	if prover == "" {
-		log.Debugf("No prover configured. Do not store peer cache")
+	if peer == "" {
+		log.Debugf("No peer specified. Do not store peer cache")
 		return nil
 	}
 
@@ -132,7 +149,7 @@ func StoreCacheMetadata(peerCache, prover string, cached map[string][]byte, miss
 	}
 
 	// Create peer cache subfolder if not existing
-	peerCacheProver := path.Join(peerCache, prover)
+	peerCacheProver := path.Join(peerCache, peer)
 	if _, err := os.Stat(peerCacheProver); err != nil {
 		if err := os.MkdirAll(peerCacheProver, 0755); err != nil {
 			return fmt.Errorf("failed to create peer cache %v: %w", peerCacheProver, err)

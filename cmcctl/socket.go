@@ -241,7 +241,7 @@ func (a SocketApi) updateCerts(c *config) {
 
 	// Check attestation response
 	if err := resp.CheckVersion(); err != nil {
-		log.Fatal("Failed to update certs: %v", err)
+		log.Fatalf("Failed to update certs: %v", err)
 	}
 	if !resp.Success {
 		log.Fatalf("UpdateCerts response returned success: %v", resp.Success)
@@ -296,7 +296,7 @@ func (a SocketApi) updateMetadata(c *config) {
 
 	// Check attestation response
 	if err := resp.CheckVersion(); err != nil {
-		log.Fatal("Failed to update metadata: %v", err)
+		log.Fatalf("Failed to update metadata: %v", err)
 	}
 	if !resp.Success {
 		log.Fatalf("UpdateMetadata response returned success: %v", resp.Success)
