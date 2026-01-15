@@ -98,6 +98,7 @@ storage="${data}/cmc-internal"
 cache="${data}/cmc-cache"
 peercache="${data}/cmc-peer-cache"
 ctrlog="${data}/cmc-container-measurements"
+hostname="$(hostname --fqdn)"
 
 est_params=(
     "-estaddr"              "0.0.0.0:9000" \
@@ -164,7 +165,7 @@ commands_params_server=("" "-addr 0.0.0.0:4443" "-addr 0.0.0.0:8082")
 
 commands_client=("verify" "dial" "request")
 
-commands_params_client=("" "-addr localhost:4443" "-addr https://localhost:8082/post -method POST -data \"hello ahttps\" -header \"Content-Type: text/plain\"")
+commands_params_client=("" "-addr ${hostname}:4443" "-addr https://${hostname}:8082/post -method POST -data \"hello ahttps\" -header \"Content-Type: text/plain\"")
 
 commands_server_ready_msg=("Wrote attestation response" "Serving under" "Serving HTTPS under")
 
@@ -212,7 +213,7 @@ do
 
         # Generate metadata for serializer (do not generate app manifest for failed attestation test)
         echo "Generating ${ar_serializer} metadata ======================================================="
-        generate-device-description > "${metadata_log}" 2>&1
+        generate-image-description > "${metadata_log}" 2>&1
         generate-rtm-manifest-tpm >> "${metadata_log}" 2>&1
         generate-os-manifest-tpm >> "${metadata_log}" 2>&1
         if [[ "${success}" == "success" ]]; then

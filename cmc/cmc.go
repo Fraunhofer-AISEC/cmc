@@ -86,7 +86,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Config:      c,
 	}
 
-	// Read metadata and device config from the file system
+	// Read metadata from the file system
 	metadata, s, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
@@ -97,11 +97,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 		cmc.Serializer = s
 		cmc.Metadata = metadata
-
-		deviceConfig, err := ar.GetDeviceConfig(s, metadata, metadataCas)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get signed device config: %v", err)
-		}
 
 		authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
 		if err != nil {
@@ -142,7 +137,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 			StoragePath:      c.Storage,
 			ServerAddr:       c.ProvisionAddr,
 			KeyConfig:        c.KeyConfig,
-			DeviceConfig:     *deviceConfig,
 			Metadata:         metadata,
 			Ima:              c.Ima,
 			ImaPcr:           c.ImaPcr,

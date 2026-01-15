@@ -8,6 +8,6 @@ source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
-"${bin}/generate-device-description" "sgx-device.test.de"
+"${bin}/generate-image-description" "sgx-device.test.de"
 
 "${bin}/precompute-rtm-manifest-sgx"

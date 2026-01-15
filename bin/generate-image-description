@@ -6,7 +6,7 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-name="${1:-testdevice.test.de}"
+name="${1:-test-image}"
 
 data="${dir}/data"
 input="${dir}/example-setup/metadata-templates"
@@ -26,24 +26,17 @@ mkdir -p "${out}"
 
 echo "Using ${data} as directory for local data"
 
-# Load device description template
-json=$(cat "${input}/device.description.json")
+# Load image description template
+json=$(cat "${input}/image.description.json")
 
 # Insert description properties
 setjson "json" "name"                  "${name}"
 setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
 setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "json" "description"           "Device Description"
+setjson "json" "description"           "Image Description"
 setjson "json" "location"              "Munich"
 
-# Save device description
-echo "Writing ${out}/device.description.json"
-printf "%s\n" "${json}" > "${out}/device.description.json"
-
-# Load device config
-json=$(cat "${input}/device.config.json")
-
-# Save device config
-echo "Writing ${out}/device.config.json"
-printf "%s\n" "${json}" > "${out}/device.config.json"
+# Save image description
+echo "Writing ${out}/image.description.json"
+printf "%s\n" "${json}" > "${out}/image.description.json"

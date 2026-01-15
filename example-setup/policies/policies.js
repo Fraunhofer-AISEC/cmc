@@ -15,10 +15,10 @@ if (obj.summary.status != "success") {
 
 // Check a certain certificate property in the RTM Manifest
 var found = false
-for (var i = 0; i < obj.metadata.devDescResult.signatureValidation.length; i++) {
-	for (var j = 0; j < obj.metadata.devDescResult.signatureValidation[i].certs.length; j++) {
-		for (var k = 0; k < obj.metadata.devDescResult.signatureValidation[i].certs[j].length; k++) {
-			if (obj.metadata.devDescResult.signatureValidation[i].certs[j][k].subject.commonName == "CMC Test Leaf Certificate") {
+for (var i = 0; i < obj.metadata.imageDescriptionResult.signatureValidation.length; i++) {
+	for (var j = 0; j < obj.metadata.imageDescriptionResult.signatureValidation[i].certs.length; j++) {
+		for (var k = 0; k < obj.metadata.imageDescriptionResult.signatureValidation[i].certs[j].length; k++) {
+			if (obj.metadata.imageDescriptionResult.signatureValidation[i].certs[j][k].subject.commonName == "CMC Test Leaf Certificate") {
 				found = true;
 			}
 		}

@@ -63,11 +63,11 @@ type Result struct {
 //
 
 type MetadataSummary struct {
-	DevDescResult       MetadataResult      `json:"devDescResult" cbor:"0,keyasint"`
-	ManifestResults     []MetadataResult    `json:"manifestResults" cbor:"1,keyasint"`
-	CompDescResult      *MetadataResult     `json:"compDescResult,omitempty" cbor:"2,keyasint,omitempty"`
-	UnknownResults      []MetadataResult    `json:"unknownResults,omitempty" cbor:"3,keyasint"`
-	CompatibilityResult CompatibilityResult `json:"compatibilityResult" cbor:"4,keyasint"`
+	ImageDescriptionResult   MetadataResult      `json:"imageDescriptionResult" cbor:"0,keyasint"`
+	ManifestResults          []MetadataResult    `json:"manifestResults" cbor:"1,keyasint"`
+	CompanyDescriptionResult *MetadataResult     `json:"companyDescriptionResult,omitempty" cbor:"2,keyasint,omitempty"`
+	UnknownResults           []MetadataResult    `json:"unknownResults,omitempty" cbor:"3,keyasint"`
+	CompatibilityResult      CompatibilityResult `json:"compatibilityResult" cbor:"4,keyasint"`
 }
 
 type MetadataResult struct {
@@ -529,7 +529,7 @@ const (
 	VerifyMeasurement
 	ExtensionsCheck
 	PcrNotSpecified
-	DeviceDescriptionNotPresent
+	ImageDescriptionNotPresent
 	UnknownMetadata
 	InvalidVersion
 	NoRootManifest
@@ -686,8 +686,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Extensions check error)", int(e))
 	case PcrNotSpecified:
 		return fmt.Sprintf("%v (PCR not specified error)", int(e))
-	case DeviceDescriptionNotPresent:
-		return fmt.Sprintf("%v (Device description not present error)", int(e))
+	case ImageDescriptionNotPresent:
+		return fmt.Sprintf("%v (Image description not present error)", int(e))
 	case UnknownMetadata:
 		return fmt.Sprintf("%v (Unknown metadata error)", int(e))
 	case InvalidVersion:
@@ -872,12 +872,12 @@ func (r *VerificationResult) PrintErr() {
 		s.PrintErr("Report")
 	}
 
-	if r.Metadata.CompDescResult != nil {
-		r.Metadata.CompDescResult.Summary.PrintErr("Company description check")
-		for _, s := range r.Metadata.CompDescResult.SignatureCheck {
+	if r.Metadata.CompanyDescriptionResult != nil {
+		r.Metadata.CompanyDescriptionResult.Summary.PrintErr("Company description check")
+		for _, s := range r.Metadata.CompanyDescriptionResult.SignatureCheck {
 			s.PrintErr("Company Description")
 		}
-		r.Metadata.CompDescResult.ValidityCheck.PrintErr("Company description validity check")
+		r.Metadata.CompanyDescriptionResult.ValidityCheck.PrintErr("Company description validity check")
 	}
 
 	for _, mr := range r.Metadata.ManifestResults {
@@ -888,9 +888,9 @@ func (r *VerificationResult) PrintErr() {
 		mr.ValidityCheck.PrintErr("%v validity check", mr.Name)
 	}
 
-	r.Metadata.DevDescResult.Summary.PrintErr("Device Description check")
-	for _, s := range r.Metadata.DevDescResult.SignatureCheck {
-		s.PrintErr("Device Description")
+	r.Metadata.ImageDescriptionResult.Summary.PrintErr("Image Description check")
+	for _, s := range r.Metadata.ImageDescriptionResult.SignatureCheck {
+		s.PrintErr("Image Description")
 	}
 
 	r.Metadata.CompatibilityResult.Summary.PrintErr("Metadata compatibility check")

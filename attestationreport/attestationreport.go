@@ -28,7 +28,7 @@ import (
 
 // The attestation report version
 const (
-	arVersion = "1.6.0"
+	arVersion = "2.0.0"
 )
 
 func GetVersion() string {
@@ -73,12 +73,11 @@ type SwEvidence struct {
 }
 
 // Metadata represents attestation report elements of type 'Manifest'
-// 'Device Description', 'Manifest Description' and 'Company Description'
+// 'Image Description', 'Manifest Description' and 'Company Description'
 type Metadata struct {
 	MetaInfo
 	Manifest
-	DeviceDescription
-	*DeviceConfig
+	ImageDescription
 }
 
 // MetaInfo is a helper struct for generic info
@@ -104,35 +103,18 @@ type Manifest struct {
 	OciSpec         *oci.Spec              `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"` // TODO move to app description
 }
 
-type DeviceDescription struct {
+type ImageDescription struct {
 	Location     string                `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
 	Descriptions []ManifestDescription `json:"descriptions,omitempty" cbor:"21,keyasint,omitempty"`
-}
-
-// DeviceConfig contains the local device configuration parameters
-type DeviceConfig struct {
-	Tpm CertConfig `json:"tpm,omitempty" cbor:"30,keyasint,omitempty"`
-	Snp CertConfig `json:"snp,omitempty" cbor:"31,keyasint,omitempty"`
-	Tdx CertConfig `json:"tdx,omitempty" cbor:"31,keyasint,omitempty"`
-	Sgx CertConfig `json:"sgx,omitempty" cbor:"32,keyasint,omitempty"`
-	Sw  CertConfig `json:"sw,omitempty" cbor:"33,keyasint,omitempty"`
 }
 
 // ManifestDescription represents the attestation report
 // element of type 'Manifest Description'
 type ManifestDescription struct {
-	Type        string              `json:"type" cbor:"0,keyasint"`
-	Name        string              `json:"name" cbor:"1,keyasint"`
-	Description string              `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
-	Manifest    string              `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
-	External    []ExternalInterface `json:"externalConnections,omitempty" cbor:"4,keyasint,omitempty"`
-	Environment []Environment       `json:"environment,omitempty" cbor:"5,keyasint,omitempty"`
-}
-
-// CertConfig contains the subject parameters for CSRs/Certs
-type CertConfig struct {
-	AkCsr CsrParams `json:"akCsr,omitempty" cbor:"3,keyasint,omitempty"`
-	IkCsr CsrParams `json:"ikCsr,omitempty" cbor:"4,keyasint,omitempty"`
+	Type        string `json:"type" cbor:"0,keyasint"`
+	Name        string `json:"name" cbor:"1,keyasint"`
+	Description string `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
+	Manifest    string `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 // ReferenceValue represents the attestation report
@@ -316,42 +298,6 @@ type TDId struct {
 	MrConfigId    HexByte `json:"mrConfigId" cbor:"2,keyasint"`
 }
 
-// ExternalInterface represents the attestation report
-// element of type 'External Interface'
-type ExternalInterface struct {
-	Type        string `json:"type" cbor:"0,keyasint"`
-	AppEndpoint string `json:"appEndpoint" cbor:"1,keyasint"`
-	Interface   string `json:"interface" cbor:"2,keyasint"`
-	Port        int    `json:"port" cbor:"3,keyasint"`
-}
-
-// Environment represents environment variables
-// for apps
-type Environment struct {
-	Key   string `json:"key" cbor:"0,keyasint"`
-	Value string `json:"value" cbor:"1,keyasint"`
-}
-
-// CsrParams contains certificate signing request parameters
-type CsrParams struct {
-	Subject     Name     `json:"subject,omitempty" cbor:"0,keyasint,omitempty"`
-	DnsNames    []string `json:"dnsNames,omitempty" cbor:"1,keyasint,omitempty"`
-	IpAddresses []string `json:"ipAddresses,omitempty" cbor:"2,keyasint,omitempty"`
-}
-
-// Name is the PKIX Name for CsrParams
-type Name struct {
-	CommonName         string        `json:"commonName,omitempty" cbor:"0,keyasint,omitempty"`
-	Country            string        `json:"country,omitempty" cbor:"1,keyasint,omitempty"`
-	Organization       string        `json:"organization,omitempty" cbor:"2,keyasint,omitempty"`
-	OrganizationalUnit string        `json:"organizationalUnit,omitempty" cbor:"3,keyasint,omitempty"`
-	Locality           string        `json:"locality,omitempty" cbor:"4,keyasint,omitempty"`
-	Province           string        `json:"province,omitempty" cbor:"5,keyasint,omitempty"`
-	StreetAddress      string        `json:"streetAddress,omitempty" cbor:"6,keyasint,omitempty"`
-	PostalCode         string        `json:"postalCode,omitempty" cbor:"7,keyasint,omitempty"`
-	Names              []interface{} `json:"names,omitempty" cbor:"8,keyasint,omitempty"`
-}
-
 // Driver is an interface representing a driver for a hardware trust anchor,
 // capable of providing attestation evidence and signing data. This can be
 // e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
@@ -388,7 +334,6 @@ type DriverConfig struct {
 	CtrLog           string
 	ExtCtrLog        bool
 	CtrDriver        string
-	DeviceConfig     DeviceConfig
 	EstTlsCas        []*x509.Certificate
 	UseSystemRootCas bool
 	Vmpl             int

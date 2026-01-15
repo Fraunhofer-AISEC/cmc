@@ -294,7 +294,7 @@ func (sgx *Sgx) provision() error {
 	}
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikCert, err := provisionIk(sgx.ikPriv, sgx.DriverConfig)
+	ikCert, err := sgx.provisionIk(sgx.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -304,17 +304,26 @@ func (sgx *Sgx) provision() error {
 	return nil
 }
 
-func provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig,
-) (*x509.Certificate, error) {
+func (sgx *Sgx) provisionIk(priv crypto.PrivateKey) (*x509.Certificate, error) {
+
+	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get FQDN: %v", err)
+	}
+	if len(sgx.ikChain) > 0 && sgx.ikChain[0].Subject.CommonName != fqdn {
+		return nil, fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
+			fqdn, sgx.ikChain[0].Subject.CommonName)
+	}
 
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Sgx.IkCsr)
+	csr, err := internal.CreateCsr(priv, fqdn, []string{fqdn}, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
 
 	// Request IK certificate from EST server
-	cert, err := c.Provisioner.SimpleEnroll(csr)
+	cert, err := sgx.DriverConfig.Provisioner.SimpleEnroll(csr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

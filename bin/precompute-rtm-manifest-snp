@@ -39,7 +39,7 @@ input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
 pki="${data}/pki"
 
-device_description="${out}/device.description.json"
+image_description="${out}/image.description.json"
 
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
@@ -181,17 +181,17 @@ rootdesc=$(cat "${input}/manifest.description.json")
 rootdesc=$(echo "${rootdesc}" | jq ".name = \"${name}.description\"")
 rootdesc=$(echo "${rootdesc}" | jq ".manifest = \"${name}\"")
 
-# Device Description: Add/replace root manifest description to/in device description
-devdesc=$(cat "${device_description}")
-exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
+# Image Description: Add/replace root manifest description to/in image description
+image_description=$(cat "${image_description}")
+exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
 if [[ "${exists}" = false ]]; then
-  echo "Adding root manifest description to device description"
+  echo "Adding root manifest description to image description"
 else
   echo "Replacing existing root manifest description"
-  devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+  image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-devdesc=$(echo "${devdesc}" | jq --argjson desc "[${rootdesc}]" '.descriptions += $desc')
+image_description=$(echo "${image_description}" | jq --argjson desc "[${rootdesc}]" '.descriptions += $desc')
 
-# Device Description: Store
-echo "Writing ${device_description}"
-printf "%s\n" "${devdesc}" > "${device_description}"
+# Image Description: Store
+echo "Writing ${image_description}"
+printf "%s\n" "${image_description}" > "${image_description}"

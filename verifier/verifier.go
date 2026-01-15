@@ -58,6 +58,19 @@ func Verify(
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
 	metadataCas []*x509.Certificate, metadataMap map[string][]byte,
 ) *ar.VerificationResult {
+	return VerifyProvision(arRaw, nonce, verifier, policies, policyEngine, policyOverwrite, metadataCas,
+		metadataMap, "")
+}
+
+// VerifyProvision provides the same functionality as Verify() and can be called during
+// provisioning, where certificates are not yet enrolled yet, and thus the FQDN is
+// provided by the provisioning server
+func VerifyProvision(
+	arRaw, nonce []byte, verifier interface{},
+	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
+	metadataCas []*x509.Certificate, metadataMap map[string][]byte,
+	fqdn string,
+) *ar.VerificationResult {
 
 	if len(metadataMap) == 0 {
 		log.Warnf("No metadata specified")
@@ -84,8 +97,8 @@ func Verify(
 	log.Tracef("Detected %v serialization", s.String())
 
 	// Verify and unpack attestation report
-	report, tr, code := verifyAr(arRaw, verifier, s)
-	result.ReportSignature = tr.SignatureCheck
+	report, mr, code := verifyAr(arRaw, verifier, s)
+	result.ReportSignature = mr.SignatureCheck
 	if code != ar.NotSpecified {
 		result.Fail(code)
 		return result
@@ -98,7 +111,7 @@ func Verify(
 	}
 	result.Metadata = metaResults
 
-	result.Prover = metaResults.DevDescResult.Name
+	result.Prover = getProver(result.ReportSignature, fqdn)
 	if result.Prover == "" {
 		result.Prover = "Unknown"
 	}
@@ -267,7 +280,7 @@ func verifyAr(attestationReport []byte, verifier interface{}, s ar.Serializer,
 
 // verifyMetadata takes the metadata map with keys being the hashes of the raw metadata items,
 // a set of CAs and a serializer and performs a validity, signature and certificate chain validation
-// as well as compatibility checks: The device description must reference all manifests, and
+// as well as compatibility checks: The image description must reference all manifests, and
 // starting from an inherently trusted root manifest, all manifests must have a compatible
 // base layer.
 func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[string][]byte,
@@ -317,10 +330,10 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		}
 
 		switch result.Metadata.Type {
-		case "Device Description":
-			results.DevDescResult = result
+		case "Image Description":
+			results.ImageDescriptionResult = result
 		case "Company Description":
-			results.CompDescResult = &result
+			results.CompanyDescriptionResult = &result
 		case "Manifest":
 			results.ManifestResults = append(results.ManifestResults, result)
 		default:
@@ -348,14 +361,14 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityR
 		},
 	}
 
-	// Check metadata compatibility and update device description result
-	if metadata.DevDescResult.Name == "" {
-		result.Summary.Fail(ar.DeviceDescriptionNotPresent)
+	// Check metadata compatibility and update image description result
+	if metadata.ImageDescriptionResult.Name == "" {
+		result.Summary.Fail(ar.ImageDescriptionNotPresent)
 	}
 
 	// Gather all manifest names referenced in the manifest descriptions
-	descManifests := make([]string, 0, len(metadata.DevDescResult.Descriptions))
-	for _, m := range metadata.DevDescResult.Descriptions {
+	descManifests := make([]string, 0, len(metadata.ImageDescriptionResult.Descriptions))
+	for _, m := range metadata.ImageDescriptionResult.Descriptions {
 		descManifests = append(descManifests, m.Manifest)
 	}
 
@@ -366,9 +379,9 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityR
 	}
 
 	// Check that each manifest description has a corresponding manifest
-	log.Debugf("Iterating manifest descriptions length %v", len(metadata.DevDescResult.Descriptions))
-	descriptionMatch := make([]ar.Result, 0, len(metadata.DevDescResult.Descriptions))
-	for _, desc := range metadata.DevDescResult.Descriptions {
+	log.Debugf("Iterating manifest descriptions length %v", len(metadata.ImageDescriptionResult.Descriptions))
+	descriptionMatch := make([]ar.Result, 0, len(metadata.ImageDescriptionResult.Descriptions))
+	for _, desc := range metadata.ImageDescriptionResult.Descriptions {
 
 		ok := internal.Contains(desc.Manifest, manifestNames)
 		if !ok {
@@ -602,4 +615,16 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 	result.ExpectedOneOf = refFingerprints
 	result.Got = hex.EncodeToString(caFingerprint[:])
 	return result
+}
+
+// Extract the Common Name from the leaf certificate if report was signed by
+// certificate. If not (i.e., during initial provisioning), use the provided name
+func getProver(r []ar.SignatureResult, optionalProver string) string {
+
+	if len(r) > 0 &&
+		len(r[0].Certs) > 0 &&
+		len(r[0].Certs[0]) > 0 {
+		return r[0].Certs[0][0].Subject.CommonName
+	}
+	return optionalProver
 }

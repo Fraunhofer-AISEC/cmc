@@ -106,7 +106,7 @@ var (
 			Status: ar.StatusSuccess,
 		},
 		Metadata: ar.MetadataSummary{
-			DevDescResult: ar.MetadataResult{
+			ImageDescriptionResult: ar.MetadataResult{
 				SignatureCheck: []ar.SignatureResult{
 					{
 						Certs: [][]ar.X509CertExtracted{
@@ -131,7 +131,7 @@ var (
 			Status: ar.StatusSuccess,
 		},
 		Metadata: ar.MetadataSummary{
-			DevDescResult: ar.MetadataResult{
+			ImageDescriptionResult: ar.MetadataResult{
 				SignatureCheck: []ar.SignatureResult{
 					{
 						Certs: [][]ar.X509CertExtracted{
@@ -182,12 +182,12 @@ var (
 			success = false;
 		}
 
-		// Check a certain certificate property in the device description
+		// Check a certain certificate property in the image description
 		var found = false
-		for (var i = 0; i < obj.metadata.devDescResult.signatureValidation.length; i++) {
-			for (var j = 0; j < obj.metadata.devDescResult.signatureValidation[i].certs.length; j++) {
-				for (var k = 0; k < obj.metadata.devDescResult.signatureValidation[i].certs[j].length; k++) {
-					if (obj.metadata.devDescResult.signatureValidation[i].certs[j][k].subject.commonName == "Test Cert") {
+		for (var i = 0; i < obj.metadata.imageDescriptionResult.signatureValidation.length; i++) {
+			for (var j = 0; j < obj.metadata.imageDescriptionResult.signatureValidation[i].certs.length; j++) {
+				for (var k = 0; k < obj.metadata.imageDescriptionResult.signatureValidation[i].certs[j].length; k++) {
+					if (obj.metadata.imageDescriptionResult.signatureValidation[i].certs[j][k].subject.commonName == "Test Cert") {
 						found = true;
 					}
 				}

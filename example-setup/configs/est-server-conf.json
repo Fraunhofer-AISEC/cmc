@@ -17,7 +17,7 @@
     "tpmEkCertDb": "../../data/tpm-ek-certs.db",
     "logLevel": "trace",
     "authMethods": [
-        "none"
+        "attestation"
     ],
     "tokenPath": "../../data/token_store",
     "publishAddr": "http://localhost:8080/results",

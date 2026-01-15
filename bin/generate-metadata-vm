@@ -8,7 +8,7 @@ source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
-"${bin}/generate-device-description" "test-vm.test.de"
+"${bin}/generate-image-description" "test-vm.test.de"
 
 "${bin}/generate-rtm-manifest-tpm" "vm-ssh"
 

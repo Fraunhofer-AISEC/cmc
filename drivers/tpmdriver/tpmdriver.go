@@ -656,13 +656,23 @@ func (t *Tpm) provision() error {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
-	akCert, err := t.provisionAk(t.DriverConfig)
+	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return fmt.Errorf("failed to get FQDN: %v", err)
+	}
+	if len(t.ikChain) > 0 && t.ikChain[0].Subject.CommonName != fqdn {
+		return fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
+			fqdn, t.ikChain[0].Subject.CommonName)
+	}
+
+	akCert, err := t.provisionAk(fqdn)
 	if err != nil {
 		return fmt.Errorf("failed to provision AK cert chain: %w", err)
 	}
 	t.akChain = append([]*x509.Certificate{akCert}, caCerts...)
 
-	ikCert, err := t.provisionIk(t.DriverConfig)
+	ikCert, err := t.provisionIk(fqdn)
 	if err != nil {
 		return fmt.Errorf("failed to provision IK cert chain: %w", err)
 	}
@@ -671,7 +681,7 @@ func (t *Tpm) provision() error {
 	return nil
 }
 
-func (t *Tpm) provisionAk(c *ar.DriverConfig) (*x509.Certificate, error) {
+func (t *Tpm) provisionAk(fqdn string) (*x509.Certificate, error) {
 
 	log.Debug("Provisioning AK certificate..")
 
@@ -696,13 +706,13 @@ func (t *Tpm) provisionAk(c *ar.DriverConfig) (*x509.Certificate, error) {
 	}
 
 	// Create AK CSR and perform EST enrollment with TPM credential activation
-	akCsr, err := createAkCsr(t.ak, c.DeviceConfig.Tpm.AkCsr)
+	akCsr, err := createAkCsr(t.ak, fqdn+" TPM AK")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
 
 	log.Debugf("Performing AK TPM activate credential enroll for CN=%v", akCsr.Subject.CommonName)
-	encCredential, encSecret, pkcs7Cert, err := c.Provisioner.TpmActivateEnroll(
+	encCredential, encSecret, pkcs7Cert, err := t.DriverConfig.Provisioner.TpmActivateEnroll(
 		tpmInfo.Manufacturer.String(), t.ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
@@ -740,7 +750,7 @@ func (t *Tpm) provisionAk(c *ar.DriverConfig) (*x509.Certificate, error) {
 	return akCert, nil
 }
 
-func (t *Tpm) provisionIk(c *ar.DriverConfig) (*x509.Certificate, error) {
+func (t *Tpm) provisionIk(fqdn string) (*x509.Certificate, error) {
 
 	log.Debug("Provisioning IK certificate..")
 
@@ -750,7 +760,7 @@ func (t *Tpm) provisionIk(c *ar.DriverConfig) (*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
 	}
 
-	ikCsr, err := ar.CreateCsr(ikPriv, c.DeviceConfig.Tpm.IkCsr)
+	ikCsr, err := internal.CreateCsr(ikPriv, fqdn, []string{fqdn}, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create IK CSR: %w", err)
 	}
@@ -767,24 +777,24 @@ func (t *Tpm) provisionIk(c *ar.DriverConfig) (*x509.Certificate, error) {
 	// Fetch attestation report as part of client authentication if configured
 	var report []byte
 	var metadata [][]byte
-	if c.ProvisionAuth.Has(internal.AuthAttestation) {
-		r, m, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{t}, c.Serializer)
+	if t.DriverConfig.ProvisionAuth.Has(internal.AuthAttestation) {
+		r, m, err := prover.Generate(nonce[:], nil, t.DriverConfig.Metadata, []ar.Driver{t}, t.DriverConfig.Serializer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 		}
 		metadata = internal.ConvertToArray(m)
-		data, err := c.Serializer.Marshal(r)
+		data, err := t.DriverConfig.Serializer.Marshal(r)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
 		}
-		report, err = prover.Sign(data, t, c.Serializer, ar.IK)
+		report, err = prover.Sign(data, t, t.DriverConfig.Serializer, ar.IK)
 		if err != nil {
 			return nil, fmt.Errorf("failed to sign attestation report: %w", err)
 		}
 	}
 
 	log.Debugf("Performing IK TPM certify enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := c.Provisioner.TpmCertifyEnroll(
+	ikCert, err := t.DriverConfig.Provisioner.TpmCertifyEnroll(
 		ikCsr,
 		ikParams,
 		t.ak.AttestationParameters().Public,
@@ -1020,20 +1030,13 @@ func (t *Tpm) getQuotePcrs() ([]int, error) {
 
 // This function calls the modified version of x509.CreateCertificateRequest which does not
 // perform hashing and can therefore be used to create CSRs for restricted tpm keys
-func createAkCsr(ak *attest.AK, params ar.CsrParams) (*x509.CertificateRequest, error) {
+func createAkCsr(ak *attest.AK, cn string) (*x509.CertificateRequest, error) {
 
 	log.Debugf("Creating AK CSR..")
 
 	tmpl := x509.CertificateRequest{
 		Subject: pkix.Name{
-			CommonName:         params.Subject.CommonName,
-			Country:            []string{params.Subject.Country},
-			Province:           []string{params.Subject.Province},
-			Locality:           []string{params.Subject.Locality},
-			Organization:       []string{params.Subject.Organization},
-			OrganizationalUnit: []string{params.Subject.OrganizationalUnit},
-			StreetAddress:      []string{params.Subject.StreetAddress},
-			PostalCode:         []string{params.Subject.PostalCode},
+			CommonName: cn,
 		},
 	}
 

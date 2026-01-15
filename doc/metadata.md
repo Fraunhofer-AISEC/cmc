@@ -23,14 +23,12 @@ metadata files to CBOR before signing them (see [Setup](./setup.md)).
 The example setup (folder `cmc/example-setup`) contains templates for the required metadata files
 in JSON.
 
-- **device.description.json**: Metadata describing the overall platform
-- **manifest.description.json**: Embedded into device description, describes an instance of a
+- **image.description.json**: Metadata describing the overall platform
+- **manifest.description.json**: Embedded into image description, describes an instance of a
 manifest (i.e., a software layer or application)
 - **manifest.json**: Template for a manifest containing reference values for a specific software
 layer or single application
 - **company.description.json**: Optional, metadata describing the operater of the computing platform
-- **device.config.json**: Signed local device configuration, contains e.g. the parameters for
-the Certificate Signing Requests for the attestation and identity keys
 
 ## Populating Metadata
 

@@ -212,12 +212,12 @@ func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 func (sw *Sw) UpdateCerts() error {
 	var err error
 
+	log.Info("Updating sw certificates")
+
 	// Initial checks
 	if sw == nil {
 		return errors.New("internal error: sw object is nil")
 	}
-
-	log.Info("Updating sw certificates")
 
 	err = sw.provision()
 	if err != nil {
@@ -299,8 +299,18 @@ func (sw *Sw) provision() error {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
+	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return fmt.Errorf("failed to get FQDN: %v", err)
+	}
+	if len(sw.ikChain) > 0 && sw.ikChain[0].Subject.CommonName != fqdn {
+		return fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
+			fqdn, sw.ikChain[0].Subject.CommonName)
+	}
+
 	// Perform AK enrollment
-	akCsr, err := ar.CreateCsr(sw.akPriv, sw.DeviceConfig.Sw.AkCsr)
+	akCsr, err := internal.CreateLocalCsr(sw.akPriv, fqdn+" SW AK")
 	if err != nil {
 		return fmt.Errorf("failed to create AK CSR: %w", err)
 	}
@@ -315,7 +325,7 @@ func (sw *Sw) provision() error {
 	log.Debugf("Received certificate CN=%v", akCert.Subject.CommonName)
 
 	// Perform IK enrollment
-	ikCsr, err := ar.CreateCsr(sw.ikPriv, sw.DeviceConfig.Sw.IkCsr)
+	ikCsr, err := internal.CreateCsr(sw.ikPriv, fqdn, []string{fqdn}, []string{})
 	if err != nil {
 		return fmt.Errorf("failed to create IK CSR: %w", err)
 	}
