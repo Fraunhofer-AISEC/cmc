@@ -413,8 +413,18 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 func (snp *Snp) provisionIk(provisioner ar.Provisioner, priv crypto.PrivateKey, c *ar.DriverConfig,
 ) (*x509.Certificate, error) {
 
+	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get FQDN: %v", err)
+	}
+	if len(snp.ikChain) > 0 && snp.ikChain[0].Subject.CommonName != fqdn {
+		return nil, fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
+			fqdn, snp.ikChain[0].Subject.CommonName)
+	}
+
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Snp.IkCsr)
+	csr, err := internal.CreateCsr(priv, fqdn, []string{fqdn}, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}

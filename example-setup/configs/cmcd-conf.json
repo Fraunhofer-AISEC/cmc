@@ -1,7 +1,7 @@
 {
     "cmcAddr": "localhost:9955",
     "provisionMode": "est",
-    "provisionAuth": [ "none" ],
+    "provisionAuth": [ "attestation" ],
     "provisionAddr": "https://localhost:9000/",
     "provisionToken": "../data/provision_token",
     "metadata": [

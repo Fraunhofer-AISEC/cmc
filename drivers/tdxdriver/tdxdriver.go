@@ -373,8 +373,18 @@ func fetchAk() ([]*x509.Certificate, error) {
 
 func (tdx *Tdx) provisionIk() (*x509.Certificate, error) {
 
+	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get FQDN: %v", err)
+	}
+	if len(tdx.ikChain) > 0 && tdx.ikChain[0].Subject.CommonName != fqdn {
+		return nil, fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
+			fqdn, tdx.ikChain[0].Subject.CommonName)
+	}
+
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(tdx.ikPriv, tdx.DeviceConfig.Tdx.IkCsr)
+	csr, err := internal.CreateCsr(tdx.ikPriv, fqdn, []string{fqdn}, []string{fqdn})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}

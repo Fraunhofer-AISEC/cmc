@@ -47,17 +47,6 @@
       },
       "type": "object"
     },
-    "CertConfig": {
-      "properties": {
-        "akCsr": {
-          "$ref": "#/$defs/CsrParams"
-        },
-        "ikCsr": {
-          "$ref": "#/$defs/CsrParams"
-        }
-      },
-      "type": "object"
-    },
     "CompatibilityResult": {
       "properties": {
         "result": {
@@ -86,26 +75,6 @@
       "required": [
         "result"
       ]
-    },
-    "CsrParams": {
-      "properties": {
-        "subject": {
-          "$ref": "#/$defs/Name"
-        },
-        "dnsNames": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "ipAddresses": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "type": "object"
     },
     "CtrData": {
       "properties": {
@@ -285,21 +254,6 @@
         "filepathlist"
       ]
     },
-    "Environment": {
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "type": "object",
-      "required": [
-        "key",
-        "value"
-      ]
-    },
     "EventData": {
       "properties": {
         "uefivariabledata": {
@@ -328,29 +282,6 @@
         }
       },
       "type": "object"
-    },
-    "ExternalInterface": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "appEndpoint": {
-          "type": "string"
-        },
-        "interface": {
-          "type": "string"
-        },
-        "port": {
-          "type": "integer"
-        }
-      },
-      "type": "object",
-      "required": [
-        "type",
-        "appEndpoint",
-        "interface",
-        "port"
-      ]
     },
     "FreeBSD": {
       "properties": {
@@ -1360,18 +1291,6 @@
         },
         "manifest": {
           "type": "string"
-        },
-        "externalConnections": {
-          "items": {
-            "$ref": "#/$defs/ExternalInterface"
-          },
-          "type": "array"
-        },
-        "environment": {
-          "items": {
-            "$ref": "#/$defs/Environment"
-          },
-          "type": "array"
         }
       },
       "type": "object",
@@ -1486,21 +1405,6 @@
           },
           "type": "array"
         },
-        "tpm": {
-          "$ref": "#/$defs/CertConfig"
-        },
-        "snp": {
-          "$ref": "#/$defs/CertConfig"
-        },
-        "tdx": {
-          "$ref": "#/$defs/CertConfig"
-        },
-        "sgx": {
-          "$ref": "#/$defs/CertConfig"
-        },
-        "sw": {
-          "$ref": "#/$defs/CertConfig"
-        },
         "summary": {
           "$ref": "#/$defs/Result"
         },
@@ -1526,7 +1430,7 @@
     },
     "MetadataSummary": {
       "properties": {
-        "devDescResult": {
+        "imgDescriptionResult": {
           "$ref": "#/$defs/MetadataResult"
         },
         "manifestResults": {
@@ -1535,7 +1439,7 @@
           },
           "type": "array"
         },
-        "compDescResult": {
+        "companyDescriptionResult": {
           "$ref": "#/$defs/MetadataResult"
         },
         "unknownResults": {
@@ -1550,7 +1454,7 @@
       },
       "type": "object",
       "required": [
-        "devDescResult",
+        "imgDescriptionResult",
         "manifestResults",
         "compatibilityResult"
       ]
@@ -1589,39 +1493,6 @@
       "required": [
         "destination"
       ]
-    },
-    "Name": {
-      "properties": {
-        "commonName": {
-          "type": "string"
-        },
-        "country": {
-          "type": "string"
-        },
-        "organization": {
-          "type": "string"
-        },
-        "organizationalUnit": {
-          "type": "string"
-        },
-        "locality": {
-          "type": "string"
-        },
-        "province": {
-          "type": "string"
-        },
-        "streetAddress": {
-          "type": "string"
-        },
-        "postalCode": {
-          "type": "string"
-        },
-        "names": {
-          "items": true,
-          "type": "array"
-        }
-      },
-      "type": "object"
     },
     "PCClientTaggedEvent": {
       "properties": {

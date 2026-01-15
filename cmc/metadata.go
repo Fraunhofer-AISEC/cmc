@@ -32,8 +32,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 )
 
-const HOSTNAME_PLACEHOLDER = "__HOSTNAME__"
-
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	useSystemRoots bool) (map[string][]byte, ar.Serializer, error) {
 
@@ -48,17 +46,9 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	// Iterate over all given paths, determine whether this is a file
 	// system or remote location, and fetch metadata
 	for _, p := range paths {
-		// The cmc allows HOSTNAME_PLACEHOLDER placeholders to be resolved by the actual hostname
-		log.Tracef("Resolving metadata path %v", p)
-		resolvedPath, err := resolveHostnamePlaceholder(p)
-		if err != nil {
-			log.Warnf("Failed to resolve hostname: %v", err)
-			fails++
-			continue
-		}
-		log.Debugf("Retrieving metadata from %v", resolvedPath)
-		if strings.HasPrefix(resolvedPath, "file://") {
-			f := strings.TrimPrefix(resolvedPath, "file://")
+		log.Debugf("Retrieving metadata from %v", p)
+		if strings.HasPrefix(p, "file://") {
+			f := strings.TrimPrefix(p, "file://")
 
 			data, err := loadMetadata(f)
 			if err != nil {
@@ -68,9 +58,9 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := estclient.FetchMetadata(resolvedPath, rootCas, useSystemRoots)
+			data, err := estclient.FetchMetadata(p, rootCas, useSystemRoots)
 			if err != nil {
-				log.Warnf("failed to fetch %v: %v", resolvedPath, err)
+				log.Warnf("failed to fetch %v: %v", p, err)
 				fails++
 				continue
 			}
@@ -329,17 +319,4 @@ func isNewer(t, ref string) (bool, error) {
 	}
 
 	return checktime.After(reftime), nil
-}
-
-func resolveHostnamePlaceholder(input string) (string, error) {
-	if !strings.Contains(input, HOSTNAME_PLACEHOLDER) {
-		return input, nil
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve hostname: %w", err)
-	}
-
-	return strings.ReplaceAll(input, HOSTNAME_PLACEHOLDER, hostname), nil
 }

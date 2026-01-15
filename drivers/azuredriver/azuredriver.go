@@ -270,7 +270,7 @@ func (azure *Azure) provision() error {
 	internal.TraceCertsShort("Provisioned AK cert", azure.ccAkChain)
 
 	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikCert, err := azure.provisionIk(azure.ikPriv, azure.DriverConfig)
+	ikCert, err := azure.provisionIk(azure.ikPriv)
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
@@ -358,10 +358,20 @@ func fetchTdxAk(data []byte) ([]*x509.Certificate, error) {
 	}, nil
 }
 
-func (azure *Azure) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) (*x509.Certificate, error) {
+func (azure *Azure) provisionIk(priv crypto.PrivateKey) (*x509.Certificate, error) {
+
+	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get FQDN: %v", err)
+	}
+	if len(azure.ikChain) > 0 && azure.ikChain[0].Subject.CommonName != fqdn {
+		return nil, fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
+			fqdn, azure.ikChain[0].Subject.CommonName)
+	}
 
 	// Create IK CSR for authentication
-	csr, err := ar.CreateCsr(priv, c.DeviceConfig.Tdx.IkCsr)
+	csr, err := internal.CreateCsr(priv, fqdn, []string{fqdn}, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
@@ -375,21 +385,22 @@ func (azure *Azure) provisionIk(priv crypto.PrivateKey, c *ar.DriverConfig) (*x5
 	log.Tracef("Created nonce from IK public: %x", nonce)
 
 	// Fetch attestation report as part of client authentication
-	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{azure}, c.Serializer)
+	report, metadata, err := prover.Generate(nonce[:], nil, azure.DriverConfig.Metadata,
+		[]ar.Driver{azure}, azure.DriverConfig.Serializer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
-	r, err := c.Serializer.Marshal(report)
+	r, err := azure.DriverConfig.Serializer.Marshal(report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
 	}
-	signedReport, err := prover.Sign(r, azure, c.Serializer, ar.IK)
+	signedReport, err := prover.Sign(r, azure, azure.DriverConfig.Serializer, ar.IK)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
 	}
 
 	// Request IK certificate from EST server
-	cert, err := c.Provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := azure.DriverConfig.Provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

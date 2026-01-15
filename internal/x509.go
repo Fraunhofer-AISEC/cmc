@@ -23,11 +23,13 @@ import (
 	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -224,6 +226,46 @@ func CheckCert(cert *x509.Certificate, cn string, signatureAlgo x509.SignatureAl
 	log.Tracef("Certificate signature algorithm %v matches expected algorithm", signatureAlgo.String())
 
 	return nil
+}
+
+func CreateLocalCsr(priv crypto.PrivateKey, cn string) (*x509.CertificateRequest, error) {
+	return CreateCsr(priv, cn, []string{}, []string{})
+}
+
+func CreateCsr(priv crypto.PrivateKey, cn string, dns, ips []string) (*x509.CertificateRequest, error) {
+
+	var ipAddresses []net.IP
+	for _, s := range ips {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			return nil, fmt.Errorf("failed to parse IP %v", s)
+		}
+		ipAddresses = append(ipAddresses, ip)
+	}
+
+	tmpl := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: cn,
+		},
+		DNSNames:    dns,
+		IPAddresses: ipAddresses,
+	}
+
+	der, err := x509.CreateCertificateRequest(rand.Reader, &tmpl, priv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create certificate request: %v", err)
+	}
+
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse created CSR: %v", err)
+	}
+	err = csr.CheckSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check signature of created CSR: %v", err)
+	}
+
+	return csr, nil
 }
 
 func CreateCert(csr *x509.CertificateRequest) (*x509.Certificate, error) {

@@ -41,7 +41,7 @@ func UpdateMetadata(cmc *Cmc) error {
 		return fmt.Errorf("internal error: cmc is nil")
 	}
 
-	// Read metadata and device config from the file system
+	// Read metadata from the file system
 	metadata, s, err := GetMetadata(cmc.MetadataLocation, cmc.Cache, cmc.EstTlsCas, cmc.EstTlsSysRoots)
 	if err != nil {
 		return fmt.Errorf("failed to get metadata: %v", err)

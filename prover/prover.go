@@ -76,11 +76,6 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 			continue
 		}
 
-		// Not all metadata needs to be sent
-		if header.Type == "Device Config" {
-			continue
-		}
-
 		digest, err := hex.DecodeString(hash)
 		if err != nil {
 			log.Tracef("Failed to decode cached hash string: %v", err)

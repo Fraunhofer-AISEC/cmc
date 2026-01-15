@@ -86,12 +86,12 @@ func TestVerify(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	type args struct {
-		serializer        ar.Serializer
-		rtmManifest       ar.Metadata
-		osManifest        ar.Metadata
-		appManifest       ar.Metadata
-		deviceDescription ar.Metadata
-		nonce             []byte
+		serializer       ar.Serializer
+		rtmManifest      ar.Metadata
+		osManifest       ar.Metadata
+		appManifest      ar.Metadata
+		imageDescription ar.Metadata
+		nonce            []byte
 	}
 	tests := []struct {
 		name string
@@ -101,24 +101,24 @@ func TestVerify(t *testing.T) {
 		{
 			name: "Valid Report JSON",
 			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
+				serializer:       ar.JsonSerializer{},
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				nonce:            nonce,
 			},
 			want: ar.StatusSuccess,
 		},
 		{
 			name: "Valid Report CBOR",
 			args: args{
-				serializer:        ar.CborSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
+				serializer:       ar.CborSerializer{},
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				nonce:            nonce,
 			},
 			want: ar.StatusSuccess,
 		},
@@ -164,33 +164,33 @@ func TestVerify(t *testing.T) {
 						CertLevel: 3,
 					},
 				},
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				nonce:            nonce,
 			},
 			want: ar.StatusFail,
 		},
 		{
-			name: "Invalid Device Description",
+			name: "Invalid Image Description",
 			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        validOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: invalidDeviceDescription,
-				nonce:             nonce,
+				serializer:       ar.JsonSerializer{},
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: invalidImageDescription,
+				nonce:            nonce,
 			},
 			want: ar.StatusFail,
 		},
 		{
 			name: "Incompatible RTM/OS Manifests",
 			args: args{
-				serializer:        ar.JsonSerializer{},
-				rtmManifest:       validRtmManifest,
-				osManifest:        incompatibleOsManifest,
-				appManifest:       validAppManifest,
-				deviceDescription: validDeviceDescription,
-				nonce:             nonce,
+				serializer:       ar.JsonSerializer{},
+				rtmManifest:      validRtmManifest,
+				osManifest:       incompatibleOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				nonce:            nonce,
 			},
 			want: ar.StatusFail,
 		},
@@ -216,7 +216,7 @@ func TestVerify(t *testing.T) {
 			// Preparation: Generate a Sample Report
 			log.Trace("Generating a Sample Report")
 
-			// Preparation: create signed manifests and deviceDescription
+			// Preparation: create signed manifests and imageDescription
 			rtmManifest, err := s.Marshal(tt.args.rtmManifest)
 			if err != nil {
 				t.Errorf("failed to marshal the RTM Manifest: %v", err)
@@ -229,9 +229,9 @@ func TestVerify(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to marshal the App Manifest: %v", err)
 			}
-			deviceDescription, err := s.Marshal(tt.args.deviceDescription)
+			imageDescription, err := s.Marshal(tt.args.imageDescription)
 			if err != nil {
-				t.Errorf("failed to marshal the DeviceDescription: %v", err)
+				t.Errorf("failed to marshal the ImageDescription: %v", err)
 			}
 
 			rtmManifest, err = prover.Sign(rtmManifest, swDriver, s, ar.IK)
@@ -246,9 +246,9 @@ func TestVerify(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to sign the App Manifest: %v", err)
 			}
-			deviceDescription, err = prover.Sign(deviceDescription, swDriver, s, ar.IK)
+			imageDescription, err = prover.Sign(imageDescription, swDriver, s, ar.IK)
 			if err != nil {
-				t.Errorf("failed to sign the DeviceDescription: %v", err)
+				t.Errorf("failed to sign the ImageDescription: %v", err)
 			}
 
 			rtmDigest := sha256.Sum256(rtmManifest)
@@ -269,25 +269,25 @@ func TestVerify(t *testing.T) {
 				Digest: appDigest[:],
 			}
 
-			deviceDigest := sha256.Sum256(deviceDescription)
-			deviceDescriptionDigest := ar.MetadataDigest{
+			imageDigest := sha256.Sum256(imageDescription)
+			imageDescriptionDigest := ar.MetadataDigest{
 				Type:   "Manifest",
-				Digest: deviceDigest[:],
+				Digest: imageDigest[:],
 			}
 
 			report := ar.AttestationReport{
 				Type:    "Attestation Report",
 				Version: ar.GetVersion(),
 				Metadata: []ar.MetadataDigest{
-					rtmManifestDigest, osManifestDigest, appManifestDigest, deviceDescriptionDigest,
+					rtmManifestDigest, osManifestDigest, appManifestDigest, imageDescriptionDigest,
 				},
 			}
 
 			metadata := map[string][]byte{
-				hex.EncodeToString(rtmDigest[:]):    rtmManifest,
-				hex.EncodeToString(osDigest[:]):     osManifest,
-				hex.EncodeToString(appDigest[:]):    appManifest,
-				hex.EncodeToString(deviceDigest[:]): deviceDescription,
+				hex.EncodeToString(rtmDigest[:]):   rtmManifest,
+				hex.EncodeToString(osDigest[:]):    osManifest,
+				hex.EncodeToString(appDigest[:]):   appManifest,
+				hex.EncodeToString(imageDigest[:]): imageDescription,
 			}
 
 			data, err := s.Marshal(report)
@@ -304,7 +304,7 @@ func TestVerify(t *testing.T) {
 			// Run FUT
 			log.Info("Running FUT")
 			got := Verify(
-				arSigned, nonce,
+				arSigned, tt.args.nonce,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
 				PolicyEngineSelect_None,
@@ -559,7 +559,7 @@ var (
 	}
 
 	validMetaInfo = ar.MetaInfo{
-		Type:    "Device Description",
+		Type:    "Image Description",
 		Name:    "test-device.test.de",
 		Version: "2023-04-10T20:00:00Z",
 		Validity: ar.Validity{
@@ -568,9 +568,9 @@ var (
 		},
 	}
 
-	validDeviceDescription = ar.Metadata{
+	validImageDescription = ar.Metadata{
 		MetaInfo: validMetaInfo,
-		DeviceDescription: ar.DeviceDescription{
+		ImageDescription: ar.ImageDescription{
 			Location: "Munich, Germany",
 			Descriptions: []ar.ManifestDescription{
 				validRtmManifestDescription,
@@ -580,9 +580,9 @@ var (
 		},
 	}
 
-	incompleteDeviceDescription = ar.Metadata{
+	incompleteImageDescription = ar.Metadata{
 		MetaInfo: validMetaInfo,
-		DeviceDescription: ar.DeviceDescription{
+		ImageDescription: ar.ImageDescription{
 			Location: "Munich, Germany",
 			Descriptions: []ar.ManifestDescription{
 				validRtmManifestDescription,
@@ -591,13 +591,13 @@ var (
 		},
 	}
 
-	invalidDeviceDescription = ar.Metadata{
+	invalidImageDescription = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type:    "Device Description",
+			Type:    "Image Description",
 			Name:    "test-device.test.de",
 			Version: "2023-04-10T20:00:00Z",
 		},
-		DeviceDescription: ar.DeviceDescription{
+		ImageDescription: ar.ImageDescription{
 			Location: "Munich, Germany",
 			Descriptions: []ar.ManifestDescription{
 				validRtmManifestDescription,
@@ -615,12 +615,12 @@ var (
 
 // Variables for Test_checkMetadataCompatibility
 var (
-	validDevDescResult = ar.MetadataResult{
-		Metadata: validDeviceDescription,
+	validImageDescriptionResult = ar.MetadataResult{
+		Metadata: validImageDescription,
 	}
 
-	incompleteDevDescResult = ar.MetadataResult{
-		Metadata: incompleteDeviceDescription,
+	incompleteImageDescriptionResult = ar.MetadataResult{
+		Metadata: incompleteImageDescription,
 	}
 
 	validCompDescResult = &ar.MetadataResult{
@@ -640,8 +640,8 @@ var (
 	}
 
 	validMetadata = &ar.MetadataSummary{
-		DevDescResult:  validDevDescResult,
-		CompDescResult: validCompDescResult,
+		ImageDescriptionResult:   validImageDescriptionResult,
+		CompanyDescriptionResult: validCompDescResult,
 		ManifestResults: []ar.MetadataResult{
 			validRtmResult,
 			validOsResult,
@@ -650,8 +650,8 @@ var (
 	}
 
 	noRootManifestMetadata = &ar.MetadataSummary{
-		DevDescResult:  validDevDescResult,
-		CompDescResult: validCompDescResult,
+		ImageDescriptionResult:   validImageDescriptionResult,
+		CompanyDescriptionResult: validCompDescResult,
 		ManifestResults: []ar.MetadataResult{
 			validOsResult,
 			validAppResult,
@@ -659,8 +659,8 @@ var (
 	}
 
 	multipleRootManifestMetadata = &ar.MetadataSummary{
-		DevDescResult:  validDevDescResult,
-		CompDescResult: validCompDescResult,
+		ImageDescriptionResult:   validImageDescriptionResult,
+		CompanyDescriptionResult: validCompDescResult,
 		ManifestResults: []ar.MetadataResult{
 			validRtmResult,
 			validRtmResult,
@@ -670,8 +670,8 @@ var (
 	}
 
 	missingManifestMetadata = &ar.MetadataSummary{
-		DevDescResult:  validDevDescResult,
-		CompDescResult: validCompDescResult,
+		ImageDescriptionResult:   validImageDescriptionResult,
+		CompanyDescriptionResult: validCompDescResult,
 		ManifestResults: []ar.MetadataResult{
 			validRtmResult,
 			validOsResult,
@@ -679,8 +679,8 @@ var (
 	}
 
 	missingDescriptionMetadata = &ar.MetadataSummary{
-		DevDescResult:  incompleteDevDescResult,
-		CompDescResult: validCompDescResult,
+		ImageDescriptionResult:   incompleteImageDescriptionResult,
+		CompanyDescriptionResult: validCompDescResult,
 		ManifestResults: []ar.MetadataResult{
 			validRtmResult,
 			validOsResult,

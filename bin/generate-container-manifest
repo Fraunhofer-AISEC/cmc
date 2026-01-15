@@ -51,15 +51,15 @@ out="${data}/metadata-raw"
 runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
 runc_config="/etc/runc-measure-conf.json"
 target="${target%/}"
-device_description="${out}/device.description.json"
+image_description_path="${out}/image.description.json"
 
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
-if [[ ! -f "${device_description}" ]]; then
-    echo "Error: Device description ${device_description} does not exist. Run generate-device-description first"
+if [[ ! -f "${image_description_path}" ]]; then
+    echo "Error: image description ${image_description_path} does not exist. Run generate-image-description first"
     exit 1
 fi
 
@@ -183,18 +183,18 @@ for ((i = 0; i < num_containers; i++)); do
         appdesc=$(echo "${appdesc}" | jq --argjson envs "${envs}" '.environment += [$envs]')
     done
 
-    # Device Description: Add/replace app description to/in device description
-    devdesc=$(cat "${device_description}")
-    exists=$(echo "${devdesc}" | jq "any(.descriptions[]; .name == \"${container}-${sha256}.description\")")
+    # Image Description: Add/replace app description to/in image description
+    image_description=$(cat "${image_description_path}")
+    exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${container}-${sha256}.description\")")
     if [[ "${exists}" = false ]]; then
-      echo "Adding app description to device description"
+      echo "Adding app description to image description"
     else
       echo "Replacing existing app description"
-      devdesc=$(echo "$devdesc" | jq ".descriptions |= map(select(.name != \"${container}-${sha256}.description\"))")
+      image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${container}-${sha256}.description\"))")
     fi
-    devdesc=$(echo "${devdesc}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+    image_description=$(echo "${image_description}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
 
-    # Device Description: Store
-    echo "Writing ${device_description}"
-    printf "%s\n" "${devdesc}" > "${device_description}"
+    # Image Description: Store
+    echo "Writing ${image_description_path}"
+    printf "%s\n" "${image_description}" > "${image_description_path}"
 done

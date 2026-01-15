@@ -71,7 +71,7 @@ for path in "${input}/"*; do
 
     # Get the type to determine the signers
     type=$(jq -r '.type' "${path}")
-    if [ "$type" == "Device Description" ]; then
+    if [ "$type" == "Image Description" ]; then
         keys="${key_op_a}"
         x5cs="${chain_op_a}"
     elif [ "$type" == "Company Description" ]; then
