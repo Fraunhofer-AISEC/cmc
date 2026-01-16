@@ -30,7 +30,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 	type args struct {
 		measurement    *ar.Measurement
 		nonce          []byte
-		rootManifest   *ar.MetadataResult
+		manifests      []ar.MetadataResult
 		refvals        []ar.ReferenceValue
 		omitCollateral bool
 	}
@@ -47,19 +47,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -83,19 +85,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: invalidSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: invalidSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -119,19 +123,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: invalidSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -155,19 +161,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -192,19 +200,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -228,19 +238,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   invalidSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   invalidSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -264,19 +276,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     validMRSIGNER,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     validMRSIGNER,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -300,19 +314,21 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
-							SgxPolicy: &ar.SgxPolicy{
-								QuoteVersion: validSGXVersion,
-								Attributes:   validSgxAttributes,
-								IsvProdId:    validIsvProdId,
-								IsvSvn:       validIsvSvn,
-								MrSigner:     "00000",
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+								SgxPolicy: &ar.SgxPolicy{
+									QuoteVersion: validSGXVersion,
+									Attributes:   validSgxAttributes,
+									IsvProdId:    validIsvProdId,
+									IsvSvn:       validIsvSvn,
+									MrSigner:     "00000",
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -336,10 +352,12 @@ func Test_verifySgxMeasurements(t *testing.T) {
 					Type:     "SGX Measurement",
 					Evidence: validSGXQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validSgxCaFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validSgxCaFingerprints,
+							},
 						},
 					},
 				},
@@ -382,7 +400,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		}
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifySgxMeasurements(*tt.args.measurement, tt.args.nonce,
-				tt.args.rootManifest, tt.args.refvals)
+				tt.args.manifests, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifySgxMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
 			}

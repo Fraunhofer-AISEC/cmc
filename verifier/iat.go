@@ -49,7 +49,7 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
+func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -66,6 +66,11 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, rootManifest *ar.M
 		return result, false
 	}
 
+	if len(manifests) == 0 {
+		result.Summary.Fail((ar.NoRootManifest))
+		return result, false
+	}
+	rootManifest := manifests[0]
 	if len(referenceValues) == 0 {
 		log.Debugf("Could not find IAS Reference Value")
 		result.Summary.Fail(ar.RefValNotPresent)

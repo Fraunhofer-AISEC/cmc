@@ -29,7 +29,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		IasM            *ar.Measurement
 		nonce           []byte
 		referenceValues []ar.ReferenceValue
-		rootManifest    *ar.MetadataResult
+		manifests       []ar.MetadataResult
 	}
 	tests := []struct {
 		name string
@@ -49,10 +49,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validIatFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validIatFingerprints,
+							},
 						},
 					},
 				},
@@ -72,10 +74,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validIatFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validIatFingerprints,
+							},
 						},
 					},
 				},
@@ -95,10 +99,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: invalidIatFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: invalidIatFingerprints,
+							},
 						},
 					},
 				},
@@ -118,10 +124,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validIatFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validIatFingerprints,
+							},
 						},
 					},
 				},
@@ -141,10 +149,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validIatFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validIatFingerprints,
+							},
 						},
 					},
 				},
@@ -164,10 +174,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validIatFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validIatFingerprints,
+							},
 						},
 					},
 				},
@@ -179,7 +191,7 @@ func Test_verifyIasMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, tt.args.rootManifest,
+			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, tt.args.manifests,
 				tt.args.referenceValues)
 			if got != tt.want {
 				t.Errorf("verifyIasMeasurements() error = %v, wantErr %v", got, tt.want)

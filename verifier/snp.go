@@ -83,7 +83,7 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
+func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -128,11 +128,11 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		return result, false
 	}
 
-	if rootManifest == nil {
-		log.Debugf("Internal error: root manifest not present")
-		result.Summary.Fail((ar.Internal))
+	if len(manifests) == 0 {
+		result.Summary.Fail((ar.NoRootManifest))
 		return result, false
 	}
+	rootManifest := manifests[0]
 
 	if rootManifest.SnpPolicy == nil {
 		log.Debugf("SNP manifest %v does not contain SNP policy", rootManifest.Name)

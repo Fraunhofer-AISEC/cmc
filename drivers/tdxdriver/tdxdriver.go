@@ -384,7 +384,7 @@ func (tdx *Tdx) provisionIk() (*x509.Certificate, error) {
 	}
 
 	// Create IK CSR for authentication
-	csr, err := internal.CreateCsr(tdx.ikPriv, fqdn, []string{fqdn}, []string{fqdn})
+	csr, err := internal.CreateCsr(tdx.ikPriv, fqdn, []string{fqdn}, []string{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSRs: %w", err)
 	}
