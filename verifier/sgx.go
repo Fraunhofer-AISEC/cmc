@@ -37,7 +37,7 @@ type SgxReport struct {
 }
 
 func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
-	rootManifest *ar.MetadataResult, referenceValues []ar.ReferenceValue,
+	manifests []ar.MetadataResult, referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
 	var err error
@@ -60,11 +60,11 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 		return result, false
 	}
 	sgxReferenceValue := referenceValues[0]
-	if rootManifest == nil {
-		log.Debugf("Internal error: root manifest not present")
-		result.Summary.Fail((ar.Internal))
+	if len(manifests) == 0 {
+		result.Summary.Fail((ar.NoRootManifest))
 		return result, false
 	}
+	rootManifest := manifests[0]
 	sgxReferencePolicy := rootManifest.Manifest.SgxPolicy
 
 	// Validate Parameters:

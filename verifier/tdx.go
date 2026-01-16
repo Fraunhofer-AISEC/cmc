@@ -85,7 +85,7 @@ type QEReportCertificationData struct {
 	PCKCertChain      SgxCertificates // A3.9 QE Certification Data: Type 5 (PCK Cert Chain)
 }
 
-func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
+func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
 	referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying TDX measurements")
@@ -104,11 +104,11 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, rootManifes
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
-	if rootManifest == nil {
-		log.Debugf("Internal error: root manifest not present")
-		result.Summary.Fail((ar.Internal))
+	if len(manifests) == 0 {
+		result.Summary.Fail((ar.NoRootManifest))
 		return result, false
 	}
+	rootManifest := manifests[0]
 	tdxPolicy := rootManifest.TdxPolicy
 	if tdxPolicy == nil {
 		log.Debugf("TDX manifest does not contain TDX policy")

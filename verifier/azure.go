@@ -77,7 +77,7 @@ type AzureVmConfig struct {
 	VmUniqueId         string `json:"vmUniqueId"`
 }
 
-func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootManifest *ar.MetadataResult,
+func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
 	tdxRefVals, snpRefVals, vtpmRefVals []ar.ReferenceValue, s ar.Serializer) ([]ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying Azure measurements...")
@@ -160,7 +160,7 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 
 	// Verify TDX measurements with verified hwreport nonce
 	if ccMeasurement.Type == "Azure TDX Measurement" {
-		tdxResult, ok := verifyTdxMeasurements(ccMeasurement, hwreportNonce, rootManifest, tdxRefVals)
+		tdxResult, ok := verifyTdxMeasurements(ccMeasurement, hwreportNonce, manifests, tdxRefVals)
 		if !ok {
 			success = false
 		}
@@ -169,7 +169,7 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, rootMa
 
 	// Verify SNP measurement with with verified hwreport nonce
 	if ccMeasurement.Type == "Azure SNP Measurement" {
-		snpResult, ok := verifySnpMeasurements(ccMeasurement, hwreportNonce, rootManifest, snpRefVals)
+		snpResult, ok := verifySnpMeasurements(ccMeasurement, hwreportNonce, manifests, snpRefVals)
 		if !ok {
 			success = false
 		}

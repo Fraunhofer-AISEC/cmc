@@ -85,7 +85,7 @@ func Verify(
 	// Update persistent peer cache
 	err := StorePeerCacheMetadata(cmc.PeerCache, peer, cmc.CachedPeerMetadata[peer], cacheMisses)
 	if err != nil {
-		log.Warnf("Internal error: failed to cache metadata: %v", err)
+		log.Warnf("Internal error: failed to cache peer metadata: %v", err)
 	}
 
 	return result, nil

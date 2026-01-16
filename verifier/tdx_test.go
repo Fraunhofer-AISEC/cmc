@@ -28,7 +28,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 	type args struct {
 		measurement    *ar.Measurement
 		nonce          []byte
-		rootManifest   *ar.MetadataResult
+		manifests      []ar.MetadataResult
 		refvals        []ar.ReferenceValue
 		omitCollateral bool
 	}
@@ -46,24 +46,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Evidence:  tdxQuote,
 					Artifacts: tdxCcEventlog,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -83,24 +85,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Evidence:  tdxQuote,
 					Artifacts: invalidTdxCcEventlog1,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -120,24 +124,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Evidence:  tdxQuote,
 					Artifacts: invalidTdxCcEventlog2,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -156,24 +162,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -192,24 +200,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: invalidTdxQuote, // Quote has manipulated MRCONFIGID
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigIdInvalidSig, // manipulated MRCONFIGID
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigIdInvalidSig, // manipulated MRCONFIGID
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -228,24 +238,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -264,24 +276,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: invalidTdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: invalidTdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -300,24 +314,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -336,25 +352,27 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									// Invalid debug value
-									Debug: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										// Invalid debug value
+										Debug: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -373,24 +391,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -411,25 +431,27 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
 
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -448,24 +470,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type:     "TDX Measurement",
 					Evidence: tdxQuote,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: tdxRootCAFingerprints,
-							TdxPolicy: &ar.TdxPolicy{
-								QuoteVersion: 0x04,
-								TdId: ar.TDId{
-									MrOwner:       mrOwner,
-									MrOwnerConfig: mrOwnerConfig,
-									MrConfigId:    mrConfigId,
-								},
-								TdAttributes: ar.TDAttributes{
-									SeptVEDisable: true,
-								},
-								Xfam: validXFAM,
-								AcceptedTcbStatuses: []string{
-									string(pcs.TcbComponentStatusUpToDate),
-									string(pcs.TcbComponentStatusOutOfDate),
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: tdxRootCAFingerprints,
+								TdxPolicy: &ar.TdxPolicy{
+									QuoteVersion: 0x04,
+									TdId: ar.TDId{
+										MrOwner:       mrOwner,
+										MrOwnerConfig: mrOwnerConfig,
+										MrConfigId:    mrConfigId,
+									},
+									TdAttributes: ar.TDAttributes{
+										SeptVEDisable: true,
+									},
+									Xfam: validXFAM,
+									AcceptedTcbStatuses: []string{
+										string(pcs.TcbComponentStatusUpToDate),
+										string(pcs.TcbComponentStatusOutOfDate),
+									},
 								},
 							},
 						},
@@ -501,7 +525,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 			})
 			log.Infof("Running Unit Test %q", tt.name)
 			got, got1 := verifyTdxMeasurements(*tt.args.measurement, tt.args.nonce,
-				tt.args.rootManifest, tt.args.refvals)
+				tt.args.manifests, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifyTdxMeasurements() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want)
 			}

@@ -100,7 +100,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	// Cache metadata if cache is available
 	if cache != "" {
 		if err := cacheMetadata(metadata, cache); err != nil {
-			log.Warnf("Failed to cache metadata to %v", cache)
+			log.Warnf("Failed to cache metadata to %v: %v", cache, err)
 		}
 	}
 
@@ -162,7 +162,7 @@ func loadMetadata(dir string) ([][]byte, error) {
 // It uses the file's sha256 hash as the filename
 func cacheMetadata(data [][]byte, localPath string) error {
 	if _, err := os.Stat(localPath); err != nil {
-		if err := os.Mkdir(localPath, 0755); err != nil {
+		if err := os.MkdirAll(localPath, 0755); err != nil {
 			return fmt.Errorf("failed to create directory for local data '%v': %v", localPath, err)
 		}
 	}

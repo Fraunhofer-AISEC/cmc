@@ -29,10 +29,10 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	type args struct {
-		measurement  *ar.Measurement
-		nonce        []byte
-		rootManifest *ar.MetadataResult
-		refvals      []ar.ReferenceValue
+		measurement *ar.Measurement
+		nonce       []byte
+		manifests   []ar.MetadataResult
+		refvals     []ar.ReferenceValue
 	}
 	tests := []struct {
 		name  string
@@ -48,19 +48,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -86,19 +88,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: invalidReportSignature,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -124,19 +128,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    invalidCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -162,19 +168,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    invalidLeafCert,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -200,19 +208,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: invalidReportData,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -238,19 +248,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -276,19 +288,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      invalidSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      invalidSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -314,19 +328,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -352,19 +368,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -390,19 +408,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -422,19 +442,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   invalidFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   invalidFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -460,19 +482,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  invalidTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  invalidTcb,
+										},
 									},
 								},
 							},
@@ -498,19 +522,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Berlin",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Berlin",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -536,19 +562,21 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: invalidFingerprints,
-							SnpPolicy: &ar.SnpPolicy{
-								ReportMinVersion: validMinVersion,
-								ReportMaxVersion: validMaxVersion,
-								GuestPolicy:      validSnpPolicy,
-								VersionPolicy: []ar.SnpVersion{
-									{
-										Name: "Milan",
-										Fw:   validFw,
-										Tcb:  validTcb,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: invalidFingerprints,
+								SnpPolicy: &ar.SnpPolicy{
+									ReportMinVersion: validMinVersion,
+									ReportMaxVersion: validMaxVersion,
+									GuestPolicy:      validSnpPolicy,
+									VersionPolicy: []ar.SnpVersion{
+										{
+											Name: "Milan",
+											Fw:   validFw,
+											Tcb:  validTcb,
+										},
 									},
 								},
 							},
@@ -574,10 +602,12 @@ func Test_verifySnpMeasurements(t *testing.T) {
 					Evidence: validReport,
 					Certs:    validCertChain,
 				},
-				rootManifest: &ar.MetadataResult{
-					Metadata: ar.Metadata{
-						Manifest: ar.Manifest{
-							CaFingerprints: validFingerprints,
+				manifests: []ar.MetadataResult{
+					{
+						Metadata: ar.Metadata{
+							Manifest: ar.Manifest{
+								CaFingerprints: validFingerprints,
+							},
 						},
 					},
 				},
@@ -596,7 +626,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := verifySnpMeasurements(*tt.args.measurement, tt.args.nonce,
-				tt.args.rootManifest, tt.args.refvals)
+				tt.args.manifests, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifySnpMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
 			}

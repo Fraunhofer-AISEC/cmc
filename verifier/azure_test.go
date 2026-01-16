@@ -27,7 +27,7 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 	type args struct {
 		measurements []ar.Measurement
 		nonce        []byte
-		rootManifest *ar.MetadataResult
+		manifests    []ar.MetadataResult
 		tdxRefVals   []ar.ReferenceValue
 		snpRefVals   []ar.ReferenceValue
 		vtpmRefVals  []ar.ReferenceValue
@@ -43,7 +43,7 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 			name: "Successful Azure Verification",
 			args: args{
 				measurements: validTdxMeasurements,
-				rootManifest: validTdxRootManifest,
+				manifests:    []ar.MetadataResult{validTdxRootManifest},
 				tdxRefVals:   validTdxRefvalsAzure,
 				vtpmRefVals:  validVtpmRefvalsAzure,
 				nonce:        validVtpmNonce,
@@ -55,7 +55,7 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 			name: "Failed Azure Verification Invalid Fingerprint",
 			args: args{
 				measurements: validTdxMeasurements,
-				rootManifest: invalidTdxRootManifestFingerprint, // Invalid fingerprint
+				manifests:    []ar.MetadataResult{invalidTdxRootManifestFingerprint}, // Invalid fingerprint
 				tdxRefVals:   validTdxRefvalsAzure,
 				vtpmRefVals:  validVtpmRefvalsAzure,
 				nonce:        validVtpmNonce,
@@ -67,7 +67,7 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 			name: "Failed Azure Verification Invalid TDX Refvals",
 			args: args{
 				measurements: validTdxMeasurements,
-				rootManifest: validTdxRootManifest,
+				manifests:    []ar.MetadataResult{validTdxRootManifest},
 				tdxRefVals:   invalidTdxRefvalsAzure, // Invalid TDX refvals
 				vtpmRefVals:  validVtpmRefvalsAzure,
 				nonce:        validVtpmNonce,
@@ -79,7 +79,7 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 			name: "Failed Azure Verification Invalid vTPM Refvals",
 			args: args{
 				measurements: validTdxMeasurements,
-				rootManifest: validTdxRootManifest,
+				manifests:    []ar.MetadataResult{validTdxRootManifest},
 				tdxRefVals:   validTdxRefvalsAzure,
 				vtpmRefVals:  invalidVtpmRefvalsAzure, // Invalid vTPM refvals azure
 				nonce:        validVtpmNonce,
@@ -116,7 +116,7 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyAzureMeasurements(tt.args.measurements, tt.args.nonce, tt.args.rootManifest, tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals, tt.args.s)
+			got, got1 := verifyAzureMeasurements(tt.args.measurements, tt.args.nonce, tt.args.manifests, tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals, tt.args.s)
 			for i := range got {
 				if got[i].Summary.Status != tt.want[i].Summary.Status {
 					t.Errorf("got %v: %v, want %v: %v", got[i].Type, got[i].Summary.Status, tt.want[i].Type, tt.want[i].Summary.Status)
@@ -424,7 +424,7 @@ AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
 +I+TKfN6NRrIr2SlWmduKwJLeGOAPQ==
 -----END CERTIFICATE-----`))
 
-	validTdxRootManifest = &ar.MetadataResult{
+	validTdxRootManifest = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
 				CaFingerprints: tdxRootCAFingerprintsAzure,
@@ -433,7 +433,7 @@ AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
 		},
 	}
 
-	invalidTdxRootManifestFingerprint = &ar.MetadataResult{
+	invalidTdxRootManifestFingerprint = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
 				CaFingerprints: invalidTdxRootCAFingerprintsAzure,

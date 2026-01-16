@@ -139,7 +139,7 @@ Loop:
 			hwAttest = true
 
 		case "SNP Measurement":
-			r, ok := verifySnpMeasurements(m, nonce, &metaResults.ManifestResults[0],
+			r, ok := verifySnpMeasurements(m, nonce, metaResults.ManifestResults,
 				refVals["SNP Reference Value"])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
@@ -148,7 +148,7 @@ Loop:
 			hwAttest = true
 
 		case "TDX Measurement":
-			r, ok := verifyTdxMeasurements(m, nonce, &metaResults.ManifestResults[0],
+			r, ok := verifyTdxMeasurements(m, nonce, metaResults.ManifestResults,
 				refVals["TDX Reference Value"])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
@@ -157,7 +157,7 @@ Loop:
 			hwAttest = true
 
 		case "SGX Measurement":
-			r, ok := verifySgxMeasurements(m, nonce, &metaResults.ManifestResults[0],
+			r, ok := verifySgxMeasurements(m, nonce, metaResults.ManifestResults,
 				refVals["SGX Reference Value"])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
@@ -166,7 +166,7 @@ Loop:
 			hwAttest = true
 
 		case "IAS Measurement":
-			r, ok := verifyIasMeasurements(m, nonce, &metaResults.ManifestResults[0],
+			r, ok := verifyIasMeasurements(m, nonce, metaResults.ManifestResults,
 				refVals["IAS Reference Value"])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
@@ -183,7 +183,7 @@ Loop:
 			result.Measurements = append(result.Measurements, *r)
 
 		case "Azure TDX Measurement", "Azure SNP Measurement", "Azure vTPM Measurement":
-			results, ok := verifyAzureMeasurements(report.Measurements, nonce, &metaResults.ManifestResults[0],
+			results, ok := verifyAzureMeasurements(report.Measurements, nonce, metaResults.ManifestResults,
 				refVals["TDX Reference Value"], refVals["SNP Reference Value"], refVals["TPM Reference Value"],
 				s)
 			if !ok {
