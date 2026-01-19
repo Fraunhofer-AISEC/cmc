@@ -1430,7 +1430,7 @@
     },
     "MetadataSummary": {
       "properties": {
-        "imgDescriptionResult": {
+        "imageDescriptionResult": {
           "$ref": "#/$defs/MetadataResult"
         },
         "manifestResults": {
@@ -1454,7 +1454,7 @@
       },
       "type": "object",
       "required": [
-        "imgDescriptionResult",
+        "imageDescriptionResult",
         "manifestResults",
         "compatibilityResult"
       ]
