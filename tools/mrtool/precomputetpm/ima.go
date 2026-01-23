@@ -30,7 +30,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, strip string, imaTemplate string) ([]*ar.ReferenceValue, error) {
+func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, strip, prepend string, imaTemplate string) ([]*ar.ReferenceValue, error) {
 
 	refvals := make([]*ar.ReferenceValue, 0)
 	fileCh := make(chan string, 100)
@@ -57,9 +57,9 @@ func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, str
 		go func() {
 			defer wg.Done()
 			for path := range fileCh {
-				refval, err := precomputeImaEntry(path, strip, imaTemplate, pcr, true)
+				refval, err := precomputeImaEntry(path, strip, prepend, imaTemplate, pcr, true)
 				if err != nil {
-					log.Debugf("error hashing %q: %v", path, err)
+					log.Errorf("error hashing %q: %v", path, err)
 					continue
 				}
 				log.Tracef("%s: %s", refval.SubType, hex.EncodeToString(refval.Sha256))
@@ -151,16 +151,16 @@ func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional 
 	return r, nil
 }
 
-func precomputeImaEntry(path, strip, template string, pcr int, optional bool) (*ar.ReferenceValue, error) {
+func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional bool) (*ar.ReferenceValue, error) {
 
 	fileHash, err := hashFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash file: %w", err)
 	}
 
-	strippedPath := stripPrefix(path, strip)
+	hashedPath := modifyPath(path, strip, prepend)
 
-	tmpl, err := precomputeImaTemplate(fileHash, strippedPath, template)
+	tmpl, err := precomputeImaTemplate(fileHash, hashedPath, template)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precompute ima template: %w", err)
 	}
@@ -168,10 +168,10 @@ func precomputeImaEntry(path, strip, template string, pcr int, optional bool) (*
 	// Create reference value
 	r := &ar.ReferenceValue{
 		Type:        "TPM Reference Value",
-		SubType:     filepath.Base(strippedPath),
+		SubType:     filepath.Base(hashedPath),
 		Index:       pcr,
 		Sha256:      tmpl,
-		Description: strippedPath,
+		Description: hashedPath,
 		Optional:    optional,
 	}
 
@@ -224,12 +224,10 @@ func hashFile(path string) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
-func stripPrefix(s, prefix string) string {
+func modifyPath(s, prefix, prepend string) string {
 	if s == "" {
 		return ""
 	}
-	if prefix != "" && strings.HasPrefix(s, prefix) {
-		return s[len(prefix):]
-	}
-	return s
+	s = strings.TrimPrefix(s, prefix)
+	return prepend + s
 }
