@@ -42,6 +42,7 @@ type Config struct {
 	MokLists       []string
 	ImaPaths       []string
 	ImaStrip       string
+	ImaPrepend     string
 	ImaTemplate    string
 	BootAggregate  []byte
 	PrintAggregate bool
@@ -50,9 +51,10 @@ type Config struct {
 const (
 	systemUuidFlag     = "systemuuid"
 	grubcmdsFlag       = "grubcmds"
-	pathFlag           = "ima-path"
+	pathFlag           = "paths"
 	imaPathFlag        = "ima-path"
 	imaStripFlag       = "ima-strip"
+	imaPrependFlag     = "ima-prepend"
 	imaTemplateFlag    = "ima-template"
 	bootAggregateFlag  = "boot-aggregate"
 	printAggregateFlag = "print-aggregate"
@@ -72,8 +74,13 @@ var flags = []cli.Flag{
 		Usage: "Optional ima path prefix which is stripped from the actual path in the output",
 	},
 	&cli.StringFlag{
+		Name:  imaPrependFlag,
+		Usage: "Optional ima path segment which is prepended the actual path in the output",
+	},
+	&cli.StringFlag{
 		Name:  imaTemplateFlag,
 		Usage: "IMA template name (ima-ng or ima-sig)",
+		Value: "ima-sig",
 	},
 	&cli.StringFlag{
 		Name:  bootAggregateFlag,
@@ -186,9 +193,12 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	if cmd.IsSet(imaStripFlag) {
 		c.ImaStrip = cmd.String(imaStripFlag)
 	}
-	if cmd.IsSet(imaTemplateFlag) {
-		c.ImaTemplate = cmd.String(imaTemplateFlag)
+	if cmd.IsSet(imaPrependFlag) {
+		c.ImaPrepend = cmd.String(imaPrependFlag)
 	}
+
+	c.ImaTemplate = cmd.String(imaTemplateFlag)
+
 	if cmd.IsSet(bootAggregateFlag) {
 		b, err := hex.DecodeString(cmd.String(bootAggregateFlag))
 		if err != nil {
@@ -238,6 +248,9 @@ func (c *Config) print() {
 	}
 	if c.ImaStrip != "" {
 		log.Debugf("\tIMA strip     : %q", c.ImaStrip)
+	}
+	if c.ImaPrepend != "" {
+		log.Debugf("\tIMA prepend   : %q", c.ImaPrepend)
 	}
 	if c.BootAggregate != nil {
 		log.Debugf("\tboot-aggregate: %q", hex.EncodeToString(c.BootAggregate))

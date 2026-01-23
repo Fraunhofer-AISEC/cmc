@@ -617,7 +617,7 @@ func PrecomputePcr9(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 func PrecomputePcr10(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
 
-	refvals, err := performImaPrecomputation(10, c.BootAggregate, c.ImaPaths, c.ImaStrip, c.ImaTemplate)
+	refvals, err := performImaPrecomputation(10, c.BootAggregate, c.ImaPaths, c.ImaStrip, c.ImaPrepend, c.ImaTemplate)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to precompute IMA refvals: %w", err)
 	}
