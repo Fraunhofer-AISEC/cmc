@@ -833,13 +833,12 @@ func (r *VerificationResult) PrintErr() {
 		for _, a := range m.Artifacts {
 			if !a.Success {
 				header := ""
-				if m.Type == "TPM Measurement" {
+				if m.Type == "TPM Result" {
 					header = fmt.Sprintf("PCR%v ", a.Index)
-				} else if m.Type == "TDX Measurement" {
+				} else if m.Type == "TDX Result" {
 					header = fmt.Sprintf("%v ", internal.IndexToMr(a.Index))
 				}
-				log.Warnf("%vMeasurement Type %v, Subtype: %v: %v verification failed",
-					header, a.Type, a.SubType, a.Digest)
+				log.Warnf("%vMeasurement %v: %v verification failed", header, a.SubType, a.Digest)
 			}
 		}
 		if m.TpmResult != nil {
