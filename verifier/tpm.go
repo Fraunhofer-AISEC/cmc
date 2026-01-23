@@ -348,6 +348,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 	}
 
 	// Calculate aggregated quote PCR: Hash all reference values together
+	log.Debugf("Calculating aggregated quote PCR")
 	sum := make([]byte, 0)
 	for i := range measurement.Artifacts {
 		pcr := measurement.Artifacts[i].Index
@@ -355,6 +356,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 		if !ok {
 			continue
 		}
+		log.Tracef("Aggregating PCR %v: %x", pcr, calculatedPcrs[pcr])
 		sum = append(sum, calculatedPcrs[pcr]...)
 	}
 	verPcr := sha256.Sum256(sum)
