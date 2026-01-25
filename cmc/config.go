@@ -17,7 +17,6 @@ package cmc
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"flag"
@@ -251,79 +250,7 @@ func GetConfig(c *Config) error {
 		c.CaKey = *caKey
 	}
 
-	// Convert all paths to absolute paths
-	pathsToAbs(c)
-
 	return nil
-}
-
-func pathsToAbs(c *Config) {
-	var err error
-	if c.Storage != "" {
-		c.Storage, err = filepath.Abs(c.Storage)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Storage, err)
-		}
-	}
-	if c.Cache != "" {
-		c.Cache, err = filepath.Abs(c.Cache)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
-		}
-	}
-	if c.PeerCache != "" {
-		c.PeerCache, err = filepath.Abs(c.PeerCache)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
-		}
-	}
-	for i := 0; i < len(c.MetadataLocation); i++ {
-		if strings.HasPrefix(c.MetadataLocation[i], "file://") {
-			f := strings.TrimPrefix(c.MetadataLocation[i], "file://")
-			f, err = filepath.Abs(f)
-			if err != nil {
-				log.Warnf("Failed to get absolute path for %v: %v", f, err)
-				continue
-			}
-			c.MetadataLocation[i] = "file://" + f
-		}
-	}
-	if c.CtrLog != "" {
-		c.CtrLog, err = filepath.Abs(c.CtrLog)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.CtrLog, err)
-		}
-	}
-	for i := 0; i < len(c.IdentityCas); i++ {
-		c.IdentityCas[i], err = filepath.Abs(c.IdentityCas[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.IdentityCas[i], err)
-		}
-	}
-	for i := 0; i < len(c.MetadataCas); i++ {
-		c.MetadataCas[i], err = filepath.Abs(c.MetadataCas[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.MetadataCas[i], err)
-		}
-	}
-	for i := 0; i < len(c.EstTlsCas); i++ {
-		c.EstTlsCas[i], err = filepath.Abs(c.EstTlsCas[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.EstTlsCas[i], err)
-		}
-	}
-	if c.ProvisionToken != "" {
-		c.ProvisionToken, err = filepath.Abs(c.ProvisionToken)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
-		}
-	}
-	if c.CaKey != "" {
-		c.CaKey, err = filepath.Abs(c.CaKey)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.CaKey, err)
-		}
-	}
 }
 
 func (c *Config) Print() {
