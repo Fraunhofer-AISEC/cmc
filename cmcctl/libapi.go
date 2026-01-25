@@ -22,7 +22,6 @@ import (
 	// local modules
 
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -42,7 +41,7 @@ func init() {
 func (a LibApi) generate(c *config) error {
 
 	if a.cmc == nil {
-		cmc, err := initialize(c)
+		cmc, err := cmc.NewCmc(&c.Config)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -89,7 +88,7 @@ func (a LibApi) generate(c *config) error {
 
 func (a LibApi) verify(c *config) error {
 	if a.cmc == nil {
-		cmc, err := initialize(c)
+		cmc, err := cmc.NewCmc(&c.Config)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -122,7 +121,7 @@ func (a LibApi) verify(c *config) error {
 func (a LibApi) updateCerts(c *config) error {
 
 	if a.cmc == nil {
-		cmc, err := initialize(c)
+		cmc, err := cmc.NewCmc(&c.Config)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -141,7 +140,7 @@ func (a LibApi) updateCerts(c *config) error {
 func (a LibApi) updateMetadata(c *config) error {
 
 	if a.cmc == nil {
-		cmc, err := initialize(c)
+		cmc, err := cmc.NewCmc(&c.Config)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -157,35 +156,6 @@ func (a LibApi) updateMetadata(c *config) error {
 	return nil
 }
 
-func initialize(c *config) (*cmc.Cmc, error) {
-
-	if len(c.Addr) == 0 {
-		return nil, errors.New("cannot initialize CMC. No addresses configured")
-	}
-
-	cmcConf := &cmc.Config{
-		CmcAddr:          c.CmcAddr,
-		ProvisionAddr:    c.ProvisionAddr,
-		MetadataLocation: c.MetadataLocation,
-		Drivers:          c.Drivers,
-		Ima:              c.Ima,
-		ImaPcr:           c.ImaPcr,
-		KeyConfig:        c.KeyConfig,
-		Api:              "libapi",
-		PolicyEngine:     c.PolicyEngine,
-		Storage:          c.Storage,
-		Cache:            c.Cache,
-		PeerCache:        c.PeerCache,
-		MeasurementLog:   c.MeasurementLog,
-		Ctr:              c.Ctr,
-		CtrDriver:        c.CtrDriver,
-		CtrPcr:           c.CtrPcr,
-		CtrLog:           c.CtrLog,
-	}
-
-	return cmc.NewCmc(cmcConf)
-}
-
 func getLibApiCmcObj(c *config) *cmc.Cmc {
 	if !strings.EqualFold(c.Api, "libapi") {
 		return nil
@@ -197,7 +167,7 @@ func getLibApiCmcObj(c *config) *cmc.Cmc {
 	}
 
 	if api.cmc == nil {
-		cmc, err := initialize(c)
+		cmc, err := cmc.NewCmc(&c.Config)
 		if err != nil {
 			log.Fatalf("failed to initialize CMC: %v", err)
 		}
