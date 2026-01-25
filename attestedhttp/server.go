@@ -30,14 +30,14 @@ type Server struct {
 	*http.Server
 
 	// Additional aTLS parameters
-	Attest        atls.AttestSelect
-	MutualTls     bool
-	CmcAddr       string
-	CmcApi        string
-	ApiSerializer ar.Serializer
-	Cmc           *cmc.Cmc
-	CmcPolicies   []byte
-	ResultCb      func(result *ar.VerificationResult)
+	Attest          atls.AttestSelect
+	MutualTls       bool
+	CmcAddr         string
+	CmcApi          string
+	ApiSerializer   ar.Serializer
+	LibApiCmcConfig *cmc.Config
+	CmcPolicies     []byte
+	ResultCb        func(result *ar.VerificationResult)
 }
 
 func (s *Server) ListenAndServe() error {
@@ -55,7 +55,7 @@ func (s *Server) ListenAndServe() error {
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
 		atls.WithResultCb(s.ResultCb),
-		atls.WithLibApiCmc(s.Cmc))
+		atls.WithLibApiCmcConfig(s.LibApiCmcConfig))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
