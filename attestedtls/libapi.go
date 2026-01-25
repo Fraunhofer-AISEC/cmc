@@ -32,7 +32,9 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-type LibApi struct{}
+type LibApi struct {
+	cmc *cmc.Cmc
+}
 
 func init() {
 	CmcApis["libapi"] = LibApi{}
@@ -41,17 +43,25 @@ func init() {
 // Obtains attestation report from CMCd
 func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
-	if cc == nil || cc.Cmc == nil {
+	if cc == nil {
 		return nil, nil, nil, errors.New("internal error: cmc is nil")
 	}
 
-	if len(cc.Cmc.Drivers) == 0 {
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
+	}
+
+	if len(a.cmc.Drivers) == 0 {
 		return nil, nil, nil, errors.New("no drivers configured")
 	}
 
 	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(chbindings))
 
-	report, metadata, cacheMisses, err := cmc.Generate(chbindings, cached, cc.Cmc)
+	report, metadata, cacheMisses, err := cmc.Generate(chbindings, cached, a.cmc)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
@@ -74,8 +84,16 @@ func (a LibApi) verifyAR(
 	metadata map[string][]byte,
 ) error {
 
-	if cc == nil || cc.Cmc == nil {
+	if cc == nil {
 		return errors.New("internal error: cmc is nil")
+	}
+
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		if err != nil {
+			return fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
 	}
 
 	req := &api.VerificationRequest{
@@ -89,7 +107,7 @@ func (a LibApi) verifyAR(
 
 	log.Debug("Verifier: verifying attestation report")
 	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
-		req.Peer, req.CacheMisses, req.Metadata, cc.Cmc)
+		req.Peer, req.CacheMisses, req.Metadata, a.cmc)
 	if err != nil {
 		return fmt.Errorf("failed to verify: %w", err)
 	}
@@ -113,14 +131,22 @@ func (a LibApi) verifyAR(
 
 func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
-	if cc == nil || cc.Cmc == nil {
+	if cc == nil {
 		return nil, errors.New("internal error: cmc is nil")
 	}
 
-	if len(cc.Cmc.Drivers) == 0 {
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
+	}
+
+	if len(a.cmc.Drivers) == 0 {
 		return nil, errors.New("no drivers configured")
 	}
-	d := cc.Cmc.Drivers[0]
+	d := a.cmc.Drivers[0]
 
 	// Get key handle from (hardware) interface
 	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
@@ -140,14 +166,22 @@ func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerO
 
 func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
-	if cc == nil || cc.Cmc == nil {
+	if cc == nil {
 		return nil, errors.New("internal error: cmc is nil")
 	}
 
-	if len(cc.Cmc.Drivers) == 0 {
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
+	}
+
+	if len(a.cmc.Drivers) == 0 {
 		return nil, errors.New("no drivers configured")
 	}
-	d := cc.Cmc.Drivers[0]
+	d := a.cmc.Drivers[0]
 
 	certChain, err := d.GetCertChain(ar.IK)
 	if err != nil {
@@ -162,13 +196,21 @@ func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 // Fetches the peer cache from the cmcd
 func (a LibApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error) {
 
-	if cc == nil || cc.Cmc == nil {
+	if cc == nil {
 		return nil, errors.New("internal error: cmc is nil")
+	}
+
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
 	}
 
 	log.Debugf("Fetching peer cache for peer: %v", fingerprint)
 
-	c, ok := cc.Cmc.CachedPeerMetadata[fingerprint]
+	c, ok := a.cmc.CachedPeerMetadata[fingerprint]
 	if !ok {
 		log.Tracef("No data cached for peer %v", fingerprint)
 		return nil, nil

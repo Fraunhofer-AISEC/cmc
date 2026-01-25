@@ -57,15 +57,15 @@ type Transport struct {
 	// as we enforce aTLS as the underlying transport protocol
 
 	// Additional aTLS parameters
-	Attest        atls.AttestSelect
-	MutualTls     bool
-	CmcAddr       string
-	CmcApi        string
-	ApiSerializer ar.Serializer
-	Cmc           *cmc.Cmc
-	CmcPolicies   []byte
-	ReadTimeout   time.Duration
-	ResultCb      func(result *ar.VerificationResult)
+	Attest          atls.AttestSelect
+	MutualTls       bool
+	CmcAddr         string
+	CmcApi          string
+	ApiSerializer   ar.Serializer
+	LibApiCmcConfig *cmc.Config
+	CmcPolicies     []byte
+	ReadTimeout     time.Duration
+	ResultCb        func(result *ar.VerificationResult)
 }
 
 // Wrapper for net/http Client
@@ -191,7 +191,7 @@ func prepareClient(c *Client) error {
 				conn, err := atls.Dial("tcp", addr, c.Transport.TLSClientConfig,
 					atls.WithApiSerializer(c.Transport.ApiSerializer),
 					atls.WithAttest(c.Transport.Attest),
-					atls.WithLibApiCmc(c.Transport.Cmc),
+					atls.WithLibApiCmcConfig(c.Transport.LibApiCmcConfig),
 					atls.WithCmcAddr(c.Transport.CmcAddr),
 					atls.WithCmcApi(c.Transport.CmcApi),
 					atls.WithCmcPolicies(c.Transport.CmcPolicies),

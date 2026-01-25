@@ -47,8 +47,7 @@ const (
 	timeoutSec          = 10
 )
 
-// Struct that holds information on cmc address and port
-// to be used by Listener and DialConfig
+// CmcConfig holds the relevant parameters to interact with the cmcd
 type CmcConfig struct {
 	CmcAddr       string
 	CmcApi        CmcApi
@@ -58,7 +57,7 @@ type CmcConfig struct {
 	Mtls          bool
 	Attest        AttestSelect
 	ResultCb      func(result *ar.VerificationResult)
-	Cmc           *cmc.Cmc
+	LibApiConfig  *cmc.Config
 }
 
 type CmcApi interface {
@@ -164,9 +163,9 @@ func WithResultCb(cb func(result *ar.VerificationResult)) ConnectionOption[CmcCo
 
 // WithLibApiCmc takes a CMC object. This is only required for the Lib API, where
 // the CMC is integrated directly into binary (instead of using the cmcd)
-func WithLibApiCmc(cmc *cmc.Cmc) ConnectionOption[CmcConfig] {
+func WithLibApiCmcConfig(config *cmc.Config) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) error {
-		c.Cmc = cmc
+		c.LibApiConfig = config
 		return nil
 	}
 }

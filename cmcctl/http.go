@@ -68,7 +68,7 @@ func request(c *config) error {
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(c.Api),
 			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithLibApiCmc(getLibApiCmcObj(c)))
+			atls.WithLibApiCmcConfig(&c.Config))
 		if err != nil {
 			return fmt.Errorf("failed to get TLS Certificate: %v", err)
 		}
@@ -93,13 +93,13 @@ func request(c *config) error {
 		IdleConnTimeout: 60 * time.Second,
 		TLSClientConfig: tlsConfig,
 
-		Attest:        c.attest,
-		MutualTls:     c.Mtls,
-		CmcAddr:       c.CmcAddr,
-		CmcApi:        c.Api,
-		ApiSerializer: c.apiSerializer,
-		Cmc:           getLibApiCmcObj(c),
-		CmcPolicies:   c.policies,
+		Attest:          c.attest,
+		MutualTls:       c.Mtls,
+		CmcAddr:         c.CmcAddr,
+		CmcApi:          c.Api,
+		ApiSerializer:   c.apiSerializer,
+		LibApiCmcConfig: &c.Config,
+		CmcPolicies:     c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
@@ -174,7 +174,7 @@ func serve(c *config) error {
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(c.Api),
 		atls.WithApiSerializer(c.apiSerializer),
-		atls.WithLibApiCmc(getLibApiCmcObj(c)))
+		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return fmt.Errorf("failed to get TLS Certificate: %v", err)
 	}
@@ -206,13 +206,13 @@ func serve(c *config) error {
 			Addr:      c.Addr,
 			TLSConfig: tlsConfig,
 		},
-		Attest:        c.attest,
-		MutualTls:     c.Mtls,
-		CmcAddr:       c.CmcAddr,
-		CmcApi:        c.Api,
-		ApiSerializer: c.apiSerializer,
-		Cmc:           getLibApiCmcObj(c),
-		CmcPolicies:   c.policies,
+		Attest:          c.attest,
+		MutualTls:       c.Mtls,
+		CmcAddr:         c.CmcAddr,
+		CmcApi:          c.Api,
+		ApiSerializer:   c.apiSerializer,
+		LibApiCmcConfig: &c.Config,
+		CmcPolicies:     c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified

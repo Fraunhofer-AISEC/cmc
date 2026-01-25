@@ -23,7 +23,6 @@ import (
 
 	"crypto/rand"
 	"fmt"
-	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
@@ -154,25 +153,4 @@ func (a LibApi) updateMetadata(c *config) error {
 	}
 
 	return nil
-}
-
-func getLibApiCmcObj(c *config) *cmc.Cmc {
-	if !strings.EqualFold(c.Api, "libapi") {
-		return nil
-	}
-
-	api, ok := apis["libapi"].(LibApi)
-	if !ok {
-		log.Fatalf("internal error: failed to retrieve libapi")
-	}
-
-	if api.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Config)
-		if err != nil {
-			log.Fatalf("failed to initialize CMC: %v", err)
-		}
-		api.cmc = cmc
-	}
-
-	return api.cmc
 }

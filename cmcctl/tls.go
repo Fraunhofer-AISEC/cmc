@@ -49,7 +49,7 @@ func dial(c *config) error {
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(c.Api),
 			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithLibApiCmc(getLibApiCmcObj(c)))
+			atls.WithLibApiCmcConfig(&c.Config))
 		if err != nil {
 			return fmt.Errorf("failed to get TLS Certificate: %w", err)
 		}
@@ -85,7 +85,7 @@ func dial(c *config) error {
 				go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
 			}
 		}),
-		atls.WithLibApiCmc(getLibApiCmcObj(c)))
+		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
@@ -128,7 +128,7 @@ func listen(c *config) error {
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(c.Api),
 		atls.WithApiSerializer(c.apiSerializer),
-		atls.WithLibApiCmc(getLibApiCmcObj(c)))
+		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return fmt.Errorf("failed to get TLS Certificate: %w", err)
 	}
@@ -167,7 +167,7 @@ func listen(c *config) error {
 				go pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, result)
 			}
 		}),
-		atls.WithLibApiCmc(getLibApiCmcObj(c)))
+		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return fmt.Errorf("failed to listen for connections: %w", err)
 	}
