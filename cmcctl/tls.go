@@ -27,14 +27,13 @@ import (
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging exemplary messages with it
-func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
+func dial(c *config) error {
 	var tlsConf *tls.Config
 
 	// Add trusted server root CAs
@@ -48,9 +47,9 @@ func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 		var cert tls.Certificate
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(api),
+			atls.WithCmcApi(c.Api),
 			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithCmc(cmc))
+			atls.WithLibApiCmc(getLibApiCmcObj(c)))
 		if err != nil {
 			return fmt.Errorf("failed to get TLS Certificate: %w", err)
 		}
@@ -72,7 +71,7 @@ func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(api),
+		atls.WithCmcApi(c.Api),
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
@@ -86,7 +85,7 @@ func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 				go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
 			}
 		}),
-		atls.WithCmc(cmc))
+		atls.WithLibApiCmc(getLibApiCmcObj(c)))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
@@ -116,7 +115,7 @@ func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 	return nil
 }
 
-func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
+func listen(c *config) error {
 
 	// Add trusted client root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -127,9 +126,9 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 	// Load certificate
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcApi(api),
+		atls.WithCmcApi(c.Api),
 		atls.WithApiSerializer(c.apiSerializer),
-		atls.WithCmc(cmc))
+		atls.WithLibApiCmc(getLibApiCmcObj(c)))
 	if err != nil {
 		return fmt.Errorf("failed to get TLS Certificate: %w", err)
 	}
@@ -157,7 +156,7 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(api),
+		atls.WithCmcApi(c.Api),
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
@@ -168,7 +167,7 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 				go pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, result)
 			}
 		}),
-		atls.WithCmc(cmc))
+		atls.WithLibApiCmc(getLibApiCmcObj(c)))
 	if err != nil {
 		return fmt.Errorf("failed to listen for connections: %w", err)
 	}

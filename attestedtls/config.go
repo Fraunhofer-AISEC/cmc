@@ -24,15 +24,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
-type CmcApiSelect uint32
-
-const (
-	CmcApi_GRPC   CmcApiSelect = 0
-	CmcApi_COAP   CmcApiSelect = 1
-	CmcApi_Socket CmcApiSelect = 2
-	CmcApi_Lib    CmcApiSelect = 3
-)
-
 type AttestSelect uint32
 
 const (
@@ -51,7 +42,7 @@ const (
 
 const (
 	cmcAddrDefault      = "127.0.0.1:9955"
-	cmcApiSelectDefault = CmcApi_GRPC
+	cmcApiSelectDefault = "grpc"
 	attestDefault       = Attest_Mutual
 	timeoutSec          = 10
 )
@@ -78,7 +69,7 @@ type CmcApi interface {
 	fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error)
 }
 
-var CmcApis = map[CmcApiSelect]CmcApi{}
+var CmcApis = map[string]CmcApi{}
 
 type ConnectionOption[T any] func(*T)
 
@@ -119,7 +110,7 @@ func WithCmcAddr(address string) ConnectionOption[CmcConfig] {
 
 // WithCmcApi specifies the API to be used to connect to the cmcd
 // If not specified, default is grpc
-func WithCmcApi(api CmcApiSelect) ConnectionOption[CmcConfig] {
+func WithCmcApi(api string) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
 		c.CmcApi = CmcApis[api]
 	}
@@ -166,9 +157,9 @@ func WithResultCb(cb func(result *ar.VerificationResult)) ConnectionOption[CmcCo
 	}
 }
 
-// WithCmc takes a CMC object. This is only required for the Lib API, where
+// WithLibApiCmc takes a CMC object. This is only required for the Lib API, where
 // the CMC is integrated directly into binary (instead of using the cmcd)
-func WithCmc(cmc *cmc.Cmc) ConnectionOption[CmcConfig] {
+func WithLibApiCmc(cmc *cmc.Cmc) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) {
 		c.Cmc = cmc
 	}

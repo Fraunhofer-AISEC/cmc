@@ -37,8 +37,7 @@ import (
 type CoapApi struct{}
 
 func init() {
-	log.Trace("Adding CoAP API to APIs")
-	CmcApis[CmcApi_COAP] = CoapApi{}
+	CmcApis["coap"] = CoapApi{}
 }
 
 // Obtains attestation report from cmcd

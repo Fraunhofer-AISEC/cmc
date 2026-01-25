@@ -31,7 +31,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ahttp "github.com/Fraunhofer-AISEC/cmc/attestedhttp"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
@@ -52,7 +51,7 @@ const (
 )
 
 // Creates an attested HTTPS connection and performs the specified requests
-func request(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func request(c *config) {
 
 	// Add trusted server root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -67,9 +66,9 @@ func request(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	if c.Mtls {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(api),
+			atls.WithCmcApi(c.Api),
 			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithCmc(cmc))
+			atls.WithLibApiCmc(getLibApiCmcObj(c)))
 		if err != nil {
 			log.Fatalf("failed to get TLS Certificate: %v", err)
 		}
@@ -97,9 +96,9 @@ func request(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Attest:        c.attest,
 		MutualTls:     c.Mtls,
 		CmcAddr:       c.CmcAddr,
-		CmcApi:        api,
+		CmcApi:        c.Api,
 		ApiSerializer: c.apiSerializer,
-		Cmc:           cmc,
+		Cmc:           getLibApiCmcObj(c),
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
@@ -161,7 +160,7 @@ func request(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	}
 }
 
-func serve(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func serve(c *config) {
 
 	// Add trusted client root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -172,9 +171,9 @@ func serve(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	// Load certificate from CMC
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcApi(api),
+		atls.WithCmcApi(c.Api),
 		atls.WithApiSerializer(c.apiSerializer),
-		atls.WithCmc(cmc))
+		atls.WithLibApiCmc(getLibApiCmcObj(c)))
 	if err != nil {
 		log.Fatalf("failed to get TLS Certificate: %v", err)
 	}
@@ -209,9 +208,9 @@ func serve(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		Attest:        c.attest,
 		MutualTls:     c.Mtls,
 		CmcAddr:       c.CmcAddr,
-		CmcApi:        api,
+		CmcApi:        c.Api,
 		ApiSerializer: c.apiSerializer,
-		Cmc:           cmc,
+		Cmc:           getLibApiCmcObj(c),
 		CmcPolicies:   c.policies,
 		ResultCb: func(result *ar.VerificationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {

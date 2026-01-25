@@ -28,7 +28,6 @@ import (
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
-	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 )
 
 type SocketApi struct{}
@@ -119,22 +118,6 @@ func (a SocketApi) verify(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
-}
-
-func (a SocketApi) dial(c *config) {
-	dial(c, attestedtls.CmcApi_Socket, nil)
-}
-
-func (a SocketApi) listen(c *config) {
-	listen(c, attestedtls.CmcApi_Socket, nil)
-}
-
-func (a SocketApi) request(c *config) {
-	request(c, attestedtls.CmcApi_Socket, nil)
-}
-
-func (a SocketApi) serve(c *config) {
-	serve(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) updateCerts(c *config) {

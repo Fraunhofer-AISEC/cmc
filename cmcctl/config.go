@@ -57,17 +57,6 @@ var (
 	log = logrus.WithField("service", "cmcctl")
 )
 
-type Api interface {
-	generate(c *config)
-	verify(c *config)
-	dial(c *config)
-	listen(c *config)
-	request(c *config)
-	serve(c *config)
-	updateMetadata(c *config)
-	updateCerts(c *config)
-}
-
 type config struct {
 	// Generic config
 	Addr             string   `json:"addr"`

@@ -31,7 +31,6 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -131,22 +130,6 @@ func (a CoapApi) verify(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
-}
-
-func (a CoapApi) dial(c *config) {
-	dial(c, attestedtls.CmcApi_COAP, nil)
-}
-
-func (a CoapApi) listen(c *config) {
-	listen(c, attestedtls.CmcApi_COAP, nil)
-}
-
-func (a CoapApi) request(c *config) {
-	request(c, attestedtls.CmcApi_COAP, nil)
-}
-
-func (a CoapApi) serve(c *config) {
-	serve(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) updateCerts(c *config) {
