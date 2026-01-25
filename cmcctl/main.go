@@ -24,17 +24,17 @@ import (
 
 var (
 	cmds = map[string]func(*config){
-		"generate":        generate,
-		"verify":          verify,
-		"measure":         measure,
-		"dial":            dial,
-		"listen":          listen,
-		"request":         request,
-		"serve":           serve,
-		"token":           token,
-		"provision":       provision,
-		"update-certs":    updateCerts,
-		"update-metadata": updateMetadata,
+		"generate":        generateCmd,
+		"verify":          verifyCmd,
+		"measure":         measureCmd,
+		"dial":            dialCmd,
+		"listen":          listenCmd,
+		"request":         requestCmd,
+		"serve":           serveCmd,
+		"token":           tokenCmd,
+		"provision":       provisionCmd,
+		"update-certs":    updateCertsCmd,
+		"update-metadata": updateMetadataCmd,
 	}
 )
 

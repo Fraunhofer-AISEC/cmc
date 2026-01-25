@@ -178,19 +178,19 @@ func (a SocketApi) measure(c *config) {
 }
 
 func (a SocketApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_Socket, nil)
+	dial(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_Socket, nil)
+	listen(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) request(c *config) {
-	requestInternal(c, attestedtls.CmcApi_Socket, nil)
+	request(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) serve(c *config) {
-	serveInternal(c, attestedtls.CmcApi_Socket, nil)
+	serve(c, attestedtls.CmcApi_Socket, nil)
 }
 
 func (a SocketApi) updateCerts(c *config) {

@@ -194,7 +194,7 @@ func (a LibApi) dial(c *config) {
 		a.cmc = cmc
 	}
 
-	dialInternal(c, attestedtls.CmcApi_Lib, a.cmc)
+	dial(c, attestedtls.CmcApi_Lib, a.cmc)
 }
 
 func (a LibApi) listen(c *config) {
@@ -208,7 +208,7 @@ func (a LibApi) listen(c *config) {
 		a.cmc = cmc
 	}
 
-	listenInternal(c, attestedtls.CmcApi_Lib, a.cmc)
+	listen(c, attestedtls.CmcApi_Lib, a.cmc)
 }
 
 func (a LibApi) request(c *config) {
@@ -221,7 +221,7 @@ func (a LibApi) request(c *config) {
 		a.cmc = cmc
 	}
 
-	requestInternal(c, attestedtls.CmcApi_Lib, a.cmc)
+	request(c, attestedtls.CmcApi_Lib, a.cmc)
 }
 
 func (a LibApi) serve(c *config) {
@@ -234,7 +234,7 @@ func (a LibApi) serve(c *config) {
 		a.cmc = cmc
 	}
 
-	serveInternal(c, attestedtls.CmcApi_Lib, a.cmc)
+	serve(c, attestedtls.CmcApi_Lib, a.cmc)
 }
 
 func (a LibApi) updateCerts(c *config) {
