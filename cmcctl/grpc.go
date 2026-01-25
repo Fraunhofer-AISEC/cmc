@@ -20,9 +20,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -34,7 +32,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
-	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -151,70 +148,6 @@ func (a GrpcApi) verify(c *config) {
 	}
 
 	log.Debug("Finished verify")
-}
-
-func (a GrpcApi) measure(c *config) {
-
-	log.Infof("Sending grpc request type 'Measure' to %v", c.CmcAddr)
-
-	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Failed to connect to cmcd: %v", err)
-	}
-	defer conn.Close()
-	client := grpcapi.NewCMCServiceClient(conn)
-
-	ctrConfig, err := os.ReadFile(c.CtrConfig)
-	if err != nil {
-		log.Fatalf("Failed to read container config: %v", err)
-	}
-
-	configHash, _, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)
-	if err != nil {
-		log.Fatalf("Failed to measure config: %v", err)
-	}
-
-	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
-	if err != nil {
-		log.Fatalf("Failed to measure rootfs: %v", err)
-	}
-
-	// Create template hash
-	tbh := []byte(configHash)
-	tbh = append(tbh, rootfsHash...)
-	hasher := sha256.New()
-	hasher.Write(tbh)
-	templateHash := hasher.Sum(nil)
-
-	req := &grpcapi.MeasureRequest{
-		Version: api.GetVersion(),
-		MeasureEvent: &grpcapi.MeasureEvent{
-			Sha256:    templateHash,
-			EventName: c.CtrName,
-			CtrData: &grpcapi.CtrData{
-				ConfigSha256: configHash,
-				RootfsSha256: rootfsHash,
-			},
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
-	defer cancel()
-	response, err := client.Measure(ctx, req)
-	if err != nil {
-		log.Fatalf("GRPC Measure Call failed: %v", err)
-	}
-
-	if response.Version != api.GetVersion() {
-		log.Fatalf("API version mismatch. Expected MeasureResponse version %v, got %v",
-			api.GetVersion(), response.Version)
-	}
-
-	if !response.Success {
-		log.Warn("Failed to record measurement")
-	}
-
-	log.Debug("Finished measure")
 }
 
 func (a GrpcApi) dial(c *config) {

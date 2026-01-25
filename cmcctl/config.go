@@ -60,7 +60,6 @@ var (
 type Api interface {
 	generate(c *config)
 	verify(c *config)
-	measure(c *config)
 	dial(c *config)
 	listen(c *config)
 	request(c *config)
@@ -89,10 +88,6 @@ type config struct {
 	TokenStore       string   `json:"tokenStore"`
 	PublishTokenFile string   `json:"publishToken"`
 	cmc.Config
-	// Only to test cmcd measure API
-	CtrName   string `json:"ctrName"`
-	CtrRootfs string `json:"ctrRootfs"`
-	CtrConfig string `json:"ctrConfig"`
 
 	identityCas   []*x509.Certificate
 	policies      []byte
@@ -123,10 +118,6 @@ const (
 	logFileFlag       = "logfile"
 	tokenStoreFlag    = "tokenstore"
 	publishTokenFlag  = "publishtoken"
-	// Only to test cmcd measure API
-	ctrNameFlag   = "ctrname"
-	ctrRootfsFlag = "ctrrootfs"
-	ctrConfigFlag = "ctrconfig"
 )
 
 var (
@@ -151,10 +142,6 @@ var (
 	logFile      = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	tokenStore   = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
 	publishtoken = flag.String(publishTokenFlag, "", "Path to token for backend authorization")
-	//  Only to test cmcd measure API
-	ctrName   = flag.String(ctrNameFlag, "", "Specifies name of container to be measured")
-	ctrRootfs = flag.String(ctrRootfsFlag, "", "Specifies rootfs path of the container to be measured")
-	ctrConfig = flag.String(ctrConfigFlag, "", "Specifies config path of the container to be measured")
 )
 
 func getConfig(cmd string) (*config, error) {
@@ -245,16 +232,6 @@ func getConfig(cmd string) (*config, error) {
 	}
 	if internal.FlagPassed(publishTokenFlag) {
 		c.PublishTokenFile = *publishtoken
-	}
-	//  Only to test cmcd measure API
-	if internal.FlagPassed(ctrNameFlag) {
-		c.CtrName = *ctrName
-	}
-	if internal.FlagPassed(ctrRootfsFlag) {
-		c.CtrRootfs = *ctrRootfs
-	}
-	if internal.FlagPassed(ctrConfigFlag) {
-		c.CtrConfig = *ctrConfig
 	}
 
 	// Configure the logger

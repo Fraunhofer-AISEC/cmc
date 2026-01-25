@@ -26,7 +26,6 @@ var (
 	cmds = map[string]func(*config){
 		"generate":        generateCmd,
 		"verify":          verifyCmd,
-		"measure":         measureCmd,
 		"dial":            dialCmd,
 		"listen":          listenCmd,
 		"request":         requestCmd,
@@ -49,7 +48,6 @@ func init() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  request\tPerform an attested HTTPS request\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  serve\t\tEstablish an attested HTTPS server\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  token\t\tRequest a bootstrap token for EST certificate requests\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  measure\tRecord measurements\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  provision\tRetrieve provisioning data for CVMs\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  update-certs\tTriggers updating the CMC AK and IK certificates\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  update-metadata\tTriggers updating the CMC metadata\n")

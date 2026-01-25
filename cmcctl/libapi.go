@@ -22,15 +22,11 @@ import (
 	// local modules
 
 	"crypto/rand"
-	"crypto/sha256"
 	"errors"
-	"os"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -120,68 +116,6 @@ func (a LibApi) verify(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
-}
-
-func (a LibApi) measure(c *config) {
-	if a.cmc == nil {
-		cmc, err := initialize(c)
-		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
-		}
-		a.cmc = cmc
-	}
-
-	if c.CtrConfig == "" {
-		log.Fatalf("Mode measure requires OCI runtime config to be specified")
-	}
-	if c.CtrRootfs == "" {
-		log.Fatalf("Mode measure requires container rootfs to be specified")
-	}
-
-	ctrConfig, err := os.ReadFile(c.CtrConfig)
-	if err != nil {
-		log.Fatalf("Failed to read oci runtime config: %v", err)
-	}
-
-	configHash, _, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)
-	if err != nil {
-		log.Fatalf("Failed to measure config: %v", err)
-	}
-
-	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
-	if err != nil {
-		log.Fatalf("Failed to measure rootfs: %v", err)
-	}
-
-	// Create template hash
-	tbh := []byte(configHash)
-	tbh = append(tbh, rootfsHash...)
-	hasher := sha256.New()
-	hasher.Write(tbh)
-	templateHash := hasher.Sum(nil)
-
-	event := &ar.MeasureEvent{
-		Sha256:    templateHash,
-		EventName: c.CtrName,
-		CtrData: &ar.CtrData{
-			ConfigSha256: configHash,
-			RootfsSha256: rootfsHash,
-		},
-	}
-
-	err = m.Measure(event,
-		&m.MeasureConfig{
-			Serializer: a.cmc.Serializer,
-			Pcr:        a.cmc.CtrPcr,
-			LogFile:    a.cmc.CtrLog,
-			Driver:     a.cmc.CtrDriver,
-		})
-	if err != nil {
-		log.Fatalf("Failed to record measurement: %v", err)
-	}
-
-	log.Debug("Measure: Recorded measurement")
 }
 
 func (a LibApi) dial(c *config) {
