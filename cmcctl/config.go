@@ -134,9 +134,10 @@ var (
 	publish       = flag.String(publishFlag, "", "Optional HTTP address to publish attestation results to")
 	apiSerializer = flag.String(apiSerializerFlag, "",
 		"Serializer to be used for internal socket and CoAP API and aTLS (JSON or CBOR)")
-	headers  = flag.String(headerFlag, "", "Set header for HTTP POST requests")
-	method   = flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
-	data     = flag.String(dataFlag, "", "Set HTTP body for POST and PUT requests")
+	headers = flag.String(headerFlag, "", "Set header for HTTP POST requests")
+	method  = flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
+	data    = flag.String(dataFlag, "",
+		"Set aTLS payload for command dial or HTTP body for POST and PUT requests for command request")
 	logLevel = flag.String(logLevelFlag, "",
 		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
 	logFile      = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
@@ -433,7 +434,7 @@ func (c *config) Print() {
 	log.Debugf("\tAPI Serializer           : %v", c.ApiSerializer)
 	log.Debugf("\tPublish                  : %v", c.Publish)
 	log.Debugf("\tApi                      : %v", c.Api)
-	log.Debugf("\tHTTP Data                : %v", c.Data)
+	log.Debugf("\tTLS / HTTP Payload       : %v", c.Data)
 	log.Debugf("\tHTTP Header              : %v", c.Header)
 	log.Debugf("\tHTTP Method              : %v", c.Method)
 	log.Debugf("\tToken Store              : %v", c.TokenStore)
