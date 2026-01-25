@@ -16,10 +16,10 @@
 package main
 
 import (
-	"bufio"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -93,21 +93,25 @@ func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
 
-	// Testing: write a hello string
-	msg := "hello\n"
-	log.Infof("Sending to peer: %v", msg)
-	_, err = conn.Write([]byte(msg))
+	if len(c.Data) == 0 {
+		log.Info("No data to send via atls configured. Finished")
+		return nil
+	}
+
+	// Send configured data
+	log.Infof("Sending to peer: %q", c.Data)
+	_, err = conn.Write([]byte(c.Data))
 	if err != nil {
 		return fmt.Errorf("failed to write: %v", err)
 	}
 
-	// Testing: read the answer from the server and print
+	// Receive answer from server
 	buf := make([]byte, 100)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("failed to read. %v", err)
 	}
-	log.Infof("Received from peer: %v", string(buf[:n-1]))
+	log.Infof("Received from peer: %q", string(buf[:n]))
 
 	return nil
 }
@@ -188,18 +192,23 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 // Simply acts as an echo server and returns the received string
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	r := bufio.NewReader(conn)
+	buf := make([]byte, 4096)
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				log.Warnf("Read error: %v", err)
+			}
+			return
+		}
 
-	msg, err := r.ReadString('\n')
-	if err != nil {
-		log.Warnf("Failed to read: %v", err)
-		return
-	}
-	log.Infof("Received from peer: %v", msg)
+		data := buf[:n]
+		log.Infof("Received %q. Echoing...", string(data))
 
-	log.Infof("Echoing: %v", msg)
-	_, err = conn.Write([]byte(msg + "\n"))
-	if err != nil {
-		log.Errorf("Failed to write: %v", err)
+		_, err = conn.Write(data)
+		if err != nil {
+			log.Errorf("Write error: %v", err)
+			return
+		}
 	}
 }
