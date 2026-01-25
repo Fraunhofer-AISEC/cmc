@@ -16,8 +16,8 @@
 package main
 
 type Api interface {
-	generate(c *config)
-	verify(c *config)
-	updateMetadata(c *config)
-	updateCerts(c *config)
+	generate(c *config) error
+	verify(c *config) error
+	updateMetadata(c *config) error
+	updateCerts(c *config) error
 }

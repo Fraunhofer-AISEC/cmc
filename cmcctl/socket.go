@@ -36,11 +36,11 @@ func init() {
 	apis["socket"] = SocketApi{}
 }
 
-func (a SocketApi) generate(c *config) {
+func (a SocketApi) generate(c *config) error {
 
 	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	log.Infof("Sending socket request type 'Attest' to %v", c.CmcAddr)
@@ -48,14 +48,14 @@ func (a SocketApi) generate(c *config) {
 	// Establish connection
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		log.Fatalf("Error dialing: %v", err)
+		return fmt.Errorf("error dialing: %w", err)
 	}
 
 	// Generate random nonce
 	nonce := make([]byte, 8)
 	_, err = rand.Read(nonce)
 	if err != nil {
-		log.Fatalf("Failed to read random bytes: %v", err)
+		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
 	// Generate attestation request
@@ -67,37 +67,38 @@ func (a SocketApi) generate(c *config) {
 	// Marshal payload
 	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
-		log.Fatalf("failed to marshal payload: %v", err)
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
-		log.Fatalf("failed to send request: %v", err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read reply
 	payload, msgType, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return fmt.Errorf("failed to receive: %w", err)
 	}
 	checkError(msgType, payload, c.apiSerializer)
 
 	// Save the attestation response for the verifier
 	err = pub.SaveReport(c.ReportFile, c.NonceFile, payload, nonce)
 	if err != nil {
-		log.Fatalf("failed to save report: %v", err)
+		return fmt.Errorf("failed to save report: %w", err)
 	}
 
+	return nil
 }
 
-func (a SocketApi) verify(c *config) {
+func (a SocketApi) verify(c *config) error {
 
 	log.Infof("Sending socket request type 'Verify' to %v", c.CmcAddr)
 
 	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
 	if err != nil {
-		log.Fatalf("Failed to load report: %v", err)
+		return fmt.Errorf("failed to load report: %w", err)
 	}
 
 	req := &api.VerificationRequest{
@@ -111,20 +112,22 @@ func (a SocketApi) verify(c *config) {
 
 	resp, err := verifySocketRequest(c, req)
 	if err != nil {
-		log.Fatalf("Failed to verify: %v", err)
+		return fmt.Errorf("failed to verify: %w", err)
 	}
 
 	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, &resp.Result)
 	if err != nil {
-		log.Fatalf("Failed to save result: %v", err)
+		return fmt.Errorf("failed to save result: %w", err)
 	}
+
+	return nil
 }
 
-func (a SocketApi) updateCerts(c *config) {
+func (a SocketApi) updateCerts(c *config) error {
 
 	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	log.Infof("Sending socket request type 'UpdateCerts' to %v", c.CmcAddr)
@@ -132,7 +135,7 @@ func (a SocketApi) updateCerts(c *config) {
 	// Establish connection
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		log.Fatalf("Error dialing: %v", err)
+		return fmt.Errorf("error dialing: %w", err)
 	}
 
 	// Generate attestation request
@@ -143,19 +146,19 @@ func (a SocketApi) updateCerts(c *config) {
 	// Marshal payload
 	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
-		log.Fatalf("failed to marshal payload: %v", err)
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeUpdateCerts)
 	if err != nil {
-		log.Fatalf("failed to send request: %v", err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read reply
 	payload, msgType, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return fmt.Errorf("failed to receive: %w", err)
 	}
 	checkError(msgType, payload, c.apiSerializer)
 
@@ -163,23 +166,25 @@ func (a SocketApi) updateCerts(c *config) {
 	resp := new(api.UpdateCertsResponse)
 	err = c.apiSerializer.Unmarshal(payload, resp)
 	if err != nil {
-		log.Fatalf("failed to unmarshal response: %v", err)
+		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	// Check attestation response
 	if err := resp.CheckVersion(); err != nil {
-		log.Fatalf("Failed to update certs: %v", err)
+		return fmt.Errorf("failed to update certs: %w", err)
 	}
 	if !resp.Success {
-		log.Fatalf("UpdateCerts response returned success: %v", resp.Success)
+		return fmt.Errorf("update certs response returned success: %v", resp.Success)
 	}
+
+	return nil
 }
 
-func (a SocketApi) updateMetadata(c *config) {
+func (a SocketApi) updateMetadata(c *config) error {
 
 	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	log.Infof("Sending socket request type 'UpdateMetadata' to %v", c.CmcAddr)
@@ -187,7 +192,7 @@ func (a SocketApi) updateMetadata(c *config) {
 	// Establish connection
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		log.Fatalf("Error dialing: %v", err)
+		return fmt.Errorf("error dialing: %w", err)
 	}
 
 	// Generate attestation request
@@ -198,19 +203,19 @@ func (a SocketApi) updateMetadata(c *config) {
 	// Marshal payload
 	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
-		log.Fatalf("failed to marshal payload: %v", err)
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeUpdateMetadata)
 	if err != nil {
-		log.Fatalf("failed to send request: %v", err)
+		return fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read reply
 	payload, msgType, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return fmt.Errorf("failed to receive: %w", err)
 	}
 	checkError(msgType, payload, c.apiSerializer)
 
@@ -218,16 +223,18 @@ func (a SocketApi) updateMetadata(c *config) {
 	resp := new(api.UpdateMetadataResponse)
 	err = c.apiSerializer.Unmarshal(payload, resp)
 	if err != nil {
-		log.Fatalf("failed to unmarshal response: %v", err)
+		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
 	// Check attestation response
 	if err := resp.CheckVersion(); err != nil {
-		log.Fatalf("Failed to update metadata: %v", err)
+		return fmt.Errorf("failed to update metadata: %w", err)
 	}
 	if !resp.Success {
-		log.Fatalf("UpdateMetadata response returned success: %v", resp.Success)
+		return fmt.Errorf("update metadata response returned success: %v", resp.Success)
 	}
+
+	return nil
 }
 
 func verifySocketRequest(c *config, req *api.VerificationRequest,
@@ -235,31 +242,31 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 
 	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return nil, fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		return nil, fmt.Errorf("error dialing: %v", err)
+		return nil, fmt.Errorf("error dialing: %w", err)
 	}
 
 	// Marshal payload
 	payload, err := c.apiSerializer.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %v", err)
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeVerify)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
 	// Read reply
 	payload, msgType, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return nil, fmt.Errorf("failed to receive: %w", err)
 	}
 	checkError(msgType, payload, c.apiSerializer)
 
@@ -277,14 +284,15 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	return verifyResp, nil
 }
 
-func checkError(t uint32, payload []byte, s ar.Serializer) {
+func checkError(t uint32, payload []byte, s ar.Serializer) error {
 	if t == api.TypeError {
 		resp := new(api.SocketError)
 		err := s.Unmarshal(payload, resp)
 		if err != nil {
-			log.Fatal("failed to unmarshal error response")
+			return fmt.Errorf("failed to unmarshal error response: %w", err)
 		} else {
-			log.Fatalf("server responded with error: %v", resp.Msg)
+			return fmt.Errorf("server responded with error: %v", resp.Msg)
 		}
 	}
+	return nil
 }
