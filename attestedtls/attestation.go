@@ -52,7 +52,11 @@ type AtlsHandshakeComplete struct {
 
 var log = logrus.WithField("service", "atls")
 
-func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc CmcConfig, endpoint Endpoint) error {
+func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc *CmcConfig, endpoint Endpoint) error {
+
+	if cc == nil {
+		return fmt.Errorf("internal error: atls handshake start: cmc config object is nil")
+	}
 
 	var err error
 	var cache []string

@@ -28,8 +28,8 @@ import (
 // PrivateKey Wrapper Implementing crypto.Signer interface
 // Used to contact cmcd for signing operations
 type PrivateKey struct {
-	CmcConfig // embedded struct
-	pubKey    crypto.PublicKey
+	*CmcConfig // embedded struct
+	pubKey     crypto.PublicKey
 }
 
 // Implementation of Sign() in crypto.Signer iface

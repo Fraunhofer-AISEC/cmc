@@ -62,22 +62,22 @@ type CmcConfig struct {
 }
 
 type CmcApi interface {
-	obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error)
-	verifyAR(cc CmcConfig, report, nonce, policies []byte, peer string, cacheMisses []string, metadata map[string][]byte) error
-	fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
-	fetchCerts(cc CmcConfig) ([][]byte, error)
-	fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error)
+	obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error)
+	verifyAR(cc *CmcConfig, report, nonce, policies []byte, peer string, cacheMisses []string, metadata map[string][]byte) error
+	fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
+	fetchCerts(cc *CmcConfig) ([][]byte, error)
+	fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error)
 }
 
 var CmcApis = map[string]CmcApi{}
 
-type ConnectionOption[T any] func(*T)
+type ConnectionOption[T any] func(*T) error
 
 // NewCmcConfig creates a new CMC config based on default and specified values
-func NewCmcConfig(configs ...ConnectionOption[CmcConfig]) (CmcConfig, error) {
+func NewCmcConfig(opts ...ConnectionOption[CmcConfig]) (*CmcConfig, error) {
 
 	// Start with defaults
-	cc := CmcConfig{
+	cc := &CmcConfig{
 		CmcAddr:       cmcAddrDefault,
 		CmcApi:        CmcApis[cmcApiSelectDefault],
 		Attest:        attestDefault,
@@ -85,16 +85,11 @@ func NewCmcConfig(configs ...ConnectionOption[CmcConfig]) (CmcConfig, error) {
 	}
 
 	// Overwrite with specified configuration options
-	for _, c := range configs {
-		c(&cc)
-	}
-
-	// Check that selected API is implemented
-	if cc.CmcApi == nil {
-		return cc, fmt.Errorf("selected CMC API is not implemented")
-	}
-	if cc.ApiSerializer == nil {
-		return cc, fmt.Errorf("specified API serializer is nil")
+	for _, opt := range opts {
+		err := opt(cc)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply connection option: %w", err)
+		}
 	}
 
 	return cc, nil
@@ -103,65 +98,76 @@ func NewCmcConfig(configs ...ConnectionOption[CmcConfig]) (CmcConfig, error) {
 // WithCmcAddress sets the address with which to contact the CMC.
 // If not specified, default is "localhost"
 func WithCmcAddr(address string) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
 		c.CmcAddr = address
+		return nil
 	}
 }
 
 // WithCmcApi specifies the API to be used to connect to the cmcd
 // If not specified, default is grpc
 func WithCmcApi(api string) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
-		c.CmcApi = CmcApis[api]
+	return func(c *CmcConfig) error {
+		cmcApi, ok := CmcApis[api]
+		if !ok {
+			return fmt.Errorf("unsupported CMC API %q", api)
+		}
+		c.CmcApi = cmcApi
+		return nil
 	}
 }
 
 // WithCmcPolicies specifies optional custom policies the attestation report should
 // be verified against
 func WithCmcPolicies(policies []byte) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
 		c.Policies = policies
+		return nil
 	}
 }
 
 // WithApiSerializer specifies the serializer for internal requests
 func WithApiSerializer(apiSerializer ar.Serializer) ConnectionOption[CmcConfig] {
-	if apiSerializer == nil {
-		log.Fatalf("Cannot configure API serializer 'nil'")
-		return func(c *CmcConfig) {}
-	}
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
+		if apiSerializer == nil {
+			return fmt.Errorf("cannot configure api serializer nil")
+		}
 		c.ApiSerializer = apiSerializer
+		return nil
 	}
 }
 
 // WithMtls specifies whether to perform mutual TLS with mutual attestation
 // or server-side authentication and attestation only
 func WithMtls(mtls bool) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
 		c.Mtls = mtls
+		return nil
 	}
 }
 
 // WithAttest specifies whether to perform mutual, dialer only, or listener only attestation
 func WithAttest(attest AttestSelect) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
 		c.Attest = attest
+		return nil
 	}
 }
 
 // WithResultCb is a callback for further processing of attestation results
 func WithResultCb(cb func(result *ar.VerificationResult)) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
 		c.ResultCb = cb
+		return nil
 	}
 }
 
 // WithLibApiCmc takes a CMC object. This is only required for the Lib API, where
 // the CMC is integrated directly into binary (instead of using the cmcd)
 func WithLibApiCmc(cmc *cmc.Cmc) ConnectionOption[CmcConfig] {
-	return func(c *CmcConfig) {
+	return func(c *CmcConfig) error {
 		c.Cmc = cmc
+		return nil
 	}
 }
 

@@ -39,9 +39,9 @@ func init() {
 }
 
 // Obtains attestation report from CMCd
-func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
-	if cc.Cmc == nil {
+	if cc == nil || cc.Cmc == nil {
 		return nil, nil, nil, errors.New("internal error: cmc is nil")
 	}
 
@@ -67,14 +67,14 @@ func (a LibApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]by
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
 func (a LibApi) verifyAR(
-	cc CmcConfig,
+	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
 	metadata map[string][]byte,
 ) error {
 
-	if cc.Cmc == nil {
+	if cc == nil || cc.Cmc == nil {
 		return errors.New("internal error: cmc is nil")
 	}
 
@@ -111,9 +111,9 @@ func (a LibApi) verifyAR(
 	return nil
 }
 
-func (a LibApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
-	if cc.Cmc == nil {
+	if cc == nil || cc.Cmc == nil {
 		return nil, errors.New("internal error: cmc is nil")
 	}
 
@@ -138,9 +138,9 @@ func (a LibApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOp
 	return signature, nil
 }
 
-func (a LibApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
+func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
-	if cc.Cmc == nil {
+	if cc == nil || cc.Cmc == nil {
 		return nil, errors.New("internal error: cmc is nil")
 	}
 
@@ -160,9 +160,9 @@ func (a LibApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 }
 
 // Fetches the peer cache from the cmcd
-func (a LibApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
+func (a LibApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error) {
 
-	if cc.Cmc == nil {
+	if cc == nil || cc.Cmc == nil {
 		return nil, errors.New("internal error: cmc is nil")
 	}
 
