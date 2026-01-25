@@ -232,7 +232,7 @@ func getConfig(cmd string) (*config, error) {
 		}
 		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		logrus.SetOutput(file)
 	}
@@ -256,7 +256,7 @@ func getConfig(cmd string) (*config, error) {
 	// Get root CA certificate in PEM format if specified
 	if cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" {
 		if len(c.IdentityCas) == 0 {
-			log.Fatal("Path to read Report CAs must be specified either via config file or commandline")
+			return nil, fmt.Errorf("path to read Report CAs must be specified either via config file or commandline")
 		}
 
 		for _, ca := range c.IdentityCas {
@@ -274,10 +274,10 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	if (cmd == "cacerts" || cmd == "provision") && c.EstTlsCa == "" {
-		log.Fatal("Path to store CA must be specified either via config file or commandline")
+		return nil, fmt.Errorf("path to store CA must be specified either via config file or commandline")
 	}
 	if cmd == "provision" && c.ProvisionToken == "" {
-		log.Fatal("Path to store bootstrap token must be specified either via config file or commandline")
+		return nil, fmt.Errorf("path to store bootstrap token must be specified either via config file or commandline")
 	}
 
 	// Add optional policies if specified

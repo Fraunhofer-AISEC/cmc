@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	cmds = map[string]func(*config){
+	cmds = map[string]func(*config) error{
 		"generate":        generateCmd,
 		"verify":          verifyCmd,
 		"dial":            dialCmd,
@@ -62,22 +62,23 @@ func main() {
 	if err != nil {
 		flag.Usage()
 		log.Fatalf("%v", err)
-		return
 	}
 
 	c, err := getConfig(os.Args[1])
 	if err != nil {
 		flag.Usage()
 		log.Fatalf("Failed to get config: %v", err)
-		return
 	}
 
 	log.Infof("Running command %v", name)
 
-	cmd(c)
+	err = cmd(c)
+	if err != nil {
+		log.Errorf("Command %v failed: %v", name, err)
+	}
 }
 
-func getCommand() (func(*config), string, error) {
+func getCommand() (func(*config) error, string, error) {
 
 	if len(os.Args) < 2 {
 		return nil, "", fmt.Errorf("expected command")

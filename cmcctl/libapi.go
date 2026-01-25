@@ -23,6 +23,7 @@ import (
 
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -38,33 +39,31 @@ func init() {
 	apis["libapi"] = LibApi{}
 }
 
-func (a LibApi) generate(c *config) {
+func (a LibApi) generate(c *config) error {
 
 	if a.cmc == nil {
 		cmc, err := initialize(c)
 		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
+			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
 		a.cmc = cmc
 	}
 
 	if a.cmc.Metadata == nil {
-		log.Fatalf("Metadata not specified. Can work only as verifier")
+		return fmt.Errorf("metadata not specified. Can work only as verifier")
 	}
 
 	// Generate random nonce
 	nonce := make([]byte, 8)
 	_, err := rand.Read(nonce)
 	if err != nil {
-		log.Fatalf("Failed to read random bytes: %v", err)
+		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
 	// Generate attestation report
 	report, metadata, cacheMisses, err := cmc.Generate(nonce, nil, a.cmc)
 	if err != nil {
-		log.Errorf("Failed to generate attestation report: %v", err)
-		return
+		return fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
 	resp := &api.AttestationResponse{
@@ -76,22 +75,23 @@ func (a LibApi) generate(c *config) {
 	// Marshal the attestation response for saving it to the file system
 	data, err := c.apiSerializer.Marshal(resp)
 	if err != nil {
-		log.Fatalf("Failed to marshal attestation response: %v", err)
+		return fmt.Errorf("failed to marshal attestation response: %w", err)
 	}
 
 	// Save the attestation report for the verifier
 	err = pub.SaveReport(c.ReportFile, c.NonceFile, data, nonce)
 	if err != nil {
-		log.Fatalf("failed to save report: %v", err)
+		return fmt.Errorf("failed to save report: %w", err)
 	}
+
+	return nil
 }
 
-func (a LibApi) verify(c *config) {
+func (a LibApi) verify(c *config) error {
 	if a.cmc == nil {
 		cmc, err := initialize(c)
 		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
+			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
 		a.cmc = cmc
 	}
@@ -99,7 +99,7 @@ func (a LibApi) verify(c *config) {
 	// Read the attestation report and the nonce previously stored
 	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
 	if err != nil {
-		log.Fatalf("Failed to load report: %v", err)
+		return fmt.Errorf("failed to load report: %w", err)
 	}
 
 	// Verify the attestation report
@@ -108,23 +108,23 @@ func (a LibApi) verify(c *config) {
 		c.policies, "", nil,
 		report.Metadata, a.cmc)
 	if err != nil {
-		log.Errorf("Verifier: failed to verify: %v", err)
-		return
+		return fmt.Errorf("failed to verify: %v", err)
 	}
 
 	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, resp)
 	if err != nil {
-		log.Fatalf("Failed to save result: %v", err)
+		return fmt.Errorf("failed to save result: %w", err)
 	}
+
+	return nil
 }
 
-func (a LibApi) updateCerts(c *config) {
+func (a LibApi) updateCerts(c *config) error {
 
 	if a.cmc == nil {
 		cmc, err := initialize(c)
 		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
+			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
 		a.cmc = cmc
 	}
@@ -132,18 +132,18 @@ func (a LibApi) updateCerts(c *config) {
 	// Generate attestation report
 	err := cmc.UpdateCerts(a.cmc)
 	if err != nil {
-		log.Errorf("Failed to update certs: %v", err)
-		return
+		return fmt.Errorf("failed to update certs: %v", err)
 	}
+
+	return nil
 }
 
-func (a LibApi) updateMetadata(c *config) {
+func (a LibApi) updateMetadata(c *config) error {
 
 	if a.cmc == nil {
 		cmc, err := initialize(c)
 		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
+			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
 		a.cmc = cmc
 	}
@@ -151,9 +151,10 @@ func (a LibApi) updateMetadata(c *config) {
 	// Generate attestation report
 	err := cmc.UpdateMetadata(a.cmc)
 	if err != nil {
-		log.Errorf("Failed to update certs: %v", err)
-		return
+		return fmt.Errorf("failed to update certs: %v", err)
 	}
+
+	return nil
 }
 
 func initialize(c *config) (*cmc.Cmc, error) {

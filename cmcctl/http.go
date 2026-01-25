@@ -51,7 +51,7 @@ const (
 )
 
 // Creates an attested HTTPS connection and performs the specified requests
-func request(c *config) {
+func request(c *config) error {
 
 	// Add trusted server root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -70,7 +70,7 @@ func request(c *config) {
 			atls.WithApiSerializer(c.apiSerializer),
 			atls.WithLibApiCmc(getLibApiCmcObj(c)))
 		if err != nil {
-			log.Fatalf("failed to get TLS Certificate: %v", err)
+			return fmt.Errorf("failed to get TLS Certificate: %v", err)
 		}
 		// Create TLS config with root CA and own certificate for authentication
 		tlsConfig = &tls.Config{
@@ -124,7 +124,7 @@ func request(c *config) {
 	}
 	req, err := http.NewRequest(c.Method, c.Addr, body)
 	if err != nil {
-		log.Fatalf("failed to make new HTTP request: %v", err)
+		return fmt.Errorf("failed to make new HTTP request: %v", err)
 	}
 
 	// Set the user specified HTTP headers
@@ -132,7 +132,7 @@ func request(c *config) {
 	for _, h := range c.Header {
 		s := strings.SplitN(h, ":", 2)
 		if len(s) != 2 {
-			log.Fatalf("invalid header %v", h)
+			return fmt.Errorf("invalid header %v", h)
 		}
 		log.Tracef("Setting header '%v: %v'", s[0], s[1])
 		req.Header.Set(s[0], s[1])
@@ -141,8 +141,7 @@ func request(c *config) {
 	// Perform the actual, user specified request
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Warnf("HTTP %v failed: %v", c.Method, err)
-		return
+		return fmt.Errorf("HTTP %v failed: %v", c.Method, err)
 	}
 	defer resp.Body.Close()
 
@@ -158,9 +157,11 @@ func request(c *config) {
 		log.Infof("Received from server: '%v'", string(content))
 		log.Debugf("Client-side aHTTPS request completed")
 	}
+
+	return nil
 }
 
-func serve(c *config) {
+func serve(c *config) error {
 
 	// Add trusted client root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -175,7 +176,7 @@ func serve(c *config) {
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithLibApiCmc(getLibApiCmcObj(c)))
 	if err != nil {
-		log.Fatalf("failed to get TLS Certificate: %v", err)
+		return fmt.Errorf("failed to get TLS Certificate: %v", err)
 	}
 
 	var clientAuth tls.ClientAuthType
@@ -231,8 +232,10 @@ func serve(c *config) {
 	// to run the server
 	err = server.ListenAndServe()
 	if err != nil {
-		log.Warnf("Failed to serve HTTPS: %v", err)
+		return fmt.Errorf("failed to serve HTTPS: %v", err)
 	}
+
+	return nil
 }
 
 // Just an example HTTP handler

@@ -15,48 +15,42 @@
 
 package main
 
-func generateCmd(c *config) {
-	c.api.generate(c)
+func generateCmd(c *config) error {
+	return c.api.generate(c)
 }
 
-func verifyCmd(c *config) {
-	c.api.verify(c)
+func verifyCmd(c *config) error {
+	return c.api.verify(c)
 }
 
-func dialCmd(c *config) {
-	dial(c)
+func dialCmd(c *config) error {
+	return dial(c)
 }
 
-func listenCmd(c *config) {
-	listen(c)
+func listenCmd(c *config) error {
+	return listen(c)
 }
 
-func requestCmd(c *config) {
-	request(c)
+func requestCmd(c *config) error {
+	return request(c)
 }
 
-func serveCmd(c *config) {
-	serve(c)
+func serveCmd(c *config) error {
+	return serve(c)
 }
 
-func updateMetadataCmd(c *config) {
-	c.api.updateMetadata(c)
+func updateMetadataCmd(c *config) error {
+	return c.api.updateMetadata(c)
 }
 
-func updateCertsCmd(c *config) {
-	c.api.updateCerts(c)
+func updateCertsCmd(c *config) error {
+	return c.api.updateCerts(c)
 }
 
-func tokenCmd(c *config) {
-	err := createToken(c)
-	if err != nil {
-		log.Fatalf("Failed to get token: %v", err)
-	}
+func tokenCmd(c *config) error {
+	return createToken(c)
 }
 
-func provisionCmd(c *config) {
-	err := retrieveProvisioningData(c)
-	if err != nil {
-		log.Fatalf("Failed to get provisioning data: %v", err)
-	}
+func provisionCmd(c *config) error {
+	return retrieveProvisioningData(c)
 }

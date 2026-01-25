@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
@@ -40,7 +41,7 @@ func init() {
 	apis["grpc"] = GrpcApi{}
 }
 
-func (a GrpcApi) generate(c *config) {
+func (a GrpcApi) generate(c *config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -50,7 +51,7 @@ func (a GrpcApi) generate(c *config) {
 
 	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect to cmcd: %v", err)
+		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
 	defer conn.Close()
 	client := grpcapi.NewCMCServiceClient(conn)
@@ -59,7 +60,7 @@ func (a GrpcApi) generate(c *config) {
 	nonce := make([]byte, 8)
 	_, err = rand.Read(nonce)
 	if err != nil {
-		log.Fatalf("Failed to read random bytes: %v", err)
+		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
 	request := grpcapi.AttestationRequest{
@@ -68,11 +69,11 @@ func (a GrpcApi) generate(c *config) {
 	}
 	response, err := client.Attest(ctx, &request)
 	if err != nil {
-		log.Fatalf("GRPC Attest Call failed: %v", err)
+		return fmt.Errorf("grpc attest call failed: %w", err)
 	}
 
 	if response.Version != api.GetVersion() {
-		log.Fatalf("API version mismatch. Expected AttestationResponse version %v, got %v",
+		return fmt.Errorf("API version mismatch. Expected AttestationResponse version %v, got %v",
 			api.GetVersion(), response.Version)
 	}
 
@@ -84,18 +85,19 @@ func (a GrpcApi) generate(c *config) {
 	}
 	data, err := c.apiSerializer.Marshal(apiResp)
 	if err != nil {
-		log.Fatalf("Failed to marshal attestation response: %v", err)
+		return fmt.Errorf("failed to marshal attestation response: %w", err)
 	}
 
 	// Save the attestation report for the verifier
 	err = pub.SaveReport(c.ReportFile, c.NonceFile, data, nonce)
 	if err != nil {
-		log.Fatalf("failed to save report: %v", err)
+		return fmt.Errorf("failed to save report: %w", err)
 	}
 
+	return nil
 }
 
-func (a GrpcApi) verify(c *config) {
+func (a GrpcApi) verify(c *config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -105,7 +107,7 @@ func (a GrpcApi) verify(c *config) {
 
 	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect to cmcd: %v", err)
+		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
 	defer conn.Close()
 	client := grpcapi.NewCMCServiceClient(conn)
@@ -113,7 +115,7 @@ func (a GrpcApi) verify(c *config) {
 	// Read the attestation report and the nonce previously stored
 	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
 	if err != nil {
-		log.Fatalf("Failed to load report: %v", err)
+		return fmt.Errorf("failed to load report: %w", err)
 	}
 
 	request := grpcapi.VerificationRequest{
@@ -126,11 +128,11 @@ func (a GrpcApi) verify(c *config) {
 
 	response, err := client.Verify(ctx, &request)
 	if err != nil {
-		log.Fatalf("GRPC Verify Call failed: %v", err)
+		return fmt.Errorf("grpc verify call failed: %w", err)
 	}
 
 	if response.Version != api.GetVersion() {
-		log.Fatalf("API version mismatch. Expected VerificationResponse version %v, got %v",
+		return fmt.Errorf("API version mismatch. Expected VerificationResponse version %v, got %v",
 			api.GetVersion(), response.Version)
 	}
 
@@ -138,18 +140,20 @@ func (a GrpcApi) verify(c *config) {
 	result := new(ar.VerificationResult)
 	err = json.Unmarshal(response.GetResult(), result)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal grpc verification result")
+		return fmt.Errorf("failed to unmarshal grpc verification result")
 	}
 
 	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, result)
 	if err != nil {
-		log.Fatalf("Failed to save result: %v", err)
+		return fmt.Errorf("failed to save result: %w", err)
 	}
 
 	log.Debug("Finished verify")
+
+	return nil
 }
 
-func (a GrpcApi) updateCerts(c *config) {
+func (a GrpcApi) updateCerts(c *config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -159,7 +163,7 @@ func (a GrpcApi) updateCerts(c *config) {
 
 	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect to cmcd: %v", err)
+		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
 	defer conn.Close()
 	client := grpcapi.NewCMCServiceClient(conn)
@@ -169,20 +173,22 @@ func (a GrpcApi) updateCerts(c *config) {
 	}
 	response, err := client.UpdateCerts(ctx, &request)
 	if err != nil {
-		log.Fatalf("GRPC UpdateCerts Call failed: %v", err)
+		return fmt.Errorf("grpc update certs call failed: %w", err)
 	}
 
 	if response.Version != api.GetVersion() {
-		log.Fatalf("API version mismatch. Expected UpdateCertsRequest version %v, got %v",
+		return fmt.Errorf("API version mismatch. Expected UpdateCertsRequest version %v, got %v",
 			api.GetVersion(), response.Version)
 	}
 
 	if !response.Success {
-		log.Fatalf("UpdateCerts response returned success: %v", response.Success)
+		return fmt.Errorf("update certs response returned success: %v", response.Success)
 	}
+
+	return nil
 }
 
-func (a GrpcApi) updateMetadata(c *config) {
+func (a GrpcApi) updateMetadata(c *config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -192,7 +198,7 @@ func (a GrpcApi) updateMetadata(c *config) {
 
 	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect to cmcd: %v", err)
+		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
 	defer conn.Close()
 	client := grpcapi.NewCMCServiceClient(conn)
@@ -202,15 +208,17 @@ func (a GrpcApi) updateMetadata(c *config) {
 	}
 	response, err := client.UpdateMetadata(ctx, &request)
 	if err != nil {
-		log.Fatalf("GRPC UpdateMetadata Call failed: %v", err)
+		return fmt.Errorf("grpc update metadata call failed: %w", err)
 	}
 
 	if response.Version != api.GetVersion() {
-		log.Fatalf("API version mismatch. Expected UpdateMetadataRequest version %v, got %v",
+		return fmt.Errorf("API version mismatch. Expected UpdateMetadataRequest version %v, got %v",
 			api.GetVersion(), response.Version)
 	}
 
 	if !response.Success {
-		log.Fatalf("UpdateMetadata response returned success: %v", response.Success)
+		return fmt.Errorf("update metadata response returned success: %v", response.Success)
 	}
+
+	return nil
 }
