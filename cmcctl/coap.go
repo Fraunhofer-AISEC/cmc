@@ -21,9 +21,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/plgd-dev/go-coap/v3/message/codes"
@@ -34,7 +32,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -134,59 +131,6 @@ func (a CoapApi) verify(c *config) {
 	if err != nil {
 		log.Fatalf("Failed to save result: %v", err)
 	}
-}
-
-func (a CoapApi) measure(c *config) {
-
-	log.Infof("Sending coap request type 'Measure' to %v", c.CmcAddr)
-
-	if c.CtrConfig == "" {
-		log.Fatalf("Mode measure requires OCI runtime config to be specified")
-	}
-	if c.CtrRootfs == "" {
-		log.Fatalf("Mode measure requires container rootfs to be specified")
-	}
-
-	ctrConfig, err := os.ReadFile(c.CtrConfig)
-	if err != nil {
-		log.Fatalf("Failed to read oci runtime config: %v", err)
-	}
-
-	configHash, _, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)
-	if err != nil {
-		log.Fatalf("Failed to measure config: %v", err)
-	}
-
-	rootfsHash, err := m.GetRootfsMeasurement(c.CtrRootfs)
-	if err != nil {
-		log.Fatalf("Failed to measure rootfs: %v", err)
-	}
-
-	// Create template hash
-	tbh := []byte(configHash)
-	tbh = append(tbh, rootfsHash...)
-	hasher := sha256.New()
-	hasher.Write(tbh)
-	templateHash := hasher.Sum(nil)
-
-	req := &api.MeasureRequest{
-		Version: api.GetVersion(),
-		Event: ar.MeasureEvent{
-			Sha256:    templateHash,
-			EventName: c.CtrName,
-			CtrData: &ar.CtrData{
-				ConfigSha256: configHash,
-				RootfsSha256: rootfsHash,
-			},
-		},
-	}
-
-	resp, err := measureInternal(c, req)
-	if err != nil {
-		log.Fatalf("Failed to verify: %v", err)
-	}
-
-	log.Infof("Measure Result: %v", resp.Success)
 }
 
 func (a CoapApi) dial(c *config) {
@@ -370,55 +314,4 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 	}
 
 	return verifyResp, nil
-}
-
-func measureInternal(c *config, req *api.MeasureRequest,
-) (*api.MeasureResponse, error) {
-
-	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
-	if err != nil {
-		return nil, fmt.Errorf("error dialing: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	// Marshal CoAP payload
-	payload, err := c.apiSerializer.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %v", err)
-	}
-
-	// Send CoAP POST request
-	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
-	}
-
-	// Read CoAP reply body
-	payload, err = resp.ReadBody()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read body: %v", err)
-	}
-
-	// Read CoAP code
-	if resp.Code() != codes.Content {
-		return nil, fmt.Errorf("server returned coap error message. Code %v, message %v",
-			resp.Code().String(), string(payload))
-	}
-	log.Debugf("Received coap response code %v", resp.Code().String())
-
-	// Unmarshal attestation response
-	measureResp := new(api.MeasureResponse)
-	err = c.apiSerializer.Unmarshal(payload, measureResp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response")
-	}
-
-	err = measureResp.CheckVersion()
-	if err != nil {
-		return nil, err
-	}
-
-	return measureResp, nil
 }

@@ -47,10 +47,6 @@ func updateCertsCmd(c *config) {
 	c.api.updateCerts(c)
 }
 
-func measureCmd(c *config) {
-	c.api.measure(c)
-}
-
 func tokenCmd(c *config) {
 	err := createToken(c)
 	if err != nil {
