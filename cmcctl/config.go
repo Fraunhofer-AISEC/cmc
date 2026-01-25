@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
@@ -72,7 +71,7 @@ type Api interface {
 
 type config struct {
 	// Generic config
-	Addr             []string `json:"addr"`
+	Addr             string   `json:"addr"`
 	ReportFile       string   `json:"report"`
 	ResultFile       string   `json:"result"`
 	NonceFile        string   `json:"nonce"`
@@ -81,7 +80,6 @@ type config struct {
 	Attest           string   `json:"attest"`
 	PoliciesFile     string   `json:"policies"`
 	Publish          string   `json:"publish"`
-	IntervalStr      string   `json:"interval"`
 	Header           []string `json:"header"`
 	Method           string   `json:"method"`
 	Data             string   `json:"data"`
@@ -99,7 +97,6 @@ type config struct {
 	identityCas   []*x509.Certificate
 	policies      []byte
 	api           Api
-	interval      time.Duration
 	apiSerializer ar.Serializer
 	attest        atls.AttestSelect
 	publishToken  []byte
@@ -118,7 +115,6 @@ const (
 	mtlsFlag          = "mtls"
 	attestFlag        = "attest"
 	publishFlag       = "publish"
-	intervalFlag      = "interval"
 	apiSerializerFlag = "apiserializer"
 	headerFlag        = "header"
 	methodFlag        = "method"
@@ -134,9 +130,8 @@ const (
 )
 
 var (
-	configFile = flag.String(configFlag, "", "JSON Configuration file")
-	addr       = flag.String(addrFlag, "",
-		"Address to connect to / listen on via attested tls / https")
+	configFile   = flag.String(configFlag, "", "JSON Configuration file")
+	addr         = flag.String(addrFlag, "", "Address to connect to / listen on via attested tls / https")
 	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
 	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
 	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
@@ -145,10 +140,7 @@ var (
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
 		"client only, or none [mutual, client, server, none]")
-	publish  = flag.String(publishFlag, "", "Optional HTTP address to publish attestation results to")
-	interval = flag.String(intervalFlag, "",
-		"Interval at which connectors will be attested. If set to '0s', attestation will only be"+
-			" done once")
+	publish       = flag.String(publishFlag, "", "Optional HTTP address to publish attestation results to")
 	apiSerializer = flag.String(apiSerializerFlag, "",
 		"Serializer to be used for internal socket and CoAP API and aTLS (JSON or CBOR)")
 	headers  = flag.String(headerFlag, "", "Set header for HTTP POST requests")
@@ -179,7 +171,6 @@ func getConfig(cmd string) (*config, error) {
 		},
 		ApiSerializer: "cbor",
 		Attest:        "mutual",
-		IntervalStr:   "0s",
 	}
 
 	// Obtain configuration from json configuration file
@@ -205,7 +196,7 @@ func getConfig(cmd string) (*config, error) {
 
 	// Overwrite cmcctl configuration with values passed via command line
 	if internal.FlagPassed(addrFlag) {
-		c.Addr = strings.Split(*addr, ",")
+		c.Addr = *addr
 	}
 	if internal.FlagPassed(reportFlag) {
 		c.ReportFile = *reportFile
@@ -230,9 +221,6 @@ func getConfig(cmd string) (*config, error) {
 	}
 	if internal.FlagPassed(publishFlag) {
 		c.Publish = *publish
-	}
-	if internal.FlagPassed(intervalFlag) {
-		c.IntervalStr = *interval
 	}
 	if internal.FlagPassed(apiSerializerFlag) {
 		c.ApiSerializer = *apiSerializer
@@ -291,12 +279,6 @@ func getConfig(cmd string) (*config, error) {
 	} else {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
-
-	intervalDuration, err := time.ParseDuration(c.IntervalStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse monitoring interval: %v", err)
-	}
-	c.interval = intervalDuration
 
 	// Convert all paths to absolute paths
 	pathsToAbs(c)
@@ -462,7 +444,6 @@ func (c *config) Print() {
 
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tAddress                  : %v", c.Addr)
-	log.Debugf("\tInterval                 : %v", c.interval)
 	log.Debugf("\tCMC API Address          : %v", c.CmcAddr)
 	log.Debugf("\tReportFile               : %v", c.ReportFile)
 	log.Debugf("\tResultFile               : %v", c.ResultFile)

@@ -116,52 +116,48 @@ func request(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	// Create an attested HTTPS Client
 	client := &ahttp.Client{Transport: transport}
 
-	for _, addr := range c.Addr {
+	log.Debugf("HTTP %v request to %v", c.Method, c.Addr)
 
-		log.Debugf("HTTP %v request to %v", c.Method, addr)
+	// Create a new HTTP request and add body in case of POST or PUT request
+	var body io.Reader
+	if strings.EqualFold(c.Method, "POST") || strings.EqualFold(c.Method, "PUT") {
+		body = io.NopCloser(bytes.NewBuffer([]byte(c.Data)))
+	}
+	req, err := http.NewRequest(c.Method, c.Addr, body)
+	if err != nil {
+		log.Fatalf("failed to make new HTTP request: %v", err)
+	}
 
-		// Create a new HTTP request and add body in case of POST or PUT request
-		var body io.Reader
-		if strings.EqualFold(c.Method, "POST") || strings.EqualFold(c.Method, "PUT") {
-			body = io.NopCloser(bytes.NewBuffer([]byte(c.Data)))
+	// Set the user specified HTTP headers
+	log.Tracef("Number of specified headers: %v", len(c.Header))
+	for _, h := range c.Header {
+		s := strings.SplitN(h, ":", 2)
+		if len(s) != 2 {
+			log.Fatalf("invalid header %v", h)
 		}
-		req, err := http.NewRequest(c.Method, addr, body)
-		if err != nil {
-			log.Fatalf("failed to make new HTTP request: %v", err)
-		}
+		log.Tracef("Setting header '%v: %v'", s[0], s[1])
+		req.Header.Set(s[0], s[1])
+	}
 
-		// Set the user specified HTTP headers
-		log.Tracef("Number of specified headers: %v", len(c.Header))
-		for _, h := range c.Header {
-			s := strings.SplitN(h, ":", 2)
-			if len(s) != 2 {
-				log.Fatalf("invalid header %v", h)
-			}
-			log.Tracef("Setting header '%v: %v'", s[0], s[1])
-			req.Header.Set(s[0], s[1])
-		}
+	// Perform the actual, user specified request
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Warnf("HTTP %v failed: %v", c.Method, err)
+		return
+	}
+	defer resp.Body.Close()
 
-		// Perform the actual, user specified request
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Warnf("HTTP %v failed: %v", c.Method, err)
-			return
-		}
-		defer resp.Body.Close()
+	log.Debug("Response Status: ", resp.Status)
+	if resp.StatusCode != 200 {
+		log.Warnf("HTTP request returned status %v", resp.Status)
+	}
 
-		log.Debug("Response Status: ", resp.Status)
-		if resp.StatusCode != 200 {
-			log.Warnf("HTTP request returned status %v", resp.Status)
-		}
-
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Warn("Failed to read response")
-		} else {
-			log.Infof("Received from server: '%v'", string(content))
-			log.Debugf("Client-side aHTTPS request completed")
-		}
-
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Warn("Failed to read response")
+	} else {
+		log.Infof("Received from server: '%v'", string(content))
+		log.Debugf("Client-side aHTTPS request completed")
 	}
 }
 
@@ -202,19 +198,12 @@ func serve(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	internal.PrintTlsConfig(tlsConfig, c.identityCas)
 
-	// Config allows to specify more than one address for dialing,
-	// always use first address for listening
-	addr := ""
-	if len(c.Addr) > 0 {
-		addr = c.Addr[0]
-	}
-
 	// Create an attested HTTP server. The inner http.Server can be
 	// configured as usual. Additionally, aTLS parameters must be
 	// specified
 	server := &ahttp.Server{
 		Server: &http.Server{
-			Addr:      addr,
+			Addr:      c.Addr,
 			TLSConfig: tlsConfig,
 		},
 		Attest:        c.attest,

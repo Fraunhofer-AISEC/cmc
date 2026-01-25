@@ -1,7 +1,5 @@
 {
-    "addr": [
-        "localhost:4443"
-    ],
+    "addr": "localhost:4443",
     "cmcAddr": "localhost:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
