@@ -215,9 +215,6 @@ func getConfig() (*config, error) {
 	}
 	log.SetLevel(l)
 
-	// Convert all paths to absolute paths
-	pathsToAbs(c)
-
 	// Load specified files
 	c.estCaKey, err = internal.LoadPrivateKey(c.EstCaKey)
 	if err != nil {
@@ -257,71 +254,6 @@ func getConfig() (*config, error) {
 	printConfig(c)
 
 	return c, nil
-}
-
-func pathsToAbs(c *config) {
-	var err error
-	c.EstCaKey, err = filepath.Abs(c.EstCaKey)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.EstCaKey, err)
-	}
-
-	for i := 0; i < len(c.EstCaChain); i++ {
-		c.EstCaChain[i], err = filepath.Abs(c.EstCaChain[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.EstCaChain[i], err)
-		}
-	}
-
-	c.TlsKey, err = filepath.Abs(c.TlsKey)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.TlsKey, err)
-	}
-
-	for i := 0; i < len(c.TlsCaChain); i++ {
-		c.TlsCaChain[i], err = filepath.Abs(c.TlsCaChain[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.TlsCaChain[i], err)
-		}
-	}
-
-	for i := 0; i < len(c.MetadataCas); i++ {
-		c.MetadataCas[i], err = filepath.Abs(c.MetadataCas[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.MetadataCas[i], err)
-		}
-	}
-
-	for i := 0; i < len(c.ClientTlsCas); i++ {
-		c.ClientTlsCas[i], err = filepath.Abs(c.ClientTlsCas[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.MetadataCas[i], err)
-		}
-	}
-
-	c.HttpFolder, err = filepath.Abs(c.HttpFolder)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
-	}
-
-	c.TpmEkCertDb, err = filepath.Abs(c.TpmEkCertDb)
-	if err != nil {
-		log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
-	}
-
-	if c.VcekCacheFolder != "" {
-		c.VcekCacheFolder, err = filepath.Abs(c.VcekCacheFolder)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
-		}
-	}
-
-	if c.PublishToken != "" {
-		c.PublishToken, err = filepath.Abs(c.PublishToken)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.HttpFolder, err)
-		}
-	}
 }
 
 func printConfig(c *config) {

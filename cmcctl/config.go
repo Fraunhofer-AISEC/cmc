@@ -247,9 +247,6 @@ func getConfig(cmd string) (*config, error) {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	// Convert all paths to absolute paths
-	pathsToAbs(c)
-
 	// Print the parsed configuration
 	c.Print()
 
@@ -319,70 +316,6 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	return c, nil
-}
-
-func pathsToAbs(c *config) {
-	var err error
-	if c.ReportFile != "" {
-		c.ReportFile, err = filepath.Abs(c.ReportFile)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.ReportFile, err)
-		}
-	}
-	if c.ResultFile != "" {
-		c.ResultFile, err = filepath.Abs(c.ResultFile)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.ResultFile, err)
-		}
-	}
-	if c.NonceFile != "" {
-		c.NonceFile, err = filepath.Abs(c.NonceFile)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.NonceFile, err)
-		}
-	}
-	if c.Storage != "" {
-		c.Storage, err = filepath.Abs(c.Storage)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Storage, err)
-		}
-	}
-	if c.Cache != "" {
-		c.Cache, err = filepath.Abs(c.Cache)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.Cache, err)
-		}
-	}
-	if c.EstTlsCa != "" {
-		c.EstTlsCa, err = filepath.Abs(c.EstTlsCa)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.EstTlsCa, err)
-		}
-	}
-	if c.ProvisionToken != "" {
-		c.ProvisionToken, err = filepath.Abs(c.ProvisionToken)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.ProvisionToken, err)
-		}
-	}
-	if c.TokenStore != "" {
-		c.TokenStore, err = filepath.Abs(c.TokenStore)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.TokenStore, err)
-		}
-	}
-	if c.PeerCache != "" {
-		c.PeerCache, err = filepath.Abs(c.PeerCache)
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.PeerCache, err)
-		}
-	}
-	for i := range c.IdentityCas {
-		c.IdentityCas[i], err = filepath.Abs(c.IdentityCas[i])
-		if err != nil {
-			log.Warnf("Failed to get absolute path for %v: %v", c.IdentityCas[i], err)
-		}
-	}
 }
 
 func GetAttestMode(attest string) (atls.AttestSelect, error) {
