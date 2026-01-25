@@ -34,9 +34,42 @@ import (
 
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging exemplary messages with it
-func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tls.Config, cmc *cmc.Cmc) error {
+func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
+	var tlsConf *tls.Config
 
-	conn, err := atls.Dial("tcp", addr, tlsConf,
+	// Add trusted server root CAs
+	trustedRootCas := x509.NewCertPool()
+	for _, ca := range c.identityCas {
+		trustedRootCas.AddCert(ca)
+	}
+
+	if c.Mtls {
+		// Load own certificate
+		var cert tls.Certificate
+		cert, err := atls.GetCert(
+			atls.WithCmcAddr(c.CmcAddr),
+			atls.WithCmcApi(api),
+			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithCmc(cmc))
+		if err != nil {
+			return fmt.Errorf("failed to get TLS Certificate: %w", err)
+		}
+		// Create TLS config with root CA and own certificate
+		tlsConf = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			RootCAs:      trustedRootCas,
+		}
+	} else {
+		// Create TLS config with root CA only
+		tlsConf = &tls.Config{
+			RootCAs:       trustedRootCas,
+			Renegotiation: tls.RenegotiateNever,
+		}
+	}
+
+	internal.PrintTlsConfig(tlsConf, c.identityCas)
+
+	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
@@ -79,70 +112,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 	return nil
 }
 
-// Wrapper for dialInternalAddr
-func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
-	var tlsConf *tls.Config
-
-	// Add trusted server root CAs
-	trustedRootCas := x509.NewCertPool()
-	for _, ca := range c.identityCas {
-		trustedRootCas.AddCert(ca)
-	}
-
-	if c.Mtls {
-		// Load own certificate
-		var cert tls.Certificate
-		cert, err := atls.GetCert(
-			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(api),
-			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithCmc(cmc))
-		if err != nil {
-			log.Fatalf("failed to get TLS Certificate: %v", err)
-		}
-		// Create TLS config with root CA and own certificate
-		tlsConf = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      trustedRootCas,
-		}
-	} else {
-		// Create TLS config with root CA only
-		tlsConf = &tls.Config{
-			RootCAs:       trustedRootCas,
-			Renegotiation: tls.RenegotiateNever,
-		}
-	}
-
-	internal.PrintTlsConfig(tlsConf, c.identityCas)
-
-	testTime := time.Unix(0, 0)
-
-	// Check if interval is non-negative
-	if testTime.Before(testTime.Add(c.interval)) {
-		ticker := time.NewTicker(c.interval)
-
-		log.Infof("Starting monitoring with interval %v", c.interval)
-
-		for {
-			for _, addr := range c.Addr {
-				err := dialInternalAddr(c, api, addr, tlsConf, cmc)
-				if err != nil {
-					log.Warnf("%v", err)
-				}
-			}
-			<-ticker.C
-		}
-	} else {
-		for _, addr := range c.Addr {
-			err := dialInternalAddr(c, api, addr, tlsConf, cmc)
-			if err != nil {
-				log.Warnf("%v", err)
-			}
-		}
-	}
-}
-
-func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) error {
 
 	// Add trusted client root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -157,7 +127,7 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithCmc(cmc))
 	if err != nil {
-		log.Fatalf("failed to get TLS Certificate: %v", err)
+		return fmt.Errorf("failed to get TLS Certificate: %w", err)
 	}
 
 	var clientAuth tls.ClientAuthType
@@ -179,13 +149,8 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
-	addr := ""
-	if len(c.Addr) > 0 {
-		addr = c.Addr[0]
-	}
-
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", addr, tlsConf,
+	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(api),
@@ -201,7 +166,7 @@ func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 		}),
 		atls.WithCmc(cmc))
 	if err != nil {
-		log.Fatalf("Failed to listen for connections: %v", err)
+		return fmt.Errorf("failed to listen for connections: %w", err)
 	}
 	defer ln.Close()
 
