@@ -40,24 +40,26 @@ func init() {
 }
 
 // Creates connection with cmcd at specified address
-func getCMCServiceConn(cc CmcConfig) (api.CMCServiceClient, *grpc.ClientConn) {
+func getCMCServiceConn(cc *CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, error) {
+	if cc == nil {
+		return nil, nil, fmt.Errorf("internal error: cmc config object is nil")
+	}
 	conn, err := grpc.NewClient(cc.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Errorf("failed to connect: %v", err)
-		return nil, nil
+		return nil, nil, fmt.Errorf("failed to connect: %v", err)
 	}
 
-	return api.NewCMCServiceClient(conn), conn
+	return api.NewCMCServiceClient(conn), conn, nil
 }
 
 // Obtains attestation report from CMCd
-func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a GrpcApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
 
 	// Get backend connection
 	log.Debugf("Sending attestation request to cmcd on %v", cc.CmcAddr)
-	cmcClient, cmcconn := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return nil, nil, nil, errors.New("failed to establish connection to obtain AR")
+	cmcClient, cmcconn, err := getCMCServiceConn(cc)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to establish connection: %w", err)
 	}
 	defer cmcconn.Close()
 
@@ -87,7 +89,7 @@ func (a GrpcApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
 func (a GrpcApi) verifyAR(
-	cc CmcConfig,
+	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
@@ -96,9 +98,9 @@ func (a GrpcApi) verifyAR(
 
 	// Get backend connection
 	log.Debugf("Sending verification request to cmcd on %v", cc.CmcAddr)
-	cmcClient, conn := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return errors.New("failed to establish connection to obtain attestation result")
+	cmcClient, conn, err := getCMCServiceConn(cc)
+	if err != nil {
+		return fmt.Errorf("failed to establish connection: %w", err)
 	}
 	defer conn.Close()
 	log.Debug("Contacting backend for AR verification")
@@ -150,15 +152,15 @@ func (a GrpcApi) verifyAR(
 	return nil
 }
 
-func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a GrpcApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// Get backend connection
 	log.Debugf("Sending TLS sign request to cmcd on %v", cc.CmcAddr)
-	cmcClient, conn := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return nil, errors.New("connection failed. No signing performed")
+	cmcClient, conn, err := getCMCServiceConn(cc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish connection: %w", err)
 	}
 	defer conn.Close()
-	log.Debug("contacting backend for Sign Operation")
+	log.Debug("Contacting backend for sign Operation")
 
 	// Create Sign request
 	hash, err := convertHash(opts)
@@ -192,12 +194,12 @@ func (a GrpcApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	return resp.GetSignedContent(), nil
 }
 
-func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
+func (a GrpcApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	// Get backend connection
 	log.Debugf("Sending TLS certificate request to cmcd on %v", cc.CmcAddr)
-	cmcClient, cmcconn := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return nil, errors.New("failed to establish connection to cmcd")
+	cmcClient, cmcconn, err := getCMCServiceConn(cc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish connection: %w", err)
 	}
 	defer cmcconn.Close()
 
@@ -226,13 +228,13 @@ func (a GrpcApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 }
 
 // Fetches the peer cache from the cmcd
-func (a GrpcApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
+func (a GrpcApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error) {
 
 	// Get backend connection
 	log.Debugf("Sending peer cache request for peer %v to cmcd on %v", fingerprint, cc.CmcAddr)
-	cmcClient, cmcconn := getCMCServiceConn(cc)
-	if cmcClient == nil {
-		return nil, errors.New("failed to establish connection to obtain AR")
+	cmcClient, cmcconn, err := getCMCServiceConn(cc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish connection: %w", err)
 	}
 	defer cmcconn.Close()
 

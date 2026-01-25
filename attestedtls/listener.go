@@ -31,7 +31,7 @@ const timeout = 10 * time.Second
  * holds net.Listener and adds additional functionality to it */
 type Listener struct {
 	net.Listener // embedded interface
-	CmcConfig    // embedded struct
+	*CmcConfig   // embedded struct
 	*tls.Config  // embedded struct
 }
 

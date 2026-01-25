@@ -41,7 +41,11 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a CoapApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+
+	if cc == nil {
+		return nil, nil, nil, fmt.Errorf("internal error: cmc config object is nil")
+	}
 
 	// Establish connection
 	log.Debugf("Sending attestation request to cmcd on %v", cc.CmcAddr)
@@ -99,12 +103,16 @@ func (a CoapApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]b
 
 // Sends attestationreport to cmcd for verification
 func (a CoapApi) verifyAR(
-	cc CmcConfig,
+	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
 	metadata map[string][]byte,
 ) error {
+
+	if cc == nil {
+		return fmt.Errorf("internal error: cmc config object is nil")
+	}
 
 	// Establish connection
 	log.Debugf("Sending verification request to cmcd on %v", cc.CmcAddr)
@@ -180,7 +188,11 @@ func (a CoapApi) verifyAR(
 	return nil
 }
 
-func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+
+	if cc == nil {
+		return nil, fmt.Errorf("internal error: cmc config object is nil")
+	}
 
 	// Establish connection
 	log.Debugf("Sending TLS sign request to cmcd on %v", cc.CmcAddr)
@@ -246,7 +258,11 @@ func (a CoapApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerO
 	return signResp.SignedContent, nil
 }
 
-func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
+func (a CoapApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
+
+	if cc == nil {
+		return nil, fmt.Errorf("internal error: cmc config object is nil")
+	}
 
 	// Establish connection
 	log.Debugf("Sending TLS certificate request to cmcd on %v", cc.CmcAddr)
@@ -302,7 +318,11 @@ func (a CoapApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 }
 
 // Fetches the peer cache from the cmcd
-func (a CoapApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
+func (a CoapApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error) {
+
+	if cc == nil {
+		return nil, fmt.Errorf("internal error: cmc config object is nil")
+	}
 
 	// Establish connection
 	log.Debugf("Sending peer cache request to cmcd on %v", cc.CmcAddr)

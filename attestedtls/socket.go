@@ -37,7 +37,11 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+
+	if cc == nil {
+		return nil, nil, nil, fmt.Errorf("internal error: cmc config is nil")
+	}
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
@@ -101,12 +105,16 @@ func (a SocketApi) obtainAR(cc CmcConfig, chbindings []byte, cached []string) ([
 
 // Sends attestation report to cmcd for verification
 func (a SocketApi) verifyAR(
-	cc CmcConfig,
+	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
 	cacheMisses []string,
 	metadata map[string][]byte,
 ) error {
+
+	if cc == nil {
+		return fmt.Errorf("internal error: cmc config is nil")
+	}
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
@@ -190,7 +198,11 @@ func (a SocketApi) verifyAR(
 	return nil
 }
 
-func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+
+	if cc == nil {
+		return nil, fmt.Errorf("internal error: cmc config is nil")
+	}
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
@@ -263,7 +275,11 @@ func (a SocketApi) fetchSignature(cc CmcConfig, digest []byte, opts crypto.Signe
 	return signResp.SignedContent, nil
 }
 
-func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
+func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
+
+	if cc == nil {
+		return nil, fmt.Errorf("internal error: cmc config is nil")
+	}
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
@@ -325,7 +341,11 @@ func (a SocketApi) fetchCerts(cc CmcConfig) ([][]byte, error) {
 	return certResp.Certificate, nil
 }
 
-func (a SocketApi) fetchPeerCache(cc CmcConfig, fingerprint string) ([]string, error) {
+func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error) {
+
+	if cc == nil {
+		return nil, fmt.Errorf("internal error: cmc config is nil")
+	}
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
