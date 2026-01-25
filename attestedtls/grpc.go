@@ -36,8 +36,7 @@ import (
 type GrpcApi struct{}
 
 func init() {
-	log.Trace("Adding gRPC API to APIs")
-	CmcApis[CmcApi_GRPC] = GrpcApi{}
+	CmcApis["grpc"] = GrpcApi{}
 }
 
 // Creates connection with cmcd at specified address

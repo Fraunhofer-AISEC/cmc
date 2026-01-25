@@ -35,8 +35,7 @@ import (
 type LibApi struct{}
 
 func init() {
-	log.Trace("Adding Lib API to APIs")
-	CmcApis[CmcApi_Lib] = LibApi{}
+	CmcApis["libapi"] = LibApi{}
 }
 
 // Obtains attestation report from CMCd

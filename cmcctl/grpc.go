@@ -30,7 +30,6 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
@@ -148,22 +147,6 @@ func (a GrpcApi) verify(c *config) {
 	}
 
 	log.Debug("Finished verify")
-}
-
-func (a GrpcApi) dial(c *config) {
-	dial(c, attestedtls.CmcApi_GRPC, nil)
-}
-
-func (a GrpcApi) listen(c *config) {
-	listen(c, attestedtls.CmcApi_GRPC, nil)
-}
-
-func (a GrpcApi) request(c *config) {
-	request(c, attestedtls.CmcApi_GRPC, nil)
-}
-
-func (a GrpcApi) serve(c *config) {
-	serve(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) updateCerts(c *config) {

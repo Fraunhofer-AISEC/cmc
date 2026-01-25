@@ -33,8 +33,7 @@ import (
 type SocketApi struct{}
 
 func init() {
-	log.Trace("Adding Socket API to APIs")
-	CmcApis[CmcApi_Socket] = SocketApi{}
+	CmcApis["socket"] = SocketApi{}
 }
 
 // Obtains attestation report from cmcd

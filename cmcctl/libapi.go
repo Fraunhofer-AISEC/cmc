@@ -23,9 +23,9 @@ import (
 
 	"crypto/rand"
 	"errors"
+	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
-	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
@@ -118,59 +118,6 @@ func (a LibApi) verify(c *config) {
 	}
 }
 
-func (a LibApi) dial(c *config) {
-	if a.cmc == nil {
-		cmc, err := initialize(c)
-		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
-		}
-		a.cmc = cmc
-	}
-
-	dial(c, attestedtls.CmcApi_Lib, a.cmc)
-}
-
-func (a LibApi) listen(c *config) {
-
-	if a.cmc == nil {
-		cmc, err := initialize(c)
-		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
-		}
-		a.cmc = cmc
-	}
-
-	listen(c, attestedtls.CmcApi_Lib, a.cmc)
-}
-
-func (a LibApi) request(c *config) {
-	if a.cmc == nil {
-		cmc, err := initialize(c)
-		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
-		}
-		a.cmc = cmc
-	}
-
-	request(c, attestedtls.CmcApi_Lib, a.cmc)
-}
-
-func (a LibApi) serve(c *config) {
-	if a.cmc == nil {
-		cmc, err := initialize(c)
-		if err != nil {
-			log.Errorf("failed to initialize CMC: %v", err)
-			return
-		}
-		a.cmc = cmc
-	}
-
-	serve(c, attestedtls.CmcApi_Lib, a.cmc)
-}
-
 func (a LibApi) updateCerts(c *config) {
 
 	if a.cmc == nil {
@@ -236,4 +183,25 @@ func initialize(c *config) (*cmc.Cmc, error) {
 	}
 
 	return cmc.NewCmc(cmcConf)
+}
+
+func getLibApiCmcObj(c *config) *cmc.Cmc {
+	if !strings.EqualFold(c.Api, "libapi") {
+		return nil
+	}
+
+	api, ok := apis["libapi"].(LibApi)
+	if !ok {
+		log.Fatalf("internal error: failed to retrieve libapi")
+	}
+
+	if api.cmc == nil {
+		cmc, err := initialize(c)
+		if err != nil {
+			log.Fatalf("failed to initialize CMC: %v", err)
+		}
+		api.cmc = cmc
+	}
+
+	return api.cmc
 }

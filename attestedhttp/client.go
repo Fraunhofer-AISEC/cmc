@@ -60,7 +60,7 @@ type Transport struct {
 	Attest        atls.AttestSelect
 	MutualTls     bool
 	CmcAddr       string
-	CmcApi        atls.CmcApiSelect
+	CmcApi        string
 	ApiSerializer ar.Serializer
 	Cmc           *cmc.Cmc
 	CmcPolicies   []byte
@@ -191,7 +191,7 @@ func prepareClient(c *Client) error {
 				conn, err := atls.Dial("tcp", addr, c.Transport.TLSClientConfig,
 					atls.WithApiSerializer(c.Transport.ApiSerializer),
 					atls.WithAttest(c.Transport.Attest),
-					atls.WithCmc(c.Transport.Cmc),
+					atls.WithLibApiCmc(c.Transport.Cmc),
 					atls.WithCmcAddr(c.Transport.CmcAddr),
 					atls.WithCmcApi(c.Transport.CmcApi),
 					atls.WithCmcPolicies(c.Transport.CmcPolicies),

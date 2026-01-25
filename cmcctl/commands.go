@@ -24,19 +24,19 @@ func verifyCmd(c *config) {
 }
 
 func dialCmd(c *config) {
-	c.api.dial(c)
+	dial(c)
 }
 
 func listenCmd(c *config) {
-	c.api.listen(c)
+	listen(c)
 }
 
 func requestCmd(c *config) {
-	c.api.request(c)
+	request(c)
 }
 
 func serveCmd(c *config) {
-	c.api.serve(c)
+	serve(c)
 }
 
 func updateMetadataCmd(c *config) {

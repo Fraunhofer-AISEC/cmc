@@ -33,7 +33,7 @@ type Server struct {
 	Attest        atls.AttestSelect
 	MutualTls     bool
 	CmcAddr       string
-	CmcApi        atls.CmcApiSelect
+	CmcApi        string
 	ApiSerializer ar.Serializer
 	Cmc           *cmc.Cmc
 	CmcPolicies   []byte
@@ -55,7 +55,7 @@ func (s *Server) ListenAndServe() error {
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
 		atls.WithResultCb(s.ResultCb),
-		atls.WithCmc(s.Cmc))
+		atls.WithLibApiCmc(s.Cmc))
 	if err != nil {
 		log.Fatalf("Failed to listen for connections: %v", err)
 	}
