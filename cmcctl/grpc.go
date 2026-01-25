@@ -218,19 +218,19 @@ func (a GrpcApi) measure(c *config) {
 }
 
 func (a GrpcApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_GRPC, nil)
+	dial(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_GRPC, nil)
+	listen(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) request(c *config) {
-	requestInternal(c, attestedtls.CmcApi_GRPC, nil)
+	request(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) serve(c *config) {
-	serveInternal(c, attestedtls.CmcApi_GRPC, nil)
+	serve(c, attestedtls.CmcApi_GRPC, nil)
 }
 
 func (a GrpcApi) updateCerts(c *config) {

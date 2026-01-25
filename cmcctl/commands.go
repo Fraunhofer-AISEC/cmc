@@ -15,50 +15,50 @@
 
 package main
 
-func generate(c *config) {
+func generateCmd(c *config) {
 	c.api.generate(c)
 }
 
-func verify(c *config) {
+func verifyCmd(c *config) {
 	c.api.verify(c)
 }
 
-func dial(c *config) {
+func dialCmd(c *config) {
 	c.api.dial(c)
 }
 
-func listen(c *config) {
+func listenCmd(c *config) {
 	c.api.listen(c)
 }
 
-func request(c *config) {
+func requestCmd(c *config) {
 	c.api.request(c)
 }
 
-func serve(c *config) {
+func serveCmd(c *config) {
 	c.api.serve(c)
 }
 
-func updateMetadata(c *config) {
+func updateMetadataCmd(c *config) {
 	c.api.updateMetadata(c)
 }
 
-func updateCerts(c *config) {
+func updateCertsCmd(c *config) {
 	c.api.updateCerts(c)
 }
 
-func measure(c *config) {
+func measureCmd(c *config) {
 	c.api.measure(c)
 }
 
-func token(c *config) {
+func tokenCmd(c *config) {
 	err := createToken(c)
 	if err != nil {
 		log.Fatalf("Failed to get token: %v", err)
 	}
 }
 
-func provision(c *config) {
+func provisionCmd(c *config) {
 	err := retrieveProvisioningData(c)
 	if err != nil {
 		log.Fatalf("Failed to get provisioning data: %v", err)

@@ -190,19 +190,19 @@ func (a CoapApi) measure(c *config) {
 }
 
 func (a CoapApi) dial(c *config) {
-	dialInternal(c, attestedtls.CmcApi_COAP, nil)
+	dial(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) listen(c *config) {
-	listenInternal(c, attestedtls.CmcApi_COAP, nil)
+	listen(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) request(c *config) {
-	requestInternal(c, attestedtls.CmcApi_COAP, nil)
+	request(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) serve(c *config) {
-	serveInternal(c, attestedtls.CmcApi_COAP, nil)
+	serve(c, attestedtls.CmcApi_COAP, nil)
 }
 
 func (a CoapApi) updateCerts(c *config) {

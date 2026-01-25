@@ -52,7 +52,7 @@ const (
 )
 
 // Creates an attested HTTPS connection and performs the specified requests
-func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func request(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	// Add trusted server root CAs
 	trustedRootCas := x509.NewCertPool()
@@ -165,7 +165,7 @@ func requestInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	}
 }
 
-func serveInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func serve(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	// Add trusted client root CAs
 	trustedRootCas := x509.NewCertPool()

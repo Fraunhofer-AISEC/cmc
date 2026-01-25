@@ -33,7 +33,7 @@ import (
 )
 
 // Creates TLS connection between this client and a server and performs a remote
-// attestation of the server before exchanging few a exemplary messages with it
+// attestation of the server before exchanging exemplary messages with it
 func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tls.Config, cmc *cmc.Cmc) error {
 
 	conn, err := atls.Dial("tcp", addr, tlsConf,
@@ -80,7 +80,7 @@ func dialInternalAddr(c *config, api atls.CmcApiSelect, addr string, tlsConf *tl
 }
 
 // Wrapper for dialInternalAddr
-func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func dial(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	var tlsConf *tls.Config
 
 	// Add trusted server root CAs
@@ -142,7 +142,7 @@ func dialInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 	}
 }
 
-func listenInternal(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
+func listen(c *config, api atls.CmcApiSelect, cmc *cmc.Cmc) {
 
 	// Add trusted client root CAs
 	trustedRootCas := x509.NewCertPool()
