@@ -30,7 +30,7 @@ jobs:
           pushd provision/estserver
           go build -ldflags="-s -w" -trimpath
           popd
-          pushd tools/backend
+          pushd tools/cmcbackend
           go build -ldflags="-s -w" -trimpath
           popd
           pushd tools/snptool
@@ -91,8 +91,8 @@ jobs:
       - name: "Upload backend"
         uses: actions/upload-artifact@v4
         with:
-          name: backend
-          path: tools/backend/backend
+          name: cmcbackend
+          path: tools/cmcbackend/cmcbackend
       - name: "Upload tdxtool"
         uses: actions/upload-artifact@v4
         with:
@@ -118,7 +118,7 @@ jobs:
             provision/estserver/estserver
             tools/metaconv/metaconv
             tools/metasign/metasign
-            tools/backend/backend
+            tools/cmcbackend/cmcbackend
             tools/tdxtool/tdxtool
             tools/snptool/snptool
             tools/azuretool/azuretool
