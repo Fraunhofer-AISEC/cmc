@@ -63,8 +63,21 @@ fi
 echo "Using CMC: ${cmc}"
 echo "Using ${data} as directory for local data"
 
-# Build CMC
-echo "Building CMC"
+# Install CMC
+echo "Installing CMC"
+go install -C "${dir}/cmcd"
+go install -C "${dir}/cmcctl"
+go install -C "${dir}/provision/estserver"
+go install -C "${dir}/tools/mrtool"
+go install -C "${dir}/tools/metaconv"
+go install -C "${dir}/tools/metasign"
+go install -C "${dir}/tools/tdxtool"
+go install -C "${dir}/tools/snptool"
+go install -C "${dir}/tools/tdxtool"
+go install -C "${dir}/tools/cmcbackend"
+
+# Build CMC to be present in local folders
+echo "Locally Building CMC"
 go build -C "${dir}/cmcd"
 go build -C "${dir}/cmcctl"
 go build -C "${dir}/provision/estserver"
@@ -74,6 +87,7 @@ go build -C "${dir}/tools/metasign"
 go build -C "${dir}/tools/tdxtool"
 go build -C "${dir}/tools/snptool"
 go build -C "${dir}/tools/tdxtool"
+go build -C "${dir}/tools/cmcbackend"
 
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"

@@ -27,11 +27,13 @@ fi
 
 sign-metadata json
 
+mkdir -p "${dir}/example-setup/vm-config/vm-metadata/"
+
 cp "${dir}/data/metadata-signed/"* "${dir}/example-setup/vm-config/vm-metadata/"
 cp "${dir}/data/pki/ca.pem" "${dir}/example-setup/vm-config/metadata-ca.pem"
 
 # Delete cmc internal data to enforce new certificate generation
-vm-ssh rm -r /var/cmc
+vm-ssh rm -rf /var/cmc
 
 # Restarting cmcd is required for fetching the updated metadata
 vm-ssh systemctl restart cmcd

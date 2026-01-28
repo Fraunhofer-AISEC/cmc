@@ -45,9 +45,8 @@ referenceValues=$("${mrtool[@]}" parse ima --mrs 10)
 json=$(cat "${input}/manifest.json")
 
 # App Manifest: Insert reference values
-while IFS= read -r element; do
-    json=$(echo "${json}" | jq --argjson element "${element}" '.referenceValues += [$element]')
-done < <(echo "${referenceValues}" | jq -c '.[]')
+json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$referenceValues") '$base | .referenceValues += $ver[0]')
+
 
 # App Manifest: Set other properties
 setjson "json" "name"                  "${name}"

@@ -42,6 +42,11 @@ If docker is not used, the following prerequisites must be installed:
 
 Building the *cmcd* requires *go*. Follow https://golang.org/doc/install.
 
+If you use the installed binaries, make sure to add the following line to your `$HOME/.profile`:
+```sh
+export PATH=$PATH:$HOME/go/bin
+```
+
 Furthermore, several packages must be installed for building the *cmc* and generating metadata:
 ```sh
 sudo apt install -y build-essential libssl-dev golang-cfssl jq yq

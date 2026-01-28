@@ -39,12 +39,6 @@ mkdir -p "${out}"
 
 echo "Using ${data} as directory for local data"
 
-# Retrieve platform details
-set +e
-firmware="Lenovo"
-bootloader=$(grub-install --version)
-set -e
-
 # Parse the values of the RTM PCRs from the kernel's binary bios measurements as reference values
 referenceValues=$("${mrtool[@]}" parse tpm --mrs 0,1,2,3,4,5,6,7)
 
@@ -63,13 +57,9 @@ setjson "json" "description"           "RTM Manifest"
 setarr  "json" "baseLayers"            "${name}"
 setjson "json" "certLevel"             3
 
-# Insert platform details
-json=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
-json=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
-
 # Replace existing reference values with new reference values in the RTM Manifest
 json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(echo "${json}" | jq --argjson ver "${referenceValues}" '.referenceValues += $ver')
+json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$referenceValues") '$base | .referenceValues += $ver[0]')
 
 # Save the RTM manifest
 echo "Writing ${out}/rtm.manifest.json"

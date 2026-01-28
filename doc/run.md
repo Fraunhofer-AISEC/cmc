@@ -34,24 +34,28 @@ The cmcctl can run the following commands, specified via the first parameter or 
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-./estserver -config cmc-data/est-server-conf.json
+estserver -config example-setup/configs/installed/est-server-conf.json
 ```
 
 #### Run the cmcd
 
 ```sh
-# Build and run the cmcd
-./cmcd -config cmc-data/cmcd-conf.json
+# Run the cmcd
+cmcd -config example-setup/configs/installed/cmcd-conf.json
+
+# NOTE: for setups that require root, e.g., to access the tpm, make sure the installed go binaries
+# are found:
+sudo env PATH="$HOME/go/bin:$PATH" cmcd -config example-setup/configs/installed/cmcd-conf.json
 ```
 
 #### Generate and Verify Attestation Reports
 
 ```sh
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
-./cmcctl -mode generate
+cmcctl generate -config example-setup/configs/installed/cmcctl-conf.json
 
 # Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
-./cmcctl -mode verify -ca cmc-data/pki/ca.pem
+cmcctl verify -config example-setup/configs/installed/cmcctl-conf.json
 ```
 
 #### Establish Attested TLS Connections
@@ -59,24 +63,23 @@ The cmcctl can run the following commands, specified via the first parameter or 
 ```sh
 
 # Run an attested TLS server
-./cmcctl -mode listen -addr 0.0.0.0:4443 -ca cmc-data/pki/ca.pem -mtls
+cmcctl listen -config example-setup/configs/installed/cmcctl-conf.json -addr "$(hostname --fqdn):4443"
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-./cmcctl -mode dial -addr localhost:4443 -ca cmc-data/pki/ca.pem -mtls
+cmcctl dial -config example-setup/configs/installed/cmcctl-conf.json -addr "$(hostname --fqdn):4443"
 ```
 
 #### Establish Attested HTTPS Connections
 
 ```sh
 # Run two attested HTTPS servers
-./cmcctl -config cmcctl-config.json -addr 0.0.0.0:8081 -mode serve
+cmcctl serve -config example-setup/configs/installed/cmcctl-conf.json -addr "$(hostname --fqdn):8082"
 
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections
-./cmcctl \
-    -config ../data/cmcctl-config.json \
-    -addr https://localhost:8081/post,https://localhost:8082/post \
-    -mode request \
+cmcctl request \
+    -config example-setup/configs/installed/cmcctl-conf.json \
+    -addr "https://$(hostname --fqdn):8082" \
     -method POST \
     -data "hello from attested HTTPS client" \
     -header "Content-Type: text/plain"

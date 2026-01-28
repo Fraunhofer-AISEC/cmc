@@ -11,6 +11,7 @@ uidn=$(id -un)
 gidn=$(id -gn)
 
 name="cmc$(printf "%s" "${dir}" | tr '/' '-')"
+hostname="cmc-docker"
 
 qgs_path="/var/run/tdx-qgs"
 
@@ -24,6 +25,8 @@ if [[ -z "$(docker images -q ${name})" ]]; then
     docker build --no-cache --tag "${name}" -f "${dir}/example-setup/docker/cmc.dockerfile" .
 fi
 
+test -c "/dev/tpm0" && tpm0="--device /dev/tpm0" || tpm0=""
+test -c "/dev/tpmrm0" && tpmrm0="--device /dev/tpmrm0" || tpmrm0=""
 test -c "/dev/kvm" && kvm="--device /dev/kvm" || kvm=""
 test -c "/dev/sev" && sev="--device /dev/sev" || sev=""
 test -c "/dev/sgx_enclave" && sgx_enclave="--device /dev/sgx_enclave" || sgx_enclave=""
@@ -35,12 +38,18 @@ if [[ -z "$(docker ps -aq -f name=${name})" ]]; then
     echo "Creating container ${name}.."
     docker create \
     --name "${name}" \
+    --hostname "${hostname}" \
     -it \
     --mount type=bind,src="${dir}",dst="${dir}" \
+    --mount type=bind,src=/sys/kernel/security,dst=/sys/kernel/security,ro \
+    --cap-add SYS_ADMIN \
+    --security-opt apparmor=unconfined \
+    --security-opt seccomp=unconfined \
     --network "${name}" \
     -p 9955:9955 \
     -p 4443:4443 \
     ${kvm} \
+    ${tpm0} ${tpmrm0} \
     ${sev} \
     ${sgx_enclave} \
     ${sgx_provision} \
@@ -60,12 +69,10 @@ if [[ -z "$(docker ps -q -f name=${name})" ]]; then
     docker exec "${name}" chown "${uid}":"${gid}" /dev/sev || true
     docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_enclave || true
     docker exec "${name}" chown "${uid}":"${gid}" /dev/sgx_provision || true
-    docker exec \
-    --user "${uid}":"${gid}" \
-    --env HOME="${HOME}" \
-    --env PATH="/usr/bin:/usr/local/go/bin:$HOME/go/bin:${dir}/bin" \
-    --workdir "${dir}/cmc" \
-    "${name}" sh -c "go build ./... && go install ./..."
+    # Required for reading measurement logs
+    docker exec "${name}" sh -c \
+        "u=\$(getent passwd ${uid} | cut -d: -f1) && \
+        echo \"\$u ALL=(ALL) NOPASSWD:ALL\" > /etc/sudoers.d/\$u"
 fi
 
 # Run specified command

@@ -18,6 +18,7 @@ package internal
 import (
 	"net"
 	"os"
+	"strings"
 )
 
 func Fqdn() (string, error) {
@@ -36,7 +37,7 @@ func Fqdn() (string, error) {
 	for _, ip := range addrs {
 		names, err := net.LookupAddr(ip.String())
 		if err == nil && len(names) > 0 {
-			return names[0], nil
+			return strings.TrimSuffix(names[0], "."), nil
 		}
 	}
 
