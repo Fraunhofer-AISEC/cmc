@@ -18,7 +18,7 @@ vm-ssh systemctl stop cmcd
 vm-ssh systemctl stop cmcctl
 
 # Remove cmc internal folder to enforce generation of new certs
-vm-ssh rm -r /var/cmc/internal
+vm-ssh rm -rf /var/cmc/internal
 
 # Copy new binaries into VM
 vm-scp cmcd/cmcd vm-ubuntu:/usr/bin/

@@ -1,7 +1,5 @@
 {
-    "addr": [
-        "https://localhost:4443"
-    ],
+    "addr": "https://ubuntu:4443",
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",

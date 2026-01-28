@@ -1,0 +1,21 @@
+{
+    "addr": "cmc-docker:4443",
+    "cmcAddr": "localhost:9955",
+    "report": "attestation-report",
+    "result": "attestation-result.json",
+    "nonce": "nonce",
+    "identityCas": [
+        "data/pki/ca.pem"
+    ],
+    "estTlsCa": "data/pki/ca.pem",
+    "mtls": true,
+    "attest": "mutual",
+    "measurementLog": true,
+    "publish": "http://localhost:8080/results",
+    "logLevel": "trace",
+    "api": "socket",
+    "apiSerializer": "cbor",
+    "keyConfig": "EC256",
+    "tokenStore": "data/token_store",
+    "provisionToken": "data/provision_token"
+}

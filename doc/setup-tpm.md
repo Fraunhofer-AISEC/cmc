@@ -26,16 +26,9 @@ source env.bash
 setup-cmc tpm
 ```
 
-## Build
-
-Everything can be built and installed according to the
-[Build Documentation](./build-and-install.md).
-
 ## Run
 
-the `cmcd` and the `cmcctl` including their [configuration files](./run.md) must be installed
-into the TPM platform or VM with attached swTPM. Then the CMC can be run as described in
-[Running the CMC](./run.md).
+The CMC can be run as described in [Running the CMC](./run.md).
 
 
 ---

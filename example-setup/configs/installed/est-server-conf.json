@@ -1,0 +1,25 @@
+{
+    "estAddr": "0.0.0.0:9000",
+    "estCaKey": "data/pki/ca-key.pem",
+    "estCaChain": [
+        "data/pki/ca.pem"
+    ],
+    "tlsKey": "data/pki/est-tls-key.pem",
+    "tlsCaChain": [
+        "data/pki/est-tls.pem",
+        "data/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "data/pki/ca.pem"
+    ],
+    "httpFolder": "data/metadata-signed",
+    "verifyEkCert": false,
+    "tpmEkCertDb": "data/tpm-ek-certs.db",
+    "logLevel": "trace",
+    "authMethods": [
+        "attestation"
+    ],
+    "tokenPath": "data/token_store",
+    "publishAddr": "http://localhost:8080/results",
+    "publishFile": "attestation-result.json"
+}

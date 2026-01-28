@@ -1,8 +1,7 @@
-# Fixed ubuntu 24.04
-FROM ubuntu@sha256:1e622c5f073b4f6bfad6632f2616c7f59ef256e96fe78bf6a595d1dc4376ac02
+FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive \
-    GO_VERSION=1.24.1 \
+    GO_VERSION=1.25.6 \
     GOPATH=/go \
     PATH="/usr/local/go/bin:$GOPATH/bin:$PATH"
 
@@ -11,9 +10,9 @@ RUN apt-get update && apt-get install -y wget lsb-release moreutils golang-cfssl
 	build-essential sqlite3 zlib1g-dev libssl-dev jq yq git curl ca-certificates \
 	python3-venv libjson-glib-dev libjson-glib-1.0-0 nasm acpica-tools uuid-dev \
 	genisoimage gnutls-bin guestfs-tools guestmount libtasn1-dev libgnutls28-dev \
-	socat libseccomp-dev python-is-python3 libtool expect clang llvm lld xxd
+	socat libseccomp-dev python-is-python3 libtool expect clang llvm lld xxd sudo
 
-# Required for QEMU
+# Install dependencies required for QEMU
 RUN apt-get install -y git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev \
     ninja-build libnfs-dev libiscsi-dev flex git-email libaio-dev libbluetooth-dev \
 	libcapstone-dev libbrlapi-dev libbz2-dev libcap-ng-dev libcurl4-gnutls-dev \

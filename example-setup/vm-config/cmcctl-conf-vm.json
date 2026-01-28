@@ -1,7 +1,5 @@
 {
-    "addr": [
-        "0.0.0.0:4443"
-    ],
+    "addr": "0.0.0.0:4443",
     "mtls": false,
     "report": "/var/cmcctl/attestation-report",
     "result": "/var/cmcctl/attestation-result.json",

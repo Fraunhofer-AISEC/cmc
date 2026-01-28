@@ -1,0 +1,34 @@
+{
+    "cmcAddr": "localhost:9955",
+    "provisionMode": "est",
+    "provisionAuth": [ "attestation" ],
+    "provisionAddr": "https://localhost:9000/",
+    "provisionToken": "data/provision_token",
+    "metadata": [
+        "file://data/metadata-signed"
+    ],
+    "drivers": [ "tpm" ],
+    "ima": true,
+    "imaPcr": 10,
+    "excludePcrs": [ ],
+    "keyConfig": "EC256",
+    "api": "socket",
+    "policyEngine": "js",
+    "policyOverwrite": false,
+    "logLevel": "trace",
+    "storage": "data/cmc-internal/",
+    "cache": "data/cmc-cache/",
+    "peerCache": "data/cmc-peer-cache",
+    "measurementLog": true,
+    "ctr": false,
+    "estTlsCas": [
+        "data/pki/ca.pem"
+    ],
+    "identityCas": [
+        "data/pki/ca.pem"
+    ],
+    "metadataCas": [
+        "data/pki/ca.pem"
+    ],
+    "caKey": "data/pki/ca-key.pem"
+}

@@ -15,3 +15,5 @@ bin="${dir}/bin"
 "${bin}/generate-os-manifest-tpm"
 
 "${bin}/generate-app-manifest-tpm"
+
+"${bin}/generate-container-manifest" "docker" "ubuntu:24.04"
