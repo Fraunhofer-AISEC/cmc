@@ -128,7 +128,7 @@ func GetBiosMeasurements(file, refvalType string, addRawEventData bool) ([]ar.Re
 
 	digests, err := parseBiosMeasurements(data, refvalType, addRawEventData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
+		return nil, fmt.Errorf("failed to parse binary bios measurements event log: %w", err)
 	}
 
 	return digests, nil
