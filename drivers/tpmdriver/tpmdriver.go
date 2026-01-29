@@ -399,7 +399,7 @@ func (t *Tpm) OpenTpm() error {
 	t.tpm, err = attest.OpenTPM(config)
 	if err != nil {
 		t.tpm = nil
-		return fmt.Errorf("activate credential failed: OpenTPM returned %w", err)
+		return fmt.Errorf("failed to open TPM %w", err)
 	}
 
 	return nil
