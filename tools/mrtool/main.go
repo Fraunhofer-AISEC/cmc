@@ -29,6 +29,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputesnp"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputetdx"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputetpm"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/readtpm"
 )
 
 var (
@@ -44,7 +45,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "parse",
-				Usage: "parse measurements",
+				Usage: "parse measurements from event logs",
 				Commands: []*cli.Command{
 					parsetpm.Command,
 					parsetdx.Command,
@@ -56,11 +57,21 @@ func main() {
 			},
 			{
 				Name:  "precompute",
-				Usage: "precompute measurements",
+				Usage: "precompute measurements based on reproducibly built artifacts",
 				Commands: []*cli.Command{
 					precomputetpm.Command,
 					precomputesnp.Command,
 					precomputetdx.Command,
+				},
+				Action: func(ctx context.Context, c *cli.Command) error {
+					return cli.ShowSubcommandHelp(c)
+				},
+			},
+			{
+				Name:  "read",
+				Usage: "read measurements from the hardware trust anchor",
+				Commands: []*cli.Command{
+					readtpm.Command,
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
 					return cli.ShowSubcommandHelp(c)

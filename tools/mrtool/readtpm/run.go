@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parsetpm
+package readtpm
 
 import (
 	"context"
@@ -22,27 +22,19 @@ import (
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
+	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
 type ParsePcrsConf struct {
-	Eventlog       string
 	PrintAggregate bool
-	RawEventData   bool
 }
 
 const (
-	DEFAULT_BINARY_BIOS_MEASUREMENTS = "/sys/kernel/security/tpm0/binary_bios_measurements"
-)
-
-const (
-	tpmEventlogFlag    = "eventlog"
 	printAggregateFlag = "print-aggregate"
-	rawEventDataFlag   = "raw-event-data"
 )
 
 var (
@@ -51,26 +43,17 @@ var (
 
 var Command = &cli.Command{
 	Name:  "tpm",
-	Usage: "parses the SRTM TPM eventlog from the Linux kernel securityfs binary_bios_measurements",
+	Usage: "reads the TPM PCR values directly from the TPM",
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:  tpmEventlogFlag,
-			Usage: "TPM eventlog input file",
-			Value: DEFAULT_BINARY_BIOS_MEASUREMENTS,
-		},
 		&cli.BoolFlag{
 			Name:  printAggregateFlag,
 			Usage: "Print the aggregated PCR value over the selected PCRs",
-		},
-		&cli.BoolFlag{
-			Name:  rawEventDataFlag,
-			Usage: "Additionally print the raw event data as it was extended if available",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		err := run(cmd)
 		if err != nil {
-			return fmt.Errorf("failed to parse tpm srtm pcrs: %w", err)
+			return fmt.Errorf("failed to read tpm pcrs: %w", err)
 		}
 		return nil
 	},
@@ -93,38 +76,35 @@ func run(cmd *cli.Command) error {
 		return fmt.Errorf("failed to check parse pcrs config: %w", err)
 	}
 
-	log.Info("Parsing TPM SRTM PCR eventlog...")
+	log.Info("Reading TPM PCRs")
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, "TPM Reference Value", pcrConf.RawEventData)
+	// Read PCRs from TPM and write to stdout
+	tpm, err := attest.OpenTPM(&attest.OpenConfig{})
 	if err != nil {
-		return fmt.Errorf("failed to read binary bios measurements: %w", err)
+		return fmt.Errorf("failed to open TPM: %w", err)
 	}
-	log.Debugf("Collected %v binary bios measurements", len(refvals))
+	defer tpm.Close()
 
-	// Only return requested PCRs
-	filteredRefvals := make([]*ar.ReferenceValue, 0, len(refvals))
-	for _, refval := range refvals {
-		if contains(globConf.Mrs, refval.Index) {
-			filteredRefvals = append(filteredRefvals, &refval)
+	pcrs, err := tpm.PCRs(attest.HashSHA256)
+	if err != nil {
+		return fmt.Errorf("failed to get TPM PCRs: %w", err)
+	}
+
+	refvals := make([]*ar.ReferenceValue, 0)
+	for _, pcr := range pcrs {
+		if contains(globConf.Mrs, pcr.Index) {
+			r := &ar.ReferenceValue{
+				Type:    "TPM Reference Value",
+				SubType: "PCR Summary",
+				Index:   pcr.Index,
+				Sha256:  pcr.Digest,
+			}
+			refvals = append(refvals, r)
 		}
 	}
 
-	// Write eventlog to stdout
 	if globConf.PrintEventLog {
-		data, err := json.MarshalIndent(filteredRefvals, "", "     ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal reference values: %w", err)
-		}
-		os.Stdout.Write(append(data, []byte("\n")...))
-	}
-
-	// Calculate summary and write to stdout
-	if globConf.PrintSummary {
-		pcrValues, err := tcg.PrecomputeFinalPcrValues(filteredRefvals)
-		if err != nil {
-			return fmt.Errorf("failed to calculate final PCR values")
-		}
-		data, err := json.MarshalIndent(pcrValues, "", "     ")
+		data, err := json.MarshalIndent(refvals, "", "     ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal reference values: %w", err)
 		}
@@ -133,7 +113,7 @@ func run(cmd *cli.Command) error {
 
 	// Calculate aggregate and write to stdout
 	if pcrConf.PrintAggregate {
-		aggregate, err := tcg.PrecomputeAggregatePcrValue(filteredRefvals)
+		aggregate, err := tcg.PrecomputeAggregatePcrValue(refvals)
 		if err != nil {
 			return fmt.Errorf("failed to calculate aggregate PCR value")
 		}
@@ -152,18 +132,13 @@ func run(cmd *cli.Command) error {
 
 func getConfig(cmd *cli.Command) (*ParsePcrsConf, error) {
 	c := &ParsePcrsConf{
-		Eventlog:       cmd.String(tpmEventlogFlag),
 		PrintAggregate: cmd.Bool(printAggregateFlag),
-		RawEventData:   cmd.Bool(rawEventDataFlag),
 	}
 	return c, nil
 }
 
 func checkConfig(globConf *global.Config, parsePcrsConf *ParsePcrsConf) error {
 
-	if !globConf.PrintEventLog && !globConf.PrintSummary && !parsePcrsConf.PrintAggregate {
-		return fmt.Errorf("neither eventlog nor summary or aggregate are set. Do nothing")
-	}
 	for _, mr := range globConf.Mrs {
 		if mr > 23 {
 			return fmt.Errorf("invalid PCR value: %v. Only 0-23 are allowed", mr)
