@@ -149,11 +149,12 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 		}
 
 		if measuredPcr.Type == ar.ARTIFACT_TYPE_PCR_EVENTLOG {
-			// measurement contains a detailed measurement list (e.g. retrieved from bios
+			// Measurement contains a detailed measurement list (e.g. retrieved from bios
 			// measurement logs or ima runtime measurement logs)
+			log.Tracef("PCR%v measurement contains event log", measuredPcr.Index)
 			measuredSummary := make([]byte, 32)
 			for _, event := range measuredPcr.Events {
-				//first event could be a TPM_PCR_INIT_VALUE ()
+				// First event could be a TPM_PCR_INIT_VALUE
 				if event.EventName == "TPM_PCR_INIT_VALUE" {
 					calculatedPcrs[pcr] = event.Sha256
 					measuredSummary = event.Sha256
@@ -194,6 +195,9 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 					nameInfo += ": " + event.EventName
 				}
 
+				log.Tracef("Found refval for PCR%v measurement %v: %v",
+					pcr, nameInfo, hex.EncodeToString(event.Sha256))
+
 				measResult := ar.DigestResult{
 					Type:        "Verified",
 					Index:       pcr,
@@ -205,9 +209,6 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 					CtrDetails:  event.CtrData,
 				}
 				detailedResults = append(detailedResults, measResult)
-
-				log.Tracef("Found refval for PCR%v measurement %v: %v",
-					pcr, nameInfo, hex.EncodeToString(event.Sha256))
 			}
 			pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 			if !bytes.Equal(measuredSummary, calculatedPcrs[pcr]) {
@@ -215,8 +216,8 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			}
 
 		} else if measuredPcr.Type == ar.ARTIFACT_TYPE_PCR_SUMMARY {
-			// measurement contains just the summary PCR value
-			// We therefore unconditionally extend every reference value for this PCR
+			// Measurement contains just the summary PCR value
+			log.Tracef("PCR%v measurement contains PCR summary", measuredPcr.Index)
 			if len(measuredPcr.Events) != 1 {
 				log.Debugf("Expected exactly one event for artifact type %q, got %v",
 					ar.ARTIFACT_TYPE_PCR_SUMMARY, len(measuredPcr.Events))
@@ -229,17 +230,38 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 						calculatedPcrs[pcr] = ref.Sha256 //the Sha256 should contain the init value
 						continue                         //break the loop iteration and continue with the next event
 					}
-					calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr], ref.Sha256)
+
+					if ref.SubType == ar.ARTIFACT_TYPE_PCR_SUMMARY {
+						log.Tracef("PCR%v refval is PCR summary", measuredPcr.Index)
+
+						// Check if calculatedPcrs is uninitialized, as only one reference
+						// value summary is allowed
+						if !bytes.Equal(calculatedPcrs[pcr], make([]byte, len(calculatedPcrs[pcr]))) {
+							log.Debugf("Fail: PCR%v multiple reference values type %q",
+								pcr, ar.ARTIFACT_TYPE_PCR_SUMMARY)
+							success = false
+						}
+
+						// Also the reference value is a PCR summary, set the calculated value
+						calculatedPcrs[pcr] = ref.Sha256
+					} else {
+						// As we only have the measured final value, but reference values for
+						// each artifact, unconditionally extend the reference value
+						calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr], ref.Sha256)
+
+						log.Tracef("Extended refval for PCR%v %v: %v",
+							pcr, ref.SubType, hex.EncodeToString(ref.Sha256))
+					}
 
 					// As we only have the PCR summary, we will later set all reference values
 					// to true/false depending on whether the calculation matches the PCR summary
-					measResult := ar.DigestResult{
+					r := ar.DigestResult{
 						Index:       pcr,
 						Digest:      hex.EncodeToString(ref.Sha256),
 						SubType:     ref.SubType,
 						Description: ref.Description,
 					}
-					detailedResults = append(detailedResults, measResult)
+					detailedResults = append(detailedResults, r)
 				}
 
 			}
@@ -248,6 +270,7 @@ func verifyPcrs(s ar.Serializer, measurement ar.Measurement,
 			if equal {
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 				pcrResult.Success = true
+				log.Tracef("PCR%v match: %x", pcr, calculatedPcrs[pcr])
 			} else {
 				log.Debugf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
 					hex.EncodeToString(measuredPcr.Events[0].Sha256),

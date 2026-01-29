@@ -41,14 +41,16 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 		want1 bool
 	}{
 		{
-			name: "Valid TPM Measurement Summary",
+			// Measurement: Eventlog
+			// Reference Values: Eventlog
+			name: "Valid_1",
 			args: args{
 				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Artifacts: validSummaryHashChain,
+					Artifacts: validArtifactsEventlog,
 				},
 				nonce:           validTpmNonce,
 				s:               ar.JsonSerializer{},
@@ -59,14 +61,16 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			want1: true,
 		},
 		{
-			name: "Valid TPM Measurement",
+			// Measurement: Final PCRs
+			// Reference Values: Eventlog
+			name: "Valid_2",
 			args: args{
 				measurements: &ar.Measurement{
 					Type:      "TPM Measurement",
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Artifacts: validHashChain,
+					Artifacts: validArtifactsSummary,
 				},
 				nonce:           validTpmNonce,
 				s:               ar.JsonSerializer{},
@@ -75,6 +79,187 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 			},
 			want:  ar.StatusSuccess,
 			want1: true,
+		},
+		{
+			// Measurement: Final PCRs
+			// Reference Values: Final PCRs
+			name: "Valid_3",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: validArtifactsSummary,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: validReferenceValuesSummary,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
+			// Measurement: Eventlog
+			// Reference Values: Final PCRs
+			// This is not supported!
+			name: "Invalid_1",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: validArtifactsEventlog,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: validReferenceValuesSummary,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Summary with invalid artifacts
+			// Reference Values: Eventlog
+			name: "Invalid_2",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: invalidArtifactsSummary,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Summary with invalid artifacts
+			// Reference Values: Summary
+			name: "Invalid_3",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: invalidArtifactsSummary,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: validReferenceValuesSummary,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Eventlog with invalid artifacts
+			// Reference Values: Eventlog
+			name: "Invalid_4",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: invalidArtifactsEventLog,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: validReferenceValues,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		// Measurement: Summary
+		// Reference Values: Eventlog with invalid reference values
+		{
+			name: "Invalid_5",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: validArtifactsSummary,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: invalidReferenceValues,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		// Measurement: Summary
+		// Reference Values: Summary with invalid reference values
+		{
+			name: "Invalid_6",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: validArtifactsSummary,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: invalidReferenceValuesSummary,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		// Measurement: Summary
+		// Reference Values: Summary with invalid duplicate reference values
+		{
+			name: "Invalid_7",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: validArtifactsSummary,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: invalidReferenceValuesSummaryDuplicate,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		// Measurement: Eventlog
+		// Reference Values: Eventlog with invalid reference values
+		{
+			name: "Invalid_8",
+			args: args{
+				measurements: &ar.Measurement{
+					Type:      "TPM Measurement",
+					Evidence:  validQuote,
+					Signature: validSignature,
+					Certs:     validTpmCertChain,
+					Artifacts: validArtifactsEventlog,
+				},
+				nonce:           validTpmNonce,
+				s:               ar.JsonSerializer{},
+				referenceValues: invalidReferenceValues,
+				cas:             []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
 		},
 		{
 			name: "Invalid Nonce",
@@ -84,7 +269,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Artifacts: validSummaryHashChain,
+					Artifacts: validArtifactsSummary,
 				},
 				nonce:           invalidTpmNonce,
 				s:               ar.JsonSerializer{},
@@ -102,65 +287,11 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: invalidSignature,
 					Certs:     validTpmCertChain,
-					Artifacts: validSummaryHashChain,
+					Artifacts: validArtifactsSummary,
 				},
 				nonce:           validTpmNonce,
 				s:               ar.JsonSerializer{},
 				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
-			},
-			want:  ar.StatusFail,
-			want1: false,
-		},
-		{
-			name: "Invalid HashChain Summary",
-			args: args{
-				measurements: &ar.Measurement{
-					Type:      "TPM Measurement",
-					Evidence:  validQuote,
-					Signature: validSignature,
-					Certs:     validTpmCertChain,
-					Artifacts: invalidSummaryHashChain,
-				},
-				nonce:           validTpmNonce,
-				s:               ar.JsonSerializer{},
-				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
-			},
-			want:  ar.StatusFail,
-			want1: false,
-		},
-		{
-			name: "Invalid HashChain",
-			args: args{
-				measurements: &ar.Measurement{
-					Type:      "TPM Measurement",
-					Evidence:  validQuote,
-					Signature: validSignature,
-					Certs:     validTpmCertChain,
-					Artifacts: invalidHashChain,
-				},
-				nonce:           validTpmNonce,
-				s:               ar.JsonSerializer{},
-				referenceValues: validReferenceValues,
-				cas:             []*x509.Certificate{validCa},
-			},
-			want:  ar.StatusFail,
-			want1: false,
-		},
-		{
-			name: "Invalid Reference Values",
-			args: args{
-				measurements: &ar.Measurement{
-					Type:      "TPM Measurement",
-					Evidence:  validQuote,
-					Signature: invalidSignature,
-					Certs:     validTpmCertChain,
-					Artifacts: validSummaryHashChain,
-				},
-				nonce:           validTpmNonce,
-				s:               ar.JsonSerializer{},
-				referenceValues: invalidReferenceValues,
 				cas:             []*x509.Certificate{validCa},
 			},
 			want:  ar.StatusFail,
@@ -174,7 +305,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     validTpmCertChain,
-					Artifacts: validSummaryHashChain,
+					Artifacts: validArtifactsSummary,
 				},
 				nonce:           validTpmNonce,
 				s:               ar.JsonSerializer{},
@@ -192,7 +323,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 					Evidence:  validQuote,
 					Signature: validSignature,
 					Certs:     invalidTpmCertChain,
-					Artifacts: validSummaryHashChain,
+					Artifacts: validArtifactsSummary,
 				},
 				nonce:           validTpmNonce,
 				s:               ar.JsonSerializer{},
@@ -248,7 +379,7 @@ var (
 
 	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
 
-	validSummaryHashChain = []ar.Artifact{
+	validArtifactsSummary = []ar.Artifact{
 		{
 			Type:  "PCR Summary",
 			Index: 1,
@@ -265,12 +396,12 @@ var (
 		},
 	}
 
-	invalidSummaryHashChain = []ar.Artifact{
+	invalidArtifactsSummary = []ar.Artifact{
 		{
 			Type:  "PCR Summary",
 			Index: 1,
 			Events: []ar.MeasureEvent{
-				{Sha256: dec("2a814d03d22568e2d669595dd8be199fd7b3df2acb8caae38e24e92605e15c80")},
+				{Sha256: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")},
 			},
 		},
 		{
@@ -282,7 +413,7 @@ var (
 		},
 	}
 
-	validHashChain = []ar.Artifact{
+	validArtifactsEventlog = []ar.Artifact{
 		{
 			Type:  "PCR Eventlog",
 			Index: 1,
@@ -311,7 +442,7 @@ var (
 		},
 	}
 
-	invalidHashChain = []ar.Artifact{
+	invalidArtifactsEventLog = []ar.Artifact{
 		{
 			Type:  "PCR Eventlog",
 			Index: 1,
@@ -443,8 +574,119 @@ var (
 	invalidReferenceValues = []ar.ReferenceValue{
 		{
 			Type:    "TPM Reference Value",
-			Sha256:  dec("1310b2b63dc1222516e5c12cedc1cc48e338f85430849b5a5b5256467e2cd0f0"),
-			SubType: "SINIT ACM Digest",
+			Sha256:  dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39"),
+			SubType: "EV_CPU_MICROCODE",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845"),
+			SubType: "Unknown Event Type",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b"),
+			SubType: "EV_NONHOST_CONFIG",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8"),
+			SubType: "EV_EFI_VARIABLE_BOOT",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			SubType: "EV_SEPARATOR",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4"),
+			SubType: "EV_PLATFORM_CONFIG_FLAGS",
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba"),
+			SubType: "EV_EFI_ACTION",
+			Index:   4,
+		},
+		{
+			Type:    "TPM Reference Value",
+			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			SubType: "EV_SEPARATOR",
+			Index:   4,
+		},
+	}
+
+	validReferenceValuesSummary = []ar.ReferenceValue{
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6"),
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72"),
+			Index:   4,
+		},
+	}
+
+	invalidReferenceValuesSummary = []ar.ReferenceValue{
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6"),
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("aaf67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72"),
+			Index:   4,
+		},
+	}
+
+	invalidReferenceValuesSummaryDuplicate = []ar.ReferenceValue{
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6"),
+			Index:   1,
+		},
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72"),
+			Index:   4,
+		},
+		{
+			Type:    "TPM Reference Value",
+			SubType: "PCR Summary",
+			Sha256:  dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72"),
 			Index:   4,
 		},
 	}

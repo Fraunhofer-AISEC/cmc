@@ -555,7 +555,7 @@ func GetEventLogs(serializer ar.Serializer,
 		}
 
 		// Collect detailed measurements from event logs if specified
-		if biosLog {
+		if biosLog && len(biosMeasurements) > 0 {
 			for _, digest := range biosMeasurements {
 				if num == digest.Index {
 					event := ar.MeasureEvent{
