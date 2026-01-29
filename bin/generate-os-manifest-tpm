@@ -44,8 +44,14 @@ kernel=$(uname -r)
 os=$(lsb_release -sd 2>/dev/null)
 set -e
 
-# Parse the values of the OS PCRs from the kernel's binary bios measurements as reference values
-referenceValues=$("${mrtool[@]}" parse tpm --mrs 8,9,12,13,14,15)
+# Retrieve reference values from event logs if present, otherwise retrieve final PCR values from TPM
+if [[ -f "/sys/kernel/security/tpm0/binary_bios_measurements" ]]; then
+  echo "TPM event log present: parsing eventlog"
+  referenceValues=$("${mrtool[@]}" parse tpm --mrs 8,9,12,13,14,15)
+else
+  echo "TPM event log not present: reading final PCR values"
+  referenceValues=$("${mrtool[@]}" read tpm --mrs 8,9,12,13,14,15)
+fi
 
 # Load OS manifest
 json=$(cat "${input}/manifest.json")
