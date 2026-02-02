@@ -830,15 +830,20 @@ func (r *VerificationResult) PrintErr() {
 		m.Summary.PrintErr("%v", m.Type)
 		m.Freshness.PrintErr("Measurement freshness check")
 		m.Signature.PrintErr("Measurement")
-		for _, a := range m.Artifacts {
+		for i, a := range m.Artifacts {
 			if !a.Success {
-				header := ""
-				if m.Type == "TPM Result" {
-					header = fmt.Sprintf("PCR%v ", a.Index)
-				} else if m.Type == "TDX Result" {
-					header = fmt.Sprintf("%v ", internal.IndexToMr(a.Index))
+				var header string
+				switch m.Type {
+				case "TPM Result":
+					header = fmt.Sprintf("PCR%v Measurement", a.Index)
+				case "TDX Result":
+					header = fmt.Sprintf("%v Measurement", internal.IndexToMr(a.Index))
+				case "SNP Result":
+					header = "SNP Measurement"
+				default:
+					header = fmt.Sprintf("%v Measurement", m.Type)
 				}
-				log.Warnf("%vMeasurement %v: %v verification failed", header, a.SubType, a.Digest)
+				log.Warnf("%v %q: %v verification failed (Artifact %v)", header, a.SubType, a.Digest, i)
 			}
 		}
 		if m.TpmResult != nil {

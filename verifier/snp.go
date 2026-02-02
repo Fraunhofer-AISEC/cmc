@@ -172,7 +172,8 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 
 	// Compare Measurements
 	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
-		log.Debug("Failed to verify SNP reference value")
+		log.Debugf("Failed to verify SNP reference value. Expected %x, got %x",
+			snpReferenceValue.Sha384, s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:     "Reference Value",
