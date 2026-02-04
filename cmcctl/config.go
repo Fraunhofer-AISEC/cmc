@@ -264,7 +264,7 @@ func getConfig(cmd string) (*config, error) {
 	c.Print()
 
 	// Get root CA certificate in PEM format if specified
-	if cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" {
+	if cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" || cmd == "proxy" {
 		if len(c.IdentityCas) == 0 {
 			return nil, fmt.Errorf("path to read Report CAs must be specified either via config file or commandline")
 		}
