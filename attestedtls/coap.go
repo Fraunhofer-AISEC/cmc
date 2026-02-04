@@ -203,15 +203,10 @@ func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	hash, err := api.SignerOptsToHash(opts)
-	if err != nil {
-		return nil, fmt.Errorf("sign request creation failed: %w", err)
-	}
-
 	req := api.TLSSignRequest{
-		Version:  api.GetVersion(),
-		Content:  digest,
-		Hashtype: hash,
+		Version: api.GetVersion(),
+		Content: digest,
+		HashAlg: opts.HashFunc().String(),
 	}
 
 	// Parse additional signing options - not implemented fields assume recommend defaults

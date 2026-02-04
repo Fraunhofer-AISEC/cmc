@@ -61,7 +61,7 @@ message VerificationResponse {
 message TLSSignRequest {
   string version = 1;
   bytes content = 2;
-  HashFunction hashtype = 3;
+  string hash_alg = 3;
   PSSOptions pssOpts = 4;
 }
 
@@ -131,27 +131,4 @@ message CtrData {
   bytes config_sha256 = 1;
   bytes rootfs_sha256 = 2;
   bytes oci_spec = 3;
-}
-
-
-enum HashFunction {
-	  SHA1        = 0;
-	  SHA224      = 1;
-	  SHA256      = 2;
-	  SHA384      = 3;
-	  SHA512      = 4;
-	  MD4         = 5;
-	  MD5         = 6;
-	  MD5SHA1     = 7;
-	  RIPEMD160   = 8;
-	  SHA3_224    = 9;
-	  SHA3_256    = 10;
-	  SHA3_384    = 11;
-	  SHA3_512    = 12;
-	  SHA512_224  = 13;
-	  SHA512_256  = 14;
-	  BLAKE2s_256 = 15;
-	  BLAKE2b_256 = 16;
-	  BLAKE2b_384 = 17;
-	  BLAKE2b_512 = 18;
 }

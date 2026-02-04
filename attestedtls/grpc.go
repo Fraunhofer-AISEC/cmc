@@ -142,11 +142,12 @@ func (a GrpcApi) verifyAR(
 	}
 
 	// Check results
-	if result.Summary.Status == ar.StatusSuccess {
+	switch result.Summary.Status {
+	case ar.StatusSuccess:
 		log.Debugf("Attestation report verification successful")
-	} else if result.Summary.Status == ar.StatusWarn {
+	case ar.StatusWarn:
 		log.Debugf("Attestation report verification passed with warnings")
-	} else {
+	default:
 		return errors.New("attestation report verification failed")
 	}
 	return nil
@@ -163,14 +164,10 @@ func (a GrpcApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 	log.Debug("Contacting backend for sign Operation")
 
 	// Create Sign request
-	hash, err := convertHash(opts)
-	if err != nil {
-		return nil, fmt.Errorf("sign request creation failed: %w", err)
-	}
 	req := api.TLSSignRequest{
-		Version:  api.GetVersion(),
-		Content:  digest,
-		Hashtype: hash,
+		Version: api.GetVersion(),
+		Content: digest,
+		HashAlg: opts.HashFunc().String(),
 	}
 
 	// parse additional signing options - not implemented fields assume recommend defaults
@@ -256,50 +253,4 @@ func (a GrpcApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, er
 	}
 
 	return resp.Cache, nil
-}
-
-// Converts Hash Types from crypto.SignerOpts to the types specified in the CMC interface
-func convertHash(opts crypto.SignerOpts) (api.HashFunction, error) {
-	switch opts.HashFunc() {
-	case crypto.MD4:
-		return api.HashFunction_MD4, nil
-	case crypto.MD5:
-		return api.HashFunction_MD5, nil
-	case crypto.SHA1:
-		return api.HashFunction_SHA1, nil
-	case crypto.SHA224:
-		return api.HashFunction_SHA224, nil
-	case crypto.SHA256:
-		return api.HashFunction_SHA256, nil
-	case crypto.SHA384:
-		return api.HashFunction_SHA384, nil
-	case crypto.SHA512:
-		return api.HashFunction_SHA512, nil
-	case crypto.MD5SHA1:
-		return api.HashFunction_MD5SHA1, nil
-	case crypto.RIPEMD160:
-		return api.HashFunction_RIPEMD160, nil
-	case crypto.SHA3_224:
-		return api.HashFunction_SHA3_224, nil
-	case crypto.SHA3_256:
-		return api.HashFunction_SHA3_256, nil
-	case crypto.SHA3_384:
-		return api.HashFunction_SHA3_384, nil
-	case crypto.SHA3_512:
-		return api.HashFunction_SHA3_512, nil
-	case crypto.SHA512_224:
-		return api.HashFunction_SHA512_224, nil
-	case crypto.SHA512_256:
-		return api.HashFunction_SHA512_256, nil
-	case crypto.BLAKE2s_256:
-		return api.HashFunction_BLAKE2s_256, nil
-	case crypto.BLAKE2b_256:
-		return api.HashFunction_BLAKE2b_256, nil
-	case crypto.BLAKE2b_384:
-		return api.HashFunction_BLAKE2b_384, nil
-	case crypto.BLAKE2b_512:
-		return api.HashFunction_BLAKE2b_512, nil
-	default:
-	}
-	return api.HashFunction_SHA512, errors.New("could not determine correct Hash function")
 }
