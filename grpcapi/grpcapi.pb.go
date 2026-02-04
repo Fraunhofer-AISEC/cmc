@@ -36,103 +36,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type HashFunction int32
-
-const (
-	HashFunction_SHA1        HashFunction = 0
-	HashFunction_SHA224      HashFunction = 1
-	HashFunction_SHA256      HashFunction = 2
-	HashFunction_SHA384      HashFunction = 3
-	HashFunction_SHA512      HashFunction = 4
-	HashFunction_MD4         HashFunction = 5
-	HashFunction_MD5         HashFunction = 6
-	HashFunction_MD5SHA1     HashFunction = 7
-	HashFunction_RIPEMD160   HashFunction = 8
-	HashFunction_SHA3_224    HashFunction = 9
-	HashFunction_SHA3_256    HashFunction = 10
-	HashFunction_SHA3_384    HashFunction = 11
-	HashFunction_SHA3_512    HashFunction = 12
-	HashFunction_SHA512_224  HashFunction = 13
-	HashFunction_SHA512_256  HashFunction = 14
-	HashFunction_BLAKE2s_256 HashFunction = 15
-	HashFunction_BLAKE2b_256 HashFunction = 16
-	HashFunction_BLAKE2b_384 HashFunction = 17
-	HashFunction_BLAKE2b_512 HashFunction = 18
-)
-
-// Enum value maps for HashFunction.
-var (
-	HashFunction_name = map[int32]string{
-		0:  "SHA1",
-		1:  "SHA224",
-		2:  "SHA256",
-		3:  "SHA384",
-		4:  "SHA512",
-		5:  "MD4",
-		6:  "MD5",
-		7:  "MD5SHA1",
-		8:  "RIPEMD160",
-		9:  "SHA3_224",
-		10: "SHA3_256",
-		11: "SHA3_384",
-		12: "SHA3_512",
-		13: "SHA512_224",
-		14: "SHA512_256",
-		15: "BLAKE2s_256",
-		16: "BLAKE2b_256",
-		17: "BLAKE2b_384",
-		18: "BLAKE2b_512",
-	}
-	HashFunction_value = map[string]int32{
-		"SHA1":        0,
-		"SHA224":      1,
-		"SHA256":      2,
-		"SHA384":      3,
-		"SHA512":      4,
-		"MD4":         5,
-		"MD5":         6,
-		"MD5SHA1":     7,
-		"RIPEMD160":   8,
-		"SHA3_224":    9,
-		"SHA3_256":    10,
-		"SHA3_384":    11,
-		"SHA3_512":    12,
-		"SHA512_224":  13,
-		"SHA512_256":  14,
-		"BLAKE2s_256": 15,
-		"BLAKE2b_256": 16,
-		"BLAKE2b_384": 17,
-		"BLAKE2b_512": 18,
-	}
-)
-
-func (x HashFunction) Enum() *HashFunction {
-	p := new(HashFunction)
-	*p = x
-	return p
-}
-
-func (x HashFunction) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (HashFunction) Descriptor() protoreflect.EnumDescriptor {
-	return file_grpcapi_proto_enumTypes[0].Descriptor()
-}
-
-func (HashFunction) Type() protoreflect.EnumType {
-	return &file_grpcapi_proto_enumTypes[0]
-}
-
-func (x HashFunction) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use HashFunction.Descriptor instead.
-func (HashFunction) EnumDescriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{0}
-}
-
 type AttestationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
@@ -409,7 +312,7 @@ type TLSSignRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
 	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	Hashtype      HashFunction           `protobuf:"varint,3,opt,name=hashtype,proto3,enum=grpcapi.HashFunction" json:"hashtype,omitempty"`
+	HashAlg       string                 `protobuf:"bytes,3,opt,name=hash_alg,json=hashAlg,proto3" json:"hash_alg,omitempty"`
 	PssOpts       *PSSOptions            `protobuf:"bytes,4,opt,name=pssOpts,proto3" json:"pssOpts,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -459,11 +362,11 @@ func (x *TLSSignRequest) GetContent() []byte {
 	return nil
 }
 
-func (x *TLSSignRequest) GetHashtype() HashFunction {
+func (x *TLSSignRequest) GetHashAlg() string {
 	if x != nil {
-		return x.Hashtype
+		return x.HashAlg
 	}
-	return HashFunction_SHA1
+	return ""
 }
 
 func (x *TLSSignRequest) GetPssOpts() *PSSOptions {
@@ -1215,11 +1118,11 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"H\n" +
 	"\x14VerificationResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
-	"\x06result\x18\x02 \x01(\fR\x06result\"\xa6\x01\n" +
+	"\x06result\x18\x02 \x01(\fR\x06result\"\x8e\x01\n" +
 	"\x0eTLSSignRequest\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\fR\acontent\x121\n" +
-	"\bhashtype\x18\x03 \x01(\x0e2\x15.grpcapi.HashFunctionR\bhashtype\x12-\n" +
+	"\acontent\x18\x02 \x01(\fR\acontent\x12\x19\n" +
+	"\bhash_alg\x18\x03 \x01(\tR\ahashAlg\x12-\n" +
 	"\apssOpts\x18\x04 \x01(\v2\x13.grpcapi.PSSOptionsR\apssOpts\"R\n" +
 	"\x0fTLSSignResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +
@@ -1263,34 +1166,7 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\aCtrData\x12#\n" +
 	"\rconfig_sha256\x18\x01 \x01(\fR\fconfigSha256\x12#\n" +
 	"\rrootfs_sha256\x18\x02 \x01(\fR\frootfsSha256\x12\x19\n" +
-	"\boci_spec\x18\x03 \x01(\fR\aociSpec*\x92\x02\n" +
-	"\fHashFunction\x12\b\n" +
-	"\x04SHA1\x10\x00\x12\n" +
-	"\n" +
-	"\x06SHA224\x10\x01\x12\n" +
-	"\n" +
-	"\x06SHA256\x10\x02\x12\n" +
-	"\n" +
-	"\x06SHA384\x10\x03\x12\n" +
-	"\n" +
-	"\x06SHA512\x10\x04\x12\a\n" +
-	"\x03MD4\x10\x05\x12\a\n" +
-	"\x03MD5\x10\x06\x12\v\n" +
-	"\aMD5SHA1\x10\a\x12\r\n" +
-	"\tRIPEMD160\x10\b\x12\f\n" +
-	"\bSHA3_224\x10\t\x12\f\n" +
-	"\bSHA3_256\x10\n" +
-	"\x12\f\n" +
-	"\bSHA3_384\x10\v\x12\f\n" +
-	"\bSHA3_512\x10\f\x12\x0e\n" +
-	"\n" +
-	"SHA512_224\x10\r\x12\x0e\n" +
-	"\n" +
-	"SHA512_256\x10\x0e\x12\x0f\n" +
-	"\vBLAKE2s_256\x10\x0f\x12\x0f\n" +
-	"\vBLAKE2b_256\x10\x10\x12\x0f\n" +
-	"\vBLAKE2b_384\x10\x11\x12\x0f\n" +
-	"\vBLAKE2b_512\x10\x122\xc3\x04\n" +
+	"\boci_spec\x18\x03 \x01(\fR\aociSpec2\xc3\x04\n" +
 	"\n" +
 	"CMCService\x12E\n" +
 	"\x06Attest\x12\x1b.grpcapi.AttestationRequest\x1a\x1c.grpcapi.AttestationResponse\"\x00\x12G\n" +
@@ -1315,60 +1191,57 @@ func file_grpcapi_proto_rawDescGZIP() []byte {
 	return file_grpcapi_proto_rawDescData
 }
 
-var file_grpcapi_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_grpcapi_proto_goTypes = []any{
-	(HashFunction)(0),              // 0: grpcapi.HashFunction
-	(*AttestationRequest)(nil),     // 1: grpcapi.AttestationRequest
-	(*AttestationResponse)(nil),    // 2: grpcapi.AttestationResponse
-	(*VerificationRequest)(nil),    // 3: grpcapi.VerificationRequest
-	(*VerificationResponse)(nil),   // 4: grpcapi.VerificationResponse
-	(*TLSSignRequest)(nil),         // 5: grpcapi.TLSSignRequest
-	(*TLSSignResponse)(nil),        // 6: grpcapi.TLSSignResponse
-	(*TLSCertRequest)(nil),         // 7: grpcapi.TLSCertRequest
-	(*TLSCertResponse)(nil),        // 8: grpcapi.TLSCertResponse
-	(*PeerCacheRequest)(nil),       // 9: grpcapi.PeerCacheRequest
-	(*PeerCacheResponse)(nil),      // 10: grpcapi.PeerCacheResponse
-	(*MeasureRequest)(nil),         // 11: grpcapi.MeasureRequest
-	(*MeasureResponse)(nil),        // 12: grpcapi.MeasureResponse
-	(*UpdateCertsRequest)(nil),     // 13: grpcapi.UpdateCertsRequest
-	(*UpdateCertsResponse)(nil),    // 14: grpcapi.UpdateCertsResponse
-	(*UpdateMetadataRequest)(nil),  // 15: grpcapi.UpdateMetadataRequest
-	(*UpdateMetadataResponse)(nil), // 16: grpcapi.UpdateMetadataResponse
-	(*MeasureEvent)(nil),           // 17: grpcapi.MeasureEvent
-	(*PSSOptions)(nil),             // 18: grpcapi.PSSOptions
-	(*CtrData)(nil),                // 19: grpcapi.CtrData
-	nil,                            // 20: grpcapi.AttestationResponse.MetadataEntry
-	nil,                            // 21: grpcapi.VerificationRequest.MetadataEntry
+	(*AttestationRequest)(nil),     // 0: grpcapi.AttestationRequest
+	(*AttestationResponse)(nil),    // 1: grpcapi.AttestationResponse
+	(*VerificationRequest)(nil),    // 2: grpcapi.VerificationRequest
+	(*VerificationResponse)(nil),   // 3: grpcapi.VerificationResponse
+	(*TLSSignRequest)(nil),         // 4: grpcapi.TLSSignRequest
+	(*TLSSignResponse)(nil),        // 5: grpcapi.TLSSignResponse
+	(*TLSCertRequest)(nil),         // 6: grpcapi.TLSCertRequest
+	(*TLSCertResponse)(nil),        // 7: grpcapi.TLSCertResponse
+	(*PeerCacheRequest)(nil),       // 8: grpcapi.PeerCacheRequest
+	(*PeerCacheResponse)(nil),      // 9: grpcapi.PeerCacheResponse
+	(*MeasureRequest)(nil),         // 10: grpcapi.MeasureRequest
+	(*MeasureResponse)(nil),        // 11: grpcapi.MeasureResponse
+	(*UpdateCertsRequest)(nil),     // 12: grpcapi.UpdateCertsRequest
+	(*UpdateCertsResponse)(nil),    // 13: grpcapi.UpdateCertsResponse
+	(*UpdateMetadataRequest)(nil),  // 14: grpcapi.UpdateMetadataRequest
+	(*UpdateMetadataResponse)(nil), // 15: grpcapi.UpdateMetadataResponse
+	(*MeasureEvent)(nil),           // 16: grpcapi.MeasureEvent
+	(*PSSOptions)(nil),             // 17: grpcapi.PSSOptions
+	(*CtrData)(nil),                // 18: grpcapi.CtrData
+	nil,                            // 19: grpcapi.AttestationResponse.MetadataEntry
+	nil,                            // 20: grpcapi.VerificationRequest.MetadataEntry
 }
 var file_grpcapi_proto_depIdxs = []int32{
-	20, // 0: grpcapi.AttestationResponse.metadata:type_name -> grpcapi.AttestationResponse.MetadataEntry
-	21, // 1: grpcapi.VerificationRequest.metadata:type_name -> grpcapi.VerificationRequest.MetadataEntry
-	0,  // 2: grpcapi.TLSSignRequest.hashtype:type_name -> grpcapi.HashFunction
-	18, // 3: grpcapi.TLSSignRequest.pssOpts:type_name -> grpcapi.PSSOptions
-	17, // 4: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
-	19, // 5: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
-	1,  // 6: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
-	3,  // 7: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
-	5,  // 8: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
-	7,  // 9: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
-	9,  // 10: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
-	11, // 11: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
-	13, // 12: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
-	15, // 13: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
-	2,  // 14: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
-	4,  // 15: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
-	6,  // 16: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
-	8,  // 17: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
-	10, // 18: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
-	12, // 19: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
-	14, // 20: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
-	16, // 21: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
-	14, // [14:22] is the sub-list for method output_type
-	6,  // [6:14] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	19, // 0: grpcapi.AttestationResponse.metadata:type_name -> grpcapi.AttestationResponse.MetadataEntry
+	20, // 1: grpcapi.VerificationRequest.metadata:type_name -> grpcapi.VerificationRequest.MetadataEntry
+	17, // 2: grpcapi.TLSSignRequest.pssOpts:type_name -> grpcapi.PSSOptions
+	16, // 3: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
+	18, // 4: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
+	0,  // 5: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
+	2,  // 6: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
+	4,  // 7: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
+	6,  // 8: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
+	8,  // 9: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
+	10, // 10: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
+	12, // 11: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
+	14, // 12: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
+	1,  // 13: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
+	3,  // 14: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
+	5,  // 15: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
+	7,  // 16: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
+	9,  // 17: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
+	11, // 18: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
+	13, // 19: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
+	15, // 20: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
+	13, // [13:21] is the sub-list for method output_type
+	5,  // [5:13] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_grpcapi_proto_init() }
@@ -1381,14 +1254,13 @@ func file_grpcapi_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpcapi_proto_rawDesc), len(file_grpcapi_proto_rawDesc)),
-			NumEnums:      1,
+			NumEnums:      0,
 			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_grpcapi_proto_goTypes,
 		DependencyIndexes: file_grpcapi_proto_depIdxs,
-		EnumInfos:         file_grpcapi_proto_enumTypes,
 		MessageInfos:      file_grpcapi_proto_msgTypes,
 	}.Build()
 	File_grpcapi_proto = out.File

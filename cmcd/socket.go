@@ -300,7 +300,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	// Get signing options from request
-	opts, err := api.HashToSignerOpts(req.Hashtype, req.PssOpts)
+	opts, err := api.StringToSignerOpts(req.HashAlg, req.PssOpts)
 	if err != nil {
 		sendError(conn, s, "failed to choose requested hash function: %v", err)
 		return

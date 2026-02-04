@@ -224,7 +224,7 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 	d := s.cmc.Drivers[0]
 
 	// get sign opts
-	opts, err = convertHash(req.GetHashtype(), req.GetPssOpts())
+	opts, err = stringToSignerOpts(req.GetHashAlg(), req.GetPssOpts())
 	if err != nil {
 		return nil, fmt.Errorf("failed to find appropriate hash function: %w", err)
 	}
@@ -310,29 +310,24 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (
 	return resp, nil
 }
 
-// Converts Protobuf hashtype to crypto.SignerOpts
-func convertHash(hashtype api.HashFunction, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
-	var hash crypto.Hash
-	var len int
-	switch hashtype {
-	case api.HashFunction_SHA256:
-		hash = crypto.SHA256
-		len = 32
-	case api.HashFunction_SHA384:
-		hash = crypto.SHA384
-		len = 48
-	case api.HashFunction_SHA512:
-		len = 64
-		hash = crypto.SHA512
-	default:
-		return crypto.SHA512, fmt.Errorf("hash function not implemented: %v", hashtype)
+// StringToSignerOpts converts hash strings as defined in https://pkg.go.dev/crypto#Hash.String
+// to SignerOpts
+// Converts hash strings as defined in https://pkg.go.dev/crypto#Hash.String to SignerOpts
+func stringToSignerOpts(s string, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
+	hash, err := internal.HashFromString(s)
+	if err != nil {
+		return nil, err
 	}
+	return hashToSignerOpts(hash, pssOpts)
+}
+
+// HashToSignerOpts converts hashes to crypto.SignerOpts
+func hashToSignerOpts(hash crypto.Hash, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
 	if pssOpts != nil {
 		saltlen := int(pssOpts.SaltLength)
 		// go-attestation / go-tpm does not allow -1 as definition for length of hash
 		if saltlen < 0 {
-			log.Warning("Signature Options: Adapted RSA PSS Salt length to length of hash: ", len)
-			saltlen = len
+			saltlen = hash.Size()
 		}
 		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
 	}

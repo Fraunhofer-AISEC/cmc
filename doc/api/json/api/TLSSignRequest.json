@@ -22,8 +22,13 @@
           "type": "string",
           "contentEncoding": "base64"
         },
-        "hashType": {
-          "type": "integer"
+        "hashAlg": {
+          "type": "string",
+          "enum": [
+            "SHA-256",
+            "SHA-384",
+            "SHA-512"
+          ]
         },
         "pssOpts": {
           "$ref": "#/$defs/PSSOptions"
@@ -33,8 +38,7 @@
       "required": [
         "version",
         "content",
-        "hashType",
-        "pssOpts"
+        "hashAlg"
       ]
     }
   }

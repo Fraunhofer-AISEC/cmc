@@ -254,7 +254,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Get signing options from request
-	opts, err := api.HashToSignerOpts(req.Hashtype, req.PssOpts)
+	opts, err := api.StringToSignerOpts(req.HashAlg, req.PssOpts)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to choose requested hash function: %v", err)
