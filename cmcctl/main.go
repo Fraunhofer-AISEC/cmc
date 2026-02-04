@@ -34,6 +34,7 @@ var (
 		"provision":       provisionCmd,
 		"update-certs":    updateCertsCmd,
 		"update-metadata": updateMetadataCmd,
+		"proxy":           proxyCmd,
 	}
 )
 
@@ -51,6 +52,7 @@ func init() {
 		fmt.Fprintf(flag.CommandLine.Output(), "  provision\tRetrieve provisioning data for CVMs\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  update-certs\tTriggers updating the CMC AK and IK certificates\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  update-metadata\tTriggers updating the CMC metadata\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  proxy\tForward data over attested TLS using HTTP CONNECT\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "\nOPTIONS:\n")
 		flag.PrintDefaults()
 	}

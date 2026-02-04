@@ -54,3 +54,7 @@ func tokenCmd(c *config) error {
 func provisionCmd(c *config) error {
 	return retrieveProvisioningData(c)
 }
+
+func proxyCmd(c *config) error {
+	return forwardProxy(c)
+}
