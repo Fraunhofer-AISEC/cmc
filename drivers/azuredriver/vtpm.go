@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -38,48 +37,67 @@ const (
 	tpmDevicePath          = "/dev/tpm0"
 )
 
-func (azure *Azure) GetVtpmMeasurement(pcrs []int, nonce []byte) (ar.Measurement, error) {
+func (azure *Azure) GetVtpmEvidence(nonce []byte) (*ar.Evidence, error) {
 
-	log.Debug("Collecting Azure vTPM measurements")
+	log.Debug("Collecting Azure vTPM quote")
 
-	quote, sig, pcrValues, err := GetVtpmQuote(pcrs, nonce)
+	quote, sig, err := GetVtpmQuote(azure.pcrs, nonce)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get vTPM quote: %w", err)
+		return nil, fmt.Errorf("failed to get vTPM quote: %w", err)
 	}
 
-	artifacts, err := tpmdriver.GetEventLogs(azure.Serializer,
-		azure.MeasurementLog, azure.Ima, azure.ctrLog,
-		azure.pcrs, azure.ImaPcr, azure.CtrPcr,
-		azure.CtrLog, pcrValues)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get event logs: %w", err)
-	}
+	log.Tracef("Quote: %x", quote)
+	log.Tracef("Signature: %x", sig)
 
-	tpmAk, err := GetVtpmAkCert()
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get vTPM AK cert: %w", err)
-	}
-
-	tm := ar.Measurement{
-		Type:      "Azure vTPM Measurement",
-		Evidence:  quote,
+	evidence := &ar.Evidence{
+		Type:      ar.TYPE_EVIDENCE_AZURE_TPM,
+		Data:      quote,
 		Signature: sig,
-		Certs:     [][]byte{tpmAk},
-		Artifacts: artifacts,
 	}
 
-	for _, elem := range tm.Artifacts {
+	return evidence, nil
+}
+
+func (azure *Azure) GetVtpmCollateral() (*ar.Collateral, error) {
+
+	artifacts := make([]ar.Artifact, 0)
+
+	if azure.MeasurementLogs {
+		events, err := tpmdriver.GetEventLogs(azure.pcrs, azure.ctrLog, azure.CtrPcr, azure.CtrLog)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get event logs: %w", err)
+		}
+		artifacts = append(artifacts, events...)
+	} else {
+		pcrs, err := azure.GetVtpmPcrs()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get prs: %w", err)
+		}
+		artifacts = append(artifacts, pcrs...)
+	}
+
+	// Just for logging
+	for _, elem := range artifacts {
 		for _, event := range elem.Events {
 			log.Tracef("PCR%v %v: %v", elem.Index, elem.Type, hex.EncodeToString(event.Sha256))
 		}
 	}
-	log.Debug("Quote: ", hex.EncodeToString(tm.Evidence))
-	log.Debug("Signature: ", hex.EncodeToString(tm.Signature))
 
-	return tm, nil
+	tpmAk, err := GetVtpmAkCert()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get vTPM AK cert: %w", err)
+	}
+
+	collateral := &ar.Collateral{
+		Type:      ar.TYPE_EVIDENCE_AZURE_TPM,
+		Certs:     [][]byte{tpmAk},
+		Artifacts: artifacts,
+	}
+
+	return collateral, nil
 }
 
-func GetVtpmQuote(pcrs []int, nonce []byte) ([]byte, []byte, map[int][]byte, error) {
+func GetVtpmQuote(pcrs []int, nonce []byte) ([]byte, []byte, error) {
 
 	azureAkHandle := tpmutil.Handle(akHandle)
 
@@ -92,28 +110,65 @@ func GetVtpmQuote(pcrs []int, nonce []byte) ([]byte, []byte, map[int][]byte, err
 
 	tpm, err := OpenTpm()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return nil, nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
 	}
 	defer tpm.Close()
 
 	quote, sig, err := tpm2.Quote(tpm, azureAkHandle, "", "", nonce, sel, tpm2.AlgNull)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get quote: %w", err)
+		return nil, nil, fmt.Errorf("failed to get quote: %w", err)
 	}
 
 	rawSig, err := tpmutil.Pack(sig.Alg, sig.RSA.HashAlg, sig.RSA.Signature)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to pack signature: %w", err)
+		return nil, nil, fmt.Errorf("failed to pack signature: %w", err)
 	}
 
 	log.Debugf("Successfully fetched quote")
 
-	pcrValues, err := ReadPcrs(tpm, tpm2.AlgSHA256)
+	return quote, rawSig, nil
+}
+
+func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
+
+	log.Debugf("Reading PCRs...")
+
+	artifacts := make([]ar.Artifact, 0, len(azure.pcrs))
+
+	tpm, err := OpenTpm()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read PCRs: %w", err)
+		return nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+	}
+	defer tpm.Close()
+
+	// ReadPCRs cannot read at most 8 PCRs at the same time
+	for _, index := range azure.pcrs {
+		sel := tpm2.PCRSelection{
+			Hash: tpm2.AlgSHA256,
+			PCRs: []int{index},
+		}
+
+		pcrs, err := tpm2.ReadPCRs(tpm, sel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read PCR: %w", err)
+		}
+
+		for pcr, digest := range pcrs {
+			artifacts = append(artifacts, ar.Artifact{
+				Type:  ar.TYPE_PCR_SUMMARY,
+				Index: pcr,
+				Events: []ar.MeasureEvent{
+					{
+						Sha256: digest,
+					},
+				},
+			})
+		}
 	}
 
-	return quote, rawSig, pcrValues, nil
+	log.Debugf("Successfully read PCRs")
+
+	return artifacts, nil
 }
 
 func GetVtpmAkCert() ([]byte, error) {
@@ -143,42 +198,6 @@ func GetVtpmAkCert() ([]byte, error) {
 	log.Debugf("Successfully fetched vTPM AK cert")
 
 	return cert, nil
-}
-
-func ReadPcrs(tpm io.ReadWriter, alg tpm2.Algorithm) (map[int][]byte, error) {
-	numPcrs := 24
-	out := map[int][]byte{}
-
-	log.Debugf("Reading PCRs...")
-
-	for i := 0; i < numPcrs; i++ {
-		sel := tpm2.PCRSelection{Hash: alg}
-		for pcr := 0; pcr < numPcrs; pcr++ {
-			if _, present := out[pcr]; !present {
-				sel.PCRs = append(sel.PCRs, pcr)
-			}
-		}
-
-		ret, err := tpm2.ReadPCRs(tpm, sel)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read PCRs: %w", err)
-		}
-
-		for pcr, digest := range ret {
-			out[pcr] = digest
-		}
-		if len(out) == numPcrs {
-			break
-		}
-	}
-
-	if len(out) != numPcrs {
-		return nil, fmt.Errorf("failed to read PCRs. Readf %v, expected %v", len(out), numPcrs)
-	}
-
-	log.Debugf("Successfully read PCRs")
-
-	return out, nil
 }
 
 func OpenTpm() (*os.File, error) {

@@ -141,7 +141,7 @@ func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional 
 
 	// Create reference value
 	r := &ar.ReferenceValue{
-		Type:     "TPM Reference Value",
+		Type:     ar.TYPE_REFVAL_TPM,
 		SubType:  "boot_aggregate",
 		Index:    pcr,
 		Sha256:   tmpl,
@@ -167,7 +167,7 @@ func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional
 
 	// Create reference value
 	r := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     filepath.Base(hashedPath),
 		Index:       pcr,
 		Sha256:      tmpl,

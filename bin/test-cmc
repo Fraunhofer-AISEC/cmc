@@ -122,14 +122,13 @@ cmc_params=(
     "-provisionaddr" "https://localhost:9000" \
     "-metadata" "file://${metadata_signed}" \
     "-drivers" "tpm,sw" \
-    "-ima=true" \
-    "-imapcr" "10" \
     "-keyconfig" "EC256" \
+    "-hashalg" "sha256" \
     "-loglevel" "trace" \
     "-storage" "${storage}" \
     "-cache" "${cache}"
     "-peercache" "${peercache}" \
-    "-measurementlog=true" \
+    "-measurementlogs=true" \
     "-ctr=true" \
     "-ctrdriver" "sw" \
     "-ctrlog" "${ctrlog}" \

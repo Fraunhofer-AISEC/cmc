@@ -37,22 +37,22 @@ func init() {
 }
 
 // Obtains attestation report from cmcd
-func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error) {
 
 	if cc == nil {
-		return nil, nil, nil, fmt.Errorf("internal error: cmc config is nil")
+		return nil, fmt.Errorf("internal error: cmc config is nil")
 	}
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return nil, fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	// Establish connection
 	log.Debugf("Sending attestation request to cmcd via %v on %v", network, addr)
 	conn, err := net.Dial(network, addr)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("error dialing cmcd: %w", err)
+		return nil, fmt.Errorf("error dialing cmcd: %w", err)
 	}
 
 	req := &api.AttestationRequest{
@@ -64,43 +64,43 @@ func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) (
 	// Marshal request
 	payload, err := cc.ApiSerializer.Marshal(req)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send request
 	err = api.Send(conn, payload, api.TypeAttest)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to send request to cmcd: %w", err)
+		return nil, fmt.Errorf("failed to send request to cmcd: %w", err)
 	}
 
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to receive from cmcd: %w", err)
+		return nil, fmt.Errorf("failed to receive from cmcd: %w", err)
 	}
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
 		err = cc.ApiSerializer.Unmarshal(payload, resp)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
-		return nil, nil, nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
+		return nil, fmt.Errorf("received error from cmcd: %v", resp.Msg)
 	} else if mtype != api.TypeAttest {
-		return nil, nil, nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
+		return nil, fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
 	}
 
 	resp := new(api.AttestationResponse)
 	err = cc.ApiSerializer.Unmarshal(payload, resp)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
 	}
 
 	if err := resp.CheckVersion(); err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	return resp.Report, resp.Metadata, resp.CacheMisses, nil
+	return resp.Report, nil
 }
 
 // Sends attestation report to cmcd for verification
@@ -108,8 +108,6 @@ func (a SocketApi) verifyAR(
 	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
-	cacheMisses []string,
-	metadata map[string][]byte,
 ) error {
 
 	if cc == nil {
@@ -118,7 +116,7 @@ func (a SocketApi) verifyAR(
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	// Establish connection
@@ -129,13 +127,11 @@ func (a SocketApi) verifyAR(
 	}
 
 	req := &api.VerificationRequest{
-		Version:     api.GetVersion(),
-		Nonce:       nonce,
-		Report:      report,
-		Metadata:    metadata,
-		Peer:        peer,
-		CacheMisses: cacheMisses,
-		Policies:    policies,
+		Version:  api.GetVersion(),
+		Nonce:    nonce,
+		Report:   report,
+		Peer:     peer,
+		Policies: policies,
 	}
 
 	// Marshal Verification request
@@ -153,7 +149,7 @@ func (a SocketApi) verifyAR(
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		return fmt.Errorf("failed to receive from cmcd: %v", err)
+		return fmt.Errorf("failed to receive from cmcd: %w", err)
 	}
 
 	if mtype == api.TypeError {
@@ -180,7 +176,7 @@ func (a SocketApi) verifyAR(
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
-		cc.ResultCb(&verifyResp.Result)
+		cc.ResultCb(verifyResp.Result)
 	} else {
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
@@ -206,7 +202,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return nil, fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	// Establish connection
@@ -242,7 +238,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return nil, fmt.Errorf("failed to receive: %w", err)
 	}
 
 	if mtype == api.TypeError {
@@ -278,7 +274,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return nil, fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	// Establish connection
@@ -308,7 +304,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return nil, fmt.Errorf("failed to receive: %w", err)
 	}
 
 	if mtype == api.TypeError {
@@ -344,7 +340,7 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 
 	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
 	if err != nil {
-		log.Fatalf("Failed to get network and address: %v", err)
+		return nil, fmt.Errorf("failed to get network and address: %w", err)
 	}
 
 	// Establish connection
@@ -374,7 +370,7 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 	// Read reply
 	payload, mtype, err := api.Receive(conn)
 	if err != nil {
-		log.Fatalf("failed to receive: %v", err)
+		return nil, fmt.Errorf("failed to receive: %w", err)
 	}
 
 	if mtype == api.TypeError {

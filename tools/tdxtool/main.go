@@ -175,7 +175,7 @@ func getQuoteRaw() ([]byte, error) {
 		return nil, fmt.Errorf("failed to create nonce: %w", err)
 	}
 
-	data, err := tdxdriver.GetMeasurement(nonce)
+	data, err := tdxdriver.GetReport(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX Quote: %w", err)
 	}

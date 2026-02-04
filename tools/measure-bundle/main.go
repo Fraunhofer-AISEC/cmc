@@ -17,6 +17,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -35,7 +36,8 @@ func main() {
 	// Parse parameters
 	c, err := getConfig()
 	if err != nil {
-		log.Fatalf("Failed to get config: %v", err)
+		flag.Usage()
+		log.Fatalf("Failed to apply config: %v", err)
 	}
 
 	logrus.SetLevel(c.logLevel)
@@ -73,7 +75,7 @@ func main() {
 	// TODO make trust anchor and PCR configurable
 	pcr := 11
 	configRef := ar.ReferenceValue{
-		Type:     "TPM Reference Value",
+		Type:     ar.TYPE_REFVAL_TPM,
 		SubType:  "OCI Runtime Config",
 		Sha256:   configHash,
 		Index:    pcr,
@@ -82,7 +84,7 @@ func main() {
 	refs = append(refs, configRef)
 
 	rootfsRef := ar.ReferenceValue{
-		Type:     "TPM Reference Value",
+		Type:     ar.TYPE_REFVAL_TPM,
 		SubType:  "OCI Runtime Rootfs",
 		Sha256:   rootfsHash,
 		Index:    pcr,

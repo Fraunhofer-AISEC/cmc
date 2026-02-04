@@ -32,6 +32,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
+	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,6 +49,8 @@ type Azure struct {
 
 	// Confidential Computing Parameters
 	ccAkChain []*x509.Certificate
+	fmspc     string
+	vmType    string
 
 	// vTPM Parameters
 	pcrs   []int
@@ -67,10 +70,7 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 	if azure == nil {
 		return errors.New("internal error: Azure object is nil")
 	}
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
+	if c.Serializer == nil {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
@@ -112,7 +112,7 @@ func (azure *Azure) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-func (azure *Azure) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (azure *Azure) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
 	log.Debug("Collecting azure measurements")
 
@@ -120,17 +120,32 @@ func (azure *Azure) Measure(nonce []byte) ([]ar.Measurement, error) {
 		return nil, errors.New("internal error: azure object is nil")
 	}
 
-	ccMeasurement, err := GetCcMeasurement(nonce, azure.ccAkChain)
+	ccEvidence, err := GetCcEvidence(nonce)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get azure measurement: %w", err)
+		return nil, fmt.Errorf("failed to get azure evidence: %w", err)
 	}
 
-	vtpmMeasurement, err := azure.GetVtpmMeasurement(azure.pcrs, nonce)
+	vtpmEvidence, err := azure.GetVtpmEvidence(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vTPM measurement: %w", err)
 	}
 
-	return []ar.Measurement{ccMeasurement, vtpmMeasurement}, nil
+	return []ar.Evidence{*ccEvidence, *vtpmEvidence}, nil
+}
+
+func (azure *Azure) GetCollateral() ([]ar.Collateral, error) {
+
+	ccCollateral, err := azure.GetCcCollateral()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CC collateral: %w", err)
+	}
+
+	vtpmCollateral, err := azure.GetVtpmCollateral()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get vTPM collateral: %w", err)
+	}
+
+	return []ar.Collateral{*ccCollateral, *vtpmCollateral}, nil
 }
 
 func (azure *Azure) Lock() error {
@@ -274,10 +289,17 @@ func (azure *Azure) provision() error {
 	if err != nil {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
-
 	azure.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
 
 	internal.TraceCertsShort("Provisioned IK cert", azure.ikChain)
+
+	// Store FMSPC TODO ONLY WORKS WITH TDX
+	exts, err := pcs.PckCertificateExtensions(azure.ccAkChain[0])
+	if err != nil {
+		return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+	}
+	azure.fmspc = exts.FMSPC
+	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	return nil
 }
@@ -285,19 +307,21 @@ func (azure *Azure) provision() error {
 func (azure *Azure) fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Fetch initial attestation report which contains AK cert chain
-	measurement, err := GetCcMeasurement(nil, nil)
+	evidence, err := GetCcEvidence(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get azure Measurement: %w", err)
 	}
 
-	switch measurement.Type {
-	case "Azure SNP Measurement":
-		return fetchSnpAk(c, measurement.Evidence)
-	case "Azure TDX Measurement":
-		return fetchTdxAk(measurement.Evidence)
+	azure.vmType = evidence.Type
+
+	switch evidence.Type {
+	case ar.TYPE_EVIDENCE_AZURE_SNP:
+		return fetchSnpAk(c, evidence.Data)
+	case ar.TYPE_EVIDENCE_AZURE_TDX:
+		return fetchTdxAk(evidence.Data)
 	}
 
-	return nil, fmt.Errorf("unknown report type %v", measurement.Type)
+	return nil, fmt.Errorf("unknown report type %v", evidence.Type)
 }
 
 func fetchSnpAk(c *ar.DriverConfig, data []byte) ([]*x509.Certificate, error) {
@@ -385,22 +409,14 @@ func (azure *Azure) provisionIk(priv crypto.PrivateKey) (*x509.Certificate, erro
 	log.Tracef("Created nonce from IK public: %x", nonce)
 
 	// Fetch attestation report as part of client authentication
-	report, metadata, err := prover.Generate(nonce[:], nil, azure.DriverConfig.Metadata,
-		[]ar.Driver{azure}, azure.DriverConfig.Serializer)
+	report, err := prover.Generate(nonce[:], nil, azure.DriverConfig.Metadata,
+		[]ar.Driver{azure}, azure.DriverConfig.Serializer, azure.DriverConfig.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
-	r, err := azure.DriverConfig.Serializer.Marshal(report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
-	}
-	signedReport, err := prover.Sign(r, azure, azure.DriverConfig.Serializer, ar.IK)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
-	}
 
 	// Request IK certificate from EST server
-	cert, err := azure.DriverConfig.Provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := azure.DriverConfig.Provisioner.CcEnroll(csr, report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

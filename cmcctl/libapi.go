@@ -24,9 +24,10 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 type LibApi struct {
@@ -59,25 +60,14 @@ func (a LibApi) generate(c *config) error {
 	}
 
 	// Generate attestation report
-	report, metadata, cacheMisses, err := cmc.Generate(nonce, nil, a.cmc)
+	report, err := prover.Generate(nonce, nil, a.cmc.Metadata, a.cmc.Drivers, a.cmc.Serializer,
+		a.cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	resp := &api.AttestationResponse{
-		Report:      report,
-		Metadata:    metadata,
-		CacheMisses: cacheMisses,
-	}
-
-	// Marshal the attestation response for saving it to the file system
-	data, err := c.apiSerializer.Marshal(resp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal attestation response: %w", err)
-	}
-
 	// Save the attestation report for the verifier
-	err = pub.SaveReport(c.ReportFile, c.NonceFile, data, nonce)
+	err = pub.SaveReport(c.ReportFile, c.NonceFile, report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -102,12 +92,9 @@ func (a LibApi) verify(c *config) error {
 
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
-	resp, err := cmc.Verify(report.Report, nonce,
-		c.policies, "", nil,
-		report.Metadata, a.cmc)
-	if err != nil {
-		return fmt.Errorf("failed to verify: %v", err)
-	}
+	resp := verifier.Verify(report, nonce, a.cmc.IdentityCas,
+		c.policies, a.cmc.PolicyEngineSelect, a.cmc.PolicyOverwrite, a.cmc.MetadataCas,
+		a.cmc.PeerCache, "")
 
 	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, resp)
 	if err != nil {

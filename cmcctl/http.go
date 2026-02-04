@@ -100,7 +100,7 @@ func request(c *config) error {
 		ApiSerializer:   c.apiSerializer,
 		LibApiCmcConfig: &c.Config,
 		CmcPolicies:     c.policies,
-		ResultCb: func(result *ar.VerificationResult) {
+		ResultCb: func(result *ar.AttestationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
@@ -213,7 +213,7 @@ func serve(c *config) error {
 		ApiSerializer:   c.apiSerializer,
 		LibApiCmcConfig: &c.Config,
 		CmcPolicies:     c.policies,
-		ResultCb: func(result *ar.VerificationResult) {
+		ResultCb: func(result *ar.AttestationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty

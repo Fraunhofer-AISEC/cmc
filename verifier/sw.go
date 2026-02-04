@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2024 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,8 +30,13 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.Certificate,
-	refVals []ar.ReferenceValue, s ar.Serializer,
+func verifySw(
+	evidence ar.Evidence,
+	collateral ar.Collateral,
+	nonce []byte,
+	cas []*x509.Certificate,
+	refVals []ar.ReferenceValue,
+	s ar.Serializer,
 ) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying SW measurements")
@@ -42,7 +47,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	ok := true
 
 	// Verify signature and extract evidence
-	tr, payload, ok := s.Verify(measurement.Evidence, cas)
+	tr, payload, ok := s.Verify(evidence.Data, cas)
 	if !ok {
 		log.Debugf("Failed to verify sw evidence")
 		result.Summary.Fail(ar.VerifyEvidence)
@@ -52,26 +57,26 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	log.Debug("Successfully verified SW measurement signature")
 
 	// Unmarshal evidence
-	evidence := new(ar.SwEvidence)
-	err := s.Unmarshal(payload, evidence)
+	swEvidence := new(ar.SwEvidence)
+	err := s.Unmarshal(payload, swEvidence)
 	if err != nil {
-		log.Debugf("Failed to unmarshal sw evidence")
+		log.Debugf("Failed to unmarshal sw swEvidence")
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
 	// Verify nonce
-	if !bytes.Equal(evidence.Nonce, nonce) {
+	if !bytes.Equal(swEvidence.Nonce, nonce) {
 		log.Debugf("Nonces mismatch: supplied nonce: %v, report nonce = %v",
-			hex.EncodeToString(nonce), hex.EncodeToString(evidence.Nonce))
+			hex.EncodeToString(nonce), hex.EncodeToString(swEvidence.Nonce))
 		ok = false
 		result.Freshness.Status = ar.StatusFail
-		result.Freshness.Expected = hex.EncodeToString(evidence.Nonce)
+		result.Freshness.Expected = hex.EncodeToString(swEvidence.Nonce)
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	} else {
 		result.Freshness.Status = ar.StatusSuccess
 		result.Freshness.Got = hex.EncodeToString(nonce)
-		log.Debug("Successfully verified nonce")
+		log.Debugf("Successfully verified evidence nonce %x", nonce)
 	}
 
 	// Check that reference values are reflected by mandatory measurements
@@ -79,7 +84,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 
 	for _, ref := range refVals {
 		found := false
-		for _, swm := range measurement.Artifacts {
+		for _, swm := range collateral.Artifacts {
 			for _, event := range swm.Events {
 				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
 
@@ -107,7 +112,7 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 		}
 		if !found {
 			res := ar.DigestResult{
-				Type:       "Reference Value",
+				Type:       ar.TYPE_REFVAL_IAS,
 				Success:    ref.Optional, // Only fail attestation if component is mandatory
 				Launched:   false,
 				SubType:    ref.SubType,
@@ -126,9 +131,9 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	log.Debugf("Finished validating reference values")
 
 	// Check that every measurement is reflected by a reference value
-	log.Debugf("Validating %v artifact(s)..", len(measurement.Artifacts))
+	log.Debugf("Validating %v artifact(s)..", len(collateral.Artifacts))
 	aggregatedHash := make([]byte, 32)
-	for _, swm := range measurement.Artifacts {
+	for _, swm := range collateral.Artifacts {
 		log.Debugf("Validating %v measurement(s)..", len(swm.Events))
 		for _, event := range swm.Events {
 			found := false
@@ -193,10 +198,10 @@ func verifySwMeasurements(measurement ar.Measurement, nonce []byte, cas []*x509.
 	}
 	log.Debugf("Finished validating artifacts")
 
-	// Verify recalculated aggregated hash against evidence hash
-	if !bytes.Equal(aggregatedHash, evidence.Sha256) {
+	// Verify recalculated aggregated hash against swEvidence hash
+	if !bytes.Equal(aggregatedHash, swEvidence.Sha256) {
 		log.Debugf("Aggregated hash does not match evidence hash (%v vs %v)",
-			hex.EncodeToString(aggregatedHash), hex.EncodeToString(evidence.Sha256))
+			hex.EncodeToString(aggregatedHash), hex.EncodeToString(swEvidence.Sha256))
 		ok = false
 		result.Summary.Fail(ar.VerifyAggregatedSwHash)
 	} else {

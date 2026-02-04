@@ -39,7 +39,7 @@ var (
 	packages = map[string][]any{
 		"attestationreport": {
 			ar.AttestationReport{},
-			ar.VerificationResult{},
+			ar.AttestationResult{},
 			ar.MeasureEvent{},
 		},
 		"api": {

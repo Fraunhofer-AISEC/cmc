@@ -76,10 +76,17 @@ func main() {
 func convert(input []byte, outform string) ([]byte, error) {
 	// Initialize serializers: detect input format
 	var si ar.Serializer
+	var err error
 	if json.Valid(input) {
-		si = ar.JsonSerializer{}
+		si, err = ar.NewJsonSerializer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize json serializer: %w", err)
+		}
 	} else if err := cbor.Wellformed(input); err == nil {
-		si = ar.CborSerializer{}
+		si, err = ar.NewCborSerializer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize cbor serializer: %w", err)
+		}
 	} else {
 		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
 	}
@@ -87,9 +94,15 @@ func convert(input []byte, outform string) ([]byte, error) {
 	// Initialize serializers: use specified output format
 	var so ar.Serializer
 	if strings.EqualFold(outform, "json") {
-		so = ar.JsonSerializer{}
+		so, err = ar.NewJsonSerializer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize json serializer: %w", err)
+		}
 	} else if strings.EqualFold(outform, "cbor") {
-		so = ar.CborSerializer{}
+		so, err = ar.NewCborSerializer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize cbor serializer: %w", err)
+		}
 	} else {
 		return nil, fmt.Errorf("output format %v not supported (only JSON and CBOR are supported)",
 			outform)
@@ -97,7 +110,7 @@ func convert(input []byte, outform string) ([]byte, error) {
 
 	// Convert serialized input to go representation
 	m := new(ar.Metadata)
-	err := si.Unmarshal(input, m)
+	err = si.Unmarshal(input, m)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal: %v", err)
 	}

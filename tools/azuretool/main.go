@@ -91,11 +91,11 @@ func run() error {
 	switch *cmd {
 
 	case CMD_GET_HW_REPORT:
-		measurement, err := azuredriver.GetCcMeasurement(nil, nil)
+		evidence, err := azuredriver.GetCcEvidence(nil)
 		if err != nil {
 			return fmt.Errorf("failed to get hwreport: %w", err)
 		}
-		os.Stdout.Write(measurement.Evidence)
+		os.Stdout.Write(evidence.Data)
 
 	case CMD_GET_AZURE_REPORT:
 		tdreport, err := azuredriver.GetAzureReport()
@@ -136,7 +136,7 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("failed to get azure user data: %w", err)
 		}
-		quote, sig, _, err := azuredriver.GetVtpmQuote(pcrNums, nonce)
+		quote, sig, err := azuredriver.GetVtpmQuote(pcrNums, nonce)
 		if err != nil {
 			return fmt.Errorf("failed to get vtpm quote: %w", err)
 		}
@@ -197,13 +197,13 @@ func verifyVtpm() error {
 	log.Debugf("Created nonce %v", hex.EncodeToString(suppliedNonce))
 
 	// Get azure report
-	measurement, err := azuredriver.GetCcMeasurement(suppliedNonce, nil)
+	evidence, err := azuredriver.GetCcEvidence(suppliedNonce)
 	if err != nil {
 		return fmt.Errorf("failed to get azure CC measurement: %w", err)
 	}
 
 	// Extract the nonce (REPORTDATA) from TDX quote / SNP report
-	reportNonce, err := verifier.GetReportNonce(measurement)
+	reportNonce, err := verifier.GetReportNonce(evidence)
 	if err != nil {
 		return fmt.Errorf("failed to extract report nonce: %w", err)
 	}
@@ -220,7 +220,7 @@ func verifyVtpm() error {
 	}
 
 	// Verify the Azure CoT: vTPM AK public embedded into REPORTDATA
-	err = verifier.VerifyAzureCoT(measurement.Claims, suppliedNonce, reportNonce, ak)
+	err = verifier.VerifyAzureCoT(evidence.AddData, suppliedNonce, reportNonce, ak)
 	if err != nil {
 		return fmt.Errorf("failed to verify azure chain of trust: %w", err)
 	}
@@ -238,7 +238,7 @@ func verifyVtpmQuote(pcrs []int) error {
 		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
-	quote, sig, _, err := azuredriver.GetVtpmQuote(pcrs, nonce)
+	quote, sig, err := azuredriver.GetVtpmQuote(pcrs, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to get vtpm quote: %w", err)
 	}

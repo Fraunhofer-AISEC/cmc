@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	atlsHandshakeVersion = "1.0.0"
+	atlsHandshakeVersion = "1.1.0"
 )
 
 type AtlsHandshakeRequest struct {
@@ -37,11 +37,9 @@ type AtlsHandshakeRequest struct {
 }
 
 type AtlsHandshakeResponse struct {
-	Version     string            `json:"version" cbor:"0,keyasint"`
-	Error       string            `json:"error,omitempty" cbor:"1,keyasint,omitempty"`
-	Report      []byte            `json:"report,omitempty" cbor:"2,keyasint,omitempty"`
-	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
-	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"4,keyasint,omitempty"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Error   string `json:"error,omitempty" cbor:"1,keyasint,omitempty"`
+	Report  []byte `json:"report,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type AtlsHandshakeComplete struct {
@@ -117,13 +115,12 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	if attestSelf {
 		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
 		// Obtain attestation report from local cmcd
-		ownResp.Report, ownResp.Metadata, ownResp.CacheMisses, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
+		ownResp.Report, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
 		if err != nil {
 			ownResp.Error = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
 			log.Warn(ownResp.Error)
 		} else {
-			log.Debugf("Prover %v: Created report length %v, metadata items %v, cache misses %v",
-				ownAddr, len(ownResp.Report), len(ownResp.Metadata), len(ownResp.CacheMisses))
+			log.Debugf("Prover %v: Created report length %v", ownAddr, len(ownResp.Report))
 		}
 	} else {
 		log.Debugf("Prover %v: Skipping own attestation", ownAddr)
@@ -169,7 +166,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
 		err = cc.CmcApi.verifyAR(cc,
 			peerResp.Report, chbindings, cc.Policies,
-			fingerprint, peerResp.CacheMisses, peerResp.Metadata)
+			fingerprint)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}

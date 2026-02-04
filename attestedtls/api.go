@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,27 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package attestedtls
 
-import (
-	log "github.com/sirupsen/logrus"
-)
+import "crypto"
 
-func main() {
-
-	log.SetLevel(log.TraceLevel)
-
-	log.Infof("Starting cmc-backend %v", getVersion())
-
-	c, err := getConfig()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
-	s, err := newServer(c)
-	if err != nil {
-		log.Fatalf("Faeild to create server: %v", err)
-	}
-
-	s.serve()
+type CmcApi interface {
+	obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error)
+	verifyAR(cc *CmcConfig, report, nonce, policies []byte, peer string) error
+	fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
+	fetchCerts(cc *CmcConfig) ([][]byte, error)
+	fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error)
 }
+
+var CmcApis = map[string]CmcApi{}

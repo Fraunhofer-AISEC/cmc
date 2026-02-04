@@ -28,7 +28,8 @@ import (
 
 func Test_verifySgxMeasurements(t *testing.T) {
 	type args struct {
-		measurement    *ar.Measurement
+		evidence       ar.Evidence
+		collateral     ar.Collateral
 		nonce          []byte
 		manifests      []ar.MetadataResult
 		refvals        []ar.ReferenceValue
@@ -43,9 +44,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Valid Attestation Report",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -69,7 +70,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -81,9 +82,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -107,7 +108,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -119,9 +120,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: invalidSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: invalidSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -145,7 +146,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -157,9 +158,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Missing Collateral",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -183,7 +184,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -196,9 +197,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -222,7 +223,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: []byte{},
 					},
 				},
@@ -234,9 +235,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -260,7 +261,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -272,9 +273,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -298,7 +299,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -310,9 +311,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MRSIGNER",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -336,7 +337,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -348,9 +349,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		{
 			name: "Missing SGX Policy",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SGX Measurement",
-					Evidence: validSGXQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SGX,
+					Data: validSGXQuote,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -363,7 +364,7 @@ func Test_verifySgxMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SGX Reference Value",
+						Type:   ar.TYPE_REFVAL_SGX,
 						Sha256: validSGXMeasurement,
 					},
 				},
@@ -388,9 +389,9 @@ func Test_verifySgxMeasurements(t *testing.T) {
 		} else {
 			testCollateral = collateral
 		}
-		tt.args.measurement.Artifacts = []ar.Artifact{
+		tt.args.collateral.Artifacts = []ar.Artifact{
 			{
-				Type: "TDX Collateral",
+				Type: ar.TYPE_TDX_COLLATERAL,
 				Events: []ar.MeasureEvent{
 					{
 						IntelCollateral: testCollateral,
@@ -399,13 +400,13 @@ func Test_verifySgxMeasurements(t *testing.T) {
 			},
 		}
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifySgxMeasurements(*tt.args.measurement, tt.args.nonce,
+			got, got1 := verifySgx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.manifests, tt.args.refvals)
 			if got.Summary.Status != tt.want {
-				t.Errorf("verifySgxMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
+				t.Errorf("verifySgx() got = %v, want %v", got.Summary.Status, tt.want)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("verifySgxMeasurements() got1 = %v, want %v", got1, tt.want)
+				t.Errorf("verifySgx() got1 = %v, want %v", got1, tt.want)
 			}
 		})
 	}

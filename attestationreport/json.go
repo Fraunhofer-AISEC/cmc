@@ -34,41 +34,17 @@ import (
 	"github.com/go-jose/go-jose/v4"
 )
 
-// Custom type for JSON unmarshaller as byte arrays are
-// encoded as hex strings in JSON but used as byte arrays
-// internally and by CBOR encoding
-type HexByte []byte
+type jsonSerializer struct{}
 
-// MarshalJSON marshalls a byte array into a hex string
-func (h HexByte) MarshalJSON() ([]byte, error) {
-	return json.Marshal(hex.EncodeToString(h))
+func NewJsonSerializer() (jsonSerializer, error) {
+	return jsonSerializer{}, nil
 }
 
-// UnmarshalJSON unmarshalls JSON hex strings into
-// byte arrays
-func (h *HexByte) UnmarshalJSON(data []byte) error {
-
-	var v string
-	err := json.Unmarshal(data, &v)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal: %v", err)
-	}
-
-	*h, err = hex.DecodeString(v)
-	if err != nil {
-		return fmt.Errorf("failed to decode string: %v", err)
-	}
-
-	return nil
-}
-
-type JsonSerializer struct{}
-
-func (s JsonSerializer) String() string {
+func (s jsonSerializer) String() string {
 	return "JSON"
 }
 
-func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
+func (s jsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 	// Extract plain payload out of base64-encoded JSON Web Signature
 	jws, err := jose.ParseSigned(string(raw), []jose.SignatureAlgorithm{
 		jose.RS256,
@@ -85,16 +61,16 @@ func (s JsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (s JsonSerializer) Marshal(v any) ([]byte, error) {
+func (s jsonSerializer) Marshal(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (s JsonSerializer) Unmarshal(data []byte, v any) error {
+func (s jsonSerializer) Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
 // Sign signs data with the specified driver (to enable hardware-based signatures)
-func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error) {
+func (s jsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error) {
 
 	log.Tracef("Signing JSON data length %v...", len(data))
 
@@ -172,7 +148,7 @@ func (s JsonSerializer) Sign(data []byte, driver Driver, sel KeySelection) ([]by
 // Verify verifies signatures and certificate chains of JWS tokens. The verifier interface must
 // either be a list of trusted CA certificates, or a trusted public key, or a VerifierOption,
 // which can be using the system certificates or the embedded self-signed certificate.
-func (s JsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
+func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
 
 	var rootpool *x509.CertPool
 	var verifyingKey crypto.PublicKey
@@ -416,4 +392,83 @@ func (hws *hwSigner) SignPayload(payload []byte, alg jose.SignatureAlgorithm) ([
 		// The return format of all other signatures does not need to be adapted for go-jose
 		return hws.signer.(crypto.Signer).Sign(rand.Reader, hashed, opts)
 	}
+}
+
+// Custom type for JSON unmarshaller as byte arrays are
+// encoded as hex strings in JSON but used as byte arrays
+// internally and by CBOR encoding
+type HexByte []byte
+
+// MarshalJSON marshalls a byte array into a hex string
+func (h HexByte) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hex.EncodeToString(h))
+}
+
+// UnmarshalJSON unmarshalls JSON hex strings into
+// byte arrays
+func (h *HexByte) UnmarshalJSON(data []byte) error {
+
+	var v string
+	err := json.Unmarshal(data, &v)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal: %v", err)
+	}
+
+	*h, err = hex.DecodeString(v)
+	if err != nil {
+		return fmt.Errorf("failed to decode string: %v", err)
+	}
+
+	return nil
+}
+
+// MarshalJSON marshals an attestation report with encoded metadata,
+// which is required for the metadata integrity hash calculation
+func (r AttestationReport) MarshalJSON() ([]byte, error) {
+
+	if r.encodedContext == nil {
+		return nil, fmt.Errorf("attestation report not prepared")
+	}
+
+	type alias AttestationReport
+	return json.Marshal(&struct {
+		*alias
+		Metadata string `json:"metadata"`
+	}{
+		alias:    (*alias)(&r),
+		Metadata: string(r.encodedContext),
+	})
+}
+
+// UnmarshalJSON unmarshals an attestation report and also stores the
+// encoded metadata internally for metadara integrity verification
+func (r *AttestationReport) UnmarshalJSON(data []byte) error {
+
+	type alias AttestationReport
+	aux := &struct {
+		*alias
+		Metadata string `json:"metadata"`
+	}{
+		alias: (*alias)(r),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal attestation report: %w", err)
+	}
+
+	r.encodedContext = []byte(aux.Metadata)
+
+	var raw []byte
+	switch r.Encoding {
+	case TYPE_ENCODING_B64:
+		r, err := base64.RawURLEncoding.DecodeString(aux.Metadata)
+		if err != nil {
+			return fmt.Errorf("failed to decode: %w", err)
+		}
+		raw = r
+	default:
+		return fmt.Errorf("unsupported JSON metadata encoding %q", r.Encoding)
+	}
+
+	return json.Unmarshal(raw, &r.Context)
 }

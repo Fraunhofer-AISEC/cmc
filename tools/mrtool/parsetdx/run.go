@@ -77,12 +77,12 @@ func run(cmd *cli.Command) error {
 
 	data, err := os.ReadFile(tdxConf.Eventlog)
 	if err != nil {
-		log.Fatalf("Failed to read input file: %v", err)
+		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
 	err = parseEventlog(data, globConf.PrintEventLog, globConf.PrintSummary, globConf.Mrs)
 	if err != nil {
-		log.Fatalf("%v", err)
+		return fmt.Errorf("failed to parse event log: %w", err)
 	}
 
 	log.Info("Finished")

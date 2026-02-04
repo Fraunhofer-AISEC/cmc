@@ -69,7 +69,7 @@ func printEventlog(l *tcg.EventLog, mrs []int) error {
 		index := int(event.MRIndex())
 
 		refval := ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
 			Sha384:      event.Digest,
 			Index:       index,
@@ -115,7 +115,7 @@ func printSummary(l *tcg.EventLog, mrs []int) error {
 	summary := make([]ar.ReferenceValue, 0, len(rtmrs))
 	for index, rtmr := range rtmrs {
 		refval := ar.ReferenceValue{
-			Type:    "TDX Reference Value",
+			Type:    ar.TYPE_REFVAL_TDX,
 			SubType: fmt.Sprintf("RTMR%v", index-1),
 			Index:   index,
 			Sha384:  rtmr,

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Fraunhofer AISEC
+// Copyright (c) 2024 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,11 +23,6 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message"
 )
 
-// SignConfig allows to specify options for signing with the specified serializer
-type SignConfig struct {
-	UseAk bool // Use the AK instead of the IK for signing
-}
-
 // Verifier can either be a list of trusted CA certificates, or a trusted public key,
 // or nil. In this case, the system cert store is used
 type Verifier interface{}
@@ -46,9 +41,17 @@ type Serializer interface {
 
 func DetectSerialization(payload []byte) (Serializer, error) {
 	if json.Valid(payload) {
-		return JsonSerializer{}, nil
+		s, err := NewJsonSerializer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize json serializer: %w", err)
+		}
+		return s, nil
 	} else if err := cbor.Wellformed(payload); err == nil {
-		return CborSerializer{}, nil
+		s, err := NewCborSerializer()
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize cbor serializer: %w", err)
+		}
+		return s, nil
 	} else {
 		return nil, fmt.Errorf("failed to detect serialization")
 	}
@@ -57,13 +60,24 @@ func DetectSerialization(payload []byte) (Serializer, error) {
 // GetMediaType returns the media type that corresponds to the serializer
 func GetMediaType(s Serializer) message.MediaType {
 	switch s.(type) {
-	case JsonSerializer:
+	case jsonSerializer:
 		return message.AppJSON
-	case CborSerializer:
+	case cborSerializer:
 		return message.AppCBOR
 	default:
-		log.Fatalf("internal error: unknown serializer type %T", s)
+		log.Warnf("unknown serializer type %T", s)
+		return message.TextPlain
 	}
-	// Will not be reached, required to vaoid compiler error
-	return message.TextPlain
+}
+
+func GetEncoding(s Serializer) string {
+	switch s.(type) {
+	case jsonSerializer:
+		return TYPE_ENCODING_B64
+	case cborSerializer:
+		return TYPE_ENCODING_CBOR
+	default:
+		log.Warnf("unknown serializer type %T", s)
+		return "unknown"
+	}
 }

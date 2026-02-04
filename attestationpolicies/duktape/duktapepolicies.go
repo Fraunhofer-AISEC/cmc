@@ -39,9 +39,9 @@ var log = logrus.WithField("service", "duktape-policies")
 type DukTapePolicyEngine struct {
 }
 
-// Validate uses a javascript engine to validate custom policies against the verification result.
+// Validate uses a javascript engine to validate custom policies against the attestation result.
 // Custom policies are handed over as a string. This implementation accepts custom policies
-// as javascript code. The javascript code can parse the VerificationResult in the variable
+// as javascript code. The javascript code can parse the atteststation resulst in the variable
 // 'json', i.e.:
 //
 //	var obj = JSON.parse(json);
@@ -51,26 +51,26 @@ type DukTapePolicyEngine struct {
 //
 //	var obj = JSON.parse(json);
 //	var success = true;
-//	if (obj.type != "Verification Result") {
+//	if (obj.type != "Attestation Result") {
 //		success = false;
 //	}
 //	success
 //
-// Or the javascript code can either return the marshalled verification result
+// Or the javascript code can either return the marshalled attestation result
 // A simple validation could then look as follows:
 //
 //	var obj = JSON.parse(json);
 //	obj.summary.status = "warn"
 //	var ret = JSON.stringify(obj);
 //	ret
-func (p *DukTapePolicyEngine) Validate(result *ar.VerificationResult, policies []byte, policyOverwrite bool) bool {
+func (p *DukTapePolicyEngine) Validate(result *ar.AttestationResult, policies []byte, policyOverwrite bool) bool {
 
-	log.Debugf("Validating custom javascript policies against verification result %q: %q",
+	log.Debugf("Validating custom javascript policies against attestation result %q: %q",
 		result.Prover, result.Summary.Status)
 
 	vr, err := json.Marshal(result)
 	if err != nil {
-		log.Errorf("Failed to marshal verification result: %v", err)
+		log.Errorf("Failed to marshal attestation result: %v", err)
 		return false
 	}
 
@@ -100,10 +100,10 @@ func (p *DukTapePolicyEngine) Validate(result *ar.VerificationResult, policies [
 	// and we need to read back the result. This means, the policies engine can overwrite the
 	// entire result
 	if policyOverwrite {
-		log.Debug("Received verification result policy validation")
+		log.Debug("Received attestation result policy validation")
 
 		if err := json.Unmarshal([]byte(goStr), &result); err != nil {
-			log.Errorf("Failed to unmarshal policy validation to verification result: %v", err)
+			log.Errorf("Failed to unmarshal policy validation to attestation result: %v", err)
 			return false
 		}
 		return true

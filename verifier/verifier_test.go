@@ -30,7 +30,6 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/sirupsen/logrus"
 )
 
@@ -92,6 +91,8 @@ func TestVerify(t *testing.T) {
 		appManifest      ar.Metadata
 		imageDescription ar.Metadata
 		nonce            []byte
+		encoding         string
+		alg              string
 	}
 	tests := []struct {
 		name string
@@ -101,24 +102,28 @@ func TestVerify(t *testing.T) {
 		{
 			name: "Valid Report JSON",
 			args: args{
-				serializer:       ar.JsonSerializer{},
+				serializer:       getJsonSerializer(),
 				rtmManifest:      validRtmManifest,
 				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
 				nonce:            nonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
 			},
 			want: ar.StatusSuccess,
 		},
 		{
 			name: "Valid Report CBOR",
 			args: args{
-				serializer:       ar.CborSerializer{},
+				serializer:       getCborSerializer(),
 				rtmManifest:      validRtmManifest,
 				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
 				nonce:            nonce,
+				encoding:         ar.TYPE_ENCODING_CBOR,
+				alg:              "SHA-256",
 			},
 			want: ar.StatusSuccess,
 		},
@@ -127,10 +132,10 @@ func TestVerify(t *testing.T) {
 			// empty measurement is max. 1 (here certification level = 3)
 			name: "Invalid Certification Level",
 			args: args{
-				serializer: ar.JsonSerializer{},
+				serializer: getJsonSerializer(),
 				rtmManifest: ar.Metadata{
 					MetaInfo: ar.MetaInfo{
-						Type:    "Manifest",
+						Type:    ar.TYPE_MANIFEST,
 						Name:    "de.test.rtm",
 						Version: "2023-04-10T20:00:00Z",
 						Validity: ar.Validity{
@@ -147,7 +152,7 @@ func TestVerify(t *testing.T) {
 				},
 				osManifest: ar.Metadata{
 					MetaInfo: ar.MetaInfo{
-						Type:    "Manifest",
+						Type:    ar.TYPE_MANIFEST,
 						Name:    "de.test.os",
 						Version: "2023-04-10T20:00:00Z",
 						Validity: ar.Validity{
@@ -167,30 +172,36 @@ func TestVerify(t *testing.T) {
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
 				nonce:            nonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
 			},
 			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Image Description",
 			args: args{
-				serializer:       ar.JsonSerializer{},
+				serializer:       getJsonSerializer(),
 				rtmManifest:      validRtmManifest,
 				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: invalidImageDescription,
 				nonce:            nonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
 			},
 			want: ar.StatusFail,
 		},
 		{
 			name: "Incompatible RTM/OS Manifests",
 			args: args{
-				serializer:       ar.JsonSerializer{},
+				serializer:       getJsonSerializer(),
 				rtmManifest:      validRtmManifest,
 				osManifest:       incompatibleOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
 				nonce:            nonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
 			},
 			want: ar.StatusFail,
 		},
@@ -234,54 +245,27 @@ func TestVerify(t *testing.T) {
 				t.Errorf("failed to marshal the ImageDescription: %v", err)
 			}
 
-			rtmManifest, err = prover.Sign(rtmManifest, swDriver, s, ar.IK)
+			rtmManifest, err = s.Sign(rtmManifest, swDriver, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the RTM Manifest: %v", err)
 			}
-			osManifest, err = prover.Sign(osManifest, swDriver, s, ar.IK)
+			osManifest, err = s.Sign(osManifest, swDriver, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the OS Manifest: %v", err)
 			}
-			appManifest, err = prover.Sign(appManifest, swDriver, s, ar.IK)
+			appManifest, err = s.Sign(appManifest, swDriver, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the App Manifest: %v", err)
 			}
-			imageDescription, err = prover.Sign(imageDescription, swDriver, s, ar.IK)
+			imageDescription, err = s.Sign(imageDescription, swDriver, ar.IK)
 			if err != nil {
 				t.Errorf("failed to sign the ImageDescription: %v", err)
 			}
 
 			rtmDigest := sha256.Sum256(rtmManifest)
-			rtmManifestDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: rtmDigest[:],
-			}
-
 			osDigest := sha256.Sum256(osManifest)
-			osManifestDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: osDigest[:],
-			}
-
 			appDigest := sha256.Sum256(appManifest)
-			appManifestDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: appDigest[:],
-			}
-
 			imageDigest := sha256.Sum256(imageDescription)
-			imageDescriptionDigest := ar.MetadataDigest{
-				Type:   "Manifest",
-				Digest: imageDigest[:],
-			}
-
-			report := ar.AttestationReport{
-				Type:    "Attestation Report",
-				Version: ar.GetVersion(),
-				Metadata: []ar.MetadataDigest{
-					rtmManifestDigest, osManifestDigest, appManifestDigest, imageDescriptionDigest,
-				},
-			}
 
 			metadata := map[string][]byte{
 				hex.EncodeToString(rtmDigest[:]):   rtmManifest,
@@ -290,27 +274,45 @@ func TestVerify(t *testing.T) {
 				hex.EncodeToString(imageDigest[:]): imageDescription,
 			}
 
+			report := ar.AttestationReport{
+				Type:     ar.TYPE_ATTESTATION_REPORT,
+				Version:  ar.GetReportVersion(),
+				Encoding: tt.args.encoding,
+				Context: ar.Context{
+					Type:  ar.TYPE_CONTEXT,
+					Alg:   tt.args.alg,
+					Nonce: tt.args.nonce,
+					Digests: []string{
+						hex.EncodeToString(rtmDigest[:]),
+						hex.EncodeToString(osDigest[:]),
+						hex.EncodeToString(appDigest[:]),
+						hex.EncodeToString(imageDigest[:]),
+					},
+					Metadata: metadata,
+				},
+			}
+
+			_, err = report.PrepareContext(tt.args.serializer, crypto.SHA256)
+			if err != nil {
+				t.Errorf("failed to prepare report context: %v", err)
+			}
+
 			data, err := s.Marshal(report)
 			if err != nil {
 				t.Errorf("failed to marshal the Attestation Report: %v", err)
 			}
 
-			// Preparation: Sign the report
-			arSigned, err := prover.Sign(data, swDriver, s, ar.IK)
-			if err != nil {
-				t.Errorf("Internal Error: Failed to sign Attestion Report: %v", err)
-			}
-
 			// Run FUT
 			log.Info("Running FUT")
 			got := Verify(
-				arSigned, tt.args.nonce,
+				data, tt.args.nonce,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
 				PolicyEngineSelect_None,
 				false,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
-				metadata)
+				nil, "",
+			)
 			log.Info("Finished FUT")
 			if got.Summary.Status != tt.want {
 				log.Warnf("Printing Summary")
@@ -402,17 +404,17 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 // variables for Test_collectReferenceValues
 var (
 	refs = []ar.ReferenceValue{
-		{Type: "TPM Reference Value", SubType: "TPM1"},
-		{Type: "TPM Reference Value", SubType: "TPM2"},
-		{Type: "SNP Reference Value", SubType: "SNP1"},
-		{Type: "SW Reference Value", SubType: "SW1"},
-		{Type: "SW Reference Value", SubType: "SW2"},
+		{Type: ar.TYPE_REFVAL_TPM, SubType: "TPM1"},
+		{Type: ar.TYPE_REFVAL_TPM, SubType: "TPM2"},
+		{Type: ar.TYPE_REFVAL_SNP, SubType: "SNP1"},
+		{Type: ar.TYPE_REFVAL_SW, SubType: "SW1"},
+		{Type: ar.TYPE_REFVAL_SW, SubType: "SW2"},
 	}
 
 	refMap = map[string][]ar.ReferenceValue{
-		"TPM Reference Value": refs[:2],
-		"SNP Reference Value": {refs[2]},
-		"SW Reference Value":  refs[3:],
+		ar.TYPE_REFVAL_TPM: refs[:2],
+		ar.TYPE_REFVAL_SNP: {refs[2]},
+		ar.TYPE_REFVAL_SW:  refs[3:],
 	}
 
 	rtmManifest = ar.MetadataResult{
@@ -457,32 +459,32 @@ var (
 var (
 	validCompanyDescription = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type: "Company Description",
+			Type: ar.TYPE_COMPANY_DESCRIPTION,
 			Name: "Test Company Description",
 		},
 	}
 
 	validRtmManifestDescription = ar.ManifestDescription{
-		Type:     "Manifest Description",
+		Type:     ar.TYPE_MANIFEST_DESCRIPTION,
 		Name:     " Test RTM Manifest Description",
 		Manifest: "de.test.rtm",
 	}
 
 	validOsManifestDescription = ar.ManifestDescription{
-		Type:     "Manifest Description",
+		Type:     ar.TYPE_MANIFEST_DESCRIPTION,
 		Name:     " Test OS Manifest Description",
 		Manifest: "de.test.os",
 	}
 
 	validAppManifestDescription = ar.ManifestDescription{
-		Type:     "Manifest Description",
+		Type:     ar.TYPE_MANIFEST_DESCRIPTION,
 		Name:     " Test App Manifest Description 1",
 		Manifest: "de.test.app",
 	}
 
 	validRtmManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type:    "Manifest",
+			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.rtm",
 			Version: "2023-04-10T20:00:00Z",
 			Validity: ar.Validity{
@@ -500,7 +502,7 @@ var (
 
 	validOsManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type:    "Manifest",
+			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
 			Validity: ar.Validity{
@@ -520,7 +522,7 @@ var (
 
 	validAppManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type:    "Manifest",
+			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.app",
 			Version: "2023-04-10T20:00:00Z",
 			Validity: ar.Validity{
@@ -540,7 +542,7 @@ var (
 
 	incompatibleOsManifest = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type:    "Manifest",
+			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
 			Validity: ar.Validity{
@@ -559,7 +561,7 @@ var (
 	}
 
 	validMetaInfo = ar.MetaInfo{
-		Type:    "Image Description",
+		Type:    ar.TYPE_IMAGE_DESCRIPTION,
 		Name:    "test-device.test.de",
 		Version: "2023-04-10T20:00:00Z",
 		Validity: ar.Validity{
@@ -593,7 +595,7 @@ var (
 
 	invalidImageDescription = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
-			Type:    "Image Description",
+			Type:    ar.TYPE_IMAGE_DESCRIPTION,
 			Name:    "test-device.test.de",
 			Version: "2023-04-10T20:00:00Z",
 		},
@@ -698,8 +700,12 @@ func (s *SwDriver) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-func (s *SwDriver) Measure(nonce []byte) ([]ar.Measurement, error) {
-	return []ar.Measurement{}, nil
+func (s *SwDriver) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
+	return []ar.Evidence{}, nil
+}
+
+func (s *SwDriver) GetCollateral() ([]ar.Collateral, error) {
+	return []ar.Collateral{}, nil
 }
 
 func (s *SwDriver) Lock() error {
@@ -791,4 +797,20 @@ func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
 	}
 
 	return priv, []*x509.Certificate{leaf, ca}, nil
+}
+
+func getCborSerializer() ar.Serializer {
+	s, err := ar.NewCborSerializer()
+	if err != nil {
+		log.Fatalf("test: failed to initialize cbor serializer: %v", err)
+	}
+	return s
+}
+
+func getJsonSerializer() ar.Serializer {
+	s, err := ar.NewJsonSerializer()
+	if err != nil {
+		log.Fatalf("test: failed to initialize json serializer: %v", err)
+	}
+	return s
 }

@@ -99,9 +99,8 @@ with `jq` and `base64`:
 jq -r .payload <metadata.json> | base64 -di | jq .
 ```
 
-Usually, all relevant data is displayed in the `Verification Result`, which is produced on every
-attestation. However, if you want to inspect the `Attestation Report` itself, this can also be done
-using various bash tools:
+If you want to inspect the `Attestation Report` itself, this can also be done using various bash
+tools:
 
 Display the raw TPM quote:
 ```sh

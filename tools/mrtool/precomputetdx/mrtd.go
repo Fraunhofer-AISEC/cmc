@@ -292,7 +292,7 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_PLATFORM_FIRMWARE_BLOB",
 			Index:       tcg.INDEX_MRTD,
 			Sha384:      hash[:],
@@ -309,7 +309,7 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "OVMF",
 			Index:       tcg.INDEX_MRTD,
 			Sha384:      hash[:],
@@ -322,7 +322,7 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create MRTD final reference value
 	mrtdSummary := &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "MRTD Summary",
 		Description: "MRTD",
 		Index:       tcg.INDEX_MRTD,

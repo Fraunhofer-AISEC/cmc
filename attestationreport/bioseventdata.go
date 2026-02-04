@@ -625,7 +625,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 			devicePath.PathName += ")"
 
 		default:
-			log.Tracef("Skipping unsupported ACPI Device Path subtype: %d", fplSubtype)
+			// Currently not supported
 			buf.Next(int(length - 4))
 		}
 
@@ -638,7 +638,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 			devicePath.VendorGUID = readGUID(buf)
 			devicePath.VendorDefinedData = (buf.Next(int(length) - 20))
 		default:
-			log.Tracef("Skipping unsupported Message Device Path subtype: %d", fplSubtype)
+			// Currently not supported
 			buf.Next(int(length - 4))
 
 		}
@@ -754,7 +754,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 		}
 
 	default:
-		return nil, fmt.Errorf("invalid device path type %v", fplType)
+		return nil, fmt.Errorf("unsupported device path type %v", fplType)
 
 	}
 	return devicePath, nil
@@ -992,7 +992,7 @@ func parseImageLoadEvent(buf *bytes.Buffer) *ImageLoadEvent {
 		for {
 			uefiDevicePath, err := parseEfiDevicePath(buf)
 			if err != nil {
-				log.Debugf("failed to retrieve device path: %v", err)
+				log.Tracef("failed to retrieve device path: %v", err)
 				break
 			}
 			if uefiDevicePath != nil {

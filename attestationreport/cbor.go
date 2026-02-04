@@ -27,13 +27,32 @@ import (
 	"github.com/veraison/go-cose"
 )
 
-type CborSerializer struct{}
+type cborSerializer struct {
+	enc cbor.EncMode
+	dec cbor.DecMode
+}
 
-func (s CborSerializer) String() string {
+var (
+	ENC_OPTIONS = cbor.CTAP2EncOptions()
+)
+
+func NewCborSerializer() (cborSerializer, error) {
+	enc, err := ENC_OPTIONS.EncMode()
+	if err != nil {
+		return cborSerializer{}, err
+	}
+	dec, err := cbor.DecOptions{}.DecMode()
+	if err != nil {
+		return cborSerializer{}, err
+	}
+	return cborSerializer{enc: enc, dec: dec}, nil
+}
+
+func (s cborSerializer) String() string {
 	return "CBOR"
 }
 
-func (s CborSerializer) GetPayload(raw []byte) ([]byte, error) {
+func (s cborSerializer) GetPayload(raw []byte) ([]byte, error) {
 	// TODO better option to subdivide?
 	// Try unmarshalling as Sign1Message
 	var msg cose.SignMessage
@@ -50,15 +69,21 @@ func (s CborSerializer) GetPayload(raw []byte) ([]byte, error) {
 	return msg.Payload, nil
 }
 
-func (s CborSerializer) Marshal(v any) ([]byte, error) {
-	return cbor.Marshal(v)
+func (s cborSerializer) Marshal(v any) ([]byte, error) {
+	if s.enc == nil {
+		return nil, fmt.Errorf("internal error: cbor encoder not initialized")
+	}
+	return s.enc.Marshal(v)
 }
 
-func (s CborSerializer) Unmarshal(data []byte, v any) error {
-	return cbor.Unmarshal(data, v)
+func (s cborSerializer) Unmarshal(data []byte, v any) error {
+	if s.dec == nil {
+		return fmt.Errorf("internal error: cbor decoder not initialized")
+	}
+	return s.dec.Unmarshal(data, v)
 }
 
-func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]byte, error) {
+func (s cborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]byte, error) {
 
 	log.Tracef("Signing CBOR data length %v...", len(data))
 
@@ -121,7 +146,7 @@ func (s CborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]by
 // Verify verifies signatures and certificate chains of COSE messages. The verifier interface must
 // either be a list of trusted CA certificates, or a trusted public key, or a VerifierOption,
 // which can be using the system certificates or the embedded self-signed certificate.
-func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
+func (s cborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
 
 	result := MetadataResult{
 		Summary: Result{
@@ -268,4 +293,45 @@ func (s CborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	}
 
 	return result, msgToVerify.Payload, success
+}
+
+// UnmarshalCBOR unmarshals an attestation report and also stores the
+// encoded context internally for metadara integrity verification
+func (r *AttestationReport) UnmarshalCBOR(data []byte) error {
+
+	// Prepare TODO avoid additional initialization
+	enc, err := ENC_OPTIONS.EncMode()
+	if err != nil {
+		return err
+	}
+	dec, err := cbor.DecOptions{}.DecMode()
+	if err != nil {
+		return err
+	}
+
+	// Regular unmarshal
+	type alias AttestationReport
+	aux := &struct {
+		*alias
+	}{
+		alias: (*alias)(r),
+	}
+	if err := dec.Unmarshal(data, aux); err != nil {
+		return fmt.Errorf("failed to unmarshal cbor: %w", err)
+	}
+
+	// Marshal context just for hashing
+	raw, err := enc.Marshal(r.Context)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata")
+	}
+
+	switch r.Encoding {
+	case TYPE_ENCODING_CBOR:
+		r.encodedContext = raw
+	default:
+		return fmt.Errorf("unsupported CBOR metadata encoding %q", r.Encoding)
+	}
+
+	return nil
 }

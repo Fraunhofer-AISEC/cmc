@@ -13,19 +13,6 @@
         "report": {
           "type": "string",
           "contentEncoding": "base64"
-        },
-        "metadata": {
-          "additionalProperties": {
-            "type": "string",
-            "contentEncoding": "base64"
-          },
-          "type": "object"
-        },
-        "cacheMisses": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "type": "object"

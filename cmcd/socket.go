@@ -26,15 +26,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"encoding/hex"
-
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	c "github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
-	"golang.org/x/exp/maps"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 // Server is the server structure
@@ -146,21 +145,16 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	log.Debugf("Prover: Generating Attestation Report with nonce: %v", hex.EncodeToString(req.Nonce))
-
-	report, metadata, cacheMisses, err := c.Generate(req.Nonce, req.Cached, cmc)
+	report, err := prover.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers,
+		cmc.Serializer, cmc.HashAlg)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
 	}
 
-	log.Debugf("Generated attestation report with %v embedded metadata items", len(metadata))
-
 	resp := &api.AttestationResponse{
-		Version:     api.GetVersion(),
-		Report:      report,
-		Metadata:    metadata,
-		CacheMisses: cacheMisses,
+		Version: api.GetVersion(),
+		Report:  report,
 	}
 
 	// Serialize payload
@@ -196,16 +190,15 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	log.Debugf("verifying attestation report from peer %q", req.Peer)
-	result, err := c.Verify(req.Report, req.Nonce, req.Policies,
-		req.Peer, req.CacheMisses, req.Metadata, cmc)
-	if err != nil {
-		sendError(conn, s, "failed to verify: %v", err)
-		return
-	}
+
+	// Verify attestation report
+	result := verifier.Verify(req.Report, req.Nonce, cmc.IdentityCas,
+		req.Policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
+		cmc.MetadataCas, cmc.PeerCache, req.Peer)
 
 	resp := &api.VerificationResponse{
 		Version: api.GetVersion(),
-		Result:  *result,
+		Result:  result,
 	}
 
 	// Serialize payload
@@ -411,15 +404,10 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 	log.Debug("Collecting peer cache")
 	resp := api.PeerCacheResponse{
 		Version: api.GetVersion(),
-	}
-	c, ok := cmc.CachedPeerMetadata[req.Peer]
-	if ok {
-		resp.Cache = maps.Keys(c)
-	} else {
-		resp.Cache = []string{}
+		Cache:   cmc.PeerCache.GetKeys(req.Peer),
 	}
 
-	log.Tracef("Collected peer cache with %v elements", len(cmc.CachedPeerMetadata[req.Peer]))
+	log.Tracef("Collected peer cache with %v elements", len(resp.Cache))
 
 	data, err := s.Marshal(&resp)
 	if err != nil {

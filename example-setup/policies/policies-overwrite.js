@@ -1,10 +1,10 @@
-// Parse the verification result
+// Parse the attestation result
 var obj = JSON.parse(json);
 
 var success = true;
 
 // Basic checks
-if (obj.type != "Verification Result") {
+if (obj.type != "Attestation Result") {
     console.log("[PolicyEngine] Invalid type");
     success = false;
 }

@@ -35,17 +35,16 @@ type Config struct {
 	ProvisionAuth    []string `json:"provisionAuth,omitempty"`
 	MetadataLocation []string `json:"metadata,omitempty"`
 	Drivers          []string `json:"drivers,omitempty"`
-	Ima              bool     `json:"ima,omitempty"`
-	ImaPcr           int      `json:"imaPcr,omitempty"`
 	ExcludePcrs      []int    `json:"excludePcrs,omitempty"`
 	KeyConfig        string   `json:"keyConfig,omitempty"`
+	HashAlg          string   `json:"hashAlg,omitempty"`
 	Api              string   `json:"api,omitempty"`
 	PolicyEngine     string   `json:"policyEngine,omitempty"`
 	PolicyOverwrite  bool     `json:"policyOverwrite,omitempty"`
 	Storage          string   `json:"storage,omitempty"`
 	Cache            string   `json:"cache,omitempty"`
 	PeerCache        string   `json:"peerCache,omitempty"`
-	MeasurementLog   bool     `json:"measurementLog,omitempty"`
+	MeasurementLogs  bool     `json:"measurementLogs,omitempty"`
 	Ctr              bool     `json:"ctr,omitempty"`
 	CtrDriver        string   `json:"ctrDriver,omitempty"`
 	CtrPcr           int      `json:"ctrPcr,omitempty"`
@@ -77,13 +76,14 @@ const (
 	ImaPcrFlag          = "imapcr"
 	ExcludePcrsFlag     = "excludepcrs"
 	KeyConfigFlag       = "keyconfig"
+	HashAlgFlag         = "hashalg"
 	ApiFlag             = "api"
 	PolicyEngineFlag    = "policyengine"
 	PolicyOverwriteFlag = "policyoverwrite"
 	StorageFlag         = "storage"
 	CacheFlag           = "cache"
 	PeerCacheFlag       = "peercache"
-	MeasurementLogFlag  = "measurementlog"
+	MeasurementLogsFlag = "measurementlogs"
 	CtrFlag             = "ctr"
 	CtrDriverFlag       = "ctrdriver"
 	CtrPcrFlag          = "ctrpcr"
@@ -113,24 +113,22 @@ var (
 	driversList = flag.String(DriversFlag, "",
 		fmt.Sprintf("Drivers for generating attestation reports (comma separated list). "+
 			"Possible: %v", strings.Join(maps.Keys(GetDrivers()), ",")))
-	ima = flag.Bool(ImaFlag, false,
-		"Specifies whether to use Integrity Measurement Architecture (IMA)")
-	imaPcr      = flag.Int(ImaPcrFlag, 0, "IMA PCR")
 	excludePcrs = flag.String(ExcludePcrsFlag, "", "TPM PCRs to be excluded from the quote "+
 		"(comma-separated list)")
 	keyConfig    = flag.String(KeyConfigFlag, "", "Key configuration")
+	hashAlg      = flag.String(HashAlgFlag, "", "Hash algorithm for attestation report integrity")
 	cmcApi       = flag.String(ApiFlag, "", "API to use. Possible: [coap grpc libapi socket]")
 	policyEngine = flag.String(PolicyEngineFlag, "",
 		fmt.Sprintf("Possible policy engines: %v",
 			strings.Join(maps.Keys(GetPolicyEngines()), ",")))
 	policyOverwrite = flag.Bool(PolicyOverwriteFlag, false,
-		"Specifies whether attestation policies can overwrite verification result properties. "+
+		"Specifies whether attestation policies can overwrite attestation result properties. "+
 			"This should be used with care, as it can overwrite the entire attestation process")
 	storage   = flag.String(StorageFlag, "", "Optional folder to store internal CMC data in")
 	cache     = flag.String(CacheFlag, "", "Optional folder to cache metadata for offline backup")
 	peerCache = flag.String(PeerCacheFlag, "",
 		"Optional folder to cache peer metadata to reduce attestation report size")
-	measurementLog = flag.Bool(MeasurementLogFlag, false,
+	measurementLogs = flag.Bool(MeasurementLogsFlag, false,
 		"Specifies whether to include measured events in measurement and validation report")
 	ctr       = flag.Bool(CtrFlag, false, "Specifies whether to conduct container measurements")
 	ctrDriver = flag.String(CtrDriverFlag, "",
@@ -167,12 +165,6 @@ func GetConfig(c *Config) error {
 	if internal.FlagPassed(DriversFlag) {
 		c.Drivers = strings.Split(*driversList, ",")
 	}
-	if internal.FlagPassed(ImaFlag) {
-		c.Ima = *ima
-	}
-	if internal.FlagPassed(ImaPcrFlag) {
-		c.ImaPcr = *imaPcr
-	}
 	if internal.FlagPassed(ExcludePcrsFlag) {
 		excludePcrs, err := internal.StrToInt(strings.Split(*excludePcrs, ","))
 		if err != nil {
@@ -182,6 +174,9 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(KeyConfigFlag) {
 		c.KeyConfig = *keyConfig
+	}
+	if internal.FlagPassed(HashAlgFlag) {
+		c.HashAlg = *hashAlg
 	}
 	if internal.FlagPassed(ApiFlag) {
 		c.Api = *cmcApi
@@ -201,8 +196,8 @@ func GetConfig(c *Config) error {
 	if internal.FlagPassed(PeerCacheFlag) {
 		c.PeerCache = *peerCache
 	}
-	if internal.FlagPassed(MeasurementLogFlag) {
-		c.MeasurementLog = *measurementLog
+	if internal.FlagPassed(MeasurementLogsFlag) {
+		c.MeasurementLogs = *measurementLogs
 	}
 	if internal.FlagPassed(CtrFlag) {
 		c.Ctr = *ctr
@@ -264,10 +259,6 @@ func (c *Config) Print() {
 		log.Debugf("\tProvisioning token             : %v", c.ProvisionToken)
 	}
 	log.Debugf("\tMetadata locations             : %v", strings.Join(c.MetadataLocation, ","))
-	log.Debugf("\tUse IMA                        : %v", c.Ima)
-	if c.Ima {
-		log.Debugf("\tIMA PCR                        : %v", c.ImaPcr)
-	}
 	if len(c.ExcludePcrs) > 0 {
 		log.Debugf("\tExclude TPM PCRs               : %v", c.ExcludePcrs)
 	}
@@ -275,8 +266,9 @@ func (c *Config) Print() {
 	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)
 	log.Debugf("\tPolicy overwrite enabled       : %v", c.PolicyOverwrite)
 	log.Debugf("\tKey config                     : %v", c.KeyConfig)
+	log.Debugf("\tHash algorithm                 : %v", c.HashAlg)
 	log.Debugf("\tDrivers                        : %v", strings.Join(c.Drivers, ","))
-	log.Debugf("\tMeasurement log                : %v", c.MeasurementLog)
+	log.Debugf("\tMeasurement log                : %v", c.MeasurementLogs)
 	log.Debugf("\tMeasure containers             : %v", c.Ctr)
 	if c.Ctr {
 		log.Debugf("\tContainer driver               : %v", c.CtrDriver)

@@ -19,6 +19,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 // UEFI Spec 2.10 Section 38.4.1:
@@ -80,10 +82,10 @@ const (
 func (t TrustAnchor) RefvalString() string {
 	switch t {
 	case TPM:
-		return "TPM Reference Value"
+		return ar.TYPE_REFVAL_TPM
 	case TDX:
-		return "TDX Reference Value"
+		return ar.TYPE_REFVAL_TDX
 	default:
-		return fmt.Sprintf("Unknown Reference Value (%v)", t)
+		return fmt.Sprintf("Unknown reference value (%v)", t)
 	}
 }

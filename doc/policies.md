@@ -15,12 +15,12 @@ boolean indicating success or failure of the custom policy validation. A minimal
 verifying only the `type` field of the attesation result could look as follows:
 
 ```js
-// Parse the verification result
+// Parse the result
 var obj = JSON.parse(json);
 var success = true;
 
-// Check the type field of the verification result
-if (obj.type != "Verification Result") {
+// Check the type field of the result
+if (obj.type != "Attestation Result") {
     console.log("Invalid type");
     success = false;
 }
@@ -28,6 +28,6 @@ if (obj.type != "Verification Result") {
 success
 ```
 
-Via the `overwritePolicies` configuration parameter, fields of the verification result can even
+Via the `overwritePolicies` configuration parameter, fields of the attestation result can even
 be overwritten, e.g. from `fail` to `warn` to allow less strict checking. This should be used
 with care.

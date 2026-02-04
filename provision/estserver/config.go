@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -198,13 +197,9 @@ func getConfig() (*config, error) {
 
 	// Configure the logger
 	if c.LogFile != "" {
-		lf, err := filepath.Abs(*logFile)
+		file, err := os.OpenFile(*logFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Fatalf("Failed to get logfile path: %v", err)
-		}
-		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		log.SetOutput(file)
 	}

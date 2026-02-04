@@ -188,7 +188,7 @@ message VerificationRequest {
 
 ### Verification Response
 
-A verification response contains the `verificationResult` of the verification process.
+A verification response contains the attestation result of the verification process.
 
 #### JSON
 See [VerificationResponse](./api/json/api/VerificationResponse.json)
@@ -197,7 +197,7 @@ See [VerificationResponse](./api/json/api/VerificationResponse.json)
 ```
 VerificationResponse = {
   0: tstr,                          ; Version - protocol version
-  1: any                            ; Verification result
+  1: any                            ; Attestation result
 }
 ```
 

@@ -83,7 +83,11 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
+func verifySnp(
+	evidence ar.Evidence,
+	collateral ar.Collateral,
+	nonce []byte,
+	manifests []ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -96,14 +100,14 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	ok := true
 
 	// Extract the SNP attestation report data structure
-	s, err := DecodeSnpReport(measurement.Evidence)
+	s, err := DecodeSnpReport(evidence.Data)
 	if err != nil {
 		log.Debugf("Failed to decode SNP report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
-	certs, err := internal.ParseCertsDer(measurement.Certs)
+	certs, err := internal.ParseCertsDer(collateral.Certs)
 	if err != nil {
 		log.Debugf("Failed to parse certificates: %v", err)
 		result.Summary.Fail(ar.ParseCert)
@@ -111,19 +115,19 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	}
 
 	if len(referenceValues) == 0 {
-		log.Debug("Could not find SNP Reference Value")
+		log.Debug("Could not find SNP reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		log.Debugf("Report contains %v reference values. Currently, only 1 SNP Reference Value is supported",
+		log.Debugf("Report contains %v reference values. Currently, only 1 SNP reference value is supported",
 			len(referenceValues))
 		result.Summary.Fail(ar.RefValMultiple)
 		return result, false
 	}
 
 	snpReferenceValue := referenceValues[0]
-	if snpReferenceValue.Type != "SNP Reference Value" {
-		log.Debugf("SNP Reference Value invalid type %v", snpReferenceValue.Type)
+	if snpReferenceValue.Type != ar.TYPE_REFVAL_SNP {
+		log.Debugf("SNP reference value invalid type %v", snpReferenceValue.Type)
 		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
@@ -159,12 +163,13 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 		result.Freshness.Got = hex.EncodeToString(s.ReportData[:])
 		ok = false
 	} else {
+		log.Debugf("Successfully verified evidence nonce %x", nonce)
 		result.Freshness.Got = hex.EncodeToString(nonce)
 		result.Freshness.Status = ar.StatusSuccess
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(measurement.Evidence, s, certs, rootManifest.CaFingerprints)
+	sig, ret := verifySnpSignature(evidence.Data, s, certs, rootManifest.CaFingerprints)
 	if !ret {
 		ok = false
 	}
@@ -176,7 +181,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 			snpReferenceValue.Sha384, s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     "Reference Value",
+				Type:     ar.TYPE_REFVAL_IAS,
 				SubType:  snpReferenceValue.SubType,
 				Digest:   hex.EncodeToString(snpReferenceValue.Sha384),
 				Success:  false,
@@ -195,7 +200,7 @@ func verifySnpMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	} else {
 		log.Debug("Successfully verified SNP reference value")
 		// As we previously checked, that the attestation report contains exactly one
-		// SNP Reference Value, we can set this here:
+		// SNP reference value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				SubType:  snpReferenceValue.SubType,

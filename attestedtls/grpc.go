@@ -53,13 +53,13 @@ func getCMCServiceConn(cc *CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, e
 }
 
 // Obtains attestation report from CMCd
-func (a GrpcApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a GrpcApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error) {
 
 	// Get backend connection
 	log.Debugf("Sending attestation request to cmcd on %v", cc.CmcAddr)
 	cmcClient, cmcconn, err := getCMCServiceConn(cc)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to establish connection: %w", err)
+		return nil, fmt.Errorf("failed to establish connection: %w", err)
 	}
 	defer cmcconn.Close()
 
@@ -76,15 +76,15 @@ func (a GrpcApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]
 	defer cancel()
 	resp, err := cmcClient.Attest(ctx, req)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to obtain AR: %w", err)
+		return nil, fmt.Errorf("failed to obtain AR: %w", err)
 	}
 
 	if resp.Version != api.GetVersion() {
-		return nil, nil, nil, fmt.Errorf("API version mismatch. Expected AttestationResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
+		return nil, fmt.Errorf("API version mismatch. Expected AttestationResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
 	}
 
 	// Return response
-	return resp.Report, resp.Metadata, resp.CacheMisses, nil
+	return resp.Report, nil
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
@@ -92,8 +92,6 @@ func (a GrpcApi) verifyAR(
 	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
-	cacheMisses []string,
-	metadata map[string][]byte,
 ) error {
 
 	// Get backend connection
@@ -106,13 +104,11 @@ func (a GrpcApi) verifyAR(
 	log.Debug("Contacting backend for AR verification")
 
 	req := &api.VerificationRequest{
-		Version:     api.GetVersion(),
-		Nonce:       nonce,
-		Report:      report,
-		Metadata:    metadata,
-		Peer:        peer,
-		CacheMisses: cacheMisses,
-		Policies:    policies,
+		Version:  api.GetVersion(),
+		Nonce:    nonce,
+		Report:   report,
+		Peer:     peer,
+		Policies: policies,
 	}
 
 	// Perform Verify request
@@ -120,7 +116,7 @@ func (a GrpcApi) verifyAR(
 	defer cancel()
 	resp, err := cmcClient.Verify(ctx, req)
 	if err != nil {
-		return fmt.Errorf("could not obtain verification result: %w", err)
+		return fmt.Errorf("could not obtain attestation result: %w", err)
 	}
 
 	if resp.Version != api.GetVersion() {
@@ -128,10 +124,10 @@ func (a GrpcApi) verifyAR(
 	}
 
 	// grpc only: the attestation result is marshalled as JSON, as we do not have protobuf definitions
-	result := new(ar.VerificationResult)
+	result := new(ar.AttestationResult)
 	err = json.Unmarshal(resp.GetResult(), result)
 	if err != nil {
-		return fmt.Errorf("could not parse verification result: %w", err)
+		return fmt.Errorf("could not parse attestation result: %w", err)
 	}
 
 	// Return attestation result via callback if specified

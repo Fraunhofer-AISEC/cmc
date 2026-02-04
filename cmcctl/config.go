@@ -32,17 +32,30 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+var serializers map[string]ar.Serializer
+
+func init() {
+	serializers = make(map[string]ar.Serializer)
+
+	jsonSer, err := ar.NewJsonSerializer()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create JSON serializer: %v", err))
+	}
+	serializers["json"] = jsonSer
+
+	cborSer, err := ar.NewCborSerializer()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CBOR serializer: %v", err))
+	}
+	serializers["cbor"] = cborSer
+}
+
 const (
 	timeoutSec = 10
 )
 
 var (
 	apis = map[string]Api{}
-
-	serializers = map[string]ar.Serializer{
-		"json": ar.JsonSerializer{},
-		"cbor": ar.CborSerializer{},
-	}
 
 	logLevels = map[string]logrus.Level{
 		"panic": logrus.PanicLevel,

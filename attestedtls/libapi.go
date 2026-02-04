@@ -20,16 +20,15 @@ package attestedtls
 import (
 	"crypto"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 type LibApi struct {
@@ -41,38 +40,35 @@ func init() {
 }
 
 // Obtains attestation report from CMCd
-func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error) {
+func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error) {
 
 	if cc == nil {
-		return nil, nil, nil, errors.New("internal error: cmc is nil")
+		return nil, errors.New("internal error: cmc is nil")
 	}
 
 	if a.cmc == nil {
 		cmc, err := cmc.NewCmc(cc.LibApiConfig)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to initialize CMC: %v", err)
+			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
 		}
 		a.cmc = cmc
 	}
 
 	if len(a.cmc.Drivers) == 0 {
-		return nil, nil, nil, errors.New("no drivers configured")
+		return nil, errors.New("no drivers configured")
 	}
 
-	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(chbindings))
-
-	report, metadata, cacheMisses, err := cmc.Generate(chbindings, cached, a.cmc)
+	report, err := prover.Generate(chbindings, cached, a.cmc.Metadata, a.cmc.Drivers,
+		a.cmc.Serializer, a.cmc.HashAlg)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
 	resp := &api.AttestationResponse{
-		Report:      report,
-		Metadata:    metadata,
-		CacheMisses: cacheMisses,
+		Report: report,
 	}
 
-	return resp.Report, resp.Metadata, resp.CacheMisses, nil
+	return resp.Report, nil
 }
 
 // Checks Attestation report by calling the CMC to Verify and checking its status response
@@ -80,8 +76,6 @@ func (a LibApi) verifyAR(
 	cc *CmcConfig,
 	report, nonce, policies []byte,
 	peer string,
-	cacheMisses []string,
-	metadata map[string][]byte,
 ) error {
 
 	if cc == nil {
@@ -97,20 +91,16 @@ func (a LibApi) verifyAR(
 	}
 
 	req := &api.VerificationRequest{
-		Nonce:       nonce,
-		Report:      report,
-		Metadata:    metadata,
-		Peer:        peer,
-		CacheMisses: cacheMisses,
-		Policies:    policies,
+		Nonce:    nonce,
+		Report:   report,
+		Peer:     peer,
+		Policies: policies,
 	}
 
 	log.Debug("Verifier: verifying attestation report")
-	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
-		req.Peer, req.CacheMisses, req.Metadata, a.cmc)
-	if err != nil {
-		return fmt.Errorf("failed to verify: %w", err)
-	}
+	result := verifier.Verify(req.Report, req.Nonce, a.cmc.IdentityCas, req.Policies,
+		a.cmc.PolicyEngineSelect, a.cmc.PolicyOverwrite, a.cmc.MetadataCas, a.cmc.PeerCache,
+		req.Peer)
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
@@ -210,13 +200,5 @@ func (a LibApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, err
 
 	log.Debugf("Fetching peer cache for peer: %v", fingerprint)
 
-	c, ok := a.cmc.CachedPeerMetadata[fingerprint]
-	if !ok {
-		log.Tracef("No data cached for peer %v", fingerprint)
-		return nil, nil
-	}
-
-	cache := maps.Keys(c)
-
-	return cache, nil
+	return a.cmc.PeerCache.GetKeys(fingerprint), nil
 }

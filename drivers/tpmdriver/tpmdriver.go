@@ -27,8 +27,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 
@@ -38,6 +40,8 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	"github.com/sirupsen/logrus"
+
+	expmaps "golang.org/x/exp/maps"
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -68,7 +72,6 @@ const (
 	ikFile      = "tpm_ik_encrypted.json"
 
 	DEFAULT_BINARY_BIOS_MEASUREMENTS = "/sys/kernel/security/tpm0/binary_bios_measurements"
-	DEFAULT_EVENT_TYPE               = "TPM Measurement"
 
 	tpmResourceManagerPath = "/dev/tpmrm0"
 	tpmDevicePath          = "/dev/tpm0"
@@ -89,23 +92,12 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
 	}
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
+	if c.Serializer == nil {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
 	t.DriverConfig = c
 	t.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
-
-	// Check if serializer is initialized
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
-		return fmt.Errorf("serializer not initialized in driver config")
-	}
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
@@ -130,7 +122,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 
 	// Determine if the system is an SRTM or DRTM system to include the
 	// respective PCRs into the TPM quote
-	t.pcrs, err = t.getQuotePcrs()
+	err = t.setQuotePcrs()
 	if err != nil {
 		return fmt.Errorf("failed to determine TPM Quote PCRs: %w", err)
 	}
@@ -167,9 +159,7 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-// Measure implements the attestation reports generic Measure interface to be called
-// as a plugin during attestation report generation
-func (t *Tpm) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (t *Tpm) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
 	log.Debug("Collecting TPM measurements")
 
@@ -183,38 +173,59 @@ func (t *Tpm) Measure(nonce []byte) ([]ar.Measurement, error) {
 	log.Debugf("Collecting TPM Quote for PCRs %v",
 		strings.Trim(strings.Join(strings.Fields(fmt.Sprint(t.pcrs)), ","), "[]"))
 
-	attestPcrs, quote, err := t.GetMeasurement(nonce)
+	quote, err := t.GetQuote(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TPM Measurement: %w", err)
 	}
-	pcrs := map[int][]byte{}
-	for _, attestPcr := range attestPcrs {
-		pcrs[attestPcr.Index] = attestPcr.Digest
+
+	log.Tracef("Quote: %x", quote.Quote)
+	log.Tracef("Signature: %x", quote.Signature)
+
+	evidences := []ar.Evidence{
+		{
+			Type:      ar.TYPE_EVIDENCE_TPM,
+			Data:      quote.Quote,
+			Signature: quote.Signature,
+		},
 	}
 
-	artifacts, err := GetEventLogs(t.Serializer, t.MeasurementLog, t.Ima, t.ctrLog,
-		t.pcrs, t.ImaPcr, t.CtrPcr, t.CtrLog, pcrs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get event logs: %w", err)
+	return evidences, nil
+}
+
+func (t *Tpm) GetCollateral() ([]ar.Collateral, error) {
+
+	artifacts := make([]ar.Artifact, 0)
+
+	if t.MeasurementLogs {
+		events, err := GetEventLogs(t.pcrs, t.ctrLog, t.CtrPcr, t.CtrLog)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get event logs: %w", err)
+		}
+		artifacts = append(artifacts, events...)
+	} else {
+		pcrs, err := t.GetPcrs()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get prs: %w", err)
+		}
+		artifacts = append(artifacts, pcrs...)
 	}
 
-	tm := ar.Measurement{
-		Type:      "TPM Measurement",
-		Evidence:  quote.Quote,
-		Signature: quote.Signature,
-		Certs:     internal.WriteCertsDer(t.akChain),
-		Artifacts: artifacts,
-	}
-
-	for _, elem := range tm.Artifacts {
+	// Just for logging
+	for _, elem := range artifacts {
 		for _, event := range elem.Events {
 			log.Tracef("PCR%v %v: %v", elem.Index, elem.Type, hex.EncodeToString(event.Sha256))
 		}
 	}
-	log.Debug("Quote: ", hex.EncodeToString(tm.Evidence))
-	log.Debug("Signature: ", hex.EncodeToString(tm.Signature))
 
-	return []ar.Measurement{tm}, nil
+	collateral := []ar.Collateral{
+		{
+			Type:      ar.TYPE_EVIDENCE_TPM,
+			Certs:     internal.WriteCertsDer(t.akChain),
+			Artifacts: artifacts,
+		},
+	}
+
+	return collateral, nil
 }
 
 func (t *Tpm) Lock() error {
@@ -427,11 +438,11 @@ func (t *Tpm) GetTpmInfo() (*attest.TPMInfo, error) {
 		return nil, fmt.Errorf("failed to get TPM info - %w", err)
 	}
 
-	log.Debug("Version             : ", tpmInfo.Version)
-	log.Debug("FirmwareVersionMajor: ", tpmInfo.FirmwareVersionMajor)
-	log.Debug("FirmwareVersionMinor: ", tpmInfo.FirmwareVersionMinor)
-	log.Debug("Interface           : ", tpmInfo.Interface)
-	log.Debug("Manufacturer        : ", tpmInfo.Manufacturer.String())
+	log.Tracef("Version             : %v", tpmInfo.Version)
+	log.Tracef("FirmwareVersionMajor: %v", tpmInfo.FirmwareVersionMajor)
+	log.Tracef("FirmwareVersionMinor: %v", tpmInfo.FirmwareVersionMinor)
+	log.Tracef("Interface           : %v", tpmInfo.Interface)
+	log.Tracef("Manufacturer        : %v", tpmInfo.Manufacturer.String())
 
 	return tpmInfo, nil
 }
@@ -492,148 +503,161 @@ func (t *Tpm) getAkQualifiedName() ([]byte, error) {
 	return qualifiedName, nil
 }
 
-// GetMeasurement retrieves the specified PCRs as well as a Quote over the PCRs
-// and returns the TPM quote as well as the single PCR values
-func (t *Tpm) GetMeasurement(nonce []byte) ([]attest.PCR, *attest.Quote, error) {
+// GetQuote retrieves the Quote over the relevant PCRs
+func (t *Tpm) GetQuote(nonce []byte) (*attest.Quote, error) {
 
 	if t.tpm == nil {
-		return nil, nil, fmt.Errorf("TPM is not opened")
+		return nil, fmt.Errorf("TPM is not opened")
 	}
 	if t.ak == nil {
-		return nil, nil, fmt.Errorf("AK does not exist")
+		return nil, fmt.Errorf("AK does not exist")
 	}
 
-	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
-	// one instance can have write access at the same time
+	// Only one instance can have access to the tpm at the same time
 	t.Lock()
 	defer t.Unlock()
-
-	pcrValues, err := t.tpm.PCRs(attest.HashSHA256)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
-	}
-	log.Debug("Finished reading PCRs from TPM")
 
 	// Retrieve quote and store quote data and signature in TPM measurement object
 	quote, err := t.ak.QuotePCRs(t.tpm, nonce, attest.HashSHA256, t.pcrs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get TPM quote - %w", err)
+		return nil, fmt.Errorf("failed to get TPM quote - %w", err)
 	}
 	log.Debug("Finished getting Quote from TPM")
 
-	return pcrValues, quote, nil
+	return quote, nil
 }
 
-func GetEventLogs(serializer ar.Serializer,
-	biosLog, imaLog, ctrLog bool,
-	pcrs []int, imaPcr, ctrPcr int,
-	ctrLogFile string, pcrValues map[int][]byte,
-) ([]ar.Artifact, error) {
+func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
+	// Only one instance can have access to the tpm at
+	// the same time
+	t.Lock()
+	defer t.Unlock()
 
-	// If configured, try to read the kernel binary bios measurements
-	// and use these values, which represent the software artifacts that have been
-	// extended. Use the final PCR values as a fallback, if the file cannot be read
-	var biosMeasurements []ar.ReferenceValue
-	var err error
-	if biosLog {
-		log.Debug("Collecting binary bios measurements")
-		biosMeasurements, err = GetBiosMeasurements(DEFAULT_BINARY_BIOS_MEASUREMENTS, DEFAULT_EVENT_TYPE, false)
-		if err != nil {
-			log.Warnf("failed to read binary bios measurements: %v. Using final PCR values as measurements",
-				err)
-		}
-		log.Debugf("Collected %v binary bios measurements", len(biosMeasurements))
+	pcrs, err := t.tpm.PCRs(attest.HashSHA256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
+	log.Debug("Finished reading PCRs from TPM")
 
-	artifacts := make([]ar.Artifact, len(pcrs))
-	for i, num := range pcrs {
-
-		events := make([]ar.MeasureEvent, 0)
-
-		pcrMeasurement := ar.Artifact{
-			Index: num,
-		}
-
-		// Collect detailed measurements from event logs if specified
-		if biosLog && len(biosMeasurements) > 0 {
-			for _, digest := range biosMeasurements {
-				if num == digest.Index {
-					event := ar.MeasureEvent{
-						Sha256:    digest.Sha256,
-						EventName: digest.SubType,
-					}
-					if digest.SubType != "TPM_PCR_INIT_VALUE" {
-						event.EventData = digest.EventData
-					}
-					events = append(events, event)
-				}
-			}
-			pcrMeasurement.Type = "PCR Eventlog"
-			pcrMeasurement.Events = events
-		} else {
-			pcrValue, ok := pcrValues[num]
-			if !ok {
-				return nil, fmt.Errorf("failed to get PCR value %v", num)
-			}
-			pcrMeasurement.Type = "PCR Summary"
-			pcrMeasurement.Events = append(pcrMeasurement.Events, ar.MeasureEvent{
-				Sha256: pcrValue,
-			})
-		}
-
-		artifacts[i] = pcrMeasurement
-	}
-
-	if imaLog {
-		// If the IMA is used, not the final PCR value is sent but instead
-		// a list of the kernel modules which are extended during verification
-		// to result in the final value
-		imaEvents, err := ima.GetImaRuntimeDigests(ima.DEFAULT_BINARY_RUNTIME_MEASUREMENTS)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get IMA runtime digests: %v", err)
-		}
-
-		// Find the IMA PCR in the TPM Measurement
-		for i := range artifacts {
-			if artifacts[i].Index == imaPcr {
-				log.Debugf("Adding %v IMA events to PCR%v measurement", len(imaEvents), artifacts[i].Index)
-				artifacts[i].Events = imaEvents
-				artifacts[i].Type = "PCR Eventlog"
-			}
+	// Collect artifacts into map
+	artifactmap := map[int]ar.Artifact{}
+	for _, pcr := range pcrs {
+		artifactmap[pcr.Index] = ar.Artifact{
+			Type:  ar.TYPE_PCR_SUMMARY,
+			Index: pcr.Index,
+			Events: []ar.MeasureEvent{
+				{
+					Sha256: pcr.Digest,
+				},
+			},
 		}
 	}
 
-	if ctrLog {
-		log.Debugf("Reading container measurements")
-		if _, err := os.Stat(ctrLogFile); err == nil {
-			// If CMC container measurements are used, add the list of executed containers
-			data, err := os.ReadFile(ctrLogFile)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read container measurements: %w", err)
-			}
-
-			var measureList []ar.MeasureEvent
-			err = serializer.Unmarshal(data, &measureList)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
-			}
-
-			for i := range artifacts {
-				if artifacts[i].Index == ctrPcr {
-					log.Debugf("Adding %v container events to PCR%v measurement", len(measureList),
-						artifacts[i].Index)
-					artifacts[i].Type = "PCR Eventlog"
-					artifacts[i].Events = measureList
-				}
-			}
-		} else {
-			log.Trace("No container measurements to read")
+	// Only return specified PCR artifacts
+	artifacts := make([]ar.Artifact, 0, len(t.pcrs))
+	for _, pcr := range t.pcrs {
+		artifact, ok := artifactmap[pcr]
+		if !ok {
+			return nil, fmt.Errorf("internal error: PCR%v not present", pcr)
 		}
-	} else {
-		log.Trace("TPM PCR Container measurements omitted: not configured")
+		artifacts = append(artifacts, artifact)
 	}
+
+	// Sort artifacts list with ascending PCR index
+	sort.Slice(artifacts, func(i, j int) bool {
+		return artifacts[i].Index < artifacts[j].Index
+	})
 
 	return artifacts, nil
+}
+
+func GetEventLogs(pcrs []int, ctrLog bool, ctrPcr int, ctrLogFile string) ([]ar.Artifact, error) {
+
+	log.Debugf("Collecting event logs for PCRs %v", pcrs)
+
+	artifactmap, err := GetBiosArtifacts(DEFAULT_BINARY_BIOS_MEASUREMENTS,
+		ar.TYPE_EVIDENCE_TPM, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get binary bios measurements: %w", err)
+	}
+
+	runtimeMeasurements, err := ima.GetImaArtifacts(ima.DEFAULT_BINARY_RUNTIME_MEASUREMENTS)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ima runtime measurements: %w", err)
+	}
+	maps.Copy(artifactmap, runtimeMeasurements)
+
+	if ctrLog {
+		containerMeasurement, err := GetContainerArtifacts(ctrLogFile, ctrPcr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get container runtime measurements: %w", err)
+		}
+		artifactmap[containerMeasurement.Index] = *containerMeasurement
+	}
+
+	// Add artifacts for PCRs with no events. This is required to reconstruct the aggregated
+	// quote PCR value during verification
+	for _, index := range pcrs {
+		if _, ok := artifactmap[index]; !ok {
+			artifactmap[index] = ar.Artifact{
+				Type:  ar.TYPE_PCR_EVENTLOG,
+				Index: index,
+			}
+		}
+	}
+
+	// Remove artifacts whose indices are configured not to be present in the attestation
+	pcrSet := make(map[int]struct{}, len(pcrs))
+	for _, p := range pcrs {
+		pcrSet[p] = struct{}{}
+	}
+	for idx := range artifactmap {
+		if _, ok := pcrSet[idx]; !ok {
+			delete(artifactmap, idx)
+		}
+	}
+
+	// Get sorted artifacts list with ascending PCR index
+	artifacts := expmaps.Values(artifactmap)
+	sort.Slice(artifacts, func(i, j int) bool {
+		return artifacts[i].Index < artifacts[j].Index
+	})
+
+	return artifacts, nil
+}
+
+func GetContainerArtifacts(path string, pcr int) (*ar.Artifact, error) {
+
+	log.Debugf("Reading container measurements")
+	if _, err := os.Stat(path); err != nil {
+		log.Trace("No container measurements to read")
+		return nil, nil
+	}
+
+	// If CMC container measurements are used, add the list of executed containers
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read container measurements: %w", err)
+	}
+
+	s, err := ar.DetectSerialization(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect atls response serializationt: %v", err)
+	}
+
+	var measureList []ar.MeasureEvent
+	err = s.Unmarshal(data, &measureList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
+	}
+
+	log.Debugf("Adding %v container events to PCR%v artifact", len(measureList), pcr)
+
+	return &ar.Artifact{
+		Type:   ar.TYPE_PCR_EVENTLOG,
+		Index:  pcr,
+		Events: measureList,
+	}, nil
 }
 
 func (t *Tpm) provision() error {
@@ -776,20 +800,11 @@ func (t *Tpm) provisionIk(fqdn string) (*x509.Certificate, error) {
 
 	// Fetch attestation report as part of client authentication if configured
 	var report []byte
-	var metadata [][]byte
 	if t.DriverConfig.ProvisionAuth.Has(internal.AuthAttestation) {
-		r, m, err := prover.Generate(nonce[:], nil, t.DriverConfig.Metadata, []ar.Driver{t}, t.DriverConfig.Serializer)
+		report, err = prover.Generate(nonce[:], nil, t.DriverConfig.Metadata, []ar.Driver{t},
+			t.DriverConfig.Serializer, t.DriverConfig.HashAlg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate attestation report: %w", err)
-		}
-		metadata = internal.ConvertToArray(m)
-		data, err := t.DriverConfig.Serializer.Marshal(r)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
-		}
-		report, err = prover.Sign(data, t, t.DriverConfig.Serializer, ar.IK)
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign attestation report: %w", err)
 		}
 	}
 
@@ -799,7 +814,6 @@ func (t *Tpm) provisionIk(fqdn string) (*x509.Certificate, error) {
 		ikParams,
 		t.ak.AttestationParameters().Public,
 		report,
-		metadata,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK: %w", err)
@@ -985,10 +999,10 @@ func ActivateCredential(
 	return secret, nil
 }
 
-func (t *Tpm) getQuotePcrs() ([]int, error) {
+func (t *Tpm) setQuotePcrs() error {
 
 	if t.tpm == nil {
-		return nil, fmt.Errorf("TPM is not opened")
+		return fmt.Errorf("TPM is not opened")
 	}
 
 	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
@@ -999,7 +1013,7 @@ func (t *Tpm) getQuotePcrs() ([]int, error) {
 	log.Debug("Retrieving PCRs")
 	pcrValues, err := t.tpm.PCRs(attest.HashSHA256)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
+		return fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
 
 	// Assume an SRTM system by default and quote the static PCRs
@@ -1021,11 +1035,11 @@ func (t *Tpm) getQuotePcrs() ([]int, error) {
 		}
 	}
 
-	pcrs = internal.FilterInts(pcrs, t.ExcludePcrs)
+	t.pcrs = internal.FilterInts(pcrs, t.ExcludePcrs)
 
-	log.Debugf("Using PCRs: %v", pcrs)
+	log.Debugf("Using PCRs: %v", t.pcrs)
 
-	return pcrs, nil
+	return nil
 }
 
 // This function calls the modified version of x509.CreateCertificateRequest which does not

@@ -35,26 +35,26 @@ type server struct {
 	debug bool
 }
 
-func newServer(c *config) server {
+func newServer(c *config) (*server, error) {
 	db, err := NewDb(c.Db, "results", c.MaxRowsPerProver, c.MaxRows)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	var token []byte
 	if c.Token != "" {
 		token, err = os.ReadFile(c.Token)
 		if err != nil {
-			log.Fatalf("Failed to read token file: %v", err)
+			return nil, fmt.Errorf("failed to read token file: %w", err)
 		}
 	}
 
-	return server{
+	return &server{
 		addr:  c.Addr,
 		db:    db,
 		token: token,
 		debug: c.Debug,
-	}
+	}, nil
 }
 
 func (s *server) handleGetStatistics(c *gin.Context) {

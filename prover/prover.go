@@ -16,7 +16,7 @@
 package prover
 
 import (
-	"encoding/hex"
+	"crypto"
 	"errors"
 	"fmt"
 
@@ -30,31 +30,40 @@ var log = logrus.WithField("service", "ar")
 // Generate generates an attestation report with the provided nonce and metadata. The metadata must
 // either be in the form of JWS tokens infull serialization format or CBOR COSE tokens. The function
 // takes a list of drivers for collecting the measurements from a hardware or software interface
-func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []ar.Driver, s ar.Serializer,
-) (*ar.AttestationReport, map[string][]byte, error) {
+func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []ar.Driver,
+	s ar.Serializer, alg crypto.Hash,
+) ([]byte, error) {
 
-	log.Debugf("Generating attestation report...")
-
-	metadataReturn := map[string][]byte{}
+	log.Debugf("Generating attestation report with nonce %x", nonce)
 
 	if s == nil {
-		return nil, nil, errors.New("serializer not specified")
+		return nil, errors.New("serializer not specified")
 	}
+
+	encoding := ar.GetEncoding(s)
+
+	// Use FQDN as attestation report name if possible,
+	// otherwise omitempty
+	hostname, _ := internal.Fqdn()
 
 	// Create attestation report object which will be filled with the attestation
 	// data or sent back incomplete in case errors occur
 	report := &ar.AttestationReport{
-		Version: ar.GetVersion(),
-		Type:    "Attestation Report",
-	}
-
-	if len(nonce) > 32 {
-		return nil, nil, fmt.Errorf("nonce exceeds maximum length of 32 bytes")
+		Version:  ar.GetReportVersion(),
+		Type:     ar.TYPE_ATTESTATION_REPORT,
+		Name:     hostname,
+		Encoding: encoding,
+		Context: ar.Context{
+			Type:     ar.TYPE_CONTEXT,
+			Alg:      alg.String(),
+			Nonce:    nonce,
+			Metadata: map[string][]byte{},
+		},
 	}
 
 	log.Debug("Adding metadata to Attestation Report..")
 
-	// Step 1: Retrieve metadata
+	// Retrieve metadata
 	log.Trace("Parsing ", len(metadata), " meta-data objects..")
 	num := 0
 
@@ -76,26 +85,18 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 			continue
 		}
 
-		digest, err := hex.DecodeString(hash)
-		if err != nil {
-			log.Tracef("Failed to decode cached hash string: %v", err)
-			continue
-		}
-		metadataDigest := ar.MetadataDigest{
-			Type:   header.Type,
-			Digest: digest,
-		}
+		log.Tracef("Adding metadata digest type %v: %v", header.Type, hash)
+		report.Context.Digests = append(report.Context.Digests, hash)
 
 		// Check if verifier has metadata item cached so it does not need to be sent
+		log.Warnf("Check against %v cached items", len(cached))
 		if internal.Contains(hash, cached) {
-			log.Tracef("Metadata %v cached by verifier, do not add", hash)
+			log.Debugf("Metadata %v cached by verifier, do not add", hash)
 		} else {
-			log.Tracef("Add metadata item %v", hash)
-			metadataReturn[hash] = m
+			log.Debugf("Metadata %v NOT cached by verifier, add", hash)
+			report.Context.Metadata[hash] = m
 		}
 
-		log.Tracef("Adding metadata digest type %v: %x", metadataDigest.Type, metadataDigest.Digest)
-		report.Metadata = append(report.Metadata, metadataDigest)
 		num++
 	}
 
@@ -105,30 +106,43 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 		log.Debugf("Added %v metadata ids to attestation report", num)
 	}
 
-	// Step 2: Retrieve measurements
-	log.Debugf("Retrieving measurements from %v measurers", len(drivers))
+	// Retrieve collaterals for interpreting evidences
+	log.Debugf("Retrieving collaterals from %v measurers", len(drivers))
 	for _, driver := range drivers {
-
-		// Collect the measurements/evidence with the specified nonce from hardware/software.
-		// The methods are implemented in the respective driver (TPM, SNP, ...)
-		log.Debugf("Getting measurements from measurement interface..")
-		measurements, err := driver.Measure(nonce)
+		log.Debugf("Getting collateral from %v", driver.Name())
+		collateral, err := driver.GetCollateral()
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get measurements: %v", err)
+			return nil, fmt.Errorf("failed to get collateral: %w", err)
 		}
-
-		report.Measurements = append(report.Measurements, measurements...)
-		for _, measurement := range measurements {
-			log.Debugf("Added %v to attestation report", measurement.Type)
-		}
+		report.Context.Collateral = append(report.Context.Collateral, collateral...)
 	}
 
-	log.Debugf("Finished attestation report generation")
+	// Prepare Attestation Report for collecting evidences with the context hash being
+	// bound to the hardware evidence for context integrity
+	evidenceNonce, err := report.PrepareContext(s, alg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare report context: %w", err)
+	}
 
-	return report, metadataReturn, nil
-}
+	// Retrieve hardware evidences
+	for _, driver := range drivers {
 
-// Sign signs the attestation report with the specified signer 'signer'
-func Sign(report []byte, signer ar.Driver, s ar.Serializer, sel ar.KeySelection) ([]byte, error) {
-	return s.Sign(report, signer, sel)
+		log.Debugf("Getting evidence from %v with evidence nonce %x", driver.Name(), evidenceNonce)
+		evidence, err := driver.GetEvidence(evidenceNonce)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get evidence: %w", err)
+		}
+		report.Evidences = append(report.Evidences, evidence...)
+	}
+
+	log.Debugf("Generated report with %v metadata digests and %v embedded items",
+		len(report.Context.Digests), len(report.Context.Metadata))
+
+	// Marshal data to bytes
+	data, err := s.Marshal(report)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
+	}
+
+	return data, nil
 }

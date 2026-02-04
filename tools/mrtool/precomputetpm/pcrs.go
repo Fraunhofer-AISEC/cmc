@@ -65,7 +65,7 @@ func PrecomputePcr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_SEPARATOR",
 		Index:       0,
 		Sha256:      hashSep[:],
@@ -75,8 +75,8 @@ func PrecomputePcr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR0",
 		Index:       0,
 		Sha256:      pcr,
@@ -118,7 +118,7 @@ func PrecomputePcr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_SEPARATOR",
 		Index:       1,
 		Sha256:      hashSep[:],
@@ -128,8 +128,8 @@ func PrecomputePcr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR1",
 		Index:       1,
 		Sha256:      pcr,
@@ -172,7 +172,7 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TPM Reference Value",
+			Type:        ar.TYPE_REFVAL_TPM,
 			SubType:     "EV_EFI_BOOT_SERVICES_DRIVER",
 			Index:       2,
 			Sha256:      hash[:],
@@ -185,7 +185,7 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_SEPARATOR",
 		Index:       2,
 		Sha256:      hashSep[:],
@@ -195,8 +195,8 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR2",
 		Index:       2,
 		Sha256:      pcr,
@@ -214,7 +214,7 @@ func PrecomputePcr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_SEPARATOR",
 		Index:       3,
 		Sha256:      hashSep[:],
@@ -224,8 +224,8 @@ func PrecomputePcr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR2",
 		Index:       3,
 		Sha256:      pcr,
@@ -253,7 +253,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TPM Reference Value",
+			Type:        ar.TYPE_REFVAL_TPM,
 			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Index:       4,
 			Sha256:      hash[:],
@@ -290,7 +290,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TPM Reference Value",
+			Type:        ar.TYPE_REFVAL_TPM,
 			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Index:       4,
 			Sha256:      hash[:],
@@ -311,7 +311,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	actionData := []byte("Calling EFI Application from Boot Option")
 	actionHash := sha256.Sum256(actionData)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_EFI_ACTION",
 		Index:       4,
 		Sha256:      actionHash[:],
@@ -323,7 +323,7 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    "TPM Reference Value",
+		Type:    ar.TYPE_REFVAL_TPM,
 		SubType: "EV_SEPARATOR",
 		Index:   4,
 		Sha256:  hashSep[:],
@@ -332,8 +332,8 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR4",
 		Index:       4,
 		Sha256:      pcr,
@@ -351,7 +351,7 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    "TPM Reference Value",
+		Type:    ar.TYPE_REFVAL_TPM,
 		SubType: "EV_SEPARATOR",
 		Index:   5,
 		Sha256:  hashSep[:],
@@ -368,7 +368,7 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TPM Reference Value",
+			Type:        ar.TYPE_REFVAL_TPM,
 			SubType:     "EV_EFI_GPT_EVENT",
 			Index:       5,
 			Sha256:      hash[:],
@@ -388,7 +388,7 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 		hash := sha256.Sum256(data)
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_EVENT_TAG",
 			Index:   5,
 			Sha256:  hash[:],
@@ -400,7 +400,7 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	actionData1 := []byte("Exit Boot Services Invocation")
 	actionHash1 := sha256.Sum256(actionData1)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_EFI_ACTION",
 		Index:       5,
 		Sha256:      actionHash1[:],
@@ -412,7 +412,7 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	actionData2 := []byte("Exit Boot Services Returned with Success")
 	actionHash2 := sha256.Sum256(actionData2)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
+		Type:        ar.TYPE_REFVAL_TPM,
 		SubType:     "EV_EFI_ACTION",
 		Index:       5,
 		Sha256:      actionHash2[:],
@@ -422,8 +422,8 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR5",
 		Index:       5,
 		Sha256:      pcr,
@@ -460,7 +460,7 @@ func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 		hash := sha256.Sum256([]byte(uuidString))
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_COMPACT_HASH",
 			Index:   6,
 			Sha256:  hash[:],
@@ -472,7 +472,7 @@ func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    "TPM Reference Value",
+		Type:    ar.TYPE_REFVAL_TPM,
 		SubType: "EV_SEPARATOR",
 		Index:   6,
 		Sha256:  hashSep[:],
@@ -481,8 +481,8 @@ func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR6",
 		Index:       6,
 		Sha256:      pcr,
@@ -506,7 +506,7 @@ func PrecomputePcr7(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    "TPM Reference Value",
+		Type:    ar.TYPE_REFVAL_TPM,
 		SubType: "EV_SEPARATOR",
 		Index:   7,
 		Sha256:  hashSep[:],
@@ -522,8 +522,8 @@ func PrecomputePcr7(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR7",
 		Index:       7,
 		Sha256:      pcr,
@@ -565,8 +565,8 @@ func PrecomputePcr8(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR8",
 		Index:       8,
 		Sha256:      pcr,
@@ -605,8 +605,8 @@ func PrecomputePcr9(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR9",
 		Index:       9,
 		Sha256:      pcr,
@@ -657,8 +657,8 @@ func PrecomputePcr11(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR11",
 		Index:       11,
 		Sha256:      pcr,
@@ -683,8 +683,8 @@ func PrecomputePcr12(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR12",
 		Index:       12,
 		Sha256:      pcr,
@@ -707,8 +707,8 @@ func PrecomputePcr14(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create final reference value
 	pcrSummary := &ar.ReferenceValue{
-		Type:        "TPM Reference Value",
-		SubType:     "PCR Summary",
+		Type:        ar.TYPE_REFVAL_TPM,
+		SubType:     ar.TYPE_PCR_SUMMARY,
 		Description: "PCR14",
 		Index:       14,
 		Sha256:      pcr,

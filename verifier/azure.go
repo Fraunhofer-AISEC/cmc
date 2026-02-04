@@ -77,66 +77,104 @@ type AzureVmConfig struct {
 	VmUniqueId         string `json:"vmUniqueId"`
 }
 
-func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
-	tdxRefVals, snpRefVals, vtpmRefVals []ar.ReferenceValue, s ar.Serializer) ([]ar.MeasurementResult, bool) {
+func verifyAzure(
+	evidences []ar.Evidence,
+	collaterals []ar.Collateral,
+	nonce []byte,
+	manifests []ar.MetadataResult,
+	tdxRefVals, snpRefVals, vtpmRefVals []ar.ReferenceValue,
+	s ar.Serializer,
+) ([]ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying Azure measurements...")
 
-	// Extract measurements and nonce, perform basic sanity checks
-	foundCcMeasurement := false
-	foundVtpmMeasurement := false
-	var ccMeasurement ar.Measurement
-	var vtpmMeasurement ar.Measurement
-	for i := range measurements {
-		switch measurements[i].Type {
-		case "Azure SNP Measurement":
-			ccMeasurement = measurements[i]
-			foundCcMeasurement = true
-		case "Azure TDX Measurement":
-			ccMeasurement = measurements[i]
-			foundCcMeasurement = true
-		case "Azure vTPM Measurement":
-			vtpmMeasurement = measurements[i]
-			foundVtpmMeasurement = true
+	// Extract evidences, collateral and nonce, perform basic sanity checks
+	foundCcEvidence := false
+	foundVtpmEvidence := false
+	var ccEvidence ar.Evidence
+	var vtpmEvidence ar.Evidence
+	for i := range evidences {
+		switch evidences[i].Type {
+		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX:
+			ccEvidence = evidences[i]
+			foundCcEvidence = true
+		case ar.TYPE_EVIDENCE_AZURE_TPM:
+			vtpmEvidence = evidences[i]
+			foundVtpmEvidence = true
 		default:
 			r := ar.MeasurementResult{
-				Type: measurements[i].Type,
+				Type: evidences[i].Type,
 			}
-			r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure measurement type %v", measurements[i].Type))
+			r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure evidence type %v",
+				evidences[i].Type))
 			return []ar.MeasurementResult{r}, false
 		}
 	}
-	if !foundCcMeasurement {
+	if !foundCcEvidence {
 		r := ar.MeasurementResult{}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("CC measurement missing"))
 		return []ar.MeasurementResult{r}, false
 	}
-	if !foundVtpmMeasurement {
+	if !foundVtpmEvidence {
 		r := ar.MeasurementResult{}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("vTPM measurement missing"))
 		return []ar.MeasurementResult{r}, false
 	}
-	if len(vtpmMeasurement.Certs) != 1 {
-		r := ar.MeasurementResult{
-			Type: vtpmMeasurement.Type,
+
+	foundCcCollateral := false
+	foundVtpmCollateral := false
+	var ccCollateral ar.Collateral
+	var vtpmCollateral ar.Collateral
+	for i := range collaterals {
+		switch collaterals[i].Type {
+		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX:
+			ccCollateral = collaterals[i]
+			foundCcCollateral = true
+		case ar.TYPE_EVIDENCE_AZURE_TPM:
+			vtpmCollateral = collaterals[i]
+			foundVtpmCollateral = true
+		default:
+			r := ar.MeasurementResult{
+				Type: collaterals[i].Type,
+			}
+			r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure collateral type %v",
+				collaterals[i].Type))
+			return []ar.MeasurementResult{r}, false
 		}
-		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected length of vTPM certs %v", len(vtpmMeasurement.Certs)))
+	}
+	if !foundCcCollateral {
+		r := ar.MeasurementResult{}
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("CC measurement missing"))
 		return []ar.MeasurementResult{r}, false
 	}
-	vtpmAkCert, err := x509.ParseCertificate(vtpmMeasurement.Certs[0])
+	if !foundVtpmCollateral {
+		r := ar.MeasurementResult{}
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("vTPM measurement missing"))
+		return []ar.MeasurementResult{r}, false
+	}
+	if len(vtpmCollateral.Certs) != 1 {
+		r := ar.MeasurementResult{
+			Type: vtpmCollateral.Type,
+		}
+		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected length of vTPM certs %v", len(vtpmCollateral.Certs)))
+		return []ar.MeasurementResult{r}, false
+	}
+
+	// Parse AK cert
+	vtpmAkCert, err := x509.ParseCertificate(vtpmCollateral.Certs[0])
 	if err != nil {
 		r := ar.MeasurementResult{
-			Type: vtpmMeasurement.Type,
+			Type: vtpmCollateral.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to parse vTPM cert: %w", err))
 		return []ar.MeasurementResult{r}, false
 	}
 
 	// Extract nonce from report to verify against vTPM AK public
-	hwreportNonce, err := GetReportNonce(ccMeasurement)
+	hwreportNonce, err := GetReportNonce(&ccEvidence)
 	if err != nil {
 		r := ar.MeasurementResult{
-			Type: ccMeasurement.Type,
+			Type: ccEvidence.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to extract CC report nonce: %w", err))
 		return []ar.MeasurementResult{r}, false
@@ -145,10 +183,10 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, manife
 
 	// Verify Azure Chain of Trust: hash of azure claims including user supplied nonce and vTPM akpublic
 	// must match CC report nonce, user supplied nonce in claims must match provided nonce
-	err = VerifyAzureCoT(ccMeasurement.Claims, nonce, hwreportNonce, vtpmAkCert)
+	err = VerifyAzureCoT(ccEvidence.AddData, nonce, hwreportNonce, vtpmAkCert)
 	if err != nil {
 		r := ar.MeasurementResult{
-			Type: ccMeasurement.Type,
+			Type: ccCollateral.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to verify Azure CoT: %w", err))
 		return []ar.MeasurementResult{r}, false
@@ -159,8 +197,8 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, manife
 	results := make([]ar.MeasurementResult, 0)
 
 	// Verify TDX measurements with verified hwreport nonce
-	if ccMeasurement.Type == "Azure TDX Measurement" {
-		tdxResult, ok := verifyTdxMeasurements(ccMeasurement, hwreportNonce, manifests, tdxRefVals)
+	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_TDX {
+		tdxResult, ok := verifyTdx(ccEvidence, ccCollateral, hwreportNonce, manifests, tdxRefVals)
 		if !ok {
 			success = false
 		}
@@ -168,8 +206,8 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, manife
 	}
 
 	// Verify SNP measurement with with verified hwreport nonce
-	if ccMeasurement.Type == "Azure SNP Measurement" {
-		snpResult, ok := verifySnpMeasurements(ccMeasurement, hwreportNonce, manifests, snpRefVals)
+	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_SNP {
+		snpResult, ok := verifySnp(ccEvidence, ccCollateral, hwreportNonce, manifests, snpRefVals)
 		if !ok {
 			success = false
 		}
@@ -177,7 +215,7 @@ func verifyAzureMeasurements(measurements []ar.Measurement, nonce []byte, manife
 	}
 
 	// Verify vTPM measurements with provided nonce
-	vtpmResult, ok := verifyTpmMeasurements(vtpmMeasurement, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefVals, s)
+	vtpmResult, ok := verifyTpm(vtpmEvidence, vtpmCollateral, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefVals, s)
 	if !ok {
 		success = false
 	}
@@ -277,8 +315,8 @@ func VerifyAzureCoT(rtdataRaw, suppliedNonce, reportNonce []byte, vtpmAkCert *x5
 		return fmt.Errorf("failed to decode runtime claims nonce: %w", err)
 	}
 	if !bytes.Equal(claimsNonce, fullSuppliedNonce) {
-		return fmt.Errorf("claims nonce %v does not match supplied nonce  %v",
-			rtclaims.UserData, hex.EncodeToString(fullSuppliedNonce))
+		return fmt.Errorf("claims nonce %v does not match supplied nonce %x",
+			rtclaims.UserData, fullSuppliedNonce)
 	}
 	log.Debugf("Claims nonce matches supplied nonce: %v", rtclaims.UserData)
 
@@ -308,15 +346,15 @@ func VerifyAzureCoT(rtdataRaw, suppliedNonce, reportNonce []byte, vtpmAkCert *x5
 	return nil
 }
 
-func GetReportNonce(measurement ar.Measurement) ([]byte, error) {
+func GetReportNonce(evidence *ar.Evidence) ([]byte, error) {
 
 	log.Debug("Extracting nonce from hardware report...")
 
-	switch measurement.Type {
-	case "Azure SNP Measurement":
-		return getSnpNonce(measurement.Evidence)
-	case "Azure TDX Measurement":
-		return getTdxNonce(measurement.Evidence)
+	switch evidence.Type {
+	case ar.TYPE_EVIDENCE_AZURE_SNP:
+		return getSnpNonce(evidence.Data)
+	case ar.TYPE_EVIDENCE_AZURE_TDX:
+		return getTdxNonce(evidence.Data)
 	default:
 		return nil, fmt.Errorf("failed to extract nonce")
 	}

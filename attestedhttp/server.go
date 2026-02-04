@@ -37,7 +37,7 @@ type Server struct {
 	ApiSerializer   ar.Serializer
 	LibApiCmcConfig *cmc.Config
 	CmcPolicies     []byte
-	ResultCb        func(result *ar.VerificationResult)
+	ResultCb        func(result *ar.AttestationResult)
 }
 
 func (s *Server) ListenAndServe() error {
@@ -57,7 +57,7 @@ func (s *Server) ListenAndServe() error {
 		atls.WithResultCb(s.ResultCb),
 		atls.WithLibApiCmcConfig(s.LibApiCmcConfig))
 	if err != nil {
-		log.Fatalf("Failed to listen for connections: %v", err)
+		return fmt.Errorf("failed to listen for connections: %w", err)
 	}
 	defer ln.Close()
 

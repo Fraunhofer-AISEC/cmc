@@ -65,7 +65,7 @@ type Transport struct {
 	LibApiCmcConfig *cmc.Config
 	CmcPolicies     []byte
 	ReadTimeout     time.Duration
-	ResultCb        func(result *ar.VerificationResult)
+	ResultCb        func(result *ar.AttestationResult)
 }
 
 // Wrapper for net/http Client

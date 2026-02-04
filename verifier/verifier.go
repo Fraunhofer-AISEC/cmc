@@ -26,6 +26,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/peercache"
 	"github.com/sirupsen/logrus"
 
 	"time"
@@ -40,7 +41,7 @@ const (
 )
 
 type PolicyEngine interface {
-	Validate(result *ar.VerificationResult, policies []byte, policyOverwrite bool) bool
+	Validate(result *ar.AttestationResult, policies []byte, policyOverwrite bool) bool
 }
 
 var (
@@ -56,29 +57,13 @@ var (
 func Verify(
 	arRaw, nonce []byte, verifier interface{},
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
-	metadataCas []*x509.Certificate, metadataMap map[string][]byte,
-) *ar.VerificationResult {
-	return VerifyProvision(arRaw, nonce, verifier, policies, policyEngine, policyOverwrite, metadataCas,
-		metadataMap, "")
-}
+	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
+	peer string,
+) *ar.AttestationResult {
 
-// VerifyProvision provides the same functionality as Verify() and can be called during
-// provisioning, where certificates are not yet enrolled yet, and thus the FQDN is
-// provided by the provisioning server
-func VerifyProvision(
-	arRaw, nonce []byte, verifier interface{},
-	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
-	metadataCas []*x509.Certificate, metadataMap map[string][]byte,
-	fqdn string,
-) *ar.VerificationResult {
-
-	if len(metadataMap) == 0 {
-		log.Warnf("No metadata specified")
-	}
-
-	result := &ar.VerificationResult{
-		Version: ar.GetVersion(),
-		Type:    "Verification Result",
+	result := &ar.AttestationResult{
+		Version: ar.GetResultVersion(),
+		Type:    ar.TYPE_ATTESTATION_RESULT,
 		Prover:  "Unknown",
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
@@ -96,26 +81,75 @@ func VerifyProvision(
 	}
 	log.Tracef("Detected %v serialization", s.String())
 
-	// Verify and unpack attestation report
-	report, mr, code := verifyAr(arRaw, verifier, s)
-	result.ReportSignature = mr.SignatureCheck
-	if code != ar.NotSpecified {
-		result.Fail(code)
+	// Unmarshal the attestation report
+	report := new(ar.AttestationReport)
+	err = s.Unmarshal(arRaw, &report)
+	if err != nil {
+		result.Fail(ar.UnknownSerialization, err)
 		return result
 	}
 
+	// Check attestation report version for compatibility
+	err = report.CheckVersion()
+	if err != nil {
+		result.Fail(ar.InvalidVersion, fmt.Errorf("expected version %v, got %v", ar.GetReportVersion(),
+			report.Version))
+		return result
+	}
+
+	// Retrieve cached metadata items for peer if configured
+	var cachedMetadata map[string][]byte
+	if peerCache != nil {
+		cachedMetadata = peerCache.Get(peer)
+	}
+
+	// Iterate over report metadata digests and retrieve metadata items from report and peer cache
+	collectedMetadata, err := collectMetadata(report.Context, cachedMetadata)
+	if err != nil {
+		result.Fail(ar.VerifyMetadata, err)
+	}
+
+	// A failed update of the peer cache only means that we need to send more
+	// data during the next attestation
+	if peerCache != nil {
+		err = peerCache.Update(peer, collectedMetadata)
+		if err != nil {
+			log.Warnf("Failed to update peer cache: %v", err)
+		}
+	}
+
 	// Verify and unpack metadata from attestation report
-	metaResults, ok := verifyMetadata(metadataCas, s, metadataMap)
+	metaResults, ok := verifyMetadata(metadataCas, s, collectedMetadata)
 	if !ok {
 		result.Fail(ar.VerifyMetadata)
 	}
 	result.Metadata = metaResults
+	result.Prover = report.Name
 
-	result.Prover = getProver(result.ReportSignature, fqdn)
-	if result.Prover == "" {
-		result.Prover = "Unknown"
-	}
 	log.Debugf("Decoded attestation report and metadata from prover %v", result.Prover)
+
+	// Verify the supplied nonce and construct the evidence nonce for context integrity verification
+	// NONCE_USER = Context.Nonce
+	// NONCE_EVIDENCE = HASH(Context)
+	result.Freshness.Expected = hex.EncodeToString(nonce)
+	result.Freshness.Got = hex.EncodeToString(report.Context.Nonce)
+	if !bytes.Equal(nonce, report.Context.Nonce) {
+		result.Freshness.Status = ar.StatusFail
+		result.Fail(ar.Freshness)
+	} else {
+		log.Debugf("Successfully verified user supplied nonce: %x", nonce)
+		result.Freshness.Status = ar.StatusSuccess
+	}
+	alg, err := internal.HashFromString(report.Context.Alg)
+	if err != nil {
+		result.Fail(ar.UnsupportedContextHashAlg, err)
+	}
+	evidenceNonce, err := internal.Hash(alg, report.GetEncodedContext())
+	if err != nil {
+		result.Fail(ar.CalculateContextHash, err)
+	}
+	log.Tracef("Recalculated %v context hash %x for encoded context with user nonce %x and length %v",
+		alg.String(), evidenceNonce, report.Context.Nonce, len(report.GetEncodedContext()))
 
 	refVals, err := collectReferenceValues(metaResults.ManifestResults)
 	if err != nil {
@@ -124,77 +158,95 @@ func VerifyProvision(
 	}
 
 	hwAttest := false
+
+	// Collect evidence collateral into a map for combined processing with evidences
+	collateral := make(map[string]ar.Collateral)
+	for _, em := range report.Context.Collateral {
+		collateral[em.Type] = em
+	}
+
+	// Required because we process multiple measurements for azure in one go
 Loop:
-	for _, m := range report.Measurements {
+	for _, ev := range report.Evidences {
 
-		switch mtype := m.Type; mtype {
+		// Retrieve the collateral corresponding to the evidence
+		col, ok := collateral[ev.Type]
+		if !ok {
+			result.Fail(ar.VerifyMeasurement, fmt.Errorf("no collateral for evidence %v", ev.Type))
+			continue
+		}
 
-		case "TPM Measurement":
-			r, ok := verifyTpmMeasurements(m, nonce, metadataCas,
-				refVals["TPM Reference Value"], s)
+		switch evtype := ev.Type; evtype {
+
+		case ar.TYPE_EVIDENCE_TPM:
+			r, ok := verifyTpm(ev, col, evidenceNonce, metadataCas, refVals[ar.TYPE_REFVAL_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
 
-		case "SNP Measurement":
-			r, ok := verifySnpMeasurements(m, nonce, metaResults.ManifestResults,
-				refVals["SNP Reference Value"])
+		case ar.TYPE_EVIDENCE_SNP:
+			r, ok := verifySnp(ev, col, evidenceNonce, metaResults.ManifestResults,
+				refVals[ar.TYPE_REFVAL_SNP])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
 
-		case "TDX Measurement":
-			r, ok := verifyTdxMeasurements(m, nonce, metaResults.ManifestResults,
-				refVals["TDX Reference Value"])
+		case ar.TYPE_EVIDENCE_TDX:
+			r, ok := verifyTdx(ev, col, evidenceNonce, metaResults.ManifestResults,
+				refVals[ar.TYPE_REFVAL_TDX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
 
-		case "SGX Measurement":
-			r, ok := verifySgxMeasurements(m, nonce, metaResults.ManifestResults,
-				refVals["SGX Reference Value"])
+		case ar.TYPE_EVIDENCE_SGX:
+			r, ok := verifySgx(ev, col, evidenceNonce, metaResults.ManifestResults,
+				refVals[ar.TYPE_REFVAL_SGX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
 
-		case "IAS Measurement":
-			r, ok := verifyIasMeasurements(m, nonce, metaResults.ManifestResults,
-				refVals["IAS Reference Value"])
+		case ar.TYPE_EVIDENCE_IAS:
+			r, ok := verifyIas(ev, col, evidenceNonce, metaResults.ManifestResults,
+				refVals[ar.TYPE_REFVAL_IAS])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 			hwAttest = true
 
-		case "SW Measurement":
-			r, ok := verifySwMeasurements(m, nonce, metadataCas,
-				refVals["SW Reference Value"], s)
+		case ar.TYPE_EVIDENCE_SW:
+			r, ok := verifySw(ev, col, evidenceNonce, metadataCas,
+				refVals[ar.TYPE_REFVAL_SW], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SW measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 
-		case "Azure TDX Measurement", "Azure SNP Measurement", "Azure vTPM Measurement":
-			results, ok := verifyAzureMeasurements(report.Measurements, nonce, metaResults.ManifestResults,
-				refVals["TDX Reference Value"], refVals["SNP Reference Value"], refVals["TPM Reference Value"],
+		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM:
+			results, ok := verifyAzure(report.Evidences, report.Context.Collateral, evidenceNonce,
+				metaResults.ManifestResults, refVals[ar.TYPE_REFVAL_TDX],
+				refVals[ar.TYPE_REFVAL_SNP], refVals[ar.TYPE_REFVAL_TPM],
 				s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
 			}
 			result.Measurements = append(result.Measurements, results...)
 			hwAttest = true
+
+			// Required because we process multiple measurements for azure
 			break Loop
 
 		default:
-			result.Fail(ar.MeasurementTypeNotSupported, fmt.Errorf("unsupported measurement type %q", mtype))
+			result.Fail(ar.MeasurementTypeNotSupported,
+				fmt.Errorf("unsupported measurement type %q", evtype))
 		}
 	}
 
@@ -250,34 +302,6 @@ Loop:
 	return result
 }
 
-func verifyAr(attestationReport []byte, verifier interface{}, s ar.Serializer,
-) (*ar.AttestationReport, ar.MetadataResult, ar.ErrorCode) {
-
-	report := ar.AttestationReport{}
-
-	//Validate Attestation Report signature
-	result, payload, ok := s.Verify(attestationReport, verifier)
-	if !ok {
-		log.Debug("Validation of Attestation Report failed")
-		return nil, result, ar.VerifyAR
-	}
-
-	err := s.Unmarshal(payload, &report)
-	if err != nil {
-		log.Debugf("Parsing of Attestation Report failed: %v", err)
-		return nil, result, ar.ParseAR
-	}
-
-	// Check version
-	err = report.CheckVersion()
-	if err != nil {
-		log.Debug(err.Error())
-		return nil, result, ar.InvalidVersion
-	}
-
-	return &report, result, ar.NotSpecified
-}
-
 // verifyMetadata takes the metadata map with keys being the hashes of the raw metadata items,
 // a set of CAs and a serializer and performs a validity, signature and certificate chain validation
 // as well as compatibility checks: The image description must reference all manifests, and
@@ -330,11 +354,11 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 		}
 
 		switch result.Metadata.Type {
-		case "Image Description":
+		case ar.TYPE_IMAGE_DESCRIPTION:
 			results.ImageDescriptionResult = result
-		case "Company Description":
+		case ar.TYPE_COMPANY_DESCRIPTION:
 			results.CompanyDescriptionResult = &result
-		case "Manifest":
+		case ar.TYPE_MANIFEST:
 			results.ManifestResults = append(results.ManifestResults, result)
 		default:
 			results.UnknownResults = append(results.UnknownResults, result)
@@ -560,11 +584,11 @@ func collectReferenceValues(metadata []ar.MetadataResult) (map[string][]ar.Refer
 	for i := range metadata {
 		for _, r := range metadata[i].ReferenceValues {
 			// Check reference value type
-			if r.Type != "SNP Reference Value" &&
-				r.Type != "SW Reference Value" &&
-				r.Type != "TPM Reference Value" &&
-				r.Type != "TDX Reference Value" &&
-				r.Type != "SGX Reference Value" {
+			if r.Type != ar.TYPE_REFVAL_SNP &&
+				r.Type != ar.TYPE_REFVAL_SW &&
+				r.Type != ar.TYPE_REFVAL_TPM &&
+				r.Type != ar.TYPE_REFVAL_TDX &&
+				r.Type != ar.TYPE_REFVAL_SGX {
 				return nil, fmt.Errorf("reference value of type %v is not supported", r.Type)
 			}
 
@@ -617,14 +641,27 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 	return result
 }
 
-// Extract the Common Name from the leaf certificate if report was signed by
-// certificate. If not (i.e., during initial provisioning), use the provided name
-func getProver(r []ar.SignatureResult, optionalProver string) string {
+func collectMetadata(context ar.Context, cached map[string][]byte) (map[string][]byte, error) {
 
-	if len(r) > 0 &&
-		len(r[0].Certs) > 0 &&
-		len(r[0].Certs[0]) > 0 {
-		return r[0].Certs[0][0].Subject.CommonName
+	collectedMetadata := make(map[string][]byte, len(context.Digests))
+
+	notFound := 0
+	for _, digest := range context.Digests {
+		// Check if item is in report
+		if item, ok := context.Metadata[digest]; ok {
+			collectedMetadata[digest] = item
+			continue
+		}
+		// Check if item is cached
+		if item, ok := cached[digest]; ok {
+			collectedMetadata[digest] = item
+			continue
+		}
+		notFound++
 	}
-	return optionalProver
+
+	if notFound > 0 {
+		return collectedMetadata, fmt.Errorf("failed to find %v metadata items", notFound)
+	}
+	return collectedMetadata, nil
 }

@@ -16,6 +16,7 @@
 package attestationreport
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/x509"
@@ -26,47 +27,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
-
-type SwDriver struct {
-	certChain []*x509.Certificate
-	priv      crypto.PrivateKey
-}
-
-func (s *SwDriver) Name() string {
-	return "SW Driver"
-}
-
-func (s *SwDriver) Init(c *DriverConfig) error {
-	return nil
-}
-
-func (s *SwDriver) Measure(nonce []byte) ([]Measurement, error) {
-	return []Measurement{}, nil
-}
-
-func (s *SwDriver) Lock() error {
-	return nil
-}
-
-func (s *SwDriver) Unlock() error {
-	return nil
-}
-
-func (s *SwDriver) GetKeyHandles(sel KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
-	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
-}
-
-func (s *SwDriver) GetCertChain(sel KeySelection) ([]*x509.Certificate, error) {
-	return s.certChain, nil
-}
-
-func (s *SwDriver) UpdateCerts() error {
-	return nil
-}
-
-func (s *SwDriver) UpdateMetadata(map[string][]byte) error {
-	return nil
-}
 
 func TestSign(t *testing.T) {
 	type args struct {
@@ -82,10 +42,11 @@ func TestSign(t *testing.T) {
 	}{
 		{
 			name: "Success Sign JSON Cert Chain",
-			s:    JsonSerializer{},
+			s:    getJsonSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: TYPE_ENCODING_B64,
 				},
 				driver: &SwDriver{
 					certChain: getCertchain(validCertChain),
@@ -97,10 +58,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign JSON Self-Signed Cert",
-			s:    JsonSerializer{},
+			s:    getJsonSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: TYPE_ENCODING_B64,
 				},
 				driver: &SwDriver{
 					certChain: getCertchain([][]byte{selfSignedCert}),
@@ -112,10 +74,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign JSON Public Key",
-			s:    JsonSerializer{},
+			s:    getJsonSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: TYPE_ENCODING_B64,
 				},
 				driver: &SwDriver{
 					priv: getPrivateKey(leafKeyPem),
@@ -126,10 +89,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign JSON Cert Chain Invalid Key",
-			s:    JsonSerializer{},
+			s:    getJsonSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: TYPE_ENCODING_B64,
 				},
 				driver: &SwDriver{
 					certChain: getCertchain(validCertChain),
@@ -141,10 +105,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign JSON Self-Signed Invalid Cert",
-			s:    JsonSerializer{},
+			s:    getJsonSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: TYPE_ENCODING_B64,
 				},
 				driver: &SwDriver{
 					certChain: getCertchain([][]byte{leafPem}), // Not a self-signed cert
@@ -156,10 +121,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign CBOR Cert Chain",
-			s:    CborSerializer{},
+			s:    getCborSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "cbor",
 				},
 				driver: &SwDriver{
 					certChain: getCertchain(validCertChain),
@@ -171,10 +137,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign CBOR Self-Signed Cert",
-			s:    CborSerializer{},
+			s:    getCborSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "cbor",
 				},
 				driver: &SwDriver{
 					certChain: getCertchain([][]byte{selfSignedCert}),
@@ -186,10 +153,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign CBOR Public Key",
-			s:    CborSerializer{},
+			s:    getCborSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "cbor",
 				},
 				driver: &SwDriver{
 					priv: getPrivateKey(leafKeyPem),
@@ -200,10 +168,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign CBOR Cert Chain Invalid Key",
-			s:    CborSerializer{},
+			s:    getCborSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "cbor",
 				},
 				driver: &SwDriver{
 					certChain: getCertchain(validCertChain),
@@ -215,10 +184,11 @@ func TestSign(t *testing.T) {
 		},
 		{
 			name: "Success Sign CBOR Self-Signed Invalid Cert",
-			s:    CborSerializer{},
+			s:    getCborSerializer(),
 			args: args{
 				ar: AttestationReport{
-					Type: "Attestation Report",
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "cbor",
 				},
 				driver: &SwDriver{
 					certChain: getCertchain([][]byte{leafPem}), // Not a self-signed cert
@@ -228,6 +198,38 @@ func TestSign(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "Fail Sign CBOR invalid encoding",
+			s:    getCborSerializer(),
+			args: args{
+				ar: AttestationReport{
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "invalid_encoding",
+				},
+				driver: &SwDriver{
+					certChain: getCertchain(validCertChain),
+					priv:      getPrivateKey(leafKeyPem),
+				},
+				sel: IK,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Fail Sign JSON invalid encoding",
+			s:    getJsonSerializer(),
+			args: args{
+				ar: AttestationReport{
+					Type:     TYPE_ATTESTATION_REPORT,
+					Encoding: "invalid_encoding",
+				},
+				driver: &SwDriver{
+					certChain: getCertchain(validCertChain),
+					priv:      getPrivateKey(leafKeyPem),
+				},
+				sel: IK,
+			},
+			wantErr: true,
+		},
 	}
 
 	// Setup logger
@@ -236,22 +238,33 @@ func TestSign(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
+			_, err := tt.args.ar.PrepareContext(tt.s, crypto.SHA256)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PrepareContext() err = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				// If the test is suppose to fail at this stage, we are finished
+				return
+			}
+
 			report, err := tt.s.Marshal(tt.args.ar)
 			if err != nil {
-				t.Errorf("Failed to setup test. Marshal failed")
+				t.Errorf("Failed to marshal: %v", err)
+				return
 			}
 
 			raw, err := tt.s.Sign(report, tt.args.driver, tt.args.sel)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Serializer.Sign() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Sign() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			// Optionally print output
 			switch tt.s.(type) {
-			case JsonSerializer:
+			case jsonSerializer:
 				log.Tracef("signed JSON report: %v", string(raw))
-			case CborSerializer:
+			case cborSerializer:
 				log.Tracef("signed CBOR report: %v", hex.EncodeToString(raw))
 			}
 
@@ -276,7 +289,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     jwsDataCertChain,
 				verifier: []*x509.Certificate{getCert(caPem)},
-				s:        JsonSerializer{},
+				s:        getJsonSerializer(),
 			},
 			want:  StatusSuccess,
 			want1: true,
@@ -286,7 +299,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     jwsDataPubKey,
 				verifier: getPublicKey(leafKeyPem),
-				s:        JsonSerializer{},
+				s:        getJsonSerializer(),
 			},
 			want:  StatusSuccess,
 			want1: true,
@@ -296,7 +309,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     jwsDataCertChain,
 				verifier: []*x509.Certificate{getCert(invalidCaPem)},
-				s:        JsonSerializer{},
+				s:        getJsonSerializer(),
 			},
 			want:  StatusFail,
 			want1: false,
@@ -306,7 +319,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     jwsDataPubKey,
 				verifier: getPublicKey(invalidLeafKeyPem),
-				s:        JsonSerializer{},
+				s:        getJsonSerializer(),
 			},
 			want:  StatusFail,
 			want1: false,
@@ -316,7 +329,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     jwsDataCertChainInvalidKey,
 				verifier: []*x509.Certificate{getCert(caPem)},
-				s:        JsonSerializer{},
+				s:        getJsonSerializer(),
 			},
 			want:  StatusFail,
 			want1: false,
@@ -326,7 +339,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     coseDataCertChain,
 				verifier: []*x509.Certificate{getCert(caPem)},
-				s:        CborSerializer{},
+				s:        getCborSerializer(),
 			},
 			want:  StatusSuccess,
 			want1: true,
@@ -336,7 +349,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     coseDataPubKey,
 				verifier: getPublicKey(leafKeyPem),
-				s:        CborSerializer{},
+				s:        getCborSerializer(),
 			},
 			want:  StatusSuccess,
 			want1: true,
@@ -346,7 +359,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     coseDataCertChain,
 				verifier: []*x509.Certificate{getCert(invalidCaPem)},
-				s:        CborSerializer{},
+				s:        getCborSerializer(),
 			},
 			want:  StatusFail,
 			want1: false,
@@ -356,7 +369,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     coseDataPubKey,
 				verifier: getPublicKey(invalidLeafKeyPem),
-				s:        CborSerializer{},
+				s:        getCborSerializer(),
 			},
 			want:  StatusFail,
 			want1: false,
@@ -366,7 +379,7 @@ func TestVerify(t *testing.T) {
 			args: args{
 				data:     coseDataCertChainInvalidKey,
 				verifier: []*x509.Certificate{getCert(caPem)},
-				s:        CborSerializer{},
+				s:        getCborSerializer(),
 			},
 			want:  StatusFail,
 			want1: false,
@@ -390,6 +403,175 @@ func TestVerify(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNonce(t *testing.T) {
+	type args struct {
+		alg        crypto.Hash
+		encoding   string
+		serializer Serializer
+		nonce      []byte
+	}
+	tests := []struct {
+		name    string
+		s       Serializer
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "Success JSON",
+			args: args{
+				alg:        crypto.SHA256,
+				encoding:   TYPE_ENCODING_B64,
+				serializer: getJsonSerializer(),
+				nonce:      []byte{0x0, 0x0, 0x0, 0x1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Success CBOR",
+			args: args{
+				alg:        crypto.SHA256,
+				encoding:   "cbor",
+				serializer: getCborSerializer(),
+				nonce:      []byte{0x0, 0x0, 0x0, 0x1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Fail invalid encoding JSON",
+			args: args{
+				alg:        crypto.SHA256,
+				encoding:   "cbor",
+				serializer: getJsonSerializer(),
+				nonce:      []byte{0x0, 0x0, 0x0, 0x1},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Fail invalid encoding CBOR",
+			args: args{
+				alg:        crypto.SHA256,
+				encoding:   TYPE_ENCODING_B64,
+				serializer: getCborSerializer(),
+				nonce:      []byte{0x0, 0x0, 0x0, 0x1},
+			},
+			wantErr: true,
+		},
+	}
+
+	logrus.SetLevel(logrus.TraceLevel)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			in := &AttestationReport{
+				Version:  GetReportVersion(),
+				Type:     TYPE_ATTESTATION_REPORT,
+				Encoding: tt.args.encoding,
+				Context: Context{
+					Type:     TYPE_CONTEXT,
+					Alg:      tt.args.alg.String(),
+					Nonce:    tt.args.nonce,
+					Metadata: map[string][]byte{},
+				},
+			}
+
+			inNonce, err := in.PrepareContext(tt.args.serializer, tt.args.alg)
+			if tt.wantErr && err != nil {
+				log.Debugf("Success: tt.wantErr: %v, err: %v", tt.wantErr, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("Test preparation: failed to prepare report context: %v", err)
+			}
+
+			data, err := tt.args.serializer.Marshal(in)
+			if tt.wantErr && err != nil {
+				log.Debugf("Success: tt.wantErr: %v, err: %v", tt.wantErr, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("failed to marshal the attestation report: %v", err)
+			}
+
+			out := new(AttestationReport)
+			err = tt.args.serializer.Unmarshal(data, out)
+			if tt.wantErr && err != nil {
+				log.Debugf("Success: tt.wantErr: %v, err: %v", tt.wantErr, err)
+				return
+			}
+			if err != nil {
+				t.Fatalf("failed to unmarshal the attestation report: %v", err)
+			}
+
+			outNonce, err := internal.Hash(tt.args.alg, out.GetEncodedContext())
+			if err != nil {
+				t.Fatalf("failed to calculate out nonce: %v", err)
+			}
+
+			if !bytes.Equal(inNonce, outNonce) && !tt.wantErr {
+				t.Fatalf("Unexpected context nonce mismatch: %x vs %x", inNonce, outNonce)
+			}
+			if !bytes.Equal(out.Context.Nonce, tt.args.nonce) {
+				t.Fatalf("Unexpected user nonce mismatch: %x vs %x", out.Context.Nonce, tt.args.nonce)
+			}
+
+			log.Debugf("Context nonce match: %x", outNonce)
+			log.Debugf("User nonce match: %x", tt.args.nonce)
+
+			if tt.wantErr {
+				t.Fatal("MarshalJSON() succeeded unexpectedly")
+			}
+		})
+	}
+}
+
+// Helpers -----------------------------------------------------------------------------------------
+
+type SwDriver struct {
+	certChain []*x509.Certificate
+	priv      crypto.PrivateKey
+}
+
+func (s *SwDriver) Name() string {
+	return "SW Driver"
+}
+
+func (s *SwDriver) Init(c *DriverConfig) error {
+	return nil
+}
+
+func (s *SwDriver) GetEvidence(nonce []byte) ([]Evidence, error) {
+	return []Evidence{}, nil
+}
+
+func (s *SwDriver) GetCollateral() ([]Collateral, error) {
+	return []Collateral{}, nil
+}
+
+func (s *SwDriver) Lock() error {
+	return nil
+}
+
+func (s *SwDriver) Unlock() error {
+	return nil
+}
+
+func (s *SwDriver) GetKeyHandles(sel KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
+	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
+}
+
+func (s *SwDriver) GetCertChain(sel KeySelection) ([]*x509.Certificate, error) {
+	return s.certChain, nil
+}
+
+func (s *SwDriver) UpdateCerts() error {
+	return nil
+}
+
+func (s *SwDriver) UpdateMetadata(map[string][]byte) error {
+	return nil
 }
 
 func getPrivateKey(keyPem []byte) *ecdsa.PrivateKey {
@@ -443,6 +625,8 @@ func dec(s string) []byte {
 	return b
 }
 
+// Data --------------------------------------------------------------------------------------------
+
 var (
 	caPem = []byte("-----BEGIN CERTIFICATE-----\nMIICCDCCAa6gAwIBAgIUHlBy6FprYzqjMvh/LTIgljJU7qAwCgYIKoZIzj0EAwIw\nYTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz\ndCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg\nQ0EwIBcNMjMxMDE3MTMxMzAwWhgPMjEyMzA5MjMxMzEzMDBaMGExCzAJBgNVBAYT\nAkRFMRIwEAYDVQQHEwlUZXN0IENpdHkxFTATBgNVBAoTDFRlc3QgQ29tcGFueTEQ\nMA4GA1UECxMHUm9vdCBDQTEVMBMGA1UEAxMMVGVzdCBSb290IENBMFkwEwYHKoZI\nzj0CAQYIKoZIzj0DAQcDQgAE+o+oQY6CsBJWvUlKgyjYo/4TeZhSTtNkshKyM1m8\neBfwC2uimBN/48Tf3c5vd1j0AfDYoCiXTGNNkAAeaLuilKNCMEAwDgYDVR0PAQH/\nBAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFIgDf9NsuRHtvE8loiif\nJSW/Dss/MAoGCCqGSM49BAMCA0gAMEUCIQDmUvdPMueI9AfKnCu/xMxCCRgc5QBd\nDJMJB2960zTM0wIgcD+6ln+vc4pEfore6nEi4PRU9LUzDWoR6p3RTMjYqBs=\n-----END CERTIFICATE-----")
 
@@ -472,3 +656,19 @@ var (
 
 	coseDataCertChainInvalidKey = dec("d8628440a057a2006001724174746573746174696f6e205265706f7274818343a10126a118218259028c308202883082022da003020102021448919a7e6a3b3265a780d5871fa2b878ae1e5234300a06082a8648ce3d0403023061310b3009060355040613024445311230100603550407130954657374204369747931153013060355040a130c5465737420436f6d70616e793110300e060355040b1307526f6f74204341311530130603550403130c5465737420526f6f742043413020170d3233313031373133313330305a180f32313233303932333133313330305a307f310b3009060355040613024445311230100603550407130954657374204369747931153013060355040a130c5465737420436f6d70616e793121301f060355040b131854657374204f7267616e697a6174696f6e616c20556e69743122302006035504031319434d432054657374204c6561662043657274696669636174653059301306072a8648ce3d020106082a8648ce3d03010703420004cb968edbdf2b242570d90a7a0262dd1894b0b8303c2ccd746ce9b869a498dfe53590356768b2113aab25e1e01096f93ac9a3d3fb8e3d7ad69291121ee7f573a1a381a230819f300e0603551d0f0101ff0404030206c030130603551d25040c300a06082b06010505070303300c0603551d130101ff04023000301d0603551d0e0416041439de5f87a8f7b62d1810084bf96036c9b9909a3a301f0603551d2304183016801488037fd36cb911edbc4f25a2289f2525bf0ecb3f302a06082b06010505070101041e301c301a06082b06010505073001860e3132372e302e302e313a38383838300a06082a8648ce3d0403020349003046022100c1a8b76077322219213b023fe042a413383ca85e281024c4b8a502001c7b07f4022100c9e7f2f34d158479616088535a8f0b6371bed9c3c1a954232f98e1d7222c950a59020c30820208308201aea00302010202141e5072e85a6b633aa332f87f2d3220963254eea0300a06082a8648ce3d0403023061310b3009060355040613024445311230100603550407130954657374204369747931153013060355040a130c5465737420436f6d70616e793110300e060355040b1307526f6f74204341311530130603550403130c5465737420526f6f742043413020170d3233313031373133313330305a180f32313233303932333133313330305a3061310b3009060355040613024445311230100603550407130954657374204369747931153013060355040a130c5465737420436f6d70616e793110300e060355040b1307526f6f74204341311530130603550403130c5465737420526f6f742043413059301306072a8648ce3d020106082a8648ce3d03010703420004fa8fa8418e82b01256bd494a8328d8a3fe137998524ed364b212b23359bc7817f00b6ba298137fe3c4dfddce6f7758f401f0d8a028974c634d90001e68bba294a3423040300e0603551d0f0101ff040403020106300f0603551d130101ff040530030101ff301d0603551d0e0416041488037fd36cb911edbc4f25a2289f2525bf0ecb3f300a06082a8648ce3d0403020348003045022100e652f74f32e788f407ca9c2bbfc4cc4209181ce5005d0c9309076f7ad334ccd30220703fba967faf738a447e8adeea7122e0f454f4b5330d6a11ea9dd14cc8d8a81b5840530d40c226c2e44a65fe9f51d06eb2771f46a2a008c6a3094a6084a744c2207093a44cfbbc5f8876813ec742f994b9856dcab23c0f8da5541d5c577b219da4e8")
 )
+
+func getCborSerializer() Serializer {
+	s, err := NewCborSerializer()
+	if err != nil {
+		log.Fatalf("test: failed to initialize cbor serializer: %v", err)
+	}
+	return s
+}
+
+func getJsonSerializer() Serializer {
+	s, err := NewJsonSerializer()
+	if err != nil {
+		log.Fatalf("test: failed to initialize json serializer: %v", err)
+	}
+	return s
+}

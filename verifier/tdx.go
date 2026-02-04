@@ -30,7 +30,7 @@ const NUM_TDX_MRS = 6
 
 // TDX quote V4: Intel TDX DCAP: Quote Generation Library and Quote Verification Library Rev 0.9 p37
 // A.3. Version 4 Quote Format (TDX-ECDSA, SGX-ECDSA, and SGX-EPID)
-type TdxReportV4 struct {
+type TdxQuoteV4 struct {
 	QuoteHeader           QuoteHeader
 	QuoteBody             TdxReportBody
 	QuoteSignatureDataLen uint32
@@ -85,8 +85,13 @@ type QEReportCertificationData struct {
 	PCKCertChain      SgxCertificates // A3.9 QE Certification Data: Type 5 (PCK Cert Chain)
 }
 
-func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
-	referenceValues []ar.ReferenceValue) (*ar.MeasurementResult, bool) {
+func verifyTdx(
+	evidence ar.Evidence,
+	collateral ar.Collateral,
+	nonce []byte,
+	manifests []ar.MetadataResult,
+	referenceValues []ar.ReferenceValue,
+) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying TDX measurements")
 
@@ -117,17 +122,17 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	}
 
 	// Parse intel collateral (QE identity, TCB info, certificate revocation lists)
-	var collateralRaw *ar.IntelCollateral
-	var collateral *Collateral
-	for _, artifact := range measurement.Artifacts {
-		if artifact.Type == ar.ARTIFACT_TYPE_TDX_COLLATERAL {
-			collateralRaw = artifact.Events[0].IntelCollateral
-			if collateralRaw == nil {
+	var intelCollateralRaw *ar.IntelCollateral
+	var intelCollateral *IntelCollateral
+	for _, artifact := range collateral.Artifacts {
+		if artifact.Type == ar.TYPE_TDX_COLLATERAL {
+			intelCollateralRaw = artifact.Events[0].IntelCollateral
+			if intelCollateralRaw == nil {
 				log.Debugf("Could not find TDX collateral")
 				result.Summary.Fail(ar.CollateralNotPresent)
 				return result, false
 			}
-			collateral, err = ParseCollateral(collateralRaw)
+			intelCollateral, err = ParseCollateral(intelCollateralRaw)
 			if err != nil {
 				log.Debugf("Could not parse TDX collateral artifact: %v", err)
 				result.Summary.Fail(ar.ParseCollateral)
@@ -137,7 +142,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	}
 
 	// Currently only support for report version 4
-	tdxQuote, err := DecodeTdxReportV4(measurement.Evidence)
+	tdxQuote, err := DecodeTdxReportV4(evidence.Data)
 	if err != nil {
 		log.Debugf("Failed to decode TDX report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
@@ -155,7 +160,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 		result.Freshness.Expected = hex.EncodeToString(nonce)
 		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 	} else {
-		log.Debugf("Successfully verified TDX quote nonce")
+		log.Debugf("Successfully verified evidence nonce %x", nonce)
 		result.Freshness.Status = ar.StatusSuccess
 		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 	}
@@ -168,7 +173,7 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	}
 
 	// Match measurement root CAs against reference root CA fingerprint
-	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
+	errCode := verifyRootCas(&quoteCerts, intelCollateral, rootManifest.CaFingerprints)
 	if errCode != ar.NotSpecified {
 		result.Summary.Fail(errCode)
 		return result, false
@@ -184,8 +189,8 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 
 	// Verify TCB info
 	result.TdxResult.TcbInfoCheck = ValidateTcbInfo(
-		&collateral.TcbInfo, collateralRaw.TcbInfo,
-		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
+		&intelCollateral.TcbInfo, intelCollateralRaw.TcbInfo,
+		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE,
 		tdxPolicy.AcceptedTcbStatuses)
 	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
@@ -196,8 +201,8 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	// Verify Quoting Enclave Identity
 	qeIdentityResult := ValidateQEIdentity(
 		&tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.QEReport,
-		&collateral.QeIdentity, collateralRaw.QeIdentity,
-		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
+		&intelCollateral.QeIdentity, intelCollateralRaw.QeIdentity,
+		intelCollateral.QeIdentityIntermediateCert, intelCollateral.QeIdentityRootCert,
 		TDX_QUOTE_TYPE)
 	result.TdxResult.QeReportCheck = qeIdentityResult
 	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
@@ -205,9 +210,9 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 	}
 
 	// Verify Quote Signature including certificate chains and CRLs
-	sig, ret := VerifyIntelQuoteSignature(measurement.Evidence, tdxQuote.QuoteSignatureData,
+	sig, ret := VerifyIntelQuoteSignature(evidence.Data, tdxQuote.QuoteSignatureData,
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		TDX_QUOTE_TYPE, collateral.PckCrl, collateral.RootCaCrl)
+		TDX_QUOTE_TYPE, intelCollateral.PckCrl, intelCollateral.RootCaCrl)
 	if !ret {
 		result.Summary.Status = ar.StatusFail
 	}
@@ -215,14 +220,14 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 
 	// Verify the measurement registers (MRTD, RTMRs) against the reference values
 	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody,
-		measurement.Artifacts, referenceValues)
+		collateral.Artifacts, referenceValues)
 	if errCode != ar.NotSpecified || !ok {
 		result.Summary.Fail(errCode)
 	}
 	result.TdxResult.MrMatch = mrResults
 	result.Artifacts = append(result.Artifacts, detailedResults...)
 
-	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &tdxPolicy.TdId, &collateral.TcbInfo)
+	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &tdxPolicy.TdId, &intelCollateral.TcbInfo)
 	if !okTdId {
 		log.Debugf("Failed to verify TDX TD ID")
 		result.Summary.Status = ar.StatusFail
@@ -266,8 +271,8 @@ func verifyTdxMeasurements(measurement ar.Measurement, nonce []byte, manifests [
 }
 
 // Parses the report into the TDReport structure
-func DecodeTdxReportV4(report []byte) (TdxReportV4, error) {
-	var reportStruct TdxReportV4
+func DecodeTdxReportV4(report []byte) (TdxQuoteV4, error) {
+	var reportStruct TdxQuoteV4
 	var header QuoteHeader
 	var body TdxReportBody
 	var sig ECDSA256QuoteSignatureDataStructureV4
@@ -277,30 +282,30 @@ func DecodeTdxReportV4(report []byte) (TdxReportV4, error) {
 	buf := bytes.NewBuffer(report)
 	err := binary.Read(buf, binary.LittleEndian, &header)
 	if err != nil {
-		return TdxReportV4{}, fmt.Errorf("failed to decode TD report header: %v", err)
+		return TdxQuoteV4{}, fmt.Errorf("failed to decode TD report header: %v", err)
 	}
 
 	if header.Version != uint16(4) {
-		return TdxReportV4{}, fmt.Errorf("unsupported Quote version %v. Only  v4 is supported", header.Version)
+		return TdxQuoteV4{}, fmt.Errorf("unsupported Quote version %v. Only  v4 is supported", header.Version)
 	}
 	log.Tracef("Decoding TDX quote header version 4")
 
 	// parse body
 	err = binary.Read(buf, binary.LittleEndian, &body)
 	if err != nil {
-		return TdxReportV4{}, fmt.Errorf("failed to decode TD report body: %v", err)
+		return TdxQuoteV4{}, fmt.Errorf("failed to decode TD report body: %v", err)
 	}
 
 	// parse signature size
 	err = binary.Read(buf, binary.LittleEndian, &sigLen)
 	if err != nil {
-		return TdxReportV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureDataLen: %v", err)
+		return TdxQuoteV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureDataLen: %v", err)
 	}
 
 	// parse signature
 	err = parseECDSAQuoteSignatureDataStructV4(buf, &sig)
 	if err != nil {
-		return TdxReportV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureData: %v", err)
+		return TdxQuoteV4{}, fmt.Errorf("failed to decode TD report QuoteSignatureData: %v", err)
 	}
 
 	// compose the final report struct
@@ -495,7 +500,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		// comparison of the recalculated MR with the measured MR fails
 		log.Debug("Verifying reference values based on MR")
 		for _, refval := range refvals {
-			t := "Reference Value"
+			t := ar.TYPE_REFVAL_IAS
 			if successMrs[refval.Index] {
 				t = "Verified"
 			}
@@ -514,7 +519,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		// If the CC eventlog is present, we can display the individual measurements
 		log.Debug("Verifying eventlog against reference values")
 		for _, artifact := range artifacts {
-			if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG {
+			if artifact.Type == ar.TYPE_CC_EVENTLOG {
 				log.Debugf("Verifying %v %v eventlog events", len(artifact.Events), internal.IndexToMr(artifact.Index))
 				for _, event := range artifact.Events {
 					found := false
@@ -561,7 +566,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 			}
 			found := false
 			for _, artifact := range artifacts {
-				if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
+				if artifact.Type == ar.TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
 					for _, event := range artifact.Events {
 						if bytes.Equal(refval.Sha384, event.Sha384) {
 							found = true
@@ -572,7 +577,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:        "Reference Value",
+					Type:        ar.TYPE_REFVAL_IAS,
 					SubType:     refval.SubType,
 					Index:       refval.Index,
 					Success:     false,
@@ -606,7 +611,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNER
 	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
 	results = append(results, ar.DigestResult{
-		Type:     "Reference Value",
+		Type:     ar.TYPE_REFVAL_IAS,
 		SubType:  "MrOwner",
 		Digest:   hex.EncodeToString(refTdId.MrOwner),
 		Success:  success,
@@ -626,7 +631,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNERCONFIG
 	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
 	results = append(results, ar.DigestResult{
-		Type:     "Reference Value",
+		Type:     ar.TYPE_REFVAL_IAS,
 		SubType:  "MROWNERCONFIG",
 		Digest:   hex.EncodeToString(refTdId.MrOwnerConfig),
 		Success:  success,
@@ -646,7 +651,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MRCONFIGID
 	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
 	results = append(results, ar.DigestResult{
-		Type:     "Reference Value",
+		Type:     ar.TYPE_REFVAL_IAS,
 		SubType:  "MRCONFIGID",
 		Digest:   hex.EncodeToString(refTdId.MrConfigId),
 		Success:  success,
@@ -666,7 +671,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MRSIGNERSEAM
 	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
 	results = append(results, ar.DigestResult{
-		Type:     "Reference Value",
+		Type:     ar.TYPE_REFVAL_IAS,
 		SubType:  "MRSIGNERSEAM",
 		Digest:   hex.EncodeToString(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes),
 		Success:  success,
@@ -755,7 +760,7 @@ func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAtt
 func ccelPresent(artifacts []ar.Artifact) bool {
 	log.Tracef("Checking if CC eventlog is present")
 	for _, artifact := range artifacts {
-		if artifact.Type == ar.ARTIFACT_TYPE_CC_EVENTLOG {
+		if artifact.Type == ar.TYPE_CC_EVENTLOG {
 			log.Tracef("CC eventlog is present and complete")
 			return true
 		}

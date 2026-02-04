@@ -40,11 +40,12 @@ var (
 // of the attestation report to perform software measurements and signing
 type Sw struct {
 	*ar.DriverConfig
-	akChain []*x509.Certificate
-	ikChain []*x509.Certificate
-	akPriv  crypto.PrivateKey
-	ikPriv  crypto.PrivateKey
-	ctr     bool
+	akChain      []*x509.Certificate
+	ikChain      []*x509.Certificate
+	akPriv       crypto.PrivateKey
+	ikPriv       crypto.PrivateKey
+	ctr          bool
+	evidenceHash []byte
 }
 
 const (
@@ -68,10 +69,7 @@ func (sw *Sw) Init(c *ar.DriverConfig) error {
 	}
 
 	// Check if serializer is initialized
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
+	if c.Serializer == nil {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
@@ -143,9 +141,32 @@ func (sw *Sw) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
 }
 
-func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
-	log.Debug("Collecting SW measurements")
+	// Generate Evidence = Nonce | Aggregated_Hash
+	data, err := sw.Serializer.Marshal(&ar.SwEvidence{
+		Nonce:  nonce,
+		Sha256: sw.evidenceHash,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal evidence: %w", err)
+	}
+	swEvidence, err := sw.Serializer.Sign(data, sw, ar.AK)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
+	}
+
+	evidence := ar.Evidence{
+		Type: ar.TYPE_EVIDENCE_SW,
+		Data: swEvidence,
+	}
+
+	return []ar.Evidence{evidence}, nil
+}
+
+func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
+
+	log.Debug("Collecting SW evidence")
 
 	if !sw.ctr {
 		return nil, errors.New("sw driver specified but use containers equals false")
@@ -170,7 +191,7 @@ func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 		}
 
 		artifact := ar.Artifact{
-			Type:   "SW Eventlog",
+			Type:   ar.TYPE_SW_EVENTLOG,
 			Events: measureList,
 		}
 		artifacts = append(artifacts, artifact)
@@ -186,27 +207,17 @@ func (sw *Sw) Measure(nonce []byte) ([]ar.Measurement, error) {
 		return nil, fmt.Errorf("failed to check container measurement file: %w", err)
 	}
 
-	// Generate Evidence = Nonce | Aggregated_Hash
-	data, err := sw.Serializer.Marshal(&ar.SwEvidence{
-		Nonce:  nonce,
-		Sha256: aggregatedHash,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal evidence: %w", err)
-	}
-	evidence, err := sw.Serializer.Sign(data, sw, ar.AK)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
-	}
+	// Store the aggregated hash for evidence retrieval
+	sw.evidenceHash = aggregatedHash
 
-	measurement := ar.Measurement{
-		Type:      "SW Measurement",
-		Evidence:  evidence,
+	collateral := ar.Collateral{
+
+		Type:      ar.TYPE_EVIDENCE_SW,
 		Artifacts: artifacts,
 		Certs:     internal.WriteCertsDer(sw.akChain),
 	}
 
-	return []ar.Measurement{measurement}, nil
+	return []ar.Collateral{collateral}, nil
 }
 
 func (sw *Sw) UpdateCerts() error {
