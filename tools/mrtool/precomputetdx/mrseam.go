@@ -44,7 +44,7 @@ func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, erro
 		hash := sha512.Sum384(data)
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "TDX-Module",
 			Index:       tcg.INDEX_MRSEAM,
 			Sha384:      hash[:],
@@ -61,7 +61,7 @@ func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, erro
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "TDX-Module",
 			Index:       tcg.INDEX_MRSEAM,
 			Sha384:      hash[:],
@@ -74,7 +74,7 @@ func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, erro
 
 	// Create MRSEAM final reference value
 	mrseamSummary := &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "MRSEAM Summary",
 		Description: "MRSEAM",
 		Index:       tcg.INDEX_MRSEAM,

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2025 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,18 +24,27 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-// VerificationResult represents the results of all steps taken during
+// The attestation result version
+const (
+	resultVersion = "3.0.0"
+)
+
+func GetResultVersion() string {
+	return resultVersion
+}
+
+// AttestationResult represents the results of all steps taken during
 // the validation of an attestation report.
-type VerificationResult struct {
-	Version         string              `json:"version" cbor:"0,keyasint"`
-	Type            string              `json:"type" cbor:"1,keyasint"`
-	Summary         Result              `json:"summary" cbor:"2,keyasint"`
-	Prover          string              `json:"prover,omitempty" cbor:"4,keyasint,omitempty"`
-	Created         string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
-	CertLevel       int                 `json:"certLevel" cbor:"6,keyasint"`
-	Measurements    []MeasurementResult `json:"measurements" cbor:"7,keyasint"`
-	Metadata        MetadataSummary     `json:"metadata" cbor:"8,keyasint"`
-	ReportSignature []SignatureResult   `json:"reportSignatureCheck" cbor:"10,keyasint"`
+type AttestationResult struct {
+	Version      string              `json:"version" cbor:"0,keyasint"`
+	Type         string              `json:"type" cbor:"1,keyasint"`
+	Summary      Result              `json:"summary" cbor:"2,keyasint"`
+	Prover       string              `json:"prover,omitempty" cbor:"3,keyasint,omitempty"`
+	Created      string              `json:"created,omitempty" cbor:"4,keyasint,omitempty"`
+	Freshness    Result              `json:"freshness" cbor:"5,keyasint"`
+	CertLevel    int                 `json:"certLevel" cbor:"6,keyasint"`
+	Measurements []MeasurementResult `json:"measurements" cbor:"7,keyasint"`
+	Metadata     MetadataSummary     `json:"metadata" cbor:"8,keyasint"`
 }
 
 type Status string
@@ -542,6 +551,9 @@ const (
 	ParseKey
 	ExtractPayload
 	TdxVerification
+	Freshness
+	UnsupportedContextHashAlg
+	CalculateContextHash
 )
 
 func (e ErrorCode) String() string {
@@ -712,6 +724,12 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Extract Payload)", int(e))
 	case TdxVerification:
 		return fmt.Sprintf("%v (TDX Verification)", int(e))
+	case Freshness:
+		return fmt.Sprintf("%v (Freshness)", int(e))
+	case UnsupportedContextHashAlg:
+		return fmt.Sprintf("%v (Unsupported context hash algorithm)", int(e))
+	case CalculateContextHash:
+		return fmt.Sprintf("%v (Calculate context hash)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -758,7 +776,7 @@ func StatusFromBool(ok bool) Status {
 	}
 }
 
-func (r *VerificationResult) Fail(code ErrorCode, errs ...error) {
+func (r *AttestationResult) Fail(code ErrorCode, errs ...error) {
 	if len(errs) > 0 {
 		for _, err := range errs {
 			r.Summary.Fail(code, err)
@@ -768,7 +786,7 @@ func (r *VerificationResult) Fail(code ErrorCode, errs ...error) {
 	}
 }
 
-func (r *VerificationResult) Warn(code ErrorCode, errs ...error) {
+func (r *AttestationResult) Warn(code ErrorCode, errs ...error) {
 	if len(errs) > 0 {
 		for _, err := range errs {
 			r.Summary.Warn(code, err)
@@ -814,7 +832,7 @@ func (r *SignatureResult) PrintErr(format string, args ...interface{}) {
 	r.CertChainCheck.PrintErr("%v cert chain check", fmt.Sprintf(format, args...))
 }
 
-func (r *VerificationResult) PrintErr() {
+func (r *AttestationResult) PrintErr() {
 
 	if r.Summary.Status == StatusSuccess {
 		return
@@ -830,20 +848,20 @@ func (r *VerificationResult) PrintErr() {
 		m.Summary.PrintErr("%v", m.Type)
 		m.Freshness.PrintErr("Measurement freshness check")
 		m.Signature.PrintErr("Measurement")
-		for i, a := range m.Artifacts {
+		for _, a := range m.Artifacts {
 			if !a.Success {
 				var header string
 				switch m.Type {
 				case "TPM Result":
-					header = fmt.Sprintf("PCR%v Measurement", a.Index)
+					header = fmt.Sprintf("PCR%v %v", a.Index, a.Type)
 				case "TDX Result":
-					header = fmt.Sprintf("%v Measurement", internal.IndexToMr(a.Index))
+					header = fmt.Sprintf("%v %v", internal.IndexToMr(a.Index), a.Type)
 				case "SNP Result":
-					header = "SNP Measurement"
+					header = fmt.Sprintf("SNP %v", a.Type)
 				default:
 					header = fmt.Sprintf("%v Measurement", m.Type)
 				}
-				log.Warnf("%v %q: %v verification failed (Artifact %v)", header, a.SubType, a.Digest, i)
+				log.Warnf("%v %q: %v verification failed", header, a.SubType, a.Digest)
 			}
 		}
 		if m.TpmResult != nil {
@@ -872,14 +890,10 @@ func (r *VerificationResult) PrintErr() {
 		}
 	}
 
-	for _, s := range r.ReportSignature {
-		s.PrintErr("Report")
-	}
-
 	if r.Metadata.CompanyDescriptionResult != nil {
 		r.Metadata.CompanyDescriptionResult.Summary.PrintErr("Company description check")
 		for _, s := range r.Metadata.CompanyDescriptionResult.SignatureCheck {
-			s.PrintErr("Company Description")
+			s.PrintErr(TYPE_COMPANY_DESCRIPTION)
 		}
 		r.Metadata.CompanyDescriptionResult.ValidityCheck.PrintErr("Company description validity check")
 	}
@@ -894,7 +908,7 @@ func (r *VerificationResult) PrintErr() {
 
 	r.Metadata.ImageDescriptionResult.Summary.PrintErr("Image Description check")
 	for _, s := range r.Metadata.ImageDescriptionResult.SignatureCheck {
-		s.PrintErr("Image Description")
+		s.PrintErr(TYPE_IMAGE_DESCRIPTION)
 	}
 
 	r.Metadata.CompatibilityResult.Summary.PrintErr("Metadata compatibility check")

@@ -29,10 +29,11 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
 	type args struct {
-		measurement *ar.Measurement
-		nonce       []byte
-		manifests   []ar.MetadataResult
-		refvals     []ar.ReferenceValue
+		evidence   ar.Evidence
+		collateral ar.Collateral
+		nonce      []byte
+		manifests  []ar.MetadataResult
+		refvals    []ar.ReferenceValue
 	}
 	tests := []struct {
 		name  string
@@ -43,10 +44,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "ValidAttestationReport",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -71,7 +75,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -83,10 +87,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Signature",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: invalidReportSignature,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: invalidReportSignature,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -111,7 +118,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -123,10 +130,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    invalidCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: invalidCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -151,7 +161,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -163,10 +173,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid VCEK Certificate",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    invalidLeafCert,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: invalidLeafCert,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -191,7 +204,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -203,10 +216,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: invalidReportData,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: invalidReportData,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -231,7 +247,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -243,10 +259,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -271,7 +290,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: invalidMeasurement,
 					},
 				},
@@ -283,10 +302,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Policy Parameter Debug",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -311,7 +333,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -323,10 +345,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -351,7 +376,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -363,10 +388,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Reference Value Type",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -391,7 +419,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "TPM Reference Value",
+						Type:   ar.TYPE_REFVAL_TPM,
 						Sha256: validMeasurement,
 					},
 				},
@@ -403,10 +431,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "No Reference Values Present",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -437,10 +468,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Firmware",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -465,7 +499,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -477,10 +511,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid TCB",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -505,7 +542,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -517,10 +554,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid Policy Code Name",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -545,7 +585,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -557,10 +597,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA Fingerprints",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -585,7 +628,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -597,10 +640,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 		{
 			name: "Missing SNP Policy",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validReport,
-					Certs:    validCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
 				},
 				manifests: []ar.MetadataResult{
 					{
@@ -613,7 +659,7 @@ func Test_verifySnpMeasurements(t *testing.T) {
 				},
 				refvals: []ar.ReferenceValue{
 					{
-						Type:   "SNP Reference Value",
+						Type:   ar.TYPE_REFVAL_SNP,
 						Sha384: validMeasurement,
 					},
 				},
@@ -625,13 +671,13 @@ func Test_verifySnpMeasurements(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifySnpMeasurements(*tt.args.measurement, tt.args.nonce,
+			got, got1 := verifySnp(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.manifests, tt.args.refvals)
 			if got.Summary.Status != tt.want {
-				t.Errorf("verifySnpMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
+				t.Errorf("verifySnp() got = %v, want %v", got.Summary.Status, tt.want)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("verifySnpMeasurements() got1 = %v, want %v", got1, tt.want)
+				t.Errorf("verifySnp() got1 = %v, want %v", got1, tt.want)
 			}
 		})
 	}

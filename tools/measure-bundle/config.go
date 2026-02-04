@@ -53,18 +53,15 @@ func getConfig() (*config, error) {
 	flag.Parse()
 
 	if *configPath == "" {
-		flag.Usage()
-		log.Fatal("OCI runtime bundle config path not provided")
+		return nil, fmt.Errorf("oci runtime bundle config path not provided")
 	}
 	if *rootfsPath == "" {
-		flag.Usage()
-		log.Fatal("OCI runtime bundle rootfs path not provided")
+		return nil, fmt.Errorf("oci runtime bundle rootfs path not provided")
 	}
 
 	l, ok := logLevels[strings.ToLower(*logLevel)]
 	if !ok {
-		flag.Usage()
-		log.Fatalf("LogLevel %v does not exist", *logLevel)
+		return nil, fmt.Errorf("log level %v does not exist", *logLevel)
 	}
 
 	c := &config{

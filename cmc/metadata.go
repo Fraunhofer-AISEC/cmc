@@ -36,8 +36,8 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	useSystemRoots bool) (map[string][]byte, ar.Serializer, error) {
 
 	if len(paths) == 0 {
-		log.Info("No metadata specified via config. Using default serializer (JSON)")
-		return nil, ar.JsonSerializer{}, nil
+		log.Info("No metadata specified via config")
+		return nil, nil, nil
 	}
 
 	metadata := make([][]byte, 0)
@@ -87,14 +87,14 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 
 	if len(metadata) == 0 {
 		log.Warn("failed to retrieve any metadata. Can only work as verifier")
-		return nil, ar.JsonSerializer{}, nil
+		return nil, nil, nil
 	}
 
 	// Filter metadata: remove any duplicates through always choosing the
 	// newest version of duplicate metadata
 	metadata, s, err := filterMetadata(metadata)
 	if err != nil {
-		return nil, ar.JsonSerializer{}, fmt.Errorf("failed to filter metadata: %w", err)
+		return nil, nil, fmt.Errorf("failed to filter metadata: %w", err)
 	}
 
 	// Cache metadata if cache is available
@@ -194,10 +194,10 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 			log.Warnf("Failed to detect serialization. Ignoring object..")
 			continue
 		}
-		switch s.(type) {
-		case ar.JsonSerializer:
+
+		if strings.EqualFold(s.String(), "JSON") {
 			foundJson = true
-		case ar.CborSerializer:
+		} else if strings.EqualFold(s.String(), "CBOR") {
 			foundCbor = true
 		}
 
@@ -248,7 +248,7 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 			if in.Type == out.Type {
 				// Metadata which can be present multiple times must be checked by its
 				// unique name
-				if in.Type == "Manifest" || in.Type == "Manifest Description" {
+				if in.Type == ar.TYPE_MANIFEST || in.Type == ar.TYPE_MANIFEST_DESCRIPTION {
 					if in.Name == out.Name {
 						// Metadata is already present, compare versions
 						log.Tracef("Checking if %v: %v is newer then %v:%v", in.Name, in.Version, out.Name, out.Version)
@@ -294,14 +294,22 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 	}
 
 	if foundJson && foundCbor {
-		return nil, ar.JsonSerializer{},
+		return nil, nil,
 			fmt.Errorf("found both JSON and CBOR metadata. Mixed metadata is not supported")
 	} else {
 		log.Debugf("Returning filtered lists with %v elements", len(outlist))
 		if foundJson {
-			return outlist, ar.JsonSerializer{}, nil
+			s, err := ar.NewJsonSerializer()
+			if err != nil {
+				return nil, nil, fmt.Errorf("internal error: failed to initialize json serializer: %w", err)
+			}
+			return outlist, s, nil
 		} else {
-			return outlist, ar.CborSerializer{}, nil
+			s, err := ar.NewCborSerializer()
+			if err != nil {
+				return nil, nil, fmt.Errorf("internal error: failed to initialize cbor serializer: %w", err)
+			}
+			return outlist, s, nil
 		}
 	}
 }

@@ -25,13 +25,14 @@ import (
 
 func Test_verifyAzureMeasurements(t *testing.T) {
 	type args struct {
-		measurements []ar.Measurement
-		nonce        []byte
-		manifests    []ar.MetadataResult
-		tdxRefVals   []ar.ReferenceValue
-		snpRefVals   []ar.ReferenceValue
-		vtpmRefVals  []ar.ReferenceValue
-		s            ar.Serializer
+		evidences   []ar.Evidence
+		collaterals []ar.Collateral
+		nonce       []byte
+		manifests   []ar.MetadataResult
+		tdxRefVals  []ar.ReferenceValue
+		snpRefVals  []ar.ReferenceValue
+		vtpmRefVals []ar.ReferenceValue
+		s           ar.Serializer
 	}
 	tests := []struct {
 		name  string
@@ -42,11 +43,12 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Successful Azure Verification",
 			args: args{
-				measurements: validTdxMeasurements,
-				manifests:    []ar.MetadataResult{validTdxRootManifest},
-				tdxRefVals:   validTdxRefvalsAzure,
-				vtpmRefVals:  validVtpmRefvalsAzure,
-				nonce:        validVtpmNonce,
+				evidences:   validAzureEvidences,
+				collaterals: validAzureCollaterals,
+				manifests:   []ar.MetadataResult{validTdxRootManifest},
+				tdxRefVals:  validTdxRefvalsAzure,
+				vtpmRefVals: validVtpmRefvalsAzure,
+				nonce:       validVtpmNonce,
 			},
 			want:  successfulAzureResult,
 			want1: true,
@@ -54,11 +56,12 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Failed Azure Verification Invalid Fingerprint",
 			args: args{
-				measurements: validTdxMeasurements,
-				manifests:    []ar.MetadataResult{invalidTdxRootManifestFingerprint}, // Invalid fingerprint
-				tdxRefVals:   validTdxRefvalsAzure,
-				vtpmRefVals:  validVtpmRefvalsAzure,
-				nonce:        validVtpmNonce,
+				evidences:   validAzureEvidences,
+				collaterals: validAzureCollaterals,
+				manifests:   []ar.MetadataResult{invalidTdxRootManifestFingerprint}, // Invalid fingerprint
+				tdxRefVals:  validTdxRefvalsAzure,
+				vtpmRefVals: validVtpmRefvalsAzure,
+				nonce:       validVtpmNonce,
 			},
 			want:  failedAzureResultTdx,
 			want1: false,
@@ -66,11 +69,12 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Failed Azure Verification Invalid TDX Refvals",
 			args: args{
-				measurements: validTdxMeasurements,
-				manifests:    []ar.MetadataResult{validTdxRootManifest},
-				tdxRefVals:   invalidTdxRefvalsAzure, // Invalid TDX refvals
-				vtpmRefVals:  validVtpmRefvalsAzure,
-				nonce:        validVtpmNonce,
+				evidences:   validAzureEvidences,
+				collaterals: validAzureCollaterals,
+				manifests:   []ar.MetadataResult{validTdxRootManifest},
+				tdxRefVals:  invalidTdxRefvalsAzure, // Invalid TDX refvals
+				vtpmRefVals: validVtpmRefvalsAzure,
+				nonce:       validVtpmNonce,
 			},
 			want:  failedAzureResultTdx,
 			want1: false,
@@ -78,11 +82,12 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Failed Azure Verification Invalid vTPM Refvals",
 			args: args{
-				measurements: validTdxMeasurements,
-				manifests:    []ar.MetadataResult{validTdxRootManifest},
-				tdxRefVals:   validTdxRefvalsAzure,
-				vtpmRefVals:  invalidVtpmRefvalsAzure, // Invalid vTPM refvals azure
-				nonce:        validVtpmNonce,
+				evidences:   validAzureEvidences,
+				collaterals: validAzureCollaterals,
+				manifests:   []ar.MetadataResult{validTdxRootManifest},
+				tdxRefVals:  validTdxRefvalsAzure,
+				vtpmRefVals: invalidVtpmRefvalsAzure, // Invalid vTPM refvals azure
+				nonce:       validVtpmNonce,
 			},
 			want:  failedAzureResultVtpm,
 			want1: false,
@@ -99,12 +104,12 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 	for _, tt := range tests {
 
 		// Insert collateral
-		for i := range tt.args.measurements {
-			if tt.args.measurements[i].Type == "Azure TDX Measurement" {
+		for i := range tt.args.collaterals {
+			if tt.args.collaterals[i].Type == ar.TYPE_EVIDENCE_AZURE_TDX {
 
-				tt.args.measurements[i].Artifacts = []ar.Artifact{
+				tt.args.collaterals[i].Artifacts = []ar.Artifact{
 					{
-						Type: "TDX Collateral",
+						Type: ar.TYPE_TDX_COLLATERAL,
 						Events: []ar.MeasureEvent{
 							{
 								IntelCollateral: collateral,
@@ -116,7 +121,9 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyAzureMeasurements(tt.args.measurements, tt.args.nonce, tt.args.manifests, tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals, tt.args.s)
+			got, got1 := verifyAzure(tt.args.evidences, tt.args.collaterals, tt.args.nonce,
+				tt.args.manifests, tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals,
+				tt.args.s)
 			for i := range got {
 				if got[i].Summary.Status != tt.want[i].Summary.Status {
 					t.Errorf("got %v: %v, want %v: %v", got[i].Type, got[i].Summary.Status, tt.want[i].Type, tt.want[i].Summary.Status)
@@ -190,25 +197,25 @@ var (
 	// Run: mrtool parse tpm -mrs 1
 	validVtpmRefvalsAzure = []ar.ReferenceValue{
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_EFI_VARIABLE_BOOT",
 			Index:   1,
 			Sha256:  dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104"),
 		},
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_EFI_VARIABLE_BOOT",
 			Index:   1,
 			Sha256:  dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2"),
 		},
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_EFI_VARIABLE_BOOT",
 			Index:   1,
 			Sha256:  dec("6ab4a55c1a608bcc44f64f3712e9cb606788842b7d0bd6abfdd5bdda246088ac"),
 		},
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_SEPARATOR",
 			Index:   1,
 			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
@@ -217,19 +224,19 @@ var (
 
 	invalidVtpmRefvalsAzure = []ar.ReferenceValue{
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_EFI_VARIABLE_BOOT",
 			Index:   1,
 			Sha256:  dec("aaaa96d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7"),
 		},
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_EFI_VARIABLE_BOOT",
 			Index:   1,
 			Sha256:  dec("b6de3a472325267624ba846ca15a3f40af01640de3210998fbe91c06e46da044"),
 		},
 		{
-			Type:    "TPM Reference Value",
+			Type:    ar.TYPE_REFVAL_TPM,
 			SubType: "EV_SEPARATOR",
 			Index:   1,
 			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
@@ -238,7 +245,7 @@ var (
 
 	validVtpmArtifactsAzure = []ar.Artifact{
 		{
-			Type:  "PCR Eventlog",
+			Type:  ar.TYPE_PCR_EVENTLOG,
 			Index: 1,
 			Events: []ar.MeasureEvent{
 				{Sha256: dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104")},
@@ -385,6 +392,35 @@ var (
 )
 
 // =================================================================================================
+// Azure data
+// =================================================================================================
+var (
+	validAzureEvidences = []ar.Evidence{
+		{
+			Type:    ar.TYPE_EVIDENCE_AZURE_TDX,
+			Data:    tdxQuoteAzure,
+			AddData: validClaimsAzure,
+		},
+		{
+			Type:      ar.TYPE_EVIDENCE_AZURE_TPM,
+			Data:      validVtpmQuote,
+			Signature: validVtpmQuoteSig,
+		},
+	}
+
+	validAzureCollaterals = []ar.Collateral{
+		{
+			Type: ar.TYPE_EVIDENCE_AZURE_TDX,
+		},
+		{
+			Type:      ar.TYPE_EVIDENCE_AZURE_TPM,
+			Artifacts: validVtpmArtifactsAzure,
+			Certs:     [][]byte{validVtpmAkCert},
+		},
+	}
+)
+
+// =================================================================================================
 // TDX data
 // =================================================================================================
 var (
@@ -442,21 +478,6 @@ AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
 		},
 	}
 
-	validTdxMeasurements = []ar.Measurement{
-		{
-			Type:     "Azure TDX Measurement",
-			Evidence: tdxQuoteAzure,
-			Claims:   validClaimsAzure,
-		},
-		{
-			Type:      "Azure vTPM Measurement",
-			Evidence:  validVtpmQuote,
-			Signature: validVtpmQuoteSig,
-			Artifacts: validVtpmArtifactsAzure,
-			Certs:     [][]byte{validVtpmAkCert},
-		},
-	}
-
 	validTdxPolicy = &ar.TdxPolicy{
 		QuoteVersion: 0x04,
 		TdId: ar.TDId{
@@ -479,7 +500,7 @@ AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
 
 	invalidTdxRefvalsAzure = []ar.ReferenceValue{
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "OVMF",
 			Index:       0,
 			Sha384:      dec("633418c955597f43a99f3378f8dfad06db87c51da2d6947e1c199dc9e2f89cee1d47542ce75ac3c8928338a13cf9bbc3"),
@@ -490,14 +511,14 @@ AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
 	// Run: tdxtool -cmd parse-quote -in quote
 	validTdxRefvalsAzure = []ar.ReferenceValue{
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "OVMF",
 			Index:       0,
 			Sha384:      dec("f858414aef26d52a3b21614bab4bafab13b3ed62ebdd9d46a6be799228c2e27bc0d025cc6e4e90daff827cbe0316bbd9"),
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "TDX-Module",
 			Index:       5,
 			Sha384:      dec("49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6"),

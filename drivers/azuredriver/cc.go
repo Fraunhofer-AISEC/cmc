@@ -17,7 +17,6 @@ package azuredriver
 
 import (
 	"bytes"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -32,7 +31,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 
-	"github.com/google/go-tdx-guest/pcs"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
@@ -42,40 +40,41 @@ const (
 	quotePath    = "/tdquote"
 )
 
-func GetCcMeasurement(nonce []byte, akchain []*x509.Certificate) (ar.Measurement, error) {
+func GetCcEvidence(nonce []byte) (*ar.Evidence, error) {
 
 	log.Debugf("Retrieving hardware report (SNP report or TDX quote)...")
 
 	err := UpdateAzureUserData(nonce)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to update azure user data")
+		return nil, fmt.Errorf("failed to update azure user data")
 	}
 
 	var reportType verifier.AzureReportType
+	var azureReport []byte
 	var reportRaw []byte
 	var rtdataRaw []byte
 	success := false
 	for i := 0; i < 3; i++ {
 
-		data, err := GetAzureReport()
+		azureReport, err = GetAzureReport()
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to get azure report: %w", err)
+			return nil, fmt.Errorf("failed to get azure report: %w", err)
 		}
 
-		reportRaw, rtdataRaw, err = DecodeAzureReport(data)
+		reportRaw, rtdataRaw, err = DecodeAzureReport(azureReport)
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to decode azure report: %w", err)
+			return nil, fmt.Errorf("failed to decode azure report: %w", err)
 		}
 
 		rtdata, claims, err := verifier.DecodeAzureRtData(rtdataRaw)
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to decode runtime data: %w", err)
+			return nil, fmt.Errorf("failed to decode runtime data: %w", err)
 		}
 		reportType = verifier.AzureReportType(rtdata.ReportType)
 
 		userData, err := hex.DecodeString(claims.UserData)
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to decode user data: %w", err)
+			return nil, fmt.Errorf("failed to decode user data: %w", err)
 		}
 		fullNonce := make([]byte, 64)
 		copy(fullNonce, nonce)
@@ -90,23 +89,42 @@ func GetCcMeasurement(nonce []byte, akchain []*x509.Certificate) (ar.Measurement
 	}
 
 	if !success {
-		return ar.Measurement{}, fmt.Errorf("failed to create report nonce specified via NVIndex")
+		return nil, fmt.Errorf("failed to create report nonce specified via NVIndex")
 	}
 
 	switch reportType {
 	case verifier.SnpReport:
-		return createSnpMeasurement(reportRaw, rtdataRaw, akchain)
+		return &ar.Evidence{
+			Type:    ar.TYPE_EVIDENCE_AZURE_SNP,
+			Data:    reportRaw,
+			AddData: rtdataRaw,
+		}, nil
 	case verifier.TdxReport:
 		// TDREPORT is only 1024 bytes TODO use length field in header if possible,
 		// currently, however, the length field in the azure report includes runtime data
 		quote, err := GetTdxQuote(reportRaw[:1024])
 		if err != nil {
-			return ar.Measurement{}, fmt.Errorf("failed to get TDX quote: %w", err)
+			return nil, fmt.Errorf("failed to get TDX quote: %w", err)
 		}
-		return createTdxMeasurement(quote, rtdataRaw, akchain)
+		return &ar.Evidence{
+			Type:    ar.TYPE_EVIDENCE_AZURE_TDX,
+			Data:    quote,
+			AddData: rtdataRaw,
+		}, nil
 	}
 
-	return ar.Measurement{}, fmt.Errorf("unknown report type %v", reportType)
+	return nil, fmt.Errorf("unknown report type %v", reportType)
+}
+
+func (azure *Azure) GetCcCollateral() (*ar.Collateral, error) {
+	switch azure.vmType {
+	case ar.TYPE_EVIDENCE_AZURE_SNP:
+		return azure.GetSnpCollateral()
+	case ar.TYPE_EVIDENCE_AZURE_TDX:
+		return azure.GetTdxCollateral()
+	default:
+		return nil, fmt.Errorf("internal error: failed to detect CVM type")
+	}
 }
 
 func UpdateAzureUserData(nonce []byte) error {
@@ -358,58 +376,36 @@ func FetchAzureTdxQuote(jsonRequest string) ([]byte, error) {
 	return body, nil
 }
 
-func createSnpMeasurement(report, claims []byte, akchain []*x509.Certificate) (ar.Measurement, error) {
-	measurement := ar.Measurement{
-		Type:     "Azure SNP Measurement",
-		Evidence: report,
-		Certs:    internal.WriteCertsDer(akchain),
-		Claims:   claims,
+func (azure *Azure) GetSnpCollateral() (*ar.Collateral, error) {
+	collateral := &ar.Collateral{
+		Type:  ar.TYPE_EVIDENCE_AZURE_SNP,
+		Certs: internal.WriteCertsDer(azure.ccAkChain),
 	}
-	return measurement, nil
+
+	return collateral, nil
 }
 
-func createTdxMeasurement(data, claims []byte, akchain []*x509.Certificate) (ar.Measurement, error) {
+func (azure *Azure) GetTdxCollateral() (*ar.Collateral, error) {
 
-	// Decode attestation report to get FMSPC (required to fetch collateral)
-	quote, err := verifier.DecodeTdxReportV4(data)
+	tdxCollateral, err := verifier.FetchCollateral(azure.fmspc, azure.ccAkChain[0], verifier.TDX_QUOTE_TYPE)
 	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to decode TDX quote: %w", err)
-	}
-	log.Tracef("PCK Leaf Certificate: %v",
-		string(internal.WriteCertPem(quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)))
-
-	// Get FMSPC
-	exts, err := pcs.PckCertificateExtensions(
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
-	}
-	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
-
-	// Fetch collateral
-	collateral, err := verifier.FetchCollateral(exts.FMSPC,
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert, verifier.TDX_QUOTE_TYPE)
-	if err != nil {
-		return ar.Measurement{}, fmt.Errorf("failed to get TDX collateral: %w", err)
+		return nil, fmt.Errorf("failed to get TDX collateral: %w", err)
 	}
 
-	// Create measurement
-	measurement := ar.Measurement{
-		Type:     "Azure TDX Measurement",
-		Evidence: data,
-		Certs:    internal.WriteCertsDer(akchain),
+	collateral := &ar.Collateral{
+		Type:  ar.TYPE_EVIDENCE_AZURE_TDX,
+		Certs: internal.WriteCertsDer(azure.ccAkChain),
 		Artifacts: []ar.Artifact{
 			{
-				Type: "TDX Collateral",
+				Type: ar.TYPE_TDX_COLLATERAL,
 				Events: []ar.MeasureEvent{
 					{
-						IntelCollateral: collateral,
+						IntelCollateral: tdxCollateral,
 					},
 				},
 			},
 		},
-		Claims: claims,
 	}
 
-	return measurement, nil
+	return collateral, nil
 }

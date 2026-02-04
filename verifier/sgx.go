@@ -29,15 +29,19 @@ import (
 
 // Overall structure: table 2 from https://download.01.org/intel-sgx/latest/dcap-latest/linux/docs/Intel_SGX_ECDSA_QuoteLibReference_DCAP_API.pdf
 // Endianess: Little Endian (all Integer fields)
-type SgxReport struct {
+type SgxQuote struct {
 	QuoteHeader           QuoteHeader
 	ISVEnclaveReport      EnclaveReportBody
 	QuoteSignatureDataLen uint32
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructure // variable size
 }
 
-func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
-	manifests []ar.MetadataResult, referenceValues []ar.ReferenceValue,
+func verifySgx(
+	evidence ar.Evidence,
+	collateral ar.Collateral,
+	nonce []byte,
+	manifests []ar.MetadataResult,
+	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
 	var err error
@@ -50,11 +54,11 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	log.Debug("Verifying SGX measurements")
 
 	if len(referenceValues) == 0 {
-		log.Debugf("Could not find SGX Reference Value")
+		log.Debugf("Could not find SGX reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	} else if len(referenceValues) > 1 {
-		log.Debugf("Report contains %v reference values. Currently, only one SGX Reference Value is supported",
+		log.Debugf("Report contains %v reference values. Currently, only one SGX reference value is supported",
 			len(referenceValues))
 		result.Summary.Fail(ar.RefValMultiple)
 		return result, false
@@ -68,14 +72,14 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	sgxReferencePolicy := rootManifest.Manifest.SgxPolicy
 
 	// Validate Parameters:
-	if len(measurement.Evidence) < SGX_QUOTE_MIN_SIZE {
+	if len(evidence.Data) < SGX_QUOTE_MIN_SIZE {
 		log.Debugf("Invalid SGX Report")
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
-	if sgxReferenceValue.Type != "SGX Reference Value" {
-		log.Debugf("SGX Reference Value invalid type %v", sgxReferenceValue.Type)
+	if sgxReferenceValue.Type != ar.TYPE_REFVAL_SGX {
+		log.Debugf("SGX reference value invalid type %v", sgxReferenceValue.Type)
 		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
@@ -87,7 +91,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	}
 
 	// Extract the attestation report into the SGXReport data structure
-	sgxQuote, err := DecodeSgxReport(measurement.Evidence)
+	sgxQuote, err := DecodeSgxReport(evidence.Data)
 	if err != nil {
 		log.Debugf("Failed to decode SGX report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
@@ -113,22 +117,23 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 		result.Summary.Status = ar.StatusFail
 		return result, false
 	} else {
+		log.Debugf("Successfully verified evidence nonce %x", nonce)
 		result.Freshness.Status = ar.StatusSuccess
 		result.Freshness.Got = hex.EncodeToString(nonce)
 	}
 
 	// Obtain collateral from measurements
-	if len(measurement.Artifacts) == 0 ||
-		len(measurement.Artifacts[0].Events) == 0 ||
-		measurement.Artifacts[0].Events[0].IntelCollateral == nil {
-		log.Debugf("Could not find TDX artifacts (collateral)")
+	if len(collateral.Artifacts) == 0 ||
+		len(collateral.Artifacts[0].Events) == 0 ||
+		collateral.Artifacts[0].Events[0].IntelCollateral == nil {
+		log.Debugf("Could not find TDX collateral")
 		result.Summary.Fail(ar.CollateralNotPresent)
 		return result, false
 	}
-	collateralRaw := measurement.Artifacts[0].Events[0].IntelCollateral
-	collateral, err := ParseCollateral(collateralRaw)
+	intelCollateralRaw := collateral.Artifacts[0].Events[0].IntelCollateral
+	intelCollateral, err := ParseCollateral(intelCollateralRaw)
 	if err != nil {
-		log.Debugf("Could not parse SGX artifacts (collateral)")
+		log.Debugf("Could not parse SGX collateral")
 		result.Summary.Fail(ar.ParseCollateral)
 		return result, false
 	}
@@ -156,8 +161,8 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 		return result, false
 	}
 
-	// Match measurement root CAs against reference root CA fingerprint
-	errCode := verifyRootCas(&quoteCerts, collateral, rootManifest.CaFingerprints)
+	// Match collateral root CAs against reference root CA fingerprint
+	errCode := verifyRootCas(&quoteCerts, intelCollateral, rootManifest.CaFingerprints)
 	if errCode != ar.NotSpecified {
 		result.Summary.Fail(errCode)
 		return result, false
@@ -174,8 +179,8 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	// Verify TcbInfo
 	log.Debugf("Verifying TCB info")
 	result.SgxResult.TcbInfoCheck = ValidateTcbInfo(
-		&collateral.TcbInfo, collateralRaw.TcbInfo,
-		collateral.TcbInfoIntermediateCert, collateral.TcbInfoRootCert,
+		&intelCollateral.TcbInfo, intelCollateralRaw.TcbInfo,
+		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
 		sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE, sgxReferencePolicy.AcceptedTcbStatuses)
 	if result.SgxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to verify TCB info structure")
@@ -187,8 +192,8 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 	log.Debugf("Verifying quoting enclave identity")
 	qeIdentityResult := ValidateQEIdentity(
 		&sgxQuote.QuoteSignatureData.QEReport,
-		&collateral.QeIdentity, collateralRaw.QeIdentity,
-		collateral.QeIdentityIntermediateCert, collateral.QeIdentityRootCert,
+		&intelCollateral.QeIdentity, intelCollateralRaw.QeIdentity,
+		intelCollateral.QeIdentityIntermediateCert, intelCollateral.QeIdentityRootCert,
 		SGX_QUOTE_TYPE)
 	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
 		result.Summary.Fail(ar.VerifyQEIdentityErr)
@@ -198,9 +203,9 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 
 	// Verify Quote Signature
 	log.Debugf("Verifying SGX quote signature")
-	sig, ret := VerifyIntelQuoteSignature(measurement.Evidence, sgxQuote.QuoteSignatureData,
+	sig, ret := VerifyIntelQuoteSignature(evidence.Data, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		QuoteType(sgxQuote.QuoteHeader.TeeType), collateral.PckCrl, collateral.RootCaCrl)
+		QuoteType(sgxQuote.QuoteHeader.TeeType), intelCollateral.PckCrl, intelCollateral.RootCaCrl)
 	if !ret {
 		success = false
 	}
@@ -208,7 +213,7 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 
 	// Verify Quote Body values
 	log.Debugf("Verifying SGX quote body")
-	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &collateral.TcbInfo, &sgxExtensions,
+	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &intelCollateral.TcbInfo, &sgxExtensions,
 		&sgxReferenceValue, sgxReferencePolicy, result)
 	if err != nil {
 		log.Debugf("Failed to verify SGX Report Body: %v", err)
@@ -231,8 +236,8 @@ func verifySgxMeasurements(measurement ar.Measurement, nonce []byte,
 }
 
 // Parses the report into the SgxReport structure
-func DecodeSgxReport(report []byte) (SgxReport, error) {
-	var reportStruct SgxReport
+func DecodeSgxReport(report []byte) (SgxQuote, error) {
+	var reportStruct SgxQuote
 	var header QuoteHeader
 	var body EnclaveReportBody
 	var sig ECDSA256QuoteSignatureDataStructure
@@ -242,25 +247,25 @@ func DecodeSgxReport(report []byte) (SgxReport, error) {
 	buf := bytes.NewBuffer(report)
 	err := binary.Read(buf, binary.LittleEndian, &header)
 	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report header: %v", err)
+		return SgxQuote{}, fmt.Errorf("failed to decode SGX report header: %v", err)
 	}
 
 	// parse body
 	err = binary.Read(buf, binary.LittleEndian, &body)
 	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report body: %v", err)
+		return SgxQuote{}, fmt.Errorf("failed to decode SGX report body: %v", err)
 	}
 
 	// parse signature size
 	err = binary.Read(buf, binary.LittleEndian, &sigLen)
 	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report QuoteSignatureDataLen: %v", err)
+		return SgxQuote{}, fmt.Errorf("failed to decode SGX report QuoteSignatureDataLen: %v", err)
 	}
 
 	// parse signature
 	err = parseECDSASignature(buf, &sig)
 	if err != nil {
-		return SgxReport{}, fmt.Errorf("failed to decode SGX report ECDSA256QuotesignatureDataStructure: %v", err)
+		return SgxQuote{}, fmt.Errorf("failed to decode SGX report ECDSA256QuotesignatureDataStructure: %v", err)
 	}
 
 	// compose the final report struct
@@ -294,7 +299,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	if !bytes.Equal(body.MRENCLAVE[:], []byte(sgxReferenceValue.Sha256)) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     "Reference Value",
+				Type:     ar.TYPE_REFVAL_IAS,
 				SubType:  sgxReferenceValue.SubType,
 				Digest:   hex.EncodeToString(sgxReferenceValue.Sha256[:]),
 				Success:  false,
@@ -324,7 +329,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Type:     "Reference Value",
+			Type:     ar.TYPE_REFVAL_IAS,
 			SubType:  "MrSigner",
 			Digest:   sgxReferencePolicy.MrSigner,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),
@@ -332,7 +337,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			Launched: true,
 		},
 		ar.DigestResult{
-			Type:     "Reference Value",
+			Type:     ar.TYPE_REFVAL_IAS,
 			SubType:  "CpuSvn",
 			Digest:   hex.EncodeToString(sgxExtensions.Tcb.Value.CpuSvn.Value),
 			Measured: hex.EncodeToString(body.CPUSVN[:]),
@@ -340,7 +345,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			Launched: true,
 		},
 		ar.DigestResult{
-			Type:     "Reference Value",
+			Type:     ar.TYPE_REFVAL_IAS,
 			SubType:  "IsvProdId",
 			Digest:   strconv.Itoa(int(sgxReferencePolicy.IsvProdId)),
 			Measured: strconv.Itoa(int(body.ISVProdID)),
@@ -348,7 +353,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			Launched: true,
 		},
 		ar.DigestResult{
-			Type:     "Reference Value",
+			Type:     ar.TYPE_REFVAL_IAS,
 			SubType:  "IsvSvn",
 			Digest:   strconv.Itoa(int(sgxReferencePolicy.IsvSvn)),
 			Measured: strconv.Itoa(int(body.ISVSVN)),

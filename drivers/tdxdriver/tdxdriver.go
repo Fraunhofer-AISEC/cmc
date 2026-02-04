@@ -63,6 +63,7 @@ type Tdx struct {
 	akChain []*x509.Certificate
 	ikChain []*x509.Certificate
 	ikPriv  crypto.PrivateKey
+	fmspc   string
 }
 
 // Name returns the name of the driver
@@ -78,10 +79,7 @@ func (tdx *Tdx) Init(c *ar.DriverConfig) error {
 	if tdx == nil {
 		return errors.New("internal error: TDX object is nil")
 	}
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
+	if c.Serializer == nil {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
@@ -121,55 +119,44 @@ func (tdx *Tdx) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-// Measure implements the attestation reports generic Measure interface to be called
-// as a plugin during attestation report generation
-func (tdx *Tdx) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (tdx *Tdx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
-	log.Debug("Collecting TDX measurements")
+	log.Debug("Collecting TDX evidence")
 
 	if tdx == nil {
 		return nil, errors.New("internal error: TDX object is nil")
 	}
 
-	data, err := GetMeasurement(nonce)
+	data, err := GetReport(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX Measurement: %w", err)
 	}
 
-	// Decode attestation report to get FMSPC (required to fetch collateral)
-	quote, err := verifier.DecodeTdxReportV4(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode TDX quote: %w", err)
+	evidence := ar.Evidence{
+		Type: ar.TYPE_EVIDENCE_TDX,
+		Data: data,
 	}
-	log.Tracef("PCK Leaf Certificate: %v",
-		string(internal.WriteCertPem(quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)))
 
-	// Get FMSPC
-	exts, err := pcs.PckCertificateExtensions(
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
-	}
-	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
+	return []ar.Evidence{evidence}, nil
+}
 
-	// Fetch collateral
-	collateral, err := verifier.FetchCollateral(exts.FMSPC,
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert, verifier.TDX_QUOTE_TYPE)
+func (tdx *Tdx) GetCollateral() ([]ar.Collateral, error) {
+
+	// Fetch tdx collateral
+	tdxCollateral, err := verifier.FetchCollateral(tdx.fmspc, tdx.akChain[0], verifier.TDX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX collateral: %w", err)
 	}
 
-	// Create measurement
-	measurement := ar.Measurement{
-		Type:     "TDX Measurement",
-		Evidence: data,
-		Certs:    internal.WriteCertsDer(tdx.akChain),
+	collateral := ar.Collateral{
+		Type:  ar.TYPE_EVIDENCE_TDX,
+		Certs: internal.WriteCertsDer(tdx.akChain),
 		Artifacts: []ar.Artifact{
 			{
-				Type: "TDX Collateral",
+				Type: ar.TYPE_TDX_COLLATERAL,
 				Events: []ar.MeasureEvent{
 					{
-						IntelCollateral: collateral,
+						IntelCollateral: tdxCollateral,
 					},
 				},
 			},
@@ -178,16 +165,16 @@ func (tdx *Tdx) Measure(nonce []byte) ([]ar.Measurement, error) {
 
 	// For a more detailed measurement, try to read the CC event log from the CCEL ACPI table
 	// and add the values to the measurement artifacts
-	if tdx.MeasurementLog {
+	if tdx.MeasurementLogs {
 		log.Debug("Collecting TDX CCEL measurement log")
 		ccel, err := GetCcel(DEFAULT_CCEL_ACPI_TABLE)
 		if err != nil {
 			log.Warnf("Failed to get CCEL: %v", err)
 		}
-		measurement.Artifacts = append(measurement.Artifacts, ccel...)
+		collateral.Artifacts = append(collateral.Artifacts, ccel...)
 	}
 
-	return []ar.Measurement{measurement}, nil
+	return []ar.Collateral{collateral}, nil
 }
 
 // Lock implements the locking method for the attestation report signer interface
@@ -238,7 +225,7 @@ func (tdx *Tdx) GetCertChain(keyType ar.KeySelection) ([]*x509.Certificate, erro
 	}
 }
 
-func GetMeasurement(nonce []byte) ([]byte, error) {
+func GetReport(nonce []byte) ([]byte, error) {
 
 	// Maximum TD quote REPORTDATA length
 	if len(nonce) > 64 {
@@ -333,6 +320,14 @@ func (tdx *Tdx) provision() error {
 		return fmt.Errorf("failed to get signing cert chain: %w", err)
 	}
 
+	// Store FMSPC
+	exts, err := pcs.PckCertificateExtensions(tdx.akChain[0])
+	if err != nil {
+		return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+	}
+	tdx.fmspc = exts.FMSPC
+	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
+
 	tdx.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
 
 	return nil
@@ -347,7 +342,7 @@ func fetchAk() ([]*x509.Certificate, error) {
 	}
 
 	// Fetch initial attestation report which contains AK cert chain
-	data, err := GetMeasurement(nonce)
+	data, err := GetReport(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX Measurement: %w", err)
 	}
@@ -397,21 +392,13 @@ func (tdx *Tdx) provisionIk() (*x509.Certificate, error) {
 	nonce := sha1.Sum(pubKey)
 
 	// Fetch attestation report as part of client authentication
-	report, metadata, err := prover.Generate(nonce[:], nil, tdx.Metadata, []ar.Driver{tdx}, tdx.Serializer)
+	report, err := prover.Generate(nonce[:], nil, tdx.Metadata, []ar.Driver{tdx}, tdx.Serializer, tdx.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
-	r, err := tdx.Serializer.Marshal(report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
-	}
-	signedReport, err := prover.Sign(r, tdx, tdx.Serializer, ar.IK)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
-	}
 
 	// Request IK certificate from EST server
-	cert, err := tdx.Provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := tdx.Provisioner.CcEnroll(csr, report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
@@ -530,7 +517,7 @@ func GetCcel(path string) ([]ar.Artifact, error) {
 		if _, ok := artifactsMap[index]; !ok {
 			log.Tracef("Adding new artifact for index %v", index)
 			artifactsMap[index] = ar.Artifact{
-				Type:   ar.ARTIFACT_TYPE_CC_EVENTLOG,
+				Type:   ar.TYPE_CC_EVENTLOG,
 				Index:  index,
 				Events: []ar.MeasureEvent{},
 			}

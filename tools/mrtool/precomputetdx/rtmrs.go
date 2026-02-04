@@ -62,7 +62,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	rtmr = internal.ExtendSha384(rtmr, tbHobHash[:])
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "EV_EFI_HANDOFF_TABLES",
 		Index:       tcg.INDEX_RTMR0,
 		Sha384:      tbHobHash[:],
@@ -83,7 +83,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 		rtmr = internal.ExtendSha384(rtmr, cfvHash[:])
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_PLATFORM_FIRMWARE_BLOB2",
 			Index:       tcg.INDEX_RTMR0,
 			Sha384:      cfvHash[:],
@@ -104,7 +104,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	rtmr = internal.ExtendSha384(rtmr, evHash[:])
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "EV_SEPARATOR",
 		Index:       tcg.INDEX_RTMR0,
 		Sha384:      evHash[:],
@@ -139,7 +139,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		// EV_SEPARATOR
 		rtmr = internal.ExtendSha384(rtmr, evHash[:])
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_SEPARATOR",
 			Index:       tcg.INDEX_RTMR0,
 			Sha384:      evHash[:],
@@ -149,7 +149,7 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create RTMR0 final reference value
 	rtmrSummary := &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "RTMR Summary",
 		Description: "RTMR0",
 		Index:       tcg.INDEX_RTMR0,
@@ -197,7 +197,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Index:       tcg.INDEX_RTMR1,
 			Sha384:      hash[:],
@@ -219,7 +219,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	// https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
 	h1 := sha512.Sum384([]byte(EFI_CALLING_EFI_APPLICATION))
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "EV_EFI_ACTION",
 		Index:       tcg.INDEX_RTMR1,
 		Sha384:      h1[:],
@@ -232,7 +232,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		sep := []byte{0x0, 0x0, 0x0, 0x0}
 		hashSep := sha512.Sum384(sep)
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_SEPARATOR",
 			Index:       tcg.INDEX_RTMR1,
 			Sha384:      hashSep[:],
@@ -251,7 +251,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_GPT_EVENT",
 			Index:       tcg.INDEX_RTMR1,
 			Sha384:      hash[:],
@@ -274,7 +274,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		}
 
 		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Index:       tcg.INDEX_RTMR1,
 			Sha384:      hash[:],
@@ -286,7 +286,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	// EV_EFI_ACTION
 	h2 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_INVOCATION))
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "EV_EFI_ACTION",
 		Index:       tcg.INDEX_RTMR1,
 		Sha384:      h2[:],
@@ -297,7 +297,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	// EV_EFI_ACTION
 	h3 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_SUCCEEDED))
 	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "EV_EFI_ACTION",
 		Index:       tcg.INDEX_RTMR1,
 		Sha384:      h3[:],
@@ -307,7 +307,7 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create RTMR1 final reference value
 	rtmrSummary := &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "RTMR Summary",
 		Description: "RTMR1",
 		Index:       tcg.INDEX_RTMR1,
@@ -336,7 +336,7 @@ func PrecomputeRtmr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create RTMR2 final reference value
 	rtmrSummary := &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "RTMR Summary",
 		Description: "RTMR2",
 		Index:       tcg.INDEX_RTMR2,
@@ -359,7 +359,7 @@ func PrecomputeRtmr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// Create RTMR3 final reference value
 	rtmrSummary := &ar.ReferenceValue{
-		Type:        "TDX Reference Value",
+		Type:        ar.TYPE_REFVAL_TDX,
 		SubType:     "RTMR Summary",
 		Description: "RTMR3",
 		Index:       tcg.INDEX_RTMR3,

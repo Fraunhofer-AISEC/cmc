@@ -80,10 +80,7 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 	if snp == nil {
 		return errors.New("internal error: SNP object is nil")
 	}
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
+	if c.Serializer == nil {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
@@ -123,28 +120,37 @@ func (snp *Snp) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-// Measure implements the attestation reports generic Measure interface to be called
-// as a plugin during attestation report generation
-func (snp *Snp) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (snp *Snp) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
-	log.Debug("Collecting SNP measurements")
+	log.Debug("Collecting SNP evidence")
 
 	if snp == nil {
 		return nil, errors.New("internal error: SNP object is nil")
 	}
 
-	data, err := GetMeasurement(nonce, snp.Vmpl)
+	data, err := GetReport(nonce, snp.Vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP Measurement: %w", err)
 	}
 
-	measurement := ar.Measurement{
-		Type:     "SNP Measurement",
-		Evidence: data,
-		Certs:    internal.WriteCertsDer(snp.akChain),
+	evidences := []ar.Evidence{
+		{
+			Type: ar.TYPE_EVIDENCE_SNP,
+			Data: data,
+		},
 	}
 
-	return []ar.Measurement{measurement}, nil
+	return evidences, nil
+}
+
+func (snp *Snp) GetCollateral() ([]ar.Collateral, error) {
+
+	return []ar.Collateral{
+		{
+			Type:  ar.TYPE_EVIDENCE_SNP,
+			Certs: internal.WriteCertsDer(snp.akChain),
+		},
+	}, nil
 }
 
 // Lock implements the locking method for the attestation report signer interface
@@ -197,7 +203,7 @@ func (snp *Snp) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
 	}
 }
 
-func GetMeasurement(nonce []byte, vmpl int) ([]byte, error) {
+func GetReport(nonce []byte, vmpl int) ([]byte, error) {
 
 	if len(nonce) > 64 {
 		return nil, errors.New("user Data must be at most 64 bytes")
@@ -348,7 +354,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
 	// Fetch an initial attestation report to determine which key is used.
-	arRaw, err := GetMeasurement(nonce, c.Vmpl)
+	arRaw, err := GetReport(nonce, c.Vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
@@ -437,21 +443,13 @@ func (snp *Snp) provisionIk(provisioner ar.Provisioner, priv crypto.PrivateKey, 
 	nonce := sha1.Sum(pubKey)
 
 	// Fetch attestation report as part of client authentication
-	report, metadata, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{snp}, c.Serializer)
+	report, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{snp}, c.Serializer, c.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
-	r, err := c.Serializer.Marshal(report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal the Attestation Report: %v", err)
-	}
-	signedReport, err := prover.Sign(r, snp, c.Serializer, ar.IK)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign attestation report: %w", err)
-	}
 
 	// Request IK certificate from EST server
-	cert, err := provisioner.CcEnroll(csr, signedReport, internal.ConvertToArray(metadata))
+	cert, err := provisioner.CcEnroll(csr, report)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

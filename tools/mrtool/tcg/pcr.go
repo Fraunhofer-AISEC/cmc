@@ -46,8 +46,8 @@ func PrecomputeFinalPcrValues(refvals []*ar.ReferenceValue) ([]*ar.ReferenceValu
 	var summaries []*ar.ReferenceValue
 	for idx, val := range summaryMap {
 		summaries = append(summaries, &ar.ReferenceValue{
-			Type:    "TPM Reference Value",
-			SubType: "PCR Summary",
+			Type:    ar.TYPE_REFVAL_TPM,
+			SubType: ar.TYPE_PCR_SUMMARY,
 			Index:   idx,
 			Sha256:  val,
 		})

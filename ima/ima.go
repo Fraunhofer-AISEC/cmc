@@ -56,26 +56,28 @@ type imaTemplate struct {
 	Data    []byte
 }
 
-// GetImaRuntimeDigests returns all hashes extended by the IMA into the TPM
+// GetImaArtifacts returns all hashes extended by the IMA into the TPM
 // IMA PCR as read from the sysfs
-func GetImaRuntimeDigests(file string) ([]ar.MeasureEvent, error) {
+func GetImaArtifacts(file string) (map[int]ar.Artifact, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseImaRuntimeDigests(data)
+	artifacts, err := parseImaRuntimeDigests(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
 
-	return digests, nil
+	return artifacts, nil
 }
 
-func parseImaRuntimeDigests(data []byte) ([]ar.MeasureEvent, error) {
+func parseImaRuntimeDigests(data []byte) (map[int]ar.Artifact, error) {
 
 	buf := bytes.NewBuffer(data)
-	events := make([]ar.MeasureEvent, 0)
+
+	// Map with PCR index as key
+	artifacts := map[int]ar.Artifact{}
 
 	for buf.Len() > 0 {
 		header := header{}
@@ -141,10 +143,18 @@ func parseImaRuntimeDigests(data []byte) ([]ar.MeasureEvent, error) {
 		log.Tracef("Parsed IMA PCR%v %v event %v", header.Pcr,
 			string(template.Name[:template.header.NameLen]), eventName)
 
-		events = append(events, event)
+		artifact, ok := artifacts[int(header.Pcr)]
+		if !ok {
+			artifact = ar.Artifact{
+				Type:  ar.TYPE_PCR_EVENTLOG,
+				Index: int(header.Pcr),
+			}
+		}
+		artifact.Events = append(artifact.Events, event)
+		artifacts[int(header.Pcr)] = artifact
 	}
 
-	return events, nil
+	return artifacts, nil
 }
 
 func parseTemplateData(tmpl *imaTemplate) ([]byte, string, error) {
@@ -170,7 +180,7 @@ func parseTemplateData(tmpl *imaTemplate) ([]byte, string, error) {
 	var tmplPathLen uint32
 	err = binary.Read(buf, binary.LittleEndian, &tmplPathLen)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read digest length from template: %w", err)
+		return nil, "", fmt.Errorf("failed to read path length from template: %w", err)
 	}
 
 	tmplPath := make([]byte, tmplPathLen)

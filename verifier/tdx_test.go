@@ -26,7 +26,8 @@ import (
 
 func Test_verifyTdxMeasurements(t *testing.T) {
 	type args struct {
-		measurement    *ar.Measurement
+		evidence       ar.Evidence
+		collateral     ar.Collateral
 		nonce          []byte
 		manifests      []ar.MetadataResult
 		refvals        []ar.ReferenceValue
@@ -41,9 +42,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Valid Report With Eventlog",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:      "TDX Measurement",
-					Evidence:  tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
 					Artifacts: tdxCcEventlog,
 				},
 				manifests: []ar.MetadataResult{
@@ -80,9 +83,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Eventlog 1",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:      "TDX Measurement",
-					Evidence:  tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
 					Artifacts: invalidTdxCcEventlog1,
 				},
 				manifests: []ar.MetadataResult{
@@ -119,9 +124,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Eventlog 2",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:      "TDX Measurement",
-					Evidence:  tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
 					Artifacts: invalidTdxCcEventlog2,
 				},
 				manifests: []ar.MetadataResult{
@@ -156,12 +163,13 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 			want1: false,
 		},
 		{
-			name: "Valid Report",
+			name: "Valid Report Without Eventlog",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -196,10 +204,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Report Signature",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: invalidTdxQuote, // Quote has manipulated MRCONFIGID
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: invalidTdxQuote, // manipulated MRCONFIGID
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -234,10 +243,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -272,10 +282,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Certificate Chain",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -310,10 +321,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Refvals",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -348,10 +360,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid Attributes",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -387,10 +400,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Missing Collateral",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -427,10 +441,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Invalid MrSeam",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -466,10 +481,11 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 		{
 			name: "Missing Reference Values",
 			args: args{
-				measurement: &ar.Measurement{
-					Type:     "TDX Measurement",
-					Evidence: tdxQuote,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
 				},
+				collateral: ar.Collateral{},
 				manifests: []ar.MetadataResult{
 					{
 						Metadata: ar.Metadata{
@@ -515,8 +531,8 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 			if tt.args.omitCollateral {
 				collateral = nil
 			}
-			tt.args.measurement.Artifacts = append(tt.args.measurement.Artifacts, ar.Artifact{
-				Type: "TDX Collateral",
+			tt.args.collateral.Artifacts = append(tt.args.collateral.Artifacts, ar.Artifact{
+				Type: ar.TYPE_TDX_COLLATERAL,
 				Events: []ar.MeasureEvent{
 					{
 						IntelCollateral: collateral,
@@ -524,7 +540,7 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 				},
 			})
 			log.Infof("Running Unit Test %q", tt.name)
-			got, got1 := verifyTdxMeasurements(*tt.args.measurement, tt.args.nonce,
+			got, got1 := verifyTdx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.manifests, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifyTdxMeasurements() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want)
@@ -588,14 +604,14 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 
 	invalidTdxRefvals = []ar.ReferenceValue{
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "OVMF",
 			Index:       0,
 			Sha384:      dec("633418c955597f43a99f3378f8dfad06db87c51da2d6947e1c199dc9e2f89cee1d47542ce75ac3c8928338a13cf9bbc3"),
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "Configuration FV",
 			Index:       1,
 			Sha384:      dec("ffff02177b059d54a2cf0c5f13340dbabf5c9dd60dc3f996c68b776fbe4de959769443a3d8ef6538b97d7e151c8298e8"),
@@ -605,147 +621,147 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 
 	validTdxRefvals = []ar.ReferenceValue{
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "OVMF",
 			Index:       0,
 			Sha384:      dec("0fbe2c73b4d9bf33c6da6b54d1f03e677d12aeec2ff1bd2b10c1c045eb007013c04a1269fa6d2c8f2edb193d032141bb"),
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "TD Hob",
 			Index:       1,
 			Sha384:      dec("02a008e63d55a77823c04a5513a5810d4e592dc41bf2596267c09eae5d4b4e3b329ae614973fb192297d8833d37a08fd"),
 			Description: "RTMR0: TD Hob passed from host VMM to guest firmware",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "Configuration FV",
 			Index:       1,
 			Sha384:      dec("f87302177b059d54a2cf0c5f13340dbabf5c9dd60dc3f996c68b776fbe4de959769443a3d8ef6538b97d7e151c8298e8"),
 			Description: "RTMR0: Configuration Firmware Volume",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE_DRIVER_CONFIG",
 			Index:       1,
 			Sha384:      dec("9dc3a1f80bcec915391dcda5ffbb15e7419f77eab462bbf72b42166fb70d50325e37b36f93537a863769bcf9bedae6fb"),
 			Description: "RTMR0: SecureBoot",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE_DRIVER_CONFIG",
 			Index:       1,
 			Sha384:      dec("6f2e3cbc14f9def86980f5f66fd85e99d63e69a73014ed8a5633ce56eca5b64b692108c56110e22acadcef58c3250f1b"),
 			Description: "RTMR0: PK",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE_DRIVER_CONFIG",
 			Index:       1,
 			Sha384:      dec("d607c0efb41c0d757d69bca0615c3a9ac0b1db06c557d992e906c6b7dee40e0e031640c7bfd7bcd35844ef9edeadc6f9"),
 			Description: "RTMR0: KEK",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE_DRIVER_CONFIG",
 			Index:       1,
 			Sha384:      dec("08a74f8963b337acb6c93682f934496373679dd26af1089cb4eaf0c30cf260a12e814856385ab8843e56a9acea19e127"),
 			Description: "RTMR0: db",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE_DRIVER_CONFIG",
 			Index:       1,
 			Sha384:      dec("18cc6e01f0c6ea99aa23f8a280423e94ad81d96d0aeb5180504fc0f7a40cb3619dd39bd6a95ec1680a86ed6ab0f9828d"),
 			Description: "RTMR0: dbx",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_SEPARATOR",
 			Index:       1,
 			Sha384:      dec("394341b7182cd227c5c6b07ef8000cdfd86136c4292b8e576573ad7ed9ae41019f5818b4b971c9effc60e1ad9f1289f0"),
 			Description: "RTMR0: HASH(00000000)",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_PLATFORM_CONFIG_FLAGS",
 			Index:       1,
 			Sha384:      dec("932924024a923bf8bf093e756f5fed3000f025395c36d1fcb50b1ce4cefbc00e7a599e7ad5017f5de876a9bdcccc2f05"),
 			Description: "RTMR0: etc/table-loader",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_PLATFORM_CONFIG_FLAGS",
 			Index:       1,
 			Sha384:      dec("775981a10dee60a12f32a527357ea34dd581b81d368cd102a37d92044d4eec6adefd72b70da46e6bc14ccb0e1ffda401"),
 			Description: "RTMR0: etc/acpi/rsdp",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_PLATFORM_CONFIG_FLAGS",
 			Index:       1,
 			Sha384:      dec("302fe8ed7e7213ed23e5bfbf4f64029ddedd986ad7f9d01053410e8ea9eed00668e06bafb17f44023324c1f0b11e3364"),
 			Description: "RTMR0: etc/acpi/tables",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE",
 			Index:       1,
 			Sha384:      dec("1dd6f7b457ad880d840d41c961283bab688e94e4b59359ea45686581e90feccea3c624b1226113f824f315eb60ae0a7c"),
 			Description: "RTMR0: VariableName - BootOrder, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_VARIABLE",
 			Index:       1,
 			Sha384:      dec("23ada07f5261f12f34a0bd8e46760962d6b4d576a416f1fea1c64bc656b1d28eacf7047ae6e967c58fd2a98bfa74c298"),
 			Description: "RTMR0: VariableName - Boot0000, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Index:       2,
 			Sha384:      dec("f8f3dede5ebb05df741da6391a8f55f5c66ba430a983fe37db21bac042613bcef1a185052f75d06646c5ac0c75a7a4b3"),
 			Description: "RTMR1: linux-amd64-tdx-systemd-debug.bzImage",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_ACTION",
 			Index:       2,
 			Sha384:      dec("77a0dab2312b4e1e57a84d865a21e5b2ee8d677a21012ada819d0a98988078d3d740f6346bfe0abaa938ca20439a8d71"),
 			Description: "RTMR1: Calling EFI Application from Boot Option",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_SEPARATOR",
 			Index:       2,
 			Sha384:      dec("394341b7182cd227c5c6b07ef8000cdfd86136c4292b8e576573ad7ed9ae41019f5818b4b971c9effc60e1ad9f1289f0"),
 			Description: "RTMR1: HASH(00000000)",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_ACTION",
 			Index:       2,
 			Sha384:      dec("214b0bef1379756011344877743fdc2a5382bac6e70362d624ccf3f654407c1b4badf7d8f9295dd3dabdef65b27677e0"),
 			Description: "RTMR1: Exit Boot Services Invocation",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EFI_ACTION",
 			Index:       2,
 			Sha384:      dec("0a2e01c85deae718a530ad8c6d20a84009babe6c8989269e950d8cf440c6e997695e64d455c4174a652cd080f6230b74"),
 			Description: "RTMR1: Exit Boot Services Returned with Success",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "EV_EVENT_TAG",
 			Index:       3,
 			Sha384:      dec("87fa6f01308d97f6da995d61409b6a6721d9cc5cb10f291a9fa43fa47d671d3f6b464a9237b8be66325f78d253f59c35"),
 			Description: "RTMR2: console=hvc0 earlyprintk=serial clearcpuid=mtrr config_hash=6a9a475c3f1e55a6ce16840d07a043fcebf13addbd1594b80148b6af466342f3 config_size=989",
 		},
 		{
-			Type:        "TDX Reference Value",
+			Type:        ar.TYPE_REFVAL_TDX,
 			SubType:     "TDX-Module",
 			Index:       5,
 			Sha384:      dec("7bf063280e94fb051f5dd7b1fc59ce9aac42bb961df8d44b709c9b0ff87a7b4df648657ba6d1189589feab1d5a3c9a9d"),
@@ -1602,7 +1618,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 	// Run: mrtool parse tdx --mrs 1,2,3,4
 	tdxCcEventlog = []ar.Artifact{
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 1,
 			Events: []ar.MeasureEvent{
 				{
@@ -1673,7 +1689,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 			},
 		},
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 2,
 			Events: []ar.MeasureEvent{
 				{
@@ -1708,7 +1724,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 			},
 		},
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 3,
 			Events: []ar.MeasureEvent{
 				{
@@ -1723,7 +1739,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 	// Missing measurements
 	invalidTdxCcEventlog1 = []ar.Artifact{
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 1,
 			Events: []ar.MeasureEvent{
 				{
@@ -1738,7 +1754,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 	// Additional measurements
 	invalidTdxCcEventlog2 = []ar.Artifact{
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 1,
 			Events: []ar.MeasureEvent{
 				{
@@ -1809,7 +1825,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 			},
 		},
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 2,
 			Events: []ar.MeasureEvent{
 				{
@@ -1844,7 +1860,7 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 			},
 		},
 		{
-			Type:  ar.ARTIFACT_TYPE_CC_EVENTLOG,
+			Type:  ar.TYPE_CC_EVENTLOG,
 			Index: 3,
 			Events: []ar.MeasureEvent{
 				{

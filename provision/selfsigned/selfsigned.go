@@ -147,7 +147,6 @@ func (c *Client) TpmCertifyEnroll(
 	ikParams attest.CertificationParameters,
 	akPublic []byte,
 	report []byte,
-	metadata [][]byte,
 ) (*x509.Certificate, error) {
 
 	// Verify the IK was certified by AK
@@ -183,7 +182,6 @@ func (c *Client) TpmCertifyEnroll(
 func (c *Client) CcEnroll(
 	csr *x509.CertificateRequest,
 	report []byte,
-	metadata [][]byte,
 ) (*x509.Certificate, error) {
 
 	// self-attestation is not required in the self-signed testing mode

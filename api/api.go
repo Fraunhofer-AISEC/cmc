@@ -66,25 +66,21 @@ type AttestationRequest struct {
 }
 
 type AttestationResponse struct {
-	Version     string            `json:"version" cbor:"0,keyasint"`
-	Report      []byte            `json:"report" cbor:"1,keyasint"`
-	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"2,keyasint,omitempty"`
-	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"3,keyasint,omitempty"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Report  []byte `json:"report" cbor:"1,keyasint"`
 }
 
 type VerificationRequest struct {
-	Version     string            `json:"version" cbor:"0,keyasint"`
-	Nonce       []byte            `json:"nonce" cbor:"1,keyasint"`
-	Report      []byte            `json:"report" cbor:"2,keyasint"`
-	Metadata    map[string][]byte `json:"metadata,omitempty" cbor:"3,keyasint,omitempty"`
-	Peer        string            `json:"peer,omitempty" cbor:"6,keyasint,omitempty"`
-	CacheMisses []string          `json:"cacheMisses,omitempty" cbor:"7,keyasint,omitempty"`
-	Policies    []byte            `json:"policies,omitempty" cbor:"8,keyasint,omitempty"`
+	Version  string `json:"version" cbor:"0,keyasint"`
+	Nonce    []byte `json:"nonce" cbor:"1,keyasint"`
+	Report   []byte `json:"report" cbor:"2,keyasint"`
+	Peer     string `json:"peer,omitempty" cbor:"6,keyasint,omitempty"`
+	Policies []byte `json:"policies,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 type VerificationResponse struct {
 	Version string                `json:"version" cbor:"0,keyasint"`
-	Result  ar.VerificationResult `json:"result" cbor:"1,keyasint"`
+	Result  *ar.AttestationResult `json:"result" cbor:"1,keyasint"`
 }
 
 type TLSSignRequest struct {

@@ -29,9 +29,9 @@ var log = logrus.WithField("service", "jspolicies")
 // based on the golang otto JavaScript engine
 type JsPolicyEngine struct{}
 
-// Validate uses a javascript engine to validate custom policies against the verification result.
+// Validate uses a javascript engine to validate custom policies against the attestation result.
 // Custom policies are handed over as a string. This implementation accepts custom policies
-// as javascript code. The javascript code can parse the VerificationResult in the variable
+// as javascript code. The javascript code can parse the attestation result in the variable
 // 'json', i.e.:
 //
 //	var obj = JSON.parse(json);
@@ -41,26 +41,26 @@ type JsPolicyEngine struct{}
 //
 //	var obj = JSON.parse(json);
 //	var success = true;
-//	if (obj.type != "Verification Result") {
+//	if (obj.type != "Attestation Result") {
 //		success = false;
 //	}
 //	success
 //
-// Or the javascript code can either return the marshalled verification result
+// Or the javascript code can either return the marshalled attestation result
 // A simple validation could then look as follows:
 //
 //	var obj = JSON.parse(json);
 //	obj.summary.status = "warn"
 //	var ret = JSON.stringify(obj);
 //	ret
-func (p *JsPolicyEngine) Validate(result *ar.VerificationResult, policies []byte, policyOverwrite bool) bool {
+func (p *JsPolicyEngine) Validate(result *ar.AttestationResult, policies []byte, policyOverwrite bool) bool {
 
-	log.Debugf("Validating custom javascript policies against verification result %q: %q",
+	log.Debugf("Validating custom javascript policies against attestation result %q: %q",
 		result.Prover, result.Summary.Status)
 
 	vr, err := json.Marshal(result)
 	if err != nil {
-		log.Errorf("Failed to marshal verification result: %v", err)
+		log.Errorf("Failed to marshal attestation result: %v", err)
 		return false
 	}
 
@@ -99,7 +99,7 @@ func (p *JsPolicyEngine) Validate(result *ar.VerificationResult, policies []byte
 	if val.IsString() {
 		// Overwriting results must explicitly be configured
 		if policyOverwrite {
-			log.Debug("Received verification result policy validation")
+			log.Debug("Received attestation result policy validation")
 			r, err := val.ToString()
 			if err != nil {
 				log.Errorf("Failed convert policy validation result to bool: %v", err)
@@ -107,7 +107,7 @@ func (p *JsPolicyEngine) Validate(result *ar.VerificationResult, policies []byte
 			}
 			err = json.Unmarshal([]byte(r), result)
 			if err != nil {
-				log.Errorf("Failed to unmarshal policy validation to verification result: %v", err)
+				log.Errorf("Failed to unmarshal policy validation to attestation result: %v", err)
 				return false
 			}
 			return true

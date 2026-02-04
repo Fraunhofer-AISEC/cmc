@@ -100,8 +100,6 @@ type AttestationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
 	Report        []byte                 `protobuf:"bytes,2,opt,name=report,proto3" json:"report,omitempty"`
-	Metadata      map[string][]byte      `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	CacheMisses   []string               `protobuf:"bytes,4,rep,name=cache_misses,json=cacheMisses,proto3" json:"cache_misses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -150,28 +148,12 @@ func (x *AttestationResponse) GetReport() []byte {
 	return nil
 }
 
-func (x *AttestationResponse) GetMetadata() map[string][]byte {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
-func (x *AttestationResponse) GetCacheMisses() []string {
-	if x != nil {
-		return x.CacheMisses
-	}
-	return nil
-}
-
 type VerificationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
 	Nonce         []byte                 `protobuf:"bytes,2,opt,name=nonce,proto3" json:"nonce,omitempty"`
 	Report        []byte                 `protobuf:"bytes,3,opt,name=report,proto3" json:"report,omitempty"`
-	Metadata      map[string][]byte      `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Peer          string                 `protobuf:"bytes,7,opt,name=peer,proto3" json:"peer,omitempty"`
-	CacheMisses   []string               `protobuf:"bytes,8,rep,name=cache_misses,json=cacheMisses,proto3" json:"cache_misses,omitempty"`
 	Policies      []byte                 `protobuf:"bytes,9,opt,name=policies,proto3" json:"policies,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -228,25 +210,11 @@ func (x *VerificationRequest) GetReport() []byte {
 	return nil
 }
 
-func (x *VerificationRequest) GetMetadata() map[string][]byte {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
 func (x *VerificationRequest) GetPeer() string {
 	if x != nil {
 		return x.Peer
 	}
 	return ""
-}
-
-func (x *VerificationRequest) GetCacheMisses() []string {
-	if x != nil {
-		return x.CacheMisses
-	}
-	return nil
 }
 
 func (x *VerificationRequest) GetPolicies() []byte {
@@ -1096,26 +1064,16 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\x12AttestationRequest\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
 	"\x05nonce\x18\x02 \x01(\fR\x05nonce\x12\x16\n" +
-	"\x06cached\x18\x03 \x03(\tR\x06cached\"\xef\x01\n" +
+	"\x06cached\x18\x03 \x03(\tR\x06cached\"G\n" +
 	"\x13AttestationResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
-	"\x06report\x18\x02 \x01(\fR\x06report\x12F\n" +
-	"\bmetadata\x18\x03 \x03(\v2*.grpcapi.AttestationResponse.MetadataEntryR\bmetadata\x12!\n" +
-	"\fcache_misses\x18\x04 \x03(\tR\vcacheMisses\x1a;\n" +
-	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"\xb5\x02\n" +
+	"\x06report\x18\x02 \x01(\fR\x06report\"\x8d\x01\n" +
 	"\x13VerificationRequest\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x14\n" +
 	"\x05nonce\x18\x02 \x01(\fR\x05nonce\x12\x16\n" +
-	"\x06report\x18\x03 \x01(\fR\x06report\x12F\n" +
-	"\bmetadata\x18\x04 \x03(\v2*.grpcapi.VerificationRequest.MetadataEntryR\bmetadata\x12\x12\n" +
-	"\x04peer\x18\a \x01(\tR\x04peer\x12!\n" +
-	"\fcache_misses\x18\b \x03(\tR\vcacheMisses\x12\x1a\n" +
-	"\bpolicies\x18\t \x01(\fR\bpolicies\x1a;\n" +
-	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\fR\x05value:\x028\x01\"H\n" +
+	"\x06report\x18\x03 \x01(\fR\x06report\x12\x12\n" +
+	"\x04peer\x18\a \x01(\tR\x04peer\x12\x1a\n" +
+	"\bpolicies\x18\t \x01(\fR\bpolicies\"H\n" +
 	"\x14VerificationResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06result\x18\x02 \x01(\fR\x06result\"\x8e\x01\n" +
@@ -1191,7 +1149,7 @@ func file_grpcapi_proto_rawDescGZIP() []byte {
 	return file_grpcapi_proto_rawDescData
 }
 
-var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_grpcapi_proto_goTypes = []any{
 	(*AttestationRequest)(nil),     // 0: grpcapi.AttestationRequest
 	(*AttestationResponse)(nil),    // 1: grpcapi.AttestationResponse
@@ -1212,36 +1170,32 @@ var file_grpcapi_proto_goTypes = []any{
 	(*MeasureEvent)(nil),           // 16: grpcapi.MeasureEvent
 	(*PSSOptions)(nil),             // 17: grpcapi.PSSOptions
 	(*CtrData)(nil),                // 18: grpcapi.CtrData
-	nil,                            // 19: grpcapi.AttestationResponse.MetadataEntry
-	nil,                            // 20: grpcapi.VerificationRequest.MetadataEntry
 }
 var file_grpcapi_proto_depIdxs = []int32{
-	19, // 0: grpcapi.AttestationResponse.metadata:type_name -> grpcapi.AttestationResponse.MetadataEntry
-	20, // 1: grpcapi.VerificationRequest.metadata:type_name -> grpcapi.VerificationRequest.MetadataEntry
-	17, // 2: grpcapi.TLSSignRequest.pssOpts:type_name -> grpcapi.PSSOptions
-	16, // 3: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
-	18, // 4: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
-	0,  // 5: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
-	2,  // 6: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
-	4,  // 7: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
-	6,  // 8: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
-	8,  // 9: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
-	10, // 10: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
-	12, // 11: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
-	14, // 12: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
-	1,  // 13: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
-	3,  // 14: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
-	5,  // 15: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
-	7,  // 16: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
-	9,  // 17: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
-	11, // 18: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
-	13, // 19: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
-	15, // 20: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
-	13, // [13:21] is the sub-list for method output_type
-	5,  // [5:13] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	17, // 0: grpcapi.TLSSignRequest.pssOpts:type_name -> grpcapi.PSSOptions
+	16, // 1: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
+	18, // 2: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
+	0,  // 3: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
+	2,  // 4: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
+	4,  // 5: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
+	6,  // 6: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
+	8,  // 7: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
+	10, // 8: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
+	12, // 9: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
+	14, // 10: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
+	1,  // 11: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
+	3,  // 12: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
+	5,  // 13: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
+	7,  // 14: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
+	9,  // 15: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
+	11, // 16: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
+	13, // 17: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
+	15, // 18: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
+	11, // [11:19] is the sub-list for method output_type
+	3,  // [3:11] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_grpcapi_proto_init() }
@@ -1255,7 +1209,7 @@ func file_grpcapi_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpcapi_proto_rawDesc), len(file_grpcapi_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -25,6 +25,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 type Db struct {
@@ -32,31 +34,13 @@ type Db struct {
 	table string
 }
 
-type Status string
-
-const (
-	StatusSuccess Status = "success"
-	StatusFail    Status = "fail"
-	StatusWarn    Status = "warn"
-)
-
-type ResultHeader struct {
-	Status Status `json:"status"`
-}
-
-type VerificationResultHeader struct {
-	Prover  string       `json:"prover,omitempty"`
-	Created string       `json:"created,omitempty"`
-	Summary ResultHeader `json:"summary"`
-}
-
 type ResultEnvelope struct {
-	Type    string `json:"type"`
-	Id      string `json:"id"`
-	Prover  string `json:"prover"`
-	Created string `json:"created"`
-	Status  Status `json:"status"`
-	Result  any    `json:"result"`
+	Type    string    `json:"type"`
+	Id      string    `json:"id"`
+	Prover  string    `json:"prover"`
+	Created string    `json:"created"`
+	Status  ar.Status `json:"status"`
+	Result  any       `json:"result"`
 }
 
 func NewDb(path string, table string, maxRowsPerProver, maxRows int) (*Db, error) {
@@ -92,7 +76,7 @@ func (db *Db) InsertResult(data []byte) error {
 	}
 
 	// Unmarshal the header to get prover and creation date
-	header := new(VerificationResultHeader)
+	header := new(ar.AttestationResult)
 	err := json.Unmarshal(data, header)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal header")
@@ -152,7 +136,7 @@ func (db *Db) GetAllStatistics() ([]*ResultEnvelope, error) {
 		var id string
 		var prover string
 		var created string
-		var status Status
+		var status ar.Status
 		err = rows.Scan(&id, &prover, &created, &status)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
@@ -192,7 +176,7 @@ func (db *Db) GetAllResults() ([]*ResultEnvelope, error) {
 		var id string
 		var prover string
 		var created string
-		var status Status
+		var status ar.Status
 		var data string
 		err = rows.Scan(&id, &prover, &created, &status, &data)
 		if err != nil {
@@ -202,7 +186,7 @@ func (db *Db) GetAllResults() ([]*ResultEnvelope, error) {
 		result := new(any)
 		err := json.Unmarshal([]byte(data), result)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal verification result: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal attestation result: %w", err)
 		}
 
 		resultEnvelope := &ResultEnvelope{
@@ -224,7 +208,7 @@ func (db *Db) GetAllResults() ([]*ResultEnvelope, error) {
 
 func (db *Db) GetEnvelopesByProver(name string) ([]*ResultEnvelope, error) {
 
-	// Extract the prover name from the JSON Verification Result
+	// Extract the prover name from the JSON attestation result
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status FROM %v
 		WHERE prover='%s'
 		ORDER BY created DESC`,
@@ -241,7 +225,7 @@ func (db *Db) GetEnvelopesByProver(name string) ([]*ResultEnvelope, error) {
 		var id string
 		var prover string
 		var created string
-		var status Status
+		var status ar.Status
 		err = rows.Scan(&id, &prover, &created, &status)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
@@ -265,7 +249,7 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 
 	log.Trace("Querying latest results")
 
-	// Extract the prover name from the JSON Verification Result and sort by date
+	// Extract the prover name from the JSON attestation result and sort by date
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status, result FROM %v
 	WHERE prover='%s'
 	ORDER BY created DESC LIMIT 1`,
@@ -282,7 +266,7 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 		var id string
 		var prover string
 		var created string
-		var status Status
+		var status ar.Status
 		var data string
 		err = rows.Scan(&id, &prover, &created, &status, &data)
 		if err != nil {
@@ -292,7 +276,7 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 		result := new(any)
 		err := json.Unmarshal([]byte(data), result)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal verification result: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal attestation result: %w", err)
 		}
 
 		resultEnvelope := &ResultEnvelope{
@@ -314,7 +298,7 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 
 func (db *Db) GetLatestResults() ([]*ResultEnvelope, error) {
 
-	// Extract the prover name from the JSON Verification Result and sort by date
+	// Extract the prover name from the JSON attestation result and sort by date
 	stmt := fmt.Sprintf(`SELECT id, prover, MAX(created), status, result FROM %v
 	GROUP BY prover`,
 		db.table)
@@ -330,7 +314,7 @@ func (db *Db) GetLatestResults() ([]*ResultEnvelope, error) {
 		var id string
 		var prover string
 		var created string
-		var status Status
+		var status ar.Status
 		var data string
 		err = rows.Scan(&id, &prover, &created, &status, &data)
 		if err != nil {
@@ -340,7 +324,7 @@ func (db *Db) GetLatestResults() ([]*ResultEnvelope, error) {
 		result := new(any)
 		err := json.Unmarshal([]byte(data), result)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal verification result: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal attestation result: %w", err)
 		}
 
 		resultEnvelope := &ResultEnvelope{
@@ -360,7 +344,7 @@ func (db *Db) GetLatestResults() ([]*ResultEnvelope, error) {
 
 func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
 
-	// Extract the prover name from the JSON Verification Result
+	// Extract the prover name from the JSON attestation result
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status, result FROM %v
 		WHERE id='%s'`,
 		db.table, id)
@@ -376,7 +360,7 @@ func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
 		var id string
 		var prover string
 		var created string
-		var status Status
+		var status ar.Status
 		var data string
 		err = rows.Scan(&id, &prover, &created, &status, &data)
 		if err != nil {
@@ -386,7 +370,7 @@ func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
 		result := new(any)
 		err := json.Unmarshal([]byte(data), result)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal verification result: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal attestation result: %w", err)
 		}
 
 		resultEnvelope := &ResultEnvelope{
@@ -406,7 +390,7 @@ func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
 
 func (db *Db) GetDeviceNames() ([]string, error) {
 
-	// Extract the prover name from the JSON Verification Result and sort by date
+	// Extract the prover name from the JSON attestation result and sort by date
 	stmt := fmt.Sprintf(`SELECT DISTINCT prover FROM %v`, db.table)
 
 	rows, err := db.db.Query(stmt)

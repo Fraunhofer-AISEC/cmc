@@ -23,13 +23,10 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"encoding/hex"
-
 	coap "github.com/plgd-dev/go-coap/v3"
 	"github.com/plgd-dev/go-coap/v3/message"
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
-	"golang.org/x/exp/maps"
 
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -37,6 +34,8 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 // CoapServer is the CoAP server structure
@@ -103,9 +102,8 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
-
-	report, metadata, cacheMisses, err := cmc.Generate(req.Nonce, req.Cached, s.cmc)
+	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
+		s.cmc.Serializer, s.cmc.HashAlg)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
@@ -113,10 +111,8 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	resp := &api.AttestationResponse{
-		Version:     api.GetVersion(),
-		Report:      report,
-		Metadata:    metadata,
-		CacheMisses: cacheMisses,
+		Version: api.GetVersion(),
+		Report:  report,
 	}
 
 	// Serialize CoAP payload
@@ -151,17 +147,11 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("verifying attestation report")
-	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
-		req.Peer, req.CacheMisses, req.Metadata, s.cmc)
-	if err != nil {
-		sendCoapError(w, r, codes.InternalServerError,
-			"Verifier: failed to verify: %v", err)
-		return
-	}
+	result := verifier.Verify(req.Report, req.Nonce, s.cmc.IdentityCas, req.Policies, s.cmc.PolicyEngineSelect, s.cmc.PolicyOverwrite, s.cmc.MetadataCas, s.cmc.PeerCache, req.Peer)
 
 	resp := &api.VerificationResponse{
 		Version: api.GetVersion(),
-		Result:  *result,
+		Result:  result,
 	}
 
 	payload, err := ser.Marshal(&resp)
@@ -365,12 +355,7 @@ func (s CoapServer) PeerCache(w mux.ResponseWriter, r *mux.Message) {
 	log.Debug("Collecting peer cache")
 	resp := api.PeerCacheResponse{
 		Version: api.GetVersion(),
-	}
-	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
-	if ok {
-		resp.Cache = maps.Keys(c)
-	} else {
-		resp.Cache = []string{}
+		Cache:   s.cmc.PeerCache.GetKeys(req.Peer),
 	}
 
 	payload, err := ser.Marshal(&resp)

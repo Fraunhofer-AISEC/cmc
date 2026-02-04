@@ -39,17 +39,13 @@ message AttestationRequest {
 message AttestationResponse {
   string version = 1;
   bytes report = 2;
-  map<string, bytes> metadata = 3;
-  repeated string cache_misses = 4;
 }
 
 message VerificationRequest {
   string version = 1;
   bytes nonce = 2;
   bytes report = 3;
-  map<string, bytes> metadata = 4;
   string peer = 7;
-  repeated string cache_misses = 8;
   bytes policies = 9;
 }
 

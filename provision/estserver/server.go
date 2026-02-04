@@ -393,7 +393,6 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	var ikCreateSignature []byte
 	var akPublic []byte
 	var report []byte
-	var metadata []byte
 
 	_, err := est.DecodeMultipart(
 		req.Body,
@@ -405,7 +404,6 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 			{ContentType: est.MimeTypeOctetStream, Data: &ikCreateSignature},
 			{ContentType: est.MimeTypeOctetStream, Data: &akPublic},
 			{ContentType: est.MimeTypeOctetStream, Data: &report},
-			{ContentType: est.MimeTypeOctetStream, Data: &metadata},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -436,7 +434,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(internal.AuthAttestation) {
 		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.metadataCas))
-		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile, s.publishToken)
+		err = verifyAttestationReport(csr, s.metadataCas, report, s.publishAddr, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
@@ -481,14 +479,12 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 
 	var csr *x509.CertificateRequest
 	var report []byte
-	var metadata []byte
 
 	_, err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypePKCS10, Data: &csr},
 			{ContentType: est.MimeTypeOctetStream, Data: &report},
-			{ContentType: est.MimeTypeOctetStream, Data: &metadata},
 		},
 		req.Header.Get(est.ContentTypeHeader),
 	)
@@ -499,7 +495,7 @@ func (s *Server) handleCcEnroll(w http.ResponseWriter, req *http.Request) {
 
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(internal.AuthAttestation) {
-		err = verifyAttestationReport(csr, s.metadataCas, report, metadata, s.publishAddr, s.publishFile, s.publishToken)
+		err = verifyAttestationReport(csr, s.metadataCas, report, s.publishAddr, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return

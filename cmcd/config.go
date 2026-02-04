@@ -85,7 +85,7 @@ func GetConfig() (*Config, error) {
 	// Overwrite cmc configuration with values passed via command line
 	err := cmc.GetConfig(&c.Config)
 	if err != nil {
-		log.Fatalf("Failed to read cmc config: %v", err)
+		return nil, fmt.Errorf("failed to read cmc config: %w", err)
 	}
 
 	if internal.FlagPassed(logLevelFlag) {
@@ -99,7 +99,7 @@ func GetConfig() (*Config, error) {
 	if c.LogFile != "" {
 		lf, err := filepath.Abs(*logFile)
 		if err != nil {
-			log.Fatalf("Failed to get logfile path: %v", err)
+			return nil, fmt.Errorf("failed to get logfile path: %w", err)
 		}
 		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {

@@ -75,7 +75,7 @@ func dial(c *config) error {
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithResultCb(func(result *ar.VerificationResult) {
+		atls.WithResultCb(func(result *ar.AttestationResult) {
 			// Publish the attestation result asynchronously if publishing address was specified and
 			// and attestation was performed
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
@@ -160,7 +160,7 @@ func listen(c *config) error {
 		atls.WithApiSerializer(c.apiSerializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithResultCb(func(result *ar.VerificationResult) {
+		atls.WithResultCb(func(result *ar.AttestationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty

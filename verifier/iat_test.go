@@ -24,9 +24,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Test_verifyIasMeasurements(t *testing.T) {
+func Test_verifyIas(t *testing.T) {
 	type args struct {
-		IasM            *ar.Measurement
+		evidence        ar.Evidence
+		collateral      ar.Collateral
 		nonce           []byte
 		referenceValues []ar.ReferenceValue
 		manifests       []ar.MetadataResult
@@ -39,10 +40,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid IAT",
 			args: args{
-				IasM: &ar.Measurement{
-					Type:     "IAS Measurement",
-					Evidence: invalidIat,
-					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_IAS,
+					Data: invalidIat,
+				},
+				collateral: ar.Collateral{
+					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ar.ReferenceValue{
@@ -64,10 +67,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Cert",
 			args: args{
-				IasM: &ar.Measurement{
-					Type:     "IAS Measurement",
-					Evidence: validIat,
-					Certs:    [][]byte{invalidIasCert.Raw, validIasCa.Raw},
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_IAS,
+					Data: validIat,
+				},
+				collateral: ar.Collateral{
+					Certs: [][]byte{invalidIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ar.ReferenceValue{
@@ -89,10 +94,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid CA Fingerprint",
 			args: args{
-				IasM: &ar.Measurement{
-					Type:     "IAS Measurement",
-					Evidence: validIat,
-					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_IAS,
+					Data: validIat,
+				},
+				collateral: ar.Collateral{
+					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ar.ReferenceValue{
@@ -114,10 +121,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				IasM: &ar.Measurement{
-					Type:     "IAS Measurement",
-					Evidence: validIat,
-					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_IAS,
+					Data: validIat,
+				},
+				collateral: ar.Collateral{
+					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: invalidIasNonce,
 				referenceValues: []ar.ReferenceValue{
@@ -137,12 +146,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Invalid Reference Value",
+			name: "Invalid reference value",
 			args: args{
-				IasM: &ar.Measurement{
-					Type:     "IAS Measurement",
-					Evidence: validIat,
-					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_IAS,
+					Data: validIat,
+				},
+				collateral: ar.Collateral{
+					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ar.ReferenceValue{
@@ -164,10 +175,12 @@ func Test_verifyIasMeasurements(t *testing.T) {
 		{
 			name: "Invalid Measurement",
 			args: args{
-				IasM: &ar.Measurement{
-					Type:     "SNP Measurement",
-					Evidence: validIat,
-					Certs:    [][]byte{validIasCert.Raw, validIasCa.Raw},
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_IAS,
+					Data: validIat,
+				},
+				collateral: ar.Collateral{
+					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
 				referenceValues: []ar.ReferenceValue{
@@ -191,14 +204,14 @@ func Test_verifyIasMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := verifyIasMeasurements(*tt.args.IasM, tt.args.nonce, tt.args.manifests,
+			_, got := verifyIas(tt.args.evidence, tt.args.collateral, tt.args.nonce, tt.args.manifests,
 				tt.args.referenceValues)
 			if got != tt.want {
-				t.Errorf("verifyIasMeasurements() error = %v, wantErr %v", got, tt.want)
+				t.Errorf("verifyIas() error = %v, wantErr %v", got, tt.want)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("verifyIasMeasurements() = %v, want %v", got, tt.want)
+				t.Errorf("verifyIas() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -230,19 +243,19 @@ var (
 	validNspeMeasurement, _ = hex.DecodeString("73deb833155c9c317d838b5368b6a63bd38706fa874e874c1b5affe4571b348b")
 
 	validSpeReferenceValue = ar.ReferenceValue{
-		Type:    "IAS Reference Value",
+		Type:    ar.TYPE_REFVAL_IAS,
 		SubType: "SPE Measurement",
 		Sha256:  validSpeMeasurement,
 	}
 
 	invalidSpeReferenceValue = ar.ReferenceValue{
-		Type:    "IAS Reference Value",
+		Type:    ar.TYPE_REFVAL_IAS,
 		SubType: "SPE Measurement",
 		Sha256:  invalidSpeMeasurement,
 	}
 
 	validNspeReferenceValue = ar.ReferenceValue{
-		Type:    "IAS Reference Value",
+		Type:    ar.TYPE_REFVAL_IAS,
 		SubType: "NSPE Measurement",
 		Sha256:  validNspeMeasurement,
 	}

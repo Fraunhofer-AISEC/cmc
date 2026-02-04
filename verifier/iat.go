@@ -49,7 +49,11 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.MetadataResult,
+func verifyIas(
+	evidence ar.Evidence,
+	collateral ar.Collateral,
+	nonce []byte,
+	manifests []ar.MetadataResult,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -58,8 +62,8 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.Met
 	}
 	ok := true
 
-	log.Debugf("Parsing %v certificates", len(iasM.Certs))
-	certs, err := internal.ParseCertsDer(iasM.Certs)
+	log.Debugf("Parsing %v certificates", len(collateral.Certs))
+	certs, err := internal.ParseCertsDer(collateral.Certs)
 	if err != nil {
 		log.Debugf("failed to parse IAS certificates: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
@@ -72,15 +76,18 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.Met
 	}
 	rootManifest := manifests[0]
 	if len(referenceValues) == 0 {
-		log.Debugf("Could not find IAS Reference Value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
-	s := ar.CborSerializer{}
+	s, err := ar.NewCborSerializer()
+	if err != nil {
+		result.Summary.Fail(ar.Internal, err)
+		return result, false
+	}
 
 	log.Debug("Verifying CBOR IAT")
 
-	iatresult, payload, ok := verifyIat(iasM.Evidence, certs[0])
+	iatresult, payload, ok := verifyIat(evidence.Data, certs[0])
 	if !ok {
 		log.Debugf("IAS signature verification failed")
 		result.Summary.Fail(ar.VerifySignature)
@@ -102,6 +109,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.Met
 
 	// Verify nonce
 	if bytes.Equal(nonce, iat.AuthChallenge) {
+		log.Debugf("Successfully verified evidence nonce %x", nonce)
 		result.Freshness.Status = ar.StatusSuccess
 	} else {
 		log.Debugf("Nonces mismatch: Supplied Nonce = %v, IAT Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(iat.AuthChallenge))
@@ -144,8 +152,8 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.Met
 	// Verify that every reference value has a corresponding measurement
 	for _, ref := range referenceValues {
 		log.Tracef("Found reference value %v: %v", ref.SubType, hex.EncodeToString(ref.Sha256))
-		if ref.Type != "IAS Reference Value" {
-			log.Tracef("IAS Reference Value invalid type %v", ref.Type)
+		if ref.Type != ar.TYPE_REFVAL_IAS {
+			log.Tracef("IAS reference value invalid type %v", ref.Type)
 			result.Summary.Fail(ar.RefValType)
 			return result, false
 		}
@@ -170,7 +178,7 @@ func verifyIasMeasurements(iasM ar.Measurement, nonce []byte, manifests []ar.Met
 					Digest:   hex.EncodeToString(ref.Sha256),
 					Success:  false,
 					Launched: false,
-					Type:     "Reference Value",
+					Type:     ar.TYPE_REFVAL_IAS,
 				})
 		}
 	}

@@ -54,6 +54,7 @@ type Sgx struct {
 	akChain []*x509.Certificate
 	ikChain []*x509.Certificate
 	ikPriv  crypto.PrivateKey
+	fmspc   string
 }
 
 // Name returns the name of the driver
@@ -69,10 +70,7 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 	if sgx == nil {
 		return errors.New("internal error: SGX object is nil")
 	}
-	switch c.Serializer.(type) {
-	case ar.JsonSerializer:
-	case ar.CborSerializer:
-	default:
+	if c.Serializer == nil {
 		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
@@ -113,72 +111,54 @@ func (sgx *Sgx) Init(c *ar.DriverConfig) error {
 	return nil
 }
 
-// Measure implements the attestation reports generic Measure interface to be called
-// as a plugin during attestation report generation
-func (sgx *Sgx) Measure(nonce []byte) ([]ar.Measurement, error) {
+func (sgx *Sgx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
-	log.Debug("Collecting SGX measurements")
+	log.Debug("Collecting SGX evidence")
 
 	if sgx == nil {
 		return nil, errors.New("internal error: SGX object is nil")
 	}
 
-	data, err := getMeasurement(nonce)
+	data, err := getQuote(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}
 
-	quote, err := verifier.DecodeSgxReport(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode SGX quote: %w", err)
+	evidence := ar.Evidence{
+		Type: ar.TYPE_EVIDENCE_SGX,
+		Data: data,
 	}
 
-	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
-	var quoteCerts verifier.SgxCertificates
-	if quote.QuoteSignatureData.QECertDataType != 5 {
-		return nil, fmt.Errorf("quoting enclave cert data type not supported: %v",
-			quote.QuoteSignatureData.QECertDataType)
-	}
-	quoteCerts, err = verifier.ParseCertificates(quote.QuoteSignatureData.QECertData, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate chain from QECertData: %w", err)
-	}
-	log.Tracef("PCK Leaf Certificate: %v",
-		string(internal.WriteCertPem(quoteCerts.PCKCert)))
+	return []ar.Evidence{evidence}, nil
+}
 
-	// Get FMSPC
-	exts, err := pcs.PckCertificateExtensions(quoteCerts.PCKCert)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get PCK certificate extensions: %w", err)
-	}
-	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
+func (sgx *Sgx) GetCollateral() ([]ar.Collateral, error) {
 
 	// Fetch collateral
-	collateral, err := verifier.FetchCollateral(exts.FMSPC, quoteCerts.PCKCert, verifier.SGX_QUOTE_TYPE)
+	sgxCollateral, err := verifier.FetchCollateral(sgx.fmspc, sgx.akChain[0], verifier.SGX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX collateral: %w", err)
 	}
 
-	measurement := ar.Measurement{
-		Type:     "SGX Measurement",
-		Evidence: data,
-		Certs:    internal.WriteCertsDer(sgx.akChain),
+	collateral := ar.Collateral{
+		Type:  ar.TYPE_EVIDENCE_SGX,
+		Certs: internal.WriteCertsDer(sgx.akChain),
 		Artifacts: []ar.Artifact{
 			{
-				Type: "SGX Collateral",
+				Type: ar.TYPE_SGX_COLLATERAL,
 				Events: []ar.MeasureEvent{
 					{
-						IntelCollateral: collateral,
+						IntelCollateral: sgxCollateral,
 					},
 				},
 			},
 		},
 	}
 
-	return []ar.Measurement{measurement}, nil
+	return []ar.Collateral{collateral}, nil
 }
 
-func getMeasurement(nonce []byte) ([]byte, error) {
+func getQuote(nonce []byte) ([]byte, error) {
 	data, err := enclave.GetRemoteReport(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
@@ -293,6 +273,14 @@ func (sgx *Sgx) provision() error {
 		return fmt.Errorf("failed to get SGX cert chain: %w", err)
 	}
 
+	// Store FMSPC
+	exts, err := pcs.PckCertificateExtensions(sgx.akChain[0])
+	if err != nil {
+		return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+	}
+	sgx.fmspc = exts.FMSPC
+	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
+
 	// Create IK CSR and fetch new certificate including its chain from EST server
 	ikCert, err := sgx.provisionIk(sgx.ikPriv)
 	if err != nil {
@@ -340,7 +328,7 @@ func fetchAk() ([]*x509.Certificate, error) {
 	}
 
 	// Fetch initial attestation report which contains AK cert chain
-	data, err := getMeasurement(nonce)
+	data, err := getQuote(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}

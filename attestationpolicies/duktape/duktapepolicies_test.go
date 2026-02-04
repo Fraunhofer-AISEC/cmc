@@ -24,7 +24,7 @@ import (
 
 func TestValidate(t *testing.T) {
 	type args struct {
-		result          *ar.VerificationResult
+		result          *ar.AttestationResult
 		policies        []byte
 		policyOverwrite bool
 	}
@@ -99,9 +99,9 @@ func TestValidate(t *testing.T) {
 }
 
 var (
-	vrValidCerts = &ar.VerificationResult{
+	vrValidCerts = &ar.AttestationResult{
 		Prover: "Test Prover",
-		Type:   "Verification Result",
+		Type:   ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},
@@ -124,9 +124,9 @@ var (
 		},
 	}
 
-	vrInvalidCerts = &ar.VerificationResult{
+	vrInvalidCerts = &ar.AttestationResult{
 		Prover: "Test Prover",
-		Type:   "Verification Result",
+		Type:   ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},
@@ -150,30 +150,30 @@ var (
 	}
 
 	// This variable is actually manipulated and cannot be reused
-	vrFailModifiable = &ar.VerificationResult{
+	vrFailModifiable = &ar.AttestationResult{
 		Prover: "Test Prover",
-		Type:   "Verification Result",
+		Type:   ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusFail,
 		},
 	}
 
-	vrFail = &ar.VerificationResult{
+	vrFail = &ar.AttestationResult{
 		Prover: "Test Prover",
-		Type:   "Verification Result",
+		Type:   ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusFail,
 		},
 	}
 
 	readPolicies = []byte(`
-		// Parse the verification result
+		// Parse the attestation result
 		var obj = JSON.parse(json);
 
 		var success = true;
 
 		// Basic checks
-		if (obj.type != "Verification Result") {
+		if (obj.type != "Attestation Result") {
 			success = false;
 		}
 		if (obj.summary.status != "success") {
@@ -199,11 +199,11 @@ var (
 	`)
 
 	writePolicies = []byte(`
-		// Parse the verification result
+		// Parse the attestation result
 		var obj = JSON.parse(json);
 
 		// Basic checks
-		if (obj.type != "Verification Result") {
+		if (obj.type != "Attestaton Result") {
 			success = false;
 		}
 

@@ -23,23 +23,17 @@ import (
 	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	log "github.com/sirupsen/logrus"
 )
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
-	report, metadataFlattened []byte, publishAddr, publishFile string, publishToken []byte,
+	report []byte, publishAddr, publishFile string, publishToken []byte,
 ) error {
 
 	if len(report) == 0 {
 		return fmt.Errorf("failed to verify attestation report: no report was provided")
-	}
-
-	metadata, err := internal.UnflattenArray(metadataFlattened)
-	if err != nil {
-		return fmt.Errorf("failed to decode metadata: %w", err)
 	}
 
 	// Use Subject Key Identifier (SKI) as nonce
@@ -55,9 +49,9 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	// Call verify with pubkey instead of identity CAs for verification in provisioning mode, which
 	// only checks the signature, but not the certificate chains (which are about to
 	// be created)
-	result := verifier.VerifyProvision(report, nonce[:], csr.PublicKey,
+	result := verifier.Verify(report, nonce[:], csr.PublicKey,
 		nil, verifier.PolicyEngineSelect_None, false,
-		cas, internal.ConvertToMap(metadata), csr.Subject.CommonName)
+		cas, nil, "")
 
 	log.Debug("Publishing result...")
 	wg := new(sync.WaitGroup)
@@ -65,15 +59,8 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	defer wg.Wait()
 	go pub.PublishResultAsync(publishAddr, publishToken, publishFile, result, wg)
 
-	switch result.Summary.Status {
-	case ar.StatusFail:
-		result.PrintErr()
+	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
 		return fmt.Errorf("failed to verify attestation report")
-	case ar.StatusWarn:
-		result.PrintErr()
-		log.Debugf("Attestation report verification passed with warnings")
-	default:
-		log.Debugf("Successfully verified attestation report")
 	}
 
 	return nil

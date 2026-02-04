@@ -1,4 +1,4 @@
-// Parse the verification result
+// Parse the attestation result
 var obj = JSON.parse(json);
 
 var success = true;

@@ -272,7 +272,7 @@ func getReport(c *Config) ([]byte, error) {
 		return nil, fmt.Errorf("failed to create nonce: %w", err)
 	}
 
-	data, err := snpdriver.GetMeasurement(nonce, c.Vmpl)
+	data, err := snpdriver.GetReport(nonce, c.Vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP Quote: %w", err)
 	}

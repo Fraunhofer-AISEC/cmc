@@ -27,11 +27,12 @@ import (
 
 func Test_verifySwMeasurements(t *testing.T) {
 	type args struct {
-		swMeasurement ar.Measurement
-		nonce         []byte
-		cas           []*x509.Certificate
-		s             ar.Serializer
-		manifests     []ar.MetadataResult
+		evidence   ar.Evidence
+		collateral ar.Collateral
+		nonce      []byte
+		cas        []*x509.Certificate
+		s          ar.Serializer
+		manifests  []ar.MetadataResult
 	}
 	tests := []struct {
 		name  string
@@ -42,15 +43,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 		{
 			name: "Valid SW Measurement",
 			args: args{
-				swMeasurement: ar.Measurement{
-					Type:      "SW Measurement",
-					Evidence:  validSwEvidence,
-					Certs:     validSwCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: validSwEvidence,
+				},
+				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
+					Certs:     validSwCertChain,
 				},
 				nonce:     validSwNonce,
 				cas:       []*x509.Certificate{validSwCa},
-				s:         ar.JsonSerializer{},
+				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
 			want:  ar.StatusSuccess,
@@ -59,15 +62,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 		{
 			name: "Invalid Nonce",
 			args: args{
-				swMeasurement: ar.Measurement{
-					Type:      "SW Measurement",
-					Evidence:  validSwEvidence,
-					Certs:     validSwCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: validSwEvidence,
+				},
+				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
+					Certs:     validSwCertChain,
 				},
 				nonce:     invalidSwNonce,
 				cas:       []*x509.Certificate{validSwCa},
-				s:         ar.JsonSerializer{},
+				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
 			want:  ar.StatusFail,
@@ -76,15 +81,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 		{
 			name: "Invalid Refvals",
 			args: args{
-				swMeasurement: ar.Measurement{
-					Type:      "SW Measurement",
-					Evidence:  validSwEvidence,
-					Certs:     validSwCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: validSwEvidence,
+				},
+				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
+					Certs:     validSwCertChain,
 				},
 				nonce:     validSwNonce,
 				cas:       []*x509.Certificate{validSwCa},
-				s:         ar.JsonSerializer{},
+				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{invalidRefvalManifest},
 			},
 			want:  ar.StatusFail,
@@ -93,15 +100,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 		{
 			name: "Invalid Artifacts",
 			args: args{
-				swMeasurement: ar.Measurement{
-					Type:      "SW Measurement",
-					Evidence:  validSwEvidence,
-					Certs:     validSwCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: validSwEvidence,
+				},
+				collateral: ar.Collateral{
 					Artifacts: invalidSwArtifacts,
+					Certs:     validSwCertChain,
 				},
 				nonce:     validSwNonce,
 				cas:       []*x509.Certificate{validSwCa},
-				s:         ar.JsonSerializer{},
+				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
 			want:  ar.StatusFail,
@@ -110,15 +119,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 		{
 			name: "Invalid Evidence",
 			args: args{
-				swMeasurement: ar.Measurement{
-					Type:      "SW Measurement",
-					Evidence:  invalidSwEvidence,
-					Certs:     validSwCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: invalidSwEvidence,
+				},
+				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
+					Certs:     validSwCertChain,
 				},
 				nonce:     validSwNonce,
 				cas:       []*x509.Certificate{validSwCa},
-				s:         ar.JsonSerializer{},
+				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
 			want:  ar.StatusFail,
@@ -127,15 +138,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 		{
 			name: "Invalid OCI Config",
 			args: args{
-				swMeasurement: ar.Measurement{
-					Type:      "SW Measurement",
-					Evidence:  validSwEvidence,
-					Certs:     validSwCertChain,
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: validSwEvidence,
+				},
+				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
+					Certs:     validSwCertChain,
 				},
 				nonce:     validSwNonce,
 				cas:       []*x509.Certificate{validSwCa},
-				s:         ar.JsonSerializer{},
+				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{invalidOciConfigUbuntuManifest},
 			},
 			want:  ar.StatusFail,
@@ -154,16 +167,18 @@ func Test_verifySwMeasurements(t *testing.T) {
 
 		// Begin FUT
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifySwMeasurements(tt.args.swMeasurement,
+			got, got1 := verifySw(
+				tt.args.evidence,
+				tt.args.collateral,
 				tt.args.nonce,
 				tt.args.cas,
-				refVals["SW Reference Value"],
+				refVals[ar.TYPE_REFVAL_SW],
 				tt.args.s)
 			if got.Summary.Status != tt.want {
-				t.Errorf("verifySwMeasurements() got = %v, want %v", got.Summary.Status, tt.want)
+				t.Errorf("verifySw() got = %v, want %v", got.Summary.Status, tt.want)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("verifySwMeasurements() got = %v, want %v", got1, tt.want)
+				t.Errorf("verifySw() got = %v, want %v", got1, tt.want)
 			}
 		})
 		// End FUT
@@ -173,7 +188,7 @@ func Test_verifySwMeasurements(t *testing.T) {
 var (
 	validSwArtifacts = []ar.Artifact{
 		{
-			Type: "SW Eventlog",
+			Type: ar.TYPE_SW_EVENTLOG,
 			Events: []ar.MeasureEvent{
 				{
 					Sha256:    dec("4df198145daeb97c758b6764f9bbaa982207b022c943949942c8be7a688ab4d7"),
@@ -190,7 +205,7 @@ var (
 
 	invalidSwArtifacts = []ar.Artifact{
 		{
-			Type: "SW Eventlog",
+			Type: ar.TYPE_SW_EVENTLOG,
 			Events: []ar.MeasureEvent{
 				{
 					Sha256:    dec("6dc7a115a4c4a4f02b49cb0866d8f63f33e86cbf933238276411a8f26961e9ff"),
@@ -206,14 +221,14 @@ var (
 	}
 
 	validUbuntuRefVal = ar.ReferenceValue{
-		Type:     "SW Reference Value",
+		Type:     ar.TYPE_REFVAL_SW,
 		SubType:  "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
 		Sha256:   dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e"),
 		Optional: true,
 	}
 
 	invalidSwRefVal = ar.ReferenceValue{
-		Type:     "SW Reference Value",
+		Type:     ar.TYPE_REFVAL_SW,
 		SubType:  "OCI Runtime Bundle Digest",
 		Sha256:   dec("ff5ed62e8fb85decea88ffee33274245d2924e2e961b3cc95be6e09a6ae5a25d"),
 		Optional: true,

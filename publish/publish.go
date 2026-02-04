@@ -28,7 +28,6 @@ import (
 
 	// local modules
 
-	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/sirupsen/logrus"
 )
@@ -37,7 +36,7 @@ var (
 	log = logrus.WithField("service", "publish")
 )
 
-func PublishResultAsync(addr string, token []byte, file string, result *ar.VerificationResult, wg *sync.WaitGroup) {
+func PublishResultAsync(addr string, token []byte, file string, result *ar.AttestationResult, wg *sync.WaitGroup) {
 	defer wg.Done()
 	err := PublishResult(addr, token, file, result)
 	if err != nil {
@@ -45,7 +44,7 @@ func PublishResultAsync(addr string, token []byte, file string, result *ar.Verif
 	}
 }
 
-func PublishResult(addr string, token []byte, file string, result *ar.VerificationResult) error {
+func PublishResult(addr string, token []byte, file string, result *ar.AttestationResult) error {
 
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
@@ -60,8 +59,11 @@ func PublishResult(addr string, token []byte, file string, result *ar.Verificati
 		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
 	case ar.StatusWarn:
 		log.Warnf("WARN: Verification for Prover %v (%v)", result.Prover, result.Created)
-	default:
+	case ar.StatusFail:
 		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
+		result.PrintErr()
+	default:
+		log.Warnf("FAILED: Unknown status %v for Prover %v (%v)", result.Summary.Status, result.Prover, result.Created)
 		result.PrintErr()
 	}
 
@@ -70,7 +72,7 @@ func PublishResult(addr string, token []byte, file string, result *ar.Verificati
 		log.Debugf("Publishing result to file %q", file)
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
-			return fmt.Errorf("failed to marshal verification result: %v", err)
+			return fmt.Errorf("failed to marshal the attestation result: %v", err)
 		}
 
 		err = os.WriteFile(file, data, 0644)
@@ -161,7 +163,7 @@ func SaveReport(reportFile, nonceFile string, report []byte, nonce []byte) error
 	return nil
 }
 
-func LoadReport(reportFile, nonceFile string, s ar.Serializer) (*api.AttestationResponse, []byte, error) {
+func LoadReport(reportFile, nonceFile string, s ar.Serializer) ([]byte, []byte, error) {
 	nonce, err := os.ReadFile(nonceFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read faile %v: %w", nonceFile, err)
@@ -172,11 +174,5 @@ func LoadReport(reportFile, nonceFile string, s ar.Serializer) (*api.Attestation
 		return nil, nil, fmt.Errorf("failed to read file %v: %w", reportFile, err)
 	}
 
-	resp := new(api.AttestationResponse)
-	err = s.Unmarshal(data, resp)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal: %w", err)
-	}
-
-	return resp, nonce, nil
+	return data, nonce, nil
 }

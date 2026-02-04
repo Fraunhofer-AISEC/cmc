@@ -95,7 +95,7 @@ func run(cmd *cli.Command) error {
 
 	log.Info("Parsing TPM SRTM PCR eventlog...")
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, "TPM Reference Value", pcrConf.RawEventData)
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, ar.TYPE_REFVAL_TPM, pcrConf.RawEventData)
 	if err != nil {
 		return fmt.Errorf("failed to read binary bios measurements: %w", err)
 	}

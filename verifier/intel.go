@@ -121,7 +121,7 @@ type SgxCertificates struct {
 	TCBSigningCert   *x509.Certificate
 }
 
-type Collateral struct {
+type IntelCollateral struct {
 	TcbInfo                    pcs.TdxTcbInfo
 	QeIdentity                 pcs.QeIdentity
 	RootCaCrl                  *x509.RevocationList
@@ -298,7 +298,7 @@ func getTCBCompByIndex(tcb TCB, index int) TCBComp {
 	}
 }
 
-func ParseCollateral(c *ar.IntelCollateral) (*Collateral, error) {
+func ParseCollateral(c *ar.IntelCollateral) (*IntelCollateral, error) {
 
 	if c == nil {
 		return nil, errors.New("cannot parse collateral: collateral is nil")
@@ -356,7 +356,7 @@ func ParseCollateral(c *ar.IntelCollateral) (*Collateral, error) {
 		log.Warnf("failed to parse root CA CRL: %v", err)
 	}
 
-	return &Collateral{
+	return &IntelCollateral{
 		TcbInfo:                    tcbInfo,
 		QeIdentity:                 qeIdentity,
 		RootCaCrl:                  rootCrl,
@@ -1097,7 +1097,7 @@ func verifyQuoteVersion(quoteVersion, expectedVersion uint16) (ar.Result, bool) 
 	return r, ok
 }
 
-func verifyRootCas(quoteCerts *SgxCertificates, collateral *Collateral, fingerprints []string) ar.ErrorCode {
+func verifyRootCas(quoteCerts *SgxCertificates, collateral *IntelCollateral, fingerprints []string) ar.ErrorCode {
 
 	if quoteCerts == nil {
 		log.Debugf("internal error: quote certs nil")

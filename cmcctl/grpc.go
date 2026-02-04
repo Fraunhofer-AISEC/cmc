@@ -77,19 +77,8 @@ func (a GrpcApi) generate(c *config) error {
 			api.GetVersion(), response.Version)
 	}
 
-	// gRPC only: Marshal response as JSON/CBOR for saving it to the file system
-	apiResp := &api.AttestationResponse{
-		Report:      response.Report,
-		Metadata:    response.Metadata,
-		CacheMisses: response.CacheMisses,
-	}
-	data, err := c.apiSerializer.Marshal(apiResp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal attestation response: %w", err)
-	}
-
 	// Save the attestation report for the verifier
-	err = pub.SaveReport(c.ReportFile, c.NonceFile, data, nonce)
+	err = pub.SaveReport(c.ReportFile, c.NonceFile, response.Report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -121,8 +110,7 @@ func (a GrpcApi) verify(c *config) error {
 	request := grpcapi.VerificationRequest{
 		Version:  api.GetVersion(),
 		Nonce:    nonce,
-		Report:   report.Report,
-		Metadata: report.Metadata,
+		Report:   report,
 		Policies: c.policies,
 	}
 
@@ -136,11 +124,11 @@ func (a GrpcApi) verify(c *config) error {
 			api.GetVersion(), response.Version)
 	}
 
-	// grpc only: the verification result is marshalled as JSON, as we do not have protobuf definitions
-	result := new(ar.VerificationResult)
+	// grpc only: the attestation result is marshalled as JSON, as we do not have protobuf definitions
+	result := new(ar.AttestationResult)
 	err = json.Unmarshal(response.GetResult(), result)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal grpc verification result")
+		return fmt.Errorf("failed to unmarshal grpc attestation result")
 	}
 
 	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, result)

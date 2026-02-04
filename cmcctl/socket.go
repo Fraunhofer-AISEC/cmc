@@ -83,8 +83,15 @@ func (a SocketApi) generate(c *config) error {
 	}
 	checkError(msgType, payload, c.apiSerializer)
 
+	// Unmarshal report
+	resp := new(api.AttestationResponse)
+	err = c.apiSerializer.Unmarshal(payload, resp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal attestation response: %w", err)
+	}
+
 	// Save the attestation response for the verifier
-	err = pub.SaveReport(c.ReportFile, c.NonceFile, payload, nonce)
+	err = pub.SaveReport(c.ReportFile, c.NonceFile, resp.Report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -102,12 +109,10 @@ func (a SocketApi) verify(c *config) error {
 	}
 
 	req := &api.VerificationRequest{
-		Version:     api.GetVersion(),
-		Nonce:       nonce,
-		Report:      report.Report,
-		Metadata:    report.Metadata,
-		CacheMisses: report.CacheMisses,
-		Policies:    c.policies,
+		Version:  api.GetVersion(),
+		Nonce:    nonce,
+		Report:   report,
+		Policies: c.policies,
 	}
 
 	resp, err := verifySocketRequest(c, req)
@@ -115,7 +120,7 @@ func (a SocketApi) verify(c *config) error {
 		return fmt.Errorf("failed to verify: %w", err)
 	}
 
-	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, &resp.Result)
+	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, resp.Result)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
@@ -274,7 +279,7 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	verifyResp := new(api.VerificationResponse)
 	err = c.apiSerializer.Unmarshal(payload, verifyResp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response")
+		return nil, fmt.Errorf("failed to unmarshal verification response: %w", err)
 	}
 
 	if err := verifyResp.CheckVersion(); err != nil {

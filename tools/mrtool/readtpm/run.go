@@ -94,8 +94,8 @@ func run(cmd *cli.Command) error {
 	for _, pcr := range pcrs {
 		if contains(globConf.Mrs, pcr.Index) {
 			r := &ar.ReferenceValue{
-				Type:    "TPM Reference Value",
-				SubType: "PCR Summary",
+				Type:    ar.TYPE_REFVAL_TPM,
+				SubType: ar.TYPE_PCR_SUMMARY,
 				Index:   pcr.Index,
 				Sha256:  pcr.Digest,
 			}

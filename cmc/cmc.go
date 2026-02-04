@@ -16,6 +16,7 @@
 package cmc
 
 import (
+	"crypto"
 	"crypto/x509"
 	"fmt"
 	"os"
@@ -26,6 +27,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/peercache"
 	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/provision/selfsigned"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -47,11 +49,12 @@ type Cmc struct {
 	IdentityCas        []*x509.Certificate
 	MetadataCas        []*x509.Certificate
 	Metadata           map[string][]byte
-	CachedPeerMetadata map[string]map[string][]byte
+	PeerCache          *peercache.Cache
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	PolicyOverwrite    bool
 	Drivers            []ar.Driver
 	Serializer         ar.Serializer
+	HashAlg            crypto.Hash
 	*Config
 }
 
@@ -79,10 +82,16 @@ func NewCmc(c *Config) (*Cmc, error) {
 		return nil, fmt.Errorf("failed to read trusted metadata root CAs: %w", err)
 	}
 
+	alg, err := internal.HashFromString(c.HashAlg)
+	if err != nil {
+		return nil, fmt.Errorf("configured hash alg %q is unsupported: %w", c.HashAlg, err)
+	}
+
 	cmc := &Cmc{
 		EstTlsCas:   estTlsCas,
 		IdentityCas: identityCas,
 		MetadataCas: metadataCas,
+		HashAlg:     alg,
 		Config:      c,
 	}
 
@@ -137,11 +146,10 @@ func NewCmc(c *Config) (*Cmc, error) {
 			StoragePath:      c.Storage,
 			ServerAddr:       c.ProvisionAddr,
 			KeyConfig:        c.KeyConfig,
+			HashAlg:          alg,
 			Metadata:         metadata,
-			Ima:              c.Ima,
-			ImaPcr:           c.ImaPcr,
 			ExcludePcrs:      c.ExcludePcrs,
-			MeasurementLog:   c.MeasurementLog,
+			MeasurementLogs:  c.MeasurementLogs,
 			Serializer:       s,
 			CtrPcr:           c.CtrPcr,
 			CtrLog:           c.CtrLog,
@@ -187,11 +195,10 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	// Load cached metadata from known peers
-	cachedPeerMetadata, err := LoadPeerCacheMetadata(c.PeerCache)
+	cmc.PeerCache, err = peercache.Load(c.PeerCache)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load peer cache: %w", err)
 	}
-	cmc.CachedPeerMetadata = cachedPeerMetadata
 
 	return cmc, nil
 }

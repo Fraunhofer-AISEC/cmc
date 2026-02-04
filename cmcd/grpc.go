@@ -26,10 +26,8 @@ import (
 	"fmt"
 	"net"
 
-	"encoding/hex"
 	"encoding/json"
 
-	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 
 	// local modules
@@ -39,6 +37,8 @@ import (
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
+	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	oci "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -96,18 +96,15 @@ func (s *GrpcServer) Attest(ctx context.Context, req *api.AttestationRequest) (*
 			api.GetVersion(), req.Version)
 	}
 
-	log.Debug("Prover: Generating Attestation Report with nonce: ", hex.EncodeToString(req.Nonce))
-
-	report, metadata, cacheMisses, err := cmc.Generate(req.Nonce, req.Cached, s.cmc)
+	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
+		s.cmc.Serializer, s.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
 	resp := &api.AttestationResponse{
-		Version:     api.GetVersion(),
-		Report:      report,
-		Metadata:    metadata,
-		CacheMisses: cacheMisses,
+		Version: api.GetVersion(),
+		Report:  report,
 	}
 
 	log.Info("Served grpc request type 'Attest'")
@@ -124,17 +121,14 @@ func (s *GrpcServer) Verify(ctx context.Context, req *api.VerificationRequest) (
 			api.GetVersion(), req.Version)
 	}
 
-	result, err := cmc.Verify(req.Report, req.Nonce, req.Policies,
-		req.Peer, req.CacheMisses, req.Metadata, s.cmc)
-	if err != nil {
-		log.Errorf("verifier: failed to verify: %v", err)
-	}
+	result := verifier.Verify(req.Report, req.Nonce, s.cmc.IdentityCas, req.Policies,
+		s.cmc.PolicyEngineSelect, s.cmc.PolicyOverwrite, s.cmc.MetadataCas, s.cmc.PeerCache, req.Peer)
 
-	// grpc only: marshal verification result in JSON as we do not have protobuf
-	// definitions for the verification result
+	// grpc only: marshal attestation result in JSON as we do not have protobuf
+	// definitions
 	data, err := json.Marshal(result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal verification result")
+		return nil, fmt.Errorf("failed to marshal the attestation result")
 	}
 
 	response := &api.VerificationResponse{
@@ -297,12 +291,7 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (
 	log.Debugf("Collecting peer cache for peer %v", req.Peer)
 	resp := &api.PeerCacheResponse{
 		Version: api.GetVersion(),
-	}
-	c, ok := s.cmc.CachedPeerMetadata[req.Peer]
-	if ok {
-		resp.Cache = maps.Keys(c)
-	} else {
-		resp.Cache = []string{}
+		Cache:   s.cmc.PeerCache.GetKeys(req.Peer),
 	}
 
 	log.Info("Served grpc request type 'PeerCache'")

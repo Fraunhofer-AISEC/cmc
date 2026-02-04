@@ -116,9 +116,43 @@ type TPMT_HA struct {
 	Digest      []uint8
 }
 
-// GetBiosMeasurements retrieves the measurements recorded into
-// the TPM PCRs by BIOS, UEFI and IPL. The file with the binary
-// measurements (usually /sys/kernel/security/tpm0/binary_bios_measurements)
+func GetBiosArtifacts(file, refvalType string, addRawEventData bool) (map[int]ar.Artifact, error) {
+
+	// Get single events
+	refvals, err := GetBiosMeasurements(file, refvalType, addRawEventData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map with PCR index as key
+	artifacts := map[int]ar.Artifact{}
+
+	// Convert to artifacts
+	for _, refval := range refvals {
+
+		artifact, ok := artifacts[refval.Index]
+		if !ok {
+			artifact = ar.Artifact{
+				Type:  ar.TYPE_PCR_EVENTLOG,
+				Index: int(refval.Index),
+			}
+		}
+		event := ar.MeasureEvent{
+			Sha256:    refval.Sha256,
+			EventName: refval.SubType,
+		}
+		if refval.SubType != "TPM_PCR_INIT_VALUE" {
+			event.EventData = refval.EventData
+		}
+		artifact.Events = append(artifact.Events, event)
+		artifacts[refval.Index] = artifact
+	}
+
+	return artifacts, nil
+}
+
+// GetBiosMeasurements retrieves the measurements recorded into the TPM PCRs by BIOS, UEFI and IPL.
+// The file with the binary measurements (e.g., /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
 func GetBiosMeasurements(file, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
@@ -286,7 +320,7 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (a
 	digest[31] = locality
 
 	entry := ar.ReferenceValue{
-		Type:    "TPM Reference Value",
+		Type:    ar.TYPE_REFVAL_TPM,
 		Sha256:  digest,
 		SubType: "TPM_PCR_INIT_VALUE",
 		Index:   pcrIndex,

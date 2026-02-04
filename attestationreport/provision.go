@@ -37,9 +37,8 @@ type Provisioner interface {
 		ikParams attest.CertificationParameters,
 		akPublic []byte,
 		report []byte,
-		metadata [][]byte,
 	) (*x509.Certificate, error)
-	CcEnroll(csr *x509.CertificateRequest, report []byte, metadata [][]byte) (*x509.Certificate, error)
+	CcEnroll(csr *x509.CertificateRequest, report []byte) (*x509.Certificate, error)
 	GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error)
 	GetSnpVcek(codeName string, chipId [64]byte, tcb uint64) (*x509.Certificate, error)
 }

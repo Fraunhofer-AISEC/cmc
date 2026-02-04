@@ -83,23 +83,25 @@ func run(cmd *cli.Command) error {
 
 	log.Infof("Parsing IMA TPM PCR eventlog %q...", pcrConf.Eventlog)
 
-	events, err := ima.GetImaRuntimeDigests(pcrConf.Eventlog)
+	artifacts, err := ima.GetImaArtifacts(pcrConf.Eventlog)
 	if err != nil {
 		return fmt.Errorf("failed to parse ima runtime digestes: %w", err)
 	}
 
-	refvals := make([]ar.ReferenceValue, 0, len(events))
-	for _, event := range events {
-		refval := ar.ReferenceValue{
-			Type:        "TPM Reference Value",
-			SubType:     filepath.Base(event.EventName),
-			Index:       globConf.Mrs[0],
-			Sha256:      event.Sha256,
-			Description: event.EventName,
-			EventData:   event.EventData,
-			Optional:    true,
+	refvals := make([]ar.ReferenceValue, 0)
+	for _, artifact := range artifacts {
+		for _, event := range artifact.Events {
+			refval := ar.ReferenceValue{
+				Type:        ar.TYPE_REFVAL_TPM,
+				SubType:     filepath.Base(event.EventName),
+				Index:       globConf.Mrs[0],
+				Sha256:      event.Sha256,
+				Description: event.EventName,
+				EventData:   event.EventData,
+				Optional:    true,
+			}
+			refvals = append(refvals, refval)
 		}
-		refvals = append(refvals, refval)
 	}
 
 	// Marshal eventlog

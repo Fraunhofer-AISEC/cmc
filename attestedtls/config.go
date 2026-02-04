@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,6 @@
 package attestedtls
 
 import (
-	"crypto"
 	"crypto/x509"
 	"fmt"
 
@@ -56,19 +55,9 @@ type CmcConfig struct {
 	Policies      []byte
 	Mtls          bool
 	Attest        AttestSelect
-	ResultCb      func(result *ar.VerificationResult)
+	ResultCb      func(result *ar.AttestationResult)
 	LibApiConfig  *cmc.Config
 }
-
-type CmcApi interface {
-	obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, map[string][]byte, []string, error)
-	verifyAR(cc *CmcConfig, report, nonce, policies []byte, peer string, cacheMisses []string, metadata map[string][]byte) error
-	fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
-	fetchCerts(cc *CmcConfig) ([][]byte, error)
-	fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error)
-}
-
-var CmcApis = map[string]CmcApi{}
 
 type ConnectionOption[T any] func(*T) error
 
@@ -76,11 +65,15 @@ type ConnectionOption[T any] func(*T) error
 func NewCmcConfig(opts ...ConnectionOption[CmcConfig]) (*CmcConfig, error) {
 
 	// Start with defaults
+	s, err := ar.NewCborSerializer()
+	if err != nil {
+		return nil, fmt.Errorf("internal error: failed to initialize cbor serializer: %w", err)
+	}
 	cc := &CmcConfig{
 		CmcAddr:       cmcAddrDefault,
 		CmcApi:        CmcApis[cmcApiSelectDefault],
 		Attest:        attestDefault,
-		ApiSerializer: ar.CborSerializer{},
+		ApiSerializer: s,
 	}
 
 	// Overwrite with specified configuration options
@@ -154,7 +147,7 @@ func WithAttest(attest AttestSelect) ConnectionOption[CmcConfig] {
 }
 
 // WithResultCb is a callback for further processing of attestation results
-func WithResultCb(cb func(result *ar.VerificationResult)) ConnectionOption[CmcConfig] {
+func WithResultCb(cb func(result *ar.AttestationResult)) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) error {
 		c.ResultCb = cb
 		return nil

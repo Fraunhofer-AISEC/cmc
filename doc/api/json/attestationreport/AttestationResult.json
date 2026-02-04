@@ -1,7 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/VerificationResult",
+  "$ref": "#/$defs/AttestationResult",
   "$defs": {
+    "AttestationResult": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/Result"
+        },
+        "prover": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "freshness": {
+          "$ref": "#/$defs/Result"
+        },
+        "certLevel": {
+          "type": "integer"
+        },
+        "measurements": {
+          "items": {
+            "$ref": "#/$defs/MeasurementResult"
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "$ref": "#/$defs/MetadataSummary"
+        }
+      },
+      "type": "object"
+    },
     "BooleanMatch": {
       "properties": {
         "success": {
@@ -2373,44 +2408,6 @@
         },
         "notAfter": {
           "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "VerificationResult": {
-      "properties": {
-        "version": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "summary": {
-          "$ref": "#/$defs/Result"
-        },
-        "prover": {
-          "type": "string"
-        },
-        "created": {
-          "type": "string"
-        },
-        "certLevel": {
-          "type": "integer"
-        },
-        "measurements": {
-          "items": {
-            "$ref": "#/$defs/MeasurementResult"
-          },
-          "type": "array"
-        },
-        "metadata": {
-          "$ref": "#/$defs/MetadataSummary"
-        },
-        "reportSignatureCheck": {
-          "items": {
-            "$ref": "#/$defs/SignatureResult"
-          },
-          "type": "array"
         }
       },
       "type": "object"

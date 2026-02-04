@@ -125,19 +125,19 @@ func getConfig() (*config, error) {
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
 		flag.Usage()
-		log.Fatalf("LogLevel %v does not exist", c.LogLevel)
+		return nil, fmt.Errorf("log level %v does not exist", c.LogLevel)
 	}
 	log.SetLevel(l)
 
 	// Convert file path to absolute path
 	c.Db, err = filepath.Abs(c.Db)
 	if err != nil {
-		log.Fatalf("Failed to get path for database: %v", err)
+		return nil, fmt.Errorf("failed to get path for database: %w", err)
 	}
 	if c.Token != "" {
 		c.Token, err = filepath.Abs(c.Token)
 		if err != nil {
-			log.Fatalf("Failed to get path for authorization token: %v", err)
+			return nil, fmt.Errorf("failed to get path for authorization token: %w", err)
 		}
 	}
 

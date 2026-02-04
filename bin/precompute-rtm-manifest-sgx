@@ -39,7 +39,7 @@ fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -
 mrenclave=$(echo "$(ego uniqueid cmcctl)" | awk 'NR==1')
 referenceValues='[
     {
-      "type": "SGX Reference Value",
+      "type": ar.TYPE_REFVAL_SGX,
       "subtype": "MRENCLAVE",
       "index": 0,
       "sha256": "'"${mrenclave}"'",
