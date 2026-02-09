@@ -45,18 +45,30 @@ func (ln Listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to accept connection: %w", err)
 	}
-	err = conn.SetReadDeadline(time.Now().Add(timeout))
+
+	// Return temporary net error to avoid shutdown of the calling server
+	if err := ln.handshake(conn); err != nil {
+		conn.Close()
+		return nil, acceptError{err}
+	}
+
+	return conn, nil
+}
+
+func (ln Listener) handshake(conn net.Conn) error {
+
+	err := conn.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		return nil, fmt.Errorf("failed to set read deadline: %w", err)
+		return fmt.Errorf("failed to set read deadline: %w", err)
 	}
 	err = conn.SetWriteDeadline(time.Now().Add(timeout))
 	if err != nil {
-		return nil, fmt.Errorf("failed to set write deadline: %w", err)
+		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
-		return nil, errors.New("internal error: failed to convert to tlsconn")
+		return errors.New("internal error: failed to convert to tlsconn")
 	}
 
 	// Usually, not required, as the the first Read or Write will call it
@@ -65,19 +77,19 @@ func (ln Listener) Accept() (net.Conn, error) {
 	log.Debug("Connection established. Performing TLS handshake..")
 	err = tlsConn.Handshake()
 	if err != nil {
-		return nil, fmt.Errorf("TLS handshake failed: %w", err)
+		return fmt.Errorf("TLS handshake failed: %w", err)
 	}
 
 	log.Debug("Connection established, getting connection state")
 	cs := tlsConn.ConnectionState()
 	if !cs.HandshakeComplete {
-		return nil, errors.New("internal error: handshake not complete")
+		return errors.New("internal error: handshake not complete")
 	}
 
 	log.Debug("TLS handshake complete, generating channel bindings")
 	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
 	if err != nil {
-		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
+		return fmt.Errorf("failed to export keying material for channel binding: %w", err)
 	}
 
 	// Retrieve peer's TLS leaf certificate fingerprint to be used as peer ID for peer cache
@@ -98,12 +110,12 @@ func (ln Listener) Accept() (net.Conn, error) {
 	}
 	err = aTlsHandshakeComplete(tlsConn, ln.CmcConfig.ApiSerializer, err)
 	if err != nil {
-		return nil, fmt.Errorf("atls handshake failed: %w", err)
+		return fmt.Errorf("atls handshake failed: %w", err)
 	}
 
 	log.Info("Server-side aTLS connection complete")
 
-	return conn, nil
+	return nil
 }
 
 // Implementation of Close in net.Listener iface
@@ -142,3 +154,12 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 
 	return net.Listener(listener), nil
 }
+
+// Implements the net.Error interface
+type acceptError struct {
+	err error
+}
+
+func (e acceptError) Error() string   { return e.err.Error() }
+func (e acceptError) Timeout() bool   { return false }
+func (e acceptError) Temporary() bool { return true }
