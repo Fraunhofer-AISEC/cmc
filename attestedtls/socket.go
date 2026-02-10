@@ -19,7 +19,6 @@ package attestedtls
 
 import (
 	"crypto"
-	"crypto/rsa"
 	"errors"
 	"fmt"
 	"net"
@@ -216,11 +215,6 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 		Version: api.GetVersion(),
 		Content: digest,
 		HashAlg: opts.HashFunc().String(),
-	}
-
-	// Parse additional signing options - not implemented fields assume recommend defaults
-	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		req.PssOpts = &api.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
 	}
 
 	// Marshal payload

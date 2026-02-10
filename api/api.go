@@ -18,18 +18,15 @@
 package api
 
 import (
-	"crypto"
-	"crypto/rsa"
 	"fmt"
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // The version of the API
 const (
-	apiVersion = "1.3.0"
+	apiVersion = "1.4.0"
 )
 
 func GetVersion() string {
@@ -84,10 +81,9 @@ type VerificationResponse struct {
 }
 
 type TLSSignRequest struct {
-	Version string      `json:"version" cbor:"0,keyasint"`
-	Content []byte      `json:"content" cbor:"1,keyasint"`
-	HashAlg string      `json:"hashAlg" cbor:"2,keyasint" jsonschema:"enum=SHA-256,enum=SHA-384,enum=SHA-512"`
-	PssOpts *PSSOptions `json:"pssOpts,omitempty" cbor:"3,keyasint,omitempty"`
+	Version string `json:"version" cbor:"0,keyasint"`
+	Content []byte `json:"content" cbor:"1,keyasint"`
+	HashAlg string `json:"hashAlg" cbor:"2,keyasint" jsonschema:"enum=SHA-256,enum=SHA-384,enum=SHA-512"`
 }
 
 type TLSSignResponse struct {
@@ -179,30 +175,6 @@ func TypeToString(t uint32) string {
 	default:
 		return "Unknown"
 	}
-}
-
-// StringToSignerOpts converts hash strings as defined in https://pkg.go.dev/crypto#Hash.String
-// to SignerOpts
-// Converts hash strings as defined in https://pkg.go.dev/crypto#Hash.String to SignerOpts
-func StringToSignerOpts(s string, pssOpts *PSSOptions) (crypto.SignerOpts, error) {
-	hash, err := internal.HashFromString(s)
-	if err != nil {
-		return nil, err
-	}
-	return HashToSignerOpts(hash, pssOpts)
-}
-
-// HashToSignerOpts converts hashes to crypto.SignerOpts
-func HashToSignerOpts(hash crypto.Hash, pssOpts *PSSOptions) (crypto.SignerOpts, error) {
-	if pssOpts != nil {
-		saltlen := int(pssOpts.SaltLength)
-		// go-attestation / go-tpm does not allow -1 as definition for length of hash
-		if saltlen < 0 {
-			saltlen = hash.Size()
-		}
-		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
-	}
-	return hash, nil
 }
 
 func (req *AttestationRequest) CheckVersion() error {

@@ -20,7 +20,6 @@ package attestedtls
 import (
 	"context"
 	"crypto"
-	"crypto/rsa"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -164,11 +163,6 @@ func (a GrpcApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 		Version: api.GetVersion(),
 		Content: digest,
 		HashAlg: opts.HashFunc().String(),
-	}
-
-	// parse additional signing options - not implemented fields assume recommend defaults
-	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		req.PssOpts = &api.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
 	}
 
 	// Send Sign request
