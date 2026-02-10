@@ -6,6 +6,9 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 cmd="${1:-request}"
+if [ "$#" -gt 0 ]; then
+  shift
+fi
 
 cd "${dir}"
 

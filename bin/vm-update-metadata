@@ -14,6 +14,9 @@ cd "${dir}"
 
 mode="${1:-parse}"
 
+# Clean start
+rm -rf "${dir}/data/metadata-raw"
+
 if [[ "${mode}" == "parse" ]]; then
     echo "Parsing metadata..."
   generate-metadata-vm
@@ -36,4 +39,11 @@ cp "${dir}/data/pki/ca.pem" "${dir}/example-setup/vm-config/metadata-ca.pem"
 vm-ssh rm -rf /var/cmc
 
 # Restarting cmcd is required for fetching the updated metadata
+echo "Restarting services"
 vm-ssh systemctl restart cmcd
+
+sleep 2
+
+vm-ssh systemctl restart cmcctl
+
+echo "Finished"
