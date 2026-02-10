@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -57,9 +58,144 @@ func proxyRawConnections(ctx context.Context, conn1, conn2 net.Conn) {
 	wg.Wait()
 }
 
-// The forward proxy uses the HTTP CONNECT method to forward arbitrary TCP connections over an
-// attested TLS connection.
+var hopByHopHeaders = []string{
+	"Proxy-Connection",
+	"Keep-Alive",
+	"TE",
+	"Transfer-Encoding",
+	"Upgrade",
+	"Connection",
+}
+
+func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.ResponseWriter, req *http.Request) {
+	log.Debug("Using standard HTTP proxy mode")
+
+	via := req.Header.Get("Via")
+	// Check the Via header to verify that we are not in a routing loop (RFC 9110, sec. 7.6.3)
+	if via != "" {
+		for hop := range strings.SplitSeq(via, ",") {
+			if strings.Contains(hop, c.Addr) {
+				http.Error(w, "Proxy loop detected", http.StatusLoopDetected)
+				log.Debug("Proxy loop detected")
+				return
+			}
+		}
+		via = via + ", "
+	}
+
+	newReq := req.Clone(req.Context())
+
+	// Add ourselves to the Via header (RFC 9110, sec 7.6.3)
+	newReq.Header.Set("Via", fmt.Sprintf("%s%d.%d %s", via, req.ProtoMajor, req.ProtoMinor, c.Addr))
+
+	// Remove connection and known hop-by-hop headers from the request (RFC 9110, sec 7.6.1)
+	var filteredHeaders []string
+	filteredHeaders = append(filteredHeaders, hopByHopHeaders...)
+	connection := req.Header.Get("Connection")
+	for field := range strings.SplitSeq(connection, ",") {
+		filteredHeaders = append(filteredHeaders, strings.TrimSpace(field))
+	}
+	for _, header := range hopByHopHeaders {
+		newReq.Header.Del(header)
+	}
+
+	// Note: We are explicitly not using http.Client.Do here as that would handle cookies, redirects, etc.
+	// which we want to forward to the client.
+	resp, err := proxyTransport.RoundTrip(newReq)
+	if err != nil {
+		log.Debugf("Failed to forward http request to %s: %s", req.URL, err)
+		http.Error(w, fmt.Sprintf("Failed to proxy request: %s", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for k, vs := range resp.Header {
+		for _, v := range vs {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		log.Debugf("Error forwarding to the client: %v", err)
+	}
+}
+
+func proxyTunnel(tlsConf *tls.Config, c *config, w http.ResponseWriter, req *http.Request) {
+	log.Debug("Using HTTP CONNECT tunneling")
+
+	h, ok := w.(http.Hijacker)
+	if !ok {
+		log.Warn("The underlying HTTP implementation does not support connection hijacking")
+		http.Error(w, "HTTP CONNECT tunneling is not supported by this proxy", http.StatusNotImplemented)
+		return
+	}
+
+	// The connect proxy scheme only supports parsing host and port (required, since no protocol is allowed).
+	// We should also reject URLs here that contains anything else, but let's let that slide in the name of compatibility.
+	if req.URL.Port() == "" {
+		http.Error(w, "No port provided", http.StatusBadRequest)
+		return
+	}
+	toServer, err := atls.Dial("tcp", req.URL.Host, tlsConf,
+		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcPolicies(c.policies),
+		atls.WithCmcApi(c.Api),
+		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithMtls(c.Mtls),
+		atls.WithAttest(c.attest),
+		atls.WithResultCb(func(result *ar.AttestationResult) {
+			// Publish the attestation result asynchronously if publishing address was specified and
+			// and attestation was performed
+			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
+				wg := new(sync.WaitGroup)
+				wg.Add(1)
+				defer wg.Wait()
+				go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
+			}
+		}),
+		atls.WithLibApiCmcConfig(&c.Config))
+	if err != nil {
+		log.Debugf("Failed to dial remote server %s: %s", req.URL.Host, err)
+		// TODO: Depending on the error, this is also a bad request (e.g. if the remote address rejects)
+		http.Error(w, fmt.Sprintf("Failed to dial remote server: %s", err), http.StatusInternalServerError)
+		return
+	}
+	defer toServer.Close()
+
+	// TODO: It might also be interesting to forward some attestation related information to the caller via X-* headers.
+	w.WriteHeader(http.StatusOK)
+
+	toClient, buffered, err := h.Hijack()
+	if err != nil {
+		log.Debugf("Error hijacking HTTP connection: %v", err)
+		return
+	}
+	defer toClient.Close()
+
+	// The error can be ignored since we peek the exact length of the buffer
+	buf, _ := buffered.Reader.Peek(buffered.Reader.Buffered())
+
+	// The HTTP server may have already received some client data.
+	n, err := toServer.Write(buf)
+	if n != len(buf) {
+		err = fmt.Errorf("could not write all available data to the destination")
+	}
+	if err != nil {
+		log.Debugf("Error forwarding buffered data to server: %v", err)
+		return
+	}
+
+	// TODO(http2): Respect connection multiplexing instead of hijacking
+	proxyRawConnections(req.Context(), toClient, toServer)
+}
+
+// The forward proxy acts as a general purpose HTTP proxy over an attested TLS tunnel.
+// It supports the HTTP CONNECT method to forward arbitrary TCP-based protocols over the TLS tunnel.
+//
+// The HTTP proxy implementation follows RFC 9110, section 7.6.
 // The semantics of the HTTP CONNECT method are defined in RFC 9110, section 9.3.6.
+// Note that the HTTP CONNECT proxy currently breaks HTTP2 connections.
 func forwardProxy(c *config) error {
 	var tlsConf *tls.Config
 
@@ -95,80 +231,47 @@ func forwardProxy(c *config) error {
 
 	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
-	proxyHandler := func(w http.ResponseWriter, req *http.Request) {
-		log := log.WithField("client", req.RemoteAddr)
+	proxyTransport := &http.Transport{
+		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			log.Debugf("Dialing TLS address: %v", addr)
 
-		if req.Method != http.MethodConnect {
-			http.Error(w, "Only HTTP CONNECT requests are supported", http.StatusMethodNotAllowed)
-			return
-		}
+			conn, err := atls.Dial("tcp", addr, tlsConf,
+				atls.WithCmcAddr(c.CmcAddr),
+				atls.WithCmcPolicies(c.policies),
+				atls.WithCmcApi(c.Api),
+				atls.WithApiSerializer(c.apiSerializer),
+				atls.WithMtls(c.Mtls),
+				atls.WithAttest(c.attest),
+				atls.WithResultCb(func(result *ar.AttestationResult) {
+					// Publish the attestation result asynchronously if publishing address was specified and
+					// and attestation was performed
+					if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
+						wg := new(sync.WaitGroup)
+						wg.Add(1)
+						defer wg.Wait()
+						go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
+					}
+				}),
+				atls.WithLibApiCmcConfig(&c.Config))
+			if err != nil {
+				return nil, fmt.Errorf("failed to dial server: %w", err)
+			}
 
-		// The connect proxy scheme only supports parsing host and port (required, since no protocol is allowed).
-		// We should also reject URLs here that contains anything else, but let's let that slide in the name of compatibility.
-		if req.URL.Port() == "" {
-			http.Error(w, "No port provided", http.StatusBadRequest)
-			return
-		}
-		toServer, err := atls.Dial("tcp", req.URL.Host, tlsConf,
-			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcPolicies(c.policies),
-			atls.WithCmcApi(c.Api),
-			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithMtls(c.Mtls),
-			atls.WithAttest(c.attest),
-			atls.WithResultCb(func(result *ar.AttestationResult) {
-				// Publish the attestation result asynchronously if publishing address was specified and
-				// and attestation was performed
-				if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
-					wg := new(sync.WaitGroup)
-					wg.Add(1)
-					defer wg.Wait()
-					go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
-				}
-			}),
-			atls.WithLibApiCmcConfig(&c.Config))
-		if err != nil {
-			log.Debugf("Failed to dial remote server %s: %s", req.URL.Host, err)
-			// TODO: Depending on the error, this is also a bad request (e.g. if the remote address rejects)
-			http.Error(w, fmt.Sprintf("Failed to dial remote server: %s", err), http.StatusInternalServerError)
-			return
-		}
-		defer toServer.Close()
+			log.Debugf("Client-side aHTTPS connection established")
 
-		// TODO: It might also be interesting to forward some attestation related information to the caller via X-* headers.
-		w.WriteHeader(http.StatusNoContent)
-
-		h, ok := w.(http.Hijacker)
-		if !ok {
-			// This is an OK panic I think since this feature is supported by the go default server.
-			panic("The HTTP server implementation does not support connection hijacking")
-		}
-
-		toClient, buffered, err := h.Hijack()
-		if err != nil {
-			log.Debugf("Error hijacking HTTP connection: %v", err)
-			return
-		}
-		defer toClient.Close()
-
-		// The error can be ignored since we peek the exact length of the buffer
-		buf, _ := buffered.Reader.Peek(buffered.Reader.Buffered())
-
-		// The HTTP server may have already received some client data.
-		n, err := toServer.Write(buf)
-		if n != len(buf) {
-			err = fmt.Errorf("could not write all available data to the destination")
-		}
-		if err != nil {
-			log.Debugf("Error forwarding buffered data to server: %v", err)
-			return
-		}
-
-		proxyRawConnections(req.Context(), toClient, toServer)
-
-		log.Debug("Connection closed")
+			return conn, err
+		},
 	}
 
-	log.Infof("Starting HTTP CONNECT proxy on %s", c.Addr)
+	proxyHandler := func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodConnect {
+			proxyTunnel(tlsConf, c, w, req)
+		} else {
+			proxyHttpRequest(proxyTransport, c, w, req)
+		}
+	}
+
+	log.Infof("Starting HTTP proxy on %s", c.Addr)
+
 	return http.ListenAndServe(c.Addr, http.HandlerFunc(proxyHandler))
 }
