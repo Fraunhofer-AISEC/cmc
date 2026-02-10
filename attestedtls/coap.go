@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/rsa"
 	"errors"
 	"fmt"
 	"time"
@@ -203,11 +202,6 @@ func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 		Version: api.GetVersion(),
 		Content: digest,
 		HashAlg: opts.HashFunc().String(),
-	}
-
-	// Parse additional signing options - not implemented fields assume recommend defaults
-	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
-		req.PssOpts = &api.PSSOptions{SaltLength: int32(pssOpts.SaltLength)}
 	}
 
 	// Marshal payload

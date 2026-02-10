@@ -20,6 +20,7 @@ package main
 import (
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"net"
 	"os"
@@ -292,11 +293,18 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	// Get signing options from request
-	opts, err := api.StringToSignerOpts(req.HashAlg, req.PssOpts)
+	hashAlg, err := internal.HashFromString(req.HashAlg)
 	if err != nil {
-		sendError(conn, s, "failed to choose requested hash function: %v", err)
+		sendError(conn, s, "unsupported hash %v: %v", req.HashAlg, err)
 		return
+	}
+	var opts crypto.SignerOpts
+	if cmc.KeyConfig == "RSA2048" || cmc.KeyConfig == "RSA4096" {
+		// RFC8446: The length of the Salt MUST be equal to the length of the output of the digest
+		// algorithm
+		opts = &rsa.PSSOptions{SaltLength: hashAlg.Size(), Hash: hashAlg}
+	} else {
+		opts = hashAlg
 	}
 
 	// Get key handle from (hardware) interface

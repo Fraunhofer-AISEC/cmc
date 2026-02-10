@@ -217,12 +217,20 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *api.TLSSignRequest) (*api
 	}
 	d := s.cmc.Drivers[0]
 
-	// get sign opts
-	opts, err = stringToSignerOpts(req.GetHashAlg(), req.GetPssOpts())
+	hashAlg, err := internal.HashFromString(req.HashAlg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find appropriate hash function: %w", err)
+		return nil, fmt.Errorf("unsupported hash %v: %v", req.HashAlg, err)
 	}
-	// get key
+
+	if s.cmc.KeyConfig == "RSA2048" || s.cmc.KeyConfig == "RSA4096" {
+		// RFC8446: The length of the Salt MUST be equal to the length of the output of the digest
+		// algorithm
+		opts = &rsa.PSSOptions{SaltLength: hashAlg.Size(), Hash: hashAlg}
+	} else {
+		opts = hashAlg
+	}
+
+	// Get key handle from (hardware) interface
 	tlsKeyPriv, _, err = d.GetKeyHandles(ar.IK)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IK: %w", err)
@@ -297,28 +305,4 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *api.PeerCacheRequest) (
 	log.Info("Served grpc request type 'PeerCache'")
 
 	return resp, nil
-}
-
-// StringToSignerOpts converts hash strings as defined in https://pkg.go.dev/crypto#Hash.String
-// to SignerOpts
-// Converts hash strings as defined in https://pkg.go.dev/crypto#Hash.String to SignerOpts
-func stringToSignerOpts(s string, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
-	hash, err := internal.HashFromString(s)
-	if err != nil {
-		return nil, err
-	}
-	return hashToSignerOpts(hash, pssOpts)
-}
-
-// HashToSignerOpts converts hashes to crypto.SignerOpts
-func hashToSignerOpts(hash crypto.Hash, pssOpts *api.PSSOptions) (crypto.SignerOpts, error) {
-	if pssOpts != nil {
-		saltlen := int(pssOpts.SaltLength)
-		// go-attestation / go-tpm does not allow -1 as definition for length of hash
-		if saltlen < 0 {
-			saltlen = hash.Size()
-		}
-		return &rsa.PSSOptions{SaltLength: saltlen, Hash: hash}, nil
-	}
-	return hash, nil
 }
