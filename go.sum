@@ -1,5 +1,7 @@
 github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6 h1:iQrMNQbdg8L6WfpazWhTAuQOODTRVS6ppzhO3kt3uaE=
 github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6/go.mod h1:aupPS5aOJwVmuVfHzn5cp+CnFSsjTRFn8NbdNWYaIv4=
+github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20260210211708-363bbf015efe h1:4eVZVv6ZabYim1SrSGPIm94aS2ViR+CGZiFy/qsTeQo=
+github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20260210211708-363bbf015efe/go.mod h1:aupPS5aOJwVmuVfHzn5cp+CnFSsjTRFn8NbdNWYaIv4=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
 github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
