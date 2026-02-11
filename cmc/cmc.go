@@ -26,10 +26,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	drv "github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/peercache"
 	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
-	"github.com/Fraunhofer-AISEC/cmc/provision/selfsigned"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
@@ -41,7 +42,7 @@ var (
 		"duktape": verifier.PolicyEngineSelect_DukTape,
 	}
 
-	drivers = map[string]ar.Driver{}
+	drivers = map[string]drv.Driver{}
 )
 
 type Cmc struct {
@@ -52,13 +53,14 @@ type Cmc struct {
 	PeerCache          *peercache.Cache
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	PolicyOverwrite    bool
-	Drivers            []ar.Driver
+	Drivers            []drv.Driver
 	Serializer         ar.Serializer
 	HashAlg            crypto.Hash
+	KeyMgr             *keymgr.KeyMgr
 	*Config
 }
 
-func GetDrivers() map[string]ar.Driver {
+func GetDrivers() map[string]drv.Driver {
 	return drivers
 }
 
@@ -112,7 +114,8 @@ func NewCmc(c *Config) (*Cmc, error) {
 			return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 		}
 
-		var provisioner ar.Provisioner
+		var provisioner keymgr.Provisioner
+		var endorser drv.Endorser
 		switch c.ProvisionMode {
 		case "est":
 			var token []byte
@@ -122,32 +125,20 @@ func NewCmc(c *Config) (*Cmc, error) {
 					return nil, fmt.Errorf("failed to read token: %v", err)
 				}
 			}
-			provisioner, err = estclient.New(c.ProvisionAddr, estTlsCas, c.EstTlsSysRoots, token)
+			estclient, err := estclient.New(c.ProvisionAddr, estTlsCas, c.EstTlsSysRoots, token)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create EST client: %w", err)
 			}
-		case "selfsigned":
-			caKey, err := internal.LoadPrivateKey(c.CaKey)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load CA private key: %w", err)
-			}
-			provisioner, err = selfsigned.New(caKey, identityCas,
-				path.Join(c.Storage, "vcek-cache"),
-				c.TpmEkCertDb, c.VerifyEkCert)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create self-signed provisioner")
-			}
+			endorser = estclient
+			provisioner = estclient
 		default:
 			return nil, fmt.Errorf("unknown provisioner %q", c.ProvisionMode)
 		}
 
 		// Create driver configuration
-		driverConf := &ar.DriverConfig{
-			StoragePath:      c.Storage,
+		driverConf := &drv.DriverConfig{
 			ServerAddr:       c.ProvisionAddr,
-			KeyConfig:        c.KeyConfig,
 			HashAlg:          alg,
-			Metadata:         metadata,
 			ExcludePcrs:      c.ExcludePcrs,
 			MeasurementLogs:  c.MeasurementLogs,
 			Serializer:       s,
@@ -159,16 +150,19 @@ func NewCmc(c *Config) (*Cmc, error) {
 			UseSystemRootCas: c.EstTlsSysRoots,
 			Vmpl:             c.Vmpl,
 			ProvisionAuth:    authMethods,
-			Provisioner:      provisioner,
+			Endorser:         endorser,
 		}
 
 		// Initialize drivers
-		usedDrivers := make([]ar.Driver, 0)
+		usedDrivers := make([]drv.Driver, 0)
 		for _, driver := range c.Drivers {
 			d, ok := drivers[strings.ToLower(driver)]
 			if !ok {
 				return nil, fmt.Errorf("driver %v not implemented", driver)
 			}
+
+			driverConf.StoragePath = path.Join(c.Storage, driver+"driver")
+
 			err = d.Init(driverConf)
 			if err != nil {
 				return nil, fmt.Errorf("failed to initialize driver: %w", err)
@@ -184,6 +178,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 					c.CtrDriver)
 			}
 		}
+
+		// Create key manager
+		keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage, "tls_key_store"), cmc.Drivers, provisioner)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize key manager: %w", err)
+		}
+		cmc.KeyMgr = keyMgr
 
 		// Get policy engine and overwrite policies
 		sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]

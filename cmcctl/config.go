@@ -76,6 +76,9 @@ type config struct {
 	ReportFile       string   `json:"report"`
 	ResultFile       string   `json:"result"`
 	NonceFile        string   `json:"nonce"`
+	KeyIdFile        string   `json:"keyId"`
+	KeyType          string   `json:"keyType"`
+	KeyConfig        string   `json:"keyConfig"`
 	EstTlsCa         string   `json:"estTlsCa"`
 	Mtls             bool     `json:"mtls"`
 	Attest           string   `json:"attest"`
@@ -89,6 +92,9 @@ type config struct {
 	LogFile          string   `json:"logFile"`
 	TokenStore       string   `json:"tokenStore"`
 	PublishTokenFile string   `json:"publishToken"`
+	TlsCn            string   `json:"tlsCn"`
+	TlsDnsNames      []string `json:"tlsDnsNames"`
+	TlsIpAddresses   []string `json:"tlsIpAddresses"`
 	cmc.Config
 
 	identityCas   []*x509.Certificate
@@ -97,29 +103,36 @@ type config struct {
 	apiSerializer ar.Serializer
 	attest        atls.AttestSelect
 	publishToken  []byte
+	keyId         string
 }
 
 // Defines the testool specic flags. CMC flags are defined in cmc/config.go
 const (
 	// Generic flags
-	configFlag        = "config"
-	addrFlag          = "addr"
-	reportFlag        = "report"
-	resultFlag        = "result"
-	nonceFlag         = "nonce"
-	estTlsCaFlag      = "esttlsca"
-	policiesFlag      = "policies"
-	mtlsFlag          = "mtls"
-	attestFlag        = "attest"
-	publishFlag       = "publish"
-	apiSerializerFlag = "apiserializer"
-	headerFlag        = "header"
-	methodFlag        = "method"
-	dataFlag          = "data"
-	logLevelFlag      = "loglevel"
-	logFileFlag       = "logfile"
-	tokenStoreFlag    = "tokenstore"
-	publishTokenFlag  = "publishtoken"
+	configFlag         = "config"
+	addrFlag           = "addr"
+	reportFlag         = "report"
+	resultFlag         = "result"
+	nonceFlag          = "nonce"
+	keyidFlag          = "keyid"
+	keyTypeFlag        = "keytype"
+	keyConfigFlag      = "keyconfig"
+	estTlsCaFlag       = "esttlsca"
+	policiesFlag       = "policies"
+	mtlsFlag           = "mtls"
+	attestFlag         = "attest"
+	publishFlag        = "publish"
+	apiSerializerFlag  = "apiserializer"
+	headerFlag         = "header"
+	methodFlag         = "method"
+	dataFlag           = "data"
+	logLevelFlag       = "loglevel"
+	logFileFlag        = "logfile"
+	tokenStoreFlag     = "tokenstore"
+	publishTokenFlag   = "publishtoken"
+	tlsCnFlag          = "tlscn"
+	tlsDnsNamesFlag    = "tlsdnsnames"
+	tlsIpAddressesFlag = "tlsipaddresses"
 )
 
 var (
@@ -128,6 +141,9 @@ var (
 	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
 	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
 	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
+	keyidFile    = flag.String(keyidFlag, "", "File to store the key ID of the (hardware-backed) TLS key")
+	keyType      = flag.String(keyTypeFlag, "", "CMC key/certificate type [tpm snp sw]")
+	keyConfig    = flag.String(keyConfigFlag, "", "Key configuration [EC256, EC384, EC512, RSA2048, RSA4096]")
 	estTlsCa     = flag.String(estTlsCaFlag, "", "Path to store retrieved CA certificates")
 	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
@@ -145,6 +161,12 @@ var (
 	logFile      = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	tokenStore   = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
 	publishtoken = flag.String(publishTokenFlag, "", "Path to token for backend authorization")
+	tlsCn        = flag.String(tlsCnFlag, "",
+		"Common Name for TLS certificate to be created via the enroll-key command")
+	tlsDnsNames = flag.String(tlsDnsNamesFlag, "",
+		"DNS SANS for TLS certificate to be created via the enroll-key command")
+	tlsIpAddresses = flag.String(tlsIpAddressesFlag, "",
+		"IP SANS for TLS certificate to be created via the enroll-key command")
 )
 
 func getConfig(cmd string) (*config, error) {
@@ -197,6 +219,15 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(nonceFlag) {
 		c.NonceFile = *nonceFile
 	}
+	if internal.FlagPassed(keyidFlag) {
+		c.KeyIdFile = *keyidFile
+	}
+	if internal.FlagPassed(keyTypeFlag) {
+		c.KeyType = *keyType
+	}
+	if internal.FlagPassed(keyConfigFlag) {
+		c.KeyConfig = *keyConfig
+	}
 	if internal.FlagPassed(estTlsCaFlag) {
 		c.EstTlsCa = *estTlsCa
 	}
@@ -235,6 +266,15 @@ func getConfig(cmd string) (*config, error) {
 	}
 	if internal.FlagPassed(publishTokenFlag) {
 		c.PublishTokenFile = *publishtoken
+	}
+	if internal.FlagPassed(tlsCnFlag) {
+		c.TlsCn = *tlsCn
+	}
+	if internal.FlagPassed(*tlsDnsNames) {
+		c.TlsDnsNames = strings.Split(*tlsDnsNames, ",")
+	}
+	if internal.FlagPassed(*tlsIpAddresses) {
+		c.TlsIpAddresses = strings.Split(*tlsIpAddresses, ",")
 	}
 
 	// Configure the logger
@@ -328,6 +368,21 @@ func getConfig(cmd string) (*config, error) {
 		return nil, fmt.Errorf("failed to get attestation mode: %v", err)
 	}
 
+	// Check if there is an existing key ID file, if not, create it
+	if _, err := os.Stat(c.KeyIdFile); err == nil {
+		data, err := os.ReadFile(c.KeyIdFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read key ID file: %w", err)
+		}
+		c.keyId = string(data)
+		log.Tracef("Read TLS key id %q", c.keyId)
+	} else {
+		err := os.MkdirAll(filepath.Dir(c.KeyIdFile), 0755)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key id file path: %w", err)
+		}
+	}
+
 	return c, nil
 }
 
@@ -361,6 +416,9 @@ func (c *config) Print() {
 	log.Debugf("\tReportFile               : %v", c.ReportFile)
 	log.Debugf("\tResultFile               : %v", c.ResultFile)
 	log.Debugf("\tNonceFile                : %v", c.NonceFile)
+	log.Debugf("\tKey ID File              : %v", c.KeyIdFile)
+	log.Debugf("\tKey Tye                  : %v", c.KeyType)
+	log.Debugf("\tKey config               : %v", c.KeyConfig)
 	log.Debugf("\tIdentity CAs             : %v", strings.Join(c.IdentityCas, ","))
 	log.Debugf("\tEstCa                    : %v", c.EstTlsCa)
 	log.Debugf("\tMtls                     : %v", c.Mtls)
@@ -374,6 +432,9 @@ func (c *config) Print() {
 	log.Debugf("\tHTTP Method              : %v", c.Method)
 	log.Debugf("\tToken Store              : %v", c.TokenStore)
 	log.Debugf("\tBackend Token            : %v", c.PublishTokenFile)
+	log.Debugf("\tTLS Cert Common Name     : %v", c.TlsCn)
+	log.Debugf("\tTLS Cert DNS Names       : %v", c.TlsDnsNames)
+	log.Debugf("\tTLS Cert IP addresses    : %v", c.TlsIpAddresses)
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
 	}

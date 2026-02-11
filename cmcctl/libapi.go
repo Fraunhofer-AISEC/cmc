@@ -24,7 +24,9 @@ import (
 	"crypto/rand"
 	"fmt"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -100,6 +102,46 @@ func (a LibApi) verify(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
+
+	return nil
+}
+
+func (a LibApi) enroll(c *config) error {
+
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(&c.Config)
+		if err != nil {
+			return fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
+	}
+
+	if a.cmc.Metadata == nil {
+		return fmt.Errorf("metadata not specified. Can work only as verifier")
+	}
+
+	log.Tracef("Requested key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
+		c.KeyType, c.KeyConfig,
+		c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
+
+	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
+		KeyConfig: api.TLSKeyConfig{
+			Type:        c.KeyType,
+			Alg:         c.KeyConfig,
+			Cn:          c.TlsCn,
+			DNSNames:    c.TlsDnsNames,
+			IPAddresses: c.TlsIpAddresses,
+		},
+		Metadata:   a.cmc.Metadata,
+		Drivers:    a.cmc.Drivers,
+		Serializer: a.cmc.Serializer,
+		ArHashAlg:  a.cmc.HashAlg,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to enroll key: %v", err)
+	}
+
+	log.Infof("Created new TLS key with KeyID %v", keyId)
 
 	return nil
 }

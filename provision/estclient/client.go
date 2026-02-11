@@ -152,8 +152,6 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 	return certs[0], nil
 }
 
-// akPublic, akCreateData, akCreateAttestation, akCreateSignature []byte,
-
 func (c *Client) TpmActivateEnroll(
 	tpmManufacturer, ekCertUrl string,
 	tpmMajor, tpmMinor int,
@@ -262,7 +260,7 @@ func (c *Client) TpmCertifyEnroll(
 	return certs[0], nil
 }
 
-func (c *Client) CcEnroll(
+func (c *Client) AttestEnroll(
 	csr *x509.CertificateRequest,
 	report []byte,
 ) (*x509.Certificate, error) {
@@ -280,7 +278,7 @@ func (c *Client) CcEnroll(
 	body := io.NopCloser(buf)
 
 	method := http.MethodPost
-	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.CcEnrollEndpoint
+	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.AttestEnrollEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 

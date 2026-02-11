@@ -16,7 +16,7 @@
 package main
 
 import (
-	"crypto/ecdsa"
+	"crypto"
 	"crypto/x509"
 	"encoding/json"
 	"flag"
@@ -61,9 +61,9 @@ type config struct {
 	PublishFile     string   `json:"publishFile"`
 	PublishToken    string   `json:"publishToken"`
 
-	estCaKey    *ecdsa.PrivateKey
+	estCaKey    crypto.PrivateKey
 	estCaChain  []*x509.Certificate
-	tlsKey      *ecdsa.PrivateKey
+	tlsKey      crypto.PrivateKey
 	tlsCaChain  []*x509.Certificate
 	metadataCas []*x509.Certificate
 	authMethods internal.AuthMethod

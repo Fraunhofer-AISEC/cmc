@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"fmt"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
@@ -55,6 +56,8 @@ type CmcConfig struct {
 	Policies      []byte
 	Mtls          bool
 	Attest        AttestSelect
+	KeyId         string
+	KeyConfig     api.TLSKeyConfig
 	ResultCb      func(result *ar.AttestationResult)
 	LibApiConfig  *cmc.Config
 }
@@ -85,6 +88,22 @@ func NewCmcConfig(opts ...ConnectionOption[CmcConfig]) (*CmcConfig, error) {
 	}
 
 	return cc, nil
+}
+
+// WithKeyId sets the key UUID to identify the key that should
+// be used for establishing attested TLS connectins
+func WithKeyId(id string) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) error {
+		c.KeyId = id
+		return nil
+	}
+}
+
+func WithKeyConfig(keyConf api.TLSKeyConfig) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) error {
+		c.KeyConfig = keyConf
+		return nil
+	}
 }
 
 // WithCmcAddress sets the address with which to contact the CMC.

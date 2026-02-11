@@ -81,7 +81,10 @@ func (a SocketApi) generate(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.apiSerializer)
+	if err != nil {
+		return err
+	}
 
 	// Unmarshal report
 	resp := new(api.AttestationResponse)
@@ -128,6 +131,66 @@ func (a SocketApi) verify(c *config) error {
 	return nil
 }
 
+func (a SocketApi) enroll(c *config) error {
+
+	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
+	if err != nil {
+		return fmt.Errorf("failed to get network and address: %w", err)
+	}
+
+	log.Infof("Sending socket request type 'TLSCreate' to %v", c.CmcAddr)
+
+	// Establish connection
+	conn, err := net.Dial(network, addr)
+	if err != nil {
+		return fmt.Errorf("error dialing: %w", err)
+	}
+
+	req := &api.TLSCreateRequest{
+		Version: api.GetVersion(),
+		KeyConfig: api.TLSKeyConfig{
+			Type:        c.KeyType,
+			Alg:         c.KeyConfig,
+			Cn:          c.TlsCn,
+			DNSNames:    c.TlsDnsNames,
+			IPAddresses: c.TlsIpAddresses,
+		},
+	}
+
+	// Marshal payload
+	payload, err := c.apiSerializer.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Send request
+	err = api.Send(conn, payload, api.TypeTLSCreate)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Read reply
+	payload, msgType, err := api.Receive(conn)
+	if err != nil {
+		return fmt.Errorf("failed to receive: %w", err)
+	}
+	err = checkError(msgType, payload, c.apiSerializer)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal report
+	resp := new(api.TLSCreateResponse)
+	err = c.apiSerializer.Unmarshal(payload, resp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal tls create response: %w", err)
+	}
+
+	log.Infof("Created new TLS key with KeyID %v", resp.KeyId)
+
+	return nil
+}
+
 func (a SocketApi) updateCerts(c *config) error {
 
 	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
@@ -165,7 +228,10 @@ func (a SocketApi) updateCerts(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.apiSerializer)
+	if err != nil {
+		return err
+	}
 
 	// Unmarshal attestation response
 	resp := new(api.UpdateCertsResponse)
@@ -222,7 +288,10 @@ func (a SocketApi) updateMetadata(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.apiSerializer)
+	if err != nil {
+		return err
+	}
 
 	// Unmarshal attestation response
 	resp := new(api.UpdateMetadataResponse)
@@ -273,7 +342,10 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive: %w", err)
 	}
-	checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.apiSerializer)
+	if err != nil {
+		return nil, err
+	}
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)

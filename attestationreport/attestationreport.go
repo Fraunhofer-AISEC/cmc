@@ -17,7 +17,6 @@ package attestationreport
 
 import (
 	"crypto"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -125,8 +124,9 @@ type Context struct {
 // to interpret the evidence. Matched to Evidence via the Type property
 type Collateral struct {
 	Type      string     `json:"type" cbor:"0,keyasint"`
-	Certs     [][]byte   `json:"certs,omitempty" cbor:"1,keyasint"`
-	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"2,keyasint,omitempty"`
+	Certs     [][]byte   `json:"certs,omitempty" cbor:"1,keyasint,omitempty"`
+	Key       []byte     `json:"key,omitempty" cbor:"2,keyasint,omitempty"`
+	Artifacts []Artifact `json:"artifacts,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 // Metadata represents attestation report reference descriptions and manifests containing
@@ -357,57 +357,6 @@ type TDId struct {
 	MrOwnerConfig HexByte `json:"mrOwnerConfig" cbor:"1,keyasint"`
 	MrConfigId    HexByte `json:"mrConfigId" cbor:"2,keyasint"`
 }
-
-// Driver is an interface representing a driver for a hardware trust anchor,
-// capable of providing attestation evidence and signing data. This can be
-// e.g. a Trusted Platform Module (TPM), AMD SEV-SNP, or the ARM PSA
-// Initial Attestation Service (IAS). The driver must be capable of
-// performing measurements, i.e. retrieving attestation evidence, such as
-// a TPM Quote or an SNP attestation report, as well as signing data.
-// For measurements, the driver must provide handles for attestation keys.
-// For signing, the driver provides handles for identity keys.
-type Driver interface {
-	Init(c *DriverConfig) error
-	GetEvidence(nonce []byte) ([]Evidence, error)
-	GetCollateral() ([]Collateral, error)
-	Lock() error
-	Unlock() error
-	GetKeyHandles(keyType KeySelection) (crypto.PrivateKey, crypto.PublicKey, error)
-	GetCertChain(keyType KeySelection) ([]*x509.Certificate, error)
-	Name() string
-	UpdateCerts() error
-	UpdateMetadata(map[string][]byte) error
-}
-
-// DriverConfig contains all configuration values required for the different drivers
-type DriverConfig struct {
-	StoragePath      string
-	ServerAddr       string
-	KeyConfig        string
-	HashAlg          crypto.Hash
-	Metadata         map[string][]byte
-	ExcludePcrs      []int
-	Serializer       Serializer
-	MeasurementLogs  bool
-	Ctr              bool
-	CtrPcr           int
-	CtrLog           string
-	ExtCtrLog        bool
-	CtrDriver        string
-	EstTlsCas        []*x509.Certificate
-	UseSystemRootCas bool
-	Vmpl             int
-	ProvisionAuth    internal.AuthMethod
-	Provisioner      Provisioner
-}
-
-type KeySelection int
-
-const (
-	UNKNOWN = iota
-	AK
-	IK
-)
 
 func (r *ReferenceValue) GetManifest() (*Metadata, error) {
 	if r.manifest == nil {

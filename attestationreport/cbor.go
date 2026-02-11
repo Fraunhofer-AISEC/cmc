@@ -18,7 +18,6 @@ package attestationreport
 import (
 	"crypto"
 	"crypto/ecdsa"
-	"crypto/rand"
 	"crypto/x509"
 	"fmt"
 
@@ -81,66 +80,6 @@ func (s cborSerializer) Unmarshal(data []byte, v any) error {
 		return fmt.Errorf("internal error: cbor decoder not initialized")
 	}
 	return s.dec.Unmarshal(data, v)
-}
-
-func (s cborSerializer) Sign(data []byte, signer Driver, sel KeySelection) ([]byte, error) {
-
-	log.Tracef("Signing CBOR data length %v...", len(data))
-
-	private, _, err := signer.GetKeyHandles(sel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get signing keys: %w", err)
-	}
-
-	certChain, err := signer.GetCertChain(sel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cert chain: %w", err)
-	}
-	certChainRaw := make([][]byte, 0)
-	for _, cert := range certChain {
-		certChainRaw = append(certChainRaw, cert.Raw)
-	}
-
-	stmp, ok := private.(crypto.Signer)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert signing key of type %T", private)
-	}
-	coseSigner, err := cose.NewSigner(cose.AlgorithmES256, stmp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create signer: %w", err)
-	}
-
-	// create a signature holder
-	sigHolder := cose.NewSignature()
-	sigHolder.Headers.Protected.SetAlgorithm(cose.AlgorithmES256)
-
-	// https://datatracker.ietf.org/doc/draft-ietf-cose-x509/08/ section 2
-	// If multiple certificates are conveyed, a CBOR array of byte strings is used,
-	// with each certificate being in its own byte string (DER Encoded)
-	sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChainRaw
-
-	msgToSign := cose.NewSignMessage()
-	msgToSign.Payload = data
-	msgToSign.Signatures = append(msgToSign.Signatures, sigHolder)
-
-	// This allows the signer to ensure mutual access for signing, if required
-	signer.Lock()
-	defer signer.Unlock()
-
-	err = msgToSign.Sign(rand.Reader, nil, coseSigner)
-	if err != nil {
-		return nil, fmt.Errorf("signing failed: %w. len(data): %v", err, len(data))
-	}
-
-	// sign and marshal message
-	coseRaw, err := msgToSign.MarshalCBOR()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal cbor object: %w", err)
-	}
-
-	log.Trace("Signing finished")
-
-	return coseRaw, nil
 }
 
 // Verify verifies signatures and certificate chains of COSE messages. The verifier interface must

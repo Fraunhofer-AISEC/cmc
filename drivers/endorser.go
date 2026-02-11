@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,14 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nodefaults || tpm
-
-package cmc
+package drivers
 
 import (
-	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
+	"crypto/x509"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 )
 
-func init() {
-	drivers["tpm"] = &tpmdriver.Tpm{}
+type Endorser interface {
+	CaCerts() ([]*x509.Certificate, error)
+	TpmActivateEnroll(
+		tpmManufacturer, ekCertUrl string,
+		tpmMajor, tpmMinor int,
+		csr *x509.CertificateRequest,
+		akParams attest.AttestationParameters,
+		ekPublic, ekCertDer []byte,
+	) ([]byte, []byte, []byte, error)
+	GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error)
+	GetSnpVcek(codeName string, chipId [64]byte, tcb uint64) (*x509.Certificate, error)
+	// TODO TDX
 }

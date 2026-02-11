@@ -18,9 +18,6 @@
 package main
 
 import (
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
 	"fmt"
 	"net"
 	"os"
@@ -32,6 +29,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	c "github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -103,10 +101,12 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 		verify(conn, payload, cmc, s)
 	case api.TypeMeasure:
 		measure(conn, payload, cmc, s)
-	case api.TypeTLSCert:
-		tlscert(conn, payload, cmc, s)
+	case api.TypeTLSCreate:
+		tlscreate(conn, payload, cmc, s)
 	case api.TypeTLSSign:
 		tlssign(conn, payload, cmc, s)
+	case api.TypeTLSCert:
+		tlscert(conn, payload, cmc, s)
 	case api.TypePeerCache:
 		fetchPeerCache(conn, payload, cmc, s)
 	case api.TypeUpdateCerts:
@@ -269,15 +269,61 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Infof("Sent socket response type 'Measure' to %v", conn.RemoteAddr().String())
 }
 
+func tlscreate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
+
+	log.Infof("Received socket request type 'TLSCreate' from %v", conn.RemoteAddr().String())
+
+	req := new(api.TLSCreateRequest)
+	err := s.Unmarshal(payload, req)
+	if err != nil {
+		sendError(conn, s, "failed to unmarshal payload: %v", err)
+		return
+	}
+
+	err = req.CheckVersion()
+	if err != nil {
+		sendError(conn, s, "%v", err)
+		return
+	}
+
+	log.Tracef("Requested key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
+		req.KeyConfig.Type, req.KeyConfig.Alg,
+		req.KeyConfig.Cn, req.KeyConfig.DNSNames, req.KeyConfig.IPAddresses)
+
+	keyId, err := cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
+		KeyConfig:  req.KeyConfig,
+		Metadata:   cmc.Metadata,
+		Drivers:    cmc.Drivers,
+		Serializer: cmc.Serializer,
+		ArHashAlg:  cmc.HashAlg,
+	})
+	if err != nil {
+		sendError(conn, s, "failed to enroll key: %v", err)
+		return
+	}
+
+	resp := &api.TLSCreateResponse{
+		Version: api.GetVersion(),
+		KeyId:   keyId,
+	}
+
+	data, err := s.Marshal(&resp)
+	if err != nil {
+		sendError(conn, s, "failed to marshal message: %v", err)
+		return
+	}
+
+	err = api.Send(conn, data, api.TypeTLSCreate)
+	if err != nil {
+		sendError(conn, s, "failed to send: %v", err)
+	}
+
+	log.Infof("Sent socket response type 'TLSCreate' to %v", conn.RemoteAddr().String())
+}
+
 func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Infof("Received socket request type 'TLSSign' from %v", conn.RemoteAddr().String())
-
-	if len(cmc.Drivers) == 0 {
-		sendError(conn, s, "TLS sign: no drivers configured")
-		return
-	}
-	d := cmc.Drivers[0]
 
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSSignRequest)
@@ -293,30 +339,7 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	hashAlg, err := internal.HashFromString(req.HashAlg)
-	if err != nil {
-		sendError(conn, s, "unsupported hash %v: %v", req.HashAlg, err)
-		return
-	}
-	var opts crypto.SignerOpts
-	if cmc.KeyConfig == "RSA2048" || cmc.KeyConfig == "RSA4096" {
-		// RFC8446: The length of the Salt MUST be equal to the length of the output of the digest
-		// algorithm
-		opts = &rsa.PSSOptions{SaltLength: hashAlg.Size(), Hash: hashAlg}
-	} else {
-		opts = hashAlg
-	}
-
-	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
-	if err != nil {
-		sendError(conn, s, "failed to get IK: %v", err)
-		return
-	}
-
-	// Sign
-	log.Tracef("TLSSign using opts: %v, driver %v", opts, d.Name())
-	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
+	signature, err := Sign(cmc.KeyMgr, req.KeyId, req.HashAlg, req.Content)
 	if err != nil {
 		sendError(conn, s, "failed to sign: %v", err)
 		return
@@ -366,7 +389,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	}
 
 	// Retrieve certificates
-	certChain, err := d.GetCertChain(ar.IK)
+	certChain, err := cmc.KeyMgr.GetCertChain(req.KeyId)
 	if err != nil {
 		sendError(conn, s, "failed to get certchain: %v", err)
 		return

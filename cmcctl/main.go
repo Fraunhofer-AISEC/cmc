@@ -26,6 +26,7 @@ var (
 	cmds = map[string]func(*config) error{
 		"generate":        generateCmd,
 		"verify":          verifyCmd,
+		"enroll-key":      enrollKeyCmd,
 		"dial":            dialCmd,
 		"listen":          listenCmd,
 		"request":         requestCmd,
@@ -44,6 +45,7 @@ func init() {
 		fmt.Fprintf(flag.CommandLine.Output(), "COMMANDS:\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  generate\tGenerate attestation report\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  verify\tVerify attestation report\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  enroll-key\tCreate and enroll a new TLS key")
 		fmt.Fprintf(flag.CommandLine.Output(), "  dial\t\tEstablish attested TLS client\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  listen\tEstablish attested TLS server\n")
 		fmt.Fprintf(flag.CommandLine.Output(), "  request\tPerform an attested HTTPS request\n")

@@ -19,9 +19,6 @@ package main
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
 	"fmt"
 
 	coap "github.com/plgd-dev/go-coap/v3"
@@ -34,6 +31,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	m "github.com/Fraunhofer-AISEC/cmc/measure"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -57,6 +55,7 @@ func (s CoapServer) Serve(addr string, c *cmc.Cmc) error {
 	r.Use(loggingMiddleware)
 	r.Handle(api.EndpointAttest, mux.HandlerFunc(s.Attest))
 	r.Handle(api.EndpointVerify, mux.HandlerFunc(s.Verify))
+	r.Handle(api.EndpointTLSCreate, mux.HandlerFunc(s.TlsCreate))
 	r.Handle(api.EndpointTLSSign, mux.HandlerFunc(s.TlsSign))
 	r.Handle(api.EndpointTLSCert, mux.HandlerFunc(s.TlsCert))
 	r.Handle(api.EndpointPeerCache, mux.HandlerFunc(s.PeerCache))
@@ -218,16 +217,55 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 	log.Infof("Sent coap response type 'Measure' to %v", w.Conn().RemoteAddr())
 }
 
+func (s CoapServer) TlsCreate(w mux.ResponseWriter, r *mux.Message) {
+	log.Infof("Received coap request type 'TLSCreate' from %v", w.Conn().RemoteAddr())
+
+	req := new(api.TLSCreateRequest)
+	ser, err := unmarshal(r, req)
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to unmarshal CoAP payload: %v", err)
+	}
+
+	err = req.CheckVersion()
+	if err != nil {
+		sendCoapError(w, r, codes.UnsupportedMediaType, "%v", err)
+		return
+	}
+
+	keyId, err := s.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
+		KeyConfig:  req.KeyConfig,
+		Metadata:   s.cmc.Metadata,
+		Drivers:    s.cmc.Drivers,
+		Serializer: s.cmc.Serializer,
+		ArHashAlg:  s.cmc.HashAlg,
+	})
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError,
+			"failed to enroll key: %v", err)
+		return
+	}
+
+	resp := &api.TLSCreateResponse{
+		Version: api.GetVersion(),
+		KeyId:   keyId,
+	}
+
+	payload, err := ser.Marshal(&resp)
+	if err != nil {
+		sendCoapError(w, r, codes.InternalServerError, "failed to marshal message: %v", err)
+		return
+	}
+
+	// CoAP response
+	SendCoapResponse(w, r, payload)
+
+	log.Infof("Sent coap response type 'TLSCreate' to %v", w.Conn().RemoteAddr())
+}
+
 func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Infof("Received coap request type 'TLSSign' from %v", w.Conn().RemoteAddr())
-
-	if len(s.cmc.Drivers) == 0 {
-		sendCoapError(w, r, codes.InternalServerError,
-			"Failed to sign: No valid drivers specified in config")
-		return
-	}
-	d := s.cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
 	req := new(api.TLSSignRequest)
@@ -244,30 +282,7 @@ func (s CoapServer) TlsSign(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	hashAlg, err := internal.HashFromString(req.HashAlg)
-	if err != nil {
-		sendCoapError(w, r, codes.InternalServerError, "unsupported hash %v: %v", req.HashAlg, err)
-		return
-	}
-	var opts crypto.SignerOpts
-	if s.cmc.KeyConfig == "RSA2048" || s.cmc.KeyConfig == "RSA4096" {
-		// RFC8446: The length of the Salt MUST be equal to the length of the output of the digest
-		// algorithm
-		opts = &rsa.PSSOptions{SaltLength: hashAlg.Size(), Hash: hashAlg}
-	} else {
-		opts = hashAlg
-	}
-
-	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
-	if err != nil {
-		sendCoapError(w, r, codes.InternalServerError, "failed to get IK: %v", err)
-		return
-	}
-
-	// Sign
-	log.Debugf("TLSSign using opts: %v, driver %v", opts, d.Name())
-	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, req.Content, opts)
+	signature, err := Sign(s.cmc.KeyMgr, req.KeyId, req.HashAlg, req.Content)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to sign: %v", err)
 		return
@@ -299,7 +314,6 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 			"Failed to sign: No valid drivers specified in config")
 		return
 	}
-	d := s.cmc.Drivers[0]
 
 	// Parse the CoAP message and return the TLS signing request
 	req := new(api.TLSCertRequest)
@@ -317,12 +331,12 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	// Retrieve certificates
-	certChain, err := d.GetCertChain(ar.IK)
+	certChain, err := s.cmc.KeyMgr.GetCertChain(req.KeyId)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return
 	}
-	log.Debugf("Obtained TLS cert for driver %v", d.Name())
+	log.Debugf("Obtained TLS cert %v", certChain[0].Subject.CommonName)
 
 	// Create response
 	resp := &api.TLSCertResponse{

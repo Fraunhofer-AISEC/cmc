@@ -27,6 +27,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
@@ -133,20 +134,12 @@ func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerO
 		a.cmc = cmc
 	}
 
-	if len(a.cmc.Drivers) == 0 {
-		return nil, errors.New("no drivers configured")
-	}
-	d := a.cmc.Drivers[0]
-
-	// Get key handle from (hardware) interface
-	tlsKeyPriv, _, err := d.GetKeyHandles(ar.IK)
+	key, err := a.cmc.KeyMgr.GetKey(cc.KeyId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get IK: %w", err)
+		return nil, fmt.Errorf("failed to get key: %w", err)
 	}
 
-	// Sign
-	log.Debugf("TLSSign using opts: %v, driver %v", opts, d.Name())
-	signature, err := tlsKeyPriv.(crypto.Signer).Sign(rand.Reader, digest, opts)
+	signature, err := key.Sign(rand.Reader, digest, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign: %w", err)
 	}
@@ -168,17 +161,12 @@ func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 		a.cmc = cmc
 	}
 
-	if len(a.cmc.Drivers) == 0 {
-		return nil, errors.New("no drivers configured")
-	}
-	d := a.cmc.Drivers[0]
-
-	certChain, err := d.GetCertChain(ar.IK)
+	// Retrieve certificates
+	certChain, err := a.cmc.KeyMgr.GetCertChain(cc.KeyId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cert chain: %w", err)
+		return nil, fmt.Errorf("failed to get cert chain: %v", err)
 	}
-
-	log.Debugf("Obtained TLS cert from %v", d.Name())
+	log.Debugf("Obtained TLS cert %v", certChain[0].Subject.CommonName)
 
 	return internal.WriteCertsPem(certChain), nil
 }
@@ -201,4 +189,24 @@ func (a LibApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, err
 	log.Debugf("Fetching peer cache for peer: %v", fingerprint)
 
 	return a.cmc.PeerCache.GetKeys(fingerprint), nil
+}
+
+func (a LibApi) createKey(cc *CmcConfig) (string, error) {
+
+	if cc == nil {
+		return "", errors.New("internal error: cmc is nil")
+	}
+
+	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
+		KeyConfig:  cc.KeyConfig,
+		Metadata:   a.cmc.Metadata,
+		Drivers:    a.cmc.Drivers,
+		Serializer: a.cmc.Serializer,
+		ArHashAlg:  a.cmc.HashAlg,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create key: %v", err)
+	}
+
+	return keyId, nil
 }

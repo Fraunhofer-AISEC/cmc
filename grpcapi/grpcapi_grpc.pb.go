@@ -36,6 +36,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	CMCService_Attest_FullMethodName         = "/grpcapi.CMCService/Attest"
 	CMCService_Verify_FullMethodName         = "/grpcapi.CMCService/Verify"
+	CMCService_TLSCreate_FullMethodName      = "/grpcapi.CMCService/TLSCreate"
 	CMCService_TLSSign_FullMethodName        = "/grpcapi.CMCService/TLSSign"
 	CMCService_TLSCert_FullMethodName        = "/grpcapi.CMCService/TLSCert"
 	CMCService_PeerCache_FullMethodName      = "/grpcapi.CMCService/PeerCache"
@@ -50,6 +51,7 @@ const (
 type CMCServiceClient interface {
 	Attest(ctx context.Context, in *AttestationRequest, opts ...grpc.CallOption) (*AttestationResponse, error)
 	Verify(ctx context.Context, in *VerificationRequest, opts ...grpc.CallOption) (*VerificationResponse, error)
+	TLSCreate(ctx context.Context, in *TLSCreateRequest, opts ...grpc.CallOption) (*TLSCreateResponse, error)
 	TLSSign(ctx context.Context, in *TLSSignRequest, opts ...grpc.CallOption) (*TLSSignResponse, error)
 	TLSCert(ctx context.Context, in *TLSCertRequest, opts ...grpc.CallOption) (*TLSCertResponse, error)
 	PeerCache(ctx context.Context, in *PeerCacheRequest, opts ...grpc.CallOption) (*PeerCacheResponse, error)
@@ -80,6 +82,16 @@ func (c *cMCServiceClient) Verify(ctx context.Context, in *VerificationRequest, 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(VerificationResponse)
 	err := c.cc.Invoke(ctx, CMCService_Verify_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cMCServiceClient) TLSCreate(ctx context.Context, in *TLSCreateRequest, opts ...grpc.CallOption) (*TLSCreateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TLSCreateResponse)
+	err := c.cc.Invoke(ctx, CMCService_TLSCreate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +164,7 @@ func (c *cMCServiceClient) UpdateMetadata(ctx context.Context, in *UpdateMetadat
 type CMCServiceServer interface {
 	Attest(context.Context, *AttestationRequest) (*AttestationResponse, error)
 	Verify(context.Context, *VerificationRequest) (*VerificationResponse, error)
+	TLSCreate(context.Context, *TLSCreateRequest) (*TLSCreateResponse, error)
 	TLSSign(context.Context, *TLSSignRequest) (*TLSSignResponse, error)
 	TLSCert(context.Context, *TLSCertRequest) (*TLSCertResponse, error)
 	PeerCache(context.Context, *PeerCacheRequest) (*PeerCacheResponse, error)
@@ -173,6 +186,9 @@ func (UnimplementedCMCServiceServer) Attest(context.Context, *AttestationRequest
 }
 func (UnimplementedCMCServiceServer) Verify(context.Context, *VerificationRequest) (*VerificationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Verify not implemented")
+}
+func (UnimplementedCMCServiceServer) TLSCreate(context.Context, *TLSCreateRequest) (*TLSCreateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TLSCreate not implemented")
 }
 func (UnimplementedCMCServiceServer) TLSSign(context.Context, *TLSSignRequest) (*TLSSignResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TLSSign not implemented")
@@ -245,6 +261,24 @@ func _CMCService_Verify_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CMCServiceServer).Verify(ctx, req.(*VerificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CMCService_TLSCreate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TLSCreateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CMCServiceServer).TLSCreate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CMCService_TLSCreate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CMCServiceServer).TLSCreate(ctx, req.(*TLSCreateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -371,6 +405,10 @@ var CMCService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Verify",
 			Handler:    _CMCService_Verify_Handler,
+		},
+		{
+			MethodName: "TLSCreate",
+			Handler:    _CMCService_TLSCreate_Handler,
 		},
 		{
 			MethodName: "TLSSign",

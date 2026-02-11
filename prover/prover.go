@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
@@ -30,7 +31,7 @@ var log = logrus.WithField("service", "ar")
 // Generate generates an attestation report with the provided nonce and metadata. The metadata must
 // either be in the form of JWS tokens infull serialization format or CBOR COSE tokens. The function
 // takes a list of drivers for collecting the measurements from a hardware or software interface
-func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []ar.Driver,
+func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []drivers.Driver,
 	s ar.Serializer, alg crypto.Hash,
 ) ([]byte, error) {
 
