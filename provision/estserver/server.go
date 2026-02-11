@@ -427,7 +427,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	// Verify that certified IK is actually the CSR public key
 	err = provision.VerifyTpmCsr(ikPublic, csr)
 	if err != nil {
-		writeHttpErrorf(w, "failed to verify IK: %v", err)
+		writeHttpErrorf(w, "failed to verify CSR: %v", err)
 		return
 	}
 
