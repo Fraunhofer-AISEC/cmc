@@ -44,7 +44,7 @@ const (
 	ServerkeygenEndpoint      = "/serverkeygen"
 	TpmActivateEnrollEndpoint = "/tpmactivateenroll"
 	TpmCertifyEnrollEndpoint  = "/tpmcertifyenroll"
-	CcEnrollEndpoint          = "/ccenroll"
+	AttestEnrollEndpoint      = "/attestenroll"
 )
 
 // HTTP header constants

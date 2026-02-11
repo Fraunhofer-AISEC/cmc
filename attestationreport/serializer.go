@@ -34,7 +34,6 @@ type Serializer interface {
 	GetPayload(raw []byte) ([]byte, error)
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
-	Sign(data []byte, driver Driver, sel KeySelection) ([]byte, error)
 	Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool)
 	String() string
 }

@@ -23,6 +23,10 @@ func verifyCmd(c *config) error {
 	return c.api.verify(c)
 }
 
+func enrollKeyCmd(c *config) error {
+	return c.api.enroll(c)
+}
+
 func dialCmd(c *config) error {
 	return dial(c)
 }

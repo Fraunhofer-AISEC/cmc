@@ -276,18 +276,199 @@ func (x *VerificationResponse) GetResult() []byte {
 	return nil
 }
 
+type TLSCreateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	KeyConfig     *TLSKeyConfig          `protobuf:"bytes,2,opt,name=key_config,json=keyConfig,proto3" json:"key_config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TLSCreateRequest) Reset() {
+	*x = TLSCreateRequest{}
+	mi := &file_grpcapi_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TLSCreateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TLSCreateRequest) ProtoMessage() {}
+
+func (x *TLSCreateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TLSCreateRequest.ProtoReflect.Descriptor instead.
+func (*TLSCreateRequest) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *TLSCreateRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *TLSCreateRequest) GetKeyConfig() *TLSKeyConfig {
+	if x != nil {
+		return x.KeyConfig
+	}
+	return nil
+}
+
+type TLSCreateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TLSCreateResponse) Reset() {
+	*x = TLSCreateResponse{}
+	mi := &file_grpcapi_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TLSCreateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TLSCreateResponse) ProtoMessage() {}
+
+func (x *TLSCreateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TLSCreateResponse.ProtoReflect.Descriptor instead.
+func (*TLSCreateResponse) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *TLSCreateResponse) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *TLSCreateResponse) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+type TLSKeyConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	Alg           string                 `protobuf:"bytes,2,opt,name=alg,proto3" json:"alg,omitempty"`
+	Cn            string                 `protobuf:"bytes,3,opt,name=cn,proto3" json:"cn,omitempty"`
+	DnsNames      []string               `protobuf:"bytes,4,rep,name=dns_names,json=dnsNames,proto3" json:"dns_names,omitempty"`
+	IpAddresses   []string               `protobuf:"bytes,5,rep,name=ip_addresses,json=ipAddresses,proto3" json:"ip_addresses,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TLSKeyConfig) Reset() {
+	*x = TLSKeyConfig{}
+	mi := &file_grpcapi_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TLSKeyConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TLSKeyConfig) ProtoMessage() {}
+
+func (x *TLSKeyConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_grpcapi_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TLSKeyConfig.ProtoReflect.Descriptor instead.
+func (*TLSKeyConfig) Descriptor() ([]byte, []int) {
+	return file_grpcapi_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TLSKeyConfig) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *TLSKeyConfig) GetAlg() string {
+	if x != nil {
+		return x.Alg
+	}
+	return ""
+}
+
+func (x *TLSKeyConfig) GetCn() string {
+	if x != nil {
+		return x.Cn
+	}
+	return ""
+}
+
+func (x *TLSKeyConfig) GetDnsNames() []string {
+	if x != nil {
+		return x.DnsNames
+	}
+	return nil
+}
+
+func (x *TLSKeyConfig) GetIpAddresses() []string {
+	if x != nil {
+		return x.IpAddresses
+	}
+	return nil
+}
+
 type TLSSignRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
-	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	HashAlg       string                 `protobuf:"bytes,3,opt,name=hash_alg,json=hashAlg,proto3" json:"hash_alg,omitempty"`
+	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Content       []byte                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	HashAlg       string                 `protobuf:"bytes,4,opt,name=hash_alg,json=hashAlg,proto3" json:"hash_alg,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TLSSignRequest) Reset() {
 	*x = TLSSignRequest{}
-	mi := &file_grpcapi_proto_msgTypes[4]
+	mi := &file_grpcapi_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +480,7 @@ func (x *TLSSignRequest) String() string {
 func (*TLSSignRequest) ProtoMessage() {}
 
 func (x *TLSSignRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[4]
+	mi := &file_grpcapi_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,12 +493,19 @@ func (x *TLSSignRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSSignRequest.ProtoReflect.Descriptor instead.
 func (*TLSSignRequest) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{4}
+	return file_grpcapi_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TLSSignRequest) GetVersion() string {
 	if x != nil {
 		return x.Version
+	}
+	return ""
+}
+
+func (x *TLSSignRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
 	}
 	return ""
 }
@@ -346,7 +534,7 @@ type TLSSignResponse struct {
 
 func (x *TLSSignResponse) Reset() {
 	*x = TLSSignResponse{}
-	mi := &file_grpcapi_proto_msgTypes[5]
+	mi := &file_grpcapi_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -358,7 +546,7 @@ func (x *TLSSignResponse) String() string {
 func (*TLSSignResponse) ProtoMessage() {}
 
 func (x *TLSSignResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[5]
+	mi := &file_grpcapi_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -371,7 +559,7 @@ func (x *TLSSignResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSSignResponse.ProtoReflect.Descriptor instead.
 func (*TLSSignResponse) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{5}
+	return file_grpcapi_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TLSSignResponse) GetVersion() string {
@@ -391,13 +579,14 @@ func (x *TLSSignResponse) GetSignedContent() []byte {
 type TLSCertRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	KeyId         string                 `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TLSCertRequest) Reset() {
 	*x = TLSCertRequest{}
-	mi := &file_grpcapi_proto_msgTypes[6]
+	mi := &file_grpcapi_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -409,7 +598,7 @@ func (x *TLSCertRequest) String() string {
 func (*TLSCertRequest) ProtoMessage() {}
 
 func (x *TLSCertRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[6]
+	mi := &file_grpcapi_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -422,12 +611,19 @@ func (x *TLSCertRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSCertRequest.ProtoReflect.Descriptor instead.
 func (*TLSCertRequest) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{6}
+	return file_grpcapi_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TLSCertRequest) GetVersion() string {
 	if x != nil {
 		return x.Version
+	}
+	return ""
+}
+
+func (x *TLSCertRequest) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
 	}
 	return ""
 }
@@ -442,7 +638,7 @@ type TLSCertResponse struct {
 
 func (x *TLSCertResponse) Reset() {
 	*x = TLSCertResponse{}
-	mi := &file_grpcapi_proto_msgTypes[7]
+	mi := &file_grpcapi_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -454,7 +650,7 @@ func (x *TLSCertResponse) String() string {
 func (*TLSCertResponse) ProtoMessage() {}
 
 func (x *TLSCertResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[7]
+	mi := &file_grpcapi_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -467,7 +663,7 @@ func (x *TLSCertResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSCertResponse.ProtoReflect.Descriptor instead.
 func (*TLSCertResponse) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{7}
+	return file_grpcapi_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TLSCertResponse) GetVersion() string {
@@ -494,7 +690,7 @@ type PeerCacheRequest struct {
 
 func (x *PeerCacheRequest) Reset() {
 	*x = PeerCacheRequest{}
-	mi := &file_grpcapi_proto_msgTypes[8]
+	mi := &file_grpcapi_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -506,7 +702,7 @@ func (x *PeerCacheRequest) String() string {
 func (*PeerCacheRequest) ProtoMessage() {}
 
 func (x *PeerCacheRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[8]
+	mi := &file_grpcapi_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -519,7 +715,7 @@ func (x *PeerCacheRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerCacheRequest.ProtoReflect.Descriptor instead.
 func (*PeerCacheRequest) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{8}
+	return file_grpcapi_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PeerCacheRequest) GetVersion() string {
@@ -546,7 +742,7 @@ type PeerCacheResponse struct {
 
 func (x *PeerCacheResponse) Reset() {
 	*x = PeerCacheResponse{}
-	mi := &file_grpcapi_proto_msgTypes[9]
+	mi := &file_grpcapi_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -558,7 +754,7 @@ func (x *PeerCacheResponse) String() string {
 func (*PeerCacheResponse) ProtoMessage() {}
 
 func (x *PeerCacheResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[9]
+	mi := &file_grpcapi_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -571,7 +767,7 @@ func (x *PeerCacheResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerCacheResponse.ProtoReflect.Descriptor instead.
 func (*PeerCacheResponse) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{9}
+	return file_grpcapi_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *PeerCacheResponse) GetVersion() string {
@@ -598,7 +794,7 @@ type MeasureRequest struct {
 
 func (x *MeasureRequest) Reset() {
 	*x = MeasureRequest{}
-	mi := &file_grpcapi_proto_msgTypes[10]
+	mi := &file_grpcapi_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +806,7 @@ func (x *MeasureRequest) String() string {
 func (*MeasureRequest) ProtoMessage() {}
 
 func (x *MeasureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[10]
+	mi := &file_grpcapi_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +819,7 @@ func (x *MeasureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeasureRequest.ProtoReflect.Descriptor instead.
 func (*MeasureRequest) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{10}
+	return file_grpcapi_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *MeasureRequest) GetVersion() string {
@@ -650,7 +846,7 @@ type MeasureResponse struct {
 
 func (x *MeasureResponse) Reset() {
 	*x = MeasureResponse{}
-	mi := &file_grpcapi_proto_msgTypes[11]
+	mi := &file_grpcapi_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -662,7 +858,7 @@ func (x *MeasureResponse) String() string {
 func (*MeasureResponse) ProtoMessage() {}
 
 func (x *MeasureResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[11]
+	mi := &file_grpcapi_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -675,7 +871,7 @@ func (x *MeasureResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeasureResponse.ProtoReflect.Descriptor instead.
 func (*MeasureResponse) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{11}
+	return file_grpcapi_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *MeasureResponse) GetVersion() string {
@@ -701,7 +897,7 @@ type UpdateCertsRequest struct {
 
 func (x *UpdateCertsRequest) Reset() {
 	*x = UpdateCertsRequest{}
-	mi := &file_grpcapi_proto_msgTypes[12]
+	mi := &file_grpcapi_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -713,7 +909,7 @@ func (x *UpdateCertsRequest) String() string {
 func (*UpdateCertsRequest) ProtoMessage() {}
 
 func (x *UpdateCertsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[12]
+	mi := &file_grpcapi_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -726,7 +922,7 @@ func (x *UpdateCertsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCertsRequest.ProtoReflect.Descriptor instead.
 func (*UpdateCertsRequest) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{12}
+	return file_grpcapi_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *UpdateCertsRequest) GetVersion() string {
@@ -746,7 +942,7 @@ type UpdateCertsResponse struct {
 
 func (x *UpdateCertsResponse) Reset() {
 	*x = UpdateCertsResponse{}
-	mi := &file_grpcapi_proto_msgTypes[13]
+	mi := &file_grpcapi_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -758,7 +954,7 @@ func (x *UpdateCertsResponse) String() string {
 func (*UpdateCertsResponse) ProtoMessage() {}
 
 func (x *UpdateCertsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[13]
+	mi := &file_grpcapi_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -771,7 +967,7 @@ func (x *UpdateCertsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateCertsResponse.ProtoReflect.Descriptor instead.
 func (*UpdateCertsResponse) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{13}
+	return file_grpcapi_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UpdateCertsResponse) GetVersion() string {
@@ -797,7 +993,7 @@ type UpdateMetadataRequest struct {
 
 func (x *UpdateMetadataRequest) Reset() {
 	*x = UpdateMetadataRequest{}
-	mi := &file_grpcapi_proto_msgTypes[14]
+	mi := &file_grpcapi_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +1005,7 @@ func (x *UpdateMetadataRequest) String() string {
 func (*UpdateMetadataRequest) ProtoMessage() {}
 
 func (x *UpdateMetadataRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[14]
+	mi := &file_grpcapi_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +1018,7 @@ func (x *UpdateMetadataRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateMetadataRequest.ProtoReflect.Descriptor instead.
 func (*UpdateMetadataRequest) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{14}
+	return file_grpcapi_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *UpdateMetadataRequest) GetVersion() string {
@@ -842,7 +1038,7 @@ type UpdateMetadataResponse struct {
 
 func (x *UpdateMetadataResponse) Reset() {
 	*x = UpdateMetadataResponse{}
-	mi := &file_grpcapi_proto_msgTypes[15]
+	mi := &file_grpcapi_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +1050,7 @@ func (x *UpdateMetadataResponse) String() string {
 func (*UpdateMetadataResponse) ProtoMessage() {}
 
 func (x *UpdateMetadataResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[15]
+	mi := &file_grpcapi_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +1063,7 @@ func (x *UpdateMetadataResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateMetadataResponse.ProtoReflect.Descriptor instead.
 func (*UpdateMetadataResponse) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{15}
+	return file_grpcapi_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *UpdateMetadataResponse) GetVersion() string {
@@ -895,7 +1091,7 @@ type MeasureEvent struct {
 
 func (x *MeasureEvent) Reset() {
 	*x = MeasureEvent{}
-	mi := &file_grpcapi_proto_msgTypes[16]
+	mi := &file_grpcapi_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -907,7 +1103,7 @@ func (x *MeasureEvent) String() string {
 func (*MeasureEvent) ProtoMessage() {}
 
 func (x *MeasureEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[16]
+	mi := &file_grpcapi_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -920,7 +1116,7 @@ func (x *MeasureEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MeasureEvent.ProtoReflect.Descriptor instead.
 func (*MeasureEvent) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{16}
+	return file_grpcapi_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *MeasureEvent) GetSha256() []byte {
@@ -955,7 +1151,7 @@ type CtrData struct {
 
 func (x *CtrData) Reset() {
 	*x = CtrData{}
-	mi := &file_grpcapi_proto_msgTypes[17]
+	mi := &file_grpcapi_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -967,7 +1163,7 @@ func (x *CtrData) String() string {
 func (*CtrData) ProtoMessage() {}
 
 func (x *CtrData) ProtoReflect() protoreflect.Message {
-	mi := &file_grpcapi_proto_msgTypes[17]
+	mi := &file_grpcapi_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -980,7 +1176,7 @@ func (x *CtrData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CtrData.ProtoReflect.Descriptor instead.
 func (*CtrData) Descriptor() ([]byte, []int) {
-	return file_grpcapi_proto_rawDescGZIP(), []int{17}
+	return file_grpcapi_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CtrData) GetConfigSha256() []byte {
@@ -1024,16 +1220,31 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\bpolicies\x18\t \x01(\fR\bpolicies\"H\n" +
 	"\x14VerificationResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
-	"\x06result\x18\x02 \x01(\fR\x06result\"_\n" +
+	"\x06result\x18\x02 \x01(\fR\x06result\"b\n" +
+	"\x10TLSCreateRequest\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x124\n" +
+	"\n" +
+	"key_config\x18\x02 \x01(\v2\x15.grpcapi.TLSKeyConfigR\tkeyConfig\"D\n" +
+	"\x11TLSCreateResponse\x12\x18\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x15\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\"\x84\x01\n" +
+	"\fTLSKeyConfig\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x10\n" +
+	"\x03alg\x18\x02 \x01(\tR\x03alg\x12\x0e\n" +
+	"\x02cn\x18\x03 \x01(\tR\x02cn\x12\x1b\n" +
+	"\tdns_names\x18\x04 \x03(\tR\bdnsNames\x12!\n" +
+	"\fip_addresses\x18\x05 \x03(\tR\vipAddresses\"v\n" +
 	"\x0eTLSSignRequest\x12\x18\n" +
-	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
-	"\acontent\x18\x02 \x01(\fR\acontent\x12\x19\n" +
-	"\bhash_alg\x18\x03 \x01(\tR\ahashAlg\"R\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x15\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\fR\acontent\x12\x19\n" +
+	"\bhash_alg\x18\x04 \x01(\tR\ahashAlg\"R\n" +
 	"\x0fTLSSignResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +
-	"\x0esigned_content\x18\x02 \x01(\fR\rsignedContent\"*\n" +
+	"\x0esigned_content\x18\x02 \x01(\fR\rsignedContent\"A\n" +
 	"\x0eTLSCertRequest\x12\x18\n" +
-	"\aversion\x18\x01 \x01(\tR\aversion\"M\n" +
+	"\aversion\x18\x01 \x01(\tR\aversion\x12\x15\n" +
+	"\x06key_id\x18\x02 \x01(\tR\x05keyId\"M\n" +
 	"\x0fTLSCertResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12 \n" +
 	"\vcertificate\x18\x02 \x03(\fR\vcertificate\"@\n" +
@@ -1067,11 +1278,12 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\aCtrData\x12#\n" +
 	"\rconfig_sha256\x18\x01 \x01(\fR\fconfigSha256\x12#\n" +
 	"\rrootfs_sha256\x18\x02 \x01(\fR\frootfsSha256\x12\x19\n" +
-	"\boci_spec\x18\x03 \x01(\fR\aociSpec2\xc3\x04\n" +
+	"\boci_spec\x18\x03 \x01(\fR\aociSpec2\x89\x05\n" +
 	"\n" +
 	"CMCService\x12E\n" +
 	"\x06Attest\x12\x1b.grpcapi.AttestationRequest\x1a\x1c.grpcapi.AttestationResponse\"\x00\x12G\n" +
-	"\x06Verify\x12\x1c.grpcapi.VerificationRequest\x1a\x1d.grpcapi.VerificationResponse\"\x00\x12>\n" +
+	"\x06Verify\x12\x1c.grpcapi.VerificationRequest\x1a\x1d.grpcapi.VerificationResponse\"\x00\x12D\n" +
+	"\tTLSCreate\x12\x19.grpcapi.TLSCreateRequest\x1a\x1a.grpcapi.TLSCreateResponse\"\x00\x12>\n" +
 	"\aTLSSign\x12\x17.grpcapi.TLSSignRequest\x1a\x18.grpcapi.TLSSignResponse\"\x00\x12>\n" +
 	"\aTLSCert\x12\x17.grpcapi.TLSCertRequest\x1a\x18.grpcapi.TLSCertResponse\"\x00\x12D\n" +
 	"\tPeerCache\x12\x19.grpcapi.PeerCacheRequest\x1a\x1a.grpcapi.PeerCacheResponse\"\x00\x12>\n" +
@@ -1092,51 +1304,57 @@ func file_grpcapi_proto_rawDescGZIP() []byte {
 	return file_grpcapi_proto_rawDescData
 }
 
-var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_grpcapi_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_grpcapi_proto_goTypes = []any{
 	(*AttestationRequest)(nil),     // 0: grpcapi.AttestationRequest
 	(*AttestationResponse)(nil),    // 1: grpcapi.AttestationResponse
 	(*VerificationRequest)(nil),    // 2: grpcapi.VerificationRequest
 	(*VerificationResponse)(nil),   // 3: grpcapi.VerificationResponse
-	(*TLSSignRequest)(nil),         // 4: grpcapi.TLSSignRequest
-	(*TLSSignResponse)(nil),        // 5: grpcapi.TLSSignResponse
-	(*TLSCertRequest)(nil),         // 6: grpcapi.TLSCertRequest
-	(*TLSCertResponse)(nil),        // 7: grpcapi.TLSCertResponse
-	(*PeerCacheRequest)(nil),       // 8: grpcapi.PeerCacheRequest
-	(*PeerCacheResponse)(nil),      // 9: grpcapi.PeerCacheResponse
-	(*MeasureRequest)(nil),         // 10: grpcapi.MeasureRequest
-	(*MeasureResponse)(nil),        // 11: grpcapi.MeasureResponse
-	(*UpdateCertsRequest)(nil),     // 12: grpcapi.UpdateCertsRequest
-	(*UpdateCertsResponse)(nil),    // 13: grpcapi.UpdateCertsResponse
-	(*UpdateMetadataRequest)(nil),  // 14: grpcapi.UpdateMetadataRequest
-	(*UpdateMetadataResponse)(nil), // 15: grpcapi.UpdateMetadataResponse
-	(*MeasureEvent)(nil),           // 16: grpcapi.MeasureEvent
-	(*CtrData)(nil),                // 17: grpcapi.CtrData
+	(*TLSCreateRequest)(nil),       // 4: grpcapi.TLSCreateRequest
+	(*TLSCreateResponse)(nil),      // 5: grpcapi.TLSCreateResponse
+	(*TLSKeyConfig)(nil),           // 6: grpcapi.TLSKeyConfig
+	(*TLSSignRequest)(nil),         // 7: grpcapi.TLSSignRequest
+	(*TLSSignResponse)(nil),        // 8: grpcapi.TLSSignResponse
+	(*TLSCertRequest)(nil),         // 9: grpcapi.TLSCertRequest
+	(*TLSCertResponse)(nil),        // 10: grpcapi.TLSCertResponse
+	(*PeerCacheRequest)(nil),       // 11: grpcapi.PeerCacheRequest
+	(*PeerCacheResponse)(nil),      // 12: grpcapi.PeerCacheResponse
+	(*MeasureRequest)(nil),         // 13: grpcapi.MeasureRequest
+	(*MeasureResponse)(nil),        // 14: grpcapi.MeasureResponse
+	(*UpdateCertsRequest)(nil),     // 15: grpcapi.UpdateCertsRequest
+	(*UpdateCertsResponse)(nil),    // 16: grpcapi.UpdateCertsResponse
+	(*UpdateMetadataRequest)(nil),  // 17: grpcapi.UpdateMetadataRequest
+	(*UpdateMetadataResponse)(nil), // 18: grpcapi.UpdateMetadataResponse
+	(*MeasureEvent)(nil),           // 19: grpcapi.MeasureEvent
+	(*CtrData)(nil),                // 20: grpcapi.CtrData
 }
 var file_grpcapi_proto_depIdxs = []int32{
-	16, // 0: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
-	17, // 1: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
-	0,  // 2: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
-	2,  // 3: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
-	4,  // 4: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
-	6,  // 5: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
-	8,  // 6: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
-	10, // 7: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
-	12, // 8: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
-	14, // 9: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
-	1,  // 10: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
-	3,  // 11: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
-	5,  // 12: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
-	7,  // 13: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
-	9,  // 14: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
-	11, // 15: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
-	13, // 16: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
-	15, // 17: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
-	10, // [10:18] is the sub-list for method output_type
-	2,  // [2:10] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	6,  // 0: grpcapi.TLSCreateRequest.key_config:type_name -> grpcapi.TLSKeyConfig
+	19, // 1: grpcapi.MeasureRequest.measure_event:type_name -> grpcapi.MeasureEvent
+	20, // 2: grpcapi.MeasureEvent.ctr_data:type_name -> grpcapi.CtrData
+	0,  // 3: grpcapi.CMCService.Attest:input_type -> grpcapi.AttestationRequest
+	2,  // 4: grpcapi.CMCService.Verify:input_type -> grpcapi.VerificationRequest
+	4,  // 5: grpcapi.CMCService.TLSCreate:input_type -> grpcapi.TLSCreateRequest
+	7,  // 6: grpcapi.CMCService.TLSSign:input_type -> grpcapi.TLSSignRequest
+	9,  // 7: grpcapi.CMCService.TLSCert:input_type -> grpcapi.TLSCertRequest
+	11, // 8: grpcapi.CMCService.PeerCache:input_type -> grpcapi.PeerCacheRequest
+	13, // 9: grpcapi.CMCService.Measure:input_type -> grpcapi.MeasureRequest
+	15, // 10: grpcapi.CMCService.UpdateCerts:input_type -> grpcapi.UpdateCertsRequest
+	17, // 11: grpcapi.CMCService.UpdateMetadata:input_type -> grpcapi.UpdateMetadataRequest
+	1,  // 12: grpcapi.CMCService.Attest:output_type -> grpcapi.AttestationResponse
+	3,  // 13: grpcapi.CMCService.Verify:output_type -> grpcapi.VerificationResponse
+	5,  // 14: grpcapi.CMCService.TLSCreate:output_type -> grpcapi.TLSCreateResponse
+	8,  // 15: grpcapi.CMCService.TLSSign:output_type -> grpcapi.TLSSignResponse
+	10, // 16: grpcapi.CMCService.TLSCert:output_type -> grpcapi.TLSCertResponse
+	12, // 17: grpcapi.CMCService.PeerCache:output_type -> grpcapi.PeerCacheResponse
+	14, // 18: grpcapi.CMCService.Measure:output_type -> grpcapi.MeasureResponse
+	16, // 19: grpcapi.CMCService.UpdateCerts:output_type -> grpcapi.UpdateCertsResponse
+	18, // 20: grpcapi.CMCService.UpdateMetadata:output_type -> grpcapi.UpdateMetadataResponse
+	12, // [12:21] is the sub-list for method output_type
+	3,  // [3:12] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_grpcapi_proto_init() }
@@ -1150,7 +1368,7 @@ func file_grpcapi_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpcapi_proto_rawDesc), len(file_grpcapi_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

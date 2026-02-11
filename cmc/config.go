@@ -36,7 +36,6 @@ type Config struct {
 	MetadataLocation []string `json:"metadata,omitempty"`
 	Drivers          []string `json:"drivers,omitempty"`
 	ExcludePcrs      []int    `json:"excludePcrs,omitempty"`
-	KeyConfig        string   `json:"keyConfig,omitempty"`
 	HashAlg          string   `json:"hashAlg,omitempty"`
 	Api              string   `json:"api,omitempty"`
 	PolicyEngine     string   `json:"policyEngine,omitempty"`
@@ -75,7 +74,6 @@ const (
 	ImaFlag             = "ima"
 	ImaPcrFlag          = "imapcr"
 	ExcludePcrsFlag     = "excludepcrs"
-	KeyConfigFlag       = "keyconfig"
 	HashAlgFlag         = "hashalg"
 	ApiFlag             = "api"
 	PolicyEngineFlag    = "policyengine"
@@ -115,7 +113,6 @@ var (
 			"Possible: %v", strings.Join(maps.Keys(GetDrivers()), ",")))
 	excludePcrs = flag.String(ExcludePcrsFlag, "", "TPM PCRs to be excluded from the quote "+
 		"(comma-separated list)")
-	keyConfig    = flag.String(KeyConfigFlag, "", "Key configuration")
 	hashAlg      = flag.String(HashAlgFlag, "", "Hash algorithm for attestation report integrity")
 	cmcApi       = flag.String(ApiFlag, "", "API to use. Possible: [coap grpc libapi socket]")
 	policyEngine = flag.String(PolicyEngineFlag, "",
@@ -171,9 +168,6 @@ func GetConfig(c *Config) error {
 			return fmt.Errorf("failed to convert excluded PCRs: %w", err)
 		}
 		c.ExcludePcrs = excludePcrs
-	}
-	if internal.FlagPassed(KeyConfigFlag) {
-		c.KeyConfig = *keyConfig
 	}
 	if internal.FlagPassed(HashAlgFlag) {
 		c.HashAlg = *hashAlg
@@ -265,7 +259,6 @@ func (c *Config) Print() {
 	log.Debugf("\tAPI                            : %v", c.Api)
 	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)
 	log.Debugf("\tPolicy overwrite enabled       : %v", c.PolicyOverwrite)
-	log.Debugf("\tKey config                     : %v", c.KeyConfig)
 	log.Debugf("\tHash algorithm                 : %v", c.HashAlg)
 	log.Debugf("\tDrivers                        : %v", strings.Join(c.Drivers, ","))
 	log.Debugf("\tMeasurement log                : %v", c.MeasurementLogs)

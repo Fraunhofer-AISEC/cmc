@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -200,6 +200,7 @@ func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 
 	req := api.TLSSignRequest{
 		Version: api.GetVersion(),
+		KeyId:   cc.KeyId,
 		Content: digest,
 		HashAlg: opts.HashFunc().String(),
 	}
@@ -261,6 +262,7 @@ func (a CoapApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	// Create TLS certificate request
 	req := api.TLSCertRequest{
 		Version: api.GetVersion(),
+		KeyId:   cc.KeyId,
 	}
 
 	// Marshal payload
@@ -360,4 +362,65 @@ func (a CoapApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, er
 	}
 
 	return resp.Cache, nil
+}
+
+func (a CoapApi) createKey(cc *CmcConfig) (string, error) {
+
+	if cc == nil {
+		return "", fmt.Errorf("internal error: cmc config object is nil")
+	}
+
+	log.Debugf("Sending TLS create request to cmcd on %v", cc.CmcAddr)
+	conn, err := udp.Dial(cc.CmcAddr)
+	if err != nil {
+		return "", fmt.Errorf("error dialing: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	req := api.TLSCreateRequest{
+		Version: api.GetVersion(),
+		KeyConfig: api.TLSKeyConfig{
+			Type:     cc.KeyConfig.Type,
+			Cn:       cc.KeyConfig.Cn,
+			DNSNames: cc.KeyConfig.DNSNames,
+		},
+	}
+
+	// Marshal payload
+	payload, err := cc.ApiSerializer.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Send sign request
+	resp, err := conn.Post(ctx, api.EndpointTLSCreate, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Read CoAP message body
+	payload, err = resp.ReadBody()
+	if err != nil {
+		return "", fmt.Errorf("failed to read body: %w", err)
+	}
+
+	// Read CoAP message code to check for errors
+	if resp.Code() != codes.Content {
+		return "", fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
+
+	var createResp api.TLSCreateResponse
+	err = cc.ApiSerializer.Unmarshal(payload, &createResp)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if err := createResp.CheckVersion(); err != nil {
+		return "", err
+	}
+
+	return createResp.KeyId, nil
 }

@@ -21,10 +21,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	// local modules
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -42,28 +45,9 @@ func dial(c *config) error {
 		trustedRootCas.AddCert(ca)
 	}
 
-	if c.Mtls {
-		// Load own certificate
-		var cert tls.Certificate
-		cert, err := atls.GetCert(
-			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(c.Api),
-			atls.WithApiSerializer(c.apiSerializer),
-			atls.WithLibApiCmcConfig(&c.Config))
-		if err != nil {
-			return fmt.Errorf("failed to get TLS Certificate: %w", err)
-		}
-		// Create TLS config with root CA and own certificate
-		tlsConf = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      trustedRootCas,
-		}
-	} else {
-		// Create TLS config with root CA only
-		tlsConf = &tls.Config{
-			RootCAs:       trustedRootCas,
-			Renegotiation: tls.RenegotiateNever,
-		}
+	tlsConf, err := createClientTlsConf(c, trustedRootCas)
+	if err != nil {
+		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
 	internal.PrintTlsConfig(tlsConf, c.identityCas)
@@ -124,11 +108,7 @@ func listen(c *config) error {
 	}
 
 	// Load certificate
-	cert, err := atls.GetCert(
-		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
-		atls.WithLibApiCmcConfig(&c.Config))
+	cert, err := getTlsCert(c)
 	if err != nil {
 		return fmt.Errorf("failed to get TLS Certificate: %w", err)
 	}
@@ -210,4 +190,95 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 	}
+}
+
+func createClientTlsConf(c *config, roots *x509.CertPool) (*tls.Config, error) {
+
+	if !c.Mtls {
+		// Create TLS config with root CA only
+		return &tls.Config{
+			RootCAs:       roots,
+			Renegotiation: tls.RenegotiateNever,
+		}, nil
+	}
+
+	// Retrieve cert from CMC for mTLS
+	cert, err := getTlsCert(c)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TLS cert: %w", err)
+	}
+
+	// Create TLS config with root CA and own certificate
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      roots,
+	}, nil
+
+}
+
+func getTlsCert(c *config) (tls.Certificate, error) {
+	// Check if there is already a key configured for this cmcctl instance
+	if c.keyId != "" {
+		cert, err := atls.GetCert(
+			atls.WithKeyId(c.keyId),
+			atls.WithCmcAddr(c.CmcAddr),
+			atls.WithCmcApi(c.Api),
+			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithLibApiCmcConfig(&c.Config))
+		if err == nil {
+			log.Tracef("Found key with key id %s", c.keyId)
+			return cert, nil
+		} else {
+			log.Warnf("Failed to retrieve certificate for key ID %v. Creating new key", c.keyId)
+		}
+	}
+
+	fqdn, err := internal.Fqdn()
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to retrieve fqdn: %w", err)
+	}
+
+	log.Tracef("Creating new TLS %v %v key and certificate", c.KeyType, c.KeyConfig)
+	keyId, err := atls.CreateCert(
+		atls.WithKeyId(c.keyId),
+		atls.WithKeyConfig(api.TLSKeyConfig{
+			Type:     c.KeyType,
+			Alg:      c.KeyConfig,
+			Cn:       fqdn,
+			DNSNames: []string{fqdn},
+		}),
+		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcApi(c.Api),
+		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithLibApiCmcConfig(&c.Config))
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to create TLS key and cert: %w", err)
+	}
+	c.keyId = keyId
+
+	// Store key ID
+	if c.KeyIdFile != "" {
+		if err := os.MkdirAll(filepath.Dir(c.KeyIdFile), 0755); err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to create key ID file directory: %w", err)
+		}
+		err := os.WriteFile(c.KeyIdFile, []byte(keyId), 0644)
+		if err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to write key ID: %w", err)
+		}
+	}
+
+	// Retrieve the newly created certificate
+	cert, err := atls.GetCert(
+		atls.WithKeyId(c.keyId),
+		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcApi(c.Api),
+		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithLibApiCmcConfig(&c.Config))
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to retrieve certificate for key ID %v: %w", keyId, err)
+	}
+
+	// Return TLS config with root CA and own certificate
+	return cert, nil
+
 }

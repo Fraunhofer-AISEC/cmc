@@ -213,6 +213,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 
 	req := api.TLSSignRequest{
 		Version: api.GetVersion(),
+		KeyId:   cc.KeyId,
 		Content: digest,
 		HashAlg: opts.HashFunc().String(),
 	}
@@ -281,6 +282,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	// Create TLS certificate request
 	req := api.TLSCertRequest{
 		Version: api.GetVersion(),
+		KeyId:   cc.KeyId,
 	}
 
 	// Marshal payload
@@ -390,4 +392,70 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 	}
 
 	return cacheResp.Cache, nil
+}
+
+func (a SocketApi) createKey(cc *CmcConfig) (string, error) {
+
+	if cc == nil {
+		return "", fmt.Errorf("internal error: cmc config is nil")
+	}
+
+	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
+	if err != nil {
+		return "", fmt.Errorf("failed to get network and address: %w", err)
+	}
+
+	// Establish connection
+	log.Debugf("Sending TLS create request to cmcd via %v on %v", network, addr)
+	conn, err := net.Dial(network, addr)
+	if err != nil {
+		return "", fmt.Errorf("error dialing: %w", err)
+	}
+
+	req := api.TLSCreateRequest{
+		Version:   api.GetVersion(),
+		KeyConfig: cc.KeyConfig,
+	}
+
+	// Marshal payload
+	payload, err := cc.ApiSerializer.Marshal(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Send cert request
+	err = api.Send(conn, payload, api.TypeTLSCreate)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Read reply
+	payload, mtype, err := api.Receive(conn)
+	if err != nil {
+		return "", fmt.Errorf("failed to receive: %w", err)
+	}
+
+	if mtype == api.TypeError {
+		resp := new(api.SocketError)
+		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		if err != nil {
+			return "", fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
+		}
+		return "", fmt.Errorf("received error from cmcd: %v", resp.Msg)
+	} else if mtype != api.TypeTLSCreate {
+		return "", fmt.Errorf("unexpected response type %v from cmcd", api.TypeToString(mtype))
+	}
+
+	// Unmarshal cert response
+	var createResp api.TLSCreateResponse
+	err = cc.ApiSerializer.Unmarshal(payload, &createResp)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if err := createResp.CheckVersion(); err != nil {
+		return "", err
+	}
+
+	return createResp.KeyId, nil
 }

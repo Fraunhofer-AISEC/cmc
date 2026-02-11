@@ -9,7 +9,6 @@
     ],
     "drivers": [ "tpm", "sw" ],
     "excludePcrs": [ ],
-    "keyConfig": "EC256",
     "hashAlg": "SHA256",
     "api": "socket",
     "policyEngine": "js",
@@ -31,6 +30,5 @@
     ],
     "metadataCas": [
         "../data/pki/ca.pem"
-    ],
-    "caKey": "../data/pki/ca-key.pem"
+    ]
 }

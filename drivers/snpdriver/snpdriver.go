@@ -19,11 +19,7 @@ package snpdriver
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha1"
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
@@ -33,8 +29,8 @@ import (
 	"path"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
@@ -44,8 +40,6 @@ var log = logrus.WithField("service", "snpdriver")
 
 const (
 	akChainFile = "snp_ak_chain.pem"
-	ikChainFile = "snp_ik_chain.pem"
-	ikFile      = "snp_ik_private.key"
 )
 
 var (
@@ -55,10 +49,8 @@ var (
 // Snp is a structure required for implementing the Measure method
 // of the attestation report Measurer interface
 type Snp struct {
-	*ar.DriverConfig
+	*drivers.DriverConfig
 	akChain []*x509.Certificate // SNP VCEK / VLEK certificate chain
-	ikChain []*x509.Certificate
-	ikPriv  crypto.PrivateKey
 }
 
 type SnpCertTableEntry struct {
@@ -73,15 +65,12 @@ func (s *Snp) Name() string {
 }
 
 // Init initializaes the SNP driver with the specifified configuration
-func (snp *Snp) Init(c *ar.DriverConfig) error {
+func (snp *Snp) Init(c *drivers.DriverConfig) error {
 	var err error
 
 	// Initial checks
 	if snp == nil {
 		return errors.New("internal error: SNP object is nil")
-	}
-	if c.Serializer == nil {
-		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
 	snp.DriverConfig = c
@@ -165,44 +154,6 @@ func (snp *Snp) Unlock() error {
 	return nil
 }
 
-// GetKeyHandles returns private and public key handles as a generic crypto interface
-func (snp *Snp) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
-	if snp == nil {
-		return nil, nil, errors.New("internal error: SNP object is nil")
-	}
-
-	switch sel {
-	case ar.AK:
-		if len(snp.akChain) == 0 {
-			return nil, nil, fmt.Errorf("internal error: SNP AK certificate not present")
-		}
-		// Only return the public key, as the VCEK / VLEK is not directly accessible
-		return nil, snp.akChain[0].PublicKey, nil
-	case ar.IK:
-		return snp.ikPriv, &snp.ikPriv.(*ecdsa.PrivateKey).PublicKey, nil
-	default:
-		return nil, nil, fmt.Errorf("internal error: unknown key selection %v", sel)
-	}
-}
-
-// GetCertChain returns the certificate chain for the specified key
-func (snp *Snp) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
-	if snp == nil {
-		return nil, errors.New("internal error: SW object is nil")
-	}
-
-	switch sel {
-	case ar.AK:
-		log.Debugf("Returning %v AK certificates", len(snp.akChain))
-		return snp.akChain, nil
-	case ar.IK:
-		log.Debugf("Returning %v IK certificates", len(snp.ikChain))
-		return snp.ikChain, nil
-	default:
-		return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
-	}
-}
-
 func GetReport(nonce []byte, vmpl int) ([]byte, error) {
 
 	if len(nonce) > 64 {
@@ -254,20 +205,6 @@ func (snp *Snp) UpdateCerts() error {
 	return nil
 }
 
-func (snp *Snp) UpdateMetadata(metadata map[string][]byte) error {
-
-	// Initial checks
-	if snp == nil {
-		return errors.New("internal error: snp object is nil")
-	}
-
-	log.Info("Updating snp driver metadata")
-
-	snp.Metadata = metadata
-
-	return nil
-}
-
 func getVlek(vmpl int) ([]byte, error) {
 
 	log.Debugf("Fetching VLEK via extended attestation report request on VMPL %v", vmpl)
@@ -314,35 +251,16 @@ func getVlek(vmpl int) ([]byte, error) {
 func (snp *Snp) provision() error {
 	var err error
 
-	// Create new private key for signing
-	snp.ikPriv, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("failed to generate private key: %w", err)
-	}
-
-	log.Debug("Retrieving CA certs")
-	caCerts, err := snp.Provisioner.CaCerts()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve certs: %w", err)
-	}
-
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
 	snp.akChain, err = fetchAk(snp.DriverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
 
-	// Create IK CSR and fetch new certificate including its chain from EST server
-	ikCert, err := snp.provisionIk(snp.Provisioner, snp.ikPriv, snp.DriverConfig)
-	if err != nil {
-		return fmt.Errorf("failed to get signing cert chain: %w", err)
-	}
-	snp.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
-
 	return nil
 }
 
-func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
+func fetchAk(c *drivers.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Generate random nonce
 	nonce := make([]byte, 64)
@@ -386,7 +304,7 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 	case internal.VCEK:
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = c.Provisioner.GetSnpVcek(codeName, s.ChipId, s.CurrentTcb)
+		akCert, err = c.Endorser.GetSnpVcek(codeName, s.ChipId, s.CurrentTcb)
 		if err != nil {
 			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
 		}
@@ -408,53 +326,12 @@ func fetchAk(c *ar.DriverConfig) ([]*x509.Certificate, error) {
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
 	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := c.Provisioner.GetSnpCa(codeName, akType)
+	ca, err := c.Endorser.GetSnpCa(codeName, akType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
 
 	return append([]*x509.Certificate{akCert}, ca...), nil
-}
-
-func (snp *Snp) provisionIk(provisioner ar.Provisioner, priv crypto.PrivateKey, c *ar.DriverConfig,
-) (*x509.Certificate, error) {
-
-	// Retrieve and check FQDN (After the initial provisioning, we do not allow changing the FQDN)
-	fqdn, err := internal.Fqdn()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get FQDN: %v", err)
-	}
-	if len(snp.ikChain) > 0 && snp.ikChain[0].Subject.CommonName != fqdn {
-		return nil, fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
-			fqdn, snp.ikChain[0].Subject.CommonName)
-	}
-
-	// Create IK CSR for authentication
-	csr, err := internal.CreateCsr(priv, fqdn, []string{fqdn}, []string{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create CSRs: %w", err)
-	}
-
-	// Use Subject Key Identifier (SKI) as nonce for attestation report
-	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse CSR public key: %v", err)
-	}
-	nonce := sha1.Sum(pubKey)
-
-	// Fetch attestation report as part of client authentication
-	report, err := prover.Generate(nonce[:], nil, c.Metadata, []ar.Driver{snp}, c.Serializer, c.HashAlg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
-	}
-
-	// Request IK certificate from EST server
-	cert, err := provisioner.CcEnroll(csr, report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
-	}
-
-	return cert, nil
 }
 
 func provisioningRequired(p string) bool {
@@ -466,14 +343,6 @@ func provisioningRequired(p string) bool {
 
 	// If any of the required files is not present, we need to provision
 	if _, err := os.Stat(path.Join(p, akChainFile)); err != nil {
-		log.Info("SNP Provisioning REQUIRED")
-		return true
-	}
-	if _, err := os.Stat(path.Join(p, ikChainFile)); err != nil {
-		log.Info("SNP Provisioning REQUIRED")
-		return true
-	}
-	if _, err := os.Stat(path.Join(p, ikFile)); err != nil {
 		log.Info("SNP Provisioning REQUIRED")
 		return true
 	}
@@ -495,25 +364,6 @@ func (snp *Snp) loadCredentials() error {
 	}
 	log.Debugf("Parsed stored AK chain of length %v", len(snp.akChain))
 
-	data, err = os.ReadFile(path.Join(snp.StoragePath, ikChainFile))
-	if err != nil {
-		return fmt.Errorf("failed to read IK chain from %v: %w", snp.StoragePath, err)
-	}
-	snp.ikChain, err = internal.ParseCertsPem(data)
-	if err != nil {
-		return fmt.Errorf("failed to parse IK certs: %w", err)
-	}
-	log.Debugf("Parsed stored IK chain of length %v", len(snp.ikChain))
-
-	data, err = os.ReadFile(path.Join(snp.StoragePath, ikFile))
-	if err != nil {
-		return fmt.Errorf("failed to read SNP private key from %v: %w", snp.StoragePath, err)
-	}
-	snp.ikPriv, err = x509.ParsePKCS8PrivateKey(data)
-	if err != nil {
-		return fmt.Errorf("failed to parse SNP private key: %w", err)
-	}
-
 	return nil
 }
 
@@ -525,23 +375,6 @@ func (snp *Snp) saveCredentials() error {
 	}
 	if err := os.WriteFile(path.Join(snp.StoragePath, akChainFile), akchainPem, 0644); err != nil {
 		return fmt.Errorf("failed to write  %v: %w", path.Join(snp.StoragePath, akChainFile), err)
-	}
-
-	ikchainPem := make([]byte, 0)
-	for _, cert := range snp.ikChain {
-		c := internal.WriteCertPem(cert)
-		ikchainPem = append(ikchainPem, c...)
-	}
-	if err := os.WriteFile(path.Join(snp.StoragePath, ikChainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(snp.StoragePath, ikChainFile), err)
-	}
-
-	key, err := x509.MarshalPKCS8PrivateKey(snp.ikPriv)
-	if err != nil {
-		return fmt.Errorf("failed marshal private key: %w", err)
-	}
-	if err := os.WriteFile(path.Join(snp.StoragePath, ikFile), key, 0600); err != nil {
-		return fmt.Errorf("failed to write %v: %w", path.Join(snp.StoragePath, ikFile), err)
 	}
 
 	return nil

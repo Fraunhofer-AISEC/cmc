@@ -52,13 +52,5 @@ func UpdateMetadata(cmc *Cmc) error {
 
 	log.Debugf("Updated metadata. New number of metadata items: %v", len(cmc.Metadata))
 
-	// Update metadata in drivers as well
-	for _, driver := range cmc.Drivers {
-		err := driver.UpdateMetadata(metadata)
-		if err != nil {
-			return fmt.Errorf("failed to update %v driver metadata: %w", driver.Name(), err)
-		}
-	}
-
 	return nil
 }

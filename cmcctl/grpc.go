@@ -141,6 +141,53 @@ func (a GrpcApi) verify(c *config) error {
 	return nil
 }
 
+func (a GrpcApi) enroll(c *config) error {
+
+	// Establish connection
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+
+	log.Infof("Sending grpc request type 'TLSCreate' to %v", c.CmcAddr)
+
+	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("failed to connect to cmcd: %w", err)
+	}
+	defer conn.Close()
+	client := grpcapi.NewCMCServiceClient(conn)
+
+	// Generate random nonce
+	nonce := make([]byte, 8)
+	_, err = rand.Read(nonce)
+	if err != nil {
+		return fmt.Errorf("failed to read random bytes: %w", err)
+	}
+
+	request := grpcapi.TLSCreateRequest{
+		Version: api.GetVersion(),
+		KeyConfig: &grpcapi.TLSKeyConfig{
+			Type:        c.KeyType,
+			Alg:         c.KeyConfig,
+			Cn:          c.TlsCn,
+			DnsNames:    c.TlsDnsNames,
+			IpAddresses: c.TlsIpAddresses,
+		},
+	}
+	response, err := client.TLSCreate(ctx, &request)
+	if err != nil {
+		return fmt.Errorf("grpc attest call failed: %w", err)
+	}
+
+	if response.Version != api.GetVersion() {
+		return fmt.Errorf("API version mismatch. Expected AttestationResponse version %v, got %v",
+			api.GetVersion(), response.Version)
+	}
+
+	log.Infof("Created new TLS key with KeyID %v", response.KeyId)
+
+	return nil
+}
+
 func (a GrpcApi) updateCerts(c *config) error {
 
 	// Establish connection

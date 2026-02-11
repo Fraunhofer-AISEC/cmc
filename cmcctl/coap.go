@@ -141,6 +141,67 @@ func (a CoapApi) verify(c *config) error {
 	return nil
 }
 
+func (a CoapApi) enroll(c *config) error {
+
+	log.Infof("Sending coap request type 'TLSCreate' to %v", c.CmcAddr)
+
+	// Establish connection
+	conn, err := udp.Dial(c.CmcAddr)
+	if err != nil {
+		return fmt.Errorf("error dialing: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Generate TLSCreate request
+	req := &api.TLSCreateRequest{
+		Version: api.GetVersion(),
+		KeyConfig: api.TLSKeyConfig{
+			Type:        c.KeyType,
+			Alg:         c.KeyConfig,
+			Cn:          c.TlsCn,
+			DNSNames:    c.TlsDnsNames,
+			IPAddresses: c.TlsIpAddresses,
+		},
+	}
+
+	// Marshal CoAP payload
+	payload, err := c.apiSerializer.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Send CoAP POST request
+	resp, err := conn.Post(ctx, api.EndpointTLSCreate, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Read CoAP reply body
+	payload, err = resp.ReadBody()
+	if err != nil {
+		return fmt.Errorf("failed to read body: %w", err)
+	}
+
+	// Read CoAP code
+	if resp.Code() != codes.Content {
+		return fmt.Errorf("server returned coap error message. Code %v, message %v",
+			resp.Code().String(), string(payload))
+	}
+	log.Debugf("Received coap response code %v", resp.Code().String())
+
+	// Unmarshal report
+	createResp := new(api.TLSCreateResponse)
+	err = c.apiSerializer.Unmarshal(payload, createResp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal attestation response: %w", err)
+	}
+
+	log.Infof("Created new TLS key with KeyID %v", createResp.KeyId)
+
+	return nil
+}
+
 func (a CoapApi) updateCerts(c *config) error {
 
 	log.Infof("Sending coap request type 'UpdateCerts' to %v", c.CmcAddr)

@@ -21,6 +21,7 @@ option go_package = "./;grpcapi";
 service CMCService {
     rpc Attest(AttestationRequest) returns (AttestationResponse) {}
     rpc Verify(VerificationRequest) returns (VerificationResponse) {}
+    rpc TLSCreate(TLSCreateRequest) returns (TLSCreateResponse) {}
     rpc TLSSign(TLSSignRequest) returns (TLSSignResponse) {}
     rpc TLSCert(TLSCertRequest) returns (TLSCertResponse) {}
     rpc PeerCache(PeerCacheRequest) returns (PeerCacheResponse) {}
@@ -54,10 +55,29 @@ message VerificationResponse {
   bytes result = 2;
 }
 
+message TLSCreateRequest {
+  string version = 1;
+  TLSKeyConfig key_config = 2;
+}
+
+message TLSCreateResponse {
+  string version = 1;
+  string key_id = 2;
+}
+
+message TLSKeyConfig {
+  string type = 1;
+  string alg = 2;
+  string cn = 3;
+  repeated string dns_names = 4;
+  repeated string ip_addresses = 5;
+}
+
 message TLSSignRequest {
   string version = 1;
-  bytes content = 2;
-  string hash_alg = 3;
+  string key_id = 2;
+  bytes content = 3;
+  string hash_alg = 4;
 }
 
 message TLSSignResponse {
@@ -67,6 +87,7 @@ message TLSSignResponse {
 
 message TLSCertRequest {
   string version = 1;
+  string key_id = 2;
 }
 
 message TLSCertResponse {

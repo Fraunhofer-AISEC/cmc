@@ -13,14 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !nodefaults || tpm
+//go:build !nodefaults || socket
 
-package cmc
+package main
 
 import (
-	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
+	"crypto/rand"
+	"fmt"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 )
 
-func init() {
-	drivers["tpm"] = &tpmdriver.Tpm{}
+func Sign(mgr *keymgr.KeyMgr, keyId, hashAlg string, digest []byte) ([]byte, error) {
+
+	key, err := mgr.GetKey(keyId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key: %w", err)
+	}
+
+	hash, err := internal.HashFromString(hashAlg)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+
+	signature, err := key.Sign(rand.Reader, digest, hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign: %w", err)
+	}
+
+	return signature, err
 }

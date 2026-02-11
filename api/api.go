@@ -36,6 +36,7 @@ func GetVersion() string {
 const (
 	EndpointAttest         = "/Attest"
 	EndpointVerify         = "/Verify"
+	EndpointTLSCreate      = "/TLSCreate"
 	EndpointTLSSign        = "/TLSSign"
 	EndpointTLSCert        = "/TLSCert"
 	EndpointPeerCache      = "/PeerCache"
@@ -48,12 +49,13 @@ const (
 	TypeError          uint32 = 0
 	TypeAttest         uint32 = 1
 	TypeVerify         uint32 = 2
-	TypeTLSSign        uint32 = 3
-	TypeTLSCert        uint32 = 4
-	TypePeerCache      uint32 = 5
-	TypeMeasure        uint32 = 6
-	TypeUpdateCerts    uint32 = 7
-	TypeUpdateMetadata uint32 = 8
+	TypeTLSCreate      uint32 = 3
+	TypeTLSSign        uint32 = 4
+	TypeTLSCert        uint32 = 5
+	TypePeerCache      uint32 = 6
+	TypeMeasure        uint32 = 7
+	TypeUpdateCerts    uint32 = 8
+	TypeUpdateMetadata uint32 = 9
 )
 
 type AttestationRequest struct {
@@ -80,10 +82,29 @@ type VerificationResponse struct {
 	Result  *ar.AttestationResult `json:"result" cbor:"1,keyasint"`
 }
 
+type TLSCreateRequest struct {
+	Version   string       `json:"version" cbor:"0,keyasint"`
+	KeyConfig TLSKeyConfig `json:"keyConfig" cbor:"1,keyasint"`
+}
+
+type TLSKeyConfig struct {
+	Type        string   `json:"type" cbor:"1,keyasint" jsonschema:"enum=tpm,enum=sw,enum=snp"`
+	Alg         string   `json:"alg" cbor:"2,keyasint" jsonschema:"enum=EC256,enum=EC384,enum=EC521,enum=RSA2048,enum=RSA4096"`
+	Cn          string   `json:"cn" cbor:"3,keyasint"`
+	DNSNames    []string `json:"dnsNames,omitempty" cbor:"4,keyasint,omitempty"`
+	IPAddresses []string `json:"ipAddresses,omitempty" cbor:"5,keyasint,omitempty"`
+}
+
+type TLSCreateResponse struct {
+	Version string `json:"version" cbor:"0,keyasint"`
+	KeyId   string `json:"keyId" cbor:"1,keyasint"`
+}
+
 type TLSSignRequest struct {
 	Version string `json:"version" cbor:"0,keyasint"`
-	Content []byte `json:"content" cbor:"1,keyasint"`
-	HashAlg string `json:"hashAlg" cbor:"2,keyasint" jsonschema:"enum=SHA-256,enum=SHA-384,enum=SHA-512"`
+	KeyId   string `json:"keyId" cbor:"1,keyasint"`
+	Content []byte `json:"content" cbor:"2,keyasint"`
+	HashAlg string `json:"hashAlg" cbor:"3,keyasint" jsonschema:"enum=SHA-256,enum=SHA-384,enum=SHA-512"`
 }
 
 type TLSSignResponse struct {
@@ -93,6 +114,7 @@ type TLSSignResponse struct {
 
 type TLSCertRequest struct {
 	Version string `json:"version" cbor:"0,keyasint"`
+	KeyId   string `json:"keyId" cbor:"1,keyasint"`
 }
 
 type TLSCertResponse struct {
@@ -160,14 +182,16 @@ func TypeToString(t uint32) string {
 		return "Attest"
 	case TypeVerify:
 		return "Verify"
-	case TypeMeasure:
-		return "Measure"
+	case TypeTLSCreate:
+		return "TLSCreate"
 	case TypeTLSSign:
 		return "TLSSign"
 	case TypeTLSCert:
 		return "TLSCert"
 	case TypePeerCache:
 		return "PeerCache"
+	case TypeMeasure:
+		return "Measure"
 	case TypeUpdateCerts:
 		return "UpdateCerts"
 	case TypeUpdateMetadata:
@@ -213,6 +237,26 @@ func (resp *VerificationResponse) CheckVersion() error {
 	}
 	if !strings.EqualFold(apiVersion, resp.Version) {
 		return fmt.Errorf("API version mismatch. Expected VerificationResponse version %q, got %q", apiVersion, resp.Version)
+	}
+	return nil
+}
+
+func (req *TLSCreateRequest) CheckVersion() error {
+	if req == nil {
+		return fmt.Errorf("internal error: TLSCreateRequest is nil")
+	}
+	if !strings.EqualFold(apiVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected TLSCreateRequest version %q, got %q", apiVersion, req.Version)
+	}
+	return nil
+}
+
+func (resp *TLSCreateResponse) CheckVersion() error {
+	if resp == nil {
+		return fmt.Errorf("internal error: TLSCreateResponse is nil")
+	}
+	if !strings.EqualFold(apiVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected TLSCreateResponse version %q, got %q", apiVersion, resp.Version)
 	}
 	return nil
 }

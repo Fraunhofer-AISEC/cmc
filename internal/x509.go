@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,6 @@ package internal
 import (
 	"bytes"
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/tls"
@@ -160,14 +159,53 @@ func WriteCertsDer(certs []*x509.Certificate) [][]byte {
 	return raw
 }
 
+func WriteCertsPemBlob(certs []*x509.Certificate) []byte {
+	pem := make([]byte, 0)
+	for _, cert := range certs {
+		c := WriteCertPem(cert)
+		pem = append(pem, c...)
+	}
+	return pem
+}
+
 func WritePublicKeyPem(key crypto.PublicKey) ([]byte, error) {
 	pk, err := x509.MarshalPKIXPublicKey(key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal PKIX public key")
+		return nil, fmt.Errorf("failed to marshal PKIX public key: %w", err)
 	}
-	p := &bytes.Buffer{}
-	pem.Encode(p, &pem.Block{Type: "PUBLIC KEY", Bytes: pk})
-	return p.Bytes(), nil
+	data := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: pk,
+	})
+	return data, nil
+}
+
+func WritePrivateKeyPem(key crypto.PrivateKey) ([]byte, error) {
+	sk, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	data := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: sk,
+	})
+
+	return data, nil
+}
+
+func StorePrivateKeyPem(file string, key crypto.PrivateKey) error {
+
+	data, err := WritePrivateKeyPem(key)
+	if err != nil {
+		return fmt.Errorf("failed to convert key to PEM: %w", err)
+	}
+
+	err = os.WriteFile(file, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+	return nil
 }
 
 // verifyCertChain tries to verify the certificate chain certs with leaf
@@ -367,22 +405,49 @@ func PrintTlsConfig(conf *tls.Config, trustedRoots []*x509.Certificate) error {
 	return nil
 }
 
-func LoadPrivateKey(caPrivFile string) (*ecdsa.PrivateKey, error) {
+func LoadPrivateKey(path string) (crypto.PrivateKey, error) {
 
 	// Read private pem-encoded key and convert it to a private key
-	privBytes, err := os.ReadFile(caPrivFile)
+	privBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file: %w", err)
 	}
 
-	privPem, _ := pem.Decode(privBytes)
+	return ParsePrivateKey(privBytes)
+}
 
-	priv, err := x509.ParseECPrivateKey(privPem.Bytes)
+func ParsePrivateKey(data []byte) (crypto.PrivateKey, error) {
+
+	// Check if PEM encoded
+	privPem, _ := pem.Decode(data)
+	if privPem != nil {
+		data = privPem.Bytes
+	}
+
+	priv, err := x509.ParsePKCS8PrivateKey(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
+		priv, err = x509.ParseECPrivateKey(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key: %w", err)
+		}
 	}
 
 	return priv, nil
+}
+
+func ParsePublicKey(data []byte) (crypto.PublicKey, error) {
+	// Check if PEM encoded
+	pubPem, _ := pem.Decode(data)
+	if pubPem != nil {
+		data = pubPem.Bytes
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(data)
+	if err != nil {
+		panic(err)
+	}
+
+	return pub, nil
 }
 
 func parseCertsListPem(data [][]byte) ([]*x509.Certificate, error) {

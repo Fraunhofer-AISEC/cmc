@@ -223,8 +223,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SW:
-			r, ok := verifySw(ev, col, evidenceNonce, metadataCas,
-				refVals[ar.TYPE_REFVAL_SW], s)
+			r, ok := verifySw(ev, col, evidenceNonce, refVals[ar.TYPE_REFVAL_SW], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SW measurement"))
 			}

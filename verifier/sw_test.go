@@ -49,14 +49,31 @@ func Test_verifySwMeasurements(t *testing.T) {
 				},
 				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
-					Certs:     validSwCertChain,
+					Key:       validSwKey,
 				},
 				nonce:     validSwNonce,
-				cas:       []*x509.Certificate{validSwCa},
 				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
 			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
+			name: "Invalid Key",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SW,
+					Data: validSwEvidence,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validSwArtifacts,
+					Key:       invalidSwKey,
+				},
+				nonce:     validSwNonce,
+				s:         getJsonSerializer(),
+				manifests: []ar.MetadataResult{validUbuntuManifest},
+			},
+			want:  ar.StatusFail,
 			want1: true,
 		},
 		{
@@ -68,10 +85,9 @@ func Test_verifySwMeasurements(t *testing.T) {
 				},
 				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
-					Certs:     validSwCertChain,
+					Certs:     validSwKey,
 				},
 				nonce:     invalidSwNonce,
-				cas:       []*x509.Certificate{validSwCa},
 				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
@@ -87,10 +103,9 @@ func Test_verifySwMeasurements(t *testing.T) {
 				},
 				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
-					Certs:     validSwCertChain,
+					Certs:     validSwKey,
 				},
 				nonce:     validSwNonce,
-				cas:       []*x509.Certificate{validSwCa},
 				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{invalidRefvalManifest},
 			},
@@ -106,10 +121,9 @@ func Test_verifySwMeasurements(t *testing.T) {
 				},
 				collateral: ar.Collateral{
 					Artifacts: invalidSwArtifacts,
-					Certs:     validSwCertChain,
+					Certs:     validSwKey,
 				},
 				nonce:     validSwNonce,
-				cas:       []*x509.Certificate{validSwCa},
 				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
@@ -125,10 +139,9 @@ func Test_verifySwMeasurements(t *testing.T) {
 				},
 				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
-					Certs:     validSwCertChain,
+					Certs:     validSwKey,
 				},
 				nonce:     validSwNonce,
-				cas:       []*x509.Certificate{validSwCa},
 				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{validUbuntuManifest},
 			},
@@ -144,10 +157,9 @@ func Test_verifySwMeasurements(t *testing.T) {
 				},
 				collateral: ar.Collateral{
 					Artifacts: validSwArtifacts,
-					Certs:     validSwCertChain,
+					Certs:     validSwKey,
 				},
 				nonce:     validSwNonce,
-				cas:       []*x509.Certificate{validSwCa},
 				s:         getJsonSerializer(),
 				manifests: []ar.MetadataResult{invalidOciConfigUbuntuManifest},
 			},
@@ -171,7 +183,6 @@ func Test_verifySwMeasurements(t *testing.T) {
 				tt.args.evidence,
 				tt.args.collateral,
 				tt.args.nonce,
-				tt.args.cas,
 				refVals[ar.TYPE_REFVAL_SW],
 				tt.args.s)
 			if got.Summary.Status != tt.want {
@@ -263,39 +274,6 @@ var (
 	validSwNonce = dec("7a9368d7ef7796e2")
 
 	invalidSwNonce = dec("ff021a63554e0e58")
-
-	validSwAk = conv([]byte(`-----BEGIN CERTIFICATE-----
-MIICgjCCAiigAwIBAgIRALNVA/kdknQk5FeLMw/if7QwCgYIKoZIzj0EAwIwYTEL
-MAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVzdCBD
-b21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3QgQ0Ew
-IBcNMjUwNzI0MDc0NDI5WhgPMjEyNTA3MDEwNzQ0MjlaMIGgMQswCQYDVQQGEwJE
-RTELMAkGA1UECBMCQlkxDzANBgNVBAcTBk11bmljaDEWMBQGA1UECRMNdGVzdHN0
-cmVldCAxNTEOMAwGA1UEERMFODU3NDgxGjAYBgNVBAoTEVRlc3QgT3JnYW5pemF0
-aW9uMQ8wDQYDVQQLEwZkZXZpY2UxHjAcBgNVBAMTFWRlLnRlc3Quc3cuYWsuZGV2
-aWNlMDBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABOJQRf5UcbV1XKGVRIWMjAhu
-RN4bkUoNwcE1x9UH2c90BnPRR0r0wN8OZo2pj+VaImvpSjafVWsxknjk8+ghNyuj
-fzB9MA4GA1UdDwEB/wQEAwIFoDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUH
-AwIwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQUtcM3sFG27seAZvRnac0675Yhqikw
-HwYDVR0jBBgwFoAUCvxFgZW8ajY3AXQzumYRCs/IldcwCgYIKoZIzj0EAwIDSAAw
-RQIgAf/Fysl2WIkXnaKeP+gJHn846MZ9nexzbRPyg6PSRG4CIQD3nmVubcUcHIbe
-8M4mTA8mMTpezihNmWlAzSQOGbj0Iw==
------END CERTIFICATE-----`))
-
-	validSwCa = conv([]byte(`-----BEGIN CERTIFICATE-----
-MIICCDCCAa6gAwIBAgIUWt85/7XJ0wUBuEgeIEA/S9aUA8UwCgYIKoZIzj0EAwIw
-YTELMAkGA1UEBhMCREUxEjAQBgNVBAcTCVRlc3QgQ2l0eTEVMBMGA1UEChMMVGVz
-dCBDb21wYW55MRAwDgYDVQQLEwdSb290IENBMRUwEwYDVQQDEwxUZXN0IFJvb3Qg
-Q0EwIBcNMjUwNzI1MDczMjAwWhgPMjEyNTA3MDEwNzMyMDBaMGExCzAJBgNVBAYT
-AkRFMRIwEAYDVQQHEwlUZXN0IENpdHkxFTATBgNVBAoTDFRlc3QgQ29tcGFueTEQ
-MA4GA1UECxMHUm9vdCBDQTEVMBMGA1UEAxMMVGVzdCBSb290IENBMFkwEwYHKoZI
-zj0CAQYIKoZIzj0DAQcDQgAEiFEEPux3zrUt2SDt+wHnPv+0kKEbWRALabHbGsW/
-8xjWymgdoEO8mRPMYScJGD77I8cv7p2PkOzR5RPCIT/40aNCMEAwDgYDVR0PAQH/
-BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFAr8RYGVvGo2NwF0M7pm
-EQrPyJXXMAoGCCqGSM49BAMCA0gAMEUCIGK9/Y2Lf8a3woMbuZ7TxzlWk0RN9BaA
-o4bXS7AHSCEYAiEAg8fmgTsTCeNEht2Y58hfxDQNQnA5PQmTCZZ2Sm8YLcM=
------END CERTIFICATE-----`))
-
-	validSwCertChain = [][]byte{validSwAk.Raw, validSwCa.Raw}
 
 	validSwEvidence = []byte(`{"payload":"eyJub25jZSI6ImVwTm8xKzkzbHVJPSIsInNoYTI1NiI6IjNwYUptcEY4QUlxR3NBcDJLSC9IdjlLZTZDL3V4QUU4R0oyNTlPQUJRckk9In0","protected":"eyJhbGciOiJFUzI1NiIsIng1YyI6WyJNSUlDZ2pDQ0FpaWdBd0lCQWdJUkFMTlZBL2tka25RazVGZUxNdy9pZjdRd0NnWUlLb1pJemowRUF3SXdZVEVMTUFrR0ExVUVCaE1DUkVVeEVqQVFCZ05WQkFjVENWUmxjM1FnUTJsMGVURVZNQk1HQTFVRUNoTU1WR1Z6ZENCRGIyMXdZVzU1TVJBd0RnWURWUVFMRXdkU2IyOTBJRU5CTVJVd0V3WURWUVFERXd4VVpYTjBJRkp2YjNRZ1EwRXdJQmNOTWpVd056STBNRGMwTkRJNVdoZ1BNakV5TlRBM01ERXdOelEwTWpsYU1JR2dNUXN3Q1FZRFZRUUdFd0pFUlRFTE1Ba0dBMVVFQ0JNQ1Fsa3hEekFOQmdOVkJBY1RCazExYm1samFERVdNQlFHQTFVRUNSTU5kR1Z6ZEhOMGNtVmxkQ0F4TlRFT01Bd0dBMVVFRVJNRk9EVTNORGd4R2pBWUJnTlZCQW9URVZSbGMzUWdUM0puWVc1cGVtRjBhVzl1TVE4d0RRWURWUVFMRXdaa1pYWnBZMlV4SGpBY0JnTlZCQU1URldSbExuUmxjM1F1YzNjdVlXc3VaR1YyYVdObE1EQlpNQk1HQnlxR1NNNDlBZ0VHQ0NxR1NNNDlBd0VIQTBJQUJPSlFSZjVVY2JWMVhLR1ZSSVdNakFodVJONGJrVW9Od2NFMXg5VUgyYzkwQm5QUlIwcjB3TjhPWm8ycGorVmFJbXZwU2phZlZXc3hrbmprOCtnaE55dWpmekI5TUE0R0ExVWREd0VCL3dRRUF3SUZvREFkQmdOVkhTVUVGakFVQmdnckJnRUZCUWNEQVFZSUt3WUJCUVVIQXdJd0RBWURWUjBUQVFIL0JBSXdBREFkQmdOVkhRNEVGZ1FVdGNNM3NGRzI3c2VBWnZSbmFjMDY3NVlocWlrd0h3WURWUjBqQkJnd0ZvQVVDdnhGZ1pXOGFqWTNBWFF6dW1ZUkNzL0lsZGN3Q2dZSUtvWkl6ajBFQXdJRFNBQXdSUUlnQWYvRnlzbDJXSWtYbmFLZVArZ0pIbjg0Nk1aOW5leHpiUlB5ZzZQU1JHNENJUUQzbm1WdWJjVWNISWJlOE00bVRBOG1NVHBlemloTm1XbEF6U1FPR2JqMEl3PT0iLCJNSUlDQ0RDQ0FhNmdBd0lCQWdJVVd0ODUvN1hKMHdVQnVFZ2VJRUEvUzlhVUE4VXdDZ1lJS29aSXpqMEVBd0l3WVRFTE1Ba0dBMVVFQmhNQ1JFVXhFakFRQmdOVkJBY1RDVlJsYzNRZ1EybDBlVEVWTUJNR0ExVUVDaE1NVkdWemRDQkRiMjF3WVc1NU1SQXdEZ1lEVlFRTEV3ZFNiMjkwSUVOQk1SVXdFd1lEVlFRREV3eFVaWE4wSUZKdmIzUWdRMEV3SUJjTk1qVXdOekkxTURjek1qQXdXaGdQTWpFeU5UQTNNREV3TnpNeU1EQmFNR0V4Q3pBSkJnTlZCQVlUQWtSRk1SSXdFQVlEVlFRSEV3bFVaWE4wSUVOcGRIa3hGVEFUQmdOVkJBb1RERlJsYzNRZ1EyOXRjR0Z1ZVRFUU1BNEdBMVVFQ3hNSFVtOXZkQ0JEUVRFVk1CTUdBMVVFQXhNTVZHVnpkQ0JTYjI5MElFTkJNRmt3RXdZSEtvWkl6ajBDQVFZSUtvWkl6ajBEQVFjRFFnQUVpRkVFUHV4M3pyVXQyU0R0K3dIblB2KzBrS0ViV1JBTGFiSGJHc1cvOHhqV3ltZ2RvRU84bVJQTVlTY0pHRDc3SThjdjdwMlBrT3pSNVJQQ0lULzQwYU5DTUVBd0RnWURWUjBQQVFIL0JBUURBZ0VHTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRkFyOFJZR1Z2R28yTndGME03cG1FUXJQeUpYWE1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lHSzkvWTJMZjhhM3dvTWJ1WjdUeHpsV2swUk45QmFBbzRiWFM3QUhTQ0VZQWlFQWc4Zm1nVHNUQ2VORWh0Mlk1OGhmeERRTlFuQTVQUW1UQ1paMlNtOFlMY009Il19","signature":"IRndhgZP6VLihiLiYP05CJyyq2gNaIOYEA92A6vcUQxkV08R9WNzcNqBstltBc-Wu3HRWmSU3wa6SllRUQUuUQ"}`)
 

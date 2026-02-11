@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ import (
 	"io"
 )
 
-// PrivateKey Wrapper Implementing crypto.Signer interface
+// PrivateKey Wrapper implementing crypto.Signer interface
 // Used to contact cmcd for signing operations
 type PrivateKey struct {
 	*CmcConfig // embedded struct
@@ -43,6 +43,21 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 
 func (priv PrivateKey) Public() crypto.PublicKey {
 	return priv.pubKey
+}
+
+func CreateCert(moreConfigs ...ConnectionOption[CmcConfig]) (string, error) {
+
+	cc, err := NewCmcConfig(moreConfigs...)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve CMC config: %w", err)
+	}
+
+	keyId, err := cc.CmcApi.createKey(cc)
+	if err != nil {
+		return "", fmt.Errorf("failed to create new CMC key: %w", err)
+	}
+
+	return keyId, nil
 }
 
 // Obtains Certificate for the Identity Key (IK) used for the connection from cmcd

@@ -122,7 +122,6 @@ cmc_params=(
     "-provisionaddr" "https://localhost:9000" \
     "-metadata" "file://${metadata_signed}" \
     "-drivers" "tpm,sw" \
-    "-keyconfig" "EC256" \
     "-hashalg" "sha256" \
     "-loglevel" "trace" \
     "-storage" "${storage}" \

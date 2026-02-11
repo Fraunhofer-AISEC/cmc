@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2024 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +17,7 @@ package tpmdriver
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/rand"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -45,31 +43,27 @@ import (
 
 	// local modules
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/prover"
 )
 
 // Tpm is a structure that implements the Measure method
 // of the attestation report Measurer interface
 type Tpm struct {
-	*ar.DriverConfig
+	*drivers.DriverConfig
 	mu      sync.Mutex
 	pcrs    []int
 	tpm     *attest.TPM
 	ak      *attest.AK
-	ik      *attest.Key
 	ek      []attest.EK
-	ikChain []*x509.Certificate
 	akChain []*x509.Certificate
 	ctrLog  bool
 }
 
 const (
 	akchainFile = "tpm_ak_chain.pem"
-	ikchainFile = "tpm_ik_chain.pem"
 	akFile      = "tpm_ak_encrypted.json"
-	ikFile      = "tpm_ik_encrypted.json"
 
 	DEFAULT_BINARY_BIOS_MEASUREMENTS = "/sys/kernel/security/tpm0/binary_bios_measurements"
 
@@ -84,16 +78,13 @@ func (t *Tpm) Name() string {
 	return "TPM driver"
 }
 
-// Init opens and initializes a TPM object, checks if provosioning is
-// required and if so, provisions the TPM
-func (t *Tpm) Init(c *ar.DriverConfig) error {
+// Init opens and initializes a TPM object, checks if provisioning is
+// required and if so, creates and activates a new attestation key (AK)
+func (t *Tpm) Init(c *drivers.DriverConfig) error {
 
 	// Initial checks
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
-	}
-	if c.Serializer == nil {
-		return fmt.Errorf("serializer not initialized in driver config")
 	}
 
 	t.DriverConfig = c
@@ -137,14 +128,14 @@ func (t *Tpm) Init(c *ar.DriverConfig) error {
 		}
 
 		if c.StoragePath != "" {
-			err = t.saveCredentials()
+			err = t.saveAk()
 			if err != nil {
 				return fmt.Errorf("failed to save TPM data: %w", err)
 			}
 		}
 
 	} else {
-		err = t.loadCredentials()
+		err = t.loadAk()
 		if err != nil {
 			return fmt.Errorf("failed to load TPM keys: %w", err)
 		}
@@ -248,47 +239,6 @@ func (t *Tpm) Unlock() error {
 	return nil
 }
 
-// GetKeyHandles returns private and public key handles as a generic crypto interface
-func (t *Tpm) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
-
-	if t == nil {
-		return nil, nil, errors.New("internal error: TPM object is nil")
-	}
-
-	if sel == ar.AK {
-		if t.ak == nil {
-			return nil, nil, fmt.Errorf("failed to get AK: not initialized")
-		}
-		return t.ak.Private(), t.ak.Public(), nil
-	} else if sel == ar.IK {
-		if t.ik == nil {
-			return nil, nil, fmt.Errorf("failed to get IK: not initialized")
-		}
-		priv, err := t.ik.Private(t.ik.Public())
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get IK Private")
-		}
-		return priv, t.ik.Public(), nil
-	}
-	return nil, nil, fmt.Errorf("internal error: unknown key selection %v", sel)
-}
-
-// GetCertChain returns the certificate chain for the specified key
-func (t *Tpm) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
-	if t == nil {
-		return nil, errors.New("internal error: TPM object is nil")
-	}
-
-	if sel == ar.AK {
-		log.Debugf("Returning %v AK certificates", len(t.akChain))
-		return t.akChain, nil
-	} else if sel == ar.IK {
-		log.Debugf("Returning %v IK certificates", len(t.ikChain))
-		return t.ikChain, nil
-	}
-	return nil, fmt.Errorf("internal error: unknown key selection %v", sel)
-}
-
 func (t *Tpm) UpdateCerts() error {
 	var err error
 
@@ -301,7 +251,6 @@ func (t *Tpm) UpdateCerts() error {
 
 	log.Debugf("Flushing current keys")
 	t.ak.Close(t.tpm)
-	t.ik.Close()
 
 	log.Debugf("Provisioning new keys and certs")
 	err = t.provision()
@@ -312,7 +261,7 @@ func (t *Tpm) UpdateCerts() error {
 	log.Warnf("AK public: %v", t.ak.Public())
 
 	if t.StoragePath != "" {
-		err = t.saveCredentials()
+		err = t.saveAk()
 		if err != nil {
 			return fmt.Errorf("failed to save azure credentials: %w", err)
 		}
@@ -321,18 +270,8 @@ func (t *Tpm) UpdateCerts() error {
 	return nil
 }
 
-func (tpm *Tpm) UpdateMetadata(metadata map[string][]byte) error {
-
-	// Initial checks
-	if tpm == nil {
-		return errors.New("internal error: tpm object is nil")
-	}
-
-	log.Info("Updating tpm driver metadata")
-
-	tpm.Metadata = metadata
-
-	return nil
+func (t *Tpm) GetAkPublic() []byte {
+	return t.ak.AttestationParameters().Public
 }
 
 // IsTpmProvisioningRequired checks if the Storage Root Key (SRK) is persisted
@@ -353,16 +292,8 @@ func IsTpmProvisioningRequired(storagePath string) (bool, error) {
 		log.Info("TPM Credential Activation REQUIRED (no AK cert chain)")
 		return true, nil
 	}
-	if _, err := os.Stat(path.Join(storagePath, ikchainFile)); err != nil {
-		log.Info("TPM Credential Activation REQUIRED (no IK cert chain)")
-		return true, nil
-	}
 	if _, err := os.Stat(path.Join(storagePath, akFile)); err != nil {
 		log.Info("TPM Credential Activation REQUIRED (no AK)")
-		return true, nil
-	}
-	if _, err := os.Stat(path.Join(storagePath, ikFile)); err != nil {
-		log.Info("TPM Credential Activation REQUIRED (no IK)")
 		return true, nil
 	}
 
@@ -669,13 +600,13 @@ func (t *Tpm) provision() error {
 		return errors.New("TPM is not openend")
 	}
 
-	t.ek, t.ak, t.ik, err = createKeys(t.tpm, t.KeyConfig)
+	t.ek, t.ak, err = createKeys(t.tpm)
 	if err != nil {
 		return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := t.Provisioner.CaCerts()
+	caCerts, err := t.Endorser.CaCerts()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -685,22 +616,12 @@ func (t *Tpm) provision() error {
 	if err != nil {
 		return fmt.Errorf("failed to get FQDN: %v", err)
 	}
-	if len(t.ikChain) > 0 && t.ikChain[0].Subject.CommonName != fqdn {
-		return fmt.Errorf("retrieved FQDN (%q) does not match IK CN (%v). Changing the FQDN is not allowed",
-			fqdn, t.ikChain[0].Subject.CommonName)
-	}
 
 	akCert, err := t.provisionAk(fqdn)
 	if err != nil {
 		return fmt.Errorf("failed to provision AK cert chain: %w", err)
 	}
 	t.akChain = append([]*x509.Certificate{akCert}, caCerts...)
-
-	ikCert, err := t.provisionIk(fqdn)
-	if err != nil {
-		return fmt.Errorf("failed to provision IK cert chain: %w", err)
-	}
-	t.ikChain = append([]*x509.Certificate{ikCert}, caCerts...)
 
 	return nil
 }
@@ -736,7 +657,7 @@ func (t *Tpm) provisionAk(fqdn string) (*x509.Certificate, error) {
 	}
 
 	log.Debugf("Performing AK TPM activate credential enroll for CN=%v", akCsr.Subject.CommonName)
-	encCredential, encSecret, pkcs7Cert, err := t.DriverConfig.Provisioner.TpmActivateEnroll(
+	encCredential, encSecret, pkcs7Cert, err := t.DriverConfig.Endorser.TpmActivateEnroll(
 		tpmInfo.Manufacturer.String(), t.ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,
@@ -774,57 +695,7 @@ func (t *Tpm) provisionAk(fqdn string) (*x509.Certificate, error) {
 	return akCert, nil
 }
 
-func (t *Tpm) provisionIk(fqdn string) (*x509.Certificate, error) {
-
-	log.Debug("Provisioning IK certificate..")
-
-	// Create IK CSR and perform EST enrollment with TPM certification
-	ikPriv, err := t.ik.Private(t.ik.Public())
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve IK private key: %w", err)
-	}
-
-	ikCsr, err := internal.CreateCsr(ikPriv, fqdn, []string{fqdn}, []string{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create IK CSR: %w", err)
-	}
-
-	ikParams := t.ik.CertificationParameters()
-
-	// Use Subject Key Identifier (SKI) as nonce for attestation report
-	pubKey, err := x509.MarshalPKIXPublicKey(ikCsr.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse CSR public key: %v", err)
-	}
-	nonce := sha1.Sum(pubKey)
-
-	// Fetch attestation report as part of client authentication if configured
-	var report []byte
-	if t.DriverConfig.ProvisionAuth.Has(internal.AuthAttestation) {
-		report, err = prover.Generate(nonce[:], nil, t.DriverConfig.Metadata, []ar.Driver{t},
-			t.DriverConfig.Serializer, t.DriverConfig.HashAlg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate attestation report: %w", err)
-		}
-	}
-
-	log.Debugf("Performing IK TPM certify enroll for CN=%v", ikCsr.Subject.CommonName)
-	ikCert, err := t.DriverConfig.Provisioner.TpmCertifyEnroll(
-		ikCsr,
-		ikParams,
-		t.ak.AttestationParameters().Public,
-		report,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to enroll IK: %w", err)
-	}
-
-	log.Debugf("Created new IK cert: %v", ikCert.Subject.CommonName)
-
-	return ikCert, nil
-}
-
-func (t *Tpm) saveCredentials() error {
+func (t *Tpm) saveAk() error {
 
 	// Store the encrypted AK blob on disk
 	akBytes, err := t.ak.Marshal()
@@ -834,16 +705,6 @@ func (t *Tpm) saveCredentials() error {
 	akPath := path.Join(t.StoragePath, akFile)
 	if err := os.WriteFile(akPath, akBytes, 0644); err != nil {
 		return fmt.Errorf("failed to write file %v: %w", akPath, err)
-	}
-
-	// Store the encrypted IK blob on disk
-	ikBytes, err := t.ik.Marshal()
-	if err != nil {
-		return fmt.Errorf("activate credential failed: Marshal IK returned %w", err)
-	}
-	ikPath := path.Join(t.StoragePath, ikFile)
-	if err := os.WriteFile(ikPath, ikBytes, 0644); err != nil {
-		return fmt.Errorf("failed to write file %v: %w", ikPath, err)
 	}
 
 	// Store the AK chain on disk
@@ -856,20 +717,10 @@ func (t *Tpm) saveCredentials() error {
 		return fmt.Errorf("failed to write  %v: %w", path.Join(t.StoragePath, akchainFile), err)
 	}
 
-	// Store the IK chain on disk
-	ikchainPem := make([]byte, 0)
-	for _, cert := range t.ikChain {
-		c := internal.WriteCertPem(cert)
-		ikchainPem = append(ikchainPem, c...)
-	}
-	if err := os.WriteFile(path.Join(t.StoragePath, ikchainFile), ikchainPem, 0644); err != nil {
-		return fmt.Errorf("failed to write  %v: %w", path.Join(t.StoragePath, ikchainFile), err)
-	}
-
 	return nil
 }
 
-func (t *Tpm) loadCredentials() error {
+func (t *Tpm) loadAk() error {
 
 	if t.tpm == nil {
 		return errors.New("tpm is not opened")
@@ -887,18 +738,6 @@ func (t *Tpm) loadCredentials() error {
 	}
 	log.Debug("Loaded AK")
 
-	// Load encrypted IK into TPM
-	ikPath := path.Join(t.StoragePath, ikFile)
-	ikBytes, err := os.ReadFile(ikPath)
-	if err != nil {
-		return fmt.Errorf("failed to read file %v: %w", ikPath, err)
-	}
-	t.ik, err = t.tpm.LoadKey(ikBytes)
-	if err != nil {
-		return fmt.Errorf("failed to load key: %w", err)
-	}
-	log.Debug("Loaded IK")
-
 	// Load AK chain
 	data, err := os.ReadFile(path.Join(t.StoragePath, akchainFile))
 	if err != nil {
@@ -910,27 +749,16 @@ func (t *Tpm) loadCredentials() error {
 	}
 	log.Debugf("Parsed stored AK chain of length %v", len(t.akChain))
 
-	// Load IK chain
-	data, err = os.ReadFile(path.Join(t.StoragePath, ikchainFile))
-	if err != nil {
-		return fmt.Errorf("failed to read IK chain from %v: %w", t.StoragePath, err)
-	}
-	t.ikChain, err = internal.ParseCertsPem(data)
-	if err != nil {
-		return fmt.Errorf("failed to parse IK certs: %w", err)
-	}
-	log.Debugf("Parsed stored IK chain of length %v", len(t.ikChain))
-
 	return nil
 }
 
-func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *attest.Key, error) {
+func createKeys(tpm *attest.TPM) ([]attest.EK, *attest.AK, error) {
 
 	log.Debug("Loading EKs")
 
 	eks, err := tpm.EKs()
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load EKs - %w", err)
+		return nil, nil, fmt.Errorf("failed to load EKs - %w", err)
 	}
 	log.Debugf("Found %v EK(s)", len(eks))
 
@@ -938,40 +766,10 @@ func createKeys(tpm *attest.TPM, keyConfig string) ([]attest.EK, *attest.AK, *at
 	akConfig := &attest.AKConfig{}
 	ak, err := tpm.NewAK(akConfig)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create new AK - %w", err)
+		return nil, nil, fmt.Errorf("failed to create new AK - %w", err)
 	}
 
-	log.Debug("Creating new IK")
-
-	// Create key as specified in the config file
-	ikConfig := &attest.KeyConfig{}
-	switch keyConfig {
-	case "EC256":
-		ikConfig.Algorithm = attest.ECDSA
-		ikConfig.Size = 256
-	case "EC384":
-		ikConfig.Algorithm = attest.ECDSA
-		ikConfig.Size = 384
-	case "EC521":
-		ikConfig.Algorithm = attest.ECDSA
-		ikConfig.Size = 521
-	case "RSA2048":
-		ikConfig.Algorithm = attest.RSA
-		ikConfig.Size = 2048
-	case "RSA4096":
-		ikConfig.Algorithm = attest.RSA
-		ikConfig.Size = 4096
-	default:
-		return nil, nil, nil, fmt.Errorf(
-			"failed to create new IK Key, unknown key configuration: %v", keyConfig)
-	}
-
-	ik, err := tpm.NewKey(ak, ikConfig)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create new IK key - %w", err)
-	}
-
-	return eks, ak, ik, nil
+	return eks, ak, nil
 }
 
 func ActivateCredential(

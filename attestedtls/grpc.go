@@ -161,6 +161,7 @@ func (a GrpcApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 	// Create Sign request
 	req := api.TLSSignRequest{
 		Version: api.GetVersion(),
+		KeyId:   cc.KeyId,
 		Content: digest,
 		HashAlg: opts.HashFunc().String(),
 	}
@@ -193,6 +194,7 @@ func (a GrpcApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	// Create TLSCert request
 	req := api.TLSCertRequest{
 		Version: api.GetVersion(),
+		KeyId:   cc.KeyId,
 	}
 
 	// Call TLSCert request
@@ -243,4 +245,40 @@ func (a GrpcApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, er
 	}
 
 	return resp.Cache, nil
+}
+
+func (a GrpcApi) createKey(cc *CmcConfig) (string, error) {
+
+	log.Debugf("Sending TLS create request to cmcd on %v", cc.CmcAddr)
+
+	cmcClient, conn, err := getCMCServiceConn(cc)
+	if err != nil {
+		return "", fmt.Errorf("failed to establish connection: %w", err)
+	}
+	defer conn.Close()
+	log.Debug("Contacting backend for TLS create operation")
+
+	req := api.TLSCreateRequest{
+		Version: api.GetVersion(),
+		KeyConfig: &api.TLSKeyConfig{
+			Type:     cc.KeyConfig.Type,
+			Cn:       cc.KeyConfig.Cn,
+			DnsNames: cc.KeyConfig.DNSNames,
+		},
+	}
+
+	// Send Sign request
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
+	defer cancel()
+	resp, err := cmcClient.TLSCreate(ctx, &req)
+	if err != nil {
+		return "", fmt.Errorf("TLS create request failed: %w", err)
+	}
+
+	if resp.Version != api.GetVersion() {
+		return "", fmt.Errorf("API version mismatch. Expected TLSCreateResponse version '%v', got '%v'", api.GetVersion(), resp.Version)
+	}
+
+	log.Tracef("Key ID: %x", resp.KeyId)
+	return resp.KeyId, nil
 }

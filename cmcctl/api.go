@@ -18,6 +18,7 @@ package main
 type Api interface {
 	generate(c *config) error
 	verify(c *config) error
+	enroll(c *config) error
 	updateMetadata(c *config) error
 	updateCerts(c *config) error
 }

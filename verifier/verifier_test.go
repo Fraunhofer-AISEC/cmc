@@ -30,6 +30,7 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -215,11 +216,6 @@ func TestVerify(t *testing.T) {
 		return
 	}
 
-	swDriver := &SwDriver{
-		priv:      key,
-		certChain: certchain,
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := tt.args.serializer
@@ -245,19 +241,19 @@ func TestVerify(t *testing.T) {
 				t.Errorf("failed to marshal the ImageDescription: %v", err)
 			}
 
-			rtmManifest, err = s.Sign(rtmManifest, swDriver, ar.IK)
+			rtmManifest, err = internal.Sign(rtmManifest, key, key.PublicKey, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the RTM Manifest: %v", err)
 			}
-			osManifest, err = s.Sign(osManifest, swDriver, ar.IK)
+			osManifest, err = internal.Sign(osManifest, key, key.PublicKey, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the OS Manifest: %v", err)
 			}
-			appManifest, err = s.Sign(appManifest, swDriver, ar.IK)
+			appManifest, err = internal.Sign(appManifest, key, key.PublicKey, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the App Manifest: %v", err)
 			}
-			imageDescription, err = s.Sign(imageDescription, swDriver, ar.IK)
+			imageDescription, err = internal.Sign(imageDescription, key, key.PublicKey, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the ImageDescription: %v", err)
 			}
@@ -690,51 +686,6 @@ var (
 		},
 	}
 )
-
-type SwDriver struct {
-	certChain []*x509.Certificate
-	priv      crypto.PrivateKey
-}
-
-func (s *SwDriver) Init(c *ar.DriverConfig) error {
-	return nil
-}
-
-func (s *SwDriver) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
-	return []ar.Evidence{}, nil
-}
-
-func (s *SwDriver) GetCollateral() ([]ar.Collateral, error) {
-	return []ar.Collateral{}, nil
-}
-
-func (s *SwDriver) Lock() error {
-	return nil
-}
-
-func (s *SwDriver) Unlock() error {
-	return nil
-}
-
-func (s *SwDriver) GetKeyHandles(sel ar.KeySelection) (crypto.PrivateKey, crypto.PublicKey, error) {
-	return s.priv, &s.priv.(*ecdsa.PrivateKey).PublicKey, nil
-}
-
-func (s *SwDriver) GetCertChain(sel ar.KeySelection) ([]*x509.Certificate, error) {
-	return s.certChain, nil
-}
-
-func (s *SwDriver) Name() string {
-	return "SW Driver"
-}
-
-func (s *SwDriver) UpdateCerts() error {
-	return nil
-}
-
-func (s *SwDriver) UpdateMetadata(map[string][]byte) error {
-	return nil
-}
 
 func createCertsAndKeys() (*ecdsa.PrivateKey, []*x509.Certificate, error) {
 
