@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -12,8 +13,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
@@ -22,6 +21,34 @@ import (
 )
 
 type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+// The requestConn struct wraps the http response writer and request body to provide the io.ReadWriteCloser interface.
+// This is needed for the tunneling proxy when the http connection does not support hijacking (as is the case for HTTP/2)
+type requestConn struct {
+	w http.ResponseWriter
+	r io.ReadCloser
+}
+
+func (c *requestConn) Read(p []byte) (int, error) {
+	return c.r.Read(p)
+}
+
+func (c *requestConn) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	if err != nil {
+		return n, err
+	}
+
+	if f, ok := c.w.(http.Flusher); ok {
+		f.Flush()
+	}
+
+	return n, err
+}
+
+func (c *requestConn) Close() error {
+	return c.r.Close()
+}
 
 var hopByHopHeaders = []string{
 	"Proxy-Connection",
@@ -34,38 +61,27 @@ var hopByHopHeaders = []string{
 
 // This function forwards all data between conn1 and conn2 until either both connections are at EOF
 // or the context ctx is cancelled.
-func proxyRawConnections(ctx context.Context, conn1, conn2 net.Conn) {
-	localCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	var ctxCancelled atomic.Bool
-
-	go func() {
-		<-localCtx.Done()
-		ctxCancelled.Store(true)
-		deadline := time.Now().Add(time.Millisecond)
-		// We set really small read deadlines to get the reading goroutines to wake up
-		conn1.SetReadDeadline(deadline)
-		conn2.SetReadDeadline(deadline)
-	}()
-
+func proxyRawConnections(client, server io.ReadWriteCloser) {
 	var wg sync.WaitGroup
-	forward := func(from, to net.Conn) {
+	forward := func(from, to io.ReadWriteCloser, direction string) {
 		defer wg.Done()
 		_, err := io.Copy(to, from)
 		if err != nil {
-			if errors.Is(err, os.ErrDeadlineExceeded) && ctxCancelled.Load() {
-				// This error is due to the context being canceled, ignore
+			if errors.Is(err, os.ErrClosed) || errors.Is(err, net.ErrClosed) {
+				// Closing connections are not an error here
+				log.Trace("Connection closed")
 			} else {
-				log.Debugf("Error forwarding data from %s to %s: %v", from.RemoteAddr(), to.RemoteAddr(), err)
+				log.Debugf("Error forwarding data %s: %v", direction, err)
 			}
 		}
 		// To comply with the spec, the connection must be closed once one connection is closed.
-		cancel()
+		// TODO: We probably actually just want to send the equivalent of a FIN packet?
+		to.Close()
 	}
 
 	wg.Add(2)
-	go forward(conn1, conn2)
-	go forward(conn2, conn1)
+	go forward(client, server, "to server")
+	go forward(server, client, "to client")
 	wg.Wait()
 }
 
@@ -126,13 +142,6 @@ func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.Response
 func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Request) {
 	log.Debug("Using HTTP CONNECT tunneling")
 
-	h, ok := w.(http.Hijacker)
-	if !ok {
-		log.Warn("The underlying HTTP implementation does not support connection hijacking")
-		http.Error(w, "HTTP CONNECT tunneling is not supported by this proxy", http.StatusNotImplemented)
-		return
-	}
-
 	// The connect proxy scheme only supports parsing host and port (required, since no protocol is allowed).
 	// We should also reject URLs here that contains anything else, but let's let that slide in the name of compatibility.
 	if req.URL.Port() == "" {
@@ -150,29 +159,41 @@ func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Requ
 
 	// TODO: It might also be interesting to forward some attestation related information to the caller via X-* headers.
 	w.WriteHeader(http.StatusOK)
-
-	toClient, buffered, err := h.Hijack()
-	if err != nil {
-		log.Debugf("Error hijacking HTTP connection: %v", err)
-		return
-	}
-	defer toClient.Close()
-
-	// The error can be ignored since we peek the exact length of the buffer
-	buf, _ := buffered.Reader.Peek(buffered.Reader.Buffered())
-
-	// The HTTP server may have already received some client data.
-	n, err := toServer.Write(buf)
-	if n != len(buf) {
-		err = fmt.Errorf("could not write all available data to the destination")
-	}
-	if err != nil {
-		log.Debugf("Error forwarding buffered data to server: %v", err)
-		return
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
 	}
 
-	// TODO(http2): Respect connection multiplexing instead of hijacking
-	proxyRawConnections(req.Context(), toClient, toServer)
+	var toClient io.ReadWriteCloser
+	if h, ok := w.(http.Hijacker); ok {
+		var buffered *bufio.ReadWriter
+		toClient, buffered, err = h.Hijack()
+		if err != nil {
+			log.Debugf("Error hijacking HTTP connection: %v", err)
+			return
+		}
+		defer toClient.Close()
+
+		// The error can be ignored since we peek the exact length of the buffer
+		buf, _ := buffered.Reader.Peek(buffered.Reader.Buffered())
+
+		// The HTTP server may have already received some client data.
+		n, err := toServer.Write(buf)
+		if n != len(buf) {
+			err = fmt.Errorf("could not write all available data to the destination")
+		}
+		if err != nil {
+			log.Debugf("Error forwarding buffered data to server: %v", err)
+			return
+		}
+	} else {
+		log.Debug("Connection hijacking not available")
+		toClient = &requestConn{
+			w: w,
+			r: req.Body,
+		}
+	}
+
+	proxyRawConnections(toClient, toServer)
 }
 
 // The forward proxy acts as a general purpose HTTP proxy over an attested TLS tunnel.
