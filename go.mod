@@ -3,7 +3,7 @@ module github.com/Fraunhofer-AISEC/cmc
 go 1.25.0
 
 require (
-	github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20241227162048-d0a5b66c0bb6
+	github.com/Fraunhofer-AISEC/go-attestation v0.5.2-0.20260210211708-363bbf015efe
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/edgelesssys/ego v1.8.1
 	github.com/fxamacker/cbor/v2 v2.9.0
