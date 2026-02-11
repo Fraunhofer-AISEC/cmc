@@ -21,6 +21,17 @@ import (
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
+type dialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+var hopByHopHeaders = []string{
+	"Proxy-Connection",
+	"Keep-Alive",
+	"TE",
+	"Transfer-Encoding",
+	"Upgrade",
+	"Connection",
+}
+
 // This function forwards all data between conn1 and conn2 until either both connections are at EOF
 // or the context ctx is cancelled.
 func proxyRawConnections(ctx context.Context, conn1, conn2 net.Conn) {
@@ -56,15 +67,6 @@ func proxyRawConnections(ctx context.Context, conn1, conn2 net.Conn) {
 	go forward(conn1, conn2)
 	go forward(conn2, conn1)
 	wg.Wait()
-}
-
-var hopByHopHeaders = []string{
-	"Proxy-Connection",
-	"Keep-Alive",
-	"TE",
-	"Transfer-Encoding",
-	"Upgrade",
-	"Connection",
 }
 
 func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.ResponseWriter, req *http.Request) {
@@ -121,7 +123,7 @@ func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.Response
 	}
 }
 
-func proxyTunnel(tlsConf *tls.Config, c *config, w http.ResponseWriter, req *http.Request) {
+func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Request) {
 	log.Debug("Using HTTP CONNECT tunneling")
 
 	h, ok := w.(http.Hijacker)
@@ -137,24 +139,7 @@ func proxyTunnel(tlsConf *tls.Config, c *config, w http.ResponseWriter, req *htt
 		http.Error(w, "No port provided", http.StatusBadRequest)
 		return
 	}
-	toServer, err := atls.Dial("tcp", req.URL.Host, tlsConf,
-		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
-		atls.WithMtls(c.Mtls),
-		atls.WithAttest(c.attest),
-		atls.WithResultCb(func(result *ar.AttestationResult) {
-			// Publish the attestation result asynchronously if publishing address was specified and
-			// and attestation was performed
-			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
-				wg := new(sync.WaitGroup)
-				wg.Add(1)
-				defer wg.Wait()
-				go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
-			}
-		}),
-		atls.WithLibApiCmcConfig(&c.Config))
+	toServer, err := dial(req.Context(), "tcp", req.URL.Host)
 	if err != nil {
 		log.Debugf("Failed to dial remote server %s: %s", req.URL.Host, err)
 		// TODO: Depending on the error, this is also a bad request (e.g. if the remote address rejects)
@@ -231,41 +216,43 @@ func forwardProxy(c *config) error {
 
 	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
+	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		log.Debugf("Dialing TLS address: %v", addr)
+
+		conn, err := atls.Dial("tcp", addr, tlsConf,
+			atls.WithCmcAddr(c.CmcAddr),
+			atls.WithCmcPolicies(c.policies),
+			atls.WithCmcApi(c.Api),
+			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithMtls(c.Mtls),
+			atls.WithAttest(c.attest),
+			atls.WithResultCb(func(result *ar.AttestationResult) {
+				// Publish the attestation result asynchronously if publishing address was specified and
+				// and attestation was performed
+				if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
+					wg := new(sync.WaitGroup)
+					wg.Add(1)
+					defer wg.Wait()
+					go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
+				}
+			}),
+			atls.WithLibApiCmcConfig(&c.Config))
+		if err != nil {
+			return nil, fmt.Errorf("failed to dial server: %w", err)
+		}
+
+		return conn, err
+	}
+
+	// We always want to dial over a TLS connection for both http and https proxy requests
 	proxyTransport := &http.Transport{
-		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			log.Debugf("Dialing TLS address: %v", addr)
-
-			conn, err := atls.Dial("tcp", addr, tlsConf,
-				atls.WithCmcAddr(c.CmcAddr),
-				atls.WithCmcPolicies(c.policies),
-				atls.WithCmcApi(c.Api),
-				atls.WithApiSerializer(c.apiSerializer),
-				atls.WithMtls(c.Mtls),
-				atls.WithAttest(c.attest),
-				atls.WithResultCb(func(result *ar.AttestationResult) {
-					// Publish the attestation result asynchronously if publishing address was specified and
-					// and attestation was performed
-					if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
-						wg := new(sync.WaitGroup)
-						wg.Add(1)
-						defer wg.Wait()
-						go pub.PublishResultAsync(c.Publish, c.publishToken, c.ResultFile, result, wg)
-					}
-				}),
-				atls.WithLibApiCmcConfig(&c.Config))
-			if err != nil {
-				return nil, fmt.Errorf("failed to dial server: %w", err)
-			}
-
-			log.Debugf("Client-side aHTTPS connection established")
-
-			return conn, err
-		},
+		DialContext:    dial,
+		DialTLSContext: dial,
 	}
 
 	proxyHandler := func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodConnect {
-			proxyTunnel(tlsConf, c, w, req)
+			proxyTunnel(dial, c, w, req)
 		} else {
 			proxyHttpRequest(proxyTransport, c, w, req)
 		}
