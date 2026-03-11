@@ -87,7 +87,7 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 		// Only log the error, still send handshake complete message to inform peer
 		log.Warnf("atls handshake failed: %v", err)
 	}
-	err = aTlsHandshakeComplete(conn, cc.ApiSerializer, err)
+	err = aTlsHandshakeComplete(conn, cc.Serializer, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)
 	}

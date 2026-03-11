@@ -119,7 +119,7 @@ func Verify(
 	}
 
 	// Verify and unpack metadata from attestation report
-	metaResults, ok := verifyMetadata(metadataCas, s, collectedMetadata)
+	metaResults, ok := verifyMetadata(metadataCas, collectedMetadata)
 	if !ok {
 		result.Fail(ar.VerifyMetadata)
 	}
@@ -223,7 +223,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SW:
-			r, ok := verifySw(ev, col, evidenceNonce, refVals[ar.TYPE_REFVAL_SW], s)
+			r, ok := verifySw(ev, col, evidenceNonce, refVals[ar.TYPE_REFVAL_SW])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SW measurement"))
 			}
@@ -306,16 +306,24 @@ Loop:
 // as well as compatibility checks: The image description must reference all manifests, and
 // starting from an inherently trusted root manifest, all manifests must have a compatible
 // base layer.
-func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[string][]byte,
+func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 ) (ar.MetadataSummary, bool) {
 
 	results := ar.MetadataSummary{}
 	success := true
-	var err error
 
 	for hash, meta := range metadatamap {
 
 		log.Debugf("Validating metadata item %v...", hash)
+
+		s, err := ar.DetectSerialization(meta)
+		if err != nil {
+			result := ar.MetadataResult{}
+			result.Summary.Fail(ar.ExtractPayload, err)
+			results.UnknownResults = append(results.UnknownResults, result)
+			continue
+		}
+		log.Tracef("Detected %v serialization", s.String())
 
 		result, payload, ok := s.Verify(meta, cas)
 		if !ok {
@@ -332,7 +340,7 @@ func verifyMetadata(cas []*x509.Certificate, s ar.Serializer, metadatamap map[st
 			log.Debugf("Signature verification of metadata item %v successful", hash)
 		}
 
-		err := s.Unmarshal(payload, &result.Metadata)
+		err = s.Unmarshal(payload, &result.Metadata)
 		if err != nil {
 			result.Summary.Fail(ar.ParseMetadata, err)
 			success = false

@@ -65,7 +65,7 @@ func (a SocketApi) generate(c *config) error {
 	}
 
 	// Marshal payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -81,14 +81,14 @@ func (a SocketApi) generate(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	err = checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
 		return err
 	}
 
 	// Unmarshal report
 	resp := new(api.AttestationResponse)
-	err = c.apiSerializer.Unmarshal(payload, resp)
+	err = c.serializer.Unmarshal(payload, resp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal attestation response: %w", err)
 	}
@@ -106,7 +106,7 @@ func (a SocketApi) verify(c *config) error {
 
 	log.Infof("Sending socket request type 'Verify' to %v", c.CmcAddr)
 
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}
@@ -158,7 +158,7 @@ func (a SocketApi) enroll(c *config) error {
 	}
 
 	// Marshal payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -174,14 +174,14 @@ func (a SocketApi) enroll(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	err = checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
 		return err
 	}
 
 	// Unmarshal report
 	resp := new(api.TLSCreateResponse)
-	err = c.apiSerializer.Unmarshal(payload, resp)
+	err = c.serializer.Unmarshal(payload, resp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal tls create response: %w", err)
 	}
@@ -212,7 +212,7 @@ func (a SocketApi) updateCerts(c *config) error {
 	}
 
 	// Marshal payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -228,14 +228,14 @@ func (a SocketApi) updateCerts(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	err = checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
 		return err
 	}
 
 	// Unmarshal attestation response
 	resp := new(api.UpdateCertsResponse)
-	err = c.apiSerializer.Unmarshal(payload, resp)
+	err = c.serializer.Unmarshal(payload, resp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -272,7 +272,7 @@ func (a SocketApi) updateMetadata(c *config) error {
 	}
 
 	// Marshal payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -288,14 +288,14 @@ func (a SocketApi) updateMetadata(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to receive: %w", err)
 	}
-	err = checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
 		return err
 	}
 
 	// Unmarshal attestation response
 	resp := new(api.UpdateMetadataResponse)
-	err = c.apiSerializer.Unmarshal(payload, resp)
+	err = c.serializer.Unmarshal(payload, resp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -326,7 +326,7 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	}
 
 	// Marshal payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -342,14 +342,14 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive: %w", err)
 	}
-	err = checkError(msgType, payload, c.apiSerializer)
+	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
 		return nil, err
 	}
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
-	err = c.apiSerializer.Unmarshal(payload, verifyResp)
+	err = c.serializer.Unmarshal(payload, verifyResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal verification response: %w", err)
 	}

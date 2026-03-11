@@ -34,7 +34,6 @@ func verifySw(
 	collateral ar.Collateral,
 	nonce []byte,
 	refVals []ar.ReferenceValue,
-	s ar.Serializer,
 ) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying SW measurements")
@@ -44,12 +43,18 @@ func verifySw(
 	}
 	ok := true
 
+	// SW Evidence is always JSON serialized, as OCI specs are JSON
+	s, err := ar.NewJsonSerializer()
+	if err != nil {
+		result.Summary.Fail(ar.Internal, err)
+		return result, false
+	}
+
 	// Verify signature against the public key from the collateral. The collateral is
 	// hashed and its digest is part of the hardware-evidence nonce, thus binding the
 	// software evidence to the hardware evidence
 	pub, err := internal.ParsePublicKey(collateral.Key)
 	if err != nil {
-		log.Debugf("Failed to parse public key")
 		result.Summary.Fail(ar.VerifyEvidence, err)
 		return result, false
 	}

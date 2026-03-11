@@ -102,7 +102,7 @@ func (a GrpcApi) verify(c *config) error {
 	client := grpcapi.NewCMCServiceClient(conn)
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}

@@ -87,7 +87,7 @@ type config struct {
 	Header           []string `json:"header"`
 	Method           string   `json:"method"`
 	Data             string   `json:"data"`
-	ApiSerializer    string   `json:"apiSerializer"`
+	Serialization    string   `json:"serialization"`
 	LogLevel         string   `json:"logLevel"`
 	LogFile          string   `json:"logFile"`
 	TokenStore       string   `json:"tokenStore"`
@@ -97,13 +97,13 @@ type config struct {
 	TlsIpAddresses   []string `json:"tlsIpAddresses"`
 	cmc.Config
 
-	identityCas   []*x509.Certificate
-	policies      []byte
-	api           Api
-	apiSerializer ar.Serializer
-	attest        atls.AttestSelect
-	publishToken  []byte
-	keyId         string
+	identityCas  []*x509.Certificate
+	policies     []byte
+	api          Api
+	serializer   ar.Serializer
+	attest       atls.AttestSelect
+	publishToken []byte
+	keyId        string
 }
 
 // Defines the testool specic flags. CMC flags are defined in cmc/config.go
@@ -122,7 +122,7 @@ const (
 	mtlsFlag           = "mtls"
 	attestFlag         = "attest"
 	publishFlag        = "publish"
-	apiSerializerFlag  = "apiserializer"
+	serializationFlag  = "serialization"
 	headerFlag         = "header"
 	methodFlag         = "method"
 	dataFlag           = "data"
@@ -150,8 +150,8 @@ var (
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
 		"client only, or none [mutual, client, server, none]")
 	publish       = flag.String(publishFlag, "", "Optional HTTP address to publish attestation results to")
-	apiSerializer = flag.String(apiSerializerFlag, "",
-		"Serializer to be used for internal socket and CoAP API and aTLS (JSON or CBOR)")
+	serialization = flag.String(serializationFlag, "",
+		"Serialization to be used requests and attestation reports (JSON or CBOR)")
 	headers = flag.String(headerFlag, "", "Set header for HTTP POST requests")
 	method  = flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
 	data    = flag.String(dataFlag, "",
@@ -181,7 +181,7 @@ func getConfig(cmd string) (*config, error) {
 		Config: cmc.Config{
 			Api: "socket",
 		},
-		ApiSerializer: "cbor",
+		Serialization: "cbor",
 		Attest:        "mutual",
 	}
 
@@ -243,8 +243,8 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(publishFlag) {
 		c.Publish = *publish
 	}
-	if internal.FlagPassed(apiSerializerFlag) {
-		c.ApiSerializer = *apiSerializer
+	if internal.FlagPassed(serializationFlag) {
+		c.Serialization = *serialization
 	}
 	if internal.FlagPassed(headerFlag) {
 		c.Header = strings.Split(*headers, ",")
@@ -348,11 +348,11 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	// Get Serializer
-	log.Debugf("Getting serializer %v", c.ApiSerializer)
-	c.apiSerializer, ok = serializers[strings.ToLower(c.ApiSerializer)]
+	log.Debugf("Getting serializer %v", c.Serialization)
+	c.serializer, ok = serializers[strings.ToLower(c.Serialization)]
 	if !ok {
 		flag.Usage()
-		return nil, fmt.Errorf("serializer %v is not implemented", c.ApiSerializer)
+		return nil, fmt.Errorf("serializer %v is not implemented", c.Serialization)
 	}
 
 	// Get API
@@ -424,7 +424,7 @@ func (c *config) Print() {
 	log.Debugf("\tMtls                     : %v", c.Mtls)
 	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
 	log.Debugf("\tAttest                   : %v", c.Attest)
-	log.Debugf("\tAPI Serializer           : %v", c.ApiSerializer)
+	log.Debugf("\tAPI Serializer           : %v", c.Serialization)
 	log.Debugf("\tPublish                  : %v", c.Publish)
 	log.Debugf("\tApi                      : %v", c.Api)
 	log.Debugf("\tTLS / HTTP Payload       : %v", c.Data)

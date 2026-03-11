@@ -29,7 +29,6 @@ type DriverConfig struct {
 	ServerAddr       string
 	HashAlg          crypto.Hash
 	ExcludePcrs      []int
-	Serializer       attestationreport.Serializer
 	MeasurementLogs  bool
 	Ctr              bool
 	CtrPcr           int

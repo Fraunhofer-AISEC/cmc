@@ -42,13 +42,12 @@ func UpdateMetadata(cmc *Cmc) error {
 	}
 
 	// Read metadata from the file system
-	metadata, s, err := GetMetadata(cmc.MetadataLocation, cmc.Cache, cmc.EstTlsCas, cmc.EstTlsSysRoots)
+	metadata, err := GetMetadata(cmc.MetadataLocation, cmc.Cache, cmc.EstTlsCas, cmc.EstTlsSysRoots)
 	if err != nil {
 		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
 	cmc.Metadata = metadata
-	cmc.Serializer = s
 
 	log.Debugf("Updated metadata. New number of metadata items: %v", len(cmc.Metadata))
 

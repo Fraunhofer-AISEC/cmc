@@ -67,7 +67,7 @@ func request(c *config) error {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(c.Api),
-			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithSerializer(c.serializer),
 			atls.WithLibApiCmcConfig(&c.Config))
 		if err != nil {
 			return fmt.Errorf("failed to get TLS Certificate: %v", err)
@@ -97,7 +97,7 @@ func request(c *config) error {
 		MutualTls:       c.Mtls,
 		CmcAddr:         c.CmcAddr,
 		CmcApi:          c.Api,
-		ApiSerializer:   c.apiSerializer,
+		Serializer:      c.serializer,
 		LibApiCmcConfig: &c.Config,
 		CmcPolicies:     c.policies,
 		ResultCb: func(result *ar.AttestationResult) {
@@ -173,7 +173,7 @@ func serve(c *config) error {
 	cert, err := atls.GetCert(
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithSerializer(c.serializer),
 		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return fmt.Errorf("failed to get TLS Certificate: %v", err)
@@ -210,7 +210,7 @@ func serve(c *config) error {
 		MutualTls:       c.Mtls,
 		CmcAddr:         c.CmcAddr,
 		CmcApi:          c.Api,
-		ApiSerializer:   c.apiSerializer,
+		Serializer:      c.serializer,
 		LibApiCmcConfig: &c.Config,
 		CmcPolicies:     c.policies,
 		ResultCb: func(result *ar.AttestationResult) {

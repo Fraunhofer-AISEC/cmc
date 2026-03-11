@@ -33,11 +33,11 @@ import (
 )
 
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
-	useSystemRoots bool) (map[string][]byte, ar.Serializer, error) {
+	useSystemRoots bool) (map[string][]byte, error) {
 
 	if len(paths) == 0 {
 		log.Info("No metadata specified via config")
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	metadata := make([][]byte, 0)
@@ -87,14 +87,14 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 
 	if len(metadata) == 0 {
 		log.Warn("failed to retrieve any metadata. Can only work as verifier")
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	// Filter metadata: remove any duplicates through always choosing the
 	// newest version of duplicate metadata
-	metadata, s, err := filterMetadata(metadata)
+	metadata, err := filterMetadata(metadata)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to filter metadata: %w", err)
+		return nil, fmt.Errorf("failed to filter metadata: %w", err)
 	}
 
 	// Cache metadata if cache is available
@@ -108,7 +108,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 
 	metamap := internal.ConvertToMap(metadata)
 
-	return metamap, s, nil
+	return metamap, nil
 }
 
 // loadMetadata loads the metadata (manifests and descriptions) from the file system
@@ -178,12 +178,10 @@ func cacheMetadata(data [][]byte, localPath string) error {
 	return nil
 }
 
-func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
+func filterMetadata(inlist [][]byte) ([][]byte, error) {
 	log.Debugf("Filtering %v meta-data objects..", len(inlist))
 
 	outlist := make([][]byte, 0)
-	foundJson := false
-	foundCbor := false
 
 	// Iterate over input list, ignore invalid items
 	for _, elem := range inlist {
@@ -193,12 +191,6 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 		if err != nil {
 			log.Warnf("Failed to detect serialization. Ignoring object..")
 			continue
-		}
-
-		if strings.EqualFold(s.String(), "JSON") {
-			foundJson = true
-		} else if strings.EqualFold(s.String(), "CBOR") {
-			foundCbor = true
 		}
 
 		// Extract plain payload (i.e. the manifest/description itself)
@@ -230,18 +222,18 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 
 			stmp, err := ar.DetectSerialization(outlist[i])
 			if err != nil {
-				return nil, s, fmt.Errorf("internal error: failed to detect serialization of already present metadata item")
+				return nil, fmt.Errorf("internal error: failed to detect serialization of already present metadata item")
 			}
 
 			// Get info about item in outlist
 			data, err := stmp.GetPayload(outlist[i])
 			if err != nil {
-				return nil, s, fmt.Errorf("internal error: failed to parse metadata object %v: %v", i, err)
+				return nil, fmt.Errorf("internal error: failed to parse metadata object %v: %v", i, err)
 			}
 			out := new(ar.MetaInfo)
 			err = stmp.Unmarshal(data, out)
 			if err != nil {
-				return nil, s, fmt.Errorf("internal error: failed to unmarshal result: %v", err)
+				return nil, fmt.Errorf("internal error: failed to unmarshal result: %v", err)
 			}
 
 			// Result contains already metadata of this type
@@ -254,7 +246,7 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 						log.Tracef("Checking if %v: %v is newer then %v:%v", in.Name, in.Version, out.Name, out.Version)
 						newer, err := isNewer(in.Version, out.Version)
 						if err != nil {
-							return nil, s, fmt.Errorf("failed to compare metadata versions: %v", err)
+							return nil, fmt.Errorf("failed to compare metadata versions: %v", err)
 						}
 						if newer {
 							// Replace item with more recent item
@@ -271,7 +263,7 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 					log.Tracef("Checking if %v: %v is newer then %v:%v", in.Name, in.Version, out.Name, out.Version)
 					newer, err := isNewer(in.Version, out.Version)
 					if err != nil {
-						return nil, s, fmt.Errorf("failed to compare metadata versions: %v", err)
+						return nil, fmt.Errorf("failed to compare metadata versions: %v", err)
 					}
 					if newer {
 						// Replace item with more recent item
@@ -293,25 +285,9 @@ func filterMetadata(inlist [][]byte) ([][]byte, ar.Serializer, error) {
 		}
 	}
 
-	if foundJson && foundCbor {
-		return nil, nil,
-			fmt.Errorf("found both JSON and CBOR metadata. Mixed metadata is not supported")
-	} else {
-		log.Debugf("Returning filtered lists with %v elements", len(outlist))
-		if foundJson {
-			s, err := ar.NewJsonSerializer()
-			if err != nil {
-				return nil, nil, fmt.Errorf("internal error: failed to initialize json serializer: %w", err)
-			}
-			return outlist, s, nil
-		} else {
-			s, err := ar.NewCborSerializer()
-			if err != nil {
-				return nil, nil, fmt.Errorf("internal error: failed to initialize cbor serializer: %w", err)
-			}
-			return outlist, s, nil
-		}
-	}
+	log.Debugf("Returning filtered lists with %v elements", len(outlist))
+
+	return outlist, nil
 }
 
 func isNewer(t, ref string) (bool, error) {

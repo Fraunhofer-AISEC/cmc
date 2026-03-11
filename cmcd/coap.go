@@ -103,7 +103,7 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
-		s.cmc.Serializer, s.cmc.HashAlg)
+		ser, s.cmc.HashAlg)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
@@ -188,7 +188,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 	var success bool
 	err = m.Measure(&req.Event,
 		&m.MeasureConfig{
-			Serializer: s.cmc.Serializer,
+			Serializer: ser,
 			Pcr:        s.cmc.CtrPcr,
 			LogFile:    s.cmc.CtrLog,
 			Driver:     s.cmc.CtrDriver,
@@ -237,7 +237,7 @@ func (s CoapServer) TlsCreate(w mux.ResponseWriter, r *mux.Message) {
 		KeyConfig:  req.KeyConfig,
 		Metadata:   s.cmc.Metadata,
 		Drivers:    s.cmc.Drivers,
-		Serializer: s.cmc.Serializer,
+		Serializer: ser,
 		ArHashAlg:  s.cmc.HashAlg,
 	})
 	if err != nil {

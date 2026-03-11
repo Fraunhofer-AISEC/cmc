@@ -62,7 +62,7 @@ func (a LibApi) generate(c *config) error {
 	}
 
 	// Generate attestation report
-	report, err := prover.Generate(nonce, nil, a.cmc.Metadata, a.cmc.Drivers, a.cmc.Serializer,
+	report, err := prover.Generate(nonce, nil, a.cmc.Metadata, a.cmc.Drivers, c.serializer,
 		a.cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to generate attestation report: %w", err)
@@ -87,7 +87,7 @@ func (a LibApi) verify(c *config) error {
 	}
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}
@@ -132,10 +132,9 @@ func (a LibApi) enroll(c *config) error {
 			DNSNames:    c.TlsDnsNames,
 			IPAddresses: c.TlsIpAddresses,
 		},
-		Metadata:   a.cmc.Metadata,
-		Drivers:    a.cmc.Drivers,
-		Serializer: a.cmc.Serializer,
-		ArHashAlg:  a.cmc.HashAlg,
+		Metadata:  a.cmc.Metadata,
+		Drivers:   a.cmc.Drivers,
+		ArHashAlg: a.cmc.HashAlg,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to enroll key: %v", err)

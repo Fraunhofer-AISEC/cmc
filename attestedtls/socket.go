@@ -61,7 +61,7 @@ func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) (
 	}
 
 	// Marshal request
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -80,7 +80,7 @@ func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) (
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
-		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		err = cc.Serializer.Unmarshal(payload, resp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
@@ -90,7 +90,7 @@ func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) (
 	}
 
 	resp := new(api.AttestationResponse)
-	err = cc.ApiSerializer.Unmarshal(payload, resp)
+	err = cc.Serializer.Unmarshal(payload, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal cmcd attestation response body: %w", err)
 	}
@@ -134,7 +134,7 @@ func (a SocketApi) verifyAR(
 	}
 
 	// Marshal Verification request
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -153,7 +153,7 @@ func (a SocketApi) verifyAR(
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
-		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		err = cc.Serializer.Unmarshal(payload, resp)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
@@ -164,7 +164,7 @@ func (a SocketApi) verifyAR(
 
 	// Unmarshal verify response
 	var verifyResp api.VerificationResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &verifyResp)
+	err = cc.Serializer.Unmarshal(payload, &verifyResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal cmcd verify response: %w", err)
 	}
@@ -219,7 +219,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -238,7 +238,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
-		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		err = cc.Serializer.Unmarshal(payload, resp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
@@ -249,7 +249,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 
 	// Unmarshal sign response
 	var signResp api.TLSSignResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &signResp)
+	err = cc.Serializer.Unmarshal(payload, &signResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -286,7 +286,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -305,7 +305,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
-		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		err = cc.Serializer.Unmarshal(payload, resp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
@@ -316,7 +316,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
 	// Unmarshal cert response
 	var certResp api.TLSCertResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &certResp)
+	err = cc.Serializer.Unmarshal(payload, &certResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -352,7 +352,7 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -371,7 +371,7 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
-		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		err = cc.Serializer.Unmarshal(payload, resp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
@@ -382,7 +382,7 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 
 	// Unmarshal cert response
 	var cacheResp api.PeerCacheResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &cacheResp)
+	err = cc.Serializer.Unmarshal(payload, &cacheResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -418,7 +418,7 @@ func (a SocketApi) createKey(cc *CmcConfig) (string, error) {
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
@@ -437,7 +437,7 @@ func (a SocketApi) createKey(cc *CmcConfig) (string, error) {
 
 	if mtype == api.TypeError {
 		resp := new(api.SocketError)
-		err = cc.ApiSerializer.Unmarshal(payload, resp)
+		err = cc.Serializer.Unmarshal(payload, resp)
 		if err != nil {
 			return "", fmt.Errorf("failed to unmarshal error response from cmcd: %w", err)
 		}
@@ -448,7 +448,7 @@ func (a SocketApi) createKey(cc *CmcConfig) (string, error) {
 
 	// Unmarshal cert response
 	var createResp api.TLSCreateResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &createResp)
+	err = cc.Serializer.Unmarshal(payload, &createResp)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}

@@ -46,6 +46,7 @@ type Sw struct {
 	akPub        crypto.PublicKey
 	ctr          bool
 	evidenceHash []byte
+	serializer   ar.Serializer
 }
 
 const (
@@ -59,19 +60,20 @@ func (s *Sw) Name() string {
 
 // Init a new object for software-based signing
 func (sw *Sw) Init(c *drivers.DriverConfig) error {
-	var err error
 
 	if sw == nil {
 		return errors.New("internal error: SW object is nil")
 	}
 
-	// Check if serializer is initialized
-	if c.Serializer == nil {
-		return fmt.Errorf("serializer not initialized in driver config")
+	// SW Evidence is always JSON serialized, as OCI specs are JSON
+	s, err := ar.NewJsonSerializer()
+	if err != nil {
+		return fmt.Errorf("failed to initialize sw serializer: %w", err)
 	}
 
 	sw.DriverConfig = c
 	sw.ctr = c.Ctr && strings.EqualFold(c.CtrDriver, "sw")
+	sw.serializer = s
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
@@ -124,14 +126,14 @@ func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 	log.Debug("Collecting SW evidence")
 
 	// Generate Evidence = Nonce | Aggregated_Hash
-	data, err := sw.Serializer.Marshal(&ar.SwEvidence{
+	data, err := sw.serializer.Marshal(&ar.SwEvidence{
 		Nonce:  nonce,
 		Sha256: sw.evidenceHash,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal evidence: %w", err)
 	}
-	swEvidence, err := internal.Sign(data, sw.akPriv, sw.akPub, sw.Serializer.String(), nil)
+	swEvidence, err := internal.Sign(data, sw.akPriv, sw.akPub, sw.serializer.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
 	}
@@ -165,7 +167,7 @@ func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
 		}
 
 		var measureList []ar.MeasureEvent
-		err = sw.Serializer.Unmarshal(data, &measureList)
+		err = sw.serializer.Unmarshal(data, &measureList)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 		}
@@ -192,7 +194,7 @@ func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
 
 	pub, err := internal.WritePublicKeyPem(sw.akPub)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to marshal public key: %w", err)
+		return nil, fmt.Errorf("failed to marshal public key: %w", err)
 	}
 
 	collateral := ar.Collateral{

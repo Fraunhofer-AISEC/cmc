@@ -220,8 +220,8 @@ func (h *HexByte) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON marshals an attestation report with encoded metadata,
-// which is required for the metadata integrity hash calculation
+// MarshalJSON marshals an attestation report with encoded context,
+// which is required for the context integrity hash calculation
 func (r AttestationReport) MarshalJSON() ([]byte, error) {
 
 	if r.encodedContext == nil {
@@ -231,10 +231,10 @@ func (r AttestationReport) MarshalJSON() ([]byte, error) {
 	type alias AttestationReport
 	return json.Marshal(&struct {
 		*alias
-		Metadata string `json:"metadata"`
+		Context string `json:"context"`
 	}{
-		alias:    (*alias)(&r),
-		Metadata: string(r.encodedContext),
+		alias:   (*alias)(&r),
+		Context: string(r.encodedContext),
 	})
 }
 
@@ -245,7 +245,7 @@ func (r *AttestationReport) UnmarshalJSON(data []byte) error {
 	type alias AttestationReport
 	aux := &struct {
 		*alias
-		Metadata string `json:"metadata"`
+		Context string `json:"context"`
 	}{
 		alias: (*alias)(r),
 	}
@@ -254,12 +254,12 @@ func (r *AttestationReport) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to unmarshal attestation report: %w", err)
 	}
 
-	r.encodedContext = []byte(aux.Metadata)
+	r.encodedContext = []byte(aux.Context)
 
 	var raw []byte
 	switch r.Encoding {
 	case TYPE_ENCODING_B64:
-		r, err := base64.RawURLEncoding.DecodeString(aux.Metadata)
+		r, err := base64.RawURLEncoding.DecodeString(aux.Context)
 		if err != nil {
 			return fmt.Errorf("failed to decode: %w", err)
 		}

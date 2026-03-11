@@ -49,17 +49,17 @@ const (
 
 // CmcConfig holds the relevant parameters to interact with the cmcd
 type CmcConfig struct {
-	CmcAddr       string
-	CmcApi        CmcApi
-	ApiSerializer ar.Serializer
-	IdentityCas   []*x509.Certificate
-	Policies      []byte
-	Mtls          bool
-	Attest        AttestSelect
-	KeyId         string
-	KeyConfig     api.TLSKeyConfig
-	ResultCb      func(result *ar.AttestationResult)
-	LibApiConfig  *cmc.Config
+	CmcAddr      string
+	CmcApi       CmcApi
+	Serializer   ar.Serializer
+	IdentityCas  []*x509.Certificate
+	Policies     []byte
+	Mtls         bool
+	Attest       AttestSelect
+	KeyId        string
+	KeyConfig    api.TLSKeyConfig
+	ResultCb     func(result *ar.AttestationResult)
+	LibApiConfig *cmc.Config
 }
 
 type ConnectionOption[T any] func(*T) error
@@ -73,10 +73,10 @@ func NewCmcConfig(opts ...ConnectionOption[CmcConfig]) (*CmcConfig, error) {
 		return nil, fmt.Errorf("internal error: failed to initialize cbor serializer: %w", err)
 	}
 	cc := &CmcConfig{
-		CmcAddr:       cmcAddrDefault,
-		CmcApi:        CmcApis[cmcApiSelectDefault],
-		Attest:        attestDefault,
-		ApiSerializer: s,
+		CmcAddr:    cmcAddrDefault,
+		CmcApi:     CmcApis[cmcApiSelectDefault],
+		Attest:     attestDefault,
+		Serializer: s,
 	}
 
 	// Overwrite with specified configuration options
@@ -137,13 +137,13 @@ func WithCmcPolicies(policies []byte) ConnectionOption[CmcConfig] {
 	}
 }
 
-// WithApiSerializer specifies the serializer for internal requests
-func WithApiSerializer(apiSerializer ar.Serializer) ConnectionOption[CmcConfig] {
+// WithSerializer specifies the serializer for requests and attestation reports
+func WithSerializer(serializer ar.Serializer) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) error {
-		if apiSerializer == nil {
+		if serializer == nil {
 			return fmt.Errorf("cannot configure api serializer nil")
 		}
-		c.ApiSerializer = apiSerializer
+		c.Serializer = serializer
 		return nil
 	}
 }

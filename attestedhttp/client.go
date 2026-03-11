@@ -61,7 +61,7 @@ type Transport struct {
 	MutualTls       bool
 	CmcAddr         string
 	CmcApi          string
-	ApiSerializer   ar.Serializer
+	Serializer      ar.Serializer
 	LibApiCmcConfig *cmc.Config
 	CmcPolicies     []byte
 	ReadTimeout     time.Duration
@@ -160,7 +160,7 @@ func prepareClient(c *Client) error {
 
 		log.Debugf("Initializing new HTTP client")
 
-		if c.Transport.ApiSerializer == nil {
+		if c.Transport.Serializer == nil {
 			return fmt.Errorf("API serializer not configured")
 		}
 
@@ -189,7 +189,7 @@ func prepareClient(c *Client) error {
 				log.Debugf("Dialing TLS address: %v", addr)
 
 				conn, err := atls.Dial("tcp", addr, c.Transport.TLSClientConfig,
-					atls.WithApiSerializer(c.Transport.ApiSerializer),
+					atls.WithSerializer(c.Transport.Serializer),
 					atls.WithAttest(c.Transport.Attest),
 					atls.WithLibApiCmcConfig(c.Transport.LibApiCmcConfig),
 					atls.WithCmcAddr(c.Transport.CmcAddr),

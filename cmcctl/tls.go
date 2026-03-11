@@ -56,7 +56,7 @@ func dial(c *config) error {
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
 		atls.WithResultCb(func(result *ar.AttestationResult) {
@@ -137,7 +137,7 @@ func listen(c *config) error {
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
 		atls.WithResultCb(func(result *ar.AttestationResult) {
@@ -223,7 +223,7 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 			atls.WithKeyId(c.keyId),
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(c.Api),
-			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithSerializer(c.serializer),
 			atls.WithLibApiCmcConfig(&c.Config))
 		if err == nil {
 			log.Tracef("Found key with key id %s", c.keyId)
@@ -249,7 +249,7 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 		}),
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithSerializer(c.serializer),
 		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to create TLS key and cert: %w", err)
@@ -272,7 +272,7 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 		atls.WithKeyId(c.keyId),
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(c.Api),
-		atls.WithApiSerializer(c.apiSerializer),
+		atls.WithSerializer(c.serializer),
 		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to retrieve certificate for key ID %v: %w", keyId, err)

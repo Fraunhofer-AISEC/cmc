@@ -21,7 +21,7 @@
     "publish": "http://nuc-02.sos.aisec.fraunhofer.de:8080/results",
     "logLevel": "trace",
     "api": "libapi",
-    "apiSerializer": "cbor",
+    "serialization": "cbor",
     "keyConfig": "EC256",
     "metadata": [
       "file://../data/metadata-signed"

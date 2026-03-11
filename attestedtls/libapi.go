@@ -60,7 +60,7 @@ func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]b
 	}
 
 	report, err := prover.Generate(chbindings, cached, a.cmc.Metadata, a.cmc.Drivers,
-		a.cmc.Serializer, a.cmc.HashAlg)
+		cc.Serializer, a.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
@@ -201,7 +201,7 @@ func (a LibApi) createKey(cc *CmcConfig) (string, error) {
 		KeyConfig:  cc.KeyConfig,
 		Metadata:   a.cmc.Metadata,
 		Drivers:    a.cmc.Drivers,
-		Serializer: a.cmc.Serializer,
+		Serializer: cc.Serializer,
 		ArHashAlg:  a.cmc.HashAlg,
 	})
 	if err != nil {

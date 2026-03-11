@@ -108,7 +108,7 @@ func (ln Listener) handshake(conn net.Conn) error {
 		// Only log the error, still send handshake complete message to inform peer
 		log.Warnf("atls handshake failed: %v", err)
 	}
-	err = aTlsHandshakeComplete(tlsConn, ln.CmcConfig.ApiSerializer, err)
+	err = aTlsHandshakeComplete(tlsConn, ln.CmcConfig.Serializer, err)
 	if err != nil {
 		return fmt.Errorf("atls handshake failed: %w", err)
 	}
