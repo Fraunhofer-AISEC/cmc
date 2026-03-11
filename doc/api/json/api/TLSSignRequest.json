@@ -8,10 +8,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "SaltLength"
-      ]
+      "type": "object"
     },
     "TLSSignRequest": {
       "properties": {
@@ -34,12 +31,7 @@
           "$ref": "#/$defs/PSSOptions"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "content",
-        "hashAlg"
-      ]
+      "type": "object"
     }
   }
 }

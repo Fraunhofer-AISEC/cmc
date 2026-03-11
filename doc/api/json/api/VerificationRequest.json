@@ -36,12 +36,7 @@
           "contentEncoding": "base64"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "nonce",
-        "report"
-      ]
+      "type": "object"
     }
   }
 }

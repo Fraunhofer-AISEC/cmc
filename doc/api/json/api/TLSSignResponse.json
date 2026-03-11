@@ -12,11 +12,7 @@
           "contentEncoding": "base64"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "signedContent"
-      ]
+      "type": "object"
     }
   }
 }

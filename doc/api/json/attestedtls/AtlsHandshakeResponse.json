@@ -28,10 +28,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "version"
-      ]
+      "type": "object"
     }
   }
 }

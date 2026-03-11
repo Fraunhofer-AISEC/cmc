@@ -14,11 +14,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "success"
-      ]
+      "type": "object"
     }
   }
 }

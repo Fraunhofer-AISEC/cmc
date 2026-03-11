@@ -17,11 +17,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "type",
-        "index"
-      ]
+      "type": "object"
     },
     "AttestationReport": {
       "properties": {
@@ -44,11 +40,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "type"
-      ]
+      "type": "object"
     },
     "Box": {
       "properties": {
@@ -59,11 +51,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "height",
-        "width"
-      ]
+      "type": "object"
     },
     "CPUAffinity": {
       "properties": {
@@ -88,11 +76,7 @@
           "$ref": "#/$defs/Spec"
         }
       },
-      "type": "object",
-      "required": [
-        "configSha256",
-        "rootfsSha256"
-      ]
+      "type": "object"
     },
     "EFIDevicePath": {
       "properties": {
@@ -184,10 +168,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "type"
-      ]
+      "type": "object"
     },
     "EFILoadOption": {
       "properties": {
@@ -207,12 +188,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "attributes",
-        "description",
-        "filepathlist"
-      ]
+      "type": "object"
     },
     "EventData": {
       "properties": {
@@ -266,10 +242,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "path"
-      ]
+      "type": "object"
     },
     "FreeBSDJail": {
       "properties": {
@@ -479,10 +452,7 @@
           "$ref": "#/$defs/HexByte"
         }
       },
-      "type": "object",
-      "required": [
-        "signatureownerguid"
-      ]
+      "type": "object"
     },
     "HexByte": {
       "type": "string",
@@ -509,10 +479,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "path"
-      ]
+      "type": "object"
     },
     "Hooks": {
       "properties": {
@@ -567,11 +534,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "firstMFN",
-        "nrMFNs"
-      ]
+      "type": "object"
     },
     "ImageLoadEvent": {
       "properties": {
@@ -591,12 +554,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "imagelocationinmemory",
-        "imagelengthinmemory",
-        "imagelinktimeaddress"
-      ]
+      "type": "object"
     },
     "IntelCollateral": {
       "properties": {
@@ -641,19 +599,7 @@
           "contentEncoding": "base64"
         }
       },
-      "type": "object",
-      "required": [
-        "TcbInfo",
-        "QeIdentity",
-        "RootCaCrl",
-        "PckCrl",
-        "PckCrlIntermediateCert",
-        "PckCrlRootCert",
-        "TcbInfoIntermediateCert",
-        "TcbInfoRootCert",
-        "QeIdentityIntermediateCert",
-        "QeIdentityRootCert"
-      ]
+      "type": "object"
     },
     "Linux": {
       "properties": {
@@ -870,13 +816,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "path",
-        "type",
-        "major",
-        "minor"
-      ]
+      "type": "object"
     },
     "LinuxDeviceCgroup": {
       "properties": {
@@ -896,10 +836,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "allow"
-      ]
+      "type": "object"
     },
     "LinuxHugepageLimit": {
       "properties": {
@@ -910,11 +847,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "pageSize",
-        "limit"
-      ]
+      "type": "object"
     },
     "LinuxIDMapping": {
       "properties": {
@@ -928,12 +861,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "containerID",
-        "hostID",
-        "size"
-      ]
+      "type": "object"
     },
     "LinuxIOPriority": {
       "properties": {
@@ -944,11 +872,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "class",
-        "priority"
-      ]
+      "type": "object"
     },
     "LinuxIntelRdt": {
       "properties": {
@@ -982,11 +906,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "name",
-        "priority"
-      ]
+      "type": "object"
     },
     "LinuxMemory": {
       "properties": {
@@ -1035,11 +955,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "mode",
-        "nodes"
-      ]
+      "type": "object"
     },
     "LinuxNamespace": {
       "properties": {
@@ -1050,10 +966,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "type"
-      ]
+      "type": "object"
     },
     "LinuxNetDevice": {
       "properties": {
@@ -1089,10 +1002,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "domain"
-      ]
+      "type": "object"
     },
     "LinuxPids": {
       "properties": {
@@ -1190,10 +1100,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "defaultAction"
-      ]
+      "type": "object"
     },
     "LinuxSeccompArg": {
       "properties": {
@@ -1210,12 +1117,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "index",
-        "value",
-        "op"
-      ]
+      "type": "object"
     },
     "LinuxSyscall": {
       "properties": {
@@ -1238,11 +1140,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "names",
-        "action"
-      ]
+      "type": "object"
     },
     "LinuxThrottleDevice": {
       "properties": {
@@ -1256,12 +1154,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "major",
-        "minor",
-        "rate"
-      ]
+      "type": "object"
     },
     "LinuxTimeOffset": {
       "properties": {
@@ -1289,11 +1182,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "major",
-        "minor"
-      ]
+      "type": "object"
     },
     "MeasureEvent": {
       "properties": {
@@ -1355,10 +1244,7 @@
           "contentEncoding": "base64"
         }
       },
-      "type": "object",
-      "required": [
-        "type"
-      ]
+      "type": "object"
     },
     "MetadataDigest": {
       "properties": {
@@ -1369,11 +1255,7 @@
           "$ref": "#/$defs/HexByte"
         }
       },
-      "type": "object",
-      "required": [
-        "type",
-        "digest"
-      ]
+      "type": "object"
     },
     "Mount": {
       "properties": {
@@ -1405,10 +1287,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "destination"
-      ]
+      "type": "object"
     },
     "PCClientTaggedEvent": {
       "properties": {
@@ -1419,11 +1298,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "taggedeventid",
-        "taggedeventdata"
-      ]
+      "type": "object"
     },
     "POSIXRlimit": {
       "properties": {
@@ -1437,12 +1312,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "type",
-        "hard",
-        "soft"
-      ]
+      "type": "object"
     },
     "PkixExtension": {
       "properties": {
@@ -1457,12 +1327,7 @@
           "contentEncoding": "base64"
         }
       },
-      "type": "object",
-      "required": [
-        "id",
-        "critical",
-        "value"
-      ]
+      "type": "object"
     },
     "Process": {
       "properties": {
@@ -1524,11 +1389,7 @@
           "$ref": "#/$defs/CPUAffinity"
         }
       },
-      "type": "object",
-      "required": [
-        "user",
-        "cwd"
-      ]
+      "type": "object"
     },
     "Root": {
       "properties": {
@@ -1539,10 +1400,7 @@
           "type": "boolean"
         }
       },
-      "type": "object",
-      "required": [
-        "path"
-      ]
+      "type": "object"
     },
     "Scheduler": {
       "properties": {
@@ -1571,10 +1429,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "policy"
-      ]
+      "type": "object"
     },
     "SignatureDatabase": {
       "properties": {
@@ -1721,10 +1576,7 @@
           "$ref": "#/$defs/FreeBSD"
         }
       },
-      "type": "object",
-      "required": [
-        "ociVersion"
-      ]
+      "type": "object"
     },
     "UEFICertificate": {
       "properties": {
@@ -1735,11 +1587,7 @@
           "$ref": "#/$defs/X509CertExtracted"
         }
       },
-      "type": "object",
-      "required": [
-        "signatureownerguid",
-        "certificates"
-      ]
+      "type": "object"
     },
     "UefiConfigurationTable": {
       "properties": {
@@ -1750,11 +1598,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "guid",
-        "tableaddress"
-      ]
+      "type": "object"
     },
     "UefiHandoffTablePointer": {
       "properties": {
@@ -1765,10 +1609,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "ueficonfigurationtable"
-      ]
+      "type": "object"
     },
     "UefiPlatformFirmwareBlob": {
       "properties": {
@@ -1779,11 +1620,7 @@
           "$ref": "#/$defs/HexByte"
         }
       },
-      "type": "object",
-      "required": [
-        "blobbase",
-        "bloblength"
-      ]
+      "type": "object"
     },
     "UefiVariableData": {
       "properties": {
@@ -1859,11 +1696,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "uid",
-        "gid"
-      ]
+      "type": "object"
     },
     "VM": {
       "properties": {
@@ -1880,10 +1713,7 @@
           "$ref": "#/$defs/HWConfig"
         }
       },
-      "type": "object",
-      "required": [
-        "kernel"
-      ]
+      "type": "object"
     },
     "VMHypervisor": {
       "properties": {
@@ -1897,10 +1727,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "path"
-      ]
+      "type": "object"
     },
     "VMImage": {
       "properties": {
@@ -1911,11 +1738,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "path",
-        "format"
-      ]
+      "type": "object"
     },
     "VMKernel": {
       "properties": {
@@ -1932,10 +1755,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "path"
-      ]
+      "type": "object"
     },
     "Validity": {
       "properties": {
@@ -1946,11 +1766,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "notBefore",
-        "notAfter"
-      ]
+      "type": "object"
     },
     "Windows": {
       "properties": {
@@ -1983,10 +1799,7 @@
           "$ref": "#/$defs/WindowsNetwork"
         }
       },
-      "type": "object",
-      "required": [
-        "layerFolders"
-      ]
+      "type": "object"
     },
     "WindowsCPUGroupAffinity": {
       "properties": {
@@ -2028,11 +1841,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "id",
-        "idType"
-      ]
+      "type": "object"
     },
     "WindowsHyperV": {
       "properties": {
@@ -2197,21 +2006,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "serialNumber",
-        "issuer",
-        "subject",
-        "validity",
-        "keyUsage",
-        "signatureAlgorithm",
-        "publicKeyAlgorithm",
-        "publicKey",
-        "pkixExtensions",
-        "basicConstraintsValid",
-        "subjectKeyId"
-      ]
+      "type": "object"
     },
     "X509Name": {
       "properties": {
@@ -2286,10 +2081,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "type"
-      ]
+      "type": "object"
     }
   }
 }

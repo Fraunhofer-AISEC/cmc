@@ -11,11 +11,7 @@
           "type": "boolean"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "success"
-      ]
+      "type": "object"
     }
   }
 }
