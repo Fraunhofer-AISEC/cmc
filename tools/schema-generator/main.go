@@ -90,10 +90,11 @@ func main() {
 	}
 
 	r := &jsonschema.Reflector{
-		ExpandedStruct:            false,
-		Anonymous:                 true,
-		DoNotReference:            false,
-		AllowAdditionalProperties: true,
+		ExpandedStruct:             false,
+		Anonymous:                  true,
+		DoNotReference:             false,
+		AllowAdditionalProperties:  true,
+		RequiredFromJSONSchemaTags: true,
 	}
 
 	for _, o := range objects {

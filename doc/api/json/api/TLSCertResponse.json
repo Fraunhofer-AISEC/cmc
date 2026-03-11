@@ -15,11 +15,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "certificate"
-      ]
+      "type": "object"
     }
   }
 }

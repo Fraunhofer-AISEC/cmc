@@ -14,11 +14,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "cache"
-      ]
+      "type": "object"
     }
   }
 }

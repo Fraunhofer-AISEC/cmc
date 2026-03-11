@@ -27,11 +27,7 @@
           "type": "boolean"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "attest"
-      ]
+      "type": "object"
     }
   }
 }

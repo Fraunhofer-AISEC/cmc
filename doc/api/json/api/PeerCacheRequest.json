@@ -11,11 +11,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "peer"
-      ]
+      "type": "object"
     }
   }
 }

@@ -8,10 +8,7 @@
           "type": "string"
         }
       },
-      "type": "object",
-      "required": [
-        "version"
-      ]
+      "type": "object"
     }
   }
 }

@@ -25,11 +25,7 @@
           "type": "array"
         }
       },
-      "type": "object",
-      "required": [
-        "version",
-        "report"
-      ]
+      "type": "object"
     }
   }
 }

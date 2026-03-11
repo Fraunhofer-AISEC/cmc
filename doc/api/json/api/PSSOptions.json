@@ -8,10 +8,7 @@
           "type": "integer"
         }
       },
-      "type": "object",
-      "required": [
-        "SaltLength"
-      ]
+      "type": "object"
     }
   }
 }
