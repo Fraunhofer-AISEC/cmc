@@ -61,6 +61,7 @@ func marshalPublicKey(pub any) (publicKeyBytes []byte, publicKeyAlgorithm pkix.A
 		if !ok {
 			return nil, pkix.AlgorithmIdentifier{}, errors.New("x509: unsupported elliptic curve")
 		}
+		//lint:ignore SA1019 update as soon as upstream is updated
 		if !pub.Curve.IsOnCurve(pub.X, pub.Y) {
 			return nil, pkix.AlgorithmIdentifier{}, errors.New("x509: invalid elliptic curve public key")
 		}
