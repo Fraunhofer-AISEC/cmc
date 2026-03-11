@@ -250,7 +250,7 @@ do
                         "${cmcctl_params[@]}" \
                         -logfile "${server_log}" \
                         -api ${protocols[i]} \
-                        -apiserializer ${api_serializer} \
+                        -serialization ${api_serializer} \
                         ${commands_params_server[j]} \
                         &
                     disown
@@ -261,7 +261,7 @@ do
                         "${commands_client[j]}" \
                         "${cmcctl_params[@]}" \
                         -logfile "${client_log}" \
-                        -apiserializer "${api_serializer}" \
+                        -serialization "${api_serializer}" \
                         -api "${protocols[i]}" \
                         ${commands_params_client[j]}
                     stty sane

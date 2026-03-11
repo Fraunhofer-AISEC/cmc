@@ -64,7 +64,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 	log.Debugf("Performing atls handshake with %v", peerAddr)
 
-	if cc.ApiSerializer == nil {
+	if cc.Serializer == nil {
 		return fmt.Errorf("internal error: API serializer is nil")
 	}
 
@@ -84,7 +84,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	// Send attestation request
 	log.Debugf("Verifier %v: sending atls handshake request mode %v to %v",
 		ownAddr, cc.Attest.String(), peerAddr)
-	err = sendAtlsRequest(conn, cc.ApiSerializer, cc.Attest, cache)
+	err = sendAtlsRequest(conn, cc.Serializer, cc.Attest, cache)
 	if err != nil {
 		return fmt.Errorf("verifer %v: failed to send atls handshake request to %v: %w",
 			ownAddr, peerAddr, err)
@@ -131,7 +131,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		ownAddr, len(ownResp.Report), peerAddr)
 	errChan := make(chan error)
 	go func() {
-		err := sendAtlsResponse(conn, cc.ApiSerializer, ownResp)
+		err := sendAtlsResponse(conn, cc.Serializer, ownResp)
 		errChan <- err
 		close(errChan)
 	}()

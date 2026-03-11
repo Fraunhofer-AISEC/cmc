@@ -25,7 +25,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	drv "github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/keymgr"
@@ -54,7 +53,6 @@ type Cmc struct {
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	PolicyOverwrite    bool
 	Drivers            []drv.Driver
-	Serializer         ar.Serializer
 	HashAlg            crypto.Hash
 	KeyMgr             *keymgr.KeyMgr
 	*Config
@@ -98,102 +96,95 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	// Read metadata from the file system
-	metadata, s, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots)
+	metadata, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
+	cmc.Metadata = metadata
 
-	// If no metadata is specified, the cmc can only work as verifier
-	if metadata != nil {
-
-		cmc.Serializer = s
-		cmc.Metadata = metadata
-
-		authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
-		}
-
-		var provisioner keymgr.Provisioner
-		var endorser drv.Endorser
-		switch c.ProvisionMode {
-		case "est":
-			var token []byte
-			if authMethods.Has(internal.AuthToken) {
-				token, err = os.ReadFile(c.ProvisionToken)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read token: %v", err)
-				}
-			}
-			estclient, err := estclient.New(c.ProvisionAddr, estTlsCas, c.EstTlsSysRoots, token)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create EST client: %w", err)
-			}
-			endorser = estclient
-			provisioner = estclient
-		default:
-			return nil, fmt.Errorf("unknown provisioner %q", c.ProvisionMode)
-		}
-
-		// Create driver configuration
-		driverConf := &drv.DriverConfig{
-			ServerAddr:       c.ProvisionAddr,
-			HashAlg:          alg,
-			ExcludePcrs:      c.ExcludePcrs,
-			MeasurementLogs:  c.MeasurementLogs,
-			Serializer:       s,
-			CtrPcr:           c.CtrPcr,
-			CtrLog:           c.CtrLog,
-			CtrDriver:        c.CtrDriver,
-			Ctr:              c.Ctr,
-			EstTlsCas:        estTlsCas,
-			UseSystemRootCas: c.EstTlsSysRoots,
-			Vmpl:             c.Vmpl,
-			ProvisionAuth:    authMethods,
-			Endorser:         endorser,
-		}
-
-		// Initialize drivers
-		usedDrivers := make([]drv.Driver, 0)
-		for _, driver := range c.Drivers {
-			d, ok := drivers[strings.ToLower(driver)]
-			if !ok {
-				return nil, fmt.Errorf("driver %v not implemented", driver)
-			}
-
-			driverConf.StoragePath = path.Join(c.Storage, driver+"driver")
-
-			err = d.Init(driverConf)
-			if err != nil {
-				return nil, fmt.Errorf("failed to initialize driver: %w", err)
-			}
-			usedDrivers = append(usedDrivers, d)
-		}
-		cmc.Drivers = usedDrivers
-
-		// Check container driver
-		if c.Ctr {
-			if !internal.Contains(c.CtrDriver, c.Drivers) {
-				return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
-					c.CtrDriver)
-			}
-		}
-
-		// Create key manager
-		keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage, "tls_key_store"), cmc.Drivers, provisioner)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize key manager: %w", err)
-		}
-		cmc.KeyMgr = keyMgr
-
-		// Get policy engine and overwrite policies
-		sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
-		if !ok {
-			log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
-		}
-		cmc.PolicyEngineSelect = sel
-		cmc.PolicyOverwrite = c.PolicyOverwrite
+	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
+
+	var provisioner keymgr.Provisioner
+	var endorser drv.Endorser
+	switch c.ProvisionMode {
+	case "est":
+		var token []byte
+		if authMethods.Has(internal.AuthToken) {
+			token, err = os.ReadFile(c.ProvisionToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read token: %v", err)
+			}
+		}
+		estclient, err := estclient.New(c.ProvisionAddr, estTlsCas, c.EstTlsSysRoots, token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create EST client: %w", err)
+		}
+		endorser = estclient
+		provisioner = estclient
+	default:
+		return nil, fmt.Errorf("unknown provisioner %q", c.ProvisionMode)
+	}
+
+	// Create driver configuration
+	driverConf := &drv.DriverConfig{
+		ServerAddr:       c.ProvisionAddr,
+		HashAlg:          alg,
+		ExcludePcrs:      c.ExcludePcrs,
+		MeasurementLogs:  c.MeasurementLogs,
+		CtrPcr:           c.CtrPcr,
+		CtrLog:           c.CtrLog,
+		CtrDriver:        c.CtrDriver,
+		Ctr:              c.Ctr,
+		EstTlsCas:        estTlsCas,
+		UseSystemRootCas: c.EstTlsSysRoots,
+		Vmpl:             c.Vmpl,
+		ProvisionAuth:    authMethods,
+		Endorser:         endorser,
+	}
+
+	// Initialize drivers
+	usedDrivers := make([]drv.Driver, 0)
+	for _, driver := range c.Drivers {
+		d, ok := drivers[strings.ToLower(driver)]
+		if !ok {
+			return nil, fmt.Errorf("driver %v not implemented", driver)
+		}
+
+		driverConf.StoragePath = path.Join(c.Storage, driver+"driver")
+
+		err = d.Init(driverConf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize driver: %w", err)
+		}
+		usedDrivers = append(usedDrivers, d)
+	}
+	cmc.Drivers = usedDrivers
+
+	// Check container driver
+	if c.Ctr {
+		if !internal.Contains(c.CtrDriver, c.Drivers) {
+			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
+				c.CtrDriver)
+		}
+	}
+
+	// Create key manager
+	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage, "tls_key_store"), cmc.Drivers, provisioner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
+	}
+	cmc.KeyMgr = keyMgr
+
+	// Get policy engine and overwrite policies
+	sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
+	if !ok {
+		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
+	}
+	cmc.PolicyEngineSelect = sel
+	cmc.PolicyOverwrite = c.PolicyOverwrite
 
 	// Load cached metadata from known peers
 	cmc.PeerCache, err = peercache.Load(c.PeerCache)

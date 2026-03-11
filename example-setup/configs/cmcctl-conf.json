@@ -13,7 +13,7 @@
     "publish": "http://localhost:8080/results",
     "logLevel": "trace",
     "api": "socket",
-    "apiSerializer": "cbor",
+    "serialization": "cbor",
     "keyConfig": "EC256",
     "keyType": "tpm",
     "keyId": "../data/key_id",

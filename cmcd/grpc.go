@@ -46,7 +46,8 @@ type GrpcServerWrapper struct{}
 // GrpcServer is the gRPC server structure
 type GrpcServer struct {
 	grpcapi.UnimplementedCMCServiceServer
-	cmc *cmc.Cmc
+	cmc        *cmc.Cmc
+	serializer ar.Serializer
 }
 
 func init() {
@@ -54,8 +55,17 @@ func init() {
 }
 
 func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
+
+	// Currently, we do not yet support protobuf-serialized attestation reports
+	// Therefore, simply user CBOR, as it is binary as well
+	serializer, err := ar.NewCborSerializer()
+	if err != nil {
+		return fmt.Errorf("failed to init cbor serializer: %w", err)
+	}
+
 	server := &GrpcServer{
-		cmc: cmc,
+		cmc:        cmc,
+		serializer: serializer,
 	}
 
 	// Create TCP server
@@ -96,7 +106,7 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 	}
 
 	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
-		s.cmc.Serializer, s.cmc.HashAlg)
+		s.serializer, s.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
@@ -174,7 +184,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 			},
 		},
 		&m.MeasureConfig{
-			Serializer: s.cmc.Serializer,
+			Serializer: s.serializer,
 			Pcr:        s.cmc.CtrPcr,
 			LogFile:    s.cmc.CtrLog,
 			Driver:     s.cmc.CtrDriver,
@@ -209,7 +219,7 @@ func (s *GrpcServer) TLSCreate(ctx context.Context, req *grpcapi.TLSCreateReques
 		},
 		Metadata:   s.cmc.Metadata,
 		Drivers:    s.cmc.Drivers,
-		Serializer: s.cmc.Serializer,
+		Serializer: s.serializer,
 		ArHashAlg:  s.cmc.HashAlg,
 	})
 	if err != nil {

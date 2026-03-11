@@ -146,8 +146,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	report, err := prover.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers,
-		cmc.Serializer, cmc.HashAlg)
+	report, err := prover.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers, s, cmc.HashAlg)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
@@ -238,7 +237,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	var success bool
 	err = m.Measure(&req.Event,
 		&m.MeasureConfig{
-			Serializer: cmc.Serializer,
+			Serializer: s,
 			Pcr:        cmc.CtrPcr,
 			LogFile:    cmc.CtrLog,
 			Driver:     cmc.CtrDriver,
@@ -294,7 +293,7 @@ func tlscreate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		KeyConfig:  req.KeyConfig,
 		Metadata:   cmc.Metadata,
 		Drivers:    cmc.Drivers,
-		Serializer: cmc.Serializer,
+		Serializer: s,
 		ArHashAlg:  cmc.HashAlg,
 	})
 	if err != nil {

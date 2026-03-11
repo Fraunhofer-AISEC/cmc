@@ -62,13 +62,13 @@ func (a CoapApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]
 	}
 
 	// Marshal request
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	coapResp, err := conn.Post(ctx, api.EndpointAttest, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	coapResp, err := conn.Post(ctx, api.EndpointAttest, ar.GetMediaType(cc.Serializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -88,7 +88,7 @@ func (a CoapApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]
 
 	// Unmarshal response
 	resp := new(api.AttestationResponse)
-	err = cc.ApiSerializer.Unmarshal(body, resp)
+	err = cc.Serializer.Unmarshal(body, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
 	}
@@ -129,13 +129,13 @@ func (a CoapApi) verifyAR(
 	}
 
 	// Marshal verification request
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Perform verification request
-	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(cc.Serializer), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -155,7 +155,7 @@ func (a CoapApi) verifyAR(
 
 	// Unmarshal verify response
 	var verifyResp api.VerificationResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &verifyResp)
+	err = cc.Serializer.Unmarshal(payload, &verifyResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -206,13 +206,13 @@ func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send sign request
-	resp, err := conn.Post(ctx, api.EndpointTLSSign, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointTLSSign, ar.GetMediaType(cc.Serializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -232,7 +232,7 @@ func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 
 	// Unmarshal sign response
 	var signResp api.TLSSignResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &signResp)
+	err = cc.Serializer.Unmarshal(payload, &signResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -266,13 +266,13 @@ func (a CoapApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send cert request
-	resp, err := conn.Post(ctx, api.EndpointTLSCert, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointTLSCert, ar.GetMediaType(cc.Serializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -292,7 +292,7 @@ func (a CoapApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
 	// Unmarshal cert response
 	var certResp api.TLSCertResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &certResp)
+	err = cc.Serializer.Unmarshal(payload, &certResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
@@ -326,13 +326,13 @@ func (a CoapApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, er
 	}
 
 	// Marshal request
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	coapResp, err := conn.Post(ctx, api.EndpointPeerCache, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	coapResp, err := conn.Post(ctx, api.EndpointPeerCache, ar.GetMediaType(cc.Serializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -352,7 +352,7 @@ func (a CoapApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, er
 
 	// Unmarshal response
 	resp := new(api.PeerCacheResponse)
-	err = cc.ApiSerializer.Unmarshal(body, resp)
+	err = cc.Serializer.Unmarshal(body, resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal body: %w", err)
 	}
@@ -388,13 +388,13 @@ func (a CoapApi) createKey(cc *CmcConfig) (string, error) {
 	}
 
 	// Marshal payload
-	payload, err := cc.ApiSerializer.Marshal(req)
+	payload, err := cc.Serializer.Marshal(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send sign request
-	resp, err := conn.Post(ctx, api.EndpointTLSCreate, ar.GetMediaType(cc.ApiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointTLSCreate, ar.GetMediaType(cc.Serializer), bytes.NewReader(payload))
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
@@ -413,7 +413,7 @@ func (a CoapApi) createKey(cc *CmcConfig) (string, error) {
 	log.Debugf("Received coap response code %v", resp.Code().String())
 
 	var createResp api.TLSCreateResponse
-	err = cc.ApiSerializer.Unmarshal(payload, &createResp)
+	err = cc.Serializer.Unmarshal(payload, &createResp)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}

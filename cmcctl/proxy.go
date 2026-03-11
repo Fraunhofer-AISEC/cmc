@@ -217,7 +217,7 @@ func forwardProxy(c *config) error {
 		cert, err := atls.GetCert(
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcApi(c.Api),
-			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithSerializer(c.serializer),
 			atls.WithLibApiCmcConfig(&c.Config))
 		if err != nil {
 			return fmt.Errorf("failed to get TLS Certificate: %w", err)
@@ -244,7 +244,7 @@ func forwardProxy(c *config) error {
 			atls.WithCmcAddr(c.CmcAddr),
 			atls.WithCmcPolicies(c.policies),
 			atls.WithCmcApi(c.Api),
-			atls.WithApiSerializer(c.apiSerializer),
+			atls.WithSerializer(c.serializer),
 			atls.WithMtls(c.Mtls),
 			atls.WithAttest(c.attest),
 			atls.WithResultCb(func(result *ar.AttestationResult) {

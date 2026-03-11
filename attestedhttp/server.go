@@ -34,7 +34,7 @@ type Server struct {
 	MutualTls       bool
 	CmcAddr         string
 	CmcApi          string
-	ApiSerializer   ar.Serializer
+	Serializer      ar.Serializer
 	LibApiCmcConfig *cmc.Config
 	CmcPolicies     []byte
 	ResultCb        func(result *ar.AttestationResult)
@@ -51,7 +51,7 @@ func (s *Server) ListenAndServe() error {
 		atls.WithCmcAddr(s.CmcAddr),
 		atls.WithCmcPolicies(s.CmcPolicies),
 		atls.WithCmcApi(s.CmcApi),
-		atls.WithApiSerializer(s.ApiSerializer),
+		atls.WithSerializer(s.Serializer),
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
 		atls.WithResultCb(s.ResultCb),

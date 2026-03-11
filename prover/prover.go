@@ -65,36 +65,20 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 	log.Debug("Adding metadata to Attestation Report..")
 
 	// Retrieve metadata
-	log.Trace("Parsing ", len(metadata), " meta-data objects..")
 	num := 0
 
+	log.Tracef("Parsing %v meta-data objects..", len(metadata))
 	for hash, m := range metadata {
 
-		// Extract plain payload
-		data, err := s.GetPayload(m)
-		if err != nil {
-			log.Tracef("Failed to parse metadata object %v: %v", hash, err)
-			continue
-		}
-
-		// Unmarshal the Type field of the JSON file to determine the type for
-		// later processing
-		header := new(ar.MetaInfo)
-		err = s.Unmarshal(data, header)
-		if err != nil {
-			log.Tracef("Failed to unmarshal data from metadata object %v: %v", hash, err)
-			continue
-		}
-
-		log.Tracef("Adding metadata digest type %v: %v", header.Type, hash)
+		log.Tracef("Adding metadata digest: %v", hash)
 		report.Context.Digests = append(report.Context.Digests, hash)
 
 		// Check if verifier has metadata item cached so it does not need to be sent
-		log.Warnf("Check against %v cached items", len(cached))
+		log.Tracef("Check against %v cached items", len(cached))
 		if internal.Contains(hash, cached) {
-			log.Debugf("Metadata %v cached by verifier, do not add", hash)
+			log.Tracef("Metadata %v cached by verifier, do not add", hash)
 		} else {
-			log.Debugf("Metadata %v NOT cached by verifier, add", hash)
+			log.Tracef("Metadata %v NOT cached by verifier, add", hash)
 			report.Context.Metadata[hash] = m
 		}
 

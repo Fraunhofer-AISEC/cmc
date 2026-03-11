@@ -66,13 +66,13 @@ func (a CoapApi) generate(c *config) error {
 	}
 
 	// Marshal CoAP payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, api.EndpointAttest, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointAttest, ar.GetMediaType(c.serializer), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -92,7 +92,7 @@ func (a CoapApi) generate(c *config) error {
 
 	// Unmarshal report
 	attestationResp := new(api.AttestationResponse)
-	err = c.apiSerializer.Unmarshal(payload, attestationResp)
+	err = c.serializer.Unmarshal(payload, attestationResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal attestation response: %w", err)
 	}
@@ -111,7 +111,7 @@ func (a CoapApi) verify(c *config) error {
 	log.Infof("Sending coap request type 'Verify' to %v", c.CmcAddr)
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.apiSerializer)
+	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}
@@ -166,13 +166,13 @@ func (a CoapApi) enroll(c *config) error {
 	}
 
 	// Marshal CoAP payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, api.EndpointTLSCreate, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointTLSCreate, ar.GetMediaType(c.serializer), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -192,7 +192,7 @@ func (a CoapApi) enroll(c *config) error {
 
 	// Unmarshal report
 	createResp := new(api.TLSCreateResponse)
-	err = c.apiSerializer.Unmarshal(payload, createResp)
+	err = c.serializer.Unmarshal(payload, createResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal attestation response: %w", err)
 	}
@@ -220,13 +220,13 @@ func (a CoapApi) updateCerts(c *config) error {
 	}
 
 	// Marshal CoAP payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, api.EndpointUpdateCerts, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointUpdateCerts, ar.GetMediaType(c.serializer), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -246,7 +246,7 @@ func (a CoapApi) updateCerts(c *config) error {
 
 	// Unmarshal response
 	updateResp := new(api.UpdateCertsResponse)
-	err = c.apiSerializer.Unmarshal(payload, updateResp)
+	err = c.serializer.Unmarshal(payload, updateResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal verification response: %w", err)
 	}
@@ -280,13 +280,13 @@ func (a CoapApi) updateMetadata(c *config) error {
 	}
 
 	// Marshal CoAP payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, api.EndpointUpdateMetadata, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointUpdateMetadata, ar.GetMediaType(c.serializer), bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -306,7 +306,7 @@ func (a CoapApi) updateMetadata(c *config) error {
 
 	// Unmarshal response
 	updateResp := new(api.UpdateMetadataResponse)
-	err = c.apiSerializer.Unmarshal(payload, updateResp)
+	err = c.serializer.Unmarshal(payload, updateResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal verification response: %w", err)
 	}
@@ -334,13 +334,13 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 	defer cancel()
 
 	// Marshal CoAP payload
-	payload, err := c.apiSerializer.Marshal(req)
+	payload, err := c.serializer.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
 	// Send CoAP POST request
-	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(c.apiSerializer), bytes.NewReader(payload))
+	resp, err := conn.Post(ctx, api.EndpointVerify, ar.GetMediaType(c.serializer), bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -360,7 +360,7 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 
 	// Unmarshal attestation response
 	verifyResp := new(api.VerificationResponse)
-	err = c.apiSerializer.Unmarshal(payload, verifyResp)
+	err = c.serializer.Unmarshal(payload, verifyResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal verification response: %w", err)
 	}
