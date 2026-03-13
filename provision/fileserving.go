@@ -13,16 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package estclient
+package provision
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
+
+var log = logrus.WithField("service", "provision")
 
 // Pre is a struct for parsing HTML content
 type Pre struct {
@@ -42,12 +47,12 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	useSystemRoots bool,
 ) ([][]byte, error) {
 
-	client, err := New(addr, rootCas, useSystemRoots, nil)
+	client, err := NewHttpClient(addr, rootCas, useSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
-	resp, err := request(client.client, http.MethodGet, addr, "", "", "", nil, nil)
+	resp, err := request(client, http.MethodGet, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform request: %w", err)
 	}
@@ -91,7 +96,7 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	return data, nil
 }
 
-func fetchDataRecursively(client *Client, pre Pre, addr string) ([][]byte, error) {
+func fetchDataRecursively(client *http.Client, pre Pre, addr string) ([][]byte, error) {
 	metadata := make([][]byte, 0)
 	for i := 0; i < len(pre.Content); i++ {
 
@@ -104,7 +109,7 @@ func fetchDataRecursively(client *Client, pre Pre, addr string) ([][]byte, error
 		}
 
 		log.Tracef("Requesting data from %v", subpath)
-		resp, err := request(client.client, http.MethodGet, subpath, "", "", "", nil, nil)
+		resp, err := request(client, http.MethodGet, subpath, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to perform request: %w", err)
 		}
@@ -147,4 +152,73 @@ func fetchDataRecursively(client *Client, pre Pre, addr string) ([][]byte, error
 		}
 	}
 	return metadata, nil
+}
+
+func NewHttpClient(addr string, serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*http.Client, error) {
+	var err error
+
+	// Create Certpool for Root CAs
+	rootpool := x509.NewCertPool()
+	if allowSystemCerts {
+		log.Debug("Using system cert pool")
+		rootpool, err = x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to add system cert pool: %w", err)
+		}
+	}
+	for _, r := range serverTlsCas {
+		rootpool.AddCert(r)
+	}
+
+	if len(serverTlsCas) == 0 {
+		return nil, fmt.Errorf("no EST server CA provided")
+	}
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				// The client does authenticate the EST server
+				RootCAs:            rootpool,
+				InsecureSkipVerify: false,
+				// The client does authenticate itself via attestation evidence and/or
+				// a token as configured
+				Certificates: nil,
+			},
+			DisableKeepAlives: false,
+		},
+	}
+
+	return client, nil
+}
+
+func request(
+	client *http.Client,
+	method, endpoint string,
+	body io.Reader,
+) (*http.Response, error) {
+
+	log.Debugf("Sending EST %v request to %v", method, endpoint)
+
+	req, err := http.NewRequest(method, endpoint, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make new HTTP request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)
+	}
+
+	log.Debug("Finished EST HTTP request")
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		payload, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
+		}
+		return nil, fmt.Errorf("HTTP Server responded %v: %v", resp.Status, string(payload))
+	}
+
+	return resp, nil
 }

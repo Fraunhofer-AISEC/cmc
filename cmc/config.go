@@ -29,10 +29,12 @@ import (
 
 type Config struct {
 	CmcAddr          string   `json:"cmcAddr,omitempty"`
-	ProvisionAddr    string   `json:"provisionAddr,omitempty"`
-	ProvisionMode    string   `json:"provisionMode,omitempty"`
 	ProvisionToken   string   `json:"provisionToken,omitempty"`
 	ProvisionAuth    []string `json:"provisionAuth,omitempty"`
+	EndorsementMode  string   `json:"endorsementMode,omitempty"`
+	EndorsementAddr  string   `json:"endorsementAddr,omitempty"`
+	EnrollmentMode   string   `json:"enrollmentMode,omitempty"`
+	EnrollmentAddr   string   `json:"enrollmentAddr,omitempty"`
 	MetadataLocation []string `json:"metadata,omitempty"`
 	Drivers          []string `json:"drivers,omitempty"`
 	ExcludePcrs      []int    `json:"excludePcrs,omitempty"`
@@ -53,22 +55,17 @@ type Config struct {
 	EstTlsCas        []string `json:"estTlsCas,omitempty"`
 	EstTlsSysRoots   bool     `json:"estTlsSysRoots"`
 	Vmpl             int      `json:"vmpl,omitempty"`
-	VerifyEkCert     bool     `json:"verifyEkCert,omitempty"`
-	TpmEkCertDb      string   `json:"tpmEkCertDb,omitempty"`
-	CaKey            string   `json:"caKey,omitempty"`
+	SnpCache         string   `json:"snpCache,omitempty"`
 }
 
 const (
-	provisionModeEst        = "est"
-	provisionModeSelfSigned = "selfsigned"
-)
-
-const (
 	cmcAddrFlag         = "cmcaddr"
-	ProvisionModeFlag   = "provisionmode"
-	provisionAddrFlag   = "provisionaddr"
 	ProvisionTokenFlag  = "provisiontoken"
 	ProvisionAuthFlag   = "provisionauth"
+	EndorsementModeFlag = "endorsementmode"
+	EndorsementAddrFlag = "endorsementaddr"
+	EnrollmentModeFlag  = "enrollmentmode"
+	EnrollmentAddrFlag  = "enrollmentaddr"
 	metadataFlag        = "metadata"
 	DriversFlag         = "drivers"
 	ImaFlag             = "ima"
@@ -91,18 +88,16 @@ const (
 	EstTlsCasFlag       = "esttlscas"
 	EstTlsSysRootsFlag  = "esttlssysroots"
 	VmplFlag            = "vmpl"
-	verifyEkCertFlag    = "verifyekcert"
-	tpmEkCertDbFlag     = "tpmekcertdb"
-	caKeyFlag           = "cakey"
+	snpCacheFlag        = "snpcache"
 )
 
 var (
-	cmcAddr       = flag.String(cmcAddrFlag, "", "CMC server address")
-	provisionMode = flag.String(ProvisionModeFlag, "",
-		fmt.Sprintf("Provisioning Mode. Possible: [%v %v]",
-			provisionModeEst, provisionModeSelfSigned))
-	provisionAddr  = flag.String(provisionAddrFlag, "", "Address of the provisioning server")
-	provisionToken = flag.String(ProvisionTokenFlag, "",
+	cmcAddr         = flag.String(cmcAddrFlag, "", "CMC server address")
+	endorsementMode = flag.String(EndorsementModeFlag, "", "Endorsement Mode. Possible: [direct | est]")
+	endorsementAddr = flag.String(EndorsementAddrFlag, "", "Address of the EST endorsement server")
+	enrollmentMode  = flag.String(EnrollmentModeFlag, "", "Enrollment Mode. Possible: [acme | est]")
+	enrollmentAddr  = flag.String(EnrollmentAddrFlag, "", "Address of the ACME/EST enrollment server")
+	provisionToken  = flag.String(ProvisionTokenFlag, "",
 		"Bootstrap token for EST client authentication")
 	provisionAuth = flag.String(ProvisionAuthFlag, "",
 		"Provisioning authentication methods (none,token,certificate,attestation)")
@@ -137,11 +132,8 @@ var (
 	estTlsCas      = flag.String(EstTlsCasFlag, "", "Path to the EST TLS CA certificates")
 	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
 	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
-	verifyEkCert   = flag.Bool(verifyEkCertFlag, false,
-		"Self-signed mode only: Indicates whether to verify TPM EK certificate chains")
-	tpmEkCertDb = flag.String(tpmEkCertDbFlag, "",
-		"Self-signed mode only: Database for EK cert chain verification")
-	caKey = flag.String(caKeyFlag, "", "Self-signed mode only: CA key")
+	snpCache       = flag.String(snpCacheFlag, "",
+		"Optional folder for caching SNP VCEKs and CAs in direct endorsement mode")
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -152,9 +144,6 @@ func GetConfig(c *Config) error {
 	// Overwrite config file configuration with given command line arguments
 	if internal.FlagPassed(cmcAddrFlag) {
 		c.CmcAddr = *cmcAddr
-	}
-	if internal.FlagPassed(provisionAddrFlag) {
-		c.ProvisionAddr = *provisionAddr
 	}
 	if internal.FlagPassed(metadataFlag) {
 		c.MetadataLocation = strings.Split(*metadata, ",")
@@ -223,20 +212,23 @@ func GetConfig(c *Config) error {
 	if internal.FlagPassed(ProvisionTokenFlag) {
 		c.ProvisionToken = *provisionToken
 	}
-	if internal.FlagPassed(ProvisionModeFlag) {
-		c.ProvisionMode = *provisionMode
-	}
 	if internal.FlagPassed(ProvisionAuthFlag) {
 		c.ProvisionAuth = strings.Split(*provisionAuth, ",")
 	}
-	if internal.FlagPassed(verifyEkCertFlag) {
-		c.VerifyEkCert = *verifyEkCert
+	if internal.FlagPassed(EndorsementModeFlag) {
+		c.EndorsementMode = *endorsementMode
 	}
-	if internal.FlagPassed(tpmEkCertDbFlag) {
-		c.TpmEkCertDb = *tpmEkCertDb
+	if internal.FlagPassed(EndorsementAddrFlag) {
+		c.EndorsementAddr = *endorsementAddr
 	}
-	if internal.FlagPassed(caKeyFlag) {
-		c.CaKey = *caKey
+	if internal.FlagPassed(EnrollmentModeFlag) {
+		c.EnrollmentMode = *enrollmentMode
+	}
+	if internal.FlagPassed(EnrollmentAddrFlag) {
+		c.EnrollmentAddr = *enrollmentAddr
+	}
+	if internal.FlagPassed(snpCacheFlag) {
+		c.SnpCache = *snpCache
 	}
 
 	return nil
@@ -246,12 +238,14 @@ func (c *Config) Print() {
 
 	log.Debugf("Using the following cmc configuration:")
 	log.Debugf("\tCMC listen address             : %v", c.CmcAddr)
-	log.Debugf("\tProvision mode                 : %v", c.ProvisionMode)
 	log.Debugf("\tProvision authentication       : %v", strings.Join(c.ProvisionAuth, ","))
-	log.Debugf("\tProvisioning server URL        : %v", c.ProvisionAddr)
 	if c.ProvisionToken != "" {
 		log.Debugf("\tProvisioning token             : %v", c.ProvisionToken)
 	}
+	log.Debugf("\tEndorsement mode               : %v", c.EndorsementMode)
+	log.Debugf("\tEndorsement server URL         : %v", c.EndorsementAddr)
+	log.Debugf("\tEnrollment mode                : %v", c.EnrollmentMode)
+	log.Debugf("\tEnrollment server URL          : %v", c.EnrollmentAddr)
 	log.Debugf("\tMetadata locations             : %v", strings.Join(c.MetadataLocation, ","))
 	if len(c.ExcludePcrs) > 0 {
 		log.Debugf("\tExclude TPM PCRs               : %v", c.ExcludePcrs)
@@ -281,9 +275,6 @@ func (c *Config) Print() {
 	log.Debugf("\tMetadata root CA paths         : %v", strings.Join(c.EstTlsCas, ","))
 	log.Debugf("\tEST TLS root CA paths          : %v", strings.Join(c.EstTlsCas, ","))
 	log.Debugf("\tUse system root CAs for EST TLS: %v", c.EstTlsSysRoots)
-	if strings.EqualFold(c.ProvisionMode, provisionModeSelfSigned) {
-		log.Debugf("\tVerify EK Cert                 : %v", c.VerifyEkCert)
-		log.Debugf("\tTPM EK DB                      : %v", c.TpmEkCertDb)
-		log.Debugf("\tCA Key                         : %v", c.CaKey)
-	}
+	log.Debugf("\tSNP VCEK and CA cache folder   : %v", c.SnpCache)
+
 }

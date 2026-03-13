@@ -39,6 +39,10 @@ func init() {
 	CmcApis["coap"] = CoapApi{}
 }
 
+var (
+	timeOut = 5 * time.Second
+)
+
 // Obtains attestation report from cmcd
 func (a CoapApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error) {
 
@@ -117,7 +121,7 @@ func (a CoapApi) verifyAR(
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeOut)
 	defer cancel()
 
 	req := &api.VerificationRequest{
@@ -195,7 +199,7 @@ func (a CoapApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Signer
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeOut)
 	defer cancel()
 
 	req := api.TLSSignRequest{
@@ -256,7 +260,7 @@ func (a CoapApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeOut)
 	defer cancel()
 
 	// Create TLS certificate request
@@ -375,16 +379,12 @@ func (a CoapApi) createKey(cc *CmcConfig) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error dialing: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeOut)
 	defer cancel()
 
 	req := api.TLSCreateRequest{
-		Version: api.GetVersion(),
-		KeyConfig: api.TLSKeyConfig{
-			Type:     cc.KeyConfig.Type,
-			Cn:       cc.KeyConfig.Cn,
-			DNSNames: cc.KeyConfig.DNSNames,
-		},
+		Version:   api.GetVersion(),
+		KeyConfig: cc.KeyConfig,
 	}
 
 	// Marshal payload

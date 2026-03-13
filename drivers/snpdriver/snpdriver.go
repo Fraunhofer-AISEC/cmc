@@ -50,7 +50,8 @@ var (
 // of the attestation report Measurer interface
 type Snp struct {
 	*drivers.DriverConfig
-	akChain []*x509.Certificate // SNP VCEK / VLEK certificate chain
+	akChain  []*x509.Certificate // SNP VCEK / VLEK certificate chain
+	endorser drivers.SnpEndorser
 }
 
 type SnpCertTableEntry struct {
@@ -72,6 +73,15 @@ func (snp *Snp) Init(c *drivers.DriverConfig) error {
 	if snp == nil {
 		return errors.New("internal error: SNP object is nil")
 	}
+	if c.Endorsers == nil {
+		return fmt.Errorf("missing endorser provider")
+	}
+
+	endorser, ok := c.Endorsers.Snp()
+	if !ok {
+		return fmt.Errorf("snp endorser not configured")
+	}
+	snp.endorser = endorser
 
 	snp.DriverConfig = c
 
@@ -237,10 +247,9 @@ func getVlek(vmpl int) ([]byte, error) {
 }
 
 func (snp *Snp) provision() error {
-	var err error
 
 	// Fetch SNP certificate chain for VCEK/VLEK (SNP Attestation Key)
-	snp.akChain, err = fetchAk(snp.DriverConfig)
+	err := snp.fetchAk()
 	if err != nil {
 		return fmt.Errorf("failed to get SNP cert chain: %w", err)
 	}
@@ -248,37 +257,37 @@ func (snp *Snp) provision() error {
 	return nil
 }
 
-func fetchAk(c *drivers.DriverConfig) ([]*x509.Certificate, error) {
+func (snp *Snp) fetchAk() error {
 
 	// Generate random nonce
 	nonce := make([]byte, 64)
 	_, err := rand.Read(nonce)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read random bytes: %w", err)
+		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
 	// Fetch the SNP attestation report signing key. Usually, this is the VCEK. However,
 	// in cloud environments, the CSP might disable VCEK usage, instead the VLEK is used.
 	// Fetch an initial attestation report to determine which key is used.
-	arRaw, err := GetReport(nonce, c.Vmpl)
+	arRaw, err := GetReport(nonce, snp.Vmpl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP report: %w", err)
+		return fmt.Errorf("failed to get SNP report: %w", err)
 	}
 	s, err := verifier.DecodeSnpReport(arRaw)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
+		return fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
 	// Verify nonce
 	if !bytes.Equal(nonce, s.ReportData[:]) {
-		return nil, fmt.Errorf("failed to verify SNP report nonce (expected %v, got %v)",
+		return fmt.Errorf("failed to verify SNP report nonce (expected %v, got %v)",
 			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
 	}
 	log.Debugf("Successfully decoded attestation report and verified nonce")
 
 	akType, err := internal.GetAkType(s.KeySelection)
 	if err != nil {
-		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
+		return fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
 	log.Debugf("Fetched Chip ID from attestation report: %x", s.ChipId[:])
@@ -292,34 +301,36 @@ func fetchAk(c *drivers.DriverConfig) ([]*x509.Certificate, error) {
 	case internal.VCEK:
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = c.Endorser.GetSnpVcek(codeName, s.ChipId, s.CurrentTcb)
+		akCert, err = snp.endorser.GetSnpVcek(codeName, s.ChipId[:], s.CurrentTcb)
 		if err != nil {
-			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
+			return fmt.Errorf("failed to enroll SNP: %w", err)
 		}
 	case internal.VLEK:
 		// VLEK is used, in this case we fetch the VLEK from the host
-		vlek, err := getVlek(c.Vmpl)
+		vlek, err := getVlek(snp.Vmpl)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch VLEK: %w", err)
+			return fmt.Errorf("failed to fetch VLEK: %w", err)
 		}
 		log.Debug("Parsing VLEK")
 		akCert, err = x509.ParseCertificate(vlek)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse VLEK")
+			return fmt.Errorf("failed to parse VLEK")
 		}
 		log.Debugf("Successfully parsed VLEK CN=%v", akCert.Subject.CommonName)
 	default:
-		return nil, fmt.Errorf("internal error: signing cert not initialized")
+		return fmt.Errorf("internal error: signing cert not initialized")
 	}
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
-	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := c.Endorser.GetSnpCa(codeName, akType)
+	log.Debugf("Fetching SNP CA for %v", akType.String())
+	ca, err := snp.endorser.GetSnpCa(codeName, akType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
+		return fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
 
-	return append([]*x509.Certificate{akCert}, ca...), nil
+	snp.akChain = append([]*x509.Certificate{akCert}, ca...)
+
+	return nil
 }
 
 func provisioningRequired(p string) bool {

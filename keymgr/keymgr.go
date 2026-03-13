@@ -59,7 +59,7 @@ type KeyMgr struct {
 	keyPath     string
 	certsPath   string
 	tpm         *tpmdriver.Tpm
-	provisioner Provisioner
+	provisioner Enroller
 }
 
 type key struct {
@@ -75,7 +75,7 @@ type KeyEnrollmentParams struct {
 	ArHashAlg  crypto.Hash
 }
 
-func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Provisioner) (*KeyMgr, error) {
+func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enroller) (*KeyMgr, error) {
 
 	mgr := &KeyMgr{
 		keyPath:     path.Join(storagePath, "keys"),
@@ -176,7 +176,7 @@ func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
 		}
 
 	default:
-		return "", fmt.Errorf("unsupported key type %v", p.KeyConfig.Type)
+		return "", fmt.Errorf("unsupported key type %q", p.KeyConfig.Type)
 	}
 
 	return keyId, nil
@@ -334,7 +334,7 @@ func detectKeyFormat(data []byte) KeyFormat {
 	return KeyUnknown
 }
 
-func simpleEnroll(provisioner Provisioner, priv crypto.PrivateKey, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
+func simpleEnroll(provisioner Enroller, priv crypto.PrivateKey, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
 
 	caCerts, err := provisioner.CaCerts()
 	if err != nil {
@@ -354,7 +354,7 @@ func simpleEnroll(provisioner Provisioner, priv crypto.PrivateKey, p *KeyEnrollm
 	return append([]*x509.Certificate{cert}, caCerts...), nil
 }
 
-func tpmEnroll(provisioner Provisioner, tpmKey *tpmdriver.TpmKey, akPublic []byte, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
+func tpmEnroll(provisioner Enroller, tpmKey *tpmdriver.TpmKey, akPublic []byte, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
 
 	caCerts, err := provisioner.CaCerts()
 	if err != nil {

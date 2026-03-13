@@ -29,7 +29,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 )
 
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
@@ -58,7 +58,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := estclient.FetchMetadata(p, rootCas, useSystemRoots)
+			data, err := provision.FetchMetadata(p, rootCas, useSystemRoots)
 			if err != nil {
 				log.Warnf("failed to fetch %v: %v", p, err)
 				fails++

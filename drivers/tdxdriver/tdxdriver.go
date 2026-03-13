@@ -54,8 +54,9 @@ const (
 // of the attestation report Measurer interface
 type Tdx struct {
 	*drivers.DriverConfig
-	akChain []*x509.Certificate
-	fmspc   string
+	akChain  []*x509.Certificate
+	fmspc    string
+	endorser drivers.TdxEndorser
 }
 
 // Name returns the name of the driver
@@ -71,6 +72,15 @@ func (tdx *Tdx) Init(c *drivers.DriverConfig) error {
 	if tdx == nil {
 		return errors.New("internal error: TDX object is nil")
 	}
+	if c.Endorsers == nil {
+		return fmt.Errorf("missing endorser provider")
+	}
+
+	endorser, ok := c.Endorsers.Tdx()
+	if !ok {
+		return fmt.Errorf("tdx endorser not configured")
+	}
+	tdx.endorser = endorser
 
 	tdx.DriverConfig = c
 
@@ -131,8 +141,12 @@ func (tdx *Tdx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
 func (tdx *Tdx) GetCollateral() ([]ar.Collateral, error) {
 
+	if tdx.fmspc == "" {
+		return nil, fmt.Errorf("internal error: cannot fetch collateral: FMSPC not set")
+	}
+
 	// Fetch tdx collateral
-	tdxCollateral, err := verifier.FetchCollateral(tdx.fmspc, tdx.akChain[0], verifier.TDX_QUOTE_TYPE)
+	tdxCollateral, err := tdx.endorser.FetchCollateral(tdx.fmspc, tdx.akChain[0], ar.TDX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX collateral: %w", err)
 	}
@@ -301,6 +315,14 @@ func (tdx *Tdx) loadCredentials() error {
 		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
 	log.Debugf("Parsed stored AK chain of length %v", len(tdx.akChain))
+
+	// Store FMSPC
+	exts, err := pcs.PckCertificateExtensions(tdx.akChain[0])
+	if err != nil {
+		return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+	}
+	tdx.fmspc = exts.FMSPC
+	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	return nil
 }

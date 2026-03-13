@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2024 Fraunhofer AISEC
+// Copyright (c) 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpcapi
+package provision
 
-// The version of the API
-const (
-	apiVersion = "1.4.0"
+import (
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 )
 
-func GetVersion() string {
-	return apiVersion
+type DirectEndorser struct {
+	snp *SnpEndorser
+	tdx *TdxEndorser
+}
+
+func NewDirectProvider(vcekCacheFolder string) *DirectEndorser {
+	return &DirectEndorser{
+		snp: NewSnpEndorser(vcekCacheFolder),
+		tdx: NewTdxEndorser(),
+	}
+}
+
+func (p *DirectEndorser) Snp() (drivers.SnpEndorser, bool) {
+	return p.snp, true
+}
+
+func (p *DirectEndorser) Tdx() (drivers.TdxEndorser, bool) {
+	return p.tdx, true
+}
+
+func (p *DirectEndorser) Tpm() (drivers.TpmEndorser, bool) {
+	return nil, false
 }

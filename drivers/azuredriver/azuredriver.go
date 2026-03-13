@@ -39,6 +39,8 @@ var log = logrus.WithField("service", "azuredriver")
 
 type Azure struct {
 	*drivers.DriverConfig
+	snpEndorser drivers.SnpEndorser
+	tdxEndorser drivers.TdxEndorser
 
 	// Confidential Computing Parameters
 	ccAkChain []*x509.Certificate
@@ -60,6 +62,22 @@ func (azure *Azure) Init(c *drivers.DriverConfig) error {
 	if azure == nil {
 		return errors.New("internal error: Azure object is nil")
 	}
+
+	if c.Endorsers == nil {
+		return fmt.Errorf("missing endorser provider")
+	}
+
+	snpEndorser, ok := c.Endorsers.Snp()
+	if !ok {
+		return fmt.Errorf("azure snp endorser not configured")
+	}
+	azure.snpEndorser = snpEndorser
+
+	tdxEndorser, ok := c.Endorsers.Tdx()
+	if !ok {
+		return fmt.Errorf("azure tdx endorser not configured")
+	}
+	azure.tdxEndorser = tdxEndorser
 
 	azure.DriverConfig = c
 	azure.pcrs = getQuotePcrs(c.ExcludePcrs)
@@ -182,11 +200,10 @@ func (azure *Azure) provision() error {
 	var err error
 
 	// Fetch CC certificate chain for Attestation Key
-	azure.ccAkChain, err = azure.fetchAk(azure.DriverConfig)
+	err = azure.fetchAk()
 	if err != nil {
 		return fmt.Errorf("failed to get azure cert chain: %w", err)
 	}
-	internal.TraceCertsShort("Provisioned AK cert", azure.ccAkChain)
 
 	// Store FMSPC TODO ONLY WORKS WITH TDX
 	exts, err := pcs.PckCertificateExtensions(azure.ccAkChain[0])
@@ -199,36 +216,41 @@ func (azure *Azure) provision() error {
 	return nil
 }
 
-func (azure *Azure) fetchAk(c *drivers.DriverConfig) ([]*x509.Certificate, error) {
+func (azure *Azure) fetchAk() error {
 
 	// Fetch initial attestation report which contains AK cert chain
 	evidence, err := GetCcEvidence(nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get azure Measurement: %w", err)
+		return fmt.Errorf("failed to get azure Measurement: %w", err)
 	}
 
 	azure.vmType = evidence.Type
 
 	switch evidence.Type {
 	case ar.TYPE_EVIDENCE_AZURE_SNP:
-		return fetchSnpAk(c, evidence.Data)
+		return azure.fetchSnpAk(evidence.Data)
 	case ar.TYPE_EVIDENCE_AZURE_TDX:
-		return fetchTdxAk(evidence.Data)
+		return azure.fetchTdxAk(evidence.Data)
 	}
 
-	return nil, fmt.Errorf("unknown report type %v", evidence.Type)
+	return fmt.Errorf("unknown report type %v", evidence.Type)
 }
 
-func fetchSnpAk(c *drivers.DriverConfig, data []byte) ([]*x509.Certificate, error) {
+func (azure *Azure) fetchSnpAk(data []byte) error {
+
+	// Initial checks
+	if azure.snpEndorser == nil {
+		return fmt.Errorf("SNP endorser not configures. Cannot fetch SNP certificate chain")
+	}
 
 	s, err := verifier.DecodeSnpReport(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode SNP report: %w", err)
+		return fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
 	akType, err := internal.GetAkType(s.KeySelection)
 	if err != nil {
-		return nil, fmt.Errorf("could not determine SNP attestation report attestation key")
+		return fmt.Errorf("could not determine SNP attestation report attestation key")
 	}
 
 	log.Debugf("Fetched Chip ID from attestation report: %x", s.ChipId[:])
@@ -242,39 +264,44 @@ func fetchSnpAk(c *drivers.DriverConfig, data []byte) ([]*x509.Certificate, erro
 	case internal.VCEK:
 		// VCEK is used, simply request EST enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK via EST")
-		akCert, err = c.Endorser.GetSnpVcek(codeName, s.ChipId, s.CurrentTcb)
+		akCert, err = azure.snpEndorser.GetSnpVcek(codeName, s.ChipId[:], s.CurrentTcb)
 		if err != nil {
-			return nil, fmt.Errorf("failed to enroll SNP: %w", err)
+			return fmt.Errorf("failed to enroll SNP: %w", err)
 		}
 	case internal.VLEK:
-		return nil, fmt.Errorf("VLEK is currently not supported for Azure")
+		return fmt.Errorf("VLEK is currently not supported for Azure")
 	default:
-		return nil, fmt.Errorf("internal error: signing cert not initialized")
+		return fmt.Errorf("internal error: signing cert not initialized")
 	}
 
 	// Fetch intermediate CAs and CA depending on signing key (VLEK / VCEK)
-	log.Debugf("Fetching SNP CA for %v from %v", akType.String(), c.ServerAddr)
-	ca, err := c.Endorser.GetSnpCa(codeName, akType)
+	log.Debugf("Fetching SNP CA for %v", akType.String())
+	ca, err := azure.snpEndorser.GetSnpCa(codeName, akType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP CA from EST server: %w", err)
+		return fmt.Errorf("failed to get SNP CA from EST server: %w", err)
 	}
 
-	return append([]*x509.Certificate{akCert}, ca...), nil
+	azure.ccAkChain = append([]*x509.Certificate{akCert}, ca...)
+
+	return nil
 }
 
-func fetchTdxAk(data []byte) ([]*x509.Certificate, error) {
+func (azure *Azure) fetchTdxAk(data []byte) error {
 	// Decode attestation report
 	quote, err := verifier.DecodeTdxReportV4(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode TDX quote: %v", err)
+		return fmt.Errorf("failed to decode TDX quote: %v", err)
 	}
 
 	// Return AK cert chain
-	return []*x509.Certificate{
+	azure.ccAkChain = []*x509.Certificate{
 		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert,
 		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.IntermediateCert,
 		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.RootCACert,
-	}, nil
+	}
+	internal.TraceCertsShort("Provisioned AK cert", azure.ccAkChain)
+
+	return nil
 }
 
 func (azure *Azure) loadCredentials() error {

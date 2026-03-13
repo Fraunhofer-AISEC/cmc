@@ -21,7 +21,8 @@ import (
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 )
 
-type Provisioner interface {
+// Enroller is an interface for TLS key enrollment via e.g., EST or ACME
+type Enroller interface {
 	CaCerts() ([]*x509.Certificate, error)
 	SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error)
 	TpmCertifyEnroll(

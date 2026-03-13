@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,8 +29,8 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -44,7 +44,7 @@ type VcekInfo struct {
 	Tcb    uint64
 }
 
-type SnpConfig struct {
+type SnpEndorser struct {
 	VcekMutex       sync.Mutex
 	VcekCacheFolder string
 	Vceks           map[VcekInfo][]byte
@@ -58,42 +58,33 @@ const (
 	DER
 )
 
-func SnpCaUrl(aktype internal.AkType, codeName string) string {
-	return fmt.Sprintf("%s/%s/v1/%s/cert_chain", snpBaseUrl, aktype.String(), codeName)
+// Implement the EndorserProvider interface
+func (endorser *SnpEndorser) Snp() (drivers.SnpEndorser, bool) {
+	return endorser, true
 }
 
-func SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) string {
+func (endorser *SnpEndorser) Tdx() (drivers.TdxEndorser, bool) {
+	return nil, false
+}
 
-	tcb := ar.GetSnpTcb(codeName, tcbRaw)
+func (endorser *SnpEndorser) Tpm() (drivers.TpmEndorser, bool) {
+	return nil, false
+}
 
-	// Turin and later chip IP length is 8 and TCB additionally contains FMC SPL
-	if codeName == "Turin" {
-		return fmt.Sprintf("%s/vcek/v1/%s/%s?fmcSPL=%v&blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
-			snpBaseUrl,
-			codeName,
-			hex.EncodeToString(chipId[:8]), // 8 byte for Turin
-			tcb.Fmc,
-			tcb.Bl,
-			tcb.Tee,
-			tcb.Snp,
-			tcb.Ucode)
-	} else {
-		return fmt.Sprintf("%s/vcek/v1/%s/%s?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
-			snpBaseUrl,
-			codeName,
-			hex.EncodeToString(chipId), // full 64 byte for Milan and Genoa
-			tcb.Bl,
-			tcb.Tee,
-			tcb.Snp,
-			tcb.Ucode)
+// NewEndorser initializes a new SNP endorser
+func NewSnpEndorser(vcekCacheFolder string) *SnpEndorser {
+	return &SnpEndorser{
+		VcekCacheFolder: vcekCacheFolder,
+		Vceks:           make(map[VcekInfo][]byte),
 	}
 }
 
-// Get Vcek takes the TCB and chip ID, calculates the VCEK URL and gets the certificate
-// in DER format from the cache or downloads it from the AMD server if not present
-func (s *SnpConfig) GetVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error) {
+// GetSnpVcek implements the drivers.SnpEndorser interface. It takes the TCB and chip ID,
+// calculates the VCEK URL and gets the certificate in DER format from the cache or downloads
+// it from the AMD server if not present
+func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error) {
 
-	log.Tracef("Fetching %q VCEK for chip ID %v, TCB %x", codeName, hex.EncodeToString(chipId), tcb)
+	log.Tracef("Fetching %q VCEK for chip ID %x, TCB %x", codeName, chipId, tcb)
 
 	// Allow only one download and caching of the VCEK certificate in parallel
 	// as the AMD KDF server allows only one request in 10s
@@ -141,7 +132,10 @@ func (s *SnpConfig) GetVcek(codeName string, chipId []byte, tcb uint64) (*x509.C
 	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
 }
 
-func (s *SnpConfig) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
+// GetSnpCa implements the drivers.SnpEndorser interface. It takes the AMD epyc code name and
+// AK type (VCEK or VLEK) and gets the CA certificate from the cache or downloads it from the
+// AMD server if not present
+func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
 
 	log.Debugf("Fetching AMD SNP %v CA", codeName)
 
@@ -155,7 +149,7 @@ func (s *SnpConfig) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.C
 	}
 
 	url := SnpCaUrl(akType, codeName)
-	ca, err := fetchSnpCa(url, PEM)
+	ca, err := DownloadSnpCa(url, PEM)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ftch SNP CA: %w", err)
 	}
@@ -166,71 +160,6 @@ func (s *SnpConfig) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.C
 		log.Warnf("Failed to cache SNP CA: %v", err)
 	}
 	return ca, nil
-}
-
-func (s *SnpConfig) lockVcekMutex() {
-	log.Trace("Trying to get lock")
-	s.VcekMutex.Lock()
-	log.Trace("Got lock")
-}
-
-func (s *SnpConfig) unlockVcekMutex() {
-	log.Trace("Releasing Lock")
-	s.VcekMutex.Unlock()
-	log.Trace("Released Lock")
-}
-
-// tryGetCachedVcek returns cached VCEKs in DER format if available
-func (s *SnpConfig) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool) {
-	if s.VcekCacheFolder != "" {
-		filePath := path.Join(s.VcekCacheFolder,
-			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
-		f, err := os.ReadFile(filePath)
-		if err != nil {
-			log.Tracef("VCEK not present at %v, will be downloaded", filePath)
-			return nil, false
-		}
-		log.Tracef("Using offlince cached VCEK %v", filePath)
-		return f, true
-	} else {
-		info := VcekInfo{
-			ChipId: chipId,
-			Tcb:    tcb,
-		}
-		if der, ok := s.Vceks[info]; ok {
-			log.Trace("Using cached VCEK")
-			return der, true
-		}
-		log.Trace("Could not find VCEK in cache")
-	}
-	return nil, false
-}
-
-// cacheVcek caches VCEKs in DER format
-func (s *SnpConfig) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
-	if s.VcekCacheFolder != "" {
-		if _, err := os.Stat(s.VcekCacheFolder); err != nil {
-			if err := os.MkdirAll(s.VcekCacheFolder, 0755); err != nil {
-				return fmt.Errorf("failed to create VCEK cache %q: %v", s.VcekCacheFolder, err)
-			}
-		}
-		filePath := path.Join(s.VcekCacheFolder,
-			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
-		err := os.WriteFile(filePath, vcek, 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write file %v: %w", filePath, err)
-		}
-		log.Tracef("Cached VCEK at %v", filePath)
-		return nil
-	} else {
-		info := VcekInfo{
-			ChipId: chipId,
-			Tcb:    tcb,
-		}
-		s.Vceks[info] = vcek
-		log.Trace("Cached VCEK")
-		return nil
-	}
 }
 
 func DownloadVcek(url string) (*x509.Certificate, int, error) {
@@ -256,22 +185,7 @@ func DownloadVcek(url string) (*x509.Certificate, int, error) {
 	return cert, resp.StatusCode, nil
 }
 
-// tryGetCachedCa returns the cached CA chain in DER format if available
-func tryGetCachedCa(caCacheFolder, codeName string) ([]byte, bool) {
-	if caCacheFolder != "" {
-		filePath := path.Join(caCacheFolder, fmt.Sprintf("ask_ark_%v.cert", codeName))
-		f, err := os.ReadFile(filePath)
-		if err != nil {
-			log.Tracef("%v CA not present at %v, will be downloaded", codeName, filePath)
-			return nil, false
-		}
-		log.Tracef("Using offlince cached %v CA: %v", codeName, filePath)
-		return f, true
-	}
-	return nil, false
-}
-
-func fetchSnpCa(url string, format certFormat) ([]*x509.Certificate, error) {
+func DownloadSnpCa(url string, format certFormat) ([]*x509.Certificate, error) {
 
 	log.Debugf("Requesting Cert from %v", url)
 
@@ -312,6 +226,116 @@ func fetchSnpCa(url string, format certFormat) ([]*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to parse x509 Certificate: %w", err)
 	}
 	return certs, nil
+}
+
+func SnpCaUrl(aktype internal.AkType, codeName string) string {
+	return fmt.Sprintf("%s/%s/v1/%s/cert_chain", snpBaseUrl, aktype.String(), codeName)
+}
+
+func SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) string {
+
+	tcb := ar.GetSnpTcb(codeName, tcbRaw)
+
+	// Turin and later chip IP length is 8 and TCB additionally contains FMC SPL
+	if codeName == "Turin" {
+		return fmt.Sprintf("%s/vcek/v1/%s/%s?fmcSPL=%v&blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
+			snpBaseUrl,
+			codeName,
+			hex.EncodeToString(chipId[:8]), // 8 byte for Turin
+			tcb.Fmc,
+			tcb.Bl,
+			tcb.Tee,
+			tcb.Snp,
+			tcb.Ucode)
+	} else {
+		return fmt.Sprintf("%s/vcek/v1/%s/%s?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
+			snpBaseUrl,
+			codeName,
+			hex.EncodeToString(chipId), // full 64 byte for Milan and Genoa
+			tcb.Bl,
+			tcb.Tee,
+			tcb.Snp,
+			tcb.Ucode)
+	}
+}
+
+func (s *SnpEndorser) lockVcekMutex() {
+	log.Trace("Trying to get lock")
+	s.VcekMutex.Lock()
+	log.Trace("Got lock")
+}
+
+func (s *SnpEndorser) unlockVcekMutex() {
+	log.Trace("Releasing Lock")
+	s.VcekMutex.Unlock()
+	log.Trace("Released Lock")
+}
+
+// tryGetCachedVcek returns cached VCEKs in DER format if available
+func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool) {
+	if s.VcekCacheFolder != "" {
+		filePath := path.Join(s.VcekCacheFolder,
+			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
+		f, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Tracef("VCEK not present at %v, will be downloaded", filePath)
+			return nil, false
+		}
+		log.Tracef("Using offlince cached VCEK %v", filePath)
+		return f, true
+	} else {
+		info := VcekInfo{
+			ChipId: chipId,
+			Tcb:    tcb,
+		}
+		if der, ok := s.Vceks[info]; ok {
+			log.Trace("Using cached VCEK")
+			return der, true
+		}
+		log.Trace("Could not find VCEK in cache")
+	}
+	return nil, false
+}
+
+// cacheVcek caches VCEKs in DER format
+func (s *SnpEndorser) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
+	if s.VcekCacheFolder != "" {
+		if _, err := os.Stat(s.VcekCacheFolder); err != nil {
+			if err := os.MkdirAll(s.VcekCacheFolder, 0755); err != nil {
+				return fmt.Errorf("failed to create VCEK cache %q: %v", s.VcekCacheFolder, err)
+			}
+		}
+		filePath := path.Join(s.VcekCacheFolder,
+			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
+		err := os.WriteFile(filePath, vcek, 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write file %v: %w", filePath, err)
+		}
+		log.Tracef("Cached VCEK at %v", filePath)
+		return nil
+	} else {
+		info := VcekInfo{
+			ChipId: chipId,
+			Tcb:    tcb,
+		}
+		s.Vceks[info] = vcek
+		log.Trace("Cached VCEK")
+		return nil
+	}
+}
+
+func tryGetCachedCa(caCacheFolder, codeName string) ([]byte, bool) {
+	if caCacheFolder != "" {
+		filePath := path.Join(caCacheFolder, fmt.Sprintf("ask_ark_%v.cert", codeName))
+		f, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Tracef("%v CA not present at %v, will be downloaded", codeName, filePath)
+			return nil, false
+		}
+		log.Tracef("Using offlince cached %v CA: %v", codeName, filePath)
+		return f, true
+	}
+	return nil, false
 }
 
 func cacheSnpCa(ca []byte, caCacheFolder, codeName string) error {

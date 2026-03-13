@@ -191,7 +191,7 @@ func verifyTdx(
 	result.TdxResult.TcbInfoCheck = ValidateTcbInfo(
 		&intelCollateral.TcbInfo, intelCollateralRaw.TcbInfo,
 		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
-		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, TDX_QUOTE_TYPE,
+		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, ar.TDX_QUOTE_TYPE,
 		tdxPolicy.AcceptedTcbStatuses)
 	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to validate TCB info")
@@ -203,7 +203,7 @@ func verifyTdx(
 		&tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.QEReport,
 		&intelCollateral.QeIdentity, intelCollateralRaw.QeIdentity,
 		intelCollateral.QeIdentityIntermediateCert, intelCollateral.QeIdentityRootCert,
-		TDX_QUOTE_TYPE)
+		ar.TDX_QUOTE_TYPE)
 	result.TdxResult.QeReportCheck = qeIdentityResult
 	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
 		result.Summary.Fail(ar.VerifyQEIdentityErr)
@@ -212,7 +212,7 @@ func verifyTdx(
 	// Verify Quote Signature including certificate chains and CRLs
 	sig, ret := VerifyIntelQuoteSignature(evidence.Data, tdxQuote.QuoteSignatureData,
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		TDX_QUOTE_TYPE, intelCollateral.PckCrl, intelCollateral.RootCaCrl)
+		ar.TDX_QUOTE_TYPE, intelCollateral.PckCrl, intelCollateral.RootCaCrl)
 	if !ret {
 		result.Summary.Status = ar.StatusFail
 	}

@@ -47,8 +47,9 @@ const (
 // of the attestation report Measurer interface
 type Sgx struct {
 	*drivers.DriverConfig
-	akChain []*x509.Certificate
-	fmspc   string
+	akChain  []*x509.Certificate
+	fmspc    string
+	endorser drivers.TdxEndorser
 }
 
 // Name returns the name of the driver
@@ -64,6 +65,15 @@ func (sgx *Sgx) Init(c *drivers.DriverConfig) error {
 	if sgx == nil {
 		return errors.New("internal error: SGX object is nil")
 	}
+	if c.Endorsers == nil {
+		return fmt.Errorf("missing endorser provider")
+	}
+
+	endorser, ok := c.Endorsers.Tdx()
+	if !ok {
+		return fmt.Errorf("sgx endorser not configured")
+	}
+	sgx.endorser = endorser
 
 	sgx.DriverConfig = c
 
@@ -126,7 +136,7 @@ func (sgx *Sgx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 func (sgx *Sgx) GetCollateral() ([]ar.Collateral, error) {
 
 	// Fetch collateral
-	sgxCollateral, err := verifier.FetchCollateral(sgx.fmspc, sgx.akChain[0], verifier.SGX_QUOTE_TYPE)
+	sgxCollateral, err := sgx.endorser.FetchCollateral(sgx.fmspc, sgx.akChain[0], ar.SGX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX collateral: %w", err)
 	}

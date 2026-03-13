@@ -262,6 +262,7 @@ func (a GrpcApi) createKey(cc *CmcConfig) (string, error) {
 		Version: api.GetVersion(),
 		KeyConfig: &api.TLSKeyConfig{
 			Type:     cc.KeyConfig.Type,
+			Alg:      cc.KeyConfig.Alg,
 			Cn:       cc.KeyConfig.Cn,
 			DnsNames: cc.KeyConfig.DNSNames,
 		},

@@ -98,7 +98,7 @@ func verifySgx(
 		return result, false
 	}
 
-	if QuoteType(sgxQuote.QuoteHeader.TeeType) != SGX_QUOTE_TYPE {
+	if ar.IntelQuoteType(sgxQuote.QuoteHeader.TeeType) != ar.SGX_QUOTE_TYPE {
 		log.Debugf("Unsupported SGX quote type (tee_type: %X)\n", sgxQuote.QuoteHeader.TeeType)
 		return result, false
 	}
@@ -181,7 +181,7 @@ func verifySgx(
 	result.SgxResult.TcbInfoCheck = ValidateTcbInfo(
 		&intelCollateral.TcbInfo, intelCollateralRaw.TcbInfo,
 		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
-		sgxExtensions, [16]byte{}, SGX_QUOTE_TYPE, sgxReferencePolicy.AcceptedTcbStatuses)
+		sgxExtensions, [16]byte{}, ar.SGX_QUOTE_TYPE, sgxReferencePolicy.AcceptedTcbStatuses)
 	if result.SgxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to verify TCB info structure")
 		result.Summary.Fail(ar.VerifyTcbInfo)
@@ -194,7 +194,7 @@ func verifySgx(
 		&sgxQuote.QuoteSignatureData.QEReport,
 		&intelCollateral.QeIdentity, intelCollateralRaw.QeIdentity,
 		intelCollateral.QeIdentityIntermediateCert, intelCollateral.QeIdentityRootCert,
-		SGX_QUOTE_TYPE)
+		ar.SGX_QUOTE_TYPE)
 	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
 		result.Summary.Fail(ar.VerifyQEIdentityErr)
 		return result, false
@@ -205,7 +205,7 @@ func verifySgx(
 	log.Debugf("Verifying SGX quote signature")
 	sig, ret := VerifyIntelQuoteSignature(evidence.Data, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
-		QuoteType(sgxQuote.QuoteHeader.TeeType), intelCollateral.PckCrl, intelCollateral.RootCaCrl)
+		ar.IntelQuoteType(sgxQuote.QuoteHeader.TeeType), intelCollateral.PckCrl, intelCollateral.RootCaCrl)
 	if !ret {
 		success = false
 	}

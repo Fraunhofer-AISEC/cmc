@@ -53,7 +53,13 @@ sudo apt install -y build-essential libssl-dev golang-cfssl jq yq
 ```
 > NOTE: For ubuntu, `yq` must be installed as a snap package
 
-Building other components, such as the OVMF and swTPM for the demo virtual machine, requires further packages:
+Recompiling the `grpc` definitions requires further packages:
+```sh
+sudo apt-get install -y protobuf-compiler protoc-gen-go protoc-gen-go-grpc
+```
+
+Building other components, such as the OVMF and swTPM for the demo virtual machine, requires further
+packages:
 ```sh
 sudo apt install -y moreutils sqlite3 zlib1g-dev libssl-dev protoc-gen-go protoc-gen-go-grpc \
                     nasm acpica-tools uuid-dev libtasn1-dev libjson-glib-1.0-0 libjson-glib-dev \

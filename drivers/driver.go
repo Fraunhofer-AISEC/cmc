@@ -20,13 +20,11 @@ import (
 	"crypto/x509"
 
 	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // DriverConfig contains all configuration values required for the different drivers
 type DriverConfig struct {
 	StoragePath      string
-	ServerAddr       string
 	HashAlg          crypto.Hash
 	ExcludePcrs      []int
 	MeasurementLogs  bool
@@ -38,8 +36,7 @@ type DriverConfig struct {
 	EstTlsCas        []*x509.Certificate
 	UseSystemRootCas bool
 	Vmpl             int
-	ProvisionAuth    internal.AuthMethod
-	Endorser         Endorser
+	Endorsers        EndorserProvider
 }
 
 // Driver is an interface representing a driver for a hardware trust anchor,

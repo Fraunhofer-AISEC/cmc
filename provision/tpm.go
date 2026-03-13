@@ -32,8 +32,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"github.com/google/go-tpm/legacy/tpm2"
-
-	log "github.com/sirupsen/logrus"
 )
 
 const (

@@ -38,7 +38,7 @@ type Server struct {
 	estCaKey     crypto.PrivateKey
 	estCaChain   []*x509.Certificate
 	metadataCas  []*x509.Certificate
-	snpConf      *provision.SnpConfig
+	snpEndorser  *provision.SnpEndorser
 	tpmConf      provision.TpmConfig
 	authMethods  internal.AuthMethod
 	tokenPath    string
@@ -109,10 +109,7 @@ func NewServer(c *config) (*Server, error) {
 			VerifyEkCert: c.VerifyEkCert,
 			DbPath:       c.TpmEkCertDb,
 		},
-		snpConf: &provision.SnpConfig{
-			VcekCacheFolder: c.VcekCacheFolder,
-			Vceks:           make(map[provision.VcekInfo][]byte),
-		},
+		snpEndorser:  provision.NewSnpEndorser(c.VcekCacheFolder),
 		authMethods:  c.authMethods,
 		tokenPath:    c.TokenPath,
 		publishAddr:  c.PublishAddr,
