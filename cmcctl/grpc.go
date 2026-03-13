@@ -163,6 +163,8 @@ func (a GrpcApi) enroll(c *config) error {
 		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
+	log.Tracef("Requesting new TLS key type %v, alg %v, CN %v", c.KeyType, c.KeyConfig, c.TlsCn)
+
 	request := grpcapi.TLSCreateRequest{
 		Version: api.GetVersion(),
 		KeyConfig: &grpcapi.TLSKeyConfig{

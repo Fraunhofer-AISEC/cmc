@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	golog "log"
 	"net/http"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ import (
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
+	"github.com/sirupsen/logrus"
 )
 
 // HTTP header constants
@@ -59,39 +61,19 @@ func request(c *config) error {
 		trustedRootCas.AddCert(ca)
 	}
 
-	// Load certificate from CMC if mutual TLS is activated and
-	// create basic TLS configuration for aTLS
-	var tlsConfig *tls.Config
-	log.Debug("Creating aTLS configuration")
-	if c.Mtls {
-		cert, err := atls.GetCert(
-			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(c.Api),
-			atls.WithSerializer(c.serializer),
-			atls.WithLibApiCmcConfig(&c.Config))
-		if err != nil {
-			return fmt.Errorf("failed to get TLS Certificate: %v", err)
-		}
-		// Create TLS config with root CA and own certificate for authentication
-		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      trustedRootCas,
-		}
-	} else {
-		// Create TLS config with root CA only
-		tlsConfig = &tls.Config{
-			RootCAs:       trustedRootCas,
-			Renegotiation: tls.RenegotiateNever,
-		}
+	tlsConf, err := createClientTlsConf(c, trustedRootCas)
+	if err != nil {
+		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-	internal.PrintTlsConfig(tlsConfig, c.identityCas)
+
+	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
 	// Create an attested HTTP Transport structure. This is a wrapper around http.Transport,
 	// look for the descriptions of the parameters there. Additionally, the aTLS parameters
 	// must be configured
 	transport := &ahttp.Transport{
 		IdleConnTimeout: 60 * time.Second,
-		TLSClientConfig: tlsConfig,
+		TLSClientConfig: tlsConf,
 
 		Attest:          c.attest,
 		MutualTls:       c.Mtls,
@@ -169,14 +151,10 @@ func serve(c *config) error {
 		trustedRootCas.AddCert(ca)
 	}
 
-	// Load certificate from CMC
-	cert, err := atls.GetCert(
-		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcApi(c.Api),
-		atls.WithSerializer(c.serializer),
-		atls.WithLibApiCmcConfig(&c.Config))
+	// Load certificate
+	cert, err := getTlsCert(c)
 	if err != nil {
-		return fmt.Errorf("failed to get TLS Certificate: %v", err)
+		return fmt.Errorf("failed to get TLS Certificate: %w", err)
 	}
 
 	var clientAuth tls.ClientAuthType
@@ -205,6 +183,11 @@ func serve(c *config) error {
 		Server: &http.Server{
 			Addr:      c.Addr,
 			TLSConfig: tlsConfig,
+			ErrorLog: golog.New(writerFunc(func(p []byte) (int, error) {
+				logrus.WithField("service", "cmcctl").
+					Warn(strings.TrimSpace(string(p)))
+				return len(p), nil
+			}), "", 0),
 		},
 		Attest:          c.attest,
 		MutualTls:       c.Mtls,
@@ -319,4 +302,10 @@ func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) 
 	msg := fmt.Sprintf(format, args...)
 	log.Warn(msg)
 	http.Error(w, msg, http.StatusBadRequest)
+}
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) {
+	return f(p)
 }

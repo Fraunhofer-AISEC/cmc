@@ -29,6 +29,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/peercache"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
@@ -102,35 +103,15 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 	cmc.Metadata = metadata
 
-	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
+	// Create endorser, which is used to fetch vendor certificate chains,
+	// such as the AMD SNP VCEK or Intel TDX PCK chain
+	endorser, err := createEndorser(c, estTlsCas)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
-	}
-
-	var provisioner keymgr.Provisioner
-	var endorser drv.Endorser
-	switch c.ProvisionMode {
-	case "est":
-		var token []byte
-		if authMethods.Has(internal.AuthToken) {
-			token, err = os.ReadFile(c.ProvisionToken)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read token: %v", err)
-			}
-		}
-		estclient, err := estclient.New(c.ProvisionAddr, estTlsCas, c.EstTlsSysRoots, token)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create EST client: %w", err)
-		}
-		endorser = estclient
-		provisioner = estclient
-	default:
-		return nil, fmt.Errorf("unknown provisioner %q", c.ProvisionMode)
+		return nil, fmt.Errorf("failed to create endorser: %w", err)
 	}
 
 	// Create driver configuration
 	driverConf := &drv.DriverConfig{
-		ServerAddr:       c.ProvisionAddr,
 		HashAlg:          alg,
 		ExcludePcrs:      c.ExcludePcrs,
 		MeasurementLogs:  c.MeasurementLogs,
@@ -141,8 +122,8 @@ func NewCmc(c *Config) (*Cmc, error) {
 		EstTlsCas:        estTlsCas,
 		UseSystemRootCas: c.EstTlsSysRoots,
 		Vmpl:             c.Vmpl,
-		ProvisionAuth:    authMethods,
-		Endorser:         endorser,
+		Endorsers:        endorser,
+		StoragePath:      c.Storage,
 	}
 
 	// Initialize drivers
@@ -152,8 +133,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 		if !ok {
 			return nil, fmt.Errorf("driver %v not implemented", driver)
 		}
-
-		driverConf.StoragePath = path.Join(c.Storage, driver+"driver")
 
 		err = d.Init(driverConf)
 		if err != nil {
@@ -169,6 +148,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
 				c.CtrDriver)
 		}
+	}
+
+	// Create provisioner for key manager, which is used to enroll certificates for created keys,
+	// e.g. via EST or ACME protocol
+	provisioner, err := createEnroller(c, estTlsCas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provioner: %w", err)
 	}
 
 	// Create key manager
@@ -193,4 +179,62 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	return cmc, nil
+}
+
+func createEndorser(c *Config, estTlsCas []*x509.Certificate) (drv.EndorserProvider, error) {
+	var err error
+
+	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
+	}
+
+	switch c.EndorsementMode {
+	case "est":
+		var token []byte
+		if authMethods.Has(internal.AuthToken) {
+			token, err = os.ReadFile(c.ProvisionToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read token: %v", err)
+			}
+		}
+		estclient, err := estclient.New(c.EndorsementAddr, estTlsCas, c.EstTlsSysRoots, token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create EST client: %w", err)
+		}
+		return estclient, nil
+	case "direct":
+		return provision.NewDirectProvider(c.SnpCache), nil
+	default:
+		return nil, fmt.Errorf("unknown endorser type %q", c.EndorsementMode)
+	}
+}
+
+func createEnroller(c *Config, estTlsCas []*x509.Certificate) (keymgr.Enroller, error) {
+	var err error
+
+	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
+	}
+
+	switch c.EnrollmentMode {
+	case "est":
+		var token []byte
+		if authMethods.Has(internal.AuthToken) {
+			token, err = os.ReadFile(c.ProvisionToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read token: %v", err)
+			}
+		}
+		estclient, err := estclient.New(c.EnrollmentAddr, estTlsCas, c.EstTlsSysRoots, token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create EST client: %w", err)
+		}
+		return estclient, nil
+	case "acme":
+		return nil, fmt.Errorf("ACME provisioning not yet implemented")
+	default:
+		return nil, fmt.Errorf("unknown provisioner %q", c.EnrollmentMode)
+	}
 }

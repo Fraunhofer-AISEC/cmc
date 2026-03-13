@@ -18,11 +18,19 @@ package drivers
 import (
 	"crypto/x509"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 )
 
-type Endorser interface {
+type EndorserProvider interface {
+	Snp() (SnpEndorser, bool)
+	Tdx() (TdxEndorser, bool)
+	Tpm() (TpmEndorser, bool)
+}
+
+// TpmEndorser provides the interface for performing TPM AK credential activation
+type TpmEndorser interface {
 	CaCerts() ([]*x509.Certificate, error)
 	TpmActivateEnroll(
 		tpmManufacturer, ekCertUrl string,
@@ -31,7 +39,15 @@ type Endorser interface {
 		akParams attest.AttestationParameters,
 		ekPublic, ekCertDer []byte,
 	) ([]byte, []byte, []byte, error)
+}
+
+// SnpEndorser provides the interface to fetch AMD SEV-SNP root CA and VCEK certificates
+type SnpEndorser interface {
 	GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error)
-	GetSnpVcek(codeName string, chipId [64]byte, tcb uint64) (*x509.Certificate, error)
-	// TODO TDX
+	GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error)
+}
+
+// TdxEndorser provides the interface to fetch Intel SGX/TDX collaterals
+type TdxEndorser interface {
+	FetchCollateral(fmspc string, pckcert *x509.Certificate, quoteType ar.IntelQuoteType) (*ar.IntelCollateral, error)
 }

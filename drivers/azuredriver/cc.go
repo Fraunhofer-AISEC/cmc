@@ -387,7 +387,7 @@ func (azure *Azure) GetSnpCollateral() (*ar.Collateral, error) {
 
 func (azure *Azure) GetTdxCollateral() (*ar.Collateral, error) {
 
-	tdxCollateral, err := verifier.FetchCollateral(azure.fmspc, azure.ccAkChain[0], verifier.TDX_QUOTE_TYPE)
+	tdxCollateral, err := azure.tdxEndorser.FetchCollateral(azure.fmspc, azure.ccAkChain[0], ar.TDX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX collateral: %w", err)
 	}

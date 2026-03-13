@@ -28,7 +28,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 	type args struct {
 		qeReportBody *EnclaveReportBody
 		qeIdentity   *pcs.QeIdentity
-		teeType      QuoteType
+		teeType      ar.IntelQuoteType
 	}
 	tests := []struct {
 		name string
@@ -40,7 +40,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   validQeIdentity,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -66,7 +66,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidId,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -79,7 +79,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidVersion,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -92,7 +92,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityExpired,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -105,7 +105,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidMiscSelect,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -118,7 +118,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidAttributes,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -131,7 +131,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidMrSigner,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -144,7 +144,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidIsvProdId,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{
@@ -157,7 +157,7 @@ func Test_validateQEIdentityProperties(t *testing.T) {
 			args: args{
 				qeReportBody: reportBody,
 				qeIdentity:   qeIdentityInvalidTcbLevels,
-				teeType:      TDX_QUOTE_TYPE,
+				teeType:      ar.TDX_QUOTE_TYPE,
 			},
 			want: ar.QeReportResult{
 				Summary: ar.Result{

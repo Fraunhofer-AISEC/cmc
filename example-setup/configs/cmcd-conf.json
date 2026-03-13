@@ -1,9 +1,11 @@
 {
     "cmcAddr": "localhost:9955",
-    "provisionMode": "est",
     "provisionAuth": [ "attestation" ],
-    "provisionAddr": "https://localhost:9000/",
     "provisionToken": "../data/provision_token",
+    "endorsementMode": "est",
+    "endorsementAddr": "https://localhost:9000/",
+    "enrollmentMode": "est",
+    "enrollmentAddr": "https://localhost:9000/",
     "metadata": [
         "file://../data/metadata-signed"
     ],

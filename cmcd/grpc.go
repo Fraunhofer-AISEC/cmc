@@ -210,9 +210,12 @@ func (s *GrpcServer) TLSCreate(ctx context.Context, req *grpcapi.TLSCreateReques
 
 	log.Info("Received grpc request type 'TLSCreate'")
 
+	log.Tracef("Enrolling new key type %v, alg %v", req.KeyConfig.Type, req.KeyConfig.Alg)
+
 	keyId, err := s.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig: api.TLSKeyConfig{
 			Type:        req.KeyConfig.Type,
+			Alg:         req.KeyConfig.Alg,
 			Cn:          req.KeyConfig.Cn,
 			DNSNames:    req.KeyConfig.DnsNames,
 			IPAddresses: req.KeyConfig.IpAddresses,

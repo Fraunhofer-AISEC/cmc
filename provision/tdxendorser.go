@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package verifier
+package provision
 
 import (
 	"crypto/x509"
@@ -24,10 +24,39 @@ import (
 	"net/url"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/google/go-tdx-guest/pcs"
 )
 
-func FetchCollateral(fmspc string, pckcert *x509.Certificate, quoteType QuoteType) (*ar.IntelCollateral, error) {
+type TdxEndorser struct {
+}
+
+// Implement the EndorserProvider interface
+func (endorser *TdxEndorser) Snp() (drivers.SnpEndorser, bool) {
+	return nil, false
+}
+
+func (endorser *TdxEndorser) Tdx() (drivers.TdxEndorser, bool) {
+	return endorser, true
+}
+
+func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, bool) {
+	return nil, false
+}
+
+// NewEndorser initializes a new SNP endorser
+func NewTdxEndorser() *TdxEndorser {
+	return &TdxEndorser{}
+}
+
+func (endorser *TdxEndorser) FetchCollateral(
+	fmspc string,
+	pckcert *x509.Certificate,
+	quoteType ar.IntelQuoteType,
+) (*ar.IntelCollateral, error) {
+
+	log.Tracef("Fetching collateral for FMSPC %v, PCK cert CN=%v, quote type %v", fmspc,
+		pckcert.Subject.CommonName, quoteType)
 
 	caType, err := getCaTypeFromPck(pckcert)
 	if err != nil {
@@ -72,17 +101,17 @@ func FetchCollateral(fmspc string, pckcert *x509.Certificate, quoteType QuoteTyp
 	}, nil
 }
 
-func fetchTcbInfo(fmspc string, quoteType QuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
+func fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
 
 	var tcbInfoUrl string
-	if quoteType == TDX_QUOTE_TYPE {
+	if quoteType == ar.TDX_QUOTE_TYPE {
 		tcbInfoUrl = pcs.TcbInfoURL(fmspc)
-	} else if quoteType == SGX_QUOTE_TYPE {
+	} else if quoteType == ar.SGX_QUOTE_TYPE {
 		tcbInfoUrl = fmt.Sprintf("https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=%v", fmspc)
 	} else {
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
 	}
-	log.Debugf("Fetching TCB Info for FMSPC %v from: %v", fmspc, tcbInfoUrl)
+	log.Debugf("Fetching TCB Info for FMSPC %q from: %v", fmspc, tcbInfoUrl)
 
 	resp, err := http.Get(tcbInfoUrl)
 	if err != nil {
@@ -102,12 +131,12 @@ func fetchTcbInfo(fmspc string, quoteType QuoteType) ([]byte, *x509.Certificate,
 	return body, inter, root, nil
 }
 
-func fetchQeIdentity(quoteType QuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
+func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
 
 	var qeIdentityUrl string
-	if quoteType == TDX_QUOTE_TYPE {
+	if quoteType == ar.TDX_QUOTE_TYPE {
 		qeIdentityUrl = pcs.QeIdentityURL()
-	} else if quoteType == SGX_QUOTE_TYPE {
+	} else if quoteType == ar.SGX_QUOTE_TYPE {
 		qeIdentityUrl = "https://api.trustedservices.intel.com/sgx/certification/v4/qe/identity"
 	} else {
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)

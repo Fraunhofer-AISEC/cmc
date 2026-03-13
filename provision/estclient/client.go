@@ -26,6 +26,7 @@ import (
 
 	"go.mozilla.org/pkcs7"
 
+	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/Fraunhofer-AISEC/go-attestation/attest"
@@ -38,6 +39,19 @@ type Client struct {
 	addr           string
 	bootstrapToken []byte
 	client         *http.Client
+}
+
+// Implement the EndorserProvider interface
+func (p *Client) Snp() (drivers.SnpEndorser, bool) {
+	return p, true
+}
+
+func (p *Client) Tdx() (drivers.TdxEndorser, bool) {
+	return nil, false
+}
+
+func (p *Client) Tpm() (drivers.TpmEndorser, bool) {
+	return p, true
 }
 
 func New(addr string, serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
@@ -341,12 +355,12 @@ func (c *Client) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Cert
 	return certs, nil
 }
 
-func (c *Client) GetSnpVcek(codeName string, chipId [64]byte, tcb uint64,
+func (c *Client) GetSnpVcek(codeName string, chipId []byte, tcb uint64,
 ) (*x509.Certificate, error) {
 
 	buf, contentType, err := est.EncodeMultiPart(
 		[]est.MimeMultipart{
-			{ContentType: est.MimeTypeOctetStream, Data: chipId[:]},
+			{ContentType: est.MimeTypeOctetStream, Data: chipId},
 			{ContentType: est.MimeTypeOctetStream, Data: tcb},
 			{ContentType: est.MimeTypeOctetStream, Data: codeName},
 		},

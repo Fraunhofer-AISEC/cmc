@@ -26,6 +26,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/tdxdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tdx-guest/pcs"
 	log "github.com/sirupsen/logrus"
@@ -242,8 +243,9 @@ func getCollateral(in string) (*ar.IntelCollateral, error) {
 	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	// Fetch collateral
-	collateral, err := verifier.FetchCollateral(exts.FMSPC,
-		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert, verifier.TDX_QUOTE_TYPE)
+	collateral, err := provision.NewTdxEndorser().FetchCollateral(exts.FMSPC,
+		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert,
+		ar.TDX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TDX collateral: %w", err)
 	}

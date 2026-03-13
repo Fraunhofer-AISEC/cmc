@@ -244,6 +244,13 @@ type MeasureEvent struct {
 	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"7,keyasint,omitempty"`
 }
 
+type IntelQuoteType uint32
+
+const (
+	SGX_QUOTE_TYPE IntelQuoteType = 0x0
+	TDX_QUOTE_TYPE IntelQuoteType = 0x81
+)
+
 // IntelCollateral is a helper struct for Intel SGX/TDX collateral
 type IntelCollateral struct {
 	TcbInfo                    []byte

@@ -59,7 +59,7 @@ func (s *Server) handleSnpVcek(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vcek, err := s.snpConf.GetVcek(codeName, chipId, tcb)
+	vcek, err := s.snpEndorser.GetSnpVcek(codeName, chipId, tcb)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return
@@ -115,7 +115,7 @@ func (s *Server) handleSnpCa(w http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Get SNP CA for %q, ak type %d", codeName, akType)
 
-	ca, err := s.snpConf.GetSnpCa(codeName, akType)
+	ca, err := s.snpEndorser.GetSnpCa(codeName, akType)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to get VCEK: %v", err)
 		return

@@ -52,13 +52,14 @@ import (
 // of the attestation report Measurer interface
 type Tpm struct {
 	*drivers.DriverConfig
-	mu      sync.Mutex
-	pcrs    []int
-	tpm     *attest.TPM
-	ak      *attest.AK
-	ek      []attest.EK
-	akChain []*x509.Certificate
-	ctrLog  bool
+	mu       sync.Mutex
+	pcrs     []int
+	tpm      *attest.TPM
+	ak       *attest.AK
+	ek       []attest.EK
+	akChain  []*x509.Certificate
+	ctrLog   bool
+	endorser drivers.TpmEndorser
 }
 
 const (
@@ -86,6 +87,14 @@ func (t *Tpm) Init(c *drivers.DriverConfig) error {
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
 	}
+	if c.Endorsers == nil {
+		return fmt.Errorf("missing endorsers provider")
+	}
+	endorser, ok := c.Endorsers.Tpm()
+	if !ok {
+		return fmt.Errorf("tpm endorser not configured")
+	}
+	t.endorser = endorser
 
 	t.DriverConfig = c
 	t.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
@@ -606,7 +615,7 @@ func (t *Tpm) provision() error {
 	}
 
 	log.Debug("Retrieving CA certs")
-	caCerts, err := t.Endorser.CaCerts()
+	caCerts, err := t.endorser.CaCerts()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve certs: %w", err)
 	}
@@ -657,7 +666,7 @@ func (t *Tpm) provisionAk(fqdn string) (*x509.Certificate, error) {
 	}
 
 	log.Debugf("Performing AK TPM activate credential enroll for CN=%v", akCsr.Subject.CommonName)
-	encCredential, encSecret, pkcs7Cert, err := t.DriverConfig.Endorser.TpmActivateEnroll(
+	encCredential, encSecret, pkcs7Cert, err := t.endorser.TpmActivateEnroll(
 		tpmInfo.Manufacturer.String(), t.ek[0].CertificateURL,
 		tpmInfo.FirmwareVersionMajor, tpmInfo.FirmwareVersionMinor,
 		akCsr,

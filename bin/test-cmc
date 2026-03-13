@@ -65,23 +65,23 @@ wait_for_message() {
     local output_file=$2
     local message=$3
 
-    # Give the output file some time to be generated
-    sleep 0.3
-
-    message_found=false
     while kill -0 ${process_pid} 2>/dev/null; do
-        if [[ -f "${cmc_log}" ]]; then
+        sleep 0.3
+        if [[ -f "${output_file}" ]]; then
             if grep -q "${message}" "${output_file}"; then
-                message_found=true
                 return 0
             fi
         fi
     done
 
-    if ! ${message_found}; then
-        echo "Process did not output the expected message: '$message'."
-        return 1
+    # Final check after process exited
+    sleep 0.3
+    if [[ -f "${output_file}" ]] && grep -q "${message}" "${output_file}"; then
+        return 0
     fi
+
+    printf "\nExpected message: '%s' not found in logfile %s\n" "${message}" "${output_file}"
+    return 1
 }
 
 
@@ -117,9 +117,11 @@ est_params=(
 
 cmc_params=(
     "-cmcaddr" "localhost:9955" \
-    "-provisionmode" "est" \
     "-provisionauth" "none" \
-    "-provisionaddr" "https://localhost:9000" \
+    "-endorsementmode" "est" \
+    "-endorsementaddr" "https://localhost:9000" \
+    "-enrollmentmode" "est" \
+    "-enrollmentaddr" "https://localhost:9000" \
     "-metadata" "file://${metadata_signed}" \
     "-drivers" "tpm,sw" \
     "-hashalg" "sha256" \
@@ -147,6 +149,8 @@ cmcctl_params=(
     "-loglevel" "trace" \
     "-cmcaddr" "localhost:9955" \
     "-keyconfig" "EC256" \
+    "-keytype" "tpm" \
+    "-keyid" "${data}/key-id" \
 )
 
 attest_success=("success" "fail")
