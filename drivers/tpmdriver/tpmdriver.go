@@ -219,7 +219,7 @@ func (t *Tpm) GetCollateral() ([]ar.Collateral, error) {
 	return collateral, nil
 }
 
-func (t *Tpm) Lock() error {
+func (t *Tpm) lock() error {
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
 	}
@@ -229,7 +229,7 @@ func (t *Tpm) Lock() error {
 	return nil
 }
 
-func (t *Tpm) Unlock() error {
+func (t *Tpm) unlock() error {
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
 	}
@@ -445,8 +445,8 @@ func (t *Tpm) GetQuote(nonce []byte) (*attest.Quote, error) {
 	}
 
 	// Only one instance can have access to the tpm at the same time
-	t.Lock()
-	defer t.Unlock()
+	t.lock()
+	defer t.unlock()
 
 	// Retrieve quote and store quote data and signature in TPM measurement object
 	quote, err := t.ak.QuotePCRs(t.tpm, nonce, attest.HashSHA256, t.pcrs)
@@ -461,8 +461,8 @@ func (t *Tpm) GetQuote(nonce []byte) (*attest.Quote, error) {
 func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 	// Only one instance can have access to the tpm at
 	// the same time
-	t.Lock()
-	defer t.Unlock()
+	t.lock()
+	defer t.unlock()
 
 	pcrs, err := t.tpm.PCRs(attest.HashSHA256)
 	if err != nil {
@@ -805,8 +805,8 @@ func (t *Tpm) setQuotePcrs() error {
 
 	// Read and Store PCRs into TPM Measurement structure. Lock this access, as only
 	// one instance can have write access at the same time
-	t.Lock()
-	defer t.Unlock()
+	t.lock()
+	defer t.unlock()
 
 	log.Debug("Retrieving PCRs")
 	pcrValues, err := t.tpm.PCRs(attest.HashSHA256)

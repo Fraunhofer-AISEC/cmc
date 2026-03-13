@@ -109,18 +109,6 @@ func (sw *Sw) Init(c *drivers.DriverConfig) error {
 	return nil
 }
 
-// Lock implements the locking method for the attestation report signer interface
-func (sw *Sw) Lock() error {
-	// No locking mechanism required for software key
-	return nil
-}
-
-// Lock implements the unlocking method for the attestation report signer interface
-func (sw *Sw) Unlock() error {
-	// No unlocking mechanism required for software key
-	return nil
-}
-
 func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
 	log.Debug("Collecting SW evidence")
