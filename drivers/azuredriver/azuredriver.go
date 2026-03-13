@@ -135,14 +135,6 @@ func (azure *Azure) GetCollateral() ([]ar.Collateral, error) {
 	return []ar.Collateral{*ccCollateral, *vtpmCollateral}, nil
 }
 
-func (azure *Azure) Lock() error {
-	return nil
-}
-
-func (azure *Azure) Unlock() error {
-	return nil
-}
-
 func (azure *Azure) UpdateCerts() error {
 	var err error
 

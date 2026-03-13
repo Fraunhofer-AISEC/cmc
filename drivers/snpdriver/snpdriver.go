@@ -142,18 +142,6 @@ func (snp *Snp) GetCollateral() ([]ar.Collateral, error) {
 	}, nil
 }
 
-// Lock implements the locking method for the attestation report signer interface
-func (snp *Snp) Lock() error {
-	// No locking mechanism required for software key
-	return nil
-}
-
-// Lock implements the unlocking method for the attestation report signer interface
-func (snp *Snp) Unlock() error {
-	// No unlocking mechanism required for software key
-	return nil
-}
-
 func GetReport(nonce []byte, vmpl int) ([]byte, error) {
 
 	if len(nonce) > 64 {

@@ -54,8 +54,6 @@ type Driver interface {
 	Init(c *DriverConfig) error
 	GetEvidence(nonce []byte) ([]attestationreport.Evidence, error)
 	GetCollateral() ([]attestationreport.Collateral, error)
-	Lock() error
-	Unlock() error
 	Name() string
 	UpdateCerts() error
 }

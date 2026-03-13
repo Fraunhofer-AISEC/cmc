@@ -157,18 +157,6 @@ func getQuote(nonce []byte) ([]byte, error) {
 	return data[16:], nil
 }
 
-// Lock implements the locking method for the attestation report signer interface
-func (sgx *Sgx) Lock() error {
-	// No locking mechanism required for software key
-	return nil
-}
-
-// Lock implements the unlocking method for the attestation report signer interface
-func (sgx *Sgx) Unlock() error {
-	// No unlocking mechanism required for software key
-	return nil
-}
-
 func (sgx *Sgx) UpdateCerts() error {
 	var err error
 
