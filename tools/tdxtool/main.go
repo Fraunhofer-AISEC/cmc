@@ -41,35 +41,70 @@ func main() {
 	}
 }
 
+type collateralSelector func(*ar.IntelCollateral) []byte
+
+var collateralCommands = map[string]collateralSelector{
+	CMD_GET_TCBINFO:                func(c *ar.IntelCollateral) []byte { return c.TcbInfo },
+	CMD_GET_QEIDENTITY:             func(c *ar.IntelCollateral) []byte { return c.QeIdentity },
+	CMD_GET_ROOT_CA_CRL:            func(c *ar.IntelCollateral) []byte { return c.RootCaCrl },
+	CMD_GET_PCK_CRL:                func(c *ar.IntelCollateral) []byte { return c.PckCrl },
+	CMD_GET_PCK_CRL_INTER_CERT:     func(c *ar.IntelCollateral) []byte { return c.PckCrlIntermediateCert },
+	CMD_GET_PCK_CRL_ROOT_CERT:      func(c *ar.IntelCollateral) []byte { return c.PckCrlRootCert },
+	CMD_GET_TCB_INFO_INTER_CERT:    func(c *ar.IntelCollateral) []byte { return c.TcbInfoIntermediateCert },
+	CMD_GET_TCB_INFO_ROOT_CERT:     func(c *ar.IntelCollateral) []byte { return c.TcbInfoRootCert },
+	CMD_GET_QE_IDENTITY_INTER_CERT: func(c *ar.IntelCollateral) []byte { return c.QeIdentityIntermediateCert },
+	CMD_GET_QE_IDENTITY_ROOT_CERT:  func(c *ar.IntelCollateral) []byte { return c.QeIdentityRootCert },
+}
+
 const (
+	// Quote commands
 	CMD_GET_QUOTE               = "get-quote"
-	CMD_GET_TCBINFO             = "get-tcbinfo"
-	CMD_GET_QEIDENTITY          = "get-qeidentity"
+	CMD_PARSE_QUOTE             = "parse-quote"
 	CMD_PARSE_CERTCHAIN         = "parse-certchain"
 	CMD_PARSE_PCK_CERT          = "parse-pck-cert"
 	CMD_PARSE_INTERMEDIATE_CERT = "parse-intermediate-cert"
 	CMD_PARSE_ROOT_CA_CERT      = "parse-root-ca-cert"
 	CMD_PARSE_FMSPC             = "parse-fmspc"
-	CMD_PARSE_QUOTE             = "parse-quote"
 	CMD_PARSE_TDREPORT          = "parse-tdreport"
 	CMD_PARSE_PCKCERT_TCB       = "parse-pck-cert-tcb"
+
+	// Collateral commands
+	CMD_GET_TCBINFO                = "get-tcbinfo"
+	CMD_GET_QEIDENTITY             = "get-qeidentity"
+	CMD_GET_ROOT_CA_CRL            = "get-root-ca-crl"
+	CMD_GET_PCK_CRL                = "get-pck-crl"
+	CMD_GET_PCK_CRL_INTER_CERT     = "get-pck-crl-intermediate-cert"
+	CMD_GET_PCK_CRL_ROOT_CERT      = "get-pck-crl-root-cert"
+	CMD_GET_TCB_INFO_INTER_CERT    = "get-tcb-info-intermediate-cert"
+	CMD_GET_TCB_INFO_ROOT_CERT     = "get-tcb-info-root-cert"
+	CMD_GET_QE_IDENTITY_INTER_CERT = "get-qe-identity-intermediate-cert"
+	CMD_GET_QE_IDENTITY_ROOT_CERT  = "get-qe-identity-root-cert"
 )
 
 func run() error {
 
-	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
-		CMD_GET_QUOTE,
-		CMD_GET_TCBINFO,
-		CMD_GET_QEIDENTITY,
-		CMD_PARSE_CERTCHAIN,
-		CMD_PARSE_PCK_CERT,
-		CMD_PARSE_INTERMEDIATE_CERT,
-		CMD_PARSE_ROOT_CA_CERT,
-		CMD_PARSE_FMSPC,
-		CMD_PARSE_QUOTE,
-		CMD_PARSE_TDREPORT,
-		CMD_PARSE_PCKCERT_TCB,
-	))
+	cmd := flag.String("cmd", "",
+		fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
+			CMD_GET_QUOTE,
+			CMD_PARSE_CERTCHAIN,
+			CMD_PARSE_PCK_CERT,
+			CMD_PARSE_INTERMEDIATE_CERT,
+			CMD_PARSE_ROOT_CA_CERT,
+			CMD_PARSE_FMSPC,
+			CMD_PARSE_QUOTE,
+			CMD_PARSE_TDREPORT,
+			CMD_PARSE_PCKCERT_TCB,
+			CMD_GET_TCBINFO,
+			CMD_GET_QEIDENTITY,
+			CMD_GET_ROOT_CA_CRL,
+			CMD_GET_PCK_CRL,
+			CMD_GET_PCK_CRL_INTER_CERT,
+			CMD_GET_PCK_CRL_ROOT_CERT,
+			CMD_GET_TCB_INFO_INTER_CERT,
+			CMD_GET_TCB_INFO_ROOT_CERT,
+			CMD_GET_QE_IDENTITY_INTER_CERT,
+			CMD_GET_QE_IDENTITY_ROOT_CERT,
+		))
 	in := flag.String("in", "", "input file")
 	flag.Parse()
 
@@ -92,20 +127,6 @@ func run() error {
 			return fmt.Errorf("failed to get TDX Quote: %w", err)
 		}
 		os.Stdout.Write(quote)
-
-	case CMD_GET_TCBINFO:
-		collateral, err := getCollateral(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get TDX collateral: %w", err)
-		}
-		os.Stdout.Write(collateral.TcbInfo)
-
-	case CMD_GET_QEIDENTITY:
-		collateral, err := getCollateral(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get TDX collateral: %w", err)
-		}
-		os.Stdout.Write(collateral.QeIdentity)
 
 	case CMD_PARSE_CERTCHAIN:
 		certChain, err := parseQuoteCertChain(*in)
@@ -161,7 +182,16 @@ func run() error {
 		}
 
 	default:
-		return fmt.Errorf("unknown cmd %q. See tdxtool -help", *cmd)
+		if selector, ok := collateralCommands[*cmd]; ok {
+			collateral, err := getCollateral(*in)
+			if err != nil {
+				return fmt.Errorf("failed to get TDX collateral: %w", err)
+			}
+			os.Stdout.Write(selector(collateral))
+			return nil
+		} else {
+			return fmt.Errorf("unknown cmd %q. See tdxtool -help", *cmd)
+		}
 
 	}
 
