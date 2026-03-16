@@ -120,7 +120,7 @@ func (sgx *Sgx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 		return nil, errors.New("internal error: SGX object is nil")
 	}
 
-	data, err := getQuote(nonce)
+	data, err := GetQuote(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}
@@ -159,7 +159,7 @@ func (sgx *Sgx) GetCollateral() ([]ar.Collateral, error) {
 	return []ar.Collateral{collateral}, nil
 }
 
-func getQuote(nonce []byte) ([]byte, error) {
+func GetQuote(nonce []byte) ([]byte, error) {
 	data, err := enclave.GetRemoteReport(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
@@ -221,7 +221,7 @@ func fetchAk() ([]*x509.Certificate, error) {
 	}
 
 	// Fetch initial attestation report which contains AK cert chain
-	data, err := getQuote(nonce)
+	data, err := GetQuote(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX Measurement: %w", err)
 	}

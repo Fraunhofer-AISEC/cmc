@@ -179,7 +179,7 @@ Loop:
 		switch evtype := ev.Type; evtype {
 
 		case ar.TYPE_EVIDENCE_TPM:
-			r, ok := verifyTpm(ev, col, evidenceNonce, metadataCas, refVals[ar.TYPE_REFVAL_TPM], s)
+			r, ok := VerifyTpm(ev, col, evidenceNonce, metadataCas, refVals[ar.TYPE_REFVAL_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
@@ -187,7 +187,13 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SNP:
-			r, ok := verifySnp(ev, col, evidenceNonce, metaResults.ManifestResults,
+			var snpPolicy *ar.SnpPolicy
+			var caFingerprints []string
+			if len(metaResults.ManifestResults) > 0 {
+				snpPolicy = metaResults.ManifestResults[0].SnpPolicy
+				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
+			}
+			r, ok := VerifySnp(ev, col, evidenceNonce, snpPolicy, caFingerprints,
 				refVals[ar.TYPE_REFVAL_SNP])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
@@ -196,7 +202,13 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_TDX:
-			r, ok := verifyTdx(ev, col, evidenceNonce, metaResults.ManifestResults,
+			var tdxPolicy *ar.TdxPolicy
+			var caFingerprints []string
+			if len(metaResults.ManifestResults) > 0 {
+				tdxPolicy = metaResults.ManifestResults[0].TdxPolicy
+				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
+			}
+			r, ok := VerifyTdx(ev, col, evidenceNonce, tdxPolicy, caFingerprints,
 				refVals[ar.TYPE_REFVAL_TDX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
@@ -205,7 +217,13 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SGX:
-			r, ok := verifySgx(ev, col, evidenceNonce, metaResults.ManifestResults,
+			var sgxPolicy *ar.SgxPolicy
+			var caFingerprints []string
+			if len(metaResults.ManifestResults) > 0 {
+				sgxPolicy = metaResults.ManifestResults[0].SgxPolicy
+				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
+			}
+			r, ok := VerifySgx(ev, col, evidenceNonce, sgxPolicy, caFingerprints,
 				refVals[ar.TYPE_REFVAL_SGX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
@@ -214,7 +232,11 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_IAS:
-			r, ok := verifyIas(ev, col, evidenceNonce, metaResults.ManifestResults,
+			var caFingerprints []string
+			if len(metaResults.ManifestResults) > 0 {
+				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
+			}
+			r, ok := VerifyIas(ev, col, evidenceNonce, caFingerprints,
 				refVals[ar.TYPE_REFVAL_IAS])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
@@ -223,17 +245,24 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SW:
-			r, ok := verifySw(ev, col, evidenceNonce, refVals[ar.TYPE_REFVAL_SW])
+			r, ok := VerifySw(ev, col, evidenceNonce, refVals[ar.TYPE_REFVAL_SW])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SW measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
 
 		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM:
-			results, ok := verifyAzure(report.Evidences, report.Context.Collateral, evidenceNonce,
-				metaResults.ManifestResults, refVals[ar.TYPE_REFVAL_TDX],
-				refVals[ar.TYPE_REFVAL_SNP], refVals[ar.TYPE_REFVAL_TPM],
-				s)
+			var tdxPolicy *ar.TdxPolicy
+			var snpPolicy *ar.SnpPolicy
+			var caFingerprints []string
+			if len(metaResults.ManifestResults) > 0 {
+				tdxPolicy = metaResults.ManifestResults[0].TdxPolicy
+				snpPolicy = metaResults.ManifestResults[0].SnpPolicy
+				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
+			}
+			results, ok := VerifyAzure(report.Evidences, report.Context.Collateral, evidenceNonce,
+				tdxPolicy, snpPolicy, caFingerprints, refVals[ar.TYPE_REFVAL_TDX],
+				refVals[ar.TYPE_REFVAL_SNP], refVals[ar.TYPE_REFVAL_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
 			}

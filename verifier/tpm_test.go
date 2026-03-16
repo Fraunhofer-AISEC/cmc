@@ -26,7 +26,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func Test_verifyTpmMeasurements(t *testing.T) {
+func TestVerifyTpm(t *testing.T) {
 	type args struct {
 		evidence        ar.Evidence
 		collateral      ar.Collateral
@@ -370,7 +370,7 @@ func Test_verifyTpmMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyTpm(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+			got, got1 := VerifyTpm(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.cas, tt.args.referenceValues, tt.args.s)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifyTpm() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want1)

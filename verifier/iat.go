@@ -49,11 +49,11 @@ type Iat struct {
 	Vsi               string        `cbor:"-75010,keyasint,omitempty"`
 }
 
-func verifyIas(
+func VerifyIas(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,
-	manifests []ar.MetadataResult,
+	caFingerprints []string,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -70,11 +70,6 @@ func verifyIas(
 		return result, false
 	}
 
-	if len(manifests) == 0 {
-		result.Summary.Fail((ar.NoRootManifest))
-		return result, false
-	}
-	rootManifest := manifests[0]
 	if len(referenceValues) == 0 {
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
@@ -132,7 +127,7 @@ func verifyIas(
 	}
 
 	// Verify that the certificate fingerprint matches one of the manifest fingerprints
-	result.Signature.CertChainCheck = verifyCaFingerprint(ca, rootManifest.CaFingerprints)
+	result.Signature.CertChainCheck = verifyCaFingerprint(ca, caFingerprints)
 	if result.Signature.CertChainCheck.Status != ar.StatusSuccess {
 		result.Summary.Fail(ar.CaFingerprint)
 		ok = false
