@@ -1,0 +1,48 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+[[ $# -eq 2 ]] || {
+    echo "Usage: fetch-test-collateral <sgx|tdx> <quote>"
+    exit 1
+}
+
+quote_type="$1"
+quote="$2"
+
+if [[ "${quote_type}" == "sgx" ]]; then
+    tool=sgxtool
+elif [[ "${quote_type}" == "tdx" ]]; then
+    tool=tdxtool
+else
+    printf "Unsupported quote type %s\n" "${quote_type}" >&2
+    exit 1
+fi
+
+tcb_info=$("${tool}" -in "${quote}" -cmd get-tcbinfo)
+qe_identity=$("${tool}" -in "${quote}" -cmd get-qeidentity)
+root_ca_crl=$("${tool}" -in "${quote}" -cmd get-root-ca-crl | base64)
+pck_crl=$("${tool}" -in "${quote}" -cmd get-pck-crl | base64)
+pck_crl_intermediate_cert=$("${tool}" -in "${quote}" -cmd get-pck-crl-intermediate-cert | base64)
+pcr_crl_root_cert=$("${tool}" -in "${quote}" -cmd get-pck-crl-root-cert | base64)
+tcb_info_intermediate_cert=$("${tool}" -in "${quote}" -cmd get-tcb-info-intermediate-cert | base64)
+tcb_info_root_cert=$("${tool}" -in "${quote}" -cmd get-tcb-info-root-cert | base64)
+qe_identity_intermediate_cert=$("${tool}" -in "${quote}" -cmd get-qe-identity-intermediate-cert | base64)
+qe_identity_root_cert=$("${tool}" -in "${quote}" -cmd get-qe-identity-root-cert | base64)
+
+printf "// Run: fetch-test-collateral %s <quote>\n" "${quote_type}"
+printf "var(\n"
+printf "\t%sTcbInfo = \`%s\`\n" "${quote_type}" "${tcb_info}"
+printf "\t%sQeIdentity =\`%s\`\n" "${quote_type}" "${qe_identity}"
+printf "\t%sRootCaCrl = \`%s\`\n" "${quote_type}" "${root_ca_crl}"
+printf "\t%sPckCrl = \`%s\`\n" "${quote_type}" "${pck_crl}"
+printf "\t%sPckCrlIntermediateCert = \`%s\`\n" "${quote_type}" "${pck_crl_intermediate_cert}"
+printf "\t%sPckCrlRootCert = \`%s\`\n" "${quote_type}" "${pcr_crl_root_cert}"
+printf "\t%sTcbInfoIntermediateCert = \`%s\`\n" "${quote_type}" "${tcb_info_intermediate_cert}"
+printf "\t%sTcbInfoRootCert = \`%s\`\n" "${quote_type}" "${tcb_info_root_cert}"
+printf "\t%sQeIdentityIntermediateCert = \`%s\`\n" "${quote_type}" "${qe_identity_intermediate_cert}"
+printf "\t%sQeIdentityRootCert = \`%s\`\n" "${quote_type}" "${qe_identity_root_cert}"
+printf ")\n"

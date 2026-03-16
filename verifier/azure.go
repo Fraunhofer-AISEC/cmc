@@ -77,11 +77,13 @@ type AzureVmConfig struct {
 	VmUniqueId         string `json:"vmUniqueId"`
 }
 
-func verifyAzure(
+func VerifyAzure(
 	evidences []ar.Evidence,
 	collaterals []ar.Collateral,
 	nonce []byte,
-	manifests []ar.MetadataResult,
+	tdxPolicy *ar.TdxPolicy,
+	snpPolicy *ar.SnpPolicy,
+	caFingerprints []string,
 	tdxRefVals, snpRefVals, vtpmRefVals []ar.ReferenceValue,
 	s ar.Serializer,
 ) ([]ar.MeasurementResult, bool) {
@@ -198,7 +200,8 @@ func verifyAzure(
 
 	// Verify TDX measurements with verified hwreport nonce
 	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_TDX {
-		tdxResult, ok := verifyTdx(ccEvidence, ccCollateral, hwreportNonce, manifests, tdxRefVals)
+		tdxResult, ok := VerifyTdx(ccEvidence, ccCollateral, hwreportNonce, tdxPolicy,
+			caFingerprints, tdxRefVals)
 		if !ok {
 			success = false
 		}
@@ -207,7 +210,8 @@ func verifyAzure(
 
 	// Verify SNP measurement with with verified hwreport nonce
 	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_SNP {
-		snpResult, ok := verifySnp(ccEvidence, ccCollateral, hwreportNonce, manifests, snpRefVals)
+		snpResult, ok := VerifySnp(ccEvidence, ccCollateral, hwreportNonce, snpPolicy,
+			caFingerprints, snpRefVals)
 		if !ok {
 			success = false
 		}
@@ -215,7 +219,7 @@ func verifyAzure(
 	}
 
 	// Verify vTPM measurements with provided nonce
-	vtpmResult, ok := verifyTpm(vtpmEvidence, vtpmCollateral, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefVals, s)
+	vtpmResult, ok := VerifyTpm(vtpmEvidence, vtpmCollateral, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefVals, s)
 	if !ok {
 		success = false
 	}

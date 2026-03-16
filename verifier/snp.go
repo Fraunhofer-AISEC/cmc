@@ -83,11 +83,12 @@ const (
 	signature_offset = 0x2A0
 )
 
-func verifySnp(
+func VerifySnp(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,
-	manifests []ar.MetadataResult,
+	policy *ar.SnpPolicy,
+	caFingerprints []string,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -132,23 +133,15 @@ func verifySnp(
 		return result, false
 	}
 
-	if len(manifests) == 0 {
-		result.Summary.Fail((ar.NoRootManifest))
-		return result, false
-	}
-	rootManifest := manifests[0]
-
-	if rootManifest.SnpPolicy == nil {
-		log.Debugf("SNP manifest %v does not contain SNP policy", rootManifest.Name)
+	if policy == nil {
 		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
 
 	// Determine AMD EPYC CPU generation and fetch corresponding version policy
-	versionPolicy, codeName, err := getSnpVersionPolicy(&s, certs[0], rootManifest.SnpPolicy)
+	versionPolicy, codeName, err := getSnpVersionPolicy(&s, certs[0], policy)
 	if err != nil {
-		log.Debugf("SNP manifest %v does not contain SNP policy: %v", rootManifest.Name, err)
-		result.Summary.Fail(ar.PolicyNotPresent)
+		result.Summary.Fail(ar.PolicyNotPresent, err)
 		return result, false
 	}
 
@@ -169,7 +162,7 @@ func verifySnp(
 	}
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(evidence.Data, s, certs, rootManifest.CaFingerprints)
+	sig, ret := verifySnpSignature(evidence.Data, s, certs, caFingerprints)
 	if !ret {
 		ok = false
 	}
@@ -211,13 +204,13 @@ func verifySnp(
 	}
 
 	// Verify the SNP report version
-	result.SnpResult.VersionMatch, ret = verifySnpVersion(rootManifest.SnpPolicy.ReportMinVersion,
-		rootManifest.SnpPolicy.ReportMaxVersion, s.Version)
+	result.SnpResult.VersionMatch, ret = verifySnpVersion(policy.ReportMinVersion,
+		policy.ReportMaxVersion, s.Version)
 	if !ret {
 		ok = false
 	}
 	// Verify SNP VM configuration
-	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, rootManifest.SnpPolicy.GuestPolicy)
+	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, policy.GuestPolicy)
 	if !ret {
 		ok = false
 	}

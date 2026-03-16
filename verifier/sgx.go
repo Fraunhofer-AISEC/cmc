@@ -36,11 +36,12 @@ type SgxQuote struct {
 	QuoteSignatureData    ECDSA256QuoteSignatureDataStructure // variable size
 }
 
-func verifySgx(
+func VerifySgx(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,
-	manifests []ar.MetadataResult,
+	policy *ar.SgxPolicy,
+	caFingerprints []string,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -64,12 +65,6 @@ func verifySgx(
 		return result, false
 	}
 	sgxReferenceValue := referenceValues[0]
-	if len(manifests) == 0 {
-		result.Summary.Fail((ar.NoRootManifest))
-		return result, false
-	}
-	rootManifest := manifests[0]
-	sgxReferencePolicy := rootManifest.Manifest.SgxPolicy
 
 	// Validate Parameters:
 	if len(evidence.Data) < SGX_QUOTE_MIN_SIZE {
@@ -84,8 +79,7 @@ func verifySgx(
 		return result, false
 	}
 
-	if sgxReferencePolicy == nil {
-		log.Debugf("SGX manifest does not contain SGX policy")
+	if policy == nil {
 		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
@@ -162,7 +156,7 @@ func verifySgx(
 	}
 
 	// Match collateral root CAs against reference root CA fingerprint
-	errCode := verifyRootCas(&quoteCerts, intelCollateral, rootManifest.CaFingerprints)
+	errCode := verifyRootCas(&quoteCerts, intelCollateral, caFingerprints)
 	if errCode != ar.NotSpecified {
 		result.Summary.Fail(errCode)
 		return result, false
@@ -181,7 +175,7 @@ func verifySgx(
 	result.SgxResult.TcbInfoCheck = ValidateTcbInfo(
 		&intelCollateral.TcbInfo, intelCollateralRaw.TcbInfo,
 		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
-		sgxExtensions, [16]byte{}, ar.SGX_QUOTE_TYPE, sgxReferencePolicy.AcceptedTcbStatuses)
+		sgxExtensions, [16]byte{}, ar.SGX_QUOTE_TYPE, policy.AcceptedTcbStatuses)
 	if result.SgxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to verify TCB info structure")
 		result.Summary.Fail(ar.VerifyTcbInfo)
@@ -214,7 +208,7 @@ func verifySgx(
 	// Verify Quote Body values
 	log.Debugf("Verifying SGX quote body")
 	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &intelCollateral.TcbInfo, &sgxExtensions,
-		&sgxReferenceValue, sgxReferencePolicy, result)
+		&sgxReferenceValue, policy, result)
 	if err != nil {
 		log.Debugf("Failed to verify SGX Report Body: %v", err)
 		result.Summary.Fail(ar.VerifySignature)
@@ -224,7 +218,7 @@ func verifySgx(
 
 	// Check version
 	log.Debugf("Verifying SGX quote version")
-	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, sgxReferencePolicy.QuoteVersion)
+	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, policy.QuoteVersion)
 	if !ret {
 		log.Debugf("Failed to verify ")
 		return result, false

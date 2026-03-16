@@ -17,22 +17,25 @@ package verifier
 
 import (
 	"testing"
+	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
 )
 
-func Test_verifyAzureMeasurements(t *testing.T) {
+func TestVerifyAzure(t *testing.T) {
 	type args struct {
-		evidences   []ar.Evidence
-		collaterals []ar.Collateral
-		nonce       []byte
-		manifests   []ar.MetadataResult
-		tdxRefVals  []ar.ReferenceValue
-		snpRefVals  []ar.ReferenceValue
-		vtpmRefVals []ar.ReferenceValue
-		s           ar.Serializer
+		evidences      []ar.Evidence
+		collaterals    []ar.Collateral
+		nonce          []byte
+		tdxPolicy      *ar.TdxPolicy
+		snpPolicy      *ar.SnpPolicy
+		caFingerprints []string
+		tdxRefVals     []ar.ReferenceValue
+		snpRefVals     []ar.ReferenceValue
+		vtpmRefVals    []ar.ReferenceValue
+		s              ar.Serializer
 	}
 	tests := []struct {
 		name  string
@@ -43,12 +46,13 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Successful Azure Verification",
 			args: args{
-				evidences:   validAzureEvidences,
-				collaterals: validAzureCollaterals,
-				manifests:   []ar.MetadataResult{validTdxRootManifest},
-				tdxRefVals:  validTdxRefvalsAzure,
-				vtpmRefVals: validVtpmRefvalsAzure,
-				nonce:       validVtpmNonce,
+				evidences:      validAzureEvidences,
+				collaterals:    validAzureCollaterals,
+				caFingerprints: tdxRootCAFingerprintsAzure,
+				tdxPolicy:      validTdxPolicy,
+				tdxRefVals:     validTdxRefvalsAzure,
+				vtpmRefVals:    validVtpmRefvalsAzure,
+				nonce:          validVtpmNonce,
 			},
 			want:  successfulAzureResult,
 			want1: true,
@@ -56,12 +60,13 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Failed Azure Verification Invalid Fingerprint",
 			args: args{
-				evidences:   validAzureEvidences,
-				collaterals: validAzureCollaterals,
-				manifests:   []ar.MetadataResult{invalidTdxRootManifestFingerprint}, // Invalid fingerprint
-				tdxRefVals:  validTdxRefvalsAzure,
-				vtpmRefVals: validVtpmRefvalsAzure,
-				nonce:       validVtpmNonce,
+				evidences:      validAzureEvidences,
+				collaterals:    validAzureCollaterals,
+				caFingerprints: invalidTdxRootCAFingerprintsAzure,
+				tdxPolicy:      validTdxPolicy,
+				tdxRefVals:     validTdxRefvalsAzure,
+				vtpmRefVals:    validVtpmRefvalsAzure,
+				nonce:          validVtpmNonce,
 			},
 			want:  failedAzureResultTdx,
 			want1: false,
@@ -69,12 +74,13 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Failed Azure Verification Invalid TDX Refvals",
 			args: args{
-				evidences:   validAzureEvidences,
-				collaterals: validAzureCollaterals,
-				manifests:   []ar.MetadataResult{validTdxRootManifest},
-				tdxRefVals:  invalidTdxRefvalsAzure, // Invalid TDX refvals
-				vtpmRefVals: validVtpmRefvalsAzure,
-				nonce:       validVtpmNonce,
+				evidences:      validAzureEvidences,
+				collaterals:    validAzureCollaterals,
+				caFingerprints: tdxRootCAFingerprintsAzure,
+				tdxPolicy:      validTdxPolicy,
+				tdxRefVals:     invalidTdxRefvalsAzure, // Invalid TDX refvals
+				vtpmRefVals:    validVtpmRefvalsAzure,
+				nonce:          validVtpmNonce,
 			},
 			want:  failedAzureResultTdx,
 			want1: false,
@@ -82,12 +88,13 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 		{
 			name: "Failed Azure Verification Invalid vTPM Refvals",
 			args: args{
-				evidences:   validAzureEvidences,
-				collaterals: validAzureCollaterals,
-				manifests:   []ar.MetadataResult{validTdxRootManifest},
-				tdxRefVals:  validTdxRefvalsAzure,
-				vtpmRefVals: invalidVtpmRefvalsAzure, // Invalid vTPM refvals azure
-				nonce:       validVtpmNonce,
+				evidences:      validAzureEvidences,
+				collaterals:    validAzureCollaterals,
+				caFingerprints: tdxRootCAFingerprintsAzure,
+				tdxPolicy:      validTdxPolicy,
+				tdxRefVals:     validTdxRefvalsAzure,
+				vtpmRefVals:    invalidVtpmRefvalsAzure, // Invalid vTPM refvals azure
+				nonce:          validVtpmNonce,
 			},
 			want:  failedAzureResultVtpm,
 			want1: false,
@@ -96,33 +103,19 @@ func Test_verifyAzureMeasurements(t *testing.T) {
 
 	logrus.SetLevel(logrus.TraceLevel)
 
-	collateral, err := FetchCollateral(fmspc_azure, pck_cert_azure, TDX_QUOTE_TYPE)
-	if err != nil {
-		t.Errorf("failed to get TDX collateral: %v", err)
-	}
+	// Set the time to a fixed time, as the intel collateral is verified to be not older
+	// than one month in the FUT
+	fixed := time.Date(2026, 3, 16, 21, 50, 0, 0, time.UTC)
+	oldNow := now
+	now = func() time.Time { return fixed }
+	defer func() { now = oldNow }()
 
 	for _, tt := range tests {
 
-		// Insert collateral
-		for i := range tt.args.collaterals {
-			if tt.args.collaterals[i].Type == ar.TYPE_EVIDENCE_AZURE_TDX {
-
-				tt.args.collaterals[i].Artifacts = []ar.Artifact{
-					{
-						Type: ar.TYPE_TDX_COLLATERAL,
-						Events: []ar.MeasureEvent{
-							{
-								IntelCollateral: collateral,
-							},
-						},
-					},
-				}
-			}
-		}
-
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifyAzure(tt.args.evidences, tt.args.collaterals, tt.args.nonce,
-				tt.args.manifests, tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals,
+			got, got1 := VerifyAzure(tt.args.evidences, tt.args.collaterals, tt.args.nonce,
+				tt.args.tdxPolicy, tt.args.snpPolicy, tt.args.caFingerprints,
+				tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals,
 				tt.args.s)
 			for i := range got {
 				if got[i].Summary.Status != tt.want[i].Summary.Status {
@@ -411,6 +404,16 @@ var (
 	validAzureCollaterals = []ar.Collateral{
 		{
 			Type: ar.TYPE_EVIDENCE_AZURE_TDX,
+			Artifacts: []ar.Artifact{
+				{
+					Type: ar.TYPE_TDX_COLLATERAL,
+					Events: []ar.MeasureEvent{
+						{
+							IntelCollateral: azureTdxCollateral,
+						},
+					},
+				},
+			},
 		},
 		{
 			Type:      ar.TYPE_EVIDENCE_AZURE_TPM,
@@ -424,60 +427,6 @@ var (
 // TDX data
 // =================================================================================================
 var (
-	// Run: azuretool -cmd get-hwreport > quote
-	// Run: tdxtool -cmd parse-fmspc -in quote > fmspc
-	fmspc_azure = "90c06f000000"
-
-	// Run: tdxtool -cmd parse-pck-cert -in quote
-	pck_cert_azure = conv([]byte(`
------BEGIN CERTIFICATE-----
-MIIE8jCCBJegAwIBAgIVAKtrcJn/2jxbyrCl++8ugc0GtYI9MAoGCCqGSM49BAMC
-MHAxIjAgBgNVBAMMGUludGVsIFNHWCBQQ0sgUGxhdGZvcm0gQ0ExGjAYBgNVBAoM
-EUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UE
-CAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTI1MDcyOTE0MDkwNFoXDTMyMDcyOTE0MDkw
-NFowcDEiMCAGA1UEAwwZSW50ZWwgU0dYIFBDSyBDZXJ0aWZpY2F0ZTEaMBgGA1UE
-CgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYD
-VQQIDAJDQTELMAkGA1UEBhMCVVMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASO
-pl+ay7ZMENff1YSCr4t+zoxSyNqGkT+HMji+5GzoUyhtsrWK1UmA3OBtnj/ZvkoZ
-uzldUHi8Pdn7AUfq3urso4IDDDCCAwgwHwYDVR0jBBgwFoAUlW9dzb0b4elAScnU
-9DPOAVcL3lQwawYDVR0fBGQwYjBgoF6gXIZaaHR0cHM6Ly9hcGkudHJ1c3RlZHNl
-cnZpY2VzLmludGVsLmNvbS9zZ3gvY2VydGlmaWNhdGlvbi92NC9wY2tjcmw/Y2E9
-cGxhdGZvcm0mZW5jb2Rpbmc9ZGVyMB0GA1UdDgQWBBRZaBN4YkgLOj8uDQdSE9fM
-yr6iNzAOBgNVHQ8BAf8EBAMCBsAwDAYDVR0TAQH/BAIwADCCAjkGCSqGSIb4TQEN
-AQSCAiowggImMB4GCiqGSIb4TQENAQEEEPT4X5l2ab4LjSMs/1Tn7N8wggFjBgoq
-hkiG+E0BDQECMIIBUzAQBgsqhkiG+E0BDQECAQIBAzAQBgsqhkiG+E0BDQECAgIB
-AzAQBgsqhkiG+E0BDQECAwIBAjAQBgsqhkiG+E0BDQECBAIBAjAQBgsqhkiG+E0B
-DQECBQIBBDAQBgsqhkiG+E0BDQECBgIBATAQBgsqhkiG+E0BDQECBwIBADAQBgsq
-hkiG+E0BDQECCAIBBTAQBgsqhkiG+E0BDQECCQIBADAQBgsqhkiG+E0BDQECCgIB
-ADAQBgsqhkiG+E0BDQECCwIBADAQBgsqhkiG+E0BDQECDAIBADAQBgsqhkiG+E0B
-DQECDQIBADAQBgsqhkiG+E0BDQECDgIBADAQBgsqhkiG+E0BDQECDwIBADAQBgsq
-hkiG+E0BDQECEAIBADAQBgsqhkiG+E0BDQECEQIBDTAfBgsqhkiG+E0BDQECEgQQ
-AwMCAgQBAAUAAAAAAAAAADAQBgoqhkiG+E0BDQEDBAIAADAUBgoqhkiG+E0BDQEE
-BAaQwG8AAAAwDwYKKoZIhvhNAQ0BBQoBATAeBgoqhkiG+E0BDQEGBBAN5epDD00r
-qPOmUCCBFiwQMEQGCiqGSIb4TQENAQcwNjAQBgsqhkiG+E0BDQEHAQEB/zAQBgsq
-hkiG+E0BDQEHAgEBADAQBgsqhkiG+E0BDQEHAwEB/zAKBggqhkjOPQQDAgNJADBG
-AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
-+I+TKfN6NRrIr2SlWmduKwJLeGOAPQ==
------END CERTIFICATE-----`))
-
-	validTdxRootManifest = ar.MetadataResult{
-		Metadata: ar.Metadata{
-			Manifest: ar.Manifest{
-				CaFingerprints: tdxRootCAFingerprintsAzure,
-				TdxPolicy:      validTdxPolicy,
-			},
-		},
-	}
-
-	invalidTdxRootManifestFingerprint = ar.MetadataResult{
-		Metadata: ar.Metadata{
-			Manifest: ar.Manifest{
-				CaFingerprints: invalidTdxRootCAFingerprintsAzure,
-				TdxPolicy:      validTdxPolicy,
-			},
-		},
-	}
-
 	validTdxPolicy = &ar.TdxPolicy{
 		QuoteVersion: 0x04,
 		TdId: ar.TDId{
@@ -1072,4 +1021,160 @@ AiEAo4q6algm28LM1MqMMED9km2How9J26EUyjFOX6LUFZ0CIQDJ7ZjuhpEGbLql
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
+
+	azureTdxCollateral = &ar.IntelCollateral{
+		TcbInfo:                    []byte(azureTdxTcbInfo),
+		QeIdentity:                 []byte(azureTdxQeIdentity),
+		RootCaCrl:                  fromb64(azureTdxRootCaCrl),
+		PckCrl:                     fromb64(azureTdxPckCrl),
+		PckCrlIntermediateCert:     fromb64(azureTdxPckCrlIntermediateCert),
+		PckCrlRootCert:             fromb64(azureTdxPckCrlRootCert),
+		TcbInfoIntermediateCert:    fromb64(azureTdxTcbInfoIntermediateCert),
+		TcbInfoRootCert:            fromb64(azureTdxTcbInfoRootCert),
+		QeIdentityIntermediateCert: fromb64(azureTdxQeIdentityIntermediateCert),
+		QeIdentityRootCert:         fromb64(azureTdxQeIdentityRootCert),
+	}
+)
+
+// Run: fetch-test-collateral tdx <quote>
+var (
+	azureTdxTcbInfo    = `{"tcbInfo":{"id":"TDX","version":3,"issueDate":"2026-03-18T08:49:38Z","nextUpdate":"2026-04-17T08:49:38Z","fmspc":"90c06f000000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":18,"tdxModule":{"mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF"},"tdxModuleIdentities":[{"id":"TDX_03","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":3},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},{"id":"TDX_01","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":6},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"isvsvn":4},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]},{"tcb":{"isvsvn":2},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]}]}],"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":3,"category":"BIOS","type":"Early Microcode Update"},{"svn":3,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":4,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":5,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":13,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":3,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":2,"category":"BIOS","type":"Early Microcode Update"},{"svn":2,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":5,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":13,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":2,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":2,"category":"BIOS","type":"Early Microcode Update"},{"svn":2,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":5,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":2,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00115","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00220","INTEL-SA-00233","INTEL-SA-00270","INTEL-SA-00293","INTEL-SA-00320","INTEL-SA-00329","INTEL-SA-00381","INTEL-SA-00389","INTEL-SA-00477","INTEL-SA-00837","INTEL-SA-01036","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]}]},"signature":"cbe7d01e35a38a84dd074839fe6c54f6c658338651397a3310ab722ec53a678ff4fd401548ef33f0d98c5d49073fe08d2f0626fccc801f4048a801044f16c9b5"}`
+	azureTdxQeIdentity = `{"enclaveIdentity":{"id":"TD_QE","version":2,"issueDate":"2026-03-18T08:20:59Z","nextUpdate":"2026-04-17T08:20:59Z","tcbEvaluationDataNumber":18,"miscselect":"00000000","miscselectMask":"FFFFFFFF","attributes":"11000000000000000000000000000000","attributesMask":"FBFFFFFFFFFFFFFF0000000000000000","mrsigner":"DC9E2A7C6F948F17474E34A7FC43ED030F7C1563F1BABDDF6340C82E0E54A8C5","isvprodid":2,"tcbLevels":[{"tcb":{"isvsvn":4},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},"signature":"b82ca1ba66a49a56dfacc41dea0a9c4b3bc484c6a1395a0aebb390c076e6e75bae2d68ab0b5f69b1ac7617677cba4cbf11bcdca715893405c80f0e166d1d2dff"}`
+	azureTdxRootCaCrl  = `MIIBIjCByAIBATAKBggqhkjOPQQDAjBoMRowGAYDVQQDDBFJbnRlbCBTR1ggUm9vdCBDQTEaMBgG
+A1UECgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYDVQQIDAJD
+QTELMAkGA1UEBhMCVVMXDTI2MDIyNjEzMDQwMFoXDTI3MDIyNjEzMDQwMFqgLzAtMAoGA1UdFAQD
+AgEBMB8GA1UdIwQYMBaAFCJlDNZanTSJ84O0lVK/UBs5JwasMAoGCCqGSM49BAMCA0kAMEYCIQDC
+Uu1Zx5W6KxFJakqZdYu4y8OAoeu7CGW+afLEs4u2QAIhAJp9iwNgKp7i1iMi11kWbWkz0k2d+gGr
+P95FIGkdcVvX`
+	azureTdxPckCrl = `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`
+	azureTdxPckCrlIntermediateCert = `MIICljCCAj2gAwIBAgIVAJVvXc29G+HpQEnJ1PQzzgFXC95UMAoGCCqGSM49BAMCMGgxGjAYBgNV
+BAMMEUludGVsIFNHWCBSb290IENBMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UE
+BwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzAeFw0xODA1MjExMDUwMTBa
+Fw0zMzA1MjExMDUwMTBaMHAxIjAgBgNVBAMMGUludGVsIFNHWCBQQ0sgUGxhdGZvcm0gQ0ExGjAY
+BgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwC
+Q0ExCzAJBgNVBAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENSB/7t21lXSO2Cuzpxw7
+4eJB72EyDGgW5rXCtx2tVTLq6hKk6z+UiRZCnqR7psOvgqFeSxlmTlJleTmi2WYz3qOBuzCBuDAf
+BgNVHSMEGDAWgBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczov
+L2NlcnRpZmljYXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRl
+cjAdBgNVHQ4EFgQUlW9dzb0b4elAScnU9DPOAVcL3lQwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB
+/wQIMAYBAf8CAQAwCgYIKoZIzj0EAwIDRwAwRAIgXsVki0w+i6VYGW3UF/22uaXe0YJDj1UenA+T
+jD1ai5cCICYb1SAmD5xkfTVpvo4UoyiSYxrDWLmUR4CI9NKyfPN+`
+	azureTdxPckCrlRootCert = `MIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoX
+DTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUlu
+dGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNV
+BAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRF
+hWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAW
+gBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmlj
+YXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4E
+FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
+AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
+4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
+	azureTdxTcbInfoIntermediateCert = `MIICjTCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTI1MDUwNjA5MjUwMFoX
+DTMyMDUwNjA5MjUwMFowbDEeMBwGA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQK
+DBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQsw
+CQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGvP+mAh91P
+EyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2ljuypajgbUwgbIwHwYDVR0j
+BBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0
+aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYD
+VR0OBBYEFH44gtX7VSlKQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAA
+MAoGCCqGSM49BAMCA0kAMEYCIQDdmmRuAo3qCO8TC1IoJMITAoOEw4dlgEBHzSz1TuMSTAIhAKVT
+qOkt59+co0O3m3hC+v5Fb00FjYWcgeu3EijOULo5`
+	azureTdxTcbInfoRootCert = `MIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoX
+DTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUlu
+dGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNV
+BAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRF
+hWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAW
+gBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmlj
+YXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4E
+FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
+AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
+4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
+	azureTdxQeIdentityIntermediateCert = `MIICjTCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTI1MDUwNjA5MjUwMFoX
+DTMyMDUwNjA5MjUwMFowbDEeMBwGA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQK
+DBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQsw
+CQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGvP+mAh91P
+EyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2ljuypajgbUwgbIwHwYDVR0j
+BBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0
+aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYD
+VR0OBBYEFH44gtX7VSlKQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAA
+MAoGCCqGSM49BAMCA0kAMEYCIQDdmmRuAo3qCO8TC1IoJMITAoOEw4dlgEBHzSz1TuMSTAIhAKVT
+qOkt59+co0O3m3hC+v5Fb00FjYWcgeu3EijOULo5`
+	azureTdxQeIdentityRootCert = `MIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoX
+DTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUlu
+dGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNV
+BAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRF
+hWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAW
+gBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmlj
+YXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4E
+FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
+AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
+4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
 )

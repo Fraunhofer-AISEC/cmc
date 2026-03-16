@@ -30,7 +30,7 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 
-func verifyTpm(
+func VerifyTpm(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,

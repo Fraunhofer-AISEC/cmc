@@ -69,6 +69,10 @@ const (
 	QE_IDENTIY_VERSION = 2
 )
 
+var (
+	now = time.Now
+)
+
 // 48 bytes
 type QuoteHeader struct {
 	Version            uint16
@@ -671,8 +675,7 @@ func ValidateTcbInfo(tcbInfo *pcs.TdxTcbInfo, tcbInfoBodyRaw []byte,
 	}
 
 	// Verify expiration
-	now := time.Now()
-	if now.After(tcbInfo.TcbInfo.NextUpdate) {
+	if now().After(tcbInfo.TcbInfo.NextUpdate) {
 		log.Debugf("TCB info has expired since: %v", tcbInfo.TcbInfo.NextUpdate)
 		result.Summary.Fail(ar.TcbInfoExpired)
 		return result
@@ -839,7 +842,8 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 		if qeIdentity.EnclaveIdentity.Version == 2 {
 			if qeIdentity.EnclaveIdentity.ID != QE_ID {
 				result.Summary.Fail(ar.VerifyQEIdentityErr,
-					fmt.Errorf("enclave Identity is not generated for TDX and does not match Quote's TEE"))
+					fmt.Errorf("enclave Identity ID (%v) is not generated for TDX (%v)",
+						qeIdentity.EnclaveIdentity.ID, QE_ID))
 				return result
 			}
 		} else {
@@ -850,7 +854,8 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 	case ar.SGX_QUOTE_TYPE:
 		if qeIdentity.EnclaveIdentity.ID != QE {
 			result.Summary.Fail(ar.VerifyQEIdentityErr,
-				fmt.Errorf("enclave Identity is not generated for SGX and does not match Quote's TEE"))
+				fmt.Errorf("enclave Identity ID (%v) is not generated for SGX (%v)",
+					qeIdentity.EnclaveIdentity.ID, QE))
 			return result
 		}
 
@@ -859,8 +864,7 @@ func validateQEIdentityProperties(qeReportBody *EnclaveReportBody, qeIdentity *p
 		return result
 	}
 
-	now := time.Now()
-	if now.After(qeIdentity.EnclaveIdentity.NextUpdate) {
+	if now().After(qeIdentity.EnclaveIdentity.NextUpdate) {
 		result.Summary.Fail(ar.VerifyQEIdentityErr,
 			fmt.Errorf("qeIdentity has expired since: %v", qeIdentity.EnclaveIdentity.NextUpdate))
 	}

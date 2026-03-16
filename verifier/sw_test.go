@@ -25,7 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Test_verifySwMeasurements(t *testing.T) {
+func TestVerifySw(t *testing.T) {
 	type args struct {
 		evidence   ar.Evidence
 		collateral ar.Collateral
@@ -179,17 +179,17 @@ func Test_verifySwMeasurements(t *testing.T) {
 
 		// Begin FUT
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := verifySw(
+			got, got1 := VerifySw(
 				tt.args.evidence,
 				tt.args.collateral,
 				tt.args.nonce,
 				refVals[ar.TYPE_REFVAL_SW],
 				tt.args.s)
 			if got.Summary.Status != tt.want {
-				t.Errorf("verifySw() got = %v, want %v", got.Summary.Status, tt.want)
+				t.Errorf("VerifySw() got = %v, want %v", got.Summary.Status, tt.want)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("verifySw() got = %v, want %v", got1, tt.want)
+				t.Errorf("VerifySw() got = %v, want %v", got1, tt.want)
 			}
 		})
 		// End FUT

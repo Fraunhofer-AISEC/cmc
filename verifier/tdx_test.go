@@ -16,7 +16,9 @@
 package verifier
 
 import (
+	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/google/go-tdx-guest/pcs"
 	"github.com/sirupsen/logrus"
@@ -24,14 +26,14 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func Test_verifyTdxMeasurements(t *testing.T) {
+func TestVerifyTdx(t *testing.T) {
 	type args struct {
 		evidence       ar.Evidence
 		collateral     ar.Collateral
 		nonce          []byte
-		manifests      []ar.MetadataResult
+		policy         *ar.TdxPolicy
+		caFingerprints []string
 		refvals        []ar.ReferenceValue
-		omitCollateral bool
 	}
 	tests := []struct {
 		name  string
@@ -47,33 +49,26 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Data: tdxQuote,
 				},
 				collateral: ar.Collateral{
-					Artifacts: tdxCcEventlog,
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
 				},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
+
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
@@ -88,31 +83,24 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Data: tdxQuote,
 				},
 				collateral: ar.Collateral{
-					Artifacts: invalidTdxCcEventlog1,
+					Type:      ar.TYPE_TDX_COLLATERAL,
+					Artifacts: append(invalidTdxCcEventlog1, collateralArtifact),
 				},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -129,31 +117,23 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Data: tdxQuote,
 				},
 				collateral: ar.Collateral{
-					Artifacts: invalidTdxCcEventlog2,
+					Artifacts: append(invalidTdxCcEventlog2, collateralArtifact),
 				},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -169,30 +149,24 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -208,30 +182,24 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: invalidTdxQuote, // manipulated MRCONFIGID
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigIdInvalidSig, // manipulated MRCONFIGID
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigIdInvalidSig, // manipulated MRCONFIGID
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -247,30 +215,24 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -286,30 +248,24 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: invalidTdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: invalidTdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -325,30 +281,24 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: invalidTdxRefvals,
@@ -364,31 +314,25 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										// Invalid debug value
-										Debug: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						// Invalid debug value
+						Debug: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -404,72 +348,22 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral:     ar.Collateral{}, // Missing collateral
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
 					},
-				},
-				refvals: validTdxRefvals,
-				nonce:   validTDXNonce,
-				// Missing collateral
-				omitCollateral: true,
-			},
-			want:  ar.StatusFail,
-			want1: false,
-		},
-		{
-			name: "Invalid MrSeam",
-			args: args{
-				evidence: ar.Evidence{
-					Type: ar.TYPE_EVIDENCE_TDX,
-					Data: tdxQuote,
-				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: validTdxRefvals,
@@ -485,33 +379,60 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 					Type: ar.TYPE_EVIDENCE_TDX,
 					Data: tdxQuote,
 				},
-				collateral: ar.Collateral{},
-				manifests: []ar.MetadataResult{
-					{
-						Metadata: ar.Metadata{
-							Manifest: ar.Manifest{
-								CaFingerprints: tdxRootCAFingerprints,
-								TdxPolicy: &ar.TdxPolicy{
-									QuoteVersion: 0x04,
-									TdId: ar.TDId{
-										MrOwner:       mrOwner,
-										MrOwnerConfig: mrOwnerConfig,
-										MrConfigId:    mrConfigId,
-									},
-									TdAttributes: ar.TDAttributes{
-										SeptVEDisable: true,
-									},
-									Xfam: validXFAM,
-									AcceptedTcbStatuses: []string{
-										string(pcs.TcbComponentStatusUpToDate),
-										string(pcs.TcbComponentStatusOutOfDate),
-									},
-								},
-							},
-						},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{collateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
 				refvals: invalidTdxRefvals,
+				nonce:   validTDXNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			name: "Invalid TCB Info",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{outdatedCollateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
+					},
+				},
+				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
 			want:  ar.StatusFail,
@@ -521,27 +442,18 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 
 	logrus.SetLevel(logrus.TraceLevel)
 
-	collateral, err := FetchCollateral(fmspcTdx, pckCertTdx, TDX_QUOTE_TYPE)
-	if err != nil {
-		t.Errorf("failed to get TDX collateral: %v", err)
-	}
+	// Set the time to a fixed time, as the intel collateral is verified to be not older
+	// than one month in the FUT
+	fixed := time.Date(2026, 3, 16, 21, 50, 0, 0, time.UTC)
+	oldNow := now
+	now = func() time.Time { return fixed }
+	defer func() { now = oldNow }()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.args.omitCollateral {
-				collateral = nil
-			}
-			tt.args.collateral.Artifacts = append(tt.args.collateral.Artifacts, ar.Artifact{
-				Type: ar.TYPE_TDX_COLLATERAL,
-				Events: []ar.MeasureEvent{
-					{
-						IntelCollateral: collateral,
-					},
-				},
-			})
 			log.Infof("Running Unit Test %q", tt.name)
-			got, got1 := verifyTdx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
-				tt.args.manifests, tt.args.refvals)
+			got, got1 := VerifyTdx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+				tt.args.policy, tt.args.caFingerprints, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifyTdxMeasurements() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want)
 			}
@@ -550,47 +462,19 @@ func Test_verifyTdxMeasurements(t *testing.T) {
 			}
 		})
 	}
+}
 
+func fromb64(in string) []byte {
+	data := []byte(in)
+	decoded := make([]byte, base64.StdEncoding.DecodedLen(len(data)))
+	n, err := base64.StdEncoding.Decode(decoded, data)
+	if err != nil {
+		log.Fatalf("Failed to decode test data: %v", err)
+	}
+	return decoded[:n]
 }
 
 var (
-	// Run: tdxtool -cmd get-quote > quote
-
-	// Run: tdxtool -cmd parse-fmspc -in quote
-	fmspcTdx = "c0806f000000"
-
-	// Run: tdxtool -cmd parse-pck-cert -in quote
-	pckCertTdx = conv([]byte(`
------BEGIN CERTIFICATE-----
-MIIE8TCCBJegAwIBAgIVAOoG5vhckF4C0sRkB6UA4Bp77T79MAoGCCqGSM49BAMC
-MHAxIjAgBgNVBAMMGUludGVsIFNHWCBQQ0sgUGxhdGZvcm0gQ0ExGjAYBgNVBAoM
-EUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UE
-CAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTI1MDQwNDAwMTYwM1oXDTMyMDQwNDAwMTYw
-M1owcDEiMCAGA1UEAwwZSW50ZWwgU0dYIFBDSyBDZXJ0aWZpY2F0ZTEaMBgGA1UE
-CgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYD
-VQQIDAJDQTELMAkGA1UEBhMCVVMwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARD
-HprVU9P2hC2OCACVZEIVzk9TgkcuSXFJ/Alf9QsL3o1/M6T7YX2ov1PF1SD9WbUk
-o0qzfAPkehxgHfAdSBPpo4IDDDCCAwgwHwYDVR0jBBgwFoAUlW9dzb0b4elAScnU
-9DPOAVcL3lQwawYDVR0fBGQwYjBgoF6gXIZaaHR0cHM6Ly9hcGkudHJ1c3RlZHNl
-cnZpY2VzLmludGVsLmNvbS9zZ3gvY2VydGlmaWNhdGlvbi92NC9wY2tjcmw/Y2E9
-cGxhdGZvcm0mZW5jb2Rpbmc9ZGVyMB0GA1UdDgQWBBRCearv7hZD6sXvsXm4JA5+
-FL+KBzAOBgNVHQ8BAf8EBAMCBsAwDAYDVR0TAQH/BAIwADCCAjkGCSqGSIb4TQEN
-AQSCAiowggImMB4GCiqGSIb4TQENAQEEEBe5taFn8y24Qhjzp0IN8/UwggFjBgoq
-hkiG+E0BDQECMIIBUzAQBgsqhkiG+E0BDQECAQIBBzAQBgsqhkiG+E0BDQECAgIB
-BzAQBgsqhkiG+E0BDQECAwIBAjAQBgsqhkiG+E0BDQECBAIBAjAQBgsqhkiG+E0B
-DQECBQIBAzAQBgsqhkiG+E0BDQECBgIBATAQBgsqhkiG+E0BDQECBwIBADAQBgsq
-hkiG+E0BDQECCAIBAzAQBgsqhkiG+E0BDQECCQIBADAQBgsqhkiG+E0BDQECCgIB
-ADAQBgsqhkiG+E0BDQECCwIBADAQBgsqhkiG+E0BDQECDAIBADAQBgsqhkiG+E0B
-DQECDQIBADAQBgsqhkiG+E0BDQECDgIBADAQBgsqhkiG+E0BDQECDwIBADAQBgsq
-hkiG+E0BDQECEAIBADAQBgsqhkiG+E0BDQECEQIBCzAfBgsqhkiG+E0BDQECEgQQ
-BwcCAgMBAAMAAAAAAAAAADAQBgoqhkiG+E0BDQEDBAIAADAUBgoqhkiG+E0BDQEE
-BAbAgG8AAAAwDwYKKoZIhvhNAQ0BBQoBATAeBgoqhkiG+E0BDQEGBBDdnpep+KBb
-BYTG3ihq+DkRMEQGCiqGSIb4TQENAQcwNjAQBgsqhkiG+E0BDQEHAQEB/zAQBgsq
-hkiG+E0BDQEHAgEB/zAQBgsqhkiG+E0BDQEHAwEB/zAKBggqhkjOPQQDAgNIADBF
-AiEAj4mlASMtwRCXMc0EOG2f2b7Sfhc6obz0g9vsWaa4ZbQCIAu2fs72NmLAkpeH
-VuSH2obLyk9EqwuskEOZw8/5bPqe
------END CERTIFICATE-----`))
-
 	tdxRootCAFingerprints        = []string{"44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"}
 	invalidTdxRootCAFingerprints = []string{"ffa0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"}
 
@@ -769,7 +653,8 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 		},
 	}
 
-	// tdxtool -cmd parse-quote -in quote
+	// Run: tdxtool -cmd get-quote > quote
+	// Run: tdxtool -cmd parse-quote -in quote
 	validXFAM = []byte{0xE7, 0x02, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 	// Run: xxd -i quote
@@ -1876,4 +1761,195 @@ VuSH2obLyk9EqwuskEOZw8/5bPqe
 			},
 		},
 	}
+
+	// nextUpdate is outdated
+	outdatedTdxTcbInfo = `
+{"tcbInfo":{"id":"TDX","version":3,"issueDate":"2026-03-16T19:21:24Z","nextUpdate":"2025-04-15T19:21:24Z","fmspc":"c0806f000000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":18,"tdxModule":{"mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF"},"tdxModuleIdentities":[{"id":"TDX_03","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":3},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},{"id":"TDX_01","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":6},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"isvsvn":4},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]},{"tcb":{"isvsvn":2},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]}]}],"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":8,"category":"BIOS","type":"Early Microcode Update"},{"svn":8,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":4,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":6,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":8,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":7,"category":"BIOS","type":"Early Microcode Update"},{"svn":7,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":7,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":6,"category":"BIOS","type":"Early Microcode Update"},{"svn":6,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":6,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00293","INTEL-SA-00477","INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]}]},"signature":"6cd94d22c45b3571577d04cf9e332e1a491abc0cebad3dd82747bc9953da9b8a2dedc86da60fa408570770e54e617b706c74c9dda0510a235accdca038ce3d75"}`
+
+	tdxCollateral = &ar.IntelCollateral{
+		TcbInfo:                    []byte(tdxTcbInfo),
+		QeIdentity:                 []byte(tdxQeIdentity),
+		RootCaCrl:                  fromb64(tdxRootCaCrl),
+		PckCrl:                     fromb64(tdxPckCrl),
+		PckCrlIntermediateCert:     fromb64(tdxPckCrlIntermediateCert),
+		PckCrlRootCert:             fromb64(tdxPckCrlRootCert),
+		TcbInfoIntermediateCert:    fromb64(tdxTcbInfoIntermediateCert),
+		TcbInfoRootCert:            fromb64(tdxTcbInfoRootCert),
+		QeIdentityIntermediateCert: fromb64(tdxQeIdentityIntermediateCert),
+		QeIdentityRootCert:         fromb64(tdxQeIdentityRootCert),
+	}
+
+	collateralArtifact = ar.Artifact{
+		Type: ar.TYPE_TDX_COLLATERAL,
+		Events: []ar.MeasureEvent{
+			{
+				IntelCollateral: tdxCollateral,
+			},
+		},
+	}
+
+	outdatedCollateral = &ar.IntelCollateral{
+		TcbInfo:                    []byte(outdatedTdxTcbInfo),
+		QeIdentity:                 []byte(tdxQeIdentity),
+		RootCaCrl:                  fromb64(tdxRootCaCrl),
+		PckCrl:                     fromb64(tdxPckCrl),
+		PckCrlIntermediateCert:     fromb64(tdxPckCrlIntermediateCert),
+		PckCrlRootCert:             fromb64(tdxPckCrlRootCert),
+		TcbInfoIntermediateCert:    fromb64(tdxTcbInfoIntermediateCert),
+		TcbInfoRootCert:            fromb64(tdxTcbInfoRootCert),
+		QeIdentityIntermediateCert: fromb64(tdxQeIdentityIntermediateCert),
+		QeIdentityRootCert:         fromb64(tdxQeIdentityRootCert),
+	}
+
+	outdatedCollateralArtifact = ar.Artifact{
+		Type: ar.TYPE_TDX_COLLATERAL,
+		Events: []ar.MeasureEvent{
+			{
+				IntelCollateral: outdatedCollateral,
+			},
+		},
+	}
+)
+
+// Run: fetch-test-collateral tdx <quote>
+var (
+	tdxTcbInfo    = `{"tcbInfo":{"id":"TDX","version":3,"issueDate":"2026-03-17T10:30:03Z","nextUpdate":"2026-04-16T10:30:03Z","fmspc":"c0806f000000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":18,"tdxModule":{"mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF"},"tdxModuleIdentities":[{"id":"TDX_03","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":3},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},{"id":"TDX_01","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":6},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"isvsvn":4},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]},{"tcb":{"isvsvn":2},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]}]}],"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":8,"category":"BIOS","type":"Early Microcode Update"},{"svn":8,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":4,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":6,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":8,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":7,"category":"BIOS","type":"Early Microcode Update"},{"svn":7,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":7,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":6,"category":"BIOS","type":"Early Microcode Update"},{"svn":6,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":6,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00293","INTEL-SA-00477","INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]}]},"signature":"7d553f8f1f1bb7cc823e9c718f3648954a8759799a765347d7cf7fe7f9e26204d7f997dcbb18b949b370c811dacf7599049a4295a25409facb43270e85d635de"}`
+	tdxQeIdentity = `{"enclaveIdentity":{"id":"TD_QE","version":2,"issueDate":"2026-03-17T10:17:40Z","nextUpdate":"2026-04-16T10:17:40Z","tcbEvaluationDataNumber":18,"miscselect":"00000000","miscselectMask":"FFFFFFFF","attributes":"11000000000000000000000000000000","attributesMask":"FBFFFFFFFFFFFFFF0000000000000000","mrsigner":"DC9E2A7C6F948F17474E34A7FC43ED030F7C1563F1BABDDF6340C82E0E54A8C5","isvprodid":2,"tcbLevels":[{"tcb":{"isvsvn":4},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},"signature":"33a7afa825bf257f04cf3d91067b09c9b35f617d331efbc9eee4bd2e29a10b53747b3a1267406814998f46311aadadc5502437e4c6097e80b1c5d04774adf7ec"}`
+	tdxRootCaCrl  = `MIIBIjCByAIBATAKBggqhkjOPQQDAjBoMRowGAYDVQQDDBFJbnRlbCBTR1ggUm9vdCBDQTEaMBgG
+A1UECgwRSW50ZWwgQ29ycG9yYXRpb24xFDASBgNVBAcMC1NhbnRhIENsYXJhMQswCQYDVQQIDAJD
+QTELMAkGA1UEBhMCVVMXDTI2MDIyNjEzMDQwMFoXDTI3MDIyNjEzMDQwMFqgLzAtMAoGA1UdFAQD
+AgEBMB8GA1UdIwQYMBaAFCJlDNZanTSJ84O0lVK/UBs5JwasMAoGCCqGSM49BAMCA0kAMEYCIQDC
+Uu1Zx5W6KxFJakqZdYu4y8OAoeu7CGW+afLEs4u2QAIhAJp9iwNgKp7i1iMi11kWbWkz0k2d+gGr
+P95FIGkdcVvX`
+	tdxPckCrl = `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`
+	tdxPckCrlIntermediateCert = `MIICljCCAj2gAwIBAgIVAJVvXc29G+HpQEnJ1PQzzgFXC95UMAoGCCqGSM49BAMCMGgxGjAYBgNV
+BAMMEUludGVsIFNHWCBSb290IENBMRowGAYDVQQKDBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UE
+BwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQswCQYDVQQGEwJVUzAeFw0xODA1MjExMDUwMTBa
+Fw0zMzA1MjExMDUwMTBaMHAxIjAgBgNVBAMMGUludGVsIFNHWCBQQ0sgUGxhdGZvcm0gQ0ExGjAY
+BgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwC
+Q0ExCzAJBgNVBAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENSB/7t21lXSO2Cuzpxw7
+4eJB72EyDGgW5rXCtx2tVTLq6hKk6z+UiRZCnqR7psOvgqFeSxlmTlJleTmi2WYz3qOBuzCBuDAf
+BgNVHSMEGDAWgBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczov
+L2NlcnRpZmljYXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRl
+cjAdBgNVHQ4EFgQUlW9dzb0b4elAScnU9DPOAVcL3lQwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB
+/wQIMAYBAf8CAQAwCgYIKoZIzj0EAwIDRwAwRAIgXsVki0w+i6VYGW3UF/22uaXe0YJDj1UenA+T
+jD1ai5cCICYb1SAmD5xkfTVpvo4UoyiSYxrDWLmUR4CI9NKyfPN+`
+	tdxPckCrlRootCert = `MIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoX
+DTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUlu
+dGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNV
+BAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRF
+hWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAW
+gBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmlj
+YXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4E
+FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
+AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
+4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
+	tdxTcbInfoIntermediateCert = `MIICjTCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTI1MDUwNjA5MjUwMFoX
+DTMyMDUwNjA5MjUwMFowbDEeMBwGA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQK
+DBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQsw
+CQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGvP+mAh91P
+EyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2ljuypajgbUwgbIwHwYDVR0j
+BBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0
+aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYD
+VR0OBBYEFH44gtX7VSlKQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAA
+MAoGCCqGSM49BAMCA0kAMEYCIQDdmmRuAo3qCO8TC1IoJMITAoOEw4dlgEBHzSz1TuMSTAIhAKVT
+qOkt59+co0O3m3hC+v5Fb00FjYWcgeu3EijOULo5`
+	tdxTcbInfoRootCert = `MIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoX
+DTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUlu
+dGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNV
+BAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRF
+hWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAW
+gBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmlj
+YXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4E
+FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
+AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
+4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
+	tdxQeIdentityIntermediateCert = `MIICjTCCAjKgAwIBAgIUfjiC1ftVKUpASY5FhAPpFJG99FUwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTI1MDUwNjA5MjUwMFoX
+DTMyMDUwNjA5MjUwMFowbDEeMBwGA1UEAwwVSW50ZWwgU0dYIFRDQiBTaWduaW5nMRowGAYDVQQK
+DBFJbnRlbCBDb3Jwb3JhdGlvbjEUMBIGA1UEBwwLU2FudGEgQ2xhcmExCzAJBgNVBAgMAkNBMQsw
+CQYDVQQGEwJVUzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABENFG8xzydWRfK92bmGvP+mAh91P
+EyV7Jh6FGJd5ndE9aBH7R3E4A7ubrlh/zN3C4xvpoouGlirMba+W2ljuypajgbUwgbIwHwYDVR0j
+BBgwFoAUImUM1lqdNInzg7SVUr9QGzknBqwwUgYDVR0fBEswSTBHoEWgQ4ZBaHR0cHM6Ly9jZXJ0
+aWZpY2F0ZXMudHJ1c3RlZHNlcnZpY2VzLmludGVsLmNvbS9JbnRlbFNHWFJvb3RDQS5kZXIwHQYD
+VR0OBBYEFH44gtX7VSlKQEmORYQD6RSRvfRVMA4GA1UdDwEB/wQEAwIGwDAMBgNVHRMBAf8EAjAA
+MAoGCCqGSM49BAMCA0kAMEYCIQDdmmRuAo3qCO8TC1IoJMITAoOEw4dlgEBHzSz1TuMSTAIhAKVT
+qOkt59+co0O3m3hC+v5Fb00FjYWcgeu3EijOULo5`
+	tdxQeIdentityRootCert = `MIICjzCCAjSgAwIBAgIUImUM1lqdNInzg7SVUr9QGzknBqwwCgYIKoZIzj0EAwIwaDEaMBgGA1UE
+AwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUludGVsIENvcnBvcmF0aW9uMRQwEgYDVQQH
+DAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNVBAYTAlVTMB4XDTE4MDUyMTEwNDUxMFoX
+DTQ5MTIzMTIzNTk1OVowaDEaMBgGA1UEAwwRSW50ZWwgU0dYIFJvb3QgQ0ExGjAYBgNVBAoMEUlu
+dGVsIENvcnBvcmF0aW9uMRQwEgYDVQQHDAtTYW50YSBDbGFyYTELMAkGA1UECAwCQ0ExCzAJBgNV
+BAYTAlVTMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEC6nEwMDIYZOj/iPWsCzaEKi71OiOSLRF
+hWGjbnBVJfVnkY4u3IjkDYYL0MxO4mqsyYjlBalTVYxFP2sJBK5zlKOBuzCBuDAfBgNVHSMEGDAW
+gBQiZQzWWp00ifODtJVSv1AbOScGrDBSBgNVHR8ESzBJMEegRaBDhkFodHRwczovL2NlcnRpZmlj
+YXRlcy50cnVzdGVkc2VydmljZXMuaW50ZWwuY29tL0ludGVsU0dYUm9vdENBLmRlcjAdBgNVHQ4E
+FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
+AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
+4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
 )

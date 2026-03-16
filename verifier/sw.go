@@ -29,7 +29,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func verifySw(
+func VerifySw(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,

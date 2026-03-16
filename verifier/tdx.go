@@ -85,11 +85,12 @@ type QEReportCertificationData struct {
 	PCKCertChain      SgxCertificates // A3.9 QE Certification Data: Type 5 (PCK Cert Chain)
 }
 
-func verifyTdx(
+func VerifyTdx(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,
-	manifests []ar.MetadataResult,
+	policy *ar.TdxPolicy,
+	caFingerprints []string,
 	referenceValues []ar.ReferenceValue,
 ) (*ar.MeasurementResult, bool) {
 
@@ -109,14 +110,8 @@ func verifyTdx(
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
-	if len(manifests) == 0 {
-		result.Summary.Fail((ar.NoRootManifest))
-		return result, false
-	}
-	rootManifest := manifests[0]
-	tdxPolicy := rootManifest.TdxPolicy
-	if tdxPolicy == nil {
-		log.Debugf("TDX manifest does not contain TDX policy")
+	if policy == nil {
+		log.Debugf("no TDX policy present")
 		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
@@ -173,7 +168,7 @@ func verifyTdx(
 	}
 
 	// Match measurement root CAs against reference root CA fingerprint
-	errCode := verifyRootCas(&quoteCerts, intelCollateral, rootManifest.CaFingerprints)
+	errCode := verifyRootCas(&quoteCerts, intelCollateral, caFingerprints)
 	if errCode != ar.NotSpecified {
 		result.Summary.Fail(errCode)
 		return result, false
@@ -192,7 +187,7 @@ func verifyTdx(
 		&intelCollateral.TcbInfo, intelCollateralRaw.TcbInfo,
 		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, ar.TDX_QUOTE_TYPE,
-		tdxPolicy.AcceptedTcbStatuses)
+		policy.AcceptedTcbStatuses)
 	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Debugf("Failed to validate TCB info")
 		result.Summary.Fail(ar.VerifyTcbInfo)
@@ -227,14 +222,14 @@ func verifyTdx(
 	result.TdxResult.MrMatch = mrResults
 	result.Artifacts = append(result.Artifacts, detailedResults...)
 
-	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &tdxPolicy.TdId, &intelCollateral.TcbInfo)
+	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &policy.TdId, &intelCollateral.TcbInfo)
 	if !okTdId {
 		log.Debugf("Failed to verify TDX TD ID")
 		result.Summary.Status = ar.StatusFail
 	}
 	result.Artifacts = append(result.Artifacts, tdIdResults...)
 
-	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], tdxPolicy.Xfam)
+	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], policy.Xfam)
 	if result.TdxResult.XfamCheck.Status != ar.StatusSuccess {
 		log.Debugf("TDX XFAM check failed")
 		result.Summary.Status = ar.StatusFail
@@ -248,14 +243,14 @@ func verifyTdx(
 
 	// Verify Quote Body values against reference TDX policy
 	var okTdAttr bool
-	result.TdxResult.TdAttributesCheck, okTdAttr = verifyTdxTdAttributes(tdxQuote.QuoteBody.TdAttributes, &tdxPolicy.TdAttributes)
+	result.TdxResult.TdAttributesCheck, okTdAttr = verifyTdxTdAttributes(tdxQuote.QuoteBody.TdAttributes, &policy.TdAttributes)
 	if !okTdAttr {
 		log.Debugf("TDX TD Attributes check failed")
 		result.Summary.Status = ar.StatusFail
 	}
 
 	// Check version
-	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader.Version, tdxPolicy.QuoteVersion)
+	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader.Version, policy.QuoteVersion)
 	if !ret {
 		result.Summary.Status = ar.StatusFail
 	}
