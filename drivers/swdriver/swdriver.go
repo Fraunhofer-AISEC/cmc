@@ -111,7 +111,7 @@ func (sw *Sw) Init(c *drivers.DriverConfig) error {
 
 func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
-	log.Debug("Collecting SW evidence")
+	log.Debugf("Generating SW evidence with aggregated hash %x", sw.evidenceHash)
 
 	// Generate Evidence = Nonce | Aggregated_Hash
 	data, err := sw.serializer.Marshal(&ar.SwEvidence{
@@ -121,6 +121,8 @@ func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal evidence: %w", err)
 	}
+
+	log.Tracef("Signing SW evidence with %v serialization", sw.serializer.String())
 	swEvidence, err := internal.Sign(data, sw.akPriv, sw.akPub, sw.serializer.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
@@ -130,6 +132,8 @@ func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 		Type: ar.TYPE_EVIDENCE_SW,
 		Data: swEvidence,
 	}
+
+	log.Tracef("Created sw evidence: %v", string(swEvidence))
 
 	return []ar.Evidence{evidence}, nil
 }
@@ -154,20 +158,16 @@ func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
 			return nil, fmt.Errorf("failed to read container measurements: %w", err)
 		}
 
-		var measureList []ar.MeasureEvent
-		err = sw.serializer.Unmarshal(data, &measureList)
+		var eventlog ar.Artifact
+		err = sw.serializer.Unmarshal(data, &eventlog)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 		}
-
-		artifact := ar.Artifact{
-			Type:   ar.TYPE_SW_EVENTLOG,
-			Events: measureList,
-		}
-		artifacts = append(artifacts, artifact)
+		artifacts = append(artifacts, eventlog)
 
 		// Calculate the aggregated evidence hash through extending all container measurements
-		for _, ml := range measureList {
+		for _, ml := range eventlog.Events {
+			log.Tracef("Extending template hash %x", ml.Sha256)
 			aggregatedHash = internal.ExtendSha256(aggregatedHash, ml.Sha256)
 		}
 
@@ -178,6 +178,7 @@ func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
 	}
 
 	// Store the aggregated hash for evidence retrieval
+	log.Tracef("Calculated aggregated hash %x", aggregatedHash)
 	sw.evidenceHash = aggregatedHash
 
 	pub, err := internal.WritePublicKeyPem(sw.akPub)
@@ -190,6 +191,8 @@ func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
 		Artifacts: artifacts,
 		Key:       pub,
 	}
+
+	log.Tracef("Created collateral with public key: %v", string(pub))
 
 	return []ar.Collateral{collateral}, nil
 }

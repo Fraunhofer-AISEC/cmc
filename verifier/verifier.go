@@ -616,23 +616,17 @@ func checkValidity(val ar.Validity) ar.Result {
 func collectReferenceValues(metadata []ar.MetadataResult) (map[string][]ar.ReferenceValue, error) {
 
 	refmap := make(map[string][]ar.ReferenceValue)
-	// Iterate over all manifests (iterator required)
-	for i := range metadata {
-		for _, r := range metadata[i].ReferenceValues {
+	// Iterate over all manifest reference values
+	for _, m := range metadata {
+		for _, r := range m.ReferenceValues {
 			// Check reference value type
 			if r.Type != ar.TYPE_REFVAL_SNP &&
 				r.Type != ar.TYPE_REFVAL_SW &&
 				r.Type != ar.TYPE_REFVAL_TPM &&
 				r.Type != ar.TYPE_REFVAL_TDX &&
 				r.Type != ar.TYPE_REFVAL_SGX {
-				return nil, fmt.Errorf("reference value of type %v is not supported", r.Type)
+				return nil, fmt.Errorf("reference value of type %q is not supported", r.Type)
 			}
-
-			// Note: The indirection and iterator are required, otherwise the manifest reference
-			// in the reference value would always point to the last element in the map
-			m := metadata[i]
-			// Add a reference to the corresponding manifest to each reference value
-			r.SetManifest(&m.Metadata)
 
 			// Collect all reference values, depending on type, independent of the manifest
 			refmap[r.Type] = append(refmap[r.Type], r)

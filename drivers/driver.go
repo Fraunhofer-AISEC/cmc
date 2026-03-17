@@ -29,7 +29,6 @@ type DriverConfig struct {
 	ExcludePcrs      []int
 	MeasurementLogs  bool
 	Ctr              bool
-	CtrPcr           int
 	CtrLog           string
 	ExtCtrLog        bool
 	CtrDriver        string

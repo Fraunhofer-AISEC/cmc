@@ -197,7 +197,7 @@ func (t *Tpm) GetCollateral() ([]ar.Collateral, error) {
 	artifacts := make([]ar.Artifact, 0)
 
 	if t.MeasurementLogs {
-		events, err := GetEventLogs(t.pcrs, t.ctrLog, t.CtrPcr, t.CtrLog)
+		events, err := GetEventLogs(t.pcrs, t.ctrLog, t.CtrLog)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get event logs: %w", err)
 		}
@@ -511,7 +511,7 @@ func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 	return artifacts, nil
 }
 
-func GetEventLogs(pcrs []int, ctrLog bool, ctrPcr int, ctrLogFile string) ([]ar.Artifact, error) {
+func GetEventLogs(pcrs []int, ctrLog bool, ctrLogFile string) ([]ar.Artifact, error) {
 
 	log.Debugf("Collecting event logs for PCRs %v", pcrs)
 
@@ -528,7 +528,7 @@ func GetEventLogs(pcrs []int, ctrLog bool, ctrPcr int, ctrLogFile string) ([]ar.
 	maps.Copy(artifactmap, runtimeMeasurements)
 
 	if ctrLog {
-		containerMeasurement, err := GetContainerArtifacts(ctrLogFile, ctrPcr)
+		containerMeasurement, err := GetContainerArtifacts(ctrLogFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get container runtime measurements: %w", err)
 		}
@@ -566,7 +566,7 @@ func GetEventLogs(pcrs []int, ctrLog bool, ctrPcr int, ctrLogFile string) ([]ar.
 	return artifacts, nil
 }
 
-func GetContainerArtifacts(path string, pcr int) (*ar.Artifact, error) {
+func GetContainerArtifacts(path string) (*ar.Artifact, error) {
 
 	log.Debugf("Reading container measurements")
 	if _, err := os.Stat(path); err != nil {
@@ -585,19 +585,15 @@ func GetContainerArtifacts(path string, pcr int) (*ar.Artifact, error) {
 		return nil, fmt.Errorf("failed to detect atls response serializationt: %v", err)
 	}
 
-	var measureList []ar.MeasureEvent
-	err = s.Unmarshal(data, &measureList)
+	var eventlog *ar.Artifact
+	err = s.Unmarshal(data, eventlog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)
 	}
 
-	log.Debugf("Adding %v container events to PCR%v artifact", len(measureList), pcr)
+	log.Debugf("Adding %v container events to PCR%v artifact", len(eventlog.Events), eventlog.Index)
 
-	return &ar.Artifact{
-		Type:   ar.TYPE_PCR_EVENTLOG,
-		Index:  pcr,
-		Events: measureList,
-	}, nil
+	return eventlog, nil
 }
 
 func (t *Tpm) provision() error {

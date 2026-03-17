@@ -176,19 +176,14 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 	err = m.Measure(
 		&ar.MeasureEvent{
 			Sha256:    req.MeasureEvent.Sha256,
+			Index:     int(req.MeasureEvent.Index),
 			EventName: req.MeasureEvent.EventName,
 			CtrData: &ar.CtrData{
 				ConfigSha256: req.MeasureEvent.CtrData.ConfigSha256,
 				RootfsSha256: req.MeasureEvent.CtrData.RootfsSha256,
 				OciSpec:      spec,
 			},
-		},
-		&m.MeasureConfig{
-			Serializer: s.serializer,
-			Pcr:        s.cmc.CtrPcr,
-			LogFile:    s.cmc.CtrLog,
-			Driver:     s.cmc.CtrDriver,
-		})
+		}, s.serializer, s.cmc.CtrLog, s.cmc.CtrDriver)
 	if err != nil {
 		log.Errorf("Failed to record measurement: %v", err)
 		success = false

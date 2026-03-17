@@ -54,11 +54,22 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 
 		if !ruleExists {
 			// If no rule is defined, treat the value as mandatory, i.e., enforce exact match
-			log.Tracef(" No rule defined for field '%v'", key)
+			log.Tracef(" No rule defined for field %q", key)
 			if !reflect.DeepEqual(refValue, measureValue) {
-				return fmt.Errorf(" field '%v' is implicitly mandatory and must match reference", key)
+				switch measureValue.(type) {
+				case string, int, bool:
+					log.Tracef(" Field %q does not reference: %v vs %v", key, measureValue, refValue)
+				default:
+					log.Tracef(" Field %q does not reference", key)
+				}
+				return fmt.Errorf(" field %q is implicitly mandatory and does not match reference", key)
 			} else {
-				log.Tracef(" Field '%v' matches reference", key)
+				switch measureValue.(type) {
+				case string, int, bool:
+					log.Tracef(" Field %q matches reference: %v", key, measureValue)
+				default:
+					log.Tracef(" Field %q matches reference", key)
+				}
 			}
 		} else {
 
@@ -66,40 +77,40 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 			switch ruleType := rule.(type) {
 			case string: // Rule specifies a JSON scalar or array of scalars
 
-				log.Debugf(" Rule %v defined for scalar field '%v'", rule, key)
+				log.Debugf(" Rule %v defined for scalar field %q", rule, key)
 
 				if rule != "mandatory" && rule != "optional" && rule != "modifiable" && rule != "subset" {
 					return fmt.Errorf(" unsupported rule type: %v", rule)
 				}
 
 				if reflect.DeepEqual(refValue, measureValue) {
-					log.Tracef(" Field '%v' is %v and matches reference", key, rule)
+					log.Tracef(" Field %q is %v and matches reference", key, rule)
 					continue
 				}
 				if ruleType == "optional" {
 					if !measurementExists {
-						log.Tracef(" Field '%v' is optional and missing in target config", key)
+						log.Tracef(" Field %q is optional and missing in target config", key)
 						continue
 					} else {
-						return fmt.Errorf(" field '%v' is optional, present, and has different value %v (vs. %v)",
+						return fmt.Errorf(" field %q is optional, present, and has different value %v (vs. %v)",
 							key, measureValue, refValue)
 					}
 				} else if ruleType == "modifiable" {
-					log.Tracef(" Field '%v' is %v and was modified (%v to %v)",
+					log.Tracef(" Field %q is %v and was modified (%v to %v)",
 						key, rule, refValue, measureValue)
 					continue
 				} else if ruleType == "subset" {
 					refArr, refOk := refValue.([]interface{})
 					measurementArr, measurementOk := measureValue.([]interface{})
 					if !refOk || !measurementOk {
-						return fmt.Errorf(" fields '%v' must be JSON array type: ref: %T, meas: %T",
+						return fmt.Errorf(" fields %q must be JSON array type: ref: %T, meas: %T",
 							key, refValue, measureValue)
 					}
 					if isSubset(measurementArr, refArr) {
-						log.Tracef(" Field '%v' is subset of reference", key)
+						log.Tracef(" Field %q is subset of reference", key)
 						continue
 					} else {
-						return fmt.Errorf(" field '%v' is not a subset (%v vs. %v)",
+						return fmt.Errorf(" field %q is not a subset (%v vs. %v)",
 							key, refValue, measureValue)
 					}
 				}
@@ -110,15 +121,15 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 				refArr, refOk := refValue.([]interface{})
 				measurementArr, measurementOk := measureValue.([]interface{})
 				if !refOk || !measurementOk {
-					return fmt.Errorf(" nested array field '%v' must be a JSON object: ref: %v, meas: %v",
+					return fmt.Errorf(" nested array field %q must be a JSON object: ref: %v, meas: %v",
 						key, refOk, measurementOk)
 				}
 				if len(ruleType) > len(refArr) || len(ruleType) > len(measurementArr) {
-					return fmt.Errorf(" field '%v' has %v elements, but rule has %v elements",
+					return fmt.Errorf(" field %q has %v elements, but rule has %v elements",
 						key, len(refArr), len(ruleType))
 				}
 				if len(measurementArr) != len(refArr) {
-					return fmt.Errorf(" field '%v' has %v elements, but reference has %v elements",
+					return fmt.Errorf(" field %q has %v elements, but reference has %v elements",
 						key, len(measurementArr), len(refArr))
 				}
 
@@ -140,7 +151,7 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 					case map[string]interface{}:
 						refElem, ok := refArr[i].(map[string]interface{})
 						if !ok {
-							return fmt.Errorf(" nested ref array field elements in '%v' must be JSON objects",
+							return fmt.Errorf(" nested ref array field elements in %q must be JSON objects",
 								key)
 						}
 						measElem, ok := measurementArr[i].(map[string]interface{})
@@ -163,7 +174,7 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 				refMap, refOk := refValue.(map[string]interface{})
 				measurementMap, measurementOk := measureValue.(map[string]interface{})
 				if !refOk || !measurementOk {
-					return fmt.Errorf(" nested field '%v' must be a JSON object", key)
+					return fmt.Errorf(" nested field %q must be a JSON object", key)
 				}
 				err := ValidateConfig(refMap, measurementMap, ruleType)
 				if err != nil {
@@ -176,7 +187,7 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 
 			}
 
-			return fmt.Errorf(" field '%v' is %v and does not match reference (%v vs. %v)",
+			return fmt.Errorf(" field %q is %v and does not match reference (%v vs. %v)",
 				key, rule, measureValue, refValue)
 		}
 	}
@@ -200,7 +211,7 @@ func checkAdditionalKey(key string, reference, measurement, rules map[string]int
 		// If it does not exist, there must be an additional rule defined for the key
 		rule, ruleExists := rules[key]
 		if !ruleExists {
-			return fmt.Errorf("unexpected field '%v' found in measurement config", key)
+			return fmt.Errorf("unexpected field %q found in measurement config", key)
 		}
 		switch ruleType := rule.(type) {
 		case string:

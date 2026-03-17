@@ -115,7 +115,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 		HashAlg:          alg,
 		ExcludePcrs:      c.ExcludePcrs,
 		MeasurementLogs:  c.MeasurementLogs,
-		CtrPcr:           c.CtrPcr,
 		CtrLog:           c.CtrLog,
 		CtrDriver:        c.CtrDriver,
 		Ctr:              c.Ctr,

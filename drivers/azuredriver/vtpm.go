@@ -63,7 +63,7 @@ func (azure *Azure) GetVtpmCollateral() (*ar.Collateral, error) {
 	artifacts := make([]ar.Artifact, 0)
 
 	if azure.MeasurementLogs {
-		events, err := tpmdriver.GetEventLogs(azure.pcrs, azure.ctrLog, azure.CtrPcr, azure.CtrLog)
+		events, err := tpmdriver.GetEventLogs(azure.pcrs, azure.ctrLog, azure.CtrLog)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get event logs: %w", err)
 		}
