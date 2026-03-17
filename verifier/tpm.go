@@ -340,8 +340,10 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						Launched:    false,
 						Digest:      hex.EncodeToString(ref.Sha256),
 						Description: ref.Description,
-						CtrDetails:  ar.GetCtrDetailsFromRefVal(&ref, s),
-						EventData:   ref.EventData,
+						CtrDetails: &ar.CtrData{
+							OciSpec: ref.OciSpec,
+						},
+						EventData: ref.EventData,
 					}
 					if !ref.Optional {
 						detailedResults = append(detailedResults, result)

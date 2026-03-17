@@ -159,7 +159,6 @@ type Manifest struct {
 	TdxPolicy       *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
 	SgxPolicy       *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
 	Details         map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
-	OciSpec         *oci.Spec              `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"` // TODO move to app description
 }
 
 // ImageDescription ties together all manifests
@@ -197,8 +196,7 @@ type ReferenceValue struct {
 	Optional    bool       `json:"optional,omitempty" cbor:"6,keyasint,omitempty"`
 	Description string     `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
 	EventData   *EventData `json:"eventdata,omitempty" cbor:"8,keyasint,omitempty"`
-
-	manifest *Metadata
+	OciSpec     *oci.Spec  `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"`
 }
 
 // Validity is a helper struct for 'Validity'
@@ -237,11 +235,12 @@ type MeasureEvent struct {
 	Sha256          HexByte          `json:"sha256,omitempty" cbor:"0,keyasint,omitempty"`
 	Sha384          HexByte          `json:"sha384,omitempty" cbor:"1,keyasint,omitempty"`
 	Sha512          HexByte          `json:"sha512,omitempty" cbor:"2,keyasint,omitempty"`
-	EventName       string           `json:"eventname,omitempty" cbor:"3,keyasint,omitempty"`
-	EventData       *EventData       `json:"eventdata,omitempty" cbor:"4,keyasint,omitempty"`
-	Description     string           `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
-	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"6,keyasint,omitempty"`
-	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"7,keyasint,omitempty"`
+	Index           int              `json:"index,omitempty" cbor:"3,keyasint,omitempty"`
+	EventName       string           `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
+	EventData       *EventData       `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
+	Description     string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"7,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
 type IntelQuoteType uint32
@@ -363,17 +362,6 @@ type TDId struct {
 	MrOwner       HexByte `json:"mrOwner" cbor:"0,keyasint"`
 	MrOwnerConfig HexByte `json:"mrOwnerConfig" cbor:"1,keyasint"`
 	MrConfigId    HexByte `json:"mrConfigId" cbor:"2,keyasint"`
-}
-
-func (r *ReferenceValue) GetManifest() (*Metadata, error) {
-	if r.manifest == nil {
-		return nil, fmt.Errorf("internal error: manifest is nil")
-	}
-	return r.manifest, nil
-}
-
-func (r *ReferenceValue) SetManifest(m *Metadata) {
-	r.manifest = m
 }
 
 func (r *AttestationReport) PrepareContext(s Serializer, alg crypto.Hash) ([]byte, error) {

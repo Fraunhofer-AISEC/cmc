@@ -923,21 +923,3 @@ func (r *AttestationResult) PrintErr() {
 	}
 
 }
-
-func GetCtrDetailsFromRefVal(r *ReferenceValue, s Serializer) *CtrData {
-
-	if r == nil {
-		log.Warnf("internal error: reference value is nil")
-		return nil
-	}
-
-	// Get OCI runtime config from manifest if present
-	m, err := r.GetManifest()
-	if err != nil {
-		return nil
-	}
-
-	return &CtrData{
-		OciSpec: m.OciSpec,
-	}
-}

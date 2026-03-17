@@ -118,7 +118,7 @@ elif [[ "${client}" == "runc" ]]; then
     sudo runc delete references
     cd -
 else
-    echo "Client ${client} not supported. Only 'docker', 'docker-compose', 'ctr' and 'runc' supported for now."
+    echo "Client ${client} not supported. Only 'docker', 'docker-compose', 'ctr' and 'runc' supported"
     exit
 fi
 
@@ -139,15 +139,13 @@ for ((i = 0; i < num_containers; i++)); do
     container=${containers[$i]}
     container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
 
-    refval=$(echo "${refvals}" | jq -r ".[$i].referenceValue")
-    config=$(echo "${refvals}" | jq -r ".[$i].ociSpec")
+    refval=$(echo "${refvals}" | jq -r ".[$i]")
 
     # App Manifest: load
     json=$(cat "${input}/manifest.json")
 
-    # App Manifest: Insert reference values and OCI config
+    # App Manifest: Insert reference values
     json=$(echo "${json}" | jq --argjson ver "[${refval}]" '.referenceValues += $ver')
-    json=$(echo "${json}" | jq --argjson cfg "${config}" '.ociSpec = $cfg')
 
     # App Manifest: Extract the reference value sha256 and add it to the file name to not overwrite the same
     # container with different arguments such as environment variables

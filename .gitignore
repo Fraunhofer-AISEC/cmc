@@ -39,3 +39,4 @@ tpmdriver/test_encrypted_ak.json
 est/server/server
 attestationreport/cache/*
 /tmp/*
+/tools/cmcbackend/*.db

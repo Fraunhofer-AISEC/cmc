@@ -235,13 +235,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Measurer: recording measurement")
 	var success bool
-	err = m.Measure(&req.Event,
-		&m.MeasureConfig{
-			Serializer: s,
-			Pcr:        cmc.CtrPcr,
-			LogFile:    cmc.CtrLog,
-			Driver:     cmc.CtrDriver,
-		})
+	err = m.Measure(&req.Event, s, cmc.CtrLog, cmc.CtrDriver)
 	if err != nil {
 		log.Errorf("Failed to measure: %v", err)
 		success = false

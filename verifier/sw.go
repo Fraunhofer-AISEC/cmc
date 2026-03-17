@@ -123,12 +123,14 @@ func VerifySw(
 		}
 		if !found {
 			res := ar.DigestResult{
-				Type:       ar.TYPE_REFVAL_IAS,
-				Success:    ref.Optional, // Only fail attestation if component is mandatory
-				Launched:   false,
-				SubType:    ref.SubType,
-				Digest:     hex.EncodeToString(ref.Sha256),
-				CtrDetails: ar.GetCtrDetailsFromRefVal(&ref, s),
+				Type:     ar.TYPE_REFVAL_IAS,
+				Success:  ref.Optional, // Only fail attestation if component is mandatory
+				Launched: false,
+				SubType:  ref.SubType,
+				Digest:   hex.EncodeToString(ref.Sha256),
+				CtrDetails: &ar.CtrData{
+					OciSpec: ref.OciSpec,
+				},
 			}
 			result.Artifacts = append(result.Artifacts, res)
 
@@ -151,6 +153,8 @@ func VerifySw(
 			for _, ref := range refVals {
 				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
 
+					log.Tracef("Found matching rootfs hash %x", ref.Sha256)
+
 					// Calculate the measurement template hash
 					templateHash, validateOk, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
@@ -160,16 +164,17 @@ func VerifySw(
 						continue
 					}
 					if !validateOk {
-						log.Debugf("Rootfs matches but config validation failed. Continue search")
+						log.Tracef("Rootfs matches but config validation failed. Continue search")
 						continue
 					}
 
 					if !bytes.Equal(event.Sha256, templateHash) {
 						validateOk = false
 						ok = false
-						log.Debugf("Failed to match template hash")
+						log.Debugf("Failed to match measured hash (%x) with reference template hash (%x)",
+							event.Sha256, templateHash)
 					} else {
-						log.Debugf("Calculated template hash matches measured hash: %v", hex.EncodeToString(templateHash))
+						log.Tracef("Calculated template hash matches measured hash: %x", templateHash)
 					}
 
 					found = true
@@ -228,22 +233,20 @@ func VerifySw(
 
 func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.CtrData) ([]byte, bool, error) {
 
-	// Fetch manifest config
-	manifest, err := ref.GetManifest()
-	if err != nil {
-		return nil, false, fmt.Errorf("internal error: failed to get manifest: %w", err)
-	}
-
 	// Hash manifest config
-	refSpecHash, err := CalculateSpecHash(manifest.OciSpec)
+	refSpecHash, err := CalculateSpecHash(ref.OciSpec)
 	if err != nil {
 		return nil, false, fmt.Errorf("internal error: failed to calculate OCI config hash: %w", err)
 	}
 
 	// Compare with reference value
 	if !bytes.Equal(measured.ConfigSha256, refSpecHash) {
+
+		log.Tracef("Measured config hash (%x) does not match reference hash (%x). "+
+			"Running rules-based validation", measured.ConfigSha256, refSpecHash)
+
 		// If no match: perform rule-based validation
-		refConvSpec, err := ConvertSpec(s, manifest.OciSpec)
+		refConvSpec, err := ConvertSpec(s, ref.OciSpec)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to convert reference spec: %w", err)
 		}
@@ -259,13 +262,18 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.
 			return nil, false, nil
 		}
 
+		log.Tracef("Rules-base validation successful")
+
 		// use measured hash, as rule-based config validation was successful
 		refSpecHash = measured.ConfigSha256
+	} else {
+		log.Tracef("Measured config hash matches reference hash: %x", refSpecHash)
 	}
 
+	log.Tracef("Using config hash %x to recalculate template hash", refSpecHash)
+
 	// Recalculate template hash
-	tbh := []byte(refSpecHash)
-	tbh = append(tbh, ref.Sha256...)
+	tbh := append(refSpecHash, ref.Sha256...)
 	hasher := sha256.New()
 	hasher.Write(tbh)
 	templateHash := hasher.Sum(nil)

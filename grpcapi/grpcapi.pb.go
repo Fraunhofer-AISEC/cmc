@@ -1083,8 +1083,9 @@ func (x *UpdateMetadataResponse) GetSuccess() bool {
 type MeasureEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sha256        []byte                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
-	EventName     string                 `protobuf:"bytes,2,opt,name=event_name,json=eventName,proto3" json:"event_name,omitempty"`
-	CtrData       *CtrData               `protobuf:"bytes,3,opt,name=ctr_data,json=ctrData,proto3" json:"ctr_data,omitempty"`
+	Index         int32                  `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
+	EventName     string                 `protobuf:"bytes,3,opt,name=event_name,json=eventName,proto3" json:"event_name,omitempty"`
+	CtrData       *CtrData               `protobuf:"bytes,4,opt,name=ctr_data,json=ctrData,proto3" json:"ctr_data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1124,6 +1125,13 @@ func (x *MeasureEvent) GetSha256() []byte {
 		return x.Sha256
 	}
 	return nil
+}
+
+func (x *MeasureEvent) GetIndex() int32 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
 }
 
 func (x *MeasureEvent) GetEventName() string {
@@ -1269,12 +1277,13 @@ const file_grpcapi_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\"L\n" +
 	"\x16UpdateMetadataResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x18\n" +
-	"\asuccess\x18\x02 \x01(\bR\asuccess\"r\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\"\x88\x01\n" +
 	"\fMeasureEvent\x12\x16\n" +
-	"\x06sha256\x18\x01 \x01(\fR\x06sha256\x12\x1d\n" +
+	"\x06sha256\x18\x01 \x01(\fR\x06sha256\x12\x14\n" +
+	"\x05index\x18\x02 \x01(\x05R\x05index\x12\x1d\n" +
 	"\n" +
-	"event_name\x18\x02 \x01(\tR\teventName\x12+\n" +
-	"\bctr_data\x18\x03 \x01(\v2\x10.grpcapi.CtrDataR\actrData\"n\n" +
+	"event_name\x18\x03 \x01(\tR\teventName\x12+\n" +
+	"\bctr_data\x18\x04 \x01(\v2\x10.grpcapi.CtrDataR\actrData\"n\n" +
 	"\aCtrData\x12#\n" +
 	"\rconfig_sha256\x18\x01 \x01(\fR\fconfigSha256\x12#\n" +
 	"\rrootfs_sha256\x18\x02 \x01(\fR\frootfsSha256\x12\x19\n" +

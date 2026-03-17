@@ -48,7 +48,6 @@ type Config struct {
 	MeasurementLogs  bool     `json:"measurementLogs,omitempty"`
 	Ctr              bool     `json:"ctr,omitempty"`
 	CtrDriver        string   `json:"ctrDriver,omitempty"`
-	CtrPcr           int      `json:"ctrPcr,omitempty"`
 	CtrLog           string   `json:"ctrLog,omitempty"`
 	IdentityCas      []string `json:"identityCas,omitempty"`
 	MetadataCas      []string `json:"metadataCas,omitempty"`
@@ -81,7 +80,6 @@ const (
 	MeasurementLogsFlag = "measurementlogs"
 	CtrFlag             = "ctr"
 	CtrDriverFlag       = "ctrdriver"
-	CtrPcrFlag          = "ctrpcr"
 	CtrLogFlag          = "ctrlog"
 	IdentityCasFlag     = "identitycas"
 	MetadataCasFlag     = "metadatacas"
@@ -125,7 +123,6 @@ var (
 	ctr       = flag.Bool(CtrFlag, false, "Specifies whether to conduct container measurements")
 	ctrDriver = flag.String(CtrDriverFlag, "",
 		"Specifies which driver to use for container measurements")
-	ctrPcr         = flag.Int(CtrPcrFlag, 0, "Container PCR")
 	ctrLog         = flag.String(CtrLogFlag, "", "Container runtime measurements path")
 	identityCas    = flag.String(IdentityCasFlag, "", "Paths to trusted identity root CAs")
 	metadataCas    = flag.String(MetadataCasFlag, "", "Paths to trusted metadata root CAs")
@@ -187,9 +184,6 @@ func GetConfig(c *Config) error {
 	}
 	if internal.FlagPassed(CtrDriverFlag) {
 		c.CtrDriver = *ctrDriver
-	}
-	if internal.FlagPassed(CtrPcrFlag) {
-		c.CtrPcr = *ctrPcr
 	}
 	if internal.FlagPassed(CtrLogFlag) {
 		c.CtrLog = *ctrLog
@@ -260,7 +254,6 @@ func (c *Config) Print() {
 	if c.Ctr {
 		log.Debugf("\tContainer driver               : %v", c.CtrDriver)
 		log.Debugf("\tContainer measurements         : %v", c.CtrLog)
-		log.Debugf("\tContainer PCR                  : %v", c.CtrPcr)
 	}
 	if c.Storage != "" {
 		log.Debugf("\tInternal storage path          : %v", c.Storage)

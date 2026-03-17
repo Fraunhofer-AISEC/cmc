@@ -135,8 +135,9 @@ message UpdateMetadataResponse {
 
 message MeasureEvent {
   bytes sha256 = 1;
-  string event_name = 2;
-  CtrData ctr_data = 3;
+  int32 index = 2;
+  string event_name = 3;
+  CtrData ctr_data = 4;
 }
 
 message CtrData {

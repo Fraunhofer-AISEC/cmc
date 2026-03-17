@@ -32,41 +32,44 @@ import (
 
 var log = logrus.WithField("service", "measure")
 
-type MeasureConfig struct {
-	Serializer ar.Serializer
-	Pcr        int
-	LogFile    string
-	Driver     string
-}
+func Measure(event *ar.MeasureEvent, s ar.Serializer, logFile, driver string) error {
 
-func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
-
-	if mc == nil {
-		return errors.New("internal error: measure config is nil")
-	}
-	if mc.Serializer == nil {
+	if s == nil {
 		return errors.New("internal error: serializer is nil")
 	}
 
 	log.Debugf("Recording measurement %v: %v", event.EventName, hex.EncodeToString(event.Sha256))
 
-	// Read the existing measurement list if it already exists
-	var measureList []ar.MeasureEvent
-	if _, err := os.Stat(mc.LogFile); err == nil {
-		data, err := os.ReadFile(mc.LogFile)
+	eventlog := new(ar.Artifact)
+	if _, err := os.Stat(logFile); err == nil {
+		// Read the existing eventlog
+		data, err := os.ReadFile(logFile)
 		if err != nil {
 			return fmt.Errorf("failed to read measurement list: %w", err)
 		}
 
-		err = mc.Serializer.Unmarshal(data, &measureList)
+		err = s.Unmarshal(data, eventlog)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal measurement list: %w", err)
+		}
+
+		if event.Index != eventlog.Index {
+			return fmt.Errorf("eventlog index (%v) does not match event index (%v)",
+				eventlog.Index, event.Index)
+		}
+
+	} else {
+		// Initialize new eventlog
+		eventlog = &ar.Artifact{
+			Type:   ar.TYPE_SW_EVENTLOG,
+			Index:  event.Index,
+			Events: []ar.MeasureEvent{},
 		}
 	}
 
 	// Search the existing measurement list..
 	found := false
-	for _, e := range measureList {
+	for _, e := range eventlog.Events {
 		if bytes.Equal(e.Sha256, event.Sha256) {
 			found = true
 			break
@@ -80,21 +83,21 @@ func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
 	}
 
 	// ..otherwise append it to the measurement list and record the measurement
-	measureList = append(measureList, *event)
+	eventlog.Events = append(eventlog.Events, *event)
 	log.Debugf("Recorded measurement %v into measurement list", event.EventName)
 
-	data, err := mc.Serializer.Marshal(measureList)
+	data, err := s.Marshal(eventlog)
 	if err != nil {
 		return fmt.Errorf("failed to marshal measurement list: %w", err)
 	}
 
-	err = os.WriteFile(mc.LogFile, data, 0644)
+	err = os.WriteFile(logFile, data, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write measurement list: %w", err)
 	}
 
 	// Write the entry to the specified driver, if any
-	if strings.EqualFold(mc.Driver, "tpm") {
+	if strings.EqualFold(driver, "tpm") {
 		addr, err := getTpmAddr()
 		if err != nil {
 			return fmt.Errorf("failed to get TPM path: %v", err)
@@ -106,16 +109,16 @@ func Measure(event *ar.MeasureEvent, mc *MeasureConfig) error {
 		}
 		defer rwc.Close()
 
-		err = tpm2.PCRExtend(rwc, tpmutil.Handle(mc.Pcr), tpm2.AlgSHA256, event.Sha256, "")
+		err = tpm2.PCRExtend(rwc, tpmutil.Handle(event.Index), tpm2.AlgSHA256, event.Sha256, "")
 		if err != nil {
-			return fmt.Errorf("failed to extend PCR%v: %w", mc.Pcr, err)
+			return fmt.Errorf("failed to extend PCR%v: %w", event.Index, err)
 		}
 
-		log.Debugf("Recorded measurement %v into PCR%v", event.EventName, mc.Pcr)
-	} else if strings.EqualFold(mc.Driver, "sw") {
+		log.Debugf("Recorded measurement %v into PCR%v", event.EventName, event.Index)
+	} else if strings.EqualFold(driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {
-		return fmt.Errorf("unknown driver '%v'", mc.Driver)
+		return fmt.Errorf("unknown driver '%v'", driver)
 	}
 
 	return nil
