@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -69,7 +70,7 @@ func main() {
 		hexStr = Split(hexStr, *startDelim, *endDelim)
 	}
 
-	bin, err := hex.DecodeString(hexStr)
+	bin, err := decodeHex(hexStr)
 	if err != nil {
 		fmt.Printf("Failed to decode string: %v\n", err)
 	}
@@ -88,4 +89,16 @@ func Split(str, before, after string) string {
 		return b[0]
 	}
 	return b[0][0 : len(b[0])-len(after)]
+}
+
+func decodeHex(input string) ([]byte, error) {
+	// Remove 0x or 0X prefixes
+	re := regexp.MustCompile(`(?i)0x`)
+	clean := re.ReplaceAllString(input, "")
+
+	// Remove anything that's not a hex digit
+	re = regexp.MustCompile(`[^0-9a-fA-F]`)
+	clean = re.ReplaceAllString(clean, "")
+
+	return hex.DecodeString(clean)
 }
