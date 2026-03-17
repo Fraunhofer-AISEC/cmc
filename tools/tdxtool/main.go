@@ -108,12 +108,17 @@ func run() error {
 	in := flag.String("in", "", "input file")
 	flag.Parse()
 
-	if *cmd == CMD_GET_TCBINFO ||
+	if *cmd == CMD_PARSE_QUOTE ||
+		*cmd == CMD_GET_TCBINFO ||
 		*cmd == CMD_GET_QEIDENTITY ||
-		*cmd == CMD_PARSE_FMSPC ||
-		*cmd == CMD_PARSE_QUOTE ||
-		*cmd == CMD_PARSE_TDREPORT ||
-		*cmd == CMD_PARSE_PCKCERT_TCB {
+		*cmd == CMD_GET_ROOT_CA_CRL ||
+		*cmd == CMD_GET_PCK_CRL ||
+		*cmd == CMD_GET_PCK_CRL_INTER_CERT ||
+		*cmd == CMD_GET_PCK_CRL_ROOT_CERT ||
+		*cmd == CMD_GET_TCB_INFO_INTER_CERT ||
+		*cmd == CMD_GET_TCB_INFO_ROOT_CERT ||
+		*cmd == CMD_GET_QE_IDENTITY_INTER_CERT ||
+		*cmd == CMD_GET_QE_IDENTITY_ROOT_CERT {
 		if *in == "" {
 			return fmt.Errorf("missing parameter -in")
 		}
@@ -127,6 +132,12 @@ func run() error {
 			return fmt.Errorf("failed to get TDX Quote: %w", err)
 		}
 		os.Stdout.Write(quote)
+
+	case CMD_PARSE_QUOTE:
+		err := parseQuote(*in)
+		if err != nil {
+			return fmt.Errorf("failed to parse quote")
+		}
 
 	case CMD_PARSE_CERTCHAIN:
 		certChain, err := parseQuoteCertChain(*in)
@@ -162,12 +173,6 @@ func run() error {
 			return fmt.Errorf("failed to parse FMSPC: %w", err)
 		}
 		fmt.Printf("%v\n", fmspc)
-
-	case CMD_PARSE_QUOTE:
-		err := parseQuote(*in)
-		if err != nil {
-			return fmt.Errorf("failed to parse quote")
-		}
 
 	case CMD_PARSE_TDREPORT:
 		err := parseTdReport(*in)
