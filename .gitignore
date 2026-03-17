@@ -25,6 +25,7 @@ tools/measure-bundle/measure-bundle
 tools/schema-generator/schema-generator
 tools/parsetdxmrs/parsetdxmrs
 tools/tdxtool/tdxtool
+tools/sgxtool/sgxtool
 tools/snptool/snptool
 tools/azuretool/azuretool
 tools/hextobin/hextobin
