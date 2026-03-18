@@ -37,7 +37,9 @@ const (
 
 // Constants
 var (
-	STARTUP_LOCALITY_SIGNATURE = [16]byte{0x53, 0x74, 0x61, 0x72, 0x74, 0x75, 0x70, 0x4C, 0x6F, 0x63, 0x61, 0x6C, 0x69, 0x74, 0x79, 0x0}
+	// ASCII String Spec ID Event03
+	SPEC_ID_SIGNATURE          = [16]byte{0x53, 0x70, 0x65, 0x63, 0x20, 0x49, 0x44, 0x20, 0x45, 0x76, 0x65, 0x6e, 0x74, 0x30, 0x33, 0x00}
+	STARTUP_LOCALITY_SIGNATURE = [16]byte{0x53, 0x74, 0x61, 0x72, 0x74, 0x75, 0x70, 0x4C, 0x6F, 0x63, 0x61, 0x6C, 0x69, 0x74, 0x79, 0x00}
 	EV_PREBOOT_CERT            = uint32(0)
 	EV_POST_CODE               = uint32(1)
 	EV_UNUSED                  = uint32(2)
@@ -89,7 +91,8 @@ type TPM2B_EVENT struct {
 	Buf  []byte
 }
 
-// TCG_EVENT is a TCG Event as specified by the TPM specification
+// TCG_EVENT represents the TCG_PCR_EVENT as specified in TCG PC Client Platform Firmware
+// Profile Specification
 type TCG_EVENT struct {
 	PcrIndex      uint32
 	EventType     uint32
@@ -97,7 +100,8 @@ type TCG_EVENT struct {
 	EventDataSize uint32
 }
 
-// TCG_EVENT2 is a TCG Event as specified by the TPM specification
+// TCG_EVENT2 represents the TCG_PCR_EVENT2 as specified in TCG PC Client Platform Firmware
+// Profile Specification
 type TCG_EVENT2 struct {
 	PcrIndex           uint32
 	EventType          uint32
@@ -114,6 +118,23 @@ type TPML_DIGEST_VALUES struct {
 type TPMT_HA struct {
 	AlgorithmId uint16
 	Digest      []uint8
+}
+
+// TCG_EfiSpecIdEvent partially represents the TCG_EfiSpecIdEvent as specified in
+// TCG PC Client Platform Firmware Profile Specification
+type TCG_EfiSpecIdEvent struct {
+	Signature          [16]byte // "Spec ID Event03\x00"
+	PlatformClass      uint32
+	FamilyVersionMinor uint8
+	FamilyVersionMajor uint8
+	SpecRevision       uint8
+	UintnSize          uint8 // 1 = uint32, 2 = uint64
+	NumberOfAlgorithms uint32
+}
+
+type TCG_AlgorithmSize struct {
+	AlgorithmId uint16 // TPMI_ALG_HASH
+	DigestSize  uint16
 }
 
 func GetBiosArtifacts(file, refvalType string, addRawEventData bool) (map[int]ar.Artifact, error) {
@@ -170,30 +191,86 @@ func GetBiosMeasurements(file, refvalType string, addRawEventData bool) ([]ar.Re
 
 func parseBiosMeasurements(data []byte, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
 
-	extends := make([]ar.ReferenceValue, 0)
-	initializedPCR := make([]bool, 24) //bool array track of what pcrs have been initialized
 	buf := bytes.NewBuffer(data)
 
 	// Read initial TCG Event to detect event log format
-	event := TCG_EVENT{}
+	var event TCG_EVENT
 	err := binary.Read(buf, binary.LittleEndian, &event)
 	if err != nil {
-		return nil, errors.New("failed to read initial binary data")
+		return nil, fmt.Errorf("failed to read initial binary data: %w", err)
 	}
 
-	// This means that the event log format version 2 is used
-	if event.EventType != EV_NO_ACTION {
-		return nil, errors.New("event log format version 1 not supported")
+	// Determine the event log version
+	log.Tracef("Initial Event Type: %v", eventtypeToString(event.EventType))
+
+	if event.EventType == EV_NO_ACTION {
+		// Eventlog format version 2 or later starts with EV_NO_ACTION event
+		specIdBuf := bytes.NewBuffer(buf.Bytes())
+		var specIdEvent TCG_EfiSpecIdEvent
+		err = binary.Read(specIdBuf, binary.LittleEndian, &specIdEvent)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse initial TCG spec ID event: %w", err)
+		}
+
+		//skips the data event entries of the EV_NO_ACTION event
+		buf.Next(int(event.EventDataSize))
+
+		// Detect the version
+		switch specIdEvent.FamilyVersionMajor {
+		case 2:
+			log.Trace("Detected event log format version 2")
+			return parseBiosMeasurementsV2(buf.Bytes(), refvalType, addRawEventData)
+		default:
+			return nil, fmt.Errorf("unsuported Eventlog version %v.%v", specIdEvent.FamilyVersionMajor,
+				specIdEvent.FamilyVersionMinor)
+		}
+	} else {
+		// Eventlog format version 1 directly starts with extended events
+		log.Trace("Detected event log format version 1")
+		return parseBiosMeasurementsV1(data, refvalType)
 	}
-	//skips the data event entries of the EV_NO_ACTION event
-	buf.Next(int(event.EventDataSize))
+}
 
-	log.Trace("Detected event log format version 2")
+func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.ReferenceValue, error) {
 
-	//an entry is at least 16 Bytes long
+	buf := bytes.NewBuffer(data)
+	extends := make([]ar.ReferenceValue, 0)
+
+	// An entry is at least 32 Bytes long
+	for buf.Len() >= 32 {
+
+		var event TCG_EVENT
+		err := binary.Read(buf, binary.LittleEndian, &event)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read initial binary data: %w", err)
+		}
+
+		// Skip the event data
+		buf.Next(int(event.EventDataSize))
+
+		//add to extends
+		extends = append(extends, ar.ReferenceValue{
+			Type:    refvalType,
+			Index:   int(event.PcrIndex),
+			Sha1:    event.Digest[:],
+			SubType: eventtypeToString(event.EventType),
+		})
+	}
+
+	return extends, nil
+
+}
+
+func parseBiosMeasurementsV2(data []byte, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
+
+	buf := bytes.NewBuffer(data)
+	extends := make([]ar.ReferenceValue, 0)
+	initializedPCR := make([]bool, 24) //bool array track of what pcrs have been initialized
+
+	// An entry is at least 16 Bytes long
 	for buf.Len() >= 16 {
 
-		//reading the first PCR entry
+		// Reading the first PCR entry
 		var pcrIndex, eventType, digestCount uint32
 		// var pcrIndex int
 		binary.Read(buf, binary.LittleEndian, &pcrIndex)
@@ -282,7 +359,6 @@ func parseBiosMeasurements(data []byte, refvalType string, addRawEventData bool)
 			SubType:   eventName,
 			EventData: extendedeventData,
 		})
-
 	}
 
 	return extends, nil
