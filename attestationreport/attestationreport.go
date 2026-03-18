@@ -190,12 +190,13 @@ type ReferenceValue struct {
 	Type        string     `json:"type" cbor:"0,keyasint"`
 	SubType     string     `json:"subtype" cbor:"1,keyasint,omitempty"`
 	Index       int        `json:"index" cbor:"2,keyasint"`
-	Sha256      HexByte    `json:"sha256,omitempty" cbor:"3,keyasint,omitempty"`
-	Sha384      HexByte    `json:"sha384,omitempty" cbor:"4,keyasint,omitempty"`
-	Sha512      HexByte    `json:"sha512,omitempty" cbor:"5,keyasint,omitempty"`
-	Optional    bool       `json:"optional,omitempty" cbor:"6,keyasint,omitempty"`
-	Description string     `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
-	EventData   *EventData `json:"eventdata,omitempty" cbor:"8,keyasint,omitempty"`
+	Sha1        HexByte    `json:"sha1,omitempty" cbor:"3,keyasint,omitempty"`
+	Sha256      HexByte    `json:"sha256,omitempty" cbor:"4,keyasint,omitempty"`
+	Sha384      HexByte    `json:"sha384,omitempty" cbor:"5,keyasint,omitempty"`
+	Sha512      HexByte    `json:"sha512,omitempty" cbor:"6,keyasint,omitempty"`
+	Optional    bool       `json:"optional,omitempty" cbor:"7,keyasint,omitempty"`
+	Description string     `json:"description,omitempty" cbor:"8,keyasint,omitempty"`
+	EventData   *EventData `json:"eventdata,omitempty" cbor:"9,keyasint,omitempty"`
 	OciSpec     *oci.Spec  `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"`
 }
 
