@@ -56,6 +56,9 @@ func VerifyTpm(
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
+	log.Tracef("Decoded quote PCR with hash %v and PCR selection %v",
+		tpmsAttest.AttestedQuoteInfo.PCRSelection.Hash,
+		tpmsAttest.AttestedQuoteInfo.PCRSelection.PCRs)
 
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {

@@ -17,6 +17,7 @@ package tpmdriver
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
@@ -161,7 +162,7 @@ func (t *Tpm) Init(c *drivers.DriverConfig) error {
 
 func (t *Tpm) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
-	log.Debug("Collecting TPM measurements")
+	log.Debug("Collecting TPM evidence")
 
 	if t == nil {
 		return nil, fmt.Errorf("internal error: tpm object not initialized")
@@ -169,9 +170,6 @@ func (t *Tpm) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 	if len(t.pcrs) == 0 {
 		return nil, fmt.Errorf("TPM measurement does not contain any PCRs")
 	}
-
-	log.Debugf("Collecting TPM Quote for PCRs %v",
-		strings.Trim(strings.Join(strings.Fields(fmt.Sprint(t.pcrs)), ","), "[]"))
 
 	quote, err := t.GetQuote(nonce)
 	if err != nil {
@@ -457,8 +455,15 @@ func (t *Tpm) GetQuote(nonce []byte) (*attest.Quote, error) {
 	t.lock()
 	defer t.unlock()
 
+	hashAlg, err := getAttestHashAlg(t.HashAlg)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("Collecting TPM Quote with hash %v for PCRs %v", t.HashAlg.String(), t.pcrs)
+
 	// Retrieve quote and store quote data and signature in TPM measurement object
-	quote, err := t.ak.QuotePCRs(t.tpm, nonce, attest.HashSHA256, t.pcrs)
+	quote, err := t.ak.QuotePCRs(t.tpm, nonce, hashAlg, t.pcrs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TPM quote - %w", err)
 	}
@@ -874,4 +879,15 @@ func createAkCsr(ak *attest.AK, cn string) (*x509.CertificateRequest, error) {
 	}
 
 	return csr, nil
+}
+
+func getAttestHashAlg(in crypto.Hash) (attest.HashAlg, error) {
+	switch in {
+	case crypto.SHA1:
+		return attest.HashSHA1, nil
+	case crypto.SHA256:
+		return attest.HashSHA256, nil
+	default:
+		return 0, fmt.Errorf("unsupported tpm hash algorithm %v", in.String())
+	}
 }
