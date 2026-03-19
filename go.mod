@@ -26,7 +26,7 @@ require (
 	github.com/veraison/go-cose v1.3.0
 	go.mozilla.org/pkcs7 v0.9.0
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa
-	google.golang.org/grpc v1.79.2
+	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/square/go-jose.v2 v2.6.0
 )
