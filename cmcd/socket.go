@@ -120,7 +120,7 @@ func handleIncoming(conn net.Conn, cmc *c.Cmc) {
 
 func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'Attest' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'Attest'")
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "attest: no drivers configured")
@@ -169,12 +169,12 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'Attest' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'Attest'")
 }
 
 func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'Verify' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'Verify'")
 
 	req := new(api.VerificationRequest)
 	err := s.Unmarshal(payload, req)
@@ -213,12 +213,12 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'Verify' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'Verify'")
 }
 
 func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'Measure' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'Measure'")
 
 	req := new(api.MeasureRequest)
 	err := s.Unmarshal(payload, req)
@@ -259,12 +259,12 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'Measure' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'Measure'")
 }
 
 func tlscreate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'TLSCreate' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'TLSCreate'")
 
 	req := new(api.TLSCreateRequest)
 	err := s.Unmarshal(payload, req)
@@ -311,12 +311,12 @@ func tlscreate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'TLSCreate' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'TLSCreate'")
 }
 
 func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'TLSSign' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'TLSSign'")
 
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSSignRequest)
@@ -354,12 +354,12 @@ func tlssign(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'TLSSign' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'TLSSign'")
 }
 
 func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'TLSCert' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'TLSCert'")
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "TLS cert: no drivers configured")
@@ -405,12 +405,12 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'TLSCert' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'TLSCert'")
 }
 
 func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'PeerCache' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'PeerCache'")
 
 	req := new(api.PeerCacheRequest)
 	err := s.Unmarshal(payload, req)
@@ -444,12 +444,12 @@ func fetchPeerCache(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'PeerCache' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'PeerCache'")
 }
 
 func updateCerts(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'UpdateCerts' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'UpdateCerts'")
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "attest: no drivers configured")
@@ -494,12 +494,12 @@ func updateCerts(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'UpdateCerts' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'UpdateCerts'")
 }
 
 func updateMetadata(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
-	log.Infof("Received socket request type 'UpdateMetadata' from %v", conn.RemoteAddr().String())
+	log.Info("Received socket request type 'UpdateMetadata'")
 
 	if len(cmc.Drivers) == 0 {
 		sendError(conn, s, "attest: no drivers configured")
@@ -544,7 +544,7 @@ func updateMetadata(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) 
 		sendError(conn, s, "failed to send: %v", err)
 	}
 
-	log.Infof("Sent socket response type 'UpdateMetadata' to %v", conn.RemoteAddr().String())
+	log.Info("Sent socket response type 'UpdateMetadata'")
 }
 
 func sendError(conn net.Conn, s ar.Serializer, format string, args ...interface{}) error {
