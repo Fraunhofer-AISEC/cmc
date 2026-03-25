@@ -86,7 +86,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	}
 
 	if len(metadata) == 0 {
-		log.Warn("failed to retrieve any metadata. Can only work as verifier")
+		log.Warn("failed to retrieve any metadata")
 		return nil, nil
 	}
 
