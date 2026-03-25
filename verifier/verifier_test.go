@@ -91,7 +91,8 @@ func TestVerify(t *testing.T) {
 		osManifest       ar.Metadata
 		appManifest      ar.Metadata
 		imageDescription ar.Metadata
-		nonce            []byte
+		proverNonce      []byte
+		verifierNonce    []byte
 		encoding         string
 		alg              string
 	}
@@ -108,7 +109,8 @@ func TestVerify(t *testing.T) {
 				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
-				nonce:            nonce,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
 			},
@@ -122,7 +124,8 @@ func TestVerify(t *testing.T) {
 				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
-				nonce:            nonce,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_CBOR,
 				alg:              "SHA-256",
 			},
@@ -172,7 +175,8 @@ func TestVerify(t *testing.T) {
 				},
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
-				nonce:            nonce,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
 			},
@@ -186,7 +190,8 @@ func TestVerify(t *testing.T) {
 				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: invalidImageDescription,
-				nonce:            nonce,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
 			},
@@ -200,7 +205,23 @@ func TestVerify(t *testing.T) {
 				osManifest:       incompatibleOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
-				nonce:            nonce,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Invalid user nonce",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      invalidUserNonce,
+				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
 			},
@@ -277,7 +298,7 @@ func TestVerify(t *testing.T) {
 				Context: ar.Context{
 					Type:  ar.TYPE_CONTEXT,
 					Alg:   tt.args.alg,
-					Nonce: tt.args.nonce,
+					Nonce: tt.args.proverNonce,
 					Digests: []string{
 						hex.EncodeToString(rtmDigest[:]),
 						hex.EncodeToString(osDigest[:]),
@@ -301,7 +322,7 @@ func TestVerify(t *testing.T) {
 			// Run FUT
 			log.Info("Running FUT")
 			got := Verify(
-				data, tt.args.nonce,
+				data, tt.args.verifierNonce,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
 				PolicyEngineSelect_None,
@@ -608,7 +629,9 @@ var (
 
 // Variables for TestVerify
 var (
-	nonce = []byte{0x01, 0x02, 0x03}
+	validUserNonce = []byte{0x01, 0x02, 0x03}
+
+	invalidUserNonce = []byte{0x04, 0x05, 0x06}
 )
 
 // Variables for Test_checkMetadataCompatibility
