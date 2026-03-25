@@ -315,6 +315,19 @@ func (azure *Azure) loadCredentials() error {
 	}
 	log.Debugf("Parsed stored AK chain of length %v", len(azure.ccAkChain))
 
+	if azure.ccAkChain[0].Subject.CommonName == "Intel SGX PCK Certificate" {
+		azure.vmType = ar.TYPE_EVIDENCE_AZURE_TDX
+		// Store FMSPC
+		exts, err := pcs.PckCertificateExtensions(azure.ccAkChain[0])
+		if err != nil {
+			return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+		}
+		azure.fmspc = exts.FMSPC
+		log.Tracef("PCK FMSPC: %v", exts.FMSPC)
+	} else {
+		azure.vmType = ar.TYPE_EVIDENCE_AZURE_SNP
+	}
+
 	return nil
 }
 
