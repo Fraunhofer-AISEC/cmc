@@ -16,6 +16,7 @@
 package cmc
 
 import (
+	"crypto"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -33,7 +34,7 @@ import (
 )
 
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
-	useSystemRoots bool) (map[string][]byte, error) {
+	useSystemRoots bool, alg crypto.Hash) (map[string][]byte, error) {
 
 	if len(paths) == 0 {
 		log.Info("No metadata specified via config")
@@ -106,7 +107,10 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 
 	log.Debugf("Loaded %v metadata objects", len(metadata))
 
-	metamap := internal.ConvertToMap(metadata)
+	metamap, err := internal.ConvertToMap(metadata, alg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert to map: %w", err)
+	}
 
 	return metamap, nil
 }
