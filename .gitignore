@@ -31,6 +31,7 @@ tools/azuretool/azuretool
 tools/hextobin/hextobin
 tools/mrtool/mrtool
 tools/pkghasher/pkghasher
+tools/ocsfgen/ocsfgen
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
