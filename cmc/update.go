@@ -42,7 +42,8 @@ func UpdateMetadata(cmc *Cmc) error {
 	}
 
 	// Read metadata from the file system
-	metadata, err := GetMetadata(cmc.MetadataLocation, cmc.Cache, cmc.EstTlsCas, cmc.EstTlsSysRoots)
+	metadata, err := GetMetadata(cmc.MetadataLocation, cmc.Cache, cmc.EstTlsCas, cmc.EstTlsSysRoots,
+		cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to get metadata: %v", err)
 	}

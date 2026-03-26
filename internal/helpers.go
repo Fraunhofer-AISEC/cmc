@@ -17,7 +17,7 @@ package internal
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto"
 	"encoding/binary"
 	"encoding/hex"
 	"flag"
@@ -106,13 +106,16 @@ func FormatRtmrData(data []byte) string {
 	return string(data)
 }
 
-func ConvertToMap(metadata [][]byte) map[string][]byte {
+func ConvertToMap(metadata [][]byte, alg crypto.Hash) (map[string][]byte, error) {
 	metamap := make(map[string][]byte)
 	for _, m := range metadata {
-		hash := sha256.Sum256(m)
+		hash, err := Hash(alg, m)
+		if err != nil {
+			return nil, fmt.Errorf("failed to construct metadata hash: %w", err)
+		}
 		metamap[hex.EncodeToString(hash[:])] = m
 	}
-	return metamap
+	return metamap, nil
 }
 
 func ConvertToArray(metamap map[string][]byte) [][]byte {

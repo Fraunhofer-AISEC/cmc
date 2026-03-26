@@ -97,7 +97,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	// Read metadata from the file system
-	metadata, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots)
+	metadata, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots, cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
