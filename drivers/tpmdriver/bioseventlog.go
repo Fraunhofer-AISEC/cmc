@@ -159,7 +159,10 @@ func GetBiosArtifacts(file, refvalType string, addRawEventData bool) (map[int]ar
 			}
 		}
 		event := ar.MeasureEvent{
+			Sha1:      refval.Sha1,
 			Sha256:    refval.Sha256,
+			Sha384:    refval.Sha384,
+			Sha512:    refval.Sha512,
 			EventName: refval.SubType,
 		}
 		if refval.SubType != "TPM_PCR_INIT_VALUE" {
