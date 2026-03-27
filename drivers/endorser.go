@@ -20,7 +20,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 )
 
 type EndorserProvider interface {

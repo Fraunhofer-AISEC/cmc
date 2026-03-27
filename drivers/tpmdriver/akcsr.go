@@ -34,6 +34,8 @@ import (
 	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
+
+	"github.com/google/go-attestation/attest"
 )
 
 // pkcs1PublicKey reflects the ASN.1 structure of a PKCS #1 public key.
@@ -558,22 +560,18 @@ func newRawAttributes(attributes []pkix.AttributeTypeAndValueSET) ([]asn1.RawVal
 //
 // This is a modified version of x509.CreateCertificateRequest which does not
 // perform hashing and can therefore be used to create CSRs for restricted keys
-func CreateCertificateRequest(rand io.Reader, template *x509.CertificateRequest, priv any) (csr []byte, err error) {
-	key, ok := priv.(crypto.Signer)
-	if !ok {
-		return nil, errors.New("x509: certificate private key does not implement crypto.Signer")
-	}
+func CreateCertificateRequest(rand io.Reader, template *x509.CertificateRequest, priv *attest.AK, tpm *attest.TPM) (csr []byte, err error) {
 
 	var hashFunc crypto.Hash
 	var sigAlgo pkix.AlgorithmIdentifier
-	hashFunc, sigAlgo, err = signingParamsForPublicKey(key.Public(), template.SignatureAlgorithm)
+	hashFunc, sigAlgo, err = signingParamsForPublicKey(priv.Public(), template.SignatureAlgorithm)
 	if err != nil {
 		return nil, err
 	}
 
 	var publicKeyBytes []byte
 	var publicKeyAlgorithm pkix.AlgorithmIdentifier
-	publicKeyBytes, publicKeyAlgorithm, err = marshalPublicKey(key.Public())
+	publicKeyBytes, publicKeyAlgorithm, err = marshalPublicKey(priv.Public())
 	if err != nil {
 		return nil, err
 	}
@@ -703,7 +701,7 @@ func CreateCertificateRequest(rand io.Reader, template *x509.CertificateRequest,
 	// also performs signing within the TPM
 
 	var signature []byte
-	signature, err = key.Sign(rand, signed, hashFunc)
+	signature, err = priv.SignMsg(tpm, signed, hashFunc)
 	if err != nil {
 		return
 	}

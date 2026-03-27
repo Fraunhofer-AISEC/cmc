@@ -33,7 +33,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 	"go.mozilla.org/pkcs7"
 
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -376,7 +376,7 @@ func (t *Tpm) GetTpmInfo() (*attest.TPMInfo, error) {
 		return nil, fmt.Errorf("failed to get TPM info - %w", err)
 	}
 
-	log.Tracef("Version             : %v", tpmInfo.Version)
+	log.Tracef("VendorInfo          : %v", tpmInfo.VendorInfo)
 	log.Tracef("FirmwareVersionMajor: %v", tpmInfo.FirmwareVersionMajor)
 	log.Tracef("FirmwareVersionMinor: %v", tpmInfo.FirmwareVersionMinor)
 	log.Tracef("Interface           : %v", tpmInfo.Interface)
@@ -661,7 +661,7 @@ func (t *Tpm) provisionAk(fqdn string) (*x509.Certificate, error) {
 	}
 
 	// Create AK CSR and perform EST enrollment with TPM credential activation
-	akCsr, err := createAkCsr(t.ak, fqdn+" TPM AK")
+	akCsr, err := t.createAkCsr(fqdn + " TPM AK")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AK CSR: %w", err)
 	}
@@ -852,7 +852,7 @@ func (t *Tpm) setQuotePcrs() error {
 
 // This function calls the modified version of x509.CreateCertificateRequest which does not
 // perform hashing and can therefore be used to create CSRs for restricted tpm keys
-func createAkCsr(ak *attest.AK, cn string) (*x509.CertificateRequest, error) {
+func (t *Tpm) createAkCsr(cn string) (*x509.CertificateRequest, error) {
 
 	log.Debugf("Creating AK CSR..")
 
@@ -864,7 +864,7 @@ func createAkCsr(ak *attest.AK, cn string) (*x509.CertificateRequest, error) {
 
 	// NOTE does not call x509.CreateCertificateRequest but instead a local
 	// modified version
-	der, err := CreateCertificateRequest(rand.Reader, &tmpl, ak.Private())
+	der, err := CreateCertificateRequest(rand.Reader, &tmpl, t.ak, t.tpm)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate request: %w", err)
 	}

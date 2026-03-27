@@ -24,7 +24,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
