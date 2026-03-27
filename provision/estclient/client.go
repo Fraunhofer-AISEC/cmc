@@ -29,7 +29,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 )
 

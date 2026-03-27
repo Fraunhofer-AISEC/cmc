@@ -18,7 +18,7 @@ package keymgr
 import (
 	"crypto/x509"
 
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 )
 
 // Enroller is an interface for TLS key enrollment via e.g., EST or ACME

@@ -21,7 +21,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 	// local modules
 )
 

@@ -27,7 +27,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 	log "github.com/sirupsen/logrus"
 	"go.mozilla.org/pkcs7"
 
@@ -174,8 +174,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	}
 
 	params := attest.ActivationParameters{
-		TPMVersion: 2,
-		EK:         ekPub,
+		EK: ekPub,
 		AK: attest.AttestationParameters{
 			Public:                  akPublic,
 			UseTCSDActivationFormat: false,

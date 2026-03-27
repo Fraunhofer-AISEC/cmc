@@ -30,7 +30,7 @@ import (
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
+	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 
@@ -246,7 +246,7 @@ func VerifyIk(ikParams attest.CertificationParameters, akPub []byte) error {
 }
 
 func VerifyTpmCsr(tpmPub []byte, csr *x509.CertificateRequest) error {
-	pub, err := attest.ParseAKPublic(attest.TPMVersion20, tpmPub)
+	pub, err := attest.ParseAKPublic(tpmPub)
 	if err != nil {
 		return fmt.Errorf("parse TPM key failed: %w", err)
 	}
