@@ -32,5 +32,6 @@
     ],
     "metadataCas": [
         "../data/pki/ca.pem"
-    ]
+    ],
+    "tpmKeyAlg": "EC256"
 }

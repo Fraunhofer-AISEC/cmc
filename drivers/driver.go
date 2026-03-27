@@ -26,6 +26,7 @@ import (
 type DriverConfig struct {
 	StoragePath      string
 	HashAlg          crypto.Hash
+	KeyAlg           string
 	ExcludePcrs      []int
 	MeasurementLogs  bool
 	Ctr              bool
