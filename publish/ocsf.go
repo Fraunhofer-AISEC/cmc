@@ -18,7 +18,9 @@ package publish
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -27,19 +29,24 @@ import (
 
 // DetectionFindings represents a minimal OCSF Detection Finding [2004]
 type DetectionFinding struct {
-	ActivityID  int         `json:"activity_id"`
-	CategoryUID int         `json:"category_uid"`
-	ClassUID    int         `json:"class_uid"`
-	TypeUID     int         `json:"type_uid"`
-	IsAlert     bool        `json:"is_alert"`
-	SeverityID  int         `json:"severity_id"`
-	Time        string      `json:"time"`
-	Message     string      `json:"message,omitempty"`
-	FindingInfo Finding     `json:"finding_info"`
-	Metadata    Metadata    `json:"metadata"`
-	RawData     []byte      `json:"raw_data,omitempty"`
-	RawDataHash Fingerprint `json:"raw_data_hash,omitempty"`
-	RawDataSize int         `json:"raw_data_size,omitempty"`
+	ActionId      int          `json:"action_id"`
+	ActivityID    int          `json:"activity_id"`
+	CategoryUID   int          `json:"category_uid"`
+	ClassUID      int          `json:"class_uid"`
+	TypeUID       int          `json:"type_uid"`
+	ConfidenceID  int          `json:"confidence_id,omitempty"`
+	DispositionID int          `json:"disposition_id,omitempty"`
+	StatusID      int          `json:"status_id,omitempty"`
+	IsAlert       bool         `json:"is_alert"`
+	SeverityID    int          `json:"severity_id"`
+	Time          string       `json:"time"`
+	Message       string       `json:"message,omitempty"`
+	FindingInfo   *Finding     `json:"finding_info"`
+	Evidences     []Evidence   `json:"evidences"`
+	Metadata      Metadata     `json:"metadata"`
+	RawData       []byte       `json:"raw_data,omitempty"`
+	RawDataHash   *Fingerprint `json:"raw_data_hash,omitempty"`
+	RawDataSize   int          `json:"raw_data_size,omitempty"`
 }
 
 // Fingerprint represents the OCSF Fingerprint object.
@@ -56,6 +63,32 @@ type Finding struct {
 	Desc  string `json:"desc"`
 }
 
+// Evidence represents the OCSF Evidence Artifact object
+type Evidence struct {
+	File File `json:"file"`
+}
+
+// File represents the OCSF File [24] object
+type File struct {
+	Hashes       []Fingerprint `json:"hashes"`
+	Path         string        `json:"path,omitempty"`
+	Size         int           `json:"size,omitempty"`
+	AccessedTime string        `json:"accessed_time,omitempty"`
+	CreatedTime  string        `json:"created_time,omitempty"`
+	ModifiedTime string        `json:"modified_time,omitempty"`
+	Attributes   uint32        `json:"attributes,omitempty"`
+	Extension    string        `json:"ext,omitempty"`
+	ParentFolder string        `json:"parent_folder,omitempty"`
+	Accessor     *User         `json:"accessor,omitempty"`
+	Creator      *User         `json:"creator,omitempty"`
+	Modifier     *User         `json:"modifier,omitempty"`
+}
+
+// User represents the OCSF User object
+type User struct {
+	Name string `json:"name,omitempty"`
+}
+
 // Metadata represents the OCSF Metadata object
 type Metadata struct {
 	Version  string   `json:"version"`
@@ -65,8 +98,9 @@ type Metadata struct {
 
 // Product represents the OCSF Product object
 type Product struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name       string `json:"name"`
+	Version    string `json:"version"`
+	VendorName string `json:"vendor_name"`
 }
 
 func CreateDetectionFindings(result *ar.AttestationResult) []*DetectionFinding {
@@ -108,42 +142,74 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 	}
 	algId, _ := AlgorithmNameToID(alg)
 
-	// Description often contains paths to binaries. If so, try to get raw data
-	var raw []byte
-	if _, err := os.Stat(dr.Description); err == nil {
-		raw, _ = os.ReadFile(dr.Description)
+	f := File{
+		Hashes: []Fingerprint{
+			{
+				Algorithm:   alg,
+				AlgorithmID: algId,
+				Value:       dr.Digest,
+			},
+		},
 	}
 
-	return &DetectionFinding{
-		ActivityID:  1,
-		CategoryUID: 2,    // Detection Finding
-		ClassUID:    2004, // Detection Finding
-		TypeUID:     200401,
-		IsAlert:     true,
-		SeverityID:  4, // e.g., high
-		Time:        t,
-		Message:     message,
-		FindingInfo: Finding{
+	// Description often contains paths to binaries. If so, try to get raw data
+	var raw []byte
+	fileExists := false
+	if info, err := os.Stat(dr.Description); err == nil {
+		fileExists = true
+		filePath := dr.Description
+		raw, _ = os.ReadFile(filePath)
+
+		f.Path = filePath
+		f.ParentFolder = filepath.Ext(filePath)
+		f.Extension = filepath.Ext(filePath)
+		f.ModifiedTime = info.ModTime().Format(time.RFC3339)
+		f.Attributes = uint32(info.Mode().Perm())
+		f.Size = len(raw)
+	}
+
+	finding := &DetectionFinding{
+		ActionId:      3,      // Observed
+		ActivityID:    1,      // Create
+		CategoryUID:   2,      // Detection Finding
+		ClassUID:      2004,   // Detection Finding
+		TypeUID:       200401, // Detection Finding
+		ConfidenceID:  3,      // High
+		DispositionID: 19,     // Alert
+		StatusID:      1,      // New
+		IsAlert:       true,   // Raise alert
+		SeverityID:    4,      // High
+		Time:          t,      // AR creation time
+		Message:       message,
+		FindingInfo: &Finding{
 			UID:   uuid.New().String(),
 			Title: fmt.Sprintf("Unauthorized software launch: %v", dr.SubType),
 			Desc:  description,
 		},
-		RawDataHash: Fingerprint{
-			Algorithm:   alg,
-			AlgorithmID: algId,
-			Value:       dr.Digest,
+		Evidences: []Evidence{
+			{
+				File: f,
+			},
 		},
 		RawData:     raw,
 		RawDataSize: len(raw),
 		Metadata: Metadata{
 			Version: "1.8.0",
 			Product: Product{
-				Name:    "SOVEREIGN Attestation Framework",
-				Version: internal.GetVersion(),
+				Name:       "Attestation Framework",
+				Version:    internal.GetVersion(),
+				VendorName: "Vendor",
 			},
 			Profiles: []string{"security_control"},
 		},
 	}
+
+	if fileExists {
+		finding.RawData = raw
+		finding.RawDataSize = len(raw)
+	}
+
+	return finding
 }
 
 var algoNameToOCSF = map[string]int{
