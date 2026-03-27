@@ -17,8 +17,8 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -52,13 +52,19 @@ func VerifyTpm(
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(evidence.Data)
 	if err != nil {
-		log.Debugf("Failed to decode TPM attestation data: %v", err)
-		result.Summary.Fail(ar.ParseEvidence)
+		result.Summary.Fail(ar.ParseEvidence, err)
 		return result, false
 	}
 	log.Tracef("Decoded quote PCR with hash %v and PCR selection %v",
 		tpmsAttest.AttestedQuoteInfo.PCRSelection.Hash,
 		tpmsAttest.AttestedQuoteInfo.PCRSelection.PCRs)
+
+	// Retrieve hash algorithm from quote
+	quoteHashAlg, err := tpmAlgoToHash(tpmsAttest.AttestedQuoteInfo.PCRSelection.Hash)
+	if err != nil {
+		result.Summary.Fail(ar.ParseEvidence, err)
+		return result, false
+	}
 
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
@@ -78,7 +84,7 @@ func VerifyTpm(
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
 	tpmResult, artifacts, ok := verifyPcrs(s, collateral.Artifacts,
-		tpmsAttest.AttestedQuoteInfo.PCRDigest, referenceValues)
+		tpmsAttest.AttestedQuoteInfo.PCRDigest, referenceValues, quoteHashAlg)
 	if !ok {
 		log.Debug("failed to recalculate PCRs")
 		result.Summary.Status = ar.StatusFail
@@ -128,7 +134,7 @@ func VerifyTpm(
 }
 
 func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
-	aggregatedQuotePcr []byte, referenceValues []ar.ReferenceValue,
+	aggregatedQuotePcr []byte, referenceValues []ar.ReferenceValue, quoteHashAlg crypto.Hash,
 ) (*ar.TpmResult, []ar.DigestResult, bool) {
 	success := true
 	pcrResults := make([]ar.DigestResult, 0)
@@ -158,23 +164,31 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 			log.Tracef("PCR%v measurement contains event log", artifact.Index)
 			measuredSummary := make([]byte, 32)
 			for _, event := range artifact.Events {
+
+				eventHash := event.GetHash(quoteHashAlg)
+
 				// First event could be a TPM_PCR_INIT_VALUE
 				if event.EventName == "TPM_PCR_INIT_VALUE" {
-					calculatedPcrs[pcr] = event.Sha256
-					measuredSummary = event.Sha256
+					calculatedPcrs[pcr] = eventHash
+					measuredSummary = eventHash
 					continue
 				}
 
 				// Extend measurement summary unconditionally...
-				measuredSummary = internal.ExtendSha256(measuredSummary, event.Sha256)
+				var err error
+				measuredSummary, err = internal.Extend(quoteHashAlg, measuredSummary, eventHash)
+				if err != nil {
+					log.Debugf("Failed to extend: %v", err)
+					success = false
+				}
 
 				// Check for every event that a corresponding reference value exists
-				ref := getReferenceValue(event.Sha256, pcr, referenceValues)
+				ref := getReferenceValue(quoteHashAlg, eventHash, pcr, referenceValues)
 				if ref == nil {
 					measResult := ar.DigestResult{
 						Type:        "Measurement",
 						Index:       pcr,
-						Digest:      hex.EncodeToString(event.Sha256),
+						Digest:      hex.EncodeToString(eventHash),
 						Success:     false,
 						Launched:    true,
 						SubType:     event.EventName,
@@ -184,15 +198,18 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Debugf("Failed to find refval for PCR%v measurement %v: %v",
-						artifact.Index, event.EventName, hex.EncodeToString(event.Sha256))
+						artifact.Index, event.EventName, hex.EncodeToString(eventHash))
 					success = false
 					pcrResult.Success = false
 					continue
 				}
 
 				// ...Extent calculated summary only if reference value was found
-				calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr],
-					event.Sha256)
+				calculatedPcrs[pcr], err = internal.Extend(quoteHashAlg, calculatedPcrs[pcr], eventHash)
+				if err != nil {
+					log.Debugf("Failed to extend: %v", err)
+					success = false
+				}
 
 				nameInfo := ref.SubType
 				if event.EventName != "" && !strings.EqualFold(ref.SubType, event.EventName) {
@@ -200,12 +217,12 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				}
 
 				log.Tracef("Found refval for PCR%v measurement %v: %v",
-					pcr, nameInfo, hex.EncodeToString(event.Sha256))
+					pcr, nameInfo, hex.EncodeToString(eventHash))
 
 				measResult := ar.DigestResult{
 					Type:        "Verified",
 					Index:       pcr,
-					Digest:      hex.EncodeToString(event.Sha256),
+					Digest:      hex.EncodeToString(eventHash),
 					Success:     true,
 					Launched:    true,
 					SubType:     nameInfo,
@@ -230,9 +247,12 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 			}
 			for _, ref := range referenceValues {
 				if ref.Index == pcr {
+
+					refHash := ref.GetHash(quoteHashAlg)
+
 					if ref.SubType == "TPM_PCR_INIT_VALUE" {
-						calculatedPcrs[pcr] = ref.Sha256 //the Sha256 should contain the init value
-						continue                         //break the loop iteration and continue with the next event
+						calculatedPcrs[pcr] = refHash
+						continue
 					}
 
 					if ref.SubType == ar.TYPE_PCR_SUMMARY {
@@ -247,21 +267,26 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						}
 
 						// Also the reference value is a PCR summary, set the calculated value
-						calculatedPcrs[pcr] = ref.Sha256
+						calculatedPcrs[pcr] = refHash
 					} else {
 						// As we only have the measured final value, but reference values for
 						// each artifact, unconditionally extend the reference value
-						calculatedPcrs[pcr] = internal.ExtendSha256(calculatedPcrs[pcr], ref.Sha256)
+						var err error
+						calculatedPcrs[pcr], err = internal.Extend(quoteHashAlg, calculatedPcrs[pcr], refHash)
+						if err != nil {
+							log.Debugf("Failed to extend: %v", err)
+							success = false
+						}
 
 						log.Tracef("Extended refval for PCR%v %v: %v",
-							pcr, ref.SubType, hex.EncodeToString(ref.Sha256))
+							pcr, ref.SubType, hex.EncodeToString(refHash))
 					}
 
 					// As we only have the PCR summary, we will later set all reference values
 					// to true/false depending on whether the calculation matches the PCR summary
 					r := ar.DigestResult{
 						Index:       pcr,
-						Digest:      hex.EncodeToString(ref.Sha256),
+						Digest:      hex.EncodeToString(refHash),
 						SubType:     ref.SubType,
 						Description: ref.Description,
 					}
@@ -270,17 +295,18 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 
 			}
 			// Then we compare the calculated value with the PCR measurement summary
-			equal := bytes.Equal(calculatedPcrs[pcr], artifact.Events[0].Sha256)
+			eventHash := artifact.Events[0].GetHash(quoteHashAlg)
+			equal := bytes.Equal(calculatedPcrs[pcr], eventHash)
 			if equal {
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
 				pcrResult.Success = true
 				log.Tracef("PCR%v match: %x", pcr, calculatedPcrs[pcr])
 			} else {
 				log.Debugf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
-					hex.EncodeToString(artifact.Events[0].Sha256),
+					hex.EncodeToString(eventHash),
 					hex.EncodeToString(calculatedPcrs[pcr]))
 				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
-				pcrResult.Measured = hex.EncodeToString(artifact.Events[0].Sha256)
+				pcrResult.Measured = hex.EncodeToString(eventHash)
 				pcrResult.Success = false
 				success = false
 			}
@@ -314,6 +340,8 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 	// in case of detailed measurement logs
 	for _, ref := range referenceValues {
 
+		refHash := ref.GetHash(quoteHashAlg)
+
 		// Check if measurement contains the reference value PCR
 		foundPcr := false
 		for _, measuredPcr := range artifacts {
@@ -330,7 +358,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 			if measuredPcr.Type != ar.TYPE_PCR_SUMMARY {
 				foundEvent := false
 				for _, event := range measuredPcr.Events {
-					if bytes.Equal(event.Sha256, ref.Sha256) {
+					if bytes.Equal(event.GetHash(quoteHashAlg), refHash) {
 						foundEvent = true
 					}
 				}
@@ -341,7 +369,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						Index:       ref.Index,
 						Success:     ref.Optional, // Only fail attestation if component is mandatory
 						Launched:    false,
-						Digest:      hex.EncodeToString(ref.Sha256),
+						Digest:      hex.EncodeToString(refHash),
 						Description: ref.Description,
 						CtrDetails: &ar.CtrData{
 							OciSpec: ref.OciSpec,
@@ -352,7 +380,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						detailedResults = append(detailedResults, result)
 						success = false
 						log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
-							ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
+							ref.Index, ref.SubType, hex.EncodeToString(refHash))
 					}
 					continue
 				}
@@ -360,14 +388,14 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 		}
 		if !foundPcr {
 			log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
-				ref.Index, ref.SubType, hex.EncodeToString(ref.Sha256))
+				ref.Index, ref.SubType, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
 				Type:        ar.TYPE_REFVAL_IAS,
 				SubType:     ref.SubType,
 				Index:       ref.Index,
 				Success:     ref.Optional,
 				Launched:    false,
-				Digest:      hex.EncodeToString(ref.Sha256),
+				Digest:      hex.EncodeToString(refHash),
 				Description: ref.Description,
 			}
 			detailedResults = append(detailedResults, result)
@@ -388,7 +416,11 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 		log.Tracef("Aggregating PCR %v: %x", pcr, calculatedPcrs[pcr])
 		sum = append(sum, calculatedPcrs[pcr]...)
 	}
-	verPcr := sha256.Sum256(sum)
+	verPcr, err := internal.Hash(quoteHashAlg, sum)
+	if err != nil {
+		log.Debugf("Failed to hash aggregated quote PCR: %v", err)
+		success = false
+	}
 
 	// Verify calculated aggregated PCR value against quote PCR value
 	aggPcrQuoteMatch := ar.Result{}
@@ -446,7 +478,14 @@ func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 	}
 
 	// Hash the quote and Verify the TPM Quote signature
-	hashed := sha256.Sum256(quote)
+	hashed, err := internal.Hash(hashAlg, quote)
+	if err != nil {
+		result := ar.Result{}
+		result.Fail(ar.VerifySignature, err)
+		return result
+	}
+
+	// The used driver libraries currently only support RSA signatures
 	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
 	if err != nil {
 		result := ar.Result{}
@@ -460,11 +499,28 @@ func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 }
 
 // Searches for a specific hash value in the reference values for RTM and OS
-func getReferenceValue(hash []byte, pcr int, refVals []ar.ReferenceValue) *ar.ReferenceValue {
+func getReferenceValue(alg crypto.Hash, hash []byte, pcr int, refVals []ar.ReferenceValue) *ar.ReferenceValue {
 	for _, ref := range refVals {
-		if ref.Index == pcr && bytes.Equal(ref.Sha256, hash) {
+		refHash := ref.GetHash(alg)
+		if ref.Index == pcr && bytes.Equal(refHash, hash) {
 			return &ref
 		}
 	}
 	return nil
+}
+
+func tpmAlgoToHash(in tpm2.Algorithm) (crypto.Hash, error) {
+
+	switch in {
+	case tpm2.AlgSHA1:
+		return crypto.SHA1, nil
+	case tpm2.AlgSHA256:
+		return crypto.SHA256, nil
+	case tpm2.AlgSHA384:
+		return crypto.SHA384, nil
+	case tpm2.AlgSHA512:
+		return crypto.SHA512, nil
+	}
+
+	return 0, fmt.Errorf("unsupported TPM hash alg %v", in)
 }

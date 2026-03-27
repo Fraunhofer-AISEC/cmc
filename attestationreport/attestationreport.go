@@ -233,15 +233,16 @@ type Artifact struct {
 
 // MeasureEvent represents a measured event
 type MeasureEvent struct {
-	Sha256          HexByte          `json:"sha256,omitempty" cbor:"0,keyasint,omitempty"`
-	Sha384          HexByte          `json:"sha384,omitempty" cbor:"1,keyasint,omitempty"`
-	Sha512          HexByte          `json:"sha512,omitempty" cbor:"2,keyasint,omitempty"`
-	Index           int              `json:"index,omitempty" cbor:"3,keyasint,omitempty"`
-	EventName       string           `json:"eventname,omitempty" cbor:"4,keyasint,omitempty"`
-	EventData       *EventData       `json:"eventdata,omitempty" cbor:"5,keyasint,omitempty"`
-	Description     string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
-	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"7,keyasint,omitempty"`
-	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"8,keyasint,omitempty"`
+	Sha1            HexByte          `json:"sha1,omitempty" cbor:"0,keyasint,omitempty"`
+	Sha256          HexByte          `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
+	Sha384          HexByte          `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
+	Sha512          HexByte          `json:"sha512,omitempty" cbor:"3,keyasint,omitempty"`
+	Index           int              `json:"index,omitempty" cbor:"4,keyasint,omitempty"`
+	EventName       string           `json:"eventname,omitempty" cbor:"5,keyasint,omitempty"`
+	EventData       *EventData       `json:"eventdata,omitempty" cbor:"6,keyasint,omitempty"`
+	Description     string           `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
+	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
 type IntelQuoteType uint32
@@ -424,5 +425,35 @@ func GetSnpTcb(codeName string, tcb uint64) SnpTcb {
 			Snp:   uint8((tcb >> 24) & 0xFF),
 			Ucode: uint8((tcb >> 56) & 0xFF),
 		}
+	}
+}
+
+func (r *ReferenceValue) GetHash(h crypto.Hash) []byte {
+	switch h {
+	case crypto.SHA1:
+		return r.Sha1
+	case crypto.SHA256:
+		return r.Sha256
+	case crypto.SHA384:
+		return r.Sha384
+	case crypto.SHA512:
+		return r.Sha512
+	default:
+		return nil
+	}
+}
+
+func (e *MeasureEvent) GetHash(h crypto.Hash) []byte {
+	switch h {
+	case crypto.SHA1:
+		return e.Sha1
+	case crypto.SHA256:
+		return e.Sha256
+	case crypto.SHA384:
+		return e.Sha384
+	case crypto.SHA512:
+		return e.Sha512
+	default:
+		return nil
 	}
 }
