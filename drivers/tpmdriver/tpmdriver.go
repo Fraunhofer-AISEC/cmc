@@ -610,7 +610,7 @@ func (t *Tpm) provision() error {
 		return errors.New("TPM is not openend")
 	}
 
-	t.ek, t.ak, err = createKeys(t.tpm)
+	t.ek, t.ak, err = createKeys(t.tpm, t.KeyAlg)
 	if err != nil {
 		return fmt.Errorf("activate credential failed: createKeys returned %w", err)
 	}
@@ -762,7 +762,7 @@ func (t *Tpm) loadAk() error {
 	return nil
 }
 
-func createKeys(tpm *attest.TPM) ([]attest.EK, *attest.AK, error) {
+func createKeys(tpm *attest.TPM, keyAlg string) ([]attest.EK, *attest.AK, error) {
 
 	log.Debug("Loading EKs")
 
@@ -772,8 +772,17 @@ func createKeys(tpm *attest.TPM) ([]attest.EK, *attest.AK, error) {
 	}
 	log.Debugf("Found %v EK(s)", len(eks))
 
-	log.Debug("Creating new AK")
+	log.Debugf("Creating new AK with algorithm %v", keyAlg)
 	akConfig := &attest.AKConfig{}
+	switch keyAlg {
+	case "EC256":
+		akConfig.Algorithm = attest.ECDSA
+	case "RSA2048":
+		akConfig.Algorithm = attest.RSA
+	default:
+		return nil, nil, fmt.Errorf("unsupported TPM AK key algorithm: %v", keyAlg)
+	}
+
 	ak, err := tpm.NewAK(akConfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create new AK - %w", err)

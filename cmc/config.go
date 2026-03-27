@@ -55,6 +55,7 @@ type Config struct {
 	EstTlsSysRoots   bool     `json:"estTlsSysRoots"`
 	Vmpl             int      `json:"vmpl,omitempty"`
 	SnpCache         string   `json:"snpCache,omitempty"`
+	TpmKeyAlg        string   `json:"tpmKeyAlg"`
 }
 
 const (
@@ -87,6 +88,7 @@ const (
 	EstTlsSysRootsFlag  = "esttlssysroots"
 	VmplFlag            = "vmpl"
 	snpCacheFlag        = "snpcache"
+	tpmKeyAlgFlag       = "tpmkeyalg"
 )
 
 var (
@@ -131,6 +133,7 @@ var (
 	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
 	snpCache       = flag.String(snpCacheFlag, "",
 		"Optional folder for caching SNP VCEKs and CAs in direct endorsement mode")
+	tpmKeyAlg = flag.String(tpmKeyAlgFlag, "", "TPM AK key algorithm (EC256, RSA2048)")
 )
 
 // GetConfig retrieves the cmc configuration from commandline flags
@@ -224,6 +227,9 @@ func GetConfig(c *Config) error {
 	if internal.FlagPassed(snpCacheFlag) {
 		c.SnpCache = *snpCache
 	}
+	if internal.FlagPassed(tpmKeyAlgFlag) {
+		c.TpmKeyAlg = *tpmKeyAlg
+	}
 
 	return nil
 }
@@ -269,5 +275,6 @@ func (c *Config) Print() {
 	log.Debugf("\tEST TLS root CA paths          : %v", strings.Join(c.EstTlsCas, ","))
 	log.Debugf("\tUse system root CAs for EST TLS: %v", c.EstTlsSysRoots)
 	log.Debugf("\tSNP VCEK and CA cache folder   : %v", c.SnpCache)
+	log.Debugf("\tTPM AK key algorithm           : %v", c.TpmKeyAlg)
 
 }

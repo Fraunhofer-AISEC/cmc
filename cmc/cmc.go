@@ -113,6 +113,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	// Create driver configuration
 	driverConf := &drv.DriverConfig{
 		HashAlg:          alg,
+		KeyAlg:           c.TpmKeyAlg,
 		ExcludePcrs:      c.ExcludePcrs,
 		MeasurementLogs:  c.MeasurementLogs,
 		CtrLog:           c.CtrLog,

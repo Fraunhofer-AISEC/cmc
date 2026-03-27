@@ -18,6 +18,7 @@ package verifier
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/hex"
@@ -457,12 +458,19 @@ func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 		return result
 	}
 
-	if tpmtSig.Alg != tpm2.AlgRSASSA {
+	switch tpmtSig.Alg {
+	case tpm2.AlgRSASSA:
+		return verifyQuoteRSA(quote, tpmtSig, cert)
+	case tpm2.AlgECDSA:
+		return verifyQuoteECDSA(quote, tpmtSig, cert)
+	default:
 		result := ar.Result{}
 		result.Fail(ar.UnsupportedAlgorithm, fmt.Errorf("hash algorithm %v not supported", tpmtSig.Alg))
 		return result
 	}
+}
 
+func verifyQuoteRSA(quote []byte, sig *tpm2.Signature, cert *x509.Certificate) ar.Result {
 	// Extract public key from x509 certificate
 	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
 	if !ok {
@@ -470,14 +478,14 @@ func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 		result.Fail(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate"))
 		return result
 	}
-	hashAlg, err := tpmtSig.RSA.HashAlg.Hash()
+	hashAlg, err := sig.RSA.HashAlg.Hash()
 	if err != nil {
 		result := ar.Result{}
 		result.Fail(ar.UnsupportedAlgorithm, fmt.Errorf("hash algorithm not supported"))
 		return result
 	}
 
-	// Hash the quote and Verify the TPM Quote signature
+	// Hash the quote with the given algorithm
 	hashed, err := internal.Hash(hashAlg, quote)
 	if err != nil {
 		result := ar.Result{}
@@ -486,14 +494,49 @@ func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Resul
 	}
 
 	// The used driver libraries currently only support RSA signatures
-	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], tpmtSig.RSA.Signature)
+	err = rsa.VerifyPKCS1v15(pubKey, hashAlg, hashed[:], sig.RSA.Signature)
 	if err != nil {
 		result := ar.Result{}
 		result.Fail(ar.VerifySignature, err)
 		return result
 	}
 
-	log.Debugf("Successfully verified TPM quote signature")
+	log.Debugf("Successfully verified TPM quote RSA signature")
+
+	return ar.Result{Status: ar.StatusSuccess}
+}
+
+func verifyQuoteECDSA(quote []byte, sig *tpm2.Signature, cert *x509.Certificate) ar.Result {
+	// Extract public key from x509 certificate
+	pubKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
+	if !ok {
+		result := ar.Result{}
+		result.Fail(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate"))
+		return result
+	}
+	hashAlg, err := sig.ECC.HashAlg.Hash()
+	if err != nil {
+		result := ar.Result{}
+		result.Fail(ar.UnsupportedAlgorithm, fmt.Errorf("hash algorithm not supported"))
+		return result
+	}
+
+	// Hash the quote with the given algorithm
+	hashed, err := internal.Hash(hashAlg, quote)
+	if err != nil {
+		result := ar.Result{}
+		result.Fail(ar.VerifySignature, err)
+		return result
+	}
+
+	// TPM ECDSA signature is (R, S), not ASN.1
+	if !ecdsa.Verify(pubKey, hashed, sig.ECC.R, sig.ECC.S) {
+		result := ar.Result{}
+		result.Fail(ar.VerifySignature, fmt.Errorf("ecdsa signature verification failed"))
+		return result
+	}
+
+	log.Debugf("Successfully verified TPM quote ECDSA signature")
 
 	return ar.Result{Status: ar.StatusSuccess}
 }
