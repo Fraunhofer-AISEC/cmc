@@ -32,7 +32,7 @@ import (
 type ParsePcrsConf struct {
 	Eventlog       string
 	PrintAggregate bool
-	RawEventData   bool
+	EventData      bool
 }
 
 const (
@@ -42,7 +42,7 @@ const (
 const (
 	tpmEventlogFlag    = "eventlog"
 	printAggregateFlag = "print-aggregate"
-	rawEventDataFlag   = "raw-event-data"
+	eventDataFlag      = "event-data"
 )
 
 var (
@@ -63,8 +63,8 @@ var Command = &cli.Command{
 			Usage: "Print the aggregated PCR value over the selected PCRs",
 		},
 		&cli.BoolFlag{
-			Name:  rawEventDataFlag,
-			Usage: "Additionally print the raw event data as it was extended if available",
+			Name:  eventDataFlag,
+			Usage: "Additionally add extended event data if available",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -95,7 +95,7 @@ func run(cmd *cli.Command) error {
 
 	log.Info("Parsing TPM SRTM PCR eventlog...")
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, ar.TYPE_REFVAL_TPM, pcrConf.RawEventData)
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, ar.TYPE_REFVAL_TPM, pcrConf.EventData)
 	if err != nil {
 		return fmt.Errorf("failed to read binary bios measurements: %w", err)
 	}
@@ -154,7 +154,7 @@ func getConfig(cmd *cli.Command) (*ParsePcrsConf, error) {
 	c := &ParsePcrsConf{
 		Eventlog:       cmd.String(tpmEventlogFlag),
 		PrintAggregate: cmd.Bool(printAggregateFlag),
-		RawEventData:   cmd.Bool(rawEventDataFlag),
+		EventData:      cmd.Bool(eventDataFlag),
 	}
 	return c, nil
 }

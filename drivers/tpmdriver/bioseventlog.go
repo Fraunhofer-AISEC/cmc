@@ -137,10 +137,10 @@ type TCG_AlgorithmSize struct {
 	DigestSize  uint16
 }
 
-func GetBiosArtifacts(file, refvalType string, addRawEventData bool) (map[int]ar.Artifact, error) {
+func GetBiosArtifacts(file, refvalType string, addEventData bool) (map[int]ar.Artifact, error) {
 
 	// Get single events
-	refvals, err := GetBiosMeasurements(file, refvalType, addRawEventData)
+	refvals, err := GetBiosMeasurements(file, refvalType, addEventData)
 	if err != nil {
 		return nil, err
 	}
@@ -178,13 +178,13 @@ func GetBiosArtifacts(file, refvalType string, addRawEventData bool) (map[int]ar
 // GetBiosMeasurements retrieves the measurements recorded into the TPM PCRs by BIOS, UEFI and IPL.
 // The file with the binary measurements (e.g., /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
+func GetBiosMeasurements(file, refvalType string, addEventData bool) ([]ar.ReferenceValue, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseBiosMeasurements(data, refvalType, addRawEventData)
+	digests, err := parseBiosMeasurements(data, refvalType, addEventData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse binary bios measurements event log: %w", err)
 	}
@@ -192,7 +192,7 @@ func GetBiosMeasurements(file, refvalType string, addRawEventData bool) ([]ar.Re
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurements(data []byte, refvalType string, addEventData bool) ([]ar.ReferenceValue, error) {
 
 	buf := bytes.NewBuffer(data)
 
@@ -222,7 +222,7 @@ func parseBiosMeasurements(data []byte, refvalType string, addRawEventData bool)
 		switch specIdEvent.FamilyVersionMajor {
 		case 2:
 			log.Trace("Detected event log format version 2")
-			return parseBiosMeasurementsV2(buf.Bytes(), refvalType, addRawEventData)
+			return parseBiosMeasurementsV2(buf.Bytes(), refvalType, addEventData)
 		default:
 			return nil, fmt.Errorf("unsuported Eventlog version %v.%v", specIdEvent.FamilyVersionMajor,
 				specIdEvent.FamilyVersionMinor)
@@ -264,7 +264,7 @@ func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.ReferenceValu
 
 }
 
-func parseBiosMeasurementsV2(data []byte, refvalType string, addRawEventData bool) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) ([]ar.ReferenceValue, error) {
 
 	buf := bytes.NewBuffer(data)
 	extends := make([]ar.ReferenceValue, 0)
@@ -340,7 +340,7 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addRawEventData boo
 
 		}
 		if parseEvent {
-			extendedeventData = ar.ParseEventData(eventData, eventName, addRawEventData)
+			extendedeventData = ar.ParseEventData(eventData, eventName)
 		}
 
 		//either Sha256 or Sha384 must be present
@@ -353,15 +353,21 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addRawEventData boo
 			continue
 		}
 
-		//add to extends
-		extends = append(extends, ar.ReferenceValue{
-			Type:      refvalType,
-			Index:     int(pcrIndex),
-			Sha256:    sha256Digest,
-			Sha384:    sha384Digest,
-			SubType:   eventName,
-			EventData: extendedeventData,
-		})
+		extend := ar.ReferenceValue{
+			Type:    refvalType,
+			Index:   int(pcrIndex),
+			Sha256:  sha256Digest,
+			Sha384:  sha384Digest,
+			SubType: eventName,
+		}
+		if extendedeventData != nil {
+			extend.Description = extendedeventData.StringContent
+			if addEventData {
+				extend.EventData = extendedeventData
+			}
+		}
+
+		extends = append(extends, extend)
 	}
 
 	return extends, nil
