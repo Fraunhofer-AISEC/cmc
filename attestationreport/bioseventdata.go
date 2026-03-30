@@ -230,11 +230,11 @@ type UefiPlatformFirmwareBlob struct {
 
 //main method for parsing the eventData --------------------------------------
 
-func ParseEventData(eventBytes []uint8, eventName string, addRawEventData bool) *EventData {
+func ParseEventData(eventBytes []uint8, eventName string) *EventData {
 	exInfo := new(EventData)
 	switch eventName {
 	case "EV_EFI_VARIABLE_DRIVER_CONFIG", "EV_EFI_VARIABLE_BOOT", "EV_EFI_VARIABLE_AUTHORITY":
-		exInfo.Uefivariabledata = parseUefiVariableData(bytes.NewBuffer(eventBytes), addRawEventData)
+		exInfo.Uefivariabledata = parseUefiVariableData(bytes.NewBuffer(eventBytes))
 	case "EV_EFI_GPT_EVENT":
 		exInfo.GPTHeader = parseUefiGPTEvent(bytes.NewBuffer(eventBytes))
 	case "EV_EFI_BOOT_SERVICES_APPLICATION", "EV_EFI_BOOT_SERVICES_DRIVER", "EV_EFI_RUNTIME_SERVICES_DRIVER":
@@ -248,10 +248,7 @@ func ParseEventData(eventBytes []uint8, eventName string, addRawEventData bool) 
 	case "EV_IPL", "EV_EFI_ACTION", "EV_POST_CODE", "EV_S_CRTM_VERSION", "EV_OMIT_BOOT_DEVICE_EVENTS":
 		exInfo.StringContent = bytesToString(eventBytes)
 	}
-
-	if addRawEventData {
-		exInfo.RawData = eventBytes
-	}
+	exInfo.RawData = eventBytes
 
 	if EmptyEventdata(exInfo) {
 		return nil
@@ -382,7 +379,7 @@ func bytesToString(uint8Array []uint8) string {
 	return result
 }
 
-func parseUefiVariableData(buf *bytes.Buffer, addRawEventData bool) *UefiVariableData {
+func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 
 	// TCG PC Client Platform Firmware Profile Specification 10.2.6 Measuring UEFI Variables
 	// And UEFI GPT Data struct UEFI_VARIABLE_DATA
@@ -445,7 +442,7 @@ func parseUefiVariableData(buf *bytes.Buffer, addRawEventData bool) *UefiVariabl
 		default:
 			//if string is of type BootXXXX
 			if (strings.Contains(unicodeName, "Boot")) || strings.Contains(unicodeName, "PlatformRecovery") || strings.Contains(unicodeName, "Driver") { //for BootXXXX, PlatformRecoveryXXXX, and DriverXXXX entries
-				uefiVariableData.EFILoadOption = parseEFILoadOption(buf, addRawEventData)
+				uefiVariableData.EFILoadOption = parseEFILoadOption(buf)
 			} else {
 				hexString := (buf.Next(int(variableDataLength)))
 				uefiVariableData.VariableData = hexString
@@ -458,7 +455,7 @@ func parseUefiVariableData(buf *bytes.Buffer, addRawEventData bool) *UefiVariabl
 	return nil
 }
 
-func parseEFILoadOption(buf *bytes.Buffer, addRawEventData bool) *EFILoadOption {
+func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
 	efiloadoption := new(EFILoadOption)
 	var filePathListLength uint16
 
@@ -489,10 +486,7 @@ func parseEFILoadOption(buf *bytes.Buffer, addRawEventData bool) *EFILoadOption 
 	}
 	if buf.Len() > 0 {
 		//contains optional data
-		optionalData := maybeUTF16(buf.Next(buf.Len()))
-		if addRawEventData {
-			efiloadoption.OptionalData = optionalData
-		}
+		efiloadoption.OptionalData = maybeUTF16(buf.Next(buf.Len()))
 	}
 
 	return efiloadoption
