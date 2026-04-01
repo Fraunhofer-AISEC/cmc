@@ -243,7 +243,8 @@ func (mgr *KeyMgr) loadKeys() error {
 		path := path.Join(mgr.keyPath, f.Name())
 		keyBytes, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("failed to read key file: %w", err)
+			log.Warnf("Failed to read key file: %v", err)
+			continue
 		}
 
 		// Parse file and determine whether this is an sw key (ecdsa, rsa) or a tpm key
@@ -251,11 +252,13 @@ func (mgr *KeyMgr) loadKeys() error {
 		case KeyPEM:
 			p, err := internal.ParsePrivateKey(keyBytes)
 			if err != nil {
-				return fmt.Errorf("failed to parse private key: %w", err)
+				log.Warnf("Failed to parse private key: %v", err)
+				continue
 			}
 			priv, ok := p.(crypto.Signer)
 			if !ok {
-				return fmt.Errorf("private key type %T does not implement signer interface", p)
+				log.Warnf("Private key type %T does not implement signer interface", p)
+				continue
 			}
 			mgr.keys[id] = key{
 				private: priv,
@@ -263,18 +266,21 @@ func (mgr *KeyMgr) loadKeys() error {
 			log.Tracef("Successfully loaded key with id %s", id)
 		case KeyTPM:
 			if mgr.tpm == nil {
-				return fmt.Errorf("failed to load tpm key: tpm support disabled")
+				log.Warnf("Failed to load tpm key: tpm support disabled")
+				continue
 			}
 			tpmKey, err := tpmdriver.ImportKey(mgr.tpm, keyBytes)
 			if err != nil {
-				return fmt.Errorf("failed to import tpm key: %w", err)
+				log.Warnf("Failed to import tpm key: %v", err)
+				continue
 			}
 			mgr.keys[id] = key{
 				private: tpmKey,
 			}
 			log.Tracef("Successfully loaded tpm key with id %s", id)
 		default:
-			return fmt.Errorf("failed to detect key format")
+			log.Warnf("Failed to detect key format")
+			continue
 		}
 	}
 	return nil
@@ -289,7 +295,7 @@ func (mgr *KeyMgr) loadCerts() error {
 
 	files, err := os.ReadDir(mgr.certsPath)
 	if err != nil {
-		return fmt.Errorf("failed to read storage path: %w", err)
+		return fmt.Errorf("failed to read storage path: %v", err)
 	}
 
 	log.Debugf("Loading %v certs", len(files))
@@ -299,16 +305,19 @@ func (mgr *KeyMgr) loadCerts() error {
 		path := path.Join(mgr.certsPath, f.Name())
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("failed to read cert file: %w", err)
+			log.Warnf("Failed to read cert file: %v", err)
+			continue
 		}
 		certs, err := internal.ParseCertsPem(data)
 		if err != nil {
-			return fmt.Errorf("failed to parse certs: %w", err)
+			log.Warnf("Failed to parse certs: %v", err)
+			continue
 		}
 
 		key, ok := mgr.keys[id]
 		if !ok {
-			return fmt.Errorf("no key exists for certificate with ID %s", id)
+			log.Warnf("No key exists for certificate with ID %s. Do not load", id)
+			continue
 		}
 
 		key.certChain = certs
