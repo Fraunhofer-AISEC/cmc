@@ -186,7 +186,7 @@ func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, p
 
 func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	log.Warn(msg)
+	log.Warnf("%v", msg)
 	http.Error(w, msg, http.StatusBadRequest)
 }
 

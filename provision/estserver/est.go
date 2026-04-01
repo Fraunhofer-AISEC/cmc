@@ -39,7 +39,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 	log.Debugf("Received /cacerts %v request from %v", req.Method, req.RemoteAddr)
 
 	if strings.Compare(req.Method, "GET") != 0 {
-		writeHttpErrorf(w, "Method %v not implemented for cacerts request", req.Method)
+		writeHttpErrorf(w, "Only method GET implemented for cacerts request")
 		return
 	}
 
@@ -65,7 +65,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	log.Debugf("Received /simpleenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Method %v not implemented for simpleenroll request", req.Method)
+		writeHttpErrorf(w, "Only method POST implemented for simpleenroll request")
 		return
 	}
 
@@ -120,7 +120,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	log.Debugf("Received /tpmactivateenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Method %v not implemented for tpmactivateenroll request", req.Method)
+		writeHttpErrorf(w, "Only method POST implemented for tpmactivateenroll request")
 		return
 	}
 
@@ -235,7 +235,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	log.Debugf("Received /tpmcertifyenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Method %v not implemented for tpmcertifyenroll request", req.Method)
+		writeHttpErrorf(w, "Only method POST implemented for tpmcertifyenroll request")
 		return
 	}
 
@@ -326,7 +326,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	log.Debugf("Received /attestenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Method %v not implemented for tpmcertifyenroll request", req.Method)
+		writeHttpErrorf(w, "Only method POST implemented for tpmcertifyenroll request")
 		return
 	}
 
