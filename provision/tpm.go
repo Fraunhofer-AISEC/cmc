@@ -17,7 +17,6 @@ package provision
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
 	"encoding/asn1"
@@ -221,21 +220,40 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, majo
 	return nil
 }
 
-func VerifyIk(ikParams attest.CertificationParameters, akPub []byte) error {
-	pub, err := tpm2.DecodePublic(akPub)
+func VerifyIk(ikParams attest.CertificationParameters, akPubRaw []byte) error {
+	akPub, err := tpm2.DecodePublic(akPubRaw)
 	if err != nil {
 		return fmt.Errorf("decode public failed: %w", err)
 	}
-	akPubVerify := &rsa.PublicKey{E: int(pub.RSAParameters.Exponent()),
-		N: pub.RSAParameters.Modulus()}
-	hash, err := pub.RSAParameters.Sign.Hash.Hash()
+
+	akKey, err := akPub.Key()
 	if err != nil {
-		return fmt.Errorf("cannot access AK's hash function: %w", err)
+		return fmt.Errorf("failed to extract AK public: %w", err)
 	}
+
 	opts := attest.VerifyOpts{
-		Public: akPubVerify,
-		Hash:   hash,
+		Public: akKey,
 	}
+
+	switch akPub.Type {
+	case tpm2.AlgRSA:
+		hash, err := akPub.RSAParameters.Sign.Hash.Hash()
+		if err != nil {
+			return fmt.Errorf("cannot access AK's hash function: %w", err)
+		}
+		opts.Hash = hash
+
+	case tpm2.AlgECC:
+		hash, err := akPub.ECCParameters.Sign.Hash.Hash()
+		if err != nil {
+			return fmt.Errorf("cannot access AK's hash function: %w", err)
+		}
+		opts.Hash = hash
+
+	default:
+		return fmt.Errorf("unsupported public key alg 0x%x", akPub.Type)
+	}
+
 	err = ikParams.Verify(opts)
 	if err != nil {
 		return fmt.Errorf("failed to certify IK with AK: %w", err)
