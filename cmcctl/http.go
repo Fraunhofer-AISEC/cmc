@@ -269,10 +269,6 @@ func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	for k, v := range req.Header {
-		log.Debugf("HTTP Header %v: %v", k, v)
-	}
-
 	payload, err := io.ReadAll(req.Body)
 	if err != nil {
 		writeHttpErrorf(w, "failed to read payload from request: %v", err)
