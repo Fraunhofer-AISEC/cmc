@@ -208,13 +208,13 @@ func (db *Db) GetAllResults() ([]*ResultEnvelope, error) {
 
 func (db *Db) GetEnvelopesByProver(name string) ([]*ResultEnvelope, error) {
 
-	// Extract the prover name from the JSON attestation result
-	stmt := fmt.Sprintf(`SELECT id, prover, created, status FROM %v
-		WHERE prover='%s'
+	// Use the prover name from the JSON attestation result
+	stmt := fmt.Sprintf(`SELECT id, prover, created, status FROM %s
+		WHERE prover = ?
 		ORDER BY created DESC`,
-		db.table, name)
+		db.table)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -251,11 +251,11 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 
 	// Extract the prover name from the JSON attestation result and sort by date
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status, result FROM %v
-	WHERE prover='%s'
+	WHERE prover=?
 	ORDER BY created DESC LIMIT 1`,
-		db.table, name)
+		db.table)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -346,10 +346,10 @@ func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
 
 	// Extract the prover name from the JSON attestation result
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status, result FROM %v
-		WHERE id='%s'`,
-		db.table, id)
+		WHERE id=?`,
+		db.table)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
