@@ -154,7 +154,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	// e.g. via EST or ACME protocol
 	provisioner, err := createEnroller(c, estTlsCas)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provioner: %w", err)
+		return nil, fmt.Errorf("failed to create enroller: %w", err)
 	}
 
 	// Create key manager
