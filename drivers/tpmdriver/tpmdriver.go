@@ -17,9 +17,7 @@ package tpmdriver
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/binary"
@@ -211,7 +209,9 @@ func (t *Tpm) GetCollateral() ([]ar.Collateral, error) {
 	// Just for logging
 	for _, elem := range artifacts {
 		for _, event := range elem.Events {
-			log.Tracef("PCR%v %v: %v", elem.Index, elem.Type, hex.EncodeToString(event.Sha256))
+			for _, h := range event.Hashes {
+				log.Tracef("PCR%v %v: %v=%x", elem.Index, elem.Type, h.Alg, h.Content)
+			}
 		}
 	}
 
@@ -409,14 +409,20 @@ func (t *Tpm) getAkQualifiedName() ([]byte, error) {
 		return nil, fmt.Errorf("failed to Decode AK Public: %w", err)
 	}
 
-	if tpm2Pub.NameAlg != tpm2.AlgSHA256 {
-		return nil, errors.New("failed to Get AK public: unsupported hash algorithm")
-	}
-
 	// Name of object is nameAlg || Digest(TPMT_PUBLIC)
 	alg := make([]byte, 2)
 	binary.BigEndian.PutUint16(alg, uint16(tpm2Pub.NameAlg))
-	digestPub := sha256.Sum256(pub)
+
+	hashAlg, err := internal.Tpm2ToCryptoHash(tpm2Pub.NameAlg)
+	if err != nil {
+		return nil, err
+	}
+
+	digestPub, err := internal.Hash(hashAlg, pub)
+	if err != nil {
+		return nil, fmt.Errorf("unsupported tpm alg 0x%x", tpm2Pub.NameAlg)
+	}
+
 	name := append(alg, digestPub[:]...)
 
 	// TPMS_CREATION_DATA contains parentQualifiedName
@@ -432,7 +438,10 @@ func (t *Tpm) getAkQualifiedName() ([]byte, error) {
 
 	// QN_AK := H_AK(QN_Parent || NAME_AK)
 	buf := append(parentQualifiedName[:], name[:]...)
-	qualifiedNameDigest := sha256.Sum256(buf)
+	qualifiedNameDigest, err := internal.Hash(hashAlg, buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash qualified name: %w", err)
+	}
 	qualifiedName := append(alg, qualifiedNameDigest[:]...)
 
 	log.Debugf("AK Name: %v", hex.EncodeToString(name[:]))
@@ -455,7 +464,7 @@ func (t *Tpm) GetQuote(nonce []byte) (*attest.Quote, error) {
 	t.lock()
 	defer t.unlock()
 
-	hashAlg, err := getAttestHashAlg(t.HashAlg)
+	hashAlg, err := internal.CryptoToAttestHash(t.HashAlg)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +487,12 @@ func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 	t.lock()
 	defer t.unlock()
 
-	pcrs, err := t.tpm.PCRs(attest.HashSHA256)
+	hashAlg, err := internal.CryptoToAttestHash(t.HashAlg)
+	if err != nil {
+		return nil, err
+	}
+
+	pcrs, err := t.tpm.PCRs(hashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
@@ -490,9 +504,14 @@ func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 		artifactmap[pcr.Index] = ar.Artifact{
 			Type:  ar.TYPE_PCR_SUMMARY,
 			Index: pcr.Index,
-			Events: []ar.MeasureEvent{
+			Events: []ar.Component{
 				{
-					Sha256: pcr.Digest,
+					Hashes: []ar.ReferenceHash{
+						{
+							Alg:     pcr.DigestAlg.String(),
+							Content: pcr.Digest,
+						},
+					},
 				},
 			},
 		}
@@ -827,8 +846,13 @@ func (t *Tpm) setQuotePcrs() error {
 	t.lock()
 	defer t.unlock()
 
+	hashAlg, err := internal.CryptoToAttestHash(t.HashAlg)
+	if err != nil {
+		return err
+	}
+
 	log.Debug("Retrieving PCRs")
-	pcrValues, err := t.tpm.PCRs(attest.HashSHA256)
+	pcrValues, err := t.tpm.PCRs(hashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
@@ -888,15 +912,4 @@ func (t *Tpm) createAkCsr(cn string) (*x509.CertificateRequest, error) {
 	}
 
 	return csr, nil
-}
-
-func getAttestHashAlg(in crypto.Hash) (attest.HashAlg, error) {
-	switch in {
-	case crypto.SHA1:
-		return attest.HashSHA1, nil
-	case crypto.SHA256:
-		return attest.HashSHA256, nil
-	default:
-		return 0, fmt.Errorf("unsupported tpm hash algorithm %v", in.String())
-	}
 }

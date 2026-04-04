@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
@@ -88,20 +87,9 @@ func run(cmd *cli.Command) error {
 		return fmt.Errorf("failed to parse ima runtime digestes: %w", err)
 	}
 
-	refvals := make([]ar.ReferenceValue, 0)
+	refvals := make([]ar.Component, 0)
 	for _, artifact := range artifacts {
-		for _, event := range artifact.Events {
-			refval := ar.ReferenceValue{
-				Type:        ar.TYPE_REFVAL_TPM,
-				SubType:     filepath.Base(event.EventName),
-				Index:       globConf.Mrs[0],
-				Sha256:      event.Sha256,
-				Description: event.EventName,
-				EventData:   event.EventData,
-				Optional:    true,
-			}
-			refvals = append(refvals, refval)
-		}
+		refvals = append(refvals, artifact.Events...)
 	}
 
 	// Marshal eventlog

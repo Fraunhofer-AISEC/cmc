@@ -88,7 +88,7 @@ setjson "json" "description"           "RTM Manifest"
 setarr  "json" "baseLayers"            "${name}"
 setjson "json" "certLevel"             3
 setjson "json" "caFingerprint"         "${fingerprint}"
-setarr  "json" "referenceValues"       "${refs}"
+setarr  "json" "components"            "${refs}"
 
 setjson "policy" "quoteVersion"                 4
 setjson "policy" "tdAttributes.debug"           false

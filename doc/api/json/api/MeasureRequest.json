@@ -24,6 +24,44 @@
       },
       "type": "object"
     },
+    "Component": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "hashes": {
+          "items": {
+            "$ref": "#/$defs/ReferenceHash"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eventdata": {
+          "$ref": "#/$defs/EventData"
+        },
+        "ctrData": {
+          "$ref": "#/$defs/CtrData"
+        },
+        "intelCollateral": {
+          "$ref": "#/$defs/IntelCollateral"
+        }
+      },
+      "type": "object"
+    },
     "CtrData": {
       "properties": {
         "configSha256": {
@@ -1144,42 +1182,13 @@
       },
       "type": "object"
     },
-    "MeasureEvent": {
-      "properties": {
-        "sha256": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "sha384": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "sha512": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "eventname": {
-          "type": "string"
-        },
-        "eventdata": {
-          "$ref": "#/$defs/EventData"
-        },
-        "description": {
-          "type": "string"
-        },
-        "ctrData": {
-          "$ref": "#/$defs/CtrData"
-        },
-        "intelCollateral": {
-          "$ref": "#/$defs/IntelCollateral"
-        }
-      },
-      "type": "object"
-    },
     "MeasureRequest": {
       "properties": {
         "version": {
           "type": "string"
         },
         "event": {
-          "$ref": "#/$defs/MeasureEvent"
+          "$ref": "#/$defs/Component"
         }
       },
       "type": "object"
@@ -1314,6 +1323,17 @@
         },
         "execCPUAffinity": {
           "$ref": "#/$defs/CPUAffinity"
+        }
+      },
+      "type": "object"
+    },
+    "ReferenceHash": {
+      "properties": {
+        "alg": {
+          "type": "string"
+        },
+        "content": {
+          "$ref": "#/$defs/HexByte"
         }
       },
       "type": "object"

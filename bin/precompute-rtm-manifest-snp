@@ -113,7 +113,7 @@ setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "
 setjson "manifest" "description"           "RTM Manifest"
 setarr  "manifest" "baseLayers"            "${name}"
 setjson "manifest" "certLevel"             3
-setarr  "manifest" "referenceValues"       "${ref}"
+setarr  "manifest" "components"       "${ref}"
 
 # Insert platform details
 setjson "manifest" "details.firmware" "${firmware}"

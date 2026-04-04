@@ -36,7 +36,7 @@ func VerifyTpm(
 	collateral ar.Collateral,
 	nonce []byte,
 	cas []*x509.Certificate,
-	referenceValues []ar.ReferenceValue,
+	refComponents []ar.Component,
 	s ar.Serializer,
 ) (*ar.MeasurementResult, bool) {
 
@@ -48,7 +48,7 @@ func VerifyTpm(
 		TpmResult: &ar.TpmResult{},
 	}
 
-	log.Debug("Verifying TPM measurements...")
+	log.Debugf("Verifying TPM measurements against %v reference values...", len(refComponents))
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(evidence.Data)
@@ -66,6 +66,7 @@ func VerifyTpm(
 		result.Summary.Fail(ar.ParseEvidence, err)
 		return result, false
 	}
+	log.Tracef("Detected %v quote hash algorithm", quoteHashAlg.String())
 
 	// Verify nonce with nonce from TPM Quote
 	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
@@ -85,7 +86,7 @@ func VerifyTpm(
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
 	tpmResult, artifacts, ok := verifyPcrs(s, collateral.Artifacts,
-		tpmsAttest.AttestedQuoteInfo.PCRDigest, referenceValues, quoteHashAlg)
+		tpmsAttest.AttestedQuoteInfo.PCRDigest, refComponents, quoteHashAlg)
 	if !ok {
 		log.Debug("failed to recalculate PCRs")
 		result.Summary.Status = ar.StatusFail
@@ -135,7 +136,7 @@ func VerifyTpm(
 }
 
 func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
-	aggregatedQuotePcr []byte, referenceValues []ar.ReferenceValue, quoteHashAlg crypto.Hash,
+	aggregatedQuotePcr []byte, refComponents []ar.Component, quoteHashAlg crypto.Hash,
 ) (*ar.TpmResult, []ar.DigestResult, bool) {
 	success := true
 	pcrResults := make([]ar.DigestResult, 0)
@@ -169,7 +170,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				eventHash := event.GetHash(quoteHashAlg)
 
 				// First event could be a TPM_PCR_INIT_VALUE
-				if event.EventName == "TPM_PCR_INIT_VALUE" {
+				if event.Name == "TPM_PCR_INIT_VALUE" {
 					calculatedPcrs[pcr] = eventHash
 					measuredSummary = eventHash
 					continue
@@ -184,22 +185,22 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				}
 
 				// Check for every event that a corresponding reference value exists
-				ref := getReferenceValue(quoteHashAlg, eventHash, pcr, referenceValues)
+				ref := getReferenceValue(quoteHashAlg, eventHash, pcr, refComponents)
 				if ref == nil {
 					measResult := ar.DigestResult{
 						Type:        "Measurement",
 						Index:       pcr,
-						Digest:      hex.EncodeToString(eventHash),
+						Digest:      eventHash,
 						Success:     false,
 						Launched:    true,
-						SubType:     event.EventName,
+						Name:        event.Name,
 						EventData:   event.EventData,
 						CtrDetails:  event.CtrData,
 						Description: event.Description,
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Debugf("Failed to find refval for PCR%v measurement %v: %v",
-						artifact.Index, event.EventName, hex.EncodeToString(eventHash))
+						artifact.Index, event.Name, hex.EncodeToString(eventHash))
 					success = false
 					pcrResult.Success = false
 					continue
@@ -212,9 +213,9 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 					success = false
 				}
 
-				nameInfo := ref.SubType
-				if event.EventName != "" && !strings.EqualFold(ref.SubType, event.EventName) {
-					nameInfo += ": " + event.EventName
+				nameInfo := ref.Name
+				if event.Name != "" && !strings.EqualFold(ref.Name, event.Name) {
+					nameInfo += ": " + event.Name
 				}
 
 				log.Tracef("Found refval for PCR%v measurement %v: %v",
@@ -223,16 +224,16 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				measResult := ar.DigestResult{
 					Type:        "Verified",
 					Index:       pcr,
-					Digest:      hex.EncodeToString(eventHash),
+					Digest:      eventHash,
 					Success:     true,
 					Launched:    true,
-					SubType:     nameInfo,
+					Name:        nameInfo,
 					Description: ref.Description,
 					CtrDetails:  event.CtrData,
 				}
 				detailedResults = append(detailedResults, measResult)
 			}
-			pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
+			pcrResult.Digest = calculatedPcrs[pcr]
 			if !bytes.Equal(measuredSummary, calculatedPcrs[pcr]) {
 				pcrResult.Measured = hex.EncodeToString(measuredSummary)
 			}
@@ -246,17 +247,17 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				success = false
 				continue
 			}
-			for _, ref := range referenceValues {
+			for _, ref := range refComponents {
 				if ref.Index == pcr {
 
 					refHash := ref.GetHash(quoteHashAlg)
 
-					if ref.SubType == "TPM_PCR_INIT_VALUE" {
+					if ref.Name == "TPM_PCR_INIT_VALUE" {
 						calculatedPcrs[pcr] = refHash
 						continue
 					}
 
-					if ref.SubType == ar.TYPE_PCR_SUMMARY {
+					if ref.Name == ar.TYPE_PCR_SUMMARY {
 						log.Tracef("PCR%v refval is PCR summary", artifact.Index)
 
 						// Check if calculatedPcrs is uninitialized, as only one reference
@@ -280,15 +281,15 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						}
 
 						log.Tracef("Extended refval for PCR%v %v: %v",
-							pcr, ref.SubType, hex.EncodeToString(refHash))
+							pcr, ref.Name, hex.EncodeToString(refHash))
 					}
 
 					// As we only have the PCR summary, we will later set all reference values
 					// to true/false depending on whether the calculation matches the PCR summary
 					r := ar.DigestResult{
 						Index:       pcr,
-						Digest:      hex.EncodeToString(refHash),
-						SubType:     ref.SubType,
+						Digest:      refHash,
+						Name:        ref.Name,
 						Description: ref.Description,
 					}
 					detailedResults = append(detailedResults, r)
@@ -299,14 +300,14 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 			eventHash := artifact.Events[0].GetHash(quoteHashAlg)
 			equal := bytes.Equal(calculatedPcrs[pcr], eventHash)
 			if equal {
-				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
+				pcrResult.Digest = calculatedPcrs[pcr]
 				pcrResult.Success = true
 				log.Tracef("PCR%v match: %x", pcr, calculatedPcrs[pcr])
 			} else {
 				log.Debugf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
 					hex.EncodeToString(eventHash),
 					hex.EncodeToString(calculatedPcrs[pcr]))
-				pcrResult.Digest = hex.EncodeToString(calculatedPcrs[pcr])
+				pcrResult.Digest = calculatedPcrs[pcr]
 				pcrResult.Measured = hex.EncodeToString(eventHash)
 				pcrResult.Success = false
 				success = false
@@ -339,7 +340,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 	// Finally, iterate over the reference values to find reference values with no
 	// matching PCR or required reference values which are not present in the measurement
 	// in case of detailed measurement logs
-	for _, ref := range referenceValues {
+	for _, ref := range refComponents {
 
 		refHash := ref.GetHash(quoteHashAlg)
 
@@ -366,22 +367,20 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				if !foundEvent {
 					result := ar.DigestResult{
 						Type:        ar.TYPE_REFVAL_IAS,
-						SubType:     ref.SubType,
+						Name:        ref.Name,
 						Index:       ref.Index,
 						Success:     ref.Optional, // Only fail attestation if component is mandatory
 						Launched:    false,
-						Digest:      hex.EncodeToString(refHash),
+						Digest:      refHash,
 						Description: ref.Description,
-						CtrDetails: &ar.CtrData{
-							OciSpec: ref.OciSpec,
-						},
-						EventData: ref.EventData,
+						CtrDetails:  ref.CtrData,
+						EventData:   ref.EventData,
 					}
 					if !ref.Optional {
 						detailedResults = append(detailedResults, result)
 						success = false
 						log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
-							ref.Index, ref.SubType, hex.EncodeToString(refHash))
+							ref.Index, ref.Name, hex.EncodeToString(refHash))
 					}
 					continue
 				}
@@ -389,14 +388,14 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 		}
 		if !foundPcr {
 			log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
-				ref.Index, ref.SubType, hex.EncodeToString(refHash))
+				ref.Index, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
 				Type:        ar.TYPE_REFVAL_IAS,
-				SubType:     ref.SubType,
+				Name:        ref.Name,
 				Index:       ref.Index,
 				Success:     ref.Optional,
 				Launched:    false,
-				Digest:      hex.EncodeToString(refHash),
+				Digest:      refHash,
 				Description: ref.Description,
 			}
 			detailedResults = append(detailedResults, result)
@@ -541,8 +540,8 @@ func verifyQuoteECDSA(quote []byte, sig *tpm2.Signature, cert *x509.Certificate)
 	return ar.Result{Status: ar.StatusSuccess}
 }
 
-// Searches for a specific hash value in the reference values for RTM and OS
-func getReferenceValue(alg crypto.Hash, hash []byte, pcr int, refVals []ar.ReferenceValue) *ar.ReferenceValue {
+// Searches for a specific hash value in the reference values
+func getReferenceValue(alg crypto.Hash, hash []byte, pcr int, refVals []ar.Component) *ar.Component {
 	for _, ref := range refVals {
 		refHash := ref.GetHash(alg)
 		if ref.Index == pcr && bytes.Equal(refHash, hash) {

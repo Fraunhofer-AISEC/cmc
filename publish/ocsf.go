@@ -51,9 +51,9 @@ type DetectionFinding struct {
 
 // Fingerprint represents the OCSF Fingerprint object.
 type Fingerprint struct {
-	Algorithm   string `json:"algorithm,omitempty"`
-	AlgorithmID int    `json:"algorithm_id"`
-	Value       string `json:"value"`
+	Algorithm   string     `json:"algorithm,omitempty"`
+	AlgorithmID int        `json:"algorithm_id"`
+	Value       ar.HexByte `json:"value"`
 }
 
 // Finding represents the OCSF Finding Information object
@@ -183,7 +183,7 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 		Message:       message,
 		FindingInfo: &Finding{
 			UID:   uuid.New().String(),
-			Title: fmt.Sprintf("Unauthorized software launch: %v", dr.SubType),
+			Title: fmt.Sprintf("Unauthorized software launch: %v", dr.Name),
 			Desc:  description,
 		},
 		Evidences: []Evidence{

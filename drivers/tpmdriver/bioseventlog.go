@@ -140,7 +140,7 @@ type TCG_AlgorithmSize struct {
 func GetBiosArtifacts(file, refvalType string, addEventData bool) (map[int]ar.Artifact, error) {
 
 	// Get single events
-	refvals, err := GetBiosMeasurements(file, refvalType, addEventData)
+	components, err := GetBiosMeasurements(file, refvalType, addEventData)
 	if err != nil {
 		return nil, err
 	}
@@ -149,27 +149,18 @@ func GetBiosArtifacts(file, refvalType string, addEventData bool) (map[int]ar.Ar
 	artifacts := map[int]ar.Artifact{}
 
 	// Convert to artifacts
-	for _, refval := range refvals {
+	for _, component := range components {
 
-		artifact, ok := artifacts[refval.Index]
+		artifact, ok := artifacts[component.Index]
 		if !ok {
+			// No artifact for this index yet, create
 			artifact = ar.Artifact{
 				Type:  ar.TYPE_PCR_EVENTLOG,
-				Index: int(refval.Index),
+				Index: int(component.Index),
 			}
 		}
-		event := ar.MeasureEvent{
-			Sha1:      refval.Sha1,
-			Sha256:    refval.Sha256,
-			Sha384:    refval.Sha384,
-			Sha512:    refval.Sha512,
-			EventName: refval.SubType,
-		}
-		if refval.SubType != "TPM_PCR_INIT_VALUE" {
-			event.EventData = refval.EventData
-		}
-		artifact.Events = append(artifact.Events, event)
-		artifacts[refval.Index] = artifact
+		artifact.Events = append(artifact.Events, component)
+		artifacts[component.Index] = artifact
 	}
 
 	return artifacts, nil
@@ -178,7 +169,7 @@ func GetBiosArtifacts(file, refvalType string, addEventData bool) (map[int]ar.Ar
 // GetBiosMeasurements retrieves the measurements recorded into the TPM PCRs by BIOS, UEFI and IPL.
 // The file with the binary measurements (e.g., /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file, refvalType string, addEventData bool) ([]ar.ReferenceValue, error) {
+func GetBiosMeasurements(file, refvalType string, addEventData bool) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
@@ -192,7 +183,7 @@ func GetBiosMeasurements(file, refvalType string, addEventData bool) ([]ar.Refer
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte, refvalType string, addEventData bool) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurements(data []byte, refvalType string, addEventData bool) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 
@@ -234,10 +225,10 @@ func parseBiosMeasurements(data []byte, refvalType string, addEventData bool) ([
 	}
 }
 
-func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
-	extends := make([]ar.ReferenceValue, 0)
+	extends := make([]ar.Component, 0)
 
 	// An entry is at least 32 Bytes long
 	for buf.Len() >= 32 {
@@ -252,11 +243,16 @@ func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.ReferenceValu
 		buf.Next(int(event.EventDataSize))
 
 		//add to extends
-		extends = append(extends, ar.ReferenceValue{
-			Type:    refvalType,
-			Index:   int(event.PcrIndex),
-			Sha1:    event.Digest[:],
-			SubType: eventtypeToString(event.EventType),
+		extends = append(extends, ar.Component{
+			Type:  refvalType,
+			Name:  eventtypeToString(event.EventType),
+			Index: int(event.PcrIndex),
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-1",
+					Content: event.Digest[:],
+				},
+			},
 		})
 	}
 
@@ -264,10 +260,10 @@ func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.ReferenceValu
 
 }
 
-func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) ([]ar.ReferenceValue, error) {
+func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
-	extends := make([]ar.ReferenceValue, 0)
+	extends := make([]ar.Component, 0)
 	initializedPCR := make([]bool, 24) //bool array track of what pcrs have been initialized
 
 	// An entry is at least 16 Bytes long
@@ -311,7 +307,7 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 			return nil, errors.New("not enough remaining bytes in buffer")
 		}
 
-		//data to include in the ReferenceValues
+		//data to include in the Components
 		var extendedeventData *ar.EventData
 
 		//bytes of the event should be added to the array
@@ -329,7 +325,7 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 		//pcr value has not been initialized
 		if !initializedPCR[pcrIndex] {
 			//generate the locality entry
-			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData)
+			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData, digestAlgorithmID)
 			if err != nil {
 				log.Debug(err)
 			} else {
@@ -353,12 +349,22 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 			continue
 		}
 
-		extend := ar.ReferenceValue{
-			Type:    refvalType,
-			Index:   int(pcrIndex),
-			Sha256:  sha256Digest,
-			Sha384:  sha384Digest,
-			SubType: eventName,
+		extend := ar.Component{
+			Type:  refvalType,
+			Name:  eventName,
+			Index: int(pcrIndex),
+		}
+		if sha256Digest != nil {
+			extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
+				Alg:     "SHA-256",
+				Content: sha256Digest,
+			})
+		}
+		if sha384Digest != nil {
+			extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
+				Alg:     "SHA-384",
+				Content: sha384Digest,
+			})
 		}
 		if extendedeventData != nil {
 			extend.Description = extendedeventData.StringContent
@@ -373,7 +379,7 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 	return extends, nil
 }
 
-func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (ar.ReferenceValue, bool, error) {
+func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, alg uint16) (ar.Component, bool, error) {
 	var found_hcrtm bool
 	var locality byte
 	skipEvent := false
@@ -388,7 +394,7 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (a
 		/* Handle StartupLocality in replay for PCR0 */
 		if !found_hcrtm && eventType == EV_NO_ACTION && pcrIndex == 0 {
 			if eventD.Len() < 17 { // sizeof(EV_NO_ACTION_STRUCT))
-				return ar.ReferenceValue{}, false, errors.New("eventsize is too small")
+				return ar.Component{}, false, errors.New("eventsize is too small")
 			}
 
 			signature := eventD.Next(16)
@@ -404,11 +410,22 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8) (a
 	digest := make([]byte, 32)
 	digest[31] = locality
 
-	entry := ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_TPM,
-		Sha256:  digest,
-		SubType: "TPM_PCR_INIT_VALUE",
-		Index:   pcrIndex,
+	entry := ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "TPM_PCR_INIT_VALUE",
+		Index: pcrIndex,
+	}
+	switch alg {
+	case 0x000b:
+		entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+			Alg:     "SHA-256",
+			Content: digest,
+		})
+	case 0x000c:
+		entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+			Alg:     "SHA-384",
+			Content: digest,
+		})
 	}
 
 	//generate the Locality

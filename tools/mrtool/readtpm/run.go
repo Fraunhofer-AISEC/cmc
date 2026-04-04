@@ -90,14 +90,19 @@ func run(cmd *cli.Command) error {
 		return fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
 
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 	for _, pcr := range pcrs {
 		if contains(globConf.Mrs, pcr.Index) {
-			r := &ar.ReferenceValue{
-				Type:    ar.TYPE_REFVAL_TPM,
-				SubType: ar.TYPE_PCR_SUMMARY,
-				Index:   pcr.Index,
-				Sha256:  pcr.Digest,
+			r := &ar.Component{
+				Type:  ar.TYPE_REFVAL_TPM,
+				Name:  ar.TYPE_PCR_SUMMARY,
+				Index: pcr.Index,
+				Hashes: []ar.ReferenceHash{
+					{
+						Alg:     "SHA-256",
+						Content: pcr.Digest[:],
+					},
+				},
 			}
 			refvals = append(refvals, r)
 		}

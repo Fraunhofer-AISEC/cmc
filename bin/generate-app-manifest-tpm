@@ -39,13 +39,13 @@ fi
 echo "Using ${data} as directory for local data"
 
 # Parse the IMA measurement lists
-referenceValues=$("${mrtool[@]}" parse ima --mrs 10)
+components=$("${mrtool[@]}" parse ima --mrs 10)
 
 # App Manifest: load
 json=$(cat "${input}/manifest.json")
 
 # App Manifest: Insert reference values
-json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$referenceValues") '$base | .referenceValues += $ver[0]')
+json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$components") '$base | .components += $ver[0]')
 
 
 # App Manifest: Set other properties

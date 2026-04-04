@@ -17,6 +17,7 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/hex"
@@ -54,7 +55,7 @@ func VerifyIas(
 	collateral ar.Collateral,
 	nonce []byte,
 	caFingerprints []string,
-	referenceValues []ar.ReferenceValue,
+	refComponents []ar.Component,
 ) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{
@@ -70,7 +71,7 @@ func VerifyIas(
 		return result, false
 	}
 
-	if len(referenceValues) == 0 {
+	if len(refComponents) == 0 {
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
@@ -145,8 +146,8 @@ func VerifyIas(
 	log.Debug("Verifying measurements")
 
 	// Verify that every reference value has a corresponding measurement
-	for _, ref := range referenceValues {
-		log.Tracef("Found reference value %v: %v", ref.SubType, hex.EncodeToString(ref.Sha256))
+	for _, ref := range refComponents {
+		log.Tracef("Found reference value %v: %x", ref.Name, ref.GetHash(crypto.SHA256))
 		if ref.Type != ar.TYPE_REFVAL_IAS {
 			log.Tracef("IAS reference value invalid type %v", ref.Type)
 			result.Summary.Fail(ar.RefValType)
@@ -154,11 +155,11 @@ func VerifyIas(
 		}
 		found := false
 		for _, swc := range iat.SwComponents {
-			if bytes.Equal(ref.Sha256, swc.MeasurementValue) {
+			if bytes.Equal(ref.GetHash(crypto.SHA256), swc.MeasurementValue) {
 				result.Artifacts = append(result.Artifacts,
 					ar.DigestResult{
-						SubType:  ref.SubType,
-						Digest:   hex.EncodeToString(ref.Sha256),
+						Name:     ref.Name,
+						Digest:   ref.GetHash(crypto.SHA256),
 						Success:  true,
 						Launched: true,
 					})
@@ -169,8 +170,8 @@ func VerifyIas(
 			ok = false
 			result.Artifacts = append(result.Artifacts,
 				ar.DigestResult{
-					SubType:  ref.SubType,
-					Digest:   hex.EncodeToString(ref.Sha256),
+					Name:     ref.Name,
+					Digest:   ref.GetHash(crypto.SHA256),
 					Success:  false,
 					Launched: false,
 					Type:     ar.TYPE_REFVAL_IAS,
@@ -183,11 +184,11 @@ func VerifyIas(
 		log.Tracef("Found measurement %v: %v", swc.MeasurementDescription,
 			hex.EncodeToString(swc.MeasurementValue))
 		found := false
-		for _, ver := range referenceValues {
-			if bytes.Equal(ver.Sha256, swc.MeasurementValue) {
+		for _, ver := range refComponents {
+			if bytes.Equal(ver.GetHash(crypto.SHA256), swc.MeasurementValue) {
 				result.Artifacts = append(result.Artifacts, ar.DigestResult{
-					SubType:  ver.SubType,
-					Digest:   hex.EncodeToString(swc.MeasurementValue),
+					Name:     ver.Name,
+					Digest:   swc.MeasurementValue,
 					Success:  true,
 					Launched: true,
 				})
@@ -197,8 +198,8 @@ func VerifyIas(
 		if !found {
 			ok = false
 			result.Artifacts = append(result.Artifacts, ar.DigestResult{
-				SubType:  swc.MeasurementDescription,
-				Digest:   hex.EncodeToString(swc.MeasurementValue),
+				Name:     swc.MeasurementDescription,
+				Digest:   swc.MeasurementValue,
 				Success:  false,
 				Launched: true,
 				Type:     "Measurement",

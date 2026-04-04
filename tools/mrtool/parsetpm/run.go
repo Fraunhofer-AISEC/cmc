@@ -102,7 +102,7 @@ func run(cmd *cli.Command) error {
 	log.Debugf("Collected %v binary bios measurements", len(refvals))
 
 	// Only return requested PCRs
-	filteredRefvals := make([]*ar.ReferenceValue, 0, len(refvals))
+	filteredRefvals := make([]*ar.Component, 0, len(refvals))
 	for _, refval := range refvals {
 		if contains(globConf.Mrs, refval.Index) {
 			filteredRefvals = append(filteredRefvals, &refval)

@@ -133,8 +133,8 @@ type PeerCacheResponse struct {
 }
 
 type MeasureRequest struct {
-	Version string          `json:"version" cbor:"0,keyasint"`
-	Event   ar.MeasureEvent `json:"event" cbor:"1,keyasint"`
+	Version string       `json:"version" cbor:"0,keyasint"`
+	Event   ar.Component `json:"event" cbor:"1,keyasint"`
 }
 
 type MeasureResponse struct {

@@ -63,8 +63,8 @@ type SecBootVariableType struct {
 }
 
 func MeasureEfiBootVars(alg crypto.Hash, ta TrustAnchor, digest []byte,
-	refvals []*ar.ReferenceValue, index int, bootOrder []string, bootXxxx []string,
-) ([]byte, []*ar.ReferenceValue, error) {
+	refvals []*ar.Component, index int, bootOrder []string, bootXxxx []string,
+) ([]byte, []*ar.Component, error) {
 	var err error
 
 	// parse the boot order to uint16
@@ -85,7 +85,7 @@ func MeasureEfiBootVars(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	// EV_EFI_VARIABLE_BOOT Boot order
 	bootOrderSerialized, _ := binary.Append(nil, binary.LittleEndian, bootOrderParsed)
 
-	var bootOrderRefval *ar.ReferenceValue
+	var bootOrderRefval *ar.Component
 	bootOrderRefval, digest, err = CreateExtendRefval(alg, ta, index, digest, bootOrderSerialized,
 		"EV_EFI_VARIABLE_BOOT",
 		"VariableName - BootOrder, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C")
@@ -98,7 +98,7 @@ func MeasureEfiBootVars(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	if len(bootXxxx) == 0 {
 		efiVariableBoot0000 := calculateEfiLoadOption()
 
-		var boot0000Refval *ar.ReferenceValue
+		var boot0000Refval *ar.Component
 		boot0000Refval, digest, err = CreateExtendRefval(alg, ta, index, digest, efiVariableBoot0000,
 			"EV_EFI_VARIABLE_BOOT", "VariableName - Boot0000, VendorGuid - 8BE4DF61-93CA-11D2-AA0D-00E098032B8C")
 		if err != nil {
@@ -114,7 +114,7 @@ func MeasureEfiBootVars(alg crypto.Hash, ta TrustAnchor, digest []byte,
 				return nil, nil, fmt.Errorf("failed to read efi variable from file: %w", err)
 			}
 
-			var bootRefval *ar.ReferenceValue
+			var bootRefval *ar.Component
 			bootRefval, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
 				"EV_EFI_VARIABLE_BOOT", filepath.Base(path))
 			if err != nil {
@@ -129,8 +129,8 @@ func MeasureEfiBootVars(alg crypto.Hash, ta TrustAnchor, digest []byte,
 }
 
 func MeasureSecureBootVariables(alg crypto.Hash, ta TrustAnchor, digest []byte,
-	refvals []*ar.ReferenceValue, index int, secureBoot, pk, kek, db, dbx string,
-) ([]byte, []*ar.ReferenceValue, error) {
+	refvals []*ar.Component, index int, secureBoot, pk, kek, db, dbx string,
+) ([]byte, []*ar.Component, error) {
 
 	vars := []SecBootVariableType{
 		{EventType: "EV_EFI_VARIABLE_DRIVER_CONFIG", VariableName: "SecureBoot", VendorGuid: EfiGlobalVariableGuid, Path: secureBoot},
@@ -146,7 +146,7 @@ func MeasureSecureBootVariables(alg crypto.Hash, ta TrustAnchor, digest []byte,
 			return nil, nil, fmt.Errorf("failed to measure variable: %w", err)
 		}
 
-		var rv *ar.ReferenceValue
+		var rv *ar.Component
 		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, varData, val.EventType, val.VariableName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create secure boot reference value for %v: %w",
@@ -159,9 +159,9 @@ func MeasureSecureBootVariables(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	return digest, refvals, nil
 }
 
-func MeasureMoklists(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.ReferenceValue,
+func MeasureMoklists(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
 	index int, moklists []string,
-) ([]byte, []*ar.ReferenceValue, error) {
+) ([]byte, []*ar.Component, error) {
 
 	for _, path := range moklists {
 
@@ -170,7 +170,7 @@ func MeasureMoklists(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*
 			return nil, nil, fmt.Errorf("failed to read efi variable from file: %w", err)
 		}
 
-		var rv *ar.ReferenceValue
+		var rv *ar.Component
 		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data, "EV_IPL", filepath.Base(path))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create reference value for %v: %w", path, err)
@@ -183,8 +183,8 @@ func MeasureMoklists(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*
 }
 
 func MeasureSbatLevel(alg crypto.Hash, ta TrustAnchor, digest []byte,
-	refvals []*ar.ReferenceValue, index int, sbatlevelPath string,
-) ([]byte, []*ar.ReferenceValue, error) {
+	refvals []*ar.Component, index int, sbatlevelPath string,
+) ([]byte, []*ar.Component, error) {
 
 	sbat := SecBootVariableType{
 		EventType:    "EV_EFI_VARIABLE_AUTHORITY",
@@ -198,7 +198,7 @@ func MeasureSbatLevel(alg crypto.Hash, ta TrustAnchor, digest []byte,
 		return nil, nil, fmt.Errorf("failed to measure variable: %w", err)
 	}
 
-	var rv *ar.ReferenceValue
+	var rv *ar.Component
 	rv, digest, err = CreateExtendRefval(alg, ta, index, digest, varData, sbat.EventType, sbat.VariableName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create secure boot reference value for %v: %w",

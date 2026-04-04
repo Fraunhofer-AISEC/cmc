@@ -23,8 +23,8 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data []byte, subtype, desc string,
-) (*ar.ReferenceValue, []byte, error) {
+func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data []byte, name, desc string,
+) (*ar.Component, []byte, error) {
 
 	hash, err := internal.Hash(alg, data)
 	if err != nil {
@@ -36,22 +36,17 @@ func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data
 		return nil, nil, fmt.Errorf("failed to extend: %w", err)
 	}
 
-	refval := &ar.ReferenceValue{
-		Type:        ta.RefvalString(),
-		SubType:     subtype,
-		Index:       idx,
+	refval := &ar.Component{
+		Type:  ta.RefvalString(),
+		Name:  name,
+		Index: idx,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     alg.String(),
+				Content: hash,
+			},
+		},
 		Description: fmt.Sprintf("%v: %v", IndexToMr(ta, idx), desc),
-	}
-
-	switch alg {
-	case crypto.SHA256:
-		refval.Sha256 = hash
-	case crypto.SHA384:
-		refval.Sha384 = hash
-	case crypto.SHA512:
-		refval.Sha512 = hash
-	default:
-		return nil, nil, fmt.Errorf("unsupported hash algorithm %v", alg.String())
 	}
 
 	return refval, mrDigestNew, nil

@@ -28,7 +28,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.0.0"
+	reportVersion = "3.1.0"
 )
 
 func GetReportVersion() string {
@@ -150,15 +150,15 @@ type MetaInfo struct {
 // Manifest represents a part of the reference software stack (e.g., OS layer, app layer)
 // and includes a list of reference hash values comprising the layer
 type Manifest struct {
-	ReferenceValues []ReferenceValue       `json:"referenceValues,omitempty" cbor:"10,keyasint,omitempty"`
-	DevCommonName   string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
-	BaseLayers      []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
-	CertLevel       int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
-	CaFingerprints  []string               `json:"caFingerprints,omitempty" cbor:"14,keyasint,omitempty"`
-	SnpPolicy       *SnpPolicy             `json:"snpPolicy,omitempty" cbor:"15,keyasint,omitempty"`
-	TdxPolicy       *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
-	SgxPolicy       *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
-	Details         map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
+	Components     []Component            `json:"components,omitempty" cbor:"10,keyasint,omitempty"`
+	DevCommonName  string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
+	BaseLayers     []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
+	CertLevel      int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
+	CaFingerprints []string               `json:"caFingerprints,omitempty" cbor:"14,keyasint,omitempty"`
+	SnpPolicy      *SnpPolicy             `json:"snpPolicy,omitempty" cbor:"15,keyasint,omitempty"`
+	TdxPolicy      *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
+	SgxPolicy      *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
+	Details        map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
 }
 
 // ImageDescription ties together all manifests
@@ -175,7 +175,7 @@ type ManifestDescription struct {
 	Manifest    string `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
-// ReferenceValue represents the attestation report element of types as defined in TYPE_REFVAL.
+// Component represents a software component with its hashes.
 // The Index is the unique identifier for the reference value: This is the number of the PCR in
 // case of TPM reference values, the CC measurement register (MR) index according to
 // UEFI Spec 2.10 Section 38.4.1 in case of TDX reference values:
@@ -186,18 +186,23 @@ type ManifestDescription struct {
 // 8~15          | 3           |   RTMR2
 // -             | 4           |   RTMR3
 // -             | 5           |   MRSEAM (not in UEFI spec)
-type ReferenceValue struct {
-	Type        string     `json:"type" cbor:"0,keyasint"`
-	SubType     string     `json:"subtype" cbor:"1,keyasint,omitempty"`
-	Index       int        `json:"index" cbor:"2,keyasint"`
-	Sha1        HexByte    `json:"sha1,omitempty" cbor:"3,keyasint,omitempty"`
-	Sha256      HexByte    `json:"sha256,omitempty" cbor:"4,keyasint,omitempty"`
-	Sha384      HexByte    `json:"sha384,omitempty" cbor:"5,keyasint,omitempty"`
-	Sha512      HexByte    `json:"sha512,omitempty" cbor:"6,keyasint,omitempty"`
-	Optional    bool       `json:"optional,omitempty" cbor:"7,keyasint,omitempty"`
-	Description string     `json:"description,omitempty" cbor:"8,keyasint,omitempty"`
-	EventData   *EventData `json:"eventdata,omitempty" cbor:"9,keyasint,omitempty"`
-	OciSpec     *oci.Spec  `json:"ociSpec,omitempty" cbor:"ociSpec,omitempty"`
+type Component struct {
+	Type            string           `json:"type" cbor:"0,keyasint"`
+	Name            string           `json:"name" cbor:"1,keyasint"`
+	Index           int              `json:"index" cbor:"2,keyasint"`
+	Hashes          []ReferenceHash  `json:"hashes,omitempty" cbor:"3,keyasint,omitempty"`
+	Version         string           `json:"version,omitempty" cbor:"4,keyasint,omitempty"`
+	Optional        bool             `json:"optional,omitempty" cbor:"5,keyasint,omitempty"`
+	Description     string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	EventData       *EventData       `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
+	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
+
+}
+
+type ReferenceHash struct {
+	Alg     string  `json:"alg" cbor:"0,keyasint"`
+	Content HexByte `json:"content" cbor:"1,keyasint"`
 }
 
 // Validity is a helper struct for 'Validity'
@@ -226,23 +231,9 @@ type SwEvidence struct {
 // It the type is CC Eventlog, 'Events' contains a list of the extends that lead to the final
 // TDX RTMR value and 'Index' contains the number of the RTMR.
 type Artifact struct {
-	Type   string         `json:"type" cbor:"0,keyasint"`
-	Index  int            `json:"index" cbor:"1,keyasint"`
-	Events []MeasureEvent `json:"events,omitempty" cbor:"2,keyasint,omitempty"`
-}
-
-// MeasureEvent represents a measured event
-type MeasureEvent struct {
-	Sha1            HexByte          `json:"sha1,omitempty" cbor:"0,keyasint,omitempty"`
-	Sha256          HexByte          `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
-	Sha384          HexByte          `json:"sha384,omitempty" cbor:"2,keyasint,omitempty"`
-	Sha512          HexByte          `json:"sha512,omitempty" cbor:"3,keyasint,omitempty"`
-	Index           int              `json:"index,omitempty" cbor:"4,keyasint,omitempty"`
-	EventName       string           `json:"eventname,omitempty" cbor:"5,keyasint,omitempty"`
-	EventData       *EventData       `json:"eventdata,omitempty" cbor:"6,keyasint,omitempty"`
-	Description     string           `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
-	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
-	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"`
+	Type   string      `json:"type" cbor:"0,keyasint"`
+	Index  int         `json:"index" cbor:"1,keyasint"`
+	Events []Component `json:"events,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type IntelQuoteType uint32
@@ -330,8 +321,7 @@ type TdxPolicy struct {
 
 type SgxPolicy struct {
 	QuoteVersion        uint16        `json:"quoteVersion" cbor:"0,keyasint"`
-	IsvProdId           uint16        `json:"isvProdId" cbor:"1,keyasint"`
-	MrSigner            string        `json:"mrSigner" cbor:"2,keyasint"`
+	MrSigner            HexByte       `json:"mrSigner" cbor:"2,keyasint"`
 	IsvSvn              uint16        `json:"isvSvn" cbor:"3,keyasint"`
 	Attributes          SGXAttributes `json:"attributes" cbor:"4,keyasint"`
 	AcceptedTcbStatuses []string      `json:"acceptedTcbStatuses,omitempty" cbor:"5,keyasint"`
@@ -428,32 +418,16 @@ func GetSnpTcb(codeName string, tcb uint64) SnpTcb {
 	}
 }
 
-func (r *ReferenceValue) GetHash(h crypto.Hash) []byte {
-	switch h {
-	case crypto.SHA1:
-		return r.Sha1
-	case crypto.SHA256:
-		return r.Sha256
-	case crypto.SHA384:
-		return r.Sha384
-	case crypto.SHA512:
-		return r.Sha512
-	default:
-		return nil
-	}
-}
+func (r *Component) GetHash(h crypto.Hash) []byte {
 
-func (e *MeasureEvent) GetHash(h crypto.Hash) []byte {
-	switch h {
-	case crypto.SHA1:
-		return e.Sha1
-	case crypto.SHA256:
-		return e.Sha256
-	case crypto.SHA384:
-		return e.Sha384
-	case crypto.SHA512:
-		return e.Sha512
-	default:
-		return nil
+	hstr := h.String()
+
+	for _, h := range r.Hashes {
+		if strings.EqualFold(hstr, h.Alg) {
+			return h.Content
+		}
 	}
+
+	// Hash not found
+	return nil
 }

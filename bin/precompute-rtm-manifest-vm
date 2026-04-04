@@ -76,8 +76,8 @@ json=$(echo "${json}" | jq ".details.firmware = \"${firmware}\"")
 json=$(echo "${json}" | jq ".details.bootloader = \"${bootloader}\"")
 
 # Replace existing reference values with new reference values in the RTM Manifest
-json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(echo "${json}" | jq --argjson ver "${refs_tpm}" '.referenceValues += $ver')
+json=$(echo "${json}" | jq 'del(.components[])')
+json=$(echo "${json}" | jq --argjson ver "${refs_tpm}" '.components += $ver')
 
 # Save the RTM manifest
 echo "Writing ${out}/rtm.manifest.json"

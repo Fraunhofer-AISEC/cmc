@@ -25,9 +25,9 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.ReferenceValue,
+func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
 	index int, cmdline, eventType string, zeros int, stripLf, appendInitrd bool,
-) ([]byte, []*ar.ReferenceValue, error) {
+) ([]byte, []*ar.Component, error) {
 
 	// Read the commandline
 	cmdLineData, err := os.ReadFile(cmdline)
@@ -64,13 +64,13 @@ func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*a
 		return nil, nil, fmt.Errorf("failed to create reference value: %w", err)
 	}
 
-	return digest, []*ar.ReferenceValue{refval}, nil
+	return digest, []*ar.Component{refval}, nil
 }
 
 func MeasureCmdlineNarrow(alg crypto.Hash, ta TrustAnchor, digest []byte,
-	refvals []*ar.ReferenceValue, index int, cmdline, eventType string, zeros int, stripLf,
+	refvals []*ar.Component, index int, cmdline, eventType string, zeros int, stripLf,
 	appendInitrd bool,
-) ([]byte, []*ar.ReferenceValue, error) {
+) ([]byte, []*ar.Component, error) {
 
 	// Read the commandline
 	cmdLineData, err := os.ReadFile(cmdline)
@@ -96,5 +96,5 @@ func MeasureCmdlineNarrow(alg crypto.Hash, ta TrustAnchor, digest []byte,
 		return nil, nil, fmt.Errorf("failed to create reference value: %w", err)
 	}
 
-	return digest, []*ar.ReferenceValue{refval}, nil
+	return digest, []*ar.Component{refval}, nil
 }

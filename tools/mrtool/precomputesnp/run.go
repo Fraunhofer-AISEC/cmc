@@ -138,12 +138,17 @@ func run(cmd *cli.Command) error {
 	}
 
 	// setup the reference value for the event log (as slice with single value)
-	refValue := [1]attestationreport.ReferenceValue{
+	refValue := [1]attestationreport.Component{
 		{
-			Type:        attestationreport.TYPE_REFVAL_SNP,
-			SubType:     "SNP Launch Digest",
-			Index:       0,
-			Sha384:      hash[:],
+			Type:  attestationreport.TYPE_REFVAL_SNP,
+			Name:  "SNP Launch Digest",
+			Index: 0,
+			Hashes: []attestationreport.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: description,
 		},
 	}

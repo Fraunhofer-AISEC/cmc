@@ -34,7 +34,7 @@ func TestVerifySnp(t *testing.T) {
 		nonce          []byte
 		policy         *ar.SnpPolicy
 		caFingerprints []string
-		refvals        []ar.ReferenceValue
+		refvals        []ar.Component
 	}
 	tests := []struct {
 		name  string
@@ -67,13 +67,8 @@ func TestVerifySnp(t *testing.T) {
 					},
 				},
 
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusSuccess,
 			want1: true,
@@ -103,13 +98,8 @@ func TestVerifySnp(t *testing.T) {
 					},
 				},
 
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -139,13 +129,8 @@ func TestVerifySnp(t *testing.T) {
 					},
 				},
 
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -174,13 +159,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -209,13 +189,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -244,13 +219,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: invalidMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: invalidRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -279,13 +249,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -314,13 +279,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: invalidNonce,
+				refvals: validRefvals,
+				nonce:   invalidNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -349,13 +309,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_TPM,
-						Sha256: validMeasurement,
-					},
-				},
-				nonce: invalidNonce,
+				refvals: invalidRefvalsType,
+				nonce:   invalidNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -413,13 +368,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -448,13 +398,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -483,13 +428,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -518,13 +458,8 @@ func TestVerifySnp(t *testing.T) {
 						},
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals: validRefvals,
+				nonce:   validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -541,13 +476,8 @@ func TestVerifySnp(t *testing.T) {
 					Certs: validCertChain,
 				},
 				caFingerprints: validFingerprints,
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SNP,
-						Sha384: validMeasurement,
-					},
-				},
-				nonce: validNonce,
+				refvals:        validRefvals,
+				nonce:          validNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -596,6 +526,42 @@ func Test_checkMinVersion(t *testing.T) {
 }
 
 var (
+	validRefvals = []ar.Component{
+		{
+			Type: ar.TYPE_REFVAL_SNP,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: validMeasurement,
+				},
+			},
+		},
+	}
+
+	invalidRefvals = []ar.Component{
+		{
+			Type: ar.TYPE_REFVAL_SNP,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: invalidMeasurement,
+				},
+			},
+		},
+	}
+
+	invalidRefvalsType = []ar.Component{
+		{
+			Type: ar.TYPE_REFVAL_TPM,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: validMeasurement,
+				},
+			},
+		},
+	}
+
 	validReport = []byte{0x02, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

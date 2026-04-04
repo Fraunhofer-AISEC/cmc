@@ -35,7 +35,7 @@ fi
 echo "Using ${data} as directory for local data"
 
 # Calculate the IMA app reference values
-referenceValues=$( \
+components=$( \
   "${dir}/tools/mrtool/mrtool" precompute ima \
     --mrs 10 \
     --template ima-ng \
@@ -47,7 +47,7 @@ referenceValues=$( \
 json=$(cat "${input}/manifest.json")
 
 # App Manifest: Insert reference values
-json=$(jq --slurpfile ver <(echo "$referenceValues") '.referenceValues += $ver[0]' <<<"$json")
+json=$(jq --slurpfile ver <(echo "$components") '.components += $ver[0]' <<<"$json")
 
 # App Manifest: Set name
 json=$(echo "${json}" | jq ".name = \"${name}\"")

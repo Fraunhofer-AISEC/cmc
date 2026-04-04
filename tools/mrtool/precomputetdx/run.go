@@ -172,10 +172,10 @@ func (c *Config) print() {
 
 }
 
-func precompute(mrNums []int, conf *Config) ([]*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func precompute(mrNums []int, conf *Config) ([]*ar.Component, []*ar.Component, error) {
 
-	refvals := make([]*ar.ReferenceValue, 0)
-	rtmrs := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
+	rtmrs := make([]*ar.Component, 0)
 
 	for _, rtmrNum := range mrNums {
 		switch {

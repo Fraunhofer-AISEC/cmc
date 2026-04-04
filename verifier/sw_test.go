@@ -29,7 +29,7 @@ func TestVerifySw(t *testing.T) {
 		evidence   ar.Evidence
 		collateral ar.Collateral
 		nonce      []byte
-		refvals    []ar.ReferenceValue
+		refvals    []ar.Component
 	}
 	tests := []struct {
 		name  string
@@ -49,7 +49,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       validSwKey,
 				},
 				nonce:   validSwNonce,
-				refvals: []ar.ReferenceValue{validUbuntuRefVal},
+				refvals: []ar.Component{validUbuntuRefVal},
 			},
 			want:  ar.StatusSuccess,
 			want1: true,
@@ -66,7 +66,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       invalidSwKey,
 				},
 				nonce:   validSwNonce,
-				refvals: []ar.ReferenceValue{validUbuntuRefVal},
+				refvals: []ar.Component{validUbuntuRefVal},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -83,7 +83,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       validSwKey,
 				},
 				nonce:   invalidSwNonce,
-				refvals: []ar.ReferenceValue{validUbuntuRefVal},
+				refvals: []ar.Component{validUbuntuRefVal},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -100,7 +100,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       validSwKey,
 				},
 				nonce:   validSwNonce,
-				refvals: []ar.ReferenceValue{validUbuntuRefVal},
+				refvals: []ar.Component{validUbuntuRefVal},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -117,7 +117,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       validSwKey,
 				},
 				nonce:   validSwNonce,
-				refvals: []ar.ReferenceValue{validUbuntuRefVal},
+				refvals: []ar.Component{validUbuntuRefVal},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -134,7 +134,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       validSwKey,
 				},
 				nonce:   validSwNonce,
-				refvals: []ar.ReferenceValue{invalidSwRefVal},
+				refvals: []ar.Component{invalidSwRefVal},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -151,7 +151,7 @@ func TestVerifySw(t *testing.T) {
 					Key:       validSwKey,
 				},
 				nonce:   validSwNonce,
-				refvals: []ar.ReferenceValue{invalidSwRefValOciConfig},
+				refvals: []ar.Component{invalidSwRefValOciConfig},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -182,10 +182,13 @@ var (
 	validSwArtifacts = []ar.Artifact{
 		{
 			Type: ar.TYPE_SW_EVENTLOG,
-			Events: []ar.MeasureEvent{
+			Events: []ar.Component{
 				{
-					Sha256:    dec("e8db6f822ecf7d968db4ae1ce9242f0e50ddf605e74d7fbdfc93a8bb641f3093"),
-					EventName: "359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
+					Hashes: []ar.ReferenceHash{{
+						Alg:     "SHA-256",
+						Content: dec("e8db6f822ecf7d968db4ae1ce9242f0e50ddf605e74d7fbdfc93a8bb641f3093")},
+					},
+					Name: "359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
 					CtrData: &ar.CtrData{
 						ConfigSha256: dec("c7ae16b284d164c0036e1f1cb437b906cfc3e8296b712b38df468fda350866ac"),
 						RootfsSha256: dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e"),
@@ -199,10 +202,13 @@ var (
 	invalidSwArtifacts = []ar.Artifact{
 		{
 			Type: ar.TYPE_SW_EVENTLOG,
-			Events: []ar.MeasureEvent{
+			Events: []ar.Component{
 				{
-					Sha256:    dec("6dc7a115a4c4a4f02b49cb0866d8f63f33e86cbf933238276411a8f26961e9ff"),
-					EventName: "07f475b29a92233363d27544683b5ea04f54ca514d742ab5a0b41bdb5914d4b",
+					Hashes: []ar.ReferenceHash{{
+						Alg:     "SHA-256",
+						Content: dec("6dc7a115a4c4a4f02b49cb0866d8f63f33e86cbf933238276411a8f26961e9ff")},
+					},
+					Name: "07f475b29a92233363d27544683b5ea04f54ca514d742ab5a0b41bdb5914d4b",
 					CtrData: &ar.CtrData{
 						ConfigSha256: dec("333c809d8ed04b01af781b964dd05fc888aea04732edcaff9d940757d2e48be8"),
 						RootfsSha256: dec("44563228698774cb66bf3fe1432ab3c8ea1adfffd9d6d388bc40d73a68cb533c"),
@@ -213,27 +219,42 @@ var (
 		},
 	}
 
-	validUbuntuRefVal = ar.ReferenceValue{
-		Type:     ar.TYPE_REFVAL_SW,
-		SubType:  "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
-		Sha256:   dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e"),
-		OciSpec:  validUbuntuOciConfig,
+	validUbuntuRefVal = ar.Component{
+		Type: ar.TYPE_REFVAL_SW,
+		Name: "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
+		Hashes: []ar.ReferenceHash{{
+			Alg:     "SHA-256",
+			Content: dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e")},
+		},
+		CtrData: &ar.CtrData{
+			OciSpec: validUbuntuOciConfig,
+		},
 		Optional: true,
 	}
 
-	invalidSwRefVal = ar.ReferenceValue{
-		Type:     ar.TYPE_REFVAL_SW,
-		SubType:  "OCI Runtime Bundle Digest",
-		Sha256:   dec("ff5ed62e8fb85decea88ffee33274245d2924e2e961b3cc95be6e09a6ae5a25d"),
-		OciSpec:  validUbuntuOciConfig,
+	invalidSwRefVal = ar.Component{
+		Type: ar.TYPE_REFVAL_SW,
+		Name: "OCI Runtime Bundle Digest",
+		Hashes: []ar.ReferenceHash{{
+			Alg:     "SHA-256",
+			Content: dec("ff5ed62e8fb85decea88ffee33274245d2924e2e961b3cc95be6e09a6ae5a25d")},
+		},
+		CtrData: &ar.CtrData{
+			OciSpec: validUbuntuOciConfig,
+		},
 		Optional: true,
 	}
 
-	invalidSwRefValOciConfig = ar.ReferenceValue{
-		Type:     ar.TYPE_REFVAL_SW,
-		SubType:  "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
-		Sha256:   dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e"),
-		OciSpec:  invalidUbuntuOciConfig,
+	invalidSwRefValOciConfig = ar.Component{
+		Type: ar.TYPE_REFVAL_SW,
+		Name: "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
+		Hashes: []ar.ReferenceHash{{
+			Alg:     "SHA-256",
+			Content: dec("b3efcaa760118501b34effbb07d099d774ecf7ee0bddf6233c7e8bc958c16d1e")},
+		},
+		CtrData: &ar.CtrData{
+			OciSpec: invalidUbuntuOciConfig,
+		},
 		Optional: true,
 	}
 

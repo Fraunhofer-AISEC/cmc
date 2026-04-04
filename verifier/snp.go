@@ -17,6 +17,7 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/sha512"
 	"crypto/x509"
@@ -89,7 +90,7 @@ func VerifySnp(
 	nonce []byte,
 	policy *ar.SnpPolicy,
 	caFingerprints []string,
-	referenceValues []ar.ReferenceValue,
+	refComponents []ar.Component,
 ) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying SNP measurements")
@@ -115,18 +116,18 @@ func VerifySnp(
 		return result, false
 	}
 
-	if len(referenceValues) == 0 {
+	if len(refComponents) == 0 {
 		log.Debug("Could not find SNP reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
-	} else if len(referenceValues) > 1 {
+	} else if len(refComponents) > 1 {
 		log.Debugf("Report contains %v reference values. Currently, only 1 SNP reference value is supported",
-			len(referenceValues))
+			len(refComponents))
 		result.Summary.Fail(ar.RefValMultiple)
 		return result, false
 	}
 
-	snpReferenceValue := referenceValues[0]
+	snpReferenceValue := refComponents[0]
 	if snpReferenceValue.Type != ar.TYPE_REFVAL_SNP {
 		log.Debugf("SNP reference value invalid type %v", snpReferenceValue.Type)
 		result.Summary.Fail(ar.RefValType)
@@ -169,22 +170,22 @@ func VerifySnp(
 	result.Signature = sig
 
 	// Compare Measurements
-	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.Sha384); cmp != 0 {
+	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.GetHash(crypto.SHA384)); cmp != 0 {
 		log.Debugf("Failed to verify SNP reference value. Expected %x, got %x",
-			snpReferenceValue.Sha384, s.Measurement[:])
+			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:     ar.TYPE_REFVAL_IAS,
-				SubType:  snpReferenceValue.SubType,
-				Digest:   hex.EncodeToString(snpReferenceValue.Sha384),
+				Name:     snpReferenceValue.Name,
+				Digest:   snpReferenceValue.GetHash(crypto.SHA384),
 				Success:  false,
 				Launched: false,
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:     "Measurement",
-				SubType:  snpReferenceValue.SubType,
-				Digest:   hex.EncodeToString(s.Measurement[:]),
+				Name:     snpReferenceValue.Name,
+				Digest:   s.Measurement[:],
 				Success:  false,
 				Launched: true,
 			})
@@ -196,8 +197,8 @@ func VerifySnp(
 		// SNP reference value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				SubType:  snpReferenceValue.SubType,
-				Digest:   hex.EncodeToString(s.Measurement[:]),
+				Name:     snpReferenceValue.Name,
+				Digest:   s.Measurement[:],
 				Success:  true,
 				Launched: true,
 			})

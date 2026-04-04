@@ -17,6 +17,7 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -33,7 +34,7 @@ func VerifySw(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,
-	refVals []ar.ReferenceValue,
+	refComponents []ar.Component,
 ) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying SW measurements")
@@ -91,13 +92,13 @@ func VerifySw(
 	}
 
 	// Check that reference values are reflected by mandatory measurements
-	log.Debugf("Validating %v reference value(s) against measurements..", len(refVals))
+	log.Debugf("Validating %v reference value(s) against measurements..", len(refComponents))
 
-	for _, ref := range refVals {
+	for _, ref := range refComponents {
 		found := false
 		for _, swm := range collateral.Artifacts {
 			for _, event := range swm.Events {
-				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
+				if bytes.Equal(event.CtrData.RootfsSha256, ref.GetHash(crypto.SHA256)) {
 
 					// Calculate the measurement template hash
 					templateHash, ok, err := ValidateTemplateHash(s, &ref, event.CtrData)
@@ -111,7 +112,7 @@ func VerifySw(
 						log.Debugf("Rootfs matches but config validation failed. Continue search")
 						continue
 					}
-					if bytes.Equal(event.Sha256, templateHash) {
+					if bytes.Equal(event.GetHash(crypto.SHA256), templateHash) {
 						found = true
 						break
 					}
@@ -123,20 +124,18 @@ func VerifySw(
 		}
 		if !found {
 			res := ar.DigestResult{
-				Type:     ar.TYPE_REFVAL_IAS,
-				Success:  ref.Optional, // Only fail attestation if component is mandatory
-				Launched: false,
-				SubType:  ref.SubType,
-				Digest:   hex.EncodeToString(ref.Sha256),
-				CtrDetails: &ar.CtrData{
-					OciSpec: ref.OciSpec,
-				},
+				Type:       ar.TYPE_REFVAL_IAS,
+				Success:    ref.Optional, // Only fail attestation if component is mandatory
+				Launched:   false,
+				Name:       ref.Name,
+				Digest:     ref.GetHash(crypto.SHA256),
+				CtrDetails: ref.CtrData,
 			}
 			result.Artifacts = append(result.Artifacts, res)
 
 			// Only fail attestation if component is mandatory
 			if !ref.Optional {
-				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %v)", ref.SubType, hex.EncodeToString(ref.Sha256))
+				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %x)", ref.Name, ref.GetHash(crypto.SHA256))
 				ok = false
 			}
 		}
@@ -150,10 +149,10 @@ func VerifySw(
 		log.Debugf("Validating %v measurement(s)..", len(swm.Events))
 		for _, event := range swm.Events {
 			found := false
-			for _, ref := range refVals {
-				if bytes.Equal(event.CtrData.RootfsSha256, ref.Sha256) {
+			for _, ref := range refComponents {
+				if bytes.Equal(event.CtrData.RootfsSha256, ref.GetHash(crypto.SHA256)) {
 
-					log.Tracef("Found matching rootfs hash %x", ref.Sha256)
+					log.Tracef("Found matching rootfs hash %x", ref.GetHash(crypto.SHA256))
 
 					// Calculate the measurement template hash
 					templateHash, validateOk, err := ValidateTemplateHash(s, &ref, event.CtrData)
@@ -168,25 +167,25 @@ func VerifySw(
 						continue
 					}
 
-					if !bytes.Equal(event.Sha256, templateHash) {
+					if !bytes.Equal(event.GetHash(crypto.SHA256), templateHash) {
 						validateOk = false
 						ok = false
 						log.Debugf("Failed to match measured hash (%x) with reference template hash (%x)",
-							event.Sha256, templateHash)
+							event.GetHash(crypto.SHA256), templateHash)
 					} else {
 						log.Tracef("Calculated template hash matches measured hash: %x", templateHash)
 					}
 
 					found = true
-					nameInfo := ref.SubType
-					if event.EventName != "" && !strings.EqualFold(ref.SubType, event.EventName) {
-						nameInfo += ": " + event.EventName
+					nameInfo := ref.Name
+					if event.Name != "" && !strings.EqualFold(ref.Name, event.Name) {
+						nameInfo += ": " + event.Name
 					}
 					r := ar.DigestResult{
 						Success:    validateOk,
 						Launched:   true,
-						SubType:    nameInfo,
-						Digest:     hex.EncodeToString(event.Sha256),
+						Name:       nameInfo,
+						Digest:     event.GetHash(crypto.SHA256),
 						CtrDetails: event.CtrData,
 					}
 					result.Artifacts = append(result.Artifacts, r)
@@ -202,12 +201,12 @@ func VerifySw(
 					Type:       "Measurement",
 					Success:    false,
 					Launched:   true,
-					SubType:    event.EventName,
-					Digest:     hex.EncodeToString(event.Sha256),
+					Name:       event.Name,
+					Digest:     event.GetHash(crypto.SHA256),
 					CtrDetails: event.CtrData,
 				}
 				result.Artifacts = append(result.Artifacts, r)
-				log.Debugf("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.Sha256))
+				log.Debugf("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.GetHash(crypto.SHA256)))
 				ok = false
 			}
 		}
@@ -231,10 +230,15 @@ func VerifySw(
 	return result, ok
 }
 
-func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.CtrData) ([]byte, bool, error) {
+func ValidateTemplateHash(s ar.Serializer, ref *ar.Component, measured *ar.CtrData) ([]byte, bool, error) {
+
+	if ref == nil || ref.CtrData == nil {
+		return nil, false, fmt.Errorf("internal error: container data or spec is nil")
+	}
+	spec := ref.CtrData.OciSpec
 
 	// Hash manifest config
-	refSpecHash, err := CalculateSpecHash(ref.OciSpec)
+	refSpecHash, err := CalculateSpecHash(spec)
 	if err != nil {
 		return nil, false, fmt.Errorf("internal error: failed to calculate OCI config hash: %w", err)
 	}
@@ -246,7 +250,7 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.
 			"Running rules-based validation", measured.ConfigSha256, refSpecHash)
 
 		// If no match: perform rule-based validation
-		refConvSpec, err := ConvertSpec(s, ref.OciSpec)
+		refConvSpec, err := ConvertSpec(s, spec)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to convert reference spec: %w", err)
 		}
@@ -273,7 +277,7 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.ReferenceValue, measured *ar.
 	log.Tracef("Using config hash %x to recalculate template hash", refSpecHash)
 
 	// Recalculate template hash
-	tbh := append(refSpecHash, ref.Sha256...)
+	tbh := append(refSpecHash, ref.GetHash(crypto.SHA256)...)
 	hasher := sha256.New()
 	hasher.Write(tbh)
 	templateHash := hasher.Sum(nil)

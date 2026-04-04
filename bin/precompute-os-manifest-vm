@@ -67,8 +67,8 @@ json=$(echo "${json}" | jq ".details.kernel = \"${kernel}\"")
 json=$(echo "${json}" | jq ".details.os = \"${os}\"")
 
 # Insert reference values in the OS Manifest
-json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(jq --slurpfile ver <(echo "${refs_tpm}") '.referenceValues += $ver[0]' <<<"${json}")
+json=$(echo "${json}" | jq 'del(.components[])')
+json=$(jq --slurpfile ver <(echo "${refs_tpm}") '.components += $ver[0]' <<<"${json}")
 
 # Save manifest
 echo "Writing ${out}/rtm.manifest.json"

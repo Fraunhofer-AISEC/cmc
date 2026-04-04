@@ -26,11 +26,11 @@ import (
 
 func TestVerifyIas(t *testing.T) {
 	type args struct {
-		evidence        ar.Evidence
-		collateral      ar.Collateral
-		nonce           []byte
-		referenceValues []ar.ReferenceValue
-		caFingerprints  []string
+		evidence       ar.Evidence
+		collateral     ar.Collateral
+		nonce          []byte
+		components     []ar.Component
+		caFingerprints []string
 	}
 	tests := []struct {
 		name string
@@ -48,7 +48,7 @@ func TestVerifyIas(t *testing.T) {
 					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ar.ReferenceValue{
+				components: []ar.Component{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -67,7 +67,7 @@ func TestVerifyIas(t *testing.T) {
 					Certs: [][]byte{invalidIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ar.ReferenceValue{
+				components: []ar.Component{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -86,7 +86,7 @@ func TestVerifyIas(t *testing.T) {
 					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ar.ReferenceValue{
+				components: []ar.Component{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -105,7 +105,7 @@ func TestVerifyIas(t *testing.T) {
 					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: invalidIasNonce,
-				referenceValues: []ar.ReferenceValue{
+				components: []ar.Component{
 					validSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -124,7 +124,7 @@ func TestVerifyIas(t *testing.T) {
 					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ar.ReferenceValue{
+				components: []ar.Component{
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -143,7 +143,7 @@ func TestVerifyIas(t *testing.T) {
 					Certs: [][]byte{validIasCert.Raw, validIasCa.Raw},
 				},
 				nonce: validIasNonce,
-				referenceValues: []ar.ReferenceValue{
+				components: []ar.Component{
 					invalidSpeReferenceValue,
 					validNspeReferenceValue,
 				},
@@ -157,7 +157,7 @@ func TestVerifyIas(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, got := VerifyIas(tt.args.evidence, tt.args.collateral, tt.args.nonce,
-				tt.args.caFingerprints, tt.args.referenceValues)
+				tt.args.caFingerprints, tt.args.components)
 			if got != tt.want {
 				t.Errorf("verifyIas() error = %v, wantErr %v", got, tt.want)
 				return
@@ -194,21 +194,36 @@ var (
 
 	validNspeMeasurement, _ = hex.DecodeString("73deb833155c9c317d838b5368b6a63bd38706fa874e874c1b5affe4571b348b")
 
-	validSpeReferenceValue = ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_IAS,
-		SubType: "SPE Measurement",
-		Sha256:  validSpeMeasurement,
+	validSpeReferenceValue = ar.Component{
+		Type: ar.TYPE_REFVAL_IAS,
+		Name: "SPE Measurement",
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: validSpeMeasurement,
+			},
+		},
 	}
 
-	invalidSpeReferenceValue = ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_IAS,
-		SubType: "SPE Measurement",
-		Sha256:  invalidSpeMeasurement,
+	invalidSpeReferenceValue = ar.Component{
+		Type: ar.TYPE_REFVAL_IAS,
+		Name: "SPE Measurement",
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: invalidSpeMeasurement,
+			},
+		},
 	}
 
-	validNspeReferenceValue = ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_IAS,
-		SubType: "NSPE Measurement",
-		Sha256:  validNspeMeasurement,
+	validNspeReferenceValue = ar.Component{
+		Type: ar.TYPE_REFVAL_IAS,
+		Name: "NSPE Measurement",
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: validNspeMeasurement,
+			},
+		},
 	}
 )

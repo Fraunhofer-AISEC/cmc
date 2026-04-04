@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.0.0"
+	resultVersion = "3.1.0"
 )
 
 func GetResultVersion() string {
@@ -117,9 +117,9 @@ type DigestResult struct {
 	Success     bool       `json:"success" cbor:"0,keyasint"`
 	Launched    bool       `json:"launched" cbor:"1,keyasint"`
 	Type        string     `json:"type,omitempty" cbor:"2,keyasint,omitempty"`
-	SubType     string     `json:"subtype,omitempty" cbor:"3,keyasint,omitempty"`
+	Name        string     `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
 	Index       int        `json:"index" cbor:"4,keyasint"`
-	Digest      string     `json:"digest,omitempty" cbor:"5,keyasint,omitempty"`
+	Digest      HexByte    `json:"digest,omitempty" cbor:"5,keyasint,omitempty"`
 	Measured    string     `json:"measured,omitempty" cbor:"6,keyasint,omitempty"`
 	Description string     `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
 	EventData   *EventData `json:"eventData,omitempty" cbor:"8,keyasint,omitempty"`
@@ -202,10 +202,12 @@ type QeReportResult struct {
 	Summary        Result `json:"summary" cbor:"0,keyasint"`
 	MrSigner       Result `json:"mrsigner" cbor:"1,keyasint"`
 	IsvProdId      Result `json:"isvProdId" cbor:"2,keyasint"`
-	MiscSelect     Result `json:"miscSelect" cbor:"3,keyasint"`
-	Attributes     Result `json:"attributes" cbor:"4,keyasint"`
-	TcbLevelStatus string `json:"status" cbor:"5,keyasint"`
-	TcbLevelDate   string `json:"date" cbor:"6,keyasint"`
+	CpuSvn         Result `json:"cpuSvn" cbor:"3,keyasint"`
+	IsvSvn         Result `json:"isvSvn" cbor:"4,keyasint"`
+	MiscSelect     Result `json:"miscSelect" cbor:"5,keyasint"`
+	Attributes     Result `json:"attributes" cbor:"6,keyasint"`
+	TcbLevelStatus string `json:"status" cbor:"7,keyasint"`
+	TcbLevelDate   string `json:"date" cbor:"8,keyasint"`
 }
 
 type TcbInfoResult struct {
@@ -861,14 +863,14 @@ func (r *AttestationResult) PrintErr() {
 				default:
 					header = fmt.Sprintf("%v Measurement", m.Type)
 				}
-				log.Warnf("%v %q: %v verification failed", header, a.SubType, a.Digest)
+				log.Warnf("%v %q: %x verification failed", header, a.Name, a.Digest)
 			}
 		}
 		if m.TpmResult != nil {
 			m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
 			for _, p := range m.TpmResult.PcrMatch {
 				if !p.Success {
-					log.Warnf("PCR%v calculated: %v, measured: %v", p.Index, p.Digest,
+					log.Warnf("PCR%v calculated: %x, measured: %v", p.Index, p.Digest,
 						p.Measured)
 				}
 			}

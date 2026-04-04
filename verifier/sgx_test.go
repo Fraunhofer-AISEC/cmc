@@ -34,7 +34,7 @@ func TestVerifySgx(t *testing.T) {
 		nonce          []byte
 		policy         *ar.SgxPolicy
 		caFingerprints []string
-		refvals        []ar.ReferenceValue
+		refvals        []ar.Component
 	}
 	tests := []struct {
 		name  string
@@ -57,7 +57,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -65,13 +64,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: validSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusSuccess,
 			want1: true,
@@ -91,7 +85,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -99,13 +92,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: validSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -125,7 +113,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -133,13 +120,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: validSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -155,7 +137,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -163,13 +144,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: validSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -189,7 +165,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -197,13 +172,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: []byte{},
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: invalidSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -223,7 +193,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   invalidSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -231,13 +200,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: validSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -257,7 +221,6 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
 					MrSigner:     validMRSIGNER,
 					AcceptedTcbStatuses: []string{
@@ -265,13 +228,8 @@ func TestVerifySgx(t *testing.T) {
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: []byte{},
+				refvals: validSgxRefvals,
+				nonce:   []byte{},
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -291,21 +249,15 @@ func TestVerifySgx(t *testing.T) {
 				policy: &ar.SgxPolicy{
 					QuoteVersion: validSGXVersion,
 					Attributes:   validSgxAttributes,
-					IsvProdId:    validIsvProdId,
 					IsvSvn:       validIsvSvn,
-					MrSigner:     "00000",
+					MrSigner:     invalidMRSIGNER,
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
 					},
 				},
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals: validSgxRefvals,
+				nonce:   validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -322,13 +274,8 @@ func TestVerifySgx(t *testing.T) {
 					Artifacts: sgxCollateralArtifacts,
 				},
 				caFingerprints: validSgxCaFingerprints,
-				refvals: []ar.ReferenceValue{
-					{
-						Type:   ar.TYPE_REFVAL_SGX,
-						Sha256: validSGXMeasurement,
-					},
-				},
-				nonce: validSGXNonce,
+				refvals:        validSgxRefvals,
+				nonce:          validSGXNonce,
 			},
 			want:  ar.StatusFail,
 			want1: false,
@@ -397,15 +344,15 @@ func TestParseSGXExtensions(t *testing.T) {
 
 // Test_verifySgxMeasurements
 var (
-	validSGXMeasurement, _   = hex.DecodeString("91bf8b96b001aa9311f3c4c4797a4fd9932bf5cfbb7e8e27a28e531fa0a39fdc")
+	validSGXMeasurement      = dec("91bf8b96b001aa9311f3c4c4797a4fd9932bf5cfbb7e8e27a28e531fa0a39fdc")
 	validSgxCaFingerprints   = []string{"44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674D3"}
 	invalidSgxCaFingerprints = []string{"44A0196B2B99F889B8E149E95B807A350E7424964399E885A7CBB8CCFAB674DF"}
 
-	validSGXNonce, _        = hex.DecodeString("b11651d0b6b9ffa770c3220dfdef2ce31d15d23681baed5bca6282b6f345879c")
-	validSGXVersion  uint16 = 0x03
-	validIsvProdId   uint16 = 1234
-	validIsvSvn      uint16 = 2
-	validMRSIGNER           = "9f4b56f24266a713caaf6049125971dc677d64c730bf74c9912a66976b507128"
+	validSGXNonce          = dec("b11651d0b6b9ffa770c3220dfdef2ce31d15d23681baed5bca6282b6f345879c")
+	validSGXVersion uint16 = 0x03
+	validIsvSvn     uint16 = 2
+	validMRSIGNER          = dec("9f4b56f24266a713caaf6049125971dc677d64c730bf74c9912a66976b507128")
+	invalidMRSIGNER        = dec("ffff56f24266a713caaf6049125971dc677d64c730bf74c9912a66976b507128")
 
 	validSgxAttributes = ar.SGXAttributes{
 		Initted:      true,
@@ -427,6 +374,30 @@ var (
 		Kss:          false,
 		Legacy:       false,
 		Avx:          false,
+	}
+
+	validSgxRefvals = []ar.Component{
+		{
+			Type: ar.TYPE_REFVAL_SGX,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: validSGXMeasurement,
+				},
+			},
+		},
+	}
+
+	invalidSgxRefvals = []ar.Component{
+		{
+			Type: ar.TYPE_REFVAL_SGX,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: []byte{},
+				},
+			},
+		},
 	}
 
 	validSGXQuote = []byte{
@@ -1230,7 +1201,7 @@ var (
 	sgxCollateralArtifacts = []ar.Artifact{
 		ar.Artifact{
 			Type: ar.TYPE_TDX_COLLATERAL,
-			Events: []ar.MeasureEvent{
+			Events: []ar.Component{
 				{
 					IntelCollateral: sgxCollateral,
 				},

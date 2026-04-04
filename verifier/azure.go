@@ -84,7 +84,7 @@ func VerifyAzure(
 	tdxPolicy *ar.TdxPolicy,
 	snpPolicy *ar.SnpPolicy,
 	caFingerprints []string,
-	tdxRefVals, snpRefVals, vtpmRefVals []ar.ReferenceValue,
+	tdxRefs, snpRefs, vtpmRefs []ar.Component,
 	s ar.Serializer,
 ) ([]ar.MeasurementResult, bool) {
 
@@ -201,7 +201,7 @@ func VerifyAzure(
 	// Verify TDX measurements with verified hwreport nonce
 	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_TDX {
 		tdxResult, ok := VerifyTdx(ccEvidence, ccCollateral, hwreportNonce, tdxPolicy,
-			caFingerprints, tdxRefVals)
+			caFingerprints, tdxRefs)
 		if !ok {
 			success = false
 		}
@@ -211,7 +211,7 @@ func VerifyAzure(
 	// Verify SNP measurement with with verified hwreport nonce
 	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_SNP {
 		snpResult, ok := VerifySnp(ccEvidence, ccCollateral, hwreportNonce, snpPolicy,
-			caFingerprints, snpRefVals)
+			caFingerprints, snpRefs)
 		if !ok {
 			success = false
 		}
@@ -219,7 +219,7 @@ func VerifyAzure(
 	}
 
 	// Verify vTPM measurements with provided nonce
-	vtpmResult, ok := VerifyTpm(vtpmEvidence, vtpmCollateral, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefVals, s)
+	vtpmResult, ok := VerifyTpm(vtpmEvidence, vtpmCollateral, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefs, s)
 	if !ok {
 		success = false
 	}

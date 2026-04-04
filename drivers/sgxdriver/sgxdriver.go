@@ -147,7 +147,7 @@ func (sgx *Sgx) GetCollateral() ([]ar.Collateral, error) {
 		Artifacts: []ar.Artifact{
 			{
 				Type: ar.TYPE_SGX_COLLATERAL,
-				Events: []ar.MeasureEvent{
+				Events: []ar.Component{
 					{
 						IntelCollateral: sgxCollateral,
 					},

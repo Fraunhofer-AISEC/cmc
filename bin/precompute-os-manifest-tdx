@@ -68,7 +68,7 @@ setjson "json" "description"           "OS Manifest"
 setarr  "json" "baseLayers"            "de.test.rtm"
 setjson "json" "certLevel"             3
 setjson "json" "caFingerprint"         "${fingerprint}"
-setarr  "json" "referenceValues"       "${refs}"
+setarr  "json" "components"            "${refs}"
 
 # Save the OS manifest
 echo "Writing ${out}/os.manifest.json"

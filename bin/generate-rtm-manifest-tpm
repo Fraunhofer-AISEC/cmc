@@ -42,10 +42,10 @@ echo "Using ${data} as directory for local data"
 # Retrieve reference values from event logs if present, otherwise retrieve final PCR values from TPM
 if [[ -f "/sys/kernel/security/tpm0/binary_bios_measurements" ]]; then
   echo "TPM event log present: parsing eventlog"
-  referenceValues=$("${mrtool[@]}" parse tpm --mrs 0,1,2,3,4,5,6,7)
+  components=$("${mrtool[@]}" parse tpm --mrs 0,1,2,3,4,5,6,7)
 else
   echo "TPM event log not present: reading final PCR values"
-  referenceValues=$("${mrtool[@]}" read tpm --mrs 0,1,2,3,4,5,6,7)
+  components=$("${mrtool[@]}" read tpm --mrs 0,1,2,3,4,5,6,7)
 fi
 
 # Load manifest template
@@ -64,8 +64,8 @@ setarr  "json" "baseLayers"            "${name}"
 setjson "json" "certLevel"             3
 
 # Replace existing reference values with new reference values in the RTM Manifest
-json=$(echo "${json}" | jq 'del(.referenceValues[])')
-json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$referenceValues") '$base | .referenceValues += $ver[0]')
+json=$(echo "${json}" | jq 'del(.components[])')
+json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$components") '$base | .components += $ver[0]')
 
 # Save the RTM manifest
 echo "Writing ${out}/rtm.manifest.json"

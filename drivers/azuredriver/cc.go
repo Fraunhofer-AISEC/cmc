@@ -398,7 +398,7 @@ func (azure *Azure) GetTdxCollateral() (*ar.Collateral, error) {
 		Artifacts: []ar.Artifact{
 			{
 				Type: ar.TYPE_TDX_COLLATERAL,
-				Events: []ar.MeasureEvent{
+				Events: []ar.Component{
 					{
 						IntelCollateral: tdxCollateral,
 					},
