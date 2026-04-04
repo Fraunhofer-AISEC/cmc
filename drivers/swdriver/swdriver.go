@@ -167,8 +167,9 @@ func (sw *Sw) GetCollateral() ([]ar.Collateral, error) {
 
 		// Calculate the aggregated evidence hash through extending all container measurements
 		for _, ml := range eventlog.Events {
-			log.Tracef("Extending template hash %x", ml.Sha256)
-			aggregatedHash = internal.ExtendSha256(aggregatedHash, ml.Sha256)
+			hash := ml.GetHash(crypto.SHA256)
+			log.Tracef("Extending template hash %x", hash)
+			aggregatedHash = internal.ExtendSha256(aggregatedHash, hash)
 		}
 
 	} else if errors.Is(err, os.ErrNotExist) {

@@ -17,7 +17,7 @@ package measure
 
 import (
 	"bytes"
-	"encoding/hex"
+	"crypto"
 	"errors"
 	"fmt"
 	"os"
@@ -32,13 +32,13 @@ import (
 
 var log = logrus.WithField("service", "measure")
 
-func Measure(event *ar.MeasureEvent, s ar.Serializer, logFile, driver string) error {
+func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error {
 
 	if s == nil {
 		return errors.New("internal error: serializer is nil")
 	}
 
-	log.Debugf("Recording measurement %v: %v", event.EventName, hex.EncodeToString(event.Sha256))
+	log.Debugf("Recording measurement %v: %x", event.Name, event.GetHash(crypto.SHA256))
 
 	eventlog := new(ar.Artifact)
 	if _, err := os.Stat(logFile); err == nil {
@@ -63,14 +63,14 @@ func Measure(event *ar.MeasureEvent, s ar.Serializer, logFile, driver string) er
 		eventlog = &ar.Artifact{
 			Type:   ar.TYPE_SW_EVENTLOG,
 			Index:  event.Index,
-			Events: []ar.MeasureEvent{},
+			Events: []ar.Component{},
 		}
 	}
 
 	// Search the existing measurement list..
 	found := false
 	for _, e := range eventlog.Events {
-		if bytes.Equal(e.Sha256, event.Sha256) {
+		if bytes.Equal(e.GetHash(crypto.SHA256), event.GetHash(crypto.SHA256)) {
 			found = true
 			break
 		}
@@ -78,13 +78,13 @@ func Measure(event *ar.MeasureEvent, s ar.Serializer, logFile, driver string) er
 
 	// ..if the container was already measured, exit
 	if found {
-		log.Debugf("Measurement %v already exists, nothing to do", event.EventName)
+		log.Debugf("Measurement %v already exists, nothing to do", event.Name)
 		return nil
 	}
 
 	// ..otherwise append it to the measurement list and record the measurement
 	eventlog.Events = append(eventlog.Events, *event)
-	log.Debugf("Recorded measurement %v into measurement list", event.EventName)
+	log.Debugf("Recorded measurement %v into measurement list", event.Name)
 
 	data, err := s.Marshal(eventlog)
 	if err != nil {
@@ -109,12 +109,13 @@ func Measure(event *ar.MeasureEvent, s ar.Serializer, logFile, driver string) er
 		}
 		defer rwc.Close()
 
-		err = tpm2.PCRExtend(rwc, tpmutil.Handle(event.Index), tpm2.AlgSHA256, event.Sha256, "")
+		err = tpm2.PCRExtend(rwc, tpmutil.Handle(event.Index), tpm2.AlgSHA256,
+			event.GetHash(crypto.SHA256), "")
 		if err != nil {
 			return fmt.Errorf("failed to extend PCR%v: %w", event.Index, err)
 		}
 
-		log.Debugf("Recorded measurement %v into PCR%v", event.EventName, event.Index)
+		log.Debugf("Recorded measurement %v into PCR%v", event.Name, event.Index)
 	} else if strings.EqualFold(driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {

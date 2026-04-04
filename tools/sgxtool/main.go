@@ -349,7 +349,7 @@ func parseQuote(in string) error {
 	log.Infof("\tRTMR2          : %x", body.Attributes[:])
 	log.Infof("\tRTMR2          : %x", body.MRENCLAVE[:])
 	log.Infof("\tRTMR3          : %x", body.MRSIGNER[:])
-	log.Infof("\tMRCONFIGID     : %v", body.ISVProdID)
+	log.Infof("\tISVPRODID      : %v", body.ISVProdID)
 	log.Infof("\tMRCONFIGID     : %v", body.ISVSVN)
 
 	return nil

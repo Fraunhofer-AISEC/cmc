@@ -39,15 +39,15 @@ const (
 	OptionROM
 )
 
-func PrecomputePcr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_S_CRTM_VERSION
 	// For VMs, this is usually { 0x0, 0x0 }
-	var rv *ar.ReferenceValue
+	var rv *ar.Component
 	rv, pcr, err = tcg.CreateExtendRefval(crypto.SHA256, tcg.TPM, 0, pcr, []byte{0x0, 0x0},
 		"EV_S_CRTM_VERSION", "CRTM Version String")
 	if err != nil {
@@ -64,32 +64,42 @@ func PrecomputePcr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_SEPARATOR",
-		Index:       0,
-		Sha256:      hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 0,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 		Description: "HASH(0000)",
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR0",
 		Index:       0,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_PLATFORM_CONFIG_FLAGS: ACPI tables
 	pcr, refvals, err = tcg.CalculateAcpiTables(crypto.SHA256, tcg.TPM, pcr, refvals,
@@ -117,31 +127,41 @@ func PrecomputePcr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_SEPARATOR",
-		Index:       1,
-		Sha256:      hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 1,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 		Description: "HASH(0000)",
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR1",
 		Index:       1,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr2(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_EFI_BOOT_SERVICES_DRIVER
 	for _, f := range c.Drivers {
@@ -171,11 +191,16 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TPM,
-			SubType:     "EV_EFI_BOOT_SERVICES_DRIVER",
-			Index:       2,
-			Sha256:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  "EV_EFI_BOOT_SERVICES_DRIVER",
+			Index: 2,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: hash[:],
+				},
+			},
 			Description: filepath.Base(f),
 		})
 		pcr = internal.ExtendSha256(pcr, hash[:])
@@ -184,60 +209,80 @@ func PrecomputePcr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_SEPARATOR",
-		Index:       2,
-		Sha256:      hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 2,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 		Description: "HASH(0000)",
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR2",
 		Index:       2,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr3(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_SEPARATOR",
-		Index:       3,
-		Sha256:      hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 3,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 		Description: "HASH(0000)",
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR2",
 		Index:       3,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure bootloaders if present
 	for _, f := range c.Bootloaders {
@@ -252,11 +297,16 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TPM,
-			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:       4,
-			Sha256:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index: 4,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: hash[:],
+				},
+			},
 			Description: filepath.Base(f),
 		})
 		pcr = internal.ExtendSha256(pcr, hash[:])
@@ -289,11 +339,16 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TPM,
-			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:       4,
-			Sha256:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index: 4,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: hash[:],
+				},
+			},
 			Description: filepath.Base(c.Kernel),
 		})
 		pcr = internal.ExtendSha256(pcr, hash[:])
@@ -310,11 +365,16 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// TCG PCClient Firmware Spec: https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
 	actionData := []byte("Calling EFI Application from Boot Option")
 	actionHash := sha256.Sum256(actionData)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_EFI_ACTION",
-		Index:       4,
-		Sha256:      actionHash[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_EFI_ACTION",
+		Index: 4,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: actionHash[:],
+			},
+		},
 		Description: "Calling EFI Application from Boot Option",
 	})
 	pcr = internal.ExtendSha256(pcr, actionHash[:])
@@ -322,39 +382,54 @@ func PrecomputePcr4(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_TPM,
-		SubType: "EV_SEPARATOR",
-		Index:   4,
-		Sha256:  hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 4,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR4",
 		Index:       4,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr5(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_TPM,
-		SubType: "EV_SEPARATOR",
-		Index:   5,
-		Sha256:  hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 5,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
@@ -367,11 +442,16 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TPM,
-			SubType:     "EV_EFI_GPT_EVENT",
-			Index:       5,
-			Sha256:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  "EV_EFI_GPT_EVENT",
+			Index: 5,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: hash[:],
+				},
+			},
 			Description: description,
 		})
 		pcr = internal.ExtendSha256(pcr, hash[:])
@@ -387,11 +467,16 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		}
 
 		hash := sha256.Sum256(data)
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_EVENT_TAG",
-			Index:   5,
-			Sha256:  hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  "EV_EVENT_TAG",
+			Index: 5,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: hash[:],
+				},
+			},
 		})
 		pcr = internal.ExtendSha256(pcr, hash[:])
 	}
@@ -399,11 +484,16 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_EFI_ACTION "Exit Boot Services Invocation"
 	actionData1 := []byte("Exit Boot Services Invocation")
 	actionHash1 := sha256.Sum256(actionData1)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_EFI_ACTION",
-		Index:       5,
-		Sha256:      actionHash1[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_EFI_ACTION",
+		Index: 5,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: actionHash1[:],
+			},
+		},
 		Description: "Exit Boot Services Invocation",
 	})
 	pcr = internal.ExtendSha256(pcr, actionHash1[:])
@@ -411,31 +501,41 @@ func PrecomputePcr5(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_EFI_ACTION "Exit Boot Services Returned with Success"
 	actionData2 := []byte("Exit Boot Services Returned with Success")
 	actionHash2 := sha256.Sum256(actionData2)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     "EV_EFI_ACTION",
-		Index:       5,
-		Sha256:      actionHash2[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_EFI_ACTION",
+		Index: 5,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: actionHash2[:],
+			},
+		},
 		Description: "Exit Boot Services Returned with Success",
 	})
 	pcr = internal.ExtendSha256(pcr, actionHash2[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR5",
 		Index:       5,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr6(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_COMPACT_HASH
 	if c.SystemUuid != "" {
@@ -459,11 +559,16 @@ func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		log.Debugf("Hashing UUID: %q", uuidString)
 
 		hash := sha256.Sum256([]byte(uuidString))
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_COMPACT_HASH",
-			Index:   6,
-			Sha256:  hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  "EV_COMPACT_HASH",
+			Index: 6,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: hash[:],
+				},
+			},
 		})
 		pcr = internal.ExtendSha256(pcr, hash[:])
 	}
@@ -471,31 +576,41 @@ func PrecomputePcr6(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_TPM,
-		SubType: "EV_SEPARATOR",
-		Index:   6,
-		Sha256:  hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 6,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR6",
 		Index:       6,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr7(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr7(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	pcr, refvals, err = tcg.MeasureSecureBootVariables(crypto.SHA256, tcg.TPM, pcr, refvals, 7, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
 	if err != nil {
@@ -505,11 +620,16 @@ func PrecomputePcr7(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	// EV_SEPARATOR
 	sep := []byte{0x0, 0x0, 0x0, 0x0}
 	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:    ar.TYPE_REFVAL_TPM,
-		SubType: "EV_SEPARATOR",
-		Index:   7,
-		Sha256:  hashSep[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "EV_SEPARATOR",
+		Index: 7,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: hashSep[:],
+			},
+		},
 	})
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
@@ -521,21 +641,26 @@ func PrecomputePcr7(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	}
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR7",
 		Index:       7,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr8(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	if c.GrubCmds != "" {
 
@@ -549,7 +674,7 @@ func PrecomputePcr8(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 		for scanner.Scan() {
 			line := scanner.Bytes()
 
-			var rv *ar.ReferenceValue
+			var rv *ar.Component
 			rv, pcr, err = tcg.CreateExtendRefval(crypto.SHA256, tcg.TPM, 8, pcr, line,
 				"EV_IPL", string(line))
 			if err != nil {
@@ -564,22 +689,27 @@ func PrecomputePcr8(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	}
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR8",
 		Index:       8,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr9(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	if len(c.Path) > 0 {
 		pcr, refvals, err = tcg.MeasureFiles(crypto.SHA256, tcg.TPM, pcr, refvals, 9, c.Path)
@@ -604,18 +734,23 @@ func PrecomputePcr9(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	}
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR9",
 		Index:       9,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr10(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr10(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	refvals, err := performImaPrecomputation(10, c.BootAggregate, c.ImaPaths, c.ImaStrip, c.ImaPrepend, c.ImaTemplate)
 	if err != nil {
@@ -627,11 +762,11 @@ func PrecomputePcr10(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	return nil, refvals, nil
 }
 
-func PrecomputePcr11(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	if len(c.Path) > 0 {
 		pcr, refvals, err = tcg.MeasureFiles(crypto.SHA256, tcg.TPM, pcr, refvals, 11, c.Path)
@@ -656,22 +791,27 @@ func PrecomputePcr11(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	}
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR11",
 		Index:       11,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr12(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr12(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	if c.Cmdline != "" {
 		pcr, refvals, err = tcg.MeasureCmdline(crypto.SHA256, tcg.TPM, pcr, refvals, 12,
@@ -682,22 +822,27 @@ func PrecomputePcr12(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	}
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR12",
 		Index:       12,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil
 }
 
-func PrecomputePcr14(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputePcr14(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
 	pcr := make([]byte, 32)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_IPL: EFI MOK-Lists
 	pcr, refvals, err = tcg.MeasureMoklists(crypto.SHA256, tcg.TPM, pcr, refvals, 14, c.MokLists)
@@ -706,12 +851,17 @@ func PrecomputePcr14(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	}
 
 	// Create final reference value
-	pcrSummary := &ar.ReferenceValue{
+	pcrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     ar.TYPE_PCR_SUMMARY,
+		Name:        ar.TYPE_PCR_SUMMARY,
 		Description: "PCR14",
 		Index:       14,
-		Sha256:      pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: pcr,
+			},
+		},
 	}
 
 	return pcrSummary, refvals, nil

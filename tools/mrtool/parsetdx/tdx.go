@@ -58,7 +58,7 @@ func parseEventlog(data []byte, eventlogFlag, summaryFlag bool, mrs []int) error
 
 func printEventlog(l *tcg.EventLog, mrs []int) error {
 
-	refvals := make([]ar.ReferenceValue, 0, len(l.Events(register.HashSHA384)))
+	refvals := make([]ar.Component, 0, len(l.Events(register.HashSHA384)))
 
 	for _, event := range l.Events(register.HashSHA384) {
 
@@ -68,10 +68,15 @@ func printEventlog(l *tcg.EventLog, mrs []int) error {
 
 		index := int(event.MRIndex())
 
-		refval := ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
-			Sha384:      event.Digest,
+		refval := ar.Component{
+			Type: ar.TYPE_REFVAL_TDX,
+			Name: fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: event.Digest,
+				},
+			},
 			Index:       index,
 			Description: internal.FormatRtmrData(event.Data),
 		}
@@ -112,13 +117,18 @@ func printSummary(l *tcg.EventLog, mrs []int) error {
 		rtmrs[int(event.MRIndex())] = h[:]
 	}
 
-	summary := make([]ar.ReferenceValue, 0, len(rtmrs))
+	summary := make([]ar.Component, 0, len(rtmrs))
 	for index, rtmr := range rtmrs {
-		refval := ar.ReferenceValue{
-			Type:    ar.TYPE_REFVAL_TDX,
-			SubType: fmt.Sprintf("RTMR%v", index-1),
-			Index:   index,
-			Sha384:  rtmr,
+		refval := ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  fmt.Sprintf("RTMR%v", index-1),
+			Index: index,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: rtmr,
+				},
+			},
 		}
 		summary = append(summary, refval)
 	}

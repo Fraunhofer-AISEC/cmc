@@ -136,6 +136,7 @@ cmc_params=(
     "-esttlscas" "${data}/pki/ca.pem" \
     "-identitycas" "${data}/pki/ca.pem" \
     "-metadatacas" "${data}/pki/ca.pem" \
+    "-tpmkeyalg" "EC256" \
 )
 
 cmcctl_params=(

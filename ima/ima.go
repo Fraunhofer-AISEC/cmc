@@ -56,29 +56,54 @@ type imaTemplate struct {
 	Data    []byte
 }
 
-// GetImaArtifacts returns all hashes extended by the IMA into the TPM
+// GetImaMeasurements returns all hashes extended by the IMA into the TPM
 // IMA PCR as read from the sysfs
-func GetImaArtifacts(file string) (map[int]ar.Artifact, error) {
+func GetImaMeasurements(file string) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	artifacts, err := parseImaRuntimeDigests(data)
+	components, err := parseImaRuntimeDigests(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
+	}
+
+	return components, nil
+}
+
+// GetImaArtifacts wraps the retrieved IMA event entries into
+// an artifacts map
+func GetImaArtifacts(file string) (map[int]ar.Artifact, error) {
+
+	events, err := GetImaMeasurements(file)
+	if err != nil {
+		return nil, err
+	}
+
+	// Map with PCR index as key
+	artifacts := map[int]ar.Artifact{}
+
+	for _, event := range events {
+		artifact, ok := artifacts[event.Index]
+		if !ok {
+			artifact = ar.Artifact{
+				Type:  ar.TYPE_PCR_EVENTLOG,
+				Index: event.Index,
+			}
+		}
+		artifact.Events = append(artifact.Events, event)
+		artifacts[event.Index] = artifact
 	}
 
 	return artifacts, nil
 }
 
-func parseImaRuntimeDigests(data []byte) (map[int]ar.Artifact, error) {
+func parseImaRuntimeDigests(data []byte) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 
-	// Map with PCR index as key
-	artifacts := map[int]ar.Artifact{}
-
+	components := make([]ar.Component, 0)
 	for buf.Len() > 0 {
 		header := header{}
 		err := binary.Read(buf, binary.LittleEndian, &header)
@@ -134,27 +159,27 @@ func parseImaRuntimeDigests(data []byte) (map[int]ar.Artifact, error) {
 			log.Tracef("Failed to parse additional template data: %v", err)
 		}
 
-		event := ar.MeasureEvent{
-			Sha256:      digest[:],
-			EventName:   filepath.Base(eventName),
-			Description: eventName,
+		event := ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  filepath.Base(eventName),
+			Index: int(header.Pcr),
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: digest[:],
+				},
+			},
+			Description: eventName, // Full path
+			Optional:    true,
 		}
+
+		components = append(components, event)
 
 		log.Tracef("Parsed IMA PCR%v %v event %v", header.Pcr,
 			string(template.Name[:template.header.NameLen]), eventName)
-
-		artifact, ok := artifacts[int(header.Pcr)]
-		if !ok {
-			artifact = ar.Artifact{
-				Type:  ar.TYPE_PCR_EVENTLOG,
-				Index: int(header.Pcr),
-			}
-		}
-		artifact.Events = append(artifact.Events, event)
-		artifacts[int(header.Pcr)] = artifact
 	}
 
-	return artifacts, nil
+	return components, nil
 }
 
 func parseTemplateData(tmpl *imaTemplate) ([]byte, string, error) {

@@ -47,11 +47,11 @@ const (
  * - QEMU FW Cfg Files as passed to OVMF
  * - EFI Boot variables
  */
-func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR0...")
 
 	rtmr := make([]byte, sha512.Size384)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// Measure EFI TD Handoff Block: UEFI Platform Initialization Specification, Vol. 3, Chapter 5 5 HOB Code Definitions
 	tbHob, err := CreateTbHob()
@@ -61,11 +61,16 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	tbHobHash := sha512.Sum384(tbHob)
 
 	rtmr = internal.ExtendSha384(rtmr, tbHobHash[:])
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "EV_EFI_HANDOFF_TABLES",
-		Index:       tcg.INDEX_RTMR0,
-		Sha384:      tbHobHash[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TDX,
+		Name:  "EV_EFI_HANDOFF_TABLES",
+		Index: tcg.INDEX_RTMR0,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: tbHobHash[:],
+			},
+		},
 		Description: "RTMR0: TD Hob passed from host VMM to guest firmware",
 	})
 
@@ -82,11 +87,16 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 		}
 
 		rtmr = internal.ExtendSha384(rtmr, cfvHash[:])
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_EFI_PLATFORM_FIRMWARE_BLOB2",
-			Index:       tcg.INDEX_RTMR0,
-			Sha384:      cfvHash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_EFI_PLATFORM_FIRMWARE_BLOB2",
+			Index: tcg.INDEX_RTMR0,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: cfvHash[:],
+				},
+			},
 			Description: "RTMR0: Configuration Firmware Volume",
 		})
 	}
@@ -103,11 +113,16 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	evHash := sha512.Sum384(evSeparator)
 
 	rtmr = internal.ExtendSha384(rtmr, evHash[:])
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "EV_SEPARATOR",
-		Index:       tcg.INDEX_RTMR0,
-		Sha384:      evHash[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TDX,
+		Name:  "EV_SEPARATOR",
+		Index: tcg.INDEX_RTMR0,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: evHash[:],
+			},
+		},
 		Description: "RTMR0: HASH(00000000)",
 	})
 
@@ -138,22 +153,32 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	if c.OvmfVersion == "edk2-stable202408.01" {
 		// EV_SEPARATOR
 		rtmr = internal.ExtendSha384(rtmr, evHash[:])
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_SEPARATOR",
-			Index:       tcg.INDEX_RTMR0,
-			Sha384:      evHash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_SEPARATOR",
+			Index: tcg.INDEX_RTMR0,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: evHash[:],
+				},
+			},
 			Description: "RTMR0: HASH(00000000)",
 		})
 	}
 
 	// Create RTMR0 final reference value
-	rtmrSummary := &ar.ReferenceValue{
+	rtmrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "RTMR Summary",
+		Name:        "RTMR Summary",
 		Description: "RTMR0",
 		Index:       tcg.INDEX_RTMR0,
-		Sha384:      rtmr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: rtmr,
+			},
+		},
 	}
 
 	return rtmrSummary, refvals, nil
@@ -164,11 +189,11 @@ func PrecomputeRtmr0(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
  *
  * RTMR1 contains the Linux kernel PE/COFF image measurement as well as some boot strings.
  */
-func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR1...")
 
 	rtmr := make([]byte, 48)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
 	if c.Kernel != "" {
@@ -196,11 +221,16 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:       tcg.INDEX_RTMR1,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index: tcg.INDEX_RTMR1,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: fmt.Sprintf("RTMR1: %v", filepath.Base(c.Kernel)),
 		})
 		rtmr = internal.ExtendSha384(rtmr, hash[:])
@@ -218,11 +248,16 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	// EV_EFI_ACTION
 	// https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
 	h1 := sha512.Sum384([]byte(EFI_CALLING_EFI_APPLICATION))
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "EV_EFI_ACTION",
-		Index:       tcg.INDEX_RTMR1,
-		Sha384:      h1[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TDX,
+		Name:  "EV_EFI_ACTION",
+		Index: tcg.INDEX_RTMR1,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: h1[:],
+			},
+		},
 		Description: fmt.Sprintf("RTMR1: %v", EFI_CALLING_EFI_APPLICATION),
 	})
 	rtmr = internal.ExtendSha384(rtmr, h1[:])
@@ -231,11 +266,16 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	if !strings.EqualFold(c.OvmfVersion, "edk2-stable202408.01") {
 		sep := []byte{0x0, 0x0, 0x0, 0x0}
 		hashSep := sha512.Sum384(sep)
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_SEPARATOR",
-			Index:       tcg.INDEX_RTMR1,
-			Sha384:      hashSep[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_SEPARATOR",
+			Index: tcg.INDEX_RTMR1,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hashSep[:],
+				},
+			},
 			Description: "RTMR1: HASH(00000000)",
 		})
 		rtmr = internal.ExtendSha384(rtmr, hashSep[:])
@@ -250,11 +290,16 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_EFI_GPT_EVENT",
-			Index:       tcg.INDEX_RTMR1,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_EFI_GPT_EVENT",
+			Index: tcg.INDEX_RTMR1,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: description,
 		})
 		rtmr = internal.ExtendSha384(rtmr, hash[:])
@@ -273,11 +318,16 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:       tcg.INDEX_RTMR1,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Index: tcg.INDEX_RTMR1,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: filepath.Base(f),
 		})
 		rtmr = internal.ExtendSha384(rtmr, hash[:])
@@ -285,33 +335,48 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 
 	// EV_EFI_ACTION
 	h2 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_INVOCATION))
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "EV_EFI_ACTION",
-		Index:       tcg.INDEX_RTMR1,
-		Sha384:      h2[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TDX,
+		Name:  "EV_EFI_ACTION",
+		Index: tcg.INDEX_RTMR1,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: h2[:],
+			},
+		},
 		Description: fmt.Sprintf("RTMR1: %v", EFI_EXIT_BOOT_SERVICES_INVOCATION),
 	})
 	rtmr = internal.ExtendSha384(rtmr, h2[:])
 
 	// EV_EFI_ACTION
 	h3 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_SUCCEEDED))
-	refvals = append(refvals, &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "EV_EFI_ACTION",
-		Index:       tcg.INDEX_RTMR1,
-		Sha384:      h3[:],
+	refvals = append(refvals, &ar.Component{
+		Type:  ar.TYPE_REFVAL_TDX,
+		Name:  "EV_EFI_ACTION",
+		Index: tcg.INDEX_RTMR1,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: h3[:],
+			},
+		},
 		Description: fmt.Sprintf("RTMR1: %v", EFI_EXIT_BOOT_SERVICES_SUCCEEDED),
 	})
 	rtmr = internal.ExtendSha384(rtmr, h3[:])
 
 	// Create RTMR1 final reference value
-	rtmrSummary := &ar.ReferenceValue{
+	rtmrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "RTMR Summary",
+		Name:        "RTMR Summary",
 		Description: "RTMR1",
 		Index:       tcg.INDEX_RTMR1,
-		Sha384:      rtmr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: rtmr[:],
+			},
+		},
 	}
 
 	return rtmrSummary, refvals, nil
@@ -322,11 +387,11 @@ func PrecomputeRtmr1(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
  *
  * RTMR2 contains the Linux kernel command line.
  */
-func PrecomputeRtmr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR2...")
 
 	rtmr := make([]byte, sha512.Size384)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	rtmr, refvals, err := tcg.MeasureCmdline(crypto.SHA384, tcg.TDX, rtmr, refvals, tcg.INDEX_RTMR2,
 		c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, false)
@@ -335,12 +400,17 @@ func PrecomputeRtmr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
 	}
 
 	// Create RTMR2 final reference value
-	rtmrSummary := &ar.ReferenceValue{
+	rtmrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "RTMR Summary",
+		Name:        "RTMR Summary",
 		Description: "RTMR2",
 		Index:       tcg.INDEX_RTMR2,
-		Sha384:      rtmr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: rtmr[:],
+			},
+		},
 	}
 
 	return rtmrSummary, refvals, nil
@@ -351,19 +421,24 @@ func PrecomputeRtmr2(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error
  *
  * RTMR3 is currently empty.
  */
-func PrecomputeRtmr3(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputeRtmr3(c *Config) (*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR3...")
 
 	rtmr := make([]byte, sha512.Size384)
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	// Create RTMR3 final reference value
-	rtmrSummary := &ar.ReferenceValue{
+	rtmrSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "RTMR Summary",
+		Name:        "RTMR Summary",
 		Description: "RTMR3",
 		Index:       tcg.INDEX_RTMR3,
-		Sha384:      rtmr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: rtmr[:],
+			},
+		},
 	}
 
 	return rtmrSummary, refvals, nil

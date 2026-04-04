@@ -16,8 +16,8 @@
 package tcg
 
 import (
+	"crypto"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"sort"
 
@@ -25,31 +25,39 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-func PrecomputeFinalPcrValues(refvals []*ar.ReferenceValue) ([]*ar.ReferenceValue, error) {
+func PrecomputeFinalPcrValues(refvals []*ar.Component) ([]*ar.Component, error) {
 
 	summaryMap := make(map[int][]byte)
 
 	for _, rv := range refvals {
+
+		hash := rv.GetHash(crypto.SHA256)
+
 		old, ok := summaryMap[rv.Index]
 		if !ok {
 			// Initialize old value with init value (can be different from zero in PCR0)
-			summaryMap[rv.Index] = rv.Sha256
+			summaryMap[rv.Index] = hash
 			continue
 		}
-		log.Tracef("extending hash: %v", hex.EncodeToString(old))
-		summaryMap[rv.Index] = internal.ExtendSha256(old, rv.Sha256)
-		log.Tracef("data          : %v", hex.EncodeToString(rv.Sha256))
-		log.Tracef("extended hash : %v", hex.EncodeToString(summaryMap[rv.Index]))
+		log.Tracef("extending hash: %x", old)
+		summaryMap[rv.Index] = internal.ExtendSha256(old, hash)
+		log.Tracef("data          : %x", hash)
+		log.Tracef("extended hash : %x", summaryMap[rv.Index])
 	}
 
 	// Convert map back to slice
-	var summaries []*ar.ReferenceValue
+	var summaries []*ar.Component
 	for idx, val := range summaryMap {
-		summaries = append(summaries, &ar.ReferenceValue{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: ar.TYPE_PCR_SUMMARY,
-			Index:   idx,
-			Sha256:  val,
+		summaries = append(summaries, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TPM,
+			Name:  ar.TYPE_PCR_SUMMARY,
+			Index: idx,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-256",
+					Content: val[:],
+				},
+			},
 		})
 	}
 
@@ -61,7 +69,7 @@ func PrecomputeFinalPcrValues(refvals []*ar.ReferenceValue) ([]*ar.ReferenceValu
 	return summaries, nil
 }
 
-func PrecomputeAggregatePcrValue(refvals []*ar.ReferenceValue) (*ar.ReferenceValue, error) {
+func PrecomputeAggregatePcrValue(refvals []*ar.Component) (*ar.Component, error) {
 	pcrValues, err := PrecomputeFinalPcrValues(refvals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate final PCR values")
@@ -69,13 +77,18 @@ func PrecomputeAggregatePcrValue(refvals []*ar.ReferenceValue) (*ar.ReferenceVal
 	hash := sha256.New()
 
 	for _, val := range pcrValues {
-		hash.Write(val.Sha256)
+		hash.Write(val.GetHash(crypto.SHA256))
 	}
 	aggregateHash := hash.Sum(nil)
-	aggregate := &ar.ReferenceValue{
-		Type:   "TPM PCR Aggregate",
-		Index:  0,
-		Sha256: aggregateHash,
+	aggregate := &ar.Component{
+		Type:  "TPM PCR Aggregate",
+		Index: 0,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: aggregateHash,
+			},
+		},
 	}
 
 	return aggregate, nil

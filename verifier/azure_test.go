@@ -32,9 +32,9 @@ func TestVerifyAzure(t *testing.T) {
 		tdxPolicy      *ar.TdxPolicy
 		snpPolicy      *ar.SnpPolicy
 		caFingerprints []string
-		tdxRefVals     []ar.ReferenceValue
-		snpRefVals     []ar.ReferenceValue
-		vtpmRefVals    []ar.ReferenceValue
+		tdxRefVals     []ar.Component
+		snpRefVals     []ar.Component
+		vtpmRefVals    []ar.Component
 		s              ar.Serializer
 	}
 	tests := []struct {
@@ -188,51 +188,51 @@ var (
 	validVtpmNonce = dec("0000000000000000000000000000000000000000000000000000000000000000")
 
 	// Run: mrtool parse tpm -mrs 1
-	validVtpmRefvalsAzure = []ar.ReferenceValue{
+	validVtpmRefvalsAzure = []ar.Component{
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   1,
-			Sha256:  dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104")}},
 		},
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   1,
-			Sha256:  dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2")}},
 		},
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   1,
-			Sha256:  dec("6ab4a55c1a608bcc44f64f3712e9cb606788842b7d0bd6abfdd5bdda246088ac"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("6ab4a55c1a608bcc44f64f3712e9cb606788842b7d0bd6abfdd5bdda246088ac")}},
 		},
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_SEPARATOR",
-			Index:   1,
-			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_SEPARATOR",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
 		},
 	}
 
-	invalidVtpmRefvalsAzure = []ar.ReferenceValue{
+	invalidVtpmRefvalsAzure = []ar.Component{
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   1,
-			Sha256:  dec("aaaa96d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("aaaa96d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7")}},
 		},
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_EFI_VARIABLE_BOOT",
-			Index:   1,
-			Sha256:  dec("b6de3a472325267624ba846ca15a3f40af01640de3210998fbe91c06e46da044"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b6de3a472325267624ba846ca15a3f40af01640de3210998fbe91c06e46da044")}},
 		},
 		{
-			Type:    ar.TYPE_REFVAL_TPM,
-			SubType: "EV_SEPARATOR",
-			Index:   1,
-			Sha256:  dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"),
+			Type:   ar.TYPE_REFVAL_TPM,
+			Name:   "EV_SEPARATOR",
+			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
 		},
 	}
 
@@ -240,11 +240,11 @@ var (
 		{
 			Type:  ar.TYPE_PCR_EVENTLOG,
 			Index: 1,
-			Events: []ar.MeasureEvent{
-				{Sha256: dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104")},
-				{Sha256: dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2")},
-				{Sha256: dec("6ab4a55c1a608bcc44f64f3712e9cb606788842b7d0bd6abfdd5bdda246088ac")},
-				{Sha256: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")},
+			Events: []ar.Component{
+				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104")}}},
+				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2")}}},
+				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("6ab4a55c1a608bcc44f64f3712e9cb606788842b7d0bd6abfdd5bdda246088ac")}}},
+				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}}},
 			},
 		},
 	}
@@ -407,7 +407,7 @@ var (
 			Artifacts: []ar.Artifact{
 				{
 					Type: ar.TYPE_TDX_COLLATERAL,
-					Events: []ar.MeasureEvent{
+					Events: []ar.Component{
 						{
 							IntelCollateral: azureTdxCollateral,
 						},
@@ -447,30 +447,30 @@ var (
 	tdxRootCAFingerprintsAzure        = []string{"44a0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"}
 	invalidTdxRootCAFingerprintsAzure = []string{"ffa0196b2b99f889b8e149e95b807a350e7424964399e885a7cbb8ccfab674d3"}
 
-	invalidTdxRefvalsAzure = []ar.ReferenceValue{
+	invalidTdxRefvalsAzure = []ar.Component{
 		{
 			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "OVMF",
+			Name:        "OVMF",
 			Index:       0,
-			Sha384:      dec("633418c955597f43a99f3378f8dfad06db87c51da2d6947e1c199dc9e2f89cee1d47542ce75ac3c8928338a13cf9bbc3"),
+			Hashes:      []ar.ReferenceHash{{Alg: "SHA-384", Content: dec("633418c955597f43a99f3378f8dfad06db87c51da2d6947e1c199dc9e2f89cee1d47542ce75ac3c8928338a13cf9bbc3")}},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
 		},
 	}
 
 	// Run: tdxtool -cmd parse-quote -in quote
-	validTdxRefvalsAzure = []ar.ReferenceValue{
+	validTdxRefvalsAzure = []ar.Component{
 		{
 			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "OVMF",
+			Name:        "OVMF",
 			Index:       0,
-			Sha384:      dec("f858414aef26d52a3b21614bab4bafab13b3ed62ebdd9d46a6be799228c2e27bc0d025cc6e4e90daff827cbe0316bbd9"),
+			Hashes:      []ar.ReferenceHash{{Alg: "SHA-384", Content: dec("f858414aef26d52a3b21614bab4bafab13b3ed62ebdd9d46a6be799228c2e27bc0d025cc6e4e90daff827cbe0316bbd9")}},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
 		},
 		{
 			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "TDX-Module",
+			Name:        "TDX-Module",
 			Index:       5,
-			Sha384:      dec("49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6"),
+			Hashes:      []ar.ReferenceHash{{Alg: "SHA-384", Content: dec("49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6")}},
 			Description: "MRSEAM: TDX-Module",
 		},
 	}

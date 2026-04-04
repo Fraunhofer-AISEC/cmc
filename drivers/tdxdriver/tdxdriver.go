@@ -157,7 +157,7 @@ func (tdx *Tdx) GetCollateral() ([]ar.Collateral, error) {
 		Artifacts: []ar.Artifact{
 			{
 				Type: ar.TYPE_TDX_COLLATERAL,
-				Events: []ar.MeasureEvent{
+				Events: []ar.Component{
 					{
 						IntelCollateral: tdxCollateral,
 					},
@@ -364,18 +364,23 @@ func GetCcel(path string) ([]ar.Artifact, error) {
 			artifactsMap[index] = ar.Artifact{
 				Type:   ar.TYPE_CC_EVENTLOG,
 				Index:  index,
-				Events: []ar.MeasureEvent{},
+				Events: []ar.Component{},
 			}
 		}
 
-		measureEvent := ar.MeasureEvent{
-			Sha384:      event.Digest,
-			EventName:   event.Type.String(),
+		measureEvent := ar.Component{
+			Name: event.Type.String(),
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: event.Digest,
+				},
+			},
 			Description: internal.FormatRtmrData(event.Data),
 		}
 
-		log.Tracef("Adding %v %v: %v", internal.IndexToMr(index), measureEvent.EventName,
-			hex.EncodeToString(measureEvent.Sha384))
+		log.Tracef("Adding %v %v: %v", internal.IndexToMr(index), measureEvent.Name,
+			hex.EncodeToString(event.Digest))
 
 		artifact := artifactsMap[index]
 		artifact.Events = append(artifact.Events, measureEvent)

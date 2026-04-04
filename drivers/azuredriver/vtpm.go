@@ -24,6 +24,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
@@ -79,7 +80,9 @@ func (azure *Azure) GetVtpmCollateral() (*ar.Collateral, error) {
 	// Just for logging
 	for _, elem := range artifacts {
 		for _, event := range elem.Events {
-			log.Tracef("PCR%v %v: %v", elem.Index, elem.Type, hex.EncodeToString(event.Sha256))
+			for _, h := range event.Hashes {
+				log.Tracef("PCR%v %v: %v=%x", elem.Index, elem.Type, h.Alg, h.Content)
+			}
 		}
 	}
 
@@ -133,6 +136,11 @@ func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
 
 	log.Debugf("Reading PCRs...")
 
+	alg, err := internal.CryptoToTpm2Hash(azure.HashAlg)
+	if err != nil {
+		return nil, err
+	}
+
 	artifacts := make([]ar.Artifact, 0, len(azure.pcrs))
 
 	tpm, err := OpenTpm()
@@ -144,7 +152,7 @@ func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
 	// ReadPCRs cannot read at most 8 PCRs at the same time
 	for _, index := range azure.pcrs {
 		sel := tpm2.PCRSelection{
-			Hash: tpm2.AlgSHA256,
+			Hash: alg,
 			PCRs: []int{index},
 		}
 
@@ -157,9 +165,14 @@ func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
 			artifacts = append(artifacts, ar.Artifact{
 				Type:  ar.TYPE_PCR_SUMMARY,
 				Index: pcr,
-				Events: []ar.MeasureEvent{
+				Events: []ar.Component{
 					{
-						Sha256: digest,
+						Hashes: []ar.ReferenceHash{
+							{
+								Alg:     azure.HashAlg.String(),
+								Content: digest,
+							},
+						},
 					},
 				},
 			})

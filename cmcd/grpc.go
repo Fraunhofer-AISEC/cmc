@@ -173,17 +173,8 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 		}
 	}
 
-	err = m.Measure(
-		&ar.MeasureEvent{
-			Sha256:    req.MeasureEvent.Sha256,
-			Index:     int(req.MeasureEvent.Index),
-			EventName: req.MeasureEvent.EventName,
-			CtrData: &ar.CtrData{
-				ConfigSha256: req.MeasureEvent.CtrData.ConfigSha256,
-				RootfsSha256: req.MeasureEvent.CtrData.RootfsSha256,
-				OciSpec:      spec,
-			},
-		}, s.serializer, s.cmc.CtrLog, s.cmc.CtrDriver)
+	err = m.Measure(toComponent(req.MeasureEvent, spec), s.serializer,
+		s.cmc.CtrLog, s.cmc.CtrDriver)
 	if err != nil {
 		log.Errorf("Failed to record measurement: %v", err)
 		success = false
@@ -313,4 +304,32 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *grpcapi.PeerCacheReques
 	log.Info("Served grpc request type 'PeerCache'")
 
 	return resp, nil
+}
+
+func toComponent(c *grpcapi.Component, spec *oci.Spec) *ar.Component {
+	return &ar.Component{
+		Type:        c.Type,
+		Name:        c.Name,
+		Index:       int(c.Index),
+		Hashes:      toGRPCHashes(c.Hashes),
+		Version:     c.Version,
+		Optional:    c.Optional,
+		Description: c.Description,
+		CtrData: &ar.CtrData{
+			ConfigSha256: c.CtrData.ConfigSha256,
+			RootfsSha256: c.CtrData.RootfsSha256,
+			OciSpec:      spec,
+		},
+	}
+}
+
+func toGRPCHashes(hashes []*grpcapi.Hash) []ar.ReferenceHash {
+	out := make([]ar.ReferenceHash, 0, len(hashes))
+	for _, h := range hashes {
+		out = append(out, ar.ReferenceHash{
+			Alg:     h.Alg,
+			Content: h.Content,
+		})
+	}
+	return out
 }

@@ -30,11 +30,11 @@ import (
  *
  * The MRTD contains the digest of the TDX-module as measured by the SEAM loader
  */
-func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing MRSEAM...")
 
 	var mrseam []byte
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	if c.TdxModule != "" {
 		data, err := os.ReadFile(c.TdxModule)
@@ -43,11 +43,16 @@ func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, erro
 		}
 		hash := sha512.Sum384(data)
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "TDX-Module",
-			Index:       tcg.INDEX_MRSEAM,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "TDX-Module",
+			Index: tcg.INDEX_MRSEAM,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: "MRSEAM: SEAMLDR Measurement: TDX-Module",
 		})
 		mrseam = hash[:]
@@ -60,11 +65,16 @@ func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, erro
 			return nil, nil, fmt.Errorf("malformed sha384 hash length: (is: %v, expected: %v)", len(hash), sha512.Size384)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "TDX-Module",
-			Index:       tcg.INDEX_MRSEAM,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "TDX-Module",
+			Index: tcg.INDEX_MRSEAM,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: "MRSEAM: TDX Module Measurement: SEAMLDR Measurement: TDX-Module",
 		})
 		mrseam = hash[:]
@@ -73,12 +83,17 @@ func PrecomputeMrSeam(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, erro
 	}
 
 	// Create MRSEAM final reference value
-	mrseamSummary := &ar.ReferenceValue{
+	mrseamSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "MRSEAM Summary",
+		Name:        "MRSEAM Summary",
 		Description: "MRSEAM",
 		Index:       tcg.INDEX_MRSEAM,
-		Sha384:      mrseam,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: mrseam,
+			},
+		},
 	}
 
 	return mrseamSummary, refvals, nil

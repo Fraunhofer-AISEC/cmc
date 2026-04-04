@@ -17,6 +17,7 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -91,7 +92,7 @@ func VerifyTdx(
 	nonce []byte,
 	policy *ar.TdxPolicy,
 	caFingerprints []string,
-	referenceValues []ar.ReferenceValue,
+	refComponents []ar.Component,
 ) (*ar.MeasurementResult, bool) {
 
 	log.Debug("Verifying TDX measurements")
@@ -105,7 +106,7 @@ func VerifyTdx(
 		TdxResult: &ar.TdxResult{},
 	}
 
-	if len(referenceValues) == 0 {
+	if len(refComponents) == 0 {
 		log.Debugf("Could not find TDX reference values")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
@@ -215,7 +216,7 @@ func VerifyTdx(
 
 	// Verify the measurement registers (MRTD, RTMRs) against the reference values
 	mrResults, detailedResults, errCode, ok := verifyTdxMrs(&tdxQuote.QuoteBody,
-		collateral.Artifacts, referenceValues)
+		collateral.Artifacts, refComponents)
 	if errCode != ar.NotSpecified || !ok {
 		result.Summary.Fail(errCode)
 	}
@@ -412,7 +413,7 @@ func parseECDSAQuoteSignatureDataStructV4(buf *bytes.Buffer, quoteSigStruct *ECD
 // 3           | RTMR2
 // 4           | RTMR3
 // 5           | MRSEAM (not in UEFI spec)
-func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.ReferenceValue,
+func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Component,
 ) ([]ar.DigestResult, []ar.DigestResult, ar.ErrorCode, bool) {
 
 	log.Debug("Verifying TDX measurement registers")
@@ -434,12 +435,12 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		}
 		if refval.Index == 0 || refval.Index == 5 {
 			// MRTD and MRSEAM are not extended
-			copy(calculatedMrs[refval.Index], refval.Sha384)
+			copy(calculatedMrs[refval.Index], refval.GetHash(crypto.SHA384))
 		} else {
 			// RTMRs are extended
-			calculatedMrs[refval.Index] = internal.ExtendSha384(calculatedMrs[refval.Index], refval.Sha384)
-			log.Tracef("Extended %v: %v = %v", internal.IndexToMr(refval.Index), refval.SubType,
-				hex.EncodeToString(refval.Sha384))
+			calculatedMrs[refval.Index] = internal.ExtendSha384(calculatedMrs[refval.Index], refval.GetHash(crypto.SHA384))
+			log.Tracef("Extended %v: %v = %x", internal.IndexToMr(refval.Index), refval.Name,
+				refval.GetHash(crypto.SHA384))
 		}
 	}
 
@@ -464,8 +465,8 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 				detailedResults = append(detailedResults,
 					ar.DigestResult{
 						Type:     "Measurement",
-						SubType:  internal.IndexToMr(i),
-						Digest:   hex.EncodeToString(measuredMrs[i]),
+						Name:     internal.IndexToMr(i),
+						Digest:   measuredMrs[i],
 						Index:    i,
 						Success:  false,
 						Launched: true,
@@ -482,9 +483,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 		// Measurement register summary
 		mrResults = append(mrResults, ar.DigestResult{
 			Index:    i,
-			SubType:  internal.IndexToMr(i),
+			Name:     internal.IndexToMr(i),
 			Success:  successMrs[i],
-			Digest:   hex.EncodeToString(calculatedMrs[i]),
+			Digest:   calculatedMrs[i],
 			Measured: hex.EncodeToString(measuredMrs[i]),
 		})
 	}
@@ -502,9 +503,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 			detailedResults = append(detailedResults,
 				ar.DigestResult{
 					Type:        t,
-					SubType:     refval.SubType,
+					Name:        refval.Name,
 					Index:       refval.Index,
-					Digest:      hex.EncodeToString(refval.Sha384),
+					Digest:      refval.GetHash(crypto.SHA384),
 					Success:     successMrs[refval.Index],
 					Launched:    successMrs[refval.Index],
 					Description: refval.Description,
@@ -519,7 +520,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 				for _, event := range artifact.Events {
 					found := false
 					for _, refval := range refvals {
-						if bytes.Equal(refval.Sha384, event.Sha384) {
+						if bytes.Equal(refval.GetHash(crypto.SHA384), event.GetHash(crypto.SHA384)) {
 							found = true
 							break
 						}
@@ -530,9 +531,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 					}
 					r := ar.DigestResult{
 						Type:        t,
-						SubType:     event.EventName,
+						Name:        event.Name,
 						Index:       artifact.Index,
-						Digest:      hex.EncodeToString(event.Sha384),
+						Digest:      event.GetHash(crypto.SHA384),
 						Description: event.Description,
 					}
 					r.Success = found
@@ -541,13 +542,13 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 
 					if r.Success {
 						log.Tracef("Successfully verified measurement %v: %v = %v",
-							internal.IndexToMr(artifact.Index), event.EventName,
-							hex.EncodeToString(event.Sha384))
+							internal.IndexToMr(artifact.Index), event.Name,
+							hex.EncodeToString(event.GetHash(crypto.SHA384)))
 					} else {
 						success = false
 						log.Debugf("Failed to verify measurement %v: %v = %v",
-							internal.IndexToMr(artifact.Index), event.EventName,
-							hex.EncodeToString(event.Sha384))
+							internal.IndexToMr(artifact.Index), event.Name,
+							hex.EncodeToString(event.GetHash(crypto.SHA384)))
 					}
 
 				}
@@ -563,7 +564,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 			for _, artifact := range artifacts {
 				if artifact.Type == ar.TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
 					for _, event := range artifact.Events {
-						if bytes.Equal(refval.Sha384, event.Sha384) {
+						if bytes.Equal(refval.GetHash(crypto.SHA384), event.GetHash(crypto.SHA384)) {
 							found = true
 							break
 						}
@@ -573,18 +574,18 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Ref
 			if !found {
 				r := ar.DigestResult{
 					Type:        ar.TYPE_REFVAL_IAS,
-					SubType:     refval.SubType,
+					Name:        refval.Name,
 					Index:       refval.Index,
 					Success:     false,
 					Launched:    false,
-					Digest:      hex.EncodeToString(refval.Sha384),
+					Digest:      refval.GetHash(crypto.SHA384),
 					Description: refval.Description,
 				}
 				detailedResults = append(detailedResults, r)
 				success = false
 				log.Tracef("Failed to verify reference value %v: %v = %v",
-					internal.IndexToMr(refval.Index), refval.SubType,
-					hex.EncodeToString(refval.Sha384))
+					internal.IndexToMr(refval.Index), refval.Name,
+					hex.EncodeToString(refval.GetHash(crypto.SHA384)))
 			}
 		}
 	}
@@ -607,8 +608,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
 	results = append(results, ar.DigestResult{
 		Type:     ar.TYPE_REFVAL_IAS,
-		SubType:  "MrOwner",
-		Digest:   hex.EncodeToString(refTdId.MrOwner),
+		Name:     "MrOwner",
+		Digest:   refTdId.MrOwner,
 		Success:  success,
 		Launched: success,
 	})
@@ -616,8 +617,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     "Measurement",
-			SubType:  "MROWNER",
-			Digest:   hex.EncodeToString(report.MrOwner[:]),
+			Name:     "MROWNER",
+			Digest:   report.MrOwner[:],
 			Success:  false,
 			Launched: false,
 		})
@@ -627,8 +628,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
 	results = append(results, ar.DigestResult{
 		Type:     ar.TYPE_REFVAL_IAS,
-		SubType:  "MROWNERCONFIG",
-		Digest:   hex.EncodeToString(refTdId.MrOwnerConfig),
+		Name:     "MROWNERCONFIG",
+		Digest:   refTdId.MrOwnerConfig,
 		Success:  success,
 		Launched: success,
 	})
@@ -636,8 +637,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     "Measurement",
-			SubType:  "MROWNERCONFIG",
-			Digest:   hex.EncodeToString(report.MrOwnerConfig[:]),
+			Name:     "MROWNERCONFIG",
+			Digest:   report.MrOwnerConfig[:],
 			Success:  false,
 			Launched: false,
 		})
@@ -647,8 +648,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
 	results = append(results, ar.DigestResult{
 		Type:     ar.TYPE_REFVAL_IAS,
-		SubType:  "MRCONFIGID",
-		Digest:   hex.EncodeToString(refTdId.MrConfigId),
+		Name:     "MRCONFIGID",
+		Digest:   refTdId.MrConfigId,
 		Success:  success,
 		Launched: success,
 	})
@@ -656,8 +657,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     "Measurement",
-			SubType:  "MRCONFIGID",
-			Digest:   hex.EncodeToString(report.MrConfigId[:]),
+			Name:     "MRCONFIGID",
+			Digest:   report.MrConfigId[:],
 			Success:  false,
 			Launched: false,
 		})
@@ -667,8 +668,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
 	results = append(results, ar.DigestResult{
 		Type:     ar.TYPE_REFVAL_IAS,
-		SubType:  "MRSIGNERSEAM",
-		Digest:   hex.EncodeToString(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes),
+		Name:     "MRSIGNERSEAM",
+		Digest:   tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes,
 		Success:  success,
 		Launched: success,
 	})
@@ -676,8 +677,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     "Measurement",
-			SubType:  "MRSIGNERSEAM",
-			Digest:   hex.EncodeToString(report.MrSignerSeam[:]),
+			Name:     "MRSIGNERSEAM",
+			Digest:   report.MrSignerSeam[:],
 			Success:  false,
 			Launched: false,
 		})

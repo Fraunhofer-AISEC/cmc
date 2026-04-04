@@ -17,11 +17,11 @@ package verifier
 
 import (
 	"bytes"
+	"crypto"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strconv"
-	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/google/go-tdx-guest/pcs"
@@ -42,7 +42,7 @@ func VerifySgx(
 	nonce []byte,
 	policy *ar.SgxPolicy,
 	caFingerprints []string,
-	referenceValues []ar.ReferenceValue,
+	refComponents []ar.Component,
 ) (*ar.MeasurementResult, bool) {
 
 	var err error
@@ -54,17 +54,17 @@ func VerifySgx(
 
 	log.Debug("Verifying SGX measurements")
 
-	if len(referenceValues) == 0 {
+	if len(refComponents) == 0 {
 		log.Debugf("Could not find SGX reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
-	} else if len(referenceValues) > 1 {
+	} else if len(refComponents) > 1 {
 		log.Debugf("Report contains %v reference values. Currently, only one SGX reference value is supported",
-			len(referenceValues))
+			len(refComponents))
 		result.Summary.Fail(ar.RefValMultiple)
 		return result, false
 	}
-	sgxReferenceValue := referenceValues[0]
+	sgxReferenceValue := refComponents[0]
 
 	// Validate Parameters:
 	if len(evidence.Data) < SGX_QUOTE_MIN_SIZE {
@@ -272,7 +272,7 @@ func DecodeSgxReport(report []byte) (SgxQuote, error) {
 }
 
 func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
-	sgxExtensions *SGXExtensionsValue, sgxReferenceValue *ar.ReferenceValue,
+	sgxExtensions *SGXExtensionsValue, refval *ar.Component,
 	sgxReferencePolicy *ar.SgxPolicy, result *ar.MeasurementResult,
 ) error {
 
@@ -282,7 +282,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	if sgxExtensions == nil {
 		return fmt.Errorf("internal error: SGX certs is nil")
 	}
-	if sgxReferenceValue == nil {
+	if refval == nil {
 		return fmt.Errorf("internal error: SGX reference value is nil")
 	}
 	if result == nil {
@@ -290,68 +290,44 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	}
 
 	// check MRENCLAVE reference value
-	if !bytes.Equal(body.MRENCLAVE[:], []byte(sgxReferenceValue.Sha256)) {
+	if !bytes.Equal(body.MRENCLAVE[:], []byte(refval.GetHash(crypto.SHA256))) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:     ar.TYPE_REFVAL_IAS,
-				SubType:  sgxReferenceValue.SubType,
-				Digest:   hex.EncodeToString(sgxReferenceValue.Sha256[:]),
+				Name:     refval.Name,
+				Digest:   refval.GetHash(crypto.SHA256),
 				Success:  false,
 				Launched: false,
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:     "Measurement",
-				SubType:  sgxReferenceValue.SubType,
-				Digest:   hex.EncodeToString(body.MRENCLAVE[:]),
+				Name:     refval.Name,
+				Digest:   body.MRENCLAVE[:],
 				Success:  false,
 				Launched: false,
 			})
 		return fmt.Errorf("MRENCLAVE mismatch. Expected: %q, Got: %q",
-			hex.EncodeToString(sgxReferenceValue.Sha256), hex.EncodeToString(body.MRENCLAVE[:]))
+			hex.EncodeToString(refval.GetHash(crypto.SHA256)), hex.EncodeToString(body.MRENCLAVE[:]))
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:     "Measurement",
-				SubType:  sgxReferenceValue.SubType,
-				Digest:   hex.EncodeToString(body.MRENCLAVE[:]),
+				Name:     refval.Name,
+				Digest:   body.MRENCLAVE[:],
 				Success:  true,
 				Launched: true,
 			})
 	}
-	log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(sgxReferenceValue.Sha256))
+	log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(refval.GetHash(crypto.SHA256)))
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
 			Type:     ar.TYPE_REFVAL_IAS,
-			SubType:  "MrSigner",
+			Name:     "MrSigner",
 			Digest:   sgxReferencePolicy.MrSigner,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),
-			Success:  strings.EqualFold(sgxReferencePolicy.MrSigner, hex.EncodeToString(body.MRSIGNER[:])),
-			Launched: true,
-		},
-		ar.DigestResult{
-			Type:     ar.TYPE_REFVAL_IAS,
-			SubType:  "CpuSvn",
-			Digest:   hex.EncodeToString(sgxExtensions.Tcb.Value.CpuSvn.Value),
-			Measured: hex.EncodeToString(body.CPUSVN[:]),
-			Success:  bytes.Compare(sgxExtensions.Tcb.Value.CpuSvn.Value, body.CPUSVN[:]) <= 0,
-			Launched: true,
-		},
-		ar.DigestResult{
-			Type:     ar.TYPE_REFVAL_IAS,
-			SubType:  "IsvProdId",
-			Digest:   strconv.Itoa(int(sgxReferencePolicy.IsvProdId)),
-			Measured: strconv.Itoa(int(body.ISVProdID)),
-			Success:  sgxReferencePolicy.IsvProdId == body.ISVProdID,
-			Launched: true,
-		},
-		ar.DigestResult{
-			Type:     ar.TYPE_REFVAL_IAS,
-			SubType:  "IsvSvn",
-			Digest:   strconv.Itoa(int(sgxReferencePolicy.IsvSvn)),
-			Measured: strconv.Itoa(int(body.ISVSVN)),
-			Success:  sgxReferencePolicy.IsvSvn == body.ISVSVN,
+			Success:  bytes.Equal(sgxReferencePolicy.MrSigner, body.MRSIGNER[:]),
 			Launched: true,
 		},
 	)
@@ -359,8 +335,38 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 
 	for _, v := range result.Artifacts {
 		if !v.Success {
-			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Expected: %v Got: %v)", v.SubType, v.Digest, v.Measured)
+			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Expected: %v Got: %v)", v.Name, v.Digest, v.Measured)
 		}
+	}
+
+	// Check CPUSVN
+	statusCpuSvn := ar.StatusFail
+	if bytes.Compare(sgxExtensions.Tcb.Value.CpuSvn.Value, body.CPUSVN[:]) <= 0 {
+		statusCpuSvn = ar.StatusSuccess
+	}
+	result.SgxResult.QeReportCheck.CpuSvn = ar.Result{
+		Got:      hex.EncodeToString(sgxExtensions.Tcb.Value.CpuSvn.Value),
+		Expected: hex.EncodeToString(body.CPUSVN[:]),
+		Status:   statusCpuSvn,
+	}
+	if statusCpuSvn != ar.StatusSuccess {
+		return fmt.Errorf("failed to verify CPUSVN: Expected: %v, Got: %v", body.CPUSVN[:],
+			sgxExtensions.Tcb.Value.CpuSvn.Value)
+	}
+
+	// Check ISV SVN
+	statusIsvSvn := ar.StatusFail
+	if sgxReferencePolicy.IsvSvn == body.ISVSVN {
+		statusIsvSvn = ar.StatusSuccess
+	}
+	result.SgxResult.QeReportCheck.IsvSvn = ar.Result{
+		Got:      strconv.Itoa(int(sgxReferencePolicy.IsvSvn)),
+		Expected: strconv.Itoa(int(body.ISVSVN)),
+		Status:   statusIsvSvn,
+	}
+	if statusIsvSvn != ar.StatusSuccess {
+		return fmt.Errorf("failed to verify ISVSVN. Expected: %v, got %v", sgxReferencePolicy.IsvSvn,
+			body.ISVSVN)
 	}
 
 	result.SgxResult.SgxAttributesCheck = ar.SgxAttributesCheck{

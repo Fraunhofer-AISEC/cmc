@@ -267,16 +267,16 @@ func (c *Config) print() {
 
 }
 
-func precompute(pcrNums []int, tpmConf *Config) ([]*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func precompute(pcrNums []int, tpmConf *Config) ([]*ar.Component, []*ar.Component, error) {
 
 	var err error
-	refvals := make([]*ar.ReferenceValue, 0)
-	pcrs := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
+	pcrs := make([]*ar.Component, 0)
 
 	for _, pcrNum := range pcrNums {
 
-		var pcr *ar.ReferenceValue
-		var rv []*ar.ReferenceValue
+		var pcr *ar.Component
+		var rv []*ar.Component
 
 		switch {
 		case pcrNum == 0:

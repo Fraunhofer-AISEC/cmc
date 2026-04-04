@@ -107,7 +107,7 @@ message PeerCacheResponse {
 
 message MeasureRequest {
   string version = 1;
-  MeasureEvent measure_event = 2;
+  Component measure_event = 2;
 }
 
 message MeasureResponse {
@@ -133,11 +133,20 @@ message UpdateMetadataResponse {
   bool success = 2;
 }
 
-message MeasureEvent {
-  bytes sha256 = 1;
-  int32 index = 2;
-  string event_name = 3;
-  CtrData ctr_data = 4;
+message Component {
+  string type = 1;
+  string name = 2;
+  int32 index = 3;
+  repeated Hash hashes = 4;
+  string version = 5;
+  bool optional = 6;
+  string description = 7;
+  CtrData ctr_data = 9;
+}
+
+message Hash {
+  string alg = 1;
+  bytes Content = 2;
 }
 
 message CtrData {

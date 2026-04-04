@@ -23,9 +23,9 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.ReferenceValue,
+func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
 	index int, acpiRspd, acpiTables, tableLoader, tpmLog string,
-) ([]byte, []*ar.ReferenceValue, error) {
+) ([]byte, []*ar.Component, error) {
 
 	// EV_PLATFORM_CONFIG_FLAGS: /etc/table-loader
 	if tableLoader != "" {
@@ -34,7 +34,7 @@ func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals
 			return nil, nil, fmt.Errorf("failed to read table loader file: %w", err)
 		}
 
-		var rv *ar.ReferenceValue
+		var rv *ar.Component
 		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
 			"EV_PLATFORM_CONFIG_FLAGS", "/etc/table-loader")
 		if err != nil {
@@ -51,7 +51,7 @@ func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals
 			return nil, nil, fmt.Errorf("failed to read ACPI RSPD file: %w", err)
 		}
 
-		var rv *ar.ReferenceValue
+		var rv *ar.Component
 		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
 			"EV_PLATFORM_CONFIG_FLAGS", "/etc/acpi/rsdp")
 		if err != nil {
@@ -68,7 +68,7 @@ func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals
 			return nil, nil, fmt.Errorf("failed to read TPM log file: %w", err)
 		}
 
-		var rv *ar.ReferenceValue
+		var rv *ar.Component
 		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
 			"EV_PLATFORM_CONFIG_FLAGS", "/etc/tpm/log")
 		if err != nil {
@@ -85,7 +85,7 @@ func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals
 			return nil, nil, fmt.Errorf("failed to read ACPI tables file: %w", err)
 		}
 
-		var rv *ar.ReferenceValue
+		var rv *ar.Component
 		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
 			"EV_PLATFORM_CONFIG_FLAGS", "/etc/acpi/tables")
 		if err != nil {

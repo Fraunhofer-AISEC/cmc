@@ -59,7 +59,7 @@ setarr() {
   # Insert new values
   if echo "${value}" | jq -e 'type == "array"' >/dev/null 2>&1; then
     # A whole array is passed
-    ref="$(echo "${ref}" | jq --argjson ver "${value}" '.referenceValues += $ver')"
+    ref="$(echo "${ref}" | jq --argjson ver "${value}" '.components += $ver')"
   else
     # Single parameters are passed
     for param in "$@"; do

@@ -84,8 +84,8 @@ var (
 )
 
 func MeasureOvmf(alg crypto.Hash, ta TrustAnchor, digest []byte,
-	refvals []*ar.ReferenceValue, index int, ovmfPath string,
-) ([]byte, []*ar.ReferenceValue, error) {
+	refvals []*ar.Component, index int, ovmfPath string,
+) ([]byte, []*ar.Component, error) {
 
 	ovmf, err := os.ReadFile(ovmfPath)
 	if err != nil {
@@ -134,7 +134,7 @@ func MeasureOvmf(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	}
 	log.Debugf("PEIFV length: 0x%x", PeiHdr.FvLength)
 
-	var rv *ar.ReferenceValue
+	var rv *ar.Component
 	rv, digest, err = CreateExtendRefval(alg, ta, index, digest, fvmain[peiOffset:peiOffset+PeiHdr.FvLength],
 		"EV_EFI_PLATFORM_FIRMWARE_BLOB", "OVMF UEFI PEI Firmware Volume")
 	if err != nil {
@@ -160,7 +160,7 @@ func MeasureOvmf(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	}
 	log.Debugf("DXE length: 0x%x", DxeHdr.FvLength)
 
-	var rv2 *ar.ReferenceValue
+	var rv2 *ar.Component
 	rv2, digest, err = CreateExtendRefval(alg, ta, index, digest,
 		fvmain[dxeOffset:uint64(dxeOffset)+DxeHdr.FvLength],
 		"EV_EFI_PLATFORM_FIRMWARE_BLOB", "OVMF UEFI DXE Firmware Volume")

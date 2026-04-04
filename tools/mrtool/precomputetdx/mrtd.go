@@ -274,11 +274,11 @@ func MeasureCfv(ovmf []byte) ([]byte, error) {
  *
  * The MRTD contains the digest of the OVMF as hashed by the Intel TDX module.
  */
-func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error) {
+func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing MRTD...")
 
 	var mrtd []byte
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 
 	if c.Ovmf != "" {
 		data, err := os.ReadFile(c.Ovmf)
@@ -291,11 +291,16 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "EV_EFI_PLATFORM_FIRMWARE_BLOB",
-			Index:       tcg.INDEX_MRTD,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "EV_EFI_PLATFORM_FIRMWARE_BLOB",
+			Index: tcg.INDEX_MRTD,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
 		})
 		mrtd = hash[:]
@@ -308,11 +313,16 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 			return nil, nil, fmt.Errorf("malformed sha384 hash length: (is: %v, expected: %v)", len(hash), sha512.Size384)
 		}
 
-		refvals = append(refvals, &ar.ReferenceValue{
-			Type:        ar.TYPE_REFVAL_TDX,
-			SubType:     "OVMF",
-			Index:       tcg.INDEX_MRTD,
-			Sha384:      hash[:],
+		refvals = append(refvals, &ar.Component{
+			Type:  ar.TYPE_REFVAL_TDX,
+			Name:  "OVMF",
+			Index: tcg.INDEX_MRTD,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: hash[:],
+				},
+			},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (firmware)",
 		})
 		mrtd = hash[:]
@@ -321,12 +331,17 @@ func PrecomputeMrtd(c *Config) (*ar.ReferenceValue, []*ar.ReferenceValue, error)
 	}
 
 	// Create MRTD final reference value
-	mrtdSummary := &ar.ReferenceValue{
+	mrtdSummary := &ar.Component{
 		Type:        ar.TYPE_REFVAL_TDX,
-		SubType:     "MRTD Summary",
+		Name:        "MRTD Summary",
 		Description: "MRTD",
 		Index:       tcg.INDEX_MRTD,
-		Sha384:      mrtd,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: mrtd,
+			},
+		},
 	}
 
 	return mrtdSummary, refvals, nil

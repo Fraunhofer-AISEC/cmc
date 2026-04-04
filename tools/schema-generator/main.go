@@ -40,7 +40,7 @@ var (
 		"attestationreport": {
 			ar.AttestationReport{},
 			ar.AttestationResult{},
-			ar.MeasureEvent{},
+			ar.Component{},
 		},
 		"api": {
 			api.AttestationRequest{},

@@ -99,6 +99,44 @@
       },
       "type": "object"
     },
+    "Component": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "hashes": {
+          "items": {
+            "$ref": "#/$defs/ReferenceHash"
+          },
+          "type": "array"
+        },
+        "version": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eventdata": {
+          "$ref": "#/$defs/EventData"
+        },
+        "ctrData": {
+          "$ref": "#/$defs/CtrData"
+        },
+        "intelCollateral": {
+          "$ref": "#/$defs/IntelCollateral"
+        }
+      },
+      "type": "object"
+    },
     "CtrData": {
       "properties": {
         "configSha256": {
@@ -124,14 +162,14 @@
         "type": {
           "type": "string"
         },
-        "subtype": {
+        "name": {
           "type": "string"
         },
         "index": {
           "type": "integer"
         },
         "digest": {
-          "type": "string"
+          "$ref": "#/$defs/HexByte"
         },
         "measured": {
           "type": "string"
@@ -622,6 +660,51 @@
             "$ref": "#/$defs/EFIDevicePath"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "IntelCollateral": {
+      "properties": {
+        "TcbInfo": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "QeIdentity": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "RootCaCrl": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "PckCrl": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "PckCrlIntermediateCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "PckCrlRootCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "TcbInfoIntermediateCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "TcbInfoRootCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "QeIdentityIntermediateCert": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "QeIdentityRootCert": {
+          "type": "string",
+          "contentEncoding": "base64"
         }
       },
       "type": "object"
@@ -1278,9 +1361,9 @@
         "description": {
           "type": "string"
         },
-        "referenceValues": {
+        "components": {
           "items": {
-            "$ref": "#/$defs/ReferenceValue"
+            "$ref": "#/$defs/Component"
           },
           "type": "array"
         },
@@ -1313,9 +1396,6 @@
         },
         "details": {
           "type": "object"
-        },
-        "ociSpec": {
-          "$ref": "#/$defs/Spec"
         },
         "location": {
           "type": "string"
@@ -1535,6 +1615,12 @@
         "isvProdId": {
           "$ref": "#/$defs/Result"
         },
+        "cpuSvn": {
+          "$ref": "#/$defs/Result"
+        },
+        "isvSvn": {
+          "$ref": "#/$defs/Result"
+        },
         "miscSelect": {
           "$ref": "#/$defs/Result"
         },
@@ -1550,34 +1636,13 @@
       },
       "type": "object"
     },
-    "ReferenceValue": {
+    "ReferenceHash": {
       "properties": {
-        "type": {
+        "alg": {
           "type": "string"
         },
-        "subtype": {
-          "type": "string"
-        },
-        "index": {
-          "type": "integer"
-        },
-        "sha256": {
+        "content": {
           "$ref": "#/$defs/HexByte"
-        },
-        "sha384": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "sha512": {
-          "$ref": "#/$defs/HexByte"
-        },
-        "optional": {
-          "type": "boolean"
-        },
-        "description": {
-          "type": "string"
-        },
-        "eventdata": {
-          "$ref": "#/$defs/EventData"
         }
       },
       "type": "object"
@@ -1720,11 +1785,8 @@
         "quoteVersion": {
           "type": "integer"
         },
-        "isvProdId": {
-          "type": "integer"
-        },
         "mrSigner": {
-          "type": "string"
+          "$ref": "#/$defs/HexByte"
         },
         "isvSvn": {
           "type": "integer"

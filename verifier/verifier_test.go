@@ -34,14 +34,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Test_collectReferenceValues(t *testing.T) {
+func Test_collectComponents(t *testing.T) {
 	type args struct {
 		metadata []ar.MetadataResult
 	}
 	tests := []struct {
 		name    string
 		args    args
-		want    map[string][]ar.ReferenceValue
+		want    map[string][]ar.Component
 		wantErr bool
 	}{
 		{
@@ -60,21 +60,21 @@ func Test_collectReferenceValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := collectReferenceValues(tt.args.metadata)
+			got, err := collectComponents(tt.args.metadata)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("collectReferenceValues() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("collectComponents() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			for wantedkey, wantedrefvals := range tt.want {
 				for _, wantedrefval := range wantedrefvals {
 					found := false
 					for _, gotrefval := range got[wantedkey] {
-						if gotrefval.SubType == wantedrefval.SubType {
+						if gotrefval.Name == wantedrefval.Name {
 							found = true
 						}
 					}
 					if !found {
-						t.Errorf("collectReferenceValues() failed to find %v", wantedrefval.SubType)
+						t.Errorf("collectComponents() failed to find %v", wantedrefval.Name)
 					}
 				}
 			}
@@ -149,9 +149,9 @@ func TestVerify(t *testing.T) {
 						Description: "de.test.rtm",
 					},
 					Manifest: ar.Manifest{
-						DevCommonName:   "Test Developer",
-						ReferenceValues: []ar.ReferenceValue{},
-						CertLevel:       3,
+						DevCommonName: "Test Developer",
+						Components:    []ar.Component{},
+						CertLevel:     3,
 					},
 				},
 				osManifest: ar.Metadata{
@@ -418,17 +418,17 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 	}
 }
 
-// variables for Test_collectReferenceValues
+// variables for Test_collectComponents
 var (
-	refs = []ar.ReferenceValue{
-		{Type: ar.TYPE_REFVAL_TPM, SubType: "TPM1"},
-		{Type: ar.TYPE_REFVAL_TPM, SubType: "TPM2"},
-		{Type: ar.TYPE_REFVAL_SNP, SubType: "SNP1"},
-		{Type: ar.TYPE_REFVAL_SW, SubType: "SW1"},
-		{Type: ar.TYPE_REFVAL_SW, SubType: "SW2"},
+	refs = []ar.Component{
+		{Type: ar.TYPE_REFVAL_TPM, Name: "TPM1"},
+		{Type: ar.TYPE_REFVAL_TPM, Name: "TPM2"},
+		{Type: ar.TYPE_REFVAL_SNP, Name: "SNP1"},
+		{Type: ar.TYPE_REFVAL_SW, Name: "SW1"},
+		{Type: ar.TYPE_REFVAL_SW, Name: "SW2"},
 	}
 
-	refMap = map[string][]ar.ReferenceValue{
+	refMap = map[string][]ar.Component{
 		ar.TYPE_REFVAL_TPM: refs[:2],
 		ar.TYPE_REFVAL_SNP: {refs[2]},
 		ar.TYPE_REFVAL_SW:  refs[3:],
@@ -437,7 +437,7 @@ var (
 	rtmManifest = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				ReferenceValues: []ar.ReferenceValue{
+				Components: []ar.Component{
 					refs[0],
 					refs[2],
 				},
@@ -448,7 +448,7 @@ var (
 	osManifest = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				ReferenceValues: []ar.ReferenceValue{
+				Components: []ar.Component{
 					refs[1],
 				},
 			},
@@ -458,7 +458,7 @@ var (
 	appManifest1 = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				ReferenceValues: []ar.ReferenceValue{refs[3]},
+				Components: []ar.Component{refs[3]},
 			},
 		},
 	}
@@ -466,7 +466,7 @@ var (
 	appManifest2 = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				ReferenceValues: []ar.ReferenceValue{refs[4]},
+				Components: []ar.Component{refs[4]},
 			},
 		},
 	}

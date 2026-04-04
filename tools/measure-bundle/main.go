@@ -69,24 +69,34 @@ func main() {
 	// For now: just the hashes
 
 	// Generate reference value array
-	refs := make([]ar.ReferenceValue, 0)
+	refs := make([]ar.Component, 0)
 
 	// Fill reference values
 	// TODO make trust anchor and PCR configurable
 	pcr := 11
-	configRef := ar.ReferenceValue{
-		Type:     ar.TYPE_REFVAL_TPM,
-		SubType:  "OCI Runtime Config",
-		Sha256:   configHash,
+	configRef := ar.Component{
+		Type: ar.TYPE_REFVAL_TPM,
+		Name: "OCI Runtime Config",
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: configHash,
+			},
+		},
 		Index:    pcr,
 		Optional: true,
 	}
 	refs = append(refs, configRef)
 
-	rootfsRef := ar.ReferenceValue{
-		Type:     ar.TYPE_REFVAL_TPM,
-		SubType:  "OCI Runtime Rootfs",
-		Sha256:   rootfsHash,
+	rootfsRef := ar.Component{
+		Type: ar.TYPE_REFVAL_TPM,
+		Name: "OCI Runtime Rootfs",
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: rootfsHash,
+			},
+		},
 		Index:    pcr,
 		Optional: true,
 	}

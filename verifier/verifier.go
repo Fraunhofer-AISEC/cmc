@@ -151,7 +151,7 @@ func Verify(
 	log.Tracef("Recalculated %v context hash %x for encoded context with user nonce %x and length %v",
 		alg.String(), evidenceNonce, report.Context.Nonce, len(report.GetEncodedContext()))
 
-	refVals, err := collectReferenceValues(metaResults.ManifestResults)
+	refVals, err := collectComponents(metaResults.ManifestResults)
 	if err != nil {
 		result.Fail(ar.RefValTypeNotSupported, err)
 		return result
@@ -613,12 +613,14 @@ func checkValidity(val ar.Validity) ar.Result {
 	return result
 }
 
-func collectReferenceValues(metadata []ar.MetadataResult) (map[string][]ar.ReferenceValue, error) {
+func collectComponents(metadata []ar.MetadataResult) (map[string][]ar.Component, error) {
 
-	refmap := make(map[string][]ar.ReferenceValue)
+	refmap := make(map[string][]ar.Component)
 	// Iterate over all manifest reference values
+	log.Tracef("Collecting reference values from %v manifests", len(metadata))
 	for _, m := range metadata {
-		for _, r := range m.ReferenceValues {
+		log.Tracef("Manifest contains %v reference values", len(m.Components))
+		for _, r := range m.Components {
 			// Check reference value type
 			if r.Type != ar.TYPE_REFVAL_SNP &&
 				r.Type != ar.TYPE_REFVAL_SW &&

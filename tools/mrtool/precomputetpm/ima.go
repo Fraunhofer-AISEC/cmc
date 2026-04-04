@@ -18,7 +18,6 @@ package precomputetpm
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -30,11 +29,11 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, strip, prepend string, imaTemplate string) ([]*ar.ReferenceValue, error) {
+func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, strip, prepend string, imaTemplate string) ([]*ar.Component, error) {
 
-	refvals := make([]*ar.ReferenceValue, 0)
+	refvals := make([]*ar.Component, 0)
 	fileCh := make(chan string, 100)
-	resultCh := make(chan *ar.ReferenceValue, 100)
+	resultCh := make(chan *ar.Component, 100)
 
 	if bootAggregate != nil {
 		log.Debugf("Precomputing boot aggregate...")
@@ -62,7 +61,6 @@ func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, str
 					log.Errorf("error hashing %q: %v", path, err)
 					continue
 				}
-				log.Tracef("%s: %s", refval.SubType, hex.EncodeToString(refval.Sha256))
 				resultCh <- refval
 			}
 		}()
@@ -132,7 +130,7 @@ func precomputeImaTemplate(hash []byte, path string, template string) ([]byte, e
 	return th[:], nil
 }
 
-func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional bool) (*ar.ReferenceValue, error) {
+func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional bool) (*ar.Component, error) {
 
 	tmpl, err := precomputeImaTemplate(hash, "boot_aggregate", template)
 	if err != nil {
@@ -140,18 +138,23 @@ func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional 
 	}
 
 	// Create reference value
-	r := &ar.ReferenceValue{
-		Type:     ar.TYPE_REFVAL_TPM,
-		SubType:  "boot_aggregate",
-		Index:    pcr,
-		Sha256:   tmpl,
+	r := &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  "boot_aggregate",
+		Index: pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: tmpl,
+			},
+		},
 		Optional: optional,
 	}
 
 	return r, nil
 }
 
-func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional bool) (*ar.ReferenceValue, error) {
+func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional bool) (*ar.Component, error) {
 
 	fileHash, err := hashFile(path)
 	if err != nil {
@@ -166,14 +169,21 @@ func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional
 	}
 
 	// Create reference value
-	r := &ar.ReferenceValue{
-		Type:        ar.TYPE_REFVAL_TPM,
-		SubType:     filepath.Base(hashedPath),
-		Index:       pcr,
-		Sha256:      tmpl,
+	r := &ar.Component{
+		Type:  ar.TYPE_REFVAL_TPM,
+		Name:  filepath.Base(hashedPath),
+		Index: pcr,
+		Hashes: []ar.ReferenceHash{
+			{
+				Alg:     "SHA-256",
+				Content: tmpl,
+			},
+		},
 		Description: hashedPath,
 		Optional:    optional,
 	}
+
+	log.Tracef("%s: %x", r.Name, tmpl)
 
 	return r, nil
 }

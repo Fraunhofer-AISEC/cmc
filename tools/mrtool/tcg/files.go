@@ -25,9 +25,9 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.ReferenceValue,
+func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
 	index int, files []string,
-) ([]byte, []*ar.ReferenceValue, error) {
+) ([]byte, []*ar.Component, error) {
 
 	for _, p := range files {
 		info, err := os.Lstat(p)
@@ -69,16 +69,16 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 
 }
 
-func MeasureFile(alg crypto.Hash, ta TrustAnchor, eventType string, digest []byte, refvals []*ar.ReferenceValue,
+func MeasureFile(alg crypto.Hash, ta TrustAnchor, eventType string, digest []byte, refvals []*ar.Component,
 	index int, file string,
-) ([]byte, []*ar.ReferenceValue, error) {
+) ([]byte, []*ar.Component, error) {
 
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure file: %w", err)
 	}
 
-	var rv *ar.ReferenceValue
+	var rv *ar.Component
 	rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data, eventType, filepath.Base(file))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create reference value: %w", err)
