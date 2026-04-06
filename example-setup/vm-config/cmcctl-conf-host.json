@@ -1,5 +1,6 @@
 {
     "addr": "https://ubuntu:4443",
+    "cmcAddr": "localhost:9955",
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",
@@ -9,10 +10,10 @@
     "estTlsCa": "data/pki/ca.pem",
     "mtls": false,
     "attest": "server",
-    "measurementLog": true,
     "logLevel": "trace",
     "api": "socket",
     "serialization": "json",
-    "cmcAddr": "localhost:9955",
-    "keyConfig": "EC256"
+    "keyConfig": "EC256",
+    "keyType": "sw",
+    "keyId": "data/key_id"
 }

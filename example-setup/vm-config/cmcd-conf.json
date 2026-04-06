@@ -1,14 +1,17 @@
 {
     "cmcAddr": "0.0.0.0:9955",
-    "provisionAddr": "https://10.0.2.2:9000/",
     "provisionAuth": [ "none" ],
-    "provisionMode": "est",
+    "endorsementMode": "est",
+    "endorsementAddr": "https://10.0.2.2:9000/",
+    "enrollmentMode": "est",
+    "enrollmentAddr": "https://10.0.2.2:9000/",
     "metadata": [
         "https://10.0.2.2:9000/vm-metadata"
     ],
     "drivers": [ "tpm", "sw" ],
     "keyConfig": "EC256",
     "hashAlg": "SHA256",
+    "tpmKeyAlg": "EC256",
     "api": "socket",
     "logLevel": "trace",
     "storage": "/var/cmc/internal/",

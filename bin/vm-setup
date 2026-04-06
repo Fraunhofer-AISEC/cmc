@@ -32,7 +32,7 @@ done
 img="noble-server-cloudimg-amd64.img"
 vm_size="20G"
 cloudimg="https://cloud-images.ubuntu.com/noble/current/${img}"
-cloudfile="${data}/images/${img}.bck"
+cloudfile="${data}/images/${img}.bkp"
 vmfile="${data}/images/${img}"
 
 qemu="${data}/qemu"
