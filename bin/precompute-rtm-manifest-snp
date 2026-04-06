@@ -39,8 +39,6 @@ input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
 pki="${data}/pki"
 
-image_description="${out}/image.description.json"
-
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
@@ -57,14 +55,6 @@ echo "Using ${data} as directory for local data"
 
 # Load manifest template
 manifest=$(cat "${input}/manifest.json")
-
-# Retrieve high level details
-set +e
-firmware="unknown"
-bootloader=$(grub-install --version)
-kernel=$(uname -r)
-os=$(lsb_release -sd 2>/dev/null)
-set -e
 
 # Get AMD cert chains
 snp_code_names=("Milan" "Genoa" "Turin")
@@ -84,23 +74,20 @@ for i in "${!snp_code_names[@]}"; do
     extendarr "manifest" "caFingerprints" "${fingerprint}"
 done
 
-set +e
-ref=$(calculate-snp-mr \
+ref=$("${dir}/tools/mrtool/mrtool" precompute snp \
   --vcpus "${vcpus}" \
   --vmm-type "${vmm_type}" \
   --ovmf "${ovmf}" \
 )
-if [[ -z "${ref}" ]]; then
-    echo "calculate-snp-mr failed: empty reference values"
-    exit 1
-fi
-echo "${ref}" | jq empty 2>/dev/null || {
-    echo "calculate-snp-mr failed: '${ref}'"
-    exit 1
-}
-set -e
 
+# SBOM: load
+sbom=$(cat "${input}/cyclonedx.sbom.json")
 
+# SBOM: Set properties
+setjson "sbom" "bomFormat"   "CycloneDX"
+setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "version"     1
+setarr  "sbom" "components"  "${ref}"
 
 name="de.test.rtm"
 
@@ -113,13 +100,7 @@ setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "
 setjson "manifest" "description"           "RTM Manifest"
 setarr  "manifest" "baseLayers"            "${name}"
 setjson "manifest" "certLevel"             3
-setarr  "manifest" "components"       "${ref}"
-
-# Insert platform details
-setjson "manifest" "details.firmware" "${firmware}"
-setjson "manifest" "details.bootloader" "${bootloader}"
-setjson "manifest" "details.kernel" "${kernel}"
-setjson "manifest" "details.os" "${os}"
+setjson "manifest" "sbom"                  "${sbom}"
 
 policy=$(cat "${input}/snp.policy.json")
 
@@ -182,16 +163,16 @@ rootdesc=$(echo "${rootdesc}" | jq ".name = \"${name}.description\"")
 rootdesc=$(echo "${rootdesc}" | jq ".manifest = \"${name}\"")
 
 # Image Description: Add/replace root manifest description to/in image description
-image_description=$(cat "${image_description}")
+image_description=$(cat "${out}/image.description.json")
 exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
 if [[ "${exists}" = false ]]; then
   echo "Adding root manifest description to image description"
 else
   echo "Replacing existing root manifest description"
-  image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
+  image_description=$(echo "${image_description}" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
 image_description=$(echo "${image_description}" | jq --argjson desc "[${rootdesc}]" '.descriptions += $desc')
 
 # Image Description: Store
-echo "Writing ${image_description}"
-printf "%s\n" "${image_description}" > "${image_description}"
+echo "Writing ${out}/image.description.json"
+printf "%s\n" "${image_description}" > "${out}/image.description.json"

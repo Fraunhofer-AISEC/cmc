@@ -1361,11 +1361,8 @@
         "description": {
           "type": "string"
         },
-        "components": {
-          "items": {
-            "$ref": "#/$defs/Component"
-          },
-          "type": "array"
+        "sbom": {
+          "$ref": "#/$defs/Sbom"
         },
         "developerCommonName": {
           "type": "string"
@@ -1718,6 +1715,26 @@
         },
         "avx": {
           "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "Sbom": {
+      "properties": {
+        "bomFormat": {
+          "type": "string"
+        },
+        "specVersion": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "type": "array"
         }
       },
       "type": "object"

@@ -53,32 +53,40 @@ else
   components=$("${mrtool[@]}" read tpm --mrs 8,9,12,13,14,15)
 fi
 
-# Load OS manifest
-json=$(cat "${input}/manifest.json")
+# SBOM: load
+sbom=$(cat "${input}/cyclonedx.sbom.json")
+
+# SBOM: Insert reference values
+sbom=$(echo "${sbom}" | jq 'del(.components[])')
+sbom=$(jq -n --argjson base "${sbom}" --slurpfile ver <(printf '%s' "${components}") '$base | .components += $ver[0]')
+
+# SBOM: Set other properties
+setjson "sbom" "bomFormat"   "CycloneDX"
+setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "version"     1
+
+# OS manifest: load
+manifest=$(cat "${input}/manifest.json")
 
 name="de.test.os"
 
-# Insert manifest properties
-setjson "json" "name"                  "${name}"
-setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-setjson "json" "developerCommonName"   "test developer"
-setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "json" "description"           "OS Manifest"
-setarr  "json" "baseLayers"            "de.test.rtm"
-setjson "json" "certLevel"             3
+# OS manifest: set properties
+setjson "manifest" "name"                  "${name}"
+setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "manifest" "developerCommonName"   "test developer"
+setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "manifest" "description"           "OS Manifest"
+setarr  "manifest" "baseLayers"            "de.test.rtm"
+setjson "manifest" "certLevel"             3
+setjson "manifest" "sbom"                  "${sbom}"
+setjson "manifest" "details.kernel"        "${kernel}"
+setjson "manifest" "details.os"            "${os}"
 
-# Insert os details
-json=$(echo "${json}" | jq ".details.kernel = \"${kernel}\"")
-json=$(echo "${json}" | jq ".details.os = \"${os}\"")
 
-# Insert reference values in the OS Manifest
-json=$(echo "${json}" | jq 'del(.components[])')
-json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$components") '$base | .components += $ver[0]')
-
-# Save manifest
+# OS Manifest: save
 echo "Writing ${out}/rtm.manifest.json"
-printf "%s\n" "${json}" > "${out}/os.manifest.json"
+printf "%s\n" "${manifest}" > "${out}/os.manifest.json"
 
 # OS Manifest Description: Create corresponding OS manifest description
 osdesc=$(cat "${input}/manifest.description.json")
