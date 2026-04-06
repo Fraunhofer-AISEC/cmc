@@ -34,7 +34,7 @@ var (
 type Cache struct {
 	path  string                       // Optional persistent storage path
 	data  map[string]map[string][]byte // Peer ID -> metadata-hash -> metadata
-	mutex sync.Mutex
+	mutex sync.RWMutex
 }
 
 // Load loads the peer cache from persistent storage
@@ -106,12 +106,21 @@ func (cache *Cache) Get(peer string) map[string][]byte {
 		return nil
 	}
 
+	cache.mutex.RLock()
+	defer cache.mutex.RUnlock()
+
 	if _, exists := cache.data[peer]; !exists {
 		log.Debugf("No metadata cached for peer %q", peer)
 		return nil
 	}
 
-	return cache.data[peer]
+	// Return a copy to avoid external mutation
+	result := make(map[string][]byte, len(cache.data[peer]))
+	for k, v := range cache.data[peer] {
+		result[k] = v
+	}
+
+	return result
 }
 
 // GetKeys returns the hashes, i.e., the IDs of the cached metadata items
