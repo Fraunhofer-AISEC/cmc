@@ -40,7 +40,7 @@ mrenclave=$(echo "$(ego uniqueid cmcctl)" | awk 'NR==1')
 components='[
     {
       "type": ar.TYPE_REFVAL_SGX,
-      "subtype": "MRENCLAVE",
+      "name": "MRENCLAVE",
       "index": 0,
       "sha256": "'"${mrenclave}"'",
       "description": "MRENCLAVE"
@@ -52,21 +52,33 @@ mrsigner=$(echo "$(ego signerid cmcctl)" | awk 'NR==1')
 
 cd "${data}"
 
+# SBOM: load
+sbom=$(cat "${input}/cyclonedx.sbom.json")
+
+# SBOM: Insert reference values
+sbom=$(jq -n --argjson base "${sbom}" --slurpfile ver <(printf '%s' "${components}") '$base | .components += $ver[0]')
+
+# SBOM: Set other properties
+setjson "sbom" "bomFormat"   "CycloneDX"
+setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "version"     1
+
 # Load manifest template
-json=$(cat "${input}/manifest.json")
+manifest=$(cat "${input}/manifest.json")
 
 name="de.test.rtm"
 
 # Insert manifest properties
-setjson "json" "name"                  "${name}"
-setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-setjson "json" "developerCommonName"   "test developer"
-setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "json" "description"           "RTM Manifest"
-setarr  "json" "baseLayers"            "${name}"
-setjson "json" "certLevel"             3
-setjson "json" "caFingerprint"         "${fingerprint}"
+setjson "manifest" "name"                  "${name}"
+setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "manifest" "developerCommonName"   "test developer"
+setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "manifest" "description"           "RTM Manifest"
+setarr  "manifest" "baseLayers"            "${name}"
+setjson "manifest" "certLevel"             3
+setjson "manifest" "caFingerprint"         "${fingerprint}"
+setjson "manifest" "sbom"                  "${sbom}"
 
 # Create policy
 policy=$(cat "${input}/sgx.policy.json")
@@ -82,15 +94,11 @@ setjson "policy" "attributes.avx"               false
 setjson "policy" "isvSvn"                       1
 setjson "policy" "mrsigner"                     "${mrsigner}"
 
-setjson "json" "sgxPolicy" "${policy}"
-
-# Replace existing reference values with new reference values
-json=$(echo "${json}" | jq 'del(.components[])')
-json=$(echo "${json}" | jq --argjson ver "${components}" '.components += $ver')
+setjson "manifest" "sgxPolicy" "${policy}"
 
 # Save the manifest
 echo "Writing ${out}/rtm.manifest.json"
-printf "%s\n" "${json}" > "${out}/rtm.manifest.json"
+printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
 
 # Manifest Description: Create corresponding manifest description
 rtmdesc=$(cat "${input}/manifest.description.json")

@@ -13,7 +13,6 @@
     ],
     "certLevel" : 0,
     "caFingerprints": [],
-    "components": [
-    ]
+    "sbom": {}
 }
 

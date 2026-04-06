@@ -41,26 +41,34 @@ echo "Using ${data} as directory for local data"
 # Parse the IMA measurement lists
 components=$("${mrtool[@]}" parse ima --mrs 10)
 
+# SBOM: load
+sbom=$(cat "${input}/cyclonedx.sbom.json")
+
+# SBOM: Insert reference values
+sbom=$(jq -n --argjson base "${sbom}" --slurpfile ver <(printf '%s' "${components}") '$base | .components += $ver[0]')
+
+# SBOM: Set other properties
+setjson "sbom" "bomFormat"   "CycloneDX"
+setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "version"     1
+
 # App Manifest: load
-json=$(cat "${input}/manifest.json")
+manifest=$(cat "${input}/manifest.json")
 
-# App Manifest: Insert reference values
-json=$(jq -n --argjson base "$json" --slurpfile ver <(printf '%s' "$components") '$base | .components += $ver[0]')
-
-
-# App Manifest: Set other properties
-setjson "json" "name"                  "${name}"
-setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-setjson "json" "developerCommonName"   "test developer"
-setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "json" "description"           "App Manifest"
-setarr  "json" "baseLayers"            "de.test.os"
-setjson "json" "certLevel"             1
+# App Manifest: Set properties
+setjson "manifest" "name"                  "${name}"
+setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+setjson "manifest" "developerCommonName"   "test developer"
+setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+setjson "manifest" "description"           "App Manifest"
+setarr  "manifest" "baseLayers"            "de.test.os"
+setjson "manifest" "certLevel"             1
+setjson "manifest" "sbom"                  "${sbom}"
 
 # App Manifest: Store
 echo "Writing ${out}/app.manifest.json"
-printf "%s\n" "${json}" > "${out}/app.manifest.json"
+printf "%s\n" "${manifest}" > "${out}/app.manifest.json"
 
 # App Description: Create corresponding app description
 appdesc=$(cat "${input}/manifest.description.json")

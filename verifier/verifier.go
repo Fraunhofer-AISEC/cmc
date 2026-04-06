@@ -619,8 +619,12 @@ func collectComponents(metadata []ar.MetadataResult) (map[string][]ar.Component,
 	// Iterate over all manifest reference values
 	log.Tracef("Collecting reference values from %v manifests", len(metadata))
 	for _, m := range metadata {
-		log.Tracef("Manifest contains %v reference values", len(m.Components))
-		for _, r := range m.Components {
+		if m.Sbom == nil {
+			log.Tracef("Manifest does not contain sbom. Continue")
+			continue
+		}
+		log.Tracef("Manifest contains %v reference values", len(m.Sbom.Components))
+		for _, r := range m.Sbom.Components {
 			// Check reference value type
 			if r.Type != ar.TYPE_REFVAL_SNP &&
 				r.Type != ar.TYPE_REFVAL_SW &&

@@ -150,7 +150,7 @@ type MetaInfo struct {
 // Manifest represents a part of the reference software stack (e.g., OS layer, app layer)
 // and includes a list of reference hash values comprising the layer
 type Manifest struct {
-	Components     []Component            `json:"components,omitempty" cbor:"10,keyasint,omitempty"`
+	Sbom           *Sbom                  `json:"sbom,omitempty" cbor:"10,keyasint,omitempty"`
 	DevCommonName  string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
 	BaseLayers     []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
 	CertLevel      int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
@@ -173,6 +173,14 @@ type ManifestDescription struct {
 	Name        string `json:"name" cbor:"1,keyasint"`
 	Description string `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
 	Manifest    string `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
+}
+
+// Sbom is a partial CycloneDX SBOM implementation
+type Sbom struct {
+	BomFormat   string      `json:"bomFormat" cbor:"0,keyasint"`
+	SpecVersion string      `json:"specVersion" cbor:"1,keyasint"`
+	Version     int         `json:"version,omitempty" cbor:"2,keyasint,omitempty"`
+	Components  []Component `json:"components,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 // Component represents a software component with its hashes.

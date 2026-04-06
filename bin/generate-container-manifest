@@ -76,7 +76,7 @@ else
   exists=true
   json=$(cat "${runc_config}")
   original_json=${json}
-  json=$(echo "$json" | jq '.generateRefVals = true')
+  json=$(echo "${json}" | jq '.generateRefVals = true')
   echo "${json}" | sudo tee "${runc_config}"
 fi
 
@@ -141,34 +141,42 @@ for ((i = 0; i < num_containers; i++)); do
 
     refval=$(echo "${refvals}" | jq -r ".[$i]")
 
-    # App Manifest: load
-    json=$(cat "${input}/manifest.json")
+    # SBOM: load
+    sbom=$(cat "${input}/cyclonedx.sbom.json")
 
-    # App Manifest: Insert reference values
-    json=$(echo "${json}" | jq --argjson ver "[${refval}]" '.components += $ver')
+    # SBOM: Insert reference values
+    sbom=$(echo "${sbom}" | jq --argjson ver "[${refval}]" '.components += $ver')
 
-    # App Manifest: Extract the reference value sha256 and add it to the file name to not overwrite the same
+    # SBOM: set reference value name
+    sbom=$(echo "${sbom}" | jq ".components[0].name += \": ${container}\"")
+
+    # SBOM: Extract the reference value sha256 and add it to the file name to not overwrite the same
     # container with different arguments such as environment variables
-    sha256=$(echo "${json}" | jq -r '.components[0].sha256')
-
+    sha256=$(echo "${sbom}" | jq -r '.components[0].sha256')
     echo "Refval sha256: ${sha256}"
 
-    # App Manifest: Set name and reference value name
-    json=$(echo "${json}" | jq ".name = \"${container}-${sha256}\"")
-    json=$(echo "${json}" | jq ".components[0].name += \": ${container}\"")
+    # SBOM: Set other properties
+    setjson "sbom" "bomFormat"   "CycloneDX"
+    setjson "sbom" "specVersion" "1.7"
+    setjson "sbom" "version"     1
 
-    # App Manifest: Set other properties
-    setjson "json" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    setjson "json" "developerCommonName"   "test developer"
-    setjson "json" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-    setjson "json" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-    setjson "json" "description"           "App Manifest"
-    setarr  "json" "baseLayers"            "de.test.os"
-    setjson "json" "certLevel"             1
+    # App Manifest: load
+    manifest=$(cat "${input}/manifest.json")
+
+    # App Manifest: Set properties
+    setjson "manifest" "name"                  "${container}-${sha256}"
+    setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    setjson "manifest" "developerCommonName"   "test developer"
+    setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
+    setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
+    setjson "manifest" "description"           "App Manifest"
+    setarr  "manifest" "baseLayers"            "de.test.os"
+    setjson "manifest" "certLevel"             1
+    setjson "manifest" "sbom"                  "${sbom}"
 
     # App Manifest: Store
     echo "Writing ${out}/${container_name}-${sha256}.manifest.json"
-    printf "%s\n" "${json}" > "${out}/${container_name}-${sha256}.manifest.json"
+    printf "%s\n" "${manifest}" > "${out}/${container_name}-${sha256}.manifest.json"
 
     # App Description: Create corresponding app description
     appdesc=$(cat "${input}/manifest.description.json")

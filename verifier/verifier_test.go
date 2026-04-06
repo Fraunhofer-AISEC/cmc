@@ -150,8 +150,10 @@ func TestVerify(t *testing.T) {
 					},
 					Manifest: ar.Manifest{
 						DevCommonName: "Test Developer",
-						Components:    []ar.Component{},
-						CertLevel:     3,
+						Sbom: &ar.Sbom{
+							Components: []ar.Component{},
+						},
+						CertLevel: 3,
 					},
 				},
 				osManifest: ar.Metadata{
@@ -437,9 +439,11 @@ var (
 	rtmManifest = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				Components: []ar.Component{
-					refs[0],
-					refs[2],
+				Sbom: &ar.Sbom{
+					Components: []ar.Component{
+						refs[0],
+						refs[2],
+					},
 				},
 			},
 		},
@@ -448,8 +452,10 @@ var (
 	osManifest = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				Components: []ar.Component{
-					refs[1],
+				Sbom: &ar.Sbom{
+					Components: []ar.Component{
+						refs[1],
+					},
 				},
 			},
 		},
@@ -458,7 +464,9 @@ var (
 	appManifest1 = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				Components: []ar.Component{refs[3]},
+				Sbom: &ar.Sbom{
+					Components: []ar.Component{refs[3]},
+				},
 			},
 		},
 	}
@@ -466,7 +474,9 @@ var (
 	appManifest2 = ar.MetadataResult{
 		Metadata: ar.Metadata{
 			Manifest: ar.Manifest{
-				Components: []ar.Component{refs[4]},
+				Sbom: &ar.Sbom{
+					Components: []ar.Component{refs[4]},
+				},
 			},
 		},
 	}
