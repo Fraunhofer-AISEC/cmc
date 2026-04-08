@@ -34,6 +34,7 @@ type PrecomputeSnpConf struct {
 	InitRfs   string
 	CmdLine   string
 	OvmfFile  string
+	IgvmFile  string
 	vcpuCount int
 	vmmType   VmmType
 	SnpDigest []byte
@@ -44,6 +45,7 @@ const (
 	initRfsFlag   = "initrd"
 	cmdFlag       = "cmdline"
 	ovmfFlag      = "ovmf"
+	igvmFlag      = "igvm"
 	vcpuCountFlag = "vcpus"
 	vmmTypeFlag   = "vmm-type"
 	snpDigestFlag = "snp-digest"
@@ -74,6 +76,10 @@ var Command = &cli.Command{
 		&cli.StringFlag{
 			Name:  ovmfFlag,
 			Usage: "Filename of the OVMF.fd file",
+		},
+		&cli.StringFlag{
+			Name:  igvmFlag,
+			Usage: "Filename of the IGVM file (alternative to specifying OVMF.fd)",
 		},
 		&cli.StringFlag{
 			Name:  kernelFlag,
@@ -129,12 +135,19 @@ func run(cmd *cli.Command) error {
 	if len(snpConfig.SnpDigest) > 0 {
 		hash = snpConfig.SnpDigest
 		description = "SNP launch digest"
-	} else {
-		hash, err = performSnpPrecomputation(snpConfig)
+	} else if snpConfig.OvmfFile != "" {
+		hash, err = performOvmfPrecomputation(snpConfig)
 		if err != nil {
 			return err
 		}
 		description = fmt.Sprintf("SNP launch digest for %d vCPUs", snpConfig.vcpuCount)
+	} else if snpConfig.IgvmFile != "" {
+		hash, err = performIgvmPrecomputation(snpConfig)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("internal error: neither ovmf, igvm nor snp digest configured")
 	}
 
 	// setup the reference value for the event log (as slice with single value)
@@ -184,6 +197,9 @@ func getConfig(cmd *cli.Command) (*PrecomputeSnpConf, error) {
 	if cmd.IsSet(ovmfFlag) {
 		config.OvmfFile = cmd.String(ovmfFlag)
 	}
+	if cmd.IsSet(igvmFlag) {
+		config.IgvmFile = cmd.String(igvmFlag)
+	}
 	if cmd.IsSet(snpDigestFlag) {
 		s := cmd.String(snpDigestFlag)
 		digest, err := hex.DecodeString(s)
@@ -198,10 +214,16 @@ func getConfig(cmd *cli.Command) (*PrecomputeSnpConf, error) {
 
 	// validate the config
 	if cmd.IsSet(ovmfFlag) && cmd.IsSet(snpDigestFlag) {
-		return nil, fmt.Errorf("flags %q and %q cannot both be set", ovmfFlag, snpDigestFlag)
+		return nil, fmt.Errorf("flags %q and %q are mutually exclusive. See mrtool precompute snp --help", ovmfFlag, snpDigestFlag)
 	}
-	if len(config.OvmfFile) == 0 && len(config.SnpDigest) == 0 {
-		return nil, fmt.Errorf("either OVMF must or precomputed SNP launch digest must be specified. See mrtool precompute snp --help")
+	if cmd.IsSet(igvmFlag) && cmd.IsSet(snpDigestFlag) {
+		return nil, fmt.Errorf("flags %q and %q are mutually exclusive. See mrtool precompute snp --help", igvmFlag, snpDigestFlag)
+	}
+	if cmd.IsSet(igvmFlag) && cmd.IsSet(ovmfFlag) {
+		return nil, fmt.Errorf("flags %q and %q are mutually exclusive. See mrtool precompute snp --help", igvmFlag, ovmfFlag)
+	}
+	if len(config.OvmfFile) == 0 && len(config.SnpDigest) == 0 && len(config.IgvmFile) == 0 {
+		return nil, fmt.Errorf("either OVMF, IGVM or precomputed SNP launch digest must be specified. See mrtool precompute snp --help")
 	}
 	if config.vcpuCount <= 0 {
 		return nil, fmt.Errorf("number of vcpus must be greater than zero. See mrtool precompute snp --help")
@@ -230,6 +252,9 @@ func getConfig(cmd *cli.Command) (*PrecomputeSnpConf, error) {
 	}
 	if len(config.OvmfFile) > 0 {
 		log.Debugf("\tOVMF file         : %q", config.OvmfFile)
+	}
+	if len(config.IgvmFile) > 0 {
+		log.Debugf("\tIGVM file         : %q", config.IgvmFile)
 	}
 	if len(config.SnpDigest) > 0 {
 		log.Debugf("\tSNP Launch Digest: %x", config.SnpDigest)
