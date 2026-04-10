@@ -57,7 +57,7 @@ sbom=$(cat "${input}/cyclonedx.sbom.json")
 
 # SBOM: Set other properties
 setjson "sbom" "bomFormat"   "CycloneDX"
-setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "specVersion" "\"1.7\""
 setjson "sbom" "version"     1
 
 # SBOM: Set reference values
@@ -86,8 +86,8 @@ printf "%s\n" "${manifest}" > "${out}/os.manifest.json"
 
 # OS Manifest Description: Create corresponding OS manifest description
 osdesc=$(cat "${input}/manifest.description.json")
-osdesc=$(echo "${osdesc}" | jq ".name = \"${name}.description\"")
-osdesc=$(echo "${osdesc}" | jq ".manifest = \"${name}\"")
+setjson "osdesc" "name"     "${name}.description"
+setjson "osdesc" "manifest" "${name}"
 
 # Image Description: Add/replace OS manifest description to/in image description
 image_description=$(cat "${image_description}")
@@ -98,7 +98,7 @@ else
   echo "Replacing existing OS Manifest description"
   image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-image_description=$(echo "${image_description}" | jq --argjson desc "[${osdesc}]" '.descriptions += $desc')
+extendarr "image_description" "descriptions" "${osdesc}"
 
 # Image Description: Store
 echo "Writing ${image_description}"

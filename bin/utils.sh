@@ -9,12 +9,12 @@ abs_path() {
 }
 
 # Updates the JSON data given in the first argument through setting the key and
-# value given in the second and third argument. Numbers must be \"\" quoted,
-# if they should be treated as a JSON string
+# value given in the second and third argument. Automatically detects whether the
+# value is valid JSON (number, bool, object, array) or a plain string.
 setjson() {
   if [[ "$#" -ne 3 ]]; then
-    echo "Error: provided invalid number of parameters: $#: $@"
-    echo "Usage: setjson <json-input> <key> <value>"
+    printf "Error: provided invalid number of parameters: %d: %s\n" "$#" "$*" >&2
+    printf "Usage: setjson <json-var> <key> <value>\n" >&2
     return 1
   fi
 
@@ -22,48 +22,38 @@ setjson() {
   local key=$2
   local value=$3
 
-  if [[ "${value}" == \"*\" || "${value}" == \'*\' ]]; then
-    # Parameter is string in quotes, use as is
-    ref="$(echo "${ref}" | jq ".${key} = ${value}")"
-  elif [[ "${value}" =~ ^\{.*\}$ || "${value}" =~ ^\[.*\]$ ]]; then
-    # Parameter is a JSON object or array, do not use quotes
-    ref="$(echo "${ref}" | jq ".${key} = ${value}")"
-  elif [[ "${value}" =~ ^[0-9]+$ || "${value}" == "true" || "${value}" == "false" ]]; then
-    # Parameter is number or boolean, do not use quotes
-    ref="$(echo "${ref}" | jq ".${key} = ${value}")"
+  if jq -e . <<<"$value" >/dev/null 2>&1; then
+    # Value is valid JSON — pass via slurpfile to avoid ARG_MAX
+    ref="$(jq --slurpfile v <(printf '%s' "$value") ".$key = \$v[0]" <<<"$ref")"
   else
-    # Parameter is a string, wrap in quotes
-    ref="$(echo "${ref}" | jq ".${key} = \"${value}\"")"
+    # Plain string — pass via --arg (handles all escaping)
+    ref="$(jq --arg v "$value" ".$key = \$v" <<<"$ref")"
   fi
 }
 
-# Updates the JSON data given in the first argument through setting the array given
-# in the second argument to the value given in the third argument. Can handle entire
-# arrays and single values
+# Updates the JSON data given in the first argument through replacing the array
+# at the key given in the second argument. Can handle entire JSON arrays and
+# single string values. Multiple string values can be passed as extra arguments.
 setarr() {
   if [[ "$#" -lt 3 ]]; then
-    echo "Error: provided invalid number of parameters: $#: $@"
-    echo "Usage: setarr <json-input> <key> <value>"
+    printf "Error: provided invalid number of parameters: %d\n" "$#" >&2
+    printf "Usage: setarr <json-var> <key> <values...>\n" >&2
     return 1
   fi
 
   local -n ref=$1
-  shift
-	local key=$1
-  shift
-  local value=$1
+  local key=$2
+  shift 2
 
-  # Delete any existing values
-  ref="$(echo "${ref}" | jq "del(.${key}[])")"
+  # Clear existing array
+  ref="$(jq "del(.$key[])" <<<"$ref")"
 
-  # Insert new values
-  if echo "${value}" | jq -e 'type == "array"' >/dev/null 2>&1; then
-    # A whole array is passed
-    ref="$(echo "${ref}" | jq --argjson ver "${value}" '.components += $ver')"
+  # If single arg is a JSON array, assign directly via slurpfile
+  if [[ $# -eq 1 ]] && jq -e 'type == "array"' <<<"$1" >/dev/null 2>&1; then
+    ref="$(jq --slurpfile v <(printf '%s' "$1") ".$key = \$v[0]" <<<"$ref")"
   else
-    # Single parameters are passed
     for param in "$@"; do
-      ref="$(echo "${ref}" | jq ".${key} += [\"${param}\"]")"
+      ref="$(jq --arg v "$param" ".$key += [\$v]" <<<"$ref")"
     done
   fi
 }
@@ -72,8 +62,8 @@ setarr() {
 # given in the second argument with the value given in the third argument
 extendarr() {
   if [[ "$#" -ne 3 ]]; then
-    echo "Error: provided invalid number of parameters: $#"
-    echo "Usage: extendarr <json-input> <key> <value>"
+    printf "Error: provided invalid number of parameters: %d\n" "$#" >&2
+    printf "Usage: extendarr <json-var> <key> <value>\n" >&2
     return 1
   fi
 
@@ -81,10 +71,11 @@ extendarr() {
   local key=$2
   local param=$3
 
-  # Determine if value is a valid JSON array
-  if echo "${param}" | jq -e type >/dev/null 2>&1; then
-    ref="$(echo "${ref}" | jq --argjson newval "${param}" ".${key} += (if \$newval | type == \"array\" then \$newval else [\$newval] end)")"
+  # Determine if value is valid JSON — pass via slurpfile to avoid ARG_MAX
+  if jq -e type <<<"$param" >/dev/null 2>&1; then
+    ref="$(jq --slurpfile v <(printf '%s' "$param") \
+      ".$key += (if \$v[0] | type == \"array\" then \$v[0] else [\$v[0]] end)" <<<"$ref")"
   else
-    ref="$(echo "${ref}" | jq --arg newval "${param}" ".${key} += [\$newval]")"
+    ref="$(jq --arg v "$param" ".$key += [\$v]" <<<"$ref")"
   fi
 }

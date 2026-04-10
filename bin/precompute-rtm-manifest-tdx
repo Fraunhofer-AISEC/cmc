@@ -77,7 +77,7 @@ sbom=$(cat "${input}/cyclonedx.sbom.json")
 
 # SBOM: Set properties
 setjson "sbom" "bomFormat"   "CycloneDX"
-setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "specVersion" "\"1.7\""
 setjson "sbom" "version"     1
 setarr  "sbom" "components"  "${refs}"
 
@@ -104,9 +104,9 @@ setjson "policy" "tdAttributes.debug"           false
 setjson "policy" "tdAttributes.septVEDisable"   true
 setjson "policy" "tdAttributes.pks"             false
 setjson "policy" "tdAttributes.kl"              false
-setjson "policy" "tdId.mrOwner"                 \""${mrowner}"\"
-setjson "policy" "tdId.mrOwnerConfig"           \""${mrowner}"\"
-setjson "policy" "tdId.mrConfigId"              \""${mrowner}\""
+setjson "policy" "tdId.mrOwner"                 "${mrowner}"
+setjson "policy" "tdId.mrOwnerConfig"           "${mrowner}"
+setjson "policy" "tdId.mrConfigId"              "${mrowner}"
 setjson "policy" "xfam"                         "${xfam}"
 
 setjson "manifest" "tdxPolicy" "${policy}"
@@ -117,8 +117,8 @@ printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
 
 # RTM Manifest Description: Create corresponding RTM manifest description
 rtmdesc=$(cat "${input}/manifest.description.json")
-rtmdesc=$(echo "${rtmdesc}" | jq ".name = \"${name}.description\"")
-rtmdesc=$(echo "${rtmdesc}" | jq ".manifest = \"${name}\"")
+setjson "rtmdesc" "name"     "${name}.description"
+setjson "rtmdesc" "manifest" "${name}"
 
 # Image Description: Add/replace RTM manifest description to/in image description
 image_description=$(cat "${image_description}")
@@ -129,7 +129,7 @@ else
   echo "Replacing existing RTM Manifest description"
   image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-image_description=$(echo "${image_description}" | jq --argjson desc "[${rtmdesc}]" '.descriptions += $desc')
+extendarr "image_description" "descriptions" "${rtmdesc}"
 
 # Image Description: Store
 echo "Writing ${image_description}"

@@ -52,12 +52,11 @@ fi
 sbom=$(cat "${input}/cyclonedx.sbom.json")
 
 # SBOM: Replace existing reference values with new reference values
-sbom=$(echo "${sbom}" | jq 'del(.components[])')
-sbom=$(jq -n --argjson base "${sbom}" --slurpfile ver <(printf '%s' "${components}") '$base | .components += $ver[0]')
+setarr "sbom" "components" "${components}"
 
 # SBOM: Set other properties
 setjson "sbom" "bomFormat"   "CycloneDX"
-setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "specVersion" "\"1.7\""
 setjson "sbom" "version"     1
 
 # Manifest: load
@@ -82,8 +81,8 @@ printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
 
 # RTM Manifest Description: Create corresponding RTM manifest description
 rtmdesc=$(cat "${input}/manifest.description.json")
-rtmdesc=$(echo "${rtmdesc}" | jq ".name = \"${name}.description\"")
-rtmdesc=$(echo "${rtmdesc}" | jq ".manifest = \"${name}\"")
+setjson "rtmdesc" "name"     "${name}.description"
+setjson "rtmdesc" "manifest" "${name}"
 
 # Image Description: Add/replace RTM manifest description to/in image description
 image_description=$(cat "${image_description_path}")
@@ -94,7 +93,7 @@ else
   echo "Replacing existing RTM Manifest description"
   image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-image_description=$(echo "${image_description}" | jq --argjson desc "[${rtmdesc}]" '.descriptions += $desc')
+extendarr "image_description" "descriptions" "${rtmdesc}"
 
 # Image Description: Store
 echo "Writing ${image_description_path}"
