@@ -145,7 +145,7 @@ for ((i = 0; i < num_containers; i++)); do
     sbom=$(cat "${input}/cyclonedx.sbom.json")
 
     # SBOM: Insert reference values
-    sbom=$(echo "${sbom}" | jq --argjson ver "[${refval}]" '.components += $ver')
+    extendarr "sbom" "components" "${refval}"
 
     # SBOM: set reference value name
     sbom=$(echo "${sbom}" | jq ".components[0].name += \": ${container}\"")
@@ -157,7 +157,7 @@ for ((i = 0; i < num_containers; i++)); do
 
     # SBOM: Set other properties
     setjson "sbom" "bomFormat"   "CycloneDX"
-    setjson "sbom" "specVersion" "1.7"
+    setjson "sbom" "specVersion" "\"1.7\""
     setjson "sbom" "version"     1
 
     # App Manifest: load
@@ -198,7 +198,7 @@ for ((i = 0; i < num_containers; i++)); do
       echo "Replacing existing app description"
       image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${container}-${sha256}.description\"))")
     fi
-    image_description=$(echo "${image_description}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+    extendarr "image_description" "descriptions" "${appdesc}"
 
     # Image Description: Store
     echo "Writing ${image_description_path}"

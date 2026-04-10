@@ -85,7 +85,7 @@ sbom=$(cat "${input}/cyclonedx.sbom.json")
 
 # SBOM: Set properties
 setjson "sbom" "bomFormat"   "CycloneDX"
-setjson "sbom" "specVersion" "1.7"
+setjson "sbom" "specVersion" "\"1.7\""
 setjson "sbom" "version"     1
 setarr  "sbom" "components"  "${ref}"
 
@@ -159,8 +159,8 @@ printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
 
 # Root manifest description: Create corresponding root manifest description
 rootdesc=$(cat "${input}/manifest.description.json")
-rootdesc=$(echo "${rootdesc}" | jq ".name = \"${name}.description\"")
-rootdesc=$(echo "${rootdesc}" | jq ".manifest = \"${name}\"")
+setjson "rootdesc" "name"     "${name}.description"
+setjson "rootdesc" "manifest" "${name}"
 
 # Image Description: Add/replace root manifest description to/in image description
 image_description=$(cat "${out}/image.description.json")
@@ -171,7 +171,7 @@ else
   echo "Replacing existing root manifest description"
   image_description=$(echo "${image_description}" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-image_description=$(echo "${image_description}" | jq --argjson desc "[${rootdesc}]" '.descriptions += $desc')
+extendarr "image_description" "descriptions" "${rootdesc}"
 
 # Image Description: Store
 echo "Writing ${out}/image.description.json"

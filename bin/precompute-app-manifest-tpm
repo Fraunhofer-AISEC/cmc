@@ -47,7 +47,7 @@ components=$( \
 sbom=$(cat "${input}/cyclonedx.sbom.json")
 
 # App Manifest: Insert reference values
-sbom=$(jq --slurpfile ver <(echo "${components}") '.components += $ver[0]' <<<"${sbom}")
+setarr "sbom" "components" "${components}"
 
 # App Manifest: load
 manifest=$(cat "${input}/manifest.json")
@@ -69,8 +69,8 @@ printf "%s\n" "${manifest}" > "${out}/app.manifest.json"
 
 # App Description: Create corresponding app description
 appdesc=$(cat "${input}/manifest.description.json")
-appdesc=$(echo "${appdesc}" | jq ".name = \"${name}.description\"")
-appdesc=$(echo "${appdesc}" | jq ".manifest = \"${name}\"")
+setjson "appdesc" "name"     "${name}.description"
+setjson "appdesc" "manifest" "${name}"
 
 # Image Description: Add/replace app description to/in image description
 image_description=$(cat "${image_description_path}")
@@ -81,7 +81,7 @@ else
   echo "Replacing existing app description"
   image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
 fi
-image_description=$(echo "${image_description}" | jq --argjson desc "[${appdesc}]" '.descriptions += $desc')
+extendarr "image_description" "descriptions" "${appdesc}"
 
 # Image Description: Store
 echo "Writing ${image_description_path}"
