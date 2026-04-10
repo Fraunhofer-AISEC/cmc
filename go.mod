@@ -29,7 +29,6 @@ require (
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
-	gopkg.in/square/go-jose.v2 v2.6.0
 )
 
 require (
