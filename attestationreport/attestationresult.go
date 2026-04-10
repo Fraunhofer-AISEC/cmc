@@ -813,6 +813,9 @@ func (r *Result) PrintErr(format string, args ...interface{}) {
 		for _, code := range r.ErrorCodes {
 			log.Warnf("    %v", code.String())
 		}
+		if r.Details != "" {
+			log.Warnf("    Details: %v", r.Details)
+		}
 	}
 
 	if r.Expected != "" {
