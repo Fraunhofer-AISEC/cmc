@@ -161,7 +161,7 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 						}
 						err := ValidateConfig(refElem, measElem, innerRuleType)
 						if err != nil {
-							return err
+							return fmt.Errorf("failed to validate config: %w", err)
 						}
 					default:
 						log.Errorf(" unknown ruletype: %v", innerRuleType)
@@ -178,7 +178,7 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 				}
 				err := ValidateConfig(refMap, measurementMap, ruleType)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to validate config: %w", err)
 				}
 				continue
 

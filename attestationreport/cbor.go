@@ -241,11 +241,11 @@ func (r *AttestationReport) UnmarshalCBOR(data []byte) error {
 	// Prepare TODO avoid additional initialization
 	enc, err := ENC_OPTIONS.EncMode()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to set up encode mode: %w", err)
 	}
 	dec, err := cbor.DecOptions{}.DecMode()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to set up decode mode: %w", err)
 	}
 
 	// Regular unmarshal

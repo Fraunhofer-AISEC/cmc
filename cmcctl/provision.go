@@ -53,11 +53,11 @@ func retrieveProvisioningData(c *config) error {
 	log.Tracef("Extracting config size and hash from cmdline...")
 	hash, err := configHash(string(cmdline))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get config hash: %w", err)
 	}
 	size, err := configSize(string(cmdline))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get config size: %w", err)
 	}
 	log.Debugf("Config hash: %v", hex.EncodeToString(hash))
 	log.Debugf("Config size: %v", size)

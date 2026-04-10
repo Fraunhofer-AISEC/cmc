@@ -209,7 +209,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, majo
 
 	chain, err := ek.Verify(x509.VerifyOptions{Roots: rootsPool, Intermediates: intermediatesPool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to verify EK: %w", err)
 	}
 
 	log.Debugf("Successfully verified chain of %v elements", len(chain[0]))

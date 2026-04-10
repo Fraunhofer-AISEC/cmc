@@ -87,7 +87,7 @@ func run(cmd *cli.Command) error {
 	// Precompute all TPM measurements
 	rtmrs, refvals, err := precompute(globConf.Mrs, tpmConf)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to precompute: %w", err)
 	}
 
 	// Write eventlog to stdout if requested
