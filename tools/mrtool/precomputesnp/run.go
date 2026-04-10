@@ -132,7 +132,7 @@ func run(cmd *cli.Command) error {
 	} else {
 		hash, err = performSnpPrecomputation(snpConfig)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to perform snp precomputation: %w", err)
 		}
 		description = fmt.Sprintf("SNP launch digest for %d vCPUs", snpConfig.vcpuCount)
 	}

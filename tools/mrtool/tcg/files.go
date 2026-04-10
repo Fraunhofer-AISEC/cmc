@@ -44,7 +44,7 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 			// Directory: walk recursively
 			err := filepath.WalkDir(p, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to walk directory: %w", err)
 				}
 				if !d.Type().IsRegular() {
 					return nil // Skip dirs, symlinks, devices, etc.
@@ -52,7 +52,7 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 				var err2 error
 				digest, refvals, err2 = MeasureFile(alg, ta, "EV_IPL", digest, refvals, index, path)
 				if err2 != nil {
-					return err2
+					return fmt.Errorf("failed to measure file: %w", err2)
 				}
 				return nil
 			})

@@ -34,43 +34,43 @@ func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
 
 	err := filepath.Walk(rootfsPath, func(file string, fi os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to walk file path: %w", err)
 		}
 
 		var link string
 		if fi.Mode()&os.ModeSymlink != 0 {
 			link, err = os.Readlink(file)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to read link: %w", err)
 			}
 		}
 
 		header, err := tar.FileInfoHeader(fi, link)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get file info header: %w", err)
 		}
 
 		header.ModTime = time.Unix(0, 0)
 
 		relativePath, err := filepath.Rel(rootfsPath, file)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get relative path: %w", err)
 		}
 		header.Name = relativePath
 
 		if err := tw.WriteHeader(header); err != nil {
-			return err
+			return fmt.Errorf("failed to write header: %w", err)
 		}
 
 		if !fi.IsDir() && fi.Mode()&os.ModeSymlink == 0 {
 			f, err := os.Open(file)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to open: %w", err)
 			}
 			defer f.Close()
 
 			if _, err := io.Copy(tw, f); err != nil {
-				return err
+				return fmt.Errorf("failed to copy: %w", err)
 			}
 		}
 

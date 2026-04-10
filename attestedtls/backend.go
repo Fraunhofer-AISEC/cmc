@@ -49,7 +49,7 @@ func Write(msg []byte, c net.Conn) error {
 			c.RemoteAddr().String())
 	}
 
-	return err
+	return nil
 }
 
 // Receives byte array from provided channel by first receiving length information, then data.

@@ -170,7 +170,7 @@ func (a SocketApi) verifyAR(
 	}
 
 	if err := verifyResp.CheckVersion(); err != nil {
-		return err
+		return fmt.Errorf("version check failed: %w", err)
 	}
 
 	// Return attestation result via callback if specified

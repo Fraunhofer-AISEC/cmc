@@ -104,7 +104,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	// Check that configured attestation mode matches peers attestation mode
 	err = checkAttestationMode(cc.Attest, req.Attest)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check attestation mode: %w", err)
 	}
 
 	ownResp := AtlsHandshakeResponse{

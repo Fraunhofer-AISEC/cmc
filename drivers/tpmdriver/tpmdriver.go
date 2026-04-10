@@ -848,7 +848,7 @@ func (t *Tpm) setQuotePcrs() error {
 
 	hashAlg, err := internal.CryptoToAttestHash(t.HashAlg)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to convert hash: %w", err)
 	}
 
 	log.Debug("Retrieving PCRs")

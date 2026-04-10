@@ -83,7 +83,7 @@ func (a SocketApi) generate(c *config) error {
 	}
 	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
-		return err
+		return fmt.Errorf("error response: %w", err)
 	}
 
 	// Unmarshal report
@@ -176,7 +176,7 @@ func (a SocketApi) enroll(c *config) error {
 	}
 	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
-		return err
+		return fmt.Errorf("error response: %w", err)
 	}
 
 	// Unmarshal report
@@ -230,7 +230,7 @@ func (a SocketApi) updateCerts(c *config) error {
 	}
 	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
-		return err
+		return fmt.Errorf("error response: %w", err)
 	}
 
 	// Unmarshal attestation response
@@ -290,7 +290,7 @@ func (a SocketApi) updateMetadata(c *config) error {
 	}
 	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
-		return err
+		return fmt.Errorf("error response: %w", err)
 	}
 
 	// Unmarshal attestation response
@@ -344,7 +344,7 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	}
 	err = checkError(msgType, payload, c.serializer)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error response: %w", err)
 	}
 
 	// Unmarshal attestation response
@@ -355,7 +355,7 @@ func verifySocketRequest(c *config, req *api.VerificationRequest,
 	}
 
 	if err := verifyResp.CheckVersion(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	return verifyResp, nil
@@ -366,7 +366,7 @@ func checkError(t uint32, payload []byte, s ar.Serializer) error {
 		resp := new(api.SocketError)
 		err := s.Unmarshal(payload, resp)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshal error response: %w", err)
+			return fmt.Errorf("failed to unmarshal: %w", err)
 		} else {
 			return fmt.Errorf("server responded with error: %v", resp.Msg)
 		}
