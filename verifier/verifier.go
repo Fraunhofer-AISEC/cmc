@@ -701,3 +701,38 @@ func collectMetadata(context ar.Context, cached map[string][]byte) (map[string][
 	}
 	return collectedMetadata, nil
 }
+
+// verifyNonce compares a measured nonce against an expected nonce and populates the
+// freshness result accordingly. Returns true if the nonces match.
+func verifyNonce(measured, expected []byte) ar.Result {
+
+	if bytes.Equal(measured, expected) {
+		log.Debugf("Successfully verified evidence nonce %x", expected)
+		return ar.Result{
+			Status: ar.StatusSuccess,
+			Got:    hex.EncodeToString(expected),
+		}
+	}
+
+	log.Debugf("Nonces mismatch: expected %v, got %v",
+		hex.EncodeToString(expected), hex.EncodeToString(measured))
+	return ar.Result{
+		Status:   ar.StatusFail,
+		Expected: hex.EncodeToString(expected),
+		Got:      hex.EncodeToString(measured),
+	}
+}
+
+// extractX509Chains converts verified x509 certificate chains into the
+// serializable X509CertExtracted format used in attestation results.
+func extractX509Chains(chains [][]*x509.Certificate) [][]ar.X509CertExtracted {
+	var result [][]ar.X509CertExtracted
+	for _, chain := range chains {
+		extracted := make([]ar.X509CertExtracted, 0, len(chain))
+		for _, cert := range chain {
+			extracted = append(extracted, ar.ExtractX509Infos(cert))
+		}
+		result = append(result, extracted)
+	}
+	return result
+}

@@ -104,14 +104,8 @@ func VerifyIas(
 	log.Debug("Verifying nonce")
 
 	// Verify nonce
-	if bytes.Equal(nonce, iat.AuthChallenge) {
-		log.Debugf("Successfully verified evidence nonce %x", nonce)
-		result.Freshness.Status = ar.StatusSuccess
-	} else {
-		log.Debugf("Nonces mismatch: Supplied Nonce = %v, IAT Nonce = %v)", hex.EncodeToString(nonce), hex.EncodeToString(iat.AuthChallenge))
-		result.Freshness.Status = ar.StatusSuccess
-		result.Freshness.Expected = hex.EncodeToString(nonce)
-		result.Freshness.Got = hex.EncodeToString(iat.AuthChallenge)
+	result.Freshness = verifyNonce(iat.AuthChallenge, nonce)
+	if result.Freshness.Status != ar.StatusSuccess {
 		ok = false
 	}
 
@@ -135,13 +129,7 @@ func VerifyIas(
 	}
 
 	//Store details from (all) validated certificate chain(s) in the report
-	for _, chain := range x509Chains {
-		chainExtracted := []ar.X509CertExtracted{}
-		for _, cert := range chain {
-			chainExtracted = append(chainExtracted, ar.ExtractX509Infos(cert))
-		}
-		result.Signature.Certs = append(result.Signature.Certs, chainExtracted)
-	}
+	result.Signature.Certs = append(result.Signature.Certs, extractX509Chains(x509Chains)...)
 
 	log.Debug("Verifying measurements")
 

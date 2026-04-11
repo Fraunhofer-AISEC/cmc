@@ -148,17 +148,9 @@ func VerifyTdx(
 	// Compare nonce for freshness (called report data in the TDX attestation report structure)
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
-	if !bytes.Equal(tdxQuote.QuoteBody.ReportData[:], nonce64) {
-		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in TDX Report = %v)",
-			hex.EncodeToString(nonce), hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:]))
+	result.Freshness = verifyNonce(tdxQuote.QuoteBody.ReportData[:], nonce64)
+	if result.Freshness.Status != ar.StatusSuccess {
 		result.Summary.Status = ar.StatusFail
-		result.Freshness.Status = ar.StatusFail
-		result.Freshness.Expected = hex.EncodeToString(nonce)
-		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
-	} else {
-		log.Debugf("Successfully verified evidence nonce %x", nonce)
-		result.Freshness.Status = ar.StatusSuccess
-		result.Freshness.Got = hex.EncodeToString(tdxQuote.QuoteBody.ReportData[:])
 	}
 
 	// Extract certificate chain from quote
