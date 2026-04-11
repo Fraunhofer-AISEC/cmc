@@ -149,17 +149,9 @@ func VerifySnp(
 	// Compare nonce for freshness (called report data in the SNP attestation report structure)
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
-	if cmp := bytes.Compare(s.ReportData[:], nonce64); cmp != 0 {
-		log.Debugf("Nonces mismatch: Supplied Nonce = %v, Nonce in SNP Report = %v)",
-			hex.EncodeToString(nonce), hex.EncodeToString(s.ReportData[:]))
-		result.Freshness.Status = ar.StatusFail
-		result.Freshness.Expected = hex.EncodeToString(nonce)
-		result.Freshness.Got = hex.EncodeToString(s.ReportData[:])
+	result.Freshness = verifyNonce(s.ReportData[:], nonce64)
+	if result.Freshness.Status != ar.StatusSuccess {
 		ok = false
-	} else {
-		log.Debugf("Successfully verified evidence nonce %x", nonce)
-		result.Freshness.Got = hex.EncodeToString(nonce)
-		result.Freshness.Status = ar.StatusSuccess
 	}
 
 	// Verify Signature, created with SNP VCEK private key
@@ -460,13 +452,7 @@ func verifySnpSignature(
 	}
 
 	//Store details from validated certificate chains in the report
-	for _, chain := range x509Chains {
-		chainExtracted := []ar.X509CertExtracted{}
-		for _, cert := range chain {
-			chainExtracted = append(chainExtracted, ar.ExtractX509Infos(cert))
-		}
-		result.Certs = append(result.Certs, chainExtracted)
-	}
+	result.Certs = append(result.Certs, extractX509Chains(x509Chains)...)
 
 	return result, true
 }

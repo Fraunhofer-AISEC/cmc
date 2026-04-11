@@ -69,17 +69,9 @@ func VerifyTpm(
 	log.Tracef("Detected %v quote hash algorithm", quoteHashAlg.String())
 
 	// Verify nonce with nonce from TPM Quote
-	if bytes.Equal(nonce, tpmsAttest.ExtraData) {
-		result.Freshness.Status = ar.StatusSuccess
-		result.Freshness.Got = hex.EncodeToString(nonce)
-		log.Debugf("Successfully verified evidence nonce %x", nonce)
-	} else {
-		log.Debugf("Nonces mismatch. Supplied Nonce: %x, TPM Quote Nonce: %x)",
-			nonce, tpmsAttest.ExtraData)
+	result.Freshness = verifyNonce(tpmsAttest.ExtraData, nonce)
+	if result.Freshness.Status != ar.StatusSuccess {
 		result.Summary.Status = ar.StatusFail
-		result.Freshness.Status = ar.StatusFail
-		result.Freshness.Expected = hex.EncodeToString(nonce)
-		result.Freshness.Got = hex.EncodeToString(tpmsAttest.ExtraData)
 	}
 
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
@@ -118,13 +110,7 @@ func VerifyTpm(
 	log.Debug("Successfully verified TPM certificate chain")
 
 	//Store details from (all) validated certificate chain(s) in the report
-	for _, chain := range x509Chains {
-		chainExtracted := []ar.X509CertExtracted{}
-		for _, cert := range chain {
-			chainExtracted = append(chainExtracted, ar.ExtractX509Infos(cert))
-		}
-		result.Signature.Certs = append(result.Signature.Certs, chainExtracted)
-	}
+	result.Signature.Certs = append(result.Signature.Certs, extractX509Chains(x509Chains)...)
 
 	if result.Summary.Status == ar.StatusSuccess {
 		log.Debugf("Successfully verified TPM measurements")

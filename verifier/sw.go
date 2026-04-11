@@ -78,17 +78,9 @@ func VerifySw(
 	}
 
 	// Verify nonce
-	if !bytes.Equal(swEvidence.Nonce, nonce) {
-		log.Debugf("Nonces mismatch: supplied nonce: %v, report nonce = %v",
-			hex.EncodeToString(nonce), hex.EncodeToString(swEvidence.Nonce))
+	result.Freshness = verifyNonce(swEvidence.Nonce, nonce)
+	if result.Freshness.Status != ar.StatusSuccess {
 		ok = false
-		result.Freshness.Status = ar.StatusFail
-		result.Freshness.Expected = hex.EncodeToString(swEvidence.Nonce)
-		result.Freshness.Got = hex.EncodeToString(nonce)
-	} else {
-		result.Freshness.Status = ar.StatusSuccess
-		result.Freshness.Got = hex.EncodeToString(nonce)
-		log.Debugf("Successfully verified evidence nonce %x", nonce)
 	}
 
 	// Check that reference values are reflected by mandatory measurements

@@ -97,23 +97,13 @@ func VerifySgx(
 		return result, false
 	}
 
-	// Compare nonce for freshness (called report data in the SNP attestation report structure)
-	// ReportData contains: nonce in ReportData field
+	// Compare nonce for freshness
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce[:])
-
-	if cmp := bytes.Compare(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64); cmp != 0 {
-		log.Debugf("Nonces mismatch: Expected: %v, Got = %v", hex.EncodeToString(nonce64),
-			hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:]))
-		result.Freshness.Status = ar.StatusFail
-		result.Freshness.Expected = hex.EncodeToString(nonce64)
-		result.Freshness.Got = hex.EncodeToString(sgxQuote.ISVEnclaveReport.ReportData[:])
+	result.Freshness = verifyNonce(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64)
+	if result.Freshness.Status != ar.StatusSuccess {
 		result.Summary.Status = ar.StatusFail
 		return result, false
-	} else {
-		log.Debugf("Successfully verified evidence nonce %x", nonce)
-		result.Freshness.Status = ar.StatusSuccess
-		result.Freshness.Got = hex.EncodeToString(nonce)
 	}
 
 	// Obtain collateral from measurements
