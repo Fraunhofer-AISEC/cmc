@@ -130,6 +130,9 @@ func (cache *Cache) GetKeys(peer string) []string {
 		return []string{}
 	}
 
+	cache.mutex.RLock()
+	defer cache.mutex.RUnlock()
+
 	c, ok := cache.data[peer]
 	if ok {
 		return maps.Keys(c)
