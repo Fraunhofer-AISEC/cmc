@@ -135,11 +135,12 @@ func fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType) ([]byte, *x509.Cert
 func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
 
 	var qeIdentityUrl string
-	if quoteType == ar.TDX_QUOTE_TYPE {
+	switch quoteType {
+	case ar.TDX_QUOTE_TYPE:
 		qeIdentityUrl = pcs.QeIdentityURL()
-	} else if quoteType == ar.SGX_QUOTE_TYPE {
+	case ar.SGX_QUOTE_TYPE:
 		qeIdentityUrl = "https://api.trustedservices.intel.com/sgx/certification/v4/qe/identity"
-	} else {
+	default:
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
 	}
 	log.Debugf("Fetching QE Identity: %v", qeIdentityUrl)
