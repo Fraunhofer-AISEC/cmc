@@ -445,7 +445,7 @@ func ParsePublicKey(data []byte) (crypto.PublicKey, error) {
 
 	pub, err := x509.ParsePKIXPublicKey(data)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to parse public key: %w", err)
 	}
 
 	return pub, nil
