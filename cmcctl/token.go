@@ -38,7 +38,7 @@ func createToken(c *config) error {
 	if c.ProvisionToken == "" {
 		fmt.Printf("%v", token)
 	} else {
-		err = os.WriteFile(c.ProvisionToken, []byte(token), 0644)
+		err = os.WriteFile(c.ProvisionToken, []byte(token), 0600)
 		if err != nil {
 			return fmt.Errorf("failed to store token: %w", err)
 		}
