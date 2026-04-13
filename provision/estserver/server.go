@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
@@ -95,9 +96,13 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	s := &http.Server{
-		Addr:      c.EstAddr,
-		Handler:   nil,
-		TLSConfig: tlsCfg,
+		Addr:              c.EstAddr,
+		Handler:           nil,
+		TLSConfig:         tlsCfg,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	server := &Server{
