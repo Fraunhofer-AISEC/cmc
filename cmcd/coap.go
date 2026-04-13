@@ -96,13 +96,7 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 		return
 	}
 
-	if s.cmc.Metadata == nil {
-		sendCoapError(w, r, codes.InternalServerError,
-			"Metadata not specified. Can work only as verifier")
-		return
-	}
-
-	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
+	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.GetMetadata(), s.cmc.Drivers,
 		ser, s.cmc.HashAlg)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
@@ -229,7 +223,7 @@ func (s CoapServer) TlsCreate(w mux.ResponseWriter, r *mux.Message) {
 
 	keyId, err := s.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  req.KeyConfig,
-		Metadata:   s.cmc.Metadata,
+		Metadata:   s.cmc.GetMetadata(),
 		Drivers:    s.cmc.Drivers,
 		Serializer: ser,
 		ArHashAlg:  s.cmc.HashAlg,

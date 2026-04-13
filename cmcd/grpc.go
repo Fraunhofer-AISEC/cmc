@@ -96,15 +96,11 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 		return nil, errors.New("attest: no drivers configured")
 	}
 
-	if s.cmc.Metadata == nil {
-		return nil, errors.New("metadata not specified. Can work only as verifier")
-	}
-
 	if err := grpcapi.CheckVersion(req.Version); err != nil {
 		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
-	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
+	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.GetMetadata(), s.cmc.Drivers,
 		s.serializer, s.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
@@ -203,7 +199,7 @@ func (s *GrpcServer) TLSCreate(ctx context.Context, req *grpcapi.TLSCreateReques
 			DNSNames:    req.KeyConfig.DnsNames,
 			IPAddresses: req.KeyConfig.IpAddresses,
 		},
-		Metadata:   s.cmc.Metadata,
+		Metadata:   s.cmc.GetMetadata(),
 		Drivers:    s.cmc.Drivers,
 		Serializer: s.serializer,
 		ArHashAlg:  s.cmc.HashAlg,
