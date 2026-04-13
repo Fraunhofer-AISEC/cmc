@@ -32,6 +32,9 @@ const (
 	SHA1_DIGEST_LEN   = 20
 	SHA256_DIGEST_LEN = 32
 	SHA384_DIGEST_LEN = 48
+
+	// maxEventDataSize is the limit for BIOS event log data
+	maxEventDataSize = 64 * 1024 * 1024
 )
 
 //structs for additional eventlog content --------------------------------
@@ -272,14 +275,17 @@ func EmptyEventdata(evData *EventData) bool {
 }
 
 // read the GUID from a buffer
-func readGUID(buf *bytes.Buffer) string {
+func readGUID(buf *bytes.Buffer) (string, error) {
+	if buf.Len() < 16 {
+		return "", fmt.Errorf("buffer too short for GUID (%v vs 16)", buf.Len())
+	}
+
 	var val1 uint32
 	var val2 uint16
 	var val3 uint16
 	var val4 [2]byte
 	var val5 [6]byte
 
-	//reading the values
 	binary.Read(buf, binary.LittleEndian, &val1)
 	binary.Read(buf, binary.LittleEndian, &val2)
 	binary.Read(buf, binary.LittleEndian, &val3)
@@ -296,7 +302,7 @@ func readGUID(buf *bytes.Buffer) string {
 	output += "-"
 	output += hex.EncodeToString(val5[:])
 
-	return output
+	return output, nil
 }
 
 func readUTF16UntilNull(buffer *bytes.Buffer) (string, error) {
@@ -388,23 +394,41 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 		var unicodeNameLength, variableDataLength uint64
 
 		// Read binary data into variables
-		variableName := readGUID(buf)
-		binary.Read(buf, binary.LittleEndian, &unicodeNameLength)
-		binary.Read(buf, binary.LittleEndian, &variableDataLength)
+		variableName, err := readGUID(buf)
+		if err != nil {
+			log.Debugf("Failed to read UEFI variable GUID: %v", err)
+			return uefiVariableData
+		}
+		if err := binary.Read(buf, binary.LittleEndian, &unicodeNameLength); err != nil {
+			log.Debugf("Failed to read unicode name length: %v", err)
+			return uefiVariableData
+		}
+		if err := binary.Read(buf, binary.LittleEndian, &variableDataLength); err != nil {
+			log.Debugf("Failed to read variable data length: %v", err)
+			return uefiVariableData
+		}
 
-		//read the amount of data into the []data fields
-		if buf.Len() < 2*int(unicodeNameLength) {
-			// return output
+		if unicodeNameLength > maxEventDataSize || variableDataLength > maxEventDataSize {
+			log.Debugf("UEFI variable data size exceeds limit: nameLen=%d, dataLen=%d",
+				unicodeNameLength, variableDataLength)
+			return uefiVariableData
+		}
+
+		nameLen := int(unicodeNameLength)
+		dataLen := int(variableDataLength)
+
+		// Read the amount of data into the []data fields
+		if buf.Len() < 2*nameLen {
 			log.Debug("Skipping incomplete UEFI Variable Data field")
 			return uefiVariableData
 		}
 
-		unicodeNameBuf := make([]uint16, unicodeNameLength)
+		unicodeNameBuf := make([]uint16, nameLen)
 		binary.Read(buf, binary.LittleEndian, &unicodeNameBuf)
 		unicodeName := string(utf16.Decode(unicodeNameBuf))
 
-		if buf.Len() < int(variableDataLength) {
-			//just stop reading
+		if buf.Len() < dataLen {
+			// Just stop reading
 			log.Debug("incomplete UEFI Variable Data field")
 			return uefiVariableData
 		}
@@ -416,11 +440,11 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 		//parse data of UEFI var
 		switch unicodeName {
 		case "PK", "KEK", "db", "dbr", "dbt", "dbx", "PKDefault", "KEKDefault", "dbDefault", "dbrDefault", "dbtDefault", "dbxDefault":
-			uefiVariableData.Signaturedb = parseEFISignaturedb(buf, int(variableDataLength))
+			uefiVariableData.Signaturedb = parseEFISignaturedb(buf, dataLen)
 		case "BootOrder":
-			uefiVariableData.BootOrder = parseEFIBootOrder(buf, int(variableDataLength))
+			uefiVariableData.BootOrder = parseEFIBootOrder(buf, dataLen)
 		case "DriverOrder":
-			uefiVariableData.DriverOrder = parseEFIBootOrder(buf, int(variableDataLength))
+			uefiVariableData.DriverOrder = parseEFIBootOrder(buf, dataLen)
 		case "BootNext":
 			uefiVariableData.BootNext = *parseSingleUint16(buf)
 		case "BootCurrent":
@@ -429,22 +453,28 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 			uefiVariableData.BootOptionSupport = *parseSingleUint32(buf)
 		case "SignatureSupport", "OsRecoveryOrder":
 			//parse an array of GUIDs
-			guidArray := make([]string, int(variableDataLength)/16)
-			for i := 0; i < int(variableDataLength)/16; i++ {
-				guidArray[i] = readGUID(buf)
+			numGuids := dataLen / 16
+			guidArray := make([]string, 0, numGuids)
+			for i := 0; i < numGuids; i++ {
+				guid, err := readGUID(buf)
+				if err != nil {
+					log.Debugf("Failed to read GUID at index %d: %v", i, err)
+					break
+				}
+				guidArray = append(guidArray, guid)
 			}
 			uefiVariableData.GUIDArray = guidArray
 		case "PlatformLangCodes", "PlatformLang":
 			//read null terminated asciiString
-			if buf.Len() >= int(variableDataLength) {
-				uefiVariableData.StringContent = string(buf.Next(int(variableDataLength)))
+			if buf.Len() >= dataLen {
+				uefiVariableData.StringContent = string(buf.Next(dataLen))
 			}
 		default:
 			//if string is of type BootXXXX
 			if (strings.Contains(unicodeName, "Boot")) || strings.Contains(unicodeName, "PlatformRecovery") || strings.Contains(unicodeName, "Driver") { //for BootXXXX, PlatformRecoveryXXXX, and DriverXXXX entries
 				uefiVariableData.EFILoadOption = parseEFILoadOption(buf)
 			} else {
-				hexString := (buf.Next(int(variableDataLength)))
+				hexString := (buf.Next(dataLen))
 				uefiVariableData.VariableData = hexString
 			}
 		}
@@ -460,8 +490,14 @@ func parseEFILoadOption(buf *bytes.Buffer) *EFILoadOption {
 	var filePathListLength uint16
 
 	// UEFI Specification Release 2.11, 3.1.3 Load Options EFI_LOAD_OPTION
-	binary.Read(buf, binary.LittleEndian, &efiloadoption.Attributes)
-	binary.Read(buf, binary.LittleEndian, &filePathListLength)
+	if err := binary.Read(buf, binary.LittleEndian, &efiloadoption.Attributes); err != nil {
+		log.Debugf("Failed to read EFI load option attributes: %v", err)
+		return nil
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &filePathListLength); err != nil {
+		log.Debugf("Failed to read EFI file path list length: %v", err)
+		return nil
+	}
 	descr, err := readUTF16UntilNull(buf)
 	if err != nil {
 		return nil
@@ -499,9 +535,18 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 	var length uint16
 
 	// UEFI Specification Release 2.11, 10.3.1 Generic Device Path Structures, Table 10.1
-	binary.Read(buf, binary.LittleEndian, &fplType)
-	binary.Read(buf, binary.LittleEndian, &fplSubtype)
-	binary.Read(buf, binary.LittleEndian, &length)
+	if err := binary.Read(buf, binary.LittleEndian, &fplType); err != nil {
+		return nil, fmt.Errorf("failed to read device path type: %w", err)
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &fplSubtype); err != nil {
+		return nil, fmt.Errorf("failed to read device path subtype: %w", err)
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+		return nil, fmt.Errorf("failed to read device path length: %w", err)
+	}
+	if length < 4 {
+		return nil, fmt.Errorf("invalid device path length %d (minimum 4)", length)
+	}
 
 	switch fplType {
 	case 1: // Hardware Device Path
@@ -533,7 +578,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 			if length < 20 {
 				return nil, fmt.Errorf("invalid vendor device path length %v", length)
 			}
-			devicePath.VendorGUID = readGUID(buf)
+			devicePath.VendorGUID, _ = readGUID(buf)
 			vendorData := make([]byte, length-20)
 			binary.Read(buf, binary.LittleEndian, &vendorData)
 			devicePath.VendorDefinedData = HexByte(vendorData)
@@ -629,7 +674,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 		case 10:
 			devicePath.Subtype = "vendor-defined messaging device path"
 			//parsing the GUID
-			devicePath.VendorGUID = readGUID(buf)
+			devicePath.VendorGUID, _ = readGUID(buf)
 			devicePath.VendorDefinedData = (buf.Next(int(length) - 20))
 		default:
 			// Currently not supported
@@ -666,7 +711,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 			if length >= 20 { //20 + n Bytes long
 				devicePath.Subtype = "Vendor"
 				//readVendor guid
-				devicePath.VendorGUID = readGUID(buf)
+				devicePath.VendorGUID, _ = readGUID(buf)
 				devicePath.VendorDefinedData = (buf.Next(int(length) - 20))
 			} else {
 				return nil, fmt.Errorf("incompatible length of file path argument")
@@ -683,7 +728,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 		case 5:
 			if length == 20 { //20 Bytes long
 				devicePath.Subtype = "Media Protocol"
-				devicePath.ProtocolGUID = readGUID(buf)
+				devicePath.ProtocolGUID, _ = readGUID(buf)
 			} else {
 				return nil, fmt.Errorf("incompatible length of file path argument")
 			}
@@ -691,7 +736,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 			if length >= 4 { //4 + n Bytes long
 				devicePath.Subtype = "PIWG Firmware File"
 				if length-4 == 16 {
-					devicePath.FirmwareFileName = readGUID(buf)
+					devicePath.FirmwareFileName, _ = readGUID(buf)
 				} else {
 					devicePath.VendorDefinedData = (buf.Next(int(length) - 4))
 				}
@@ -708,7 +753,7 @@ func parseEfiDevicePath(buf *bytes.Buffer) (*EFIDevicePath, error) {
 				devicePath.Subtype = "RAM Disk Device Path"
 				binary.Read(buf, binary.LittleEndian, &devicePath.StartingAddress)
 				binary.Read(buf, binary.LittleEndian, &devicePath.EndingAddress)
-				devicePath.DiskTypeGUID = readGUID(buf)
+				devicePath.DiskTypeGUID, _ = readGUID(buf)
 				binary.Read(buf, binary.LittleEndian, &devicePath.DiskInstance)
 			} else {
 				return nil, fmt.Errorf("incompatible length of file path argument")
@@ -797,7 +842,12 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 		sigdb := SignatureDatabase{}
 
 		//read the first signatureDatabase
-		sigdb.SignatureTypeGUID = readGUID(buf)
+		var err error
+		sigdb.SignatureTypeGUID, err = readGUID(buf)
+		if err != nil {
+			log.Debugf("Failed to read signature type GUID: %v", err)
+			break
+		}
 
 		var signatureListSize, signatureHeaderSize, signatureSize uint32
 		binary.Read(buf, binary.LittleEndian, &signatureListSize)
@@ -816,7 +866,11 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 		hashes := make([]Hash, 0)           //if they are empty, dispose
 
 		for buf.Len() >= int(signatureSize) && int(signatureListSize)-counter*int(signatureSize) >= int(signatureSize) {
-			sigOwner := readGUID(buf)
+			sigOwner, err := readGUID(buf)
+			if err != nil {
+				log.Debugf("Failed to read signature owner GUID: %v", err)
+				break
+			}
 
 			switch sigdb.SignatureTypeGUID {
 			case "a5c059a1-94e4-4aa7-87b5-ab155c2bf072": //EFI_CERT_X509_GUID
@@ -893,7 +947,7 @@ func parseUefiGPTEvent(buf *bytes.Buffer) *GPTHeader {
 		binary.Read(buf, binary.LittleEndian, &partitionTableHeader.FirstUsableLBA)
 		binary.Read(buf, binary.LittleEndian, &partitionTableHeader.LastUsableLBA)
 		//DiskGUID
-		partitionTableHeader.DiskGUID = readGUID(buf)
+		partitionTableHeader.DiskGUID, _ = readGUID(buf)
 		binary.Read(buf, binary.LittleEndian, &partitionTableHeader.PartitionEntryLBA)
 		binary.Read(buf, binary.LittleEndian, &partitionTableHeader.NumberOfPartitionEntries)
 		binary.Read(buf, binary.LittleEndian, &partitionTableHeader.SizeOfPartitionEntry)
@@ -903,6 +957,12 @@ func parseUefiGPTEvent(buf *bytes.Buffer) *GPTHeader {
 		var numberOfPartitions uint64
 		binary.Read(buf, binary.LittleEndian, &numberOfPartitions)
 
+		// Bounds-check
+		if numberOfPartitions > maxEventDataSize/128 {
+			log.Debugf("GPT number of partitions exceeds limit: %d", numberOfPartitions)
+			return partitionTableHeader
+		}
+
 		gptPartitions := make([]GPTPartitionEntry, 0)
 
 		//reading the partitions
@@ -911,10 +971,10 @@ func parseUefiGPTEvent(buf *bytes.Buffer) *GPTHeader {
 				for i := 0; i < int(numberOfPartitions); i++ {
 					partition := GPTPartitionEntry{}
 					//Partition Type GUID
-					partition.PartitionTypeGUID = readGUID(buf)
+					partition.PartitionTypeGUID, _ = readGUID(buf)
 
 					//Unique Partition GUID
-					partition.UniquePartitionGUID = readGUID(buf)
+					partition.UniquePartitionGUID, _ = readGUID(buf)
 					binary.Read(buf, binary.LittleEndian, &partition.StartingLBA)
 					binary.Read(buf, binary.LittleEndian, &partition.EndingLBA)
 					binary.Read(buf, binary.LittleEndian, &partition.Attributes)
@@ -949,8 +1009,14 @@ func parsePCClientTaggedEvent(buf *bytes.Buffer) *PCClientTaggedEvent {
 	taggedEvent := new(PCClientTaggedEvent)
 	var taggedEventDataSize uint32
 	var taggedEventId uint32
-	binary.Read(buf, binary.LittleEndian, &taggedEventId)
-	binary.Read(buf, binary.LittleEndian, &taggedEventDataSize)
+	if err := binary.Read(buf, binary.LittleEndian, &taggedEventId); err != nil {
+		log.Debugf("Failed to read tagged event ID: %v", err)
+		return nil
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &taggedEventDataSize); err != nil {
+		log.Debugf("Failed to read tagged event data size: %v", err)
+		return nil
+	}
 
 	taggedEvent.TaggedEventID = fmt.Sprintf("0x%08X", taggedEventId)
 
@@ -1008,13 +1074,19 @@ func parseEFIHandoffTables(buf *bytes.Buffer) *UefiHandoffTablePointer {
 		var numberOfTables uint64
 		binary.Read(buf, binary.LittleEndian, &numberOfTables)
 
+		// Bounds-check to prevent overflow in multiplication and excessive allocation
+		if numberOfTables > maxEventDataSize/24 {
+			log.Debugf("EFI handoff table count exceeds limit: %d", numberOfTables)
+			return nil
+		}
+
 		//check possible length: len(GUID) = 16 + len(address) = 8  => 24 Bytes per table
 		if buf.Len() >= 24*int(numberOfTables) {
 			uefiConfigurationTable := make([]UefiConfigurationTable, 0)
 			for i := 0; i < int(numberOfTables); i++ {
 				//read GUID
 				var conTable UefiConfigurationTable
-				conTable.EFIGuid = readGUID(buf)
+				conTable.EFIGuid, _ = readGUID(buf)
 
 				//read address
 				binary.Read(buf, binary.LittleEndian, &conTable.VendorTable)
