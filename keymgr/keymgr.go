@@ -22,7 +22,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -397,11 +397,12 @@ func prepareEnroll(priv crypto.PrivateKey, p *KeyEnrollmentParams) (*x509.Certif
 	}
 
 	// Use Subject Key Identifier (SKI) as nonce for attestation report
+	// We use SHA-256 instead of SHA-1 for the SKI as we control both sides
 	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse CSR public key: %v", err)
 	}
-	nonce := sha1.Sum(pubKey)
+	nonce := sha256.Sum256(pubKey)
 
 	// Fetch attestation report as part of client authentication
 	report, err := prover.Generate(nonce[:], nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)

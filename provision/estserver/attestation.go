@@ -16,7 +16,7 @@
 package main
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -37,11 +37,12 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	}
 
 	// Use Subject Key Identifier (SKI) as nonce
+	// We use SHA-256 instead of SHA-1 for the SKI as we control both sides
 	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse CSR public key: %w", err)
 	}
-	nonce := sha1.Sum(pubKey)
+	nonce := sha256.Sum256(pubKey)
 
 	log.Debugf("Verifying attestation report with SKI as nonce: %v",
 		hex.EncodeToString(nonce[:]))
