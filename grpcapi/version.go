@@ -15,6 +15,8 @@
 
 package grpcapi
 
+import "fmt"
+
 // The version of the API
 const (
 	apiVersion = "1.4.0"
@@ -22,4 +24,12 @@ const (
 
 func GetVersion() string {
 	return apiVersion
+}
+
+func CheckVersion(version string) error {
+	if version != apiVersion {
+		return fmt.Errorf("API version mismatch. Expected version %v, got %v",
+			apiVersion, version)
+	}
+	return nil
 }
