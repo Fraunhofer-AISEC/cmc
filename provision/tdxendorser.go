@@ -117,6 +117,7 @@ func fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType) ([]byte, *x509.Cert
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get HTTPS TCB Info response: %w", err)
 	}
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -147,6 +148,7 @@ func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get HTTPS QE identity response: %w", err)
 	}
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -170,6 +172,7 @@ func fetchPckCrl(ca string) (*x509.RevocationList, *x509.Certificate, *x509.Cert
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to fetch PCK CRL: %w", err)
 	}
+	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -203,6 +206,7 @@ func fetchRootCrl(urls []string) (*x509.RevocationList, error) {
 			continue
 		}
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			log.Warnf("failed to read HTTPS root CA CRL body from %v: %v", url, err)
 			continue
