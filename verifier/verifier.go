@@ -50,12 +50,13 @@ var (
 	policyEngines = map[PolicyEngineSelect]PolicyEngine{}
 )
 
-// Verify verifies an attestation report in full serialized JWS
-// format against the supplied nonce and CA certificates. Verifies the certificate
-// chains of all attestation report elements as well as the measurements against
+// Verify verifies an attestation report in full serialized JWS or COSE
+// format against the supplied nonce. This includes verifying the integrity of the overall
+// report, which is bound to the hardware nonce, verifying the certificate
+// chains of all attestation report elements as well as verifying the measurements against
 // the reference values and the compatibility of software artefacts.
 func Verify(
-	arRaw, nonce []byte, verifier interface{},
+	arRaw, nonce []byte,
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
 	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
 	peer string,

@@ -141,7 +141,8 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 	}
 
 	log.Debug("verifying attestation report")
-	result := verifier.Verify(req.Report, req.Nonce, s.cmc.IdentityCas, req.Policies, s.cmc.PolicyEngineSelect, s.cmc.PolicyOverwrite, s.cmc.MetadataCas, s.cmc.PeerCache, req.Peer)
+	result := verifier.Verify(req.Report, req.Nonce, req.Policies, s.cmc.PolicyEngineSelect,
+		s.cmc.PolicyOverwrite, s.cmc.MetadataCas, s.cmc.PeerCache, req.Peer)
 
 	resp := &api.VerificationResponse{
 		Version: api.GetVersion(),

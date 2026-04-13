@@ -325,7 +325,6 @@ func TestVerify(t *testing.T) {
 			log.Info("Running FUT")
 			got := Verify(
 				data, tt.args.verifierNonce,
-				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil,
 				PolicyEngineSelect_None,
 				false,
