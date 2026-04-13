@@ -65,9 +65,8 @@ func VerifyIas(
 
 	log.Debugf("Parsing %v certificates", len(collateral.Certs))
 	certs, err := internal.ParseCertsDer(collateral.Certs)
-	if err != nil {
-		log.Debugf("failed to parse IAS certificates: %v", err)
-		result.Summary.Fail(ar.ParseEvidence)
+	if err != nil || len(certs) == 0 {
+		result.Summary.Fail(ar.ParseCert, fmt.Errorf("failed to parse IAS certificates: %w", err))
 		return result, false
 	}
 
