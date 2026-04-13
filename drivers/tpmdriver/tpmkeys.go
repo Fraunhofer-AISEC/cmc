@@ -113,7 +113,7 @@ func (tpmKey *TpmKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts
 }
 
 func (tpmKey *TpmKey) Export(path string) error {
-	err := os.WriteFile(path, tpmKey.marshalled, 0644)
+	err := os.WriteFile(path, tpmKey.marshalled, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write marshalled key file: %w", err)
 	}

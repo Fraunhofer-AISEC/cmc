@@ -201,7 +201,7 @@ func StorePrivateKeyPem(file string, key crypto.PrivateKey) error {
 		return fmt.Errorf("failed to convert key to PEM: %w", err)
 	}
 
-	err = os.WriteFile(file, data, 0644)
+	err = os.WriteFile(file, data, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -436,6 +436,7 @@ func ParsePrivateKey(data []byte) (crypto.PrivateKey, error) {
 }
 
 func ParsePublicKey(data []byte) (crypto.PublicKey, error) {
+
 	// Check if PEM encoded
 	pubPem, _ := pem.Decode(data)
 	if pubPem != nil {

@@ -732,7 +732,7 @@ func (t *Tpm) saveAk() error {
 		return fmt.Errorf("activate credential failed: Marshal AK returned %w", err)
 	}
 	akPath := path.Join(t.StoragePath, akFile)
-	if err := os.WriteFile(akPath, akBytes, 0644); err != nil {
+	if err := os.WriteFile(akPath, akBytes, 0600); err != nil {
 		return fmt.Errorf("failed to write file %v: %w", akPath, err)
 	}
 

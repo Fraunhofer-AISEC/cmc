@@ -261,7 +261,7 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 		if err := os.MkdirAll(filepath.Dir(c.KeyIdFile), 0755); err != nil {
 			return tls.Certificate{}, fmt.Errorf("failed to create key ID file directory: %w", err)
 		}
-		err := os.WriteFile(c.KeyIdFile, []byte(keyId), 0644)
+		err := os.WriteFile(c.KeyIdFile, []byte(keyId), 0600)
 		if err != nil {
 			return tls.Certificate{}, fmt.Errorf("failed to write key ID: %w", err)
 		}
