@@ -59,7 +59,7 @@ func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]b
 		return nil, errors.New("no drivers configured")
 	}
 
-	report, err := prover.Generate(chbindings, cached, a.cmc.Metadata, a.cmc.Drivers,
+	report, err := prover.Generate(chbindings, cached, a.cmc.GetMetadata(), a.cmc.Drivers,
 		cc.Serializer, a.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
@@ -199,7 +199,7 @@ func (a LibApi) createKey(cc *CmcConfig) (string, error) {
 
 	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  cc.KeyConfig,
-		Metadata:   a.cmc.Metadata,
+		Metadata:   a.cmc.GetMetadata(),
 		Drivers:    a.cmc.Drivers,
 		Serializer: cc.Serializer,
 		ArHashAlg:  a.cmc.HashAlg,

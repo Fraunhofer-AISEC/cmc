@@ -127,10 +127,6 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	if cmc.Metadata == nil {
-		log.Warn("Generating AR without any metadata")
-	}
-
 	req := new(api.AttestationRequest)
 	err := s.Unmarshal(payload, req)
 	if err != nil {
@@ -146,7 +142,7 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
-	report, err := prover.Generate(req.Nonce, req.Cached, cmc.Metadata, cmc.Drivers, s, cmc.HashAlg)
+	report, err := prover.Generate(req.Nonce, req.Cached, cmc.GetMetadata(), cmc.Drivers, s, cmc.HashAlg)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)
 		return
@@ -285,7 +281,7 @@ func tlscreate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	keyId, err := cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  req.KeyConfig,
-		Metadata:   cmc.Metadata,
+		Metadata:   cmc.GetMetadata(),
 		Drivers:    cmc.Drivers,
 		Serializer: s,
 		ArHashAlg:  cmc.HashAlg,

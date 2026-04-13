@@ -22,6 +22,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 
@@ -49,7 +50,6 @@ type Cmc struct {
 	EstTlsCas          []*x509.Certificate
 	IdentityCas        []*x509.Certificate
 	MetadataCas        []*x509.Certificate
-	Metadata           map[string][]byte
 	PeerCache          *peercache.Cache
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	PolicyOverwrite    bool
@@ -57,6 +57,26 @@ type Cmc struct {
 	HashAlg            crypto.Hash
 	KeyMgr             *keymgr.KeyMgr
 	*Config
+
+	metadata      map[string][]byte
+	metadataMutex sync.RWMutex
+}
+
+func (cmc *Cmc) GetMetadata() map[string][]byte {
+	cmc.metadataMutex.RLock()
+	defer cmc.metadataMutex.RUnlock()
+
+	copy := make(map[string][]byte, len(cmc.metadata))
+	for k, v := range cmc.metadata {
+		copy[k] = v
+	}
+	return copy
+}
+
+func (cmc *Cmc) UpdateMetadata(metadata map[string][]byte) {
+	cmc.metadataMutex.Lock()
+	defer cmc.metadataMutex.Unlock()
+	cmc.metadata = metadata
 }
 
 func GetDrivers() map[string]drv.Driver {
@@ -101,7 +121,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
-	cmc.Metadata = metadata
+	cmc.UpdateMetadata(metadata)
 
 	// Create endorser, which is used to fetch vendor certificate chains,
 	// such as the AMD SNP VCEK or Intel TDX PCK chain

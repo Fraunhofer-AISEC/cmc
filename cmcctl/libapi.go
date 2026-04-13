@@ -50,10 +50,6 @@ func (a LibApi) generate(c *config) error {
 		a.cmc = cmc
 	}
 
-	if a.cmc.Metadata == nil {
-		return fmt.Errorf("metadata not specified. Can work only as verifier")
-	}
-
 	// Generate random nonce
 	nonce := make([]byte, 8)
 	_, err := rand.Read(nonce)
@@ -62,7 +58,7 @@ func (a LibApi) generate(c *config) error {
 	}
 
 	// Generate attestation report
-	report, err := prover.Generate(nonce, nil, a.cmc.Metadata, a.cmc.Drivers, c.serializer,
+	report, err := prover.Generate(nonce, nil, a.cmc.GetMetadata(), a.cmc.Drivers, c.serializer,
 		a.cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to generate attestation report: %w", err)
@@ -116,10 +112,6 @@ func (a LibApi) enroll(c *config) error {
 		a.cmc = cmc
 	}
 
-	if a.cmc.Metadata == nil {
-		return fmt.Errorf("metadata not specified. Can work only as verifier")
-	}
-
 	log.Tracef("Requested key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
 		c.KeyType, c.KeyConfig,
 		c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
@@ -132,7 +124,7 @@ func (a LibApi) enroll(c *config) error {
 			DNSNames:    c.TlsDnsNames,
 			IPAddresses: c.TlsIpAddresses,
 		},
-		Metadata:  a.cmc.Metadata,
+		Metadata:  a.cmc.GetMetadata(),
 		Drivers:   a.cmc.Drivers,
 		ArHashAlg: a.cmc.HashAlg,
 	})

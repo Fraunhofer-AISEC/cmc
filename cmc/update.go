@@ -48,9 +48,9 @@ func UpdateMetadata(cmc *Cmc) error {
 		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
-	cmc.Metadata = metadata
+	cmc.UpdateMetadata(metadata)
 
-	log.Debugf("Updated metadata. New number of metadata items: %v", len(cmc.Metadata))
+	log.Debugf("Updated metadata. New number of metadata items: %v", len(metadata))
 
 	return nil
 }
