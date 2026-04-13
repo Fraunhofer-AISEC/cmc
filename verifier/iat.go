@@ -202,6 +202,12 @@ func VerifyIas(
 
 func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
 
+	if cert == nil {
+		result := ar.Result{}
+		result.Fail(ar.ExtractPubKey, fmt.Errorf("certificate is nil"))
+		return result, nil, false
+	}
+
 	// create a Sign1Message from a raw COSE_Sign payload
 	var msgToVerify cose.Sign1Message
 	err := msgToVerify.UnmarshalCBOR(data)
