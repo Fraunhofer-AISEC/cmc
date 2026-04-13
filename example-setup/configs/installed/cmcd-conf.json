@@ -20,13 +20,7 @@
     "peerCache": "data/cmc-peer-cache",
     "measurementLogs": true,
     "ctr": false,
-    "estTlsCas": [
-        "data/pki/ca.pem"
-    ],
-    "identityCas": [
-        "data/pki/ca.pem"
-    ],
-    "metadataCas": [
+    "rootCas": [
         "data/pki/ca.pem"
     ],
     "caKey": "data/pki/ca-key.pem"

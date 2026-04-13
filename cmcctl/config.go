@@ -71,7 +71,6 @@ var (
 )
 
 type config struct {
-	// Generic config
 	Addr             string   `json:"addr"`
 	ReportFile       string   `json:"report"`
 	ResultFile       string   `json:"result"`
@@ -79,7 +78,7 @@ type config struct {
 	KeyIdFile        string   `json:"keyId"`
 	KeyType          string   `json:"keyType"`
 	KeyConfig        string   `json:"keyConfig"`
-	EstTlsCa         string   `json:"estTlsCa"`
+	CaStorePath      string   `json:"caStorePath"`
 	Mtls             bool     `json:"mtls"`
 	Attest           string   `json:"attest"`
 	PoliciesFile     string   `json:"policies"`
@@ -97,7 +96,7 @@ type config struct {
 	TlsIpAddresses   []string `json:"tlsIpAddresses"`
 	cmc.Config
 
-	identityCas  []*x509.Certificate
+	rootCas      []*x509.Certificate
 	policies     []byte
 	api          Api
 	serializer   ar.Serializer
@@ -117,7 +116,7 @@ const (
 	keyidFlag          = "keyid"
 	keyTypeFlag        = "keytype"
 	keyConfigFlag      = "keyconfig"
-	estTlsCaFlag       = "esttlsca"
+	caStorePathFlag    = "castorepath"
 	policiesFlag       = "policies"
 	mtlsFlag           = "mtls"
 	attestFlag         = "attest"
@@ -144,7 +143,7 @@ var (
 	keyidFile    = flag.String(keyidFlag, "", "File to store the key ID of the (hardware-backed) TLS key")
 	keyType      = flag.String(keyTypeFlag, "", "CMC key/certificate type [tpm snp sw]")
 	keyConfig    = flag.String(keyConfigFlag, "", "Key configuration [EC256, EC384, EC512, RSA2048, RSA4096]")
-	estTlsCa     = flag.String(estTlsCaFlag, "", "Path to store retrieved CA certificates")
+	caStorePath  = flag.String(caStorePathFlag, "", "Path to store CA certs retrieved with provision command")
 	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
@@ -228,8 +227,8 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(keyConfigFlag) {
 		c.KeyConfig = *keyConfig
 	}
-	if internal.FlagPassed(estTlsCaFlag) {
-		c.EstTlsCa = *estTlsCa
+	if internal.FlagPassed(caStorePathFlag) {
+		c.CaStorePath = *caStorePath
 	}
 	if internal.FlagPassed(policiesFlag) {
 		c.PoliciesFile = *policiesFile
@@ -305,11 +304,11 @@ func getConfig(cmd string) (*config, error) {
 
 	// Get root CA certificate in PEM format if specified
 	if cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" || cmd == "proxy" {
-		if len(c.IdentityCas) == 0 {
-			return nil, fmt.Errorf("path to read Report CAs must be specified either via config file or commandline")
+		if len(c.RootCas) == 0 {
+			return nil, fmt.Errorf("path to root CAs must be specified via config file or commandline")
 		}
 
-		for _, ca := range c.IdentityCas {
+		for _, ca := range c.RootCas {
 			ca, err := os.ReadFile(ca)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
@@ -318,16 +317,18 @@ func getConfig(cmd string) (*config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
 			}
-			c.identityCas = append(c.identityCas, cert)
+			c.rootCas = append(c.rootCas, cert)
 		}
 
 	}
 
-	if (cmd == "cacerts" || cmd == "provision") && c.EstTlsCa == "" {
-		return nil, fmt.Errorf("path to store CA must be specified either via config file or commandline")
-	}
-	if cmd == "provision" && c.ProvisionToken == "" {
-		return nil, fmt.Errorf("path to store bootstrap token must be specified either via config file or commandline")
+	if cmd == "provision" {
+		if c.CaStorePath == "" {
+			return nil, fmt.Errorf("path to store CA must be specified via config file or commandline")
+		}
+		if c.ProvisionToken == "" {
+			return nil, fmt.Errorf("path to store bootstrap token must be specified via config file or commandline")
+		}
 	}
 
 	// Add optional policies if specified
@@ -419,8 +420,8 @@ func (c *config) Print() {
 	log.Debugf("\tKey ID File              : %v", c.KeyIdFile)
 	log.Debugf("\tKey Tye                  : %v", c.KeyType)
 	log.Debugf("\tKey config               : %v", c.KeyConfig)
-	log.Debugf("\tIdentity CAs             : %v", strings.Join(c.IdentityCas, ","))
-	log.Debugf("\tEstCa                    : %v", c.EstTlsCa)
+	log.Debugf("\tTrusted root CA          : %v", strings.Join(c.RootCas, ","))
+	log.Debugf("\tProvision CA store path  : %v", c.CaStorePath)
 	log.Debugf("\tMtls                     : %v", c.Mtls)
 	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
 	log.Debugf("\tAttest                   : %v", c.Attest)

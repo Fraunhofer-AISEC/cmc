@@ -34,7 +34,7 @@ import (
 )
 
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
-	useSystemRoots bool, alg crypto.Hash) (map[string][]byte, error) {
+	allowSystemRoots bool, alg crypto.Hash) (map[string][]byte, error) {
 
 	if len(paths) == 0 {
 		log.Info("No metadata specified via config")
@@ -59,7 +59,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 			}
 			metadata = append(metadata, data...)
 		} else {
-			data, err := provision.FetchMetadata(p, rootCas, useSystemRoots)
+			data, err := provision.FetchMetadata(p, rootCas, allowSystemRoots)
 			if err != nil {
 				log.Warnf("failed to fetch %v: %v", p, err)
 				fails++

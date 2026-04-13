@@ -42,53 +42,54 @@ var (
 )
 
 type config struct {
-	EstAddr         string   `json:"estAddr"`
-	EstCaKey        string   `json:"estCaKey"`
-	EstCaChain      []string `json:"estCaChain"`
-	TlsKey          string   `json:"tlsKey"`
-	TlsCaChain      []string `json:"tlsCaChain"`
-	MetadataCas     []string `json:"metadataCas"`
-	ClientTlsCas    []string `json:"clientTlsCas"`
-	HttpFolder      string   `json:"httpFolder"`
-	VerifyEkCert    bool     `json:"verifyEkCert"`
-	TpmEkCertDb     string   `json:"tpmEkCertDb,omitempty"`
-	VcekCacheFolder string   `json:"vcekCacheFolder,omitempty"`
-	LogLevel        string   `json:"logLevel"`
-	LogFile         string   `json:"logFile,omitempty"`
-	AuthMethods     []string `json:"authMethods,omitempty"`
-	TokenPath       string   `json:"tokenPath"`
-	PublishAddr     string   `json:"publishAddr"`
-	PublishFile     string   `json:"publishFile"`
-	PublishToken    string   `json:"publishToken"`
+	EstAddr          string   `json:"estAddr"`
+	EstCaKey         string   `json:"estCaKey"`
+	EstCaChain       []string `json:"estCaChain"`
+	TlsKey           string   `json:"tlsKey"`
+	TlsCaChain       []string `json:"tlsCaChain"`
+	RootCas          []string `json:"rootCas"`
+	AllowSystemCerts bool     `json:"allowSystemCerts"`
+	HttpFolder       string   `json:"httpFolder"`
+	VerifyEkCert     bool     `json:"verifyEkCert"`
+	TpmEkCertDb      string   `json:"tpmEkCertDb,omitempty"`
+	VcekCacheFolder  string   `json:"vcekCacheFolder,omitempty"`
+	LogLevel         string   `json:"logLevel"`
+	LogFile          string   `json:"logFile,omitempty"`
+	AuthMethods      []string `json:"authMethods,omitempty"`
+	TokenPath        string   `json:"tokenPath"`
+	PublishAddr      string   `json:"publishAddr"`
+	PublishFile      string   `json:"publishFile"`
+	PublishToken     string   `json:"publishToken"`
 
 	estCaKey    crypto.PrivateKey
 	estCaChain  []*x509.Certificate
 	tlsKey      crypto.PrivateKey
 	tlsCaChain  []*x509.Certificate
-	metadataCas []*x509.Certificate
+	rootCas     []*x509.Certificate
 	authMethods internal.AuthMethod
 }
 
 const (
-	configFlag          = "config"
-	tokenPathFlag       = "tokenPath"
-	estAddrFlag         = "estaddr"
-	estCaKeyFlag        = "estcakey"
-	estCaChainFlag      = "estcachain"
-	tlsKeyFlag          = "tlskey"
-	tlsCaChainFlag      = "tlscachain"
-	metadataCasFlag     = "metadatacas"
-	clientTlsCasFlag    = "clienttlscas"
-	httpFolderFlag      = "httpfolder"
-	verifyEkCertFlag    = "verifyekcert"
-	tpmEkCertDbFlag     = "tpmekcertdb"
-	vcekCacheFolderFlag = "vcekcachefolder"
-	logLevelFlag        = "loglevel"
-	logFileFlag         = "logfile"
-	authMethodsFlag     = "authmethods"
-	publishAddrFlag     = "publishaddr"
-	publishFileFlag     = "publishfile"
-	publishTokenFlag    = "publishTokenFlag"
+	configFlag           = "config"
+	tokenPathFlag        = "tokenPath"
+	estAddrFlag          = "estaddr"
+	estCaKeyFlag         = "estcakey"
+	estCaChainFlag       = "estcachain"
+	tlsKeyFlag           = "tlskey"
+	tlsCaChainFlag       = "tlscachain"
+	rootCasFlag          = "rootcas"
+	allowSystemCertsFlag = "allowsystemcerts"
+	clientTlsCasFlag     = "clienttlscas"
+	httpFolderFlag       = "httpfolder"
+	verifyEkCertFlag     = "verifyekcert"
+	tpmEkCertDbFlag      = "tpmekcertdb"
+	vcekCacheFolderFlag  = "vcekcachefolder"
+	logLevelFlag         = "loglevel"
+	logFileFlag          = "logfile"
+	authMethodsFlag      = "authmethods"
+	publishAddrFlag      = "publishaddr"
+	publishFileFlag      = "publishfile"
+	publishTokenFlag     = "publishTokenFlag"
 )
 
 func getConfig() (*config, error) {
@@ -103,8 +104,9 @@ func getConfig() (*config, error) {
 	estCaChain := flag.String(estCaChainFlag, "", "Path to the EST CA certificate chain")
 	tlsKey := flag.String(tlsKeyFlag, "", "TLS key for EST HTTPS server")
 	tlsCaChain := flag.String(tlsCaChainFlag, "", "TLS certificate chain for EST HTTPS server")
-	metadataCas := flag.String(metadataCasFlag, "", "Trusted metadata root CAs for attest enroll")
-	clientTlsCas := flag.String(clientTlsCasFlag, "", "Trusted root CAs for client authentication if active")
+	rootCas := flag.String(rootCasFlag, "", "Trusted root CAs")
+	allowSystemCerts := flag.Bool(allowSystemCertsFlag, false,
+		"Allow using the system cert pool as trusted root CAs")
 	httpFolder := flag.String(httpFolderFlag, "", "Folder to be served")
 	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
 		"Indicates whether to verify TPM EK certificate chains")
@@ -158,11 +160,11 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(tlsCaChainFlag) {
 		c.TlsCaChain = strings.Split(*tlsCaChain, ",")
 	}
-	if internal.FlagPassed(metadataCasFlag) {
-		c.MetadataCas = strings.Split(*metadataCas, ",")
+	if internal.FlagPassed(rootCasFlag) {
+		c.RootCas = strings.Split(*rootCas, ",")
 	}
-	if internal.FlagPassed(*clientTlsCas) {
-		c.ClientTlsCas = strings.Split(*clientTlsCas, ",")
+	if internal.FlagPassed(allowSystemCertsFlag) {
+		c.AllowSystemCerts = *allowSystemCerts
 	}
 	if internal.FlagPassed(httpFolderFlag) {
 		c.HttpFolder = *httpFolder
@@ -231,7 +233,7 @@ func getConfig() (*config, error) {
 		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
 	}
 
-	c.metadataCas, err = internal.ReadCerts(c.MetadataCas)
+	c.rootCas, err = internal.ReadCerts(c.RootCas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load trusted metadata CAs: %w", err)
 	}
@@ -265,10 +267,7 @@ func printConfig(c *config) {
 	log.Debugf("\tEST CA cert chain   : %v", strings.Join(c.EstCaChain, ","))
 	log.Debugf("\tTLS Key File        : %v", c.TlsKey)
 	log.Debugf("\tTLS CA cert chain   : %v", strings.Join(c.TlsCaChain, ","))
-	log.Debugf("\tMetadata CAs        : %v", strings.Join(c.MetadataCas, ","))
-	for _, cca := range c.ClientTlsCas {
-		log.Debugf("\tClient TLS CAs:     : %v", cca)
-	}
+	log.Debugf("\tTrusted root CAs    : %v", strings.Join(c.RootCas, ","))
 	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)

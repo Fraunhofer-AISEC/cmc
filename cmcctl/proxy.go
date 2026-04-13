@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -205,10 +204,9 @@ func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Requ
 func forwardProxy(c *config) error {
 	var tlsConf *tls.Config
 
-	// Add trusted server root CAs
-	trustedRootCas := x509.NewCertPool()
-	for _, ca := range c.identityCas {
-		trustedRootCas.AddCert(ca)
+	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	if err != nil {
+		return fmt.Errorf("failed to create cert pool: %w", err)
 	}
 
 	if c.Mtls {
@@ -225,17 +223,17 @@ func forwardProxy(c *config) error {
 		// Create TLS config with root CA and own certificate
 		tlsConf = &tls.Config{
 			Certificates: []tls.Certificate{cert},
-			RootCAs:      trustedRootCas,
+			RootCAs:      rootpool,
 		}
 	} else {
 		// Create TLS config with root CA only
 		tlsConf = &tls.Config{
-			RootCAs:       trustedRootCas,
+			RootCAs:       rootpool,
 			Renegotiation: tls.RenegotiateNever,
 		}
 	}
 
-	internal.PrintTlsConfig(tlsConf, c.identityCas)
+	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		log.Debugf("Dialing TLS address: %v", addr)

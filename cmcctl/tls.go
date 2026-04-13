@@ -17,7 +17,6 @@ package main
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
@@ -37,20 +36,11 @@ import (
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging exemplary messages with it
 func dial(c *config) error {
-	var tlsConf *tls.Config
 
-	// Add trusted server root CAs
-	trustedRootCas := x509.NewCertPool()
-	for _, ca := range c.identityCas {
-		trustedRootCas.AddCert(ca)
-	}
-
-	tlsConf, err := createClientTlsConf(c, trustedRootCas)
+	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-
-	internal.PrintTlsConfig(tlsConf, c.identityCas)
 
 	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),
@@ -101,10 +91,9 @@ func dial(c *config) error {
 
 func listen(c *config) error {
 
-	// Add trusted client root CAs
-	trustedRootCas := x509.NewCertPool()
-	for _, ca := range c.identityCas {
-		trustedRootCas.AddCert(ca)
+	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	if err != nil {
+		return fmt.Errorf("failed to create cert pool: %w", err)
 	}
 
 	// Load certificate
@@ -126,11 +115,11 @@ func listen(c *config) error {
 	tlsConf := &tls.Config{
 		Certificates:  []tls.Certificate{cert},
 		ClientAuth:    clientAuth,
-		ClientCAs:     trustedRootCas,
+		ClientCAs:     rootpool,
 		Renegotiation: tls.RenegotiateNever,
 	}
 
-	internal.PrintTlsConfig(tlsConf, c.identityCas)
+	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
@@ -192,12 +181,17 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
-func createClientTlsConf(c *config, roots *x509.CertPool) (*tls.Config, error) {
+func createClientTlsConf(c *config) (*tls.Config, error) {
+
+	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cert pool: %w", err)
+	}
 
 	if !c.Mtls {
 		// Create TLS config with root CA only
 		return &tls.Config{
-			RootCAs:       roots,
+			RootCAs:       rootpool,
 			Renegotiation: tls.RenegotiateNever,
 		}, nil
 	}
@@ -209,11 +203,14 @@ func createClientTlsConf(c *config, roots *x509.CertPool) (*tls.Config, error) {
 	}
 
 	// Create TLS config with root CA and own certificate
-	return &tls.Config{
+	tlsConf := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		RootCAs:      roots,
-	}, nil
+		RootCAs:      rootpool,
+	}
 
+	internal.PrintTlsConfig(tlsConf, c.rootCas)
+
+	return tlsConf, nil
 }
 
 func getTlsCert(c *config) (tls.Certificate, error) {

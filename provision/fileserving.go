@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -44,10 +45,10 @@ type Content struct {
 
 // FetchMetadata fetches the metadata (manifests and descriptions) from a remote server
 func FetchMetadata(addr string, rootCas []*x509.Certificate,
-	useSystemRoots bool,
+	allowSystemRoots bool,
 ) ([][]byte, error) {
 
-	client, err := NewHttpClient(addr, rootCas, useSystemRoots, nil)
+	client, err := NewHttpClient(addr, rootCas, allowSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -154,24 +155,11 @@ func fetchDataRecursively(client *http.Client, pre Pre, addr string) ([][]byte, 
 	return metadata, nil
 }
 
-func NewHttpClient(addr string, serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*http.Client, error) {
-	var err error
+func NewHttpClient(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*http.Client, error) {
 
-	// Create Certpool for Root CAs
-	rootpool := x509.NewCertPool()
-	if allowSystemCerts {
-		log.Debug("Using system cert pool")
-		rootpool, err = x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to add system cert pool: %w", err)
-		}
-	}
-	for _, r := range serverTlsCas {
-		rootpool.AddCert(r)
-	}
-
-	if len(serverTlsCas) == 0 {
-		return nil, fmt.Errorf("no EST server CA provided")
+	rootpool, err := internal.CreateCertPool(rootCas, allowSystemCerts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cert pool: %w", err)
 	}
 
 	client := &http.Client{

@@ -91,7 +91,7 @@ func (a LibApi) verify(c *config) error {
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
 	resp := verifier.Verify(report, nonce, c.policies, a.cmc.PolicyEngineSelect,
-		a.cmc.PolicyOverwrite, a.cmc.MetadataCas, a.cmc.PeerCache, "")
+		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, "")
 
 	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, resp)
 	if err != nil {

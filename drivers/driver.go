@@ -17,26 +17,23 @@ package drivers
 
 import (
 	"crypto"
-	"crypto/x509"
 
 	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 // DriverConfig contains all configuration values required for the different drivers
 type DriverConfig struct {
-	StoragePath      string
-	HashAlg          crypto.Hash
-	KeyAlg           string
-	ExcludePcrs      []int
-	MeasurementLogs  bool
-	Ctr              bool
-	CtrLog           string
-	ExtCtrLog        bool
-	CtrDriver        string
-	EstTlsCas        []*x509.Certificate
-	UseSystemRootCas bool
-	Vmpl             int
-	Endorsers        EndorserProvider
+	StoragePath     string
+	HashAlg         crypto.Hash
+	KeyAlg          string
+	ExcludePcrs     []int
+	MeasurementLogs bool
+	Ctr             bool
+	CtrLog          string
+	ExtCtrLog       bool
+	CtrDriver       string
+	Vmpl            int
+	Endorsers       EndorserProvider
 }
 
 // Driver is an interface representing a driver for a hardware trust anchor,
