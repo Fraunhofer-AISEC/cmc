@@ -100,9 +100,8 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 		return nil, errors.New("metadata not specified. Can work only as verifier")
 	}
 
-	if req.Version != grpcapi.GetVersion() {
-		return nil, fmt.Errorf("API version mismatch. Expected AttestationRequest version %v, got %v",
-			grpcapi.GetVersion(), req.Version)
+	if err := grpcapi.CheckVersion(req.Version); err != nil {
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.Metadata, s.cmc.Drivers,
@@ -125,9 +124,8 @@ func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationReques
 
 	log.Info("Received grpc request type 'Verify'")
 
-	if req.Version != grpcapi.GetVersion() {
-		return nil, fmt.Errorf("API version mismatch. Expected VerificationRequest version %v, got %v",
-			grpcapi.GetVersion(), req.Version)
+	if err := grpcapi.CheckVersion(req.Version); err != nil {
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	result := verifier.Verify(req.Report, req.Nonce, s.cmc.IdentityCas, req.Policies,
@@ -156,9 +154,8 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 
 	log.Info("Received grpc request type 'Measure'")
 
-	if req.Version != grpcapi.GetVersion() {
-		return nil, fmt.Errorf("API version mismatch. Expected MeasureRequest version %v, got %v",
-			grpcapi.GetVersion(), req.Version)
+	if err := grpcapi.CheckVersion(req.Version); err != nil {
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	// oci spec in protobuf is marshaled as bytes
@@ -230,9 +227,8 @@ func (s *GrpcServer) TLSSign(ctx context.Context, req *grpcapi.TLSSignRequest) (
 
 	log.Info("Received grpc request type 'TLSSign'")
 
-	if req.Version != grpcapi.GetVersion() {
-		return nil, fmt.Errorf("API version mismatch. Expected TLSSignRequest version %v, got %v",
-			grpcapi.GetVersion(), req.Version)
+	if err := grpcapi.CheckVersion(req.Version); err != nil {
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	signature, err := Sign(s.cmc.KeyMgr, req.KeyId, req.HashAlg, req.Content)
@@ -256,9 +252,8 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (
 
 	log.Info("Received grpc request type 'TLSCert'")
 
-	if req.Version != grpcapi.GetVersion() {
-		return nil, fmt.Errorf("API version mismatch. Expected TLSCertRequest version %v, got %v",
-			grpcapi.GetVersion(), req.Version)
+	if err := grpcapi.CheckVersion(req.Version); err != nil {
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	if len(s.cmc.Drivers) == 0 {
@@ -290,9 +285,8 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *grpcapi.PeerCacheReques
 
 	log.Info("Received grpc request type 'PeerCache'")
 
-	if req.Version != grpcapi.GetVersion() {
-		return nil, fmt.Errorf("API version mismatch. Expected PeerCacheRequest version %v, got %v",
-			grpcapi.GetVersion(), req.Version)
+	if err := grpcapi.CheckVersion(req.Version); err != nil {
+		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
 	log.Debugf("Collecting peer cache for peer %v", req.Peer)
