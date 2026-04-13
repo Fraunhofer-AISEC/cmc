@@ -37,7 +37,7 @@ func Sign(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey, serializer 
 	case "JSON":
 		return signJson(data, priv, pub, certChain)
 	case "CBOR":
-		return signCbor(data, priv, certChain)
+		return signCbor(data, priv, pub, certChain)
 	default:
 		return nil, fmt.Errorf("unknown serializer %v", serializer)
 	}
@@ -89,7 +89,7 @@ func signJson(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey,
 	return []byte(msg), nil
 }
 
-func signCbor(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate) ([]byte, error) {
+func signCbor(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey, certChain []*x509.Certificate) ([]byte, error) {
 
 	log.Tracef("Signing CBOR data length %v...", len(data))
 
@@ -102,14 +102,21 @@ func signCbor(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate
 	if !ok {
 		return nil, fmt.Errorf("failed to convert signing key of type %T", priv)
 	}
-	coseSigner, err := cose.NewSigner(cose.AlgorithmES256, stmp)
+
+	alg, err := coseAlgFromKeyType(pub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get COSE algorithm from key type: %w", err)
+	}
+	log.Trace("Chosen COSE signature algorithm: ", alg)
+
+	coseSigner, err := cose.NewSigner(alg, stmp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signer: %w", err)
 	}
 
 	// create a signature holder
 	sigHolder := cose.NewSignature()
-	sigHolder.Headers.Protected.SetAlgorithm(cose.AlgorithmES256)
+	sigHolder.Headers.Protected.SetAlgorithm(alg)
 
 	// https://datatracker.ietf.org/doc/draft-ietf-cose-x509/08/ section 2
 	// If multiple certificates are conveyed, a CBOR array of byte strings is used,
@@ -185,5 +192,53 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 		}
 	default:
 		return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown key type %T", pub)
+	}
+}
+
+// Deduces COSE signature algorithm from provided key type
+func coseAlgFromKeyType(pub crypto.PublicKey) (cose.Algorithm, error) {
+	switch key := pub.(type) {
+	case rsa.PublicKey:
+		switch key.Size() {
+		case 256:
+			return cose.AlgorithmRS256, nil
+		case 512:
+			return cose.AlgorithmRS512, nil
+		default:
+			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v", key.Size())
+		}
+	case *rsa.PublicKey:
+		switch key.Size() {
+		case 256:
+			return cose.AlgorithmRS256, nil
+		case 512:
+			return cose.AlgorithmRS512, nil
+		default:
+			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v", key.Size())
+		}
+	case ecdsa.PublicKey:
+		switch key.Curve {
+		case elliptic.P224(), elliptic.P256():
+			return cose.AlgorithmES256, nil
+		case elliptic.P384():
+			return cose.AlgorithmES384, nil
+		case elliptic.P521():
+			return cose.AlgorithmES512, nil
+		default:
+			return cose.AlgorithmReserved, errors.New("unsupported elliptic curve for COSE")
+		}
+	case *ecdsa.PublicKey:
+		switch key.Curve {
+		case elliptic.P224(), elliptic.P256():
+			return cose.AlgorithmES256, nil
+		case elliptic.P384():
+			return cose.AlgorithmES384, nil
+		case elliptic.P521():
+			return cose.AlgorithmES512, nil
+		default:
+			return cose.AlgorithmReserved, errors.New("unsupported elliptic curve for COSE")
+		}
+	default:
+		return cose.AlgorithmReserved, fmt.Errorf("unsupported key type for COSE: %T", pub)
 	}
 }
