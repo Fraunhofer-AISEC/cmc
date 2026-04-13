@@ -80,7 +80,7 @@ const (
 	CtrFlag              = "ctr"
 	CtrDriverFlag        = "ctrdriver"
 	CtrLogFlag           = "ctrlog"
-	RootCasFlag          = "metadatacas"
+	RootCasFlag          = "rootcas"
 	AllowSystemCertsFlag = "allowsystemcerts"
 	VmplFlag             = "vmpl"
 	snpCacheFlag         = "snpcache"
