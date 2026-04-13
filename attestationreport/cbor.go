@@ -17,7 +17,6 @@ package attestationreport
 
 import (
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/x509"
 	"fmt"
 
@@ -191,19 +190,22 @@ func (s cborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 					result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
 				}
 			}
-			verifyingKey, ok = certChain[0].PublicKey.(*ecdsa.PublicKey)
-			if !ok {
-				result.Summary.Status = StatusFail
-				result.SignatureCheck[i].SignCheck.Fail(ExtractPubKey)
-				success = false
-				continue
-			}
+			verifyingKey = certChain[0].PublicKey
 		}
 
-		verifier, err := cose.NewVerifier(cose.AlgorithmES256, verifyingKey)
+		// Get algorithm from the signature's protected headers
+		alg, err := sig.Headers.Protected.Algorithm()
 		if err != nil {
-			result.Summary.Fail(NotSpecified, err)
-			result.SignatureCheck[i].SignCheck.Fail(Internal, err)
+			result.Summary.Fail(UnsupportedAlgorithm, fmt.Errorf("failed to get COSE algorithm from protected headers: %w", err))
+			result.SignatureCheck[i].SignCheck.Fail(UnsupportedAlgorithm, err)
+			success = false
+			continue
+		}
+
+		verifier, err := cose.NewVerifier(alg, verifyingKey)
+		if err != nil {
+			result.Summary.Fail(UnsupportedAlgorithm, err)
+			result.SignatureCheck[i].SignCheck.Fail(UnsupportedAlgorithm, err)
 			success = false
 			continue
 		}
