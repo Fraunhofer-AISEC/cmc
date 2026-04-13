@@ -215,6 +215,7 @@ func fetchRootCrl(urls []string) (*x509.RevocationList, error) {
 		rootCrl, err := x509.ParseRevocationList(body)
 		if err != nil {
 			log.Warnf("failed to parse root CA CRL from %v: %v", url, err)
+			continue
 		}
 		return rootCrl, nil
 	}
