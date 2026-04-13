@@ -27,54 +27,54 @@ import (
 // HashFromString retrieves the hash algorithm from the specified
 // string as defined in https://pkg.go.dev/crypto#Hash.String
 func HashFromString(s string) (crypto.Hash, error) {
-	switch strings.ToUpper(s) {
-	case "MD4":
+	switch strings.ToLower(s) {
+	case "md4":
 		return crypto.MD4, nil
-	case "MD5":
+	case "md5":
 		return crypto.MD5, nil
-	case "SHA1":
+	case "sha1":
 		return crypto.SHA1, nil
-	case "SHA-1":
+	case "sha-1":
 		return crypto.SHA1, nil
-	case "SHA224":
+	case "sha224":
 		return crypto.SHA224, nil
-	case "SHA-224":
+	case "sha-224":
 		return crypto.SHA224, nil
-	case "SHA256":
+	case "sha256":
 		return crypto.SHA256, nil
-	case "SHA-256":
+	case "sha-256":
 		return crypto.SHA256, nil
-	case "SHA384":
+	case "sha384":
 		return crypto.SHA384, nil
-	case "SHA-384":
+	case "sha-384":
 		return crypto.SHA384, nil
-	case "SHA512":
+	case "sha512":
 		return crypto.SHA512, nil
-	case "SHA-512":
+	case "sha-512":
 		return crypto.SHA512, nil
-	case "MD5+SHA1":
+	case "md5+sha1":
 		return crypto.MD5SHA1, nil
-	case "RIPEMD-160":
+	case "ripemd-160":
 		return crypto.RIPEMD160, nil
-	case "SHA3-224":
+	case "sha3-224":
 		return crypto.SHA3_224, nil
-	case "SHA3-256":
+	case "sha3-256":
 		return crypto.SHA3_256, nil
-	case "SHA3-384":
+	case "sha3-384":
 		return crypto.SHA3_384, nil
-	case "SHA3-512":
+	case "sha3-512":
 		return crypto.SHA3_512, nil
-	case "SHA-512/224":
+	case "sha-512/224":
 		return crypto.SHA512_224, nil
-	case "SHA-512/256":
+	case "sha-512/256":
 		return crypto.SHA512_256, nil
-	case "BLAKE2s-256":
+	case "blake2s-256":
 		return crypto.BLAKE2s_256, nil
-	case "BLAKE2b-256":
+	case "blake2b-256":
 		return crypto.BLAKE2b_256, nil
-	case "BLAKE2b-384":
+	case "blake2b-384":
 		return crypto.BLAKE2b_384, nil
-	case "BLAKE2b-512":
+	case "blake2b-512":
 		return crypto.BLAKE2b_512, nil
 	default:
 		return 0, fmt.Errorf("unsupported hash %q", s)
