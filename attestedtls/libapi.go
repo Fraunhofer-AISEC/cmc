@@ -109,11 +109,12 @@ func (a LibApi) verifyAR(
 		log.Tracef("Will not return attestation result: no callback specified")
 	}
 
-	if result.Summary.Status == ar.StatusSuccess {
+	switch result.Summary.Status {
+	case ar.StatusSuccess:
 		log.Debugf("Attestation report verification successful")
-	} else if result.Summary.Status == ar.StatusWarn {
+	case ar.StatusWarn:
 		log.Debugf("Attestation report verification passed with warnings")
-	} else {
+	default:
 		return errors.New("attestation report verification failed")
 	}
 	return nil
