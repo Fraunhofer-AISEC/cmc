@@ -110,7 +110,7 @@ func VerifySnp(
 	}
 
 	certs, err := internal.ParseCertsDer(collateral.Certs)
-	if err != nil {
+	if err != nil || len(certs) == 0 {
 		log.Debugf("Failed to parse certificates: %v", err)
 		result.Summary.Fail(ar.ParseCert)
 		return result, false
@@ -162,7 +162,7 @@ func VerifySnp(
 	result.Signature = sig
 
 	// Compare Measurements
-	if cmp := bytes.Compare(s.Measurement[:], snpReferenceValue.GetHash(crypto.SHA384)); cmp != 0 {
+	if !bytes.Equal(s.Measurement[:], snpReferenceValue.GetHash(crypto.SHA384)) {
 		log.Debugf("Failed to verify SNP reference value. Expected %x, got %x",
 			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
@@ -384,8 +384,11 @@ func verifySnpSignature(
 	result := ar.SignatureResult{}
 
 	if len(reportRaw) < signature_offset {
-		log.Warn("Internal Error: Report buffer too small")
-		result.SignCheck.Fail(ar.Internal)
+		result.SignCheck.Fail(ar.Internal, fmt.Errorf("internal error: report buffer too small"))
+		return result, false
+	}
+	if len(certs) == 0 {
+		result.SignCheck.Fail(ar.Internal, fmt.Errorf("no certificates present"))
 		return result, false
 	}
 
@@ -733,7 +736,7 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 	for _, ext := range cert.Extensions {
 
 		if ext.Id.String() == oid {
-			if cmp := bytes.Compare(ext.Value, buf); cmp != 0 {
+			if !bytes.Equal(ext.Value, buf) {
 				log.Debugf("extension %v value %v does not match expected value %v",
 					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
 				return ar.Result{
