@@ -104,7 +104,7 @@ est_params=(
     "-estaddr"              "0.0.0.0:9000" \
     "-estcakey"             "${data}/pki/ca-key.pem" \
     "-estcachain"           "${data}/pki/ca.pem" \
-    "-metadatacas"          "${data}/pki/ca.pem" \
+    "-rootcas"              "${data}/pki/ca.pem" \
     "-httpfolder"           "${data}" \
     "-tpmekcertdb"          "${data}/tpm-ek-certs.db" \
     "-tlskey"               "${data}/pki/est-tls-key.pem" \
@@ -133,9 +133,7 @@ cmc_params=(
     "-ctr=true" \
     "-ctrdriver" "sw" \
     "-ctrlog" "${ctrlog}" \
-    "-esttlscas" "${data}/pki/ca.pem" \
-    "-identitycas" "${data}/pki/ca.pem" \
-    "-metadatacas" "${data}/pki/ca.pem" \
+    "-rootcas" "${data}/pki/ca.pem" \
     "-tpmkeyalg" "EC256" \
 )
 
@@ -143,8 +141,7 @@ cmcctl_params=(
     "-report" "attestation-report" \
     "-result" "attestation-result.json" \
     "-nonce" "nonce" \
-    "-identitycas" "${data}/pki/ca.pem" \
-    "-esttlscas" "${data}/pki/ca.pem" \
+    "-rootcas" "${data}/pki/ca.pem" \
     "-mtls=true" \
     "-attest" "mutual" \
     "-loglevel" "trace" \

@@ -24,13 +24,7 @@
     "ctrDriver": "sw",
     "ctrLog": "/tmp/container_measurements",
     "ctrPcr": 11,
-    "estTlsCas": [
-        "../data/pki/ca.pem"
-    ],
-    "identityCas": [
-        "../data/pki/ca.pem"
-    ],
-    "metadataCas": [
+    "rootCas": [
         "../data/pki/ca.pem"
     ],
     "tpmKeyAlg": "EC256"

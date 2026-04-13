@@ -54,24 +54,11 @@ func (p *Client) Tpm() (drivers.TpmEndorser, bool) {
 	return p, true
 }
 
-func New(addr string, serverTlsCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
-	var err error
+func New(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
 
-	// Create Certpool for Root CAs
-	rootpool := x509.NewCertPool()
-	if allowSystemCerts {
-		log.Debug("Using system cert pool")
-		rootpool, err = x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to add system cert pool: %w", err)
-		}
-	}
-	for _, r := range serverTlsCas {
-		rootpool.AddCert(r)
-	}
-
-	if len(serverTlsCas) == 0 {
-		return nil, fmt.Errorf("no EST server CA provided")
+	rootpool, err := internal.CreateCertPool(rootCas, allowSystemCerts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cert pool: %w", err)
 	}
 
 	client := &http.Client{

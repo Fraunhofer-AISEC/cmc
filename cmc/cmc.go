@@ -47,15 +47,13 @@ var (
 )
 
 type Cmc struct {
-	EstTlsCas          []*x509.Certificate
-	IdentityCas        []*x509.Certificate
-	MetadataCas        []*x509.Certificate
 	PeerCache          *peercache.Cache
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	PolicyOverwrite    bool
 	Drivers            []drv.Driver
 	HashAlg            crypto.Hash
 	KeyMgr             *keymgr.KeyMgr
+	RootCas            []*x509.Certificate
 	*Config
 
 	metadata      map[string][]byte
@@ -89,18 +87,10 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 
 func NewCmc(c *Config) (*Cmc, error) {
 
-	// Read trusted root CAs for EST server TLS authentication, IKs and metadata
-	estTlsCas, err := internal.ReadCerts(c.EstTlsCas)
+	// Read trusted root CAs
+	rootCas, err := internal.ReadCerts(c.RootCas)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read EST TLS CA certificates: %w", err)
-	}
-	identityCas, err := internal.ReadCerts(c.IdentityCas)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read trusted identity root CAs: %w", err)
-	}
-	metadataCas, err := internal.ReadCerts(c.MetadataCas)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read trusted metadata root CAs: %w", err)
+		return nil, fmt.Errorf("failed to read trusted root CA certificates: %w", err)
 	}
 
 	alg, err := internal.HashFromString(c.HashAlg)
@@ -109,15 +99,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	cmc := &Cmc{
-		EstTlsCas:   estTlsCas,
-		IdentityCas: identityCas,
-		MetadataCas: metadataCas,
-		HashAlg:     alg,
-		Config:      c,
+		HashAlg: alg,
+		RootCas: rootCas,
+		Config:  c,
 	}
 
 	// Read metadata from the file system
-	metadata, err := GetMetadata(c.MetadataLocation, c.Cache, estTlsCas, c.EstTlsSysRoots, cmc.HashAlg)
+	metadata, err := GetMetadata(c.MetadataLocation, c.Cache, rootCas, c.AllowSystemCerts, cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
@@ -125,25 +113,23 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 	// Create endorser, which is used to fetch vendor certificate chains,
 	// such as the AMD SNP VCEK or Intel TDX PCK chain
-	endorser, err := createEndorser(c, estTlsCas)
+	endorser, err := createEndorser(c, rootCas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create endorser: %w", err)
 	}
 
 	// Create driver configuration
 	driverConf := &drv.DriverConfig{
-		HashAlg:          alg,
-		KeyAlg:           c.TpmKeyAlg,
-		ExcludePcrs:      c.ExcludePcrs,
-		MeasurementLogs:  c.MeasurementLogs,
-		CtrLog:           c.CtrLog,
-		CtrDriver:        c.CtrDriver,
-		Ctr:              c.Ctr,
-		EstTlsCas:        estTlsCas,
-		UseSystemRootCas: c.EstTlsSysRoots,
-		Vmpl:             c.Vmpl,
-		Endorsers:        endorser,
-		StoragePath:      c.Storage,
+		HashAlg:         alg,
+		KeyAlg:          c.TpmKeyAlg,
+		ExcludePcrs:     c.ExcludePcrs,
+		MeasurementLogs: c.MeasurementLogs,
+		CtrLog:          c.CtrLog,
+		CtrDriver:       c.CtrDriver,
+		Ctr:             c.Ctr,
+		Vmpl:            c.Vmpl,
+		Endorsers:       endorser,
+		StoragePath:     c.Storage,
 	}
 
 	// Initialize drivers
@@ -172,7 +158,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 	// Create provisioner for key manager, which is used to enroll certificates for created keys,
 	// e.g. via EST or ACME protocol
-	provisioner, err := createEnroller(c, estTlsCas)
+	provisioner, err := createEnroller(c, rootCas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create enroller: %w", err)
 	}
@@ -201,7 +187,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	return cmc, nil
 }
 
-func createEndorser(c *Config, estTlsCas []*x509.Certificate) (drv.EndorserProvider, error) {
+func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvider, error) {
 	var err error
 
 	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
@@ -218,7 +204,7 @@ func createEndorser(c *Config, estTlsCas []*x509.Certificate) (drv.EndorserProvi
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		estclient, err := estclient.New(c.EndorsementAddr, estTlsCas, c.EstTlsSysRoots, token)
+		estclient, err := estclient.New(c.EndorsementAddr, rootCas, c.AllowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
@@ -230,7 +216,7 @@ func createEndorser(c *Config, estTlsCas []*x509.Certificate) (drv.EndorserProvi
 	}
 }
 
-func createEnroller(c *Config, estTlsCas []*x509.Certificate) (keymgr.Enroller, error) {
+func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, error) {
 	var err error
 
 	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
@@ -247,7 +233,7 @@ func createEnroller(c *Config, estTlsCas []*x509.Certificate) (keymgr.Enroller, 
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		estclient, err := estclient.New(c.EnrollmentAddr, estTlsCas, c.EstTlsSysRoots, token)
+		estclient, err := estclient.New(c.EnrollmentAddr, rootCas, c.AllowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}

@@ -208,6 +208,28 @@ func StorePrivateKeyPem(file string, key crypto.PrivateKey) error {
 	return nil
 }
 
+func CreateCertPool(roots []*x509.Certificate, allowSystemCerts bool) (*x509.CertPool, error) {
+	var err error
+	var rootpool *x509.CertPool
+
+	if allowSystemCerts {
+		log.Trace("Adding system cert pool to trusted root CAs")
+		rootpool, err = x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to add system cert pool: %w", err)
+		}
+	} else {
+		rootpool = x509.NewCertPool()
+	}
+
+	for _, cert := range roots {
+		log.Tracef("Adding %q to trusted root CAs", cert.Subject.CommonName)
+		rootpool.AddCert(cert)
+	}
+
+	return rootpool, nil
+}
+
 // verifyCertChain tries to verify the certificate chain certs with leaf
 // certificate first up to one of the root certificates in cas
 func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x509.Certificate, error) {

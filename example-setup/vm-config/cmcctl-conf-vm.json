@@ -4,10 +4,10 @@
     "report": "/var/cmcctl/attestation-report",
     "result": "/var/cmcctl/attestation-result.json",
     "nonce": "/var/cmcctl/nonce",
-    "identityCas": [
+    "rootCas": [
         "/var/ca.pem"
     ],
-    "estTlsCa": "/var/ca.pem",
+    "caStorePath": "/var/ca.pem",
     "mtls": false,
     "attest": "server",
     "logLevel": "trace",

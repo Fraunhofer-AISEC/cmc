@@ -4,10 +4,10 @@
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",
-    "identityCas": [
+    "rootCas": [
         "data/pki/ca.pem"
     ],
-    "estTlsCa": "data/pki/ca.pem",
+    "caStorePath": "data/pki/ca.pem",
     "mtls": false,
     "attest": "server",
     "logLevel": "trace",

@@ -49,46 +49,42 @@ type Config struct {
 	Ctr              bool     `json:"ctr,omitempty"`
 	CtrDriver        string   `json:"ctrDriver,omitempty"`
 	CtrLog           string   `json:"ctrLog,omitempty"`
-	IdentityCas      []string `json:"identityCas,omitempty"`
-	MetadataCas      []string `json:"metadataCas,omitempty"`
-	EstTlsCas        []string `json:"estTlsCas,omitempty"`
-	EstTlsSysRoots   bool     `json:"estTlsSysRoots"`
+	RootCas          []string `json:"rootCas,omitempty"`
+	AllowSystemCerts bool     `json:"allowSystemCerts"`
 	Vmpl             int      `json:"vmpl,omitempty"`
 	SnpCache         string   `json:"snpCache,omitempty"`
-	TpmKeyAlg        string   `json:"tpmKeyAlg"`
+	TpmKeyAlg        string   `json:"tpmKeyAlg,omitempty"`
 }
 
 const (
-	cmcAddrFlag         = "cmcaddr"
-	ProvisionTokenFlag  = "provisiontoken"
-	ProvisionAuthFlag   = "provisionauth"
-	EndorsementModeFlag = "endorsementmode"
-	EndorsementAddrFlag = "endorsementaddr"
-	EnrollmentModeFlag  = "enrollmentmode"
-	EnrollmentAddrFlag  = "enrollmentaddr"
-	metadataFlag        = "metadata"
-	DriversFlag         = "drivers"
-	ImaFlag             = "ima"
-	ImaPcrFlag          = "imapcr"
-	ExcludePcrsFlag     = "excludepcrs"
-	HashAlgFlag         = "hashalg"
-	ApiFlag             = "api"
-	PolicyEngineFlag    = "policyengine"
-	PolicyOverwriteFlag = "policyoverwrite"
-	StorageFlag         = "storage"
-	CacheFlag           = "cache"
-	PeerCacheFlag       = "peercache"
-	MeasurementLogsFlag = "measurementlogs"
-	CtrFlag             = "ctr"
-	CtrDriverFlag       = "ctrdriver"
-	CtrLogFlag          = "ctrlog"
-	IdentityCasFlag     = "identitycas"
-	MetadataCasFlag     = "metadatacas"
-	EstTlsCasFlag       = "esttlscas"
-	EstTlsSysRootsFlag  = "esttlssysroots"
-	VmplFlag            = "vmpl"
-	snpCacheFlag        = "snpcache"
-	tpmKeyAlgFlag       = "tpmkeyalg"
+	cmcAddrFlag          = "cmcaddr"
+	ProvisionTokenFlag   = "provisiontoken"
+	ProvisionAuthFlag    = "provisionauth"
+	EndorsementModeFlag  = "endorsementmode"
+	EndorsementAddrFlag  = "endorsementaddr"
+	EnrollmentModeFlag   = "enrollmentmode"
+	EnrollmentAddrFlag   = "enrollmentaddr"
+	metadataFlag         = "metadata"
+	DriversFlag          = "drivers"
+	ImaFlag              = "ima"
+	ImaPcrFlag           = "imapcr"
+	ExcludePcrsFlag      = "excludepcrs"
+	HashAlgFlag          = "hashalg"
+	ApiFlag              = "api"
+	PolicyEngineFlag     = "policyengine"
+	PolicyOverwriteFlag  = "policyoverwrite"
+	StorageFlag          = "storage"
+	CacheFlag            = "cache"
+	PeerCacheFlag        = "peercache"
+	MeasurementLogsFlag  = "measurementlogs"
+	CtrFlag              = "ctr"
+	CtrDriverFlag        = "ctrdriver"
+	CtrLogFlag           = "ctrlog"
+	RootCasFlag          = "metadatacas"
+	AllowSystemCertsFlag = "allowsystemcerts"
+	VmplFlag             = "vmpl"
+	snpCacheFlag         = "snpcache"
+	tpmKeyAlgFlag        = "tpmkeyalg"
 )
 
 var (
@@ -125,13 +121,12 @@ var (
 	ctr       = flag.Bool(CtrFlag, false, "Specifies whether to conduct container measurements")
 	ctrDriver = flag.String(CtrDriverFlag, "",
 		"Specifies which driver to use for container measurements")
-	ctrLog         = flag.String(CtrLogFlag, "", "Container runtime measurements path")
-	identityCas    = flag.String(IdentityCasFlag, "", "Paths to trusted identity root CAs")
-	metadataCas    = flag.String(MetadataCasFlag, "", "Paths to trusted metadata root CAs")
-	estTlsCas      = flag.String(EstTlsCasFlag, "", "Path to the EST TLS CA certificates")
-	estTlsSysRoots = flag.Bool(EstTlsSysRootsFlag, false, "Use system root CAs for EST TLS")
-	vmpl           = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
-	snpCache       = flag.String(snpCacheFlag, "",
+	ctrLog           = flag.String(CtrLogFlag, "", "Container runtime measurements path")
+	rootCas          = flag.String(RootCasFlag, "", "Paths to trusted root CAs")
+	allowSystemCerts = flag.Bool(AllowSystemCertsFlag, false,
+		"Allow using the system cert pool as trusted root CAs")
+	vmpl     = flag.Int(VmplFlag, 0, "SNP Virtual Machine Privilege Level (VMPL)")
+	snpCache = flag.String(snpCacheFlag, "",
 		"Optional folder for caching SNP VCEKs and CAs in direct endorsement mode")
 	tpmKeyAlg = flag.String(tpmKeyAlgFlag, "", "TPM AK key algorithm (EC256, RSA2048)")
 )
@@ -191,17 +186,11 @@ func GetConfig(c *Config) error {
 	if internal.FlagPassed(CtrLogFlag) {
 		c.CtrLog = *ctrLog
 	}
-	if internal.FlagPassed(IdentityCasFlag) {
-		c.IdentityCas = strings.Split(*identityCas, ",")
+	if internal.FlagPassed(RootCasFlag) {
+		c.RootCas = strings.Split(*rootCas, ",")
 	}
-	if internal.FlagPassed(MetadataCasFlag) {
-		c.MetadataCas = strings.Split(*metadataCas, ",")
-	}
-	if internal.FlagPassed(EstTlsCasFlag) {
-		c.EstTlsCas = strings.Split(*estTlsCas, ",")
-	}
-	if internal.FlagPassed(EstTlsSysRootsFlag) {
-		c.EstTlsSysRoots = *estTlsSysRoots
+	if internal.FlagPassed(AllowSystemCertsFlag) {
+		c.AllowSystemCerts = *allowSystemCerts
 	}
 	if internal.FlagPassed(VmplFlag) {
 		c.Vmpl = *vmpl
@@ -270,10 +259,8 @@ func (c *Config) Print() {
 	if c.PeerCache != "" {
 		log.Debugf("\tPeer cache path                : %v", c.PeerCache)
 	}
-	log.Debugf("\tIdentity root CA paths         : %v", strings.Join(c.EstTlsCas, ","))
-	log.Debugf("\tMetadata root CA paths         : %v", strings.Join(c.EstTlsCas, ","))
-	log.Debugf("\tEST TLS root CA paths          : %v", strings.Join(c.EstTlsCas, ","))
-	log.Debugf("\tUse system root CAs for EST TLS: %v", c.EstTlsSysRoots)
+	log.Debugf("\tMetadata root CA paths         : %v", strings.Join(c.RootCas, ","))
+	log.Debugf("\tAllow system root CAs:         : %v", c.AllowSystemCerts)
 	log.Debugf("\tSNP VCEK and CA cache folder   : %v", c.SnpCache)
 	log.Debugf("\tTPM AK key algorithm           : %v", c.TpmKeyAlg)
 

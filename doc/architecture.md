@@ -68,7 +68,7 @@ on how to generate, sign and parse metadata is given in the [Metadata Descriptio
 The following figure shows the Public Key Infrastructure (PKI) and Certificate Authority (CA) roles
 in the CMC ecosystem. In practice, a single component may fulfill multiple roles.
 
-The `cmcd` itself uses Attestation Key (AK) key-pair and corresponding certificates to sign the
+The `cmcd` itself uses Attestation Key (AK) key-pairs and corresponding certificates to sign the
 hardware attestation reports (e.g. TPM or Intel TDX Quote). Depending on the used technology, the
 private key usually resides in hardware and the certificate chain is provided by the manufacturer,
 e.g., the Intel TDX PCK key and certificate chain or the AMD SEV-SNP VCEK key and certificate chain.
@@ -94,18 +94,17 @@ anchor CAs, as the certificates are embedded in the *Context* and the valid CA f
 embdded into the *Manifests*. Trust Anchor CAs are either embedded into the evidence itself
 (Intel TDX quote) or sent as part of the *Context*.
 
-Each node requires metadata CAs, which are the root of trust for manifests and
-reference values. *Metadata CAs can be fetched through the /metdatacacerts endpoint.*
-Metadata CAs issue certificates to entities providing signed metadata and
-reference values (e.g., software developers or certifiers).
+Each node requires a set of trusted root CAs, which are the root of trust for manifests and
+reference values. Users can configure whether the certificates of the system cert pool shall be
+accepted as trusted root CAs or not.
 
 If EST is used, an EST TLS CA for EST server authentication during initial certificate enrollment
 is required. Nodes (i.e., EST clients) do not need to authenticate against the server, as a
 trust anchor-based authentication and attestatoin is performed during certificate enrollment (e.g.,
 TPM credential activation). This bootstrapping CA must be provisioned onto the node and measured
-during attestation. The EST TLS CA is used for estserver authentication.
+during attestation.
 
-If TLS keys shall be enrolled via EST, each node requires an identity CA. This CA
+If TLS keys shall be enrolled via EST, each node requires a CA for TLS keys. This CA
 can be fetched through querying the `/cacerts` EST server endpoint. The identity CA issues TLS keys
 via EST endpoints (`/simpleenroll`, `/tpmcertifyenroll`, `/attestenroll`).
 

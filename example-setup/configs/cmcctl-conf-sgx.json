@@ -8,13 +8,10 @@
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",
-    "identityCas": [
+    "rootCas": [
         "data/pki/ca.pem"
     ],
-    "metadataCas": [
-        "data/pki/ca.pem"
-    ],
-    "estCa": "data/pki/ca.pem",
+    "caStorePath": "data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
     "measurementLog": false,

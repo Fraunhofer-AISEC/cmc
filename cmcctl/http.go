@@ -18,7 +18,6 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"io"
 	golog "log"
@@ -55,18 +54,12 @@ const (
 // Creates an attested HTTPS connection and performs the specified requests
 func request(c *config) error {
 
-	// Add trusted server root CAs
-	trustedRootCas := x509.NewCertPool()
-	for _, ca := range c.identityCas {
-		trustedRootCas.AddCert(ca)
-	}
-
-	tlsConf, err := createClientTlsConf(c, trustedRootCas)
+	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
-	internal.PrintTlsConfig(tlsConf, c.identityCas)
+	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	// Create an attested HTTP Transport structure. This is a wrapper around http.Transport,
 	// look for the descriptions of the parameters there. Additionally, the aTLS parameters
@@ -145,10 +138,9 @@ func request(c *config) error {
 
 func serve(c *config) error {
 
-	// Add trusted client root CAs
-	trustedRootCas := x509.NewCertPool()
-	for _, ca := range c.identityCas {
-		trustedRootCas.AddCert(ca)
+	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	if err != nil {
+		return fmt.Errorf("failed to create cert pool: %w", err)
 	}
 
 	// Load certificate
@@ -170,11 +162,11 @@ func serve(c *config) error {
 	tlsConfig := &tls.Config{
 		Certificates:  []tls.Certificate{cert},
 		ClientAuth:    clientAuth,
-		ClientCAs:     trustedRootCas,
+		ClientCAs:     rootpool,
 		Renegotiation: tls.RenegotiateNever,
 	}
 
-	internal.PrintTlsConfig(tlsConfig, c.identityCas)
+	internal.PrintTlsConfig(tlsConfig, c.rootCas)
 
 	// Create an attested HTTP server. The inner http.Server can be
 	// configured as usual. Additionally, aTLS parameters must be

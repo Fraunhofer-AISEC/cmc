@@ -38,7 +38,7 @@ type Server struct {
 	server       *http.Server
 	estCaKey     crypto.PrivateKey
 	estCaChain   []*x509.Certificate
-	metadataCas  []*x509.Certificate
+	rootCas      []*x509.Certificate
 	snpEndorser  *provision.SnpEndorser
 	tpmConf      provision.TpmConfig
 	authMethods  internal.AuthMethod
@@ -74,16 +74,12 @@ func NewServer(c *config) (*Server, error) {
 	// The client does authenticate itself via a certificate if configured
 	if c.authMethods.Has(internal.AuthCertificate) {
 		log.Debugf("Enforcing client authentication via certificate")
-		clientRoots := x509.NewCertPool()
-		for _, ca := range c.ClientTlsCas {
-			c, err := internal.ReadCert(ca)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse client CA certificate: %w", err)
-			}
-			clientRoots.AddCert(c)
+		rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
 		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-		tlsCfg.ClientCAs = clientRoots
+		tlsCfg.ClientCAs = rootpool
 	}
 
 	var publishToken []byte
@@ -106,10 +102,10 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	server := &Server{
-		server:      s,
-		estCaKey:    c.estCaKey,
-		estCaChain:  c.estCaChain,
-		metadataCas: c.metadataCas,
+		server:     s,
+		estCaKey:   c.estCaKey,
+		estCaChain: c.estCaChain,
+		rootCas:    c.rootCas,
 		tpmConf: provision.TpmConfig{
 			VerifyEkCert: c.VerifyEkCert,
 			DbPath:       c.TpmEkCertDb,

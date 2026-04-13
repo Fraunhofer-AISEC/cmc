@@ -4,10 +4,10 @@
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
-    "identityCas": [
+    "rootCas": [
         "../data/pki/ca.pem"
     ],
-    "estTlsCa": "../data/pki/ca.pem",
+    "caStorePath": "../data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
     "publish": "http://localhost:8080/results",
