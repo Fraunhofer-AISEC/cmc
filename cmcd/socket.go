@@ -188,7 +188,7 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Debugf("verifying attestation report from peer %q", req.Peer)
 
 	// Verify attestation report
-	result := verifier.Verify(req.Report, req.Nonce, cmc.IdentityCas,
+	result := verifier.Verify(req.Report, req.Nonce,
 		req.Policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
 		cmc.MetadataCas, cmc.PeerCache, req.Peer)
 

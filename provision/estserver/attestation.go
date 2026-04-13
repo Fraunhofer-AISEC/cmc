@@ -47,10 +47,8 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	log.Debugf("Verifying attestation report with SKI as nonce: %v",
 		hex.EncodeToString(nonce[:]))
 
-	// Call verify with pubkey instead of identity CAs for verification in provisioning mode, which
-	// only checks the signature, but not the certificate chains (which are about to
-	// be created)
-	result := verifier.Verify(report, nonce[:], csr.PublicKey,
+	// Verify the attestation report
+	result := verifier.Verify(report, nonce[:],
 		nil, verifier.PolicyEngineSelect_None, false,
 		cas, nil, "")
 
