@@ -9,7 +9,7 @@
         "data/pki/est-tls.pem",
         "data/pki/ca.pem"
     ],
-    "metadataCas": [
+    "rootCas": [
         "data/pki/ca.pem"
     ],
     "httpFolder": "data/metadata-signed",

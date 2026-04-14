@@ -10,7 +10,7 @@
         "data/pki/est-tls.pem",
         "data/pki/ca.pem"
     ],
-    "metadataCas": [
+    "rootCas": [
         "data/pki/ca.pem",
         "example-setup/vm-config/metadata-ca.pem"
     ],
