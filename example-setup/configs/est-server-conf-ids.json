@@ -11,7 +11,7 @@
         "../../data-ids/pki/est-tls.pem",
         "../../data-ids/pki/ca.pem"
     ],
-    "metadataCas": [
+    "rootCas": [
         "../../data/pki/ca.pem"
     ],
     "httpFolder": "../../data-ids/",
