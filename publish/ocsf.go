@@ -17,10 +17,7 @@ package publish
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -152,22 +149,6 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 		},
 	}
 
-	// Description often contains paths to binaries. If so, try to get raw data
-	var raw []byte
-	fileExists := false
-	if info, err := os.Stat(dr.Description); err == nil {
-		fileExists = true
-		filePath := dr.Description
-		raw, _ = os.ReadFile(filePath)
-
-		f.Path = filePath
-		f.ParentFolder = filepath.Ext(filePath)
-		f.Extension = filepath.Ext(filePath)
-		f.ModifiedTime = info.ModTime().Format(time.RFC3339)
-		f.Attributes = uint32(info.Mode().Perm())
-		f.Size = len(raw)
-	}
-
 	finding := &DetectionFinding{
 		ActionId:      3,      // Observed
 		ActivityID:    1,      // Create
@@ -191,8 +172,6 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 				File: f,
 			},
 		},
-		RawData:     raw,
-		RawDataSize: len(raw),
 		Metadata: Metadata{
 			Version: "1.8.0",
 			Product: Product{
@@ -202,11 +181,6 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 			},
 			Profiles: []string{"security_control"},
 		},
-	}
-
-	if fileExists {
-		finding.RawData = raw
-		finding.RawDataSize = len(raw)
 	}
 
 	return finding
