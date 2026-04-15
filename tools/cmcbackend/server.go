@@ -29,16 +29,22 @@ import (
 )
 
 type server struct {
-	addr  string
-	db    *Db
-	token []byte
-	debug bool
+	addr   string
+	db     *Db
+	ocsfDb *Db
+	token  []byte
+	debug  bool
 }
 
 func newServer(c *config) (*server, error) {
 	db, err := NewDb(c.Db, "results", c.MaxRowsPerProver, c.MaxRows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
+	}
+
+	ocsfDb, err := NewOcsfDb(c.Db, c.MaxRows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize OCSF database: %w", err)
 	}
 
 	var token []byte
@@ -50,10 +56,11 @@ func newServer(c *config) (*server, error) {
 	}
 
 	return &server{
-		addr:  c.Addr,
-		db:    db,
-		token: token,
-		debug: c.Debug,
+		addr:   c.Addr,
+		db:     db,
+		ocsfDb: ocsfDb,
+		token:  token,
+		debug:  c.Debug,
 	}, nil
 }
 
@@ -89,8 +96,13 @@ func (s *server) handleGetDevices(c *gin.Context) {
 	getDevices(c, s.db)
 }
 
+func (s *server) handlePostOcsfDetectionFinding(c *gin.Context) {
+	postOcsfFinding(c, s.ocsfDb, s.token)
+}
+
 func (s *server) serve() {
 	defer s.db.Close()
+	defer s.ocsfDb.Close()
 
 	if s.debug {
 		gin.SetMode(gin.DebugMode)
@@ -116,6 +128,7 @@ func (s *server) serve() {
 	router.GET("/resultsbyid/:id", s.handleGetResultById)
 	router.GET("/latestresults", s.handleGetLatestResults)
 	router.GET("/devices", s.handleGetDevices)
+	router.POST("/ocsf-detection-finding", s.handlePostOcsfDetectionFinding)
 
 	router.Run(s.addr)
 }
@@ -267,6 +280,38 @@ func postResult(c *gin.Context, db *Db, token []byte) {
 	err = db.InsertResult(body)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to insert data into DB: %v", err)
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	c.JSON(http.StatusCreated, res)
+}
+
+// postOcsfFinding adds an OCSF detection finding from JSON
+func postOcsfFinding(c *gin.Context, db *Db, token []byte) {
+
+	err := authorize(c.Request, token)
+	if err != nil {
+		msg := fmt.Sprintf("Unauthorized request: %v", err)
+		log.Warnf("%v", msg)
+		c.IndentedJSON(http.StatusUnauthorized, gin.H{"message": msg})
+		return
+	}
+
+	res := new(any)
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to read body: %v", err)
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	err = db.InsertOcsfFinding(body)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to insert OCSF finding into DB: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
 		log.Warn(msg)
 		return

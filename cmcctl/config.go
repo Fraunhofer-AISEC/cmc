@@ -82,7 +82,8 @@ type config struct {
 	Mtls             bool     `json:"mtls"`
 	Attest           string   `json:"attest"`
 	PoliciesFile     string   `json:"policies"`
-	Publish          string   `json:"publish"`
+	PublishResults   string   `json:"publishResults"`
+	PublishOcsf      string   `json:"publishOcsf"`
 	Header           []string `json:"header"`
 	Method           string   `json:"method"`
 	Data             string   `json:"data"`
@@ -120,7 +121,8 @@ const (
 	policiesFlag       = "policies"
 	mtlsFlag           = "mtls"
 	attestFlag         = "attest"
-	publishFlag        = "publish"
+	publishResultsFlag = "publishresults"
+	publishOcsfFlag    = "publishocsf"
 	serializationFlag  = "serialization"
 	headerFlag         = "header"
 	methodFlag         = "method"
@@ -148,7 +150,8 @@ var (
 	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
 	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
 		"client only, or none [mutual, client, server, none]")
-	publish       = flag.String(publishFlag, "", "Optional HTTP address to publish attestation results to")
+	publishResults = flag.String(publishResultsFlag, "", "Optional HTTP address to publish attestation results to")
+	publishOcsf    = flag.String(publishOcsfFlag, "", "Optional HTTP address to publish OCSF detection findings to")
 	serialization = flag.String(serializationFlag, "",
 		"Serialization to be used requests and attestation reports (JSON or CBOR)")
 	headers = flag.String(headerFlag, "", "Set header for HTTP POST requests")
@@ -239,8 +242,11 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(attestFlag) {
 		c.Attest = *attest
 	}
-	if internal.FlagPassed(publishFlag) {
-		c.Publish = *publish
+	if internal.FlagPassed(publishResultsFlag) {
+		c.PublishResults = *publishResults
+	}
+	if internal.FlagPassed(publishOcsfFlag) {
+		c.PublishOcsf = *publishOcsf
 	}
 	if internal.FlagPassed(serializationFlag) {
 		c.Serialization = *serialization
@@ -426,7 +432,8 @@ func (c *config) Print() {
 	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
 	log.Debugf("\tAttest                   : %v", c.Attest)
 	log.Debugf("\tAPI Serializer           : %v", c.Serialization)
-	log.Debugf("\tPublish                  : %v", c.Publish)
+	log.Debugf("\tPublish Results          : %v", c.PublishResults)
+	log.Debugf("\tPublish OCSF             : %v", c.PublishOcsf)
 	log.Debugf("\tApi                      : %v", c.Api)
 	log.Debugf("\tTLS / HTTP Payload       : %v", c.Data)
 	log.Debugf("\tHTTP Header              : %v", c.Header)

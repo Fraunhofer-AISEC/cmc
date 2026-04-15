@@ -42,10 +42,11 @@ type Server struct {
 	snpEndorser  *provision.SnpEndorser
 	tpmConf      provision.TpmConfig
 	authMethods  internal.AuthMethod
-	tokenPath    string
-	publishAddr  string
-	publishFile  string
-	publishToken []byte
+	tokenPath      string
+	publishResults string
+	publishOcsf    string
+	publishFile    string
+	publishToken   []byte
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -112,10 +113,11 @@ func NewServer(c *config) (*Server, error) {
 		},
 		snpEndorser:  provision.NewSnpEndorser(c.VcekCacheFolder),
 		authMethods:  c.authMethods,
-		tokenPath:    c.TokenPath,
-		publishAddr:  c.PublishAddr,
-		publishFile:  c.PublishFile,
-		publishToken: publishToken,
+		tokenPath:      c.TokenPath,
+		publishResults: c.PublishResults,
+		publishOcsf:    c.PublishOcsf,
+		publishFile:    c.PublishFile,
+		publishToken:   publishToken,
 	}
 
 	// EST endpoints
