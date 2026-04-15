@@ -29,7 +29,7 @@ import (
 )
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
-	report []byte, publishAddr, publishFile string, publishToken []byte,
+	report []byte, publishResults, publishOcsf, publishFile string, publishToken []byte,
 ) error {
 
 	if len(report) == 0 {
@@ -56,7 +56,7 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	defer wg.Wait()
-	go pub.PublishResultAsync(publishAddr, publishToken, publishFile, result, wg)
+	go pub.PublishAsync(publishResults, publishOcsf, publishToken, publishFile, result, wg)
 
 	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
 		return fmt.Errorf("failed to verify attestation report")

@@ -20,6 +20,6 @@
         "attestation"
     ],
     "tokenPath": "../../data/token_store",
-    "publishAddr": "http://localhost:8080/results",
+    "publishResults": "http://localhost:8080/results",
     "publishFile": "attestation-result.json"
 }

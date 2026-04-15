@@ -15,7 +15,7 @@
     "mtls": true,
     "attest": "mutual",
     "measurementLog": false,
-    "publish": "http://nuc-02.sos.aisec.fraunhofer.de:8080/results",
+    "publishResults": "http://nuc-02.sos.aisec.fraunhofer.de:8080/results",
     "logLevel": "trace",
     "api": "libapi",
     "serialization": "cbor",

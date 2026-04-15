@@ -36,15 +36,14 @@ var (
 	log = logrus.WithField("service", "publish")
 )
 
-func PublishResultAsync(addr string, token []byte, file string, result *ar.AttestationResult, wg *sync.WaitGroup) {
+func PublishAsync(resultsAddr, ocsfAddr string, token []byte, file string, result *ar.AttestationResult, wg *sync.WaitGroup) {
 	defer wg.Done()
-	err := PublishResult(addr, token, file, result)
-	if err != nil {
-		log.Warnf("Failed to asynchronously publish result: %v", err)
+	if err := Publish(resultsAddr, ocsfAddr, token, file, result); err != nil {
+		log.Warnf("Failed to asynchronously publish: %v", err)
 	}
 }
 
-func PublishResult(addr string, token []byte, file string, result *ar.AttestationResult) error {
+func Publish(resultsAddr, ocsfAddr string, token []byte, file string, result *ar.AttestationResult) error {
 
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
@@ -85,30 +84,44 @@ func PublishResult(addr string, token []byte, file string, result *ar.Attestatio
 	}
 
 	// Send the attestation result to the specified server
-	if addr != "" {
-		log.Debugf("Publishing result to '%v'", addr)
+	if resultsAddr != "" {
+		log.Debugf("Publishing result to '%v'", resultsAddr)
 
 		data, err := json.Marshal(*result)
 		if err != nil {
 			return fmt.Errorf("failed to marshal result: %v", err)
 		}
 
-		err = sendResult(addr, token, data)
+		err = sendResult(resultsAddr, token, data)
 		if err != nil {
 			log.Warnf("Failed to publish: %v", err)
 		}
 	} else {
-		log.Trace("Will not publish to remote server: no address specified")
+		log.Trace("Will not publish result to endpoint: no endpoint specified")
+	}
+
+	// Send OCSF detection findings to the specified server
+	if ocsfAddr != "" {
+		findings := CreateDetectionFindings(result)
+		log.Tracef("Publishing %v OCSF detection findings to %v", len(findings), ocsfAddr)
+		for _, f := range findings {
+			data, err := json.Marshal(f)
+			if err != nil {
+				log.Warnf("Failed to marshal OCSF finding: %v", err)
+				continue
+			}
+			if err = sendResult(ocsfAddr, token, data); err != nil {
+				log.Warnf("Failed to publish OCSF finding: %v", err)
+			}
+		}
+	} else {
+		log.Trace("Will not publish OCSF findings to endpoint: no endpoint specified")
 	}
 
 	return nil
 }
 
 func sendResult(addr string, token []byte, result []byte) error {
-
-	if addr == "" {
-		return nil
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -139,8 +152,6 @@ func sendResult(addr string, token []byte, result []byte) error {
 		return fmt.Errorf("failed to publish result: server responded with %v: %v",
 			resp.Status, string(data))
 	}
-
-	log.Debugf("Successfully published result: server responded with %v", resp.Status)
 
 	return nil
 }

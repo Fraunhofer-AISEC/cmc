@@ -57,7 +57,8 @@ type config struct {
 	LogFile          string   `json:"logFile,omitempty"`
 	AuthMethods      []string `json:"authMethods,omitempty"`
 	TokenPath        string   `json:"tokenPath"`
-	PublishAddr      string   `json:"publishAddr"`
+	PublishResults   string   `json:"publishResults"`
+	PublishOcsf      string   `json:"publishOcsf"`
 	PublishFile      string   `json:"publishFile"`
 	PublishToken     string   `json:"publishToken"`
 
@@ -87,7 +88,8 @@ const (
 	logLevelFlag         = "loglevel"
 	logFileFlag          = "logfile"
 	authMethodsFlag      = "authmethods"
-	publishAddrFlag      = "publishaddr"
+	publishResultsFlag   = "publishresults"
+	publishOcsfFlag      = "publishocsf"
 	publishFileFlag      = "publishfile"
 	publishTokenFlag     = "publishTokenFlag"
 )
@@ -116,7 +118,8 @@ func getConfig() (*config, error) {
 		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
 	logFile := flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	authMethods := flag.String(authMethodsFlag, "", "Client authentication methods (none,token,certificate,attestation)")
-	publishAddr := flag.String(publishAddrFlag, "", "Optional HTTP address to publish attestation reports to when provisioning mode is set to 'attestation'")
+	publishResults := flag.String(publishResultsFlag, "", "Optional HTTP address to publish attestation results to when provisioning mode is set to 'attestation'")
+	publishOcsf := flag.String(publishOcsfFlag, "", "Optional HTTP address to publish OCSF detection findings to when provisioning mode is set to 'attestation'")
 	publishFile := flag.String(publishFileFlag, "", "Optional file to publish attestation reports to when provisioning mode is set to 'attestation'")
 	publishToken := flag.String(publishTokenFlag, "", "HTTP Authorization token for publishing attestation results")
 	flag.Parse()
@@ -187,8 +190,11 @@ func getConfig() (*config, error) {
 	if internal.FlagPassed(authMethodsFlag) {
 		c.AuthMethods = strings.Split(*authMethods, ",")
 	}
-	if internal.FlagPassed(publishAddrFlag) {
-		c.PublishAddr = *publishAddr
+	if internal.FlagPassed(publishResultsFlag) {
+		c.PublishResults = *publishResults
+	}
+	if internal.FlagPassed(publishOcsfFlag) {
+		c.PublishOcsf = *publishOcsf
 	}
 	if internal.FlagPassed(publishFileFlag) {
 		c.PublishFile = *publishFile
@@ -275,7 +281,8 @@ func printConfig(c *config) {
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
 	log.Debugf("\tToken Path          : %v", c.TokenPath)
-	log.Debugf("\tPublish Address     : %v", c.PublishAddr)
+	log.Debugf("\tPublish Results     : %v", c.PublishResults)
+	log.Debugf("\tPublish OCSF        : %v", c.PublishOcsf)
 	log.Debugf("\tPublish File        : %v", c.PublishFile)
 	log.Debugf("\tPublish Token       : %v", c.PublishToken)
 }

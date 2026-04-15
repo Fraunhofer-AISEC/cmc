@@ -415,6 +415,122 @@ func (db *Db) GetDeviceNames() ([]string, error) {
 	return results, nil
 }
 
+type ocsfFindingHeader struct {
+	Time        string `json:"time"`
+	FindingInfo *struct {
+		UID string `json:"uid"`
+	} `json:"finding_info"`
+}
+
+func NewOcsfDb(path string, maxRows int) (*Db, error) {
+
+	log.Tracef("Opening OCSF database %v", path)
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open sqlite3 DB: %w", err)
+	}
+
+	table := "ocsf_findings"
+
+	ok, err := tableExists(db, table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check tables: %w", err)
+	}
+	if !ok {
+		if err = createOcsfTable(db, table, maxRows); err != nil {
+			return nil, fmt.Errorf("failed to create OCSF table: %w", err)
+		}
+	}
+
+	return &Db{db: db, table: table}, nil
+}
+
+func (db *Db) InsertOcsfFinding(data []byte) error {
+
+	if !json.Valid(data) {
+		return fmt.Errorf("provided data is not valid JSON")
+	}
+
+	header := new(ocsfFindingHeader)
+	err := json.Unmarshal(data, header)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal OCSF finding header")
+	}
+
+	var findingUID string
+	if header.FindingInfo != nil {
+		findingUID = header.FindingInfo.UID
+	}
+
+	log.Tracef("Inserting OCSF finding '%v' into %v", findingUID, db.table)
+
+	digest := sha256.Sum256(data)
+	id := hex.EncodeToString(digest[:])
+
+	insert := fmt.Sprintf(`INSERT INTO %v
+		(id, time, finding_uid, finding)
+		VALUES
+		(?, ?, ?, json(?))`, db.table)
+
+	tx, err := db.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Commit()
+
+	stmt, err := tx.Prepare(insert)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id, header.Time, findingUID, string(data))
+	if err != nil {
+		return fmt.Errorf("failed to execute statement: %w", err)
+	}
+
+	return nil
+}
+
+func createOcsfTable(db *sql.DB, table string, maxTotalRows int) error {
+
+	log.Tracef("Creating OCSF table %v", table)
+
+	sqlStmt := fmt.Sprintf(`
+CREATE TABLE %v (
+    serial INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL,
+    time TEXT,
+    finding_uid TEXT,
+    finding TEXT
+);`, table)
+	_, err := db.Exec(sqlStmt)
+	if err != nil {
+		return fmt.Errorf("failed to exec sqlite3 create statement: %w", err)
+	}
+
+	sqlStmt = fmt.Sprintf(`
+CREATE TRIGGER limit_ocsf_size AFTER INSERT ON %v
+BEGIN
+    DELETE FROM %v
+    WHERE serial IN (
+        SELECT serial
+        FROM %v
+        ORDER BY serial DESC
+        LIMIT -1 OFFSET %v
+    );
+END;`, table, table, table, maxTotalRows)
+
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		return fmt.Errorf("failed to exec sqlite3 trigger statement: %w", err)
+	}
+
+	log.Tracef("Created OCSF table %v with total limit %v", table, maxTotalRows)
+	return nil
+}
+
 func tableExists(db *sql.DB, table string) (bool, error) {
 	stmt := fmt.Sprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%v';",
 		table)

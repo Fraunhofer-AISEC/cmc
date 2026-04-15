@@ -2,19 +2,30 @@
 
 > :warning: **Note:** This is a simple, unsecure Proof-of-Concept implementation for demonstration purposes only
 
-Monitoring server for managing attestation results. The server provides a simple HTTP REST API to
-store and retrieve attestation results from the CMC.
+Monitoring server for managing attestation results and OCSF detection findings. The server
+provides a simple HTTP REST API to store and retrieve attestation results and OCSF detection
+findings from the CMC.
+
+Results are stored in the `results` table and OCSF detection findings in the `ocsf_findings`
+table, both in the same SQLite database file.
 
 The server provides the following REST API:
+
+**Attestation Results**
 ```sh
-POST   /results                 # Inserts a new result
-GET    /statistics              # Retrieve attestation statistics
-GET    /results                 # Retrieves all attestation results
-GET    /results/:name/latest    # Retrieves latest result from the prover :name
-GET    /resultsbyid/:id         # Retrieves a result by its :id
-GET    /envelopes/:name         # Retrieves all result envelopes containing the results from the prover :name
-GET    /latestresults           # Retrieves all latest results from all provers
-GET    /devices                 # Retrieves all prover names
+POST   /results                      # Insert a new attestation result
+GET    /statistics                   # Retrieve attestation statistics (no result body)
+GET    /results                      # Retrieve all attestation results
+GET    /results/:name/latest         # Retrieve latest result from prover :name
+GET    /resultsbyid/:id              # Retrieve a result by its SHA-256 :id
+GET    /envelopes/:name              # Retrieve all result envelopes for prover :name
+GET    /latestresults                # Retrieve the latest result from each prover
+GET    /devices                      # Retrieve all prover names
+```
+
+**OCSF Detection Findings**
+```sh
+POST   /ocsf-detection-finding       # Insert a new OCSF Detection Finding [class 2004]
 ```
 
 ## Build
@@ -25,19 +36,19 @@ go build
 
 ## Test
 
-Query all devices:
+Query all attestation results:
 
 ```sh
 curl http://localhost:8080/results
 ```
 
-Query single device by ID:
+Query latest result for a specific prover:
 
 ```sh
-curl http://localhost:8080/results/<device-name>
+curl http://localhost:8080/results/<prover-name>/latest
 ```
 
-Add new device with:
+Insert an attestation result:
 
 ```sh
 curl http://localhost:8080/results \
@@ -46,4 +57,15 @@ curl http://localhost:8080/results \
     --header "Authorization: Bearer <HEXSTRING>" \
     --request "POST" \
     --data @attestation-result.json
+```
+
+Insert an OCSF detection finding:
+
+```sh
+curl http://localhost:8080/ocsf-detection-finding \
+    --include \
+    --header "Content-Type: application/json" \
+    --header "Authorization: Bearer <HEXSTRING>" \
+    --request "POST" \
+    --data @detection-finding.json
 ```

@@ -133,7 +133,7 @@ func (a CoapApi) verify(c *config) error {
 		return fmt.Errorf("%w", err)
 	}
 
-	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, resp.Result)
+	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.publishToken, c.ResultFile, resp.Result)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}

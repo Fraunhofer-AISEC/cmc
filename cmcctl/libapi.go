@@ -93,7 +93,7 @@ func (a LibApi) verify(c *config) error {
 	resp := verifier.Verify(report, nonce, c.policies, a.cmc.PolicyEngineSelect,
 		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, "")
 
-	err = pub.PublishResult(c.Publish, c.publishToken, c.ResultFile, resp)
+	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.publishToken, c.ResultFile, resp)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
