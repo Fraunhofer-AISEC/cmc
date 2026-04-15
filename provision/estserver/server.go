@@ -132,6 +132,9 @@ func NewServer(c *config) (*Server, error) {
 	// Metadata file serving
 	httpHandleMetadata(c.HttpFolder)
 
+	// Log and return 404 for unmatched routes
+	http.HandleFunc("/", server.handleNotFound)
+
 	return server, nil
 }
 
@@ -159,6 +162,11 @@ func logRequest(h http.Handler) http.Handler {
 		log.Debugf("Received request: %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 		h.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	log.Debugf("Received request: %s %s from %s - not found", r.Method, r.URL.Path, r.RemoteAddr)
+	http.NotFound(w, r)
 }
 
 func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, payload []byte,
