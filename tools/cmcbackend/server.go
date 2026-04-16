@@ -29,22 +29,16 @@ import (
 )
 
 type server struct {
-	addr   string
-	db     *Db
-	ocsfDb *Db
-	token  []byte
-	debug  bool
+	addr  string
+	db    *Db
+	token []byte
+	debug bool
 }
 
 func newServer(c *config) (*server, error) {
-	db, err := NewDb(c.Db, "results", c.MaxRowsPerProver, c.MaxRows)
+	db, err := NewDb(c.Db, c.MaxRowsPerProver, c.MaxRows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
-	}
-
-	ocsfDb, err := NewOcsfDb(c.Db, c.MaxRows)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize OCSF database: %w", err)
 	}
 
 	var token []byte
@@ -56,11 +50,10 @@ func newServer(c *config) (*server, error) {
 	}
 
 	return &server{
-		addr:   c.Addr,
-		db:     db,
-		ocsfDb: ocsfDb,
-		token:  token,
-		debug:  c.Debug,
+		addr:  c.Addr,
+		db:    db,
+		token: token,
+		debug: c.Debug,
 	}, nil
 }
 
@@ -97,12 +90,23 @@ func (s *server) handleGetDevices(c *gin.Context) {
 }
 
 func (s *server) handlePostOcsfDetectionFinding(c *gin.Context) {
-	postOcsfFinding(c, s.ocsfDb, s.token)
+	postOcsfFinding(c, s.db, s.token)
+}
+
+func (s *server) handlePostNetworkEvent(c *gin.Context) {
+	postNetworkEvent(c, s.db, s.token)
+}
+
+func (s *server) handleGetNetworkEvents(c *gin.Context) {
+	getNetworkEvents(c, s.db)
+}
+
+func (s *server) handleGetNetworkGraph(c *gin.Context) {
+	getNetworkGraph(c, s.db)
 }
 
 func (s *server) serve() {
 	defer s.db.Close()
-	defer s.ocsfDb.Close()
 
 	if s.debug {
 		gin.SetMode(gin.DebugMode)
@@ -129,6 +133,9 @@ func (s *server) serve() {
 	router.GET("/latestresults", s.handleGetLatestResults)
 	router.GET("/devices", s.handleGetDevices)
 	router.POST("/ocsf-detection-finding", s.handlePostOcsfDetectionFinding)
+	router.POST("/network-events", s.handlePostNetworkEvent)
+	router.GET("/network-events", s.handleGetNetworkEvents)
+	router.GET("/network-graph", s.handleGetNetworkGraph)
 
 	router.Run(s.addr)
 }
@@ -318,6 +325,74 @@ func postOcsfFinding(c *gin.Context, db *Db, token []byte) {
 	}
 
 	c.JSON(http.StatusCreated, res)
+}
+
+// postNetworkEvent adds a network event from JSON
+func postNetworkEvent(c *gin.Context, db *Db, token []byte) {
+
+	err := authorize(c.Request, token)
+	if err != nil {
+		msg := fmt.Sprintf("Unauthorized request: %v", err)
+		log.Warnf("%v", msg)
+		c.IndentedJSON(http.StatusUnauthorized, gin.H{"message": msg})
+		return
+	}
+
+	res := new(any)
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to read body: %v", err)
+		c.IndentedJSON(http.StatusBadRequest, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	err = db.InsertNetworkEvent(body)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to insert network event into DB: %v", err)
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	c.JSON(http.StatusCreated, res)
+}
+
+// getNetworkEvents returns all stored network events
+func getNetworkEvents(c *gin.Context, db *Db) {
+
+	log.Trace("in GET /network-events")
+
+	results, err := db.GetAllNetworkEvents()
+	if err != nil {
+		msg := fmt.Sprintf("failed to retrieve network events: %v", err)
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+
+	log.Tracef("Finished returning %v network events", len(results))
+}
+
+// getNetworkGraph returns the latest event per (verifier, prover) pair for graph visualization
+func getNetworkGraph(c *gin.Context, db *Db) {
+
+	log.Trace("in GET /network-graph")
+
+	results, err := db.GetNetworkGraph()
+	if err != nil {
+		msg := fmt.Sprintf("failed to retrieve network graph: %v", err)
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+
+	log.Tracef("Finished returning network graph with %v edges", len(results))
 }
 
 // getResultById gets a result by its ID
