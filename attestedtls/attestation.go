@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 const (
@@ -56,11 +57,31 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		return fmt.Errorf("internal error: atls handshake start: cmc config object is nil")
 	}
 
+	// Make a local copy to avoid mutating shared config (e.g., listener's CmcConfig)
+	localCc := *cc
+	cc = &localCc
+
 	var err error
 	var cache []string
 
 	ownAddr := conn.LocalAddr().String()
 	peerAddr := conn.RemoteAddr().String()
+
+	// Wrap ResultCb to inject verifier identity before the application callback runs
+	originalCb := cc.ResultCb
+	cc.ResultCb = func(result *ar.AttestationResult) {
+		hostname, err := internal.Fqdn()
+		if err != nil {
+			log.Warnf("Failed to get FQDN for verifier identity: %v", err)
+		}
+		result.Verifier = ar.Endpoint{
+			Hostname: hostname,
+			Ip:       ownAddr,
+		}
+		if originalCb != nil {
+			originalCb(result)
+		}
+	}
 
 	log.Debugf("Performing atls handshake with %v", peerAddr)
 

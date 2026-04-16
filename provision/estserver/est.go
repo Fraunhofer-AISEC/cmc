@@ -296,7 +296,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	if s.authMethods.Has(internal.AuthAttestation) {
 		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.rootCas))
 		err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
-			s.publishFile, s.publishToken)
+			s.publishNetwork, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
@@ -358,7 +358,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	// Verify attestation report if authentication method attestation is activated
 	if s.authMethods.Has(internal.AuthAttestation) {
 		err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
-			s.publishFile, s.publishToken)
+			s.publishNetwork, s.publishFile, s.publishToken)
 		if err != nil {
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return

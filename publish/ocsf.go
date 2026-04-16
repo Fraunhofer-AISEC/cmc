@@ -130,7 +130,7 @@ func CreateDetectionFindings(result *ar.AttestationResult) []*DetectionFinding {
 	return findings
 }
 
-func CreateDetectionFinding(dr ar.DigestResult, prover ar.Prover, t string) *DetectionFinding {
+func CreateDetectionFinding(dr ar.DigestResult, prover ar.Endpoint, t string) *DetectionFinding {
 
 	message := "Unauthorized software launch detected"
 

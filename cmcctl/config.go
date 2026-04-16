@@ -84,6 +84,7 @@ type config struct {
 	PoliciesFile     string   `json:"policies"`
 	PublishResults   string   `json:"publishResults"`
 	PublishOcsf      string   `json:"publishOcsf"`
+	PublishNetwork   string   `json:"publishNetwork"`
 	Header           []string `json:"header"`
 	Method           string   `json:"method"`
 	Data             string   `json:"data"`
@@ -123,6 +124,7 @@ const (
 	attestFlag         = "attest"
 	publishResultsFlag = "publishresults"
 	publishOcsfFlag    = "publishocsf"
+	publishNetworkFlag = "publishnetwork"
 	serializationFlag  = "serialization"
 	headerFlag         = "header"
 	methodFlag         = "method"
@@ -152,7 +154,8 @@ var (
 		"client only, or none [mutual, client, server, none]")
 	publishResults = flag.String(publishResultsFlag, "", "Optional HTTP address to publish attestation results to")
 	publishOcsf    = flag.String(publishOcsfFlag, "", "Optional HTTP address to publish OCSF detection findings to")
-	serialization = flag.String(serializationFlag, "",
+	publishNetwork = flag.String(publishNetworkFlag, "", "Optional HTTP address to publish lightweight network events to")
+	serialization  = flag.String(serializationFlag, "",
 		"Serialization to be used requests and attestation reports (JSON or CBOR)")
 	headers = flag.String(headerFlag, "", "Set header for HTTP POST requests")
 	method  = flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
@@ -247,6 +250,9 @@ func getConfig(cmd string) (*config, error) {
 	}
 	if internal.FlagPassed(publishOcsfFlag) {
 		c.PublishOcsf = *publishOcsf
+	}
+	if internal.FlagPassed(publishNetworkFlag) {
+		c.PublishNetwork = *publishNetwork
 	}
 	if internal.FlagPassed(serializationFlag) {
 		c.Serialization = *serialization
@@ -434,6 +440,7 @@ func (c *config) Print() {
 	log.Debugf("\tAPI Serializer           : %v", c.Serialization)
 	log.Debugf("\tPublish Results          : %v", c.PublishResults)
 	log.Debugf("\tPublish OCSF             : %v", c.PublishOcsf)
+	log.Debugf("\tPublish Network          : %v", c.PublishNetwork)
 	log.Debugf("\tApi                      : %v", c.Api)
 	log.Debugf("\tTLS / HTTP Payload       : %v", c.Data)
 	log.Debugf("\tHTTP Header              : %v", c.Header)

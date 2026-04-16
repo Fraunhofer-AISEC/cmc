@@ -65,7 +65,7 @@ func Verify(
 	result := &ar.AttestationResult{
 		Version: ar.GetResultVersion(),
 		Type:    ar.TYPE_ATTESTATION_RESULT,
-		Prover: ar.Prover{
+		Prover: ar.Endpoint{
 			PeerId: peer,
 		},
 		Summary: ar.Result{

@@ -59,6 +59,7 @@ type config struct {
 	TokenPath        string   `json:"tokenPath"`
 	PublishResults   string   `json:"publishResults"`
 	PublishOcsf      string   `json:"publishOcsf"`
+	PublishNetwork   string   `json:"publishNetwork"`
 	PublishFile      string   `json:"publishFile"`
 	PublishToken     string   `json:"publishToken"`
 
@@ -90,6 +91,7 @@ const (
 	authMethodsFlag      = "authmethods"
 	publishResultsFlag   = "publishresults"
 	publishOcsfFlag      = "publishocsf"
+	publishNetworkFlag   = "publishnetwork"
 	publishFileFlag      = "publishfile"
 	publishTokenFlag     = "publishTokenFlag"
 )
@@ -120,6 +122,7 @@ func getConfig() (*config, error) {
 	authMethods := flag.String(authMethodsFlag, "", "Client authentication methods (none,token,certificate,attestation)")
 	publishResults := flag.String(publishResultsFlag, "", "Optional HTTP address to publish attestation results to when provisioning mode is set to 'attestation'")
 	publishOcsf := flag.String(publishOcsfFlag, "", "Optional HTTP address to publish OCSF detection findings to when provisioning mode is set to 'attestation'")
+	publishNetwork := flag.String(publishNetworkFlag, "", "Optional HTTP address to publish lightweight network events to")
 	publishFile := flag.String(publishFileFlag, "", "Optional file to publish attestation reports to when provisioning mode is set to 'attestation'")
 	publishToken := flag.String(publishTokenFlag, "", "HTTP Authorization token for publishing attestation results")
 	flag.Parse()
@@ -195,6 +198,9 @@ func getConfig() (*config, error) {
 	}
 	if internal.FlagPassed(publishOcsfFlag) {
 		c.PublishOcsf = *publishOcsf
+	}
+	if internal.FlagPassed(publishNetworkFlag) {
+		c.PublishNetwork = *publishNetwork
 	}
 	if internal.FlagPassed(publishFileFlag) {
 		c.PublishFile = *publishFile
@@ -283,6 +289,7 @@ func printConfig(c *config) {
 	log.Debugf("\tToken Path          : %v", c.TokenPath)
 	log.Debugf("\tPublish Results     : %v", c.PublishResults)
 	log.Debugf("\tPublish OCSF        : %v", c.PublishOcsf)
+	log.Debugf("\tPublish Network     : %v", c.PublishNetwork)
 	log.Debugf("\tPublish File        : %v", c.PublishFile)
 	log.Debugf("\tPublish Token       : %v", c.PublishToken)
 }

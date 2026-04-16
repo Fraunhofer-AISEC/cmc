@@ -35,16 +35,17 @@ import (
 )
 
 type Server struct {
-	server       *http.Server
-	estCaKey     crypto.PrivateKey
-	estCaChain   []*x509.Certificate
-	rootCas      []*x509.Certificate
-	snpEndorser  *provision.SnpEndorser
-	tpmConf      provision.TpmConfig
-	authMethods  internal.AuthMethod
+	server         *http.Server
+	estCaKey       crypto.PrivateKey
+	estCaChain     []*x509.Certificate
+	rootCas        []*x509.Certificate
+	snpEndorser    *provision.SnpEndorser
+	tpmConf        provision.TpmConfig
+	authMethods    internal.AuthMethod
 	tokenPath      string
 	publishResults string
 	publishOcsf    string
+	publishNetwork string
 	publishFile    string
 	publishToken   []byte
 }
@@ -111,11 +112,12 @@ func NewServer(c *config) (*Server, error) {
 			VerifyEkCert: c.VerifyEkCert,
 			DbPath:       c.TpmEkCertDb,
 		},
-		snpEndorser:  provision.NewSnpEndorser(c.VcekCacheFolder),
-		authMethods:  c.authMethods,
+		snpEndorser:    provision.NewSnpEndorser(c.VcekCacheFolder),
+		authMethods:    c.authMethods,
 		tokenPath:      c.TokenPath,
 		publishResults: c.PublishResults,
 		publishOcsf:    c.PublishOcsf,
+		publishNetwork: c.PublishNetwork,
 		publishFile:    c.PublishFile,
 		publishToken:   publishToken,
 	}
