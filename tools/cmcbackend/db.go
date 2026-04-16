@@ -504,6 +504,40 @@ func (db *Db) InsertOcsfFinding(data []byte) error {
 	return nil
 }
 
+func (db *Db) GetAllOcsfFindings() ([]any, error) {
+
+	log.Trace("Querying all OCSF findings")
+
+	stmt := fmt.Sprintf("SELECT finding FROM %v ORDER BY serial DESC;", tableOcsfFindings)
+
+	rows, err := db.db.Query(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]any, 0)
+	for rows.Next() {
+		var data string
+		err = rows.Scan(&data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		finding := new(any)
+		err = json.Unmarshal([]byte(data), finding)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal OCSF finding: %w", err)
+		}
+
+		results = append(results, *finding)
+	}
+
+	log.Tracef("Returning %v OCSF findings", len(results))
+
+	return results, nil
+}
+
 // Network event methods
 
 func (db *Db) InsertNetworkEvent(data []byte) error {
