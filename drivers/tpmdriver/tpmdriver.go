@@ -17,6 +17,7 @@ package tpmdriver
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -193,7 +194,7 @@ func (t *Tpm) GetCollateral() ([]ar.Collateral, error) {
 	artifacts := make([]ar.Artifact, 0)
 
 	if t.MeasurementLogs {
-		events, err := GetEventLogs(t.pcrs, t.ctrLog, t.CtrLog)
+		events, err := GetEventLogs(t.pcrs, t.ctrLog, t.CtrLog, t.HashAlg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get event logs: %w", err)
 		}
@@ -535,12 +536,12 @@ func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 	return artifacts, nil
 }
 
-func GetEventLogs(pcrs []int, ctrLog bool, ctrLogFile string) ([]ar.Artifact, error) {
+func GetEventLogs(pcrs []int, ctrLog bool, ctrLogFile string, alg crypto.Hash) ([]ar.Artifact, error) {
 
 	log.Debugf("Collecting event logs for PCRs %v", pcrs)
 
 	artifactmap, err := GetBiosArtifacts(DEFAULT_BINARY_BIOS_MEASUREMENTS,
-		ar.TYPE_EVIDENCE_TPM, false)
+		ar.TYPE_EVIDENCE_TPM, false, []crypto.Hash{alg})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get binary bios measurements: %w", err)
 	}

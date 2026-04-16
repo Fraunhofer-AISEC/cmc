@@ -17,12 +17,15 @@ package parsetpm
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 	"github.com/sirupsen/logrus"
@@ -33,6 +36,7 @@ type ParsePcrsConf struct {
 	Eventlog       string
 	PrintAggregate bool
 	EventData      bool
+	Algorithms     []string
 }
 
 const (
@@ -43,6 +47,7 @@ const (
 	tpmEventlogFlag    = "eventlog"
 	printAggregateFlag = "print-aggregate"
 	eventDataFlag      = "event-data"
+	algorithmFlag      = "algorithms"
 )
 
 var (
@@ -65,6 +70,11 @@ var Command = &cli.Command{
 		&cli.BoolFlag{
 			Name:  eventDataFlag,
 			Usage: "Additionally add extended event data if available",
+		},
+		&cli.StringFlag{
+			Name: algorithmFlag,
+			Usage: "Comma-separated list of PCR Bank hash algorithms to retrieve. " +
+				"If not specified, fetches all available PCR banks. Possible: SHA-256, SHA-384",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -95,7 +105,21 @@ func run(cmd *cli.Command) error {
 
 	log.Info("Parsing TPM SRTM PCR eventlog...")
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, ar.TYPE_REFVAL_TPM, pcrConf.EventData)
+	algs := make([]crypto.Hash, 0, len(pcrConf.Algorithms))
+	for _, s := range pcrConf.Algorithms {
+		alg, err := internal.HashFromString(s)
+		if err != nil {
+			return fmt.Errorf("failed to convert hash alg: %w", err)
+		}
+		algs = append(algs, alg)
+		log.Tracef("Added PCR bank hash algorithm %v", s)
+	}
+	if len(algs) == 0 {
+		log.Trace("No algorithms specified: retrieving all available PCR banks")
+	}
+
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, ar.TYPE_REFVAL_TPM,
+		pcrConf.EventData, algs)
 	if err != nil {
 		return fmt.Errorf("failed to read binary bios measurements: %w", err)
 	}
@@ -156,7 +180,23 @@ func getConfig(cmd *cli.Command) (*ParsePcrsConf, error) {
 		PrintAggregate: cmd.Bool(printAggregateFlag),
 		EventData:      cmd.Bool(eventDataFlag),
 	}
+
+	algos := cmd.String(algorithmFlag)
+	if algos != "" {
+		c.Algorithms = strings.Split(algos, ",")
+	}
+
+	c.Print()
+
 	return c, nil
+}
+
+func (c *ParsePcrsConf) Print() {
+	log.Debugf("Parse TPM Config")
+	log.Debugf("\tEventlog : %v\n", c.Eventlog)
+	log.Debugf("\tAggregate: %v\n", c.PrintAggregate)
+	log.Debugf("\tEventData: %v\n", c.EventData)
+	log.Debugf("\tAlgos    : %v\n", c.Algorithms)
 }
 
 func checkConfig(globConf *global.Config, parsePcrsConf *ParsePcrsConf) error {
