@@ -16,6 +16,7 @@
 package tpmdriver
 
 import (
+	"crypto"
 	"encoding/json"
 	"testing"
 
@@ -27,6 +28,7 @@ func Test_parseBiosMeasurements(t *testing.T) {
 		data            []byte
 		refvalType      string
 		addRawEventData bool
+		algs            []crypto.Hash
 	}
 	tests := []struct {
 		name    string
@@ -39,6 +41,7 @@ func Test_parseBiosMeasurements(t *testing.T) {
 				data:            BinaryBiosMeasurements,
 				refvalType:      "TPM Measurement",
 				addRawEventData: false,
+				algs:            []crypto.Hash{crypto.SHA256},
 			},
 			wantErr: false,
 		},
@@ -48,6 +51,7 @@ func Test_parseBiosMeasurements(t *testing.T) {
 				data:            BinaryBiosMeasurements,
 				refvalType:      "TPM Measurement",
 				addRawEventData: true,
+				algs:            []crypto.Hash{crypto.SHA256},
 			},
 			wantErr: false,
 		},
@@ -57,6 +61,7 @@ func Test_parseBiosMeasurements(t *testing.T) {
 				data:            InvalidBinaryBiosMeasuremens,
 				refvalType:      "TPM Measurement",
 				addRawEventData: false,
+				algs:            []crypto.Hash{crypto.SHA256},
 			},
 			wantErr: true,
 		},
@@ -66,7 +71,8 @@ func Test_parseBiosMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.refvalType, tt.args.addRawEventData)
+			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.refvalType,
+				tt.args.addRawEventData, tt.args.algs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseBiosMeasurements() error = %v, wantErr %v", err, tt.wantErr)
 				//maybe print the return value of the BIOS Measurements

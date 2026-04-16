@@ -17,12 +17,15 @@ package tpmdriver
 
 import (
 	"bytes"
+	"crypto"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 // Constants for digests and TCG Events
@@ -137,10 +140,10 @@ type TCG_AlgorithmSize struct {
 	DigestSize  uint16
 }
 
-func GetBiosArtifacts(file, refvalType string, addEventData bool) (map[int]ar.Artifact, error) {
+func GetBiosArtifacts(file, refvalType string, addEventData bool, algs []crypto.Hash) (map[int]ar.Artifact, error) {
 
 	// Get single events
-	components, err := GetBiosMeasurements(file, refvalType, addEventData)
+	components, err := GetBiosMeasurements(file, refvalType, addEventData, algs)
 	if err != nil {
 		return nil, err
 	}
@@ -169,13 +172,13 @@ func GetBiosArtifacts(file, refvalType string, addEventData bool) (map[int]ar.Ar
 // GetBiosMeasurements retrieves the measurements recorded into the TPM PCRs by BIOS, UEFI and IPL.
 // The file with the binary measurements (e.g., /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file, refvalType string, addEventData bool) ([]ar.Component, error) {
+func GetBiosMeasurements(file, refvalType string, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseBiosMeasurements(data, refvalType, addEventData)
+	digests, err := parseBiosMeasurements(data, refvalType, addEventData, algs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse binary bios measurements event log: %w", err)
 	}
@@ -183,7 +186,16 @@ func GetBiosMeasurements(file, refvalType string, addEventData bool) ([]ar.Compo
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte, refvalType string, addEventData bool) ([]ar.Component, error) {
+func parseBiosMeasurements(data []byte, refvalType string, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
+
+	tpmAlgs := make([]tpm2.Algorithm, 0, len(algs))
+	for _, alg := range algs {
+		tpmAlg, err := internal.CryptoToTpm2Hash(alg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get hash algorithm: %w", err)
+		}
+		tpmAlgs = append(tpmAlgs, tpmAlg)
+	}
 
 	buf := bytes.NewBuffer(data)
 
@@ -213,7 +225,7 @@ func parseBiosMeasurements(data []byte, refvalType string, addEventData bool) ([
 		switch specIdEvent.FamilyVersionMajor {
 		case 2:
 			log.Trace("Detected event log format version 2")
-			return parseBiosMeasurementsV2(buf.Bytes(), refvalType, addEventData)
+			return parseBiosMeasurementsV2(buf.Bytes(), refvalType, addEventData, tpmAlgs)
 		default:
 			return nil, fmt.Errorf("unsuported Eventlog version %v.%v", specIdEvent.FamilyVersionMajor,
 				specIdEvent.FamilyVersionMinor)
@@ -260,7 +272,7 @@ func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.Component, er
 
 }
 
-func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) ([]ar.Component, error) {
+func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool, algs []tpm2.Algorithm) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 	extends := make([]ar.Component, 0)
@@ -277,10 +289,12 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 		eventName := eventtypeToString(eventType)
 		binary.Read(buf, binary.LittleEndian, &digestCount)
 
-		var digestAlgorithmID uint16
 		var sha256Digest ar.HexByte
 		var sha384Digest ar.HexByte
+		foundSha256 := false
+		foundSha384 := false
 		for i := 0; i < int(digestCount); i++ {
+			var digestAlgorithmID uint16
 			binary.Read(buf, binary.LittleEndian, &digestAlgorithmID)
 			digestLength, err := algorithmIDtoSize(digestAlgorithmID)
 			if err != nil {
@@ -292,15 +306,26 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 			digest := make(ar.HexByte, digestLength)
 			binary.Read(buf, binary.LittleEndian, &digest)
 			switch digestAlgorithmID {
-			case 0x000b: //sha256
+			case uint16(tpm2.AlgSHA256):
 				sha256Digest = make(ar.HexByte, SHA256_DIGEST_LEN)
 				copy(sha256Digest, digest)
-			case 0x000c: //sha384
+				foundSha256 = true
+			case uint16(tpm2.AlgSHA384):
 				sha384Digest = make(ar.HexByte, SHA384_DIGEST_LEN)
 				copy(sha384Digest, digest)
+				foundSha384 = true
 			}
 			//other digest types will be implicitly skipped
 		}
+
+		availableAlgs := make([]tpm2.Algorithm, 0)
+		if foundSha256 {
+			availableAlgs = append(availableAlgs, tpm2.AlgSHA256)
+		}
+		if foundSha384 {
+			availableAlgs = append(availableAlgs, tpm2.AlgSHA384)
+		}
+
 		var eventSize uint32
 		binary.Read(buf, binary.LittleEndian, &eventSize)
 		if int(eventSize) > buf.Len() {
@@ -325,7 +350,8 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 		//pcr value has not been initialized
 		if !initializedPCR[pcrIndex] {
 			//generate the locality entry
-			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData, digestAlgorithmID)
+			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData,
+				algs, availableAlgs)
 			if err != nil {
 				log.Debug(err)
 			} else {
@@ -339,11 +365,6 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 			extendedeventData = ar.ParseEventData(eventData, eventName)
 		}
 
-		//either Sha256 or Sha384 must be present
-		if !(len(sha384Digest) == SHA384_DIGEST_LEN || len(sha256Digest) == SHA256_DIGEST_LEN) {
-			return nil, errors.New("no SHA256 or SHA384 in TCG event entry")
-		}
-
 		//skip event
 		if eventName == eventtypeToString(EV_NO_ACTION) {
 			continue
@@ -354,18 +375,44 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 			Name:  eventName,
 			Index: int(pcrIndex),
 		}
-		if sha256Digest != nil {
-			extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
-				Alg:     "SHA-256",
-				Content: sha256Digest,
-			})
+
+		// If no algs are specified, add all available PCR banks
+		if len(algs) == 0 {
+			if sha256Digest != nil {
+				extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
+					Alg:     "SHA-256",
+					Content: sha256Digest,
+				})
+			}
+			if sha384Digest != nil {
+				extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
+					Alg:     "SHA-384",
+					Content: sha384Digest,
+				})
+			}
+		} else {
+			for _, alg := range algs {
+				switch alg {
+				case tpm2.AlgSHA256:
+					if sha256Digest == nil {
+						return nil, fmt.Errorf("event log does not contain SHA-256 digest")
+					}
+					extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
+						Alg:     "SHA-256",
+						Content: sha256Digest,
+					})
+				case tpm2.AlgSHA384:
+					if sha384Digest == nil {
+						return nil, fmt.Errorf("event log does not contain SHA-384 digest")
+					}
+					extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
+						Alg:     "SHA-384",
+						Content: sha384Digest,
+					})
+				}
+			}
 		}
-		if sha384Digest != nil {
-			extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
-				Alg:     "SHA-384",
-				Content: sha384Digest,
-			})
-		}
+
 		if extendedeventData != nil {
 			extend.Description = extendedeventData.StringContent
 			if addEventData {
@@ -379,7 +426,8 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool) 
 	return extends, nil
 }
 
-func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, alg uint16) (ar.Component, bool, error) {
+func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, algs []tpm2.Algorithm,
+	availableAlgs []tpm2.Algorithm) (ar.Component, bool, error) {
 	var found_hcrtm bool
 	var locality byte
 	skipEvent := false
@@ -407,25 +455,51 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, al
 		}
 	}
 
-	digest := make([]byte, 32)
-	digest[31] = locality
-
 	entry := ar.Component{
 		Type:  ar.TYPE_REFVAL_TPM,
 		Name:  "TPM_PCR_INIT_VALUE",
 		Index: pcrIndex,
 	}
-	switch alg {
-	case 0x000b:
-		entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
-			Alg:     "SHA-256",
-			Content: digest,
-		})
-	case 0x000c:
-		entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
-			Alg:     "SHA-384",
-			Content: digest,
-		})
+
+	// If no algs are specified, add all available PCR banks
+	if len(algs) == 0 {
+		for _, alg := range availableAlgs {
+			switch alg {
+			case tpm2.AlgSHA256:
+				digest := make([]byte, 32)
+				digest[31] = locality
+				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+					Alg:     "SHA-256",
+					Content: digest,
+				})
+			case tpm2.AlgSHA384:
+				digest := make([]byte, 48)
+				digest[47] = locality
+				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+					Alg:     "SHA-384",
+					Content: digest,
+				})
+			}
+		}
+	} else {
+		for _, alg := range algs {
+			switch alg {
+			case tpm2.AlgSHA256:
+				digest := make([]byte, 32)
+				digest[31] = locality
+				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+					Alg:     "SHA-256",
+					Content: digest,
+				})
+			case tpm2.AlgSHA384:
+				digest := make([]byte, 48)
+				digest[47] = locality
+				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+					Alg:     "SHA-384",
+					Content: digest,
+				})
+			}
+		}
 	}
 
 	//generate the Locality
