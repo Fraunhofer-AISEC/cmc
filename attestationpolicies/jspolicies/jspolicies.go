@@ -56,7 +56,7 @@ type JsPolicyEngine struct{}
 func (p *JsPolicyEngine) Validate(result *ar.AttestationResult, policies []byte, policyOverwrite bool) bool {
 
 	log.Debugf("Validating custom javascript policies against attestation result %q: %q",
-		result.Prover, result.Summary.Status)
+		result.Prover.Hostname, result.Summary.Status)
 
 	vr, err := json.Marshal(result)
 	if err != nil {

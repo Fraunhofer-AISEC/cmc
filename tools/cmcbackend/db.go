@@ -82,11 +82,11 @@ func (db *Db) InsertResult(data []byte) error {
 		return fmt.Errorf("failed to unmarshal header")
 	}
 
-	if header.Prover == "" {
+	if header.Prover.Hostname == "" {
 		return errors.New("cannot insert into database: The result prover field is empty")
 	}
 
-	log.Tracef("Inserting prover '%v' into %v", header.Prover, db.table)
+	log.Tracef("Inserting prover '%v' into %v", header.Prover.Hostname, db.table)
 
 	// Create ID through hashing
 	digest := sha256.Sum256(data)
@@ -110,7 +110,7 @@ func (db *Db) InsertResult(data []byte) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(id[:], header.Prover, header.Created, header.Summary.Status, string(data))
+	_, err = stmt.Exec(id[:], header.Prover.Hostname, header.Created, header.Summary.Status, string(data))
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
 	}

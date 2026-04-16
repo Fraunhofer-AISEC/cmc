@@ -48,21 +48,21 @@ func Publish(resultsAddr, ocsfAddr string, token []byte, file string, result *ar
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
 	}
-	if result.Prover == "" {
+	if result.Prover.Hostname == "" {
 		return fmt.Errorf("will not publish result: prover is empty (this happens if connection could not be established)")
 	}
 
 	// Log the result
 	switch result.Summary.Status {
 	case ar.StatusSuccess:
-		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 	case ar.StatusWarn:
-		log.Warnf("WARN: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Warnf("WARN: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 	case ar.StatusFail:
-		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Warnf("FAILED: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 		result.PrintErr()
 	default:
-		log.Warnf("FAILED: Unknown status %v for Prover %v (%v)", result.Summary.Status, result.Prover, result.Created)
+		log.Warnf("FAILED: Unknown status %v for Prover %v (%v)", result.Summary.Status, result.Prover.Hostname, result.Created)
 		result.PrintErr()
 	}
 

@@ -166,7 +166,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
 		err = cc.CmcApi.verifyAR(cc,
 			peerResp.Report, chbindings, cc.Policies,
-			fingerprint)
+			fingerprint, peerAddr)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
 		}

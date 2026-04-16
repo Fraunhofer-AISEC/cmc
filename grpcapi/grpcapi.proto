@@ -47,6 +47,7 @@ message VerificationRequest {
   bytes nonce = 2;
   bytes report = 3;
   string peer = 7;
+  string peer_addr = 8;
   bytes policies = 9;
 }
 

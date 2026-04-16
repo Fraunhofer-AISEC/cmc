@@ -71,6 +71,7 @@ type VerificationRequest struct {
 	Nonce    []byte `json:"nonce" cbor:"1,keyasint"`
 	Report   []byte `json:"report" cbor:"2,keyasint"`
 	Peer     string `json:"peer,omitempty" cbor:"6,keyasint,omitempty"`
+	PeerAddr string `json:"peerAddr,omitempty" cbor:"7,keyasint,omitempty"`
 	Policies []byte `json:"policies,omitempty" cbor:"8,keyasint,omitempty"`
 }
 

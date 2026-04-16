@@ -125,7 +125,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationReques
 	}
 
 	result := verifier.Verify(req.Report, req.Nonce, req.Policies, s.cmc.PolicyEngineSelect,
-		s.cmc.PolicyOverwrite, s.cmc.RootCas, s.cmc.PeerCache, req.Peer)
+		s.cmc.PolicyOverwrite, s.cmc.RootCas, s.cmc.PeerCache, req.Peer, req.PeerAddr)
 
 	// grpc only: marshal attestation result in JSON as we do not have protobuf
 	// definitions

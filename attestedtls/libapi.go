@@ -76,7 +76,7 @@ func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]b
 func (a LibApi) verifyAR(
 	cc *CmcConfig,
 	report, nonce, policies []byte,
-	peer string,
+	peer, peerAddr string,
 ) error {
 
 	if cc == nil {
@@ -95,12 +95,13 @@ func (a LibApi) verifyAR(
 		Nonce:    nonce,
 		Report:   report,
 		Peer:     peer,
+		PeerAddr: peerAddr,
 		Policies: policies,
 	}
 
 	log.Debug("Verifier: verifying attestation report")
 	result := verifier.Verify(req.Report, req.Nonce, req.Policies, a.cmc.PolicyEngineSelect,
-		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, req.Peer)
+		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, req.Peer, req.PeerAddr)
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
