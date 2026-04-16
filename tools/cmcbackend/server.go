@@ -89,6 +89,10 @@ func (s *server) handleGetDevices(c *gin.Context) {
 	getDevices(c, s.db)
 }
 
+func (s *server) handleGetOcsfFindings(c *gin.Context) {
+	getOcsfFindings(c, s.db)
+}
+
 func (s *server) handlePostOcsfDetectionFinding(c *gin.Context) {
 	postOcsfFinding(c, s.db, s.token)
 }
@@ -132,6 +136,7 @@ func (s *server) serve() {
 	router.GET("/resultsbyid/:id", s.handleGetResultById)
 	router.GET("/latestresults", s.handleGetLatestResults)
 	router.GET("/devices", s.handleGetDevices)
+	router.GET("/ocsf-detection-finding", s.handleGetOcsfFindings)
 	router.POST("/ocsf-detection-finding", s.handlePostOcsfDetectionFinding)
 	router.POST("/network-events", s.handlePostNetworkEvent)
 	router.GET("/network-events", s.handleGetNetworkEvents)
@@ -293,6 +298,24 @@ func postResult(c *gin.Context, db *Db, token []byte) {
 	}
 
 	c.JSON(http.StatusCreated, res)
+}
+
+// getOcsfFindings returns all stored OCSF detection findings
+func getOcsfFindings(c *gin.Context, db *Db) {
+
+	log.Trace("in GET /ocsf-detection-finding")
+
+	results, err := db.GetAllOcsfFindings()
+	if err != nil {
+		msg := fmt.Sprintf("failed to retrieve OCSF findings: %v", err)
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
+		log.Warn(msg)
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
+
+	log.Tracef("Finished returning %v OCSF findings", len(results))
 }
 
 // postOcsfFinding adds an OCSF detection finding from JSON
