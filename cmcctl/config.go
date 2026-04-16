@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"flag"
@@ -93,18 +94,21 @@ type config struct {
 	LogFile          string   `json:"logFile"`
 	TokenStore       string   `json:"tokenStore"`
 	PublishTokenFile string   `json:"publishToken"`
+	PublishCert      string   `json:"publishCert"`
+	PublishKey       string   `json:"publishKey"`
 	TlsCn            string   `json:"tlsCn"`
 	TlsDnsNames      []string `json:"tlsDnsNames"`
 	TlsIpAddresses   []string `json:"tlsIpAddresses"`
 	cmc.Config
 
-	rootCas      []*x509.Certificate
-	policies     []byte
-	api          Api
-	serializer   ar.Serializer
-	attest       atls.AttestSelect
-	publishToken []byte
-	keyId        string
+	rootCas           []*x509.Certificate
+	policies          []byte
+	api               Api
+	serializer        ar.Serializer
+	attest            atls.AttestSelect
+	publishToken      []byte
+	publishClientCert *tls.Certificate
+	keyId             string
 }
 
 // Defines the testool specic flags. CMC flags are defined in cmc/config.go
@@ -133,6 +137,8 @@ const (
 	logFileFlag        = "logfile"
 	tokenStoreFlag     = "tokenstore"
 	publishTokenFlag   = "publishtoken"
+	publishCertFlag    = "publishcert"
+	publishKeyFlag     = "publishkey"
 	tlsCnFlag          = "tlscn"
 	tlsDnsNamesFlag    = "tlsdnsnames"
 	tlsIpAddressesFlag = "tlsipaddresses"
@@ -166,6 +172,8 @@ var (
 	logFile      = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
 	tokenStore   = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
 	publishtoken = flag.String(publishTokenFlag, "", "Path to token for backend authorization")
+	publishcert  = flag.String(publishCertFlag, "", "Client certificate for mTLS authentication when publishing")
+	publishkey   = flag.String(publishKeyFlag, "", "Client key for mTLS authentication when publishing")
 	tlsCn        = flag.String(tlsCnFlag, "",
 		"Common Name for TLS certificate to be created via the enroll-key command")
 	tlsDnsNames = flag.String(tlsDnsNamesFlag, "",
@@ -278,6 +286,12 @@ func getConfig(cmd string) (*config, error) {
 	if internal.FlagPassed(publishTokenFlag) {
 		c.PublishTokenFile = *publishtoken
 	}
+	if internal.FlagPassed(publishCertFlag) {
+		c.PublishCert = *publishcert
+	}
+	if internal.FlagPassed(publishKeyFlag) {
+		c.PublishKey = *publishkey
+	}
 	if internal.FlagPassed(tlsCnFlag) {
 		c.TlsCn = *tlsCn
 	}
@@ -319,19 +333,18 @@ func getConfig(cmd string) (*config, error) {
 		if len(c.RootCas) == 0 {
 			return nil, fmt.Errorf("path to root CAs must be specified via config file or commandline")
 		}
+	}
 
-		for _, ca := range c.RootCas {
-			ca, err := os.ReadFile(ca)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
-			}
-			cert, err := internal.ParseCert(ca)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
-			}
-			c.rootCas = append(c.rootCas, cert)
+	for _, ca := range c.RootCas {
+		ca, err := os.ReadFile(ca)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
 		}
-
+		cert, err := internal.ParseCert(ca)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
+		}
+		c.rootCas = append(c.rootCas, cert)
 	}
 
 	if cmd == "provision" {
@@ -358,6 +371,15 @@ func getConfig(cmd string) (*config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read publish token: %w", err)
 		}
+	}
+
+	if c.PublishCert != "" && c.PublishKey != "" {
+		log.Debugf("Loading publish client certificate %v", c.PublishCert)
+		cert, err := tls.LoadX509KeyPair(c.PublishCert, c.PublishKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load publish client cert: %w", err)
+		}
+		c.publishClientCert = &cert
 	}
 
 	// Get Serializer

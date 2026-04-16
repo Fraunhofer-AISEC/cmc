@@ -82,7 +82,8 @@ func request(c *config) error {
 				wg := new(sync.WaitGroup)
 				wg.Add(1)
 				defer wg.Wait()
-				go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, wg)
+				go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, wg,
+					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 			}
 		},
 	}
@@ -192,7 +193,8 @@ func serve(c *config) error {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result)
+				go pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
+					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 			}
 		},
 	}

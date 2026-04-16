@@ -62,6 +62,8 @@ type config struct {
 	PublishNetwork   string   `json:"publishNetwork"`
 	PublishFile      string   `json:"publishFile"`
 	PublishToken     string   `json:"publishToken"`
+	PublishCert      string   `json:"publishCert"`
+	PublishKey       string   `json:"publishKey"`
 
 	estCaKey    crypto.PrivateKey
 	estCaChain  []*x509.Certificate
@@ -94,6 +96,8 @@ const (
 	publishNetworkFlag   = "publishnetwork"
 	publishFileFlag      = "publishfile"
 	publishTokenFlag     = "publishTokenFlag"
+	publishCertFlag      = "publishcert"
+	publishKeyFlag       = "publishkey"
 )
 
 func getConfig() (*config, error) {
@@ -125,6 +129,8 @@ func getConfig() (*config, error) {
 	publishNetwork := flag.String(publishNetworkFlag, "", "Optional HTTP address to publish lightweight network events to")
 	publishFile := flag.String(publishFileFlag, "", "Optional file to publish attestation reports to when provisioning mode is set to 'attestation'")
 	publishToken := flag.String(publishTokenFlag, "", "HTTP Authorization token for publishing attestation results")
+	publishCert := flag.String(publishCertFlag, "", "Client certificate for mTLS authentication when publishing")
+	publishKey := flag.String(publishKeyFlag, "", "Client key for mTLS authentication when publishing")
 	flag.Parse()
 
 	// Create default configuration
@@ -207,6 +213,12 @@ func getConfig() (*config, error) {
 	}
 	if internal.FlagPassed(publishTokenFlag) {
 		c.PublishToken = *publishToken
+	}
+	if internal.FlagPassed(publishCertFlag) {
+		c.PublishCert = *publishCert
+	}
+	if internal.FlagPassed(publishKeyFlag) {
+		c.PublishKey = *publishKey
 	}
 
 	// Configure the logger

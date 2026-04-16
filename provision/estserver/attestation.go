@@ -17,6 +17,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -31,6 +32,8 @@ import (
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
 	report []byte, publishResults, publishOcsf, publishNetwork, publishFile string, publishToken []byte,
+	publishRootCas []*x509.Certificate, publishAllowSystemCerts bool,
+	publishClientCert *tls.Certificate,
 ) error {
 
 	if len(report) == 0 {
@@ -60,7 +63,8 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	defer wg.Wait()
-	go pub.PublishAsync(publishResults, publishOcsf, publishNetwork, publishToken, publishFile, result, wg)
+	go pub.PublishAsync(publishResults, publishOcsf, publishNetwork, publishToken, publishFile, result, wg,
+		publishRootCas, publishAllowSystemCerts, publishClientCert)
 
 	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
 		return fmt.Errorf("failed to verify attestation report")
