@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.1.0"
+	resultVersion = "3.2.0"
 )
 
 func GetResultVersion() string {
@@ -39,12 +39,18 @@ type AttestationResult struct {
 	Version      string              `json:"version" cbor:"0,keyasint"`
 	Type         string              `json:"type" cbor:"1,keyasint"`
 	Summary      Result              `json:"summary" cbor:"2,keyasint"`
-	Prover       string              `json:"prover,omitempty" cbor:"3,keyasint,omitempty"`
+	Prover       Prover              `json:"prover" cbor:"3,keyasint"`
 	Created      string              `json:"created,omitempty" cbor:"4,keyasint,omitempty"`
 	Freshness    Result              `json:"freshness" cbor:"5,keyasint"`
 	CertLevel    int                 `json:"certLevel" cbor:"6,keyasint"`
 	Measurements []MeasurementResult `json:"measurements" cbor:"7,keyasint"`
 	Metadata     MetadataSummary     `json:"metadata" cbor:"8,keyasint"`
+}
+
+type Prover struct {
+	Hostname string `json:"prover,omitempty" cbor:"0,keyasint,omitempty"`
+	Ip       string `json:"ip,omitempty" cbor:"1,keyasint,omitempty"`
+	PeerId   string `json:"peerId,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 type Status string

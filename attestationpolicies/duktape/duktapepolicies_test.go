@@ -100,8 +100,10 @@ func TestValidate(t *testing.T) {
 
 var (
 	vrValidCerts = &ar.AttestationResult{
-		Prover: "Test Prover",
-		Type:   ar.TYPE_ATTESTATION_RESULT,
+		Prover: ar.Prover{
+			Hostname: "Test Prover",
+		},
+		Type: ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},
@@ -125,8 +127,10 @@ var (
 	}
 
 	vrInvalidCerts = &ar.AttestationResult{
-		Prover: "Test Prover",
-		Type:   ar.TYPE_ATTESTATION_RESULT,
+		Prover: ar.Prover{
+			Hostname: "Test Prover",
+		},
+		Type: ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},
@@ -151,16 +155,20 @@ var (
 
 	// This variable is actually manipulated and cannot be reused
 	vrFailModifiable = &ar.AttestationResult{
-		Prover: "Test Prover",
-		Type:   ar.TYPE_ATTESTATION_RESULT,
+		Prover: ar.Prover{
+			Hostname: "Test Prover",
+		},
+		Type: ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusFail,
 		},
 	}
 
 	vrFail = &ar.AttestationResult{
-		Prover: "Test Prover",
-		Type:   ar.TYPE_ATTESTATION_RESULT,
+		Prover: ar.Prover{
+			Hostname: "Test Prover",
+		},
+		Type: ar.TYPE_ATTESTATION_RESULT,
 		Summary: ar.Result{
 			Status: ar.StatusFail,
 		},

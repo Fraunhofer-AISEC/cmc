@@ -106,7 +106,7 @@ func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) (
 func (a SocketApi) verifyAR(
 	cc *CmcConfig,
 	report, nonce, policies []byte,
-	peer string,
+	peer, peerAddr string,
 ) error {
 
 	if cc == nil {
@@ -130,6 +130,7 @@ func (a SocketApi) verifyAR(
 		Nonce:    nonce,
 		Report:   report,
 		Peer:     peer,
+		PeerAddr: peerAddr,
 		Policies: policies,
 	}
 

@@ -329,7 +329,7 @@ func TestVerify(t *testing.T) {
 				PolicyEngineSelect_None,
 				false,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
-				nil, "",
+				nil, "", "",
 			)
 			log.Info("Finished FUT")
 			if got.Summary.Status != tt.want {

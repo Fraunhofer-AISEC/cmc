@@ -16,6 +16,7 @@
 package publish
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -36,6 +37,7 @@ type DetectionFinding struct {
 	StatusID      int          `json:"status_id,omitempty"`
 	IsAlert       bool         `json:"is_alert"`
 	SeverityID    int          `json:"severity_id"`
+	Device        *Device      `json:"device,omitempty"`
 	Time          string       `json:"time"`
 	Message       string       `json:"message,omitempty"`
 	FindingInfo   *Finding     `json:"finding_info"`
@@ -81,6 +83,20 @@ type File struct {
 	Modifier     *User         `json:"modifier,omitempty"`
 }
 
+type Device struct {
+	TypeId        int    `json:"type_id"`
+	Hostname      string `json:"hostname,omitempty"`
+	InstanceUid   string `json:"instance_uid,omitempty"`
+	InterfaceName string `json:"interface_name,omitempty"`
+	InterfaceUid  string `json:"interface_uid,omitempty"`
+	Owner         *User  `json:"owner,omitempty"`
+	Region        string `json:"region,omitempty"`
+	Type          string `json:"type,omitempty"`
+	Uid           string `json:"uid,omitempty"`
+	VendorName    string `json:"vendor_name,omitempty"`
+	Ip            string `json:"ip,omitempty"`
+}
+
 // User represents the OCSF User object
 type User struct {
 	Name string `json:"name,omitempty"`
@@ -107,14 +123,14 @@ func CreateDetectionFindings(result *ar.AttestationResult) []*DetectionFinding {
 			if digest.Success || !digest.Launched {
 				continue // nothing to do
 			}
-			finding := CreateDetectionFinding(digest, result.Created)
+			finding := CreateDetectionFinding(digest, result.Prover, result.Created)
 			findings = append(findings, finding)
 		}
 	}
 	return findings
 }
 
-func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
+func CreateDetectionFinding(dr ar.DigestResult, prover ar.Prover, t string) *DetectionFinding {
 
 	message := "Unauthorized software launch detected"
 
@@ -149,6 +165,22 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 		},
 	}
 
+	device := &Device{
+		TypeId: 1, // Server
+		Type:   "server",
+	}
+	device.Hostname = prover.Hostname
+	device.Ip = prover.Ip
+
+	// Use the first 16 bytes of the 32 bye peer id as the OCSF device uid if present
+	peerId, err := hex.DecodeString(prover.PeerId)
+	if err == nil && len(peerId) >= 16 {
+		uuid, err := uuid.FromBytes(peerId[:16])
+		if err == nil {
+			device.Uid = uuid.String()
+		}
+	}
+
 	finding := &DetectionFinding{
 		ActionId:      3,      // Observed
 		ActivityID:    1,      // Create
@@ -172,6 +204,7 @@ func CreateDetectionFinding(dr ar.DigestResult, t string) *DetectionFinding {
 				File: f,
 			},
 		},
+		Device: device,
 		Metadata: Metadata{
 			Version: "1.8.0",
 			Product: Product{

@@ -90,7 +90,7 @@ func (a GrpcApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]
 func (a GrpcApi) verifyAR(
 	cc *CmcConfig,
 	report, nonce, policies []byte,
-	peer string,
+	peer, peerAddr string,
 ) error {
 
 	// Get backend connection
@@ -107,6 +107,7 @@ func (a GrpcApi) verifyAR(
 		Nonce:    nonce,
 		Report:   report,
 		Peer:     peer,
+		PeerAddr: peerAddr,
 		Policies: policies,
 	}
 

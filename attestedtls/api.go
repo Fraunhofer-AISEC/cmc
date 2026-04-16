@@ -19,7 +19,7 @@ import "crypto"
 
 type CmcApi interface {
 	obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error)
-	verifyAR(cc *CmcConfig, report, nonce, policies []byte, peer string) error
+	verifyAR(cc *CmcConfig, report, nonce, policies []byte, peer, peerAddr string) error
 	createKey(cc *CmcConfig) (string, error)
 	fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error)
 	fetchCerts(cc *CmcConfig) ([][]byte, error)

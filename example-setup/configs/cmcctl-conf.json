@@ -11,6 +11,7 @@
     "mtls": true,
     "attest": "mutual",
     "publishResults": "http://localhost:8080/results",
+    "publishOcsf": "http://localhost:8080/ocsf-detection-finding",
     "logLevel": "trace",
     "api": "socket",
     "serialization": "cbor",

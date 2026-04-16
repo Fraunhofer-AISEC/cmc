@@ -190,7 +190,7 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	// Verify attestation report
 	result := verifier.Verify(req.Report, req.Nonce,
 		req.Policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
-		cmc.RootCas, cmc.PeerCache, req.Peer)
+		cmc.RootCas, cmc.PeerCache, req.Peer, req.PeerAddr)
 
 	resp := &api.VerificationResponse{
 		Version: api.GetVersion(),

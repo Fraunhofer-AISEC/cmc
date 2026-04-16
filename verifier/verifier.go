@@ -59,13 +59,15 @@ func Verify(
 	arRaw, nonce []byte,
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
 	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
-	peer string,
+	peer string, peerAddr string,
 ) *ar.AttestationResult {
 
 	result := &ar.AttestationResult{
 		Version: ar.GetResultVersion(),
 		Type:    ar.TYPE_ATTESTATION_RESULT,
-		Prover:  "Unknown",
+		Prover: ar.Prover{
+			PeerId: peer,
+		},
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},
@@ -125,9 +127,16 @@ func Verify(
 		result.Fail(ar.VerifyMetadata)
 	}
 	result.Metadata = metaResults
-	result.Prover = report.Name
+	if report.Name != "" {
+		result.Prover.Hostname = report.Name
+	} else {
+		result.Prover.Hostname = "unknown"
+	}
+	if peerAddr != "" {
+		result.Prover.Ip = peerAddr
+	}
 
-	log.Debugf("Decoded attestation report and metadata from prover %v", result.Prover)
+	log.Debugf("Decoded attestation report and metadata from prover %v", result.Prover.Hostname)
 
 	// Verify the supplied nonce and construct the evidence nonce for context integrity verification
 	// NONCE_USER = Context.Nonce
@@ -318,13 +327,13 @@ Loop:
 
 	switch result.Summary.Status {
 	case ar.StatusSuccess:
-		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Infof("SUCCESS: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 	case ar.StatusWarn:
-		log.Infof("WARN: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Infof("WARN: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 	case ar.StatusFail:
-		log.Infof("FAILED: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Infof("FAILED: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 	default:
-		log.Infof("FAILED UNKNOWN: Verification for Prover %v (%v)", result.Prover, result.Created)
+		log.Infof("FAILED UNKNOWN: Verification for Prover %v (%v)", result.Prover.Hostname, result.Created)
 		result.Summary.Status = ar.StatusFail
 	}
 
