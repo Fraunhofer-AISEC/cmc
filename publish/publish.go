@@ -18,6 +18,8 @@ package publish
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,6 +31,7 @@ import (
 	// local modules
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,20 +39,34 @@ var (
 	log = logrus.WithField("service", "publish")
 )
 
-func PublishAsync(resultsAddr, ocsfAddr, networkAddr string, token []byte, file string, result *ar.AttestationResult, wg *sync.WaitGroup) {
+func PublishAsync(resultsAddr, ocsfAddr, networkAddr string, token []byte, file string,
+	result *ar.AttestationResult, wg *sync.WaitGroup,
+	rootCas []*x509.Certificate, allowSystemCerts bool,
+	clientCert *tls.Certificate,
+) {
 	defer wg.Done()
-	if err := Publish(resultsAddr, ocsfAddr, networkAddr, token, file, result); err != nil {
+	if err := Publish(resultsAddr, ocsfAddr, networkAddr, token, file, result,
+		rootCas, allowSystemCerts, clientCert); err != nil {
 		log.Warnf("Failed to asynchronously publish: %v", err)
 	}
 }
 
-func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file string, result *ar.AttestationResult) error {
+func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file string,
+	result *ar.AttestationResult,
+	rootCas []*x509.Certificate, allowSystemCerts bool,
+	clientCert *tls.Certificate,
+) error {
 
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
 	}
 	if result.Prover.Hostname == "" {
 		return fmt.Errorf("will not publish result: prover is empty (this happens if connection could not be established)")
+	}
+
+	client, err := createClient(rootCas, allowSystemCerts, clientCert)
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client for publishing: %w", err)
 	}
 
 	// Log the result
@@ -92,7 +109,7 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 			return fmt.Errorf("failed to marshal result: %v", err)
 		}
 
-		err = sendResult(resultsAddr, token, data)
+		err = sendResult(client, resultsAddr, token, data)
 		if err != nil {
 			log.Warnf("Failed to publish: %v", err)
 		}
@@ -110,7 +127,7 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 				log.Warnf("Failed to marshal OCSF finding: %v", err)
 				continue
 			}
-			if err = sendResult(ocsfAddr, token, data); err != nil {
+			if err = sendResult(client, ocsfAddr, token, data); err != nil {
 				log.Warnf("Failed to publish OCSF finding: %v", err)
 			}
 		}
@@ -126,7 +143,7 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 			data, err := json.Marshal(event)
 			if err != nil {
 				log.Warnf("Failed to marshal network event: %v", err)
-			} else if err = sendResult(networkAddr, token, data); err != nil {
+			} else if err = sendResult(client, networkAddr, token, data); err != nil {
 				log.Warnf("Failed to publish network event: %v", err)
 			}
 		} else {
@@ -139,7 +156,37 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 	return nil
 }
 
-func sendResult(addr string, token []byte, result []byte) error {
+func createClient(rootCas []*x509.Certificate, allowSystemCerts bool,
+	clientCert *tls.Certificate,
+) (*http.Client, error) {
+
+	if len(rootCas) == 0 && !allowSystemCerts && clientCert == nil {
+		log.Trace("Creating HTTP publishing client")
+		return http.DefaultClient, nil
+	}
+
+	log.Trace("Creating HTTPS publishing client")
+
+	tlsConfig := &tls.Config{}
+
+	pool, err := internal.CreateCertPool(rootCas, allowSystemCerts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cert pool: %w", err)
+	}
+	tlsConfig.RootCAs = pool
+
+	if clientCert != nil {
+		tlsConfig.Certificates = []tls.Certificate{*clientCert}
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}, nil
+}
+
+func sendResult(client *http.Client, addr string, token []byte, result []byte) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -155,7 +202,7 @@ func sendResult(addr string, token []byte, result []byte) error {
 		req.Header.Set("Authorization", "Bearer "+string(token))
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("http post request failed: %w", err)
 	}
@@ -169,6 +216,9 @@ func sendResult(addr string, token []byte, result []byte) error {
 	if resp.StatusCode != 201 {
 		return fmt.Errorf("failed to publish result: server responded with %v: %v",
 			resp.Status, string(data))
+	} else {
+		log.Tracef("Success: Server responded with %v - %v", resp.StatusCode,
+			http.StatusText(resp.StatusCode))
 	}
 
 	return nil

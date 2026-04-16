@@ -252,7 +252,8 @@ func forwardProxy(c *config) error {
 					wg := new(sync.WaitGroup)
 					wg.Add(1)
 					defer wg.Wait()
-					go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, wg)
+					go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, wg,
+						c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 				}
 			}),
 			atls.WithLibApiCmcConfig(&c.Config))

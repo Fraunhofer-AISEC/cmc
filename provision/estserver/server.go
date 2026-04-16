@@ -35,19 +35,21 @@ import (
 )
 
 type Server struct {
-	server         *http.Server
-	estCaKey       crypto.PrivateKey
-	estCaChain     []*x509.Certificate
-	rootCas        []*x509.Certificate
-	snpEndorser    *provision.SnpEndorser
-	tpmConf        provision.TpmConfig
-	authMethods    internal.AuthMethod
-	tokenPath      string
-	publishResults string
-	publishOcsf    string
-	publishNetwork string
-	publishFile    string
-	publishToken   []byte
+	server            *http.Server
+	estCaKey          crypto.PrivateKey
+	estCaChain        []*x509.Certificate
+	rootCas           []*x509.Certificate
+	snpEndorser       *provision.SnpEndorser
+	tpmConf           provision.TpmConfig
+	authMethods       internal.AuthMethod
+	tokenPath         string
+	publishResults    string
+	publishOcsf       string
+	publishNetwork    string
+	publishFile       string
+	publishToken      []byte
+	allowSystemCerts  bool
+	publishClientCert *tls.Certificate
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -93,6 +95,15 @@ func NewServer(c *config) (*Server, error) {
 		}
 	}
 
+	var publishClientCert *tls.Certificate
+	if c.PublishCert != "" && c.PublishKey != "" {
+		cert, err := tls.LoadX509KeyPair(c.PublishCert, c.PublishKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load publish client cert: %w", err)
+		}
+		publishClientCert = &cert
+	}
+
 	s := &http.Server{
 		Addr:              c.EstAddr,
 		Handler:           nil,
@@ -112,14 +123,16 @@ func NewServer(c *config) (*Server, error) {
 			VerifyEkCert: c.VerifyEkCert,
 			DbPath:       c.TpmEkCertDb,
 		},
-		snpEndorser:    provision.NewSnpEndorser(c.VcekCacheFolder),
-		authMethods:    c.authMethods,
-		tokenPath:      c.TokenPath,
-		publishResults: c.PublishResults,
-		publishOcsf:    c.PublishOcsf,
-		publishNetwork: c.PublishNetwork,
-		publishFile:    c.PublishFile,
-		publishToken:   publishToken,
+		snpEndorser:       provision.NewSnpEndorser(c.VcekCacheFolder),
+		authMethods:       c.authMethods,
+		tokenPath:         c.TokenPath,
+		publishResults:    c.PublishResults,
+		publishOcsf:       c.PublishOcsf,
+		publishNetwork:    c.PublishNetwork,
+		publishFile:       c.PublishFile,
+		publishToken:      publishToken,
+		allowSystemCerts:  c.AllowSystemCerts,
+		publishClientCert: publishClientCert,
 	}
 
 	// EST endpoints

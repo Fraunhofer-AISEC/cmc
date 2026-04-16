@@ -98,7 +98,8 @@ func (a LibApi) verify(c *config) error {
 	hostname, _ := internal.Fqdn()
 	resp.Verifier = ar.Endpoint{Hostname: hostname}
 
-	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, resp)
+	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, resp,
+		c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}

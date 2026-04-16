@@ -131,7 +131,8 @@ func (a GrpcApi) verify(c *config) error {
 		return fmt.Errorf("failed to unmarshal grpc attestation result")
 	}
 
-	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result)
+	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
+		c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
