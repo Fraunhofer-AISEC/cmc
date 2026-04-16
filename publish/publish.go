@@ -36,14 +36,14 @@ var (
 	log = logrus.WithField("service", "publish")
 )
 
-func PublishAsync(resultsAddr, ocsfAddr string, token []byte, file string, result *ar.AttestationResult, wg *sync.WaitGroup) {
+func PublishAsync(resultsAddr, ocsfAddr, networkAddr string, token []byte, file string, result *ar.AttestationResult, wg *sync.WaitGroup) {
 	defer wg.Done()
-	if err := Publish(resultsAddr, ocsfAddr, token, file, result); err != nil {
+	if err := Publish(resultsAddr, ocsfAddr, networkAddr, token, file, result); err != nil {
 		log.Warnf("Failed to asynchronously publish: %v", err)
 	}
 }
 
-func Publish(resultsAddr, ocsfAddr string, token []byte, file string, result *ar.AttestationResult) error {
+func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file string, result *ar.AttestationResult) error {
 
 	if result == nil {
 		return fmt.Errorf("will not publish result: not present")
@@ -101,7 +101,7 @@ func Publish(resultsAddr, ocsfAddr string, token []byte, file string, result *ar
 	}
 
 	// Send OCSF detection findings to the specified server
-	if ocsfAddr != "" {
+	if ocsfAddr != "" && result.Summary.Status != ar.StatusSuccess {
 		findings := CreateDetectionFindings(result)
 		log.Tracef("Publishing %v OCSF detection findings to %v", len(findings), ocsfAddr)
 		for _, f := range findings {
@@ -116,6 +116,24 @@ func Publish(resultsAddr, ocsfAddr string, token []byte, file string, result *ar
 		}
 	} else {
 		log.Trace("Will not publish OCSF findings to endpoint: no endpoint specified")
+	}
+
+	// Send lightweight network event for graph visualization
+	if networkAddr != "" {
+		log.Tracef("Publishing network event to %v", networkAddr)
+		if result.Verifier.Hostname != "" {
+			event := CreateNetworkEvent(result)
+			data, err := json.Marshal(event)
+			if err != nil {
+				log.Warnf("Failed to marshal network event: %v", err)
+			} else if err = sendResult(networkAddr, token, data); err != nil {
+				log.Warnf("Failed to publish network event: %v", err)
+			}
+		} else {
+			log.Trace("Will not publish network event: verifier hostname is empty")
+		}
+	} else {
+		log.Trace("Will not publish network event to endpoint: no endpoint specified")
 	}
 
 	return nil

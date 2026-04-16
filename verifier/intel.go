@@ -1062,7 +1062,7 @@ func VerifyPckCertChain(quoteCerts SgxCertificates, pckCrl, rootCrl *x509.Revoca
 	log.Debugf("Successfully verified PCK certificate chain")
 
 	// Verify PCK CRL against intermediate certificate and check PCK cert against CRL
-	err = internal.CheckRevocation(pckCrl, quoteCerts.PCKCert, quoteCerts.IntermediateCert)
+	err = checkRevocation(pckCrl, quoteCerts.PCKCert, quoteCerts.IntermediateCert)
 	if err != nil {
 		log.Debugf("CRL check of PCK Cert failed: %v", err)
 		return nil, ar.CRLCheckPCK
@@ -1070,7 +1070,7 @@ func VerifyPckCertChain(quoteCerts SgxCertificates, pckCrl, rootCrl *x509.Revoca
 	log.Debugf("Successfully checked PCK revocation list")
 
 	// Verify Root CRL against root CA certificate and check intermediate cert against CRL
-	err = internal.CheckRevocation(rootCrl, quoteCerts.IntermediateCert, quoteCerts.RootCACert)
+	err = checkRevocation(rootCrl, quoteCerts.IntermediateCert, quoteCerts.RootCACert)
 	if err != nil {
 		log.Debugf("CRL check of root CA cert failed: %v", err)
 		return nil, ar.CRLCheckRoot
@@ -1216,4 +1216,43 @@ func statusAccepted(status pcs.TcbComponentStatus, list []string) bool {
 	log.Debugf("\tDeclined TCB info status %v (accepted statuses: %v)",
 		status, strings.Join(l, ","))
 	return false
+}
+
+// checkRevocation first validates the provided certificate revocation list against a CA and then
+// checks if the provided certificate was revoked
+func checkRevocation(crl *x509.RevocationList, cert *x509.Certificate, ca *x509.Certificate) error {
+
+	if cert == nil || crl == nil {
+		return fmt.Errorf("certificate or revocation null pointer exception")
+	}
+
+	if crl.Issuer.String() != ca.Subject.String() {
+		return fmt.Errorf("CRL issuer name %v does not match CA subject name %v",
+			crl.Issuer.String(), ca.Subject.String())
+	}
+	log.Tracef("CRL issuer name %v matches expected name", crl.Issuer.String())
+
+	// Check CRL signature
+	err := crl.CheckSignatureFrom(ca)
+	if err != nil {
+		return fmt.Errorf("CRL signature is invalid: %v", err)
+	}
+
+	// Check if CRL is up to date
+	if now().After(crl.NextUpdate) {
+		return fmt.Errorf("CRL has expired since: %v", crl.NextUpdate)
+	}
+
+	if !bytes.Equal(crl.RawIssuer, cert.RawIssuer) {
+		return fmt.Errorf("CRL RawIssuer is invalid. got: %v, expected: %v ", crl.RawIssuer, cert.RawIssuer)
+	}
+
+	// Check if certificate has been revoked
+	for _, revokedCert := range crl.RevokedCertificateEntries {
+		if cert.SerialNumber.Cmp(revokedCert.SerialNumber) == 0 {
+			return fmt.Errorf("certificate has been revoked since: %v", revokedCert.RevocationTime)
+		}
+	}
+
+	return nil
 }

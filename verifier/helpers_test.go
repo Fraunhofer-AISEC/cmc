@@ -127,9 +127,9 @@ func TestVerifyCaFingerprint(t *testing.T) {
 	wrongFp := hex.EncodeToString(make([]byte, 32))
 
 	tests := []struct {
-		name           string
-		fingerprints   []string
-		wantStatus     ar.Status
+		name         string
+		fingerprints []string
+		wantStatus   ar.Status
 	}{
 		{
 			name:         "matching fingerprint",

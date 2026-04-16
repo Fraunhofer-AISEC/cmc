@@ -23,13 +23,14 @@ import (
 	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	log "github.com/sirupsen/logrus"
 )
 
 func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
-	report []byte, publishResults, publishOcsf, publishFile string, publishToken []byte,
+	report []byte, publishResults, publishOcsf, publishNetwork, publishFile string, publishToken []byte,
 ) error {
 
 	if len(report) == 0 {
@@ -52,11 +53,14 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 		nil, verifier.PolicyEngineSelect_None, false,
 		cas, nil, "", "")
 
+	hostname, _ := internal.Fqdn()
+	result.Verifier = ar.Endpoint{Hostname: hostname}
+
 	log.Debug("Publishing result...")
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	defer wg.Wait()
-	go pub.PublishAsync(publishResults, publishOcsf, publishToken, publishFile, result, wg)
+	go pub.PublishAsync(publishResults, publishOcsf, publishNetwork, publishToken, publishFile, result, wg)
 
 	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
 		return fmt.Errorf("failed to verify attestation report")

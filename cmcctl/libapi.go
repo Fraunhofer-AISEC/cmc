@@ -25,7 +25,9 @@ import (
 	"fmt"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
@@ -93,7 +95,10 @@ func (a LibApi) verify(c *config) error {
 	resp := verifier.Verify(report, nonce, c.policies, a.cmc.PolicyEngineSelect,
 		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, "", "")
 
-	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.publishToken, c.ResultFile, resp)
+	hostname, _ := internal.Fqdn()
+	resp.Verifier = ar.Endpoint{Hostname: hostname}
+
+	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, resp)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
