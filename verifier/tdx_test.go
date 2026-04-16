@@ -34,6 +34,7 @@ func TestVerifyTdx(t *testing.T) {
 		policy         *ar.TdxPolicy
 		caFingerprints []string
 		refvals        []ar.Component
+		useCurrentTime bool
 	}
 	tests := []struct {
 		name  string
@@ -413,7 +414,7 @@ func TestVerifyTdx(t *testing.T) {
 					Data: tdxQuote,
 				},
 				collateral: ar.Collateral{
-					Artifacts: []ar.Artifact{outdatedCollateralArtifact},
+					Artifacts: []ar.Artifact{invalidCollateralArtifact},
 				},
 				caFingerprints: tdxRootCAFingerprints,
 				policy: &ar.TdxPolicy{
@@ -438,6 +439,40 @@ func TestVerifyTdx(t *testing.T) {
 			want:  ar.StatusFail,
 			want1: false,
 		},
+		{
+			name: "Outdated TCB Info",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{outdatedCollateralArtifact},
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy: &ar.TdxPolicy{
+					QuoteVersion: 0x04,
+					TdId: ar.TDId{
+						MrOwner:       mrOwner,
+						MrOwnerConfig: mrOwnerConfig,
+						MrConfigId:    mrConfigId,
+					},
+					TdAttributes: ar.TDAttributes{
+						SeptVEDisable: true,
+					},
+					Xfam: validXFAM,
+					AcceptedTcbStatuses: []string{
+						string(pcs.TcbComponentStatusUpToDate),
+						string(pcs.TcbComponentStatusOutOfDate),
+					},
+				},
+				refvals:        validTdxRefvals,
+				nonce:          validTDXNonce,
+				useCurrentTime: true,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
 	}
 
 	logrus.SetLevel(logrus.TraceLevel)
@@ -451,6 +486,12 @@ func TestVerifyTdx(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			// Some tests require the current time
+			if tt.args.useCurrentTime {
+				now = oldNow
+			}
+
 			log.Infof("Running Unit Test %q", tt.name)
 			got, got1 := VerifyTdx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.policy, tt.args.caFingerprints, tt.args.refvals)
@@ -1763,7 +1804,9 @@ var (
 	}
 
 	// nextUpdate is outdated
-	outdatedTdxTcbInfo = `
+	outdatedTdxTcbInfo = `{"tcbInfo":{"id":"TDX","version":3,"issueDate":"2026-03-17T10:30:03Z","nextUpdate":"2026-04-16T10:30:03Z","fmspc":"c0806f000000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":18,"tdxModule":{"mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF"},"tdxModuleIdentities":[{"id":"TDX_03","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":3},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},{"id":"TDX_01","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":6},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"isvsvn":4},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]},{"tcb":{"isvsvn":2},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]}]}],"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":8,"category":"BIOS","type":"Early Microcode Update"},{"svn":8,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":4,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":6,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":8,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":7,"category":"BIOS","type":"Early Microcode Update"},{"svn":7,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":7,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":6,"category":"BIOS","type":"Early Microcode Update"},{"svn":6,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":6,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00293","INTEL-SA-00477","INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]}]},"signature":"7d553f8f1f1bb7cc823e9c718f3648954a8759799a765347d7cf7fe7f9e26204d7f997dcbb18b949b370c811dacf7599049a4295a25409facb43270e85d635de"}`
+
+	invalidTdxTcbInfo = `
 {"tcbInfo":{"id":"TDX","version":3,"issueDate":"2026-03-16T19:21:24Z","nextUpdate":"2025-04-15T19:21:24Z","fmspc":"c0806f000000","pceId":"0000","tcbType":0,"tcbEvaluationDataNumber":18,"tdxModule":{"mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF"},"tdxModuleIdentities":[{"id":"TDX_03","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":3},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"}]},{"id":"TDX_01","mrsigner":"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","attributes":"0000000000000000","attributesMask":"FFFFFFFFFFFFFFFF","tcbLevels":[{"tcb":{"isvsvn":6},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"isvsvn":4},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]},{"tcb":{"isvsvn":2},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01036","INTEL-SA-01099"]}]}],"tcbLevels":[{"tcb":{"sgxtcbcomponents":[{"svn":8,"category":"BIOS","type":"Early Microcode Update"},{"svn":8,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":4,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":6,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":8,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-11-13T00:00:00Z","tcbStatus":"UpToDate"},{"tcb":{"sgxtcbcomponents":[{"svn":7,"category":"BIOS","type":"Early Microcode Update"},{"svn":7,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":5,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":7,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2024-03-13T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":6,"category":"BIOS","type":"Early Microcode Update"},{"svn":6,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":3,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":6,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-08-09T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":11,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2023-02-15T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]},{"tcb":{"sgxtcbcomponents":[{"svn":5,"category":"BIOS","type":"Early Microcode Update"},{"svn":5,"category":"OS/VMM","type":"SGX Late Microcode Update"},{"svn":2,"category":"OS/VMM","type":"TXT SINIT"},{"svn":2,"category":"BIOS"},{"svn":3,"category":"BIOS"},{"svn":1,"category":"BIOS"},{"svn":0},{"svn":0,"category":"OS/VMM","type":"SEAMLDR ACM"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}],"pcesvn":5,"tdxtcbcomponents":[{"svn":3,"category":"OS/VMM","type":"TDX Module"},{"svn":0,"category":"OS/VMM","type":"TDX Module"},{"svn":5,"category":"OS/VMM","type":"TDX Late Microcode Update"},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0},{"svn":0}]},"tcbDate":"2018-01-04T00:00:00Z","tcbStatus":"OutOfDate","advisoryIDs":["INTEL-SA-00106","INTEL-SA-00135","INTEL-SA-00203","INTEL-SA-00293","INTEL-SA-00477","INTEL-SA-00837","INTEL-SA-00960","INTEL-SA-00982","INTEL-SA-00986","INTEL-SA-01010","INTEL-SA-01036","INTEL-SA-01076","INTEL-SA-01079","INTEL-SA-01099","INTEL-SA-01103","INTEL-SA-01111"]}]},"signature":"6cd94d22c45b3571577d04cf9e332e1a491abc0cebad3dd82747bc9953da9b8a2dedc86da60fa408570770e54e617b706c74c9dda0510a235accdca038ce3d75"}`
 
 	tdxCollateral = &ar.IntelCollateral{
@@ -1806,6 +1849,28 @@ var (
 		Events: []ar.Component{
 			{
 				IntelCollateral: outdatedCollateral,
+			},
+		},
+	}
+
+	invalidCollateral = &ar.IntelCollateral{
+		TcbInfo:                    []byte(invalidTdxTcbInfo),
+		QeIdentity:                 []byte(tdxQeIdentity),
+		RootCaCrl:                  fromb64(tdxRootCaCrl),
+		PckCrl:                     fromb64(tdxPckCrl),
+		PckCrlIntermediateCert:     fromb64(tdxPckCrlIntermediateCert),
+		PckCrlRootCert:             fromb64(tdxPckCrlRootCert),
+		TcbInfoIntermediateCert:    fromb64(tdxTcbInfoIntermediateCert),
+		TcbInfoRootCert:            fromb64(tdxTcbInfoRootCert),
+		QeIdentityIntermediateCert: fromb64(tdxQeIdentityIntermediateCert),
+		QeIdentityRootCert:         fromb64(tdxQeIdentityRootCert),
+	}
+
+	invalidCollateralArtifact = ar.Artifact{
+		Type: ar.TYPE_TDX_COLLATERAL,
+		Events: []ar.Component{
+			{
+				IntelCollateral: invalidCollateral,
 			},
 		},
 	}
