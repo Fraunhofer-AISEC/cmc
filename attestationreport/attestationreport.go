@@ -437,5 +437,6 @@ func (r *Component) GetHash(h crypto.Hash) []byte {
 	}
 
 	// Hash not found
+	log.Tracef("component does not contain requested %q digest", hstr)
 	return nil
 }
