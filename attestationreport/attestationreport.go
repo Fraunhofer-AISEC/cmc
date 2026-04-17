@@ -29,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.2.1"
+	reportVersion = "3.3.0"
 )
 
 func GetReportVersion() string {
@@ -74,6 +74,7 @@ const (
 	TYPE_IMAGE_DESCRIPTION    = "Image Description"
 	TYPE_MANIFEST_DESCRIPTION = "Manifest Description"
 	TYPE_COMPANY_DESCRIPTION  = "Company Description"
+	TYPE_OMSP_RESPONSE        = "OMSP Response"
 
 	// CycloneDX component type values
 	TYPE_FIRMWARE = "firmware"
@@ -146,15 +147,16 @@ type Metadata struct {
 	MetaInfo
 	Manifest
 	ImageDescription
+	OmspResponse
 }
 
 // MetaInfo is a helper struct for generic info
-// present in every metadata object
+// present in most metadata objects
 type MetaInfo struct {
 	Type        string   `json:"type" cbor:"0,keyasint"`
-	Name        string   `json:"name" cbor:"1,keyasint"`
-	Version     string   `json:"version" cbor:"2,keyasint"`
-	Validity    Validity `json:"validity" cbor:"3,keyasint"`
+	Name        string   `json:"name,omitempty" cbor:"1,keyasint,omitempty"`
+	Version     string   `json:"version,omitempty" cbor:"2,keyasint,omitempty"`
+	Validity    Validity `json:"validity,omitempty" cbor:"3,keyasint,omitempty"`
 	Description string   `json:"description,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
@@ -170,6 +172,7 @@ type Manifest struct {
 	TdxPolicy      *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
 	SgxPolicy      *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
 	Details        map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
+	OmspServer     string                 `json:"omspServer,omitempty" cbor:"20,keyasint,omitempty"`
 }
 
 // ImageDescription ties together all manifests
@@ -186,6 +189,33 @@ type ManifestDescription struct {
 	Manifest    string                 `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
 	OciRules    map[string]interface{} `json:"ociRules,omitempty" cbor:"4,keyasint,omitempty"`
 }
+
+// OmspResponse and SingleOmspResponse are used to provide information about the revocation status of SW manifests.
+// Structure and content were developed based on the definition of OCSP responses for certificate status requests (RFC 6960).
+// Certificates, Signature Algorithms and Signatures are provided by transferring the OmspResponse as JWS or signed CBOR.
+type OmspResponse struct {
+	Server     string               `json:"server,omitempty" cbor:"30,keyasint,omitempty"`
+	ProducedAt string               `json:"producedAt,omitempty" cbor:"31,keyasint,omitempty"`
+	Responses  []SingleOmspResponse `json:"responses,omitempty" cbor:"32,keyasint,omitempty"`
+}
+
+type SingleOmspResponse struct {
+	ManifestHash     string           `json:"manifestHash" cbor:"0,keyasint"`
+	Status           RevocationStatus `json:"status" cbor:"1,keyasint"`
+	ThisUpdate       string           `json:"thisUpdate" cbor:"2,keyasint"`
+	NextUpdate       string           `json:"nextUpdate,omitempty" cbor:"3,keyasint,omitempty"` //Note: used string instead of time.Time to avoid issues with UnMarshaling in case of empty values
+	RevocationTime   string           `json:"revocationTime,omitempty" cbor:"4,keyasint,omitempty"`
+	RevocationReason string           `json:"revocationReason,omitempty" cbor:"5,keyasint,omitempty"`
+}
+
+type RevocationStatus string
+
+const (
+	OmspStatusGood     RevocationStatus = "good"
+	OmspStatusOutdated RevocationStatus = "outdated"
+	OmspStatusRevoked  RevocationStatus = "revoked"
+	OmspStatusUnknown  RevocationStatus = "unknown"
+)
 
 // Sbom is a partial CycloneDX SBOM implementation
 type Sbom struct {
@@ -232,7 +262,7 @@ type ReferenceHash struct {
 	Content HexByte `json:"content" cbor:"1,keyasint"`
 }
 
-// Validity is a helper struct for 'Validity'
+// Validity is a helper struct for the validity period of provided information
 type Validity struct {
 	NotBefore string `json:"notBefore" cbor:"0,keyasint"`
 	NotAfter  string `json:"notAfter" cbor:"1,keyasint"`
@@ -343,7 +373,7 @@ type TdxPolicy struct {
 	TdId                TDId         `json:"tdId" cbor:"1,keyasint"`
 	Xfam                HexByte      `json:"xfam" cbor:"2,keyasint"`
 	TdAttributes        TDAttributes `json:"tdAttributes" cbor:"3,keyasint"`
-	AcceptedTcbStatuses []string     `json:"acceptedTcbStatuses,omitempty" cbor:"4,keyasint"`
+	AcceptedTcbStatuses []string     `json:"acceptedTcbStatuses,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 type SgxPolicy struct {
@@ -351,7 +381,7 @@ type SgxPolicy struct {
 	MrSigner            HexByte       `json:"mrSigner" cbor:"2,keyasint"`
 	IsvSvn              uint16        `json:"isvSvn" cbor:"3,keyasint"`
 	Attributes          SGXAttributes `json:"attributes" cbor:"4,keyasint"`
-	AcceptedTcbStatuses []string      `json:"acceptedTcbStatuses,omitempty" cbor:"5,keyasint"`
+	AcceptedTcbStatuses []string      `json:"acceptedTcbStatuses,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 // SGX attributes according to
