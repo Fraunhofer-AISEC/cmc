@@ -23,7 +23,8 @@
                 },
                 "usages": [
                     "digital signature",
-                    "server auth"
+                    "server auth",
+                    "client auth"
                 ]
             }
     	}
