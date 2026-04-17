@@ -25,5 +25,6 @@
     "rootCas": [
         "/var/metadata-ca.pem",
         "/var/ca.pem"
-    ]
+    ],
+    "useOmsp": true
 }

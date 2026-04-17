@@ -46,6 +46,7 @@ type Config struct {
 	Vmpl             int      `json:"vmpl,omitempty"`
 	SnpCache         string   `json:"snpCache,omitempty"`
 	TpmKeyAlg        string   `json:"tpmKeyAlg,omitempty"`
+	UseOmsp          bool     `json:"useOmsp,omitempty"`
 }
 
 func (c *Config) Print() {
@@ -88,5 +89,6 @@ func (c *Config) Print() {
 	log.Debugf("\tAllow system root CAs:         : %v", c.AllowSystemCerts)
 	log.Debugf("\tSNP VCEK and CA cache folder   : %v", c.SnpCache)
 	log.Debugf("\tTPM AK key algorithm           : %v", c.TpmKeyAlg)
+	log.Debugf("\tSupport manifest revocation    : %v", c.UseOmsp)
 
 }
