@@ -54,6 +54,7 @@ type Cmc struct {
 	HashAlg            crypto.Hash
 	KeyMgr             *keymgr.KeyMgr
 	RootCas            []*x509.Certificate
+	OmspHashes         []string //stores keys for retrieving OmspResponses from metadata map
 	*Config
 
 	metadata      map[string][]byte
@@ -109,6 +110,15 @@ func NewCmc(c *Config) (*Cmc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
+
+	// Request and cache revocation status of all used manifests (if CMC is configured to use OMSP)
+	if cmc.UseOmsp {
+		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.RootCas, alg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get omsp responses: %v", err)
+		}
+	}
+
 	cmc.UpdateMetadata(metadata)
 
 	// Create endorser, which is used to fetch vendor certificate chains,

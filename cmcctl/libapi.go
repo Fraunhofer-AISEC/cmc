@@ -59,6 +59,9 @@ func (a LibApi) generate(c *config) error {
 		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
+	// Request updated OMSP responses if stored ones are too old
+	a.cmc.UpdateOmsps()
+
 	// Generate attestation report
 	report, err := prover.Generate(nonce, nil, a.cmc.GetMetadata(), a.cmc.Drivers, c.serializer,
 		a.cmc.HashAlg)

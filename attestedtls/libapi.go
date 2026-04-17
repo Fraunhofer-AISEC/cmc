@@ -59,6 +59,9 @@ func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]b
 		return nil, errors.New("no drivers configured")
 	}
 
+	// Request updated OMSP responses if stored ones are too old
+	a.cmc.UpdateOmsps()
+
 	report, err := prover.Generate(chbindings, cached, a.cmc.GetMetadata(), a.cmc.Drivers,
 		cc.Serializer, a.cmc.HashAlg)
 	if err != nil {
