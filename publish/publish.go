@@ -129,6 +129,7 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 			}
 			if err = sendResult(client, ocsfAddr, token, data); err != nil {
 				log.Warnf("Failed to publish OCSF finding: %v", err)
+				break
 			}
 		}
 	} else {
@@ -213,7 +214,7 @@ func sendResult(client *http.Client, addr string, token []byte, result []byte) e
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
-	if resp.StatusCode != 201 {
+	if resp.StatusCode != 201 && resp.StatusCode != 200 {
 		return fmt.Errorf("failed to publish result: server responded with %v: %v",
 			resp.Status, string(data))
 	} else {
