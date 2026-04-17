@@ -283,30 +283,33 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	if !bytes.Equal(body.MRENCLAVE[:], []byte(refval.GetHash(crypto.SHA256))) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     ar.TYPE_REFVAL_IAS,
-				Name:     refval.Name,
-				Digest:   refval.GetHash(crypto.SHA256),
-				Success:  false,
-				Launched: false,
+				Type:       ar.TYPE_REFVAL_IAS,
+				Name:       refval.Name,
+				Digest:     refval.GetHash(crypto.SHA256),
+				Success:    false,
+				Launched:   false,
+				PackageUrl: refval.PackageUrl,
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     "Measurement",
-				Name:     refval.Name,
-				Digest:   body.MRENCLAVE[:],
-				Success:  false,
-				Launched: false,
+				Type:       "Measurement",
+				Name:       refval.Name,
+				Digest:     body.MRENCLAVE[:],
+				Success:    false,
+				Launched:   false,
+				PackageUrl: refval.PackageUrl,
 			})
 		return fmt.Errorf("MRENCLAVE mismatch. Expected: %q, Got: %q",
 			hex.EncodeToString(refval.GetHash(crypto.SHA256)), hex.EncodeToString(body.MRENCLAVE[:]))
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     "Measurement",
-				Name:     refval.Name,
-				Digest:   body.MRENCLAVE[:],
-				Success:  true,
-				Launched: true,
+				Type:       "Measurement",
+				Name:       refval.Name,
+				Digest:     body.MRENCLAVE[:],
+				Success:    true,
+				Launched:   true,
+				PackageUrl: refval.PackageUrl,
 			})
 	}
 	log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(refval.GetHash(crypto.SHA256)))

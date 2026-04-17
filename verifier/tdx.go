@@ -501,6 +501,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 					Success:     successMrs[refval.Index],
 					Launched:    successMrs[refval.Index],
 					Description: refval.Description,
+					PackageUrl:  refval.PackageUrl,
 				})
 		}
 	} else {
@@ -527,6 +528,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 						Index:       artifact.Index,
 						Digest:      event.GetHash(crypto.SHA384),
 						Description: event.Description,
+						PackageUrl:  event.PackageUrl,
 					}
 					r.Success = found
 					r.Launched = found
@@ -572,6 +574,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 					Launched:    false,
 					Digest:      refval.GetHash(crypto.SHA384),
 					Description: refval.Description,
+					PackageUrl:  refval.PackageUrl,
 				}
 				detailedResults = append(detailedResults, r)
 				success = false

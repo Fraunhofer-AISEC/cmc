@@ -167,19 +167,21 @@ func VerifySnp(
 			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     ar.TYPE_REFVAL_IAS,
-				Name:     snpReferenceValue.Name,
-				Digest:   snpReferenceValue.GetHash(crypto.SHA384),
-				Success:  false,
-				Launched: false,
+				Type:       ar.TYPE_REFVAL_IAS,
+				Name:       snpReferenceValue.Name,
+				Digest:     snpReferenceValue.GetHash(crypto.SHA384),
+				Success:    false,
+				Launched:   false,
+				PackageUrl: snpReferenceValue.PackageUrl,
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:     "Measurement",
-				Name:     snpReferenceValue.Name,
-				Digest:   s.Measurement[:],
-				Success:  false,
-				Launched: true,
+				Type:       "Measurement",
+				Name:       snpReferenceValue.Name,
+				Digest:     s.Measurement[:],
+				Success:    false,
+				Launched:   true,
+				PackageUrl: snpReferenceValue.PackageUrl,
 			})
 
 		ok = false
@@ -189,10 +191,11 @@ func VerifySnp(
 		// SNP reference value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:     snpReferenceValue.Name,
-				Digest:   s.Measurement[:],
-				Success:  true,
-				Launched: true,
+				Name:       snpReferenceValue.Name,
+				Digest:     s.Measurement[:],
+				Success:    true,
+				Launched:   true,
+				PackageUrl: snpReferenceValue.PackageUrl,
 			})
 	}
 

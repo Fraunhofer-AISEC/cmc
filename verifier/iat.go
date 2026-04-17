@@ -145,10 +145,11 @@ func VerifyIas(
 			if bytes.Equal(ref.GetHash(crypto.SHA256), swc.MeasurementValue) {
 				result.Artifacts = append(result.Artifacts,
 					ar.DigestResult{
-						Name:     ref.Name,
-						Digest:   ref.GetHash(crypto.SHA256),
-						Success:  true,
-						Launched: true,
+						Name:       ref.Name,
+						Digest:     ref.GetHash(crypto.SHA256),
+						Success:    true,
+						Launched:   true,
+						PackageUrl: ref.PackageUrl,
 					})
 				found = true
 			}
@@ -157,11 +158,12 @@ func VerifyIas(
 			ok = false
 			result.Artifacts = append(result.Artifacts,
 				ar.DigestResult{
-					Name:     ref.Name,
-					Digest:   ref.GetHash(crypto.SHA256),
-					Success:  false,
-					Launched: false,
-					Type:     ar.TYPE_REFVAL_IAS,
+					Name:       ref.Name,
+					Digest:     ref.GetHash(crypto.SHA256),
+					Success:    false,
+					Launched:   false,
+					Type:       ar.TYPE_REFVAL_IAS,
+					PackageUrl: ref.PackageUrl,
 				})
 		}
 	}
@@ -174,10 +176,11 @@ func VerifyIas(
 		for _, ver := range refComponents {
 			if bytes.Equal(ver.GetHash(crypto.SHA256), swc.MeasurementValue) {
 				result.Artifacts = append(result.Artifacts, ar.DigestResult{
-					Name:     ver.Name,
-					Digest:   swc.MeasurementValue,
-					Success:  true,
-					Launched: true,
+					Name:       ver.Name,
+					Digest:     swc.MeasurementValue,
+					Success:    true,
+					Launched:   true,
+					PackageUrl: ver.PackageUrl,
 				})
 				found = true
 			}

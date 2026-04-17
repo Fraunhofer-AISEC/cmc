@@ -183,6 +183,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						EventData:   event.EventData,
 						CtrDetails:  event.CtrData,
 						Description: event.Description,
+						PackageUrl:  event.PackageUrl,
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Debugf("Failed to find refval for PCR%v measurement %v: %v",
@@ -216,6 +217,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 					Name:        nameInfo,
 					Description: ref.Description,
 					CtrDetails:  event.CtrData,
+					PackageUrl:  ref.PackageUrl,
 				}
 				detailedResults = append(detailedResults, measResult)
 			}
@@ -277,6 +279,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						Digest:      refHash,
 						Name:        ref.Name,
 						Description: ref.Description,
+						PackageUrl:  ref.PackageUrl,
 					}
 					detailedResults = append(detailedResults, r)
 				}
@@ -361,6 +364,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						Description: ref.Description,
 						CtrDetails:  ref.CtrData,
 						EventData:   ref.EventData,
+						PackageUrl:  ref.PackageUrl,
 					}
 					if !ref.Optional {
 						detailedResults = append(detailedResults, result)
@@ -383,6 +387,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				Launched:    false,
 				Digest:      refHash,
 				Description: ref.Description,
+				PackageUrl:  ref.PackageUrl,
 			}
 			detailedResults = append(detailedResults, result)
 			success = false
