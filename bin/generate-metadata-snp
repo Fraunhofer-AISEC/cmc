@@ -37,4 +37,4 @@ done
 
 "${bin}/generate-image-description" "snp-device.test.de"
 
-"${bin}/precompute-rtm-manifest-snp" --vcpus "${vcpus}" --vmm-type "${vmm_type}" --ovmf "${ovmf}"
+"${bin}/precompute-rtm-manifest-snp" --vcpus "${vcpus}" --vmm-type "${vmm_type}" --ovmf "${ovmf}" --omsp "https://localhost:9000/omsp"

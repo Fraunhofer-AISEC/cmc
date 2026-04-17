@@ -7,6 +7,25 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 metatool="${dir}/tools/metatool/metatool"
 
+# Extract OMSP endpoint from parameters
+omsp=""
+
+i=1
+while [[ $i -le $# ]]; do
+  arg="${!i}"
+  case "$arg" in
+    --omsp) 
+      (( i++ ))
+      omsp="${!i}"
+      ;;
+    *)
+      echo "Usage: $(basename $0) [--omsp <omsp endpoint>]"
+      exit 1
+      ;;
+  esac
+  (( i++ ))
+done
+
 data="${dir}/data"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
@@ -58,6 +77,7 @@ echo "Writing ${out}/os.manifest.json"
   --details "kernel=${kernel},os=${os}" \
   --sbom-format CycloneDX \
   --components "${components}" \
+  --omsp "${omsp}" \
   --out "${out}/os.manifest.json"
 
 # Create OS manifest description and add to image description

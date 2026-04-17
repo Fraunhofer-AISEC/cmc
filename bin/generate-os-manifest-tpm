@@ -7,16 +7,35 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 metatool="${dir}/tools/metatool/metatool"
 
+# Extract OMSP endpoint before parsing the remaining parameters
+omsp=""
+args=()
+
+i=1
+while [[ $i -le $# ]]; do
+  arg="${!i}"
+  case "$arg" in
+    --omsp) 
+      (( i++ ))
+      omsp="${!i}"
+      ;;
+    *)    
+      args+=("$arg")
+      ;;
+  esac
+  (( i++ ))
+done
+
 # If ssh is not specified, the reference values are parsed from the local machine. If SSH is
 # specified, the reference values are parsed from the remote, where the mrtool must be installed
-if [[ $# -eq 0 ]]; then
+if [[ ${#args[@]} -eq 0 ]]; then
   mrtool=(sudo "${dir}/tools/mrtool/mrtool")
-elif [[ $# -eq 1 ]]; then
-  mrtool=("$1" mrtool)
-elif [[ $# -eq 2 ]]; then
-  mrtool=("$1" "$2" mrtool)
+elif [[ ${#args[@]} -eq 1 ]]; then
+  mrtool=("${args[0]}" mrtool)
+elif [[ ${#args[@]} -eq 2 ]]; then
+  mrtool=("${args[0]}" "${args[1]}" mrtool)
 else
-  echo "Usage: $(basename $0) [ssh]"
+  echo "Usage: $(basename $0) [--omsp <omsp endpoint>] [ssh]"
   exit 1
 fi
 
@@ -64,6 +83,7 @@ echo "Writing ${out}/os.manifest.json"
   --details "kernel=${kernel},os=${os}" \
   --sbom-format CycloneDX \
   --components "${components}" \
+  --omsp "${omsp}" \
   --out "${out}/os.manifest.json"
 
 # Create OS manifest description and add to image description

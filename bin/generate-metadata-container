@@ -10,10 +10,10 @@ bin="${dir}/bin"
 
 "${bin}/generate-image-description" "tpm-test-image"
 
-"${bin}/generate-rtm-manifest-tpm"
+"${bin}/generate-rtm-manifest-tpm" --omsp "https://localhost:9000/omsp"
 
-"${bin}/generate-os-manifest-tpm"
+"${bin}/generate-os-manifest-tpm" --omsp "https://localhost:9000/omsp"
 
-"${bin}/generate-app-manifest-tpm"
+"${bin}/generate-app-manifest-tpm" --omsp "https://localhost:9000/omsp"
 
-"${bin}/generate-container-manifest" "docker" "ubuntu:24.04"
+"${bin}/generate-container-manifest" --omsp "https://localhost:9000/omsp" "docker" "ubuntu:24.04"

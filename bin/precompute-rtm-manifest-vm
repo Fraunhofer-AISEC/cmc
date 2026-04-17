@@ -7,6 +7,25 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 metatool="${dir}/tools/metatool/metatool"
 
+# Extract OMSP endpoint from parameters
+omsp=""
+
+i=1
+while [[ $i -le $# ]]; do
+  arg="${!i}"
+  case "$arg" in
+    --omsp) 
+      (( i++ ))
+      omsp="${!i}"
+      ;;
+    *)
+      echo "Usage: $(basename $0) [--omsp <omsp endpoint>]"
+      exit 1
+      ;;
+  esac
+  (( i++ ))
+done
+
 data="${dir}/data"
 out="${data}/metadata-raw"
 
@@ -57,6 +76,7 @@ echo "Writing ${out}/rtm.manifest.json"
   --ca-fingerprints "${fingerprint}" \
   --sbom-format CycloneDX \
   --components "${components}" \
+  --omsp "${omsp}" \
   --out "${out}/rtm.manifest.json"
 
 # Create manifest description and add to image description

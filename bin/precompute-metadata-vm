@@ -10,6 +10,6 @@ bin="${dir}/bin"
 
 "${bin}/generate-image-description" "test-vm.test.de"
 
-"${bin}/precompute-rtm-manifest-vm"
+"${bin}/precompute-rtm-manifest-vm" --omsp "https://10.0.2.2:9000/omsp"
 
-"${bin}/precompute-os-manifest-vm"
+"${bin}/precompute-os-manifest-vm" --omsp "https://10.0.2.2:9000/omsp"

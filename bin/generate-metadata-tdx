@@ -10,6 +10,6 @@ bin="${dir}/bin"
 
 "${bin}/generate-image-description" "tdx-device.test.de"
 
-"${bin}/precompute-rtm-manifest-tdx"
+"${bin}/precompute-rtm-manifest-tdx" --omsp "https://localhost:9000/omsp"
 
-"${bin}/precompute-os-manifest-tdx"
+"${bin}/precompute-os-manifest-tdx" --omsp "https://localhost:9000/omsp"

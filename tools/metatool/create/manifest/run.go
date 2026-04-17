@@ -52,6 +52,7 @@ const (
 	snpPolicyFlag   = "snp-policy"
 	tdxPolicyFlag   = "tdx-policy"
 	sgxPolicyFlag   = "sgx-policy"
+	omspFlag        = "omsp"
 )
 
 var Command = &cli.Command{
@@ -135,6 +136,10 @@ var Command = &cli.Command{
 		&cli.StringFlag{
 			Name:  sgxPolicyFlag,
 			Usage: "path to a JSON file containing an SGX policy",
+		},
+		&cli.StringFlag{
+			Name:  omspFlag,
+			Usage: "URL for server endpoint offering manifest revocation information in form of OMSP responses",
 		},
 	),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -231,6 +236,9 @@ func buildManifest(cmd *cli.Command) (*ar.Metadata, error) {
 			return nil, fmt.Errorf("failed to load SGX policy: %w", err)
 		}
 		m.SgxPolicy = p
+	}
+	if cmd.IsSet(omspFlag) && cmd.String(omspFlag) != "" {
+		m.OmspServer = cmd.String(omspFlag)
 	}
 
 	return m, nil
