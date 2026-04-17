@@ -30,21 +30,20 @@ import (
 	"github.com/veraison/go-cose"
 )
 
-func Sign(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey, serializer string,
+func Sign(data []byte, priv crypto.PrivateKey, serializer string,
 	certChain []*x509.Certificate,
 ) ([]byte, error) {
 	switch serializer {
 	case "JSON":
-		return signJson(data, priv, pub, certChain)
+		return signJson(data, priv, certChain)
 	case "CBOR":
-		return signCbor(data, priv, pub, certChain)
+		return signCbor(data, priv, certChain)
 	default:
 		return nil, fmt.Errorf("unknown serializer %v", serializer)
 	}
 }
 
-func signJson(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey,
-	certChain []*x509.Certificate,
+func signJson(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate,
 ) ([]byte, error) {
 	log.Tracef("Signing JSON data length %v...", len(data))
 
@@ -55,7 +54,7 @@ func signJson(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey,
 	}
 
 	// Get signature algorithm
-	alg, err := algFromKeyType(pub)
+	alg, err := algFromKeyType(priv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get alg from key type: %w", err)
 	}
@@ -89,7 +88,7 @@ func signJson(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey,
 	return []byte(msg), nil
 }
 
-func signCbor(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey, certChain []*x509.Certificate) ([]byte, error) {
+func signCbor(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate) ([]byte, error) {
 
 	log.Tracef("Signing CBOR data length %v...", len(data))
 
@@ -103,7 +102,7 @@ func signCbor(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey, certCha
 		return nil, fmt.Errorf("failed to convert signing key of type %T", priv)
 	}
 
-	alg, err := coseAlgFromKeyType(pub)
+	alg, err := coseAlgFromKeyType(priv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get COSE algorithm from key type: %w", err)
 	}
@@ -144,9 +143,9 @@ func signCbor(data []byte, priv crypto.PrivateKey, pub crypto.PublicKey, certCha
 }
 
 // Deduces jose signature algorithm from provided key type
-func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
-	switch key := pub.(type) {
-	case rsa.PublicKey:
+func algFromKeyType(priv crypto.PrivateKey) (jose.SignatureAlgorithm, error) {
+	switch key := priv.(type) {
+	case rsa.PrivateKey:
 		switch key.Size() {
 		case 256:
 			// FUTURE: use RSA PSS: PS256
@@ -157,7 +156,7 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 		default:
 			return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
 		}
-	case *rsa.PublicKey:
+	case *rsa.PrivateKey:
 		switch key.Size() {
 		case 256:
 			// FUTURE: use RSA PSS: PS256
@@ -168,7 +167,7 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 		default:
 			return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
 		}
-	case ecdsa.PublicKey:
+	case ecdsa.PrivateKey:
 		switch key.Curve {
 		case elliptic.P224(), elliptic.P256():
 			return jose.ES256, nil
@@ -179,7 +178,7 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 		default:
 			return jose.RS256, errors.New("failed to determine algorithm from key type: unknown elliptic curve")
 		}
-	case *ecdsa.PublicKey:
+	case *ecdsa.PrivateKey:
 		switch key.Curve {
 		case elliptic.P224(), elliptic.P256():
 			return jose.ES256, nil
@@ -191,14 +190,14 @@ func algFromKeyType(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
 			return jose.RS256, errors.New("failed to determine algorithm from key type: unknown elliptic curve")
 		}
 	default:
-		return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown key type %T", pub)
+		return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown key type %T", priv)
 	}
 }
 
 // Deduces COSE signature algorithm from provided key type
-func coseAlgFromKeyType(pub crypto.PublicKey) (cose.Algorithm, error) {
-	switch key := pub.(type) {
-	case rsa.PublicKey:
+func coseAlgFromKeyType(priv crypto.PrivateKey) (cose.Algorithm, error) {
+	switch key := priv.(type) {
+	case rsa.PrivateKey:
 		switch key.Size() {
 		case 256:
 			return cose.AlgorithmRS256, nil
@@ -207,7 +206,7 @@ func coseAlgFromKeyType(pub crypto.PublicKey) (cose.Algorithm, error) {
 		default:
 			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v", key.Size())
 		}
-	case *rsa.PublicKey:
+	case *rsa.PrivateKey:
 		switch key.Size() {
 		case 256:
 			return cose.AlgorithmRS256, nil
@@ -216,7 +215,7 @@ func coseAlgFromKeyType(pub crypto.PublicKey) (cose.Algorithm, error) {
 		default:
 			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v", key.Size())
 		}
-	case ecdsa.PublicKey:
+	case ecdsa.PrivateKey:
 		switch key.Curve {
 		case elliptic.P224(), elliptic.P256():
 			return cose.AlgorithmES256, nil
@@ -227,7 +226,7 @@ func coseAlgFromKeyType(pub crypto.PublicKey) (cose.Algorithm, error) {
 		default:
 			return cose.AlgorithmReserved, errors.New("unsupported elliptic curve for COSE")
 		}
-	case *ecdsa.PublicKey:
+	case *ecdsa.PrivateKey:
 		switch key.Curve {
 		case elliptic.P224(), elliptic.P256():
 			return cose.AlgorithmES256, nil
@@ -239,6 +238,6 @@ func coseAlgFromKeyType(pub crypto.PublicKey) (cose.Algorithm, error) {
 			return cose.AlgorithmReserved, errors.New("unsupported elliptic curve for COSE")
 		}
 	default:
-		return cose.AlgorithmReserved, fmt.Errorf("unsupported key type for COSE: %T", pub)
+		return cose.AlgorithmReserved, fmt.Errorf("unsupported key type for COSE: %T", priv)
 	}
 }
