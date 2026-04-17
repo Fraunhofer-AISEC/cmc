@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.3.1"
+	resultVersion = "3.3.2"
 )
 
 func GetResultVersion() string {
@@ -132,6 +132,7 @@ type DigestResult struct {
 	EventData   *EventData `json:"eventData,omitempty" cbor:"8,keyasint,omitempty"`
 	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"9,keyasint,omitempty"`
 	PackageUrl  string     `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
+	HashAlg     string     `json:"hashAlg,omitempty" cbor:"11,keyasint,omitempty"`
 }
 
 type BooleanMatch struct {

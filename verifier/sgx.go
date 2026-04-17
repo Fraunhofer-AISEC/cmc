@@ -289,6 +289,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				Success:    false,
 				Launched:   false,
 				PackageUrl: refval.PackageUrl,
+				HashAlg:    crypto.SHA256.String(),
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
@@ -298,6 +299,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				Success:    false,
 				Launched:   false,
 				PackageUrl: refval.PackageUrl,
+				HashAlg:    crypto.SHA256.String(),
 			})
 		return fmt.Errorf("MRENCLAVE mismatch. Expected: %q, Got: %q",
 			hex.EncodeToString(refval.GetHash(crypto.SHA256)), hex.EncodeToString(body.MRENCLAVE[:]))
@@ -310,6 +312,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				Success:    true,
 				Launched:   true,
 				PackageUrl: refval.PackageUrl,
+				HashAlg:    crypto.SHA256.String(),
 			})
 	}
 	log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(refval.GetHash(crypto.SHA256)))
@@ -322,6 +325,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),
 			Success:  bytes.Equal(sgxReferencePolicy.MrSigner, body.MRSIGNER[:]),
 			Launched: true,
+			HashAlg:  crypto.SHA256.String(),
 		},
 	)
 	log.Debugf("Successfully verified MRSIGNER (%q)", sgxReferencePolicy.MrSigner)

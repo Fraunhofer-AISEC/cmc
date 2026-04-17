@@ -173,6 +173,7 @@ func VerifySnp(
 				Success:    false,
 				Launched:   false,
 				PackageUrl: snpReferenceValue.PackageUrl,
+				HashAlg:    crypto.SHA384.String(),
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
@@ -182,6 +183,7 @@ func VerifySnp(
 				Success:    false,
 				Launched:   true,
 				PackageUrl: snpReferenceValue.PackageUrl,
+				HashAlg:    crypto.SHA384.String(),
 			})
 
 		ok = false
@@ -196,6 +198,7 @@ func VerifySnp(
 				Success:    true,
 				Launched:   true,
 				PackageUrl: snpReferenceValue.PackageUrl,
+				HashAlg:    crypto.SHA384.String(),
 			})
 	}
 

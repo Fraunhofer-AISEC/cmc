@@ -77,7 +77,7 @@ func VerifyTpm(
 	// Extend the reference values to re-calculate the PCR value and evaluate it against the measured
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
-	tpmResult, artifacts, ok := verifyPcrs(s, collateral.Artifacts,
+	tpmResult, artifacts, ok := verifyPcrs(collateral.Artifacts,
 		tpmsAttest.AttestedQuoteInfo.PCRDigest, refComponents, quoteHashAlg)
 	if !ok {
 		log.Debug("failed to recalculate PCRs")
@@ -121,7 +121,7 @@ func VerifyTpm(
 	return result, result.Summary.Status == ar.StatusSuccess
 }
 
-func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
+func verifyPcrs(artifacts []ar.Artifact,
 	aggregatedQuotePcr []byte, refComponents []ar.Component, quoteHashAlg crypto.Hash,
 ) (*ar.TpmResult, []ar.DigestResult, bool) {
 	success := true
@@ -136,6 +136,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 		pcrResult := ar.DigestResult{
 			Index:   artifact.Index,
 			Success: true,
+			HashAlg: quoteHashAlg.String(),
 		}
 
 		pcr := artifact.Index
@@ -184,6 +185,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						CtrDetails:  event.CtrData,
 						Description: event.Description,
 						PackageUrl:  event.PackageUrl,
+						HashAlg:     quoteHashAlg.String(),
 					}
 					detailedResults = append(detailedResults, measResult)
 					log.Debugf("Failed to find refval for PCR%v measurement %v: %v",
@@ -218,6 +220,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 					Description: ref.Description,
 					CtrDetails:  event.CtrData,
 					PackageUrl:  ref.PackageUrl,
+					HashAlg:     quoteHashAlg.String(),
 				}
 				detailedResults = append(detailedResults, measResult)
 			}
@@ -280,6 +283,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						Name:        ref.Name,
 						Description: ref.Description,
 						PackageUrl:  ref.PackageUrl,
+						HashAlg:     quoteHashAlg.String(),
 					}
 					detailedResults = append(detailedResults, r)
 				}
@@ -365,6 +369,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 						CtrDetails:  ref.CtrData,
 						EventData:   ref.EventData,
 						PackageUrl:  ref.PackageUrl,
+						HashAlg:     quoteHashAlg.String(),
 					}
 					if !ref.Optional {
 						detailedResults = append(detailedResults, result)
@@ -388,6 +393,7 @@ func verifyPcrs(s ar.Serializer, artifacts []ar.Artifact,
 				Digest:      refHash,
 				Description: ref.Description,
 				PackageUrl:  ref.PackageUrl,
+				HashAlg:     quoteHashAlg.String(),
 			}
 			detailedResults = append(detailedResults, result)
 			success = false
