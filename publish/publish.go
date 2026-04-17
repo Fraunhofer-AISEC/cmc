@@ -118,18 +118,20 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 	}
 
 	// Send OCSF detection findings to the specified server
-	if ocsfAddr != "" && result.Summary.Status != ar.StatusSuccess {
-		findings := CreateDetectionFindings(result)
-		log.Tracef("Publishing %v OCSF detection findings to %v", len(findings), ocsfAddr)
-		for _, f := range findings {
-			data, err := json.Marshal(f)
-			if err != nil {
-				log.Warnf("Failed to marshal OCSF finding: %v", err)
-				continue
-			}
-			if err = sendResult(client, ocsfAddr, token, data); err != nil {
-				log.Warnf("Failed to publish OCSF finding: %v", err)
-				break
+	if ocsfAddr != "" {
+		if result.Summary.Status != ar.StatusSuccess {
+			findings := CreateDetectionFindings(result)
+			log.Tracef("Publishing %v OCSF detection findings to %v", len(findings), ocsfAddr)
+			for _, f := range findings {
+				data, err := json.Marshal(f)
+				if err != nil {
+					log.Warnf("Failed to marshal OCSF finding: %v", err)
+					continue
+				}
+				if err = sendResult(client, ocsfAddr, token, data); err != nil {
+					log.Warnf("Failed to publish OCSF finding: %v", err)
+					break
+				}
 			}
 		}
 	} else {
