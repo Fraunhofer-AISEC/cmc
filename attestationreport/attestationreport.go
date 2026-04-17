@@ -28,7 +28,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.1.0"
+	reportVersion = "3.1.1"
 )
 
 func GetReportVersion() string {
@@ -205,7 +205,7 @@ type Component struct {
 	EventData       *EventData       `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
 	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
 	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
-
+	PackageUrl      string           `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
 }
 
 type ReferenceHash struct {
