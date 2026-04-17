@@ -48,6 +48,14 @@ func UpdateMetadata(cmc *Cmc) error {
 		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
+	// Request and cache revocation status of all used manifests (if CMC is configured to use OMSP)
+	if cmc.UseOmsp {
+		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.RootCas, cmc.HashAlg)
+		if err != nil {
+			return fmt.Errorf("failed to get omsp responses: %v", err)
+		}
+	}
+
 	cmc.UpdateMetadata(metadata)
 
 	log.Debugf("Updated metadata. New number of metadata items: %v", len(metadata))

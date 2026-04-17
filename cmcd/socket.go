@@ -142,6 +142,9 @@ func attest(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		return
 	}
 
+	// Request updated OMSP responses if stored ones are too old
+	cmc.UpdateOmsps()
+
 	report, err := prover.Generate(req.Nonce, req.Cached, cmc.GetMetadata(), cmc.Drivers, s, cmc.HashAlg)
 	if err != nil {
 		sendError(conn, s, "failed to generate attestation report: %v", err)

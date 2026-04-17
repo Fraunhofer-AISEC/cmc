@@ -100,6 +100,9 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
+	// Request updated OMSP responses if stored ones are too old
+	s.cmc.UpdateOmsps()
+
 	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.GetMetadata(), s.cmc.Drivers,
 		s.serializer, s.cmc.HashAlg)
 	if err != nil {
