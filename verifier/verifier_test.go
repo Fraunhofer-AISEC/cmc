@@ -95,6 +95,7 @@ func TestVerify(t *testing.T) {
 		verifierNonce    []byte
 		encoding         string
 		alg              string
+		omspResponse     ar.Metadata
 	}
 	tests := []struct {
 		name string
@@ -113,6 +114,7 @@ func TestVerify(t *testing.T) {
 				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
 			},
 			want: ar.StatusSuccess,
 		},
@@ -128,6 +130,7 @@ func TestVerify(t *testing.T) {
 				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_CBOR,
 				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
 			},
 			want: ar.StatusSuccess,
 		},
@@ -181,6 +184,7 @@ func TestVerify(t *testing.T) {
 				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
 			},
 			want: ar.StatusFail,
 		},
@@ -196,6 +200,7 @@ func TestVerify(t *testing.T) {
 				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
 			},
 			want: ar.StatusFail,
 		},
@@ -211,6 +216,7 @@ func TestVerify(t *testing.T) {
 				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
 			},
 			want: ar.StatusFail,
 		},
@@ -226,6 +232,168 @@ func TestVerify(t *testing.T) {
 				verifierNonce:    validUserNonce,
 				encoding:         ar.TYPE_ENCODING_B64,
 				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
+			},
+			want: ar.StatusFail,
+		},
+		// Test cases for manifest revocation (OMSP Response)
+		{
+			name: "RTM manifest revocation status unknown",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type: ar.TYPE_OMSP_RESPONSE,
+					},
+					OmspResponse: ar.OmspResponse{
+						Server:     "https://10.0.2.2:9000/",
+						ProducedAt: "2026-04-16T20:00:00Z",
+						Responses: []ar.SingleOmspResponse{
+							{
+								ManifestHash: "rtmhash", //is replaced with hash of signed artefact in the test function
+								Status:       ar.OmspStatusUnknown,
+								ThisUpdate:   "2026-04-01T20:00:00Z",
+								NextUpdate:   "2030-04-01T20:00:00Z",
+							},
+						},
+					},
+				},
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "RTM manifest revocation status outdated",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type: ar.TYPE_OMSP_RESPONSE,
+					},
+					OmspResponse: ar.OmspResponse{
+						Server:     "https://10.0.2.2:9000/",
+						ProducedAt: "2026-04-16T20:00:00Z",
+						Responses: []ar.SingleOmspResponse{
+							{
+								ManifestHash: "rtmhash", //is replaced with hash of signed artefact in the test function
+								Status:       ar.OmspStatusOutdated,
+								ThisUpdate:   "2026-04-01T20:00:00Z",
+								NextUpdate:   "2030-04-01T20:00:00Z",
+							},
+						},
+					},
+				},
+			},
+			want: ar.StatusWarn,
+		},
+		{
+			name: "RTM manifest revocation status revoked",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type: ar.TYPE_OMSP_RESPONSE,
+					},
+					OmspResponse: ar.OmspResponse{
+						Server:     "https://10.0.2.2:9000/",
+						ProducedAt: "2026-04-16T20:00:00Z",
+						Responses: []ar.SingleOmspResponse{
+							{
+								ManifestHash: "rtmhash", //is replaced with hash of signed artefact in the test function
+								Status:       ar.OmspStatusRevoked,
+								ThisUpdate:   "2026-04-01T20:00:00Z",
+								NextUpdate:   "2030-04-01T20:00:00Z",
+							},
+						},
+					},
+				},
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Invalid OMSP response because of ProducedAt",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type: ar.TYPE_OMSP_RESPONSE,
+					},
+					OmspResponse: ar.OmspResponse{
+						Server:     "https://10.0.2.2:9000/",
+						ProducedAt: "2030-04-16T20:00:00Z",
+						Responses: []ar.SingleOmspResponse{
+							{
+								ManifestHash: "rtmhash", //is replaced with hash of signed artefact in the test function
+								Status:       ar.OmspStatusGood,
+								ThisUpdate:   "2026-04-01T20:00:00Z",
+								NextUpdate:   "2030-04-01T20:00:00Z",
+							},
+						},
+					},
+				},
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Invalid OMSP response because of NextUpdate for RTM",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      validRtmManifest,
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse: ar.Metadata{
+					MetaInfo: ar.MetaInfo{
+						Type: ar.TYPE_OMSP_RESPONSE,
+					},
+					OmspResponse: ar.OmspResponse{
+						Server:     "https://10.0.2.2:9000/",
+						ProducedAt: "2026-04-16T20:00:00Z",
+						Responses: []ar.SingleOmspResponse{
+							{
+								ManifestHash: "rtmhash", //is replaced with hash of signed artefact in the test function
+								Status:       ar.OmspStatusGood,
+								ThisUpdate:   "2025-04-01T20:00:00Z",
+								NextUpdate:   "2026-01-01T20:00:00Z",
+							},
+						},
+					},
+				},
 			},
 			want: ar.StatusFail,
 		},
@@ -286,11 +454,22 @@ func TestVerify(t *testing.T) {
 			appDigest := sha256.Sum256(appManifest)
 			imageDigest := sha256.Sum256(imageDescription)
 
+			// add RTM hashes to OMSP response
+			tt.args.omspResponse.Responses[0].ManifestHash = hex.EncodeToString(rtmDigest[:])
+
+			omspResponse, err := s.Marshal(tt.args.omspResponse)
+			omspResponseSigned, err := internal.Sign(omspResponse, key, s.String(), certchain)
+			if err != nil {
+				t.Errorf("failed to sign the OMSP response: %v", err)
+			}
+			omspDigest := sha256.Sum256(omspResponseSigned)
+
 			metadata := map[string][]byte{
 				hex.EncodeToString(rtmDigest[:]):   rtmManifest,
 				hex.EncodeToString(osDigest[:]):    osManifest,
 				hex.EncodeToString(appDigest[:]):   appManifest,
 				hex.EncodeToString(imageDigest[:]): imageDescription,
+				hex.EncodeToString(omspDigest[:]):  omspResponseSigned,
 			}
 
 			report := ar.AttestationReport{
@@ -306,6 +485,7 @@ func TestVerify(t *testing.T) {
 						hex.EncodeToString(osDigest[:]),
 						hex.EncodeToString(appDigest[:]),
 						hex.EncodeToString(imageDigest[:]),
+						hex.EncodeToString(omspDigest[:]),
 					},
 					Metadata: metadata,
 				},
@@ -325,11 +505,10 @@ func TestVerify(t *testing.T) {
 			log.Info("Running FUT")
 			got := Verify(
 				data, tt.args.verifierNonce,
-				nil,
-				PolicyEngineSelect_None,
-				false,
+				nil, PolicyEngineSelect_None, false,
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil, "", "",
+				true,
 			)
 			log.Info("Finished FUT")
 			if got.Summary.Status != tt.want {
@@ -553,6 +732,7 @@ var (
 			DevCommonName: "Test Developer",
 			CertLevel:     1,
 			BaseLayers:    []string{"de.test.rtm"},
+			OmspServer:    "https://10.0.2.2:9000/",
 		},
 	}
 
@@ -671,6 +851,24 @@ var (
 	validUserNonce = []byte{0x01, 0x02, 0x03}
 
 	invalidUserNonce = []byte{0x04, 0x05, 0x06}
+
+	validOmspResponse = ar.Metadata{
+		MetaInfo: ar.MetaInfo{
+			Type: ar.TYPE_OMSP_RESPONSE,
+		},
+		OmspResponse: ar.OmspResponse{
+			Server:     "https://10.0.2.2:9000/",
+			ProducedAt: "2026-04-16T20:00:00Z",
+			Responses: []ar.SingleOmspResponse{
+				{
+					ManifestHash: "rtmhash", //is replaced with hash of signed artefact in the test function
+					Status:       ar.OmspStatusGood,
+					ThisUpdate:   "2026-04-01T20:00:00Z",
+					NextUpdate:   "2030-04-01T20:00:00Z",
+				},
+			},
+		},
+	}
 )
 
 // Variables for Test_checkMetadataCompatibility
