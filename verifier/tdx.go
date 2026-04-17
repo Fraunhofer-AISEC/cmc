@@ -462,6 +462,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 						Index:    i,
 						Success:  false,
 						Launched: true,
+						HashAlg:  crypto.SHA384.String(),
 					})
 			}
 			log.Debugf("%v: Measurement %q does not match recalculation %q",
@@ -479,6 +480,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			Success:  successMrs[i],
 			Digest:   calculatedMrs[i],
 			Measured: hex.EncodeToString(measuredMrs[i]),
+			HashAlg:  crypto.SHA384.String(),
 		})
 	}
 
@@ -502,6 +504,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 					Launched:    successMrs[refval.Index],
 					Description: refval.Description,
 					PackageUrl:  refval.PackageUrl,
+					HashAlg:     crypto.SHA384.String(),
 				})
 		}
 	} else {
@@ -529,6 +532,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 						Digest:      event.GetHash(crypto.SHA384),
 						Description: event.Description,
 						PackageUrl:  event.PackageUrl,
+						HashAlg:     crypto.SHA384.String(),
 					}
 					r.Success = found
 					r.Launched = found
@@ -575,6 +579,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 					Digest:      refval.GetHash(crypto.SHA384),
 					Description: refval.Description,
 					PackageUrl:  refval.PackageUrl,
+					HashAlg:     crypto.SHA384.String(),
 				}
 				detailedResults = append(detailedResults, r)
 				success = false
@@ -607,6 +612,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		Digest:   refTdId.MrOwner,
 		Success:  success,
 		Launched: success,
+		HashAlg:  crypto.SHA384.String(),
 	})
 	if !success {
 		tdIdSuccess = false
@@ -616,6 +622,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 			Digest:   report.MrOwner[:],
 			Success:  false,
 			Launched: false,
+			HashAlg:  crypto.SHA384.String(),
 		})
 	}
 
@@ -667,6 +674,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		Digest:   tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes,
 		Success:  success,
 		Launched: success,
+		HashAlg:  crypto.SHA384.String(),
 	})
 	if !success {
 		tdIdSuccess = false
@@ -676,6 +684,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 			Digest:   report.MrSignerSeam[:],
 			Success:  false,
 			Launched: false,
+			HashAlg:  crypto.SHA384.String(),
 		})
 	}
 

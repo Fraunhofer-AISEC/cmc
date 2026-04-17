@@ -123,6 +123,7 @@ func VerifySw(
 				Digest:     ref.GetHash(crypto.SHA256),
 				CtrDetails: ref.CtrData,
 				PackageUrl: ref.PackageUrl,
+				HashAlg:    crypto.SHA256.String(),
 			}
 			result.Artifacts = append(result.Artifacts, res)
 
@@ -181,6 +182,7 @@ func VerifySw(
 						Digest:     event.GetHash(crypto.SHA256),
 						CtrDetails: event.CtrData,
 						PackageUrl: ref.PackageUrl,
+						HashAlg:    crypto.SHA256.String(),
 					}
 					result.Artifacts = append(result.Artifacts, r)
 
@@ -199,6 +201,7 @@ func VerifySw(
 					Digest:     event.GetHash(crypto.SHA256),
 					CtrDetails: event.CtrData,
 					PackageUrl: event.PackageUrl,
+					HashAlg:    crypto.SHA256.String(),
 				}
 				result.Artifacts = append(result.Artifacts, r)
 				log.Debugf("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.GetHash(crypto.SHA256)))

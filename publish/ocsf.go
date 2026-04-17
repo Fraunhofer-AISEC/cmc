@@ -143,23 +143,12 @@ func CreateDetectionFinding(dr ar.DigestResult, prover ar.Endpoint, t string) *D
 		description += ", Event Data: " + dr.EventData.StringContent
 	}
 
-	var alg string
-	switch len(dr.Digest) {
-	case 2 * 32:
-		alg = "sha256"
-	case 2 * 48:
-		alg = "sha384"
-	case 2 * 64:
-		alg = "sha512"
-	default:
-		alg = "other"
-	}
-	algId, _ := AlgorithmNameToID(alg)
+	algId, _ := AlgorithmNameToID(dr.HashAlg)
 
 	f := File{
 		Hashes: []Fingerprint{
 			{
-				Algorithm:   alg,
+				Algorithm:   dr.HashAlg,
 				AlgorithmID: algId,
 				Value:       dr.Digest,
 			},
@@ -225,13 +214,28 @@ func CreateDetectionFinding(dr ar.DigestResult, prover ar.Endpoint, t string) *D
 }
 
 var algoNameToOCSF = map[string]int{
-	"md5":    1,
-	"sha1":   2,
-	"sha256": 3,
-	"sha512": 4,
-	"sha224": 8,
-	"sha384": 9,
-	"other":  99,
+	"Unknown":           0,
+	"MD5":               1,
+	"SHA-1":             2,
+	"SHA-256":           3,
+	"SHA-512":           4,
+	"CTPH":              5,
+	"TLSH":              6,
+	"quickXorHash":      7,
+	"SHA-224":           8,
+	"SHA-384":           9,
+	"SHA-512/224":       10,
+	"SHA-512/256":       11,
+	"SHA3-224":          12,
+	"SHA3-256":          13,
+	"SHA3-384":          14,
+	"SHA3-512":          15,
+	"xxHash H3 64-bit":  16,
+	"xxHash H3 128-bit": 17,
+	"Imphash":           18,
+	"NPF":               19,
+	"HASSH":             20,
+	"Other":             99,
 }
 
 func AlgorithmNameToID(name string) (int, bool) {

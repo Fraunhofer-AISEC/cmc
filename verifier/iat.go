@@ -150,6 +150,7 @@ func VerifyIas(
 						Success:    true,
 						Launched:   true,
 						PackageUrl: ref.PackageUrl,
+						HashAlg:    crypto.SHA256.String(),
 					})
 				found = true
 			}
@@ -164,6 +165,7 @@ func VerifyIas(
 					Launched:   false,
 					Type:       ar.TYPE_REFVAL_IAS,
 					PackageUrl: ref.PackageUrl,
+					HashAlg:    crypto.SHA256.String(),
 				})
 		}
 	}
@@ -181,6 +183,7 @@ func VerifyIas(
 					Success:    true,
 					Launched:   true,
 					PackageUrl: ver.PackageUrl,
+					HashAlg:    crypto.SHA256.String(),
 				})
 				found = true
 			}
@@ -193,6 +196,7 @@ func VerifyIas(
 				Success:  false,
 				Launched: true,
 				Type:     "Measurement",
+				HashAlg:  crypto.SHA256.String(),
 			})
 		}
 	}
