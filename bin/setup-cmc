@@ -100,3 +100,6 @@ echo "signing metadata with serializer ${serializer}"
 
 # Sign the metadata
 "${dir}/bin/sign-metadata${script_suffix}" "${serializer}"
+
+# Generate the OMSP responses for the signed manifests
+"${dir}/bin/generate-omsp-responses"

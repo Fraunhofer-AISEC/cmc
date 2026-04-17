@@ -30,6 +30,8 @@ fi
 
 sign-metadata json
 
+generate-omsp-responses
+
 mkdir -p "${dir}/example-setup/vm-config/vm-metadata/"
 
 cp "${dir}/data/metadata-signed/"* "${dir}/example-setup/vm-config/vm-metadata/"
