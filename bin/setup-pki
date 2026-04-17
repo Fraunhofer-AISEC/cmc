@@ -34,6 +34,12 @@ cfssl genkey -config "${input}/cfssl-ca-config.json" -profile tlscert "${input}/
 # Sign CSR and generate certificate for EST server TLS connections
 cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile tlscert -config "${input}/cfssl-ca-config.json" "${out}/est-tls.csr" | cfssljson -bare "${out}/est-tls"
 
+# Generate key and CSR for signing OMSP responses (used by provisioning server)
+cfssl genkey -config "${input}/cfssl-ca-config.json" -profile omspcert "${input}/cfssl-omsp.json" | cfssljson -bare "${out}/omsp"
+
+# Sign CSR and generate certificate for signing OMSP responses (used by provisioning server)
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile omspcert -config "${input}/cfssl-ca-config.json" "${out}/omsp.csr" | cfssljson -bare "${out}/omsp"
+
 # Generate certificates to use with Intel TDX PCCS
 pccs_key="${out}/tdx-pccs-private.pem"
 pccs_csr="${out}/tdx-pccs-csr.pem"

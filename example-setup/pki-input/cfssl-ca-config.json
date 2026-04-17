@@ -26,6 +26,18 @@
                     "server auth",
                     "client auth"
                 ]
+            },
+            "omspcert": {
+                "expiry": "876000h",
+                "key": {
+                    "algo": "ecdsa",
+                    "size": 256
+                },
+                "usages": [
+                    "signing",
+                    "digital signature",
+                    "content commitment"
+                ]
             }
     	}
    }
