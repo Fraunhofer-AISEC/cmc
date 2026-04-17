@@ -8,7 +8,8 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 metatool="${dir}/tools/metatool/metatool"
 
 print_usage() {
-  echo "Usage: $(basename "$0") <container-engine> <container> [<container arguments>]"
+  echo "Usage: $(basename "$0") [--omsp <omsp endpoint>] <container-engine> <container> [<container arguments>]"
+  echo "       omsp endpoint: specifies endpoint under which revocation information about the SW manifest can be requested"
   echo "       container-engine: docker, ctr, docker-compose, runc"
   echo "       container: depends on the engine, e.g."
   echo "              docker/ctr:     docker.io/library/ubuntu:22.04"
@@ -17,32 +18,45 @@ print_usage() {
   echo "      container arguments: additional container cmdline parameters"
 }
 
-if [[ "$#" -lt 2 ]]; then
+# Extract the --omsp and -env parameters
+keys=()
+values=()
+omsp=""
+remaining=()
+
+i=1
+while [[ $i -le $# ]]; do
+    arg="${!i}"
+    case "${arg}" in
+    -env)
+        (( i++ ))
+        remaining+=("$arg")
+        remaining+=("${!i}")
+
+        IFS='=' read -r KEY VAL <<< "${!i}"
+        keys+=("${KEY}")
+        values+=("${VAL}")
+        ;;
+    --omsp)
+      (( i++ ))
+      omsp="${!i}"
+      ;;
+    *)
+      remaining+=("$arg")
+      ;;
+  esac
+  (( i++ ))
+done
+
+if [[ ${#remaining[@]} -lt 2 ]]; then
   print_usage
   exit 1
 fi
 
-# Extract the -env parameters
-keys=()
-values=()
-found=false
-for arg in "$@"; do
-    if [[ "${arg}" == "-env" ]]; then
-        found=true
-    elif [[ "${found}" == true ]]; then
-        IFS='=' read -r KEY VAL <<< "$arg"
-        keys+=("${KEY}")
-        values+=("${VAL}")
-        found=false
-    fi
-done
-
 # Set all parameters
-client="$1"
-shift
-target="$1"
-shift
-args="$@"
+client="${remaining[0]}"
+target="${remaining[1]}"
+args=("${remaining[@]:2}")
 
 data="${dir}/data"
 cmc="${dir}"
@@ -171,6 +185,7 @@ for ((i = 0; i < num_containers; i++)); do
       --base-layers "de.test.os" \
       --cert-level 1 \
       --sbom "${sbom_tmp}" \
+      --omsp "${omsp}" \
       --out "${out}/${container_name}.manifest.json"
     rm -f "${sbom_tmp}"
 

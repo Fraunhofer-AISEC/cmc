@@ -10,4 +10,4 @@ bin="${dir}/bin"
 
 "${bin}/generate-image-description" "sgx-device.test.de"
 
-"${bin}/precompute-rtm-manifest-sgx"
+"${bin}/precompute-rtm-manifest-sgx" --omsp "https://localhost:9000/omsp"

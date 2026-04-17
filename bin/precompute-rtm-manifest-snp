@@ -11,6 +11,7 @@ metatool="${dir}/tools/metatool/metatool"
 ovmf="${dir}/vm/images/OVMF-AWS.fd"
 vcpus=2
 vmm_type=ec2
+omsp=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -27,9 +28,13 @@ while [[ $# -gt 0 ]]; do
       ovmf="$2"
       shift 2
       ;;
+    --omsp)
+      omsp="$2"
+      shift 2
+      ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--vcpus #] [--vmm-type TYPE] [--ovmf PATH]"
+      echo "Usage: $0 [--vcpus #] [--vmm-type TYPE] [--ovmf PATH] [--omsp <omsp endpoint>]"
       exit 1
       ;;
   esac
@@ -126,6 +131,7 @@ printf "Writing %s\n" "${out}/rtm.manifest.json"
   --snp-policy "${policy_tmp}" \
   --sbom-format CycloneDX \
   --components "${components}" \
+  --omsp "${omsp}" \
   --out "${out}/rtm.manifest.json"
 rm -f "${policy_tmp}"
 
