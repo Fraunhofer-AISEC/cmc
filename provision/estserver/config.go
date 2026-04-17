@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -64,6 +64,10 @@ type config struct {
 	PublishToken     string   `json:"publishToken"`
 	PublishCert      string   `json:"publishCert"`
 	PublishKey       string   `json:"publishKey"`
+	OmspFolder       string   `json:"omspFolder"`
+	OmspKey          string   `json:"omspKey"`
+	OmspCaChain      []string `json:"omspCaChain"`
+	OmspUrl          string   `json:"omspUrl"`
 
 	estCaKey    crypto.PrivateKey
 	estCaChain  []*x509.Certificate
@@ -71,6 +75,8 @@ type config struct {
 	tlsCaChain  []*x509.Certificate
 	rootCas     []*x509.Certificate
 	authMethods internal.AuthMethod
+	omspKey     crypto.PrivateKey
+	omspCaChain []*x509.Certificate
 }
 
 const (
@@ -97,6 +103,10 @@ const (
 	publishTokenFlag     = "publish-token"
 	publishCertFlag      = "publish-cert"
 	publishKeyFlag       = "publish-key"
+	omspFolderFlag       = "omsp-folder"
+	omspKeyFlag          = "omsp-key"
+	omspCaChainFlag      = "omsp-ca-chain"
+	omspUrlFlag          = "omsp-url"
 )
 
 var flags = []cli.Flag{
@@ -192,6 +202,22 @@ var flags = []cli.Flag{
 		Name:  publishKeyFlag,
 		Usage: "client key for mTLS authentication when publishing",
 	},
+	&cli.StringFlag{
+		Name:  omspFolderFlag,
+		Usage: "folder with pre-generated revocation status JSON files for SW manifests",
+	},
+	&cli.StringFlag{
+		Name:  omspKeyFlag,
+		Usage: "private key for signing OMSP responses",
+	},
+	&cli.StringFlag{
+		Name:  omspCaChainFlag,
+		Usage: "comma-separated certificate chain for the OMSP signing key",
+	},
+	&cli.StringFlag{
+		Name:  omspUrlFlag,
+		Usage: "URL of the OMSP endpoint",
+	},
 }
 
 func getConfig(cmd *cli.Command) (*config, error) {
@@ -282,6 +308,18 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(publishKeyFlag) {
 		c.PublishKey = cmd.String(publishKeyFlag)
 	}
+	if cmd.IsSet(omspFolderFlag) {
+		c.OmspFolder = cmd.String(omspFolderFlag)
+	}
+	if cmd.IsSet(omspKeyFlag) {
+		c.OmspKey = cmd.String(omspKeyFlag)
+	}
+	if cmd.IsSet(omspCaChainFlag) {
+		c.OmspCaChain = strings.Split(cmd.String(omspCaChainFlag), ",")
+	}
+	if cmd.IsSet(omspUrlFlag) {
+		c.OmspUrl = cmd.String(omspUrlFlag)
+	}
 
 	// Configure the logger
 	if c.LogFile != "" {
@@ -333,6 +371,17 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
+	c.omspKey, err = internal.LoadPrivateKey(c.OmspKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load private OMSP key: %w", err)
+	}
+
+	c.omspCaChain, err = internal.ReadCerts(c.OmspCaChain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load OMSP certificate chain: %w", err)
+	}
+
+	// Print the parsed configuration
 	printConfig(c)
 
 	return c, nil
@@ -365,4 +414,8 @@ func printConfig(c *config) {
 	log.Debugf("\tPublish Network     : %v", c.PublishNetwork)
 	log.Debugf("\tPublish File        : %v", c.PublishFile)
 	log.Debugf("\tPublish Token       : %v", c.PublishToken)
+	log.Debugf("\tOMSP folder         : %v", c.OmspFolder)
+	log.Debugf("\tOMSP Key File       : %v", c.OmspKey)
+	log.Debugf("\tOMSP CA cert chain  : %v", strings.Join(c.OmspCaChain, ","))
+	log.Debugf("\tOMSP URL            : %v", c.OmspUrl)
 }
