@@ -17,5 +17,12 @@
     "httpFolder": "../../data-ids/",
     "verifyEkCert": false,
     "tpmEkCertDb": "../../data-ids/tpm-ek-certs.db",
-    "logLevel": "trace"
+    "logLevel": "trace",
+    "omspFolder": "../../data/omsp-raw",
+    "omspKey": "../../data/pki/omsp-key.pem",
+    "omspCaChain": [
+        "../../data/pki/omsp.pem",
+        "../../data/pki/ca.pem"
+    ],
+    "omspUrl": "https://localhost:9000/omsp"
 }

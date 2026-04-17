@@ -21,6 +21,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,12 @@ type Server struct {
 	publishToken      []byte
 	allowSystemCerts  bool
 	publishClientCert *tls.Certificate
+
+	//Configuration of OMSP server for fetching manifest revocation information
+	omspFolder  string
+	omspKey     crypto.PrivateKey
+	omspCaChain []*x509.Certificate
+	omspUrl     string
 }
 
 func NewServer(c *config) (*Server, error) {
@@ -133,6 +140,10 @@ func NewServer(c *config) (*Server, error) {
 		publishToken:      publishToken,
 		allowSystemCerts:  c.AllowSystemCerts,
 		publishClientCert: publishClientCert,
+		omspFolder:        c.OmspFolder,
+		omspKey:           c.omspKey,
+		omspCaChain:       c.omspCaChain,
+		omspUrl:           c.OmspUrl,
 	}
 
 	// EST endpoints
@@ -148,6 +159,13 @@ func NewServer(c *config) (*Server, error) {
 
 	// Metadata file serving
 	httpHandleMetadata(c.HttpFolder)
+
+	//OMSP Server for fetching manifest revocation information
+	u, err := url.Parse(c.OmspUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse omsp Endpoint from provided OmspURL: %w", err)
+	}
+	http.HandleFunc(u.Path, server.handleRevocationRequest)
 
 	// Log and return 404 for unmatched routes
 	http.HandleFunc("/", server.handleNotFound)
@@ -197,13 +215,13 @@ func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, p
 	}
 	w.WriteHeader(http.StatusOK)
 
-	log.Tracef("Sending EST response")
+	log.Tracef("Sending HTTP response")
 	n, err := w.Write(payload)
 	if err != nil {
-		return fmt.Errorf("failed to handle cacerts request: %w", err)
+		return fmt.Errorf("failed to send HTTP response: %w", err)
 	}
 	if n != len(payload) {
-		log.Warnf("Failed to handle cacerts request: Only %v of %v bytes sent",
+		log.Warnf("Failed to send HTTP response: Only %v of %v bytes sent",
 			n, len(payload))
 	}
 

@@ -48,7 +48,7 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	allowSystemRoots bool,
 ) ([][]byte, error) {
 
-	client, err := NewHttpClient(addr, rootCas, allowSystemRoots, nil)
+	client, err := NewHttpClient(rootCas, allowSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -155,7 +155,7 @@ func fetchDataRecursively(client *http.Client, pre Pre, addr string) ([][]byte, 
 	return metadata, nil
 }
 
-func NewHttpClient(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*http.Client, error) {
+func NewHttpClient(rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*http.Client, error) {
 
 	rootpool, err := internal.CreateCertPool(rootCas, allowSystemCerts)
 	if err != nil {
