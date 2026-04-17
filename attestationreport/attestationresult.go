@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.3.3"
+	resultVersion = "3.4.0"
 )
 
 func GetResultVersion() string {
@@ -82,15 +82,21 @@ type MetadataSummary struct {
 	ImageDescriptionResult   MetadataResult      `json:"imageDescriptionResult" cbor:"0,keyasint"`
 	ManifestResults          []MetadataResult    `json:"manifestResults" cbor:"1,keyasint"`
 	CompanyDescriptionResult *MetadataResult     `json:"companyDescriptionResult,omitempty" cbor:"2,keyasint,omitempty"`
-	UnknownResults           []MetadataResult    `json:"unknownResults,omitempty" cbor:"3,keyasint"`
+	UnknownResults           []MetadataResult    `json:"unknownResults,omitempty" cbor:"3,keyasint,omitempty"`
 	CompatibilityResult      CompatibilityResult `json:"compatibilityResult" cbor:"4,keyasint"`
+	OmspResults              []MetadataResult    `json:"omspSignatureResults,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 type MetadataResult struct {
 	Metadata
-	Summary        Result            `json:"summary" cbor:"40,keyasint"`
-	ValidityCheck  Result            `json:"validityCheck,omitempty" cbor:"41,keyasint,omitempty"`
-	SignatureCheck []SignatureResult `json:"signatureValidation" cbor:"42,keyasint,omitempty"`
+	Summary          Result            `json:"summary" cbor:"40,keyasint"`
+	ValidityCheck    Result            `json:"validityCheck,omitempty" cbor:"41,keyasint,omitempty"`
+	SignatureCheck   []SignatureResult `json:"signatureValidation,omitempty" cbor:"42,keyasint,omitempty"`
+	ManifestHash     string            `json:"manifestHash,omitempty" cbor:"50,keyasint,omitempty"`
+	OmspValidity     *Result           `json:"omspValidity,omitempty" cbor:"51,keyasint,omitempty"`
+	OmspStatus       *Result           `json:"omspStatus,omitempty" cbor:"52,keyasint,omitempty"`
+	RevocationTime   string            `json:"revocationTime,omitempty" cbor:"53,keyasint,omitempty"`
+	RevocationReason string            `json:"revocationReason,omitempty" cbor:"54,keyasint,omitempty"`
 }
 
 type CompatibilityResult struct {
@@ -264,7 +270,7 @@ type TdAttributesCheck struct {
 type SignatureResult struct {
 	SignCheck      Result                `json:"signatureVerification" cbor:"0,keyasint"`
 	CertChainCheck Result                `json:"certChainValidation" cbor:"1,keyasint"`
-	Certs          [][]X509CertExtracted `json:"certs,omitempty" cbor:"2,keyasint"`
+	Certs          [][]X509CertExtracted `json:"certs,omitempty" cbor:"2,keyasint,omitempty"`
 }
 
 // X509CertExtracted represents a x509 certificate with attributes
@@ -288,7 +294,7 @@ type X509CertExtracted struct {
 	UnknownExtKeyUsage []string `json:"unknownExtKeyUsage,omitempty" cbor:"11,keyasint,omitempty"`
 
 	BasicConstraintsValid bool `json:"basicConstraintsValid" cbor:"12,keyasint"`
-	IsCA                  bool `json:"isCA,omitempty" cbor:"13,keyasint"`
+	IsCA                  bool `json:"isCA,omitempty" cbor:"13,keyasint,omitempty"`
 
 	// MaxPathLen and MaxPathLenZero indicate the presence and
 	// value of the BasicConstraints' "pathLenConstraint".
@@ -566,6 +572,9 @@ const (
 	Freshness
 	UnsupportedContextHashAlg
 	CalculateContextHash
+	ManifestRevoked
+	ManifestRevocationUnknown
+	ManifestOutdated
 )
 
 func (e ErrorCode) String() string {
@@ -742,6 +751,12 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Unsupported context hash algorithm)", int(e))
 	case CalculateContextHash:
 		return fmt.Sprintf("%v (Calculate context hash)", int(e))
+	case ManifestRevoked:
+		return fmt.Sprintf("%v (Manifest revoked)", int(e))
+	case ManifestRevocationUnknown:
+		return fmt.Sprintf("%v (No revocation information for manifest available)", int(e))
+	case ManifestOutdated:
+		return fmt.Sprintf("%v (Manifest outdated, i.e., new SW version available but no (severe) security issues known with used version)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
