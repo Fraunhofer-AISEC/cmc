@@ -18,6 +18,7 @@ package publish
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -170,7 +171,11 @@ func CreateDetectionFinding(dr ar.DigestResult, prover ar.Endpoint, t string) *D
 		Type:   "server",
 	}
 	device.Hostname = prover.Hostname
-	device.Ip = prover.Ip
+	if host, _, err := net.SplitHostPort(prover.Ip); err == nil {
+		device.Ip = host
+	} else {
+		device.Ip = prover.Ip
+	}
 
 	// Use the first 16 bytes of the 32 bye peer id as the OCSF device uid if present
 	peerId, err := hex.DecodeString(prover.PeerId)
