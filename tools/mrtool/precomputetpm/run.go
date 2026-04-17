@@ -17,6 +17,7 @@ package precomputetpm
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -36,29 +37,31 @@ var (
 
 type Config struct {
 	*tcg.Conf
-	SystemUuid     string
-	GrubCmds       string
-	Path           []string
-	MokLists       []string
-	ImaPaths       []string
-	ImaStrip       string
-	ImaPrepend     string
-	ImaTemplate    string
-	BootAggregate  []byte
-	PrintAggregate bool
+	SystemUuid        string
+	GrubCmds          string
+	Path              []string
+	MokLists          []string
+	ImaPaths          []string
+	ImaStrip          string
+	ImaPrepend        string
+	ImaTemplate       string
+	BootAggregate     []byte
+	PrintAggregate    bool
+	BuildrootManifest string
 }
 
 const (
-	systemUuidFlag     = "systemuuid"
-	grubcmdsFlag       = "grubcmds"
-	pathFlag           = "paths"
-	imaPathFlag        = "ima-path"
-	imaStripFlag       = "ima-strip"
-	imaPrependFlag     = "ima-prepend"
-	imaTemplateFlag    = "ima-template"
-	bootAggregateFlag  = "boot-aggregate"
-	printAggregateFlag = "print-aggregate"
-	mokListsFlag       = "moklists"
+	systemUuidFlag        = "systemuuid"
+	grubcmdsFlag          = "grubcmds"
+	pathFlag              = "paths"
+	imaPathFlag           = "ima-path"
+	imaStripFlag          = "ima-strip"
+	imaPrependFlag        = "ima-prepend"
+	imaTemplateFlag       = "ima-template"
+	bootAggregateFlag     = "boot-aggregate"
+	printAggregateFlag    = "print-aggregate"
+	mokListsFlag          = "moklists"
+	buildrootManifestFlag = "buildroot-manifest"
 )
 
 var flags = []cli.Flag{
@@ -92,6 +95,10 @@ var flags = []cli.Flag{
 	},
 	&cli.StringFlag{Name: mokListsFlag, Usage: "Comma-separated list of UEFI MokList variable data files as written to " +
 		"/sys/firmware/efi/efivars to be extended into PCR14"},
+	&cli.StringFlag{
+		Name:  buildrootManifestFlag,
+		Usage: "Path to a buildroot manifest CSV file to augment reference values with package URLs and versions",
+	},
 }
 
 var Command = &cli.Command{
@@ -125,6 +132,14 @@ func run(cmd *cli.Command) error {
 	pcrs, refvals, err := precompute(globConf.Mrs, tpmConf)
 	if err != nil {
 		return fmt.Errorf("failed to precompute: %w", err)
+	}
+
+	if tpmConf.BuildrootManifest != "" {
+		manifest, err := parseBuildrootManifest(tpmConf.BuildrootManifest)
+		if err != nil {
+			return fmt.Errorf("failed to parse buildroot manifest: %w", err)
+		}
+		augmentRefvals(refvals, manifest)
 	}
 
 	// Write eventlog to stdout if requested
@@ -213,6 +228,10 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 		c.MokLists = strings.Split(cmd.String(mokListsFlag), ",")
 	}
 
+	if cmd.IsSet(buildrootManifestFlag) {
+		c.BuildrootManifest = cmd.String(buildrootManifestFlag)
+	}
+
 	c.print()
 
 	return c, nil
@@ -263,6 +282,10 @@ func (c *Config) print() {
 		for _, m := range c.MokLists {
 			log.Debugf("\t\t%q", m)
 		}
+	}
+
+	if c.BuildrootManifest != "" {
+		log.Debugf("\tBuildroot Manifest: %q", c.BuildrootManifest)
 	}
 
 }
@@ -324,4 +347,57 @@ func precompute(pcrNums []int, tpmConf *Config) ([]*ar.Component, []*ar.Componen
 	}
 
 	return pcrs, refvals, nil
+}
+
+type manifestEntry struct {
+	Name          string
+	Version       string
+	SourceArchive string
+	SourceSite    string
+}
+
+func parseBuildrootManifest(path string) (map[string]*manifestEntry, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open manifest: %w", err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read manifest CSV: %w", err)
+	}
+
+	entries := make(map[string]*manifestEntry)
+	for i, record := range records {
+		if i == 0 {
+			continue
+		}
+		if len(record) < 6 {
+			continue
+		}
+		entries[record[0]] = &manifestEntry{
+			Name:          record[0],
+			Version:       record[1],
+			SourceArchive: record[4],
+			SourceSite:    record[5],
+		}
+	}
+
+	return entries, nil
+}
+
+func augmentRefvals(refvals []*ar.Component, manifest map[string]*manifestEntry) {
+	for _, rv := range refvals {
+		entry, ok := manifest[rv.Name]
+		if !ok {
+			continue
+		}
+		rv.Version = entry.Version
+		downloadUrl := strings.TrimRight(entry.SourceSite, "/") + "/" + entry.SourceArchive
+		rv.PackageUrl = fmt.Sprintf("pkg:generic/%s@%s?download_url=%s",
+			entry.Name, entry.Version, downloadUrl)
+		log.Debugf("Augmented refval %q with version %q and purl", rv.Name, rv.Version)
+	}
 }
