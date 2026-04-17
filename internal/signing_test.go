@@ -39,16 +39,16 @@ func TestAlgFromKeyType(t *testing.T) {
 		want    jose.SignatureAlgorithm
 		wantErr bool
 	}{
-		{"ECDSA P-256 pointer", &ecP256.PublicKey, jose.ES256, false},
-		{"ECDSA P-384 pointer", &ecP384.PublicKey, jose.ES384, false},
-		{"ECDSA P-521 pointer", &ecP521.PublicKey, jose.ES512, false},
-		{"ECDSA P-256 value", ecP256.PublicKey, jose.ES256, false},
-		{"ECDSA P-384 value", ecP384.PublicKey, jose.ES384, false},
-		{"ECDSA P-521 value", ecP521.PublicKey, jose.ES512, false},
-		{"RSA-2048 pointer", &rsa2048.PublicKey, jose.RS256, false},
-		{"RSA-4096 pointer", &rsa4096.PublicKey, jose.RS512, false},
-		{"RSA-2048 value", rsa2048.PublicKey, jose.RS256, false},
-		{"RSA-4096 value", rsa4096.PublicKey, jose.RS512, false},
+		{"ECDSA P-256 pointer", ecP256, jose.ES256, false},
+		{"ECDSA P-384 pointer", ecP384, jose.ES384, false},
+		{"ECDSA P-521 pointer", ecP521, jose.ES512, false},
+		{"ECDSA P-256 value", *ecP256, jose.ES256, false},
+		{"ECDSA P-384 value", *ecP384, jose.ES384, false},
+		{"ECDSA P-521 value", *ecP521, jose.ES512, false},
+		{"RSA-2048 pointer", rsa2048, jose.RS256, false},
+		{"RSA-4096 pointer", rsa4096, jose.RS512, false},
+		{"RSA-2048 value", *rsa2048, jose.RS256, false},
+		{"RSA-4096 value", *rsa4096, jose.RS512, false},
 		{"unknown type", "not a key", jose.RS256, true},
 	}
 	for _, tt := range tests {

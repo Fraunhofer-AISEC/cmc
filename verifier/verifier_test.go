@@ -264,19 +264,19 @@ func TestVerify(t *testing.T) {
 				t.Errorf("failed to marshal the ImageDescription: %v", err)
 			}
 
-			rtmManifest, err = internal.Sign(rtmManifest, key, key.PublicKey, s.String(), certchain)
+			rtmManifest, err = internal.Sign(rtmManifest, key, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the RTM Manifest: %v", err)
 			}
-			osManifest, err = internal.Sign(osManifest, key, key.PublicKey, s.String(), certchain)
+			osManifest, err = internal.Sign(osManifest, key, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the OS Manifest: %v", err)
 			}
-			appManifest, err = internal.Sign(appManifest, key, key.PublicKey, s.String(), certchain)
+			appManifest, err = internal.Sign(appManifest, key, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the App Manifest: %v", err)
 			}
-			imageDescription, err = internal.Sign(imageDescription, key, key.PublicKey, s.String(), certchain)
+			imageDescription, err = internal.Sign(imageDescription, key, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the ImageDescription: %v", err)
 			}

@@ -123,7 +123,7 @@ func (sw *Sw) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 	}
 
 	log.Tracef("Signing SW evidence with %v serialization", sw.serializer.String())
-	swEvidence, err := internal.Sign(data, sw.akPriv, sw.akPub, sw.serializer.String(), nil)
+	swEvidence, err := internal.Sign(data, sw.akPriv, sw.serializer.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign sw evidence: %w", err)
 	}
