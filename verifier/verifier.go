@@ -59,7 +59,7 @@ func Verify(
 	arRaw, nonce []byte,
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
 	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
-	peer string, peerAddr string,
+	peer string, peerAddr string, checkOmsp bool,
 ) *ar.AttestationResult {
 
 	result := &ar.AttestationResult{
@@ -122,9 +122,11 @@ func Verify(
 	}
 
 	// Verify and unpack metadata from attestation report
-	metaResults, ok := verifyMetadata(metadataCas, collectedMetadata)
-	if !ok {
+	metaResults, status := verifyMetadata(metadataCas, collectedMetadata, checkOmsp)
+	if status == ar.StatusFail {
 		result.Fail(ar.VerifyMetadata)
+	} else if status == ar.StatusWarn {
+		result.Warn(ar.VerifyMetadata)
 	}
 	result.Metadata = metaResults
 	if report.Name != "" {
@@ -345,11 +347,15 @@ Loop:
 // as well as compatibility checks: The image description must reference all manifests, and
 // starting from an inherently trusted root manifest, all manifests must have a compatible
 // base layer.
+// Furthermore it checks that none of the manifests have been revoked based on the OMSP response.
 func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
-) (ar.MetadataSummary, bool) {
+	checkOmsp bool,
+) (ar.MetadataSummary, ar.Status) {
 
 	results := ar.MetadataSummary{}
-	success := true
+	success := ar.StatusSuccess
+
+	omspMap := make(map[string]ar.Metadata)
 
 	for hash, meta := range metadatamap {
 
@@ -367,7 +373,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 		result, payload, ok := s.Verify(meta, cas)
 		if !ok {
 			log.Warnf("Signature verification of metadata item %v failed", hash)
-			success = false
+			success = ar.StatusFail
 			// Still unpack metadata item for validation-result diagnosis
 			payload, err = s.GetPayload(meta)
 			if err != nil {
@@ -382,21 +388,44 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 		err = s.Unmarshal(payload, &result.Metadata)
 		if err != nil {
 			result.Summary.Fail(ar.ParseMetadata, err)
-			success = false
+			success = ar.StatusFail
 		} else {
 			log.Debugf("Parse metadata %v: %v successful", result.Metadata.Type, result.Metadata.Name)
 		}
 
-		result.ValidityCheck = checkValidity(result.Metadata.Validity)
-		if result.ValidityCheck.Status == ar.StatusFail {
-			log.Warnf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
-				result.Metadata.Type, result.Metadata.Name,
-				result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
-			result.Summary.Status = ar.StatusFail
-			success = false
+		if result.Metadata.Type == ar.TYPE_OMSP_RESPONSE {
+			log.Debug("Checking validity of OMSP response...")
+			currentTime := time.Now()
+			notBefore, err := time.Parse(time.RFC3339, result.ProducedAt)
+			if err != nil {
+				result.Summary.Status = ar.StatusFail
+				result.ValidityCheck.Fail(ar.ParseTime, err)
+				success = ar.StatusFail
+			}
+			if notBefore.After(currentTime) {
+				result.Summary.Status = ar.StatusFail
+				result.ValidityCheck.Fail(ar.NotYetValid)
+				result.ValidityCheck.Got = currentTime.String()
+				result.ValidityCheck.ExpectedBetween = []string{notBefore.String(), "-"}
+				success = ar.StatusFail
+				log.Warn("OMSP Response invalid since ProducedAt lies in the future")
+			} else {
+				result.ValidityCheck.Status = ar.StatusSuccess
+				log.Debug("OMSP Response valid")
+			}
 		} else {
-			log.Debugf("Checking expiration of %v: %v successful",
-				result.Metadata.Type, result.Metadata.Name)
+			log.Debug("Checking validity of metadata item...")
+			result.ValidityCheck = checkValidity(result.Metadata.Validity)
+			if result.ValidityCheck.Status == ar.StatusFail {
+				log.Warnf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
+					result.Metadata.Type, result.Metadata.Name,
+					result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
+				result.Summary.Status = ar.StatusFail
+				success = ar.StatusFail
+			} else {
+				log.Debugf("Checking expiration of %v: %v successful",
+					result.Metadata.Type, result.Metadata.Name)
+			}
 		}
 
 		switch result.Metadata.Type {
@@ -405,22 +434,152 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 		case ar.TYPE_COMPANY_DESCRIPTION:
 			results.CompanyDescriptionResult = &result
 		case ar.TYPE_MANIFEST:
+			if checkOmsp {
+				result.ManifestHash = hash
+			}
 			results.ManifestResults = append(results.ManifestResults, result)
+		case ar.TYPE_OMSP_RESPONSE:
+			omspMap[result.Server] = result.Metadata
+			results.OmspResults = append(results.OmspResults, result)
 		default:
 			results.UnknownResults = append(results.UnknownResults, result)
 			log.Warnf("Unknown manifest type %v", result.Metadata.Type)
-			success = false
+			success = ar.StatusFail
 		}
 		log.Debugf("Finished validation of metadata item %v: %v", hash, result.Summary.Status)
 	}
 
+	if checkOmsp {
+		successOmsp := checkManifestRevocation(results.ManifestResults, omspMap)
+		switch successOmsp {
+		case ar.StatusFail:
+			success = ar.StatusFail
+		case ar.StatusWarn:
+			if success != ar.StatusFail {
+				success = ar.StatusWarn
+			}
+		}
+	}
+
 	r := checkMetadataCompatibility(&results)
 	if r.Summary.Status != ar.StatusSuccess {
-		success = false
+		success = ar.StatusFail
 	}
 	results.CompatibilityResult = *r
 
 	return results, success
+}
+
+func checkManifestRevocation(manifestResults []ar.MetadataResult, omspMap map[string]ar.Metadata) ar.Status {
+
+	success := ar.StatusSuccess
+
+	log.Debug("Checking revocation status for SW manifests...")
+	for i := range manifestResults {
+		elem := &manifestResults[i]
+		if elem.OmspServer == "" {
+			log.Debugf("Manifest %v with hash %v does not contain a server URL for OmspRequests. Manifest is ignored during revocation check...", elem.Name, elem.ManifestHash)
+			elem.Summary.Details = elem.Summary.Details + ("Revocation check for manifest was not possible, because manifest contains no OmspServer URL.")
+			continue
+		}
+
+		omspFound := false
+		for s, resp := range omspMap[elem.OmspServer].Responses {
+			log.Debugf("checkManifestRevocation s:%v", s)
+			log.Debugf("resp.ManifestHash: %v, elem.ManifestHash: %v", resp.ManifestHash, elem.ManifestHash)
+
+			if resp.ManifestHash == elem.ManifestHash {
+				omspFound = true
+
+				log.Debugf("Found OMSP Response for Manifest %v (hash: %v)", elem.Name, elem.ManifestHash)
+				elem.OmspValidity = checkOmspValidity(resp.ThisUpdate, resp.NextUpdate)
+				if elem.OmspValidity.Status == ar.StatusFail {
+					log.Debugf("Check for validity of the SingleOmspResponse failed with error code(s) %v", elem.OmspValidity.ErrorCodes)
+					elem.Summary.Status = ar.StatusFail
+					success = ar.StatusFail
+				} else {
+					log.Debugf("SingleOmspResponse was valid")
+				}
+
+				elem.OmspStatus = &ar.Result{}
+				elem.OmspStatus.Got = string(resp.Status)
+				switch resp.Status {
+				case ar.OmspStatusGood:
+					log.Debugf("%v (hash: %v) is still valid (not revoked)", elem.Name, elem.ManifestHash)
+					elem.OmspStatus.Status = ar.StatusSuccess
+				case ar.OmspStatusOutdated:
+					log.Debugf("%v (hash: %v) is outdated (but not revoked)", elem.Name, elem.ManifestHash)
+					elem.OmspStatus.Warn(ar.ManifestOutdated)
+					if elem.Summary.Status != ar.StatusFail {
+						elem.Summary.Status = ar.StatusWarn
+					}
+					if success != ar.StatusFail {
+						success = ar.StatusWarn
+					}
+				case ar.OmspStatusRevoked:
+					log.Debugf("%v (hash: %v) is revoked", elem.Name, elem.ManifestHash)
+					elem.OmspStatus.Fail(ar.ManifestRevoked)
+					elem.RevocationTime = resp.RevocationTime
+					elem.RevocationReason = resp.RevocationReason
+					elem.Summary.Status = ar.StatusFail
+					success = ar.StatusFail
+				case ar.OmspStatusUnknown:
+					log.Debugf("For %v (hash: %v) the OMSP provider had no revocation information", elem.Name, elem.ManifestHash)
+					elem.OmspStatus.Fail(ar.ManifestRevocationUnknown)
+					elem.Summary.Status = ar.StatusFail
+					success = ar.StatusFail
+				default:
+					log.Debugf("%v (hash: %v) has an unknown revocation status assigned %v", elem.Name, elem.ManifestHash, resp.Status)
+					elem.OmspStatus.Fail(ar.ManifestRevocationUnknown)
+					elem.Summary.Status = ar.StatusFail
+					success = ar.StatusFail
+				}
+				break
+			}
+		}
+		if !omspFound {
+			log.Debugf("For %v (hash: %v) no revocation information was provided", elem.Name, elem.ManifestHash)
+			elem.OmspStatus.Fail(ar.ManifestRevocationUnknown)
+			elem.Summary.Status = ar.StatusFail
+			success = ar.StatusFail
+		}
+	}
+	return success
+}
+
+func checkOmspValidity(thisUpdate string, nextUpdate string) *ar.Result {
+	result := &ar.Result{
+		Status: ar.StatusSuccess,
+	}
+
+	notBefore, err := time.Parse(time.RFC3339, thisUpdate)
+	if err != nil {
+		result.Fail(ar.ParseTime, err)
+		return result
+	}
+	currentTime := time.Now()
+
+	if notBefore.After(currentTime) {
+		result.Fail(ar.NotYetValid)
+		result.Got = currentTime.String()
+		result.ExpectedBetween = []string{thisUpdate, nextUpdate}
+	}
+
+	if nextUpdate != "" {
+		notAfter, err := time.Parse(time.RFC3339, nextUpdate)
+		if err != nil {
+			result.Fail(ar.ParseTime, err)
+			return result
+		}
+
+		if currentTime.After(notAfter) {
+			result.Fail(ar.Expired)
+			result.Got = currentTime.String()
+			result.ExpectedBetween = []string{thisUpdate, nextUpdate}
+		}
+	}
+
+	return result
 }
 
 func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityResult {
