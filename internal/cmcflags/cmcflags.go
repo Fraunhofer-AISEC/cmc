@@ -53,6 +53,7 @@ const (
 	VmplFlag             = "vmpl"
 	SnpCacheFlag         = "snp-cache"
 	TpmKeyAlgFlag        = "tpm-key-alg"
+	UseOmspFlag          = "use-omsp"
 )
 
 var Flags = []cli.Flag{
@@ -162,6 +163,10 @@ var Flags = []cli.Flag{
 		Name:  TpmKeyAlgFlag,
 		Usage: "TPM AK key algorithm (EC256, RSA2048)",
 	},
+	&cli.BoolFlag{
+		Name:  UseOmspFlag,
+		Usage: "Indicates whether to use revocation information for manifests",
+	},
 }
 
 // Override applies CLI flag values to the given cmc.Config, only overwriting
@@ -248,6 +253,9 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	}
 	if cmd.IsSet(TpmKeyAlgFlag) {
 		c.TpmKeyAlg = cmd.String(TpmKeyAlgFlag)
+	}
+	if cmd.IsSet(UseOmspFlag) {
+		c.UseOmsp = cmd.Bool(UseOmspFlag)
 	}
 
 	return nil
