@@ -1,15 +1,16 @@
 {
     "cmcAddr": "localhost:9955",
-    "provisionMode": "est",
     "provisionAuth": [ "attestation" ],
-    "provisionAddr": "https://localhost:9000/",
     "provisionToken": "data/provision_token",
+    "endorsementMode": "est",
+    "endorsementAddr": "https://localhost:9000/",
+    "enrollmentMode": "est",
+    "enrollmentAddr": "https://localhost:9000/",
     "metadata": [
         "file://data/metadata-signed"
     ],
     "drivers": [ "tpm" ],
     "excludePcrs": [ ],
-    "keyConfig": "EC256",
     "hashAlg": "SHA256",
     "api": "socket",
     "policyEngine": "js",
@@ -23,5 +24,5 @@
     "rootCas": [
         "data/pki/ca.pem"
     ],
-    "caKey": "data/pki/ca-key.pem"
+    "tpmKeyAlg": "EC256"
 }
