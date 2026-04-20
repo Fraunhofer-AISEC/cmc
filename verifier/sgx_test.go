@@ -1199,7 +1199,7 @@ var (
 	}
 
 	sgxCollateralArtifacts = []ar.Artifact{
-		ar.Artifact{
+		{
 			Type: ar.TYPE_TDX_COLLATERAL,
 			Events: []ar.Component{
 				{
