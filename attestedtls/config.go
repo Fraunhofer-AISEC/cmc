@@ -91,7 +91,7 @@ func NewCmcConfig(opts ...ConnectionOption[CmcConfig]) (*CmcConfig, error) {
 }
 
 // WithKeyId sets the key UUID to identify the key that should
-// be used for establishing attested TLS connectins
+// be used for establishing attested TLS connections
 func WithKeyId(id string) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) error {
 		c.KeyId = id
