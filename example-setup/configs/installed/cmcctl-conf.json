@@ -10,12 +10,13 @@
     "caStorePath": "data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
-    "measurementLog": true,
     "publishResults": "http://localhost:8080/results",
     "logLevel": "trace",
     "api": "socket",
     "serialization": "cbor",
     "keyConfig": "EC256",
+    "keyType": "tpm",
+    "keyId": "data/key_id",
     "tokenStore": "data/token_store",
     "provisionToken": "data/provision_token"
 }
