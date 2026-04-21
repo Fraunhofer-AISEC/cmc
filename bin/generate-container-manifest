@@ -137,12 +137,16 @@ for ((i = 0; i < num_containers; i++)); do
     echo "Creating manifest for container $i"
 
     container=${containers[$i]}
-    container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
 
     refval=$(echo "${refvals}" | jq -r ".[$i]")
 
     # SBOM: load
     sbom=$(cat "${input}/cyclonedx.sbom.json")
+
+    # SBOM: Set properties
+    setjson "sbom" "bomFormat"   "CycloneDX"
+    setjson "sbom" "specVersion" "\"1.7\""
+    setjson "sbom" "version"     1
 
     # SBOM: Insert reference values
     extendarr "sbom" "components" "${refval}"
@@ -152,19 +156,16 @@ for ((i = 0; i < num_containers; i++)); do
 
     # SBOM: Extract the reference value sha256 and add it to the file name to not overwrite the same
     # container with different arguments such as environment variables
-    sha256=$(echo "${sbom}" | jq -r '.components[0].sha256')
-    echo "Refval sha256: ${sha256}"
+    sha256=$(echo "${sbom}" | jq -r '.components[0].hashes[0].content')
+    container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
+    container_name="${container_name}-${sha256:0:8}"
 
-    # SBOM: Set other properties
-    setjson "sbom" "bomFormat"   "CycloneDX"
-    setjson "sbom" "specVersion" "\"1.7\""
-    setjson "sbom" "version"     1
 
     # App Manifest: load
     manifest=$(cat "${input}/manifest.json")
 
     # App Manifest: Set properties
-    setjson "manifest" "name"                  "${container}-${sha256}"
+    setjson "manifest" "name"                  "${container_name}"
     setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     setjson "manifest" "developerCommonName"   "test developer"
     setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
@@ -175,13 +176,13 @@ for ((i = 0; i < num_containers; i++)); do
     setjson "manifest" "sbom"                  "${sbom}"
 
     # App Manifest: Store
-    echo "Writing ${out}/${container_name}-${sha256}.manifest.json"
-    printf "%s\n" "${manifest}" > "${out}/${container_name}-${sha256}.manifest.json"
+    echo "Writing ${out}/${container_name}.manifest.json"
+    printf "%s\n" "${manifest}" > "${out}/${container_name}.manifest.json"
 
     # App Description: Create corresponding app description
     appdesc=$(cat "${input}/manifest.description.json")
-    appdesc=$(echo "${appdesc}" | jq ".name = \"${container}-${sha256}.description\"")
-    appdesc=$(echo "${appdesc}" | jq ".manifest = \"${container}-${sha256}\"")
+    appdesc=$(echo "${appdesc}" | jq ".name = \"${container_name}.description\"")
+    appdesc=$(echo "${appdesc}" | jq ".manifest = \"${container_name}\"")
     echo "Adding environment variables"
     for j in "${!keys[@]}"; do
         envs="{\"key\": \"${keys[${j}]}\", \"value\": \"${values[${j}]}\"}"
@@ -191,12 +192,12 @@ for ((i = 0; i < num_containers; i++)); do
 
     # Image Description: Add/replace app description to/in image description
     image_description=$(cat "${image_description_path}")
-    exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${container}-${sha256}.description\")")
+    exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${container}.description\")")
     if [[ "${exists}" = false ]]; then
       echo "Adding app description to image description"
     else
       echo "Replacing existing app description"
-      image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${container}-${sha256}.description\"))")
+      image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${container}.description\"))")
     fi
     extendarr "image_description" "descriptions" "${appdesc}"
 
