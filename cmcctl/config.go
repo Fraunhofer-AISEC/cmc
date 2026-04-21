@@ -374,12 +374,14 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	if c.PublishCert != "" && c.PublishKey != "" {
-		log.Debugf("Loading publish client certificate %v", c.PublishCert)
+		log.Debugf("Loading publish client key %v and certificate %v", c.PublishKey, c.PublishCert)
 		cert, err := tls.LoadX509KeyPair(c.PublishCert, c.PublishKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load publish client cert: %w", err)
+		if err == nil {
+			c.publishClientCert = &cert
+		} else {
+			log.Warnf("failed to load publish client cert: %v. Will not use client authentication for publishing",
+				err)
 		}
-		c.publishClientCert = &cert
 	}
 
 	// Get Serializer
