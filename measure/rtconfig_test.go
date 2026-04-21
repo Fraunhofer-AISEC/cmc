@@ -49,7 +49,7 @@ func TestGetConfigMeasurement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, _, err := GetSpecMeasurement(tt.args.id, tt.args.configData)
+			got, _, err := GetSpecMeasurement(tt.args.id, tt.args.configData)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetSpecMeasurement() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -84,7 +84,7 @@ func Test_normalize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := normalize(tt.args.id, tt.args.configData)
+			got, err := normalize(tt.args.id, tt.args.configData)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("normalize() error = %v, wantErr %v", err, tt.wantErr)
 				return

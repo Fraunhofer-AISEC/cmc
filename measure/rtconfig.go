@@ -30,21 +30,33 @@ import (
 	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
 )
 
-func GetSpecMeasurement(id string, configData []byte) ([]byte, []byte, string, error) {
+func GetRootfsPath(configRaw []byte) (string, error) {
+	var config specs.Spec
+	if err := json.Unmarshal(configRaw, &config); err != nil {
+		return "", fmt.Errorf("failed to unmarshal original OCI runtime config: %w", err)
+	}
+	if config.Root == nil {
+		return "", fmt.Errorf("invalid OCI config: no rootfs specified")
+	}
 
-	normalizedConfig, rootfs, err := normalize(id, configData)
+	return config.Root.Path, nil
+}
+
+func GetSpecMeasurement(id string, configRaw []byte) ([]byte, []byte, error) {
+
+	normalizedConfig, err := normalize(id, configRaw)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to normalize config: %w", err)
+		return nil, nil, fmt.Errorf("failed to normalize config: %w", err)
 	}
 
 	hasher := sha256.New()
 	hasher.Write(normalizedConfig)
 	hash := hasher.Sum(nil)
 
-	return hash, normalizedConfig, rootfs, nil
+	return hash, normalizedConfig, nil
 }
 
-func normalize(id string, configData []byte) ([]byte, string, error) {
+func normalize(id string, configRaw []byte) ([]byte, error) {
 
 	// The container id varies depending on the client. For ctr, this is a user-specified
 	// name. For docker, this is a random UUID which changes on different container invocations
@@ -53,7 +65,7 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 	if len(id) > 12 {
 		shortId = shortId[:12]
 	}
-	configString := string(configData)
+	configString := string(configRaw)
 
 	// TODO check the security relevance of every manipulated OCI runtime config bundle property
 
@@ -66,7 +78,7 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 	var config specs.Spec
 	err := json.Unmarshal(reproducibleConfig, &config)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to unmarshal OCI runtime config: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal OCI runtime config: %w", err)
 	}
 
 	// Make the docker prestart hooks reproducible
@@ -77,7 +89,7 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 			//lint:ignore SA1019 still needed for old configs
 			config.Hooks.Prestart[i].Path, err = filepath.EvalSymlinks(config.Hooks.Prestart[i].Path)
 			if err != nil {
-				return nil, "", fmt.Errorf("failed to evaluate dockerd symlink: %w", err)
+				return nil, fmt.Errorf("failed to evaluate dockerd symlink: %w", err)
 			}
 
 			// TODO FIXME The docker network controller ID is generated randomly (github.com/moby/moby/libnetwork/controller.go:New())
@@ -106,10 +118,6 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 	// Some container engines such as docker store the rootfs in an non-reproducible
 	// path. Therefore we store the path and hash the rootfs at this path, but remove the
 	// path from the config.json.
-	if config.Root == nil {
-		return nil, "", fmt.Errorf("invalid OCI config: no rootfs specified")
-	}
-	rootfs := config.Root.Path
 	config.Root = nil
 
 	// List environment variables alphabetically to guarantee reproducibility
@@ -125,16 +133,16 @@ func normalize(id string, configData []byte) ([]byte, string, error) {
 
 	data, err := json.Marshal(config)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to marshal config: %w", err)
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
 
 	// Transform to RFC 8785 canonical JSON form for reproducible hashing
 	tbh, err := jcs.Transform(data)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to cannonicalize json: %w", err)
+		return nil, fmt.Errorf("failed to cannonicalize json: %w", err)
 	}
 
-	return tbh, rootfs, nil
+	return tbh, nil
 }
 
 func isHex(s string) bool {

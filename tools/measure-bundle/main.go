@@ -54,7 +54,7 @@ func main() {
 		log.Fatalf("Failed to read container config: %v", err)
 	}
 
-	configHash, _, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)
+	configHash, _, err := m.GetSpecMeasurement("mycontainer", ctrConfig)
 	if err != nil {
 		log.Fatalf("Failed to measure config: %v", err)
 	}
