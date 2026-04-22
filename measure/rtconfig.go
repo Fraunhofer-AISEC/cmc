@@ -95,22 +95,19 @@ func normalize(id string, configRaw []byte) ([]byte, error) {
 			// TODO FIXME The docker network controller ID is generated randomly (github.com/moby/moby/libnetwork/controller.go:New())
 			// and then the truncated daemon.netController.ID() is added as an argument in the prestart
 			// hooks (github.com/moby/moby/daemon/oci_linux.go:withLibnetwork()). This is a very hacky
-			// way to make it reproducible, ideally, the actual network ID controller ID should be
-			// retrieved and then replaced
+			// way to make it reproducible
 			//lint:ignore SA1019 still needed for old configs
-			for j := range config.Hooks.Prestart[i].Args {
+			args := config.Hooks.Prestart[i].Args
+			if len(args) >= 4 && args[0] == "libnetwork-setkey" && len(args[3]) == 12 && isHex(args[3]) {
 				//lint:ignore SA1019 still needed for old configs
-				if len(config.Hooks.Prestart[i].Args[j]) == 12 && isHex(config.Hooks.Prestart[i].Args[j]) {
-					//lint:ignore SA1019 still needed for old configs
-					config.Hooks.Prestart[i].Args[j] = "<docker-network-controller-id>"
-				}
+				config.Hooks.Prestart[i].Args[3] = "<docker-network-controller-id>"
 			}
 		}
 	}
 
 	// Some values from the config, which are not security relevant and may change
 	// on different container invocations will be ignored
-	// TODO FIXME check all properties for security relevance , currently experimental
+	// TODO FIXME check all properties for security relevance, currently experimental
 	config.Annotations = nil
 	config.Process.Terminal = false
 	config.Process.ConsoleSize = nil
