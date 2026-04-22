@@ -79,6 +79,14 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 
 				log.Debugf(" Rule %v defined for scalar field %q", rule, key)
 
+				if strings.HasPrefix(ruleType, "replace:") {
+					err := applyReplace(ruleType, key, refValue, measureValue)
+					if err != nil {
+						return err
+					}
+					continue
+				}
+
 				if rule != "mandatory" && rule != "optional" && rule != "modifiable" && rule != "subset" {
 					return fmt.Errorf(" unsupported rule type: %v", rule)
 				}
@@ -234,6 +242,63 @@ func checkAdditionalKey(key string, reference, measurement, rules map[string]int
 			return fmt.Errorf("unsupported rule type for measurement-only key %v: %v", key, ruleType)
 		}
 	}
+	return nil
+}
+
+// applyReplace handles the "replace:KEY=*[,KEY=*]" rule for string arrays.
+// It replaces measurement entries matching wildcard keys with their reference
+// counterparts, then compares for equality.
+func applyReplace(rule, field string, refValue, measureValue interface{}) error {
+	patterns := strings.TrimPrefix(rule, "replace:")
+	wildcardKeys := make(map[string]bool)
+	for _, pattern := range strings.Split(patterns, ",") {
+		key, _, ok := strings.Cut(pattern, "=")
+		if !ok || key == "" {
+			return fmt.Errorf(" invalid replace pattern %q for field %q", pattern, field)
+		}
+		wildcardKeys[key] = true
+	}
+
+	refArr, refOk := refValue.([]interface{})
+	measArr, measOk := measureValue.([]interface{})
+	if !refOk || !measOk {
+		return fmt.Errorf(" field %q must be a JSON array for replace rule: ref: %T, meas: %T",
+			field, refValue, measureValue)
+	}
+
+	// Build key:entry map from reference array
+	refByKey := make(map[string]interface{})
+	for _, entry := range refArr {
+		s, ok := entry.(string)
+		if !ok {
+			continue
+		}
+		key, _, _ := strings.Cut(s, "=")
+		refByKey[key] = entry
+	}
+
+	// Replace wildcard entries in measurement with reference values
+	replaced := make([]interface{}, len(measArr))
+	copy(replaced, measArr)
+	for i, entry := range replaced {
+		s, ok := entry.(string)
+		if !ok {
+			continue
+		}
+		key, _, _ := strings.Cut(s, "=")
+		if wildcardKeys[key] {
+			if refEntry, exists := refByKey[key]; exists {
+				log.Tracef(" Replacing measurement entry %q with reference value for key %q", s, key)
+				replaced[i] = refEntry
+			}
+		}
+	}
+
+	if !reflect.DeepEqual(refArr, replaced) {
+		return fmt.Errorf(" field %q does not match reference after applying replace rule", field)
+	}
+
+	log.Tracef(" Field %q matches reference after replace rule", field)
 	return nil
 }
 

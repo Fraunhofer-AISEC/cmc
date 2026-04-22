@@ -169,10 +169,11 @@ type ImageDescription struct {
 
 // ManifestDescription links the manifests into the ImageDescription
 type ManifestDescription struct {
-	Type        string `json:"type" cbor:"0,keyasint"`
-	Name        string `json:"name" cbor:"1,keyasint"`
-	Description string `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
-	Manifest    string `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
+	Type        string                 `json:"type" cbor:"0,keyasint"`
+	Name        string                 `json:"name" cbor:"1,keyasint"`
+	Description string                 `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
+	Manifest    string                 `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
+	OciRules    map[string]interface{} `json:"ociRules,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // Sbom is a partial CycloneDX SBOM implementation
@@ -195,17 +196,18 @@ type Sbom struct {
 // -             | 4           |   RTMR3
 // -             | 5           |   MRSEAM (not in UEFI spec)
 type Component struct {
-	Type            string           `json:"type" cbor:"0,keyasint"`
-	Name            string           `json:"name" cbor:"1,keyasint"`
-	Index           int              `json:"index" cbor:"2,keyasint"`
-	Hashes          []ReferenceHash  `json:"hashes,omitempty" cbor:"3,keyasint,omitempty"`
-	Version         string           `json:"version,omitempty" cbor:"4,keyasint,omitempty"`
-	Optional        bool             `json:"optional,omitempty" cbor:"5,keyasint,omitempty"`
-	Description     string           `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
-	EventData       *EventData       `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
-	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
-	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
-	PackageUrl      string           `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
+	Type            string                 `json:"type" cbor:"0,keyasint"`
+	Name            string                 `json:"name" cbor:"1,keyasint"`
+	Index           int                    `json:"index" cbor:"2,keyasint"`
+	Hashes          []ReferenceHash        `json:"hashes,omitempty" cbor:"3,keyasint,omitempty"`
+	Version         string                 `json:"version,omitempty" cbor:"4,keyasint,omitempty"`
+	Optional        bool                   `json:"optional,omitempty" cbor:"5,keyasint,omitempty"`
+	Description     string                 `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	EventData       *EventData             `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
+	CtrData         *CtrData               `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral       `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
+	PackageUrl      string                 `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
+	OciRules        map[string]interface{} `json:"ociRules,omitempty" cbor:"11,keyasint,omitempty"`
 }
 
 type ReferenceHash struct {

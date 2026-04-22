@@ -104,6 +104,51 @@ func TestValidateConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "Valid replace single key",
+			args: args{
+				reference:   replaceRefConfig,
+				measurement: replaceValidMeasConfig,
+				rules:       replaceRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid replace exact match",
+			args: args{
+				reference:   replaceRefConfig,
+				measurement: replaceRefConfig,
+				rules:       replaceRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid replace multiple keys",
+			args: args{
+				reference:   replaceRefConfig,
+				measurement: replaceMultiValidMeasConfig,
+				rules:       replaceMultiRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Invalid replace non-wildcard changed",
+			args: args{
+				reference:   replaceRefConfig,
+				measurement: replaceInvalidMeasConfig,
+				rules:       replaceRules,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Invalid replace extra env var",
+			args: args{
+				reference:   replaceRefConfig,
+				measurement: replaceInvalidExtraMeasConfig,
+				rules:       replaceRules,
+			},
+			wantErr: true,
+		},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
 	for _, tt := range tests {
@@ -320,6 +365,70 @@ var (
 	}
 
 	invalidImplicitValue = "invalid"
+
+	// Replace rule test data
+	replaceRefConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=<container-id>",
+				"PATH=/usr/bin:/bin",
+				"TOKEN=",
+			},
+		},
+	}
+
+	replaceValidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=<container-id>",
+				"PATH=/usr/bin:/bin",
+				"TOKEN=value",
+			},
+		},
+	}
+
+	replaceMultiValidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=different-host",
+				"PATH=/usr/bin:/bin",
+				"TOKEN=value",
+			},
+		},
+	}
+
+	replaceInvalidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=<container-id>",
+				"PATH=/something/else",
+				"TOKEN=value",
+			},
+		},
+	}
+
+	replaceInvalidExtraMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=<container-id>",
+				"PATH=/usr/bin:/bin",
+				"TOKEN=value",
+				"EXTRA=unexpected",
+			},
+		},
+	}
+
+	replaceRules = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": "replace:TOKEN=*",
+		},
+	}
+
+	replaceMultiRules = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": "replace:TOKEN=*,HOSTNAME=*",
+		},
+	}
 
 	// Rules for unit tests
 	rules = map[string]interface{}{

@@ -259,8 +259,11 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.Component, measured *ar.CtrDa
 			return nil, false, fmt.Errorf("failed to convert measurement spec: %w", err)
 		}
 
-		// TODO load rules
-		err = ValidateConfig(refConvSpec, measConvSpec, map[string]interface{}{})
+		rules := ref.OciRules
+		if rules == nil {
+			rules = map[string]interface{}{}
+		}
+		err = ValidateConfig(refConvSpec, measConvSpec, rules)
 		if err != nil {
 			log.Debugf("Failed to validate OCI config: %v", err)
 			return nil, false, nil
