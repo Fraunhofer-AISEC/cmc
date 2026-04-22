@@ -626,6 +626,7 @@ func checkValidity(val ar.Validity) ar.Result {
 func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestDescription) (map[string][]ar.Component, error) {
 
 	// SwVerify only: Build manifest-name: OciRules lookup from descriptions for
+	log.Tracef("Collecting OCI rules for %v descriptions", len(descriptions))
 	rulesLookup := make(map[string]map[string]interface{})
 	for _, desc := range descriptions {
 		if desc.OciRules != nil {
@@ -654,6 +655,7 @@ func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestD
 
 			// SwVerify only: Add rules
 			if rules, ok := rulesLookup[m.Name]; ok {
+				log.Tracef("Adding rules for %q", m.Name)
 				r.OciRules = rules
 			}
 
