@@ -161,7 +161,7 @@ func Verify(
 	log.Tracef("Recalculated %v context hash %x for encoded context with user nonce %x and length %v",
 		alg.String(), evidenceNonce, report.Context.Nonce, len(report.GetEncodedContext()))
 
-	refVals, err := collectComponents(metaResults.ManifestResults)
+	refVals, err := collectComponents(metaResults.ManifestResults, metaResults.ImageDescriptionResult.Descriptions)
 	if err != nil {
 		result.Fail(ar.RefValTypeNotSupported, err)
 		return result
@@ -623,7 +623,15 @@ func checkValidity(val ar.Validity) ar.Result {
 	return result
 }
 
-func collectComponents(metadata []ar.MetadataResult) (map[string][]ar.Component, error) {
+func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestDescription) (map[string][]ar.Component, error) {
+
+	// SwVerify only: Build manifest-name: OciRules lookup from descriptions for
+	rulesLookup := make(map[string]map[string]interface{})
+	for _, desc := range descriptions {
+		if desc.OciRules != nil {
+			rulesLookup[desc.Manifest] = desc.OciRules
+		}
+	}
 
 	refmap := make(map[string][]ar.Component)
 	// Iterate over all manifest reference values
@@ -642,6 +650,11 @@ func collectComponents(metadata []ar.MetadataResult) (map[string][]ar.Component,
 				r.Type != ar.TYPE_REFVAL_TDX &&
 				r.Type != ar.TYPE_REFVAL_SGX {
 				return nil, fmt.Errorf("reference value of type %q is not supported", r.Type)
+			}
+
+			// SwVerify only: Add rules
+			if rules, ok := rulesLookup[m.Name]; ok {
+				r.OciRules = rules
 			}
 
 			// Collect all reference values, depending on type, independent of the manifest

@@ -60,7 +60,7 @@ func Test_collectComponents(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := collectComponents(tt.args.metadata)
+			got, err := collectComponents(tt.args.metadata, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("collectComponents() error = %v, wantErr %v", err, tt.wantErr)
 				return
