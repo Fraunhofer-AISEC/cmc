@@ -182,7 +182,7 @@ func VerifySw(
 						Launched:   true,
 						Name:       nameInfo,
 						Digest:     event.GetHash(crypto.SHA256),
-						CtrDetails: event.CtrData,
+						CtrDetails: ref.CtrData,
 						PackageUrl: ref.PackageUrl,
 						HashAlg:    crypto.SHA256.String(),
 					}
@@ -269,7 +269,7 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.Component, measured *ar.CtrDa
 			return nil, false, nil
 		}
 
-		log.Tracef("Rules-base validation successful")
+		log.Tracef("Rules-based validation successful")
 
 		// use measured hash, as rule-based config validation was successful
 		refSpecHash = measured.ConfigSha256
