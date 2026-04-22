@@ -92,6 +92,8 @@ func VerifySw(
 			for _, event := range swm.Events {
 				if bytes.Equal(event.CtrData.RootfsSha256, ref.GetHash(crypto.SHA256)) {
 
+					log.Tracef("Found matching rootfs hash %x", ref.GetHash(crypto.SHA256))
+
 					// Calculate the measurement template hash
 					templateHash, ok, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
