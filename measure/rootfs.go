@@ -61,7 +61,7 @@ func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
 			return fmt.Errorf("failed to write header: %w", err)
 		}
 
-		if !fi.IsDir() && fi.Mode()&os.ModeSymlink == 0 {
+		if fi.Mode().IsRegular() {
 			f, err := os.Open(file)
 			if err != nil {
 				return fmt.Errorf("failed to open: %w", err)
