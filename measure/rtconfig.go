@@ -120,6 +120,15 @@ func normalize(id string, configRaw []byte) ([]byte, error) {
 	// List environment variables alphabetically to guarantee reproducibility
 	slices.Sort(config.Process.Env)
 
+	// Docker-volume source paths (anonymous and named) contain
+	// non-deterministic components and can be normalized, as this is Dockercan -internal
+	// storage, as they start empty.
+	for i := range config.Mounts {
+		if strings.HasPrefix(config.Mounts[i].Source, "/var/lib/docker/volumes/") {
+			config.Mounts[i].Source = "<docker-volume>"
+		}
+	}
+
 	// List mounts alphabetically to guarantee reproducibility
 	sort.Slice(config.Mounts, func(i, j int) bool {
 		if config.Mounts[i].Source == config.Mounts[j].Source {
