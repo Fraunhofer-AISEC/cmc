@@ -173,7 +173,7 @@ type ManifestDescription struct {
 	Name        string                 `json:"name" cbor:"1,keyasint"`
 	Description string                 `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
 	Manifest    string                 `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
-	OciRules    map[string]interface{} `json:"ociRules,omitempty" cbor:"4,keyasint,omitempty"`
+	OciRules    map[string]interface{} `json:"-" cbor:"-"`
 }
 
 // Sbom is a partial CycloneDX SBOM implementation
