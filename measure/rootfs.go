@@ -17,7 +17,6 @@ package measure
 
 import (
 	"archive/tar"
-	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -27,8 +26,8 @@ import (
 )
 
 func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
+	hasher := sha256.New()
+	tw := tar.NewWriter(hasher)
 
 	rootfsPath = filepath.Clean(rootfsPath) + string(os.PathSeparator)
 
@@ -84,8 +83,6 @@ func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to close tar writer: %w", err)
 	}
 
-	hasher := sha256.New()
-	hasher.Write(buf.Bytes())
 	hash := hasher.Sum(nil)
 
 	return hash, nil
