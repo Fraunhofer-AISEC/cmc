@@ -182,7 +182,7 @@ func VerifySw(
 						Launched:   true,
 						Name:       nameInfo,
 						Digest:     event.GetHash(crypto.SHA256),
-						CtrDetails: ref.CtrData,
+						CtrDetails: labelWildcardEnv(ref.CtrData, ref.OciRules),
 						PackageUrl: ref.PackageUrl,
 						HashAlg:    crypto.SHA256.String(),
 					}
@@ -201,7 +201,7 @@ func VerifySw(
 					Launched:   true,
 					Name:       event.Name,
 					Digest:     event.GetHash(crypto.SHA256),
-					CtrDetails: event.CtrData,
+					CtrDetails: redactEnv(event.CtrData),
 					PackageUrl: event.PackageUrl,
 					HashAlg:    crypto.SHA256.String(),
 				}

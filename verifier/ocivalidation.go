@@ -302,6 +302,63 @@ func applyReplace(rule, field string, refValue, measureValue interface{}) error 
 	return nil
 }
 
+func labelWildcardEnv(ctrData *ar.CtrData, rules map[string]interface{}) *ar.CtrData {
+	if ctrData == nil || ctrData.OciSpec == nil || rules == nil {
+		return ctrData
+	}
+	processRules, ok := rules["process"].(map[string]interface{})
+	if !ok {
+		return ctrData
+	}
+	envRule, ok := processRules["env"].(string)
+	if !ok || !strings.HasPrefix(envRule, "replace:") {
+		return ctrData
+	}
+
+	wildcardKeys := make(map[string]bool)
+	for _, p := range strings.Split(strings.TrimPrefix(envRule, "replace:"), ",") {
+		key, _, _ := strings.Cut(p, "=")
+		wildcardKeys[key] = true
+	}
+
+	spec := *ctrData.OciSpec
+	if spec.Process != nil {
+		p := *spec.Process
+		p.Env = make([]string, len(spec.Process.Env))
+		copy(p.Env, spec.Process.Env)
+		for i, e := range p.Env {
+			key, _, _ := strings.Cut(e, "=")
+			if wildcardKeys[key] {
+				p.Env[i] = key + "=*"
+			}
+		}
+		spec.Process = &p
+	}
+
+	c := *ctrData
+	c.OciSpec = &spec
+	return &c
+}
+
+func redactEnv(ctrData *ar.CtrData) *ar.CtrData {
+	if ctrData == nil || ctrData.OciSpec == nil || ctrData.OciSpec.Process == nil {
+		return ctrData
+	}
+
+	spec := *ctrData.OciSpec
+	p := *spec.Process
+	p.Env = make([]string, len(spec.Process.Env))
+	for i, e := range spec.Process.Env {
+		key, _, _ := strings.Cut(e, "=")
+		p.Env[i] = key + "=<redacted>"
+	}
+	spec.Process = &p
+
+	c := *ctrData
+	c.OciSpec = &spec
+	return &c
+}
+
 // isSubset checks if a slice is a subset of another slice
 func isSubset(subset, superset []interface{}) bool {
 	for _, subElem := range subset {
