@@ -173,7 +173,7 @@ type ManifestDescription struct {
 	Name        string                 `json:"name" cbor:"1,keyasint"`
 	Description string                 `json:"description,omitempty" cbor:"2,keyasint,omitempty"`
 	Manifest    string                 `json:"manifest,omitempty" cbor:"3,keyasint,omitempty"`
-	OciRules    map[string]interface{} `json:"-" cbor:"-"`
+	OciRules    map[string]interface{} `json:"ociRules,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // Sbom is a partial CycloneDX SBOM implementation
@@ -207,7 +207,7 @@ type Component struct {
 	CtrData         *CtrData               `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
 	IntelCollateral *IntelCollateral       `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
 	PackageUrl      string                 `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
-	OciRules        map[string]interface{} `json:"ociRules,omitempty" cbor:"11,keyasint,omitempty"`
+	OciRules        map[string]interface{} `json:"-" cbor:"-"`
 }
 
 type ReferenceHash struct {
