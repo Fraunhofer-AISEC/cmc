@@ -126,7 +126,7 @@ func (a SocketApi) verify(c *config) error {
 	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, resp.Result,
 		c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 	if err != nil {
-		return fmt.Errorf("failed to save result: %w", err)
+		return fmt.Errorf("failed to publish result: %w", err)
 	}
 
 	return nil
