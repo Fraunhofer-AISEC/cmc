@@ -104,7 +104,7 @@ func Publish(resultsAddr, ocsfAddr, networkAddr string, token []byte, file strin
 	if resultsAddr != "" {
 		log.Debugf("Publishing result to '%v'", resultsAddr)
 
-		data, err := json.Marshal(*result)
+		data, err := json.Marshal(result)
 		if err != nil {
 			return fmt.Errorf("failed to marshal result: %v", err)
 		}

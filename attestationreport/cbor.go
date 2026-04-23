@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"fmt"
+	"reflect"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/fxamacker/cbor/v2"
@@ -32,6 +33,9 @@ type cborSerializer struct {
 
 var (
 	ENC_OPTIONS = cbor.CTAP2EncOptions()
+	DEC_OPTIONS = cbor.DecOptions{
+		DefaultMapType: reflect.TypeOf(map[string]interface{}{}),
+	}
 )
 
 func NewCborSerializer() (cborSerializer, error) {
@@ -39,7 +43,7 @@ func NewCborSerializer() (cborSerializer, error) {
 	if err != nil {
 		return cborSerializer{}, err
 	}
-	dec, err := cbor.DecOptions{}.DecMode()
+	dec, err := DEC_OPTIONS.DecMode()
 	if err != nil {
 		return cborSerializer{}, err
 	}
@@ -245,7 +249,7 @@ func (r *AttestationReport) UnmarshalCBOR(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to set up encode mode: %w", err)
 	}
-	dec, err := cbor.DecOptions{}.DecMode()
+	dec, err := DEC_OPTIONS.DecMode()
 	if err != nil {
 		return fmt.Errorf("failed to set up decode mode: %w", err)
 	}
