@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -164,23 +163,19 @@ func VerifySw(
 					}
 
 					if !bytes.Equal(event.GetHash(crypto.SHA256), templateHash) {
-						validateOk = false
-						ok = false
-						log.Debugf("Failed to match measured hash (%x) with reference template hash (%x)",
+						log.Debugf("measured template hash (%x) does not match reference hash (%x)",
 							event.GetHash(crypto.SHA256), templateHash)
-					} else {
-						log.Tracef("Calculated template hash matches measured hash: %x", templateHash)
+						continue
 					}
 
+					log.Tracef("Calculated template hash matches measured hash: %x", templateHash)
+
 					found = true
-					nameInfo := ref.Name
-					if event.Name != "" && !strings.EqualFold(ref.Name, event.Name) {
-						nameInfo += ": " + event.Name
-					}
 					r := ar.DigestResult{
-						Success:    validateOk,
+						Type:       "Verified",
+						Name:       ref.Name,
+						Success:    true,
 						Launched:   true,
-						Name:       nameInfo,
 						Digest:     event.GetHash(crypto.SHA256),
 						CtrDetails: labelWildcardEnv(ref.CtrData, ref.OciRules),
 						PackageUrl: ref.PackageUrl,
