@@ -158,7 +158,7 @@ func handleNotFound(url *url.URL, resp http.ResponseWriter) {
 	setLinkDirectory(url, resp)
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusNotFound)
-	resp.Write([]byte("Unknown resource on this ACME proxy server\n"))
+	resp.Write([]byte("Unknown resource on this ACME server\n"))
 }
 func handleDirectory(url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	if req.Method != http.MethodGet {
@@ -320,7 +320,7 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	}
 	for _, ident := range payload.Identifier {
 		if ident.Type != "dns" {
-			http.Error(resp, "proxy only supports dns identifier", http.StatusBadRequest)
+			http.Error(resp, "server only supports dns identifier", http.StatusBadRequest)
 			return
 		}
 		if !ValidateIdentifier(ident.Value) {
