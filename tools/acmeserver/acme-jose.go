@@ -41,56 +41,56 @@ const (
 
 func UnpackAndParseJWS(url *url.URL, req *http.Request, resp http.ResponseWriter) *RequestPayload {
 	if ct := req.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "application/jose+json") {
-		http.Error(resp, "Expected body of [application/jose+json]", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "expected body of [application/jose+json]")
 		return nil
 	}
 
 	jwsBody, err := io.ReadAll(io.LimitReader(req.Body, MaxJsonPayloadSize))
 	if err != nil {
-		http.Error(resp, "Too large payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "too large payload")
 		return nil
 	}
 
 	// unpack the overall body
 	var body jwsJSONBody
 	if err := json.Unmarshal(jwsBody, &body); err != nil {
-		http.Error(resp, "malformed JWS JSON payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS JSON payload")
 		return nil
 	}
 	if body.Protected == "" || body.Signature == "" {
-		http.Error(resp, "malformed JWS JSON object", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS JSON object")
 		return nil
 	}
 
 	// unpack the payload
 	jwsPayload, err := base64.RawURLEncoding.DecodeString(body.Payload)
 	if err != nil {
-		http.Error(resp, "malformed JWS payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS payload")
 		return nil
 	}
 
 	// unpack the protected field (key or kid can be empty)
 	jwsProtected, err := base64.RawURLEncoding.DecodeString(body.Protected)
 	if err != nil {
-		http.Error(resp, "malformed JWS Protected", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS protected header")
 		return nil
 	}
 	var protected jwsJSONProtected
 	if err := json.Unmarshal(jwsProtected, &protected); err != nil || protected.Algorithm == "" || protected.Nonce == "" || protected.URL == "" || (protected.Key == nil && protected.Kid == "") {
-		http.Error(resp, "malformed JWS Protected", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS protected header")
 		return nil
 	}
 
 	// unpack the signature
 	jwsSignature, err := base64.RawURLEncoding.DecodeString(body.Signature)
 	if err != nil {
-		http.Error(resp, "malformed JWS signature", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS signature")
 		return nil
 	}
 
 	// validate the request url
 	if protected.URL != url.String() {
-		http.Error(resp, "malformed JWS request URL", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS request URL")
 		return nil
 	}
 
@@ -99,12 +99,12 @@ func UnpackAndParseJWS(url *url.URL, req *http.Request, resp http.ResponseWriter
 	if protected.Key != nil {
 		key, err := json.Marshal(protected.Key)
 		if err != nil {
-			http.Error(resp, "malformed JWS Protected", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS key")
 			return nil
 		}
 		canonical, err := jsoncanonicalizer.Transform(key)
 		if err != nil {
-			http.Error(resp, "malformed JWS key", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed JWS key")
 			return nil
 		}
 		keyString = string(canonical)
@@ -126,7 +126,7 @@ func ValidateJWSWithJWK(payload *RequestPayload, resp http.ResponseWriter, jwkRa
 	// parse the JWK
 	var jwk jose.JSONWebKey
 	if err := json.Unmarshal([]byte(jwkRaw), &jwk); err != nil {
-		http.Error(resp, "Unsupported JWS key format", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "unsupported JWS key format")
 		return false
 	}
 
@@ -137,13 +137,13 @@ func ValidateJWSWithJWK(payload *RequestPayload, resp http.ResponseWriter, jwkRa
 	compactSerialization := fmt.Sprintf("%v.%v", payload.Encoded, base64.RawURLEncoding.EncodeToString(payload.Signature))
 	jws, err := jose.ParseSigned(compactSerialization, []jose.SignatureAlgorithm{alg})
 	if err != nil {
-		http.Error(resp, "Unsupported JWS algorithm", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "unsupported JWS algorithm")
 		return false
 	}
 
 	// verify the signature
 	if _, err := jws.Verify(jwk.Key); err != nil {
-		http.Error(resp, "JWS payload verification error", http.StatusBadRequest)
+		acmeError(resp, http.StatusUnauthorized, AcmeErrUnauthorized, "JWS signature verification failed")
 		return false
 	}
 	return true

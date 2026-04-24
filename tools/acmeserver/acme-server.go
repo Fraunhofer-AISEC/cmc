@@ -12,6 +12,26 @@ import (
 	"time"
 )
 
+const (
+	AcmeErrAccountDoesNotExist   = "urn:ietf:params:acme:error:accountDoesNotExist"
+	AcmeErrBadNonce              = "urn:ietf:params:acme:error:badNonce"
+	AcmeErrMalformed             = "urn:ietf:params:acme:error:malformed"
+	AcmeErrOrderNotReady         = "urn:ietf:params:acme:error:orderNotReady"
+	AcmeErrUnauthorized          = "urn:ietf:params:acme:error:unauthorized"
+	AcmeErrUnsupportedIdentifier = "urn:ietf:params:acme:error:unsupportedIdentifier"
+	AcmeErrServerInternal        = "urn:ietf:params:acme:error:serverInternal"
+)
+
+func acmeError(resp http.ResponseWriter, status int, errType string, detail string) {
+	resp.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
+	resp.WriteHeader(status)
+	json.NewEncoder(resp).Encode(map[string]any{
+		"type":   errType,
+		"detail": detail,
+		"status": status,
+	})
+}
+
 func handleAcmeDispatch(state *AcmeState, req *http.Request, resp http.ResponseWriter, https bool) {
 	url := &url.URL{
 		Scheme: (func(https bool) string {
@@ -80,8 +100,7 @@ func setReplayNonce(state *AcmeState, resp http.ResponseWriter) {
 func respondWithJson(status int, resp http.ResponseWriter, value any) {
 	resp.Header().Set("Content-Type", "application/json; charset=utf-8")
 	resp.WriteHeader(status)
-	enc := json.NewEncoder(resp)
-	enc.Encode(value)
+	json.NewEncoder(resp).Encode(value)
 }
 func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) ([]byte, *AcmeAccount) {
 	if req.Method != http.MethodPost {
@@ -97,19 +116,20 @@ func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp ht
 		return nil, nil
 	}
 
-	// validate the nonce
 	if !state.Nonce.Check(jwsBody.Nonce) {
-		http.Error(resp, "outdated or invalid nonce", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrBadNonce, "outdated or invalid nonce")
 		return nil, nil
 	}
 
-	// check if the account exists
 	var account *AcmeAccount
 	if index := strings.Index(jwsBody.Kid, "/account/"); index == -1 {
-		http.Error(resp, "unknown account kid", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrAccountDoesNotExist, "unknown account kid")
 		return nil, nil
 	} else if account = state.LookupAccountById(jwsBody.Kid[index+9:]); account == nil {
-		http.Error(resp, "unknown account kid", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrAccountDoesNotExist, "unknown account kid")
+		return nil, nil
+	} else if account.Deactivated.Load() {
+		acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "account is deactivated")
 		return nil, nil
 	}
 
@@ -120,9 +140,13 @@ func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp ht
 	return jwsBody.Payload, account
 }
 func sendAccountResource(status int, account *AcmeAccount, url *url.URL, resp http.ResponseWriter) {
+	accountStatus := AcmeStatusValid
+	if account.Deactivated.Load() {
+		accountStatus = AcmeStatusDeactivated
+	}
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/account/%v", account.Identifier)))
 	respondWithJson(status, resp, map[string]any{
-		"status":  "valid",
+		"status":  string(accountStatus),
 		"contact": account.Contacts,
 		"orders":  makeFullURL(url, "/orders"),
 	})
@@ -154,9 +178,7 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 
 func handleNotFound(url *url.URL, resp http.ResponseWriter) {
 	setLinkDirectory(url, resp)
-	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	resp.WriteHeader(http.StatusNotFound)
-	resp.Write([]byte("Unknown resource on this ACME server\n"))
+	acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown resource on this ACME server")
 }
 func handleDirectory(url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	if req.Method != http.MethodGet {
@@ -218,7 +240,7 @@ func handleNewAccount(state *AcmeState, url *url.URL, req *http.Request, resp ht
 	}
 
 	if !state.Nonce.Check(jwsBody.Nonce) {
-		http.Error(resp, "outdated or invalid nonce", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrBadNonce, "outdated or invalid nonce")
 		return
 	}
 
@@ -234,14 +256,14 @@ func handleNewAccount(state *AcmeState, url *url.URL, req *http.Request, resp ht
 		TermsOfServiceAgreed   bool     `json:"termsOfServiceAgreed"`
 	}{}
 	if err := json.Unmarshal(jwsBody.Payload, &payload); err != nil {
-		http.Error(resp, "malformed account creation payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed account creation payload")
 		return
 	}
 
 	if payload.OnlyReturnExisting {
 		account := state.LookupAccountByKey(jwsBody.Key)
 		if account == nil {
-			http.Error(resp, "account does not exist", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrAccountDoesNotExist, "account does not exist")
 			return
 		}
 		sendAccountResource(http.StatusOK, account, url, resp)
@@ -250,16 +272,16 @@ func handleNewAccount(state *AcmeState, url *url.URL, req *http.Request, resp ht
 
 	for _, contact := range payload.Contacts {
 		if !ValidateContact(contact) {
-			http.Error(resp, fmt.Sprintf("malformed contact [%v] encountered", contact), http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, fmt.Sprintf("malformed contact [%v] encountered", contact))
 			return
 		}
 	}
 	if !payload.TermsOfServiceAgreed {
-		http.Error(resp, "terms of service have not been agreed to", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "terms of service have not been agreed to")
 		return
 	}
 	if payload.ExternalAccountBinding != nil {
-		http.Error(resp, "external account bindings not required", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "external account bindings not required")
 		return
 	}
 
@@ -286,21 +308,21 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 		NotAfter   string            `json:"notAfter"`
 	}{}
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
-		http.Error(resp, "malformed order creation payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed order creation payload")
 		return
 	}
 
 	if len(payload.Identifier) == 0 {
-		http.Error(resp, "cannot create order for empty identifiers", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "cannot create order for empty identifiers")
 		return
 	}
 	for _, ident := range payload.Identifier {
 		if ident.Type != "dns" {
-			http.Error(resp, "server only supports dns identifier", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrUnsupportedIdentifier, "server only supports dns identifier")
 			return
 		}
 		if !ValidateIdentifier(ident.Value) {
-			http.Error(resp, "malformed dns identifier", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed dns identifier")
 			return
 		}
 	}
@@ -308,7 +330,7 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	var notBefore, notAfter *time.Time
 	if len(payload.NotBefore) > 0 {
 		if time, err := time.Parse(time.RFC3339Nano, payload.NotBefore); err != nil {
-			http.Error(resp, "invalid before time format", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid before time format")
 			return
 		} else {
 			notBefore = &time
@@ -316,14 +338,14 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	}
 	if len(payload.NotAfter) > 0 {
 		if time, err := time.Parse(time.RFC3339Nano, payload.NotAfter); err != nil {
-			http.Error(resp, "invalid after time format", http.StatusBadRequest)
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid after time format")
 			return
 		} else {
 			notAfter = &time
 		}
 	}
 	if notBefore != nil && notAfter != nil && !notBefore.Before(*notAfter) {
-		http.Error(resp, "invalid order in time constraints", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid order in time constraints")
 		return
 	}
 
@@ -345,12 +367,29 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 	if rawPayload == nil {
 		return
 	}
-	if len(rawPayload) != 0 {
-		http.Error(resp, "malformed request payload", http.StatusBadRequest)
+
+	// empty payload returns account info
+	if len(rawPayload) == 0 {
+		sendAccountResource(http.StatusOK, account, url, resp)
 		return
 	}
 
-	sendAccountResource(http.StatusOK, account, url, resp)
+	// parse account update
+	payload := struct {
+		Status string `json:"status"`
+	}{}
+	if err := json.Unmarshal(rawPayload, &payload); err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed account update payload")
+		return
+	}
+
+	if payload.Status == string(AcmeStatusDeactivated) {
+		account.Deactivated.Store(true)
+		sendAccountResource(http.StatusOK, account, url, resp)
+		return
+	}
+
+	acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "unsupported account update")
 }
 func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	rawPayload, account := processPostAsGet(state, url, req, resp)
@@ -358,7 +397,7 @@ func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.R
 		return
 	}
 	if len(rawPayload) != 0 {
-		http.Error(resp, "malformed request payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
 		return
 	}
 
@@ -375,7 +414,7 @@ func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.R
 func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	var orderIdentifier string
 	if index := strings.Index(url.Path, "/order/"); index == -1 {
-		http.Error(resp, "malformed order identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed order identifier")
 		return
 	} else {
 		orderIdentifier = url.Path[index+7:]
@@ -386,7 +425,7 @@ func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.Re
 		return
 	}
 	if len(rawPayload) != 0 {
-		http.Error(resp, "malformed request payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
 		return
 	}
 
@@ -395,7 +434,7 @@ func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.Re
 
 	order := account.orders[orderIdentifier]
 	if order == nil {
-		http.Error(resp, "unknown order identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown order identifier")
 		return
 	}
 	order.UpdateOrder()
@@ -405,17 +444,17 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 	var orderIdentifier string
 	var idIndex int
 	if indexId := strings.Index(url.Path, "/auth/"); indexId == -1 {
-		http.Error(resp, "malformed authorization identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed authorization identifier")
 		return
 	} else if indexIndex := strings.Index(url.Path[indexId+6:], "/"); indexIndex == -1 {
-		http.Error(resp, "malformed authorization identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed authorization identifier")
 		return
 	} else {
 		indexIndex += indexId + 6
 		orderIdentifier = url.Path[indexId+6 : indexIndex]
 		var err error
 		if idIndex, err = strconv.Atoi(url.Path[indexIndex+1:]); err != nil {
-			http.Error(resp, "malformed authorization identifier", http.StatusNotFound)
+			acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed authorization identifier")
 			return
 		}
 	}
@@ -425,7 +464,7 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 		return
 	}
 	if len(rawPayload) != 0 {
-		http.Error(resp, "malformed request payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
 		return
 	}
 
@@ -434,13 +473,13 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 
 	order := account.orders[orderIdentifier]
 	if order == nil {
-		http.Error(resp, "unknown order identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown order identifier")
 		return
 	}
 	order.UpdateOrder()
 
 	if idIndex >= len(order.Authorizations) {
-		http.Error(resp, "unknown authorization identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown authorization identifier")
 		return
 	}
 	auth := &order.Authorizations[idIndex]
@@ -465,17 +504,17 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 	var orderIdentifier string
 	var idIndex int
 	if indexId := strings.Index(url.Path, "/challenge/"); indexId == -1 {
-		http.Error(resp, "malformed challenge identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
 		return
 	} else if indexIndex := strings.Index(url.Path[indexId+11:], "/"); indexIndex == -1 {
-		http.Error(resp, "malformed challenge identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
 		return
 	} else {
 		indexIndex += indexId + 11
 		orderIdentifier = url.Path[indexId+11 : indexIndex]
 		var err error
 		if idIndex, err = strconv.Atoi(url.Path[indexIndex+1:]); err != nil {
-			http.Error(resp, "malformed challenge identifier", http.StatusNotFound)
+			acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
 			return
 		}
 	}
@@ -485,7 +524,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		return
 	}
 	if !bytes.Equal(rawPayload, []byte("{}")) {
-		http.Error(resp, "malformed request payload", http.StatusBadRequest)
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
 		return
 	}
 
@@ -494,13 +533,13 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 
 	order := account.orders[orderIdentifier]
 	if order == nil {
-		http.Error(resp, "unknown order identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown order identifier")
 		return
 	}
 	order.UpdateOrder()
 
 	if idIndex >= len(order.Authorizations) {
-		http.Error(resp, "unknown authorization identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown authorization identifier")
 		return
 	}
 	auth := &order.Authorizations[idIndex]
@@ -522,7 +561,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	var orderIdentifier string
 	if index := strings.Index(url.Path, "/finalize/"); index == -1 {
-		http.Error(resp, "malformed finalize identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed finalize identifier")
 		return
 	} else {
 		orderIdentifier = url.Path[index+10:]
@@ -538,16 +577,16 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 
 	order := account.orders[orderIdentifier]
 	if order == nil {
-		http.Error(resp, "unknown order identifier", http.StatusNotFound)
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown order identifier")
 		return
 	}
 	order.UpdateOrder()
 
 	if order.Status != AcmeStatusReady {
-		sendOrderResource(http.StatusOK, order, url, resp)
+		acmeError(resp, http.StatusForbidden, AcmeErrOrderNotReady, "order is not ready for finalization")
 		return
 	}
 
 	// TODO: validate final CSR in payload and provide the certificate
-	http.Error(resp, "not yet implemented", http.StatusInternalServerError)
+	acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "not yet implemented")
 }

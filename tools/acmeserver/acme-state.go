@@ -5,6 +5,7 @@ import (
 	mrand "math/rand/v2"
 	"regexp"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -86,11 +87,12 @@ func makeNewIdentifier() string {
 type AcmeStatus string
 
 const (
-	AcmeStatusPending AcmeStatus = "pending"
-	AcmeStatusReady   AcmeStatus = "ready"
-	AcmeStatusValid   AcmeStatus = "valid"
-	AcmeStatusExpired AcmeStatus = "expired"
-	AcmeStatusInvalid AcmeStatus = "invalid"
+	AcmeStatusPending     AcmeStatus = "pending"
+	AcmeStatusReady       AcmeStatus = "ready"
+	AcmeStatusValid       AcmeStatus = "valid"
+	AcmeStatusExpired     AcmeStatus = "expired"
+	AcmeStatusInvalid     AcmeStatus = "invalid"
+	AcmeStatusDeactivated AcmeStatus = "deactivated"
 )
 
 type AcmeAuthorization struct {
@@ -111,18 +113,27 @@ type AcmeOrder struct {
 }
 
 func (o *AcmeOrder) UpdateOrder() {
+	// expire pending and ready orders whose deadline has passed
+	if time.Now().After(o.ExpiryTime) && (o.Status == AcmeStatusPending || o.Status == AcmeStatusReady) {
+		o.Status = AcmeStatusInvalid
+		for i := range o.Authorizations {
+			if o.Authorizations[i].Status == AcmeStatusPending || o.Authorizations[i].Status == AcmeStatusValid {
+				o.Authorizations[i].Status = AcmeStatusExpired
+			}
+		}
+		return
+	}
+
 	if o.Status != AcmeStatusPending {
 		return
 	}
 
-	now := time.Now()
 	validCount, incompleteCount := 0, 0
 	for i := range o.Authorizations {
-		if now.After(o.ExpiryTime) {
-			o.Authorizations[i].Status = AcmeStatusExpired
-		} else if o.Authorizations[i].Status == AcmeStatusValid {
+		switch o.Authorizations[i].Status {
+		case AcmeStatusValid:
 			validCount++
-		} else if o.Authorizations[i].Status == AcmeStatusPending {
+		case AcmeStatusPending:
 			incompleteCount++
 		}
 	}
@@ -136,10 +147,12 @@ func (o *AcmeOrder) UpdateOrder() {
 
 // AcmeAccount fields Jwk, Identifier, Contacts, and TosAccepted are
 // immutable after creation (set before the account is published to the
-// shared map). They can be read without holding the mutex. The orders
-// map must only be accessed while holding mux.
+// shared map). They can be read without holding the mutex. The
+// Deactivated flag is accessed via atomic operations. The orders map
+// must only be accessed while holding mux.
 type AcmeAccount struct {
 	mux         sync.Mutex
+	Deactivated atomic.Bool
 	Jwk         string
 	Identifier  string
 	Contacts    []string
