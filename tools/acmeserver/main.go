@@ -54,7 +54,7 @@ func run(port uint16, certPath, keyPath string) error {
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "acme-server",
+		Name:  "acmeserver",
 		Usage: "A small test acme web server. If no certificate and key is provided, an http server is started.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
