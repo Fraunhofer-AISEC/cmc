@@ -39,7 +39,6 @@ func (n *AcmeNonceHandler) AllocNext() string {
 	n.mux.Lock()
 	defer n.mux.Unlock()
 
-	// allocate and add the next nonce
 	next := &nonceListEntry{
 		nonce: rand.Text(),
 	}
@@ -48,9 +47,8 @@ func (n *AcmeNonceHandler) AllocNext() string {
 		return next.nonce
 	}
 
-	// check if the list needs to be shrunk
 	n.last.next, n.last, n.size = next, next, n.size+1
-	for ; n.size > NonceBufferSize; n.size = n.size - 1 {
+	for ; n.size > NonceBufferSize; n.size-- {
 		n.list = n.list.next
 	}
 	return next.nonce
@@ -59,13 +57,11 @@ func (n *AcmeNonceHandler) Check(nonce string) bool {
 	n.mux.Lock()
 	defer n.mux.Unlock()
 
-	// find the nonce in the list and remove it
 	for prev, next := (*nonceListEntry)(nil), n.list; next != nil; prev, next = next, next.next {
 		if next.nonce != nonce {
 			continue
 		}
 
-		// unlink the entry from the list
 		if prev == nil {
 			n.list = next.next
 		} else {
@@ -81,9 +77,7 @@ func (n *AcmeNonceHandler) Check(nonce string) bool {
 
 func makeNewIdentifier() string {
 	identifier, dict := "", "0123456789abcdefghijklmnopqrstuv"
-
-	// construct the new identifier
-	for i := uint(0); i < AccountIdLength; i += 1 {
+	for i := uint(0); i < AccountIdLength; i++ {
 		identifier += string(dict[mrand.IntN(len(dict))])
 	}
 	return identifier
@@ -99,7 +93,6 @@ const (
 	AcmeStatusInvalid AcmeStatus = "invalid"
 )
 
-// maps a single challenge to each authorization
 type AcmeAuthorization struct {
 	Identifier    string
 	Status        AcmeStatus
@@ -118,23 +111,22 @@ type AcmeOrder struct {
 }
 
 func (o *AcmeOrder) UpdateOrder() {
-	now, validCount, incompleteCount := time.Now(), 0, 0
 	if o.Status != AcmeStatusPending {
 		return
 	}
 
-	// patch the status according to the authorizations
-	for _, auth := range o.Authorizations {
+	now := time.Now()
+	validCount, incompleteCount := 0, 0
+	for i := range o.Authorizations {
 		if now.After(o.ExpiryTime) {
-			auth.Status = AcmeStatusExpired
-		} else if auth.Status == AcmeStatusValid {
-			validCount += 1
-		} else if auth.Status == AcmeStatusPending {
-			incompleteCount += 1
+			o.Authorizations[i].Status = AcmeStatusExpired
+		} else if o.Authorizations[i].Status == AcmeStatusValid {
+			validCount++
+		} else if o.Authorizations[i].Status == AcmeStatusPending {
+			incompleteCount++
 		}
 	}
 
-	// patch the overall status
 	if validCount == len(o.Authorizations) {
 		o.Status = AcmeStatusReady
 	} else if validCount+incompleteCount < len(o.Authorizations) {
@@ -142,40 +134,51 @@ func (o *AcmeOrder) UpdateOrder() {
 	}
 }
 
+// AcmeAccount fields Jwk, Identifier, Contacts, and TosAccepted are
+// immutable after creation (set before the account is published to the
+// shared map). They can be read without holding the mutex. The orders
+// map must only be accessed while holding mux.
 type AcmeAccount struct {
 	mux         sync.Mutex
 	Jwk         string
 	Identifier  string
 	Contacts    []string
-	Orders      map[string]*AcmeOrder
 	TosAccepted bool
+	orders      map[string]*AcmeOrder
 }
 
-func (a *AcmeAccount) NewOrder() *AcmeOrder {
+func (a *AcmeAccount) CreateOrder(auths []AcmeAuthorization, notBefore, notAfter string, expiry time.Time) *AcmeOrder {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
+	var identifier string
 	for {
-		identifier := makeNewIdentifier()
-		if _, ok := a.Orders[identifier]; ok {
-			continue
+		identifier = makeNewIdentifier()
+		if _, ok := a.orders[identifier]; !ok {
+			break
 		}
-
-		// allocate and assign the new order
-		order := &AcmeOrder{Identifier: identifier}
-		a.Orders[identifier] = order
-		return order
 	}
+
+	order := &AcmeOrder{
+		Identifier:       identifier,
+		Status:           AcmeStatusPending,
+		RequestNotBefore: notBefore,
+		RequestNotAfter:  notAfter,
+		ExpiryTime:       expiry,
+		Authorizations:   auths,
+	}
+	a.orders[identifier] = order
+	return order
 }
-func (a *AcmeAccount) LookupOrderById(id string) *AcmeOrder {
+
+func (a *AcmeAccount) OrderIDs() []string {
 	a.mux.Lock()
 	defer a.mux.Unlock()
-
-	order, ok := a.Orders[id]
-	if !ok {
-		return nil
+	ids := make([]string, 0, len(a.orders))
+	for id := range a.orders {
+		ids = append(ids, id)
 	}
-	return order
+	return ids
 }
 
 type AcmeState struct {
@@ -191,13 +194,40 @@ func (s *AcmeState) LookupAccountByKey(jwk string) *AcmeAccount {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	// TODO: better comparison, as jwk may not be same serialized string
 	for _, acc := range s.accounts {
 		if acc.Jwk == jwk {
 			return acc
 		}
 	}
 	return nil
+}
+func (s *AcmeState) FindOrCreateAccount(jwk string, contacts []string, tosAccepted bool) (*AcmeAccount, bool) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	for _, acc := range s.accounts {
+		if acc.Jwk == jwk {
+			return acc, false
+		}
+	}
+
+	var identifier string
+	for {
+		identifier = makeNewIdentifier()
+		if _, ok := s.accounts[identifier]; !ok {
+			break
+		}
+	}
+
+	account := &AcmeAccount{
+		Jwk:         jwk,
+		Identifier:  identifier,
+		Contacts:    contacts,
+		TosAccepted: tosAccepted,
+		orders:      make(map[string]*AcmeOrder),
+	}
+	s.accounts[identifier] = account
+	return account, true
 }
 func (s *AcmeState) LookupAccountById(id string) *AcmeAccount {
 	s.mux.Lock()
@@ -208,20 +238,4 @@ func (s *AcmeState) LookupAccountById(id string) *AcmeAccount {
 		return nil
 	}
 	return acc
-}
-func (s *AcmeState) NewAccount() *AcmeAccount {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	for {
-		identifier := makeNewIdentifier()
-		if _, ok := s.accounts[identifier]; ok {
-			continue
-		}
-
-		// allocate and assign the new entry
-		account := &AcmeAccount{Identifier: identifier, Orders: make(map[string]*AcmeOrder)}
-		s.accounts[identifier] = account
-		return account
-	}
 }

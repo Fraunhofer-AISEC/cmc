@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
 	"github.com/go-jose/go-jose/v4"
 )
 
@@ -93,7 +94,7 @@ func UnpackAndParseJWS(url *url.URL, req *http.Request, resp http.ResponseWriter
 		return nil
 	}
 
-	// re-serialize the key to the correct format
+	// canonicalize the key for stable comparison across serialization formats
 	keyString := ""
 	if protected.Key != nil {
 		key, err := json.Marshal(protected.Key)
@@ -101,7 +102,12 @@ func UnpackAndParseJWS(url *url.URL, req *http.Request, resp http.ResponseWriter
 			http.Error(resp, "malformed JWS Protected", http.StatusBadRequest)
 			return nil
 		}
-		keyString = string(key)
+		canonical, err := jsoncanonicalizer.Transform(key)
+		if err != nil {
+			http.Error(resp, "malformed JWS key", http.StatusBadRequest)
+			return nil
+		}
+		keyString = string(canonical)
 	}
 
 	// construct the final parsed payload object

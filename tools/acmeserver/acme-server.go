@@ -113,7 +113,7 @@ func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp ht
 		return nil, nil
 	}
 
-	// validate the signature itself (based on the account key)
+	// account.Jwk is immutable after creation; safe to read without the account lock
 	if !ValidateJWSWithJWK(jwsBody, resp, account.Jwk) {
 		return nil, nil
 	}
@@ -133,7 +133,6 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 		Value string `json:"value"`
 	}
 
-	// setup the list of tasks and ids
 	taskList := []string{}
 	idList := []OrderIdentifier{}
 	for i, auth := range order.Authorizations {
@@ -141,7 +140,6 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 		idList = append(idList, OrderIdentifier{Type: "dns", Value: auth.Identifier})
 	}
 
-	// return the created order
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
 	respondWithJson(status, resp, map[string]any{
 		"status":         string(order.Status),
@@ -219,72 +217,53 @@ func handleNewAccount(state *AcmeState, url *url.URL, req *http.Request, resp ht
 		return
 	}
 
-	// validate the nonce
 	if !state.Nonce.Check(jwsBody.Nonce) {
 		http.Error(resp, "outdated or invalid nonce", http.StatusBadRequest)
 		return
 	}
 
-	// validate the signature itself (based on the key provided in the header)
 	if !ValidateJWSWithJWK(jwsBody, resp, jwsBody.Key) {
 		return
 	}
 
-	// check if the account already exists
-	account, created := state.LookupAccountByKey(jwsBody.Key), false
-	if account == nil {
-		created = true
+	// parse and validate the payload before any state mutations
+	payload := struct {
+		OnlyReturnExisting     bool     `json:"onlyReturnExisting"`
+		Contacts               []string `json:"contact"`
+		ExternalAccountBinding any      `json:"externalAccountBinding,omitempty"`
+		TermsOfServiceAgreed   bool     `json:"termsOfServiceAgreed"`
+	}{}
+	if err := json.Unmarshal(jwsBody.Payload, &payload); err != nil {
+		http.Error(resp, "malformed account creation payload", http.StatusBadRequest)
+		return
+	}
 
-		// parse the payload
-		payload := struct {
-			OnlyReturnExisting     bool     `json:"onlyReturnExisting"`
-			Contacts               []string `json:"contact"`
-			ExternalAccountBinding any      `json:"externalAccountBinding,omitempty"`
-			TermsOfServiceAgreed   bool     `json:"termsOfServiceAgreed"`
-		}{}
-		if err := json.Unmarshal(jwsBody.Payload, &payload); err != nil {
-			http.Error(resp, "malformed account creation payload", http.StatusBadRequest)
-			return
-		}
-
-		// check if the existance of an account is checked
-		if payload.OnlyReturnExisting {
+	if payload.OnlyReturnExisting {
+		account := state.LookupAccountByKey(jwsBody.Key)
+		if account == nil {
 			http.Error(resp, "account does not exist", http.StatusBadRequest)
 			return
 		}
-
-		// validate the contacts
-		for _, contact := range payload.Contacts {
-			if !ValidateContact(contact) {
-				http.Error(resp, fmt.Sprintf("malformed contact [%v] encountered", contact), http.StatusBadRequest)
-				return
-			}
-		}
-
-		// validate the tos flags
-		if !payload.TermsOfServiceAgreed {
-			http.Error(resp, "terms of service have not been agreed to", http.StatusBadRequest)
-			return
-		}
-
-		// no external account bindings supported
-		if payload.ExternalAccountBinding != nil {
-			http.Error(resp, "external account bindings not required", http.StatusBadRequest)
-			return
-		}
-
-		// allocate the new account and populate it
-		account = state.NewAccount()
-		account.mux.Lock()
-		account.Jwk = jwsBody.Key
-		account.Contacts = payload.Contacts
-		account.TosAccepted = true
-	} else {
-		account.mux.Lock()
+		sendAccountResource(http.StatusOK, account, url, resp)
+		return
 	}
-	defer account.mux.Unlock()
 
-	// return the created/found account
+	for _, contact := range payload.Contacts {
+		if !ValidateContact(contact) {
+			http.Error(resp, fmt.Sprintf("malformed contact [%v] encountered", contact), http.StatusBadRequest)
+			return
+		}
+	}
+	if !payload.TermsOfServiceAgreed {
+		http.Error(resp, "terms of service have not been agreed to", http.StatusBadRequest)
+		return
+	}
+	if payload.ExternalAccountBinding != nil {
+		http.Error(resp, "external account bindings not required", http.StatusBadRequest)
+		return
+	}
+
+	account, created := state.FindOrCreateAccount(jwsBody.Key, payload.Contacts, payload.TermsOfServiceAgreed)
 	if created {
 		sendAccountResource(http.StatusCreated, account, url, resp)
 	} else {
@@ -292,13 +271,11 @@ func handleNewAccount(state *AcmeState, url *url.URL, req *http.Request, resp ht
 	}
 }
 func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// resolve the account and payload and validate them
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
 
-	// parse the payload
 	type OrderIdentifier struct {
 		Type  string `json:"type"`
 		Value string `json:"value"`
@@ -313,7 +290,6 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 		return
 	}
 
-	// validate the identifier
 	if len(payload.Identifier) == 0 {
 		http.Error(resp, "cannot create order for empty identifiers", http.StatusBadRequest)
 		return
@@ -329,7 +305,6 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 		}
 	}
 
-	// validate the times
 	var notBefore, notAfter *time.Time
 	if len(payload.NotBefore) > 0 {
 		if time, err := time.Parse(time.RFC3339Nano, payload.NotBefore); err != nil {
@@ -352,16 +327,9 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 		return
 	}
 
-	// allocate the new order and populate it
-	order := account.NewOrder()
-	account.mux.Lock()
-	defer account.mux.Unlock()
-	order.Status = AcmeStatusPending
-	order.RequestNotBefore = payload.NotBefore
-	order.RequestNotAfter = payload.NotAfter
-	order.ExpiryTime = time.Now().Add(OrderTimeWindow)
+	auths := make([]AcmeAuthorization, 0, len(payload.Identifier))
 	for _, ident := range payload.Identifier {
-		order.Authorizations = append(order.Authorizations, AcmeAuthorization{
+		auths = append(auths, AcmeAuthorization{
 			Identifier:    ident.Value,
 			Status:        AcmeStatusPending,
 			Token:         rand.Text(),
@@ -369,11 +337,10 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 		})
 	}
 
-	// return the created order
+	order := account.CreateOrder(auths, payload.NotBefore, payload.NotAfter, time.Now().Add(OrderTimeWindow))
 	sendOrderResource(http.StatusCreated, order, url, resp)
 }
 func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// resolve the account and payload and validate them
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
@@ -382,14 +349,10 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 		http.Error(resp, "malformed request payload", http.StatusBadRequest)
 		return
 	}
-	account.mux.Lock()
-	defer account.mux.Unlock()
 
-	// return the found account
 	sendAccountResource(http.StatusOK, account, url, resp)
 }
 func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// resolve the account and payload and validate them
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
@@ -398,22 +361,18 @@ func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.R
 		http.Error(resp, "malformed request payload", http.StatusBadRequest)
 		return
 	}
-	account.mux.Lock()
-	defer account.mux.Unlock()
 
-	// construct the list of orders
-	orders := []string{}
-	for id := range account.Orders {
+	ids := account.OrderIDs()
+	orders := make([]string, 0, len(ids))
+	for _, id := range ids {
 		orders = append(orders, makeFullURL(url, fmt.Sprintf("/order/%v", id)))
 	}
 
-	// return the requested list of orders
 	respondWithJson(http.StatusOK, resp, map[string]any{
 		"orders": orders,
 	})
 }
 func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// lookup the order id
 	var orderIdentifier string
 	if index := strings.Index(url.Path, "/order/"); index == -1 {
 		http.Error(resp, "malformed order identifier", http.StatusNotFound)
@@ -422,7 +381,6 @@ func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.Re
 		orderIdentifier = url.Path[index+7:]
 	}
 
-	// resolve the account and payload and validate them
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
@@ -432,21 +390,18 @@ func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.Re
 		return
 	}
 
-	// lookup the order
-	order := account.LookupOrderById(orderIdentifier)
+	account.mux.Lock()
+	defer account.mux.Unlock()
+
+	order := account.orders[orderIdentifier]
 	if order == nil {
 		http.Error(resp, "unknown order identifier", http.StatusNotFound)
 		return
 	}
-
-	// return the found order
-	account.mux.Lock()
-	defer account.mux.Unlock()
 	order.UpdateOrder()
 	sendOrderResource(http.StatusOK, order, url, resp)
 }
 func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// lookup the order id and auth index
 	var orderIdentifier string
 	var idIndex int
 	if indexId := strings.Index(url.Path, "/auth/"); indexId == -1 {
@@ -465,7 +420,6 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 		}
 	}
 
-	// resolve the account and payload and validate them
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
@@ -475,24 +429,22 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 		return
 	}
 
-	// lookup the order
-	order := account.LookupOrderById(orderIdentifier)
+	account.mux.Lock()
+	defer account.mux.Unlock()
+
+	order := account.orders[orderIdentifier]
 	if order == nil {
 		http.Error(resp, "unknown order identifier", http.StatusNotFound)
 		return
 	}
-	account.mux.Lock()
-	defer account.mux.Unlock()
 	order.UpdateOrder()
 
-	// lookup the authentication index
 	if idIndex >= len(order.Authorizations) {
 		http.Error(resp, "unknown authorization identifier", http.StatusNotFound)
 		return
 	}
 	auth := &order.Authorizations[idIndex]
 
-	// return the found authorization
 	respondWithJson(http.StatusOK, resp, map[string]any{
 		"status":  string(auth.Status),
 		"expires": order.ExpiryTime.Format(time.RFC3339Nano),
@@ -510,7 +462,6 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 	})
 }
 func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// lookup the order id and auth index
 	var orderIdentifier string
 	var idIndex int
 	if indexId := strings.Index(url.Path, "/challenge/"); indexId == -1 {
@@ -529,7 +480,6 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		}
 	}
 
-	// resolve the account and payload and validate them
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
@@ -539,31 +489,28 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		return
 	}
 
-	// lookup the order
-	order := account.LookupOrderById(orderIdentifier)
+	account.mux.Lock()
+	defer account.mux.Unlock()
+
+	order := account.orders[orderIdentifier]
 	if order == nil {
 		http.Error(resp, "unknown order identifier", http.StatusNotFound)
 		return
 	}
-	account.mux.Lock()
-	defer account.mux.Unlock()
 	order.UpdateOrder()
 
-	// lookup the authentication index
 	if idIndex >= len(order.Authorizations) {
 		http.Error(resp, "unknown authorization identifier", http.StatusNotFound)
 		return
 	}
 	auth := &order.Authorizations[idIndex]
 
-	// check if the status should be toggled to 'ready'
 	if auth.Status == AcmeStatusPending {
 		// TODO: implement actual challenge validation/verification
 		auth.Status = AcmeStatusValid
 		auth.Validated = time.Now().Format(time.RFC3339Nano)
 	}
 
-	// return the challenge
 	respondWithJson(http.StatusOK, resp, map[string]any{
 		"type":      auth.ChallengeType,
 		"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v", orderIdentifier, idIndex)),
@@ -573,7 +520,6 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 	})
 }
 func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	// lookup the order id
 	var orderIdentifier string
 	if index := strings.Index(url.Path, "/finalize/"); index == -1 {
 		http.Error(resp, "malformed finalize identifier", http.StatusNotFound)
@@ -582,25 +528,21 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 		orderIdentifier = url.Path[index+10:]
 	}
 
-	// resolve the account
 	rawPayload, account := processPostAsGet(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
 
-	// lookup the order
-	order := account.LookupOrderById(orderIdentifier)
+	account.mux.Lock()
+	defer account.mux.Unlock()
+
+	order := account.orders[orderIdentifier]
 	if order == nil {
 		http.Error(resp, "unknown order identifier", http.StatusNotFound)
 		return
 	}
-
-	// return the found order
-	account.mux.Lock()
-	defer account.mux.Unlock()
 	order.UpdateOrder()
 
-	// validate the state
 	if order.Status != AcmeStatusReady {
 		sendOrderResource(http.StatusOK, order, url, resp)
 		return
