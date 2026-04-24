@@ -9,9 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/lestrrat-go/jwx/v3/jwa"
-	"github.com/lestrrat-go/jwx/v3/jwk"
-	"github.com/lestrrat-go/jwx/v3/jws"
+	"github.com/go-jose/go-jose/v4"
 )
 
 type jwsJSONBody struct {
@@ -119,27 +117,26 @@ func UnpackAndParseJWS(url *url.URL, req *http.Request, resp http.ResponseWriter
 }
 
 func ValidateJWSWithJWK(payload *RequestPayload, resp http.ResponseWriter, jwkRaw string) bool {
-	// parse the signature algorithm
-	alg, ok := jwa.LookupSignatureAlgorithm(payload.Algorithm)
-	if !ok {
-		http.Error(resp, "Unsupported JWS algorithm", http.StatusBadRequest)
-		return false
-	}
-	verifier, err := jws.VerifierFor(alg)
-	if err != nil {
-		http.Error(resp, "Unsupported JWS algorithm", http.StatusBadRequest)
-		return false
-	}
-
-	// parse the key itself
-	key, err := jwk.ParseKey([]byte(jwkRaw))
-	if err != nil {
+	// parse the JWK
+	var jwk jose.JSONWebKey
+	if err := json.Unmarshal([]byte(jwkRaw), &jwk); err != nil {
 		http.Error(resp, "Unsupported JWS key format", http.StatusBadRequest)
 		return false
 	}
 
-	// verify the signature for the given payload
-	if verifier.Verify(key, []byte(payload.Encoded), payload.Signature) != nil {
+	// map the algorithm string to a go-jose SignatureAlgorithm
+	alg := jose.SignatureAlgorithm(payload.Algorithm)
+
+	// reconstruct the JWS compact serialization so go-jose can verify it
+	compactSerialization := fmt.Sprintf("%v.%v", payload.Encoded, base64.RawURLEncoding.EncodeToString(payload.Signature))
+	jws, err := jose.ParseSigned(compactSerialization, []jose.SignatureAlgorithm{alg})
+	if err != nil {
+		http.Error(resp, "Unsupported JWS algorithm", http.StatusBadRequest)
+		return false
+	}
+
+	// verify the signature
+	if _, err := jws.Verify(jwk.Key); err != nil {
 		http.Error(resp, "JWS payload verification error", http.StatusBadRequest)
 		return false
 	}
