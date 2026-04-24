@@ -48,6 +48,7 @@ type Config struct {
 	BootAggregate     []byte
 	PrintAggregate    bool
 	BuildrootManifest string
+	PackageFileList   string
 }
 
 const (
@@ -62,6 +63,7 @@ const (
 	printAggregateFlag    = "print-aggregate"
 	mokListsFlag          = "moklists"
 	buildrootManifestFlag = "buildroot-manifest"
+	packageFileListFlag   = "package-file-list"
 )
 
 var flags = []cli.Flag{
@@ -98,6 +100,10 @@ var flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  buildrootManifestFlag,
 		Usage: "Path to a buildroot manifest CSV file to augment reference values with package URLs and versions",
+	},
+	&cli.StringFlag{
+		Name:  packageFileListFlag,
+		Usage: "Path to a buildroot packages-file-list.txt for mapping file names to package names (requires --buildroot-manifest)",
 	},
 }
 
@@ -139,7 +145,16 @@ func run(cmd *cli.Command) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse buildroot manifest: %w", err)
 		}
-		augmentRefvals(refvals, manifest)
+
+		var pathToPackage map[string]string
+		if tpmConf.PackageFileList != "" {
+			pathToPackage, err = parsePackageFileList(tpmConf.PackageFileList)
+			if err != nil {
+				return fmt.Errorf("failed to parse package file list: %w", err)
+			}
+		}
+
+		augmentRefvals(refvals, manifest, pathToPackage)
 	}
 
 	// Write eventlog to stdout if requested
@@ -232,6 +247,14 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 		c.BuildrootManifest = cmd.String(buildrootManifestFlag)
 	}
 
+	if cmd.IsSet(packageFileListFlag) {
+		c.PackageFileList = cmd.String(packageFileListFlag)
+	}
+
+	if c.PackageFileList != "" && c.BuildrootManifest == "" {
+		return nil, fmt.Errorf("--package-file-list requires --buildroot-manifest")
+	}
+
 	c.print()
 
 	return c, nil
@@ -286,6 +309,9 @@ func (c *Config) print() {
 
 	if c.BuildrootManifest != "" {
 		log.Debugf("\tBuildroot Manifest: %q", c.BuildrootManifest)
+	}
+	if c.PackageFileList != "" {
+		log.Debugf("\tPackage File List: %q", c.PackageFileList)
 	}
 
 }
@@ -388,9 +414,43 @@ func parseBuildrootManifest(path string) (map[string]*manifestEntry, error) {
 	return entries, nil
 }
 
-func augmentRefvals(refvals []*ar.Component, manifest map[string]*manifestEntry) {
+func parsePackageFileList(path string) (map[string]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open package file list: %w", err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read package file list CSV: %w", err)
+	}
+
+	pathToPackage := make(map[string]string)
+	for _, record := range records {
+		if len(record) < 2 {
+			continue
+		}
+		normalizedPath := strings.TrimPrefix(record[1], ".")
+		pathToPackage[normalizedPath] = record[0]
+	}
+
+	log.Debugf("Parsed package file list: %d path entries", len(pathToPackage))
+
+	return pathToPackage, nil
+}
+
+func augmentRefvals(refvals []*ar.Component, manifest map[string]*manifestEntry, pathToPackage map[string]string) {
 	for _, rv := range refvals {
-		entry, ok := manifest[rv.Name]
+		pkgName := rv.Name
+		if pathToPackage != nil {
+			if pkg, ok := pathToPackage[rv.Description]; ok {
+				pkgName = pkg
+			}
+		}
+
+		entry, ok := manifest[pkgName]
 		if !ok {
 			continue
 		}
@@ -398,6 +458,7 @@ func augmentRefvals(refvals []*ar.Component, manifest map[string]*manifestEntry)
 		downloadUrl := strings.TrimRight(entry.SourceSite, "/") + "/" + entry.SourceArchive
 		rv.PackageUrl = fmt.Sprintf("pkg:generic/%s@%s?download_url=%s",
 			entry.Name, entry.Version, downloadUrl)
-		log.Debugf("Augmented refval %q with version %q and purl", rv.Name, rv.Version)
+		log.Debugf("Augmented refval %q (package %q) with version %q and purl",
+			rv.Name, pkgName, rv.Version)
 	}
 }
