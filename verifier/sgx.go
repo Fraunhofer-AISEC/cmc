@@ -283,7 +283,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	if !bytes.Equal(body.MRENCLAVE[:], []byte(refval.GetHash(crypto.SHA256))) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TYPE_REFVAL_IAS,
+				Type:       ar.TYPE_REFVAL_SGX,
 				Name:       refval.Name,
 				Digest:     refval.GetHash(crypto.SHA256),
 				Success:    false,
@@ -319,7 +319,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Type:     ar.TYPE_REFVAL_IAS,
+			Type:     ar.TYPE_REFVAL_SGX,
 			Name:     "MrSigner",
 			Digest:   sgxReferencePolicy.MrSigner,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),
