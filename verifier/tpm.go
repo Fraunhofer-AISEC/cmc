@@ -359,7 +359,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 				}
 				if !foundEvent {
 					result := ar.DigestResult{
-						Type:        ar.TYPE_REFVAL_IAS,
+						Type:        ar.TYPE_REFVAL_TPM,
 						Name:        ref.Name,
 						Index:       ref.Index,
 						Success:     ref.Optional, // Only fail attestation if component is mandatory
@@ -385,7 +385,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 			log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
 				ref.Index, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
-				Type:        ar.TYPE_REFVAL_IAS,
+				Type:        ar.TYPE_REFVAL_TPM,
 				Name:        ref.Name,
 				Index:       ref.Index,
 				Success:     ref.Optional,

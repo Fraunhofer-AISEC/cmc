@@ -167,7 +167,7 @@ func VerifySnp(
 			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TYPE_REFVAL_IAS,
+				Type:       ar.TYPE_REFVAL_SNP,
 				Name:       snpReferenceValue.Name,
 				Digest:     snpReferenceValue.GetHash(crypto.SHA384),
 				Success:    false,
