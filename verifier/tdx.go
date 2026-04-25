@@ -490,7 +490,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		// comparison of the recalculated MR with the measured MR fails
 		log.Debug("Verifying reference values based on MR")
 		for _, refval := range refvals {
-			t := ar.TYPE_REFVAL_IAS
+			t := ar.TYPE_REFVAL_TDX
 			if successMrs[refval.Index] {
 				t = "Verified"
 			}
@@ -571,7 +571,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:        ar.TYPE_REFVAL_IAS,
+					Type:        ar.TYPE_REFVAL_TDX,
 					Name:        refval.Name,
 					Index:       refval.Index,
 					Success:     false,
@@ -607,7 +607,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNER
 	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_IAS,
+		Type:     ar.TYPE_REFVAL_TDX,
 		Name:     "MrOwner",
 		Digest:   refTdId.MrOwner,
 		Success:  success,
@@ -629,7 +629,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNERCONFIG
 	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_IAS,
+		Type:     ar.TYPE_REFVAL_TDX,
 		Name:     "MROWNERCONFIG",
 		Digest:   refTdId.MrOwnerConfig,
 		Success:  success,
@@ -649,7 +649,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MRCONFIGID
 	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_IAS,
+		Type:     ar.TYPE_REFVAL_TDX,
 		Name:     "MRCONFIGID",
 		Digest:   refTdId.MrConfigId,
 		Success:  success,
@@ -669,7 +669,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MRSIGNERSEAM
 	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_IAS,
+		Type:     ar.TYPE_REFVAL_TDX,
 		Name:     "MRSIGNERSEAM",
 		Digest:   tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes,
 		Success:  success,
