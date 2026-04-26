@@ -16,11 +16,14 @@
 package cmc
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -31,6 +34,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
+	"github.com/fxamacker/cbor/v2"
 )
 
 func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
@@ -49,6 +53,7 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 	for _, p := range paths {
 		log.Debugf("Retrieving metadata from %v", p)
 		if strings.HasPrefix(p, "file://") {
+			// File-system metadata, path is directory or file
 			f := strings.TrimPrefix(p, "file://")
 
 			data, err := loadMetadata(f)
@@ -58,7 +63,22 @@ func GetMetadata(paths []string, cache string, rootCas []*x509.Certificate,
 				continue
 			}
 			metadata = append(metadata, data...)
-		} else {
+
+		} else if strings.HasPrefix(p, "blob://") {
+			// Blob metadata, containing one or multiple raw manifests
+			f := strings.TrimPrefix(p, "blob://")
+
+			data, err := loadMetadataFromBlob(f)
+			if err != nil {
+
+				log.Warnf("failed to read %v: %v", f, err)
+				fails++
+				continue
+			}
+			metadata = append(metadata, data...)
+
+		} else if strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+			// Remote metadata, fetched via HTTP
 			data, err := provision.FetchMetadata(p, rootCas, allowSystemRoots)
 			if err != nil {
 				log.Warnf("failed to fetch %v: %v", p, err)
@@ -159,6 +179,55 @@ func loadMetadata(dir string) ([][]byte, error) {
 		}
 		metadata = append(metadata, data)
 	}
+	return metadata, nil
+}
+
+// loadMetadataFromBlob loads the metadata (manifests and descriptions) from a raw blob
+func loadMetadataFromBlob(dev string) ([][]byte, error) {
+
+	data, err := os.ReadFile(dev)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %v: %w", dev, err)
+	}
+
+	// Block devices may have trailing zero-padding
+	data = bytes.TrimRight(data, "\x00")
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no data in %v", dev)
+	}
+
+	// Detect format: JSON starts with '{' or '[', assume CBOR otherwise
+	var metadata [][]byte
+	if data[0] == '{' || data[0] == '[' {
+		dec := json.NewDecoder(bytes.NewReader(data))
+		for {
+			var raw json.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, fmt.Errorf("failed to decode JSON object from blob: %w", err)
+			}
+			metadata = append(metadata, []byte(raw))
+		}
+	} else {
+		dec := cbor.NewDecoder(bytes.NewReader(data))
+		for {
+			var raw cbor.RawMessage
+			if err := dec.Decode(&raw); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, fmt.Errorf("failed to decode CBOR object from blob: %w", err)
+			}
+			metadata = append(metadata, []byte(raw))
+		}
+	}
+
+	if len(metadata) == 0 {
+		return nil, fmt.Errorf("no metadata objects found in %v", dev)
+	}
+
 	return metadata, nil
 }
 
