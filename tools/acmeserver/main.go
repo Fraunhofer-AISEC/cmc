@@ -8,17 +8,19 @@ import (
 	"os"
 	"time"
 
-	"github.com/urfave/cli/v3"
+	cli "github.com/urfave/cli/v3"
 )
 
 const (
-	flagCertFile  = "cert"
-	flagKeyFile   = "key"
-	flagPort      = "port"
-	serverTimeout = 60 * time.Second
+	flagCertFile   = "cert"
+	flagKeyFile    = "key"
+	flagCACertFile = "ca-cert"
+	flagCAKeyFile  = "ca-key"
+	flagPort       = "port"
+	serverTimeout  = 60 * time.Second
 )
 
-func run(port uint16, certPath, keyPath string) error {
+func run(port uint16, certPath, keyPath, caCertPath, caKeyPath string) error {
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%v", port),
 		ReadTimeout:  serverTimeout,
@@ -26,6 +28,18 @@ func run(port uint16, certPath, keyPath string) error {
 		IdleTimeout:  serverTimeout,
 	}
 	state := NewAcmeState()
+
+	if caCertPath != "" && caKeyPath != "" {
+		if err := state.LoadCA(caCertPath, caKeyPath); err != nil {
+			return fmt.Errorf("loading CA: %w", err)
+		}
+		log.Printf("Loaded CA certificate from %s", caCertPath)
+	} else {
+		if err := state.GenerateEphemeralCA(); err != nil {
+			return fmt.Errorf("generating ephemeral CA: %w", err)
+		}
+		log.Printf("Generated ephemeral CA certificate")
+	}
 
 	// check if a raw http server should be started
 	if certPath == "" && keyPath == "" {
@@ -59,11 +73,19 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  flagCertFile,
-				Usage: "Path to certificate to be used",
+				Usage: "Path to TLS certificate for HTTPS",
 			},
 			&cli.StringFlag{
 				Name:  flagKeyFile,
-				Usage: "Path to key for certificate to be used",
+				Usage: "Path to TLS key for HTTPS",
+			},
+			&cli.StringFlag{
+				Name:  flagCACertFile,
+				Usage: "Path to CA certificate for signing issued certificates (ephemeral if omitted)",
+			},
+			&cli.StringFlag{
+				Name:  flagCAKeyFile,
+				Usage: "Path to CA private key for signing issued certificates (ephemeral if omitted)",
 			},
 			&cli.Uint16Flag{
 				Name:        flagPort,
@@ -75,7 +97,7 @@ func main() {
 			if !c.IsSet(flagPort) {
 				return fmt.Errorf("Flag [%v] must be specified", flagPort)
 			}
-			return run(c.Uint16(flagPort), c.String(flagCertFile), c.String(flagKeyFile))
+			return run(c.Uint16(flagPort), c.String(flagCertFile), c.String(flagKeyFile), c.String(flagCACertFile), c.String(flagCAKeyFile))
 		},
 	}
 
