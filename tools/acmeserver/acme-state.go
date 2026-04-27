@@ -118,6 +118,7 @@ type AcmeOrder struct {
 	RequestNotAfter  string
 	ExpiryTime       time.Time
 	Authorizations   []AcmeAuthorization
+	Certificate      []byte
 }
 
 func (o *AcmeOrder) UpdateOrder() {
@@ -220,9 +221,9 @@ type AcmeState struct {
 	mux      sync.Mutex
 	Nonce    AcmeNonceHandler
 	accounts map[string]*AcmeAccount
-	CACert   []byte            // PEM-encoded CA certificate
-	CAKey    *ecdsa.PrivateKey // CA signing key
-	CAx509   *x509.Certificate // parsed CA certificate
+	CACert   []byte
+	CAKey    *ecdsa.PrivateKey
+	CAx509   *x509.Certificate
 }
 
 func NewAcmeState() *AcmeState {

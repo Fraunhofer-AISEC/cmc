@@ -3,10 +3,17 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/url"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -71,6 +78,8 @@ func handleAcmeDispatch(state *AcmeState, req *http.Request, resp http.ResponseW
 		handleOrder(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/auth/"):
 		handleAuth(state, url, req, resp)
+	case strings.HasPrefix(url.Path, "/certificate/"):
+		handleCertificate(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/finalize/"):
 		handleFinalize(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/challenge/"):
@@ -170,8 +179,7 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 		idList = append(idList, OrderIdentifier{Type: "dns", Value: auth.Identifier})
 	}
 
-	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
-	respondWithJson(status, resp, map[string]any{
+	result := map[string]any{
 		"status":         string(order.Status),
 		"expires":        order.ExpiryTime.Format(time.RFC3339Nano),
 		"notBefore":      time.Now(),
@@ -179,7 +187,13 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 		"identifiers":    idList,
 		"authorizations": taskList,
 		"finalize":       makeFullURL(url, fmt.Sprintf("/finalize/%v", order.Identifier)),
-	})
+	}
+	if order.Certificate != nil {
+		result["certificate"] = makeFullURL(url, fmt.Sprintf("/certificate/%v", order.Identifier))
+	}
+
+	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
+	respondWithJson(status, resp, result)
 }
 
 func handleNotFound(url *url.URL, resp http.ResponseWriter) {
@@ -641,6 +655,43 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		"validated": auth.Validated,
 	})
 }
+func handleCertificate(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
+	var orderIdentifier string
+	if index := strings.Index(url.Path, "/certificate/"); index == -1 {
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed certificate identifier")
+		return
+	} else {
+		orderIdentifier = url.Path[index+13:]
+	}
+
+	rawPayload, account := processPostAsGet(state, url, req, resp)
+	if rawPayload == nil {
+		return
+	}
+	if len(rawPayload) != 0 {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
+		return
+	}
+
+	account.mux.Lock()
+	order := account.orders[orderIdentifier]
+	if order == nil {
+		account.mux.Unlock()
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown order identifier")
+		return
+	}
+	cert := order.Certificate
+	account.mux.Unlock()
+
+	if cert == nil {
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "certificate not yet issued")
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/pem-certificate-chain")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write(cert)
+}
 func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	var orderIdentifier string
 	if index := strings.Index(url.Path, "/finalize/"); index == -1 {
@@ -670,6 +721,75 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 		return
 	}
 
-	// TODO: validate final CSR in payload and provide the certificate
-	acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "not yet implemented")
+	payload := struct {
+		CSR string `json:"csr"`
+	}{}
+	if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.CSR == "" {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed finalize payload")
+		return
+	}
+
+	csrDER, err := base64.RawURLEncoding.DecodeString(payload.CSR)
+	if err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR encoding")
+		return
+	}
+
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR")
+		return
+	}
+	if err := csr.CheckSignature(); err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid CSR signature")
+		return
+	}
+
+	orderDNS := make([]string, 0, len(order.Authorizations))
+	for _, auth := range order.Authorizations {
+		orderDNS = append(orderDNS, auth.Identifier)
+	}
+	sort.Strings(orderDNS)
+
+	csrDNS := make([]string, len(csr.DNSNames))
+	copy(csrDNS, csr.DNSNames)
+	sort.Strings(csrDNS)
+
+	if !slices.Equal(orderDNS, csrDNS) {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "CSR identifiers do not match order identifiers")
+		return
+	}
+
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to generate serial number")
+		return
+	}
+
+	notBefore := time.Now()
+	notAfter := notBefore.Add(OrderLifeTime)
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject:      pkix.Name{CommonName: csr.DNSNames[0]},
+		DNSNames:     csr.DNSNames,
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, state.CAx509, csr.PublicKey, state.CAKey)
+	if err != nil {
+		acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to sign certificate")
+		return
+	}
+
+	var chain bytes.Buffer
+	pem.Encode(&chain, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	pem.Encode(&chain, &pem.Block{Type: "CERTIFICATE", Bytes: state.CAx509.Raw})
+
+	order.Certificate = chain.Bytes()
+	order.Status = AcmeStatusValid
+
+	sendOrderResource(http.StatusOK, order, url, resp)
 }
