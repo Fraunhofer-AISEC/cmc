@@ -59,6 +59,8 @@ func handleAcmeDispatch(state *AcmeState, req *http.Request, resp http.ResponseW
 		handleNewOrder(state, url, req, resp)
 	case url.Path == "/tos":
 		handleTermsOfService(url, req, resp)
+	case url.Path == "/ca":
+		handleCA(state, url, req, resp)
 	case url.Path == "/key-change":
 		handleKeyChange(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/account/"):
@@ -151,7 +153,7 @@ func sendAccountResource(status int, account *AcmeAccount, url *url.URL, resp ht
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/account/%v", account.Identifier)))
 	respondWithJson(status, resp, map[string]any{
 		"status":  string(accountStatus),
-		"contact": account.Contacts,
+		"contact": account.GetContacts(),
 		"orders":  makeFullURL(url, "/orders"),
 	})
 }
@@ -199,6 +201,7 @@ func handleDirectory(url *url.URL, req *http.Request, resp http.ResponseWriter) 
 			"termsOfService":          makeFullURL(url, "/tos"),
 			"caaIdentities":           []string{"test.com"},
 			"externalAccountRequired": false,
+			"caCertificate":           makeFullURL(url, "/ca"),
 		},
 	})
 }
@@ -212,6 +215,17 @@ func handleTermsOfService(url *url.URL, req *http.Request, resp http.ResponseWri
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte("Be friendly! :)\n"))
+}
+func handleCA(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
+	if req.Method != http.MethodGet {
+		resp.Header().Add("Allow", http.MethodGet)
+		resp.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	setLinkDirectory(url, resp)
+	resp.Header().Set("Content-Type", "application/pem-certificate-chain")
+	resp.WriteHeader(http.StatusOK)
+	resp.Write(state.CACert)
 }
 func handleNewNonce(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -381,7 +395,8 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 
 	// parse account update
 	payload := struct {
-		Status string `json:"status"`
+		Status   string   `json:"status"`
+		Contacts []string `json:"contact"`
 	}{}
 	if err := json.Unmarshal(rawPayload, &payload); err != nil {
 		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed account update payload")
@@ -390,6 +405,18 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 
 	if payload.Status == string(AcmeStatusDeactivated) {
 		account.Deactivated.Store(true)
+		sendAccountResource(http.StatusOK, account, url, resp)
+		return
+	}
+
+	if payload.Contacts != nil {
+		for _, contact := range payload.Contacts {
+			if !ValidateContact(contact) {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, fmt.Sprintf("malformed contact [%v] encountered", contact))
+				return
+			}
+		}
+		account.UpdateContacts(payload.Contacts)
 		sendAccountResource(http.StatusOK, account, url, resp)
 		return
 	}

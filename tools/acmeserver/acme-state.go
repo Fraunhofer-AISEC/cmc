@@ -1,8 +1,16 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"fmt"
+	"math/big"
 	mrand "math/rand/v2"
+	"os"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -145,13 +153,12 @@ func (o *AcmeOrder) UpdateOrder() {
 	}
 }
 
-// AcmeAccount fields Identifier, Contacts, and TosAccepted are
-// immutable after creation (set before the account is published to the
-// shared map). They can be read without holding the mutex. The Jwk
-// field may be updated by key rollover under both state.mux and
-// account.mux; reads outside state.mux must hold account.mux. The
-// Deactivated flag is accessed via atomic operations. The orders map
-// must only be accessed while holding mux.
+// AcmeAccount fields Identifier and TosAccepted are immutable after
+// creation (set before the account is published to the shared map).
+// They can be read without holding the mutex. The Jwk and Contacts
+// fields may be updated (key rollover / contact update) and must be
+// read under account.mux. The Deactivated flag is accessed via atomic
+// operations. The orders map must only be accessed while holding mux.
 type AcmeAccount struct {
 	mux         sync.Mutex
 	Deactivated atomic.Bool
@@ -160,6 +167,19 @@ type AcmeAccount struct {
 	Contacts    []string
 	TosAccepted bool
 	orders      map[string]*AcmeOrder
+}
+
+func (a *AcmeAccount) UpdateContacts(contacts []string) {
+	a.mux.Lock()
+	a.Contacts = contacts
+	a.mux.Unlock()
+}
+
+func (a *AcmeAccount) GetContacts() []string {
+	a.mux.Lock()
+	c := a.Contacts
+	a.mux.Unlock()
+	return c
 }
 
 func (a *AcmeAccount) CreateOrder(auths []AcmeAuthorization, notBefore, notAfter string, expiry time.Time) *AcmeOrder {
@@ -200,10 +220,84 @@ type AcmeState struct {
 	mux      sync.Mutex
 	Nonce    AcmeNonceHandler
 	accounts map[string]*AcmeAccount
+	CACert   []byte            // PEM-encoded CA certificate
+	CAKey    *ecdsa.PrivateKey // CA signing key
+	CAx509   *x509.Certificate // parsed CA certificate
 }
 
 func NewAcmeState() *AcmeState {
 	return &AcmeState{accounts: make(map[string]*AcmeAccount)}
+}
+
+func (s *AcmeState) LoadCA(certPath, keyPath string) error {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return fmt.Errorf("reading CA certificate: %w", err)
+	}
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return fmt.Errorf("reading CA key: %w", err)
+	}
+
+	certBlock, _ := pem.Decode(certPEM)
+	if certBlock == nil {
+		return fmt.Errorf("no PEM block found in CA certificate file")
+	}
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("parsing CA certificate: %w", err)
+	}
+
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return fmt.Errorf("no PEM block found in CA key file")
+	}
+	key, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("parsing CA key (expected EC private key): %w", err)
+	}
+
+	s.CACert = certPEM
+	s.CAKey = key
+	s.CAx509 = cert
+	return nil
+}
+
+func (s *AcmeState) GenerateEphemeralCA() error {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generating CA key: %w", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName:   "ACME Test Server Ephemeral CA",
+			Organization: []string{"Fraunhofer AISEC"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLen:            0,
+		MaxPathLenZero:        true,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		return fmt.Errorf("creating CA certificate: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return fmt.Errorf("parsing generated CA certificate: %w", err)
+	}
+
+	s.CACert = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	s.CAKey = key
+	s.CAx509 = cert
+	return nil
 }
 func (s *AcmeState) LookupAccountByKey(jwk string) *AcmeAccount {
 	s.mux.Lock()
