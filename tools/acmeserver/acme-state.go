@@ -145,9 +145,11 @@ func (o *AcmeOrder) UpdateOrder() {
 	}
 }
 
-// AcmeAccount fields Jwk, Identifier, Contacts, and TosAccepted are
+// AcmeAccount fields Identifier, Contacts, and TosAccepted are
 // immutable after creation (set before the account is published to the
-// shared map). They can be read without holding the mutex. The
+// shared map). They can be read without holding the mutex. The Jwk
+// field may be updated by key rollover under both state.mux and
+// account.mux; reads outside state.mux must hold account.mux. The
 // Deactivated flag is accessed via atomic operations. The orders map
 // must only be accessed while holding mux.
 type AcmeAccount struct {
@@ -251,4 +253,24 @@ func (s *AcmeState) LookupAccountById(id string) *AcmeAccount {
 		return nil
 	}
 	return acc
+}
+func (s *AcmeState) ChangeAccountKey(account *AcmeAccount, oldJwk, newJwk string) *AcmeAccount {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	if account.Jwk != oldJwk {
+		return account
+	}
+
+	for _, acc := range s.accounts {
+		if acc != account && acc.Jwk == newJwk {
+			return acc
+		}
+	}
+
+	account.mux.Lock()
+	account.Jwk = newJwk
+	account.mux.Unlock()
+
+	return nil
 }

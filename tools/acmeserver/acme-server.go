@@ -59,6 +59,8 @@ func handleAcmeDispatch(state *AcmeState, req *http.Request, resp http.ResponseW
 		handleNewOrder(state, url, req, resp)
 	case url.Path == "/tos":
 		handleTermsOfService(url, req, resp)
+	case url.Path == "/key-change":
+		handleKeyChange(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/account/"):
 		handleAccount(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/orders/"):
@@ -133,8 +135,10 @@ func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp ht
 		return nil, nil
 	}
 
-	// account.Jwk is immutable after creation; safe to read without the account lock
-	if !ValidateJWSWithJWK(jwsBody, resp, account.Jwk) {
+	account.mux.Lock()
+	jwk := account.Jwk
+	account.mux.Unlock()
+	if !ValidateJWSWithJWK(jwsBody, resp, jwk) {
 		return nil, nil
 	}
 	return jwsBody.Payload, account
@@ -190,6 +194,7 @@ func handleDirectory(url *url.URL, req *http.Request, resp http.ResponseWriter) 
 		"newNonce":   makeFullURL(url, "/nonce"),
 		"newAccount": makeFullURL(url, "/new-account"),
 		"newOrder":   makeFullURL(url, "/new-order"),
+		"keyChange":  makeFullURL(url, "/key-change"),
 		"meta": map[string]any{
 			"termsOfService":          makeFullURL(url, "/tos"),
 			"caaIdentities":           []string{"test.com"},
@@ -390,6 +395,57 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 	}
 
 	acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "unsupported account update")
+}
+func handleKeyChange(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
+	rawPayload, account := processPostAsGet(state, url, req, resp)
+	if rawPayload == nil {
+		return
+	}
+
+	inner := ParseJWS(rawPayload, url, resp, "inner JWS")
+	if inner == nil {
+		return
+	}
+	if inner.Key == "" {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "inner JWS must contain a JWK")
+		return
+	}
+	if !ValidateJWSWithJWK(inner, resp, inner.Key) {
+		return
+	}
+
+	var keyChangePayload struct {
+		Account string `json:"account"`
+		OldKey  any    `json:"oldKey"`
+	}
+	if err := json.Unmarshal(inner.Payload, &keyChangePayload); err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed key change payload")
+		return
+	}
+
+	if !strings.HasSuffix(keyChangePayload.Account, "/account/"+account.Identifier) {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "account URL mismatch in key change")
+		return
+	}
+
+	oldKeyCanonical, err := CanonicalJSON(keyChangePayload.OldKey)
+	if err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed old key in key change")
+		return
+	}
+
+	conflict := state.ChangeAccountKey(account, oldKeyCanonical, inner.Key)
+	if conflict == account {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "old key does not match account key")
+		return
+	}
+	if conflict != nil {
+		resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/account/%v", conflict.Identifier)))
+		acmeError(resp, http.StatusConflict, AcmeErrMalformed, "new key already in use by another account")
+		return
+	}
+
+	sendAccountResource(http.StatusOK, account, url, resp)
 }
 func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	rawPayload, account := processPostAsGet(state, url, req, resp)
