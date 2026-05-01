@@ -94,6 +94,7 @@ log_dir="${data}/logs"
 
 metadata_raw="${data}/metadata-raw"
 metadata_signed="${data}/metadata-signed"
+omsp_data="${data}/omsp-raw"
 storage="${data}/cmc-internal"
 cache="${data}/cmc-cache"
 peercache="${data}/cmc-peer-cache"
@@ -113,6 +114,10 @@ est_params=(
     "--log-file"            "${log_dir}/estserver.log" \
     "--auth-methods"        "none" \
     "--verify-ek-cert=false" \
+    "--omsp-folder"           "${data}/omsp-raw" \
+    "--omsp-key"              "${data}/pki/omsp-key.pem" \
+    "--omsp-ca-chain"         "${data}/pki/omsp.pem" \
+    "--omsp-url"              "https://localhost:9000/omsp" \
 )
 
 cmc_params=(
@@ -135,6 +140,7 @@ cmc_params=(
     "--ctr-log" "${ctrlog}" \
     "--root-cas" "${data}/pki/ca.pem" \
     "--tpm-key-alg" "EC256" \
+    "--use-omsp=true" \
 )
 
 cmcctl_params=(
@@ -156,6 +162,8 @@ attest_success=("success" "fail")
 ar_serializers=("json" "cbor")
 
 api_serializers=("json" "cbor")
+
+omsp_serializers=("json" "cbor")
 
 protocols=("grpc" "coap" "socket")
 
@@ -187,6 +195,7 @@ go build -C "${dir}/tools/metatool"
 echo "Wiping internal folders for fresh start..."
 sudo rm -rf "${metadata_raw}"
 sudo rm -rf "${metadata_signed}"
+sudo rm -rf "${omsp_data}"
 sudo rm -rf "${storage}"
 sudo rm -rf "${cache}"
 sudo rm -rf "${peercache}"
@@ -213,79 +222,83 @@ do
         # Generate metadata for serializer (do not generate app manifest for failed attestation test)
         echo "Generating ${ar_serializer} metadata ======================================================="
         generate-image-description > "${metadata_log}" 2>&1
-        generate-rtm-manifest-tpm >> "${metadata_log}" 2>&1
-        generate-os-manifest-tpm >> "${metadata_log}" 2>&1
+        generate-rtm-manifest-tpm --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
+        generate-os-manifest-tpm --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
         if [[ "${success}" == "success" ]]; then
-            generate-app-manifest-tpm >> "${metadata_log}" 2>&1
+            generate-app-manifest-tpm --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
         fi
         sign-metadata "${ar_serializer}" >> "${metadata_log}" 2>&1
+        generate-omsp-responses >> "${metadata_log}" 2>&1
 
         # Test CMC with the parameter matrix
         for api_serializer in "${api_serializers[@]}"
         do
-            for i in "${!protocols[@]}"
+            for omsp_serializer in "${omsp_serializers[@]}"
             do
-                cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}.log"
-
-                echo "Starting cmcd"
-                sudo "${dir}/cmcd/cmcd" \
-                    "${cmc_params[@]}" \
-                    --log-file "${cmc_log}" \
-                    --api "${protocols[i]}" \
-                    &
-                cmc_pid="$!"
-                disown
-                wait_for_message "$cmc_pid" "${cmc_log}" "Waiting for.*requests"
-                stty sane
-                echo "Restarted cmcd -----------------------------------------------------------------"
-
-                for j in "${!commands_server[@]}"
+                for i in "${!protocols[@]}"
                 do
-                    server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${commands_server[j]}.log"
-                    client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${protocols[i]}_${commands_client[j]}.log"
+                    cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}.log"
 
-                    printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | API %-6s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${protocols[i]}"
-
-                    "${dir}/cmcctl/cmcctl" \
-                        "${commands_server[j]}" \
-                        "${cmcctl_params[@]}" \
-                        --log-file "${server_log}" \
-                        --api ${protocols[i]} \
-                        --serialization ${api_serializer} \
-                        ${commands_params_server[j]} \
-                        &
-                    disown
-                    wait_for_message $! "${server_log}" "${commands_server_ready_msg[j]}"
-                    stty sane
-
-                    # cmcctl returns error code for fail test cases
-                    set +e
-                    "${dir}/cmcctl/cmcctl" \
-                        "${commands_client[j]}" \
-                        "${cmcctl_params[@]}" \
-                        --log-file "${client_log}" \
-                        --serialization "${api_serializer}" \
+                    echo "Starting cmcd"
+                    sudo "${dir}/cmcd/cmcd" \
+                        "${cmc_params[@]}" \
+                        --log-file "${cmc_log}" \
+                        --omsp-format "${omsp_serializer}" \
                         --api "${protocols[i]}" \
-                        ${commands_params_client[j]}
+                        &
+                    cmc_pid="$!"
+                    disown
+                    wait_for_message "$cmc_pid" "${cmc_log}" "Waiting for.*requests"
                     stty sane
-                    set -e
+                    echo "Restarted cmcd -----------------------------------------------------------------"
 
-                    if [[ "${success}" == "success" ]]; then
-                        wait_msg_server="${commands_server_success_msg[j]}"
-                        wait_msg_client="${commands_client_success_msg[j]}"
-                    else
-                        wait_msg_server="${commands_server_fail_msg[j]}"
-                        wait_msg_client="${commands_client_fail_msg[j]}"
-                    fi
+                    for j in "${!commands_server[@]}"
+                    do
+                        server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}_${commands_server[j]}.log"
+                        client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}_${commands_client[j]}.log"
 
-                    # Verify the server and client output
-                    grep -q "${wait_msg_server}" "${server_log}"
-                    grep -q "${wait_msg_client}" "${client_log}"
-                    printf "[\033[32;1m  OK  \033[0m]\n"
+                        printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | OMSP %s | API %-6s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${omsp_serializer}" "${protocols[i]}"
 
-                    kill_process "cmcctl"
+                        "${dir}/cmcctl/cmcctl" \
+                            "${commands_server[j]}" \
+                            "${cmcctl_params[@]}" \
+                            --log-file "${server_log}" \
+                            --api ${protocols[i]} \
+                            --serialization ${api_serializer} \
+                            ${commands_params_server[j]} \
+                            &
+                        disown
+                        wait_for_message $! "${server_log}" "${commands_server_ready_msg[j]}"
+                        stty sane
+
+                        set +e
+                        "${dir}/cmcctl/cmcctl" \
+                            "${commands_client[j]}" \
+                            "${cmcctl_params[@]}" \
+                            --log-file "${client_log}" \
+                            --serialization "${api_serializer}" \
+                            --api "${protocols[i]}" \
+                            ${commands_params_client[j]}
+                        stty sane
+                        set -e
+
+                        if [[ "${success}" == "success" ]]; then
+                            wait_msg_server="${commands_server_success_msg[j]}"
+                            wait_msg_client="${commands_client_success_msg[j]}"
+                        else
+                            wait_msg_server="${commands_server_fail_msg[j]}"
+                            wait_msg_client="${commands_client_fail_msg[j]}"
+                        fi
+
+                        # Verify the server and client output
+                        grep -q "${wait_msg_server}" "${server_log}"
+                        grep -q "${wait_msg_client}" "${client_log}"
+                        printf "[\033[32;1m  OK  \033[0m]\n"
+
+                        kill_process "cmcctl"
+                    done
+                    kill_process "cmcd"
                 done
-                kill_process "cmcd"
             done
         done
     done
