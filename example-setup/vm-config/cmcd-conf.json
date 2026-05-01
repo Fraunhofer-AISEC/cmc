@@ -26,5 +26,6 @@
         "/var/metadata-ca.pem",
         "/var/ca.pem"
     ],
-    "useOmsp": true
+    "useOmsp": true,
+    "omspFormat": "json"
 }

@@ -28,7 +28,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func AddOmspToMetadata(metadata map[string][]byte, rootCas []*x509.Certificate, alg crypto.Hash) (map[string][]byte, []string, error) {
+func AddOmspToMetadata(metadata map[string][]byte, ser ar.Serializer, rootCas []*x509.Certificate, alg crypto.Hash) (map[string][]byte, []string, error) {
 	log.Tracef("Requesting revocation information for manifests from OMSP server")
 	omspReqs, err := getOmspRequests(metadata)
 	if err != nil {
@@ -38,7 +38,7 @@ func AddOmspToMetadata(metadata map[string][]byte, rootCas []*x509.Certificate, 
 	omspData := make([][]byte, 0)
 	omspHashes := make([]string, 0)
 	for server, omspReq := range omspReqs {
-		omspResp, err := provision.FetchRevocationStatus(server, omspReq, rootCas, false)
+		omspResp, err := provision.FetchRevocationStatus(server, omspReq, ser, rootCas, false)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to fetch revocation status for manifests from %v: %v", server, err)
 		}
@@ -152,7 +152,7 @@ func (cmc *Cmc) UpdateOmsps() {
 				}
 			}
 
-			newOmspResp, err := provision.FetchRevocationStatus(omspResp.Server, reqList[omspResp.Server], cmc.RootCas, false)
+			newOmspResp, err := provision.FetchRevocationStatus(omspResp.Server, reqList[omspResp.Server], cmc.OmspSerializer, cmc.RootCas, false)
 			if err != nil {
 				log.Warnf("failed to fetch revocation status for manifests: %v", err)
 				return

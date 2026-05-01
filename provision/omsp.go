@@ -18,10 +18,11 @@ package provision
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 // OmspRequests are used for requesting information about the revocation status of SW manifests
@@ -33,7 +34,7 @@ type OmspRequest struct {
 
 // FetchRevocationStatus fetches evidence of the current revocation status for all used manifests from a remote server
 // possibly add parameter for manifest identifiers
-func FetchRevocationStatus(endpoint string, or OmspRequest, rootCas []*x509.Certificate, useSystemRoots bool) ([]byte, error) {
+func FetchRevocationStatus(endpoint string, or OmspRequest, ser ar.Serializer, rootCas []*x509.Certificate, useSystemRoots bool) ([]byte, error) {
 	log.Tracef("Requesting OMSP")
 
 	client, err := NewHttpClient(rootCas, useSystemRoots, nil)
@@ -42,7 +43,7 @@ func FetchRevocationStatus(endpoint string, or OmspRequest, rootCas []*x509.Cert
 	}
 
 	method := http.MethodPost
-	orbody, err := json.Marshal(or)
+	orbody, err := ser.Marshal(or)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal OMSP request: %w", err)
 	}
@@ -53,7 +54,15 @@ func FetchRevocationStatus(endpoint string, or OmspRequest, rootCas []*x509.Cert
 	if err != nil {
 		return nil, fmt.Errorf("failed to make new HTTP request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+
+	if ser.String() == "JSON" {
+		req.Header.Set("Content-Type", "application/json")
+	} else if ser.String() == "CBOR" {
+		req.Header.Set("Content-Type", "application/cbor")
+	} else {
+		return nil, fmt.Errorf("serializer %v not supported", ser.String())
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to perform HTTP request: %w", err)

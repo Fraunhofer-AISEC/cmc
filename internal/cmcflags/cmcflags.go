@@ -54,6 +54,7 @@ const (
 	SnpCacheFlag         = "snp-cache"
 	TpmKeyAlgFlag        = "tpm-key-alg"
 	UseOmspFlag          = "use-omsp"
+	OmspFormatFlag       = "omsp-format"
 )
 
 var Flags = []cli.Flag{
@@ -167,6 +168,10 @@ var Flags = []cli.Flag{
 		Name:  UseOmspFlag,
 		Usage: "Indicates whether to use revocation information for manifests",
 	},
+	&cli.StringFlag{
+		Name:  OmspFormatFlag,
+		Usage: "Indicates which serialization format to use for revocation information for manifests. Possible: [json | cbor]",
+	},
 }
 
 // Override applies CLI flag values to the given cmc.Config, only overwriting
@@ -256,6 +261,9 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	}
 	if cmd.IsSet(UseOmspFlag) {
 		c.UseOmsp = cmd.Bool(UseOmspFlag)
+	}
+	if cmd.IsSet(OmspFormatFlag) {
+		c.OmspFormat = cmd.String(OmspFormatFlag)
 	}
 
 	return nil
