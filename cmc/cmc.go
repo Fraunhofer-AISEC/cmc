@@ -26,6 +26,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	drv "github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/keymgr"
@@ -55,6 +56,7 @@ type Cmc struct {
 	KeyMgr             *keymgr.KeyMgr
 	RootCas            []*x509.Certificate
 	OmspHashes         []string //stores keys for retrieving OmspResponses from metadata map
+	OmspSerializer     ar.Serializer
 	*Config
 
 	metadata      map[string][]byte
@@ -113,7 +115,21 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 	// Request and cache revocation status of all used manifests (if CMC is configured to use OMSP)
 	if cmc.UseOmsp {
-		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.RootCas, alg)
+		switch c.OmspFormat {
+		case "json":
+			cmc.OmspSerializer, err = ar.NewJsonSerializer()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate JSON serializer: %v", err)
+			}
+		case "cbor":
+			cmc.OmspSerializer, err = ar.NewCborSerializer()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate CBOR serializer: %v", err)
+			}
+		default:
+			return nil, fmt.Errorf("OMSP serializer type %v not supported", c.OmspFormat)
+		}
+		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.OmspSerializer, cmc.RootCas, alg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get omsp responses: %v", err)
 		}

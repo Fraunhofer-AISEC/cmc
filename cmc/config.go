@@ -47,6 +47,7 @@ type Config struct {
 	SnpCache         string   `json:"snpCache,omitempty"`
 	TpmKeyAlg        string   `json:"tpmKeyAlg,omitempty"`
 	UseOmsp          bool     `json:"useOmsp,omitempty"`
+	OmspFormat       string   `json:"omspFormat,omitempty"`
 }
 
 func (c *Config) Print() {
@@ -90,5 +91,7 @@ func (c *Config) Print() {
 	log.Debugf("\tSNP VCEK and CA cache folder   : %v", c.SnpCache)
 	log.Debugf("\tTPM AK key algorithm           : %v", c.TpmKeyAlg)
 	log.Debugf("\tSupport manifest revocation    : %v", c.UseOmsp)
-
+	if c.OmspFormat != "" {
+		log.Debugf("\tFormat for revocation info     : %v", c.OmspFormat)
+	}
 }

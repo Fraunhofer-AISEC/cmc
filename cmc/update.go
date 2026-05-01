@@ -50,7 +50,7 @@ func UpdateMetadata(cmc *Cmc) error {
 
 	// Request and cache revocation status of all used manifests (if CMC is configured to use OMSP)
 	if cmc.UseOmsp {
-		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.RootCas, cmc.HashAlg)
+		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.OmspSerializer, cmc.RootCas, cmc.HashAlg)
 		if err != nil {
 			return fmt.Errorf("failed to get omsp responses: %v", err)
 		}

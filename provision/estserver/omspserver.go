@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -42,6 +43,28 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	var ser ar.Serializer
+	var err error
+
+	ct, _, _ := mime.ParseMediaType(req.Header.Get("Content-Type"))
+	switch ct {
+	case "application/json":
+		ser, err = ar.NewJsonSerializer()
+		if err != nil {
+			writeHttpErrorf(w, "failed to generate JSON serializer: %v", err)
+			return
+		}
+	case "application/cbor":
+		ser, err = ar.NewCborSerializer()
+		if err != nil {
+			writeHttpErrorf(w, "failed to generate CBOR serializer: %v", err)
+			return
+		}
+	default:
+		writeHttpErrorf(w, "Content-Type %v not supported for /omsp request", req.Header["Content-Type"])
+		return
+	}
+
 	payload, err := io.ReadAll(req.Body)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to read HTTP request body: %v", err)
@@ -49,9 +72,9 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 	}
 
 	var omspReq provision.OmspRequest
-	err = json.Unmarshal(payload, &omspReq)
+	err = ser.Unmarshal(payload, &omspReq)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to unmarshal OMSP request: %v", err)
+		writeHttpErrorf(w, "failed to unmarshal OMSP request: %v", err)
 		return
 	}
 
@@ -106,7 +129,7 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
-	data, err := json.Marshal(omspResp)
+	data, err := ser.Marshal(omspResp)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to marshal OMSP request: %v", err)
 		return
@@ -114,14 +137,14 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 
 	// Load OMSP key and sign JWS with the generated payload with it
 	log.Tracef("Signing OMSP Response with omspKey")
-	respBody, err := internal.Sign(data, s.omspKey, "JSON", s.omspCaChain)
+	respBody, err := internal.Sign(data, s.omspKey, ser.String(), s.omspCaChain)
 	if err != nil {
 		log.Warnf("Failed to create signature: %v", err)
 		http.Error(w, "Generating signature for OMSP responses failed", http.StatusBadRequest)
 		return
 	}
 
-	err = sendResponse(w, "application/json", "", []byte(respBody))
+	err = sendResponse(w, ct, "", []byte(respBody))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to send generated OMSP response: %v", err)
 		return
