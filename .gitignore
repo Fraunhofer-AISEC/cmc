@@ -18,6 +18,7 @@ tools/cmcbackend/cmcbackend
 tools/backend/monitoring.db
 tools/metasign/metasign
 tools/metaconv/metaconv
+tools/metatool/metatool
 tools/fmspc-retrieval-tool/fmspc-retrieval-tool
 tools/measurefs/measurefs
 tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1
