@@ -42,18 +42,18 @@ for path in "${input}/"*; do
 
     # Convert to CBOR if specified, otherwise just copy
     if [[ "${ser,,}" = "cbor" ]]; then
-      "${dir}/tools/metaconv/metaconv" \
-        -in "${path}" \
-        -out "${tmp}/${out_file}" \
-        -outform cbor
+      "${dir}/tools/metatool/metatool" convert \
+        --in "${path}" \
+        --out "${tmp}/${out_file}" \
+        --outform cbor
     else
       cp "${path}" "${tmp}/${out_file}"
     fi
 
     # Sign metadata object
-    "${dir}/tools/metasign/metasign" \
-      -in "${tmp}/${out_file}" \
-      -out "${out}/${out_file}" \
-      -keys "${key}" \
-      -x5cs "${chain}"
+    "${dir}/tools/metatool/metatool" sign \
+      --in "${tmp}/${out_file}" \
+      --out "${out}/${out_file}" \
+      --keys "${key}" \
+      --x5cs "${chain}"
 done

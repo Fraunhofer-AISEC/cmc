@@ -181,8 +181,7 @@ go build -C "${dir}/cmcd"
 go build -C "${dir}/cmcctl"
 go build -C "${dir}/provision/estserver"
 go build -C "${dir}/tools/mrtool"
-go build -C "${dir}/tools/metaconv"
-go build -C "${dir}/tools/metasign"
+go build -C "${dir}/tools/metatool"
 
 # Clean start
 echo "Wiping internal folders for fresh start..."

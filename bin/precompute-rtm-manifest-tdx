@@ -4,7 +4,8 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
+
+metatool="${dir}/tools/metatool/metatool"
 
 [[ $# -eq 1 ]] || {
     # Script requires path to artifacts folder containing all required artifacts such as
@@ -30,18 +31,11 @@ acpi_tables="${artifacts}/etc-acpi-tables"
 table_loader="${artifacts}/etc-table-loader"
 
 data="${dir}/data"
-input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
-
-image_description="${out}/image.description.json"
+image_description_path="${out}/image.description.json"
 
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
-  exit 1
-fi
-
-if [[ ! -d "${input}" ]]; then
-  echo "Data directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
@@ -56,8 +50,7 @@ fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -
 
 # Generate reference values
 echo "Calculating reference values"
-
-refs=$(mrtool precompute tdx \
+components=$(mrtool precompute tdx \
     --mrs 0,1,5 \
     --tdxmodule "${tdx_module}" \
     --ovmf "${ovmf}" \
@@ -72,65 +65,47 @@ refs=$(mrtool precompute tdx \
 mrowner="000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 xfam="e702060000000000"
 
-# SBOM: load
-sbom=$(cat "${input}/cyclonedx.sbom.json")
-
-# SBOM: Set properties
-setjson "sbom" "bomFormat"   "CycloneDX"
-setjson "sbom" "specVersion" "\"1.7\""
-setjson "sbom" "version"     1
-setarr  "sbom" "components"  "${refs}"
-
-# Load manifest template and policy
-manifest=$(cat "${input}/manifest.json")
-policy=$(cat "${input}/tdx.policy.json")
+# Create TDX policy
+policy_tmp=$(mktemp)
+"${metatool}" create tdx-policy \
+  --quote-version 4 \
+  --sept-ve-disable \
+  --mr-owner "${mrowner}" \
+  --mr-owner-config "${mrowner}" \
+  --mr-config-id "${mrowner}" \
+  --xfam "${xfam}" \
+  --out "${policy_tmp}"
 
 name="de.test.rtm"
 
-# Insert manifest properties
-setjson "manifest" "name"                  "${name}"
-setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-setjson "manifest" "developerCommonName"   "test developer"
-setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "manifest" "description"           "RTM Manifest"
-setarr  "manifest" "baseLayers"            "${name}"
-setjson "manifest" "certLevel"             3
-setjson "manifest" "caFingerprint"         "${fingerprint}"
-setjson "manifest" "sbom"                  "${sbom}"
-
-setjson "policy" "quoteVersion"                 4
-setjson "policy" "tdAttributes.debug"           false
-setjson "policy" "tdAttributes.septVEDisable"   true
-setjson "policy" "tdAttributes.pks"             false
-setjson "policy" "tdAttributes.kl"              false
-setjson "policy" "tdId.mrOwner"                 "${mrowner}"
-setjson "policy" "tdId.mrOwnerConfig"           "${mrowner}"
-setjson "policy" "tdId.mrConfigId"              "${mrowner}"
-setjson "policy" "xfam"                         "${xfam}"
-
-setjson "manifest" "tdxPolicy" "${policy}"
-
-# Save the RTM manifest
+# Create RTM manifest
 echo "Writing ${out}/rtm.manifest.json"
-printf "%s\n" "${manifest}" > "${out}/rtm.manifest.json"
+"${metatool}" create manifest \
+  --name "${name}" \
+  --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+  --developer-common-name "test developer" \
+  --not-before "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")" \
+  --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
+  --description "RTM Manifest" \
+  --base-layers "${name}" \
+  --cert-level 3 \
+  --ca-fingerprints "${fingerprint}" \
+  --tdx-policy "${policy_tmp}" \
+  --sbom-format CycloneDX \
+  --components "${components}" \
+  --out "${out}/rtm.manifest.json"
+rm -f "${policy_tmp}"
 
-# RTM Manifest Description: Create corresponding RTM manifest description
-rtmdesc=$(cat "${input}/manifest.description.json")
-setjson "rtmdesc" "name"     "${name}.description"
-setjson "rtmdesc" "manifest" "${name}"
+# Create manifest description and add to image description
+desc_tmp=$(mktemp)
+"${metatool}" create manifest-description \
+  --name "${name}.description" \
+  --manifest "${name}" \
+  --out "${desc_tmp}"
 
-# Image Description: Add/replace RTM manifest description to/in image description
-image_description=$(cat "${image_description}")
-exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
-if [[ "${exists}" = false ]]; then
-  echo "Adding RTM manifest description to image description"
-else
-  echo "Replacing existing RTM Manifest description"
-  image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
-fi
-extendarr "image_description" "descriptions" "${rtmdesc}"
-
-# Image Description: Store
-echo "Writing ${image_description}"
-printf "%s\n" "${image_description}" > "${image_description}"
+echo "Writing ${image_description_path}"
+"${metatool}" create image-description \
+  --in "${image_description_path}" \
+  --add-description "${desc_tmp}" \
+  --out "${image_description_path}"
+rm -f "${desc_tmp}"

@@ -39,8 +39,7 @@ printf "[\033[34;1m EXEC \033[0m] Building CMC..\n"
 go build -C "${dir}/cmcctl"
 go build -C "${dir}/cmcd"
 go build -C "${dir}/provision/estserver"
-go build -C "${dir}/tools/metaconv"
-go build -C "${dir}/tools/metasign"
+go build -C "${dir}/tools/metatool"
 
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"
