@@ -4,7 +4,8 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
+
+metatool="${dir}/tools/metatool/metatool"
 
 print_usage() {
   echo "Usage: $(basename "$0") <container-engine> <container> [<container arguments>]"
@@ -45,7 +46,6 @@ args="$@"
 
 data="${dir}/data"
 cmc="${dir}"
-input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
 
 runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
@@ -140,67 +140,63 @@ for ((i = 0; i < num_containers; i++)); do
 
     refval=$(echo "${refvals}" | jq -r ".[$i]")
 
-    # SBOM: load
-    sbom=$(cat "${input}/cyclonedx.sbom.json")
+    # Build the SBOM with components and extract SHA256 for unique naming
+    sbom=$(jq -n \
+      --arg fmt "CycloneDX" \
+      --arg spec "1.7" \
+      --argjson ver 1 \
+      --argjson comp "${refval}" \
+      '{bomFormat: $fmt, specVersion: $spec, version: $ver, components: (if $comp | type == "array" then $comp else [$comp] end)}')
 
-    # SBOM: Set properties
-    setjson "sbom" "bomFormat"   "CycloneDX"
-    setjson "sbom" "specVersion" "\"1.7\""
-    setjson "sbom" "version"     1
-
-    # SBOM: Insert reference values
-    extendarr "sbom" "components" "${refval}"
-
-    # SBOM: Extract the reference value sha256 and add it to the file name to not overwrite the same
-    # container with different arguments such as environment variables
     sha256=$(echo "${sbom}" | jq -r '.components[0].hashes[0].content')
     container_name=$(echo "${container}-oci" | sed 's:.*/::' | tr : -)
     container_name="${container_name}-${sha256:0:8}"
 
-    # SBOM: set reference value name
+    # Rename the component
     sbom=$(echo "${sbom}" | jq --arg name "${container_name}" '.components[0].name = $name')
 
-    # App Manifest: load
-    manifest=$(cat "${input}/manifest.json")
+    # Save SBOM to temp file for metatool
+    sbom_tmp=$(mktemp)
+    echo "${sbom}" > "${sbom_tmp}"
 
-    # App Manifest: Set properties
-    setjson "manifest" "name"                  "${container_name}"
-    setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    setjson "manifest" "developerCommonName"   "test developer"
-    setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-    setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-    setjson "manifest" "description"           "App Manifest"
-    setarr  "manifest" "baseLayers"            "de.test.os"
-    setjson "manifest" "certLevel"             1
-    setjson "manifest" "sbom"                  "${sbom}"
-
-    # App Manifest: Store
+    # Create container manifest
     echo "Writing ${out}/${container_name}.manifest.json"
-    printf "%s\n" "${manifest}" > "${out}/${container_name}.manifest.json"
+    "${metatool}" create manifest \
+      --name "${container_name}" \
+      --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+      --developer-common-name "test developer" \
+      --not-before "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")" \
+      --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
+      --description "App Manifest" \
+      --base-layers "de.test.os" \
+      --cert-level 1 \
+      --sbom "${sbom_tmp}" \
+      --out "${out}/${container_name}.manifest.json"
+    rm -f "${sbom_tmp}"
 
-    # App Description: Create corresponding app description
-    appdesc=$(cat "${input}/manifest.description.json")
-    appdesc=$(echo "${appdesc}" | jq ".name = \"${container_name}.description\"")
-    appdesc=$(echo "${appdesc}" | jq ".manifest = \"${container_name}\"")
-    echo "Adding environment variables"
-    for j in "${!keys[@]}"; do
-        envs="{\"key\": \"${keys[${j}]}\", \"value\": \"${values[${j}]}\"}"
-        echo "Adding $envs"
-        appdesc=$(echo "${appdesc}" | jq --argjson envs "${envs}" '.environment += [$envs]')
-    done
+    # Create app manifest description
+    desc_tmp=$(mktemp)
+    "${metatool}" create manifest-description \
+      --name "${container_name}.description" \
+      --manifest "${container_name}" \
+      --out "${desc_tmp}"
 
-    # Image Description: Add/replace app description to/in image description
-    image_description=$(cat "${image_description_path}")
-    exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${container}.description\")")
-    if [[ "${exists}" = false ]]; then
-      echo "Adding app description to image description"
-    else
-      echo "Replacing existing app description"
-      image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${container}.description\"))")
+    # Add environment variables to the description if present
+    if [[ ${#keys[@]} -gt 0 ]]; then
+        echo "Adding environment variables"
+        for j in "${!keys[@]}"; do
+            envs="{\"key\": \"${keys[${j}]}\", \"value\": \"${values[${j}]}\"}"
+            echo "Adding $envs"
+            desc_json=$(cat "${desc_tmp}")
+            echo "${desc_json}" | jq --argjson envs "${envs}" '.environment += [$envs]' > "${desc_tmp}"
+        done
     fi
-    extendarr "image_description" "descriptions" "${appdesc}"
 
-    # Image Description: Store
+    # Add manifest description to image description
     echo "Writing ${image_description_path}"
-    printf "%s\n" "${image_description}" > "${image_description_path}"
+    "${metatool}" create image-description \
+      --in "${image_description_path}" \
+      --add-description "${desc_tmp}" \
+      --out "${image_description_path}"
+    rm -f "${desc_tmp}"
 done

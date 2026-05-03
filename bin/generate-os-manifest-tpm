@@ -4,7 +4,8 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
+
+metatool="${dir}/tools/metatool/metatool"
 
 # If ssh is not specified, the reference values are parsed from the local machine. If SSH is
 # specified, the reference values are parsed from the remote, where the mrtool must be installed
@@ -20,17 +21,11 @@ else
 fi
 
 data="${dir}/data"
-input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
 
 if [[ ! -d "${data}" ]]; then
   echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
-  exit 1
-fi
-
-if [[ ! -d "${input}" ]]; then
-  echo "Data directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
@@ -53,57 +48,34 @@ else
   components=$("${mrtool[@]}" read tpm --mrs 8,9,12,13,14,15)
 fi
 
-# SBOM: load
-sbom=$(cat "${input}/cyclonedx.sbom.json")
-
-# SBOM: Insert reference values
-setarr "sbom" "components" "${components}"
-
-# SBOM: Set other properties
-setjson "sbom" "bomFormat"   "CycloneDX"
-setjson "sbom" "specVersion" "\"1.7\""
-setjson "sbom" "version"     1
-
-# OS manifest: load
-manifest=$(cat "${input}/manifest.json")
-
 name="de.test.os"
 
-# OS manifest: set properties
-setjson "manifest" "name"                  "${name}"
-setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-setjson "manifest" "developerCommonName"   "test developer"
-setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "manifest" "description"           "OS Manifest"
-setarr  "manifest" "baseLayers"            "de.test.rtm"
-setjson "manifest" "certLevel"             3
-setjson "manifest" "sbom"                  "${sbom}"
-setjson "manifest" "details.kernel"        "${kernel}"
-setjson "manifest" "details.os"            "${os}"
+# Create OS manifest
+echo "Writing ${out}/os.manifest.json"
+"${metatool}" create manifest \
+  --name "${name}" \
+  --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+  --developer-common-name "test developer" \
+  --not-before "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")" \
+  --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
+  --description "OS Manifest" \
+  --base-layers "de.test.rtm" \
+  --cert-level 3 \
+  --details "kernel=${kernel},os=${os}" \
+  --sbom-format CycloneDX \
+  --components "${components}" \
+  --out "${out}/os.manifest.json"
 
+# Create OS manifest description and add to image description
+desc_tmp=$(mktemp)
+"${metatool}" create manifest-description \
+  --name "${name}.description" \
+  --manifest "${name}" \
+  --out "${desc_tmp}"
 
-# OS Manifest: save
-echo "Writing ${out}/rtm.manifest.json"
-printf "%s\n" "${manifest}" > "${out}/os.manifest.json"
-
-# OS Manifest Description: Create corresponding OS manifest description
-osdesc=$(cat "${input}/manifest.description.json")
-setjson "osdesc" "name"     "${name}.description"
-setjson "osdesc" "manifest" "${name}"
-
-# Image Description: Add/replace os manifest description to/in image description
-image_description=$(cat "${image_description_path}")
-exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
-if [[ "${exists}" = false ]]; then
-  echo "Adding OS Manifest description to image description"
-else
-  echo "Replacing existing OS Manifest description"
-  image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
-fi
-extendarr "image_description" "descriptions" "${osdesc}"
-
-# Image Description: Store
 echo "Writing ${image_description_path}"
-printf "%s\n" "${image_description}" > "${image_description_path}"
-
+"${metatool}" create image-description \
+  --in "${image_description_path}" \
+  --add-description "${desc_tmp}" \
+  --out "${image_description_path}"
+rm -f "${desc_tmp}"

@@ -4,7 +4,8 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
+
+metatool="${dir}/tools/metatool/metatool"
 
 [[ $# -eq 1 ]] || {
     # Script requires path to artifacts folder containing user space binaries
@@ -16,7 +17,6 @@ source "${dir}/bin/utils.sh"
 artifacts="$1"
 
 data="${dir}/data"
-input="${dir}/example-setup/metadata-templates"
 out="${data}/metadata-raw"
 
 name="de.test.host-apps"
@@ -43,46 +43,31 @@ components=$( \
     --path "${artifacts}" \
   )
 
-# SBOM: load
-sbom=$(cat "${input}/cyclonedx.sbom.json")
-
-# App Manifest: Insert reference values
-setarr "sbom" "components" "${components}"
-
-# App Manifest: load
-manifest=$(cat "${input}/manifest.json")
-
-# App Manifest: Set other properties
-setjson "manifest" "name"                  "${name}"
-setjson "manifest" "version"               "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-setjson "manifest" "developerCommonName"   "test developer"
-setjson "manifest" "validity.notBefore"    "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")"
-setjson "manifest" "validity.notAfter"     "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")"
-setjson "manifest" "description"           "App Manifest"
-setarr  "manifest" "baseLayers"            "de.test.os"
-setjson "manifest" "certLevel"             1
-setjson "manifest" "sbom"                  "${sbom}"
-
-# App Manifest: Store
+# Create app manifest
 echo "Writing ${out}/app.manifest.json"
-printf "%s\n" "${manifest}" > "${out}/app.manifest.json"
+"${metatool}" create manifest \
+  --name "${name}" \
+  --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+  --developer-common-name "test developer" \
+  --not-before "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")" \
+  --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
+  --description "App Manifest" \
+  --base-layers "de.test.os" \
+  --cert-level 1 \
+  --sbom-format CycloneDX \
+  --components "${components}" \
+  --out "${out}/app.manifest.json"
 
-# App Description: Create corresponding app description
-appdesc=$(cat "${input}/manifest.description.json")
-setjson "appdesc" "name"     "${name}.description"
-setjson "appdesc" "manifest" "${name}"
+# Create app manifest description and add to image description
+desc_tmp=$(mktemp)
+"${metatool}" create manifest-description \
+  --name "${name}.description" \
+  --manifest "${name}" \
+  --out "${desc_tmp}"
 
-# Image Description: Add/replace app description to/in image description
-image_description=$(cat "${image_description_path}")
-exists=$(echo "${image_description}" | jq "any(.descriptions[]; .name == \"${name}.description\")")
-if [[ "${exists}" = false ]]; then
-  echo "Adding app description to image description"
-else
-  echo "Replacing existing app description"
-  image_description=$(echo "$image_description" | jq ".descriptions |= map(select(.name != \"${name}.description\"))")
-fi
-extendarr "image_description" "descriptions" "${appdesc}"
-
-# Image Description: Store
 echo "Writing ${image_description_path}"
-printf "%s\n" "${image_description}" > "${image_description_path}"
+"${metatool}" create image-description \
+  --in "${image_description_path}" \
+  --add-description "${desc_tmp}" \
+  --out "${image_description_path}"
+rm -f "${desc_tmp}"

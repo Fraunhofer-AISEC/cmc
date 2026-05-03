@@ -61,10 +61,10 @@ for path in "${input}/"*; do
 
     # Convert to CBOR if specified, otherwise just copy
     if [[ "${ser,,}" = "cbor" ]]; then
-      metaconv \
-        -in "${path}" \
-        -out "${tmp}/${out_file}" \
-        -outform cbor
+      metatool convert \
+        --in "${path}" \
+        --out "${tmp}/${out_file}" \
+        --outform cbor
     else
       cp "${path}" "${tmp}/${out_file}"
     fi
@@ -82,11 +82,10 @@ for path in "${input}/"*; do
         x5cs="${chain_dev_a}:${chain_eva_a}:${chain_cert_a}"
     fi
 
-
     # Sign metadata object
-    metasign \
-      -in "${tmp}/${out_file}" \
-      -out "${out}/${out_file}" \
-      -keys "${keys}" \
-      -x5cs "${x5cs}"
+    metatool sign \
+      --in "${tmp}/${out_file}" \
+      --out "${out}/${out_file}" \
+      --keys "${keys}" \
+      --x5cs "${x5cs}"
 done
