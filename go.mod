@@ -4,8 +4,8 @@ go 1.25.0
 
 require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
-	github.com/edgelesssys/ego v1.8.1
-	github.com/fxamacker/cbor/v2 v2.9.0
+	github.com/edgelesssys/ego v1.9.0
+	github.com/fxamacker/cbor/v2 v2.9.1
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -17,17 +17,17 @@ require (
 	github.com/google/go-tpm v0.9.8
 	github.com/google/uuid v1.6.0
 	github.com/invopop/jsonschema v0.13.0
-	github.com/mattn/go-sqlite3 v1.14.34
+	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/opencontainers/runtime-spec v1.3.0
-	github.com/plgd-dev/go-coap/v3 v3.4.2
+	github.com/plgd-dev/go-coap/v3 v3.5.1
 	github.com/robertkrimen/otto v0.5.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/ulikunitz/xz v0.5.15
 	github.com/urfave/cli/v3 v3.7.0
 	github.com/veraison/go-cose v1.3.0
 	go.mozilla.org/pkcs7 v0.9.0
-	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa
-	google.golang.org/grpc v1.79.3
+	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
+	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -70,12 +70,12 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.25.0 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
