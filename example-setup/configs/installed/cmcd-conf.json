@@ -24,5 +24,6 @@
     "rootCas": [
         "data/pki/ca.pem"
     ],
-    "tpmKeyAlg": "EC256"
+    "tpmKeyAlg": "EC256",
+    "useOmsp": false
 }
