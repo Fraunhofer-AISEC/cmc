@@ -145,7 +145,7 @@ func TestVerify(t *testing.T) {
 						Type:    ar.TYPE_MANIFEST,
 						Name:    "de.test.rtm",
 						Version: "2023-04-10T20:00:00Z",
-						Validity: ar.Validity{
+						Validity: &ar.Validity{
 							NotBefore: "2023-04-10T20:00:00Z",
 							NotAfter:  "2026-04-10T20:00:00Z",
 						},
@@ -164,7 +164,7 @@ func TestVerify(t *testing.T) {
 						Type:    ar.TYPE_MANIFEST,
 						Name:    "de.test.os",
 						Version: "2023-04-10T20:00:00Z",
-						Validity: ar.Validity{
+						Validity: &ar.Validity{
 							NotBefore: "2023-04-10T20:00:00Z",
 							NotAfter:  "2026-04-10T20:00:00Z",
 						},
@@ -722,7 +722,7 @@ var (
 			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.rtm",
 			Version: "2023-04-10T20:00:00Z",
-			Validity: ar.Validity{
+			Validity: &ar.Validity{
 				NotBefore: "2023-04-10T20:00:00Z",
 				NotAfter:  "2030-04-10T20:00:00Z",
 			},
@@ -741,7 +741,7 @@ var (
 			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
-			Validity: ar.Validity{
+			Validity: &ar.Validity{
 				NotBefore: "2023-04-10T20:00:00Z",
 				NotAfter:  "2030-04-10T20:00:00Z",
 			},
@@ -761,7 +761,7 @@ var (
 			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.app",
 			Version: "2023-04-10T20:00:00Z",
-			Validity: ar.Validity{
+			Validity: &ar.Validity{
 				NotBefore: "2023-04-10T20:00:00Z",
 				NotAfter:  "2030-04-10T20:00:00Z",
 			},
@@ -781,7 +781,7 @@ var (
 			Type:    ar.TYPE_MANIFEST,
 			Name:    "de.test.os",
 			Version: "2023-04-10T20:00:00Z",
-			Validity: ar.Validity{
+			Validity: &ar.Validity{
 				NotBefore: "2023-04-10T20:00:00Z",
 				NotAfter:  "2030-04-10T20:00:00Z",
 			},
@@ -800,7 +800,7 @@ var (
 		Type:    ar.TYPE_IMAGE_DESCRIPTION,
 		Name:    "test-device.test.de",
 		Version: "2023-04-10T20:00:00Z",
-		Validity: ar.Validity{
+		Validity: &ar.Validity{
 			NotBefore: "2023-04-10T20:00:00Z",
 			NotAfter:  "2030-04-10T20:00:00Z",
 		},

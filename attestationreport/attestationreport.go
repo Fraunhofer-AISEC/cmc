@@ -153,11 +153,11 @@ type Metadata struct {
 // MetaInfo is a helper struct for generic info
 // present in most metadata objects
 type MetaInfo struct {
-	Type        string   `json:"type" cbor:"0,keyasint"`
-	Name        string   `json:"name,omitempty" cbor:"1,keyasint,omitempty"`
-	Version     string   `json:"version,omitempty" cbor:"2,keyasint,omitempty"`
-	Validity    Validity `json:"validity,omitempty" cbor:"3,keyasint,omitempty"`
-	Description string   `json:"description,omitempty" cbor:"4,keyasint,omitempty"`
+	Type        string    `json:"type" cbor:"0,keyasint"`
+	Name        string    `json:"name,omitempty" cbor:"1,keyasint,omitempty"`
+	Version     string    `json:"version,omitempty" cbor:"2,keyasint,omitempty"`
+	Validity    *Validity `json:"validity,omitempty" cbor:"3,keyasint,omitempty"`
+	Description string    `json:"description,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // Manifest represents a part of the reference software stack (e.g., OS layer, app layer)
