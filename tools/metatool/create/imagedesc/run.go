@@ -126,11 +126,16 @@ func buildImageDescription(cmd *cli.Command) (*ar.Metadata, error) {
 	if cmd.IsSet(descriptionFlag) {
 		m.Description = cmd.String(descriptionFlag)
 	}
-	if cmd.IsSet(notBeforeFlag) {
-		m.Validity.NotBefore = cmd.String(notBeforeFlag)
-	}
-	if cmd.IsSet(notAfterFlag) {
-		m.Validity.NotAfter = cmd.String(notAfterFlag)
+	if cmd.IsSet(notBeforeFlag) || cmd.IsSet(notAfterFlag) {
+		if m.Validity == nil {
+			m.Validity = &ar.Validity{}
+		}
+		if cmd.IsSet(notBeforeFlag) {
+			m.Validity.NotBefore = cmd.String(notBeforeFlag)
+		}
+		if cmd.IsSet(notAfterFlag) {
+			m.Validity.NotAfter = cmd.String(notAfterFlag)
+		}
 	}
 	if cmd.IsSet(locationFlag) {
 		m.Location = cmd.String(locationFlag)

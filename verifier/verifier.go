@@ -415,16 +415,23 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 			}
 		} else {
 			log.Debug("Checking validity of metadata item...")
-			result.ValidityCheck = checkValidity(result.Metadata.Validity)
-			if result.ValidityCheck.Status == ar.StatusFail {
-				log.Warnf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
-					result.Metadata.Type, result.Metadata.Name,
-					result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
+			if result.Metadata.Validity == nil {
+				log.Warnf("Manifest %v: %v is missing validity information",
+					result.Metadata.Type, result.Metadata.Name)
 				result.Summary.Status = ar.StatusFail
 				success = ar.StatusFail
 			} else {
-				log.Debugf("Checking expiration of %v: %v successful",
-					result.Metadata.Type, result.Metadata.Name)
+				result.ValidityCheck = checkValidity(result.Metadata.Validity)
+				if result.ValidityCheck.Status == ar.StatusFail {
+					log.Warnf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
+						result.Metadata.Type, result.Metadata.Name,
+						result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
+					result.Summary.Status = ar.StatusFail
+					success = ar.StatusFail
+				} else {
+					log.Debugf("Checking expiration of %v: %v successful",
+						result.Metadata.Type, result.Metadata.Name)
+				}
 			}
 		}
 
@@ -750,7 +757,7 @@ func hasCompatibleBaseLayer(baseLayers []string, processed map[string]bool) bool
 	return false
 }
 
-func checkValidity(val ar.Validity) ar.Result {
+func checkValidity(val *ar.Validity) ar.Result {
 	result := ar.Result{
 		Status: ar.StatusSuccess,
 	}
