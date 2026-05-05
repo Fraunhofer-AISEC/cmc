@@ -38,12 +38,7 @@ func TestGetConfigMeasurement(t *testing.T) {
 				id:         "mycontainer",
 				configData: configData,
 			},
-			want: []byte{
-				0x54, 0x96, 0xca, 0x7d, 0x37, 0x8e, 0x44, 0xb3,
-				0x70, 0x47, 0x8e, 0x8d, 0xf4, 0x79, 0xdd, 0x99,
-				0x71, 0x65, 0x11, 0x66, 0xe9, 0x93, 0x3f, 0x7f,
-				0x48, 0x6e, 0x44, 0x88, 0x75, 0xea, 0xe9, 0x2e,
-			},
+			want:    dec("fc4b2c7b6ba4f42e8b1542e315c066b1fd1b052349ddf28ff339e66207910a2a"),
 			wantErr: false,
 		},
 	}
@@ -97,7 +92,7 @@ func Test_normalize(t *testing.T) {
 }
 
 var (
-	normalizedDockerConfig = []byte(`{"hooks":{"prestart":[{"args":["libnetwork-setkey","-exec-root=/var/run/docker","<container-id>","<docker-network-controller-id>"],"path":"/usr/bin/ls"}]},"hostname":"<container-id>","linux":{"cgroupsPath":"system.slice:docker:<container-id>","maskedPaths":["/proc/asound","/sys/devices/virtual/powercap"],"namespaces":[{"type":"mount"}],"readonlyPaths":["/proc/bus","/proc/sysrq-trigger"],"resources":{"blockIO":{},"devices":[{"access":"rwm","allow":false}]},"seccomp":{"architectures":["SCMP_ARCH_X86_64","SCMP_ARCH_X32"],"defaultAction":"SCMP_ACT_ERRNO","defaultErrnoRet":1,"syscalls":[{"action":"SCMP_ACT_ALLOW","names":["chroot"]}]},"sysctl":{"net.ipv4.ip_unprivileged_port_start":"0","net.ipv4.ping_group_range":"0 2147483647"}},"mounts":[{"destination":"/etc/resolv.conf","options":["rbind","rprivate"],"source":"/var/lib/docker/containers/<container-id>/resolv.conf","type":"bind"}],"ociVersion":"1.2.0","process":{"args":["/bin/sh"],"capabilities":{"permitted":["CAP_CHOWN","CAP_DAC_OVERRIDE"]},"cwd":"/","env":["HOSTNAME=<container-id>","PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","TERM=xterm"],"user":{"gid":0,"uid":0}}}`)
+	normalizedDockerConfig = []byte(`{"hooks":{"prestart":[{"args":["libnetwork-setkey","-exec-root=/var/run/docker","<container-id>","<docker-network-controller-id>"],"path":"/usr/bin/ls"}]},"linux":{"cgroupsPath":"system.slice:docker:<container-id>","maskedPaths":["/proc/asound","/sys/devices/virtual/powercap"],"namespaces":[{"type":"mount"}],"readonlyPaths":["/proc/bus","/proc/sysrq-trigger"],"resources":{"blockIO":{},"devices":[{"access":"rwm","allow":false}]},"seccomp":{"architectures":["SCMP_ARCH_X86_64","SCMP_ARCH_X32"],"defaultAction":"SCMP_ACT_ERRNO","defaultErrnoRet":1,"syscalls":[{"action":"SCMP_ACT_ALLOW","names":["chroot"]}]},"sysctl":{"net.ipv4.ip_unprivileged_port_start":"0","net.ipv4.ping_group_range":"0 2147483647"}},"mounts":[{"destination":"/etc/resolv.conf","options":["rbind","rprivate"],"source":"/var/lib/docker/containers/<container-id>/resolv.conf","type":"bind"}],"ociVersion":"1.2.0","process":{"args":["/bin/sh"],"capabilities":{"permitted":["CAP_CHOWN","CAP_DAC_OVERRIDE"]},"cwd":"/","env":["HOSTNAME=<container-id>","PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","TERM=xterm"],"user":{"gid":0,"uid":0}}}`)
 
 	dockerConfig = []byte(`
 {
@@ -539,3 +534,11 @@ var (
 		0x20, 0x20, 0x20, 0x5d, 0x0a, 0x20, 0x20, 0x7d, 0x0a, 0x7d, 0x0a,
 	}
 )
+
+func dec(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		log.Fatalf("Failed to decode %v: %v", s, err)
+	}
+	return b
+}
