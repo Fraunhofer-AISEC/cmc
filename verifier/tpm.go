@@ -239,7 +239,12 @@ func verifyPcrs(artifacts []ar.Artifact,
 				continue
 			}
 			for _, ref := range refComponents {
-				if ref.Index == pcr {
+				idx, err := ref.GetIndex()
+				if err != nil {
+					success = false
+					continue
+				}
+				if idx == pcr {
 
 					refHash := ref.GetHash(quoteHashAlg)
 
@@ -335,21 +340,22 @@ func verifyPcrs(artifacts []ar.Artifact,
 	// in case of detailed measurement logs
 	for _, ref := range refComponents {
 
+		idx, err := ref.GetIndex()
+		if err != nil {
+			success = false
+			continue
+		}
 		refHash := ref.GetHash(quoteHashAlg)
 
-		// Check if measurement contains the reference value PCR
 		foundPcr := false
 		for _, measuredPcr := range artifacts {
 
-			if measuredPcr.Index == ref.Index {
+			if measuredPcr.Index == idx {
 				foundPcr = true
 			} else {
 				continue
 			}
 
-			// Check if the reference value is present (only possible if detailed
-			// measurement logs were provided. In case of summary, every reference value is
-			// extended expected)
 			if measuredPcr.Type != ar.TYPE_PCR_SUMMARY {
 				foundEvent := false
 				for _, event := range measuredPcr.Events {
@@ -359,10 +365,10 @@ func verifyPcrs(artifacts []ar.Artifact,
 				}
 				if !foundEvent {
 					result := ar.DigestResult{
-						Type:        ar.TYPE_REFVAL_TPM,
+						Type:        ar.TRUST_ANCHOR_TPM,
 						Name:        ref.Name,
-						Index:       ref.Index,
-						Success:     ref.Optional, // Only fail attestation if component is mandatory
+						Index:       idx,
+						Success:     ref.Optional,
 						Launched:    false,
 						Digest:      refHash,
 						Description: ref.Description,
@@ -375,7 +381,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 						detailedResults = append(detailedResults, result)
 						success = false
 						log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
-							ref.Index, ref.Name, hex.EncodeToString(refHash))
+							idx, ref.Name, hex.EncodeToString(refHash))
 					}
 					continue
 				}
@@ -383,11 +389,11 @@ func verifyPcrs(artifacts []ar.Artifact,
 		}
 		if !foundPcr {
 			log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
-				ref.Index, ref.Name, hex.EncodeToString(refHash))
+				idx, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
-				Type:        ar.TYPE_REFVAL_TPM,
+				Type:        ar.TRUST_ANCHOR_TPM,
 				Name:        ref.Name,
-				Index:       ref.Index,
+				Index:       idx,
 				Success:     ref.Optional,
 				Launched:    false,
 				Digest:      refHash,
@@ -541,7 +547,11 @@ func verifyQuoteECDSA(quote []byte, sig *tpm2.Signature, cert *x509.Certificate)
 func getReferenceValue(alg crypto.Hash, hash []byte, pcr int, refVals []ar.Component) *ar.Component {
 	for _, ref := range refVals {
 		refHash := ref.GetHash(alg)
-		if ref.Index == pcr && bytes.Equal(refHash, hash) {
+		idx, err := ref.GetIndex()
+		if err != nil {
+			continue
+		}
+		if idx == pcr && bytes.Equal(refHash, hash) {
 			return &ref
 		}
 	}

@@ -118,8 +118,7 @@ func run(cmd *cli.Command) error {
 		log.Trace("No algorithms specified: retrieving all available PCR banks")
 	}
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, ar.TYPE_REFVAL_TPM,
-		pcrConf.EventData, algs)
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, pcrConf.EventData, algs)
 	if err != nil {
 		return fmt.Errorf("failed to read binary bios measurements: %w", err)
 	}
@@ -128,7 +127,11 @@ func run(cmd *cli.Command) error {
 	// Only return requested PCRs
 	filteredRefvals := make([]*ar.Component, 0, len(refvals))
 	for _, refval := range refvals {
-		if contains(globConf.Mrs, refval.Index) {
+		index, err := refval.GetIndex()
+		if err != nil {
+			return fmt.Errorf("failed to get index: %w", err)
+		}
+		if contains(globConf.Mrs, index) {
 			filteredRefvals = append(filteredRefvals, &refval)
 		}
 	}

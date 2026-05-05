@@ -32,38 +32,45 @@ func PrecomputeFinalPcrValues(refvals []*ar.Component) ([]*ar.Component, error) 
 	for _, rv := range refvals {
 
 		hash := rv.GetHash(crypto.SHA256)
+		idx, err := rv.GetIndex()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get index: %w", err)
+		}
 
-		old, ok := summaryMap[rv.Index]
+		old, ok := summaryMap[idx]
 		if !ok {
-			// Initialize old value with init value (can be different from zero in PCR0)
-			summaryMap[rv.Index] = hash
+			summaryMap[idx] = hash
 			continue
 		}
 		log.Tracef("extending hash: %x", old)
-		summaryMap[rv.Index] = internal.ExtendSha256(old, hash)
+		summaryMap[idx] = internal.ExtendSha256(old, hash)
 		log.Tracef("data          : %x", hash)
-		log.Tracef("extended hash : %x", summaryMap[rv.Index])
+		log.Tracef("extended hash : %x", summaryMap[idx])
 	}
 
 	// Convert map back to slice
 	var summaries []*ar.Component
 	for idx, val := range summaryMap {
-		summaries = append(summaries, &ar.Component{
-			Type:  ar.TYPE_REFVAL_TPM,
-			Name:  ar.TYPE_PCR_SUMMARY,
-			Index: idx,
+		c := &ar.Component{
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, idx),
+			Name: ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-256",
 					Content: val[:],
 				},
 			},
-		})
+		}
+		c.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+		c.SetIndex(idx)
+		summaries = append(summaries, c)
 	}
 
 	// Sort summaries by index
 	sort.Slice(summaries, func(i, j int) bool {
-		return summaries[i].Index < summaries[j].Index
+		i1, _ := summaries[i].GetIndex()
+		i2, _ := summaries[j].GetIndex()
+		return i1 < i2
 	})
 
 	return summaries, nil
@@ -81,8 +88,7 @@ func PrecomputeAggregatePcrValue(refvals []*ar.Component) (*ar.Component, error)
 	}
 	aggregateHash := hash.Sum(nil)
 	aggregate := &ar.Component{
-		Type:  "TPM PCR Aggregate",
-		Index: 0,
+		Type: "TPM PCR Aggregate",
 		Hashes: []ar.ReferenceHash{
 			{
 				Alg:     "SHA-256",
@@ -90,6 +96,8 @@ func PrecomputeAggregatePcrValue(refvals []*ar.Component) (*ar.Component, error)
 			},
 		},
 	}
+	aggregate.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+	aggregate.SetIndex(0)
 
 	return aggregate, nil
 }

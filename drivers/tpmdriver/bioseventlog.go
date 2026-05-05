@@ -140,12 +140,12 @@ type TCG_AlgorithmSize struct {
 	DigestSize  uint16
 }
 
-func GetBiosArtifacts(file, refvalType string, addEventData bool, algs []crypto.Hash) (map[int]ar.Artifact, error) {
+func GetBiosArtifacts(file string, addEventData bool, algs []crypto.Hash) (map[int]ar.Artifact, error) {
 
 	// Get single events
-	components, err := GetBiosMeasurements(file, refvalType, addEventData, algs)
+	components, err := GetBiosMeasurements(file, addEventData, algs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get bios measurements: %w", err)
 	}
 
 	// Map with PCR index as key
@@ -153,17 +153,21 @@ func GetBiosArtifacts(file, refvalType string, addEventData bool, algs []crypto.
 
 	// Convert to artifacts
 	for _, component := range components {
+		idx, err := component.GetIndex()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get index: %w", err)
+		}
 
-		artifact, ok := artifacts[component.Index]
+		artifact, ok := artifacts[idx]
 		if !ok {
 			// No artifact for this index yet, create
 			artifact = ar.Artifact{
 				Type:  ar.TYPE_PCR_EVENTLOG,
-				Index: int(component.Index),
+				Index: idx,
 			}
 		}
 		artifact.Events = append(artifact.Events, component)
-		artifacts[component.Index] = artifact
+		artifacts[idx] = artifact
 	}
 
 	return artifacts, nil
@@ -172,13 +176,13 @@ func GetBiosArtifacts(file, refvalType string, addEventData bool, algs []crypto.
 // GetBiosMeasurements retrieves the measurements recorded into the TPM PCRs by BIOS, UEFI and IPL.
 // The file with the binary measurements (e.g., /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file, refvalType string, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
+func GetBiosMeasurements(file string, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseBiosMeasurements(data, refvalType, addEventData, algs)
+	digests, err := parseBiosMeasurements(data, addEventData, algs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse binary bios measurements event log: %w", err)
 	}
@@ -186,7 +190,7 @@ func GetBiosMeasurements(file, refvalType string, addEventData bool, algs []cryp
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte, refvalType string, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
+func parseBiosMeasurements(data []byte, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
 
 	tpmAlgs := make([]tpm2.Algorithm, 0, len(algs))
 	for _, alg := range algs {
@@ -225,7 +229,7 @@ func parseBiosMeasurements(data []byte, refvalType string, addEventData bool, al
 		switch specIdEvent.FamilyVersionMajor {
 		case 2:
 			log.Trace("Detected event log format version 2")
-			return parseBiosMeasurementsV2(buf.Bytes(), refvalType, addEventData, tpmAlgs)
+			return parseBiosMeasurementsV2(buf.Bytes(), addEventData, tpmAlgs)
 		default:
 			return nil, fmt.Errorf("unsuported Eventlog version %v.%v", specIdEvent.FamilyVersionMajor,
 				specIdEvent.FamilyVersionMinor)
@@ -233,11 +237,11 @@ func parseBiosMeasurements(data []byte, refvalType string, addEventData bool, al
 	} else {
 		// Eventlog format version 1 directly starts with extended events
 		log.Trace("Detected event log format version 1")
-		return parseBiosMeasurementsV1(data, refvalType)
+		return parseBiosMeasurementsV1(data)
 	}
 }
 
-func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.Component, error) {
+func parseBiosMeasurementsV1(data []byte) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 	extends := make([]ar.Component, 0)
@@ -255,24 +259,26 @@ func parseBiosMeasurementsV1(data []byte, refvalType string) ([]ar.Component, er
 		buf.Next(int(event.EventDataSize))
 
 		//add to extends
-		extends = append(extends, ar.Component{
-			Type:  refvalType,
-			Name:  eventtypeToString(event.EventType),
-			Index: int(event.PcrIndex),
+		component := ar.Component{
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, int(event.PcrIndex)),
+			Name: eventtypeToString(event.EventType),
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-1",
 					Content: event.Digest[:],
 				},
 			},
-		})
+		}
+		component.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+		component.SetIndex(int(event.PcrIndex))
+		extends = append(extends, component)
 	}
 
 	return extends, nil
 
 }
 
-func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool, algs []tpm2.Algorithm) ([]ar.Component, error) {
+func parseBiosMeasurementsV2(data []byte, addEventData bool, algs []tpm2.Algorithm) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 	extends := make([]ar.Component, 0)
@@ -371,10 +377,11 @@ func parseBiosMeasurementsV2(data []byte, refvalType string, addEventData bool, 
 		}
 
 		extend := ar.Component{
-			Type:  refvalType,
-			Name:  eventName,
-			Index: int(pcrIndex),
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, int(pcrIndex)),
+			Name: eventName,
 		}
+		extend.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+		extend.SetIndex(int(pcrIndex))
 
 		// If no algs are specified, add all available PCR banks
 		if len(algs) == 0 {
@@ -456,10 +463,11 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, al
 	}
 
 	entry := ar.Component{
-		Type:  ar.TYPE_REFVAL_TPM,
-		Name:  "TPM_PCR_INIT_VALUE",
-		Index: pcrIndex,
+		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, pcrIndex),
+		Name: "TPM_PCR_INIT_VALUE",
 	}
+	entry.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+	entry.SetIndex(pcrIndex)
 
 	// If no algs are specified, add all available PCR banks
 	if len(algs) == 0 {

@@ -319,7 +319,7 @@ func (c *Config) print() {
 func precompute(pcrNums []int, tpmConf *Config) ([]*ar.Component, []*ar.Component, error) {
 
 	var err error
-	refvals := make([]*ar.Component, 0)
+	components := make([]*ar.Component, 0)
 	pcrs := make([]*ar.Component, 0)
 
 	for _, pcrNum := range pcrNums {
@@ -369,10 +369,10 @@ func precompute(pcrNums []int, tpmConf *Config) ([]*ar.Component, []*ar.Componen
 		if pcr != nil {
 			pcrs = append(pcrs, pcr)
 		}
-		refvals = append(refvals, rv...)
+		components = append(components, rv...)
 	}
 
-	return pcrs, refvals, nil
+	return pcrs, components, nil
 }
 
 type manifestEntry struct {

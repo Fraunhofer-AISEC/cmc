@@ -220,7 +220,7 @@ var (
 	}
 
 	validUbuntuRefVal = ar.Component{
-		Type: ar.TYPE_REFVAL_SW,
+		Type: ar.TYPE_APP,
 		Name: "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
 		Hashes: []ar.ReferenceHash{{
 			Alg:     "SHA-256",
@@ -230,10 +230,13 @@ var (
 			OciSpec: validUbuntuOciConfig,
 		},
 		Optional: true,
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
+		},
 	}
 
 	invalidSwRefVal = ar.Component{
-		Type: ar.TYPE_REFVAL_SW,
+		Type: ar.TYPE_APP,
 		Name: "OCI Runtime Bundle Digest",
 		Hashes: []ar.ReferenceHash{{
 			Alg:     "SHA-256",
@@ -243,10 +246,13 @@ var (
 			OciSpec: validUbuntuOciConfig,
 		},
 		Optional: true,
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
+		},
 	}
 
 	invalidSwRefValOciConfig = ar.Component{
-		Type: ar.TYPE_REFVAL_SW,
+		Type: ar.TYPE_APP,
 		Name: "OCI Runtime Bundle Rootfs Digest: 359e464721925b79c836b8a7997b5645d9b3a6b46998b7377ebec72cb971b94b",
 		Hashes: []ar.ReferenceHash{{
 			Alg:     "SHA-256",
@@ -256,6 +262,9 @@ var (
 			OciSpec: invalidUbuntuOciConfig,
 		},
 		Optional: true,
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
+		},
 	}
 
 	validSwNonce = dec("8962e5c8e9522190551a3c4f40cf886e798d5ff1d698bc951fc11781cdb5f63a")

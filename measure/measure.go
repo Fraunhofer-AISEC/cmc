@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -40,6 +41,14 @@ func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error
 
 	log.Debugf("Recording measurement %v: %x", event.Name, event.GetHash(crypto.SHA256))
 
+	index, err := event.GetIndex()
+	if err != nil {
+		return fmt.Errorf("failed to get index: %w", err)
+	}
+	if index < 0 || index > math.MaxUint32 {
+		return fmt.Errorf("invalid PCR index %v: out of uint32 range", index)
+	}
+
 	eventlog := new(ar.Artifact)
 	if _, err := os.Stat(logFile); err == nil {
 		// Read the existing eventlog
@@ -53,16 +62,16 @@ func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error
 			return fmt.Errorf("failed to unmarshal measurement list: %w", err)
 		}
 
-		if event.Index != eventlog.Index {
+		if index != eventlog.Index {
 			return fmt.Errorf("eventlog index (%v) does not match event index (%v)",
-				eventlog.Index, event.Index)
+				eventlog.Index, index)
 		}
 
 	} else {
 		// Initialize new eventlog
 		eventlog = &ar.Artifact{
 			Type:   ar.TYPE_SW_EVENTLOG,
-			Index:  event.Index,
+			Index:  index,
 			Events: []ar.Component{},
 		}
 	}
@@ -109,13 +118,13 @@ func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error
 		}
 		defer rwc.Close()
 
-		err = tpm2.PCRExtend(rwc, tpmutil.Handle(event.Index), tpm2.AlgSHA256,
+		err = tpm2.PCRExtend(rwc, tpmutil.Handle(index), tpm2.AlgSHA256,
 			event.GetHash(crypto.SHA256), "")
 		if err != nil {
-			return fmt.Errorf("failed to extend PCR%v: %w", event.Index, err)
+			return fmt.Errorf("failed to extend PCR%v: %w", index, err)
 		}
 
-		log.Debugf("Recorded measurement %v into PCR%v", event.Name, event.Index)
+		log.Debugf("Recorded measurement %v into PCR%v", event.Name, index)
 	} else if strings.EqualFold(driver, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {

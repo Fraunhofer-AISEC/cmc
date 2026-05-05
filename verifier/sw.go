@@ -117,7 +117,7 @@ func VerifySw(
 		}
 		if !found {
 			res := ar.DigestResult{
-				Type:       ar.TYPE_REFVAL_SW,
+				Type:       ar.TRUST_ANCHOR_SW,
 				Success:    ref.Optional, // Only fail attestation if component is mandatory
 				Launched:   false,
 				Name:       ref.Name,

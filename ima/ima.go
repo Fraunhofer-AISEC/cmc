@@ -78,22 +78,26 @@ func GetImaArtifacts(file string) (map[int]ar.Artifact, error) {
 
 	events, err := GetImaMeasurements(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get ima measurements: %w", err)
 	}
 
 	// Map with PCR index as key
 	artifacts := map[int]ar.Artifact{}
 
 	for _, event := range events {
-		artifact, ok := artifacts[event.Index]
+		idx, err := event.GetIndex()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get index: %w", err)
+		}
+		artifact, ok := artifacts[idx]
 		if !ok {
 			artifact = ar.Artifact{
 				Type:  ar.TYPE_PCR_EVENTLOG,
-				Index: event.Index,
+				Index: idx,
 			}
 		}
 		artifact.Events = append(artifact.Events, event)
-		artifacts[event.Index] = artifact
+		artifacts[idx] = artifact
 	}
 
 	return artifacts, nil
@@ -160,9 +164,8 @@ func parseImaRuntimeDigests(data []byte) ([]ar.Component, error) {
 		}
 
 		event := ar.Component{
-			Type:  ar.TYPE_REFVAL_TPM,
-			Name:  filepath.Base(eventName),
-			Index: int(header.Pcr),
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, int(header.Pcr)),
+			Name: filepath.Base(eventName),
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-256",
@@ -172,6 +175,8 @@ func parseImaRuntimeDigests(data []byte) ([]ar.Component, error) {
 			Description: eventName, // Full path
 			Optional:    true,
 		}
+		event.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+		event.SetIndex(int(header.Pcr))
 
 		components = append(components, event)
 

@@ -79,13 +79,13 @@ const (
 	TDX
 )
 
-func (t TrustAnchor) RefvalString() string {
+func (t TrustAnchor) PropertyValue() string {
 	switch t {
 	case TPM:
-		return ar.TYPE_REFVAL_TPM
+		return ar.TRUST_ANCHOR_TPM
 	case TDX:
-		return ar.TYPE_REFVAL_TDX
+		return ar.TRUST_ANCHOR_TDX
 	default:
-		return fmt.Sprintf("Unknown reference value (%v)", t)
+		return fmt.Sprintf("Unknown (%v)", t)
 	}
 }

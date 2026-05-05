@@ -26,7 +26,6 @@ import (
 func Test_parseBiosMeasurements(t *testing.T) {
 	type args struct {
 		data            []byte
-		refvalType      string
 		addRawEventData bool
 		algs            []crypto.Hash
 	}
@@ -39,7 +38,6 @@ func Test_parseBiosMeasurements(t *testing.T) {
 			name: "Test parseBiosMeasurements success",
 			args: args{
 				data:            BinaryBiosMeasurements,
-				refvalType:      "TPM Measurement",
 				addRawEventData: false,
 				algs:            []crypto.Hash{crypto.SHA256},
 			},
@@ -49,7 +47,6 @@ func Test_parseBiosMeasurements(t *testing.T) {
 			name: "Test parseBiosMeasurements extended success",
 			args: args{
 				data:            BinaryBiosMeasurements,
-				refvalType:      "TPM Measurement",
 				addRawEventData: true,
 				algs:            []crypto.Hash{crypto.SHA256},
 			},
@@ -59,7 +56,6 @@ func Test_parseBiosMeasurements(t *testing.T) {
 			name: "Test parseBiosMeasurements fail",
 			args: args{
 				data:            InvalidBinaryBiosMeasuremens,
-				refvalType:      "TPM Measurement",
 				addRawEventData: false,
 				algs:            []crypto.Hash{crypto.SHA256},
 			},
@@ -71,8 +67,7 @@ func Test_parseBiosMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.refvalType,
-				tt.args.addRawEventData, tt.args.algs)
+			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.addRawEventData, tt.args.algs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseBiosMeasurements() error = %v, wantErr %v", err, tt.wantErr)
 				//maybe print the return value of the BIOS Measurements

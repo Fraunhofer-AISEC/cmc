@@ -291,10 +291,9 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
 		}
 
-		refvals = append(refvals, &ar.Component{
-			Type:  ar.TYPE_REFVAL_TDX,
-			Name:  "EV_EFI_PLATFORM_FIRMWARE_BLOB",
-			Index: tcg.INDEX_MRTD,
+		comp := &ar.Component{
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_MRTD),
+			Name: "EV_EFI_PLATFORM_FIRMWARE_BLOB",
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
@@ -302,7 +301,10 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 				},
 			},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
-		})
+		}
+		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+		comp.SetIndex(tcg.INDEX_MRTD)
+		refvals = append(refvals, comp)
 		mrtd = hash[:]
 	} else if c.Mrtd != "" {
 		hash, err := hex.DecodeString(c.Mrtd)
@@ -313,10 +315,9 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("malformed sha384 hash length: (is: %v, expected: %v)", len(hash), sha512.Size384)
 		}
 
-		refvals = append(refvals, &ar.Component{
-			Type:  ar.TYPE_REFVAL_TDX,
-			Name:  "OVMF",
-			Index: tcg.INDEX_MRTD,
+		comp := &ar.Component{
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_MRTD),
+			Name: "OVMF",
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
@@ -324,7 +325,10 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 				},
 			},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (firmware)",
-		})
+		}
+		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+		comp.SetIndex(tcg.INDEX_MRTD)
+		refvals = append(refvals, comp)
 		mrtd = hash[:]
 	} else {
 		return nil, nil, fmt.Errorf("ovmf or mrtd must be specified for MRTD")
@@ -332,10 +336,9 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	// Create MRTD final reference value
 	mrtdSummary := &ar.Component{
-		Type:        ar.TYPE_REFVAL_TDX,
+		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_MRTD),
 		Name:        "MRTD Summary",
 		Description: "MRTD",
-		Index:       tcg.INDEX_MRTD,
 		Hashes: []ar.ReferenceHash{
 			{
 				Alg:     "SHA-384",
@@ -343,6 +346,8 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 			},
 		},
 	}
+	mrtdSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+	mrtdSummary.SetIndex(tcg.INDEX_MRTD)
 
 	return mrtdSummary, refvals, nil
 }

@@ -422,16 +422,18 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		calculatedMrs[i] = make([]byte, 48)
 	}
 	for _, refval := range refvals {
-		if refval.Index >= NUM_TDX_MRS {
+		idx, err := refval.GetIndex()
+		if err != nil {
 			return nil, nil, ar.IllegalTdxMrIndex, false
 		}
-		if refval.Index == 0 || refval.Index == 5 {
-			// MRTD and MRSEAM are not extended
-			copy(calculatedMrs[refval.Index], refval.GetHash(crypto.SHA384))
+		if idx >= NUM_TDX_MRS {
+			return nil, nil, ar.IllegalTdxMrIndex, false
+		}
+		if idx == 0 || idx == 5 {
+			copy(calculatedMrs[idx], refval.GetHash(crypto.SHA384))
 		} else {
-			// RTMRs are extended
-			calculatedMrs[refval.Index] = internal.ExtendSha384(calculatedMrs[refval.Index], refval.GetHash(crypto.SHA384))
-			log.Tracef("Extended %v: %v = %x", internal.IndexToMr(refval.Index), refval.Name,
+			calculatedMrs[idx] = internal.ExtendSha384(calculatedMrs[idx], refval.GetHash(crypto.SHA384))
+			log.Tracef("Extended %v: %v = %x", internal.IndexToMr(idx), refval.Name,
 				refval.GetHash(crypto.SHA384))
 		}
 	}
@@ -490,18 +492,23 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		// comparison of the recalculated MR with the measured MR fails
 		log.Debug("Verifying reference values based on MR")
 		for _, refval := range refvals {
-			t := ar.TYPE_REFVAL_TDX
-			if successMrs[refval.Index] {
+			idx, err := refval.GetIndex()
+			if err != nil {
+				success = false
+				continue
+			}
+			t := ar.TRUST_ANCHOR_TDX
+			if successMrs[idx] {
 				t = "Verified"
 			}
 			detailedResults = append(detailedResults,
 				ar.DigestResult{
 					Type:        t,
 					Name:        refval.Name,
-					Index:       refval.Index,
+					Index:       idx,
 					Digest:      refval.GetHash(crypto.SHA384),
-					Success:     successMrs[refval.Index],
-					Launched:    successMrs[refval.Index],
+					Success:     successMrs[idx],
+					Launched:    successMrs[idx],
 					Description: refval.Description,
 					PackageUrl:  refval.PackageUrl,
 					HashAlg:     crypto.SHA384.String(),
@@ -554,13 +561,17 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		}
 		log.Debugf("Verifying reference values against eventlog measurements")
 		for _, refval := range refvals {
-			if refval.Index < 1 || refval.Index > 4 {
-				// Only check RTMRs
+			idx, err := refval.GetIndex()
+			if err != nil {
+				success = false
+				continue
+			}
+			if idx < 1 || idx > 4 {
 				continue
 			}
 			found := false
 			for _, artifact := range artifacts {
-				if artifact.Type == ar.TYPE_CC_EVENTLOG && artifact.Index == refval.Index {
+				if artifact.Type == ar.TYPE_CC_EVENTLOG && artifact.Index == idx {
 					for _, event := range artifact.Events {
 						if bytes.Equal(refval.GetHash(crypto.SHA384), event.GetHash(crypto.SHA384)) {
 							found = true
@@ -571,9 +582,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:        ar.TYPE_REFVAL_TDX,
+					Type:        ar.TRUST_ANCHOR_TDX,
 					Name:        refval.Name,
-					Index:       refval.Index,
+					Index:       idx,
 					Success:     false,
 					Launched:    false,
 					Digest:      refval.GetHash(crypto.SHA384),
@@ -584,7 +595,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 				detailedResults = append(detailedResults, r)
 				success = false
 				log.Tracef("Failed to verify reference value %v: %v = %v",
-					internal.IndexToMr(refval.Index), refval.Name,
+					internal.IndexToMr(idx), refval.Name,
 					hex.EncodeToString(refval.GetHash(crypto.SHA384)))
 			}
 		}
@@ -607,7 +618,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNER
 	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_TDX,
+		Type:     ar.TRUST_ANCHOR_TDX,
 		Name:     "MrOwner",
 		Digest:   refTdId.MrOwner,
 		Success:  success,
@@ -629,7 +640,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNERCONFIG
 	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_TDX,
+		Type:     ar.TRUST_ANCHOR_TDX,
 		Name:     "MROWNERCONFIG",
 		Digest:   refTdId.MrOwnerConfig,
 		Success:  success,
@@ -649,7 +660,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MRCONFIGID
 	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_TDX,
+		Type:     ar.TRUST_ANCHOR_TDX,
 		Name:     "MRCONFIGID",
 		Digest:   refTdId.MrConfigId,
 		Success:  success,
@@ -669,7 +680,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MRSIGNERSEAM
 	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_REFVAL_TDX,
+		Type:     ar.TRUST_ANCHOR_TDX,
 		Name:     "MRSIGNERSEAM",
 		Digest:   tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes,
 		Success:  success,
