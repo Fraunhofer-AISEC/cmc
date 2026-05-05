@@ -528,36 +528,45 @@ func Test_checkMinVersion(t *testing.T) {
 var (
 	validRefvals = []ar.Component{
 		{
-			Type: ar.TYPE_REFVAL_SNP,
+			Type: ar.TYPE_FIRMWARE,
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
 					Content: validMeasurement,
 				},
+			},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SNP},
 			},
 		},
 	}
 
 	invalidRefvals = []ar.Component{
 		{
-			Type: ar.TYPE_REFVAL_SNP,
+			Type: ar.TYPE_FIRMWARE,
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
 					Content: invalidMeasurement,
 				},
 			},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SNP},
+			},
 		},
 	}
 
 	invalidRefvalsType = []ar.Component{
 		{
-			Type: ar.TYPE_REFVAL_TPM,
+			Type: ar.TYPE_FIRMWARE,
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-256",
 					Content: validMeasurement,
 				},
+			},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
 			},
 		},
 	}

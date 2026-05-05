@@ -138,20 +138,20 @@ func run(cmd *cli.Command) error {
 	}
 
 	// setup the reference value for the event log (as slice with single value)
-	refValue := [1]attestationreport.Component{
-		{
-			Type:  attestationreport.TYPE_REFVAL_SNP,
-			Name:  "SNP Launch Digest",
-			Index: 0,
-			Hashes: []attestationreport.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: hash[:],
-				},
+	comp := attestationreport.Component{
+		Type: attestationreport.CycloneDxType(attestationreport.TRUST_ANCHOR_SNP, 0),
+		Name: "SNP Launch Digest",
+		Hashes: []attestationreport.ReferenceHash{
+			{
+				Alg:     "SHA-384",
+				Content: hash[:],
 			},
-			Description: description,
 		},
+		Description: description,
 	}
+	comp.SetTrustAnchor(attestationreport.TRUST_ANCHOR_SNP)
+	comp.SetIndex(0)
+	refValue := [1]attestationreport.Component{comp}
 
 	// marshal eventlog
 	data, err := json.MarshalIndent(refValue, "", "    ")

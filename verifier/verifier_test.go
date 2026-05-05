@@ -422,17 +422,47 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 // variables for Test_collectComponents
 var (
 	refs = []ar.Component{
-		{Type: ar.TYPE_REFVAL_TPM, Name: "TPM1"},
-		{Type: ar.TYPE_REFVAL_TPM, Name: "TPM2"},
-		{Type: ar.TYPE_REFVAL_SNP, Name: "SNP1"},
-		{Type: ar.TYPE_REFVAL_SW, Name: "SW1"},
-		{Type: ar.TYPE_REFVAL_SW, Name: "SW2"},
+		{
+			Type: ar.TYPE_FIRMWARE,
+			Name: "TPM1",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+			},
+		},
+		{
+			Type: ar.TYPE_FIRMWARE,
+			Name: "TPM2",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+			},
+		},
+		{
+			Type: ar.TYPE_FIRMWARE,
+			Name: "SNP1",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SNP},
+			},
+		},
+		{
+			Type: ar.TYPE_APP,
+			Name: "SW1",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
+			},
+		},
+		{
+			Type: ar.TYPE_APP,
+			Name: "SW2",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
+			},
+		},
 	}
 
 	refMap = map[string][]ar.Component{
-		ar.TYPE_REFVAL_TPM: refs[:2],
-		ar.TYPE_REFVAL_SNP: {refs[2]},
-		ar.TYPE_REFVAL_SW:  refs[3:],
+		ar.TRUST_ANCHOR_TPM: refs[:2],
+		ar.TRUST_ANCHOR_SNP: {refs[2]},
+		ar.TRUST_ANCHOR_SW:  refs[3:],
 	}
 
 	rtmManifest = ar.MetadataResult{

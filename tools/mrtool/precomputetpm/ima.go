@@ -138,18 +138,9 @@ func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional 
 	}
 
 	// Create reference value
-	r := &ar.Component{
-		Type:  ar.TYPE_REFVAL_TPM,
-		Name:  "boot_aggregate",
-		Index: pcr,
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-256",
-				Content: tmpl,
-			},
-		},
-		Optional: optional,
-	}
+	r := newTPMComponent(pcr, "boot_aggregate",
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: tmpl}}, "")
+	r.Optional = optional
 
 	return r, nil
 }
@@ -169,19 +160,9 @@ func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional
 	}
 
 	// Create reference value
-	r := &ar.Component{
-		Type:  ar.TYPE_REFVAL_TPM,
-		Name:  filepath.Base(hashedPath),
-		Index: pcr,
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-256",
-				Content: tmpl,
-			},
-		},
-		Description: hashedPath,
-		Optional:    optional,
-	}
+	r := newTPMComponent(pcr, filepath.Base(hashedPath),
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: tmpl}}, hashedPath)
+	r.Optional = optional
 
 	log.Tracef("%s: %x", r.Name, tmpl)
 

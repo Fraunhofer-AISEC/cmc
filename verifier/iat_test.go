@@ -195,7 +195,7 @@ var (
 	validNspeMeasurement, _ = hex.DecodeString("73deb833155c9c317d838b5368b6a63bd38706fa874e874c1b5affe4571b348b")
 
 	validSpeReferenceValue = ar.Component{
-		Type: ar.TYPE_REFVAL_IAS,
+		Type: ar.TYPE_DATA,
 		Name: "SPE Measurement",
 		Hashes: []ar.ReferenceHash{
 			{
@@ -203,10 +203,13 @@ var (
 				Content: validSpeMeasurement,
 			},
 		},
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_IAS},
+		},
 	}
 
 	invalidSpeReferenceValue = ar.Component{
-		Type: ar.TYPE_REFVAL_IAS,
+		Type: ar.TYPE_DATA,
 		Name: "SPE Measurement",
 		Hashes: []ar.ReferenceHash{
 			{
@@ -214,16 +217,22 @@ var (
 				Content: invalidSpeMeasurement,
 			},
 		},
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_IAS},
+		},
 	}
 
 	validNspeReferenceValue = ar.Component{
-		Type: ar.TYPE_REFVAL_IAS,
+		Type: ar.TYPE_DATA,
 		Name: "NSPE Measurement",
 		Hashes: []ar.ReferenceHash{
 			{
 				Alg:     "SHA-256",
 				Content: validNspeMeasurement,
 			},
+		},
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_IAS},
 		},
 	}
 )

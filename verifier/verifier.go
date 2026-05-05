@@ -189,7 +189,7 @@ Loop:
 		switch evtype := ev.Type; evtype {
 
 		case ar.TYPE_EVIDENCE_TPM:
-			r, ok := VerifyTpm(ev, col, evidenceNonce, metadataCas, refVals[ar.TYPE_REFVAL_TPM], s)
+			r, ok := VerifyTpm(ev, col, evidenceNonce, metadataCas, refVals[ar.TRUST_ANCHOR_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
@@ -204,7 +204,7 @@ Loop:
 				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
 			}
 			r, ok := VerifySnp(ev, col, evidenceNonce, snpPolicy, caFingerprints,
-				refVals[ar.TYPE_REFVAL_SNP])
+				refVals[ar.TRUST_ANCHOR_SNP])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
 			}
@@ -219,7 +219,7 @@ Loop:
 				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
 			}
 			r, ok := VerifyTdx(ev, col, evidenceNonce, tdxPolicy, caFingerprints,
-				refVals[ar.TYPE_REFVAL_TDX])
+				refVals[ar.TRUST_ANCHOR_TDX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
 			}
@@ -234,7 +234,7 @@ Loop:
 				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
 			}
 			r, ok := VerifySgx(ev, col, evidenceNonce, sgxPolicy, caFingerprints,
-				refVals[ar.TYPE_REFVAL_SGX])
+				refVals[ar.TRUST_ANCHOR_SGX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
 			}
@@ -247,7 +247,7 @@ Loop:
 				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
 			}
 			r, ok := VerifyIas(ev, col, evidenceNonce, caFingerprints,
-				refVals[ar.TYPE_REFVAL_IAS])
+				refVals[ar.TRUST_ANCHOR_IAS])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
 			}
@@ -255,7 +255,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SW:
-			r, ok := VerifySw(ev, col, evidenceNonce, refVals[ar.TYPE_REFVAL_SW])
+			r, ok := VerifySw(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SW])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SW measurement"))
 			}
@@ -271,8 +271,8 @@ Loop:
 				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
 			}
 			results, ok := VerifyAzure(report.Evidences, report.Context.Collateral, evidenceNonce,
-				tdxPolicy, snpPolicy, caFingerprints, refVals[ar.TYPE_REFVAL_TDX],
-				refVals[ar.TYPE_REFVAL_SNP], refVals[ar.TYPE_REFVAL_TPM], s)
+				tdxPolicy, snpPolicy, caFingerprints, refVals[ar.TRUST_ANCHOR_TDX],
+				refVals[ar.TRUST_ANCHOR_SNP], refVals[ar.TRUST_ANCHOR_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
 			}
@@ -644,13 +644,16 @@ func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestD
 		}
 		log.Tracef("Manifest contains %v reference values", len(m.Sbom.Components))
 		for _, r := range m.Sbom.Components {
-			// Check reference value type
-			if r.Type != ar.TYPE_REFVAL_SNP &&
-				r.Type != ar.TYPE_REFVAL_SW &&
-				r.Type != ar.TYPE_REFVAL_TPM &&
-				r.Type != ar.TYPE_REFVAL_TDX &&
-				r.Type != ar.TYPE_REFVAL_SGX {
-				return nil, fmt.Errorf("reference value of type %q is not supported", r.Type)
+			ta, err := r.GetTrustAnchor()
+			if err != nil {
+				return nil, fmt.Errorf("component %q: %w", r.Name, err)
+			}
+
+			switch ta {
+			case ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_SNP,
+				ar.TRUST_ANCHOR_SGX, ar.TRUST_ANCHOR_IAS, ar.TRUST_ANCHOR_SW:
+			default:
+				return nil, fmt.Errorf("unsupported trust anchor %q", ta)
 			}
 
 			// SwVerify only: Add rules
@@ -659,8 +662,8 @@ func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestD
 				r.OciRules = rules
 			}
 
-			// Collect all reference values, depending on type, independent of the manifest
-			refmap[r.Type] = append(refmap[r.Type], r)
+			// Collect all reference values by trust anchor
+			refmap[ta] = append(refmap[ta], r)
 		}
 	}
 

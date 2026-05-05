@@ -75,7 +75,7 @@ func main() {
 	// TODO make trust anchor and PCR configurable
 	pcr := 11
 	configRef := ar.Component{
-		Type: ar.TYPE_REFVAL_TPM,
+		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, pcr),
 		Name: "OCI Runtime Config",
 		Hashes: []ar.ReferenceHash{
 			{
@@ -83,13 +83,14 @@ func main() {
 				Content: configHash,
 			},
 		},
-		Index:    pcr,
 		Optional: true,
 	}
+	configRef.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+	configRef.SetIndex(pcr)
 	refs = append(refs, configRef)
 
 	rootfsRef := ar.Component{
-		Type: ar.TYPE_REFVAL_TPM,
+		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, pcr),
 		Name: "OCI Runtime Rootfs",
 		Hashes: []ar.ReferenceHash{
 			{
@@ -97,9 +98,10 @@ func main() {
 				Content: rootfsHash,
 			},
 		},
-		Index:    pcr,
 		Optional: true,
 	}
+	rootfsRef.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+	rootfsRef.SetIndex(pcr)
 	refs = append(refs, rootfsRef)
 
 	// Marshal reference value array

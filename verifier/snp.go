@@ -128,8 +128,9 @@ func VerifySnp(
 	}
 
 	snpReferenceValue := refComponents[0]
-	if snpReferenceValue.Type != ar.TYPE_REFVAL_SNP {
-		log.Debugf("SNP reference value invalid type %v", snpReferenceValue.Type)
+	ta, err := snpReferenceValue.GetTrustAnchor()
+	if err != nil || ta != ar.TRUST_ANCHOR_SNP {
+		log.Debugf("SNP reference value invalid trust anchor %v (err: %v)", ta, err)
 		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
@@ -167,7 +168,7 @@ func VerifySnp(
 			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TYPE_REFVAL_SNP,
+				Type:       ar.TRUST_ANCHOR_SNP,
 				Name:       snpReferenceValue.Name,
 				Digest:     snpReferenceValue.GetHash(crypto.SHA384),
 				Success:    false,

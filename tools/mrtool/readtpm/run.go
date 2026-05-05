@@ -94,9 +94,8 @@ func run(cmd *cli.Command) error {
 	for _, pcr := range pcrs {
 		if contains(globConf.Mrs, pcr.Index) {
 			r := &ar.Component{
-				Type:  ar.TYPE_REFVAL_TPM,
-				Name:  ar.TYPE_PCR_SUMMARY,
-				Index: pcr.Index,
+				Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, pcr.Index),
+				Name: ar.TYPE_PCR_SUMMARY,
 				Hashes: []ar.ReferenceHash{
 					{
 						Alg:     "SHA-256",
@@ -104,6 +103,8 @@ func run(cmd *cli.Command) error {
 					},
 				},
 			}
+			r.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+			r.SetIndex(pcr.Index)
 			refvals = append(refvals, r)
 		}
 	}

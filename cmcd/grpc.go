@@ -297,10 +297,9 @@ func (s *GrpcServer) PeerCache(ctx context.Context, req *grpcapi.PeerCacheReques
 }
 
 func toComponent(c *grpcapi.Component, spec *oci.Spec) *ar.Component {
-	return &ar.Component{
+	component := &ar.Component{
 		Type:        c.Type,
 		Name:        c.Name,
-		Index:       int(c.Index),
 		Hashes:      toGRPCHashes(c.Hashes),
 		Version:     c.Version,
 		Optional:    c.Optional,
@@ -311,6 +310,8 @@ func toComponent(c *grpcapi.Component, spec *oci.Spec) *ar.Component {
 			OciSpec:      spec,
 		},
 	}
+	component.SetIndex(int(c.Index))
+	return component
 }
 
 func toGRPCHashes(hashes []*grpcapi.Hash) []ar.ReferenceHash {

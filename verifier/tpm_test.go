@@ -284,6 +284,28 @@ func TestVerifyTpm(t *testing.T) {
 			want:  ar.StatusFail,
 			want1: false,
 		},
+		// Measurement: Eventlog
+		// Reference Values: Eventlog with invalid reference values (missing trust anchor and index)
+		{
+			name: "Invalid_9",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog,
+					Certs:     validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: invalidComponentsMissingProperties,
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
 		{
 			name: "Invalid Nonce",
 			args: args{
@@ -517,208 +539,430 @@ var (
 
 	validComponents = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_CPU_MICROCODE",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "Unknown Event Type",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_NONHOST_CONFIG",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_SEPARATOR",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_PLATFORM_CONFIG_FLAGS",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")}},
+			Type:   ar.TYPE_OS,
 			Name:   "EV_EFI_ACTION",
-			Index:  4,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Type:   ar.TYPE_OS,
 			Name:   "EV_SEPARATOR",
-			Index:  4,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_OS,
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036")}},
-			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:  4,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_OS,
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05")}},
-			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:  4,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025")}},
+			Type:   ar.TYPE_OS,
 			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Index:  4,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 	}
 
 	invalidComponents = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_CPU_MICROCODE",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "Unknown Event Type",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_NONHOST_CONFIG",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8")}},
-			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_SEPARATOR",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")}},
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_PLATFORM_CONFIG_FLAGS",
-			Index:  1,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")}},
+			Type:   ar.TYPE_OS,
 			Name:   "EV_EFI_ACTION",
-			Index:  4,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
-			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Type:   ar.TYPE_OS,
 			Name:   "EV_SEPARATOR",
-			Index:  4,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
+		},
+	}
+
+	invalidComponentsMissingProperties = []ar.Component{
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_CPU_MICROCODE",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "Unknown Event Type",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")}},
+			// Properties missing
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_NONHOST_CONFIG",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8574d91b49f1c9a6ecc8b1e8565bd668f819ea8ed73c5f682948141587aecd3b")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("afffbd73d1e4e658d5a1768f6fa11a6c38a1b5c94694015bc96418a7b5291b39")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("6cf2851f19f1c3ec3070f20400892cb8e6ee712422efd77d655e2ebde4e00d69")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("faf98c184d571dd4e928f55bbf3b2a6e0fc60ba1fb393a9552f004f76ecf06a7")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_EFI_VARIABLE_BOOT",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b785d921b9516221dff929db343c124a832cceee1b508b36b7eb37dc50fc18d8")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_SEPARATOR",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   "EV_PLATFORM_CONFIG_FLAGS",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b997bc194a4b65980eb0cb172bd5cc51a6460b79c047a92e8f4ff9f85d578bd4")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
+		},
+		{
+			Type:   ar.TYPE_OS,
+			Name:   "EV_EFI_ACTION",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
+		},
+		{
+			Type:   ar.TYPE_OS,
+			Name:   "EV_SEPARATOR",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
+		},
+		{
+			Type:   ar.TYPE_OS,
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("dbffd70a2c43fd2c1931f18b8f8c08c5181db15f996f747dfed34def52fad036")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
+		},
+		{
+			Type:   ar.TYPE_OS,
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("acc00aad4b0413a8b349b4493f95830da6a7a44bd6fc1579f6f53c339c26cb05")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
+		},
+		{
+			Type:   ar.TYPE_OS,
+			Name:   "EV_EFI_BOOT_SERVICES_APPLICATION",
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3ba11d87f4450f0b92bd53676d88a3622220a7d53f0338bf387badc31cf3c025")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 	}
 
 	invalidComponentsSummary = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")}},
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_OS,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")}},
-			Index:  4,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 	}
 
 	invalidReferenceComponentsSummary = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")}},
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_OS,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("aaf67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")}},
-			Index:  4,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 	}
 
 	invalidReferenceComponentsSummaryDuplicate = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")}},
-			Index:  1,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_OS,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")}},
-			Index:  4,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_OS,
 			Name:   ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")}},
-			Index:  4,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "4"},
+			},
 		},
 	}
 )

@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -28,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.1.1"
+	reportVersion = "3.2.1"
 )
 
 func GetReportVersion() string {
@@ -74,14 +75,24 @@ const (
 	TYPE_MANIFEST_DESCRIPTION = "Manifest Description"
 	TYPE_COMPANY_DESCRIPTION  = "Company Description"
 
-	// Reference value type fields
-	TYPE_REFVAL     = "Reference Value"
-	TYPE_REFVAL_SNP = "SNP Reference Value"
-	TYPE_REFVAL_SW  = "SW Reference Value"
-	TYPE_REFVAL_SGX = "SGX Reference Value"
-	TYPE_REFVAL_TDX = "TDX Reference Value"
-	TYPE_REFVAL_TPM = "TPM Reference Value"
-	TYPE_REFVAL_IAS = "IAS Reference Value"
+	// CycloneDX component type values
+	TYPE_FIRMWARE = "firmware"
+	TYPE_OS       = "operating-system"
+	TYPE_PLATFORM = "platform"
+	TYPE_APP      = "application"
+	TYPE_DATA     = "data"
+
+	// CMC property names
+	PROPERTY_TRUST_ANCHOR = "cmc.ta"
+	PROPERTY_INDEX        = "cmc.index"
+
+	// Trust anchor property values
+	TRUST_ANCHOR_TPM = "TPM"
+	TRUST_ANCHOR_TDX = "TDX"
+	TRUST_ANCHOR_SNP = "SNP"
+	TRUST_ANCHOR_SGX = "SGX"
+	TRUST_ANCHOR_IAS = "IAS"
+	TRUST_ANCHOR_SW  = "SW"
 )
 
 // AttestationReport represents the self-contained attestation report comprising evidences,
@@ -185,7 +196,7 @@ type Sbom struct {
 }
 
 // Component represents a software component with its hashes.
-// The Index is the unique identifier for the reference value: This is the number of the PCR in
+// The index is encoded in the property: This is the number of the PCR in
 // case of TPM reference values, the CC measurement register (MR) index according to
 // UEFI Spec 2.10 Section 38.4.1 in case of TDX reference values:
 // TPM PCR Index | CC MR Index | TDX register
@@ -198,16 +209,22 @@ type Sbom struct {
 type Component struct {
 	Type            string                 `json:"type" cbor:"0,keyasint"`
 	Name            string                 `json:"name" cbor:"1,keyasint"`
-	Index           int                    `json:"index" cbor:"2,keyasint"`
-	Hashes          []ReferenceHash        `json:"hashes,omitempty" cbor:"3,keyasint,omitempty"`
-	Version         string                 `json:"version,omitempty" cbor:"4,keyasint,omitempty"`
-	Optional        bool                   `json:"optional,omitempty" cbor:"5,keyasint,omitempty"`
-	Description     string                 `json:"description,omitempty" cbor:"6,keyasint,omitempty"`
+	Hashes          []ReferenceHash        `json:"hashes,omitempty" cbor:"2,keyasint,omitempty"`
+	Version         string                 `json:"version,omitempty" cbor:"3,keyasint,omitempty"`
+	Optional        bool                   `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
+	Description     string                 `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
+	Properties      []Property             `json:"properties,omitempty" cbor:"6,keyasint,omitempty"`
 	EventData       *EventData             `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
 	CtrData         *CtrData               `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
 	IntelCollateral *IntelCollateral       `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
 	PackageUrl      string                 `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
 	OciRules        map[string]interface{} `json:"-" cbor:"-"`
+}
+
+// Property represents a CycloneDX component property (name-value pair)
+type Property struct {
+	Name  string `json:"name" cbor:"0,keyasint"`
+	Value string `json:"value" cbor:"1,keyasint"`
 }
 
 type ReferenceHash struct {
@@ -441,4 +458,84 @@ func (r *Component) GetHash(h crypto.Hash) []byte {
 	// Hash not found
 	log.Tracef("component does not contain requested %q digest", hstr)
 	return nil
+}
+
+func (c *Component) GetProperty(name string) (string, error) {
+	for _, p := range c.Properties {
+		if p.Name == name {
+			return p.Value, nil
+		}
+	}
+	return "", fmt.Errorf("failed to get property %v", name)
+}
+
+func (c *Component) SetProperty(name, value string) {
+	for i, p := range c.Properties {
+		if p.Name == name {
+			c.Properties[i].Value = value
+			return
+		}
+	}
+	c.Properties = append(c.Properties, Property{Name: name, Value: value})
+}
+
+func (c *Component) GetIndex() (int, error) {
+	val, err := c.GetProperty(PROPERTY_INDEX)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get property: %w", err)
+	}
+	idx, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert: %w", err)
+	}
+	return idx, nil
+}
+
+func (c *Component) SetIndex(index int) {
+	c.SetProperty(PROPERTY_INDEX, strconv.Itoa(index))
+}
+
+func (c *Component) GetTrustAnchor() (string, error) {
+	val, err := c.GetProperty(PROPERTY_TRUST_ANCHOR)
+	if err != nil {
+		return "", fmt.Errorf("failed to get property: %w", err)
+	}
+	return val, nil
+}
+
+func (c *Component) SetTrustAnchor(ta string) {
+	c.SetProperty(PROPERTY_TRUST_ANCHOR, ta)
+}
+
+func CycloneDxType(ta string, index int) string {
+	switch ta {
+	case TRUST_ANCHOR_TPM:
+		switch {
+		case index >= 0 && index <= 3:
+			return TYPE_FIRMWARE
+		case index == 4 || index == 5 || index == 8 || index == 9:
+			return TYPE_OS
+		case index == 6 || index == 7:
+			return TYPE_PLATFORM
+		default:
+			return TYPE_APP
+		}
+	case TRUST_ANCHOR_TDX:
+		switch index {
+		case 0, 1, 5:
+			return TYPE_FIRMWARE
+		case 2, 3:
+			return TYPE_OS
+		case 4:
+			return TYPE_APP
+		default:
+			return TYPE_APP
+		}
+	case TRUST_ANCHOR_SNP:
+		return TYPE_FIRMWARE
+	case TRUST_ANCHOR_SW:
+		return TYPE_APP
+	default:
+		return TYPE_DATA
+	}
 }
