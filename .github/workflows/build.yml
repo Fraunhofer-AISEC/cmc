@@ -42,10 +42,7 @@ jobs:
           pushd tools/azuretool
           go build -ldflags="-s -w" -trimpath
           popd
-          pushd tools/metasign
-          go build -ldflags="-s -w" -trimpath
-          popd
-          pushd tools/metaconv
+          pushd tools/metatool
           go build -ldflags="-s -w" -trimpath
           popd
       - name: Vet Check
@@ -78,16 +75,11 @@ jobs:
         with:
           name: estserver
           path: provision/estserver/estserver
-      - name: "Upload metaconv"
+      - name: "Upload metatool"
         uses: actions/upload-artifact@v4
         with:
-          name: metaconv
-          path: tools/metaconv/metaconv
-      - name: "Upload metasign"
-        uses: actions/upload-artifact@v4
-        with:
-          name: metasign
-          path: tools/metasign/metasign
+          name: metatool
+          path: tools/metatool/metatool
       - name: "Upload backend"
         uses: actions/upload-artifact@v4
         with:
@@ -116,8 +108,7 @@ jobs:
             cmcd/cmcd
             cmcctl/cmcctl
             provision/estserver/estserver
-            tools/metaconv/metaconv
-            tools/metasign/metasign
+            tools/metatool/metatool
             tools/cmcbackend/cmcbackend
             tools/tdxtool/tdxtool
             tools/snptool/snptool
