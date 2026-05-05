@@ -135,8 +135,9 @@ func VerifyIas(
 	// Verify that every reference value has a corresponding measurement
 	for _, ref := range refComponents {
 		log.Tracef("Found reference value %v: %x", ref.Name, ref.GetHash(crypto.SHA256))
-		if ref.Type != ar.TYPE_REFVAL_IAS {
-			log.Tracef("IAS reference value invalid type %v", ref.Type)
+		ta, err := ref.GetTrustAnchor()
+		if err != nil || ta != ar.TRUST_ANCHOR_IAS {
+			log.Tracef("IAS reference value invalid trust anchor %v (err: %v)", ta, err)
 			result.Summary.Fail(ar.RefValType)
 			return result, false
 		}
@@ -163,7 +164,7 @@ func VerifyIas(
 					Digest:     ref.GetHash(crypto.SHA256),
 					Success:    false,
 					Launched:   false,
-					Type:       ar.TYPE_REFVAL_IAS,
+					Type:       ar.TRUST_ANCHOR_IAS,
 					PackageUrl: ref.PackageUrl,
 					HashAlg:    crypto.SHA256.String(),
 				})

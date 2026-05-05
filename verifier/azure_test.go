@@ -190,49 +190,70 @@ var (
 	// Run: mrtool parse tpm -mrs 1
 	validVtpmRefvalsAzure = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("6ab4a55c1a608bcc44f64f3712e9cb606788842b7d0bd6abfdd5bdda246088ac")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_SEPARATOR",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 	}
 
 	invalidVtpmRefvalsAzure = []ar.Component{
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("aaaa96d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_EFI_VARIABLE_BOOT",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("b6de3a472325267624ba846ca15a3f40af01640de3210998fbe91c06e46da044")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 		{
-			Type:   ar.TYPE_REFVAL_TPM,
+			Type:   ar.TYPE_FIRMWARE,
 			Name:   "EV_SEPARATOR",
-			Index:  1,
 			Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+				{Name: ar.PROPERTY_INDEX, Value: "1"},
+			},
 		},
 	}
 
@@ -449,29 +470,38 @@ var (
 
 	invalidTdxRefvalsAzure = []ar.Component{
 		{
-			Type:        ar.TYPE_REFVAL_TDX,
+			Type:        ar.TYPE_FIRMWARE,
 			Name:        "OVMF",
-			Index:       0,
 			Hashes:      []ar.ReferenceHash{{Alg: "SHA-384", Content: dec("633418c955597f43a99f3378f8dfad06db87c51da2d6947e1c199dc9e2f89cee1d47542ce75ac3c8928338a13cf9bbc3")}},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
+				{Name: ar.PROPERTY_INDEX, Value: "0"},
+			},
 		},
 	}
 
 	// Run: tdxtool -cmd parse-quote -in quote
 	validTdxRefvalsAzure = []ar.Component{
 		{
-			Type:        ar.TYPE_REFVAL_TDX,
+			Type:        ar.TYPE_FIRMWARE,
 			Name:        "OVMF",
-			Index:       0,
 			Hashes:      []ar.ReferenceHash{{Alg: "SHA-384", Content: dec("f858414aef26d52a3b21614bab4bafab13b3ed62ebdd9d46a6be799228c2e27bc0d025cc6e4e90daff827cbe0316bbd9")}},
 			Description: "MRTD: TDX Module Measurement: Initial TD contents (OVMF)",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
+				{Name: ar.PROPERTY_INDEX, Value: "0"},
+			},
 		},
 		{
-			Type:        ar.TYPE_REFVAL_TDX,
+			Type:        ar.TYPE_FIRMWARE,
 			Name:        "TDX-Module",
-			Index:       5,
 			Hashes:      []ar.ReferenceHash{{Alg: "SHA-384", Content: dec("49b66faa451d19ebbdbe89371b8daf2b65aa3984ec90110343e9e2eec116af08850fa20e3b1aa9a874d77a65380ee7e6")}},
 			Description: "MRSEAM: TDX-Module",
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
+				{Name: ar.PROPERTY_INDEX, Value: "5"},
+			},
 		},
 	}
 

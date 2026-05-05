@@ -69,7 +69,7 @@ func printEventlog(l *tcg.EventLog, mrs []int) error {
 		index := int(event.MRIndex())
 
 		refval := ar.Component{
-			Type: ar.TYPE_REFVAL_TDX,
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, index),
 			Name: fmt.Sprintf("RTMR%v: %v", event.MRIndex()-1, event.Type.String()),
 			Hashes: []ar.ReferenceHash{
 				{
@@ -77,9 +77,10 @@ func printEventlog(l *tcg.EventLog, mrs []int) error {
 					Content: event.Digest,
 				},
 			},
-			Index:       index,
 			Description: internal.FormatRtmrData(event.Data),
 		}
+		refval.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+		refval.SetIndex(index)
 
 		refvals = append(refvals, refval)
 	}
@@ -120,9 +121,8 @@ func printSummary(l *tcg.EventLog, mrs []int) error {
 	summary := make([]ar.Component, 0, len(rtmrs))
 	for index, rtmr := range rtmrs {
 		refval := ar.Component{
-			Type:  ar.TYPE_REFVAL_TDX,
-			Name:  fmt.Sprintf("RTMR%v", index-1),
-			Index: index,
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, index),
+			Name: fmt.Sprintf("RTMR%v", index-1),
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
@@ -130,12 +130,16 @@ func printSummary(l *tcg.EventLog, mrs []int) error {
 				},
 			},
 		}
+		refval.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+		refval.SetIndex(index)
 		summary = append(summary, refval)
 	}
 
 	// Sort summaries by index
 	sort.Slice(summary, func(i, j int) bool {
-		return summary[i].Index < summary[j].Index
+		i1, _ := summary[i].GetIndex()
+		i2, _ := summary[j].GetIndex()
+		return i1 < i2
 	})
 
 	data, err := json.MarshalIndent(summary, "", "    ")

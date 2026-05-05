@@ -378,24 +378,30 @@ var (
 
 	validSgxRefvals = []ar.Component{
 		{
-			Type: ar.TYPE_REFVAL_SGX,
+			Type: ar.TYPE_DATA,
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-256",
 					Content: validSGXMeasurement,
 				},
 			},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SGX},
+			},
 		},
 	}
 
 	invalidSgxRefvals = []ar.Component{
 		{
-			Type: ar.TYPE_REFVAL_SGX,
+			Type: ar.TYPE_DATA,
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-256",
 					Content: []byte{},
 				},
+			},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SGX},
 			},
 		},
 	}

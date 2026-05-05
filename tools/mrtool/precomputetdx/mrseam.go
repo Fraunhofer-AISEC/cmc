@@ -43,10 +43,9 @@ func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 		hash := sha512.Sum384(data)
 
-		refvals = append(refvals, &ar.Component{
-			Type:  ar.TYPE_REFVAL_TDX,
-			Name:  "TDX-Module",
-			Index: tcg.INDEX_MRSEAM,
+		comp := &ar.Component{
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_MRSEAM),
+			Name: "TDX-Module",
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
@@ -54,7 +53,10 @@ func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 				},
 			},
 			Description: "MRSEAM: SEAMLDR Measurement: TDX-Module",
-		})
+		}
+		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+		comp.SetIndex(tcg.INDEX_MRSEAM)
+		refvals = append(refvals, comp)
 		mrseam = hash[:]
 	} else if c.MrSeam != "" {
 		hash, err := hex.DecodeString(c.MrSeam)
@@ -65,10 +67,9 @@ func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("malformed sha384 hash length: (is: %v, expected: %v)", len(hash), sha512.Size384)
 		}
 
-		refvals = append(refvals, &ar.Component{
-			Type:  ar.TYPE_REFVAL_TDX,
-			Name:  "TDX-Module",
-			Index: tcg.INDEX_MRSEAM,
+		comp := &ar.Component{
+			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_MRSEAM),
+			Name: "TDX-Module",
 			Hashes: []ar.ReferenceHash{
 				{
 					Alg:     "SHA-384",
@@ -76,7 +77,10 @@ func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 				},
 			},
 			Description: "MRSEAM: TDX Module Measurement: SEAMLDR Measurement: TDX-Module",
-		})
+		}
+		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+		comp.SetIndex(tcg.INDEX_MRSEAM)
+		refvals = append(refvals, comp)
 		mrseam = hash[:]
 	} else {
 		return nil, nil, fmt.Errorf("tdx-module or mrseam must be specified for MRSEAM")
@@ -84,10 +88,9 @@ func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	// Create MRSEAM final reference value
 	mrseamSummary := &ar.Component{
-		Type:        ar.TYPE_REFVAL_TDX,
+		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_MRSEAM),
 		Name:        "MRSEAM Summary",
 		Description: "MRSEAM",
-		Index:       tcg.INDEX_MRSEAM,
 		Hashes: []ar.ReferenceHash{
 			{
 				Alg:     "SHA-384",
@@ -95,6 +98,8 @@ func PrecomputeMrSeam(c *Config) (*ar.Component, []*ar.Component, error) {
 			},
 		},
 	}
+	mrseamSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
+	mrseamSummary.SetIndex(tcg.INDEX_MRSEAM)
 
 	return mrseamSummary, refvals, nil
 }

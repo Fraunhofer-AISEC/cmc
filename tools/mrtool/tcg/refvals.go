@@ -36,10 +36,9 @@ func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data
 		return nil, nil, fmt.Errorf("failed to extend: %w", err)
 	}
 
-	refval := &ar.Component{
-		Type:  ta.RefvalString(),
-		Name:  name,
-		Index: idx,
+	component := &ar.Component{
+		Type: ar.CycloneDxType(ta.PropertyValue(), idx),
+		Name: name,
 		Hashes: []ar.ReferenceHash{
 			{
 				Alg:     alg.String(),
@@ -48,6 +47,8 @@ func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data
 		},
 		Description: fmt.Sprintf("%v: %v", IndexToMr(ta, idx), desc),
 	}
+	component.SetTrustAnchor(ta.PropertyValue())
+	component.SetIndex(idx)
 
-	return refval, mrDigestNew, nil
+	return component, mrDigestNew, nil
 }

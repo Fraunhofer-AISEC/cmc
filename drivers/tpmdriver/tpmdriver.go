@@ -540,8 +540,7 @@ func GetEventLogs(pcrs []int, ctrLog bool, ctrLogFile string, alg crypto.Hash) (
 
 	log.Debugf("Collecting event logs for PCRs %v", pcrs)
 
-	artifactmap, err := GetBiosArtifacts(DEFAULT_BINARY_BIOS_MEASUREMENTS,
-		ar.TYPE_EVIDENCE_TPM, false, []crypto.Hash{alg})
+	artifactmap, err := GetBiosArtifacts(DEFAULT_BINARY_BIOS_MEASUREMENTS, false, []crypto.Hash{alg})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get binary bios measurements: %w", err)
 	}

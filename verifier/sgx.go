@@ -73,8 +73,9 @@ func VerifySgx(
 		return result, false
 	}
 
-	if sgxReferenceValue.Type != ar.TYPE_REFVAL_SGX {
-		log.Debugf("SGX reference value invalid type %v", sgxReferenceValue.Type)
+	ta, err := sgxReferenceValue.GetTrustAnchor()
+	if err != nil || ta != ar.TRUST_ANCHOR_SGX {
+		log.Debugf("SGX reference value invalid trust anchor %v (err: %v)", ta, err)
 		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
@@ -283,7 +284,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	if !bytes.Equal(body.MRENCLAVE[:], []byte(refval.GetHash(crypto.SHA256))) {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TYPE_REFVAL_SGX,
+				Type:       ar.TRUST_ANCHOR_SGX,
 				Name:       refval.Name,
 				Digest:     refval.GetHash(crypto.SHA256),
 				Success:    false,
@@ -319,7 +320,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Type:     ar.TYPE_REFVAL_SGX,
+			Type:     ar.TRUST_ANCHOR_SGX,
 			Name:     "MrSigner",
 			Digest:   sgxReferencePolicy.MrSigner,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),
