@@ -105,6 +105,9 @@ func normalize(id string, configRaw []byte) ([]byte, error) {
 		}
 	}
 
+	// The hostname is the hostname seen from inside the container and cannot be predicted
+	config.Hostname = ""
+
 	// Some values from the config, which are not security relevant and may change
 	// on different container invocations will be ignored
 	// TODO FIXME check all properties for security relevance, currently experimental
