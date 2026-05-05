@@ -4,8 +4,7 @@ Metadata in the form of *Manifests* and *Descriptions* is used to described the 
 of the platform including all references values (hashes) of the expected software.
 
 The entire set of metadata is put together into an *Attestation Report*. The overall architecture
-and the *Attestation Report* are described in [Architecture](./architecture.md). Read the
-architecture section first for a better understanding.
+and the *Attestation Report* are described in [Architecture](./architecture.md).
 
 ## Serialization Format
 
@@ -14,27 +13,22 @@ and signed via [JSON Web signatures (JWS)](https://www.rfc-editor.org/rfc/rfc751
 [CBOR](https://datatracker.ietf.org/doc/html/rfc8949) and signed via
 [CBOR Object Signing and Encryption (COSE)](https://datatracker.ietf.org/doc/html/rfc8152).
 
-As CBOR is a binary serialization format, the serialized data is not human-readable. Therefore, the
-metadata templates are always in JSON. A [converter](../tools/metaconv/) is provided to convert the
-metadata files to CBOR before signing them (see [Setup](./setup.md)).
+## Metadata Creation
 
-## Metadata Templates
+The [metatool](../tools/metatool) can be used to create and sign metadata in JSON or CBOR format
+(see `metatool [command] [subcommand] --help` for available commands and options).
+The minimal setup contains an image description describing the image/physical machine, with a
+single manifest description, which links to a manifest with a Software Bill of Materials (SBOM)
+containing the reference hashes of the platform. Usually, multiple manifests are used and linked
+together, for describing different layers of the software stack. Currently,
+[CycloneDX](https://cyclonedx.org/) is used as the SBOM format.
 
-The example setup (folder `cmc/example-setup`) contains templates for the required metadata files
-in JSON.
+The [mrtool](../tools/mrtool/README.md) can be used for generating or parsing the reference hashes
+and outputting them as an SBOM `components` array (see
+[Reference Values](./metadata.md#reference-values))
 
-- **image.description.json**: Metadata describing the overall platform
-- **manifest.description.json**: Embedded into image description, describes an instance of a
-manifest (i.e., a software layer or application)
-- **manifest.json**: Template for a manifest containing reference values for a specific software
-layer or single application
-- **company.description.json**: Optional, metadata describing the operater of the computing platform
-
-## Populating Metadata
-
-Metadata can be generated and populated manually or automatically from the templates. Refer to
-e.g. [generate-rtm-manifest-tpm](../bin/generate-rtm-manifest-tpm) for an example on how to
-populate the metadata automatically via `jq` and the [mrtool](../tools/mrtool/README.md).
+The scripts in the [bin](../bin) folder, such as
+[generate-metadata-tpm](../bin/generate-metadata-tpm) use the tool to create example metadata.
 
 ### Manifest Names
 
@@ -64,26 +58,13 @@ examples.
 
 ## Signing Metadata
 
-As soon as the platform-specific metadata has been generated, it must be signed.
+Metadata can be signed during creation with the [metatool](../tools/metatool/) (see
+`metatool create --help` and the available subcommands for usage), or, after creation, via the
+`metatool sign` command (see `metatool sign --help`).
 
-By default, the metadata is in JSON format. If the demo-setup is used, the metadata can
-be signed with:
+For an example, refer to the example signing script:
 ```sh
 sign-metadata json
-```
-This signs all metadata in `data/metadata-raw` and puts it in `data/metadata-signed`. If
-`CBOR` serialization shall be used, simply replace `json` with `cbor`.
-
-If an own setup and PKI are used, metadata can be signed with the `metasign` tool:
-```sh
-metasign -in <metadata.json> -out <metadata-signed.json> -keys <private-key(s)> -x5cs <certificate-chain(s)>
-```
-
-If the CMC shall work with CBOR metadata, first convert the metadata and then sign as described
-above:
-```sh
-# Convert JSON to CBOR using the converter-tool
-metaconv -in <input-file>.json -out <output-file.cbor> -inform json -outform cbor
 ```
 
 ## Parsing Metadata
