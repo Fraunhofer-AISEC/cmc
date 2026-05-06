@@ -127,12 +127,13 @@ type DigestResult struct {
 	Name        string     `json:"name,omitempty" cbor:"3,keyasint,omitempty"`
 	Index       int        `json:"index" cbor:"4,keyasint"`
 	Digest      HexByte    `json:"digest,omitempty" cbor:"5,keyasint,omitempty"`
-	Measured    string     `json:"measured,omitempty" cbor:"6,keyasint,omitempty"`
-	Description string     `json:"description,omitempty" cbor:"7,keyasint,omitempty"`
-	EventData   *EventData `json:"eventData,omitempty" cbor:"8,keyasint,omitempty"`
-	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"9,keyasint,omitempty"`
-	PackageUrl  string     `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
-	HashAlg     string     `json:"hashAlg,omitempty" cbor:"11,keyasint,omitempty"`
+	HashAlg     string     `json:"hashAlg,omitempty" cbor:"6,keyasint,omitempty"`
+	Measured    string     `json:"measured,omitempty" cbor:"7,keyasint,omitempty"`
+	Description string     `json:"description,omitempty" cbor:"8,keyasint,omitempty"`
+	EventData   *EventData `json:"eventData,omitempty" cbor:"9,keyasint,omitempty"`
+	CtrDetails  *CtrData   `json:"ctrDetails,omitempty" cbor:"10,keyasint,omitempty"`
+	Version     string     `json:"version,omitempty" cbor:"11,keyasint,omitempty"`
+	PackageUrl  string     `json:"purl,omitempty" cbor:"12,keyasint,omitempty"`
 }
 
 type BooleanMatch struct {
