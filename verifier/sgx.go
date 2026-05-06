@@ -55,7 +55,7 @@ func VerifySgx(
 	log.Debug("Verifying SGX measurements")
 
 	if len(refComponents) == 0 {
-		log.Debugf("Could not find SGX reference value")
+		log.Warnf("Could not find SGX reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	} else if len(refComponents) > 1 {
@@ -68,14 +68,14 @@ func VerifySgx(
 
 	// Validate Parameters:
 	if len(evidence.Data) < SGX_QUOTE_MIN_SIZE {
-		log.Debugf("Invalid SGX Report")
+		log.Warnf("Invalid SGX Report")
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
 	ta, err := sgxReferenceValue.GetTrustAnchor()
 	if err != nil || ta != ar.TRUST_ANCHOR_SGX {
-		log.Debugf("SGX reference value invalid trust anchor %v (err: %v)", ta, err)
+		log.Warnf("SGX reference value invalid trust anchor %v (err: %v)", ta, err)
 		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
@@ -88,13 +88,13 @@ func VerifySgx(
 	// Extract the attestation report into the SGXReport data structure
 	sgxQuote, err := DecodeSgxReport(evidence.Data)
 	if err != nil {
-		log.Debugf("Failed to decode SGX report: %v", err)
+		log.Warnf("Failed to decode SGX report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
 	if ar.IntelQuoteType(sgxQuote.QuoteHeader.TeeType) != ar.SGX_QUOTE_TYPE {
-		log.Debugf("Unsupported SGX quote type (tee_type: %X)\n", sgxQuote.QuoteHeader.TeeType)
+		log.Warnf("Unsupported SGX quote type (tee_type: %X)\n", sgxQuote.QuoteHeader.TeeType)
 		return result, false
 	}
 
@@ -111,14 +111,14 @@ func VerifySgx(
 	if len(collateral.Artifacts) == 0 ||
 		len(collateral.Artifacts[0].Events) == 0 ||
 		collateral.Artifacts[0].Events[0].IntelCollateral == nil {
-		log.Debugf("Could not find TDX collateral")
+		log.Warnf("Could not find TDX collateral")
 		result.Summary.Fail(ar.CollateralNotPresent)
 		return result, false
 	}
 	intelCollateralRaw := collateral.Artifacts[0].Events[0].IntelCollateral
 	intelCollateral, err := ParseCollateral(intelCollateralRaw)
 	if err != nil {
-		log.Debugf("Could not parse SGX collateral")
+		log.Warnf("Could not parse SGX collateral")
 		result.Summary.Fail(ar.ParseCollateral)
 		return result, false
 	}
@@ -129,19 +129,19 @@ func VerifySgx(
 	if sgxQuote.QuoteSignatureData.QECertDataType == 5 {
 		quoteCerts, err = ParseCertificates(sgxQuote.QuoteSignatureData.QECertData, true)
 		if err != nil {
-			log.Debugf("Failed to parse certificate chain from QECertData: %v", err)
+			log.Warnf("Failed to parse certificate chain from QECertData: %v", err)
 			result.Summary.Fail(ar.ParseCert)
 			return result, false
 		}
 	} else {
-		log.Debugf("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
+		log.Warnf("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
 		result.Summary.Fail(ar.ParseCert)
 		return result, false
 	}
 
 	// Check that root CA from PCK cert chain is present in quote
 	if quoteCerts.RootCACert == nil {
-		log.Debugf("root cert is null")
+		log.Warnf("root cert is null")
 		result.Summary.Fail(ar.ParseCA)
 		return result, false
 	}
@@ -156,7 +156,7 @@ func VerifySgx(
 	// Parse and verify PCK certificate extensions
 	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
-		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		log.Warnf("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.Fail(ar.ParseExtensions)
 		return result, false
 	}
@@ -168,7 +168,7 @@ func VerifySgx(
 		intelCollateral.TcbInfoIntermediateCert, intelCollateral.TcbInfoRootCert,
 		sgxExtensions, [16]byte{}, ar.SGX_QUOTE_TYPE, policy.AcceptedTcbStatuses)
 	if result.SgxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
-		log.Debugf("Failed to verify TCB info structure")
+		log.Warnf("Failed to verify TCB info structure")
 		result.Summary.Fail(ar.VerifyTcbInfo)
 		return result, false
 	}
@@ -201,7 +201,7 @@ func VerifySgx(
 	err = VerifySgxQuoteBody(&sgxQuote.ISVEnclaveReport, &intelCollateral.TcbInfo, &sgxExtensions,
 		&sgxReferenceValue, policy, result)
 	if err != nil {
-		log.Debugf("Failed to verify SGX Report Body: %v", err)
+		log.Warnf("Failed to verify SGX Report Body: %v", err)
 		result.Summary.Fail(ar.VerifySignature)
 		result.Summary.Status = ar.StatusFail
 		return result, false
@@ -211,7 +211,7 @@ func VerifySgx(
 	log.Debugf("Verifying SGX quote version")
 	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, policy.QuoteVersion)
 	if !ret {
-		log.Debugf("Failed to verify ")
+		log.Warnf("Failed to verify ")
 		return result, false
 	}
 
