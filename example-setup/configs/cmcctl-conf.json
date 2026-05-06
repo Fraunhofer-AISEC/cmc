@@ -14,7 +14,7 @@
     "publishOcsf": "http://localhost:8080/ocsf-detection-finding",
     "logLevel": "trace",
     "api": "socket",
-    "serialization": "cbor",
+    "serialization": "json",
     "keyConfig": "EC256",
     "keyType": "tpm",
     "keyId": "../data/key_id",
