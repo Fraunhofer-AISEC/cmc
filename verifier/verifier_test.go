@@ -458,6 +458,9 @@ func TestVerify(t *testing.T) {
 			tt.args.omspResponse.Responses[0].ManifestHash = hex.EncodeToString(rtmDigest[:])
 
 			omspResponse, err := s.Marshal(tt.args.omspResponse)
+			if err != nil {
+				t.Errorf("failed to marshall OMSP response: %v", err)
+			}
 			omspResponseSigned, err := internal.Sign(omspResponse, key, s.String(), certchain)
 			if err != nil {
 				t.Errorf("failed to sign the OMSP response: %v", err)
