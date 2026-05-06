@@ -84,7 +84,7 @@ func VerifyIas(
 
 	iatresult, payload, ok := verifyIat(evidence.Data, certs[0])
 	if !ok {
-		log.Debugf("IAS signature verification failed")
+		log.Warnf("IAS signature verification failed")
 		result.Summary.Fail(ar.VerifySignature)
 		return result, false
 	}
@@ -95,7 +95,7 @@ func VerifyIas(
 	iat := &Iat{}
 	err = s.Unmarshal(payload, iat)
 	if err != nil {
-		log.Debugf("Failed to unmarshal IAT: %v", err)
+		log.Warnf("Failed to unmarshal IAT: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
@@ -115,7 +115,7 @@ func VerifyIas(
 	// Verify certificate chain
 	x509Chains, err := internal.VerifyCertChain(certs, []*x509.Certificate{ca})
 	if err != nil {
-		log.Debugf("Failed to verify certificate chain: %v", err)
+		log.Warnf("Failed to verify certificate chain: %v", err)
 		result.Summary.Fail(ar.VerifyCertChain)
 		ok = false
 	}

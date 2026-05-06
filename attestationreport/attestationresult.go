@@ -753,11 +753,11 @@ func (r *Result) Fail(code ErrorCode, errs ...error) {
 	}
 	if len(errs) > 0 {
 		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
-		log.Debugf("Verification failed with error code %v: %v", code.String(), r.Details)
+		log.Warnf("Verification failed with error code %v: %v", code.String(), r.Details)
 	} else if code != NotSpecified {
-		log.Debugf("Verification failed with error code %v", code.String())
+		log.Warnf("Verification failed with error code %v", code.String())
 	} else {
-		log.Debugf("Verification failed")
+		log.Warnf("Verification failed")
 	}
 }
 
@@ -771,11 +771,11 @@ func (r *Result) Warn(code ErrorCode, errs ...error) {
 	}
 	if len(errs) > 0 {
 		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
-		log.Debugf("Verification passed with warning %v: %v", code.String(), r.Details)
+		log.Warnf("Verification passed with warning %v: %v", code.String(), r.Details)
 	} else if code != NotSpecified {
-		log.Debugf("Verification passed with warning %v", code.String())
+		log.Warnf("Verification passed with warning %v", code.String())
 	} else {
-		log.Debugf("Verification passed with warning")
+		log.Warnf("Verification passed with warning")
 	}
 }
 
