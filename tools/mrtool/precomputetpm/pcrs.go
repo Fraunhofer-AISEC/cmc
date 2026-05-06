@@ -43,17 +43,6 @@ func newTPMComponent(index int, name string, hashes []ar.ReferenceHash, desc str
 	return c
 }
 
-func newTPMSummary(index int, name, desc string, hashes []ar.ReferenceHash) *ar.Component {
-	c := &ar.Component{
-		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, index),
-		Name:        name,
-		Hashes:      hashes,
-		Description: desc,
-	}
-	c.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
-	c.SetIndex(index)
-	return c
-}
 
 type DriverFileType int
 
@@ -93,8 +82,8 @@ func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(0, ar.TYPE_PCR_SUMMARY, "PCR0",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(0, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR0")
 
 	return pcrSummary, refvals, nil
 }
@@ -136,8 +125,8 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(1, ar.TYPE_PCR_SUMMARY, "PCR1",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(1, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR1")
 
 	return pcrSummary, refvals, nil
 }
@@ -188,8 +177,8 @@ func PrecomputePcr2(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(2, ar.TYPE_PCR_SUMMARY, "PCR2",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(2, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR2")
 
 	return pcrSummary, refvals, nil
 }
@@ -207,8 +196,8 @@ func PrecomputePcr3(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(3, ar.TYPE_PCR_SUMMARY, "PCR3",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(3, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR3")
 
 	return pcrSummary, refvals, nil
 }
@@ -292,8 +281,8 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(4, ar.TYPE_PCR_SUMMARY, "PCR4",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(4, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR4")
 
 	return pcrSummary, refvals, nil
 }
@@ -356,8 +345,8 @@ func PrecomputePcr5(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, actionHash2[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(5, ar.TYPE_PCR_SUMMARY, "PCR5",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(5, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR5")
 
 	return pcrSummary, refvals, nil
 }
@@ -402,8 +391,8 @@ func PrecomputePcr6(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr = internal.ExtendSha256(pcr, hashSep[:])
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(6, ar.TYPE_PCR_SUMMARY, "PCR6",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(6, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR6")
 
 	return pcrSummary, refvals, nil
 }
@@ -434,8 +423,8 @@ func PrecomputePcr7(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(7, ar.TYPE_PCR_SUMMARY, "PCR7",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(7, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR7")
 
 	return pcrSummary, refvals, nil
 }
@@ -472,8 +461,8 @@ func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(8, ar.TYPE_PCR_SUMMARY, "PCR8",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(8, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR8")
 
 	return pcrSummary, refvals, nil
 }
@@ -507,8 +496,8 @@ func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(9, ar.TYPE_PCR_SUMMARY, "PCR9",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(9, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR9")
 
 	return pcrSummary, refvals, nil
 }
@@ -554,8 +543,8 @@ func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(11, ar.TYPE_PCR_SUMMARY, "PCR11",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(11, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR11")
 
 	return pcrSummary, refvals, nil
 }
@@ -575,8 +564,8 @@ func PrecomputePcr12(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(12, ar.TYPE_PCR_SUMMARY, "PCR12",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(12, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR12")
 
 	return pcrSummary, refvals, nil
 }
@@ -594,8 +583,8 @@ func PrecomputePcr14(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newTPMSummary(14, ar.TYPE_PCR_SUMMARY, "PCR14",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}})
+	pcrSummary := newTPMComponent(14, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR14")
 
 	return pcrSummary, refvals, nil
 }
