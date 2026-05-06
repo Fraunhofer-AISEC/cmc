@@ -16,6 +16,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -92,6 +93,14 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 	for _, hash := range omspReq.ManifestHashes {
 		// Retrieve the OMSP responses
 		log.Debugf("Retrieving OMSP response for manifest with hash %v", hash)
+
+		// Check that the provided hash is a valid hex string to prevent path traversal attacks
+		_, err := hex.DecodeString(hash)
+		if err != nil {
+			log.Debugf("Invalid manifest hash %v provided and ignored for response: %v", hash, err)
+			writeHttpErrorf(w, "Invalid manifest hash provided: %v", hash)
+			continue
+		}
 		file := path.Join(s.omspFolder, hash+".json")
 		fileInfo, err := os.Stat(file)
 		if err != nil {
