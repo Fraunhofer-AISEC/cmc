@@ -80,7 +80,7 @@ func VerifyTpm(
 	tpmResult, artifacts, ok := verifyPcrs(collateral.Artifacts,
 		tpmsAttest.AttestedQuoteInfo.PCRDigest, refComponents, quoteHashAlg)
 	if !ok {
-		log.Debug("failed to recalculate PCRs")
+		log.Warn("failed to recalculate PCRs")
 		result.Summary.Status = ar.StatusFail
 	}
 	result.TpmResult = tpmResult
@@ -88,7 +88,7 @@ func VerifyTpm(
 
 	mCerts, err := internal.ParseCertsDer(collateral.Certs)
 	if err != nil {
-		log.Debugf("Failed to parse measurement certs: %v", err)
+		log.Warnf("Failed to parse measurement certs: %v", err)
 		result.Signature.CertChainCheck.Fail(ar.ParseCert)
 		result.Summary.Status = ar.StatusFail
 		return result, false
@@ -101,7 +101,7 @@ func VerifyTpm(
 
 	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
 	if err != nil {
-		log.Debugf("Failed to verify TPM quote certificate chain: %v", err)
+		log.Warnf("Failed to verify TPM quote certificate chain: %v", err)
 		result.Summary.Status = ar.StatusFail
 		result.Signature.CertChainCheck.Fail(ar.VerifyCertChain)
 	} else {
@@ -115,7 +115,7 @@ func VerifyTpm(
 	if result.Summary.Status == ar.StatusSuccess {
 		log.Debugf("Successfully verified TPM measurements")
 	} else {
-		log.Debugf("Failed to verify TPM measurements")
+		log.Warnf("Failed to verify TPM measurements")
 	}
 
 	return result, result.Summary.Status == ar.StatusSuccess
@@ -167,7 +167,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 				var err error
 				measuredSummary, err = internal.Extend(quoteHashAlg, measuredSummary, eventHash)
 				if err != nil {
-					log.Debugf("Failed to extend: %v", err)
+					log.Warnf("Failed to extend: %v", err)
 					success = false
 				}
 
@@ -188,7 +188,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 						HashAlg:     quoteHashAlg.String(),
 					}
 					detailedResults = append(detailedResults, measResult)
-					log.Debugf("Failed to find refval for PCR%v measurement %v: %v",
+					log.Warnf("Failed to find refval for PCR%v measurement %v: %v",
 						artifact.Index, event.Name, hex.EncodeToString(eventHash))
 					success = false
 					pcrResult.Success = false
@@ -198,7 +198,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 				// ...Extent calculated summary only if reference value was found
 				calculatedPcrs[pcr], err = internal.Extend(quoteHashAlg, calculatedPcrs[pcr], eventHash)
 				if err != nil {
-					log.Debugf("Failed to extend: %v", err)
+					log.Warnf("Failed to extend: %v", err)
 					success = false
 				}
 
@@ -233,7 +233,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 			// Measurement contains just the summary PCR value
 			log.Tracef("PCR%v measurement contains PCR summary", artifact.Index)
 			if len(artifact.Events) != 1 {
-				log.Debugf("Expected exactly one event for artifact type %q, got %v",
+				log.Warnf("Expected exactly one event for artifact type %q, got %v",
 					ar.TYPE_PCR_SUMMARY, len(artifact.Events))
 				success = false
 				continue
@@ -259,7 +259,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 						// Check if calculatedPcrs is uninitialized, as only one reference
 						// value summary is allowed
 						if !bytes.Equal(calculatedPcrs[pcr], make([]byte, len(calculatedPcrs[pcr]))) {
-							log.Debugf("Fail: PCR%v multiple reference values type %q",
+							log.Warnf("Fail: PCR%v multiple reference values type %q",
 								pcr, ar.TYPE_PCR_SUMMARY)
 							success = false
 						}
@@ -272,7 +272,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 						var err error
 						calculatedPcrs[pcr], err = internal.Extend(quoteHashAlg, calculatedPcrs[pcr], refHash)
 						if err != nil {
-							log.Debugf("Failed to extend: %v", err)
+							log.Warnf("Failed to extend: %v", err)
 							success = false
 						}
 
@@ -302,7 +302,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 				pcrResult.Success = true
 				log.Tracef("PCR%v match: %x", pcr, calculatedPcrs[pcr])
 			} else {
-				log.Debugf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
+				log.Warnf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
 					hex.EncodeToString(eventHash),
 					hex.EncodeToString(calculatedPcrs[pcr]))
 				pcrResult.Digest = calculatedPcrs[pcr]
@@ -323,7 +323,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 		} else {
 			success = false
 			pcrResult.Success = false
-			log.Debugf("Unknown measurement PCR type %v", artifact.Type)
+			log.Warnf("Unknown measurement PCR type %v", artifact.Type)
 		}
 
 		pcrResults = append(pcrResults, pcrResult)
@@ -380,7 +380,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 					if !ref.Optional {
 						detailedResults = append(detailedResults, result)
 						success = false
-						log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
+						log.Warnf("Failed to find measurement for required PCR%v reference value %v: %v",
 							idx, ref.Name, hex.EncodeToString(refHash))
 					}
 					continue
@@ -388,7 +388,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 			}
 		}
 		if !foundPcr {
-			log.Debugf("Failed to find measurement for required PCR%v reference value %v: %v",
+			log.Warnf("Failed to find measurement for required PCR%v reference value %v: %v",
 				idx, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
 				Type:        ar.TRUST_ANCHOR_TPM,
@@ -421,7 +421,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 	}
 	verPcr, err := internal.Hash(quoteHashAlg, sum)
 	if err != nil {
-		log.Debugf("Failed to hash aggregated quote PCR: %v", err)
+		log.Warnf("Failed to hash aggregated quote PCR: %v", err)
 		success = false
 	}
 
@@ -431,7 +431,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 		log.Debugf("Aggregated PCR matches quote PCR: %x", verPcr[:])
 		aggPcrQuoteMatch.Status = ar.StatusSuccess
 	} else {
-		log.Debugf("Aggregated PCR does not match Quote PCR: %x vs. %x", verPcr[:], aggregatedQuotePcr)
+		log.Warnf("Aggregated PCR does not match Quote PCR: %x vs. %x", verPcr[:], aggregatedQuotePcr)
 		aggPcrQuoteMatch.Status = ar.StatusFail
 		aggPcrQuoteMatch.Expected = hex.EncodeToString(verPcr[:])
 		aggPcrQuoteMatch.Got = hex.EncodeToString(aggregatedQuotePcr)

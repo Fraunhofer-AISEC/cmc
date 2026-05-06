@@ -228,7 +228,7 @@ func VerifyAzure(
 	if success {
 		log.Debugf("Successfully verified Azure measurements")
 	} else {
-		log.Debugf("Failed to verify Azure measurements")
+		log.Warnf("Failed to verify Azure measurements")
 	}
 
 	return results, success

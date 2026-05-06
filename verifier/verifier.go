@@ -366,7 +366,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 
 		result, payload, ok := s.Verify(meta, cas)
 		if !ok {
-			log.Debugf("Signature verification of metadata item %v failed", hash)
+			log.Warnf("Signature verification of metadata item %v failed", hash)
 			success = false
 			// Still unpack metadata item for validation-result diagnosis
 			payload, err = s.GetPayload(meta)
@@ -389,7 +389,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 
 		result.ValidityCheck = checkValidity(result.Metadata.Validity)
 		if result.ValidityCheck.Status == ar.StatusFail {
-			log.Debugf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
+			log.Warnf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
 				result.Metadata.Type, result.Metadata.Name,
 				result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
 			result.Summary.Status = ar.StatusFail
@@ -408,7 +408,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 			results.ManifestResults = append(results.ManifestResults, result)
 		default:
 			results.UnknownResults = append(results.UnknownResults, result)
-			log.Debugf("Unknown manifest type %v", result.Metadata.Type)
+			log.Warnf("Unknown manifest type %v", result.Metadata.Type)
 			success = false
 		}
 		log.Debugf("Finished validation of metadata item %v: %v", hash, result.Summary.Status)
@@ -455,7 +455,7 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityR
 
 		ok := internal.Contains(desc.Manifest, manifestNames)
 		if !ok {
-			log.Debugf("No manifest for manifest description: %v", desc.Manifest)
+			log.Warnf("No manifest for manifest description: %v", desc.Manifest)
 			result.Summary.Status = ar.StatusFail
 		}
 
@@ -475,7 +475,7 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityR
 
 		ok := internal.Contains(m.Name, descManifests)
 		if !ok {
-			log.Debugf("No manifest description for manifest: %v", m.Name)
+			log.Warnf("No manifest description for manifest: %v", m.Name)
 			result.Summary.Status = ar.StatusFail
 			r := ar.Result{
 				Status:        ar.StatusFail,
@@ -514,7 +514,7 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 		if len(m.BaseLayers) == 1 && m.Name == m.BaseLayers[0] {
 			// Check that there is exactly one root of trust manifest
 			if foundRoot {
-				log.Debugf("Found additional root of trust manifest %v (already got %v)", m.Name, root.Name)
+				log.Warnf("Found additional root of trust manifest %v (already got %v)", m.Name, root.Name)
 				success = false
 				return manifests, nil, ar.MultipleRootManifests, success
 			}
@@ -531,7 +531,7 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 	var sorted []ar.MetadataResult
 	var unplaced []ar.MetadataResult
 	if !foundRoot || root.Name == "" {
-		log.Debug("Did not find root manifest")
+		log.Warn("Did not find root manifest")
 		unplaced = manifests
 		success = false
 		return manifests, nil, ar.NoRootManifest, success
@@ -565,7 +565,7 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 	// Identify manifests with no compatible base layer
 	for _, m := range manifests {
 		if !processed[m.Name] {
-			log.Debugf("%v has no compatible baselayer\n", m.Name)
+			log.Warnf("%v has no compatible baselayer", m.Name)
 			unplaced = append(unplaced, m)
 			success = false
 			results = append(results, ar.Result{
@@ -681,7 +681,7 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 	for _, fp := range refFingerprints {
 		refFingerprint, err := hex.DecodeString(fp)
 		if err != nil {
-			log.Debugf("Failed to decode CA fingerprint %v: %v", fp, err)
+			log.Warnf("Failed to decode CA fingerprint %v: %v", fp, err)
 			result.Fail(ar.ParseCAFingerprint)
 			return result
 		}
@@ -691,13 +691,13 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 			result.Status = ar.StatusSuccess
 			return result
 		} else {
-			log.Tracef("Root Manifest CA fingerprint %x does not match measurement CA fingerprint %x. Continue..",
+			log.Warnf("Root Manifest CA fingerprint %x does not match measurement CA fingerprint %x. Continue..",
 				refFingerprint, caFingerprint[:])
 			continue
 		}
 	}
 
-	log.Debug("Failed to find matching CA fingerprint")
+	log.Warn("Failed to find matching CA fingerprint")
 
 	result.Status = ar.StatusFail
 	result.ExpectedOneOf = refFingerprints
@@ -742,7 +742,7 @@ func verifyNonce(measured, expected []byte) ar.Result {
 		}
 	}
 
-	log.Debugf("Nonces mismatch: expected %v, got %v",
+	log.Warnf("Nonces mismatch: expected %v, got %v",
 		hex.EncodeToString(expected), hex.EncodeToString(measured))
 	return ar.Result{
 		Status:   ar.StatusFail,

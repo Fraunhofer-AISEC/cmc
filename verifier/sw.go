@@ -60,7 +60,7 @@ func VerifySw(
 	}
 	tr, payload, ok := s.Verify(evidence.Data, pub)
 	if !ok {
-		log.Debugf("Failed to verify sw evidence")
+		log.Warnf("Failed to verify sw evidence")
 		result.Summary.Fail(ar.VerifyEvidence)
 		return result, false
 	}
@@ -71,7 +71,7 @@ func VerifySw(
 	swEvidence := new(ar.SwEvidence)
 	err = s.Unmarshal(payload, swEvidence)
 	if err != nil {
-		log.Debugf("Failed to unmarshal sw swEvidence")
+		log.Warnf("Failed to unmarshal sw swEvidence")
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
@@ -102,7 +102,7 @@ func VerifySw(
 						continue
 					}
 					if !ok {
-						log.Debugf("Rootfs matches but config validation failed. Continue search")
+						log.Warnf("Rootfs matches but config validation failed. Continue search")
 						continue
 					}
 					if bytes.Equal(event.GetHash(crypto.SHA256), templateHash) {
@@ -130,7 +130,7 @@ func VerifySw(
 
 			// Only fail attestation if component is mandatory
 			if !ref.Optional {
-				log.Debugf("no SW Measurement found for mandatory SW reference value %v (hash: %x)", ref.Name, ref.GetHash(crypto.SHA256))
+				log.Warnf("no SW Measurement found for mandatory SW reference value %v (hash: %x)", ref.Name, ref.GetHash(crypto.SHA256))
 				ok = false
 			}
 		}
@@ -163,7 +163,7 @@ func VerifySw(
 					}
 
 					if !bytes.Equal(event.GetHash(crypto.SHA256), templateHash) {
-						log.Debugf("measured template hash (%x) does not match reference hash (%x)",
+						log.Warnf("measured template hash (%x) does not match reference hash (%x)",
 							event.GetHash(crypto.SHA256), templateHash)
 						continue
 					}
@@ -201,7 +201,7 @@ func VerifySw(
 					HashAlg:    crypto.SHA256.String(),
 				}
 				result.Artifacts = append(result.Artifacts, r)
-				log.Debugf("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.GetHash(crypto.SHA256)))
+				log.Warnf("no SW reference value found for SW measurement: %v", hex.EncodeToString(event.GetHash(crypto.SHA256)))
 				ok = false
 			}
 		}
@@ -210,7 +210,7 @@ func VerifySw(
 
 	// Verify recalculated aggregated hash against swEvidence hash
 	if !bytes.Equal(aggregatedHash, swEvidence.Sha256) {
-		log.Debugf("Aggregated hash does not match evidence hash (%v vs %v)",
+		log.Warnf("Aggregated hash does not match evidence hash (%v vs %v)",
 			hex.EncodeToString(aggregatedHash), hex.EncodeToString(swEvidence.Sha256))
 		ok = false
 		result.Summary.Fail(ar.VerifyAggregatedSwHash)
@@ -260,7 +260,7 @@ func ValidateTemplateHash(s ar.Serializer, ref *ar.Component, measured *ar.CtrDa
 		}
 		err = ValidateConfig(refConvSpec, measConvSpec, rules)
 		if err != nil {
-			log.Debugf("Failed to validate OCI config: %v", err)
+			log.Warnf("Failed to validate OCI config: %v", err)
 			return nil, false, nil
 		}
 

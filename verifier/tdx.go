@@ -107,12 +107,12 @@ func VerifyTdx(
 	}
 
 	if len(refComponents) == 0 {
-		log.Debugf("Could not find TDX reference values")
+		log.Warnf("Could not find TDX reference values")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
 	if policy == nil {
-		log.Debugf("no TDX policy present")
+		log.Warnf("no TDX policy present")
 		result.Summary.Fail(ar.PolicyNotPresent)
 		return result, false
 	}
@@ -124,13 +124,13 @@ func VerifyTdx(
 		if artifact.Type == ar.TYPE_TDX_COLLATERAL {
 			intelCollateralRaw = artifact.Events[0].IntelCollateral
 			if intelCollateralRaw == nil {
-				log.Debugf("Could not find TDX collateral")
+				log.Warnf("Could not find TDX collateral")
 				result.Summary.Fail(ar.CollateralNotPresent)
 				return result, false
 			}
 			intelCollateral, err = ParseCollateral(intelCollateralRaw)
 			if err != nil {
-				log.Debugf("Could not parse TDX collateral artifact: %v", err)
+				log.Warnf("Could not parse TDX collateral artifact: %v", err)
 				result.Summary.Fail(ar.ParseCollateral)
 				return result, false
 			}
@@ -140,7 +140,7 @@ func VerifyTdx(
 	// Currently only support for report version 4
 	tdxQuote, err := DecodeTdxReportV4(evidence.Data)
 	if err != nil {
-		log.Debugf("Failed to decode TDX report: %v", err)
+		log.Warnf("Failed to decode TDX report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
@@ -170,7 +170,7 @@ func VerifyTdx(
 	// Parse and verify PCK certificate extensions
 	sgxExtensions, err := ParseSGXExtensions(quoteCerts.PCKCert.Extensions[SGX_EXTENSION_INDEX].Value[4:]) // skip the first value (not relevant)
 	if err != nil {
-		log.Debugf("failed to parse SGX Extensions from PCK Certificate: %v", err)
+		log.Warnf("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.Fail(ar.ParseCert)
 		return result, false
 	}
@@ -182,7 +182,7 @@ func VerifyTdx(
 		sgxExtensions, tdxQuote.QuoteBody.TeeTcbSvn, ar.TDX_QUOTE_TYPE,
 		policy.AcceptedTcbStatuses)
 	if result.TdxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
-		log.Debugf("Failed to validate TCB info")
+		log.Warnf("Failed to validate TCB info")
 		result.Summary.Fail(ar.VerifyTcbInfo)
 	}
 
@@ -217,20 +217,20 @@ func VerifyTdx(
 
 	tdIdResults, okTdId := verifyTdxTdId(&tdxQuote.QuoteBody, &policy.TdId, &intelCollateral.TcbInfo)
 	if !okTdId {
-		log.Debugf("Failed to verify TDX TD ID")
+		log.Warnf("Failed to verify TDX TD ID")
 		result.Summary.Status = ar.StatusFail
 	}
 	result.Artifacts = append(result.Artifacts, tdIdResults...)
 
 	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], policy.Xfam)
 	if result.TdxResult.XfamCheck.Status != ar.StatusSuccess {
-		log.Debugf("TDX XFAM check failed")
+		log.Warnf("TDX XFAM check failed")
 		result.Summary.Status = ar.StatusFail
 	}
 
 	result.TdxResult.SeamAttributesCheck = verifyTdxSeamAttributes(tdxQuote.QuoteBody.SeamAttributes[:])
 	if result.TdxResult.SeamAttributesCheck.Status != ar.StatusSuccess {
-		log.Debugf("TDX SEAM attributes check failed")
+		log.Warnf("TDX SEAM attributes check failed")
 		result.Summary.Status = ar.StatusFail
 	}
 
@@ -238,7 +238,7 @@ func VerifyTdx(
 	var okTdAttr bool
 	result.TdxResult.TdAttributesCheck, okTdAttr = verifyTdxTdAttributes(tdxQuote.QuoteBody.TdAttributes, &policy.TdAttributes)
 	if !okTdAttr {
-		log.Debugf("TDX TD Attributes check failed")
+		log.Warnf("TDX TD Attributes check failed")
 		result.Summary.Status = ar.StatusFail
 	}
 
@@ -252,7 +252,7 @@ func VerifyTdx(
 	if result.Summary.Status == ar.StatusSuccess {
 		log.Debug("Successfully verified TDX measurements")
 	} else {
-		log.Debug("Failed to verify TDX measurements")
+		log.Warn("Failed to verify TDX measurements")
 	}
 
 	return result, result.Summary.Status == ar.StatusSuccess
@@ -467,7 +467,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 						HashAlg:  crypto.SHA384.String(),
 					})
 			}
-			log.Debugf("%v: Measurement %q does not match recalculation %q",
+			log.Warnf("%v: Measurement %q does not match recalculation %q",
 				internal.IndexToMr(i),
 				hex.EncodeToString(measuredMrs[i]), hex.EncodeToString(calculatedMrs[i]))
 		} else {
@@ -551,7 +551,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 							hex.EncodeToString(event.GetHash(crypto.SHA384)))
 					} else {
 						success = false
-						log.Debugf("Failed to verify measurement %v: %v = %v",
+						log.Warnf("Failed to verify measurement %v: %v = %v",
 							internal.IndexToMr(artifact.Index), event.Name,
 							hex.EncodeToString(event.GetHash(crypto.SHA384)))
 					}
@@ -604,7 +604,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 	if success {
 		log.Debug("Successfully verified TDX measurement registers")
 	} else {
-		log.Debug("Failed to verify TDX measurement registers")
+		log.Warn("Failed to verify TDX measurement registers")
 	}
 
 	return mrResults, detailedResults, ar.NotSpecified, success

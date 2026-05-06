@@ -104,24 +104,24 @@ func VerifySnp(
 	// Extract the SNP attestation report data structure
 	s, err := DecodeSnpReport(evidence.Data)
 	if err != nil {
-		log.Debugf("Failed to decode SNP report: %v", err)
+		log.Warnf("Failed to decode SNP report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
 		return result, false
 	}
 
 	certs, err := internal.ParseCertsDer(collateral.Certs)
 	if err != nil || len(certs) == 0 {
-		log.Debugf("Failed to parse certificates: %v", err)
+		log.Warnf("Failed to parse certificates: %v", err)
 		result.Summary.Fail(ar.ParseCert)
 		return result, false
 	}
 
 	if len(refComponents) == 0 {
-		log.Debug("Could not find SNP reference value")
+		log.Warn("Could not find SNP reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	} else if len(refComponents) > 1 {
-		log.Debugf("Report contains %v reference values. Currently, only 1 SNP reference value is supported",
+		log.Warnf("Report contains %v reference values. Currently, only 1 SNP reference value is supported",
 			len(refComponents))
 		result.Summary.Fail(ar.RefValMultiple)
 		return result, false
@@ -130,7 +130,7 @@ func VerifySnp(
 	snpReferenceValue := refComponents[0]
 	ta, err := snpReferenceValue.GetTrustAnchor()
 	if err != nil || ta != ar.TRUST_ANCHOR_SNP {
-		log.Debugf("SNP reference value invalid trust anchor %v (err: %v)", ta, err)
+		log.Warnf("SNP reference value invalid trust anchor %v (err: %v)", ta, err)
 		result.Summary.Fail(ar.RefValType)
 		return result, false
 	}
@@ -164,7 +164,7 @@ func VerifySnp(
 
 	// Compare Measurements
 	if !bytes.Equal(s.Measurement[:], snpReferenceValue.GetHash(crypto.SHA384)) {
-		log.Debugf("Failed to verify SNP reference value. Expected %x, got %x",
+		log.Warnf("Failed to verify SNP reference value. Expected %x, got %x",
 			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
@@ -239,7 +239,7 @@ func verifySnpVersion(min, max, got uint32) (ar.Result, bool) {
 	r := ar.Result{}
 	ok := (got >= min && got <= max)
 	if !ok {
-		log.Debugf("SNP report version mismatch: Report = %v, min = %v, max = %v", got, min, max)
+		log.Warnf("SNP report version mismatch: Report = %v, min = %v, max = %v", got, min, max)
 		r.Status = ar.StatusFail
 		r.ExpectedBetween = []string{
 			strconv.FormatUint(uint64(min), 10),
@@ -295,7 +295,7 @@ func verifySnpPolicy(policy uint64, v ar.SnpGuestPolicy) (ar.PolicyCheck, bool) 
 		r.Debug.Success &&
 		r.SingleSocket.Success
 	if !ok {
-		log.Debugf("SNP policies do not match: Abi: %v, Smt: %v, Migration: %v, Debug: %v, SingleSocket: %v",
+		log.Warnf("SNP policies do not match: Abi: %v, Smt: %v, Migration: %v, Debug: %v, SingleSocket: %v",
 			r.Abi.Success, r.Smt.Success, r.Migration.Success, r.Debug.Success, r.SingleSocket.Success)
 	}
 	r.Summary.Status = ar.StatusFromBool(ok)
@@ -311,7 +311,7 @@ func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
 
 	ok := checkMinVersion([]uint8{major, minor, build}, []uint8{v.Major, v.Minor, v.Build})
 	if !ok {
-		log.Debugf("SNP FW version check failed. Expected: %v.%v.%v, got %v.%v.%v",
+		log.Warnf("SNP FW version check failed. Expected: %v.%v.%v, got %v.%v.%v",
 			v.Major, v.Minor, v.Build, major, minor, build)
 	}
 
@@ -375,7 +375,7 @@ func verifySnpTcb(codeName string, s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool)
 	}
 	ok := r.Bl.Success && r.Tee.Success && r.Snp.Success && r.Ucode.Success
 	if !ok {
-		log.Debugf("SNP TCB check failed: BL: %v, TEE: %v, SNP: %v, UCODE: %v",
+		log.Warnf("SNP TCB check failed: BL: %v, TEE: %v, SNP: %v, UCODE: %v",
 			r.Bl.Success, r.Tee.Success, r.Snp.Success, r.Ucode.Success)
 	}
 	r.Summary.Status = ar.StatusFromBool(ok)
@@ -421,7 +421,7 @@ func verifySnpSignature(
 
 	// Check that the algorithm is supported
 	if report.SignatureAlgo != ecdsa384_with_sha384 {
-		log.Debugf("Signature Algorithm %v not supported", report.SignatureAlgo)
+		log.Warnf("Signature Algorithm %v not supported", report.SignatureAlgo)
 		result.SignCheck.Fail(ar.UnsupportedAlgorithm)
 		return result, false
 	}
@@ -429,7 +429,7 @@ func verifySnpSignature(
 	// Extract the public key from the certificate
 	pub, ok := certs[0].PublicKey.(*ecdsa.PublicKey)
 	if !ok {
-		log.Debug("Failed to extract ECDSA public key from certificate")
+		log.Warn("Failed to extract ECDSA public key from certificate")
 		result.SignCheck.Fail(ar.ExtractPubKey)
 		return result, false
 	}
@@ -437,7 +437,7 @@ func verifySnpSignature(
 	// Verify ECDSA Signature represented by r and s
 	ok = ecdsa.Verify(pub, digest[:], r, s)
 	if !ok {
-		log.Debug("Failed to verify SNP report signature")
+		log.Warn("Failed to verify SNP report signature")
 		result.SignCheck.Fail(ar.VerifySignature)
 		return result, false
 	}
@@ -448,7 +448,7 @@ func verifySnpSignature(
 	ca := certs[len(certs)-1]
 	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
 	if err != nil {
-		log.Debugf("Failed to verify certificate chain: %v", err)
+		log.Warnf("Failed to verify certificate chain: %v", err)
 		result.CertChainCheck.Fail(ar.VerifyCertChain)
 		return result, false
 	}
@@ -508,7 +508,7 @@ func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snprep
 	// Checked extensions depend on the key type
 	akType, err := internal.GetAkType(report.KeySelection)
 	if err != nil {
-		log.Debugf("Could not determine SNP attestation report attestation key type")
+		log.Warnf("Could not determine SNP attestation report attestation key type")
 		success = false
 	}
 
@@ -519,32 +519,32 @@ func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snprep
 
 	if codeName == "Turin" {
 		if r, ok = checkExtensionUint8(cert, oidFmc, tcb.Fmc); !ok {
-			log.Debugf("SEV FMC extension check failed")
+			log.Warnf("SEV FMC extension check failed")
 			success = false
 		}
 		results = append(results, r)
 	}
 
 	if r, ok = checkExtensionUint8(cert, oidBl, tcb.Bl); !ok {
-		log.Debugf("SEV BL extension check failed")
+		log.Warnf("SEV BL extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, oidTee, tcb.Tee); !ok {
-		log.Debugf("SEV TEE extension check failed")
+		log.Warnf("SEV TEE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, oidSnp, tcb.Snp); !ok {
-		log.Debugf("SEV SNP extension check failed")
+		log.Warnf("SEV SNP extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
 	if r, ok = checkExtensionUint8(cert, oidUcode, tcb.Ucode); !ok {
-		log.Debugf("SEV UCODE extension check failed")
+		log.Warnf("SEV UCODE extension check failed")
 		success = false
 	}
 	results = append(results, r)
@@ -560,7 +560,7 @@ func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snprep
 			len = 8
 		}
 		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:len]); !ok {
-			log.Debugf("Chip ID extension check failed")
+			log.Warnf("Chip ID extension check failed")
 			success = false
 		}
 		results = append(results, r)
@@ -571,7 +571,7 @@ func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snprep
 	if akType == internal.VLEK {
 		csp, ok := getExtensionString(cert, oidCspId)
 		if !ok {
-			log.Debug("CSP ID extension check failed")
+			log.Warn("CSP ID extension check failed")
 			success = false
 		}
 		log.Debugf("CSP ID extension present: %v", csp)
@@ -697,7 +697,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 			}
 			if ext.Value[1] == 0x1 {
 				if ext.Value[2] != value {
-					log.Debugf("extension %v value[2]: %v does not match expected value %v",
+					log.Warnf("extension %v value[2]: %v does not match expected value %v",
 						oid, ext.Value[2], value)
 					return ar.Result{
 						Status:   ar.StatusFail,
@@ -710,7 +710,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 				// even though this field is defined as unsigned int in the AMD spec
 				// Thus, if the most significant bit is required, one byte of additional 0x00 padding is added
 				if ext.Value[2] != 0x00 || ext.Value[3] != value {
-					log.Debugf("extension %v value = %v%v does not match expected value  %v",
+					log.Warnf("extension %v value = %v%v does not match expected value  %v",
 						oid, ext.Value[2], ext.Value[3], value)
 					return ar.Result{
 						Status:   ar.StatusFail,
@@ -744,7 +744,7 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 
 		if ext.Id.String() == oid {
 			if !bytes.Equal(ext.Value, buf) {
-				log.Debugf("extension %v value %v does not match expected value %v",
+				log.Warnf("extension %v value %v does not match expected value %v",
 					oid, hex.EncodeToString(ext.Value), hex.EncodeToString(buf))
 				return ar.Result{
 					Status:   ar.StatusFail,
@@ -771,6 +771,6 @@ func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
 			return string(ext.Value), true
 		}
 	}
-	log.Debugf("extension %v: %v not present in certificate", oid, oidDesc(oid))
+	log.Warnf("extension %v: %v not present in certificate", oid, oidDesc(oid))
 	return "", false
 }
