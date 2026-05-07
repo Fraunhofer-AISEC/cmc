@@ -65,6 +65,8 @@ var Command = &cli.Command{
 			return fmt.Errorf("failed to get global config: %w", err)
 		}
 
+		log.Infof("Signing %v", cmd.String(inFlag))
+
 		data, err := os.ReadFile(cmd.String(inFlag))
 		if err != nil {
 			return fmt.Errorf("failed to read input file: %w", err)

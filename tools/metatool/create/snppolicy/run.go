@@ -20,12 +20,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/global"
 )
+
+var log = logrus.WithField("service", "metatool")
 
 const (
 	reportMinFlag    = "report-min-version"
@@ -85,6 +88,8 @@ var Command = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get global config: %w", err)
 		}
+
+		log.Info("Creating SNP policy")
 
 		p := ar.SnpPolicy{
 			ReportMinVersion: uint32(cmd.Uint(reportMinFlag)),

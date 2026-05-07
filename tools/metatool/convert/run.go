@@ -60,6 +60,8 @@ var Command = &cli.Command{
 			return fmt.Errorf("failed to get global config: %w", err)
 		}
 
+		log.Infof("Converting %v to %v", cmd.String(inFlag), cmd.String(outformFlag))
+
 		data, err := os.ReadFile(cmd.String(inFlag))
 		if err != nil {
 			return fmt.Errorf("failed to read input file: %w", err)
