@@ -30,6 +30,13 @@ import (
 	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
 )
 
+func derefInt64(p *int64) int64 {
+	if p == nil {
+		return -1
+	}
+	return *p
+}
+
 func GetRootfsPath(configRaw []byte) (string, error) {
 	var config specs.Spec
 	if err := json.Unmarshal(configRaw, &config); err != nil {
@@ -44,7 +51,7 @@ func GetRootfsPath(configRaw []byte) (string, error) {
 
 func GetSpecMeasurement(id string, configRaw []byte) ([]byte, []byte, error) {
 
-	normalizedConfig, err := normalize(id, configRaw)
+	normalizedConfig, err := Normalize(id, configRaw)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to normalize config: %w", err)
 	}
@@ -56,7 +63,7 @@ func GetSpecMeasurement(id string, configRaw []byte) ([]byte, []byte, error) {
 	return hash, normalizedConfig, nil
 }
 
-func normalize(id string, configRaw []byte) ([]byte, error) {
+func Normalize(id string, configRaw []byte) ([]byte, error) {
 
 	// The container id varies depending on the client. For ctr, this is a user-specified
 	// name. For docker, this is a random UUID which changes on different container invocations
@@ -139,6 +146,49 @@ func normalize(id string, configRaw []byte) ([]byte, error) {
 		}
 		return config.Mounts[i].Source < config.Mounts[j].Source
 	})
+
+	// Sort linux arrays alphabetically
+	if config.Linux != nil {
+		slices.Sort(config.Linux.MaskedPaths)
+		slices.Sort(config.Linux.ReadonlyPaths)
+		sort.Slice(config.Linux.Namespaces, func(i, j int) bool {
+			return config.Linux.Namespaces[i].Type < config.Linux.Namespaces[j].Type
+		})
+		if config.Linux.Resources != nil {
+			sort.Slice(config.Linux.Resources.Devices, func(i, j int) bool {
+				if config.Linux.Resources.Devices[i].Type != config.Linux.Resources.Devices[j].Type {
+					return config.Linux.Resources.Devices[i].Type < config.Linux.Resources.Devices[j].Type
+				}
+				mi, mj := derefInt64(config.Linux.Resources.Devices[i].Major), derefInt64(config.Linux.Resources.Devices[j].Major)
+				if mi != mj {
+					return mi < mj
+				}
+				return derefInt64(config.Linux.Resources.Devices[i].Minor) < derefInt64(config.Linux.Resources.Devices[j].Minor)
+			})
+		}
+		if config.Linux.Seccomp != nil {
+			slices.Sort(config.Linux.Seccomp.Architectures)
+			slices.Sort(config.Linux.Seccomp.Flags)
+			for i := range config.Linux.Seccomp.Syscalls {
+				slices.Sort(config.Linux.Seccomp.Syscalls[i].Names)
+			}
+			sort.Slice(config.Linux.Seccomp.Syscalls, func(i, j int) bool {
+				ni := strings.Join(config.Linux.Seccomp.Syscalls[i].Names, ",")
+				nj := strings.Join(config.Linux.Seccomp.Syscalls[j].Names, ",")
+				if ni != nj {
+					return ni < nj
+				}
+				return config.Linux.Seccomp.Syscalls[i].Action < config.Linux.Seccomp.Syscalls[j].Action
+			})
+		}
+	}
+	if config.Process.Capabilities != nil {
+		slices.Sort(config.Process.Capabilities.Bounding)
+		slices.Sort(config.Process.Capabilities.Effective)
+		slices.Sort(config.Process.Capabilities.Inheritable)
+		slices.Sort(config.Process.Capabilities.Permitted)
+		slices.Sort(config.Process.Capabilities.Ambient)
+	}
 
 	data, err := json.Marshal(config)
 	if err != nil {
