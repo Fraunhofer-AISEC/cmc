@@ -58,9 +58,9 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 			if !reflect.DeepEqual(refValue, measureValue) {
 				switch measureValue.(type) {
 				case string, int, bool:
-					log.Tracef(" Field %q does not reference: %v vs %v", key, measureValue, refValue)
+					log.Tracef(" Field %q does not match reference: %v vs %v", key, measureValue, refValue)
 				default:
-					log.Tracef(" Field %q does not reference", key)
+					log.Tracef(" Field %q does not match reference", key)
 				}
 				return fmt.Errorf(" field %q is implicitly mandatory and does not match reference", key)
 			} else {
@@ -79,15 +79,17 @@ func ValidateConfig(reference, measurement, rules map[string]interface{}) error 
 
 				log.Debugf(" Rule %v defined for scalar field %q", rule, key)
 
-				if strings.HasPrefix(ruleType, "replace:") {
-					err := applyReplace(ruleType, key, refValue, measureValue)
+				if strings.HasPrefix(ruleType, "replace:") || strings.HasPrefix(ruleType, "additional:") {
+					err := applyEnvRules(ruleType, key, refValue, measureValue)
 					if err != nil {
 						return err
 					}
 					continue
 				}
 
-				if rule != "mandatory" && rule != "optional" && rule != "modifiable" && rule != "subset" {
+				// Additional is handled in own loop
+				if rule != "mandatory" && rule != "optional" && rule != "modifiable" &&
+					rule != "subset" {
 					return fmt.Errorf(" unsupported rule type: %v", rule)
 				}
 
@@ -245,24 +247,39 @@ func checkAdditionalKey(key string, reference, measurement, rules map[string]int
 	return nil
 }
 
-// applyReplace handles the "replace:KEY=*[,KEY=*]" rule for string arrays.
-// It replaces measurement entries matching wildcard keys with their reference
-// counterparts, then compares for equality.
-func applyReplace(rule, field string, refValue, measureValue interface{}) error {
-	patterns := strings.TrimPrefix(rule, "replace:")
-	wildcardKeys := make(map[string]bool)
-	for _, pattern := range strings.Split(patterns, ",") {
-		key, _, ok := strings.Cut(pattern, "=")
-		if !ok || key == "" {
-			return fmt.Errorf(" invalid replace pattern %q for field %q", pattern, field)
+// applyEnvRules handles "replace:" and "additional:" rules for string arrays.
+// Rules can be combined with ";", e.g. "replace:TOKEN=*;additional:SECRET=*".
+// Replace swaps measurement values with reference values for matching keys.
+// Additional strips measurement entries not present in the reference.
+func applyEnvRules(rule, field string, refValue, measureValue interface{}) error {
+	replaceKeys := make(map[string]bool)
+	additionalKeys := make(map[string]string)
+
+	for _, part := range strings.Split(rule, ";") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "replace:") {
+			for _, pattern := range strings.Split(strings.TrimPrefix(part, "replace:"), ",") {
+				key, _, ok := strings.Cut(pattern, "=")
+				if !ok || key == "" {
+					return fmt.Errorf(" invalid replace pattern %q for field %q", pattern, field)
+				}
+				replaceKeys[key] = true
+			}
+		} else if strings.HasPrefix(part, "additional:") {
+			for _, pattern := range strings.Split(strings.TrimPrefix(part, "additional:"), ",") {
+				key, val, ok := strings.Cut(pattern, "=")
+				if !ok || key == "" {
+					return fmt.Errorf(" invalid additional pattern %q for field %q", pattern, field)
+				}
+				additionalKeys[key] = val
+			}
 		}
-		wildcardKeys[key] = true
 	}
 
 	refArr, refOk := refValue.([]interface{})
 	measArr, measOk := measureValue.([]interface{})
 	if !refOk || !measOk {
-		return fmt.Errorf(" field %q must be a JSON array for replace rule: ref: %T, meas: %T",
+		return fmt.Errorf(" field %q must be a JSON array for env rules: ref: %T, meas: %T",
 			field, refValue, measureValue)
 	}
 
@@ -277,28 +294,45 @@ func applyReplace(rule, field string, refValue, measureValue interface{}) error 
 		refByKey[key] = entry
 	}
 
-	// Replace wildcard entries in measurement with reference values
-	replaced := make([]interface{}, len(measArr))
-	copy(replaced, measArr)
-	for i, entry := range replaced {
+	// Process measurement entries: replace wildcards, strip additional
+	processed := make([]interface{}, 0, len(measArr))
+	for _, entry := range measArr {
 		s, ok := entry.(string)
 		if !ok {
+			processed = append(processed, entry)
 			continue
 		}
-		key, _, _ := strings.Cut(s, "=")
-		if wildcardKeys[key] {
+		key, val, _ := strings.Cut(s, "=")
+
+		if replaceKeys[key] {
 			if refEntry, exists := refByKey[key]; exists {
 				log.Tracef(" Replacing measurement entry %q with reference value for key %q", s, key)
-				replaced[i] = refEntry
+				processed = append(processed, refEntry)
+			} else {
+				processed = append(processed, entry)
+			}
+			continue
+		}
+
+		if expectedVal, isAdditional := additionalKeys[key]; isAdditional {
+			if _, inRef := refByKey[key]; !inRef {
+				if expectedVal != "*" && val != expectedVal {
+					return fmt.Errorf(" additional env var %q has value %q, expected %q",
+						key, val, expectedVal)
+				}
+				log.Tracef(" Allowing additional measurement entry %q for key %q", s, key)
+				continue
 			}
 		}
+
+		processed = append(processed, entry)
 	}
 
-	if !reflect.DeepEqual(refArr, replaced) {
-		return fmt.Errorf(" field %q does not match reference after applying replace rule", field)
+	if !reflect.DeepEqual(refArr, processed) {
+		return fmt.Errorf(" field %q does not match reference after applying env rules", field)
 	}
 
-	log.Tracef(" Field %q matches reference after replace rule", field)
+	log.Tracef(" Field %q matches reference after env rules", field)
 	return nil
 }
 
@@ -311,14 +345,30 @@ func labelWildcardEnv(ctrData *ar.CtrData, rules map[string]interface{}) *ar.Ctr
 		return ctrData
 	}
 	envRule, ok := processRules["env"].(string)
-	if !ok || !strings.HasPrefix(envRule, "replace:") {
+	if !ok {
 		return ctrData
 	}
 
 	wildcardKeys := make(map[string]bool)
-	for _, p := range strings.Split(strings.TrimPrefix(envRule, "replace:"), ",") {
-		key, _, _ := strings.Cut(p, "=")
-		wildcardKeys[key] = true
+	for _, part := range strings.Split(envRule, ";") {
+		part = strings.TrimSpace(part)
+		var patterns string
+		if strings.HasPrefix(part, "replace:") {
+			patterns = strings.TrimPrefix(part, "replace:")
+		} else if strings.HasPrefix(part, "additional:") {
+			patterns = strings.TrimPrefix(part, "additional:")
+		} else {
+			continue
+		}
+		for _, p := range strings.Split(patterns, ",") {
+			key, _, _ := strings.Cut(p, "=")
+			if key != "" {
+				wildcardKeys[key] = true
+			}
+		}
+	}
+	if len(wildcardKeys) == 0 {
+		return ctrData
 	}
 
 	spec := *ctrData.OciSpec

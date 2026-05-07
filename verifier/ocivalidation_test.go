@@ -149,6 +149,69 @@ func TestValidateConfig(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "Valid additional single key",
+			args: args{
+				reference:   additionalEnvRefConfig,
+				measurement: additionalEnvValidMeasConfig,
+				rules:       additionalEnvRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid additional exact match",
+			args: args{
+				reference:   additionalEnvRefConfig,
+				measurement: additionalEnvRefConfig,
+				rules:       additionalEnvRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid additional multiple keys",
+			args: args{
+				reference:   additionalEnvRefConfig,
+				measurement: additionalEnvMultiValidMeasConfig,
+				rules:       additionalEnvMultiRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Valid additional specific value",
+			args: args{
+				reference:   additionalEnvRefConfig,
+				measurement: additionalEnvSpecificValidMeasConfig,
+				rules:       additionalEnvSpecificRules,
+			},
+			wantErr: false,
+		},
+		{
+			name: "Invalid additional unexpected key",
+			args: args{
+				reference:   additionalEnvRefConfig,
+				measurement: additionalEnvInvalidMeasConfig,
+				rules:       additionalEnvRules,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Invalid additional wrong specific value",
+			args: args{
+				reference:   additionalEnvRefConfig,
+				measurement: additionalEnvInvalidValueMeasConfig,
+				rules:       additionalEnvSpecificRules,
+			},
+			wantErr: true,
+		},
+		{
+			name: "Valid combined replace and additional",
+			args: args{
+				reference:   combinedRefConfig,
+				measurement: combinedValidMeasConfig,
+				rules:       combinedRules,
+			},
+			wantErr: false,
+		},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
 	for _, tt := range tests {
@@ -427,6 +490,110 @@ var (
 	replaceMultiRules = map[string]interface{}{
 		"process": map[string]interface{}{
 			"env": "replace:TOKEN=*,HOSTNAME=*",
+		},
+	}
+
+	// Additional env rule test data
+	additionalEnvRefConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"PATH=/usr/bin:/bin",
+				"HOME=/root",
+			},
+		},
+	}
+
+	additionalEnvValidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"PATH=/usr/bin:/bin",
+				"HOME=/root",
+				"TOKEN=secret",
+			},
+		},
+	}
+
+	additionalEnvMultiValidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"PATH=/usr/bin:/bin",
+				"HOME=/root",
+				"TOKEN=secret",
+				"SECRET=value",
+			},
+		},
+	}
+
+	additionalEnvSpecificValidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"PATH=/usr/bin:/bin",
+				"HOME=/root",
+				"TOKEN=expected",
+			},
+		},
+	}
+
+	additionalEnvInvalidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"PATH=/usr/bin:/bin",
+				"HOME=/root",
+				"UNKNOWN=value",
+			},
+		},
+	}
+
+	additionalEnvInvalidValueMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"PATH=/usr/bin:/bin",
+				"HOME=/root",
+				"TOKEN=wrong",
+			},
+		},
+	}
+
+	additionalEnvRules = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": "additional:TOKEN=*",
+		},
+	}
+
+	additionalEnvMultiRules = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": "additional:TOKEN=*,SECRET=*",
+		},
+	}
+
+	additionalEnvSpecificRules = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": "additional:TOKEN=expected",
+		},
+	}
+
+	combinedRefConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=<container-id>",
+				"PATH=/usr/bin:/bin",
+			},
+		},
+	}
+
+	combinedValidMeasConfig = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": []interface{}{
+				"HOSTNAME=actual-host",
+				"PATH=/usr/bin:/bin",
+				"TOKEN=secret",
+			},
+		},
+	}
+
+	combinedRules = map[string]interface{}{
+		"process": map[string]interface{}{
+			"env": "replace:HOSTNAME=*;additional:TOKEN=*",
 		},
 	}
 
