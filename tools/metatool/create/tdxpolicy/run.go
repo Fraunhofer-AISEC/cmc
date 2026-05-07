@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -28,17 +29,19 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/global"
 )
 
+var log = logrus.WithField("service", "metatool")
+
 const (
-	quoteVersionFlag    = "quote-version"
-	mrOwnerFlag         = "mr-owner"
-	mrOwnerConfigFlag   = "mr-owner-config"
-	mrConfigIdFlag      = "mr-config-id"
-	xfamFlag            = "xfam"
-	debugFlag           = "debug"
-	septVEDisableFlag   = "sept-ve-disable"
-	pksFlag             = "pks"
-	klFlag              = "kl"
-	acceptedTcbFlag     = "accepted-tcb-statuses"
+	quoteVersionFlag  = "quote-version"
+	mrOwnerFlag       = "mr-owner"
+	mrOwnerConfigFlag = "mr-owner-config"
+	mrConfigIdFlag    = "mr-config-id"
+	xfamFlag          = "xfam"
+	debugFlag         = "debug"
+	septVEDisableFlag = "sept-ve-disable"
+	pksFlag           = "pks"
+	klFlag            = "kl"
+	acceptedTcbFlag   = "accepted-tcb-statuses"
 )
 
 var Command = &cli.Command{
@@ -91,6 +94,8 @@ var Command = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get global config: %w", err)
 		}
+
+		log.Info("Creating TDX policy")
 
 		p := ar.TdxPolicy{
 			QuoteVersion: uint16(cmd.Uint(quoteVersionFlag)),

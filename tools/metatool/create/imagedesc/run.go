@@ -22,12 +22,15 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/global"
 )
+
+var log = logrus.WithField("service", "metatool")
 
 const (
 	inFlag           = "in"
@@ -87,6 +90,8 @@ var Command = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get global config: %w", err)
 		}
+
+		log.Infof("Creating image description '%v'", cmd.String(nameFlag))
 
 		id, err := buildImageDescription(cmd)
 		if err != nil {
