@@ -23,7 +23,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -101,7 +101,16 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 			writeHttpErrorf(w, "Invalid manifest hash provided: %v", hash)
 			continue
 		}
-		file := path.Join(s.omspFolder, hash+".json")
+		file := filepath.Join(s.omspFolder, hash+".json")
+
+		// Check that the requested file remains in the specified omspFolder to prevent path traversal attacks
+		relPath, err := filepath.Rel(s.omspFolder, file)
+		if err != nil || strings.HasPrefix(relPath, "..") {
+			log.Debugf("Invalid manifest hash %v provided and ignored for response", hash)
+			writeHttpErrorf(w, "Invalid manifest hash: %v", hash)
+			continue
+		}
+
 		fileInfo, err := os.Stat(file)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
