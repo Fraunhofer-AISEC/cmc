@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,8 +28,9 @@ import (
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/internal/cmcflags"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
+	"github.com/urfave/cli/v3"
 )
 
 var serializers map[string]ar.Serializer
@@ -111,85 +111,163 @@ type config struct {
 	keyId             string
 }
 
-// Defines the testool specic flags. CMC flags are defined in cmc/config.go
 const (
-	// Generic flags
 	configFlag         = "config"
 	addrFlag           = "addr"
 	reportFlag         = "report"
 	resultFlag         = "result"
 	nonceFlag          = "nonce"
-	keyidFlag          = "keyid"
-	keyTypeFlag        = "keytype"
-	keyConfigFlag      = "keyconfig"
-	caStorePathFlag    = "castorepath"
+	keyidFlag          = "key-id"
+	keyTypeFlag        = "key-type"
+	keyConfigFlag      = "key-config"
+	caStorePathFlag    = "ca-store-path"
 	policiesFlag       = "policies"
 	mtlsFlag           = "mtls"
 	attestFlag         = "attest"
-	publishResultsFlag = "publishresults"
-	publishOcsfFlag    = "publishocsf"
-	publishNetworkFlag = "publishnetwork"
+	publishResultsFlag = "publish-results"
+	publishOcsfFlag    = "publish-ocsf"
+	publishNetworkFlag = "publish-network"
 	serializationFlag  = "serialization"
 	headerFlag         = "header"
 	methodFlag         = "method"
 	dataFlag           = "data"
-	logLevelFlag       = "loglevel"
-	logFileFlag        = "logfile"
-	tokenStoreFlag     = "tokenstore"
-	publishTokenFlag   = "publishtoken"
-	publishCertFlag    = "publishcert"
-	publishKeyFlag     = "publishkey"
-	tlsCnFlag          = "tlscn"
-	tlsDnsNamesFlag    = "tlsdnsnames"
-	tlsIpAddressesFlag = "tlsipaddresses"
+	logLevelFlag       = "log-level"
+	logFileFlag        = "log-file"
+	tokenStoreFlag     = "token-store"
+	publishTokenFlag   = "publish-token"
+	publishCertFlag    = "publish-cert"
+	publishKeyFlag     = "publish-key"
+	tlsCnFlag          = "tls-cn"
+	tlsDnsNamesFlag    = "tls-dns-names"
+	tlsIpAddressesFlag = "tls-ip-addresses"
 )
 
-var (
-	configFile   = flag.String(configFlag, "", "JSON Configuration file")
-	addr         = flag.String(addrFlag, "", "Address to connect to / listen on via attested tls / https")
-	reportFile   = flag.String(reportFlag, "", "Output file for the attestation report")
-	resultFile   = flag.String(resultFlag, "", "Output file for the attestation result")
-	nonceFile    = flag.String(nonceFlag, "", "Output file for the nonce")
-	keyidFile    = flag.String(keyidFlag, "", "File to store the key ID of the (hardware-backed) TLS key")
-	keyType      = flag.String(keyTypeFlag, "", "CMC key/certificate type [tpm snp sw]")
-	keyConfig    = flag.String(keyConfigFlag, "", "Key configuration [EC256, EC384, EC512, RSA2048, RSA4096]")
-	caStorePath  = flag.String(caStorePathFlag, "", "Path to store CA certs retrieved with provision command")
-	policiesFile = flag.String(policiesFlag, "", "JSON policies file for custom verification")
-	mtls         = flag.Bool(mtlsFlag, false, "Performs mutual TLS")
-	attest       = flag.String(attestFlag, "", "Peforms performs remote attestation: mutual, server only,"+
-		"client only, or none [mutual, client, server, none]")
-	publishResults = flag.String(publishResultsFlag, "", "Optional HTTP address to publish attestation results to")
-	publishOcsf    = flag.String(publishOcsfFlag, "", "Optional HTTP address to publish OCSF detection findings to")
-	publishNetwork = flag.String(publishNetworkFlag, "", "Optional HTTP address to publish lightweight network events to")
-	serialization  = flag.String(serializationFlag, "",
-		"Serialization to be used requests and attestation reports (JSON or CBOR)")
-	headers = flag.String(headerFlag, "", "Set header for HTTP POST requests")
-	method  = flag.String(methodFlag, "", "Set HTTP request method (GET, POST, PUT, HEADER)")
-	data    = flag.String(dataFlag, "",
-		"Set aTLS payload for command dial or HTTP body for POST and PUT requests for command request")
-	logLevel = flag.String(logLevelFlag, "",
-		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
-	logFile      = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
-	tokenStore   = flag.String(tokenStoreFlag, "", "Path to token store for token mode")
-	publishtoken = flag.String(publishTokenFlag, "", "Path to token for backend authorization")
-	publishcert  = flag.String(publishCertFlag, "", "Client certificate for mTLS authentication when publishing")
-	publishkey   = flag.String(publishKeyFlag, "", "Client key for mTLS authentication when publishing")
-	tlsCn        = flag.String(tlsCnFlag, "",
-		"Common Name for TLS certificate to be created via the enroll-key command")
-	tlsDnsNames = flag.String(tlsDnsNamesFlag, "",
-		"DNS SANS for TLS certificate to be created via the enroll-key command")
-	tlsIpAddresses = flag.String(tlsIpAddressesFlag, "",
-		"IP SANS for TLS certificate to be created via the enroll-key command")
-)
+var flags = append([]cli.Flag{
+	&cli.StringFlag{
+		Name:  configFlag,
+		Usage: "JSON configuration file(s), comma-separated",
+	},
+	&cli.StringFlag{
+		Name:  addrFlag,
+		Usage: "address to connect to / listen on via attested TLS / HTTPS",
+	},
+	&cli.StringFlag{
+		Name:  reportFlag,
+		Usage: "output file for the attestation report",
+	},
+	&cli.StringFlag{
+		Name:  resultFlag,
+		Usage: "output file for the attestation result",
+	},
+	&cli.StringFlag{
+		Name:  nonceFlag,
+		Usage: "output file for the nonce",
+	},
+	&cli.StringFlag{
+		Name:  keyidFlag,
+		Usage: "file to store the key ID of the (hardware-backed) TLS key",
+	},
+	&cli.StringFlag{
+		Name:  keyTypeFlag,
+		Usage: "CMC key/certificate type [tpm, snp, sw]",
+	},
+	&cli.StringFlag{
+		Name:  keyConfigFlag,
+		Usage: "key configuration [EC256, EC384, EC512, RSA2048, RSA4096]",
+	},
+	&cli.StringFlag{
+		Name:  caStorePathFlag,
+		Usage: "path to store CA certs retrieved with provision command",
+	},
+	&cli.StringFlag{
+		Name:  policiesFlag,
+		Usage: "JSON policies file for custom verification",
+	},
+	&cli.BoolFlag{
+		Name:  mtlsFlag,
+		Usage: "perform mutual TLS",
+	},
+	&cli.StringFlag{
+		Name:  attestFlag,
+		Usage: "remote attestation mode [mutual, client, server, none]",
+	},
+	&cli.StringFlag{
+		Name:  publishResultsFlag,
+		Usage: "HTTP address to publish attestation results to",
+	},
+	&cli.StringFlag{
+		Name:  publishOcsfFlag,
+		Usage: "HTTP address to publish OCSF detection findings to",
+	},
+	&cli.StringFlag{
+		Name:  publishNetworkFlag,
+		Usage: "HTTP address to publish lightweight network events to",
+	},
+	&cli.StringFlag{
+		Name:  serializationFlag,
+		Usage: "serialization for requests and attestation reports [json, cbor]",
+	},
+	&cli.StringFlag{
+		Name:  headerFlag,
+		Usage: "comma-separated headers for HTTP requests",
+	},
+	&cli.StringFlag{
+		Name:  methodFlag,
+		Usage: "HTTP request method (GET, POST, PUT, HEAD)",
+	},
+	&cli.StringFlag{
+		Name:  dataFlag,
+		Usage: "aTLS payload for dial or HTTP body for POST/PUT requests",
+	},
+	&cli.StringFlag{
+		Name:  logLevelFlag,
+		Usage: fmt.Sprintf("logging level: %v", strings.Join(logLevelKeys(), ",")),
+	},
+	&cli.StringFlag{
+		Name:  logFileFlag,
+		Usage: "file to log to instead of stdout/stderr",
+	},
+	&cli.StringFlag{
+		Name:  tokenStoreFlag,
+		Usage: "path to token store for token mode",
+	},
+	&cli.StringFlag{
+		Name:  publishTokenFlag,
+		Usage: "path to token for backend authorization",
+	},
+	&cli.StringFlag{
+		Name:  publishCertFlag,
+		Usage: "client certificate for mTLS authentication when publishing",
+	},
+	&cli.StringFlag{
+		Name:  publishKeyFlag,
+		Usage: "client key for mTLS authentication when publishing",
+	},
+	&cli.StringFlag{
+		Name:  tlsCnFlag,
+		Usage: "common name for TLS certificate created via enroll-key",
+	},
+	&cli.StringFlag{
+		Name:  tlsDnsNamesFlag,
+		Usage: "comma-separated DNS SANs for TLS certificate created via enroll-key",
+	},
+	&cli.StringFlag{
+		Name:  tlsIpAddressesFlag,
+		Usage: "comma-separated IP SANs for TLS certificate created via enroll-key",
+	},
+}, cmcflags.Flags...)
 
-func getConfig(cmd string) (*config, error) {
+func logLevelKeys() []string {
+	keys := make([]string, 0, len(logLevels))
+	for k := range logLevels {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func getConfig(cmd *cli.Command) (*config, error) {
 	var ok bool
 
-	os.Args = append([]string{os.Args[0]}, os.Args[2:]...)
-
-	flag.Parse()
-
-	// Initialize configuration with some default values
 	c := &config{
 		Config: cmc.Config{
 			Api: "socket",
@@ -198,9 +276,8 @@ func getConfig(cmd string) (*config, error) {
 		Attest:        "mutual",
 	}
 
-	// Obtain configuration from json configuration file
-	if internal.FlagPassed(configFlag) {
-		files := strings.Split(*configFile, ",")
+	if cmd.IsSet(configFlag) {
+		files := strings.Split(cmd.String(configFlag), ",")
 		for _, f := range files {
 			data, err := os.ReadFile(f)
 			if err != nil {
@@ -213,98 +290,96 @@ func getConfig(cmd string) (*config, error) {
 		}
 	}
 
-	// Overwrite cmc configuration with values passed via command line (only required for libapi)
-	err := cmc.GetConfig(&c.Config)
+	err := cmcflags.Override(cmd, &c.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cmc config: %v", err)
 	}
 
-	// Overwrite cmcctl configuration with values passed via command line
-	if internal.FlagPassed(addrFlag) {
-		c.Addr = *addr
+	if cmd.IsSet(addrFlag) {
+		c.Addr = cmd.String(addrFlag)
 	}
-	if internal.FlagPassed(reportFlag) {
-		c.ReportFile = *reportFile
+	if cmd.IsSet(reportFlag) {
+		c.ReportFile = cmd.String(reportFlag)
 	}
-	if internal.FlagPassed(resultFlag) {
-		c.ResultFile = *resultFile
+	if cmd.IsSet(resultFlag) {
+		c.ResultFile = cmd.String(resultFlag)
 	}
-	if internal.FlagPassed(nonceFlag) {
-		c.NonceFile = *nonceFile
+	if cmd.IsSet(nonceFlag) {
+		c.NonceFile = cmd.String(nonceFlag)
 	}
-	if internal.FlagPassed(keyidFlag) {
-		c.KeyIdFile = *keyidFile
+	if cmd.IsSet(keyidFlag) {
+		c.KeyIdFile = cmd.String(keyidFlag)
 	}
-	if internal.FlagPassed(keyTypeFlag) {
-		c.KeyType = *keyType
+	if cmd.IsSet(keyTypeFlag) {
+		c.KeyType = cmd.String(keyTypeFlag)
 	}
-	if internal.FlagPassed(keyConfigFlag) {
-		c.KeyConfig = *keyConfig
+	if cmd.IsSet(keyConfigFlag) {
+		c.KeyConfig = cmd.String(keyConfigFlag)
 	}
-	if internal.FlagPassed(caStorePathFlag) {
-		c.CaStorePath = *caStorePath
+	if cmd.IsSet(caStorePathFlag) {
+		c.CaStorePath = cmd.String(caStorePathFlag)
 	}
-	if internal.FlagPassed(policiesFlag) {
-		c.PoliciesFile = *policiesFile
+	if cmd.IsSet(policiesFlag) {
+		c.PoliciesFile = cmd.String(policiesFlag)
 	}
-	if internal.FlagPassed(mtlsFlag) {
-		c.Mtls = *mtls
+	if cmd.IsSet(mtlsFlag) {
+		c.Mtls = cmd.Bool(mtlsFlag)
 	}
-	if internal.FlagPassed(attestFlag) {
-		c.Attest = *attest
+	if cmd.IsSet(attestFlag) {
+		c.Attest = cmd.String(attestFlag)
 	}
-	if internal.FlagPassed(publishResultsFlag) {
-		c.PublishResults = *publishResults
+	if cmd.IsSet(publishResultsFlag) {
+		c.PublishResults = cmd.String(publishResultsFlag)
 	}
-	if internal.FlagPassed(publishOcsfFlag) {
-		c.PublishOcsf = *publishOcsf
+	if cmd.IsSet(publishOcsfFlag) {
+		c.PublishOcsf = cmd.String(publishOcsfFlag)
 	}
-	if internal.FlagPassed(publishNetworkFlag) {
-		c.PublishNetwork = *publishNetwork
+	if cmd.IsSet(publishNetworkFlag) {
+		c.PublishNetwork = cmd.String(publishNetworkFlag)
 	}
-	if internal.FlagPassed(serializationFlag) {
-		c.Serialization = *serialization
+	if cmd.IsSet(serializationFlag) {
+		c.Serialization = cmd.String(serializationFlag)
 	}
-	if internal.FlagPassed(headerFlag) {
-		c.Header = strings.Split(*headers, ",")
+	if cmd.IsSet(headerFlag) {
+		c.Header = strings.Split(cmd.String(headerFlag), ",")
 	}
-	if internal.FlagPassed(methodFlag) {
-		c.Method = *method
+	if cmd.IsSet(methodFlag) {
+		c.Method = cmd.String(methodFlag)
 	}
-	if internal.FlagPassed(dataFlag) {
-		c.Data = *data
+	if cmd.IsSet(dataFlag) {
+		c.Data = cmd.String(dataFlag)
 	}
-	if internal.FlagPassed(logLevelFlag) {
-		c.LogLevel = *logLevel
+	if cmd.IsSet(logLevelFlag) {
+		c.LogLevel = cmd.String(logLevelFlag)
 	}
-	if internal.FlagPassed(logFileFlag) {
-		c.LogFile = *logFile
+	if cmd.IsSet(logFileFlag) {
+		c.LogFile = cmd.String(logFileFlag)
 	}
-	if internal.FlagPassed(tokenStoreFlag) {
-		c.TokenStore = *tokenStore
+	if cmd.IsSet(tokenStoreFlag) {
+		c.TokenStore = cmd.String(tokenStoreFlag)
 	}
-	if internal.FlagPassed(publishTokenFlag) {
-		c.PublishTokenFile = *publishtoken
+	if cmd.IsSet(publishTokenFlag) {
+		c.PublishTokenFile = cmd.String(publishTokenFlag)
 	}
-	if internal.FlagPassed(publishCertFlag) {
-		c.PublishCert = *publishcert
+	if cmd.IsSet(publishCertFlag) {
+		c.PublishCert = cmd.String(publishCertFlag)
 	}
-	if internal.FlagPassed(publishKeyFlag) {
-		c.PublishKey = *publishkey
+	if cmd.IsSet(publishKeyFlag) {
+		c.PublishKey = cmd.String(publishKeyFlag)
 	}
-	if internal.FlagPassed(tlsCnFlag) {
-		c.TlsCn = *tlsCn
+	if cmd.IsSet(tlsCnFlag) {
+		c.TlsCn = cmd.String(tlsCnFlag)
 	}
-	if internal.FlagPassed(*tlsDnsNames) {
-		c.TlsDnsNames = strings.Split(*tlsDnsNames, ",")
+	if cmd.IsSet(tlsDnsNamesFlag) {
+		c.TlsDnsNames = strings.Split(cmd.String(tlsDnsNamesFlag), ",")
 	}
-	if internal.FlagPassed(*tlsIpAddresses) {
-		c.TlsIpAddresses = strings.Split(*tlsIpAddresses, ",")
+	if cmd.IsSet(tlsIpAddressesFlag) {
+		c.TlsIpAddresses = strings.Split(cmd.String(tlsIpAddressesFlag), ",")
 	}
 
 	// Configure the logger
 	if c.LogFile != "" {
-		lf, err := filepath.Abs(*logFile)
+		lf, err := filepath.Abs(c.LogFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get logfile path: %v", err)
 		}
@@ -325,35 +400,19 @@ func getConfig(cmd string) (*config, error) {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	// Print the parsed configuration
 	c.Print()
 
-	// Get root CA certificate in PEM format if specified
-	if cmd == "dial" || cmd == "listen" || cmd == "request" || cmd == "serve" || cmd == "proxy" {
-		if len(c.RootCas) == 0 {
-			return nil, fmt.Errorf("path to root CAs must be specified via config file or commandline")
-		}
-	}
-
+	// Parse root CAs
 	for _, ca := range c.RootCas {
-		ca, err := os.ReadFile(ca)
+		data, err := os.ReadFile(ca)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read certificate file %v: %v", ca, err)
 		}
-		cert, err := internal.ParseCert(ca)
+		cert, err := internal.ParseCert(data)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse certificate %v: %v", ca, err)
 		}
 		c.rootCas = append(c.rootCas, cert)
-	}
-
-	if cmd == "provision" {
-		if c.CaStorePath == "" {
-			return nil, fmt.Errorf("path to store CA must be specified via config file or commandline")
-		}
-		if c.ProvisionToken == "" {
-			return nil, fmt.Errorf("path to store bootstrap token must be specified via config file or commandline")
-		}
 	}
 
 	// Add optional policies if specified
@@ -388,14 +447,12 @@ func getConfig(cmd string) (*config, error) {
 	log.Debugf("Getting serializer %v", c.Serialization)
 	c.serializer, ok = serializers[strings.ToLower(c.Serialization)]
 	if !ok {
-		flag.Usage()
 		return nil, fmt.Errorf("serializer %v is not implemented", c.Serialization)
 	}
 
 	// Get API
 	c.api, ok = apis[strings.ToLower(c.Api)]
 	if !ok {
-		flag.Usage()
 		return nil, fmt.Errorf("API '%v' is not implemented", c.Api)
 	}
 
@@ -406,17 +463,19 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	// Check if there is an existing key ID file, if not, create it
-	if _, err := os.Stat(c.KeyIdFile); err == nil {
-		data, err := os.ReadFile(c.KeyIdFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read key ID file: %w", err)
-		}
-		c.keyId = string(data)
-		log.Tracef("Read TLS key id %q", c.keyId)
-	} else {
-		err := os.MkdirAll(filepath.Dir(c.KeyIdFile), 0755)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create key id file path: %w", err)
+	if c.KeyIdFile != "" {
+		if _, err := os.Stat(c.KeyIdFile); err == nil {
+			data, err := os.ReadFile(c.KeyIdFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read key ID file: %w", err)
+			}
+			c.keyId = string(data)
+			log.Tracef("Read TLS key id %q", c.keyId)
+		} else {
+			err := os.MkdirAll(filepath.Dir(c.KeyIdFile), 0755)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create key id file path: %w", err)
+			}
 		}
 	}
 

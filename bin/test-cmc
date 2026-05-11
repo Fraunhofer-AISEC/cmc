@@ -101,54 +101,54 @@ ctrlog="${data}/cmc-container-measurements"
 hostname="$(hostname --fqdn)"
 
 est_params=(
-    "-estaddr"              "0.0.0.0:9000" \
-    "-estcakey"             "${data}/pki/ca-key.pem" \
-    "-estcachain"           "${data}/pki/ca.pem" \
-    "-rootcas"              "${data}/pki/ca.pem" \
-    "-httpfolder"           "${data}" \
-    "-tpmekcertdb"          "${data}/tpm-ek-certs.db" \
-    "-tlskey"               "${data}/pki/est-tls-key.pem" \
-    "-tlscachain"           "${data}/pki/est-tls.pem" \
-    "-loglevel"             "trace" \
-    "-logfile"              "${log_dir}/estserver.log" \
-    "-authmethods"          "none" \
-    "-verifyekcert=false" \
+    "--est-addr"            "0.0.0.0:9000" \
+    "--est-ca-key"          "${data}/pki/ca-key.pem" \
+    "--est-ca-chain"        "${data}/pki/ca.pem" \
+    "--root-cas"            "${data}/pki/ca.pem" \
+    "--http-folder"         "${data}" \
+    "--tpm-ek-cert-db"      "${data}/tpm-ek-certs.db" \
+    "--tls-key"             "${data}/pki/est-tls-key.pem" \
+    "--tls-ca-chain"        "${data}/pki/est-tls.pem" \
+    "--log-level"           "trace" \
+    "--log-file"            "${log_dir}/estserver.log" \
+    "--auth-methods"        "none" \
+    "--verify-ek-cert=false" \
 )
 
 cmc_params=(
-    "-cmcaddr" "localhost:9955" \
-    "-provisionauth" "none" \
-    "-endorsementmode" "est" \
-    "-endorsementaddr" "https://localhost:9000" \
-    "-enrollmentmode" "est" \
-    "-enrollmentaddr" "https://localhost:9000" \
-    "-metadata" "file://${metadata_signed}" \
-    "-drivers" "tpm,sw" \
-    "-hashalg" "sha256" \
-    "-loglevel" "trace" \
-    "-storage" "${storage}" \
-    "-cache" "${cache}"
-    "-peercache" "${peercache}" \
-    "-measurementlogs=true" \
-    "-ctr=true" \
-    "-ctrdriver" "sw" \
-    "-ctrlog" "${ctrlog}" \
-    "-rootcas" "${data}/pki/ca.pem" \
-    "-tpmkeyalg" "EC256" \
+    "--cmc-addr" "localhost:9955" \
+    "--provision-auth" "none" \
+    "--endorsement-mode" "est" \
+    "--endorsement-addr" "https://localhost:9000" \
+    "--enrollment-mode" "est" \
+    "--enrollment-addr" "https://localhost:9000" \
+    "--metadata" "file://${metadata_signed}" \
+    "--drivers" "tpm,sw" \
+    "--hash-alg" "sha256" \
+    "--log-level" "trace" \
+    "--storage" "${storage}" \
+    "--cache" "${cache}"
+    "--peer-cache" "${peercache}" \
+    "--measurement-logs" \
+    "--ctr" \
+    "--ctr-driver" "sw" \
+    "--ctr-log" "${ctrlog}" \
+    "--root-cas" "${data}/pki/ca.pem" \
+    "--tpm-key-alg" "EC256" \
 )
 
 cmcctl_params=(
-    "-report" "attestation-report" \
-    "-result" "attestation-result.json" \
-    "-nonce" "nonce" \
-    "-rootcas" "${data}/pki/ca.pem" \
-    "-mtls=true" \
-    "-attest" "mutual" \
-    "-loglevel" "trace" \
-    "-cmcaddr" "localhost:9955" \
-    "-keyconfig" "EC256" \
-    "-keytype" "tpm" \
-    "-keyid" "${data}/key-id" \
+    "--report" "attestation-report" \
+    "--result" "attestation-result.json" \
+    "--nonce" "nonce" \
+    "--root-cas" "${data}/pki/ca.pem" \
+    "--mtls" \
+    "--attest" "mutual" \
+    "--log-level" "trace" \
+    "--cmc-addr" "localhost:9955" \
+    "--key-config" "EC256" \
+    "--key-type" "tpm" \
+    "--key-id" "${data}/key-id" \
 )
 
 attest_success=("success" "fail")
@@ -161,11 +161,11 @@ protocols=("grpc" "coap" "socket")
 
 commands_server=("generate" "listen" "serve")
 
-commands_params_server=("" "-addr 0.0.0.0:4443" "-addr 0.0.0.0:8082")
+commands_params_server=("" "--addr 0.0.0.0:4443" "--addr 0.0.0.0:8082")
 
 commands_client=("verify" "dial" "request")
 
-commands_params_client=("" "-addr ${hostname}:4443" "-addr https://${hostname}:8082/post -method POST -data \"hello ahttps\" -header \"Content-Type: text/plain\"")
+commands_params_client=("" "--addr ${hostname}:4443" "--addr https://${hostname}:8082/post --method POST --data \"hello ahttps\"")
 
 commands_server_ready_msg=("Wrote attestation response" "Serving under" "Serving HTTPS under")
 
@@ -230,8 +230,8 @@ do
                 echo "Starting cmcd"
                 sudo "${dir}/cmcd/cmcd" \
                     "${cmc_params[@]}" \
-                    -logfile "${cmc_log}" \
-                    -api "${protocols[i]}" \
+                    --log-file "${cmc_log}" \
+                    --api "${protocols[i]}" \
                     &
                 cmc_pid="$!"
                 disown
@@ -249,23 +249,26 @@ do
                     "${dir}/cmcctl/cmcctl" \
                         "${commands_server[j]}" \
                         "${cmcctl_params[@]}" \
-                        -logfile "${server_log}" \
-                        -api ${protocols[i]} \
-                        -serialization ${api_serializer} \
+                        --log-file "${server_log}" \
+                        --api ${protocols[i]} \
+                        --serialization ${api_serializer} \
                         ${commands_params_server[j]} \
                         &
                     disown
                     wait_for_message $! "${server_log}" "${commands_server_ready_msg[j]}"
                     stty sane
 
+                    # cmcctl returns error code for fail test cases
+                    set +e
                     "${dir}/cmcctl/cmcctl" \
                         "${commands_client[j]}" \
                         "${cmcctl_params[@]}" \
-                        -logfile "${client_log}" \
-                        -serialization "${api_serializer}" \
-                        -api "${protocols[i]}" \
+                        --log-file "${client_log}" \
+                        --serialization "${api_serializer}" \
+                        --api "${protocols[i]}" \
                         ${commands_params_client[j]}
                     stty sane
+                    set -e
 
                     if [[ "${success}" == "success" ]]; then
                         wait_msg_server="${commands_server_success_msg[j]}"

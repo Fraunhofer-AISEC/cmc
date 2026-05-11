@@ -16,11 +16,15 @@
 package main
 
 import (
+	"context"
+	"os"
 	"strings"
+
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -28,32 +32,39 @@ var (
 )
 
 func main() {
+	cmd := &cli.Command{
+		Name:  "cmcd",
+		Usage: "generates and verifies TPM, AMD SEV-SNP, Intel TDX, as well as SGX attestation evidence",
+		Flags: Flags,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			c, err := GetConfig(cmd)
+			if err != nil {
+				return err
+			}
 
-	c, err := GetConfig()
+			log.Infof("Running cmc %v", internal.GetVersion())
+
+			cmcInst, err := cmc.NewCmc(&c.Config)
+			if err != nil {
+				return err
+			}
+
+			server, ok := servers[strings.ToLower(c.Api)]
+			if !ok {
+				return cli.Exit("API '"+c.Api+"' is not implemented", 1)
+			}
+
+			err = notifySystemd()
+			if err != nil {
+				return err
+			}
+
+			return server.Serve(c.CmcAddr, cmcInst)
+		},
+	}
+
+	err := cmd.Run(context.Background(), os.Args)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatal(err)
 	}
-
-	log.Infof("Running cmc %v", internal.GetVersion())
-
-	cmc, err := cmc.NewCmc(&c.Config)
-	if err != nil {
-		log.Fatalf("Failed to init CMC: %v", err)
-	}
-
-	server, ok := servers[strings.ToLower(c.Api)]
-	if !ok {
-		log.Fatalf("API '%v' is not implemented", c.Api)
-	}
-
-	err = notifySystemd()
-	if err != nil {
-		log.Fatalf("Failed to notify systemd: %v", err)
-	}
-
-	err = server.Serve(c.CmcAddr, cmc)
-	if err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
-
 }

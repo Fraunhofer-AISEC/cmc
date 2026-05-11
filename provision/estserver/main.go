@@ -16,25 +16,37 @@
 package main
 
 import (
+	"context"
+	"os"
+
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 )
 
 func main() {
+	cmd := &cli.Command{
+		Name:  "estserver",
+		Usage: "EST provisioning server with attestation support",
+		Flags: flags,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			config, err := getConfig(cmd)
+			if err != nil {
+				return err
+			}
 
-	config, err := getConfig()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+			log.Info("Starting EST server..")
+
+			s, err := NewServer(config)
+			if err != nil {
+				return err
+			}
+
+			return s.Serve()
+		},
 	}
 
-	log.Info("Starting EST server..")
-
-	s, err := NewServer(config)
+	err := cmd.Run(context.Background(), os.Args)
 	if err != nil {
-		log.Fatalf("Failed to create new server: %v", err)
-	}
-
-	err = s.Serve()
-	if err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		log.Fatal(err)
 	}
 }

@@ -20,7 +20,6 @@ import (
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -49,16 +48,6 @@ func Contains(elem string, list []string) bool {
 		}
 	}
 	return false
-}
-
-func FlagPassed(name string) bool {
-	found := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
 }
 
 // Tests if the address is a network address in the form ip:port. In this
