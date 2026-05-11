@@ -16,84 +16,177 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"os"
-	"strings"
-)
 
-var (
-	cmds = map[string]func(*config) error{
-		"generate":        generateCmd,
-		"verify":          verifyCmd,
-		"enroll-key":      enrollKeyCmd,
-		"dial":            dialCmd,
-		"listen":          listenCmd,
-		"request":         requestCmd,
-		"serve":           serveCmd,
-		"token":           tokenCmd,
-		"provision":       provisionCmd,
-		"update-certs":    updateCertsCmd,
-		"update-metadata": updateMetadataCmd,
-		"proxy":           proxyCmd,
-	}
+	"github.com/urfave/cli/v3"
 )
-
-func init() {
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "USAGE:\n\tcmcctl command [options]\n\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "COMMANDS:\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  generate\tGenerate attestation report\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  verify\tVerify attestation report\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  enroll-key\tCreate and enroll a new TLS key")
-		fmt.Fprintf(flag.CommandLine.Output(), "  dial\t\tEstablish attested TLS client\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  listen\tEstablish attested TLS server\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  request\tPerform an attested HTTPS request\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  serve\t\tEstablish an attested HTTPS server\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  token\t\tRequest a bootstrap token for EST certificate requests\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  provision\tRetrieve provisioning data for CVMs\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  update-certs\tTriggers updating the CMC AK and IK certificates\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  update-metadata\tTriggers updating the CMC metadata\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "  proxy\tForward data over attested TLS using HTTP\n")
-		fmt.Fprintf(flag.CommandLine.Output(), "\nOPTIONS:\n")
-		flag.PrintDefaults()
-	}
-}
 
 func main() {
+	cmd := &cli.Command{
+		Name:  "cmcctl",
+		Usage: "CLI client for the CMC daemon",
+		Flags: flags,
+		Commands: []*cli.Command{
+			{
+				Name:  "generate",
+				Usage: "Generate attestation report",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					return c.api.generate(c)
+				},
+			},
+			{
+				Name:  "verify",
+				Usage: "Verify attestation report",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					return c.api.verify(c)
+				},
+			},
+			{
+				Name:  "enroll-key",
+				Usage: "Create and enroll a new TLS key",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					return c.api.enroll(c)
+				},
+			},
+			{
+				Name:  "dial",
+				Usage: "Establish attested TLS client",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					if len(c.RootCas) == 0 {
+						return fmt.Errorf("path to root CAs must be specified via config file or command line")
+					}
+					return dial(c)
+				},
+			},
+			{
+				Name:  "listen",
+				Usage: "Establish attested TLS server",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					if len(c.RootCas) == 0 {
+						return fmt.Errorf("path to root CAs must be specified via config file or command line")
+					}
+					return listen(c)
+				},
+			},
+			{
+				Name:  "request",
+				Usage: "Perform an attested HTTPS request",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					if len(c.RootCas) == 0 {
+						return fmt.Errorf("path to root CAs must be specified via config file or command line")
+					}
+					return request(c)
+				},
+			},
+			{
+				Name:  "serve",
+				Usage: "Establish an attested HTTPS server",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					if len(c.RootCas) == 0 {
+						return fmt.Errorf("path to root CAs must be specified via config file or command line")
+					}
+					return serve(c)
+				},
+			},
+			{
+				Name:  "token",
+				Usage: "Request a bootstrap token for EST certificate requests",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					return createToken(c)
+				},
+			},
+			{
+				Name:  "provision",
+				Usage: "Retrieve provisioning data for CVMs",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					if c.CaStorePath == "" {
+						return fmt.Errorf("path to store CA must be specified via config file or command line")
+					}
+					if c.ProvisionToken == "" {
+						return fmt.Errorf("provision token must be specified via config file or command line")
+					}
+					return retrieveProvisioningData(c)
+				},
+			},
+			{
+				Name:  "update-certs",
+				Usage: "Triggers updating the CMC AK and IK certificates",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					return c.api.updateCerts(c)
+				},
+			},
+			{
+				Name:  "update-metadata",
+				Usage: "Triggers updating the CMC metadata",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					return c.api.updateMetadata(c)
+				},
+			},
+			{
+				Name:  "proxy",
+				Usage: "Forward data over attested TLS using HTTP",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					c, err := getConfig(cmd)
+					if err != nil {
+						return err
+					}
+					if len(c.RootCas) == 0 {
+						return fmt.Errorf("path to root CAs must be specified via config file or command line")
+					}
+					return forwardProxy(c)
+				},
+			},
+		},
+	}
 
-	cmd, name, err := getCommand()
+	err := cmd.Run(context.Background(), os.Args)
 	if err != nil {
-		flag.Usage()
-		log.Fatalf("%v", err)
+		log.Fatal(err)
 	}
-
-	c, err := getConfig(os.Args[1])
-	if err != nil {
-		flag.Usage()
-		log.Fatalf("Failed to get config: %v", err)
-	}
-
-	log.Infof("Running command %v", name)
-
-	err = cmd(c)
-	if err != nil {
-		log.Errorf("Command %v failed: %v", name, err)
-	}
-}
-
-func getCommand() (func(*config) error, string, error) {
-
-	if len(os.Args) < 2 {
-		return nil, "", fmt.Errorf("expected command")
-	}
-
-	cmd := os.Args[1]
-
-	cmdFunc, ok := cmds[strings.ToLower(cmd)]
-	if !ok {
-		return nil, "", fmt.Errorf("undefined command %v", cmd)
-	}
-
-	return cmdFunc, cmd, nil
 }

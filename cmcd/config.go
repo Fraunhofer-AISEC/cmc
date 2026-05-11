@@ -17,16 +17,16 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/Fraunhofer-AISEC/cmc/cmc"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
+	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/internal/cmcflags"
 )
 
 type Config struct {
@@ -37,15 +37,8 @@ type Config struct {
 
 const (
 	configFlag   = "config"
-	logLevelFlag = "loglevel"
-	logFileFlag  = "logfile"
-)
-
-var (
-	configFile = flag.String(configFlag, "", "configuration file")
-	logLevel   = flag.String(logLevelFlag, "",
-		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
-	logFile = flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
+	logLevelFlag = "log-level"
+	logFileFlag  = "log-file"
 )
 
 var (
@@ -60,16 +53,35 @@ var (
 	}
 )
 
-func GetConfig() (*Config, error) {
+var Flags = append([]cli.Flag{
+	&cli.StringFlag{
+		Name:  configFlag,
+		Usage: "JSON configuration file(s), comma-separated",
+	},
+	&cli.StringFlag{
+		Name:  logLevelFlag,
+		Usage: fmt.Sprintf("logging level: %v", strings.Join(logLevelKeys(), ",")),
+	},
+	&cli.StringFlag{
+		Name:  logFileFlag,
+		Usage: "file to log to instead of stdout/stderr",
+	},
+}, cmcflags.Flags...)
 
-	flag.Parse()
+func logLevelKeys() []string {
+	keys := make([]string, 0, len(logLevels))
+	for k := range logLevels {
+		keys = append(keys, k)
+	}
+	return keys
+}
 
-	// Initialize cmcd configuration
+func GetConfig(cmd *cli.Command) (*Config, error) {
+
 	c := &Config{}
 
-	// Fill cmcd values from json configuration file
-	if internal.FlagPassed(configFlag) {
-		files := strings.Split(*configFile, ",")
+	if cmd.IsSet(configFlag) {
+		files := strings.Split(cmd.String(configFlag), ",")
 		for _, f := range files {
 			data, err := os.ReadFile(f)
 			if err != nil {
@@ -82,22 +94,21 @@ func GetConfig() (*Config, error) {
 		}
 	}
 
-	// Overwrite cmc configuration with values passed via command line
-	err := cmc.GetConfig(&c.Config)
+	err := cmcflags.Override(cmd, &c.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cmc config: %w", err)
 	}
 
-	if internal.FlagPassed(logLevelFlag) {
-		c.LogLevel = *logLevel
+	if cmd.IsSet(logLevelFlag) {
+		c.LogLevel = cmd.String(logLevelFlag)
 	}
-	if internal.FlagPassed(logFileFlag) {
-		c.LogFile = *logFile
+	if cmd.IsSet(logFileFlag) {
+		c.LogFile = cmd.String(logFileFlag)
 	}
 
 	// Configure the logger
 	if c.LogFile != "" {
-		lf, err := filepath.Abs(*logFile)
+		lf, err := filepath.Abs(c.LogFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get logfile path: %w", err)
 		}
@@ -118,7 +129,6 @@ func GetConfig() (*Config, error) {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
-	// Output the configuration
 	c.Print()
 
 	return c, nil

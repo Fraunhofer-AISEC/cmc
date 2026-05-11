@@ -19,13 +19,13 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/exp/maps"
 )
 
@@ -75,65 +75,129 @@ type config struct {
 
 const (
 	configFlag           = "config"
-	tokenPathFlag        = "tokenPath"
-	estAddrFlag          = "estaddr"
-	estCaKeyFlag         = "estcakey"
-	estCaChainFlag       = "estcachain"
-	tlsKeyFlag           = "tlskey"
-	tlsCaChainFlag       = "tlscachain"
-	rootCasFlag          = "rootcas"
-	allowSystemCertsFlag = "allowsystemcerts"
-	clientTlsCasFlag     = "clienttlscas"
-	httpFolderFlag       = "httpfolder"
-	verifyEkCertFlag     = "verifyekcert"
-	tpmEkCertDbFlag      = "tpmekcertdb"
-	vcekCacheFolderFlag  = "vcekcachefolder"
-	logLevelFlag         = "loglevel"
-	logFileFlag          = "logfile"
-	authMethodsFlag      = "authmethods"
-	publishResultsFlag   = "publishresults"
-	publishOcsfFlag      = "publishocsf"
-	publishNetworkFlag   = "publishnetwork"
-	publishFileFlag      = "publishfile"
-	publishTokenFlag     = "publishTokenFlag"
-	publishCertFlag      = "publishcert"
-	publishKeyFlag       = "publishkey"
+	tokenPathFlag        = "token-path"
+	estAddrFlag          = "est-addr"
+	estCaKeyFlag         = "est-ca-key"
+	estCaChainFlag       = "est-ca-chain"
+	tlsKeyFlag           = "tls-key"
+	tlsCaChainFlag       = "tls-ca-chain"
+	rootCasFlag          = "root-cas"
+	allowSystemCertsFlag = "allow-system-certs"
+	httpFolderFlag       = "http-folder"
+	verifyEkCertFlag     = "verify-ek-cert"
+	tpmEkCertDbFlag      = "tpm-ek-cert-db"
+	vcekCacheFolderFlag  = "vcek-cache-folder"
+	logLevelFlag         = "log-level"
+	logFileFlag          = "log-file"
+	authMethodsFlag      = "auth-methods"
+	publishResultsFlag   = "publish-results"
+	publishOcsfFlag      = "publish-ocsf"
+	publishNetworkFlag   = "publish-network"
+	publishFileFlag      = "publish-file"
+	publishTokenFlag     = "publish-token"
+	publishCertFlag      = "publish-cert"
+	publishKeyFlag       = "publish-key"
 )
 
-func getConfig() (*config, error) {
+var flags = []cli.Flag{
+	&cli.StringFlag{
+		Name:  configFlag,
+		Usage: "JSON configuration file",
+	},
+	&cli.StringFlag{
+		Name:  tokenPathFlag,
+		Usage: "local address to request tokens",
+	},
+	&cli.StringFlag{
+		Name:  estAddrFlag,
+		Usage: "EST server address to listen for requests",
+	},
+	&cli.StringFlag{
+		Name:  estCaKeyFlag,
+		Usage: "path to the EST CA key for signing CSRs",
+	},
+	&cli.StringFlag{
+		Name:  estCaChainFlag,
+		Usage: "comma-separated paths to EST CA certificate chain",
+	},
+	&cli.StringFlag{
+		Name:  tlsKeyFlag,
+		Usage: "TLS key for EST HTTPS server",
+	},
+	&cli.StringFlag{
+		Name:  tlsCaChainFlag,
+		Usage: "comma-separated paths to TLS certificate chain for EST HTTPS server",
+	},
+	&cli.StringFlag{
+		Name:  rootCasFlag,
+		Usage: "comma-separated paths to trusted root CAs",
+	},
+	&cli.BoolFlag{
+		Name:  allowSystemCertsFlag,
+		Usage: "allow using the system cert pool as trusted root CAs",
+	},
+	&cli.StringFlag{
+		Name:  httpFolderFlag,
+		Usage: "folder to be served via HTTP",
+	},
+	&cli.BoolFlag{
+		Name:  verifyEkCertFlag,
+		Usage: "verify TPM EK certificate chains",
+	},
+	&cli.StringFlag{
+		Name:  tpmEkCertDbFlag,
+		Usage: "database for EK cert chain verification",
+	},
+	&cli.StringFlag{
+		Name:  vcekCacheFolderFlag,
+		Usage: "folder to cache AMD SNP VCEKs",
+	},
+	&cli.StringFlag{
+		Name:  logLevelFlag,
+		Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
+	},
+	&cli.StringFlag{
+		Name:  logFileFlag,
+		Usage: "file to log to instead of stdout/stderr",
+	},
+	&cli.StringFlag{
+		Name:  authMethodsFlag,
+		Usage: "client authentication methods (none,token,certificate,attestation)",
+	},
+	&cli.StringFlag{
+		Name:  publishResultsFlag,
+		Usage: "HTTP address to publish attestation results to",
+	},
+	&cli.StringFlag{
+		Name:  publishOcsfFlag,
+		Usage: "HTTP address to publish OCSF detection findings to",
+	},
+	&cli.StringFlag{
+		Name:  publishNetworkFlag,
+		Usage: "HTTP address to publish lightweight network events to",
+	},
+	&cli.StringFlag{
+		Name:  publishFileFlag,
+		Usage: "file to publish attestation reports to",
+	},
+	&cli.StringFlag{
+		Name:  publishTokenFlag,
+		Usage: "HTTP authorization token for publishing attestation results",
+	},
+	&cli.StringFlag{
+		Name:  publishCertFlag,
+		Usage: "client certificate for mTLS authentication when publishing",
+	},
+	&cli.StringFlag{
+		Name:  publishKeyFlag,
+		Usage: "client key for mTLS authentication when publishing",
+	},
+}
+
+func getConfig(cmd *cli.Command) (*config, error) {
 	var ok bool
 	var err error
 
-	// Parse given command line flags
-	configFile := flag.String(configFlag, "", "configuration file")
-	tokenAddr := flag.String(tokenPathFlag, "", "Local address to request tokens")
-	estAddr := flag.String(estAddrFlag, "", "EST server address to listen for EST requests")
-	estCaKey := flag.String(estCaKeyFlag, "", "Path to the EST CA key for signing CSRs")
-	estCaChain := flag.String(estCaChainFlag, "", "Path to the EST CA certificate chain")
-	tlsKey := flag.String(tlsKeyFlag, "", "TLS key for EST HTTPS server")
-	tlsCaChain := flag.String(tlsCaChainFlag, "", "TLS certificate chain for EST HTTPS server")
-	rootCas := flag.String(rootCasFlag, "", "Trusted root CAs")
-	allowSystemCerts := flag.Bool(allowSystemCertsFlag, false,
-		"Allow using the system cert pool as trusted root CAs")
-	httpFolder := flag.String(httpFolderFlag, "", "Folder to be served")
-	verifyEkCert := flag.Bool(verifyEkCertFlag, false,
-		"Indicates whether to verify TPM EK certificate chains")
-	tpmEkCertDb := flag.String(tpmEkCertDbFlag, "", "Database for EK cert chain verification")
-	vcekCacheFolder := flag.String(vcekCacheFolderFlag, "", "Folder to cache AMD SNP VCEKs")
-	logLevel := flag.String(logLevelFlag, "",
-		fmt.Sprintf("Possible logging: %v", maps.Keys(logLevels)))
-	logFile := flag.String(logFileFlag, "", "Optional file to log to instead of stdout/stderr")
-	authMethods := flag.String(authMethodsFlag, "", "Client authentication methods (none,token,certificate,attestation)")
-	publishResults := flag.String(publishResultsFlag, "", "Optional HTTP address to publish attestation results to when provisioning mode is set to 'attestation'")
-	publishOcsf := flag.String(publishOcsfFlag, "", "Optional HTTP address to publish OCSF detection findings to when provisioning mode is set to 'attestation'")
-	publishNetwork := flag.String(publishNetworkFlag, "", "Optional HTTP address to publish lightweight network events to")
-	publishFile := flag.String(publishFileFlag, "", "Optional file to publish attestation reports to when provisioning mode is set to 'attestation'")
-	publishToken := flag.String(publishTokenFlag, "", "HTTP Authorization token for publishing attestation results")
-	publishCert := flag.String(publishCertFlag, "", "Client certificate for mTLS authentication when publishing")
-	publishKey := flag.String(publishKeyFlag, "", "Client key for mTLS authentication when publishing")
-	flag.Parse()
-
-	// Create default configuration
 	c := &config{
 		EstAddr:      "0.0.0.0:9000",
 		VerifyEkCert: true,
@@ -141,11 +205,10 @@ func getConfig() (*config, error) {
 		AuthMethods:  []string{"attestation"},
 	}
 
-	// Obtain custom configuration from file if specified
-	if internal.FlagPassed(configFlag) {
-		data, err := os.ReadFile(*configFile)
+	if cmd.IsSet(configFlag) {
+		data, err := os.ReadFile(cmd.String(configFlag))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read config file '%v': %w", *configFile, err)
+			return nil, fmt.Errorf("failed to read config file '%v': %w", cmd.String(configFlag), err)
 		}
 		err = json.Unmarshal(data, c)
 		if err != nil {
@@ -153,77 +216,76 @@ func getConfig() (*config, error) {
 		}
 	}
 
-	// Overwrite config file configuration with given commandline arguments
-	if internal.FlagPassed(tokenPathFlag) {
-		c.TokenPath = *tokenAddr
+	if cmd.IsSet(tokenPathFlag) {
+		c.TokenPath = cmd.String(tokenPathFlag)
 	}
-	if internal.FlagPassed(estAddrFlag) {
-		c.EstAddr = *estAddr
+	if cmd.IsSet(estAddrFlag) {
+		c.EstAddr = cmd.String(estAddrFlag)
 	}
-	if internal.FlagPassed(estCaKeyFlag) {
-		c.EstCaKey = *estCaKey
+	if cmd.IsSet(estCaKeyFlag) {
+		c.EstCaKey = cmd.String(estCaKeyFlag)
 	}
-	if internal.FlagPassed(estCaChainFlag) {
-		c.EstCaChain = strings.Split(*estCaChain, ",")
+	if cmd.IsSet(estCaChainFlag) {
+		c.EstCaChain = strings.Split(cmd.String(estCaChainFlag), ",")
 	}
-	if internal.FlagPassed(tlsKeyFlag) {
-		c.TlsKey = *tlsKey
+	if cmd.IsSet(tlsKeyFlag) {
+		c.TlsKey = cmd.String(tlsKeyFlag)
 	}
-	if internal.FlagPassed(tlsCaChainFlag) {
-		c.TlsCaChain = strings.Split(*tlsCaChain, ",")
+	if cmd.IsSet(tlsCaChainFlag) {
+		c.TlsCaChain = strings.Split(cmd.String(tlsCaChainFlag), ",")
 	}
-	if internal.FlagPassed(rootCasFlag) {
-		c.RootCas = strings.Split(*rootCas, ",")
+	if cmd.IsSet(rootCasFlag) {
+		c.RootCas = strings.Split(cmd.String(rootCasFlag), ",")
 	}
-	if internal.FlagPassed(allowSystemCertsFlag) {
-		c.AllowSystemCerts = *allowSystemCerts
+	if cmd.IsSet(allowSystemCertsFlag) {
+		c.AllowSystemCerts = cmd.Bool(allowSystemCertsFlag)
 	}
-	if internal.FlagPassed(httpFolderFlag) {
-		c.HttpFolder = *httpFolder
+	if cmd.IsSet(httpFolderFlag) {
+		c.HttpFolder = cmd.String(httpFolderFlag)
 	}
-	if internal.FlagPassed(verifyEkCertFlag) {
-		c.VerifyEkCert = *verifyEkCert
+	if cmd.IsSet(verifyEkCertFlag) {
+		c.VerifyEkCert = cmd.Bool(verifyEkCertFlag)
 	}
-	if internal.FlagPassed(tpmEkCertDbFlag) {
-		c.TpmEkCertDb = *tpmEkCertDb
+	if cmd.IsSet(tpmEkCertDbFlag) {
+		c.TpmEkCertDb = cmd.String(tpmEkCertDbFlag)
 	}
-	if internal.FlagPassed(vcekCacheFolderFlag) {
-		c.VcekCacheFolder = *vcekCacheFolder
+	if cmd.IsSet(vcekCacheFolderFlag) {
+		c.VcekCacheFolder = cmd.String(vcekCacheFolderFlag)
 	}
-	if internal.FlagPassed(logLevelFlag) {
-		c.LogLevel = *logLevel
+	if cmd.IsSet(logLevelFlag) {
+		c.LogLevel = cmd.String(logLevelFlag)
 	}
-	if internal.FlagPassed(logFileFlag) {
-		c.LogFile = *logFile
+	if cmd.IsSet(logFileFlag) {
+		c.LogFile = cmd.String(logFileFlag)
 	}
-	if internal.FlagPassed(authMethodsFlag) {
-		c.AuthMethods = strings.Split(*authMethods, ",")
+	if cmd.IsSet(authMethodsFlag) {
+		c.AuthMethods = strings.Split(cmd.String(authMethodsFlag), ",")
 	}
-	if internal.FlagPassed(publishResultsFlag) {
-		c.PublishResults = *publishResults
+	if cmd.IsSet(publishResultsFlag) {
+		c.PublishResults = cmd.String(publishResultsFlag)
 	}
-	if internal.FlagPassed(publishOcsfFlag) {
-		c.PublishOcsf = *publishOcsf
+	if cmd.IsSet(publishOcsfFlag) {
+		c.PublishOcsf = cmd.String(publishOcsfFlag)
 	}
-	if internal.FlagPassed(publishNetworkFlag) {
-		c.PublishNetwork = *publishNetwork
+	if cmd.IsSet(publishNetworkFlag) {
+		c.PublishNetwork = cmd.String(publishNetworkFlag)
 	}
-	if internal.FlagPassed(publishFileFlag) {
-		c.PublishFile = *publishFile
+	if cmd.IsSet(publishFileFlag) {
+		c.PublishFile = cmd.String(publishFileFlag)
 	}
-	if internal.FlagPassed(publishTokenFlag) {
-		c.PublishToken = *publishToken
+	if cmd.IsSet(publishTokenFlag) {
+		c.PublishToken = cmd.String(publishTokenFlag)
 	}
-	if internal.FlagPassed(publishCertFlag) {
-		c.PublishCert = *publishCert
+	if cmd.IsSet(publishCertFlag) {
+		c.PublishCert = cmd.String(publishCertFlag)
 	}
-	if internal.FlagPassed(publishKeyFlag) {
-		c.PublishKey = *publishKey
+	if cmd.IsSet(publishKeyFlag) {
+		c.PublishKey = cmd.String(publishKeyFlag)
 	}
 
 	// Configure the logger
 	if c.LogFile != "" {
-		file, err := os.OpenFile(*logFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		file, err := os.OpenFile(c.LogFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open log file: %w", err)
 		}
@@ -231,7 +293,7 @@ func getConfig() (*config, error) {
 	}
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
-		log.Warnf("LogLevel %v does not exist Default to info level", c.LogLevel)
+		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
 		l = log.InfoLevel
 	}
 	log.SetLevel(l)
@@ -271,7 +333,6 @@ func getConfig() (*config, error) {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	// Print the parsed configuration
 	printConfig(c)
 
 	return c, nil

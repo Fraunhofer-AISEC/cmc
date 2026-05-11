@@ -142,7 +142,7 @@ func listen(c *config) error {
 	}
 	defer ln.Close()
 
-	log.Infof("Serving under %v", *addr)
+	log.Infof("Serving under %v", c.Addr)
 
 	for {
 		// Accept connection and perform remote attestation

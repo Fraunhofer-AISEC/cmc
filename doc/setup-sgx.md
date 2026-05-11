@@ -47,7 +47,7 @@ cmc-docker
 Run the estserver:
 ```sh
 cd cmc/provision/estserver
-./estserver -config ../../example-setup/configs/est-server-conf.json
+./estserver --config ../../example-setup/configs/est-server-conf.json
 ```
 
 Run the cmcctl:
@@ -55,10 +55,10 @@ Run the cmcctl:
 cd cmc/cmcctl
 
 # Generate attestation report within enclave (configs folder is mounted into enclave)
-ego run ./cmcctl -config configs/cmcctl-conf-sgx.json -mode generate
+ego run ./cmcctl generate --config configs/cmcctl-conf-sgx.json
 
 # Verify attestation report within enclave (can also be performed outside)
-ego run ./cmcctl -config configs/cmcctl-conf-sgx.json -mode verify
+ego run ./cmcctl verify --config configs/cmcctl-conf-sgx.json
 ```
 
 Additional information for the enclave such as heapSize, mount points, security version (ISV SVN)
