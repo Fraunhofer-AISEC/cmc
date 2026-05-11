@@ -182,6 +182,60 @@ func main() {
 					return forwardProxy(c)
 				},
 			},
+			{
+				Name:  "kubeprov",
+				Usage: "Kubernetes node provisioning via attested TLS",
+				Commands: []*cli.Command{
+					{
+						Name:  "serve",
+						Usage: "Distribute kubeadm join tokens to attested workers",
+						Flags: []cli.Flag{
+							&cli.IntFlag{
+								Name:  kubeprovCountFlag,
+								Usage: "number of workers to serve before exiting (0 = unlimited)",
+							},
+							&cli.StringFlag{
+								Name:  kubeadmPathFlag,
+								Usage: "path to kubeadm binary",
+							},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+							c, err := getConfig(cmd)
+							if err != nil {
+								return err
+							}
+							if len(c.RootCas) == 0 {
+								return fmt.Errorf("path to root CAs must be specified via config file or command line")
+							}
+							return kubeprovServe(c)
+						},
+					},
+					{
+						Name:  "join",
+						Usage: "Join this node to a Kubernetes cluster via attested provisioning",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:  kubeprovDryRunFlag,
+								Usage: "print join info without executing kubeadm",
+							},
+							&cli.StringFlag{
+								Name:  kubeadmPathFlag,
+								Usage: "path to kubeadm binary",
+							},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+							c, err := getConfig(cmd)
+							if err != nil {
+								return err
+							}
+							if len(c.RootCas) == 0 {
+								return fmt.Errorf("path to root CAs must be specified via config file or command line")
+							}
+							return kubeprovJoin(c)
+						},
+					},
+				},
+			},
 		},
 	}
 
