@@ -1,0 +1,167 @@
+#!/bin/bash
+
+set -euo pipefail
+
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+
+metatool="${dir}/tools/metatool/metatool"
+ctrtool="${dir}/tools/ctrtool/ctrtool"
+
+print_usage() {
+  echo "Usage: $(basename "$0") <container-engine> <container> [<container arguments>]"
+  echo "       container-engine: docker, ctr, docker-compose, runc"
+  echo "       container: depends on the engine, e.g."
+  echo "              docker/ctr:     docker.io/library/ubuntu:22.04"
+  echo "              docker-compose: docker-compose.yaml"
+  echo "              runc:           /path/to/runtime-bundle"
+  echo "      container arguments: additional container cmdline parameters"
+}
+
+if [[ "$#" -lt 2 ]]; then
+  print_usage
+  exit 1
+fi
+
+# Extract the --env parameters
+env_vars=()
+found=false
+for arg in "$@"; do
+    if [[ "${arg}" == "--env" ]]; then
+        found=true
+    elif [[ "${found}" == true ]]; then
+        env_vars+=("${arg}")
+        found=false
+    fi
+done
+
+# Set all parameters
+client="$1"
+shift
+target="$1"
+shift
+args="$@"
+
+data="${dir}/data"
+cmc="${dir}"
+out="${data}/metadata-raw"
+
+target="${target%/}"
+image_description_path="${out}/image.description.json"
+
+if [[ ! -d "${data}" ]]; then
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
+  exit 1
+fi
+
+if [[ ! -f "${image_description_path}" ]]; then
+    echo "Error: image description ${image_description_path} does not exist. Run generate-image-description first"
+    exit 1
+fi
+
+echo "Precomputing reference values for container: ${target} with args ${args}"
+echo "Using ${data} as directory for local data"
+
+mkdir -p "${out}"
+
+tmpdir=$(mktemp -d)
+echo "Using temporary directory ${tmpdir} for processing"
+
+echo "Generating reference values for ${client} client"
+if  [[ "${client}" == "ctr" ]]; then
+    echo "Not implemented yet"
+    exit 1
+elif [[ "${client}" == "docker" ]]; then
+
+    echo "Pulling ${target}..."
+    buildah pull "${target}"
+    buildah push "${target}" "oci-archive:${tmpdir}/tmp-image-oci.tar:latest"
+
+    echo "Converting ${target} to OCI runtime bundle..."
+    sudo "${ctrtool}" convert --apparmor=true --in "${tmpdir}/tmp-image-oci.tar" --out "${tmpdir}/bundle"
+
+    echo "Measuring ${tmpdir}/bundle..."
+    refval=$(sudo "${ctrtool}" measure --bundle "${tmpdir}/bundle" --name "${target}")
+
+elif [[ "${client}" == "docker-compose" ]]; then
+    echo "Not implemented yet"
+    exit 1
+elif [[ "${client}" == "runc" ]]; then
+    echo "Not implemented yet"
+    exit 1
+else
+    echo "Engine ${client} not supported"
+    exit 1
+fi
+
+echo "Creating manifest for container ${target}"
+
+# Calculate the template hash for a unique container name
+config_hash=$(echo "${refval}" | jq -r '.ctrData.configSha256')
+rootfs_hash=$(echo "${refval}" | jq -r '.ctrData.rootfsSha256')
+template_hash=$(
+    printf '%s' "${config_hash}${rootfs_hash}" \
+    | xxd -r -p \
+    | sha256sum \
+    | awk '{print $1}'
+)
+container_name=$(echo "${target}-ctrtool" | sed 's:.*/::' | tr : -)
+container_name="${container_name}-${template_hash:0:8}"
+
+echo "Created container name ${container_name}"
+
+echo "Created container name ${container_name}"
+
+# Rename the component
+refval=$(echo "${refval}" | jq --arg name "${container_name}" '.name = $name')
+
+# Create container manifest
+echo "Writing ${out}/${container_name}.manifest.json"
+"${metatool}" create manifest \
+    --name "${container_name}" \
+    --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+    --developer-common-name "test developer" \
+    --not-before "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "-1 day")" \
+    --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
+    --description "App Manifest" \
+    --base-layers "de.test.os" \
+    --cert-level 1 \
+    --sbom-format "CycloneDX" \
+    --spec-version "1.7" \
+    --sbom-version 1 \
+    --components "[${refval}]" \
+    --out "${out}/${container_name}.manifest.json"
+
+# Create additional environment variable rules if specified
+oci_rules_args=()
+if [[ ${#env_vars[@]} -gt 0 ]]; then
+    echo "Adding additional environment variable rules"
+    additional_patterns=""
+    for j in "${!env_vars[@]}"; do
+        if [[ -n "${additional_patterns}" ]]; then
+            additional_patterns+=","
+        fi
+        additional_patterns+="${env_vars[$j]}"
+    done
+    oci_rules_tmp=$(mktemp --suffix=.json)
+    printf '{"process":{"env":"additional:%s"}}' "${additional_patterns}" > "${oci_rules_tmp}"
+    oci_rules_args=(--oci-rules "${oci_rules_tmp}")
+fi
+
+# Create app manifest description
+desc_tmp=$(mktemp)
+"${metatool}" create manifest-description \
+    --name "${container_name}.description" \
+    --manifest "${container_name}" \
+    --out "${desc_tmp}"
+
+# Add manifest description to image description
+echo "Writing ${image_description_path}"
+"${metatool}" create image-description \
+    --in "${image_description_path}" \
+    --add-description "${desc_tmp}" \
+    --out "${image_description_path}"
+
+rm -f "${desc_tmp}" ${oci_rules_tmp:+"${oci_rules_tmp}"}
+
+echo "Finished"
