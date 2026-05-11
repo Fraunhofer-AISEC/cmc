@@ -182,6 +182,21 @@ func WithLibApiCmcConfig(config *cmc.Config) ConnectionOption[CmcConfig] {
 	}
 }
 
+func ParseAttestMode(attest string) (AttestSelect, error) {
+	switch attest {
+	case "mutual":
+		return Attest_Mutual, nil
+	case "client":
+		return Attest_Client, nil
+	case "server":
+		return Attest_Server, nil
+	case "none":
+		return Attest_None, nil
+	default:
+		return 0, fmt.Errorf("unknown attestation mode %q", attest)
+	}
+}
+
 func (s AttestSelect) String() string {
 	switch s {
 	case Attest_Mutual:
