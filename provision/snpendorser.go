@@ -124,9 +124,9 @@ func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x
 			return nil, fmt.Errorf("failed to get VCEK certificate: %w", err)
 		}
 		// The AMD KDS server accepts requests only every 10 seconds, try again
-		log.Warnf("AMD server blocked VCEK request for ChipID %v TCB %x (HTTP 429 - Too many requests). Trying again in 11s",
+		log.Warnf("AMD server blocked VCEK request for ChipID %v TCB %x (HTTP 429 - Too many requests). Trying again in 21s",
 			hex.EncodeToString(id[:]), tcb)
-		time.Sleep(time.Duration(11) * time.Second)
+		time.Sleep(time.Duration(21) * time.Second)
 	}
 
 	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
