@@ -400,7 +400,7 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	// Get attestation mode
-	c.attest, err = GetAttestMode(c.Attest)
+	c.attest, err = atls.ParseAttestMode(c.Attest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get attestation mode: %v", err)
 	}
@@ -421,23 +421,6 @@ func getConfig(cmd string) (*config, error) {
 	}
 
 	return c, nil
-}
-
-func GetAttestMode(attest string) (atls.AttestSelect, error) {
-	var selection atls.AttestSelect
-	switch attest {
-	case "mutual":
-		selection = atls.Attest_Mutual
-	case "client":
-		selection = atls.Attest_Client
-	case "server":
-		selection = atls.Attest_Server
-	case "none":
-		selection = atls.Attest_None
-	default:
-		return 0, fmt.Errorf("unknown mode %v", attest)
-	}
-	return selection, nil
 }
 
 func (c *config) Print() {

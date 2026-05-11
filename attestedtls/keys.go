@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 )
 
 // PrivateKey Wrapper implementing crypto.Signer interface
@@ -43,6 +45,41 @@ func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerO
 
 func (priv PrivateKey) Public() crypto.PublicKey {
 	return priv.pubKey
+}
+
+// GetOrCreateCert retrieves an existing TLS certificate by key ID, or creates
+// a new one if retrieval fails. The key ID is updated in place and persisted
+// to keyIdFile if non-empty.
+func GetOrCreateCert(keyId *string, keyIdFile string, opts ...ConnectionOption[CmcConfig]) (tls.Certificate, error) {
+	if *keyId != "" {
+		cert, err := GetCert(append(opts, WithKeyId(*keyId))...)
+		if err == nil {
+			log.Tracef("Found key with key id %s", *keyId)
+			return cert, nil
+		}
+		log.Warnf("Failed to retrieve certificate for key ID %v. Creating new key", *keyId)
+	}
+
+	newId, err := CreateCert(append(opts, WithKeyId(*keyId))...)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to create TLS key and cert: %w", err)
+	}
+	*keyId = newId
+
+	if keyIdFile != "" {
+		if err := os.MkdirAll(filepath.Dir(keyIdFile), 0755); err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to create key ID file directory: %w", err)
+		}
+		if err := os.WriteFile(keyIdFile, []byte(newId), 0600); err != nil {
+			return tls.Certificate{}, fmt.Errorf("failed to write key ID: %w", err)
+		}
+	}
+
+	cert, err := GetCert(append(opts, WithKeyId(*keyId))...)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to retrieve certificate for key ID %v: %w", newId, err)
+	}
+	return cert, nil
 }
 
 func CreateCert(moreConfigs ...ConnectionOption[CmcConfig]) (string, error) {
