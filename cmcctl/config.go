@@ -99,6 +99,9 @@ type config struct {
 	TlsCn            string   `json:"tlsCn"`
 	TlsDnsNames      []string `json:"tlsDnsNames"`
 	TlsIpAddresses   []string `json:"tlsIpAddresses"`
+	KubeadmPath      string   `json:"kubeadmPath"`
+	KubeprovCount    int      `json:"kubeprovCount"`
+	KubeprovDryRun   bool     `json:"kubeprovDryRun"`
 	cmc.Config
 
 	rootCas           []*x509.Certificate
@@ -140,6 +143,9 @@ const (
 	tlsCnFlag          = "tls-cn"
 	tlsDnsNamesFlag    = "tls-dns-names"
 	tlsIpAddressesFlag = "tls-ip-addresses"
+	kubeadmPathFlag    = "kubeadm-path"
+	kubeprovCountFlag  = "count"
+	kubeprovDryRunFlag = "dry-run"
 )
 
 var flags = append([]cli.Flag{
@@ -375,6 +381,20 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	}
 	if cmd.IsSet(tlsIpAddressesFlag) {
 		c.TlsIpAddresses = strings.Split(cmd.String(tlsIpAddressesFlag), ",")
+	}
+	if cmd.IsSet(kubeadmPathFlag) {
+		c.KubeadmPath = cmd.String(kubeadmPathFlag)
+	}
+	if cmd.IsSet(kubeprovCountFlag) {
+		c.KubeprovCount = int(cmd.Int(kubeprovCountFlag))
+	}
+	if cmd.IsSet(kubeprovDryRunFlag) {
+		c.KubeprovDryRun = cmd.Bool(kubeprovDryRunFlag)
+	}
+
+	// Default kubeadm path
+	if c.KubeadmPath == "" {
+		c.KubeadmPath = "kubeadm"
 	}
 
 	// Configure the logger
