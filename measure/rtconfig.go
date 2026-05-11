@@ -122,7 +122,7 @@ func Normalize(id string, configRaw []byte) ([]byte, error) {
 	config.Process.Terminal = false
 	config.Process.ConsoleSize = nil
 
-	// Some container engines such as docker store the rootfs in an non-reproducible
+	// Some container engines such as docker store the rootfs in a non-reproducible
 	// path. Therefore we store the path and hash the rootfs at this path, but remove the
 	// path from the config.json.
 	config.Root = nil

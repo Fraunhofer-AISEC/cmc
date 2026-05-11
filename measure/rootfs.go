@@ -22,18 +22,36 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/containerd/containerd/v2/pkg/archive/tarheader"
+	"github.com/containerd/continuity/fs"
+	"golang.org/x/sys/unix"
 )
 
+// PAX header prefix used for extended file attributes (xattrs)
+const paxSchilyXattr = "SCHILY.xattr."
+
+// GetRootfsMeasurement computes a deterministic hash of the container rootfs
 func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
 	hasher := sha256.New()
 	tw := tar.NewWriter(hasher)
 
-	rootfsPath = filepath.Clean(rootfsPath) + string(os.PathSeparator)
+	rootfsPath = filepath.Clean(rootfsPath)
+	inodeSrc := map[uint64]string{}
 
 	err := filepath.Walk(rootfsPath, func(file string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("failed to walk file path: %w", err)
+		}
+
+		if file == rootfsPath {
+			return nil
+		}
+
+		if fi.Mode()&os.ModeSocket != 0 {
+			return nil
 		}
 
 		var link string
@@ -44,24 +62,51 @@ func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
 			}
 		}
 
-		header, err := tar.FileInfoHeader(fi, link)
+		header, err := tarheader.FileInfoHeaderNoLookups(fi, link)
 		if err != nil {
 			return fmt.Errorf("failed to get file info header: %w", err)
 		}
 
 		header.ModTime = time.Unix(0, 0)
+		header.AccessTime = time.Time{}
+		header.ChangeTime = time.Time{}
+		header.Format = tar.FormatPAX
 
 		relativePath, err := filepath.Rel(rootfsPath, file)
 		if err != nil {
 			return fmt.Errorf("failed to get relative path: %w", err)
 		}
-		header.Name = relativePath
+		name := filepath.ToSlash(relativePath)
+		if fi.IsDir() && !strings.HasSuffix(name, "/") {
+			name += "/"
+		}
+		header.Name = name
+
+		inode, isHardlink := fs.GetLinkInfo(fi)
+		if isHardlink {
+			if source, ok := inodeSrc[inode]; ok {
+				header.Typeflag = tar.TypeLink
+				header.Linkname = source
+				header.Size = 0
+			} else {
+				inodeSrc[inode] = name
+			}
+		}
+
+		if capability, err := getSecurityCapability(file); err != nil {
+			return fmt.Errorf("failed to get capabilities xattr: %w", err)
+		} else if len(capability) > 0 {
+			if header.PAXRecords == nil {
+				header.PAXRecords = map[string]string{}
+			}
+			header.PAXRecords[paxSchilyXattr+"security.capability"] = string(capability)
+		}
 
 		if err := tw.WriteHeader(header); err != nil {
 			return fmt.Errorf("failed to write header: %w", err)
 		}
 
-		if fi.Mode().IsRegular() {
+		if header.Typeflag == tar.TypeReg && header.Size > 0 {
 			f, err := os.Open(file)
 			if err != nil {
 				return fmt.Errorf("failed to open: %w", err)
@@ -86,4 +131,20 @@ func GetRootfsMeasurement(rootfsPath string) ([]byte, error) {
 	hash := hasher.Sum(nil)
 
 	return hash, nil
+}
+
+// getSecurityCapability reads the security.capability xattr from path
+func getSecurityCapability(path string) ([]byte, error) {
+	dest := make([]byte, 256)
+	sz, err := unix.Lgetxattr(path, "security.capability", dest)
+	if err != nil {
+		if err == unix.ENOTSUP || err == unix.ENODATA {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if sz <= 0 {
+		return nil, nil
+	}
+	return dest[:sz], nil
 }
