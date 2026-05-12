@@ -22,6 +22,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/ovmf"
 )
 
 type PageType = uint8
@@ -44,6 +46,31 @@ var snpPageTypeStrings = map[PageType]string{
 	snpPageTypeUnmeasured: "SNP_PAGE_TYPE_UNMEASURED",
 	snpPageTypeSecrets:    "SNP_PAGE_TYPE_SECRETS",
 	snpPageTypeCpuid:      "SNP_PAGE_TYPE_CPUID",
+}
+
+const (
+	sevDescTypeSnpSecMem       = uint32(1)
+	sevDescTypeSnpSecrets      = uint32(2)
+	sevDescTypeCpuid           = uint32(3)
+	sevDescTypeSnpKernelHashes = uint32(0x10)
+)
+
+var sevMetadataGuid = []byte{
+	0x66, 0x65, 0x88, 0xdc, 0x4a, 0x98, 0x98, 0x47,
+	0xa7, 0x5e, 0x55, 0x85, 0xa7, 0xbf, 0x67, 0xcc,
+}
+
+type ovmfSevMetadataDesc struct {
+	Base uint32
+	Len  uint32
+	Type uint32
+}
+
+type ovmfSevMetadataHeader struct {
+	Signature [4]byte
+	Len       uint32
+	Version   uint32
+	NumDesc   uint32
 }
 
 type snpSevHashTableEntry struct {
@@ -302,52 +329,99 @@ func performSnpSetupVmcbSaveAreaPage(eip uint64, vmmType VmmType) ([]byte, error
 	return tempPage[:], nil
 }
 
+func findSevMetadata(ovmfData []byte) ([]ovmfSevMetadataDesc, error) {
+	data, err := ovmf.FindGuidTableEntry(ovmfData, sevMetadataGuid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find SEV metadata in OVMF: %w", err)
+	}
+
+	metaOffset := binary.LittleEndian.Uint32(data)
+	metaStart := len(ovmfData) - int(metaOffset)
+	if metaStart < 0 || metaStart >= len(ovmfData) {
+		return nil, fmt.Errorf("SEV metadata offset out of range: %d", metaOffset)
+	}
+
+	var header ovmfSevMetadataHeader
+	reader := bytes.NewReader(ovmfData[metaStart:])
+	if err := binary.Read(reader, binary.LittleEndian, &header); err != nil {
+		return nil, fmt.Errorf("failed to read SEV metadata header: %w", err)
+	}
+	if !bytes.Equal(header.Signature[:], []byte("ASEV")) {
+		return nil, fmt.Errorf("invalid SEV metadata signature: %s", header.Signature)
+	}
+
+	descs := make([]ovmfSevMetadataDesc, header.NumDesc)
+	for i := uint32(0); i < header.NumDesc; i++ {
+		if err := binary.Read(reader, binary.LittleEndian, &descs[i]); err != nil {
+			return nil, fmt.Errorf("failed to read SEV metadata descriptor %d: %w", i, err)
+		}
+	}
+
+	return descs, nil
+}
+
 func performSnpPrecomputation(config *PrecomputeSnpConf) ([]byte, error) {
 	log.Debug("Precomputing SNP measurement registers...")
 
 	// read the ovmf data
 	ovmfData, err := os.ReadFile(config.OvmfFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read ofmv file: %w", err)
+		return nil, fmt.Errorf("failed to read ovmf file: %w", err)
 	}
 	if (len(ovmfData) % 4096) != 0 {
 		return nil, fmt.Errorf("OVMF data are expected to be page aligned: %x", len(ovmfData))
 	}
 	log.Debugf("OVMF data size: %d", len(ovmfData))
 
-	// add all of the pages
+	// add all OVMF pages as normal pages
 	hashDigest := SnpHash{}
 	for i := 0; i < len(ovmfData); i += 4096 {
 		hashDigest = performSnpUpdatePageInfo(hashDigest, ovmfData[i:i+4096], snpPageTypeNormal, uint64(0x100000000-len(ovmfData)+i))
 	}
-	for gpa := uint64(0x00800000); gpa < 0x00809000; gpa += 4096 {
-		hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeZero, gpa)
-	}
-	for gpa := uint64(0x0080a000); gpa < 0x0080d000; gpa += 4096 {
-		hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeZero, gpa)
-	}
-	hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeSecrets, 0x0080d000)
-	if config.vmmType == VmmTypeQemu.Value {
-		hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeCpuid, 0x0080e000)
-	}
+
+	var hashTablePage []byte
 	if len(config.Kernel) > 0 {
-		hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeZero, 0x80f000)
-		hashTablePage, err := performSnpSetupHashTablePage(config.CmdLine, config.Kernel, config.InitRfs)
+		hashTablePage, err = performSnpSetupHashTablePage(config.CmdLine, config.Kernel, config.InitRfs)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read commandline file: %w", err)
-		}
-		hashDigest = performSnpUpdatePageInfo(hashDigest, hashTablePage, snpPageTypeNormal, 0x810000)
-		for gpa := uint64(0x00811000); gpa < 0x00820000; gpa += 4096 {
-			hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeZero, gpa)
-		}
-	} else {
-		for gpa := uint64(0x0080f000); gpa < 0x00820000; gpa += 4096 {
-			hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeZero, gpa)
+			return nil, fmt.Errorf("failed to setup hash table page: %w", err)
 		}
 	}
 
-	if config.vmmType == VmmTypeEc2.Value {
-		hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeCpuid, 0x0080e000)
+	descs, err := findSevMetadata(ovmfData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find SEV metadata in OVMF: %w", err)
+	}
+	log.Debugf("SEV metadata: %d descriptor(s)", len(descs))
+
+	for i, desc := range descs {
+		var pageType PageType
+		switch desc.Type {
+		case sevDescTypeSnpSecMem:
+			pageType = snpPageTypeZero
+		case sevDescTypeSnpSecrets:
+			pageType = snpPageTypeSecrets
+		case sevDescTypeCpuid:
+			pageType = snpPageTypeCpuid
+		case sevDescTypeSnpKernelHashes:
+			if len(config.Kernel) > 0 {
+				pageType = snpPageTypeNormal
+			} else {
+				pageType = snpPageTypeZero
+			}
+		default:
+			pageType = snpPageTypeZero
+		}
+
+		log.Debugf("  desc[%d]: base=0x%08x len=0x%08x type=%d -> page_type=%d",
+			i, desc.Base, desc.Len, desc.Type, pageType)
+
+		for pg := uint32(0); pg < desc.Len; pg += 4096 {
+			var content []byte
+			if desc.Type == sevDescTypeSnpKernelHashes && len(config.Kernel) > 0 {
+				content = hashTablePage
+			}
+			hashDigest = performSnpUpdatePageInfo(hashDigest, content, pageType, uint64(desc.Base+pg))
+		}
 	}
 
 	tempPage, err := performSnpSetupVmcbSaveAreaPage(0xfffffff0, config.vmmType)

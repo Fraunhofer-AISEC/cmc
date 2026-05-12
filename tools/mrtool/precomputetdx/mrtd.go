@@ -20,10 +20,12 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/ovmf"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 )
 
@@ -52,45 +54,29 @@ const (
 	TdxMetadataAttributesExtendMemPageAdd = 0x02
 	TdxMetadataAttributesExtendMr         = 0x01
 	TdvfDescriptorOffset                  = 0x20
-	OvmfTableFooterGuidOffset             = 0x30
 	MrtdExtensionBufferSize               = 0x80
 	MemPageAddGpaOffset                   = 0x10
 	TdhMrExtendGranularity                = 0x100
 )
 
-func getOvmfMetadataOffset(ovmf []byte) (uint64, error) {
-	// 16 bytes for GUID
-	if OvmfTableFooterGuidOffset > len(ovmf) || OvmfTableFooterGuidOffset < 16 {
-		return 0, fmt.Errorf("invalid ovmf offset")
-	}
-
-	tableFooterOffset := len(ovmf) - OvmfTableFooterGuidOffset
-	footerGuid := ovmf[tableFooterOffset : tableFooterOffset+16]
-
-	// OVMF_TABLE_FOOTER_GUID
-	if !bytes.Equal(footerGuid, []byte{0xde, 0x82, 0xb5, 0x96, 0xb2, 0x1f, 0xf7, 0x45, 0xba, 0xea, 0xa3, 0x66, 0xc5, 0x5a, 0x08, 0x2d}) {
-		return uint64(binary.LittleEndian.Uint32(ovmf[len(ovmf)-TdvfDescriptorOffset-16:])), nil
-	}
-
-	// Footer GUID matches
-	ovmfTableOffset := tableFooterOffset - binary.Size(uint16(0)) - 16
-	ovmfTableLength := int(binary.LittleEndian.Uint16(ovmf[ovmfTableOffset:])) - binary.Size(uint16(0))
-
-	for count := 0; count < ovmfTableLength; {
-		tableGuid := ovmf[ovmfTableOffset : ovmfTableOffset+16]
-		length := int(binary.LittleEndian.Uint16(ovmf[ovmfTableOffset-binary.Size(uint16(0)):]))
-
-		// OVMF_TABLE_TDX_METADATA_GUID
-		if !bytes.Equal(tableGuid, []byte{0x35, 0x65, 0x7a, 0xe4, 0x4a, 0x98, 0x98, 0x47, 0x86, 0x5e, 0x46, 0x85, 0xa7, 0xbf, 0x8e, 0xc2}) {
-			ovmfTableOffset -= length
-			count += length
-			continue
-		}
-
-		return uint64(len(ovmf) - int(binary.LittleEndian.Uint32(ovmf[ovmfTableOffset-binary.Size(uint16(0))-binary.Size(uint32(0)):])) - 16), nil
-	}
-	return 0, nil
+var tdxMetadataGuid = []byte{
+	0x35, 0x65, 0x7a, 0xe4, 0x4a, 0x98, 0x98, 0x47,
+	0x86, 0x5e, 0x46, 0x85, 0xa7, 0xbf, 0x8e, 0xc2,
 }
+
+func getOvmfMetadataOffset(ovmfData []byte) (uint64, error) {
+	data, err := ovmf.FindGuidTableEntry(ovmfData, tdxMetadataGuid)
+	if errors.Is(err, ovmf.ErrFooterGuidNotFound) {
+		// TODO check if this is still needed
+		return uint64(binary.LittleEndian.Uint32(ovmfData[len(ovmfData)-TdvfDescriptorOffset-16:])), nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	offset := binary.LittleEndian.Uint32(data)
+	return uint64(len(ovmfData)) - uint64(offset) - 16, nil
+}
+
 func isValidDescriptor(descriptor *TdxMetadataDescriptor) error {
 	if descriptor.Signature != TdxMetadataSignature {
 		return fmt.Errorf("invalid signature: %x (expected %x)", descriptor.Signature, TdxMetadataSignature)
