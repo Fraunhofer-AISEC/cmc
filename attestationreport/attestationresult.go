@@ -756,7 +756,7 @@ func (e ErrorCode) String() string {
 	case ManifestRevocationUnknown:
 		return fmt.Sprintf("%v (No revocation information for manifest available)", int(e))
 	case ManifestOutdated:
-		return fmt.Sprintf("%v (Manifest outdated, i.e., new SW version available but no (severe) security issues known with used version)", int(e))
+		return fmt.Sprintf("%v (Manifest outdated)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}

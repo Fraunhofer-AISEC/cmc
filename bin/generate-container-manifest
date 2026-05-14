@@ -56,7 +56,10 @@ fi
 # Set all parameters
 client="${remaining[0]}"
 target="${remaining[1]}"
-args=("${remaining[@]:2}")
+args=()
+if declare -p remaining &>/dev/null; then
+  args=("${remaining[@]:2}")
+fi
 
 data="${dir}/data"
 cmc="${dir}"
@@ -77,7 +80,7 @@ if [[ ! -f "${image_description_path}" ]]; then
     exit 1
 fi
 
-echo "Creating reference values for container: ${target} with args ${args}"
+echo "Creating reference values for container: ${target} with args ${args[*]}"
 echo "Using ${data} as directory for local data"
 
 mkdir -p "${out}"
@@ -114,7 +117,7 @@ elif  [[ "${client}" == "shim" ]]; then
     set -e
 elif [[ "${client}" == "docker" ]]; then
     containers=("${target}")
-    sudo docker run ${args} "${target}"
+    sudo docker run "${args[@]}" "${target}"
 elif [[ "${client}" == "docker-compose" ]]; then
     containers=($(yq '.services | keys | .[]' "${target}"))
     set +e
