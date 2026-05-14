@@ -90,9 +90,9 @@ func getOmspRequests(metadata map[string][]byte) (map[string]provision.OmspReque
 				log.Debugf("Manifest %v with hash %v does not contain a server URL for OmspRequests. Manifest is ignored during revocation check...", in.Name, hash)
 			} else {
 				log.Debugf("Adding hash %v for manifest %v to OmspRequest for server %v", in.Name, hash, in.OmspServer)
-				var omspReq provision.OmspRequest
+				omspReq := omspReqs[in.OmspServer]
 				omspReq.ArVersion = ar.GetReportVersion()
-				omspReq.ManifestHashes = append(omspReqs[in.OmspServer].ManifestHashes, hash)
+				omspReq.ManifestHashes = append(omspReq.ManifestHashes, hash)
 				omspReqs[in.OmspServer] = omspReq
 			}
 		}
