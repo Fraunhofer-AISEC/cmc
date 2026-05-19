@@ -887,7 +887,7 @@ func (r *AttestationResult) PrintErr() {
 				case "TDX Result":
 					header = fmt.Sprintf("%v %v", internal.IndexToMr(a.Index), a.Type)
 				case "SNP Result":
-					header = fmt.Sprintf("SNP %v", a.Type)
+					header = fmt.Sprintf("%v", a.Type)
 				default:
 					header = fmt.Sprintf("%v Measurement", m.Type)
 				}
