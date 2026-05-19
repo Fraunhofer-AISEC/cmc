@@ -371,14 +371,21 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	c.omspKey, err = internal.LoadPrivateKey(c.OmspKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load private OMSP key: %w", err)
-	}
-
-	c.omspCaChain, err = internal.ReadCerts(c.OmspCaChain)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load OMSP certificate chain: %w", err)
+	// OMSP is optional. If any OMSP field is set, require all of them.
+	if c.OmspUrl != "" || c.OmspKey != "" || c.OmspFolder != "" || len(c.OmspCaChain) > 0 {
+		if c.OmspUrl == "" || c.OmspKey == "" || c.OmspFolder == "" || len(c.OmspCaChain) == 0 {
+			return nil, fmt.Errorf("incomplete OMSP configuration: omspUrl, omspKey, omspFolder, and omspCaChain must all be set to enable OMSP")
+		}
+		c.omspKey, err = internal.LoadPrivateKey(c.OmspKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load private OMSP key: %w", err)
+		}
+		c.omspCaChain, err = internal.ReadCerts(c.OmspCaChain)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load OMSP certificate chain: %w", err)
+		}
+	} else {
+		log.Info("OMSP not configured, OMSP requests will not be served")
 	}
 
 	// Print the parsed configuration

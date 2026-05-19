@@ -160,12 +160,14 @@ func NewServer(c *config) (*Server, error) {
 	// Metadata file serving
 	httpHandleMetadata(c.HttpFolder)
 
-	//OMSP Server for fetching manifest revocation information
-	u, err := url.Parse(c.OmspUrl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse omsp Endpoint from provided OmspURL: %w", err)
+	// OMSP Server for fetching manifest revocation information (optional)
+	if c.OmspUrl != "" {
+		u, err := url.Parse(c.OmspUrl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse omsp Endpoint from provided OmspURL: %w", err)
+		}
+		http.HandleFunc(u.Path, server.handleRevocationRequest)
 	}
-	http.HandleFunc(u.Path, server.handleRevocationRequest)
 
 	// Log and return 404 for unmatched routes
 	http.HandleFunc("/", server.handleNotFound)
