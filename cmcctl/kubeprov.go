@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -76,6 +77,7 @@ func kubeprovServe(c *config) error {
 
 	log.Infof("Serving on %v", c.Addr)
 
+	var wg sync.WaitGroup
 	served := 0
 	for {
 		conn, err := ln.Accept()
@@ -84,11 +86,17 @@ func kubeprovServe(c *config) error {
 			continue
 		}
 
-		go kubeprovHandleConn(conn, c.KubeadmPath)
+		wg.Add(1)
+		go func(conn net.Conn) {
+			defer wg.Done()
+			kubeprovHandleConn(conn, c.KubeadmPath)
+		}(conn)
 
 		served++
 		if c.KubeprovCount > 0 && served >= c.KubeprovCount {
-			log.Infof("Served %d worker(s), exiting", served)
+			log.Infof("Served %d worker(s), waiting for handlers to finish", served)
+			wg.Wait()
+			log.Infof("All handlers finished, exiting")
 			return nil
 		}
 	}
