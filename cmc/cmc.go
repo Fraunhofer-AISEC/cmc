@@ -236,12 +236,12 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 		}
 		return estclient, nil
 	case "direct":
-		return provision.NewDirectProvider(c.SnpCache), nil
+		return provision.NewDirectProvider(c.VendorCache), nil
 	case "pccs":
 		if c.EndorsementAddr == "" {
 			return nil, fmt.Errorf("pccs endorsement mode requires endorsementAddr")
 		}
-		return provision.NewTdxEndorser(c.EndorsementAddr), nil
+		return provision.NewTdxEndorser(c.EndorsementAddr, c.VendorCache), nil
 	default:
 		return nil, fmt.Errorf("unknown endorser type %q", c.EndorsementMode)
 	}

@@ -23,14 +23,18 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/google/go-tdx-guest/pcs"
 )
 
+const tdxCacheTtl = 24 * time.Hour
+
 type TdxEndorser struct {
 	baseUrl string
+	cache   *tdxCache
 }
 
 // Implement the EndorserProvider interface
@@ -47,10 +51,12 @@ func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, bool) {
 }
 
 // NewTdxEndorser initializes a new TDX endorser. baseUrl is the address of the
-// collateral server (Intel PCS or custom PCCS)
-func NewTdxEndorser(baseUrl string) *TdxEndorser {
+// collateral server (Intel PCS or custom PCCS). If a cacheFolder is specified,
+// collateral is also cached to disk
+func NewTdxEndorser(baseUrl, cacheFolder string) *TdxEndorser {
 	return &TdxEndorser{
 		baseUrl: strings.TrimRight(baseUrl, "/"),
+		cache:   newTdxCache(cacheFolder, tdxCacheTtl),
 	}
 }
 
@@ -87,7 +93,7 @@ func (endorser *TdxEndorser) FetchCollateral(
 	}
 
 	log.Debug("Fetching root CA CRL")
-	rootCrl, err := fetchRootCrl(rootQe.CRLDistributionPoints)
+	rootCrl, err := endorser.fetchRootCrl(rootQe.CRLDistributionPoints)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Root CA CRL: %w", err)
 	}
@@ -106,8 +112,55 @@ func (endorser *TdxEndorser) FetchCollateral(
 	}, nil
 }
 
+// cachedFetch wraps a server fetch with TTL-based caching
+func (endorser *TdxEndorser) cachedFetch(
+	key string,
+	fetch func() (body []byte, issuerChain string, err error),
+) ([]byte, string, error) {
+
+	cached, fresh := endorser.cache.get(key)
+	if fresh {
+		log.Tracef("Using cached %v (age %v)", key, time.Since(cached.FetchedAt).Round(time.Second))
+		return cached.Body, cached.IssuerChain, nil
+	}
+
+	body, issuerChain, err := fetch()
+	if err != nil {
+		if cached != nil {
+			log.Warnf("Refresh of %v failed, using stale cache (age %v): %v",
+				key, time.Since(cached.FetchedAt).Round(time.Second), err)
+			return cached.Body, cached.IssuerChain, nil
+		}
+		return nil, "", err
+	}
+
+	endorser.cache.put(key, &cachedCollateral{
+		FetchedAt:   time.Now(),
+		Body:        body,
+		IssuerChain: issuerChain,
+	})
+	return body, issuerChain, nil
+}
+
 func (endorser *TdxEndorser) fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType,
 ) ([]byte, *x509.Certificate, *x509.Certificate, error) {
+
+	key := fmt.Sprintf("tcb_%v_%v", quoteType, fmspc)
+	body, issuerChain, err := endorser.cachedFetch(key, func() ([]byte, string, error) {
+		return endorser.fetchTcbInfoFromServer(fmspc, quoteType)
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	inter, root, err := parseIssuerChain(issuerChain)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse TCB info issuer chain: %w", err)
+	}
+	return body, inter, root, nil
+}
+
+func (endorser *TdxEndorser) fetchTcbInfoFromServer(fmspc string, quoteType ar.IntelQuoteType,
+) ([]byte, string, error) {
 
 	var tcbInfoUrl string
 	switch quoteType {
@@ -116,31 +169,48 @@ func (endorser *TdxEndorser) fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteT
 	case ar.SGX_QUOTE_TYPE:
 		tcbInfoUrl = fmt.Sprintf("%s/sgx/certification/v4/tcb?fmspc=%v", endorser.baseUrl, fmspc)
 	default:
-		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
+		return nil, "", fmt.Errorf("unknown quote type %v", quoteType)
 	}
 	log.Debugf("Fetching TCB Info for FMSPC %q from: %v", fmspc, tcbInfoUrl)
 
 	resp, err := http.Get(tcbInfoUrl)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get HTTPS TCB Info response: %w", err)
+		return nil, "", fmt.Errorf("failed to get HTTPS TCB Info response: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read HTTPS TCB Info body: %w", err)
+		return nil, "", fmt.Errorf("failed to read HTTPS TCB Info body: %w", err)
 	}
 
-	inter, root, err := extractChainFromHeader(resp.Header, pcs.TcbInfoIssuerChainPhrase)
+	rawChain, err := extractChainFromHeader(resp.Header, pcs.TcbInfoIssuerChainPhrase)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to extract TCB info issuer cert chain from HTTPS header: %w", err)
+		return nil, "", fmt.Errorf("failed to extract TCB info issuer cert chain from HTTPS header: %w", err)
 	}
 
-	return body, inter, root, nil
+	return body, rawChain, nil
 }
 
 func (endorser *TdxEndorser) fetchQeIdentity(quoteType ar.IntelQuoteType,
 ) ([]byte, *x509.Certificate, *x509.Certificate, error) {
+
+	key := fmt.Sprintf("qe_%v", quoteType)
+	body, issuerChain, err := endorser.cachedFetch(key, func() ([]byte, string, error) {
+		return endorser.fetchQeIdentityFromServer(quoteType)
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	inter, root, err := parseIssuerChain(issuerChain)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse QE identity issuer chain: %w", err)
+	}
+	return body, inter, root, nil
+}
+
+func (endorser *TdxEndorser) fetchQeIdentityFromServer(quoteType ar.IntelQuoteType,
+) ([]byte, string, error) {
 
 	var qeIdentityUrl string
 	switch quoteType {
@@ -149,63 +219,111 @@ func (endorser *TdxEndorser) fetchQeIdentity(quoteType ar.IntelQuoteType,
 	case ar.SGX_QUOTE_TYPE:
 		qeIdentityUrl = fmt.Sprintf("%s/sgx/certification/v4/qe/identity", endorser.baseUrl)
 	default:
-		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
+		return nil, "", fmt.Errorf("unknown quote type %v", quoteType)
 	}
 	log.Debugf("Fetching QE Identity: %v", qeIdentityUrl)
 
 	resp, err := http.Get(qeIdentityUrl)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get HTTPS QE identity response: %w", err)
+		return nil, "", fmt.Errorf("failed to get HTTPS QE identity response: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read HTTPS TCB Info body: %w", err)
+		return nil, "", fmt.Errorf("failed to read HTTPS QE identity body: %w", err)
 	}
 
-	inter, root, err := extractChainFromHeader(resp.Header, pcs.SgxQeIdentityIssuerChainPhrase)
+	rawChain, err := extractChainFromHeader(resp.Header, pcs.SgxQeIdentityIssuerChainPhrase)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to extract TCB info issuer cert chain from HTTPS header: %w", err)
+		return nil, "", fmt.Errorf("failed to extract QE identity issuer cert chain from HTTPS header: %w", err)
 	}
 
-	return body, inter, root, nil
+	return body, rawChain, nil
 }
 
 func (endorser *TdxEndorser) fetchPckCrl(ca string,
 ) (*x509.RevocationList, *x509.Certificate, *x509.Certificate, error) {
+
+	key := fmt.Sprintf("pckcrl_%v", ca)
+	body, issuerChain, err := endorser.cachedFetch(key, func() ([]byte, string, error) {
+		return endorser.fetchPckCrlFromServer(ca)
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	pckCrl, err := x509.ParseRevocationList(body)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse PCK CRL: %w", err)
+	}
+	inter, root, err := parseIssuerChain(issuerChain)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse PCK CRL issuer chain: %w", err)
+	}
+	return pckCrl, inter, root, nil
+}
+
+func (endorser *TdxEndorser) fetchPckCrlFromServer(ca string) ([]byte, string, error) {
 
 	pckCrlUrl := fmt.Sprintf("%s/sgx/certification/v4/pckcrl?ca=%s&encoding=der", endorser.baseUrl, ca)
 	log.Debugf("Fetching PCK CRL: %v", pckCrlUrl)
 
 	resp, err := http.Get(pckCrlUrl)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to fetch PCK CRL: %w", err)
+		return nil, "", fmt.Errorf("failed to fetch PCK CRL: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read HTTPS PCK CRL body: %w", err)
+		return nil, "", fmt.Errorf("failed to read HTTPS PCK CRL body: %w", err)
 	}
 
-	inter, root, err := extractChainFromHeader(resp.Header, pcs.SgxPckCrlIssuerChainPhrase)
+	rawChain, err := extractChainFromHeader(resp.Header, pcs.SgxPckCrlIssuerChainPhrase)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to extract PCK CRL issuer cert chain from header: %w", err)
+		return nil, "", fmt.Errorf("failed to extract PCK CRL issuer cert chain from header: %w", err)
 	}
 
-	pckCrl, err := x509.ParseRevocationList(body)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to parse PCK CRL from %v: %w", pckCrlUrl, err)
-	}
-
-	return pckCrl, inter, root, nil
+	return body, rawChain, nil
 }
 
-func fetchRootCrl(urls []string) (*x509.RevocationList, error) {
+func (endorser *TdxEndorser) fetchRootCrl(urls []string) (*x509.RevocationList, error) {
+
+	const key = "rootcrl"
+
+	cached, fresh := endorser.cache.get(key)
+	if fresh {
+		log.Tracef("Using cached %v (age %v)", key, time.Since(cached.FetchedAt).Round(time.Second))
+		return x509.ParseRevocationList(cached.Body)
+	}
+
+	body, srcUrl, err := fetchRootCrlFromServer(urls)
+	if err != nil {
+		if cached != nil {
+			log.Warnf("Refresh of %v failed, using stale cache (age %v): %v",
+				key, time.Since(cached.FetchedAt).Round(time.Second), err)
+			return x509.ParseRevocationList(cached.Body)
+		}
+		return nil, err
+	}
+
+	rootCrl, err := x509.ParseRevocationList(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse root CA CRL from %v: %w", srcUrl, err)
+	}
+
+	endorser.cache.put(key, &cachedCollateral{
+		FetchedAt:  time.Now(),
+		Body:       body,
+		SourceUrls: []string{srcUrl},
+	})
+	return rootCrl, nil
+}
+
+func fetchRootCrlFromServer(urls []string) ([]byte, string, error) {
 
 	if len(urls) == 0 {
-		return nil, fmt.Errorf("root CA CRLs are empty")
+		return nil, "", fmt.Errorf("root CA CRLs are empty")
 	}
 
 	log.Debugf("Fetching Root CA CRLs from: %v", urls)
@@ -221,50 +339,52 @@ func fetchRootCrl(urls []string) (*x509.RevocationList, error) {
 			log.Warnf("failed to read HTTPS root CA CRL body from %v: %v", url, err)
 			continue
 		}
-		rootCrl, err := x509.ParseRevocationList(body)
-		if err != nil {
+		if _, err := x509.ParseRevocationList(body); err != nil {
 			log.Warnf("failed to parse root CA CRL from %v: %v", url, err)
 			continue
 		}
-		return rootCrl, nil
+		return body, url, nil
 	}
 
-	return nil, fmt.Errorf("failed to fetch root CA CRL from locations: %v", urls)
+	return nil, "", fmt.Errorf("failed to fetch root CA CRL from locations: %v", urls)
 }
 
-func extractChainFromHeader(header map[string][]string, phrase string,
-) (*x509.Certificate, *x509.Certificate, error) {
+func extractChainFromHeader(header map[string][]string, phrase string) (string, error) {
 
 	h, ok := header[phrase]
 	if !ok {
-		return nil, nil, fmt.Errorf("header %v does not exist", phrase)
+		return "", fmt.Errorf("header %v does not exist", phrase)
 	}
 	if len(h) != 1 {
-		return nil, nil, fmt.Errorf("unexpeted issuer chain length %v", len(h))
+		return "", fmt.Errorf("unexpeted issuer chain length %v", len(h))
 	}
+	return h[0], nil
+}
 
-	chain, err := url.QueryUnescape(h[0])
+func parseIssuerChain(raw string) (*x509.Certificate, *x509.Certificate, error) {
+
+	chain, err := url.QueryUnescape(raw)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to decode issuer chain in %v: %w", phrase, err)
+		return nil, nil, fmt.Errorf("failed to decode issuer chain: %w", err)
 	}
 
 	block, rem := pem.Decode([]byte(chain))
 	if block == nil {
-		return nil, nil, fmt.Errorf("failed to decode PEM-formatted certificate from %v", phrase)
+		return nil, nil, fmt.Errorf("failed to decode intermediate certificate PEM block")
 	}
 	intermediate, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse intermediate certificate from %v: %w", phrase, err)
+		return nil, nil, fmt.Errorf("failed to parse intermediate certificate: %w", err)
 	}
 	log.Tracef("Parsed certificate CN=%v", intermediate.Subject.CommonName)
 
 	block, rem = pem.Decode(rem)
 	if block == nil {
-		return nil, nil, fmt.Errorf("failed to decode PEM-formatted certificate from %v", phrase)
+		return nil, nil, fmt.Errorf("failed to decode root certificate PEM block")
 	}
 	root, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse intermediate certificate from %v: %w", phrase, err)
+		return nil, nil, fmt.Errorf("failed to parse root certificate: %w", err)
 	}
 	log.Tracef("Parsed certificate CN=%v", root.Subject.CommonName)
 
@@ -272,7 +392,6 @@ func extractChainFromHeader(header map[string][]string, phrase string,
 		return nil, nil, fmt.Errorf("issuer chain of unexpected length")
 	}
 
-	// return intermediate and root certificate
 	return intermediate, root, nil
 }
 

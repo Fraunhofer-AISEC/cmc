@@ -246,7 +246,7 @@ func getCollateral(in string) (*ar.IntelCollateral, error) {
 	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	// Fetch collateral
-	collateral, err := provision.NewTdxEndorser(provision.PcsUrl).FetchCollateral(exts.FMSPC, quoteCerts.PCKCert,
+	collateral, err := provision.NewTdxEndorser(provision.PcsUrl, "").FetchCollateral(exts.FMSPC, quoteCerts.PCKCert,
 		ar.SGX_QUOTE_TYPE)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SGX collateral: %w", err)
