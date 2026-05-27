@@ -75,10 +75,13 @@ Tcg2DxeImageRead (
   )
 {
   UINTN               EndPosition;
+  UINTN               OriginalSize;
 
   if (FileHandle == NULL || ReadSize == NULL || Buffer == NULL) {
     return EFI_INVALID_PARAMETER;
   }
+
+  OriginalSize = *ReadSize;
 
   if (MAX_ADDRESS - FileOffset < *ReadSize) {
     return EFI_INVALID_PARAMETER;
@@ -91,6 +94,10 @@ Tcg2DxeImageRead (
 
   if (FileOffset >= mTcg2DxeImageSize) {
     *ReadSize = 0;
+  }
+
+  if (*ReadSize > OriginalSize) {
+    *ReadSize = OriginalSize;
   }
 
   memcpy (Buffer, (UINT8 *)((UINTN) FileHandle + FileOffset), *ReadSize);
@@ -928,7 +935,7 @@ LoadPeImage (
   }
   uint64_t file_size = st.st_size;
 
-  *buf = (uint8_t *)malloc(sizeof(uint8_t) * file_size);
+  *buf = (uint8_t *)malloc(file_size);
   if (!*buf) {
     printf("Failed to allocate memory\n");
     return -1;
