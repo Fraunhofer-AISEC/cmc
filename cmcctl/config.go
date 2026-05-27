@@ -446,9 +446,11 @@ func getConfig(cmd *cli.Command) (*config, error) {
 
 	if c.PublishTokenFile != "" {
 		log.Debugf("Retrieving publish token %v", c.PublishTokenFile)
-		c.publishToken, err = os.ReadFile(c.PublishTokenFile)
+		token, err := os.ReadFile(c.PublishTokenFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read publish token: %w", err)
+			log.Warnf("failed to read publish token: %v", err)
+		} else {
+			c.publishToken = token
 		}
 	}
 
