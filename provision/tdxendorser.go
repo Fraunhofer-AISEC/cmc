@@ -28,6 +28,10 @@ import (
 	"github.com/google/go-tdx-guest/pcs"
 )
 
+const (
+	PcsUrl = "https://api.trustedservices.intel.com"
+)
+
 type TdxEndorser struct {
 }
 
@@ -44,7 +48,7 @@ func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, bool) {
 	return nil, false
 }
 
-// NewEndorser initializes a new SNP endorser
+// NewEndorser initializes a new TDX endorser
 func NewTdxEndorser() *TdxEndorser {
 	return &TdxEndorser{}
 }
@@ -63,25 +67,25 @@ func (endorser *TdxEndorser) FetchCollateral(
 		return nil, fmt.Errorf("failed to get CA type from PCK cert")
 	}
 
-	log.Debug("Fetching TCB Info from Intel PCS")
+	log.Debug("Fetching TCB Info")
 	tcbInfo, interTcbInfo, rootTcbInfo, err := fetchTcbInfo(fmspc, quoteType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch TCB info: %w", err)
 	}
 
-	log.Debug("Fetching QE Identity from Intel PCS")
+	log.Debug("Fetching QE Identity")
 	qeIdentity, interQe, rootQe, err := fetchQeIdentity(quoteType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch QE identity: %w", err)
 	}
 
-	log.Debugf("Fetching PCK %v CRL from Intel PCS", caType)
+	log.Debugf("Fetching PCK %v CRL", caType)
 	pckCrl, interPckCrl, rootPckCrl, err := fetchPckCrl(caType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch PCK CRL: %w", err)
 	}
 
-	log.Debug("Fetching root CA CRL from Intel PCS")
+	log.Debug("Fetching root CA CRL")
 	rootCrl, err := fetchRootCrl(rootQe.CRLDistributionPoints)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Root CA CRL: %w", err)
@@ -104,11 +108,12 @@ func (endorser *TdxEndorser) FetchCollateral(
 func fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
 
 	var tcbInfoUrl string
-	if quoteType == ar.TDX_QUOTE_TYPE {
-		tcbInfoUrl = pcs.TcbInfoURL(fmspc)
-	} else if quoteType == ar.SGX_QUOTE_TYPE {
-		tcbInfoUrl = fmt.Sprintf("https://api.trustedservices.intel.com/sgx/certification/v4/tcb?fmspc=%v", fmspc)
-	} else {
+	switch quoteType {
+	case ar.TDX_QUOTE_TYPE:
+		tcbInfoUrl = fmt.Sprintf("%s/tdx/certification/v4/tcb?fmspc=%s", PcsUrl, fmspc)
+	case ar.SGX_QUOTE_TYPE:
+		tcbInfoUrl = fmt.Sprintf("%s/sgx/certification/v4/tcb?fmspc=%v", PcsUrl, fmspc)
+	default:
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
 	}
 	log.Debugf("Fetching TCB Info for FMSPC %q from: %v", fmspc, tcbInfoUrl)
@@ -137,9 +142,9 @@ func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x
 	var qeIdentityUrl string
 	switch quoteType {
 	case ar.TDX_QUOTE_TYPE:
-		qeIdentityUrl = pcs.QeIdentityURL()
+		qeIdentityUrl = fmt.Sprintf("%s/tdx/certification/v4/qe/identity", PcsUrl)
 	case ar.SGX_QUOTE_TYPE:
-		qeIdentityUrl = "https://api.trustedservices.intel.com/sgx/certification/v4/qe/identity"
+		qeIdentityUrl = fmt.Sprintf("%s/sgx/certification/v4/qe/identity", PcsUrl)
 	default:
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
 	}
@@ -166,7 +171,7 @@ func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x
 
 func fetchPckCrl(ca string) (*x509.RevocationList, *x509.Certificate, *x509.Certificate, error) {
 
-	pckCrlUrl := pcs.PckCrlURL(ca)
+	pckCrlUrl := fmt.Sprintf("%s/sgx/certification/v4/pckcrl?ca=%s&encoding=der", PcsUrl, ca)
 	log.Debugf("Fetching PCK CRL: %v", pckCrlUrl)
 
 	resp, err := http.Get(pckCrlUrl)
