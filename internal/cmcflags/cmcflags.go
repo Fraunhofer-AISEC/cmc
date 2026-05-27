@@ -51,7 +51,7 @@ const (
 	RootCasFlag          = "root-cas"
 	AllowSystemCertsFlag = "allow-system-certs"
 	VmplFlag             = "vmpl"
-	SnpCacheFlag         = "snp-cache"
+	VendorCacheFlag      = "vendor-cache"
 	TpmKeyAlgFlag        = "tpm-key-alg"
 	UseOmspFlag          = "use-omsp"
 	OmspFormatFlag       = "omsp-format"
@@ -157,8 +157,8 @@ var Flags = []cli.Flag{
 		Usage: "SNP Virtual Machine Privilege Level (VMPL)",
 	},
 	&cli.StringFlag{
-		Name:  SnpCacheFlag,
-		Usage: "folder for caching SNP VCEKs and CAs in direct endorsement mode",
+		Name:  VendorCacheFlag,
+		Usage: "folder for caching hardware vendor collateral (SNP VCEKs/CAs, TDX/SGX collateral) in direct and pccs endorsement modes",
 	},
 	&cli.StringFlag{
 		Name:  TpmKeyAlgFlag,
@@ -253,8 +253,8 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	if cmd.IsSet(EnrollmentAddrFlag) {
 		c.EnrollmentAddr = cmd.String(EnrollmentAddrFlag)
 	}
-	if cmd.IsSet(SnpCacheFlag) {
-		c.SnpCache = cmd.String(SnpCacheFlag)
+	if cmd.IsSet(VendorCacheFlag) {
+		c.VendorCache = cmd.String(VendorCacheFlag)
 	}
 	if cmd.IsSet(TpmKeyAlgFlag) {
 		c.TpmKeyAlg = cmd.String(TpmKeyAlgFlag)

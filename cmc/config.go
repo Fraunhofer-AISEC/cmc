@@ -44,7 +44,7 @@ type Config struct {
 	RootCas          []string `json:"rootCas,omitempty"`
 	AllowSystemCerts bool     `json:"allowSystemCerts"`
 	Vmpl             int      `json:"vmpl,omitempty"`
-	SnpCache         string   `json:"snpCache,omitempty"`
+	VendorCache      string   `json:"vendorCache,omitempty"`
 	TpmKeyAlg        string   `json:"tpmKeyAlg,omitempty"`
 	UseOmsp          bool     `json:"useOmsp,omitempty"`
 	OmspFormat       string   `json:"omspFormat,omitempty"`
@@ -88,7 +88,7 @@ func (c *Config) Print() {
 	}
 	log.Debugf("\tMetadata root CA paths         : %v", strings.Join(c.RootCas, ","))
 	log.Debugf("\tAllow system root CAs:         : %v", c.AllowSystemCerts)
-	log.Debugf("\tSNP VCEK and CA cache folder   : %v", c.SnpCache)
+	log.Debugf("\tVendor collateral cache folder : %v", c.VendorCache)
 	log.Debugf("\tTPM AK key algorithm           : %v", c.TpmKeyAlg)
 	log.Debugf("\tSupport manifest revocation    : %v", c.UseOmsp)
 	if c.OmspFormat != "" {

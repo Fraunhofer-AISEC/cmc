@@ -28,10 +28,10 @@ type DirectEndorser struct {
 	tdx *TdxEndorser
 }
 
-func NewDirectProvider(vcekCacheFolder string) *DirectEndorser {
+func NewDirectProvider(vendorCacheFolder string) *DirectEndorser {
 	return &DirectEndorser{
-		snp: NewSnpEndorser(vcekCacheFolder),
-		tdx: NewTdxEndorser(PcsUrl),
+		snp: NewSnpEndorser(vendorCacheFolder),
+		tdx: NewTdxEndorser(PcsUrl, vendorCacheFolder),
 	}
 }
 
