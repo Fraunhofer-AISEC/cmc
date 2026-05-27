@@ -109,7 +109,16 @@ func (sgx *Sgx) Init(c *drivers.DriverConfig) error {
 		}
 	}
 
+	sgx.populateCollateralCache()
+
 	return nil
+}
+
+// populateCollateralCache populates the endorser cache
+func (sgx *Sgx) populateCollateralCache() {
+	if _, err := sgx.endorser.FetchCollateral(sgx.fmspc, sgx.akChain[0], ar.SGX_QUOTE_TYPE); err != nil {
+		log.Warnf("Failed to populate SGX collateral cache: %v", err)
+	}
 }
 
 func (sgx *Sgx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
@@ -188,6 +197,8 @@ func (sgx *Sgx) UpdateCerts() error {
 			return fmt.Errorf("failed to save sgx credentials: %w", err)
 		}
 	}
+
+	sgx.populateCollateralCache()
 
 	return nil
 }

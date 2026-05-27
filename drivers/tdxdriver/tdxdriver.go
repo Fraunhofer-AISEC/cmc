@@ -115,7 +115,16 @@ func (tdx *Tdx) Init(c *drivers.DriverConfig) error {
 		}
 	}
 
+	tdx.populateCollateralCache()
+
 	return nil
+}
+
+// populateCollateralCache populates the endorser cache
+func (tdx *Tdx) populateCollateralCache() {
+	if _, err := tdx.endorser.FetchCollateral(tdx.fmspc, tdx.akChain[0], ar.TDX_QUOTE_TYPE); err != nil {
+		log.Warnf("Failed to populate TDX collateral cache: %v", err)
+	}
 }
 
 func (tdx *Tdx) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
@@ -230,6 +239,8 @@ func (tdx *Tdx) UpdateCerts() error {
 			return fmt.Errorf("failed to save TDX credentials: %w", err)
 		}
 	}
+
+	tdx.populateCollateralCache()
 
 	return nil
 }
