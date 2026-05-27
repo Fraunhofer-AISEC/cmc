@@ -72,7 +72,7 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  EndorsementModeFlag,
-		Usage: "endorsement mode [direct, est]",
+		Usage: "endorsement mode [direct, est, pccs]",
 	},
 	&cli.StringFlag{
 		Name:  EndorsementAddrFlag,
