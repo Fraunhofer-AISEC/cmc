@@ -22,17 +22,15 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/google/go-tdx-guest/pcs"
 )
 
-const (
-	PcsUrl = "https://api.trustedservices.intel.com"
-)
-
 type TdxEndorser struct {
+	baseUrl string
 }
 
 // Implement the EndorserProvider interface
@@ -48,9 +46,12 @@ func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, bool) {
 	return nil, false
 }
 
-// NewEndorser initializes a new TDX endorser
-func NewTdxEndorser() *TdxEndorser {
-	return &TdxEndorser{}
+// NewTdxEndorser initializes a new TDX endorser. baseUrl is the address of the
+// collateral server (Intel PCS or custom PCCS)
+func NewTdxEndorser(baseUrl string) *TdxEndorser {
+	return &TdxEndorser{
+		baseUrl: strings.TrimRight(baseUrl, "/"),
+	}
 }
 
 func (endorser *TdxEndorser) FetchCollateral(
@@ -68,19 +69,19 @@ func (endorser *TdxEndorser) FetchCollateral(
 	}
 
 	log.Debug("Fetching TCB Info")
-	tcbInfo, interTcbInfo, rootTcbInfo, err := fetchTcbInfo(fmspc, quoteType)
+	tcbInfo, interTcbInfo, rootTcbInfo, err := endorser.fetchTcbInfo(fmspc, quoteType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch TCB info: %w", err)
 	}
 
 	log.Debug("Fetching QE Identity")
-	qeIdentity, interQe, rootQe, err := fetchQeIdentity(quoteType)
+	qeIdentity, interQe, rootQe, err := endorser.fetchQeIdentity(quoteType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch QE identity: %w", err)
 	}
 
 	log.Debugf("Fetching PCK %v CRL", caType)
-	pckCrl, interPckCrl, rootPckCrl, err := fetchPckCrl(caType)
+	pckCrl, interPckCrl, rootPckCrl, err := endorser.fetchPckCrl(caType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch PCK CRL: %w", err)
 	}
@@ -105,14 +106,15 @@ func (endorser *TdxEndorser) FetchCollateral(
 	}, nil
 }
 
-func fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
+func (endorser *TdxEndorser) fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType,
+) ([]byte, *x509.Certificate, *x509.Certificate, error) {
 
 	var tcbInfoUrl string
 	switch quoteType {
 	case ar.TDX_QUOTE_TYPE:
-		tcbInfoUrl = fmt.Sprintf("%s/tdx/certification/v4/tcb?fmspc=%s", PcsUrl, fmspc)
+		tcbInfoUrl = fmt.Sprintf("%s/tdx/certification/v4/tcb?fmspc=%s", endorser.baseUrl, fmspc)
 	case ar.SGX_QUOTE_TYPE:
-		tcbInfoUrl = fmt.Sprintf("%s/sgx/certification/v4/tcb?fmspc=%v", PcsUrl, fmspc)
+		tcbInfoUrl = fmt.Sprintf("%s/sgx/certification/v4/tcb?fmspc=%v", endorser.baseUrl, fmspc)
 	default:
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
 	}
@@ -137,14 +139,15 @@ func fetchTcbInfo(fmspc string, quoteType ar.IntelQuoteType) ([]byte, *x509.Cert
 	return body, inter, root, nil
 }
 
-func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x509.Certificate, error) {
+func (endorser *TdxEndorser) fetchQeIdentity(quoteType ar.IntelQuoteType,
+) ([]byte, *x509.Certificate, *x509.Certificate, error) {
 
 	var qeIdentityUrl string
 	switch quoteType {
 	case ar.TDX_QUOTE_TYPE:
-		qeIdentityUrl = fmt.Sprintf("%s/tdx/certification/v4/qe/identity", PcsUrl)
+		qeIdentityUrl = fmt.Sprintf("%s/tdx/certification/v4/qe/identity", endorser.baseUrl)
 	case ar.SGX_QUOTE_TYPE:
-		qeIdentityUrl = fmt.Sprintf("%s/sgx/certification/v4/qe/identity", PcsUrl)
+		qeIdentityUrl = fmt.Sprintf("%s/sgx/certification/v4/qe/identity", endorser.baseUrl)
 	default:
 		return nil, nil, nil, fmt.Errorf("unknown quote type %v", quoteType)
 	}
@@ -169,9 +172,10 @@ func fetchQeIdentity(quoteType ar.IntelQuoteType) ([]byte, *x509.Certificate, *x
 	return body, inter, root, nil
 }
 
-func fetchPckCrl(ca string) (*x509.RevocationList, *x509.Certificate, *x509.Certificate, error) {
+func (endorser *TdxEndorser) fetchPckCrl(ca string,
+) (*x509.RevocationList, *x509.Certificate, *x509.Certificate, error) {
 
-	pckCrlUrl := fmt.Sprintf("%s/sgx/certification/v4/pckcrl?ca=%s&encoding=der", PcsUrl, ca)
+	pckCrlUrl := fmt.Sprintf("%s/sgx/certification/v4/pckcrl?ca=%s&encoding=der", endorser.baseUrl, ca)
 	log.Debugf("Fetching PCK CRL: %v", pckCrlUrl)
 
 	resp, err := http.Get(pckCrlUrl)
@@ -228,7 +232,8 @@ func fetchRootCrl(urls []string) (*x509.RevocationList, error) {
 	return nil, fmt.Errorf("failed to fetch root CA CRL from locations: %v", urls)
 }
 
-func extractChainFromHeader(header map[string][]string, phrase string) (*x509.Certificate, *x509.Certificate, error) {
+func extractChainFromHeader(header map[string][]string, phrase string,
+) (*x509.Certificate, *x509.Certificate, error) {
 
 	h, ok := header[phrase]
 	if !ok {

@@ -243,7 +243,7 @@ func getCollateral(in string) (*ar.IntelCollateral, error) {
 	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	// Fetch collateral
-	collateral, err := provision.NewTdxEndorser().FetchCollateral(exts.FMSPC,
+	collateral, err := provision.NewTdxEndorser(provision.PcsUrl).FetchCollateral(exts.FMSPC,
 		quote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain.PCKCert,
 		ar.TDX_QUOTE_TYPE)
 	if err != nil {

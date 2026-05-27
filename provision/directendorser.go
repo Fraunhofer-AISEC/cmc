@@ -19,6 +19,10 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/drivers"
 )
 
+const (
+	PcsUrl = "https://api.trustedservices.intel.com"
+)
+
 type DirectEndorser struct {
 	snp *SnpEndorser
 	tdx *TdxEndorser
@@ -27,7 +31,7 @@ type DirectEndorser struct {
 func NewDirectProvider(vcekCacheFolder string) *DirectEndorser {
 	return &DirectEndorser{
 		snp: NewSnpEndorser(vcekCacheFolder),
-		tdx: NewTdxEndorser(),
+		tdx: NewTdxEndorser(PcsUrl),
 	}
 }
 
