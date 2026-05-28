@@ -16,7 +16,6 @@
 package provision
 
 import (
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/xml"
 	"fmt"
@@ -48,7 +47,8 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	allowSystemRoots bool,
 ) ([][]byte, error) {
 
-	client, err := NewHttpClient(rootCas, allowSystemRoots, nil)
+	// The client does authenticate itself via attestation evidence and/or token as configured
+	client, err := internal.NewHttpClient(rootCas, allowSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
@@ -153,30 +153,6 @@ func fetchDataRecursively(client *http.Client, pre Pre, addr string) ([][]byte, 
 		}
 	}
 	return metadata, nil
-}
-
-func NewHttpClient(rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*http.Client, error) {
-
-	rootpool, err := internal.CreateCertPool(rootCas, allowSystemCerts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create cert pool: %w", err)
-	}
-
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				// The client does authenticate the EST server
-				RootCAs:            rootpool,
-				InsecureSkipVerify: false,
-				// The client does authenticate itself via attestation evidence and/or
-				// a token as configured
-				Certificates: nil,
-			},
-			DisableKeepAlives: false,
-		},
-	}
-
-	return client, nil
 }
 
 func request(

@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // OmspRequests are used for requesting information about the revocation status of SW manifests
@@ -37,7 +38,7 @@ type OmspRequest struct {
 func FetchRevocationStatus(endpoint string, or OmspRequest, ser ar.Serializer, rootCas []*x509.Certificate, useSystemRoots bool) ([]byte, error) {
 	log.Tracef("Requesting OMSP")
 
-	client, err := NewHttpClient(rootCas, useSystemRoots, nil)
+	client, err := internal.NewHttpClient(rootCas, useSystemRoots, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OMSP client: %w", err)
 	}
