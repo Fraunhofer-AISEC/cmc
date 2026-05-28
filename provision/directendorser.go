@@ -16,6 +16,8 @@
 package provision
 
 import (
+	"fmt"
+
 	"github.com/Fraunhofer-AISEC/cmc/drivers"
 )
 
@@ -28,11 +30,20 @@ type DirectEndorser struct {
 	tdx *TdxEndorser
 }
 
-func NewDirectProvider(vendorCacheFolder string) *DirectEndorser {
+// NewDirectProvider builds an endorser that fetches collateral directly from the vendor
+// services (AMD KDS, Intel PCS)
+func NewDirectProvider(vendorCacheFolder string) (*DirectEndorser, error) {
+
+	// Use the host system root store regardless of the CMC trust
+	// pool as the Intel PCS is a production service under a global CA
+	tdx, err := NewTdxEndorser(PcsUrl, vendorCacheFolder, nil, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TDX endorser: %w", err)
+	}
 	return &DirectEndorser{
 		snp: NewSnpEndorser(vendorCacheFolder),
-		tdx: NewTdxEndorser(PcsUrl, vendorCacheFolder),
-	}
+		tdx: tdx,
+	}, nil
 }
 
 func (p *DirectEndorser) Snp() (drivers.SnpEndorser, bool) {

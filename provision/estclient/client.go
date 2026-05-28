@@ -17,7 +17,6 @@ package estclient
 
 import (
 	"bytes"
-	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
@@ -56,23 +55,10 @@ func (p *Client) Tpm() (drivers.TpmEndorser, bool) {
 
 func New(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
 
-	rootpool, err := internal.CreateCertPool(rootCas, allowSystemCerts)
+	// The client does authenticate itself via attestation evidence and/or token as configured
+	client, err := internal.NewHttpClient(rootCas, allowSystemCerts, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cert pool: %w", err)
-	}
-
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				// The client does authenticate the EST server
-				RootCAs:            rootpool,
-				InsecureSkipVerify: false,
-				// The client does authenticate itself via attestation evidence and/or
-				// a token as configured
-				Certificates: nil,
-			},
-			DisableKeepAlives: false,
-		},
+		return nil, fmt.Errorf("failed to create EST client: %w", err)
 	}
 
 	return &Client{
