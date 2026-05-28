@@ -27,6 +27,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-tdx-guest/pcs"
 )
 
@@ -35,6 +36,7 @@ const tdxCacheTtl = 24 * time.Hour
 type TdxEndorser struct {
 	baseUrl string
 	cache   *tdxCache
+	client  *http.Client
 }
 
 // Implement the EndorserProvider interface
@@ -53,11 +55,20 @@ func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, bool) {
 // NewTdxEndorser initializes a new TDX endorser. baseUrl is the address of the
 // collateral server (Intel PCS or custom PCCS). If a cacheFolder is specified,
 // collateral is also cached to disk
-func NewTdxEndorser(baseUrl, cacheFolder string) *TdxEndorser {
+func NewTdxEndorser(
+	baseUrl, cacheFolder string,
+	rootCas []*x509.Certificate,
+	allowSystemCerts bool,
+) (*TdxEndorser, error) {
+	client, err := internal.NewHttpClient(rootCas, allowSystemCerts, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TDX endorser HTTP client: %w", err)
+	}
 	return &TdxEndorser{
 		baseUrl: strings.TrimRight(baseUrl, "/"),
 		cache:   newTdxCache(cacheFolder, tdxCacheTtl),
-	}
+		client:  client,
+	}, nil
 }
 
 func (endorser *TdxEndorser) FetchCollateral(
@@ -173,7 +184,7 @@ func (endorser *TdxEndorser) fetchTcbInfoFromServer(fmspc string, quoteType ar.I
 	}
 	log.Debugf("Fetching TCB Info for FMSPC %q from: %v", fmspc, tcbInfoUrl)
 
-	resp, err := http.Get(tcbInfoUrl)
+	resp, err := endorser.client.Get(tcbInfoUrl)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get HTTPS TCB Info response: %w", err)
 	}
@@ -223,7 +234,7 @@ func (endorser *TdxEndorser) fetchQeIdentityFromServer(quoteType ar.IntelQuoteTy
 	}
 	log.Debugf("Fetching QE Identity: %v", qeIdentityUrl)
 
-	resp, err := http.Get(qeIdentityUrl)
+	resp, err := endorser.client.Get(qeIdentityUrl)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get HTTPS QE identity response: %w", err)
 	}
@@ -268,7 +279,7 @@ func (endorser *TdxEndorser) fetchPckCrlFromServer(ca string) ([]byte, string, e
 	pckCrlUrl := fmt.Sprintf("%s/sgx/certification/v4/pckcrl?ca=%s&encoding=der", endorser.baseUrl, ca)
 	log.Debugf("Fetching PCK CRL: %v", pckCrlUrl)
 
-	resp, err := http.Get(pckCrlUrl)
+	resp, err := endorser.client.Get(pckCrlUrl)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to fetch PCK CRL: %w", err)
 	}
@@ -297,7 +308,7 @@ func (endorser *TdxEndorser) fetchRootCrl(urls []string) (*x509.RevocationList, 
 		return x509.ParseRevocationList(cached.Body)
 	}
 
-	body, srcUrl, err := fetchRootCrlFromServer(urls)
+	body, srcUrl, err := endorser.fetchRootCrlFromServer(urls)
 	if err != nil {
 		if cached != nil {
 			log.Warnf("Refresh of %v failed, using stale cache (age %v): %v",
@@ -320,7 +331,7 @@ func (endorser *TdxEndorser) fetchRootCrl(urls []string) (*x509.RevocationList, 
 	return rootCrl, nil
 }
 
-func fetchRootCrlFromServer(urls []string) ([]byte, string, error) {
+func (endorser *TdxEndorser) fetchRootCrlFromServer(urls []string) ([]byte, string, error) {
 
 	if len(urls) == 0 {
 		return nil, "", fmt.Errorf("root CA CRLs are empty")
@@ -328,7 +339,7 @@ func fetchRootCrlFromServer(urls []string) ([]byte, string, error) {
 
 	log.Debugf("Fetching Root CA CRLs from: %v", urls)
 	for _, url := range urls {
-		resp, err := http.Get(url)
+		resp, err := endorser.client.Get(url)
 		if err != nil {
 			log.Warnf("failed to fetch root CA CRL from %v: %v", url, err)
 			continue
