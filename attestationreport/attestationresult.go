@@ -862,6 +862,139 @@ func (r *SignatureResult) PrintErr(format string, args ...interface{}) {
 	r.CertChainCheck.PrintErr("%v cert chain check", fmt.Sprintf(format, args...))
 }
 
+func (v *VersionCheck) PrintErr(format string, args ...interface{}) {
+	if v.Success {
+		return
+	}
+	log.Warnf("%v failed: claimed %v, measured %v",
+		fmt.Sprintf(format, args...), v.Claimed, v.Measured)
+}
+
+func (b *BooleanMatch) PrintErr(format string, args ...interface{}) {
+	if b.Success {
+		return
+	}
+	log.Warnf("%v failed: claimed %v, measured %v",
+		fmt.Sprintf(format, args...), b.Claimed, b.Measured)
+}
+
+func (r *TcbCheck) PrintErr(format string, args ...interface{}) {
+	if r.Summary.Status == StatusSuccess {
+		return
+	}
+	r.Summary.PrintErr(format, args...)
+	prefix := fmt.Sprintf(format, args...)
+	r.Fmc.PrintErr("%v FMC SPL", prefix)
+	r.Bl.PrintErr("%v BL SPL", prefix)
+	r.Tee.PrintErr("%v TEE SPL", prefix)
+	r.Snp.PrintErr("%v SNP SPL", prefix)
+	r.Ucode.PrintErr("%v uCode SPL", prefix)
+}
+
+func (r *PolicyCheck) PrintErr(format string, args ...interface{}) {
+	if r.Summary.Status == StatusSuccess {
+		return
+	}
+	r.Summary.PrintErr(format, args...)
+	prefix := fmt.Sprintf(format, args...)
+	r.Abi.PrintErr("%v ABI", prefix)
+	r.Smt.PrintErr("%v SMT", prefix)
+	r.Migration.PrintErr("%v migration", prefix)
+	r.Debug.PrintErr("%v debug", prefix)
+	r.SingleSocket.PrintErr("%v single socket", prefix)
+}
+
+func (r *TcbLevelResult) PrintErr(format string, args ...interface{}) {
+	prefix := fmt.Sprintf(format, args...)
+	r.PceSvn.PrintErr("%v PCE SVN", prefix)
+	for i := range r.SgxComponents {
+		r.SgxComponents[i].PrintErr("%v SGX component %v", prefix, i)
+	}
+	for i := range r.TdxComponents {
+		r.TdxComponents[i].PrintErr("%v TDX component %v", prefix, i)
+	}
+}
+
+func (r *TcbInfoResult) PrintErr(format string, args ...interface{}) {
+	if r.Summary.Status == StatusSuccess {
+		return
+	}
+	r.Summary.PrintErr(format, args...)
+	prefix := fmt.Sprintf(format, args...)
+	r.Id.PrintErr("%v ID", prefix)
+	r.Version.PrintErr("%v version", prefix)
+	r.TcbLevel.PrintErr("%v TCB level", prefix)
+}
+
+func (r *QeReportResult) PrintErr(format string, args ...interface{}) {
+	if r.Summary.Status == StatusSuccess {
+		return
+	}
+	r.Summary.PrintErr(format, args...)
+	prefix := fmt.Sprintf(format, args...)
+	r.MrSigner.PrintErr("%v MRSIGNER", prefix)
+	r.IsvProdId.PrintErr("%v ISV ProdID", prefix)
+	r.CpuSvn.PrintErr("%v CPU SVN", prefix)
+	r.IsvSvn.PrintErr("%v ISV SVN", prefix)
+	r.MiscSelect.PrintErr("%v MiscSelect", prefix)
+	r.Attributes.PrintErr("%v attributes", prefix)
+	if r.TcbLevelStatus != "" {
+		log.Warnf("%v TCB level status: %v (%v)", prefix, r.TcbLevelStatus, r.TcbLevelDate)
+	}
+}
+
+func (r *SgxAttributesCheck) PrintErr(format string, args ...interface{}) {
+	prefix := fmt.Sprintf(format, args...)
+	r.Initted.PrintErr("%v initted", prefix)
+	r.Debug.PrintErr("%v debug", prefix)
+	r.Mode64Bit.PrintErr("%v mode64bit", prefix)
+	r.ProvisionKey.PrintErr("%v provision key", prefix)
+	r.EInitToken.PrintErr("%v einit token", prefix)
+	r.Kss.PrintErr("%v KSS", prefix)
+	r.Legacy.PrintErr("%v legacy", prefix)
+	r.Avx.PrintErr("%v AVX", prefix)
+}
+
+func (r *TdAttributesCheck) PrintErr(format string, args ...interface{}) {
+	prefix := fmt.Sprintf(format, args...)
+	r.Debug.PrintErr("%v debug", prefix)
+	r.SeptVEDisable.PrintErr("%v SEPT VE disable", prefix)
+	r.Pks.PrintErr("%v PKS", prefix)
+	r.Kl.PrintErr("%v KL", prefix)
+}
+
+func (r *SnpResult) PrintErr() {
+	r.VersionMatch.PrintErr("SNP report version match")
+	r.FwCheck.PrintErr("SNP firmware version")
+	r.TcbCheck.PrintErr("SNP TCB check")
+	r.PolicyCheck.PrintErr("SNP guest policy check")
+	for i := range r.ExtensionsCheck {
+		r.ExtensionsCheck[i].PrintErr("SNP VCEK extension %v", i)
+	}
+}
+
+func (r *SgxResult) PrintErr() {
+	r.VersionMatch.PrintErr("SGX quote version match")
+	r.TcbInfoCheck.PrintErr("SGX TCB info check")
+	r.QeReportCheck.PrintErr("SGX QE report check")
+	r.SgxAttributesCheck.PrintErr("SGX attribute")
+}
+
+func (r *TdxResult) PrintErr() {
+	r.VersionMatch.PrintErr("TDX quote version match")
+	r.TcbInfoCheck.PrintErr("TDX TCB info check")
+	r.QeReportCheck.PrintErr("TDX QE report check")
+	r.TdAttributesCheck.PrintErr("TDX TD attribute")
+	r.SeamAttributesCheck.PrintErr("TDX SEAM attributes check")
+	r.XfamCheck.PrintErr("TDX XFAM check")
+	for _, m := range r.MrMatch {
+		if !m.Success {
+			log.Warnf("%v %q failed: calculated %x, measured %v",
+				internal.IndexToMr(m.Index), m.Name, m.Digest, m.Measured)
+		}
+	}
+}
+
 func (r *AttestationResult) PrintErr() {
 
 	if r.Summary.Status == StatusSuccess {
@@ -904,19 +1037,13 @@ func (r *AttestationResult) PrintErr() {
 			}
 		}
 		if m.SnpResult != nil {
-			m.SnpResult.VersionMatch.PrintErr("Version match")
-			// TODO
-			log.Warnf("Detailed SNP evaluation not yet implemented")
+			m.SnpResult.PrintErr()
 		}
 		if m.SgxResult != nil {
-			m.SgxResult.VersionMatch.PrintErr("Version match")
-			// TODO
-			log.Warnf("Detailed SGX evaluation not yet implemented")
+			m.SgxResult.PrintErr()
 		}
 		if m.TdxResult != nil {
-			m.TdxResult.VersionMatch.PrintErr("Version match")
-			// TODO
-			log.Warnf("Detailed TDX evaluation not yet implemented")
+			m.TdxResult.PrintErr()
 		}
 	}
 
