@@ -434,37 +434,49 @@ func verifySnpSignature(
 		return result, false
 	}
 
+	success := true
+
 	// Verify ECDSA Signature represented by r and s
-	ok = ecdsa.Verify(pub, digest[:], r, s)
-	if !ok {
+	if ecdsa.Verify(pub, digest[:], r, s) {
+		log.Debug("Successfully verified SNP report signature")
+		result.SignCheck.Status = ar.StatusSuccess
+	} else {
 		log.Warn("Failed to verify SNP report signature")
 		result.SignCheck.Fail(ar.VerifySignature)
-		return result, false
+		success = false
 	}
-	log.Debug("Successfully verified SNP report signature")
-	result.SignCheck.Status = ar.StatusSuccess
 
-	// Verify the SNP certificate chain
+	// Verify the SNP certificate chain (independent of signature check)
 	ca := certs[len(certs)-1]
 	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
-	if err != nil {
+	chainOk := err == nil
+	if !chainOk {
 		log.Warnf("Failed to verify certificate chain: %v", err)
 		result.CertChainCheck.Fail(ar.VerifyCertChain)
-		return result, false
+		success = false
+	} else {
+		log.Debug("Successfully verified SNP certificate chain")
 	}
-	log.Debug("Successfully verified SNP certificate chain")
 
 	// Verify that the certificate fingerprint matches one of the manifest fingerprints
-	result.CertChainCheck = verifyCaFingerprint(ca, fingerprints)
-	if result.CertChainCheck.Status != ar.StatusSuccess {
+	// (independent of chain validity — just a value comparison)
+	fpResult := verifyCaFingerprint(ca, fingerprints)
+	if fpResult.Status != ar.StatusSuccess {
+		if chainOk {
+			result.CertChainCheck = fpResult
+		}
 		result.CertChainCheck.Fail(ar.CaFingerprint)
-		return result, false
+		success = false
+	} else if chainOk {
+		result.CertChainCheck = fpResult
 	}
 
-	//Store details from validated certificate chains in the report
-	result.Certs = append(result.Certs, extractX509Chains(x509Chains)...)
+	// Store details from validated certificate chains in the report
+	if chainOk {
+		result.Certs = append(result.Certs, extractX509Chains(x509Chains)...)
+	}
 
-	return result, true
+	return result, success
 }
 
 const (

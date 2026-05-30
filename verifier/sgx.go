@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -170,21 +171,20 @@ func VerifySgx(
 	if result.SgxResult.TcbInfoCheck.Summary.Status != ar.StatusSuccess {
 		log.Warnf("Failed to verify TCB info structure")
 		result.Summary.Fail(ar.VerifyTcbInfo)
-		return result, false
+		success = false
 	}
 
 	// Verify QE Identity
 	log.Debugf("Verifying quoting enclave identity")
-	qeIdentityResult := ValidateQEIdentity(
+	result.SgxResult.QeReportCheck = ValidateQEIdentity(
 		&sgxQuote.QuoteSignatureData.QEReport,
 		&intelCollateral.QeIdentity, intelCollateralRaw.QeIdentity,
 		intelCollateral.QeIdentityIntermediateCert, intelCollateral.QeIdentityRootCert,
 		ar.SGX_QUOTE_TYPE)
-	if qeIdentityResult.Summary.Status != ar.StatusSuccess {
+	if result.SgxResult.QeReportCheck.Summary.Status != ar.StatusSuccess {
 		result.Summary.Fail(ar.VerifyQEIdentityErr)
-		return result, false
+		success = false
 	}
-	result.SgxResult.QeReportCheck = qeIdentityResult
 
 	// Verify Quote Signature
 	log.Debugf("Verifying SGX quote signature")
@@ -202,17 +202,15 @@ func VerifySgx(
 		&sgxReferenceValue, policy, result)
 	if err != nil {
 		log.Warnf("Failed to verify SGX Report Body: %v", err)
-		result.Summary.Fail(ar.VerifySignature)
-		result.Summary.Status = ar.StatusFail
-		return result, false
+		result.Summary.Fail(ar.VerifyMeasurement)
+		success = false
 	}
 
 	// Check version
 	log.Debugf("Verifying SGX quote version")
 	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, policy.QuoteVersion)
 	if !ret {
-		log.Warnf("Failed to verify ")
-		return result, false
+		success = false
 	}
 
 	result.Summary.Status = ar.StatusFromBool(success)
@@ -280,8 +278,11 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 		return fmt.Errorf("internal error: SGX measurement result is nil")
 	}
 
+	var errs []error
+
 	// check MRENCLAVE reference value
-	if !bytes.Equal(body.MRENCLAVE[:], []byte(refval.GetHash(crypto.SHA256))) {
+	mrEnclaveOk := bytes.Equal(body.MRENCLAVE[:], []byte(refval.GetHash(crypto.SHA256)))
+	if !mrEnclaveOk {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
 				Type:       ar.TRUST_ANCHOR_SGX,
@@ -302,8 +303,8 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				PackageUrl: refval.PackageUrl,
 				HashAlg:    crypto.SHA256.String(),
 			})
-		return fmt.Errorf("MRENCLAVE mismatch. Expected: %q, Got: %q",
-			hex.EncodeToString(refval.GetHash(crypto.SHA256)), hex.EncodeToString(body.MRENCLAVE[:]))
+		errs = append(errs, fmt.Errorf("MRENCLAVE mismatch. Expected: %q, Got: %q",
+			hex.EncodeToString(refval.GetHash(crypto.SHA256)), hex.EncodeToString(body.MRENCLAVE[:])))
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
@@ -315,26 +316,27 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 				PackageUrl: refval.PackageUrl,
 				HashAlg:    crypto.SHA256.String(),
 			})
+		log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(refval.GetHash(crypto.SHA256)))
 	}
-	log.Debugf("Successfully verified MRENCLAVE (%q)", hex.EncodeToString(refval.GetHash(crypto.SHA256)))
 
+	// check MRSIGNER (always run, regardless of MRENCLAVE outcome)
+	mrSignerOk := bytes.Equal(sgxReferencePolicy.MrSigner, body.MRSIGNER[:])
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
 			Type:     ar.TRUST_ANCHOR_SGX,
 			Name:     "MrSigner",
 			Digest:   sgxReferencePolicy.MrSigner,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),
-			Success:  bytes.Equal(sgxReferencePolicy.MrSigner, body.MRSIGNER[:]),
+			Success:  mrSignerOk,
 			Launched: true,
 			HashAlg:  crypto.SHA256.String(),
 		},
 	)
-	log.Debugf("Successfully verified MRSIGNER (%q)", sgxReferencePolicy.MrSigner)
-
-	for _, v := range result.Artifacts {
-		if !v.Success {
-			return fmt.Errorf("SGX Quote Body Verification failed. %v: (Expected: %v Got: %v)", v.Name, v.Digest, v.Measured)
-		}
+	if !mrSignerOk {
+		errs = append(errs, fmt.Errorf("MRSIGNER mismatch. Expected: %v, Got: %v",
+			hex.EncodeToString(sgxReferencePolicy.MrSigner), hex.EncodeToString(body.MRSIGNER[:])))
+	} else {
+		log.Debugf("Successfully verified MRSIGNER (%q)", sgxReferencePolicy.MrSigner)
 	}
 
 	// Check CPUSVN
@@ -348,8 +350,8 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 		Status:   statusCpuSvn,
 	}
 	if statusCpuSvn != ar.StatusSuccess {
-		return fmt.Errorf("failed to verify CPUSVN: Expected: %v, Got: %v", body.CPUSVN[:],
-			sgxExtensions.Tcb.Value.CpuSvn.Value)
+		errs = append(errs, fmt.Errorf("failed to verify CPUSVN: Expected: %v, Got: %v", body.CPUSVN[:],
+			sgxExtensions.Tcb.Value.CpuSvn.Value))
 	}
 
 	// Check ISV SVN
@@ -363,8 +365,8 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 		Status:   statusIsvSvn,
 	}
 	if statusIsvSvn != ar.StatusSuccess {
-		return fmt.Errorf("failed to verify ISVSVN. Expected: %v, got %v", sgxReferencePolicy.IsvSvn,
-			body.ISVSVN)
+		errs = append(errs, fmt.Errorf("failed to verify ISVSVN. Expected: %v, got %v", sgxReferencePolicy.IsvSvn,
+			body.ISVSVN))
 	}
 
 	result.SgxResult.SgxAttributesCheck = ar.SgxAttributesCheck{
@@ -410,7 +412,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 		},
 	}
 
-	ok := result.SgxResult.SgxAttributesCheck.Initted.Success &&
+	attrOk := result.SgxResult.SgxAttributesCheck.Initted.Success &&
 		result.SgxResult.SgxAttributesCheck.Debug.Success &&
 		result.SgxResult.SgxAttributesCheck.Mode64Bit.Success &&
 		result.SgxResult.SgxAttributesCheck.ProvisionKey.Success &&
@@ -418,8 +420,8 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 		result.SgxResult.SgxAttributesCheck.Kss.Success &&
 		result.SgxResult.SgxAttributesCheck.Legacy.Success &&
 		result.SgxResult.SgxAttributesCheck.Avx.Success
-	if !ok {
-		return fmt.Errorf("SGXAttributesCheck failed: Initted: %v, Debug: %v, Mode64Bit: %v, ProvisionKey: %v, EInitToken: %v, Kss: %v, Legacy: %v, Avx: %v",
+	if !attrOk {
+		errs = append(errs, fmt.Errorf("SGXAttributesCheck failed: Initted: %v, Debug: %v, Mode64Bit: %v, ProvisionKey: %v, EInitToken: %v, Kss: %v, Legacy: %v, Avx: %v",
 			result.SgxResult.SgxAttributesCheck.Initted.Success,
 			result.SgxResult.SgxAttributesCheck.Debug.Success,
 			result.SgxResult.SgxAttributesCheck.Mode64Bit.Success,
@@ -428,9 +430,12 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			result.SgxResult.SgxAttributesCheck.Kss.Success,
 			result.SgxResult.SgxAttributesCheck.Legacy.Success,
 			result.SgxResult.SgxAttributesCheck.Avx.Success,
-		)
+		))
 	}
 
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 }
 
