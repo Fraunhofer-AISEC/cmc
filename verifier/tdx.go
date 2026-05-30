@@ -150,7 +150,7 @@ func VerifyTdx(
 	copy(nonce64, nonce)
 	result.Freshness = verifyNonce(tdxQuote.QuoteBody.ReportData[:], nonce64)
 	if result.Freshness.Status != ar.StatusSuccess {
-		result.Summary.Status = ar.StatusFail
+		result.Summary.Fail(ar.Freshness)
 	}
 
 	// Extract certificate chain from quote
