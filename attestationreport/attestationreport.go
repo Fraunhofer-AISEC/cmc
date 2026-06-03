@@ -454,6 +454,7 @@ func (ar *AttestationReport) GetEncodedContext() []byte {
 	return ar.encodedContext
 }
 
+// GetSnpTcb parses the raw uint64 TCB into the respective fields
 func GetSnpTcb(codeName string, tcb uint64) SnpTcb {
 	if strings.EqualFold(codeName, "Milan") || strings.EqualFold(codeName, "Genoa") {
 		return SnpTcb{
@@ -473,6 +474,22 @@ func GetSnpTcb(codeName string, tcb uint64) SnpTcb {
 			Ucode: uint8((tcb >> 56) & 0xFF),
 		}
 	}
+}
+
+// PackSnpTcb packs the TCB components into the raw uint64 attestation report TCB representation
+func PackSnpTcb(codeName string, tcb SnpTcb) uint64 {
+	if strings.EqualFold(codeName, "Milan") || strings.EqualFold(codeName, "Genoa") {
+		return uint64(tcb.Bl) |
+			uint64(tcb.Tee)<<8 |
+			uint64(tcb.Snp)<<48 |
+			uint64(tcb.Ucode)<<56
+	}
+	// Turin
+	return uint64(tcb.Fmc) |
+		uint64(tcb.Bl)<<8 |
+		uint64(tcb.Tee)<<16 |
+		uint64(tcb.Snp)<<24 |
+		uint64(tcb.Ucode)<<56
 }
 
 func (r *Component) GetHash(h crypto.Hash) []byte {
