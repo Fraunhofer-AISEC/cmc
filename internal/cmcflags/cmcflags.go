@@ -68,7 +68,7 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  ProvisionAuthFlag,
-		Usage: "provisioning authentication methods (none,token,certificate,attestation)",
+		Usage: "provisioning authentication methods [none token certificate attestation]",
 	},
 	&cli.StringFlag{
 		Name:  EndorsementModeFlag,
@@ -88,12 +88,12 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  MetadataFlag,
-		Usage: "comma-separated list of metadata locations (file://, https://, or blob://)",
+		Usage: "comma-separated list of metadata locations [file:// https:// blob://]",
 	},
 	&cli.StringFlag{
 		Name: DriversFlag,
-		Usage: fmt.Sprintf("comma-separated list of attestation report drivers. Possible: %v",
-			strings.Join(maps.Keys(cmc.GetDrivers()), ",")),
+		Usage: fmt.Sprintf("comma-separated list of attestation report drivers %v",
+			maps.Keys(cmc.GetDrivers())),
 	},
 	&cli.StringFlag{
 		Name:  ExcludePcrsFlag,
@@ -105,12 +105,11 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  ApiFlag,
-		Usage: "API to use [coap, grpc, libapi, socket]",
+		Usage: "API to use [coap grpc libapi socket]",
 	},
 	&cli.StringFlag{
-		Name: PolicyEngineFlag,
-		Usage: fmt.Sprintf("policy engine: %v",
-			strings.Join(maps.Keys(cmc.GetPolicyEngines()), ",")),
+		Name:  PolicyEngineFlag,
+		Usage: fmt.Sprintf("policy engine: %v", maps.Keys(cmc.GetPolicyEngines())),
 	},
 	&cli.BoolFlag{
 		Name:  PolicyOverwriteFlag,
@@ -158,19 +157,20 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  VendorCacheFlag,
-		Usage: "folder for caching hardware vendor collateral (SNP VCEKs/CAs, TDX/SGX collateral) in direct and pccs endorsement modes",
+		Usage: "folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)",
 	},
 	&cli.StringFlag{
 		Name:  TpmKeyAlgFlag,
-		Usage: "TPM AK key algorithm (EC256, RSA2048)",
+		Usage: "TPM AK key algorithm [ec256 rsa2048]",
 	},
 	&cli.BoolFlag{
 		Name:  UseOmspFlag,
 		Usage: "Indicates whether to use revocation information for manifests",
 	},
 	&cli.StringFlag{
-		Name:  OmspFormatFlag,
-		Usage: "Indicates which serialization format to use for revocation information for manifests. Possible: [json | cbor]",
+		Name: OmspFormatFlag,
+		Usage: "Indicates which serialization format to use for revocation information for " +
+			"manifests [json cbor]",
 	},
 }
 

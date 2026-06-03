@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
@@ -60,21 +62,13 @@ var Flags = append([]cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  logLevelFlag,
-		Usage: fmt.Sprintf("logging level: %v", strings.Join(logLevelKeys(), ",")),
+		Usage: fmt.Sprintf("logging level %v", maps.Keys(logLevels)),
 	},
 	&cli.StringFlag{
 		Name:  logFileFlag,
 		Usage: "file to log to instead of stdout/stderr",
 	},
 }, cmcflags.Flags...)
-
-func logLevelKeys() []string {
-	keys := make([]string, 0, len(logLevels))
-	for k := range logLevels {
-		keys = append(keys, k)
-	}
-	return keys
-}
 
 func GetConfig(cmd *cli.Command) (*Config, error) {
 
