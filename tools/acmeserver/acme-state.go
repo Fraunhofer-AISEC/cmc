@@ -107,20 +107,29 @@ func makeNewIdentifier() string {
 	return identifier
 }
 
-type AcmeStatus string
+type AccountStatus string
+type OrderStatus string
+type AuthStatus string
 
 const (
-	AcmeStatusPending     AcmeStatus = "pending"
-	AcmeStatusReady       AcmeStatus = "ready"
-	AcmeStatusValid       AcmeStatus = "valid"
-	AcmeStatusExpired     AcmeStatus = "expired"
-	AcmeStatusInvalid     AcmeStatus = "invalid"
-	AcmeStatusDeactivated AcmeStatus = "deactivated"
+	AccountStatusValid       AccountStatus = "valid"
+	AccountStatusDeactivated AccountStatus = "deactivated"
+
+	OrderStatusPending OrderStatus = "pending"
+	OrderStatusReady   OrderStatus = "ready"
+	OrderStatusValid   OrderStatus = "valid"
+	OrderStatusInvalid OrderStatus = "invalid"
+
+	AuthStatusPending     AuthStatus = "pending"
+	AuthStatusValid       AuthStatus = "valid"
+	AuthStatusExpired     AuthStatus = "expired"
+	AuthStatusInvalid     AuthStatus = "invalid"
+	AuthStatusDeactivated AuthStatus = "deactivated"
 )
 
 type AcmeAuthorization struct {
 	Identifier    string
-	Status        AcmeStatus
+	Status        AuthStatus
 	Token         string
 	ChallengeType string
 	Validated     string
@@ -128,7 +137,7 @@ type AcmeAuthorization struct {
 
 type AcmeOrder struct {
 	Identifier       string
-	Status           AcmeStatus
+	Status           OrderStatus
 	RequestNotBefore string
 	RequestNotAfter  string
 	ExpiryTime       time.Time
@@ -137,35 +146,28 @@ type AcmeOrder struct {
 }
 
 func (o *AcmeOrder) UpdateOrder() {
-	// expire pending and ready orders whose deadline has passed
-	if time.Now().After(o.ExpiryTime) && (o.Status == AcmeStatusPending || o.Status == AcmeStatusReady) {
-		o.Status = AcmeStatusInvalid
-		for i := range o.Authorizations {
-			if o.Authorizations[i].Status == AcmeStatusPending || o.Authorizations[i].Status == AcmeStatusValid {
-				o.Authorizations[i].Status = AcmeStatusExpired
-			}
-		}
-		return
-	}
+	validCount, invalidCount := 0, 0
 
-	if o.Status != AcmeStatusPending {
-		return
-	}
-
-	validCount, incompleteCount := 0, 0
+	// update the authorizations
+	expired := time.Now().After(o.ExpiryTime)
 	for i := range o.Authorizations {
-		switch o.Authorizations[i].Status {
-		case AcmeStatusValid:
+		if expired && o.Authorizations[i].Status != AuthStatusInvalid {
+			o.Authorizations[i].Status = AuthStatusExpired
+		}
+
+		if o.Authorizations[i].Status == AuthStatusValid {
 			validCount++
-		case AcmeStatusPending:
-			incompleteCount++
+		} else if o.Authorizations[i].Status != AuthStatusPending {
+			invalidCount++
 		}
 	}
 
-	if validCount == len(o.Authorizations) {
-		o.Status = AcmeStatusReady
-	} else if validCount+incompleteCount < len(o.Authorizations) {
-		o.Status = AcmeStatusInvalid
+	// update the overall order status (order becomes ready whenever at least one challenge per
+	// authorization is valid - this implementation only serves one challenge per authorization)
+	if validCount == len(o.Authorizations) && o.Status == OrderStatusPending {
+		o.Status = OrderStatusReady
+	} else if invalidCount > 0 {
+		o.Status = OrderStatusInvalid
 	}
 }
 
@@ -212,7 +214,7 @@ func (a *AcmeAccount) CreateOrder(auths []AcmeAuthorization, notBefore, notAfter
 
 	order := &AcmeOrder{
 		Identifier:       identifier,
-		Status:           AcmeStatusPending,
+		Status:           OrderStatusPending,
 		RequestNotBefore: notBefore,
 		RequestNotAfter:  notAfter,
 		ExpiryTime:       expiry,
