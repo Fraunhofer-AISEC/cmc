@@ -101,7 +101,7 @@ func (n *AcmeNonceHandler) Check(nonce string) bool {
 
 func makeNewIdentifier() string {
 	identifier, dict := "", "0123456789abcdefghijklmnopqrstuv"
-	for i := uint(0); i < AccountIdLength; i++ {
+	for range AccountIdLength {
 		identifier += string(dict[mrand.IntN(len(dict))])
 	}
 	return identifier
@@ -148,10 +148,12 @@ type AcmeOrder struct {
 func (o *AcmeOrder) UpdateOrder() {
 	validCount, invalidCount := 0, 0
 
-	// update the authorizations
+	// update the authorizations (terminal states cannot expire anymore)
 	expired := time.Now().After(o.ExpiryTime)
 	for i := range o.Authorizations {
-		if expired && o.Authorizations[i].Status != AuthStatusInvalid {
+		if expired &&
+			o.Authorizations[i].Status != AuthStatusInvalid &&
+			o.Authorizations[i].Status != AuthStatusDeactivated {
 			o.Authorizations[i].Status = AuthStatusExpired
 		}
 
@@ -163,10 +165,11 @@ func (o *AcmeOrder) UpdateOrder() {
 	}
 
 	// update the overall order status (order becomes ready whenever at least one challenge per
-	// authorization is valid - this implementation only serves one challenge per authorization)
+	// authorization is valid - this server implementation only serves one challenge per
+	// authorization; a finalized (valid) order keeps its status even after authorizations expire)
 	if validCount == len(o.Authorizations) && o.Status == OrderStatusPending {
 		o.Status = OrderStatusReady
-	} else if invalidCount > 0 {
+	} else if invalidCount > 0 && o.Status != OrderStatusValid {
 		o.Status = OrderStatusInvalid
 	}
 }
