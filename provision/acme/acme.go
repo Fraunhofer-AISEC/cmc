@@ -28,9 +28,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/go-attestation/attest"
 	"github.com/go-jose/go-jose/v4"
+	"github.com/google/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 )
 
@@ -348,34 +347,15 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 	return cert, nil
 }
 
-func (c *Client) TpmActivateEnroll(
-	tpmManufacturer, ekCertUrl string,
-	tpmMajor, tpmMinor int,
-	csr *x509.CertificateRequest,
-	akParams attest.AttestationParameters,
-	ekPublic, ekCertDer []byte,
-) ([]byte, []byte, []byte, error) {
-	return nil, nil, nil, fmt.Errorf("ACME provisioner: TpmActivateEnroll not yet implemented")
-}
-
 func (c *Client) TpmCertifyEnroll(
 	csr *x509.CertificateRequest,
 	ikParams attest.CertificationParameters,
 	akPublic []byte,
 	report []byte,
-	metadata [][]byte,
 ) (*x509.Certificate, error) {
 	return nil, fmt.Errorf("ACME provisioner: TpmCertifyEnroll not yet implemented")
 }
 
-func (c *Client) CcEnroll(csr *x509.CertificateRequest, report []byte, metadata [][]byte) (*x509.Certificate, error) {
-	return nil, fmt.Errorf("ACME provisioner: CcEnroll not yet implemented")
-}
-
-func (c *Client) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
-	return nil, fmt.Errorf("ACME provisioner: GetSnpCa not yet implemented")
-}
-
-func (c *Client) GetSnpVcek(codeName string, chipId [64]byte, tcb uint64) (*x509.Certificate, error) {
-	return nil, fmt.Errorf("ACME provisioner: GetSnpVcek not yet implemented")
+func (c *Client) AttestEnroll(csr *x509.CertificateRequest, report []byte) (*x509.Certificate, error) {
+	return nil, fmt.Errorf("ACME provisioner: AttestEnroll not yet implemented")
 }
