@@ -31,6 +31,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/peercache"
+	"github.com/Fraunhofer-AISEC/cmc/provision/acme"
 	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	estenroller "github.com/Fraunhofer-AISEC/cmc/provision/enroller"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -276,7 +277,11 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 		}
 		return enroller, nil
 	case "acme":
-		return nil, fmt.Errorf("ACME provisioning not yet implemented")
+		acmeclient, err := acme.New(c.EnrollmentAddr, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ACME client: %w", err)
+		}
+		return acmeclient, nil
 	default:
 		return nil, fmt.Errorf("unknown provisioner %q", c.EnrollmentMode)
 	}
