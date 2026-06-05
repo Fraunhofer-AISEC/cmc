@@ -130,7 +130,7 @@ func respondWithJson(status int, resp http.ResponseWriter, value any) {
 	resp.WriteHeader(status)
 	json.NewEncoder(resp).Encode(value)
 }
-func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) ([]byte, *AcmeAccount) {
+func authenticateRequest(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) ([]byte, *AcmeAccount) {
 	if req.Method != http.MethodPost {
 		resp.Header().Add("Allow", http.MethodPost)
 		resp.WriteHeader(http.StatusMethodNotAllowed)
@@ -170,9 +170,9 @@ func processPostAsGet(state *AcmeState, url *url.URL, req *http.Request, resp ht
 	return jwsBody.Payload, account
 }
 func sendAccountResource(status int, account *AcmeAccount, url *url.URL, resp http.ResponseWriter) {
-	accountStatus := AcmeStatusValid
+	accountStatus := AccountStatusValid
 	if account.Deactivated.Load() {
-		accountStatus = AcmeStatusDeactivated
+		accountStatus = AccountStatusDeactivated
 	}
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/account/%v", account.Identifier)))
 	respondWithJson(status, resp, map[string]any{
@@ -341,7 +341,7 @@ func handleNewAccount(state *AcmeState, url *url.URL, req *http.Request, resp ht
 	}
 }
 func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -401,7 +401,7 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	for _, ident := range payload.Identifier {
 		auths = append(auths, AcmeAuthorization{
 			Identifier:    ident.Value,
-			Status:        AcmeStatusPending,
+			Status:        AuthStatusPending,
 			Token:         rand.Text(),
 			ChallengeType: "http-01",
 		})
@@ -411,7 +411,7 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	sendOrderResource(http.StatusCreated, order, url, resp)
 }
 func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -432,7 +432,7 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 		return
 	}
 
-	if payload.Status == string(AcmeStatusDeactivated) {
+	if payload.Status == string(AccountStatusDeactivated) {
 		account.Deactivated.Store(true)
 		sendAccountResource(http.StatusOK, account, url, resp)
 		return
@@ -453,7 +453,7 @@ func handleAccount(state *AcmeState, url *url.URL, req *http.Request, resp http.
 	acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "unsupported account update")
 }
 func handleKeyChange(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -504,7 +504,7 @@ func handleKeyChange(state *AcmeState, url *url.URL, req *http.Request, resp htt
 	sendAccountResource(http.StatusOK, account, url, resp)
 }
 func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -532,7 +532,7 @@ func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.Re
 		orderIdentifier = url.Path[index+7:]
 	}
 
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -571,7 +571,7 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 		}
 	}
 
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -631,7 +631,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		}
 	}
 
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -656,9 +656,9 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 	}
 	auth := &order.Authorizations[idIndex]
 
-	if auth.Status == AcmeStatusPending {
+	if auth.Status == AuthStatusPending {
 		// TODO: implement actual challenge validation/verification
-		auth.Status = AcmeStatusValid
+		auth.Status = AuthStatusPending
 		auth.Validated = time.Now().Format(time.RFC3339Nano)
 	}
 
@@ -679,7 +679,7 @@ func handleCertificate(state *AcmeState, url *url.URL, req *http.Request, resp h
 		orderIdentifier = url.Path[index+13:]
 	}
 
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -716,7 +716,7 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 		orderIdentifier = url.Path[index+10:]
 	}
 
-	rawPayload, account := processPostAsGet(state, url, req, resp)
+	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
 		return
 	}
@@ -731,7 +731,7 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 	}
 	order.UpdateOrder()
 
-	if order.Status != AcmeStatusReady {
+	if order.Status != OrderStatusReady {
 		acmeError(resp, http.StatusForbidden, AcmeErrOrderNotReady, "order is not ready for finalization")
 		return
 	}
@@ -804,7 +804,7 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 	pem.Encode(&chain, &pem.Block{Type: "CERTIFICATE", Bytes: state.CAx509.Raw})
 
 	order.Certificate = chain.Bytes()
-	order.Status = AcmeStatusValid
+	order.Status = OrderStatusValid
 
 	sendOrderResource(http.StatusOK, order, url, resp)
 }
