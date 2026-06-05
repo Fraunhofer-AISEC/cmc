@@ -575,10 +575,6 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 	if rawPayload == nil {
 		return
 	}
-	if len(rawPayload) != 0 {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
-		return
-	}
 
 	account.mux.Lock()
 	defer account.mux.Unlock()
@@ -595,6 +591,22 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 		return
 	}
 	auth := &order.Authorizations[idIndex]
+
+	if len(rawPayload) != 0 {
+		payload := struct {
+			Status string `json:"status"`
+		}{}
+		if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.Status != string(AuthStatusDeactivated) {
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed authorization update payload")
+			return
+		}
+		if auth.Status != AuthStatusPending && auth.Status != AuthStatusValid {
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "cannot deactivate authorization in current state")
+			return
+		}
+		auth.Status = AuthStatusDeactivated
+		order.UpdateOrder()
+	}
 
 	respondWithJson(http.StatusOK, resp, map[string]any{
 		"status":  string(auth.Status),
@@ -658,7 +670,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 
 	if auth.Status == AuthStatusPending {
 		// TODO: implement actual challenge validation/verification
-		auth.Status = AuthStatusPending
+		auth.Status = AuthStatusValid
 		auth.Validated = time.Now().Format(time.RFC3339Nano)
 	}
 
