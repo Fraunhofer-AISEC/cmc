@@ -29,6 +29,15 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
+type kubeprovRequest struct {
+	Kind string `json:"kind"` // "join" or "kubeconfig"
+}
+
+const (
+	kubeprovKindJoin       = "join"
+	kubeprovKindKubeconfig = "kubeconfig"
+)
+
 type joinInfo struct {
 	APIServer  string `json:"apiServer"`
 	Token      string `json:"token"`
@@ -89,12 +98,12 @@ func kubeprovServe(c *config) error {
 		wg.Add(1)
 		go func(conn net.Conn) {
 			defer wg.Done()
-			kubeprovHandleConn(conn, c.KubeadmPath)
+			kubeprovHandleConn(conn, c.KubeadmPath, c.KubeconfigPath)
 		}(conn)
 
 		served++
 		if c.KubeprovCount > 0 && served >= c.KubeprovCount {
-			log.Infof("Served %d worker(s), waiting for handlers to finish", served)
+			log.Infof("Served %d client(s), waiting for handlers to finish", served)
 			wg.Wait()
 			log.Infof("All handlers finished, exiting")
 			return nil
@@ -102,9 +111,32 @@ func kubeprovServe(c *config) error {
 	}
 }
 
-func kubeprovHandleConn(conn net.Conn, kubeadmPath string) {
+func kubeprovHandleConn(conn net.Conn, kubeadmPath, kubeconfigPath string) {
 	defer conn.Close()
 
+	data, err := atls.Read(conn)
+	if err != nil {
+		log.Errorf("Failed to read request: %v", err)
+		return
+	}
+
+	var req kubeprovRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		log.Errorf("Failed to parse request from %v: %v", conn.RemoteAddr(), err)
+		return
+	}
+
+	switch req.Kind {
+	case kubeprovKindJoin:
+		kubeprovServeJoin(conn, kubeadmPath)
+	case kubeprovKindKubeconfig:
+		kubeprovServeKubeconfig(conn, kubeconfigPath)
+	default:
+		log.Errorf("Unknown request kind %q from %v", req.Kind, conn.RemoteAddr())
+	}
+}
+
+func kubeprovServeJoin(conn net.Conn, kubeadmPath string) {
 	info, err := createJoinToken(kubeadmPath)
 	if err != nil {
 		log.Errorf("Failed to create join token: %v", err)
@@ -123,6 +155,21 @@ func kubeprovHandleConn(conn net.Conn, kubeadmPath string) {
 	}
 
 	log.Infof("Sent join info to %v (server: %v)", conn.RemoteAddr(), info.APIServer)
+}
+
+func kubeprovServeKubeconfig(conn net.Conn, kubeconfigPath string) {
+	data, err := os.ReadFile(kubeconfigPath)
+	if err != nil {
+		log.Errorf("Failed to read kubeconfig %v: %v", kubeconfigPath, err)
+		return
+	}
+
+	if err := atls.Write(data, conn); err != nil {
+		log.Errorf("Failed to send kubeconfig: %v", err)
+		return
+	}
+
+	log.Infof("Sent kubeconfig (%d bytes) to %v", len(data), conn.RemoteAddr())
 }
 
 func createJoinToken(kubeadmPath string) (*joinInfo, error) {
@@ -155,10 +202,10 @@ func parseJoinCommand(line string) (*joinInfo, error) {
 	return info, nil
 }
 
-func kubeprovJoin(c *config) error {
+func kubeprovDial(c *config, kind string) (net.Conn, error) {
 	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
-		return fmt.Errorf("failed to create TLS config: %w", err)
+		return nil, fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
 	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
@@ -170,7 +217,26 @@ func kubeprovJoin(c *config) error {
 		atls.WithAttest(c.attest),
 		atls.WithLibApiCmcConfig(&c.Config))
 	if err != nil {
-		return fmt.Errorf("failed to dial server: %w", err)
+		return nil, fmt.Errorf("failed to dial server: %w", err)
+	}
+
+	req, err := json.Marshal(kubeprovRequest{Kind: kind})
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+	if err := atls.Write(req, conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	return conn, nil
+}
+
+func kubeprovJoin(c *config) error {
+	conn, err := kubeprovDial(c, kubeprovKindJoin)
+	if err != nil {
+		return err
 	}
 	defer conn.Close()
 
@@ -193,6 +259,34 @@ func kubeprovJoin(c *config) error {
 	}
 
 	return execKubeadmJoin(c.KubeadmPath, &info)
+}
+
+func kubeprovKubeconfig(c *config) error {
+	conn, err := kubeprovDial(c, kubeprovKindKubeconfig)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	data, err := atls.Read(conn)
+	if err != nil {
+		return fmt.Errorf("failed to read kubeconfig: %w", err)
+	}
+
+	log.Infof("Received kubeconfig (%d bytes)", len(data))
+
+	if c.KubeprovOutput == "" {
+		if _, err := os.Stdout.Write(data); err != nil {
+			return fmt.Errorf("failed to write kubeconfig to stdout: %w", err)
+		}
+		return nil
+	}
+
+	if err := os.WriteFile(c.KubeprovOutput, data, 0o600); err != nil {
+		return fmt.Errorf("failed to write kubeconfig to %v: %w", c.KubeprovOutput, err)
+	}
+	log.Infof("Wrote kubeconfig to %v", c.KubeprovOutput)
+	return nil
 }
 
 func execKubeadmJoin(kubeadmPath string, info *joinInfo) error {

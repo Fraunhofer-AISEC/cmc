@@ -100,8 +100,10 @@ type config struct {
 	TlsDnsNames      []string `json:"tlsDnsNames"`
 	TlsIpAddresses   []string `json:"tlsIpAddresses"`
 	KubeadmPath      string   `json:"kubeadmPath"`
+	KubeconfigPath   string   `json:"kubeconfigPath"`
 	KubeprovCount    int      `json:"kubeprovCount"`
 	KubeprovDryRun   bool     `json:"kubeprovDryRun"`
+	KubeprovOutput   string   `json:"kubeprovOutput"`
 	cmc.Config
 
 	rootCas           []*x509.Certificate
@@ -144,8 +146,10 @@ const (
 	tlsDnsNamesFlag    = "tls-dns-names"
 	tlsIpAddressesFlag = "tls-ip-addresses"
 	kubeadmPathFlag    = "kubeadm-path"
+	kubeconfigPathFlag = "kubeconfig-path"
 	kubeprovCountFlag  = "count"
 	kubeprovDryRunFlag = "dry-run"
+	kubeprovOutputFlag = "output"
 )
 
 var flags = append([]cli.Flag{
@@ -385,16 +389,27 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(kubeadmPathFlag) {
 		c.KubeadmPath = cmd.String(kubeadmPathFlag)
 	}
+	if cmd.IsSet(kubeconfigPathFlag) {
+		c.KubeconfigPath = cmd.String(kubeconfigPathFlag)
+	}
 	if cmd.IsSet(kubeprovCountFlag) {
 		c.KubeprovCount = int(cmd.Int(kubeprovCountFlag))
 	}
 	if cmd.IsSet(kubeprovDryRunFlag) {
 		c.KubeprovDryRun = cmd.Bool(kubeprovDryRunFlag)
 	}
+	if cmd.IsSet(kubeprovOutputFlag) {
+		c.KubeprovOutput = cmd.String(kubeprovOutputFlag)
+	}
 
 	// Default kubeadm path
 	if c.KubeadmPath == "" {
 		c.KubeadmPath = "kubeadm"
+	}
+
+	// Default kubeconfig path (kubeadm writes admin.conf here after init)
+	if c.KubeconfigPath == "" {
+		c.KubeconfigPath = "/etc/kubernetes/admin.conf"
 	}
 
 	// Configure the logger

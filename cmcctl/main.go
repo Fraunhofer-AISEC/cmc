@@ -188,15 +188,19 @@ func main() {
 				Commands: []*cli.Command{
 					{
 						Name:  "serve",
-						Usage: "Distribute kubeadm join tokens to attested workers",
+						Usage: "Distribute kubeadm join tokens and admin kubeconfigs to attested clients",
 						Flags: []cli.Flag{
 							&cli.IntFlag{
 								Name:  kubeprovCountFlag,
-								Usage: "number of workers to serve before exiting (0 = unlimited)",
+								Usage: "number of clients to serve before exiting (0 = unlimited)",
 							},
 							&cli.StringFlag{
 								Name:  kubeadmPathFlag,
 								Usage: "path to kubeadm binary",
+							},
+							&cli.StringFlag{
+								Name:  kubeconfigPathFlag,
+								Usage: "path to admin kubeconfig served on 'kubeconfig' requests",
 							},
 						},
 						Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -232,6 +236,26 @@ func main() {
 								return fmt.Errorf("path to root CAs must be specified via config file or command line")
 							}
 							return kubeprovJoin(c)
+						},
+					},
+					{
+						Name:  "kubeconfig",
+						Usage: "Fetch the cluster's admin kubeconfig via attested TLS",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:  kubeprovOutputFlag,
+								Usage: "output file for the received kubeconfig (default: stdout)",
+							},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+							c, err := getConfig(cmd)
+							if err != nil {
+								return err
+							}
+							if len(c.RootCas) == 0 {
+								return fmt.Errorf("path to root CAs must be specified via config file or command line")
+							}
+							return kubeprovKubeconfig(c)
 						},
 					},
 				},
