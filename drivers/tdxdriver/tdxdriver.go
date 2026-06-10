@@ -76,9 +76,9 @@ func (tdx *Tdx) Init(c *drivers.DriverConfig) error {
 		return fmt.Errorf("missing endorser provider")
 	}
 
-	endorser, ok := c.Endorsers.Tdx()
-	if !ok {
-		return fmt.Errorf("tdx endorser not configured")
+	endorser, err := c.Endorsers.Tdx()
+	if err != nil {
+		return fmt.Errorf("failed to get endorser: %w", err)
 	}
 	tdx.endorser = endorser
 

@@ -40,16 +40,16 @@ type TdxEndorser struct {
 }
 
 // Implement the EndorserProvider interface
-func (endorser *TdxEndorser) Snp() (drivers.SnpEndorser, bool) {
-	return nil, false
+func (endorser *TdxEndorser) Snp() (drivers.SnpEndorser, error) {
+	return nil, fmt.Errorf("internal error: requesting SNP from TDX endorser")
 }
 
-func (endorser *TdxEndorser) Tdx() (drivers.TdxEndorser, bool) {
-	return endorser, true
+func (endorser *TdxEndorser) Tdx() (drivers.TdxEndorser, error) {
+	return endorser, nil
 }
 
-func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, bool) {
-	return nil, false
+func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, error) {
+	return nil, fmt.Errorf("internal error: requesting TPM from TDX endorser")
 }
 
 // NewTdxEndorser initializes a new TDX endorser. baseUrl is the address of the

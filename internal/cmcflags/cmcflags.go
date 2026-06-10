@@ -71,8 +71,16 @@ var Flags = []cli.Flag{
 		Usage: "provisioning authentication methods [none token certificate attestation]",
 	},
 	&cli.StringFlag{
-		Name:  EndorsementModeFlag,
-		Usage: "endorsement mode [direct, est, pccs]",
+		Name: EndorsementModeFlag,
+		Usage: "endorsement mode for fetching driver certs and collateral [direct cps est]:\n" +
+			"\t\tdirect\n" +
+			"\t\t\tSNP: fetch AMD SNP VCEK/CA directly from AMD KDS (rate-limited: 10s per request)\n" +
+			"\t\t\tTDX: fetch TDX collateral directly from Intel PCS\n" +
+			"\t\tcps:\n" +
+			"\t\t\tSNP: Fetch AMD SNP VCEK/CA from custom caching proxy service (CPS)\n" +
+			"\t\t\tTDX: Fetch TDX collateral from Provisioning Certififcation Caching Service (PCCS)\n" +
+			"\t\test:\n" +
+			"\t\t\tTPM: Enroll TPM EK certificate via Enrollment over Secure Transport (EST) server\n",
 	},
 	&cli.StringFlag{
 		Name:  EndorsementAddrFlag,

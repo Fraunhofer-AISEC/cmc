@@ -77,9 +77,9 @@ func (snp *Snp) Init(c *drivers.DriverConfig) error {
 		return fmt.Errorf("missing endorser provider")
 	}
 
-	endorser, ok := c.Endorsers.Snp()
-	if !ok {
-		return fmt.Errorf("snp endorser not configured")
+	endorser, err := c.Endorsers.Snp()
+	if err != nil {
+		return fmt.Errorf("failed to get endorser: %w", err)
 	}
 	snp.endorser = endorser
 

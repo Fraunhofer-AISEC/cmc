@@ -35,8 +35,6 @@ import (
 const (
 	EndpointPrefix            = "/.well-known/est"
 	CacertsEndpoint           = "/cacerts"
-	SnpCaCertsEndpoint        = "/snpcacerts"
-	SnpVcekEndpoint           = "/snpvcek"
 	CsrattrsEndpoint          = "/csrattrs"
 	EnrollEndpoint            = "/simpleenroll"
 	HealthCheckEndpoint       = "/healthcheck"
