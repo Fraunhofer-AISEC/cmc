@@ -67,15 +67,15 @@ func (azure *Azure) Init(c *drivers.DriverConfig) error {
 		return fmt.Errorf("missing endorser provider")
 	}
 
-	snpEndorser, ok := c.Endorsers.Snp()
-	if !ok {
-		return fmt.Errorf("azure snp endorser not configured")
+	snpEndorser, err := c.Endorsers.Snp()
+	if err != nil {
+		return fmt.Errorf("failed to get azure endorser: %w", err)
 	}
 	azure.snpEndorser = snpEndorser
 
-	tdxEndorser, ok := c.Endorsers.Tdx()
-	if !ok {
-		return fmt.Errorf("azure tdx endorser not configured")
+	tdxEndorser, err := c.Endorsers.Tdx()
+	if err != nil {
+		return fmt.Errorf("failed to get azure endorser: %w", err)
 	}
 	azure.tdxEndorser = tdxEndorser
 

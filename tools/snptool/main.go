@@ -154,11 +154,16 @@ func main() {
 					log.Debugf("Fetched code name %q for family ID 0x%x, model ID 0x%x", codeName,
 						report.CpuFamilyId, report.CpuModelId)
 
-					url := provision.SnpVcekUrl(codeName, report.ChipId[:], report.CurrentTcb)
+					endorser, err := provision.NewSnpEndorser(provision.AmdKdsUrl, "", nil, true)
+					if err != nil {
+						return fmt.Errorf("failed to create SNP endorser: %w", err)
+					}
+
+					url := endorser.SnpVcekUrl(codeName, report.ChipId[:], report.CurrentTcb)
 
 					log.Debugf("Created VCEK URL %q", url)
 
-					vcek, status, err := provision.DownloadVcek(url)
+					vcek, status, err := endorser.DownloadVcek(url)
 					if err != nil {
 						return fmt.Errorf("failed to download VCEK. Status %v (%w)", status, err)
 					}

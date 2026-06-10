@@ -69,9 +69,9 @@ func (sgx *Sgx) Init(c *drivers.DriverConfig) error {
 		return fmt.Errorf("missing endorser provider")
 	}
 
-	endorser, ok := c.Endorsers.Tdx()
-	if !ok {
-		return fmt.Errorf("sgx endorser not configured")
+	endorser, err := c.Endorsers.Tdx()
+	if err != nil {
+		return fmt.Errorf("failed to get endorser: %w", err)
 	}
 	sgx.endorser = endorser
 

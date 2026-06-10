@@ -41,16 +41,16 @@ type Client struct {
 }
 
 // Implement the EndorserProvider interface
-func (p *Client) Snp() (drivers.SnpEndorser, bool) {
-	return p, true
+func (p *Client) Snp() (drivers.SnpEndorser, error) {
+	return nil, fmt.Errorf("EST endorser does not support SNP")
 }
 
-func (p *Client) Tdx() (drivers.TdxEndorser, bool) {
-	return nil, false
+func (p *Client) Tdx() (drivers.TdxEndorser, error) {
+	return nil, fmt.Errorf("EST endorser does not support SNP")
 }
 
-func (p *Client) Tpm() (drivers.TpmEndorser, bool) {
-	return p, true
+func (p *Client) Tpm() (drivers.TpmEndorser, error) {
+	return p, nil
 }
 
 func New(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token []byte) (*Client, error) {
@@ -266,86 +266,6 @@ func (c *Client) AttestEnroll(
 
 	method := http.MethodPost
 	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.AttestEnrollEndpoint
-	accepts := est.MimeTypePKCS7
-	transferEncoding := est.EncodingTypeBase64
-
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding,
-		body, c.bootstrapToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	payload, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
-	}
-
-	certs, err := parseSimplePkiResponse(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse simple PKI response: %w", err)
-	}
-
-	return certs[0], nil
-}
-
-func (c *Client) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
-
-	buf, contentType, err := est.EncodeMultiPart(
-		[]est.MimeMultipart{
-			{ContentType: est.MimeTypeOctetStream, Data: []byte{byte(akType)}},
-			{ContentType: est.MimeTypeOctetStream, Data: codeName},
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode multipart: %w", err)
-	}
-
-	body := io.NopCloser(buf)
-
-	method := http.MethodPost
-	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.SnpCaCertsEndpoint
-	accepts := est.MimeTypePKCS7
-	transferEncoding := est.EncodingTypeBase64
-
-	resp, err := request(c.client, method, endpoint, accepts, contentType, transferEncoding,
-		body, c.bootstrapToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	payload, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
-	}
-
-	certs, err := parseSimplePkiResponse(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse simple PKI response: %w", err)
-	}
-
-	return certs, nil
-}
-
-func (c *Client) GetSnpVcek(codeName string, chipId []byte, tcb uint64,
-) (*x509.Certificate, error) {
-
-	buf, contentType, err := est.EncodeMultiPart(
-		[]est.MimeMultipart{
-			{ContentType: est.MimeTypeOctetStream, Data: chipId},
-			{ContentType: est.MimeTypeOctetStream, Data: tcb},
-			{ContentType: est.MimeTypeOctetStream, Data: codeName},
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode multipart: %w", err)
-	}
-
-	body := io.NopCloser(buf)
-
-	method := http.MethodPost
-	endpoint := strings.TrimSuffix(c.addr, "/") + est.EndpointPrefix + est.SnpVcekEndpoint
 	accepts := est.MimeTypePKCS7
 	transferEncoding := est.EncodingTypeBase64
 

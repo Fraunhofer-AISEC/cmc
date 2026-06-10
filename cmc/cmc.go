@@ -223,6 +223,7 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 
 	switch c.EndorsementMode {
 	case "est":
+		// TPM-only attestation must use EST endorsement mode as credential activation is mandatory
 		var token []byte
 		if authMethods.Has(internal.AuthToken) {
 			token, err = os.ReadFile(c.ProvisionToken)
@@ -236,12 +237,14 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 		}
 		return estclient, nil
 	case "direct":
+		// Direct endorsement supports TDX (Intel PCS) and SNP (AMD KDS)
 		return provision.NewDirectProvider(c.VendorCache)
-	case "pccs":
+	case "cps":
+		// CPS endorsement supports TDX (PCCS) and SNP (custom caching proxy service)
 		if c.EndorsementAddr == "" {
-			return nil, fmt.Errorf("pccs endorsement mode requires endorsementAddr")
+			return nil, fmt.Errorf("cps endorsement mode requires endorsementAddr")
 		}
-		return provision.NewTdxEndorser(c.EndorsementAddr, c.VendorCache, rootCas, c.AllowSystemCerts)
+		return provision.NewCpsProvider(c.VendorCache, c.EndorsementAddr, rootCas, c.AllowSystemCerts)
 	default:
 		return nil, fmt.Errorf("unknown endorser type %q", c.EndorsementMode)
 	}

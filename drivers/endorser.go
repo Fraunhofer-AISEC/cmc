@@ -24,9 +24,9 @@ import (
 )
 
 type EndorserProvider interface {
-	Snp() (SnpEndorser, bool)
-	Tdx() (TdxEndorser, bool)
-	Tpm() (TpmEndorser, bool)
+	Snp() (SnpEndorser, error)
+	Tdx() (TdxEndorser, error)
+	Tpm() (TpmEndorser, error)
 }
 
 // TpmEndorser provides the interface for performing TPM AK credential activation

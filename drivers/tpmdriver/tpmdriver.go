@@ -90,9 +90,9 @@ func (t *Tpm) Init(c *drivers.DriverConfig) error {
 	if c.Endorsers == nil {
 		return fmt.Errorf("missing endorsers provider")
 	}
-	endorser, ok := c.Endorsers.Tpm()
-	if !ok {
-		return fmt.Errorf("tpm endorser not configured")
+	endorser, err := c.Endorsers.Tpm()
+	if err != nil {
+		return fmt.Errorf("failed to get endorser: %w", err)
 	}
 	t.endorser = endorser
 
@@ -677,6 +677,8 @@ func (t *Tpm) provisionAk(fqdn string) (*x509.Certificate, error) {
 	} else if t.ek[0].CertificateURL != "" {
 		log.Debugf("Using EK URL %q", t.ek[0].CertificateURL)
 		ekRaw = nil
+	} else {
+		log.Debugf("No EK certificate present")
 	}
 
 	// Create AK CSR and perform EST enrollment with TPM credential activation
@@ -790,6 +792,17 @@ func createKeys(tpm *attest.TPM, keyAlg string) ([]attest.EK, *attest.AK, error)
 		return nil, nil, fmt.Errorf("failed to load EKs - %w", err)
 	}
 	log.Debugf("Found %v EK(s)", len(eks))
+
+	for i, ek := range eks {
+		if ek.Certificate != nil {
+			log.Tracef("EK[%v] Subject CN=%v", i, ek.Certificate.Subject.CommonName)
+			log.Tracef("EK[%v] Issuer  CN=%v", i, ek.Certificate.Issuer.CommonName)
+		} else if ek.CertificateURL != "" {
+			log.Tracef("EK[%v] URL=%v", i, ek.CertificateURL)
+		} else {
+			log.Tracef("EK[%v]: No certificate or URL configured", i)
+		}
+	}
 
 	log.Debugf("Creating new AK with algorithm %v", keyAlg)
 	akConfig := &attest.AKConfig{}

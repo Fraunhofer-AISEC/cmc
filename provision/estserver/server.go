@@ -111,6 +111,13 @@ func NewServer(c *config) (*Server, error) {
 		publishClientCert = &cert
 	}
 
+	// Use the system CA root store regardless of the CMC trust
+	// pool as the AMD KDS is a production service under a global ca
+	snpEndorser, err := provision.NewSnpEndorser(provision.AmdKdsUrl, c.VcekCacheFolder, nil, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create snp endorser: %w", err)
+	}
+
 	s := &http.Server{
 		Addr:              c.EstAddr,
 		Handler:           nil,
@@ -130,7 +137,7 @@ func NewServer(c *config) (*Server, error) {
 			VerifyEkCert: c.VerifyEkCert,
 			DbPath:       c.TpmEkCertDb,
 		},
-		snpEndorser:       provision.NewSnpEndorser(c.VcekCacheFolder),
+		snpEndorser:       snpEndorser,
 		authMethods:       c.authMethods,
 		tokenPath:         c.TokenPath,
 		publishResults:    c.PublishResults,
@@ -154,8 +161,11 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc(est.EndpointPrefix+est.TpmActivateEnrollEndpoint, server.handleTpmActivateEnroll)
 	http.HandleFunc(est.EndpointPrefix+est.TpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
 	http.HandleFunc(est.EndpointPrefix+est.AttestEnrollEndpoint, server.handleAttestEnroll)
-	http.HandleFunc(est.EndpointPrefix+est.SnpVcekEndpoint, server.handleSnpVcek)
-	http.HandleFunc(est.EndpointPrefix+est.SnpCaCertsEndpoint, server.handleSnpCa)
+
+	// AMD KDS-shaped SNP collateral endpoints (proxy and cache for rate-limited AMD KDS)
+	http.HandleFunc("GET /vcek/v1/{codeName}/cert_chain", server.handleVcekCertChain)
+	http.HandleFunc("GET /vlek/v1/{codeName}/cert_chain", server.handleVlekCertChain)
+	http.HandleFunc("GET /vcek/v1/{codeName}/{chipId}", server.handleVcek)
 
 	// Metadata file serving
 	httpHandleMetadata(c.HttpFolder)
