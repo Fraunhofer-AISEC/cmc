@@ -54,20 +54,20 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 	refvals := make([]*ar.Component, 0)
 
 	// Measure EFI TD Handoff Block: UEFI Platform Initialization Specification, Vol. 3, Chapter 5 5 HOB Code Definitions
-	tbHob, err := CreateTbHob()
+	tdHob, err := CreateTdHob(c)
 	if err != nil {
 		return nil, nil, err
 	}
-	tbHobHash := sha512.Sum384(tbHob)
+	tdHobHash := sha512.Sum384(tdHob)
 
-	rtmr = internal.ExtendSha384(rtmr, tbHobHash[:])
+	rtmr = internal.ExtendSha384(rtmr, tdHobHash[:])
 	comp := &ar.Component{
 		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR0),
 		Name: "EV_EFI_HANDOFF_TABLES",
 		Hashes: []ar.ReferenceHash{
 			{
 				Alg:     "SHA-384",
-				Content: tbHobHash[:],
+				Content: tdHobHash[:],
 			},
 		},
 		Description: "RTMR0: TD Hob passed from host VMM to guest firmware",
@@ -83,7 +83,7 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to read file: %w", err)
 		}
 
-		cfvHash, err := MeasureCfv(data)
+		cfvHash, err := measureCfv(data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
 		}
