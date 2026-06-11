@@ -33,7 +33,7 @@ type Conf struct {
 	AcpiTables   string
 	TableLoader  string
 	TpmLog       string
-	EfiHob       string
+	SmbiosTables string
 	BootOrder    []string
 	BootXxxx     []string
 	NoBootVars   bool
@@ -66,7 +66,7 @@ const (
 	acpitablesFlag   = "acpitables"
 	tableloaderFlag  = "tableloader"
 	tpmlogFlag       = "tpmlog"
-	efihobFlag       = "efihob"
+	smbiosTablesFlag = "smbios-tables"
 	bootorderFlag    = "bootorder"
 	bootxxxxFlag     = "bootxxxx"
 	nobootvarsFlag   = "nobootvars"
@@ -100,7 +100,7 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{Name: acpitablesFlag, Usage: "Path to QEMU etc/acpi/tables file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tableloaderFlag, Usage: "Path to QEMU etc/table-loader file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tpmlogFlag, Usage: "Path to QEMU etc/tpm/log file for PCR1/RTMR0"},
-	&cli.StringFlag{Name: efihobFlag, Usage: "Path to an EFI handoff table optionally measured into PCR1"},
+	&cli.StringFlag{Name: smbiosTablesFlag, Usage: "Path to SMBIOS tables file optionally measured into PCR1"},
 	&cli.StringFlag{Name: bootorderFlag, Usage: "Comma-separated list of UEFI boot order numbers to be measured into PCR1/RTMR0"},
 	&cli.StringFlag{Name: bootxxxxFlag, Usage: "Comma-separated list of UEFI Boot#### variable data files to be measured into PCR1/RTMR0"},
 	&cli.BoolFlag{Name: nobootvarsFlag, Usage: "Do not measure UEFI boot variables into PCR1/RTMR0"},
@@ -145,8 +145,8 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	if cmd.IsSet(tpmlogFlag) {
 		c.TpmLog = cmd.String(tpmlogFlag)
 	}
-	if cmd.IsSet(efihobFlag) {
-		c.EfiHob = cmd.String(efihobFlag)
+	if cmd.IsSet(smbiosTablesFlag) {
+		c.SmbiosTables = cmd.String(smbiosTablesFlag)
 	}
 
 	if cmd.IsSet(bootorderFlag) {
@@ -246,8 +246,8 @@ func (c *Conf) Print() {
 	if c.TpmLog != "" {
 		log.Debugf("\tTPM Log: %q", c.TpmLog)
 	}
-	if c.EfiHob != "" {
-		log.Debugf("\tEFI HOB: %q", c.EfiHob)
+	if c.SmbiosTables != "" {
+		log.Debugf("\tSMBIOS tables: %q", c.SmbiosTables)
 	}
 
 	if len(c.BootOrder) > 0 {

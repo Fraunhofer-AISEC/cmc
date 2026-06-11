@@ -43,7 +43,6 @@ func newTPMComponent(index int, name string, hashes []ar.ReferenceHash, desc str
 	return c
 }
 
-
 type DriverFileType int
 
 const (
@@ -101,13 +100,13 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
 	}
 
-	// EV_EFI_HANDOFF_TABLES
-	if c.EfiHob != "" {
-		pcr, refvals, err = tcg.MeasureFile(crypto.SHA256, tcg.TPM, "EV_EFI_HANDOFF_TABLES", pcr, refvals, 1, c.EfiHob)
+	// SMBIOS tables recorded as EV_EFI_HANDOFF_TABLES
+	if c.SmbiosTables != "" {
+		pcr, refvals, err = tcg.MeasureFile(crypto.SHA256, tcg.TPM, "EV_EFI_HANDOFF_TABLES", pcr,
+			refvals, 1, c.SmbiosTables)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure EFI HOB file: %w", err)
+			return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
 		}
-
 	}
 
 	// EV_EFI_VARIABLE_BOOT: boot variables
