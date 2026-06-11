@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2025 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/cgo"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 )
 
@@ -225,7 +224,7 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 			}
 		}
 
-		hash, err := cgo.MeasurePeImage(cgo.SHA384, data)
+		hash, err := tcg.MeasurePeCoff(crypto.SHA384, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
@@ -330,7 +329,7 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to read file: %w", err)
 		}
 
-		hash, err := cgo.MeasurePeImage(cgo.SHA384, data)
+		hash, err := tcg.MeasurePeCoff(crypto.SHA384, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
