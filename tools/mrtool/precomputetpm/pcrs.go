@@ -27,7 +27,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/cgo"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 )
 
@@ -158,7 +157,7 @@ func PrecomputePcr2(c *Config) (*ar.Component, []*ar.Component, error) {
 			}
 		}
 
-		hash, err := cgo.MeasurePeImage(cgo.SHA256, data)
+		hash, err := tcg.MeasurePeCoff(crypto.SHA256, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
@@ -214,7 +213,7 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to read file: %w", err)
 		}
 
-		hash, err := cgo.MeasurePeImage(cgo.SHA256, data)
+		hash, err := tcg.MeasurePeCoff(crypto.SHA256, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
@@ -246,7 +245,7 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 			}
 		}
 
-		hash, err := cgo.MeasurePeImage(cgo.SHA256, data)
+		hash, err := tcg.MeasurePeCoff(crypto.SHA256, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
