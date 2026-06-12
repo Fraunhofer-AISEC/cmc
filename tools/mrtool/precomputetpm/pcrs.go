@@ -99,12 +99,39 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
 	}
 
-	// SMBIOS tables recorded as EV_EFI_HANDOFF_TABLES
-	if c.SmbiosTables != "" {
-		pcr, refvals, err = tcg.MeasureFile(crypto.SHA256, tcg.TPM, "EV_EFI_HANDOFF_TABLES", pcr,
-			refvals, 1, c.SmbiosTables)
+	// SMBIOS tables recorded as EV_EFI_HANDOFF_TABLES.
+	var smbiosBlob []byte
+	switch {
+	// Capture mode: the input is /sys/firmware/dmi/tables/DMI dumped from a reference VM
+	case c.SmbiosTables != "":
+		smbiosBlob, err = os.ReadFile(c.SmbiosTables)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read SMBIOS tables: %w", err)
+		}
+	// Spec mode: encode the table from the spec, matching what OVMF would install
+	case c.SmbiosSpec != nil:
+		smbiosBlob, err = tcg.BuildSmbiosTable(*c.SmbiosSpec)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to encode SMBIOS spec: %w", err)
+		}
+	}
+	if smbiosBlob != nil {
+		filtered, err := tcg.FilterSmbiosForMeasurement(smbiosBlob)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to filter SMBIOS tables: %w", err)
+		}
+		var rv *ar.Component
+		rv, pcr, err = tcg.CreateExtendRefval(crypto.SHA256, tcg.TPM, 1, pcr,
+			filtered, "EV_EFI_HANDOFF_TABLES", "smbios-tables")
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
+		}
+		refvals = append(refvals, rv)
+
+		if c.DumpSmbios != "" {
+			if err := os.WriteFile(c.DumpSmbios, filtered, 0644); err != nil {
+				return nil, nil, fmt.Errorf("failed to write smbios dump: %w", err)
+			}
 		}
 	}
 

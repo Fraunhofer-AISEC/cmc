@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2025 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +16,9 @@
 package tcg
 
 import (
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -34,6 +37,7 @@ type Conf struct {
 	TableLoader  string
 	TpmLog       string
 	SmbiosTables string
+	SmbiosSpec   *SmbiosSpec
 	BootOrder    []string
 	BootXxxx     []string
 	NoBootVars   bool
@@ -58,6 +62,7 @@ type Conf struct {
 	DumpDxe      string
 	DumpKernel   string
 	DumpGpt      string
+	DumpSmbios   string
 }
 
 const (
@@ -67,6 +72,19 @@ const (
 	tableloaderFlag  = "tableloader"
 	tpmlogFlag       = "tpmlog"
 	smbiosTablesFlag = "smbios-tables"
+
+	smbiosSocketsFlag         = "smbios-sockets"
+	smbiosRamSizeFlag         = "smbios-ram-size"
+	smbiosRamBelow4GFlag      = "smbios-ram-below-4g"
+	smbiosManufacturerFlag    = "smbios-manufacturer"
+	smbiosProductFlag         = "smbios-product"
+	smbiosMachineVersionFlag  = "smbios-machine-version"
+	smbiosProcessorIdFlag     = "smbios-processor-id"
+	smbiosChassisSecurityFlag = "smbios-chassis-security"
+	smbiosBiosVendorFlag      = "smbios-bios-vendor"
+	smbiosBiosVersionFlag     = "smbios-bios-version"
+	smbiosBiosDateFlag        = "smbios-bios-date"
+
 	bootorderFlag    = "bootorder"
 	bootxxxxFlag     = "bootxxxx"
 	nobootvarsFlag   = "nobootvars"
@@ -92,6 +110,7 @@ const (
 	dumpdxeFlag    = "dumpdxe"
 	dumpkernelFlag = "dumpkernel"
 	dumpgptFlag    = "dumpgpt"
+	dumpsmbiosFlag = "dumpsmbios"
 )
 
 var Flags = []cli.Flag{
@@ -100,7 +119,20 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{Name: acpitablesFlag, Usage: "Path to QEMU etc/acpi/tables file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tableloaderFlag, Usage: "Path to QEMU etc/table-loader file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tpmlogFlag, Usage: "Path to QEMU etc/tpm/log file for PCR1/RTMR0"},
-	&cli.StringFlag{Name: smbiosTablesFlag, Usage: "Path to SMBIOS tables file optionally measured into PCR1"},
+	&cli.StringFlag{Name: smbiosTablesFlag, Usage: "Path to a DMI dump (/sys/firmware/dmi/tables/DMI) captured from a reference VM; EDK2 SmbiosMeasurementDxe filter is applied before hashing (mutually exclusive with --smbios-*)"},
+
+	&cli.StringFlag{Name: smbiosRamSizeFlag, Usage: "Spec-mode: guest RAM size (e.g. 4G, 8192M); enables spec mode"},
+	&cli.IntFlag{Name: smbiosSocketsFlag, Usage: "Spec-mode: number of CPU sockets"},
+	&cli.StringFlag{Name: smbiosRamBelow4GFlag, Usage: "Spec-mode: override below-4G RAM split"},
+	&cli.StringFlag{Name: smbiosManufacturerFlag, Usage: "Spec-mode: SMBIOS Manufacturer string"},
+	&cli.StringFlag{Name: smbiosProductFlag, Usage: "Spec-mode: SMBIOS ProductName"},
+	&cli.StringFlag{Name: smbiosMachineVersionFlag, Usage: "Spec-mode: SMBIOS Type Version (e.g. pc-q35-10.1)"},
+	&cli.StringFlag{Name: smbiosProcessorIdFlag, Usage: "Spec-mode: SMBIOS ProcessorID as 16-hex-digit string (Default matches QEMU -cpu EPYC-v4)"},
+	&cli.IntFlag{Name: smbiosChassisSecurityFlag, Usage: "Spec-mode: SMBIOS Type 3 ChassisSecurityStatus byte"},
+	&cli.StringFlag{Name: smbiosBiosVendorFlag, Usage: "Spec-mode: SMBIOS Vendor"},
+	&cli.StringFlag{Name: smbiosBiosVersionFlag, Usage: "Spec-mode: SMBIOS BIOSVersion"},
+	&cli.StringFlag{Name: smbiosBiosDateFlag, Usage: "Spec-mode: SMBIOS BIOSReleaseDate (MM/DD/YYYY)"},
+
 	&cli.StringFlag{Name: bootorderFlag, Usage: "Comma-separated list of UEFI boot order numbers to be measured into PCR1/RTMR0"},
 	&cli.StringFlag{Name: bootxxxxFlag, Usage: "Comma-separated list of UEFI Boot#### variable data files to be measured into PCR1/RTMR0"},
 	&cli.BoolFlag{Name: nobootvarsFlag, Usage: "Do not measure UEFI boot variables into PCR1/RTMR0"},
@@ -125,6 +157,7 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{Name: dumpdxeFlag, Usage: "Optional path to folder to dump the measured DXEFV"},
 	&cli.StringFlag{Name: dumpkernelFlag, Usage: "Optional path to folder to dump the measured kernel"},
 	&cli.StringFlag{Name: dumpgptFlag, Usage: "Optional path to folder to dump the measured GPT"},
+	&cli.StringFlag{Name: dumpsmbiosFlag, Usage: "Optional path to folder to dump the measured smbios tables"},
 }
 
 func GetTcgConf(cmd *cli.Command) (*Conf, error) {
@@ -148,6 +181,15 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	if cmd.IsSet(smbiosTablesFlag) {
 		c.SmbiosTables = cmd.String(smbiosTablesFlag)
 	}
+
+	spec, err := parseSmbiosSpec(cmd)
+	if err != nil {
+		return nil, err
+	}
+	if spec != nil && c.SmbiosTables != "" {
+		return nil, fmt.Errorf("--%s and --smbios-* are mutually exclusive", smbiosTablesFlag)
+	}
+	c.SmbiosSpec = spec
 
 	if cmd.IsSet(bootorderFlag) {
 		c.BootOrder = strings.Split(cmd.String(bootorderFlag), ",")
@@ -224,6 +266,9 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	}
 	if cmd.IsSet(dumpgptFlag) {
 		c.DumpGpt = cmd.String(dumpgptFlag)
+	}
+	if cmd.IsSet(dumpsmbiosFlag) {
+		c.DumpSmbios = cmd.String(dumpsmbiosFlag)
 	}
 
 	return c, nil
@@ -322,6 +367,12 @@ func (c *Conf) Print() {
 		log.Debugf("\tSBAT Level: %q", c.SbatLevel)
 	}
 
+	if c.SmbiosSpec != nil {
+		log.Debugf("\tSMBIOS spec: sockets=%d ramSize=%#x product=%q machineVer=%q",
+			c.SmbiosSpec.Sockets, c.SmbiosSpec.RamSize,
+			c.SmbiosSpec.ProductName, c.SmbiosSpec.MachineVersion)
+	}
+
 	if c.DumpPei != "" {
 		log.Debugf("\tDump PEI: %q", c.DumpPei)
 	}
@@ -334,4 +385,96 @@ func (c *Conf) Print() {
 	if c.DumpGpt != "" {
 		log.Debugf("\tDump GPT: %q", c.DumpGpt)
 	}
+	if c.DumpSmbios != "" {
+		log.Debugf("\t Dump SMBIOS: %q", c.DumpSmbios)
+	}
+
+}
+
+// parseSmbiosSpec returns a populated SmbiosSpec when any --smbios-* flag is set
+func parseSmbiosSpec(cmd *cli.Command) (*SmbiosSpec, error) {
+	specFlags := []string{
+		smbiosSocketsFlag, smbiosRamSizeFlag, smbiosRamBelow4GFlag,
+		smbiosManufacturerFlag, smbiosProductFlag, smbiosMachineVersionFlag,
+		smbiosProcessorIdFlag, smbiosChassisSecurityFlag,
+		smbiosBiosVendorFlag, smbiosBiosVersionFlag, smbiosBiosDateFlag,
+	}
+	anySet := false
+	for _, f := range specFlags {
+		if cmd.IsSet(f) {
+			anySet = true
+			break
+		}
+	}
+	if !anySet {
+		return nil, nil
+	}
+
+	if !cmd.IsSet(smbiosRamSizeFlag) {
+		return nil, fmt.Errorf("--%s is required when any --smbios-* flag is set", smbiosRamSizeFlag)
+	}
+
+	spec := SmbiosDefaults()
+	ramSize, err := ParseRamSize(cmd.String(smbiosRamSizeFlag))
+	if err != nil {
+		return nil, fmt.Errorf("invalid --%s: %w", smbiosRamSizeFlag, err)
+	}
+	spec.RamSize = ramSize
+
+	if cmd.IsSet(smbiosSocketsFlag) {
+		spec.Sockets = cmd.Int(smbiosSocketsFlag)
+	}
+	if cmd.IsSet(smbiosRamBelow4GFlag) {
+		v, err := ParseRamSize(cmd.String(smbiosRamBelow4GFlag))
+		if err != nil {
+			return nil, fmt.Errorf("invalid --%s: %w", smbiosRamBelow4GFlag, err)
+		}
+		spec.RamBelow4G = v
+	}
+	if cmd.IsSet(smbiosManufacturerFlag) {
+		spec.Manufacturer = cmd.String(smbiosManufacturerFlag)
+	}
+	if cmd.IsSet(smbiosProductFlag) {
+		spec.ProductName = cmd.String(smbiosProductFlag)
+	}
+	if cmd.IsSet(smbiosMachineVersionFlag) {
+		spec.MachineVersion = cmd.String(smbiosMachineVersionFlag)
+	}
+	if cmd.IsSet(smbiosChassisSecurityFlag) {
+		v := cmd.Int(smbiosChassisSecurityFlag)
+		if v < 0 || v > 0xff {
+			return nil, fmt.Errorf("invalid --%s: %d (must fit in uint8)", smbiosChassisSecurityFlag, v)
+		}
+		spec.ChassisSecurityStatus = uint8(v)
+	}
+	if cmd.IsSet(smbiosProcessorIdFlag) {
+		id, err := parseHexUint64(cmd.String(smbiosProcessorIdFlag))
+		if err != nil {
+			return nil, fmt.Errorf("invalid --%s: %w", smbiosProcessorIdFlag, err)
+		}
+		spec.ProcessorId = id
+	}
+	if cmd.IsSet(smbiosBiosVendorFlag) {
+		spec.BiosVendor = cmd.String(smbiosBiosVendorFlag)
+	}
+	if cmd.IsSet(smbiosBiosVersionFlag) {
+		spec.BiosVersion = cmd.String(smbiosBiosVersionFlag)
+	}
+	if cmd.IsSet(smbiosBiosDateFlag) {
+		spec.BiosDate = cmd.String(smbiosBiosDateFlag)
+	}
+
+	return &spec, nil
+}
+
+func parseHexUint64(s string) (uint64, error) {
+	s = strings.TrimPrefix(strings.TrimPrefix(s, "0x"), "0X")
+	if len(s) > 16 {
+		return 0, fmt.Errorf("too long (max 16 hex digits)")
+	}
+	raw, err := hex.DecodeString(strings.Repeat("0", 16-len(s)) + s)
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(raw), nil
 }

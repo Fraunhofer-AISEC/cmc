@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os"
 	"sort"
+
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 )
 
 const (
@@ -41,12 +43,6 @@ const (
 	EFI_RESOURCE_ATTRIBUTE_PRESENT     = 0x01
 	EFI_RESOURCE_ATTRIBUTE_INITIALIZED = 0x02
 	EFI_RESOURCE_ATTRIBUTE_TESTED      = 0x04
-
-	// QEMU q35 chooses lowmem = 2 GiB when ram_size >= 0xb0000000, else lowmem = ram_size.
-	// See qemu hw/i386/pc_q35.c pc_q35_init().
-	qemuQ35LowmemThreshold = 0xb0000000
-	qemuQ35Lowmem          = 0x80000000
-	qemuAbove4gMemStart    = 0x100000000
 )
 
 // Format and size of the data inside the HOB (all HOBs must contain this generic header)
@@ -199,16 +195,13 @@ func buildRamEntries(ramSize uint64, sections []TdxMetadataSection) ([]ramEntry,
 // initialE820 mirrors qemu's pc_q35 RAM split: lowmem = 2 GiB whenever ram_size
 // >= 2.75 GiB, else lowmem = ram_size and there is no above-4G range
 func initialE820(ramSize uint64) []ramEntry {
-	lowmem := uint64(qemuQ35Lowmem)
-	if ramSize < qemuQ35LowmemThreshold {
-		lowmem = ramSize
-	}
+	below, above := tcg.QemuQ35RamSplit(ramSize)
 
-	entries := []ramEntry{{address: 0, length: lowmem}}
-	if ramSize > lowmem {
+	entries := []ramEntry{{address: 0, length: below}}
+	if above > 0 {
 		entries = append(entries, ramEntry{
-			address: qemuAbove4gMemStart,
-			length:  ramSize - lowmem,
+			address: tcg.QemuAbove4gMemStart,
+			length:  above,
 		})
 	}
 	return entries

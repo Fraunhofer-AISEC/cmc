@@ -24,6 +24,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parseima"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsesmbios"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetdx"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetpm"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputesnp"
@@ -50,6 +51,7 @@ func main() {
 					parsetpm.Command,
 					parsetdx.Command,
 					parseima.Command,
+					parsesmbios.Command,
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
 					return cli.ShowSubcommandHelp(c)

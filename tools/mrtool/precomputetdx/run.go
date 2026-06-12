@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2025 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,8 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
@@ -63,7 +61,9 @@ var flags = []cli.Flag{
 	&cli.StringFlag{Name: mrtdFlag, Usage: "The MRTD hash (alternative to --ovmf if hash is supplied externally)"},
 	&cli.StringFlag{Name: ovmfversionFlag, Usage: "The version of the OVMF image", Value: defaultOvmfVersion},
 	&cli.StringFlag{Name: qemuversionFlag, Usage: "QEMU version", Value: defaultQemuVersion},
-	&cli.StringFlag{Name: ramsizeFlag, Usage: "Guest RAM size (e.g. 4G, 8192M) used to reconstruct the TD HOB", Value: defaultRamSize},
+	&cli.StringFlag{Name: ramsizeFlag,
+		Usage: "Guest RAM size (accepts QEMU ram sizes, e.g. 4G, 8192M) used to reconstruct the TD HOB",
+		Value: defaultRamSize},
 }
 
 var Command = &cli.Command{
@@ -156,7 +156,7 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	if cmd.IsSet(ramsizeFlag) {
 		ramStr = cmd.String(ramsizeFlag)
 	}
-	c.RamSize, err = parseRamSize(ramStr)
+	c.RamSize, err = tcg.ParseRamSize(ramStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid --%s %q: %w", ramsizeFlag, ramStr, err)
 	}
@@ -164,48 +164,6 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	c.print()
 
 	return c, nil
-}
-
-// parseRamSize accepts and converts qemu-style sizes
-func parseRamSize(s string) (uint64, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, fmt.Errorf("empty value")
-	}
-
-	mul := uint64(1)
-	last := s[len(s)-1]
-	if last == 'i' || last == 'I' {
-		if len(s) < 2 {
-			return 0, fmt.Errorf("missing unit before 'i'")
-		}
-		s = s[:len(s)-1]
-		last = s[len(s)-1]
-	}
-	switch last {
-	case 'K', 'k':
-		mul = 1 << 10
-	case 'M', 'm':
-		mul = 1 << 20
-	case 'G', 'g':
-		mul = 1 << 30
-	case 'T', 't':
-		mul = 1 << 40
-	default:
-		if last < '0' || last > '9' {
-			return 0, fmt.Errorf("unknown unit %q", string(last))
-		}
-		n, err := strconv.ParseUint(s, 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		return n, nil
-	}
-	n, err := strconv.ParseUint(s[:len(s)-1], 10, 64)
-	if err != nil {
-		return 0, err
-	}
-	return n * mul, nil
 }
 
 func (c *Config) print() {
