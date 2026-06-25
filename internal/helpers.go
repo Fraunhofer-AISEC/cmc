@@ -169,3 +169,16 @@ func FilterInts(list, excludeList []int) []int {
 	}
 	return filtered
 }
+
+func SaveKeyId(keyIdFile, keyId string) error {
+	if keyIdFile == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(keyIdFile), 0755); err != nil {
+		return fmt.Errorf("failed to create key ID file directory: %w", err)
+	}
+	if err := os.WriteFile(keyIdFile, []byte(keyId), 0600); err != nil {
+		return fmt.Errorf("failed to write key ID: %w", err)
+	}
+	return nil
+}

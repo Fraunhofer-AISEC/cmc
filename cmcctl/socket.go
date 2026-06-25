@@ -147,6 +147,9 @@ func (a SocketApi) enroll(c *config) error {
 		return fmt.Errorf("error dialing: %w", err)
 	}
 
+	log.Tracef("Requesting key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
+		c.KeyType, c.KeyConfig, c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
+
 	req := &api.TLSCreateRequest{
 		Version: api.GetVersion(),
 		KeyConfig: api.TLSKeyConfig{
@@ -180,11 +183,15 @@ func (a SocketApi) enroll(c *config) error {
 		return fmt.Errorf("error response: %w", err)
 	}
 
-	// Unmarshal report
+	// Unmarshal create cert response
 	resp := new(api.TLSCreateResponse)
 	err = c.serializer.Unmarshal(payload, resp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal tls create response: %w", err)
+	}
+
+	if err := internal.SaveKeyId(c.KeyIdFile, resp.KeyId); err != nil {
+		return err
 	}
 
 	log.Infof("Created new TLS key with KeyID %v", resp.KeyId)
