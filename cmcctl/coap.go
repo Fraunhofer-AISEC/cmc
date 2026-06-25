@@ -31,6 +31,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -154,6 +155,9 @@ func (a CoapApi) enroll(c *config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	log.Tracef("Requesting key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
+		c.KeyType, c.KeyConfig, c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
+
 	// Generate TLSCreate request
 	req := &api.TLSCreateRequest{
 		Version: api.GetVersion(),
@@ -196,6 +200,10 @@ func (a CoapApi) enroll(c *config) error {
 	err = c.serializer.Unmarshal(payload, createResp)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal attestation response: %w", err)
+	}
+
+	if err := internal.SaveKeyId(c.KeyIdFile, createResp.KeyId); err != nil {
+		return err
 	}
 
 	log.Infof("Created new TLS key with KeyID %v", createResp.KeyId)

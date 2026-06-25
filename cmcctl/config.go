@@ -377,10 +377,14 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		c.TlsCn = cmd.String(tlsCnFlag)
 	}
 	if cmd.IsSet(tlsDnsNamesFlag) {
-		c.TlsDnsNames = strings.Split(cmd.String(tlsDnsNamesFlag), ",")
+		if s := cmd.String(tlsDnsNamesFlag); s != "" {
+			c.TlsDnsNames = strings.Split(s, ",")
+		}
 	}
 	if cmd.IsSet(tlsIpAddressesFlag) {
-		c.TlsIpAddresses = strings.Split(cmd.String(tlsIpAddressesFlag), ",")
+		if s := cmd.String(tlsIpAddressesFlag); s != "" {
+			c.TlsIpAddresses = strings.Split(s, ",")
+		}
 	}
 	if cmd.IsSet(kubeadmPathFlag) {
 		c.KubeadmPath = cmd.String(kubeadmPathFlag)
@@ -491,7 +495,7 @@ func getConfig(cmd *cli.Command) (*config, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to read key ID file: %w", err)
 			}
-			c.keyId = string(data)
+			c.keyId = strings.TrimSpace(string(data))
 			log.Tracef("Read TLS key id %q", c.keyId)
 		} else {
 			err := os.MkdirAll(filepath.Dir(c.KeyIdFile), 0755)

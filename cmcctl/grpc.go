@@ -32,6 +32,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/grpcapi"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -164,7 +165,8 @@ func (a GrpcApi) enroll(c *config) error {
 		return fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
-	log.Tracef("Requesting new TLS key type %v, alg %v, CN %v", c.KeyType, c.KeyConfig, c.TlsCn)
+	log.Tracef("Requesting key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
+		c.KeyType, c.KeyConfig, c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
 
 	request := grpcapi.TLSCreateRequest{
 		Version: api.GetVersion(),
@@ -184,6 +186,10 @@ func (a GrpcApi) enroll(c *config) error {
 	if response.Version != api.GetVersion() {
 		return fmt.Errorf("API version mismatch. Expected AttestationResponse version %v, got %v",
 			api.GetVersion(), response.Version)
+	}
+
+	if err := internal.SaveKeyId(c.KeyIdFile, response.KeyId); err != nil {
+		return err
 	}
 
 	log.Infof("Created new TLS key with KeyID %v", response.KeyId)

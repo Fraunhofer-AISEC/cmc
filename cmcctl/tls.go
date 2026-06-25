@@ -214,19 +214,31 @@ func createClientTlsConf(c *config) (*tls.Config, error) {
 }
 
 func getTlsCert(c *config) (tls.Certificate, error) {
+
 	fqdn, err := internal.Fqdn()
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("failed to retrieve fqdn: %w", err)
+	}
+
+	// Use configured CN, DNS names and IP addresses for SANs if specified, otherwise use FQDN
+	cn := fqdn
+	if c.TlsCn != "" {
+		cn = c.TlsCn
+	}
+	dnsNames := []string{fqdn}
+	if len(c.TlsDnsNames) > 0 {
+		dnsNames = c.TlsDnsNames
 	}
 
 	log.Tracef("Creating new TLS %v %v key and certificate", c.KeyType, c.KeyConfig)
 
 	return atls.GetOrCreateCert(&c.keyId, c.KeyIdFile,
 		atls.WithKeyConfig(api.TLSKeyConfig{
-			Type:     c.KeyType,
-			Alg:      c.KeyConfig,
-			Cn:       fqdn,
-			DNSNames: []string{fqdn},
+			Type:        c.KeyType,
+			Alg:         c.KeyConfig,
+			Cn:          cn,
+			DNSNames:    dnsNames,
+			IPAddresses: c.TlsIpAddresses,
 		}),
 		atls.WithCmcAddr(c.CmcAddr),
 		atls.WithCmcApi(c.Api),

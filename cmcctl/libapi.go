@@ -140,6 +140,10 @@ func (a LibApi) enroll(c *config) error {
 		return fmt.Errorf("failed to enroll key: %v", err)
 	}
 
+	if err := internal.SaveKeyId(c.KeyIdFile, keyId); err != nil {
+		return err
+	}
+
 	log.Infof("Created new TLS key with KeyID %v", keyId)
 
 	return nil
