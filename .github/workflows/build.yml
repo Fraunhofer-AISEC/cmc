@@ -45,6 +45,9 @@ jobs:
           pushd tools/metatool
           go build -ldflags="-s -w" -trimpath
           popd
+          pushd tools/mrtool
+          go build -ldflags="-s -w" -trimpath
+          popd
       - name: Vet Check
         run: go vet ./...
       - name: Format Check
@@ -80,6 +83,11 @@ jobs:
         with:
           name: metatool
           path: tools/metatool/metatool
+      - name: "Upload mrtool"
+        uses: actions/upload-artifact@v4
+        with:
+          name: mrtool
+          path: tools/mrtool/mrtool
       - name: "Upload backend"
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +117,7 @@ jobs:
             cmcctl/cmcctl
             provision/estserver/estserver
             tools/metatool/metatool
+            tools/mrtool/mrtool
             tools/cmcbackend/cmcbackend
             tools/tdxtool/tdxtool
             tools/snptool/snptool
