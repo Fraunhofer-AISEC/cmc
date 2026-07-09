@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -15,7 +14,6 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 )
 
@@ -202,38 +200,11 @@ func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Requ
 // The semantics of the HTTP CONNECT method are defined in RFC 9110, section 9.3.6.
 // Note that the HTTP CONNECT proxy currently breaks HTTP2 connections.
 func forwardProxy(c *config) error {
-	var tlsConf *tls.Config
 
-	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
-		return fmt.Errorf("failed to create cert pool: %w", err)
+		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-
-	if c.Mtls {
-		// Load own certificate
-		var cert tls.Certificate
-		cert, err := atls.GetCert(
-			atls.WithCmcAddr(c.CmcAddr),
-			atls.WithCmcApi(c.Api),
-			atls.WithSerializer(c.serializer),
-			atls.WithLibApiCmcConfig(&c.Config))
-		if err != nil {
-			return fmt.Errorf("failed to get TLS Certificate: %w", err)
-		}
-		// Create TLS config with root CA and own certificate
-		tlsConf = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			RootCAs:      rootpool,
-		}
-	} else {
-		// Create TLS config with root CA only
-		tlsConf = &tls.Config{
-			RootCAs:       rootpool,
-			Renegotiation: tls.RenegotiateNever,
-		}
-	}
-
-	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		log.Debugf("Dialing TLS address: %v", addr)

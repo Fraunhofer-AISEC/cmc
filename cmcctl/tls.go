@@ -230,7 +230,7 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 		dnsNames = c.TlsDnsNames
 	}
 
-	log.Tracef("Creating new TLS %v %v key and certificate", c.KeyType, c.KeyConfig)
+	log.Tracef("Fetching TLS %v %v certificate", c.KeyType, c.KeyConfig)
 
 	return atls.GetOrCreateCert(&c.keyId, c.KeyIdFile,
 		atls.WithKeyConfig(api.TLSKeyConfig{
