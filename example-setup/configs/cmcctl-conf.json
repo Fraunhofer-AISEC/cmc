@@ -1,5 +1,6 @@
 {
     "addr": "localhost:4443",
+    "tlsDnsNames": [ "localhost" ],
     "cmcAddr": "localhost:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
