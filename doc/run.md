@@ -34,14 +34,16 @@ The cmcctl provides the following subcommands:
 
 ## Run the framwork
 
-#### Run the EST and Provisioning Server
+### Run the EST and Provisioning Server
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
 estserver --config example-setup/configs/installed/est-server-conf.json
 ```
 
-#### Run the cmcd
+### Run the cmcd
+
+Prerequisite: [est server running](./run.md#run-the-est-and-provisioning-server)
 
 ```sh
 # Run the cmcd
@@ -52,7 +54,9 @@ cmcd --config example-setup/configs/installed/cmcd-conf.json
 sudo env PATH="$HOME/go/bin:$PATH" cmcd --config example-setup/configs/installed/cmcd-conf.json
 ```
 
-#### Generate and Verify Attestation Reports
+### Generate and Verify Attestation Reports
+
+Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
@@ -62,7 +66,9 @@ cmcctl generate --config example-setup/configs/installed/cmcctl-conf.json
 cmcctl verify --config example-setup/configs/installed/cmcctl-conf.json
 ```
 
-#### Establish Attested TLS Connections
+### Establish Attested TLS Connections
+
+Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 
@@ -73,7 +79,9 @@ cmcctl listen --config example-setup/configs/installed/cmcctl-conf.json --addr "
 cmcctl dial --config example-setup/configs/installed/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
 ```
 
-#### Establish Attested HTTPS Connections
+### Establish Attested HTTPS Connections
+
+Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run two attested HTTPS servers
@@ -89,7 +97,7 @@ cmcctl request \
     --header "Content-Type: text/plain"
 ```
 
-#### Specify custom CA certificates
+### Specify custom CA certificates
 
 The below commands show how to build and run the cmcd. At runtime, a client can provide the cmcd
 with root certificates that are to be used during the verification of the attestation report. If
@@ -103,6 +111,31 @@ SSL_CERT_FILE=../example-setup/pki/ca/ca.pem ./cmcd --config <config-file>
 SSL_CERT_DIR=../example-setup/pki/ca/ ./cmcd --config <config-file>
 ```
 
-#### Run cmcctl in SGX-Enclave
+### Run cmcctl in SGX-Enclave
 
 See [SGX-Setup](./setup-sgx.md).
+
+### Run legacy HTTP client and server via aTLS proxies
+
+Prerequisite: [cmcd running](./run.md#run-the-cmcd)
+
+```sh
+# Run the caddy atls reverse proxy and hello world plain HTTP server
+cd cmc/tools/caddy-atls
+./caddy run --config ../../example-setups/configs/hello-world-reverse-proxy.caddyfile
+
+# Run the cmcctl HTTP CONNECT proxy on localhost:4443
+cd cmc/cmcctl
+./cmcctl proxy -config ../example-setup/configs/cmcctl-conf.json --allow-system-certs=true --attest server
+
+# Request from legacy HTTP server via aTLS reverse proxy
+curl -p -x http://localhost:4443 http://localhost:4445/
+```
+
+This runs the following setup:
+
+![Proxy Mode](./diagrams/proxy-mode.drawio.svg)
+
+As an alternative, use [reverse-proxy.caddyfile](../example-setup/configs/reverse-proxy.caddyfile)
+to let Caddy act as a reverse proxy only and deploy your own HTTP server on `localhost:8080` and
+use an HTTP client of your choice.
