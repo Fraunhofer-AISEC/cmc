@@ -97,7 +97,7 @@ func CreateCert(moreConfigs ...ConnectionOption[CmcConfig]) (string, error) {
 	return keyId, nil
 }
 
-// Obtains Certificate for the Identity Key (IK) used for the connection from cmcd
+// Retrieves TLS Certificate by key id. Note: Usually GetOrCreateCert() can be used
 func GetCert(moreConfigs ...ConnectionOption[CmcConfig]) (tls.Certificate, error) {
 	var tlsCert tls.Certificate
 

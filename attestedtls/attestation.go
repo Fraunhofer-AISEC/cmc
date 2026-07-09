@@ -92,10 +92,9 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	attestSelf, attestPeer := convertAttestMode(cc.Attest, endpoint)
 
 	if attestPeer {
-		if fingerprint == "" {
-			return fmt.Errorf("internal error: TLS peer cert fingerprint is nil")
-		}
-
+		// Check if we have cached item for the peer identified by its certificate
+		// fingerprint. If client does noth authenticated (mtls=false) then this will
+		// simply return an empty list and we send the entire attestation report.
 		cache, err = cc.CmcApi.fetchPeerCache(cc, fingerprint)
 		if err != nil {
 			return fmt.Errorf("failed to fetch peer cache: %w", err)
