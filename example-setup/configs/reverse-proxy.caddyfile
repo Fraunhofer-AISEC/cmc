@@ -1,0 +1,29 @@
+# Demonstrates using Caddy + aTLS as a reverse proxy for a legacy HTTP
+# service that does not support attestation. Caddy terminates the
+# attested TLS handshake on :4445 and reverse-proxies plain HTTP to the
+# backend on :8080.
+{
+	auto_https disable_redirects
+
+	# aTLS wrapper only applies to the public-facing :4445 server.
+	# The :8080 backend server below is left as plain HTTP.
+	servers :4445 {
+		protocols h1 h2
+		listener_wrappers {
+			atls {
+				cmc_api socket
+				cmc_addr 127.0.0.1:9955
+				attest server
+				serializer json
+			}
+		}
+	}
+}
+
+# Public, attested endpoint. Terminates aTLS and forwards to the backend
+https://localhost:4445 {
+	tls internal
+
+	# Standard Caddy reverse proxy with atls
+	reverse_proxy http://127.0.0.1:8080
+}

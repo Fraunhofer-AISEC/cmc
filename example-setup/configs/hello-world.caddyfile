@@ -1,4 +1,5 @@
-# Example caddyfile demonstrating the use of the ATLS plugin
+# Example caddyfile demonstrating the use of the ATLS plugin:
+# Caddy terminates aTLS on :4445 and responds with Hello World.
 {
 	auto_https disable_redirects
 	servers :4445 {
