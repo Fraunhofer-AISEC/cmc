@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"sync"
 
-	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -22,12 +20,9 @@ func init() {
 }
 
 type ATlsModule struct {
-	// Config
-	CmcApi          string `json:"cmc_api,omitempty"`
-	CmcAddr         string `json:"cmc_addr,omitempty"`
+	CmcOptions
+
 	AttestationMode string `json:"attestation_mode,omitempty"`
-	Serializer      string `json:"serializer,omitempty"`
-	PolicyFile      string `json:"policy_file,omitempty"`
 
 	cmcConfig *atls.CmcConfig
 	logger    *zap.Logger
@@ -41,67 +36,33 @@ func (ATlsModule) CaddyModule() caddy.ModuleInfo {
 }
 
 func (m *ATlsModule) createConfig() error {
-	configOpts := make([]atls.ConnectionOption[atls.CmcConfig], 0)
-
+	opts, err := buildCmcOptions(&m.CmcOptions)
+	if err != nil {
+		return err
+	}
 	if m.CmcApi != "" {
 		m.logger.Debug("Configuring CMC API", zap.String("api", m.CmcApi))
-		configOpts = append(configOpts, atls.WithCmcApi(m.CmcApi))
 	}
-
 	if m.CmcAddr != "" {
 		m.logger.Debug("Configuring CMC address", zap.String("addr", m.CmcAddr))
-		configOpts = append(configOpts, atls.WithCmcAddr(m.CmcAddr))
+	}
+	if m.Serializer != "" {
+		m.logger.Debug("Configuring API serializer", zap.String("serializer", m.Serializer))
+	}
+	if m.PolicyFile != "" {
+		m.logger.Debug("Configuring policy file", zap.String("policy_file", m.PolicyFile))
 	}
 
 	if m.AttestationMode != "" {
 		m.logger.Debug("Configuring attestation mode", zap.String("attestation_mode", m.AttestationMode))
-		var attest atls.AttestSelect
-		switch m.AttestationMode {
-		case "mutual":
-			attest = atls.Attest_Mutual
-		case "client":
-			attest = atls.Attest_Client
-		case "server":
-			attest = atls.Attest_Server
-		case "none":
-			attest = atls.Attest_None
-		default:
-			return fmt.Errorf("invalid attestation mode: %s", m.AttestationMode)
-		}
-		configOpts = append(configOpts, atls.WithAttest(attest))
-	}
-
-	if m.Serializer != "" {
-		m.logger.Debug("Configuring API serializer", zap.String("serializer", m.Serializer))
-		var serializer ar.Serializer
-		var err error
-		switch m.Serializer {
-		case "json":
-			serializer, err = ar.NewJsonSerializer()
-			if err != nil {
-				return fmt.Errorf("could not create a json serializer: %w", err)
-			}
-		case "cbor":
-			serializer, err = ar.NewCborSerializer()
-			if err != nil {
-				return fmt.Errorf("could not create a cbor serializer: %w", err)
-			}
-		default:
-			return fmt.Errorf("invalid serializer: %s", m.Serializer)
-		}
-		configOpts = append(configOpts, atls.WithSerializer(serializer))
-	}
-
-	if m.PolicyFile != "" {
-		m.logger.Debug("Configuring policy file", zap.String("policy_file", m.PolicyFile))
-		policy, err := os.ReadFile(m.PolicyFile)
+		attest, err := atls.ParseAttestMode(m.AttestationMode)
 		if err != nil {
-			return fmt.Errorf("could not open policy file: %w", err)
+			return err
 		}
-		configOpts = append(configOpts, atls.WithCmcPolicies(policy))
+		opts = append(opts, atls.WithAttest(attest))
 	}
 
-	cmcConfig, err := atls.NewCmcConfig(configOpts...)
+	cmcConfig, err := atls.NewCmcConfig(opts...)
 	if err != nil {
 		return fmt.Errorf("invalid aTLS config: %w", err)
 	}
@@ -142,32 +103,21 @@ func (m *ATlsModule) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	d.Next()
 
 	for nesting := d.Nesting(); d.NextBlock(nesting); {
+		matched, err := parseCmcOption(d, &m.CmcOptions)
+		if err != nil {
+			return err
+		}
+		if matched {
+			continue
+		}
 		switch d.Val() {
-		case "cmc_api":
-			if !d.NextArg() {
-				return d.ArgErr()
-			}
-			m.CmcApi = d.Val()
-		case "cmc_addr":
-			if !d.NextArg() {
-				return d.ArgErr()
-			}
-			m.CmcAddr = d.Val()
 		case "attest":
 			if !d.NextArg() {
 				return d.ArgErr()
 			}
 			m.AttestationMode = d.Val()
-		case "serializer":
-			if !d.NextArg() {
-				return d.ArgErr()
-			}
-			m.Serializer = d.Val()
-		case "policy_file":
-			if !d.NextArg() {
-				return d.ArgErr()
-			}
-			m.PolicyFile = d.Val()
+		default:
+			return d.Errf("unknown atls directive %q", d.Val())
 		}
 	}
 

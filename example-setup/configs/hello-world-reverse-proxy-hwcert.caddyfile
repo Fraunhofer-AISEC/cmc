@@ -1,0 +1,56 @@
+# Demonstrates using Caddy + aTLS as a reverse proxy for a legacy HTTP
+# service that does not support attestation. Caddy terminates the
+# attested TLS handshake on :4445 and reverse-proxies plain HTTP to the
+# backend on :8080. Additionally enforces using hardware-based (TPM) keys
+# via the CMC for TLS connection establishment compared to
+# hello-world-reverse-proxy-mtls.caddyfile.
+#
+# The legacy HTTP server is also defined in this configuration. For
+# demonstration purposes only
+{
+	auto_https disable_redirects
+
+	servers :4445 {
+		protocols h1 h2
+		listener_wrappers {
+			atls {
+				cmc_api socket
+				cmc_addr 127.0.0.1:9955
+				attest mutual
+				serializer json
+			}
+		}
+	}
+}
+
+# Public, attested endpoint. Terminates aTLS and forwards to the backend.
+https://localhost:4445 {
+	# Fetch the server TLS identity from cmcd at startup
+	cmc_cert {
+		cmc_api socket
+		cmc_addr 127.0.0.1:9955
+		serializer json
+		key_id_file ./cmc-key.id
+		key_type tpm
+		key_alg EC256
+		common_name localhost
+		dns_names localhost
+	}
+
+	tls {
+		client_auth {
+			mode require_and_verify
+			trust_pool file {
+				pem_file ../cmc/data/pki/ca.pem
+			}
+		}
+	}
+
+	reverse_proxy http://127.0.0.1:8080
+}
+
+# "Legacy" HTTP-only demo server.
+:8080 {
+	bind 127.0.0.1
+	respond "Hello World from Legacy HTTP Server"
+}
