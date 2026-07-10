@@ -1,0 +1,21 @@
+# Example caddyfile demonstrating the use of the ATLS plugin
+{
+	auto_https disable_redirects
+	servers :4445 {
+		protocols h1 h2
+		listener_wrappers {
+			# The ATLS plugin needs to be placed first as it directly interacts with the TLS listener
+			atls {
+				cmc_api socket
+				cmc_addr 127.0.0.1:9955
+				attest server
+				serializer json
+			}
+		}
+	}
+}
+
+https://localhost:4445 {
+	tls internal
+	respond "Hello, World"
+}
