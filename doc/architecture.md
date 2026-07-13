@@ -25,7 +25,7 @@ attestation reports. (prover), or validates the evidences against the metadata (
 The *cmcd* provides a socket, a gRPC, as well as a CoAP REST API.
 - The *cmcctl* can be used to control the *cmcd*, to generate and verify attestation reports and to
 create exemplary attested tls and https connections.
-- The *keymgr* for optinally creating and managing hardware keys and certificates for attested TLS
+- The *keymgr* for optionally creating and managing hardware keys and certificates for attested TLS
 connections
 - Drivers for trusted hardware to provide the evidences
 
