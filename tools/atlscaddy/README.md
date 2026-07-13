@@ -76,7 +76,7 @@ client-side `cmcctl proxy` and server-side `caddy-atls` reverse proxy refer to t
 
 ### Comon options
 
-All custom blocks accept the follwoing options:
+All custom blocks accept the following options:
 
 | Option        | Values                               | Notes                            |
 | ------------- | ------------------------------------ | -------------------------------- |
