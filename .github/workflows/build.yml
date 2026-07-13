@@ -9,8 +9,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+
 jobs:
-  ci:
+  build-cmc:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,11 +51,6 @@ jobs:
           pushd tools/mrtool
           go build -ldflags="-s -w" -trimpath
           popd
-      - name: Build caddy-atls
-        run: |
-          CGO_ENABLED=1 go tool xcaddy build \
-            --with github.com/Fraunhofer-AISEC/cmc/tools/atlscaddy \
-            --replace github.com/Fraunhofer-AISEC/cmc=.
       - name: Vet Check
         run: go vet ./...
       - name: Format Check
@@ -113,25 +111,49 @@ jobs:
         with:
           name: azuretool
           path: tools/azuretool/azuretool
+
+  build-caddy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.2
+      - name: Build caddy-atls
+        run: |
+          CGO_ENABLED=1 go tool xcaddy build \
+            --with github.com/Fraunhofer-AISEC/cmc/tools/atlscaddy \
+            --replace github.com/Fraunhofer-AISEC/cmc=.
       - name: "Upload caddy-atls"
         uses: actions/upload-artifact@v4
         with:
           name: caddy-atls
           path: caddy
+
+  release:
+    needs: [build-cmc, build-caddy]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
       - name: Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            cmcd/cmcd
-            cmcctl/cmcctl
-            provision/estserver/estserver
-            tools/metatool/metatool
-            tools/mrtool/mrtool
-            tools/cmcbackend/cmcbackend
-            tools/tdxtool/tdxtool
-            tools/snptool/snptool
-            tools/azuretool/azuretool
-            caddy
-
-
+            artifacts/cmcd/cmcd
+            artifacts/cmcctl/cmcctl
+            artifacts/estserver/estserver
+            artifacts/metatool/metatool
+            artifacts/mrtool/mrtool
+            artifacts/cmcbackend/cmcbackend
+            artifacts/tdxtool/tdxtool
+            artifacts/snptool/snptool
+            artifacts/azuretool/azuretool
+            artifacts/caddy-atls/caddy
