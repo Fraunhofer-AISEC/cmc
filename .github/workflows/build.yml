@@ -21,7 +21,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.26.2
+          go-version: 1.26.5
       - name: Build
         run: |
           pushd cmcd
@@ -120,7 +120,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.26.2
+          go-version: 1.26.5
       - name: Build caddy-atls
         run: |
           CGO_ENABLED=1 go tool xcaddy build \
