@@ -17,9 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.26.2
       - name: Build
@@ -67,47 +67,47 @@ jobs:
       - name: Test
         run: go test ./...
       - name: "Upload cmcd"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cmcd
           path: cmcd/cmcd
       - name: "Upload cmcctl"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cmcctl
           path: cmcctl/cmcctl
       - name: "Upload estserver"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: estserver
           path: provision/estserver/estserver
       - name: "Upload metatool"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: metatool
           path: tools/metatool/metatool
       - name: "Upload mrtool"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mrtool
           path: tools/mrtool/mrtool
       - name: "Upload backend"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cmcbackend
           path: tools/cmcbackend/cmcbackend
       - name: "Upload tdxtool"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tdxtool
           path: tools/tdxtool/tdxtool
       - name: "Upload snptool"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: snptool
           path: tools/snptool/snptool
       - name: "Upload azuretool"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: azuretool
           path: tools/azuretool/azuretool
@@ -116,9 +116,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: 1.26.2
       - name: Build caddy-atls
@@ -127,7 +127,7 @@ jobs:
             --with github.com/Fraunhofer-AISEC/cmc/tools/atlscaddy \
             --replace github.com/Fraunhofer-AISEC/cmc=.
       - name: "Upload caddy-atls"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: caddy-atls
           path: caddy
@@ -140,7 +140,7 @@ jobs:
       contents: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Release
