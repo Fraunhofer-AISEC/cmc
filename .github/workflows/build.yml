@@ -30,7 +30,7 @@ jobs:
           pushd cmcctl
           go build -ldflags="-s -w" -trimpath
           popd
-          pushd provision/estserver
+          pushd tools/estserver
           go build -ldflags="-s -w" -trimpath
           popd
           pushd tools/cmcbackend
@@ -80,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: estserver
-          path: provision/estserver/estserver
+          path: tools/estserver/estserver
       - name: "Upload metatool"
         uses: actions/upload-artifact@v7
         with:

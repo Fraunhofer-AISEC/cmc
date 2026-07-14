@@ -10,10 +10,10 @@ cmcd/cmcd
 cmcctl/cmcctl
 cmcctl/token
 cmcctl/ca.pem
-provision/estserver/estserver
 **/nonce
 **/attestation-report
 **/attestation-result.json
+tools/estserver/estserver
 tools/cmcbackend/cmcbackend
 tools/backend/monitoring.db
 tools/metasign/metasign

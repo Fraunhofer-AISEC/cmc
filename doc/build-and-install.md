@@ -29,7 +29,7 @@ export PATH=$PATH:$HOME/go/bin
 ### Build the Provisioning Server
 
 ```sh
-cd provision/estserver
+cd tools/estserver
 go build
 ```
 

@@ -46,7 +46,7 @@ cmc-docker
 
 Run the estserver:
 ```sh
-cd cmc/provision/estserver
+cd cmc/tools/estserver
 ./estserver --config ../../example-setup/configs/est-server-conf.json
 ```
 
