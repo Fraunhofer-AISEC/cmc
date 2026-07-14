@@ -30,6 +30,7 @@ const (
 type DirectEndorser struct {
 	snp *SnpEndorser
 	tdx *TdxEndorser
+	tpm *VtpmEndorser
 }
 
 func (p *DirectEndorser) Snp() (drivers.SnpEndorser, error) {
@@ -40,8 +41,10 @@ func (p *DirectEndorser) Tdx() (drivers.TdxEndorser, error) {
 	return p.tdx, nil
 }
 
+// Tpm returns a VtpmEndorser. This is only to be used for CVMs with Confidential Computing trust
+// anchor, where the vTPM resides within the CVM and is bound to the hardware attestation report.
 func (p *DirectEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return nil, fmt.Errorf("director endorser does not support TPM")
+	return p.tpm, nil
 }
 
 // NewDirectProvider builds an endorser that fetches collateral directly from the vendor
@@ -65,6 +68,7 @@ func NewDirectProvider(vendorCacheFolder string) (*DirectEndorser, error) {
 	return &DirectEndorser{
 		snp: snp,
 		tdx: tdx,
+		tpm: &VtpmEndorser{},
 	}, nil
 }
 
@@ -96,5 +100,6 @@ func NewCpsProvider(
 	return &DirectEndorser{
 		snp: snp,
 		tdx: tdx,
+		tpm: &VtpmEndorser{},
 	}, nil
 }

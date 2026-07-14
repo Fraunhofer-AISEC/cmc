@@ -109,8 +109,9 @@ func (t *Tpm) Init(c *drivers.DriverConfig) error {
 	}
 
 	// Check if the TPM is provisioned. If provisioned, load the AK and IK key.
-	// Otherwise perform credential activation with provisioning server and then load the keys
-	provisioningRequired, err := IsTpmProvisioningRequired(c.StoragePath)
+	// Otherwise perform credential activation with provisioning server and then load the keys.
+	provisioningRequired, err := IsTpmProvisioningRequired(c.StoragePath,
+		t.endorser.RequiresCredentialActivation())
 	if err != nil {
 		return fmt.Errorf("failed to check if TPM is provisioned: %w", err)
 	}
@@ -282,27 +283,31 @@ func (t *Tpm) GetAkPublic() []byte {
 	return t.ak.AttestationParameters().Public
 }
 
-// IsTpmProvisioningRequired checks if the Storage Root Key (SRK) is persisted
-// at 0x810000001 and the encrypted AK blob is present, which is used as an
-// indicator that the TPM is provisioned and the AK can directly be loaded.
-// This function uses the low-level go-tpm library directly as go-attestation
-// does not provide such a functionality.
-func IsTpmProvisioningRequired(storagePath string) (bool, error) {
+// IsTpmProvisioningRequired reports whether the TPM driver must provision
+// an AK. It first checks that the on-disk AK blob and cert chain are present.
+// If checkSrk is set to true, additionally verifiy that the SRK is persisted at.
+// This check can only be omitted if the (v)TPM acts as a secondary trust anchor.
+func IsTpmProvisioningRequired(storagePath string, checkSrk bool) (bool, error) {
 
 	// Stateless operation always requires provisioning
 	if storagePath == "" {
-		log.Info("TPM Credential Activation REQUIRED (no storage path)")
+		log.Info("TPM Provisioning REQUIRED (no storage path)")
 		return true, nil
 	}
 
 	// If any of the required files is not present, we need to provision
 	if _, err := os.Stat(path.Join(storagePath, akchainFile)); err != nil {
-		log.Info("TPM Credential Activation REQUIRED (no AK cert chain)")
+		log.Info("TPM Provisioning REQUIRED (no AK cert chain)")
 		return true, nil
 	}
 	if _, err := os.Stat(path.Join(storagePath, akFile)); err != nil {
-		log.Info("TPM Credential Activation REQUIRED (no AK)")
+		log.Info("TPM Provisioning REQUIRED (no AK)")
 		return true, nil
+	}
+
+	if !checkSrk {
+		log.Info("TPM Provisioning NOT REQUIRED (vTPM mode)")
+		return false, nil
 	}
 
 	// If the AK is not persisted in the TPM, we need to provision
@@ -621,13 +626,23 @@ func GetContainerArtifacts(path string) (*ar.Artifact, error) {
 }
 
 func (t *Tpm) provision() error {
-	var err error
-
-	log.Debug("Performing TPM credential activation..")
-
 	if t.tpm == nil {
 		return errors.New("TPM is not openend")
 	}
+
+	// (v)TPM acts as primary trust anchor
+	if t.endorser.RequiresCredentialActivation() {
+		return t.provisionCredentialActivation()
+	}
+
+	// vTPM acts as secondary trust anchor
+	return t.provisionSelfSigned()
+}
+
+func (t *Tpm) provisionCredentialActivation() error {
+	var err error
+
+	log.Debug("Performing TPM credential activation..")
 
 	t.ek, t.ak, err = createKeys(t.tpm, t.KeyAlg)
 	if err != nil {
@@ -804,6 +819,17 @@ func createKeys(tpm *attest.TPM, keyAlg string) ([]attest.EK, *attest.AK, error)
 		}
 	}
 
+	ak, err := createAk(tpm, keyAlg)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return eks, ak, nil
+}
+
+// createAk creates a fresh TPM Attestation Key with the given algorithm
+func createAk(tpm *attest.TPM, keyAlg string) (*attest.AK, error) {
+
 	log.Debugf("Creating new AK with algorithm %v", keyAlg)
 	akConfig := &attest.AKConfig{}
 	switch keyAlg {
@@ -812,15 +838,15 @@ func createKeys(tpm *attest.TPM, keyAlg string) ([]attest.EK, *attest.AK, error)
 	case "RSA2048":
 		akConfig.Algorithm = attest.RSA
 	default:
-		return nil, nil, fmt.Errorf("unsupported TPM AK key algorithm: %v", keyAlg)
+		return nil, fmt.Errorf("unsupported TPM AK key algorithm: %v", keyAlg)
 	}
 
 	ak, err := tpm.NewAK(akConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create new AK - %w", err)
+		return nil, fmt.Errorf("failed to create new AK - %w", err)
 	}
 
-	return eks, ak, nil
+	return ak, nil
 }
 
 func ActivateCredential(

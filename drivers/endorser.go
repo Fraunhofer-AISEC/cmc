@@ -29,9 +29,13 @@ type EndorserProvider interface {
 	Tpm() (TpmEndorser, error)
 }
 
-// TpmEndorser provides the interface for performing TPM AK credential activation
+// TpmEndorser provides the interface for provisioning a TPM AK. For physical
+// TPMs, the endorser performs EK-based credential activation against an external
+// service. For CVM vTPMs, a self-signed AK certificate is produced without
+// credential activation, as we have no EK manufacturer CA.
 type TpmEndorser interface {
 	CaCerts() ([]*x509.Certificate, error)
+	RequiresCredentialActivation() bool
 	TpmActivateEnroll(
 		tpmManufacturer, ekCertUrl string,
 		tpmMajor, tpmMinor int,

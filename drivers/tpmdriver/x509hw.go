@@ -205,7 +205,7 @@ type authKeyId struct {
 	Id []byte `asn1:"optional,tag:0"`
 }
 
-// Use function instead of method because we cannot define addtional
+// Use function instead of method because we cannot define additional
 // methods for x509.SignatureAlgorithm
 func isRSAPSS(algo x509.SignatureAlgorithm) bool {
 	switch algo {

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2025 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -191,7 +191,19 @@ Loop:
 		switch evtype := ev.Type; evtype {
 
 		case ar.TYPE_EVIDENCE_TPM:
-			r, ok := VerifyTpm(ev, col, evidenceNonce, metadataCas, refVals[ar.TRUST_ANCHOR_TPM], s)
+			// If the TPM acts as a primary trust anchor, use the privacy CA for verifying the
+			// certificate chain (required because the TPM EK is not allowed to sign). If the vTPM
+			// acts as a secondary trust anchor, we perform integrity verification through verifying
+			// the binding of the vTPM self-signed AK certificate with the hardware report.
+			tpmCas := metadataCas
+			if reportHasCvmAnchor(report.Evidences) {
+				ak, err := selfSignedAkFromCollateral(col)
+				if err == nil && ak != nil {
+					tpmCas = []*x509.Certificate{ak}
+					log.Debug("Use self-signed AK cert: report includes hardware CVM binding")
+				}
+			}
+			r, ok := VerifyTpm(ev, col, evidenceNonce, tpmCas, refVals[ar.TRUST_ANCHOR_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
@@ -915,6 +927,37 @@ func verifyNonce(measured, expected []byte) ar.Result {
 		Expected: hex.EncodeToString(expected),
 		Got:      hex.EncodeToString(measured),
 	}
+}
+
+// reportHasCvmAnchor reports whether the attestation report contains a hardware
+// CVM evidence type that binds the whole Context and thus the TPM AK cert.
+func reportHasCvmAnchor(evidences []ar.Evidence) bool {
+	for _, ev := range evidences {
+		switch ev.Type {
+		case ar.TYPE_EVIDENCE_SNP, ar.TYPE_EVIDENCE_TDX, ar.TYPE_EVIDENCE_SGX:
+			return true
+		}
+	}
+	return false
+}
+
+// selfSignedAkFromCollateral returns the AK certificate from the vTPM collateral
+// if it is self-signed.
+func selfSignedAkFromCollateral(col ar.Collateral) (*x509.Certificate, error) {
+	if len(col.Certs) == 0 {
+		return nil, nil
+	}
+	cert, err := x509.ParseCertificate(col.Certs[0])
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(cert.RawIssuer, cert.RawSubject) {
+		return nil, nil
+	}
+	if err := cert.CheckSignatureFrom(cert); err != nil {
+		return nil, nil
+	}
+	return cert, nil
 }
 
 // extractX509Chains converts verified x509 certificate chains into the
