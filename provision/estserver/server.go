@@ -29,6 +29,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
+	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	log "github.com/sirupsen/logrus"
 
@@ -40,7 +41,7 @@ type Server struct {
 	estCaKey          crypto.PrivateKey
 	estCaChain        []*x509.Certificate
 	rootCas           []*x509.Certificate
-	snpEndorser       *provision.SnpEndorser
+	snpEndorser       *endorser.SnpEndorser
 	tpmConf           provision.TpmConfig
 	authMethods       internal.AuthMethod
 	tokenPath         string
@@ -113,7 +114,7 @@ func NewServer(c *config) (*Server, error) {
 
 	// Use the system CA root store regardless of the CMC trust
 	// pool as the AMD KDS is a production service under a global ca
-	snpEndorser, err := provision.NewSnpEndorser(provision.AmdKdsUrl, c.VcekCacheFolder, nil, false)
+	snpEndorser, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, c.VcekCacheFolder, nil, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snp endorser: %w", err)
 	}
@@ -220,10 +221,10 @@ func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, p
 ) error {
 
 	if contentType != "" {
-		w.Header().Set(est.ContentTypeHeader, contentType)
+		w.Header().Set(internal.HttpContentTypeHeader, contentType)
 	}
 	if transferEncoding != "" {
-		w.Header().Set(est.TransferEncodingHeader, transferEncoding)
+		w.Header().Set(internal.HttpTransferEncodingHeader, transferEncoding)
 	}
 	w.WriteHeader(http.StatusOK)
 

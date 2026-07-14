@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package provision
+package endorser
 
 import (
 	"crypto/x509"
@@ -27,29 +27,29 @@ const (
 	AmdKdsUrl = "https://kdsintf.amd.com"
 )
 
-type DirectEndorser struct {
+type CvmEndorser struct {
 	snp *SnpEndorser
 	tdx *TdxEndorser
 	tpm *VtpmEndorser
 }
 
-func (p *DirectEndorser) Snp() (drivers.SnpEndorser, error) {
+func (p *CvmEndorser) Snp() (drivers.SnpEndorser, error) {
 	return p.snp, nil
 }
 
-func (p *DirectEndorser) Tdx() (drivers.TdxEndorser, error) {
+func (p *CvmEndorser) Tdx() (drivers.TdxEndorser, error) {
 	return p.tdx, nil
 }
 
 // Tpm returns a VtpmEndorser. This is only to be used for CVMs with Confidential Computing trust
 // anchor, where the vTPM resides within the CVM and is bound to the hardware attestation report.
-func (p *DirectEndorser) Tpm() (drivers.TpmEndorser, error) {
+func (p *CvmEndorser) Tpm() (drivers.TpmEndorser, error) {
 	return p.tpm, nil
 }
 
 // NewDirectProvider builds an endorser that fetches collateral directly from the vendor
 // services (AMD KDS, Intel PCS)
-func NewDirectProvider(vendorCacheFolder string) (*DirectEndorser, error) {
+func NewDirectProvider(vendorCacheFolder string) (*CvmEndorser, error) {
 
 	// Use the host system root store regardless of the CMC trust
 	// pool as the Intel PCS is a production service under a global CA
@@ -65,7 +65,7 @@ func NewDirectProvider(vendorCacheFolder string) (*DirectEndorser, error) {
 		return nil, fmt.Errorf("failed to create SNP direct endorser: %w", err)
 	}
 
-	return &DirectEndorser{
+	return &CvmEndorser{
 		snp: snp,
 		tdx: tdx,
 		tpm: &VtpmEndorser{},
@@ -81,7 +81,7 @@ func NewCpsProvider(
 	baseUrl string,
 	rootCas []*x509.Certificate,
 	allowSystemCerts bool,
-) (*DirectEndorser, error) {
+) (*CvmEndorser, error) {
 
 	// Use the provided root cas and optionally additionally the system root store
 	// as we are using a custom PCCS service
@@ -97,7 +97,7 @@ func NewCpsProvider(
 		return nil, fmt.Errorf("failed to create SNP cps endorser: %w", err)
 	}
 
-	return &DirectEndorser{
+	return &CvmEndorser{
 		snp: snp,
 		tdx: tdx,
 		tpm: &VtpmEndorser{},

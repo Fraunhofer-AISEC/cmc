@@ -26,7 +26,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/tdxdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
+	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tdx-guest/pcs"
 	log "github.com/sirupsen/logrus"
@@ -243,7 +243,7 @@ func getCollateral(in string) (*ar.IntelCollateral, error) {
 	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	// Fetch collateral
-	endorser, err := provision.NewTdxEndorser(provision.PcsUrl, "", nil, true)
+	endorser, err := endorser.NewTdxEndorser(endorser.PcsUrl, "", nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TDX endorser: %w", err)
 	}

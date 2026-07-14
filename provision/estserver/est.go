@@ -53,7 +53,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 	}
 	encoded := est.EncodeBase64(body)
 
-	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
+	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
 		return
@@ -77,14 +77,14 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check content type pkcs10 CSR
-	t, _, err := mime.ParseMediaType(req.Header.Get(est.ContentTypeHeader))
+	t, _, err := mime.ParseMediaType(req.Header.Get(internal.HttpContentTypeHeader))
 	if err != nil {
 		writeHttpErrorf(w, "failed to parse media type %s: %v",
-			est.ContentTypeHeader, err)
+			internal.HttpContentTypeHeader, err)
 		return
 	}
 	if !strings.HasPrefix(t, est.MimeTypePKCS10) {
-		writeHttpErrorf(w, "invalid %s %s, must begin with %s", est.ContentTypeHeader,
+		writeHttpErrorf(w, "invalid %s %s, must begin with %s", internal.HttpContentTypeHeader,
 			t, est.MimeTypePKCS10)
 		return
 	}
@@ -108,7 +108,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	}
 	encoded := est.EncodeBase64(body)
 
-	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
+	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
 		return
@@ -154,7 +154,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 			{ContentType: est.MimeTypeOctetStream, Data: &ekPubPkix},
 			{ContentType: est.MimeTypeOctetStream, Data: &ekCertDer},
 		},
-		req.Header.Get(est.ContentTypeHeader),
+		req.Header.Get(internal.HttpContentTypeHeader),
 	)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
@@ -265,7 +265,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 			{ContentType: est.MimeTypeOctetStream, Data: &akPublic},
 			{ContentType: est.MimeTypeOctetStream, Data: &report},
 		},
-		req.Header.Get(est.ContentTypeHeader),
+		req.Header.Get(internal.HttpContentTypeHeader),
 	)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
@@ -317,7 +317,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 	encoded := est.EncodeBase64(body)
 
-	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
+	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
 		return
@@ -349,7 +349,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 			{ContentType: est.MimeTypePKCS10, Data: &csr},
 			{ContentType: est.MimeTypeOctetStream, Data: &report},
 		},
-		req.Header.Get(est.ContentTypeHeader),
+		req.Header.Get(internal.HttpContentTypeHeader),
 	)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
@@ -382,7 +382,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Enrolled cert %v", cert.Subject.CommonName)
 
-	err = sendResponse(w, est.MimeTypePKCS7, est.EncodingTypeBase64, encoded)
+	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
 		return

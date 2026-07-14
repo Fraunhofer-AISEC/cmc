@@ -32,7 +32,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/drivers/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
+	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-sev-guest/client"
 	"github.com/sirupsen/logrus"
@@ -154,7 +154,7 @@ func main() {
 					log.Debugf("Fetched code name %q for family ID 0x%x, model ID 0x%x", codeName,
 						report.CpuFamilyId, report.CpuModelId)
 
-					endorser, err := provision.NewSnpEndorser(provision.AmdKdsUrl, "", nil, true)
+					endorser, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, "", nil, true)
 					if err != nil {
 						return fmt.Errorf("failed to create SNP endorser: %w", err)
 					}
