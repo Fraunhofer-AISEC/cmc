@@ -68,6 +68,13 @@ func New(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token 
 	}, nil
 }
 
+// RequiresCredentialActivation reports whether the TPM driver must perform
+// EK-based credential activation with this endorser. The EST-based enrollment
+// for hardware TPMs requires TPM credential activation.
+func (c *Client) RequiresCredentialActivation() bool {
+	return true
+}
+
 func (c *Client) CaCerts() ([]*x509.Certificate, error) {
 
 	method := http.MethodGet

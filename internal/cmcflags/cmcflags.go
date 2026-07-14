@@ -76,9 +76,11 @@ var Flags = []cli.Flag{
 			"\t\tdirect\n" +
 			"\t\t\tSNP: fetch AMD SNP VCEK/CA directly from AMD KDS (rate-limited: 10s per request)\n" +
 			"\t\t\tTDX: fetch TDX collateral directly from Intel PCS\n" +
+			"\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n" +
 			"\t\tcps:\n" +
 			"\t\t\tSNP: Fetch AMD SNP VCEK/CA from custom caching proxy service (CPS)\n" +
 			"\t\t\tTDX: Fetch TDX collateral from Provisioning Certififcation Caching Service (PCCS)\n" +
+			"\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n" +
 			"\t\test:\n" +
 			"\t\t\tTPM: Enroll TPM EK certificate via Enrollment over Secure Transport (EST) server\n",
 	},
