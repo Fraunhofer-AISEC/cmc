@@ -47,9 +47,9 @@ type VcekInfo struct {
 type SnpEndorser struct {
 	baseUrl     string
 	client      *http.Client
-	VcekMutex   sync.Mutex
-	CacheFolder string
-	Vceks       map[VcekInfo][]byte
+	vcekMutex   sync.Mutex
+	cacheFolder string
+	vceks       map[VcekInfo][]byte
 }
 
 type certFormat int
@@ -87,8 +87,8 @@ func NewSnpEndorser(
 	return &SnpEndorser{
 		baseUrl:     strings.TrimRight(baseUrl, "/"),
 		client:      client,
-		CacheFolder: vendorCacheFolder,
-		Vceks:       make(map[VcekInfo][]byte),
+		cacheFolder: vendorCacheFolder,
+		vceks:       make(map[VcekInfo][]byte),
 	}, nil
 }
 
@@ -152,7 +152,7 @@ func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509
 
 	log.Debugf("Fetching AMD SNP %v CA", codeName)
 
-	der, ok := tryGetCachedCa(s.CacheFolder, codeName)
+	der, ok := tryGetCachedCa(s.cacheFolder, codeName)
 	if ok {
 		ca, err := x509.ParseCertificates(der)
 		if err != nil {
@@ -169,7 +169,7 @@ func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509
 
 	log.Debugf("Successfully downloaded SNP CA")
 	rawCerts := internal.WriteCertsDer(ca)
-	if err := cacheSnpCa(bytes.Join(rawCerts, nil), s.CacheFolder, codeName); err != nil {
+	if err := cacheSnpCa(bytes.Join(rawCerts, nil), s.cacheFolder, codeName); err != nil {
 		log.Warnf("Failed to cache SNP CA: %v", err)
 	}
 	return ca, nil
@@ -274,20 +274,20 @@ func (s *SnpEndorser) SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) 
 
 func (s *SnpEndorser) lockVcekMutex() {
 	log.Trace("Trying to get lock")
-	s.VcekMutex.Lock()
+	s.vcekMutex.Lock()
 	log.Trace("Got lock")
 }
 
 func (s *SnpEndorser) unlockVcekMutex() {
 	log.Trace("Releasing Lock")
-	s.VcekMutex.Unlock()
+	s.vcekMutex.Unlock()
 	log.Trace("Released Lock")
 }
 
 // tryGetCachedVcek returns cached VCEKs in DER format if available
 func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool) {
-	if s.CacheFolder != "" {
-		filePath := path.Join(s.CacheFolder,
+	if s.cacheFolder != "" {
+		filePath := path.Join(s.cacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
 		f, err := os.ReadFile(filePath)
 		if err != nil {
@@ -301,7 +301,7 @@ func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, boo
 			ChipId: chipId,
 			Tcb:    tcb,
 		}
-		if der, ok := s.Vceks[info]; ok {
+		if der, ok := s.vceks[info]; ok {
 			log.Trace("Using cached VCEK")
 			return der, true
 		}
@@ -312,13 +312,13 @@ func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, boo
 
 // cacheVcek caches VCEKs in DER format
 func (s *SnpEndorser) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
-	if s.CacheFolder != "" {
-		if _, err := os.Stat(s.CacheFolder); err != nil {
-			if err := os.MkdirAll(s.CacheFolder, 0755); err != nil {
-				return fmt.Errorf("failed to create VCEK cache %q: %v", s.CacheFolder, err)
+	if s.cacheFolder != "" {
+		if _, err := os.Stat(s.cacheFolder); err != nil {
+			if err := os.MkdirAll(s.cacheFolder, 0755); err != nil {
+				return fmt.Errorf("failed to create VCEK cache %q: %v", s.cacheFolder, err)
 			}
 		}
-		filePath := path.Join(s.CacheFolder,
+		filePath := path.Join(s.cacheFolder,
 			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
 		err := os.WriteFile(filePath, vcek, 0644)
 		if err != nil {
@@ -331,7 +331,7 @@ func (s *SnpEndorser) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error 
 			ChipId: chipId,
 			Tcb:    tcb,
 		}
-		s.Vceks[info] = vcek
+		s.vceks[info] = vcek
 		log.Trace("Cached VCEK")
 		return nil
 	}
