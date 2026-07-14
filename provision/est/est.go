@@ -27,7 +27,8 @@ import (
 	"net/textproto"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/sirupsen/logrus"
 	"go.mozilla.org/pkcs7"
 )
 
@@ -43,22 +44,6 @@ const (
 	TpmActivateEnrollEndpoint = "/tpmactivateenroll"
 	TpmCertifyEnrollEndpoint  = "/tpmcertifyenroll"
 	AttestEnrollEndpoint      = "/attestenroll"
-)
-
-// HTTP header constants
-const (
-	AcceptHeader             = "Accept"
-	ContentTypeHeader        = "Content-Type"
-	ContentTypeOptionsHeader = "X-Content-Type-Options"
-	EncodingTypeBase64       = "base64"
-	ParamValueCertsOnly      = "certs-only"
-	ParamValueGenKey         = "server-generated-key"
-	RetryAfterHeader         = "Retry-After"
-	ServerHeader             = "Server"
-	ServerKeyGenBoundary     = "estServerKeyGenBoundary"
-	StrictTransportHeader    = "Strict-Transport-Security"
-	TransferEncodingHeader   = "Content-Transfer-Encoding"
-	UserAgentHeader          = "User-Agent"
 )
 
 // MIME type constants.
@@ -85,6 +70,8 @@ type MimeMultipart struct {
 	ContentType string
 	Data        interface{}
 }
+
+var log = logrus.WithField("service", "ima")
 
 func EncodePkcs7CertsOnly(certs []*x509.Certificate) ([]byte, error) {
 	var data []byte
@@ -169,7 +156,7 @@ func DecodeMultipart(r io.Reader, parts []MimeMultipart, ctypeHeader string) (in
 		}
 		defer p.Close()
 
-		err = checkMediaType(p, part.ContentType, EncodingTypeBase64)
+		err = checkMediaType(p, part.ContentType, internal.HttpEncodingTypeBase64)
 		if err != nil {
 			return 0, fmt.Errorf("failed to verify part type %v: %w", i, err)
 		}
@@ -263,8 +250,8 @@ func EncodeMultiPart(parts []MimeMultipart) (*bytes.Buffer, string, error) {
 		}
 
 		v := textproto.MIMEHeader{}
-		v.Add(ContentTypeHeader, p.ContentType)
-		v.Add(TransferEncodingHeader, EncodingTypeBase64)
+		v.Add(internal.HttpContentTypeHeader, p.ContentType)
+		v.Add(internal.HttpTransferEncodingHeader, internal.HttpEncodingTypeBase64)
 
 		pw, err := w.CreatePart(v)
 		if err != nil {
@@ -287,17 +274,17 @@ func EncodeMultiPart(parts []MimeMultipart) (*bytes.Buffer, string, error) {
 }
 
 func checkMediaType(part *multipart.Part, contentType, encoding string) error {
-	t, _, err := mime.ParseMediaType(part.Header.Get(ContentTypeHeader))
+	t, _, err := mime.ParseMediaType(part.Header.Get(internal.HttpContentTypeHeader))
 	if err != nil {
 		return fmt.Errorf("failed to parse media type %s: %w",
-			ContentTypeHeader, err)
+			internal.HttpContentTypeHeader, err)
 	}
 	if !strings.HasPrefix(contentType, t) {
-		return fmt.Errorf("invalid %s %s, must begin with %s", ContentTypeHeader,
+		return fmt.Errorf("invalid %s %s, must begin with %s", internal.HttpContentTypeHeader,
 			t, contentType)
 	}
-	if part.Header.Get(TransferEncodingHeader) != encoding {
-		return fmt.Errorf("%s part must be %s", encoding, TransferEncodingHeader)
+	if part.Header.Get(internal.HttpTransferEncodingHeader) != encoding {
+		return fmt.Errorf("%s part must be %s", encoding, internal.HttpTransferEncodingHeader)
 	}
 	return nil
 }
@@ -327,4 +314,22 @@ func ParsePkcs10Csr(r io.Reader) (*x509.CertificateRequest, error) {
 	}
 
 	return csr, nil
+}
+
+// ParseSimplePkiResponse extracts certs from certs-only CMC Simple PKI Response [RFC5272].
+func ParseSimplePkiResponse(data []byte) ([]*x509.Certificate, error) {
+
+	decoded, err := DecodeBase64(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode payload: %w", err)
+	}
+
+	p7, err := pkcs7.Parse(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse PKCS7: %w", err)
+	}
+
+	certs := p7.Certificates
+
+	return certs, nil
 }

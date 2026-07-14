@@ -109,7 +109,7 @@ func VerifyEk(pub, cert []byte, tpmInfo, certUrl, ekDbPath string, verifyEk bool
 
 func getIntelEkCert(certificateUrl string) ([]byte, error) {
 
-	log.Println("Requesting Cert from ", certificateUrl)
+	log.Debugf("Requesting Cert from %v", certificateUrl)
 
 	resp, err := http.Get(certificateUrl)
 
@@ -117,7 +117,7 @@ func getIntelEkCert(certificateUrl string) ([]byte, error) {
 		return nil, fmt.Errorf("error GET: %w", err)
 	}
 	defer resp.Body.Close()
-	log.Println("Response Status: ", resp.Status)
+	log.Debugf("Response Status: %v", resp.Status)
 	if resp.StatusCode != 200 {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, majo
 	} else if err != nil {
 		return fmt.Errorf("failed to load EK intermediate certs from database: %w", err)
 	} else {
-		log.Trace("Found Intermediate Certs in DB: ", string(intermediates))
+		log.Tracef("Found Intermediate Certs in DB: %v", string(intermediates))
 
 		intermediatesPool = x509.NewCertPool()
 		ok := intermediatesPool.AppendCertsFromPEM(intermediates)
@@ -189,7 +189,7 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, majo
 	if err != nil {
 		return fmt.Errorf("failed to retrieve CA certificate for TPM from %v (Major: %v, Minor: %v): %w", manufacturer, major, minor, err)
 	}
-	log.Trace("Found Root Certs in DB: ", string(roots))
+	log.Tracef("Found Root Certs in DB: %v", string(roots))
 
 	rootsPool := x509.NewCertPool()
 	ok := rootsPool.AppendCertsFromPEM(roots)

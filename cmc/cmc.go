@@ -31,8 +31,8 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/peercache"
-	"github.com/Fraunhofer-AISEC/cmc/provision"
-	"github.com/Fraunhofer-AISEC/cmc/provision/estclient"
+	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
+	estenroller "github.com/Fraunhofer-AISEC/cmc/provision/enroller"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
@@ -231,20 +231,20 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		estclient, err := estclient.New(c.EndorsementAddr, rootCas, c.AllowSystemCerts, token)
+		endorser, err := endorser.NewEstEndorser(c.EndorsementAddr, rootCas, c.AllowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
-		return estclient, nil
+		return endorser, nil
 	case "direct":
 		// Direct endorsement supports TDX (Intel PCS) and SNP (AMD KDS)
-		return provision.NewDirectProvider(c.VendorCache)
+		return endorser.NewDirectProvider(c.VendorCache)
 	case "cps":
 		// CPS endorsement supports TDX (PCCS) and SNP (custom caching proxy service)
 		if c.EndorsementAddr == "" {
 			return nil, fmt.Errorf("cps endorsement mode requires endorsementAddr")
 		}
-		return provision.NewCpsProvider(c.VendorCache, c.EndorsementAddr, rootCas, c.AllowSystemCerts)
+		return endorser.NewCpsProvider(c.VendorCache, c.EndorsementAddr, rootCas, c.AllowSystemCerts)
 	default:
 		return nil, fmt.Errorf("unknown endorser type %q", c.EndorsementMode)
 	}
@@ -267,11 +267,11 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		estclient, err := estclient.New(c.EnrollmentAddr, rootCas, c.AllowSystemCerts, token)
+		enroller, err := estenroller.New(c.EnrollmentAddr, rootCas, c.AllowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
-		return estclient, nil
+		return enroller, nil
 	case "acme":
 		return nil, fmt.Errorf("ACME provisioning not yet implemented")
 	default:
