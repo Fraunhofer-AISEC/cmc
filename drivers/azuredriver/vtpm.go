@@ -18,7 +18,6 @@ package azuredriver
 import (
 	"encoding/asn1"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 
@@ -30,12 +29,10 @@ import (
 )
 
 const (
-	nvIndexAkCert          = tpmutil.Handle(0x01C101D0) // NV index to read
-	nvIndexTdReport        = tpmutil.Handle(0x01400001) // NV index to read attestation report from
-	nvIndexTdUserData      = tpmutil.Handle(0x01400002) // NV index to supply attestation report user data
-	akHandle               = tpmutil.Handle(0x81000003)
-	tpmResourceManagerPath = "/dev/tpmrm0"
-	tpmDevicePath          = "/dev/tpm0"
+	nvIndexAkCert     = tpmutil.Handle(0x01C101D0) // NV index to read
+	nvIndexTdReport   = tpmutil.Handle(0x01400001) // NV index to read attestation report from
+	nvIndexTdUserData = tpmutil.Handle(0x01400002) // NV index to supply attestation report user data
+	akHandle          = tpmutil.Handle(0x81000003)
 )
 
 func (azure *Azure) GetVtpmEvidence(nonce []byte) (*ar.Evidence, error) {
@@ -113,7 +110,7 @@ func GetVtpmQuote(pcrs []int, nonce []byte) ([]byte, []byte, error) {
 
 	tpm, err := OpenTpm()
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return nil, nil, fmt.Errorf("unable to open TPM device: %w", err)
 	}
 	defer tpm.Close()
 
@@ -145,11 +142,11 @@ func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
 
 	tpm, err := OpenTpm()
 	if err != nil {
-		return nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return nil, fmt.Errorf("unable to open TPM device: %w", err)
 	}
 	defer tpm.Close()
 
-	// ReadPCRs cannot read at most 8 PCRs at the same time
+	// ReadPCRs can read at most 8 PCRs at the same time
 	for _, index := range azure.pcrs {
 		sel := tpm2.PCRSelection{
 			Hash: alg,
@@ -190,7 +187,7 @@ func GetVtpmAkCert() ([]byte, error) {
 
 	tpm, err := OpenTpm()
 	if err != nil {
-		return nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return nil, fmt.Errorf("unable to open TPM device: %w", err)
 	}
 	defer tpm.Close()
 
@@ -215,20 +212,10 @@ func GetVtpmAkCert() ([]byte, error) {
 
 func OpenTpm() (*os.File, error) {
 
-	dev, err := GetTpmDevicePath()
+	dev, err := tpmdriver.GetTpmDevicePath()
 	if err != nil {
 		return nil, err
 	}
 
 	return os.OpenFile(dev, os.O_RDWR, 0)
-}
-
-func GetTpmDevicePath() (string, error) {
-	if _, err := os.Stat(tpmResourceManagerPath); err == nil {
-		return tpmResourceManagerPath, nil
-	} else if _, err := os.Stat(tpmDevicePath); err == nil {
-		return tpmDevicePath, nil
-	} else {
-		return "", errors.New("failed to find TPM device in /dev")
-	}
 }
