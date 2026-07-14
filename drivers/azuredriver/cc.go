@@ -139,7 +139,7 @@ func UpdateAzureUserData(nonce []byte) error {
 
 	rwc, err := OpenTpm()
 	if err != nil {
-		return fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return fmt.Errorf("unable to open TPM device: %w", err)
 	}
 	defer rwc.Close()
 
@@ -201,7 +201,7 @@ func GetAzureUserData() ([]byte, error) {
 
 	rwc, err := OpenTpm()
 	if err != nil {
-		return nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return nil, fmt.Errorf("unable to open TPM device: %w", err)
 	}
 	defer rwc.Close()
 
@@ -241,7 +241,7 @@ func GetAzureReport() ([]byte, error) {
 
 	rwc, err := OpenTpm()
 	if err != nil {
-		return nil, fmt.Errorf("unable to open TPM device %s: %w", tpmDevicePath, err)
+		return nil, fmt.Errorf("unable to open TPM device: %w", err)
 	}
 	defer rwc.Close()
 
