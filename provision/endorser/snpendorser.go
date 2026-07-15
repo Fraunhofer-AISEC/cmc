@@ -164,7 +164,7 @@ func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509
 	url := s.SnpCaUrl(akType, codeName)
 	ca, err := s.downloadSnpCa(url, PEM)
 	if err != nil {
-		return nil, fmt.Errorf("failed to ftch SNP CA: %w", err)
+		return nil, fmt.Errorf("failed to fetch SNP CA: %w", err)
 	}
 
 	log.Debugf("Successfully downloaded SNP CA")

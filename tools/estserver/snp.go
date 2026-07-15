@@ -35,7 +35,9 @@ func (s *Server) handleVlekCertChain(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) serveSnpCertChain(w http.ResponseWriter, req *http.Request, akType internal.AkType) {
+
 	codeName := req.PathValue("codeName")
+
 	log.Debugf("Received %v cert_chain request for %q from %v", akType, codeName, req.RemoteAddr)
 
 	ca, err := s.snpEndorser.GetSnpCa(codeName, akType)
@@ -52,14 +54,15 @@ func (s *Server) serveSnpCertChain(w http.ResponseWriter, req *http.Request, akT
 }
 
 func (s *Server) handleVcek(w http.ResponseWriter, req *http.Request) {
+
 	codeName := req.PathValue("codeName")
 	chipIdHex := req.PathValue("chipId")
 
-	log.Debugf("Received /vcek request for %q chip %v from %v", codeName, chipIdHex, req.RemoteAddr)
+	log.Debugf("Received /vcek request from %v", req.RemoteAddr)
 
 	chipId, err := hex.DecodeString(chipIdHex)
 	if err != nil {
-		writeBadRequest(w, "invalid chipId hex: %v", err)
+		writeBadRequest(w, "invalid chip id: %v", err)
 		return
 	}
 
