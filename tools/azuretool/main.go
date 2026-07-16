@@ -91,7 +91,17 @@ func run() error {
 	switch *cmd {
 
 	case CMD_GET_HW_REPORT:
-		evidence, err := azuredriver.GetCcEvidence(nil)
+		var nonce []byte
+		if *in != "" {
+			nonce = []byte(*in)
+		} else {
+			data, err := azuredriver.GetAzureUserData()
+			if err != nil {
+				return fmt.Errorf("failed to get azure user data: %w", err)
+			}
+			nonce = data
+		}
+		evidence, err := azuredriver.GetCcEvidence(nonce)
 		if err != nil {
 			return fmt.Errorf("failed to get hwreport: %w", err)
 		}
