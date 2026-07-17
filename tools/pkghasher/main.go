@@ -17,9 +17,9 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -32,6 +32,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 )
 
 type hashJob struct {
@@ -51,44 +52,80 @@ var (
 	}
 )
 
+const (
+	outFlag = "out"
+	osFlag  = "os"
+	cpusFlag = "cpus"
+	logFlag = "log"
+)
+
 func main() {
+	cmd := &cli.Command{
+		Name:  "pkghasher",
+		Usage: "Hash the files installed by system packages to produce reference values",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  outFlag,
+				Usage: "directory to output hash files to",
+				Value: "collected-refvals",
+			},
+			&cli.StringFlag{
+				Name:  osFlag,
+				Usage: "OS distribution to be used",
+				Value: "ubuntu",
+			},
+			&cli.IntFlag{
+				Name:  cpusFlag,
+				Usage: "number of files hashed concurrently",
+				Value: runtime.NumCPU(),
+			},
+			&cli.StringFlag{
+				Name:  logFlag,
+				Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
+				Value: "info",
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return run(cmd)
+		},
+	}
 
-	outputDir := flag.String("out", "collected-refvals", "Directory to output hash files to (default: collected-refvals)")
-	distribution := flag.String("os", "ubuntu", "OS distribution to be used (default: ubuntu)")
-	parallelCount := flag.Int("cpus", runtime.NumCPU(), "Defined how many files are hashed concurrently (default: #CPUs)")
-	logLevel := flag.String("log", "info",
-		fmt.Sprintf("Possible logging levels (default: info): %v", strings.Join(maps.Keys(logLevels), ",")))
-	flag.Parse()
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	l, ok := logLevels[strings.ToLower(*logLevel)]
+func run(cmd *cli.Command) error {
+	outputDir := cmd.String(outFlag)
+	distribution := cmd.String(osFlag)
+	parallelCount := cmd.Int(cpusFlag)
+	logLevel := cmd.String(logFlag)
+
+	l, ok := logLevels[strings.ToLower(logLevel)]
 	if !ok {
-		log.Errorf("log level %v does not exist", *logLevel)
-		os.Exit(1)
+		return fmt.Errorf("log level %v does not exist", logLevel)
 	}
 	log.SetLevel(l)
 
-	if err := os.MkdirAll(*outputDir, 0755); err != nil {
-		log.Errorf("failed to create output dir: %v\n", err)
-		os.Exit(1)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output dir: %w", err)
 	}
 
 	var pkgs []string
 	var err error
 
-	switch *distribution {
+	switch distribution {
 	case "ubuntu":
 		log.Info("Fetching package list...")
 		pkgs, err = getPackages()
 		if err != nil {
-			log.Errorf("Failed to list packages: %v", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to list packages: %w", err)
 		}
 		for _, pkg := range pkgs {
 			log.Tracef("    %v", pkg)
 		}
 	default:
-		log.Errorf("Distribution %v is not supported", *distribution)
-		os.Exit(1)
+		return fmt.Errorf("distribution %v is not supported", distribution)
 	}
 
 	log.Infof("Found %d packages", len(pkgs))
@@ -97,7 +134,7 @@ func main() {
 
 	// Start worker pool
 	log.Info("Hashing packages (this might take a while)")
-	for i := 0; i < *parallelCount; i++ {
+	for i := 0; i < parallelCount; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -114,7 +151,7 @@ func main() {
 			log.Warnf("Skipping %s: %v", pkg, err)
 			continue
 		}
-		outfile := filepath.Join(*outputDir, pkg+".hashes")
+		outfile := filepath.Join(outputDir, pkg+".hashes")
 
 		// Clear the file before appending
 		if err := os.WriteFile(outfile, []byte{}, 0644); err != nil {
@@ -133,6 +170,7 @@ func main() {
 	wg.Wait()
 
 	log.Info("Done.")
+	return nil
 }
 
 func getPackages() ([]string, error) {
