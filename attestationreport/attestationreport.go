@@ -302,16 +302,16 @@ const (
 
 // IntelCollateral is a helper struct for Intel SGX/TDX collateral
 type IntelCollateral struct {
-	TcbInfo                    []byte
-	QeIdentity                 []byte
-	RootCaCrl                  []byte
-	PckCrl                     []byte
-	PckCrlIntermediateCert     []byte
-	PckCrlRootCert             []byte
-	TcbInfoIntermediateCert    []byte
-	TcbInfoRootCert            []byte
-	QeIdentityIntermediateCert []byte
-	QeIdentityRootCert         []byte
+	TcbInfo                    []byte `json:"tcbInfo" cbor:"0,keyasint"`
+	QeIdentity                 []byte `json:"qeIdentity" cbor:"1,keyasint"`
+	RootCaCrl                  []byte `json:"rootCaCrl" cbor:"2,keyasint"`
+	PckCrl                     []byte `json:"pckCrl" cbor:"3,keyasint"`
+	PckCrlIntermediateCert     []byte `json:"pckCrlIntermediateCert" cbor:"4,keyasint"`
+	PckCrlRootCert             []byte `json:"pckCrlRootCert" cbor:"5,keyasint"`
+	TcbInfoIntermediateCert    []byte `json:"tcbInfoIntermediateCert" cbor:"6,keyasint"`
+	TcbInfoRootCert            []byte `json:"tcbInfoRootCert" cbor:"7,keyasint"`
+	QeIdentityIntermediateCert []byte `json:"qeIdentityIntermediateCert" cbor:"8,keyasint"`
+	QeIdentityRootCert         []byte `json:"qeIdentityRootCert" cbor:"9,keyasint"`
 }
 
 // CrtData represents the measurement of an OCI container, comprising the OCI
