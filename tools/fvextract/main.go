@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
-	"flag"
+	"context"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/urfave/cli/v3"
 )
 
 const (
@@ -14,65 +16,93 @@ const (
 
 	PEIFV_SIZE = 0xE0000
 	DXEFV_SIZE = 0xE80000
+
+	refFlag     = "ref"
+	inFlag      = "in"
+	outFlag     = "out"
+	fvFlag      = "fv"
+	refSizeFlag = "refsize"
 )
 
 func main() {
+	cmd := &cli.Command{
+		Name:  "fvextract",
+		Usage: "Extract a UEFI firmware volume (peifv/dxefv) from a QEMU memory dump",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     refFlag,
+				Usage:    "firmware volume reference file",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:     inFlag,
+				Usage:    "dumped qemu memory",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:     outFlag,
+				Usage:    "extracted uefi firmware volume",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:     fvFlag,
+				Usage:    "firmware volume to extract [peifv, dxefv]",
+				Required: true,
+			},
+			&cli.IntFlag{
+				Name:  refSizeFlag,
+				Usage: "number of bytes used to locate the reference volume in the dumped memory",
+				Value: 256,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return run(cmd)
+		},
+	}
 
-	refFile := flag.String("ref", "", "firmware volume reference file")
-	inputFile := flag.String("in", "", "dumped qemu memory")
-	outputFile := flag.String("out", "", "extracted uefi firmware volume")
-	volume := flag.String("fv", "", "firmware volume to extract [peifv, dxefv]")
-	refSize := flag.Int("refsize", 256, "This number of bytes will be used to find the reference volume in the dumped memory")
-	flag.Parse()
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
 
-	if *inputFile == "" {
-		fmt.Println("Input file not specified")
-		flag.Usage()
-		return
-	}
-	if *outputFile == "" {
-		fmt.Println("Output file not specified")
-		flag.Usage()
-		return
-	}
-	if *refFile == "" {
-		fmt.Println("Reference file not specified")
-		flag.Usage()
-	}
+func run(cmd *cli.Command) error {
+	volume := cmd.String(fvFlag)
 
 	var volumeSize int
-	if strings.EqualFold(*volume, PEIFV) {
+	switch {
+	case strings.EqualFold(volume, PEIFV):
 		volumeSize = PEIFV_SIZE
-	} else if strings.EqualFold(*volume, DXEFV) {
+	case strings.EqualFold(volume, DXEFV):
 		volumeSize = DXEFV_SIZE
-	} else {
-		fmt.Printf("Unknown firmware volume type %q. Allowed: peifv, dxefv\n", *volume)
-		return
+	default:
+		return fmt.Errorf("unknown firmware volume type %q; allowed: peifv, dxefv", volume)
 	}
 
-	ref, err := os.ReadFile(*refFile)
+	refPath := cmd.String(refFlag)
+	inputPath := cmd.String(inFlag)
+	outputPath := cmd.String(outFlag)
+	refSize := cmd.Int(refSizeFlag)
+
+	ref, err := os.ReadFile(refPath)
 	if err != nil {
-		fmt.Printf("Failed to read reference file: %v\n", err)
-		return
+		return fmt.Errorf("failed to read reference file: %w", err)
 	}
 
-	in, err := os.ReadFile(*inputFile)
+	in, err := os.ReadFile(inputPath)
 	if err != nil {
-		fmt.Printf("Failed to read input file: %v\n", err)
-		return
+		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
-	index := bytes.Index(in, ref[:*refSize])
+	index := bytes.Index(in, ref[:refSize])
 	if index == -1 {
-		fmt.Printf("Failed to find index\n")
-		return
+		return fmt.Errorf("failed to find reference volume in dumped memory")
 	}
 
 	fmt.Printf("Index: %x\n", index)
 
-	err = os.WriteFile(*outputFile, in[index:index+volumeSize], 0644)
-	if err != nil {
-		fmt.Printf("Failed to write output file %v: %v\n", outputFile, err)
-		return
+	if err := os.WriteFile(outputPath, in[index:index+volumeSize], 0644); err != nil {
+		return fmt.Errorf("failed to write output file %v: %w", outputPath, err)
 	}
+	return nil
 }
