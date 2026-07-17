@@ -16,7 +16,11 @@
 package main
 
 import (
+	"context"
+	"os"
+
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 )
 
 func main() {
@@ -25,15 +29,25 @@ func main() {
 
 	log.Infof("Starting cmc-backend %v", getVersion())
 
-	c, err := getConfig()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+	cmd := &cli.Command{
+		Name:  "cmcbackend",
+		Usage: "CMC backend server for storing and providing attestation-results",
+		Flags: flags,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			c, err := getConfig(cmd)
+			if err != nil {
+				return err
+			}
+			s, err := newServer(c)
+			if err != nil {
+				return err
+			}
+			s.serve()
+			return nil
+		},
 	}
 
-	s, err := newServer(c)
-	if err != nil {
-		log.Fatalf("Faeild to create server: %v", err)
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
 	}
-
-	s.serve()
 }

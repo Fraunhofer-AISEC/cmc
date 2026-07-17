@@ -17,7 +17,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +24,7 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/exp/maps"
 )
 
@@ -61,19 +61,43 @@ var (
 	}
 )
 
-func getConfig() (*config, error) {
-	var err error
+var flags = []cli.Flag{
+	&cli.StringFlag{
+		Name:  configFlag,
+		Usage: "configuration file",
+	},
+	&cli.StringFlag{
+		Name:  addrFlag,
+		Usage: "HTTP listen address (default: localhost:8080)",
+	},
+	&cli.StringFlag{
+		Name:  dbFlag,
+		Usage: "SQLite3 database path (default: monitoring.db)",
+	},
+	&cli.StringFlag{
+		Name:  logFlag,
+		Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
+	},
+	&cli.IntFlag{
+		Name:  maxRowsFlag,
+		Usage: "maximum number of results which can be stored in the database (default: 400)",
+	},
+	&cli.IntFlag{
+		Name:  maxRowsPerProverFlag,
+		Usage: "maximum number of results per prover which can be stored in the database (default: 20)",
+	},
+	&cli.StringFlag{
+		Name:  tokenFlag,
+		Usage: "optional HTTP authorization token",
+	},
+	&cli.BoolFlag{
+		Name:  debugFlag,
+		Usage: "activate GIN debug mode",
+	},
+}
 
-	configFile := flag.String(configFlag, "", "configuration file")
-	addr := flag.String(addrFlag, "", "HTTP listen address (default: localhost:8080)")
-	dbFile := flag.String(dbFlag, "", "SQLite3 database path (default: monitoring.db)")
-	logLevel := flag.String(logFlag, "",
-		fmt.Sprintf("Possible logging: %v", strings.Join(maps.Keys(logLevels), ",")))
-	maxRows := flag.Int(maxRowsFlag, 0, "Maximum number of results which can be stored in the database (default: 100)")
-	maxRowsPerProver := flag.Int(maxRowsPerProverFlag, 0, "Maximum number of results which can be stored in the database (default: 100)")
-	token := flag.String(tokenFlag, "", "Optional HTTP authorization token")
-	debug := flag.Bool(debugFlag, false, "Set this to true to activate GIN debug mode")
-	flag.Parse()
+func getConfig(cmd *cli.Command) (*config, error) {
+	var err error
 
 	// Create default configuration
 	c := &config{
@@ -86,45 +110,44 @@ func getConfig() (*config, error) {
 	}
 
 	// Obtain custom configuration from file if specified
-	if flagPassed(configFlag) {
-		log.Infof("Loading config from file %v", *configFile)
-		data, err := os.ReadFile(*configFile)
+	if cmd.IsSet(configFlag) {
+		configFile := cmd.String(configFlag)
+		log.Infof("Loading config from file %v", configFile)
+		data, err := os.ReadFile(configFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read cmcd config file %v: %v", *configFile, err)
+			return nil, fmt.Errorf("failed to read cmcd config file %v: %v", configFile, err)
 		}
-		err = json.Unmarshal(data, c)
-		if err != nil {
+		if err := json.Unmarshal(data, c); err != nil {
 			return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
 		}
 	}
 
 	// Overwrite config file configuration with given command line arguments
-	if flagPassed(addrFlag) {
-		c.Addr = *addr
+	if cmd.IsSet(addrFlag) {
+		c.Addr = cmd.String(addrFlag)
 	}
-	if flagPassed(dbFlag) {
-		c.Db = *dbFile
+	if cmd.IsSet(dbFlag) {
+		c.Db = cmd.String(dbFlag)
 	}
-	if flagPassed(logFlag) {
-		c.LogLevel = *logLevel
+	if cmd.IsSet(logFlag) {
+		c.LogLevel = cmd.String(logFlag)
 	}
-	if flagPassed(maxRowsFlag) {
-		c.MaxRows = *maxRows
+	if cmd.IsSet(maxRowsFlag) {
+		c.MaxRows = cmd.Int(maxRowsFlag)
 	}
-	if flagPassed(maxRowsPerProverFlag) {
-		c.MaxRowsPerProver = *maxRowsPerProver
+	if cmd.IsSet(maxRowsPerProverFlag) {
+		c.MaxRowsPerProver = cmd.Int(maxRowsPerProverFlag)
 	}
-	if flagPassed(tokenFlag) {
-		c.Token = *token
+	if cmd.IsSet(tokenFlag) {
+		c.Token = cmd.String(tokenFlag)
 	}
-	if flagPassed(debugFlag) {
-		c.Debug = *debug
+	if cmd.IsSet(debugFlag) {
+		c.Debug = cmd.Bool(debugFlag)
 	}
 
 	// Configure the logger
 	l, ok := logLevels[strings.ToLower(c.LogLevel)]
 	if !ok {
-		flag.Usage()
 		return nil, fmt.Errorf("log level %v does not exist", c.LogLevel)
 	}
 	log.SetLevel(l)
@@ -161,16 +184,6 @@ func printConfig(c *config) {
 	log.Debugf("\tMaximum Entries per Prover: %v", c.MaxRowsPerProver)
 	log.Debugf("\tToken                     : %v", c.Token)
 	log.Debugf("\tGIN Debug                 : %v", c.Debug)
-}
-
-func flagPassed(name string) bool {
-	found := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
 }
 
 func getVersion() string {
