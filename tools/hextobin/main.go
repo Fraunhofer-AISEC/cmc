@@ -17,43 +17,75 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/urfave/cli/v3"
+)
+
+const (
+	inFlag    = "in"
+	outFlag   = "out"
+	startFlag = "start"
+	endFlag   = "end"
 )
 
 func main() {
-	inputFile := flag.String("in", "", "hex input file")
-	outputFile := flag.String("out", "", "binary output file")
-	startDelim := flag.String("start", "", "start delimiter")
-	endDelim := flag.String("end", "", "end delimiter")
-	flag.Parse()
+	cmd := &cli.Command{
+		Name:  "hextobin",
+		Usage: "Convert a hex-encoded input file to a binary output file",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     inFlag,
+				Usage:    "hex input file",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:     outFlag,
+				Usage:    "binary output file",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:  startFlag,
+				Usage: "start delimiter (optional; requires -end when set)",
+			},
+			&cli.StringFlag{
+				Name:  endFlag,
+				Usage: "end delimiter (optional; requires -start when set)",
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return run(cmd)
+		},
+	}
 
-	if *inputFile == "" {
-		fmt.Println("Input file not specified")
-		return
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
-	if *outputFile == "" {
-		fmt.Println("Output file not specified")
-		return
+}
+
+func run(cmd *cli.Command) error {
+	inputFile := cmd.String(inFlag)
+	outputFile := cmd.String(outFlag)
+	startDelim := cmd.String(startFlag)
+	endDelim := cmd.String(endFlag)
+
+	if startDelim != "" && endDelim == "" {
+		return fmt.Errorf("start delimiter set but no end delimiter specified")
 	}
-	if *startDelim != "" && *endDelim == "" {
-		fmt.Println("Start delimiter, bot no end delimiter specified")
-		return
-	}
-	if *startDelim == "" && *endDelim != "" {
-		fmt.Println("End delimiter, but no start delimiter specified")
-		return
+	if startDelim == "" && endDelim != "" {
+		return fmt.Errorf("end delimiter set but no start delimiter specified")
 	}
 
-	in, err := os.ReadFile(*inputFile)
+	in, err := os.ReadFile(inputFile)
 	if err != nil {
-		fmt.Printf("Failed to read input file %v: %v\n", *inputFile, err)
-		return
+		return fmt.Errorf("failed to read input file %v: %w", inputFile, err)
 	}
 
 	hexStr := strings.Map(func(r rune) rune {
@@ -63,23 +95,20 @@ func main() {
 		return -1
 	}, string(in))
 
-	if *startDelim != "" {
-
-		fmt.Printf("Extracting string between '%v' and '%v'\n", *startDelim, *endDelim)
-
-		hexStr = Split(hexStr, *startDelim, *endDelim)
+	if startDelim != "" {
+		fmt.Printf("Extracting string between '%v' and '%v'\n", startDelim, endDelim)
+		hexStr = Split(hexStr, startDelim, endDelim)
 	}
 
 	bin, err := decodeHex(hexStr)
 	if err != nil {
-		fmt.Printf("Failed to decode string: %v\n", err)
+		return fmt.Errorf("failed to decode string: %w", err)
 	}
 
-	err = os.WriteFile(*outputFile, bin, 0644)
-	if err != nil {
-		fmt.Printf("Failed to write output file %v: %v\n", outputFile, err)
-		return
+	if err := os.WriteFile(outputFile, bin, 0644); err != nil {
+		return fmt.Errorf("failed to write output file %v: %w", outputFile, err)
 	}
+	return nil
 }
 
 func Split(str, before, after string) string {
