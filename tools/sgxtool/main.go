@@ -16,11 +16,12 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/x509"
-	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/sgxdriver"
@@ -29,170 +30,170 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tdx-guest/pcs"
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 )
+
+const (
+	inFlag = "in"
+)
+
+type collateralSelector func(*ar.IntelCollateral) []byte
+
+var collateralSelectors = map[string]collateralSelector{
+	"get-tcbinfo":                       func(c *ar.IntelCollateral) []byte { return c.TcbInfo },
+	"get-qeidentity":                    func(c *ar.IntelCollateral) []byte { return c.QeIdentity },
+	"get-root-ca-crl":                   func(c *ar.IntelCollateral) []byte { return c.RootCaCrl },
+	"get-pck-crl":                       func(c *ar.IntelCollateral) []byte { return c.PckCrl },
+	"get-pck-crl-intermediate-cert":     func(c *ar.IntelCollateral) []byte { return c.PckCrlIntermediateCert },
+	"get-pck-crl-root-cert":             func(c *ar.IntelCollateral) []byte { return c.PckCrlRootCert },
+	"get-tcb-info-intermediate-cert":    func(c *ar.IntelCollateral) []byte { return c.TcbInfoIntermediateCert },
+	"get-tcb-info-root-cert":            func(c *ar.IntelCollateral) []byte { return c.TcbInfoRootCert },
+	"get-qe-identity-intermediate-cert": func(c *ar.IntelCollateral) []byte { return c.QeIdentityIntermediateCert },
+	"get-qe-identity-root-cert":         func(c *ar.IntelCollateral) []byte { return c.QeIdentityRootCert },
+}
 
 func main() {
 
 	log.SetLevel(log.TraceLevel)
 
-	err := run()
-	if err != nil {
+	subcommands := []*cli.Command{
+		{
+			Name:  "get-quote",
+			Usage: "Fetch a raw SGX quote from the platform",
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				quote, err := getQuoteRaw()
+				if err != nil {
+					return fmt.Errorf("failed to get SGX Quote: %w", err)
+				}
+				os.Stdout.Write(quote)
+				return nil
+			},
+		},
+		{
+			Name:  "parse-quote",
+			Usage: "Parse an SGX quote and log its fields",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				return parseQuote(cmd.String(inFlag))
+			},
+		},
+		{
+			Name:  "parse-certchain",
+			Usage: "Extract the certificate chain from an SGX quote",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				out, err := parseQuoteCertChain(cmd.String(inFlag))
+				if err != nil {
+					return fmt.Errorf("failed to get SGX cert chain: %w", err)
+				}
+				os.Stdout.Write(out)
+				return nil
+			},
+		},
+		{
+			Name:  "parse-pck-cert",
+			Usage: "Extract the PCK certificate from an SGX quote",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				out, err := parseQuotePCKCert(cmd.String(inFlag))
+				if err != nil {
+					return fmt.Errorf("failed to get SGX PCK cert: %w", err)
+				}
+				os.Stdout.Write(out)
+				return nil
+			},
+		},
+		{
+			Name:  "parse-intermediate-cert",
+			Usage: "Extract the intermediate certificate from an SGX quote",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				out, err := parseQuoteIntermediateCert(cmd.String(inFlag))
+				if err != nil {
+					return fmt.Errorf("failed to get SGX intermediate cert: %w", err)
+				}
+				os.Stdout.Write(out)
+				return nil
+			},
+		},
+		{
+			Name:  "parse-root-ca-cert",
+			Usage: "Extract the Root CA certificate from an SGX quote",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				out, err := parseQuoteRootCaCert(cmd.String(inFlag))
+				if err != nil {
+					return fmt.Errorf("failed to get SGX Root CA cert: %w", err)
+				}
+				os.Stdout.Write(out)
+				return nil
+			},
+		},
+		{
+			Name:  "parse-fmspc",
+			Usage: "Print the FMSPC extracted from an SGX quote's PCK cert",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				fmspc, err := parseFmspc(cmd.String(inFlag))
+				if err != nil {
+					return fmt.Errorf("failed to parse FMSPC: %w", err)
+				}
+				fmt.Printf("%v\n", fmspc)
+				return nil
+			},
+		},
+		{
+			Name:  "parse-pck-cert-tcb",
+			Usage: "Log the SGX-extension TCB fields from an SGX quote's PCK cert",
+			Flags: inFileFlag(),
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				return parseQuotePCKCertTcb(cmd.String(inFlag))
+			},
+		},
+	}
+
+	// Register collateral subcommands
+	for name, selector := range collateralSelectors {
+		subcommands = append(subcommands, collateralCommand(name, selector))
+	}
+
+	cmd := &cli.Command{
+		Name:     "sgxtool",
+		Usage:    "SGX quote and collateral inspection utility",
+		Commands: subcommands,
+	}
+
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Errorf("%v", err)
+		os.Exit(1)
 	}
 }
 
-type collateralSelector func(*ar.IntelCollateral) []byte
-
-var collateralCommands = map[string]collateralSelector{
-	CMD_GET_TCBINFO:                func(c *ar.IntelCollateral) []byte { return c.TcbInfo },
-	CMD_GET_QEIDENTITY:             func(c *ar.IntelCollateral) []byte { return c.QeIdentity },
-	CMD_GET_ROOT_CA_CRL:            func(c *ar.IntelCollateral) []byte { return c.RootCaCrl },
-	CMD_GET_PCK_CRL:                func(c *ar.IntelCollateral) []byte { return c.PckCrl },
-	CMD_GET_PCK_CRL_INTER_CERT:     func(c *ar.IntelCollateral) []byte { return c.PckCrlIntermediateCert },
-	CMD_GET_PCK_CRL_ROOT_CERT:      func(c *ar.IntelCollateral) []byte { return c.PckCrlRootCert },
-	CMD_GET_TCB_INFO_INTER_CERT:    func(c *ar.IntelCollateral) []byte { return c.TcbInfoIntermediateCert },
-	CMD_GET_TCB_INFO_ROOT_CERT:     func(c *ar.IntelCollateral) []byte { return c.TcbInfoRootCert },
-	CMD_GET_QE_IDENTITY_INTER_CERT: func(c *ar.IntelCollateral) []byte { return c.QeIdentityIntermediateCert },
-	CMD_GET_QE_IDENTITY_ROOT_CERT:  func(c *ar.IntelCollateral) []byte { return c.QeIdentityRootCert },
+func inFileFlag() []cli.Flag {
+	return []cli.Flag{
+		&cli.StringFlag{
+			Name:     inFlag,
+			Usage:    "input file (SGX quote binary)",
+			Required: true,
+		},
+	}
 }
 
-const (
-	// Quote commands
-	CMD_GET_QUOTE               = "get-quote"
-	CMD_PARSE_QUOTE             = "parse-quote"
-	CMD_PARSE_CERTCHAIN         = "parse-certchain"
-	CMD_PARSE_PCK_CERT          = "parse-pck-cert"
-	CMD_PARSE_INTERMEDIATE_CERT = "parse-intermediate-cert"
-	CMD_PARSE_ROOT_CA_CERT      = "parse-root-ca-cert"
-	CMD_PARSE_FMSPC             = "parse-fmspc"
-	CMD_PARSE_PCKCERT_TCB       = "parse-pck-cert-tcb"
-
-	// Collateral commands
-	CMD_GET_TCBINFO                = "get-tcbinfo"
-	CMD_GET_QEIDENTITY             = "get-qeidentity"
-	CMD_GET_ROOT_CA_CRL            = "get-root-ca-crl"
-	CMD_GET_PCK_CRL                = "get-pck-crl"
-	CMD_GET_PCK_CRL_INTER_CERT     = "get-pck-crl-intermediate-cert"
-	CMD_GET_PCK_CRL_ROOT_CERT      = "get-pck-crl-root-cert"
-	CMD_GET_TCB_INFO_INTER_CERT    = "get-tcb-info-intermediate-cert"
-	CMD_GET_TCB_INFO_ROOT_CERT     = "get-tcb-info-root-cert"
-	CMD_GET_QE_IDENTITY_INTER_CERT = "get-qe-identity-intermediate-cert"
-	CMD_GET_QE_IDENTITY_ROOT_CERT  = "get-qe-identity-root-cert"
-)
-
-func run() error {
-
-	cmd := flag.String("cmd", "",
-		fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
-			CMD_GET_QUOTE,
-			CMD_PARSE_CERTCHAIN,
-			CMD_PARSE_PCK_CERT,
-			CMD_PARSE_INTERMEDIATE_CERT,
-			CMD_PARSE_ROOT_CA_CERT,
-			CMD_PARSE_FMSPC,
-			CMD_PARSE_QUOTE,
-			CMD_PARSE_PCKCERT_TCB,
-			CMD_GET_TCBINFO,
-			CMD_GET_QEIDENTITY,
-			CMD_GET_ROOT_CA_CRL,
-			CMD_GET_PCK_CRL,
-			CMD_GET_PCK_CRL_INTER_CERT,
-			CMD_GET_PCK_CRL_ROOT_CERT,
-			CMD_GET_TCB_INFO_INTER_CERT,
-			CMD_GET_TCB_INFO_ROOT_CERT,
-			CMD_GET_QE_IDENTITY_INTER_CERT,
-			CMD_GET_QE_IDENTITY_ROOT_CERT,
-		))
-	in := flag.String("in", "", "input file")
-	flag.Parse()
-
-	if *cmd == CMD_PARSE_QUOTE ||
-		*cmd == CMD_GET_TCBINFO ||
-		*cmd == CMD_GET_QEIDENTITY ||
-		*cmd == CMD_GET_ROOT_CA_CRL ||
-		*cmd == CMD_GET_PCK_CRL ||
-		*cmd == CMD_GET_PCK_CRL_INTER_CERT ||
-		*cmd == CMD_GET_PCK_CRL_ROOT_CERT ||
-		*cmd == CMD_GET_TCB_INFO_INTER_CERT ||
-		*cmd == CMD_GET_TCB_INFO_ROOT_CERT ||
-		*cmd == CMD_GET_QE_IDENTITY_INTER_CERT ||
-		*cmd == CMD_GET_QE_IDENTITY_ROOT_CERT {
-		if *in == "" {
-			return fmt.Errorf("missing parameter -in")
-		}
-	}
-
-	switch *cmd {
-
-	case CMD_GET_QUOTE:
-		quote, err := getQuoteRaw()
-		if err != nil {
-			return fmt.Errorf("failed to get SGX Quote: %w", err)
-		}
-		os.Stdout.Write(quote)
-
-	case CMD_PARSE_QUOTE:
-		err := parseQuote(*in)
-		if err != nil {
-			return fmt.Errorf("failed to parse quote")
-		}
-
-	case CMD_PARSE_CERTCHAIN:
-		certChain, err := parseQuoteCertChain(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get SGX cert chain: %w", err)
-		}
-		os.Stdout.Write(certChain)
-
-	case CMD_PARSE_PCK_CERT:
-		certChain, err := parseQuotePCKCert(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get SGX PCK cert: %w", err)
-		}
-		os.Stdout.Write(certChain)
-
-	case CMD_PARSE_INTERMEDIATE_CERT:
-		certChain, err := parseQuoteIntermediateCert(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get SGX intermediate cert: %w", err)
-		}
-		os.Stdout.Write(certChain)
-
-	case CMD_PARSE_ROOT_CA_CERT:
-		certChain, err := parseQuoteRootCaCert(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get SGX Root CA cert: %w", err)
-		}
-		os.Stdout.Write(certChain)
-
-	case CMD_PARSE_FMSPC:
-		fmspc, err := parseFmspc(*in)
-		if err != nil {
-			return fmt.Errorf("failed to parse FMSPC: %w", err)
-		}
-		fmt.Printf("%v\n", fmspc)
-
-	case CMD_PARSE_PCKCERT_TCB:
-		err := parseQuotePCKCertTcb(*in)
-		if err != nil {
-			return fmt.Errorf("failed to get SGX PCK cert: %w", err)
-		}
-
-	default:
-		if selector, ok := collateralCommands[*cmd]; ok {
-			collateral, err := getCollateral(*in)
+func collateralCommand(name string, selector collateralSelector) *cli.Command {
+	return &cli.Command{
+		Name: name,
+		Usage: fmt.Sprintf("Fetch collateral and extract field %q",
+			strings.TrimPrefix(name, "get-")),
+		Flags: inFileFlag(),
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			collateral, err := getCollateral(cmd.String(inFlag))
 			if err != nil {
 				return fmt.Errorf("failed to get SGX collateral: %w", err)
 			}
 			os.Stdout.Write(selector(collateral))
 			return nil
-		} else {
-			return fmt.Errorf("unknown cmd %q. See sgxtool -help", *cmd)
-		}
-
+		},
 	}
-
-	return nil
 }
 
 func getQuoteRaw() ([]byte, error) {
