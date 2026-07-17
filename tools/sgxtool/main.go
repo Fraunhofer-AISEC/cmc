@@ -16,9 +16,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -28,13 +30,18 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/google/go-tdx-guest/pcs"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
 const (
-	inFlag = "in"
+	inFlag     = "in"
+	formatFlag = "format"
+
+	formatCbor = "cbor"
+	formatJson = "json"
 )
 
 type collateralSelector func(*ar.IntelCollateral) []byte
@@ -150,6 +157,25 @@ func main() {
 				return parseQuotePCKCertTcb(cmd.String(inFlag))
 			},
 		},
+		{
+			Name:  "fetch-collateral",
+			Usage: "Fetch the full SGX collateral for a quote",
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:     inFlag,
+					Usage:    "input file (SGX quote binary)",
+					Required: true,
+				},
+				&cli.StringFlag{
+					Name:  formatFlag,
+					Usage: "output format for the collateral blob [cbor, json]",
+					Value: formatCbor,
+				},
+			},
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				return fetchCollateral(cmd.String(inFlag), cmd.String(formatFlag))
+			},
+		},
 	}
 
 	// Register collateral subcommands
@@ -182,18 +208,67 @@ func inFileFlag() []cli.Flag {
 func collateralCommand(name string, selector collateralSelector) *cli.Command {
 	return &cli.Command{
 		Name: name,
-		Usage: fmt.Sprintf("Fetch collateral and extract field %q",
+		Usage: fmt.Sprintf("Extract field %q from a pre-fetched collateral blob (see fetch-collateral)",
 			strings.TrimPrefix(name, "get-")),
-		Flags: inFileFlag(),
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     inFlag,
+				Usage:    "input file (SGX collateral blob written by fetch-collateral, CBOR or JSON)",
+				Required: true,
+			},
+		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			collateral, err := getCollateral(cmd.String(inFlag))
+			collateral, err := readCollateralBlob(cmd.String(inFlag))
 			if err != nil {
-				return fmt.Errorf("failed to get SGX collateral: %w", err)
+				return fmt.Errorf("failed to read SGX collateral blob: %w", err)
 			}
 			os.Stdout.Write(selector(collateral))
 			return nil
 		},
 	}
+}
+
+func fetchCollateral(quotePath, format string) error {
+	collateral, err := getCollateral(quotePath)
+	if err != nil {
+		return fmt.Errorf("failed to fetch SGX collateral: %w", err)
+	}
+
+	var data []byte
+	switch strings.ToLower(format) {
+	case formatCbor:
+		data, err = cbor.Marshal(collateral)
+	case formatJson:
+		data, err = json.MarshalIndent(collateral, "", "  ")
+	default:
+		return fmt.Errorf("unknown format %q (want %v or %v)", format, formatCbor, formatJson)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to marshal collateral as %v: %w", format, err)
+	}
+
+	os.Stdout.Write(data)
+	return nil
+}
+
+func readCollateralBlob(path string) (*ar.IntelCollateral, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read collateral blob: %w", err)
+	}
+
+	var c ar.IntelCollateral
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		if err := json.Unmarshal(data, &c); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal collateral blob as JSON: %w", err)
+		}
+	} else {
+		if err := cbor.Unmarshal(data, &c); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal collateral blob as CBOR: %w", err)
+		}
+	}
+	return &c, nil
 }
 
 func getQuoteRaw() ([]byte, error) {
