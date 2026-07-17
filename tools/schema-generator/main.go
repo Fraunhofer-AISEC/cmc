@@ -17,8 +17,8 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,6 +27,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -66,27 +67,50 @@ var (
 	}
 )
 
+const (
+	packageFlag = "package"
+	outFlag     = "out"
+)
+
 func main() {
 	log.SetLevel(log.TraceLevel)
 
-	pkg := flag.String("package", "",
-		fmt.Sprintf("The golang package to generate JSON Schema definitions for. Possible: %v", maps.Keys(packages)))
-
-	out := flag.String("out", "output", "The directory the schema definitions shall be written to")
-
-	flag.Parse()
-
-	// Create sub-directory for the package
-	dir := filepath.Join(*out, *pkg)
-
-	objects, ok := packages[*pkg]
-	if !ok {
-		log.Fatalf("Target '%v' not found", *pkg)
+	cmd := &cli.Command{
+		Name:  "schema-generator",
+		Usage: "Generate JSON Schema definitions for CMC Go packages",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  packageFlag,
+				Usage: fmt.Sprintf("Go package to generate JSON Schema definitions for. Possible: %v", maps.Keys(packages)),
+			},
+			&cli.StringFlag{
+				Name:  outFlag,
+				Usage: "directory to write schema definitions to",
+				Value: "output",
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return run(cmd)
+		},
 	}
 
-	err := os.MkdirAll(dir, os.ModePerm)
-	if err != nil {
-		log.Fatalf("Error creating directory: %v\n", err)
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run(cmd *cli.Command) error {
+	pkg := cmd.String(packageFlag)
+	out := cmd.String(outFlag)
+
+	objects, ok := packages[pkg]
+	if !ok {
+		return fmt.Errorf("target %q not found", pkg)
+	}
+
+	dir := filepath.Join(out, pkg)
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	r := &jsonschema.Reflector{
@@ -101,17 +125,16 @@ func main() {
 		schema := r.Reflect(o)
 		data, err := json.MarshalIndent(schema, "", "  ")
 		if err != nil {
-			log.Fatalf("Failed to marshal: %v", err)
+			return fmt.Errorf("failed to marshal: %w", err)
 		}
 
 		f := filepath.Join(dir, fmt.Sprintf("%v.json", getName(o)))
-
-		err = os.WriteFile(f, data, 0644)
-		if err != nil {
-			log.Fatalf("Failed to write file: %v", err)
+		if err := os.WriteFile(f, data, 0644); err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
 		}
 	}
 
+	return nil
 }
 
 func getName(v interface{}) string {
