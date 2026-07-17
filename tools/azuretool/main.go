@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2025 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,181 +17,326 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/azuredriver"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tpm/legacy/tpm2"
 	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
+)
+
+const (
+	pcrsFlag     = "pcrs"
+	mrsFlag      = "mrs"
+	userdataFlag = "userdata"
+
+	defaultPcrs = "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
 )
 
 func main() {
 
 	log.SetLevel(log.TraceLevel)
 
-	err := run()
-	if err != nil {
+	cmd := &cli.Command{
+		Name: "azuretool",
+		Usage: "Tool to set nonces and fetch hardware reports (SNP reports, TDX quotes) via the " +
+			"Azure-specific vTPM NVIndex mechanism, fetch Azure reports (hardware reports " +
+			"including metadata), and interact with the vTPM",
+		Commands: []*cli.Command{
+			{
+				Name: "get-hcl-report",
+				Usage: "Fetch the azure HCL report (comprises hcl header, SNP report / TDX " +
+					"TDREPORT, runtime-data). Note: does fetch the TDREPORT, not the TDX Quote. " +
+					"To fetch a TDX quote, use the get-quote command",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name: userdataFlag,
+						Usage: "user data to inject as nonce before triggering report " +
+							"regeneration (if unset, the currently stored NV user data is reused)",
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return getAzureReport(cmd)
+				},
+			},
+			{
+				Name:  "get-hcl-payload",
+				Usage: "Fetch the azure HCL report payload (SNP report or TDX TDREPORT)",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name: userdataFlag,
+						Usage: "user data to inject as nonce before triggering report " +
+							"regeneration (if unset, the currently stored NV user data is reused)",
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return getAzureHwReport(cmd)
+				},
+			},
+			{
+				Name: "get-quote",
+				Usage: "Fetch the hardware quote (SNP report or TDX quote). For SNP, this is the " +
+					"HCL payload extracted from the HCL report. For TDX, the HCL payload is sent " +
+					"to the Azure IMDS service, which converts the TDREPORT into a TDX Quote",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name: userdataFlag,
+						Usage: "user data to inject as nonce before fetching (if unset, " +
+							"currently set NV data is used)",
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return getHwReport(cmd)
+				},
+			},
+			{
+				Name:  "get-azure-rtdata",
+				Usage: "Fetch the azure report runtime data",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return getAzureRtData()
+				},
+			},
+			{
+				Name:  "get-vtpm-quote",
+				Usage: "Fetch a vTPM quote from the TPM",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    pcrsFlag,
+						Usage:   "PCRs to include in quote (comma-separated)",
+						Value:   defaultPcrs,
+						Aliases: []string{mrsFlag},
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					pcrs, err := parsePcrs(cmd.String(pcrsFlag))
+					if err != nil {
+						return err
+					}
+					return getVtpmQuote(pcrs)
+				},
+			},
+			{
+				Name:  "get-vtpm-ak-cert",
+				Usage: "Fetch the vTPM AK certificate",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return getVtpmAkCert()
+				},
+			},
+			{
+				Name: "verify-vtpm",
+				Usage: "Verify that SHA256(runtimeclaims) == REPORTDATA && " +
+					"runtimeclaims.akpub == vTPM AK",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return verifyVtpm()
+				},
+			},
+			{
+				Name:  "verify-vtpm-quote",
+				Usage: "Verify a vTPM quote signature",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    pcrsFlag,
+						Usage:   "PCRs to include in quote (comma-separated)",
+						Value:   defaultPcrs,
+						Aliases: []string{mrsFlag},
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					pcrs, err := parsePcrs(cmd.String(pcrsFlag))
+					if err != nil {
+						return err
+					}
+					return verifyVtpmQuote(pcrs)
+				},
+			},
+			{
+				Name:  "update-user-data",
+				Usage: "Update azure hcl report user data (nonce) in the NV index",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     userdataFlag,
+						Usage:    "user data to write to the NV index",
+						Required: true,
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return azuredriver.UpdateAzureUserData([]byte(cmd.String(userdataFlag)))
+				},
+			},
+			{
+				Name:  "get-user-data",
+				Usage: "Read azure hcl report user data (nonce) from the NV index",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					data, err := azuredriver.GetAzureUserData()
+					if err != nil {
+						return fmt.Errorf("failed to get azure user data: %w", err)
+					}
+					os.Stdout.Write(data)
+					return nil
+				},
+			},
+		},
+	}
+
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Errorf("%v", err)
+		os.Exit(1)
 	}
 }
 
-const (
-	CMD_GET_AZURE_REPORT   = "get-azure-report"   // Fetches the azure report (header, hwreport, runtime-data)
-	CMD_GET_AZURE_HWREPORT = "get-azure-hwreport" // Fetches the azure report payload, which is the SNP report or the TDX TDREPORT
-	CMD_GET_HW_REPORT      = "get-hwreport"       // Fetches the hardware report (SNP report or TDX quote)
-	CMD_GET_AZURE_RTDATA   = "get-azure-rtdata"   // Fetches the azure report runtime data
-	CMD_GET_VTPM_QUOTE     = "get-vtpm-quote"     // Fetches the vTPM quote from the TPM
-	CMD_GET_VTPM_AK_CERT   = "get-vtpm-ak-cert"   // Fetches the vTPM AK cert
-	CMD_VERIFY_VTPM        = "verify-vtpm"        // Verify that SHA256(runtimeclaims) == REPORTDATA && runtimeclaims.akpub == vTPM AK
-	CMD_VERIFY_VTPM_QUOTE  = "verify-vtpm-quote"  // Verify the quote signature
-	CMD_UPDATE_USER_DATA   = "update-user-data"   // Update azure report user data in NV index
-	CMD_GET_USER_DATA      = "get-user-data"      // Read user data from NV index
-)
-
-func run() error {
-
-	cmd := flag.String("cmd", "", fmt.Sprintf("command to run: %v, %v, %v, %v, %v, %v, %v, %v, %v, %v",
-		CMD_GET_AZURE_REPORT,
-		CMD_GET_AZURE_HWREPORT,
-		CMD_GET_HW_REPORT,
-		CMD_GET_AZURE_RTDATA,
-		CMD_GET_VTPM_QUOTE,
-		CMD_GET_VTPM_AK_CERT,
-		CMD_VERIFY_VTPM,
-		CMD_VERIFY_VTPM_QUOTE,
-		CMD_UPDATE_USER_DATA,
-		CMD_GET_USER_DATA,
-	))
-	pcrs := flag.String("pcrs", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", "PCRs to include in quote")
-	in := flag.String("userdata", "", "Azure User Data")
-	flag.Parse()
-
-	parts := strings.Split(*pcrs, ",")
-	pcrNums := make([]int, len(parts))
+func parsePcrs(s string) ([]int, error) {
+	parts := strings.Split(s, ",")
+	pcrs := make([]int, len(parts))
 	for i, p := range parts {
 		n, err := strconv.Atoi(strings.TrimSpace(p))
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("invalid pcr %q: %w", p, err)
 		}
-		pcrNums[i] = n
+		pcrs[i] = n
+	}
+	return pcrs, nil
+}
+
+func getAzureReport(cmd *cli.Command) error {
+	report, err := fetchAzureReport(cmd)
+	if err != nil {
+		return err
+	}
+	os.Stdout.Write(report)
+	return nil
+}
+
+func getAzureHwReport(cmd *cli.Command) error {
+	report, err := fetchAzureReport(cmd)
+	if err != nil {
+		return err
+	}
+	hwreport, rtdataRaw, err := azuredriver.DecodeAzureReport(report)
+	if err != nil {
+		return fmt.Errorf("failed to decode azure report: %w", err)
+	}
+	if _, _, err := verifier.DecodeAzureRtData(rtdataRaw); err != nil {
+		return fmt.Errorf("failed to decode runtime data: %w", err)
+	}
+	os.Stdout.Write(hwreport)
+	return nil
+}
+
+// fetchAzureReport writes the nonce to the NV user data (triggering the Azure
+// firmware to regenerate the HCL report) and checks if the returned report
+// reflects that nonce. Does some retries as this did not work reliably in
+// the past
+func fetchAzureReport(cmd *cli.Command) ([]byte, error) {
+	var nonce []byte
+	if cmd.IsSet(userdataFlag) {
+		nonce = []byte(cmd.String(userdataFlag))
+	} else {
+		data, err := azuredriver.GetAzureUserData()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get azure user data: %w", err)
+		}
+		nonce = data
 	}
 
-	if *cmd == CMD_UPDATE_USER_DATA && *in == "" {
-		return fmt.Errorf("missing parameter -userdata")
+	if err := azuredriver.UpdateAzureUserData(nonce); err != nil {
+		return nil, fmt.Errorf("failed to update azure user data: %w", err)
 	}
 
-	switch *cmd {
+	fullNonce := make([]byte, 64)
+	copy(fullNonce, nonce)
 
-	case CMD_GET_HW_REPORT:
-		var nonce []byte
-		if *in != "" {
-			nonce = []byte(*in)
-		} else {
-			data, err := azuredriver.GetAzureUserData()
-			if err != nil {
-				return fmt.Errorf("failed to get azure user data: %w", err)
-			}
-			nonce = data
-		}
-		evidence, err := azuredriver.GetCcEvidence(nonce)
+	for i := 0; i < 3; i++ {
+		report, err := azuredriver.GetAzureReport()
 		if err != nil {
-			return fmt.Errorf("failed to get hwreport: %w", err)
+			return nil, fmt.Errorf("failed to get azure report: %w", err)
 		}
-		os.Stdout.Write(evidence.Data)
+		_, rtdataRaw, err := azuredriver.DecodeAzureReport(report)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode azure report: %w", err)
+		}
+		_, claims, err := verifier.DecodeAzureRtData(rtdataRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode runtime data: %w", err)
+		}
+		userData, err := hex.DecodeString(claims.UserData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode user data: %w", err)
+		}
+		if bytes.Equal(userData, fullNonce) {
+			return report, nil
+		}
+		// Sometimes the nonce written to the NVindex is not effective immediately
+		log.Warnf("Nonce does not match NVIndex nonce (%x vs. %x). Trying again...",
+			userData, fullNonce)
+		time.Sleep(3 * time.Second)
+	}
+	return nil, fmt.Errorf("failed to bind report to specified nonce")
+}
 
-	case CMD_GET_AZURE_REPORT:
-		tdreport, err := azuredriver.GetAzureReport()
-		if err != nil {
-			return fmt.Errorf("failed to get azure report: %w", err)
-		}
-		os.Stdout.Write(tdreport)
-
-	case CMD_GET_AZURE_HWREPORT:
-		azureReport, err := azuredriver.GetAzureReport()
-		if err != nil {
-			return fmt.Errorf("failed to get azure report: %w", err)
-		}
-		hwreport, rtdataRaw, err := azuredriver.DecodeAzureReport(azureReport)
-		if err != nil {
-			return fmt.Errorf("failed to decode azure report: %w", err)
-		}
-		_, _, err = verifier.DecodeAzureRtData(rtdataRaw)
-		if err != nil {
-			return fmt.Errorf("failed to decode runtime data: %w", err)
-		}
-		os.Stdout.Write(hwreport)
-
-	case CMD_GET_AZURE_RTDATA:
-		azureReport, err := azuredriver.GetAzureReport()
-		if err != nil {
-			return fmt.Errorf("failed to get azure report: %w", err)
-		}
-		_, rtdataRaw, err := azuredriver.DecodeAzureReport(azureReport)
-		if err != nil {
-			return fmt.Errorf("failed to decode azure report: %w", err)
-		}
-		os.Stdout.Write(rtdataRaw)
-
-	case CMD_GET_VTPM_QUOTE:
-
-		nonce, err := azuredriver.GetAzureUserData()
-		if err != nil {
-			return fmt.Errorf("failed to get azure user data: %w", err)
-		}
-		quote, sig, err := azuredriver.GetVtpmQuote(pcrNums, nonce)
-		if err != nil {
-			return fmt.Errorf("failed to get vtpm quote: %w", err)
-		}
-		log.Debugf("Writing quote length %v (0x%x)", len(quote), len(quote))
-		os.Stdout.Write(quote)
-		log.Debugf("Writing signature length %v (0x%x)", len(sig), len(sig))
-		os.Stdout.Write(sig)
-
-	case CMD_GET_VTPM_AK_CERT:
-		akcert, err := azuredriver.GetVtpmAkCert()
-		if err != nil {
-			return fmt.Errorf("failed to get vtpm ak cert: %w", err)
-		}
-		os.Stdout.Write(akcert)
-
-	case CMD_VERIFY_VTPM:
-		err := verifyVtpm()
-		if err != nil {
-			return fmt.Errorf("failed to verify vTPM: %w", err)
-		}
-
-	case CMD_VERIFY_VTPM_QUOTE:
-		err := verifyVtpmQuote(pcrNums)
-		if err != nil {
-			return fmt.Errorf("failed to verify quote: %w", err)
-		}
-
-	case CMD_UPDATE_USER_DATA:
-		err := azuredriver.UpdateAzureUserData([]byte(*in))
-		if err != nil {
-			return fmt.Errorf("failed to update azure user data: %w", err)
-		}
-
-	case CMD_GET_USER_DATA:
+func getHwReport(cmd *cli.Command) error {
+	var nonce []byte
+	if cmd.IsSet(userdataFlag) {
+		nonce = []byte(cmd.String(userdataFlag))
+	} else {
 		data, err := azuredriver.GetAzureUserData()
 		if err != nil {
 			return fmt.Errorf("failed to get azure user data: %w", err)
 		}
-		os.Stdout.Write(data)
-
-	default:
-		return fmt.Errorf("unknown cmd %q. See azuretool -help", *cmd)
-
+		nonce = data
 	}
+	evidence, err := azuredriver.GetCcEvidence(nonce)
+	if err != nil {
+		return fmt.Errorf("failed to get hwreport: %w", err)
+	}
+	os.Stdout.Write(evidence.Data)
+	return nil
+}
 
+func getAzureRtData() error {
+	azureReport, err := azuredriver.GetAzureReport()
+	if err != nil {
+		return fmt.Errorf("failed to get azure report: %w", err)
+	}
+	_, rtdataRaw, err := azuredriver.DecodeAzureReport(azureReport)
+	if err != nil {
+		return fmt.Errorf("failed to decode azure report: %w", err)
+	}
+	os.Stdout.Write(rtdataRaw)
+	return nil
+}
+
+func getVtpmQuote(pcrs []int) error {
+	nonce, err := azuredriver.GetAzureUserData()
+	if err != nil {
+		return fmt.Errorf("failed to get azure user data: %w", err)
+	}
+	quote, sig, err := azuredriver.GetVtpmQuote(pcrs, nonce)
+	if err != nil {
+		return fmt.Errorf("failed to get vtpm quote: %w", err)
+	}
+	log.Debugf("Writing quote length %v (0x%x)", len(quote), len(quote))
+	os.Stdout.Write(quote)
+	log.Debugf("Writing signature length %v (0x%x)", len(sig), len(sig))
+	os.Stdout.Write(sig)
+	return nil
+}
+
+func getVtpmAkCert() error {
+	akcert, err := azuredriver.GetVtpmAkCert()
+	if err != nil {
+		return fmt.Errorf("failed to get vtpm ak cert: %w", err)
+	}
+	os.Stdout.Write(akcert)
 	return nil
 }
 
