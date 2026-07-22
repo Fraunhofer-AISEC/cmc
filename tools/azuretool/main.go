@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -39,6 +40,10 @@ const (
 	pcrsFlag     = "pcrs"
 	mrsFlag      = "mrs"
 	userdataFlag = "userdata"
+	nonceFlag    = "nonce"
+	quoteFlag    = "quote"
+	akCertFlag   = "ak-cert"
+	outFlag      = "out"
 
 	defaultPcrs = "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
 )
@@ -51,7 +56,15 @@ func main() {
 		Name: "azuretool",
 		Usage: "Tool to set nonces and fetch hardware reports (SNP reports, TDX quotes) via the " +
 			"Azure-specific vTPM NVIndex mechanism, fetch Azure reports (hardware reports " +
-			"including metadata), and interact with the vTPM",
+			"including metadata), and interact with the vTPM. For design details about the " +
+			"Azure-specific CVM guest attestation, refer to: " +
+			"https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  outFlag,
+				Usage: "output file (writes to stdout if unset)",
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name: "get-hcl-report",
@@ -100,15 +113,21 @@ func main() {
 				},
 			},
 			{
-				Name:  "get-azure-rtdata",
-				Usage: "Fetch the azure report runtime data",
+				Name: "get-azure-rtdata",
+				Usage: "Fetch the azure report runtime data (starting at azure hcl attestation " +
+					"report offset 1216, the runtime data contains the hardware report type " +
+					"and the runtime claims, which include the user nonce, the vTPM public keys " +
+					"and the user data. For more information, refer to: " +
+					"https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return getAzureRtData()
+					return getAzureRtData(cmd)
 				},
 			},
 			{
-				Name:  "get-vtpm-quote",
-				Usage: "Fetch a vTPM quote from the TPM",
+				Name: "get-vtpm-quote",
+				Usage: "Fetch a vTPM quote from the TPM via the standard /dev/tpm0 or " +
+					"/dev/tpmrm0 mechanism. The quote and signature are written to stdout " +
+					"in a serialized format that is readable by other commands of this tool",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    pcrsFlag,
@@ -116,20 +135,26 @@ func main() {
 						Value:   defaultPcrs,
 						Aliases: []string{mrsFlag},
 					},
+					&cli.StringFlag{
+						Name:  nonceFlag,
+						Usage: "raw string nonce to embed in the quote (if unset, 0x00)",
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					pcrs, err := parsePcrs(cmd.String(pcrsFlag))
 					if err != nil {
 						return err
 					}
-					return getVtpmQuote(pcrs)
+					return getVtpmQuote(cmd, pcrs, nonceFromFlag(cmd))
 				},
 			},
 			{
-				Name:  "get-vtpm-ak-cert",
-				Usage: "Fetch the vTPM AK certificate",
+				Name: "get-vtpm-ak-cert",
+				Usage: "Fetch the vTPM AK certificate (stored in NV index 0x01C101D0). See " +
+					"https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design" +
+					" for more information",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return getVtpmAkCert()
+					return getVtpmAkCert(cmd)
 				},
 			},
 			{
@@ -141,27 +166,41 @@ func main() {
 				},
 			},
 			{
-				Name:  "verify-vtpm-quote",
-				Usage: "Verify a vTPM quote signature",
+				Name: "verify-vtpm-quote-signature",
+				Usage: "Verify a vTPM quote signature. If --" + quoteFlag + " and --" +
+					akCertFlag + " are not set, a fresh quote and AK certificate are " +
+					"fetched from the vTPM.",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    pcrsFlag,
-						Usage:   "PCRs to include in quote (comma-separated)",
+						Usage:   "PCRs to include when fetching a fresh quote (comma-separated)",
 						Value:   defaultPcrs,
 						Aliases: []string{mrsFlag},
 					},
+					&cli.StringFlag{
+						Name: nonceFlag,
+						Usage: "raw string nonce expected in the quote (if unset, use 0x00 " +
+							"used when fetching a fresh quote and when verifying the nonce of a " +
+							"pre-fetched quote",
+					},
+					&cli.StringFlag{
+						Name: quoteFlag,
+						Usage: "path to a pre-fetched quote+signature file as written by " +
+							"get-vtpm-quote. if unset, a fresh quote is fetched",
+					},
+					&cli.StringFlag{
+						Name: akCertFlag,
+						Usage: "path to a pre-fetched AK certificate. If unset, the AK " +
+							"certificate is read from the vTPM NV index",
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					pcrs, err := parsePcrs(cmd.String(pcrsFlag))
-					if err != nil {
-						return err
-					}
-					return verifyVtpmQuote(pcrs)
+					return verifyVtpmQuote(cmd)
 				},
 			},
 			{
 				Name:  "update-user-data",
-				Usage: "Update azure hcl report user data (nonce) in the NV index",
+				Usage: "Update azure hcl report user data (nonce) in the NV index 0x01400002",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     userdataFlag,
@@ -175,13 +214,15 @@ func main() {
 			},
 			{
 				Name:  "get-user-data",
-				Usage: "Read azure hcl report user data (nonce) from the NV index",
+				Usage: "Read azure hcl report user data (nonce) from the NV index 0x01400002",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					data, err := azuredriver.GetAzureUserData()
 					if err != nil {
 						return fmt.Errorf("failed to get azure user data: %w", err)
 					}
-					os.Stdout.Write(data)
+					if err := writeOutput(cmd, data); err != nil {
+						return fmt.Errorf("failed to write output: %w", err)
+					}
 					return nil
 				},
 			},
@@ -212,7 +253,9 @@ func getAzureReport(cmd *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	os.Stdout.Write(report)
+	if err := writeOutput(cmd, report); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 	return nil
 }
 
@@ -228,7 +271,11 @@ func getAzureHwReport(cmd *cli.Command) error {
 	if _, _, err := verifier.DecodeAzureRtData(rtdataRaw); err != nil {
 		return fmt.Errorf("failed to decode runtime data: %w", err)
 	}
-	os.Stdout.Write(hwreport)
+
+	if err := writeOutput(cmd, hwreport); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+
 	return nil
 }
 
@@ -298,11 +345,14 @@ func getHwReport(cmd *cli.Command) error {
 	if err != nil {
 		return fmt.Errorf("failed to get hwreport: %w", err)
 	}
-	os.Stdout.Write(evidence.Data)
+
+	if err := writeOutput(cmd, evidence.Data); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 	return nil
 }
 
-func getAzureRtData() error {
+func getAzureRtData(cmd *cli.Command) error {
 	azureReport, err := azuredriver.GetAzureReport()
 	if err != nil {
 		return fmt.Errorf("failed to get azure report: %w", err)
@@ -311,32 +361,73 @@ func getAzureRtData() error {
 	if err != nil {
 		return fmt.Errorf("failed to decode azure report: %w", err)
 	}
-	os.Stdout.Write(rtdataRaw)
+	if err := writeOutput(cmd, rtdataRaw); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 	return nil
 }
 
-func getVtpmQuote(pcrs []int) error {
-	nonce, err := azuredriver.GetAzureUserData()
-	if err != nil {
-		return fmt.Errorf("failed to get azure user data: %w", err)
-	}
+func getVtpmQuote(cmd *cli.Command, pcrs []int, nonce []byte) error {
 	quote, sig, err := azuredriver.GetVtpmQuote(pcrs, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to get vtpm quote: %w", err)
 	}
 	log.Debugf("Writing quote length %v (0x%x)", len(quote), len(quote))
-	os.Stdout.Write(quote)
 	log.Debugf("Writing signature length %v (0x%x)", len(sig), len(sig))
-	os.Stdout.Write(sig)
+	blob := encodeQuoteBlob(quote, sig)
+	if err := writeOutput(cmd, blob); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 	return nil
 }
 
-func getVtpmAkCert() error {
+func nonceFromFlag(cmd *cli.Command) []byte {
+	if cmd.IsSet(nonceFlag) {
+		return []byte(cmd.String(nonceFlag))
+	}
+	return []byte{0}
+}
+
+func encodeQuoteBlob(quote, sig []byte) []byte {
+	buf := make([]byte, 4+len(quote)+4+len(sig))
+	binary.BigEndian.PutUint32(buf[0:4], uint32(len(quote)))
+	copy(buf[4:4+len(quote)], quote)
+	binary.BigEndian.PutUint32(buf[4+len(quote):4+len(quote)+4], uint32(len(sig)))
+	copy(buf[4+len(quote)+4:], sig)
+	return buf
+}
+
+func readQuoteBlob(path string) (quote, sig []byte, err error) {
+	buf, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read quote file %q: %w", path, err)
+	}
+	if len(buf) < 4 {
+		return nil, nil, fmt.Errorf("quote file %q too short for quote length prefix", path)
+	}
+	qLen := binary.BigEndian.Uint32(buf[:4])
+	if uint64(len(buf)) < 4+uint64(qLen)+4 {
+		return nil, nil, fmt.Errorf("quote file %q too short for quote of length %d", path, qLen)
+	}
+	quote = buf[4 : 4+qLen]
+	sigOff := 4 + qLen
+	sLen := binary.BigEndian.Uint32(buf[sigOff : sigOff+4])
+	if uint64(len(buf)) != uint64(sigOff)+4+uint64(sLen) {
+		return nil, nil, fmt.Errorf("quote file %q length %d does not match framed lengths (quote %d + sig %d)",
+			path, len(buf), qLen, sLen)
+	}
+	sig = buf[sigOff+4 : sigOff+4+sLen]
+	return quote, sig, nil
+}
+
+func getVtpmAkCert(cmd *cli.Command) error {
 	akcert, err := azuredriver.GetVtpmAkCert()
 	if err != nil {
 		return fmt.Errorf("failed to get vtpm ak cert: %w", err)
 	}
-	os.Stdout.Write(akcert)
+	if err := writeOutput(cmd, akcert); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
 	return nil
 }
 
@@ -385,22 +476,43 @@ func verifyVtpm() error {
 	return nil
 }
 
-func verifyVtpmQuote(pcrs []int) error {
+func verifyVtpmQuote(cmd *cli.Command) error {
 
-	nonce := make([]byte, 4)
-	_, err := rand.Read(nonce)
-	if err != nil {
-		return fmt.Errorf("failed to read random bytes: %w", err)
+	nonce := nonceFromFlag(cmd)
+
+	var (
+		quote, sig []byte
+		err        error
+	)
+	if quotePath := cmd.String(quoteFlag); quotePath != "" {
+		log.Debugf("Reading pre-fetched quote from %v", quotePath)
+		quote, sig, err = readQuoteBlob(quotePath)
+		if err != nil {
+			return err
+		}
+	} else {
+		pcrs, perr := parsePcrs(cmd.String(pcrsFlag))
+		if perr != nil {
+			return perr
+		}
+		quote, sig, err = azuredriver.GetVtpmQuote(pcrs, nonce)
+		if err != nil {
+			return fmt.Errorf("failed to get vtpm quote: %w", err)
+		}
 	}
 
-	quote, sig, err := azuredriver.GetVtpmQuote(pcrs, nonce)
-	if err != nil {
-		return fmt.Errorf("failed to get vtpm quote: %w", err)
-	}
-
-	akcert, err := azuredriver.GetVtpmAkCert()
-	if err != nil {
-		return fmt.Errorf("failed to get vtpm ak cert: %w", err)
+	var akcert []byte
+	if akCertPath := cmd.String(akCertFlag); akCertPath != "" {
+		log.Debugf("Reading pre-fetched AK certificate from %v", akCertPath)
+		akcert, err = os.ReadFile(akCertPath)
+		if err != nil {
+			return fmt.Errorf("failed to read ak cert file %q: %w", akCertPath, err)
+		}
+	} else {
+		akcert, err = azuredriver.GetVtpmAkCert()
+		if err != nil {
+			return fmt.Errorf("failed to get vtpm ak cert: %w", err)
+		}
 	}
 
 	log.Debugf("Parsing AK cert...")
@@ -434,6 +546,21 @@ func verifyVtpmQuote(pcrs []int) error {
 	}
 
 	log.Debugf("Successfully verified vtpm quote")
+
+	return nil
+}
+
+func writeOutput(cmd *cli.Command, data []byte) error {
+	if path := cmd.String(outFlag); path != "" {
+		err := os.WriteFile(path, data, 0o644)
+		if err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
+		}
+	}
+	_, err := os.Stdout.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write stdout: %w", err)
+	}
 
 	return nil
 }
