@@ -64,6 +64,7 @@ var (
 				"\t\tIMA: PCR Index (default: 10)\n" +
 				"\t\tTDX: MRTD=0, RTMR0=1, RTMR1=2, RTMR2=3, RTMR3=4, MRSEAM=5 (comma-separated list)\n" +
 				"\t\tSNP: MR=0 (default)\n",
+			Aliases: []string{"pcrs"},
 		},
 		&cli.StringFlag{
 			Name:  logLevelFlag,
