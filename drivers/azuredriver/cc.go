@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -305,8 +304,7 @@ func GetTdxQuote(report []byte) ([]byte, error) {
 
 	quoteResponse, err := FetchAzureTdxQuote(imdsRequest)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get quote from IMDS: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to get quote from IMDS: %w", err)
 	}
 
 	log.Debugf("Unmarshalling azure formatted TDX quote..")
@@ -318,19 +316,16 @@ func GetTdxQuote(report []byte) ([]byte, error) {
 		} `json:"runtimeData"`
 	}
 	if err := json.Unmarshal(quoteResponse, &parsed); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to parse quote JSON: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to parse TDX quote JSON: %w", err)
 	}
 
 	if parsed.Quote == "" {
-		fmt.Fprintf(os.Stderr, "Received empty quote from IMDS\n")
-		os.Exit(1)
+		return nil, fmt.Errorf("received empty TDX quote from IMDS")
 	}
 
 	quoteBytes, err := base64.RawURLEncoding.DecodeString(parsed.Quote)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to decode base64url quote: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to decode base64url TDX quote: %w", err)
 	}
 
 	log.Debugf("Successfully retrieved quote")

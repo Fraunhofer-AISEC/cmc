@@ -22,9 +22,16 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
+
+// headerReadTimeout is the maximum time allowed to receive the 8-byte framing
+// header. It guards against a client that connects but never sends data.
+// The payload read itself has no hard deadline — payload size is validated
+// against MaxUnixMsgLen before reading begins.
+const headerReadTimeout = 30 * time.Second
 
 // Receive receives data from a socket with the following format
 //
@@ -42,7 +49,12 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 		}
 	}
 
-	// Read header
+	// Read header — enforce a strict deadline to prevent a connecting client
+	// from blocking the handler goroutine indefinitely.
+	if err := conn.SetDeadline(time.Now().Add(headerReadTimeout)); err != nil {
+		return nil, 0, fmt.Errorf("failed to set header read deadline: %w", err)
+	}
+
 	buf := make([]byte, 8)
 
 	log.Tracef("Reading header length %v", len(buf))
@@ -66,21 +78,28 @@ func Receive(conn net.Conn) ([]byte, uint32, error) {
 
 	log.Tracef("Received header type %v. Receiving payload length %v", TypeToString(msgType), payloadLen)
 
-	// Read payload
+	// Read payload — chunk is allocated once outside the loop to reduce GC
+	// pressure on large/frequent payloads.
 	payload := bytes.NewBuffer(nil)
+	payload.Grow(payloadLen)
 	received := 0
-	for {
-		chunk := make([]byte, 128*1024)
-		n, err = conn.Read(chunk)
+	chunkSize := 128 * 1024
+	if payloadLen < chunkSize {
+		chunkSize = payloadLen
+	}
+	chunk := make([]byte, chunkSize)
+
+	for received < payloadLen { // BUGFIX: was "== payloadLen" which could loop forever on overshoot
+		toRead := chunkSize
+		if remaining := payloadLen - received; remaining < toRead {
+			toRead = remaining
+		}
+		n, err = conn.Read(chunk[:toRead])
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to read payload: %w", err)
 		}
 		received += n
 		payload.Write(chunk[:n])
-
-		if received == payloadLen {
-			break
-		}
 	}
 
 	log.Tracef("Received payload length %v", payloadLen)
