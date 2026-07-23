@@ -18,7 +18,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
@@ -197,10 +196,17 @@ func main() {
 			},
 			{
 				Name: "verify-vtpm",
-				Usage: "Verify that SHA256(runtimeclaims) == REPORTDATA && " +
-					"runtimeclaims.akpub == vTPM AK",
+				Usage: "Verify that the vTPM AK is bound to the hardware report. This verifies " +
+					"SHA256(runtimeclaims) == REPORTDATA && runtimeclaims.akpub == vTPM AK",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name: userdataFlag,
+						Usage: "user data to inject as nonce before fetching (if unset, " +
+							"currently set NV data is used)",
+					},
+				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return verifyVtpm()
+					return verifyVtpm(cmd)
 				},
 			},
 			{
@@ -539,19 +545,23 @@ func getVtpmAkCert(cmd *cli.Command) error {
 	return nil
 }
 
-func verifyVtpm() error {
+func verifyVtpm(cmd *cli.Command) error {
 
 	log.Debugf("Verifying vTPM Chain of Trust")
 
-	suppliedNonce := make([]byte, 64)
-	_, err := rand.Read(suppliedNonce)
-	if err != nil {
-		return fmt.Errorf("failed to create nonce: %w", err)
+	var nonce []byte
+	if cmd.IsSet(userdataFlag) {
+		nonce = []byte(cmd.String(userdataFlag))
+	} else {
+		data, err := azuredriver.GetAzureUserData()
+		if err != nil {
+			return fmt.Errorf("failed to get azure user data: %w", err)
+		}
+		nonce = data
 	}
-	log.Debugf("Created nonce %v", hex.EncodeToString(suppliedNonce))
 
 	// Get azure report
-	evidence, err := azuredriver.GetCcEvidence(suppliedNonce)
+	evidence, err := azuredriver.GetCcEvidence(nonce)
 	if err != nil {
 		return fmt.Errorf("failed to get azure CC measurement: %w", err)
 	}
@@ -574,7 +584,7 @@ func verifyVtpm() error {
 	}
 
 	// Verify the Azure CoT: vTPM AK public embedded into REPORTDATA
-	err = verifier.VerifyAzureCoT(evidence.AddData, suppliedNonce, reportNonce, ak)
+	err = verifier.VerifyAzureCoT(evidence.AddData, nonce, reportNonce, ak)
 	if err != nil {
 		return fmt.Errorf("failed to verify azure chain of trust: %w", err)
 	}
