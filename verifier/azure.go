@@ -245,39 +245,56 @@ func DecodeAzureRtData(data []byte) (*AzureRuntimeData, *AzureRuntimeClaims, err
 		return nil, nil, fmt.Errorf("failed to decode Azure report payload: %w", err)
 	}
 
-	log.Debug("Parsed runtime data")
-	log.Debugf("\tRuntimeData data size  : %v", rtdata.DataSize)
-	log.Debugf("\tRuntimeData version    : %v", rtdata.Version)
-	log.Debugf("\tRuntimeData report type: %v", rtdata.ReportType)
-	log.Debugf("\tRuntimeData hash type  : %v", rtdata.HashType)
-	log.Debugf("\tRuntimeData claim size : %v", rtdata.ClaimSize)
-
 	if rtdata.Version != 1 {
 		return nil, nil, fmt.Errorf("unsupported runtime data version %v. Expected %v", rtdata.Version, 1)
 	}
 
 	// Parse runtime claims
 	rawClaims := buf.Bytes()[:rtdata.ClaimSize]
-	log.Debugf("Parsing claims size %v", len(rawClaims))
 	var claims AzureRuntimeClaims
 	err = json.Unmarshal(rawClaims, &claims)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal claims: %w", err)
 	}
 
-	log.Debug("Parsed runtime claims")
-	log.Debugf("\tRoot cert thumbprint   : %q", claims.VmConfig.RootCertThumbPrint)
-	log.Debugf("\tConsole enabled        : %v", claims.VmConfig.ConsoleEnabled)
-	log.Debugf("\tSecure boot enabled    : %v", claims.VmConfig.SecureBoot)
-	log.Debugf("\tTPM enabled            : %v", claims.VmConfig.TpmEnabled)
-	log.Debugf("\tTPM persisted          : %v", claims.VmConfig.TpmPersisted)
-	log.Debugf("\tVM unique ID           : %q", claims.VmConfig.VmUniqueId)
-	log.Debugf("\tUser data              : %q", claims.UserData)
-	for _, key := range claims.Keys {
-		log.Debugf("\tJWK KeyID              : %v", key.KeyID)
-	}
+	DumpAzureRuntimeClaims(&rtdata, &claims, log.Debugf)
 
 	return &rtdata, &claims, nil
+}
+
+// DumpAzureRuntimeClaims logs every field of the parsed Azure runtime data and
+// runtime claims through the given format function
+func DumpAzureRuntimeClaims(rtdata *AzureRuntimeData, claims *AzureRuntimeClaims,
+	logf func(string, ...any),
+) {
+	logf("RuntimeData data size  : %v", rtdata.DataSize)
+	logf("RuntimeData version    : %v", rtdata.Version)
+	logf("RuntimeData report type: %v", rtdata.ReportType)
+	logf("RuntimeData hash type  : %v", rtdata.HashType)
+	logf("RuntimeData claim size : %v", rtdata.ClaimSize)
+	logf("Root cert thumbprint   : %q", claims.VmConfig.RootCertThumbPrint)
+	logf("Console enabled        : %v", claims.VmConfig.ConsoleEnabled)
+	logf("Secure boot enabled    : %v", claims.VmConfig.SecureBoot)
+	logf("TPM enabled            : %v", claims.VmConfig.TpmEnabled)
+	logf("TPM persisted          : %v", claims.VmConfig.TpmPersisted)
+	logf("VM unique ID           : %q", claims.VmConfig.VmUniqueId)
+	logf("User data              : %q", claims.UserData)
+	for _, key := range claims.Keys {
+		logf("JWK KeyID              : %v", key.KeyID)
+	}
+}
+
+// HashAzureRuntimeClaims computes REPORTDATA = SHA256(RuntimeClaimsJSON). See:
+// https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design
+func HashAzureRuntimeClaims(rtdata *AzureRuntimeData, rtdataRaw []byte) ([]byte, error) {
+
+	headerSize := binary.Size(*rtdata)
+	end := headerSize + int(rtdata.ClaimSize)
+	if end > len(rtdataRaw) {
+		return nil, fmt.Errorf("runtime data too short: need %d bytes, have %d", end, len(rtdataRaw))
+	}
+	hash := sha256.Sum256(rtdataRaw[headerSize:end])
+	return hash[:], nil
 }
 
 // Verifies the Azure Chain of Trust (CoT): Verify that the TDX Quote / SNP report nonce equals
@@ -299,19 +316,18 @@ func VerifyAzureCoT(rtdataRaw, suppliedNonce, reportNonce []byte, vtpmAkCert *x5
 		return fmt.Errorf("failed to decode azure runtime data: %w", err)
 	}
 
-	// Hash runtime claims without the first 20 bytes of header
-	// https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design
-	rawRuntimeClaims := rtdataRaw[20 : 20+rtdata.ClaimSize]
-	log.Debugf("Length raw runtime claims: %v", len(rawRuntimeClaims))
-	hashRuntimeClaims := sha256.Sum256(rawRuntimeClaims)
-	log.Debugf("Hash runtime claims: %v", hex.EncodeToString(hashRuntimeClaims[:]))
+	hashRuntimeClaims, err := HashAzureRuntimeClaims(rtdata, rtdataRaw)
+	if err != nil {
+		return fmt.Errorf("failed to hash azure runtime claims: %w", err)
+	}
+	log.Debugf("Hash runtime claims: %v", hex.EncodeToString(hashRuntimeClaims))
 
 	// Compare report data with runtime claims
-	if !bytes.Equal(hashRuntimeClaims[:], reportNonce[:32]) {
+	if !bytes.Equal(hashRuntimeClaims, reportNonce[:32]) {
 		return fmt.Errorf("HASH(runtime_claims) != REPORTDATA: %v vs. %v",
-			hex.EncodeToString(hashRuntimeClaims[:]), hex.EncodeToString(reportNonce[:32]))
+			hex.EncodeToString(hashRuntimeClaims), hex.EncodeToString(reportNonce[:32]))
 	}
-	log.Debugf("HASH(runtime_claims) matches REPORTDATA: %v", hex.EncodeToString(hashRuntimeClaims[:]))
+	log.Debugf("HASH(runtime_claims) matches REPORTDATA: %v", hex.EncodeToString(hashRuntimeClaims))
 
 	// Compare supplied nonce with runtime claims nonce
 	claimsNonce, err := hex.DecodeString(rtclaims.UserData)
