@@ -660,15 +660,13 @@ func verifyVtpmQuote(cmd *cli.Command) error {
 
 func writeOutput(cmd *cli.Command, data []byte) error {
 	if path := cmd.String(outFlag); path != "" {
-		err := os.WriteFile(path, data, 0o644)
-		if err != nil {
+		if err := os.WriteFile(path, data, 0o644); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
+		return nil
 	}
-	_, err := os.Stdout.Write(data)
-	if err != nil {
+	if _, err := os.Stdout.Write(data); err != nil {
 		return fmt.Errorf("failed to write stdout: %w", err)
 	}
-
 	return nil
 }
