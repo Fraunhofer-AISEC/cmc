@@ -44,6 +44,7 @@ const (
 	quoteFlag    = "quote"
 	akCertFlag   = "ak-cert"
 	outFlag      = "out"
+	inFlag       = "in"
 
 	defaultPcrs = "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
 )
@@ -121,6 +122,43 @@ func main() {
 					"https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return getAzureRtData(cmd)
+				},
+			},
+			{
+				Name: "compute-reportdata",
+				Usage: "Compute the expected REPORTDATA (SHA256 of the Azure runtime-claims " +
+					"JSON) that Azure firmware will produce for a supplied user nonce. Takes " +
+					"the firmware-generated fields (vTPM AK / EK JWKs, VM configuration) from " +
+					"an rtdata blob acquired via get-azure-rtdata.",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     inFlag,
+						Usage:    "path to an Azure runtime-data blob (see get-azure-rtdata)",
+						Required: true,
+					},
+					&cli.StringFlag{
+						Name:     userdataFlag,
+						Usage:    "raw string user nonce",
+						Required: true,
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return computeReportData(cmd)
+				},
+			},
+			{
+				Name: "show-rtdata",
+				Usage: "Decode and print all fields of an Azure runtime-data blob acquired via " +
+					"get-azure-rtdata.",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     inFlag,
+						Usage:    "path to an Azure runtime-data blob (see get-azure-rtdata)",
+						Required: true,
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return showRtData(cmd)
 				},
 			},
 			{
@@ -364,6 +402,76 @@ func getAzureRtData(cmd *cli.Command) error {
 	if err := writeOutput(cmd, rtdataRaw); err != nil {
 		return fmt.Errorf("failed to write output: %w", err)
 	}
+	return nil
+}
+
+func computeReportData(cmd *cli.Command) error {
+	rtdataRaw, err := os.ReadFile(cmd.String(inFlag))
+	if err != nil {
+		return fmt.Errorf("failed to read rtdata file: %w", err)
+	}
+
+	rtdata, claims, err := verifier.DecodeAzureRtData(rtdataRaw)
+	if err != nil {
+		return fmt.Errorf("failed to decode azure runtime data: %w", err)
+	}
+
+	// The user nonce lives in the claims JSON as a hex-encoded 64-byte string
+	if len(claims.UserData) != 128 {
+		return fmt.Errorf("unexpected user-data length in rtdata: %d hex chars (expected %d)",
+			len(claims.UserData), 128)
+	}
+
+	nonce := []byte(cmd.String(userdataFlag))
+	if len(nonce) > 32 {
+		return fmt.Errorf("nonce length %d exceeds maximum length accepted by the NV index (32 bytes)",
+			len(nonce))
+	}
+	padded := make([]byte, 64)
+	copy(padded, nonce)
+	newUserData := hex.EncodeToString(padded)
+
+	headerSize := binary.Size(*rtdata)
+	end := headerSize + int(rtdata.ClaimSize)
+	if end > len(rtdataRaw) {
+		return fmt.Errorf("runtime data too short: need %d bytes, have %d", end, len(rtdataRaw))
+	}
+	claimsJSON := rtdataRaw[headerSize:end]
+
+	if n := bytes.Count(claimsJSON, []byte(claims.UserData)); n != 1 {
+		return fmt.Errorf("could not locate user-data in claims JSON (found %d occurrences)", n)
+	}
+
+	// Byte-substitute the user-data value so the JSON encoding Azure
+	// firmware produced is preserved. Re-marshalling would risk a field-ordering mismatch.
+	modified := make([]byte, len(rtdataRaw))
+	copy(modified, rtdataRaw)
+	udOff := bytes.Index(modified[headerSize:end], []byte(claims.UserData))
+	copy(modified[headerSize+udOff:], newUserData)
+
+	hash, err := verifier.HashAzureRuntimeClaims(rtdata, modified)
+	if err != nil {
+		return fmt.Errorf("failed to hash runtime claims: %w", err)
+	}
+
+	log.Infof("Expected REPORTDATA (SHA256 of runtime claims with supplied nonce): %v",
+		hex.EncodeToString(hash))
+	if err := writeOutput(cmd, hash); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+	return nil
+}
+
+func showRtData(cmd *cli.Command) error {
+	rtdataRaw, err := os.ReadFile(cmd.String(inFlag))
+	if err != nil {
+		return fmt.Errorf("failed to read rtdata file: %w", err)
+	}
+	rtdata, claims, err := verifier.DecodeAzureRtData(rtdataRaw)
+	if err != nil {
+		return fmt.Errorf("failed to decode azure runtime data: %w", err)
+	}
+	verifier.DumpAzureRuntimeClaims(rtdata, claims, log.Infof)
 	return nil
 }
 
