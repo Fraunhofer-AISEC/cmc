@@ -46,7 +46,7 @@ func GetCcEvidence(nonce []byte) (*ar.Evidence, error) {
 
 	err := UpdateAzureUserData(nonce)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update azure user data")
+		return nil, fmt.Errorf("failed to update azure user data: %w", err)
 	}
 
 	var reportType verifier.AzureReportType
