@@ -43,7 +43,11 @@ const (
 )
 
 var (
+	// SEV-ES Guest-Hypervisor Communication Block Standardization: MSG_REPORT_REQ
 	VlekUuid = []byte{0xa8, 0x07, 0x4b, 0xc2, 0xa2, 0x5a, 0x48, 0x3e, 0xaa, 0xe6, 0x39, 0xc0, 0x45, 0xa0, 0xb8, 0xa1}
+	VcekUuid = []byte{0x63, 0xda, 0x75, 0x8d, 0xe6, 0x64, 0x45, 0x64, 0xad, 0xc5, 0xf4, 0xb9, 0x3b, 0xe8, 0xac, 0xcd}
+	AskUuid  = []byte{0x4a, 0xb7, 0xb3, 0x79, 0xbb, 0xac, 0x4f, 0xe4, 0xa0, 0x2f, 0x05, 0xae, 0xf3, 0x27, 0xc7, 0x82}
+	ArkUuid  = []byte{0xc0, 0xb4, 0x06, 0xa4, 0xa8, 0x03, 0x49, 0x52, 0x97, 0x43, 0x3f, 0xb6, 0x01, 0x4c, 0xd0, 0xae}
 )
 
 // Snp is a structure required for implementing the Measure method
@@ -203,47 +207,71 @@ func (snp *Snp) UpdateCerts() error {
 	return nil
 }
 
-func getVlek(vmpl int) ([]byte, error) {
-
-	log.Debugf("Fetching VLEK via extended attestation report request on VMPL %v", vmpl)
+func GetExtendedReport(vmpl int) ([]byte, []byte, error) {
+	log.Debugf("Fetching the extended SNP attestation report request on VMPL %v", vmpl)
 
 	d, err := client.OpenDevice()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open /dev/sev-guest")
+		return nil, nil, fmt.Errorf("failed to open /dev/sev-guest")
 	}
 	defer d.Close()
 
 	//lint:ignore SA1019 will be updated later
-	_, certs, err := client.GetRawExtendedReportAtVmpl(d, [64]byte{0}, vmpl)
+	report, certs, err := client.GetRawExtendedReportAtVmpl(d, [64]byte{0}, vmpl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP attestation report")
+		return nil, nil, fmt.Errorf("failed to get SNP attestation report")
 	}
 
 	log.Debugf("Fetched extended SNP attestation report with certs length %v", len(certs))
 
-	b := bytes.NewBuffer(certs)
-	for {
-		log.Debug("Parsing cert table entry..")
-		var entry SnpCertTableEntry
-		err = binary.Read(b, binary.LittleEndian, &entry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode cert table entry: %w", err)
-		}
+	return report, certs, nil
+}
 
-		if entry == (SnpCertTableEntry{}) {
-			log.Debugf("Reached last (zero) SNP cert table entry")
-			break
-		}
+func GetCertsFromExtReport(certTable []byte, uuids [][]byte) ([]*x509.Certificate, error) {
 
-		log.Debugf("Found cert table entry with UUID %v", hex.EncodeToString(entry.Uuid[:]))
+	if len(uuids) == 0 {
+		return nil, fmt.Errorf("no uuids provided for cert retrieval")
+	}
 
-		if bytes.Equal(entry.Uuid[:], VlekUuid) {
-			log.Debugf("Found VLEK offset %v length %v", entry.Offset, entry.Length)
-			return certs[entry.Offset : entry.Offset+entry.Length], nil
+	certs := make([]*x509.Certificate, 0, len(uuids))
+
+	for _, uuid := range uuids {
+		b := bytes.NewBuffer(certTable)
+		for {
+			log.Debug("Parsing cert table entry..")
+			var entry SnpCertTableEntry
+			err := binary.Read(b, binary.LittleEndian, &entry)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode cert table entry: %w", err)
+			}
+
+			if entry == (SnpCertTableEntry{}) {
+				log.Debugf("Reached last (zero) SNP cert table entry")
+				break
+			}
+
+			log.Debugf("Found cert table entry with UUID %v", hex.EncodeToString(entry.Uuid[:]))
+
+			if bytes.Equal(entry.Uuid[:], uuid) {
+				log.Debugf("Found cert offset %v length %v", entry.Offset, entry.Length)
+				raw := certTable[entry.Offset : entry.Offset+entry.Length]
+				cert, err := x509.ParseCertificate(raw)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse cert: %w", err)
+				}
+				log.Debugf("Successfully parsed cert CN=%v", cert.Subject.CommonName)
+
+				certs = append(certs, cert)
+				break
+			}
 		}
 	}
 
-	return nil, errors.New("could not find VLEK in certificates")
+	if len(certs) != len(uuids) {
+		return nil, fmt.Errorf("only retrieved %v of %v certificates", len(certs), len(uuids))
+	}
+
+	return certs, nil
 }
 
 func (snp *Snp) provision() error {
@@ -306,16 +334,15 @@ func (snp *Snp) fetchAk() error {
 			return fmt.Errorf("failed to enroll SNP: %w", err)
 		}
 	case internal.VLEK:
-		// VLEK is used, in this case we fetch the VLEK from the host
-		vlek, err := getVlek(snp.Vmpl)
+		_, certTable, err := GetExtendedReport(snp.Vmpl)
 		if err != nil {
-			return fmt.Errorf("failed to fetch VLEK: %w", err)
+			return fmt.Errorf("failed to get extended report: %w", err)
 		}
-		log.Debug("Parsing VLEK")
-		akCert, err = x509.ParseCertificate(vlek)
+		certs, err := GetCertsFromExtReport(certTable, [][]byte{VlekUuid})
 		if err != nil {
-			return fmt.Errorf("failed to parse VLEK")
+			return fmt.Errorf("failed to get certs from report")
 		}
+		akCert = certs[0]
 		log.Debugf("Successfully parsed VLEK CN=%v", akCert.Subject.CommonName)
 	default:
 		return fmt.Errorf("internal error: signing cert not initialized")
