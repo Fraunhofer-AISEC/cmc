@@ -72,7 +72,7 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name: EndorsementModeFlag,
-		Usage: "endorsement mode for fetching driver certs and collateral [direct cps est]:\n" +
+		Usage: "endorsement mode for fetching driver certs and collateral [direct cps host est]:\n" +
 			"\t\tdirect\n" +
 			"\t\t\tSNP: fetch AMD SNP VCEK/CA directly from AMD KDS (rate-limited: 10s per request)\n" +
 			"\t\t\tTDX: fetch TDX collateral directly from Intel PCS\n" +
@@ -81,6 +81,8 @@ var Flags = []cli.Flag{
 			"\t\t\tSNP: Fetch AMD SNP VCEK/CA from custom caching proxy service (CPS)\n" +
 			"\t\t\tTDX: Fetch TDX collateral from Provisioning Certififcation Caching Service (PCCS)\n" +
 			"\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n" +
+			"\t\thost:\n" +
+			"\t\t\tSNP: Fetch AMD SNP VCEK/CA from the local hypervisor via SNP_GET_EXT_REPORT\n" +
 			"\t\test:\n" +
 			"\t\t\tTPM: Enroll TPM EK certificate via Enrollment over Secure Transport (EST) server\n",
 	},

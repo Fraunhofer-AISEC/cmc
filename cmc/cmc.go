@@ -245,6 +245,9 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 			return nil, fmt.Errorf("cps endorsement mode requires endorsementAddr")
 		}
 		return endorser.NewCpsProvider(c.VendorCache, c.EndorsementAddr, rootCas, c.AllowSystemCerts)
+	case "host":
+		// Host endorsement supports SNP via the SNP_GET_EXT_REPORT API
+		return endorser.NewSnpHostEndorser()
 	default:
 		return nil, fmt.Errorf("unknown endorser type %q", c.EndorsementMode)
 	}
