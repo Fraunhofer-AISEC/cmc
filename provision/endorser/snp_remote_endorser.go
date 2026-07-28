@@ -104,14 +104,7 @@ func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x
 	s.lockVcekMutex()
 	defer s.unlockVcekMutex()
 
-	if len(chipId) != lenChipId {
-		return nil, fmt.Errorf("invalid chip ID length %v, must be %v", len(chipId), lenChipId)
-	}
-
-	var id [lenChipId]byte
-	copy(id[:], chipId)
-
-	der, ok := s.tryGetCachedVcek(id, tcb)
+	der, ok := s.tryGetCachedVcek(chipId, tcb)
 	if ok {
 		vcek, err := x509.ParseCertificate(der)
 		if err != nil {
@@ -120,14 +113,17 @@ func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x
 		return vcek, nil
 	}
 
-	url := s.SnpVcekUrl(codeName, chipId, tcb)
+	url, err := s.SnpVcekUrl(codeName, chipId, tcb)
+	if err != nil {
+		return nil, fmt.Errorf("failed to assemble snp vcek url: %w", err)
+	}
 
 	for i := 0; i < snpMaxRetries; i++ {
 		log.Tracef("Requesting SNP VCEK certificate from: %v", url)
 		vcek, statusCode, err := s.DownloadVcek(url)
 		if err == nil {
 			log.Tracef("Successfully downloaded VCEK certificate")
-			if err := s.cacheVcek(vcek.Raw, id, tcb); err != nil {
+			if err := s.cacheVcek(vcek.Raw, chipId, tcb); err != nil {
 				log.Warnf("Failed to cache VCEK: %v", err)
 			}
 			return vcek, nil
@@ -137,8 +133,8 @@ func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x
 			return nil, fmt.Errorf("failed to get VCEK certificate: %w", err)
 		}
 		// The AMD KDS server accepts requests only every 10 seconds, try again
-		log.Warnf("AMD server blocked VCEK request for ChipID %v TCB %x (HTTP 429 - Too many requests). Trying again in 21s",
-			hex.EncodeToString(id[:]), tcb)
+		log.Warnf("AMD server blocked VCEK request for ChipID %x TCB %x (HTTP 429 - Too many requests). Trying again in 21s",
+			chipId, tcb)
 		time.Sleep(time.Duration(21) * time.Second)
 	}
 
@@ -245,30 +241,40 @@ func (s *SnpEndorser) SnpCaUrl(aktype internal.AkType, codeName string) string {
 	return fmt.Sprintf("%s/%s/v1/%s/cert_chain", s.baseUrl, aktype.String(), codeName)
 }
 
-func (s *SnpEndorser) SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) string {
+func (s *SnpEndorser) SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) (string, error) {
 
 	tcb := ar.GetSnpTcb(codeName, tcbRaw)
 
 	// Turin and later chip IP length is 8 and TCB additionally contains FMC SPL
 	if codeName == "Turin" {
+
+		if len(chipId) != 8 {
+			return "", fmt.Errorf("invalid chip id length %v (%v requires 8)", len(chipId), codeName)
+		}
+
 		return fmt.Sprintf("%s/vcek/v1/%s/%s?fmcSPL=%v&blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
 			s.baseUrl,
 			codeName,
-			hex.EncodeToString(chipId[:8]), // 8 byte for Turin
+			hex.EncodeToString(chipId),
 			tcb.Fmc,
 			tcb.Bl,
 			tcb.Tee,
 			tcb.Snp,
-			tcb.Ucode)
+			tcb.Ucode), nil
 	} else {
+
+		if len(chipId) != 64 {
+			return "", fmt.Errorf("invalid chip id length %v (%v requires 64)", len(chipId), codeName)
+		}
+
 		return fmt.Sprintf("%s/vcek/v1/%s/%s?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
 			s.baseUrl,
 			codeName,
-			hex.EncodeToString(chipId), // full 64 byte for Milan and Genoa
+			hex.EncodeToString(chipId),
 			tcb.Bl,
 			tcb.Tee,
 			tcb.Snp,
-			tcb.Ucode)
+			tcb.Ucode), nil
 	}
 }
 
@@ -285,10 +291,15 @@ func (s *SnpEndorser) unlockVcekMutex() {
 }
 
 // tryGetCachedVcek returns cached VCEKs in DER format if available
-func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, bool) {
+func (s *SnpEndorser) tryGetCachedVcek(chipId []byte, tcb uint64) ([]byte, bool) {
+
+	// For caching, always use the full 64-byte chip id report format
+	var id [lenChipId]byte
+	copy(id[:], chipId)
+
 	if s.cacheFolder != "" {
 		filePath := path.Join(s.cacheFolder,
-			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
+			fmt.Sprintf("%x_%x.der", id, tcb))
 		f, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Tracef("VCEK not present at %v, will be downloaded", filePath)
@@ -298,7 +309,7 @@ func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, boo
 		return f, true
 	} else {
 		info := VcekInfo{
-			ChipId: chipId,
+			ChipId: id,
 			Tcb:    tcb,
 		}
 		if der, ok := s.vceks[info]; ok {
@@ -311,7 +322,12 @@ func (s *SnpEndorser) tryGetCachedVcek(chipId [64]byte, tcb uint64) ([]byte, boo
 }
 
 // cacheVcek caches VCEKs in DER format
-func (s *SnpEndorser) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error {
+func (s *SnpEndorser) cacheVcek(vcek []byte, chipId []byte, tcb uint64) error {
+
+	// For caching, always use the full 64-byte chip id report format
+	var id [lenChipId]byte
+	copy(id[:], chipId)
+
 	if s.cacheFolder != "" {
 		if _, err := os.Stat(s.cacheFolder); err != nil {
 			if err := os.MkdirAll(s.cacheFolder, 0755); err != nil {
@@ -319,7 +335,7 @@ func (s *SnpEndorser) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error 
 			}
 		}
 		filePath := path.Join(s.cacheFolder,
-			fmt.Sprintf("%v_%x.der", hex.EncodeToString(chipId[:]), tcb))
+			fmt.Sprintf("%x_%x.der", id, tcb))
 		err := os.WriteFile(filePath, vcek, 0644)
 		if err != nil {
 			return fmt.Errorf("failed to write file %v: %w", filePath, err)
@@ -328,7 +344,7 @@ func (s *SnpEndorser) cacheVcek(vcek []byte, chipId [64]byte, tcb uint64) error 
 		return nil
 	} else {
 		info := VcekInfo{
-			ChipId: chipId,
+			ChipId: id,
 			Tcb:    tcb,
 		}
 		s.vceks[info] = vcek

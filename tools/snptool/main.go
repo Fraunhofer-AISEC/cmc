@@ -159,7 +159,10 @@ func main() {
 						return fmt.Errorf("failed to create SNP endorser: %w", err)
 					}
 
-					url := endorser.SnpVcekUrl(codeName, report.ChipId[:], report.CurrentTcb)
+					url, err := endorser.SnpVcekUrl(codeName, report.ChipId[:], report.CurrentTcb)
+					if err != nil {
+						return fmt.Errorf("failed to assemble snp vcek url: %w", err)
+					}
 
 					log.Debugf("Created VCEK URL %q", url)
 
