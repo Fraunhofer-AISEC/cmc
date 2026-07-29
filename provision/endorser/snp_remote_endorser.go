@@ -243,34 +243,29 @@ func (s *SnpEndorser) SnpCaUrl(aktype internal.AkType, codeName string) string {
 
 func (s *SnpEndorser) SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) (string, error) {
 
+	if len(chipId) < 8 {
+		return "", fmt.Errorf("chip id too short (%v). Must be 8 (Turin) or 64 (Milan, Genoa)",
+			len(chipId))
+	}
+
 	tcb := ar.GetSnpTcb(codeName, tcbRaw)
 
 	// Turin and later chip IP length is 8 and TCB additionally contains FMC SPL
 	if codeName == "Turin" {
-
-		if len(chipId) != 8 {
-			return "", fmt.Errorf("invalid chip id length %v (%v requires 8)", len(chipId), codeName)
-		}
-
 		return fmt.Sprintf("%s/vcek/v1/%s/%s?fmcSPL=%v&blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
 			s.baseUrl,
 			codeName,
-			hex.EncodeToString(chipId),
+			hex.EncodeToString(chipId[:8]), // 8 byte for Turin
 			tcb.Fmc,
 			tcb.Bl,
 			tcb.Tee,
 			tcb.Snp,
 			tcb.Ucode), nil
 	} else {
-
-		if len(chipId) != 64 {
-			return "", fmt.Errorf("invalid chip id length %v (%v requires 64)", len(chipId), codeName)
-		}
-
 		return fmt.Sprintf("%s/vcek/v1/%s/%s?blSPL=%v&teeSPL=%v&snpSPL=%v&ucodeSPL=%v",
 			s.baseUrl,
 			codeName,
-			hex.EncodeToString(chipId),
+			hex.EncodeToString(chipId), // full 64 byte for Milan and Genoa
 			tcb.Bl,
 			tcb.Tee,
 			tcb.Snp,
