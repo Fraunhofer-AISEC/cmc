@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -64,6 +65,18 @@ func CanonicalJSON(v any) (string, error) {
 		return "", err
 	}
 	return string(canonical), nil
+}
+
+func RawKeyThumbprint(jwkRaw string) ([]byte, error) {
+	var jwk jose.JSONWebKey
+	if err := json.Unmarshal([]byte(jwkRaw), &jwk); err != nil {
+		return nil, fmt.Errorf("parsing JWK: %w", err)
+	}
+	thumbprint, err := jwk.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return nil, fmt.Errorf("computing JWK thumbprint: %w", err)
+	}
+	return thumbprint, nil
 }
 
 func ParseJWS(data []byte, url *url.URL, resp http.ResponseWriter, label string) *RequestPayload {
