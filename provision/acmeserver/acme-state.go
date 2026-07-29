@@ -19,8 +19,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -127,12 +129,17 @@ const (
 	AuthStatusDeactivated AuthStatus = "deactivated"
 )
 
+type AcmeChallenge struct {
+	Type      string
+	Token     string
+	Status    AuthStatus
+	Validated string
+}
+
 type AcmeAuthorization struct {
-	Identifier    string
-	Status        AuthStatus
-	Token         string
-	ChallengeType string
-	Validated     string
+	Identifier string
+	Status     AuthStatus
+	Challenges []AcmeChallenge
 }
 
 type AcmeOrder struct {
@@ -148,25 +155,40 @@ type AcmeOrder struct {
 func (o *AcmeOrder) UpdateOrder() {
 	validCount, invalidCount := 0, 0
 
-	// update the authorizations (terminal states cannot expire anymore)
 	expired := time.Now().After(o.ExpiryTime)
 	for i := range o.Authorizations {
+		auth := &o.Authorizations[i]
+
 		if expired &&
-			o.Authorizations[i].Status != AuthStatusInvalid &&
-			o.Authorizations[i].Status != AuthStatusDeactivated {
-			o.Authorizations[i].Status = AuthStatusExpired
+			auth.Status != AuthStatusInvalid &&
+			auth.Status != AuthStatusDeactivated {
+			auth.Status = AuthStatusExpired
+			for j := range auth.Challenges {
+				if auth.Challenges[j].Status == AuthStatusPending {
+					auth.Challenges[j].Status = AuthStatusExpired
+				}
+			}
 		}
 
-		if o.Authorizations[i].Status == AuthStatusValid {
+		// An authorization is valid if any of its challenges is valid
+		if auth.Status != AuthStatusDeactivated && auth.Status != AuthStatusExpired {
+			for j := range auth.Challenges {
+				if auth.Challenges[j].Status == AuthStatusValid {
+					auth.Status = AuthStatusValid
+					break
+				}
+			}
+		}
+
+		if auth.Status == AuthStatusValid {
 			validCount++
-		} else if o.Authorizations[i].Status != AuthStatusPending {
+		} else if auth.Status != AuthStatusPending {
 			invalidCount++
 		}
 	}
 
-	// update the overall order status (order becomes ready whenever at least one challenge per
-	// authorization is valid - this server implementation only serves one challenge per
-	// authorization; a finalized (valid) order keeps its status even after authorizations expire)
+	// Order becomes ready when all authorizations are valid; a finalized (valid)
+	// order keeps its status even after authorizations expire
 	if validCount == len(o.Authorizations) && o.Status == OrderStatusPending {
 		o.Status = OrderStatusReady
 	} else if invalidCount > 0 && o.Status != OrderStatusValid {
@@ -236,14 +258,24 @@ func (a *AcmeAccount) OrderIDs() []string {
 	}
 	return ids
 }
+func (a *AcmeAccount) TokenAccountNonce(token string) ([]byte, error) {
+	thumbprint, err := RawKeyThumbprint(a.Jwk)
+	if err != nil {
+		return nil, fmt.Errorf("computing raw jwk thumbprint: %w", err)
+	}
+	keyAuth := token + "." + base64.RawURLEncoding.EncodeToString(thumbprint)
+	hash := sha256.Sum256([]byte(keyAuth))
+	return hash[:], nil
+}
 
 type AcmeState struct {
-	mux      sync.Mutex
-	Nonce    AcmeNonceHandler
-	accounts map[string]*AcmeAccount
-	CACert   []byte
-	CAKey    *ecdsa.PrivateKey
-	CAx509   *x509.Certificate
+	mux         sync.Mutex
+	Nonce       AcmeNonceHandler
+	accounts    map[string]*AcmeAccount
+	CACert      []byte
+	CAKey       *ecdsa.PrivateKey
+	CAx509      *x509.Certificate
+	MetadataCas []*x509.Certificate
 }
 
 func NewAcmeState() *AcmeState {

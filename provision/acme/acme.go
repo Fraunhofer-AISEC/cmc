@@ -16,9 +16,11 @@
 package acme
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -184,6 +186,7 @@ func (c *Client) signedPost(url string, nonce *string, nonceURL, accountURL stri
 }
 
 // ensureAccount either looks up an existing account (when a key was provided externally) or creates a new one (when the key is ephemeral).
+// Important: tos are automatically accepted.
 func (c *Client) ensureAccount(newAccountURL, nonceURL string, nonce *string) (string, *string, error) {
 	if !c.ephemeral {
 		resp, _, nextNonce, err := c.signedPost(newAccountURL, nonce, nonceURL, "", map[string]any{
@@ -225,87 +228,103 @@ func (c *Client) CaCerts() ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("ACME provisioner: CaCerts not yet implemented")
 }
 
-// automatically agrees to ToS
-func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
-	dir, err := c.fetchDirectory()
-	if err != nil {
-		return nil, fmt.Errorf("fetching directory: %w", err)
-	}
+type acmeChallenge struct {
+	Type   string `json:"type"`
+	URL    string `json:"url"`
+	Status string `json:"status"`
+	Token  string `json:"token"`
+}
 
-	accountURL, nonce, err := c.ensureAccount(dir.newAccount, dir.newNonce, nil)
-	if err != nil {
-		return nil, fmt.Errorf("ensuring account: %w", err)
-	}
+type acmeAuth struct {
+	Status     string          `json:"status"`
+	Challenges []acmeChallenge `json:"challenges"`
+}
 
-	// Create order with DNS identifiers from the CSR
-	dnsNames := csr.DNSNames
-	identifiers := make([]map[string]string, len(dnsNames))
-	for i, name := range dnsNames {
+type acmeOrder struct {
+	Status         string   `json:"status"`
+	Authorizations []string `json:"authorizations"`
+	Finalize       string   `json:"finalize"`
+	Certificate    string   `json:"certificate"`
+}
+
+func (c *Client) createOrder(csr *x509.CertificateRequest, nonce *string, dir *acmeDirectory, accountURL string) (*acmeOrder, *string, error) {
+	identifiers := make([]map[string]string, len(csr.DNSNames))
+	for i, name := range csr.DNSNames {
 		identifiers[i] = map[string]string{"type": "dns", "value": name}
 	}
 	resp, body, nonce, err := c.signedPost(dir.newOrder, nonce, dir.newNonce, accountURL, map[string]any{
 		"identifiers": identifiers,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating order: %w", err)
+		return nil, nonce, fmt.Errorf("creating order: %w", err)
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("order creation failed (status %d): %s", resp.StatusCode, body)
+		return nil, nonce, fmt.Errorf("order creation failed (status %d): %s", resp.StatusCode, body)
 	}
 
-	var order struct {
-		Status         string   `json:"status"`
-		Authorizations []string `json:"authorizations"`
-		Finalize       string   `json:"finalize"`
-		Certificate    string   `json:"certificate"`
-	}
+	var order acmeOrder
 	if err := json.Unmarshal(body, &order); err != nil {
-		return nil, fmt.Errorf("decoding order response: %w", err)
+		return nil, nonce, fmt.Errorf("decoding order response: %w", err)
 	}
 	log.Debugf("Created order with %d authorization(s)", len(order.Authorizations))
+	return &order, nonce, nil
+}
 
-	// Complete challenges for each authorization
-	for _, authURL := range order.Authorizations {
-		resp, body, nonce, err = c.signedPost(authURL, nonce, dir.newNonce, accountURL, nil)
+// challengeHandler returns the payload to send for a given challenge.
+// Returning nil signals that this challenge type is not handled and should be skipped.
+type challengeHandler func(ch acmeChallenge) (any, error)
+
+func (c *Client) completeChallenges(authURLs []string, handler challengeHandler, nonce *string, dir *acmeDirectory, accountURL string) (*string, error) {
+	for _, authURL := range authURLs {
+		resp, body, nextNonce, err := c.signedPost(authURL, nonce, dir.newNonce, accountURL, nil)
+		nonce = nextNonce
 		if err != nil {
-			return nil, fmt.Errorf("fetching authorization: %w", err)
+			return nonce, fmt.Errorf("fetching authorization: %w", err)
 		}
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("authorization fetch failed (status %d): %s", resp.StatusCode, body)
+			return nonce, fmt.Errorf("authorization fetch failed (status %d): %s", resp.StatusCode, body)
 		}
 
-		var auth struct {
-			Status     string `json:"status"`
-			Challenges []struct {
-				URL    string `json:"url"`
-				Status string `json:"status"`
-			} `json:"challenges"`
-		}
+		var auth acmeAuth
 		if err := json.Unmarshal(body, &auth); err != nil {
-			return nil, fmt.Errorf("decoding authorization: %w", err)
+			return nonce, fmt.Errorf("decoding authorization: %w", err)
 		}
 
 		if auth.Status == "valid" {
 			continue
 		}
-		if len(auth.Challenges) == 0 {
-			return nil, fmt.Errorf("authorization has no challenges")
-		}
 
-		for index, challenge := range auth.Challenges {
-			resp, body, nonce, err = c.signedPost(challenge.URL, nonce, dir.newNonce, accountURL, map[string]any{})
+		completed := false
+		for _, ch := range auth.Challenges {
+			payload, err := handler(ch)
 			if err != nil {
-				return nil, fmt.Errorf("responding to challenge[%d]: %w", index, err)
+				return nonce, fmt.Errorf("preparing response for challenge %q: %w", ch.Type, err)
+			}
+			if payload == nil {
+				continue
+			}
+
+			resp, body, nextNonce, err = c.signedPost(ch.URL, nonce, dir.newNonce, accountURL, payload)
+			nonce = nextNonce
+			if err != nil {
+				return nonce, fmt.Errorf("responding to %s challenge: %w", ch.Type, err)
 			}
 			if resp.StatusCode != http.StatusOK {
-				return nil, fmt.Errorf("challenge[%d] response failed (status %d): %s", index, resp.StatusCode, body)
+				return nonce, fmt.Errorf("%s challenge failed (status %d): %s", ch.Type, resp.StatusCode, body)
 			}
+			completed = true
+			break
+		}
+		if !completed {
+			return nonce, fmt.Errorf("no supported challenge type found in authorization")
 		}
 	}
+	return nonce, nil
+}
 
-	// Finalize order with the CSR
+func (c *Client) finalizeAndDownload(csr *x509.CertificateRequest, order *acmeOrder, nonce *string, dir *acmeDirectory, accountURL string) (*x509.Certificate, error) {
 	csrB64 := base64.RawURLEncoding.EncodeToString(csr.Raw)
-	resp, body, nonce, err = c.signedPost(order.Finalize, nonce, dir.newNonce, accountURL, map[string]any{
+	resp, body, nonce, err := c.signedPost(order.Finalize, nonce, dir.newNonce, accountURL, map[string]any{
 		"csr": csrB64,
 	})
 	if err != nil {
@@ -325,7 +344,6 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 		return nil, fmt.Errorf("finalized order has no certificate URL")
 	}
 
-	// Download the issued certificate
 	resp, body, _, err = c.signedPost(finalized.Certificate, nonce, dir.newNonce, accountURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("downloading certificate: %w", err)
@@ -342,8 +360,52 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 	if err != nil {
 		return nil, fmt.Errorf("parsing issued certificate: %w", err)
 	}
+	return cert, nil
+}
 
-	log.Debug("ACME enrollment completed successfully")
+func (c *Client) keyAuthorizationNonce(token string) ([]byte, error) {
+	jwk := jose.JSONWebKey{Key: c.key.Public(), Algorithm: string(jose.ES256)}
+	thumbprint, err := jwk.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return nil, fmt.Errorf("computing JWK thumbprint: %w", err)
+	}
+	keyAuth := token + "." + base64.RawURLEncoding.EncodeToString(thumbprint)
+	hash := sha256.Sum256([]byte(keyAuth))
+	return hash[:], nil
+}
+
+func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+	dir, err := c.fetchDirectory()
+	if err != nil {
+		return nil, fmt.Errorf("fetching directory: %w", err)
+	}
+
+	accountURL, nonce, err := c.ensureAccount(dir.newAccount, dir.newNonce, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring account: %w", err)
+	}
+
+	order, nonce, err := c.createOrder(csr, nonce, dir, accountURL)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce, err = c.completeChallenges(order.Authorizations, func(ch acmeChallenge) (any, error) {
+		if ch.Type == "http-01" {
+			return map[string]any{}, nil
+		}
+		return nil, nil
+	}, nonce, dir, accountURL)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := c.finalizeAndDownload(csr, order, nonce, dir, accountURL)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("ACME simple enrollment completed successfully")
 	return cert, nil
 }
 
@@ -356,6 +418,47 @@ func (c *Client) TpmCertifyEnroll(
 	return nil, fmt.Errorf("ACME provisioner: TpmCertifyEnroll not yet implemented")
 }
 
-func (c *Client) AttestEnroll(csr *x509.CertificateRequest, report []byte) (*x509.Certificate, error) {
-	return nil, fmt.Errorf("ACME provisioner: AttestEnroll not yet implemented")
+func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error) {
+	dir, err := c.fetchDirectory()
+	if err != nil {
+		return nil, fmt.Errorf("fetching directory: %w", err)
+	}
+
+	accountURL, nonce, err := c.ensureAccount(dir.newAccount, dir.newNonce, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring account: %w", err)
+	}
+
+	order, nonce, err := c.createOrder(csr, nonce, dir, accountURL)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce, err = c.completeChallenges(order.Authorizations, func(ch acmeChallenge) (any, error) {
+		if ch.Type != "software-attest-01" {
+			return nil, nil
+		}
+		keyAuth, err := c.keyAuthorizationNonce(ch.Token)
+		if err != nil {
+			return nil, fmt.Errorf("computing key authorization: %w", err)
+		}
+		report, err := generateReport(keyAuth)
+		if err != nil {
+			return nil, fmt.Errorf("generating attestation report: %w", err)
+		}
+		return map[string]any{
+			"report": base64.RawURLEncoding.EncodeToString(report),
+		}, nil
+	}, nonce, dir, accountURL)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := c.finalizeAndDownload(csr, order, nonce, dir, accountURL)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("ACME attestation enrollment completed successfully")
+	return cert, nil
 }

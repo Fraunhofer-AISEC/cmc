@@ -350,12 +350,16 @@ func simpleEnroll(provisioner Enroller, priv crypto.PrivateKey, p *KeyEnrollment
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
-	csr, report, err := prepareEnroll(priv, p)
+	csr, err := internal.CreateCsr(priv, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create CSR: %w", err)
 	}
 
-	cert, err := provisioner.AttestEnroll(csr, report)
+	generateReport := func(nonce []byte) ([]byte, error) {
+		return prover.Generate(nonce, nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)
+	}
+
+	cert, err := provisioner.AttestEnroll(csr, generateReport)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}

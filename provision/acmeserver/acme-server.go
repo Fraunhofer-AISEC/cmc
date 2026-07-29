@@ -32,6 +32,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 const (
@@ -209,6 +212,20 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
 	respondWithJson(status, resp, result)
+}
+func verifyAttestationReport(report []byte, nonce []byte, cas []*x509.Certificate) error {
+	if len(report) == 0 {
+		return fmt.Errorf("empty attestation report")
+	}
+
+	result := verifier.Verify(report, nonce, nil,
+		verifier.PolicyEngineSelect_None, false,
+		cas, nil, "", "", false)
+
+	if result.Summary.Status != attestationreport.StatusSuccess && result.Summary.Status != attestationreport.StatusWarn {
+		return fmt.Errorf("attestation verification failed: %s", result.Summary.Status)
+	}
+	return nil
 }
 
 func handleNotFound(url *url.URL, resp http.ResponseWriter) {
@@ -399,11 +416,18 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 
 	auths := make([]AcmeAuthorization, 0, len(payload.Identifier))
 	for _, ident := range payload.Identifier {
+		challenges := []AcmeChallenge{
+			{Type: "http-01", Token: rand.Text(), Status: AuthStatusPending},
+		}
+		if len(state.MetadataCas) > 0 {
+			challenges = append(challenges, AcmeChallenge{
+				Type: "software-attest-01", Token: rand.Text(), Status: AuthStatusPending,
+			})
+		}
 		auths = append(auths, AcmeAuthorization{
-			Identifier:    ident.Value,
-			Status:        AuthStatusPending,
-			Token:         rand.Text(),
-			ChallengeType: "http-01",
+			Identifier: ident.Value,
+			Status:     AuthStatusPending,
+			Challenges: challenges,
 		})
 	}
 
@@ -524,13 +548,12 @@ func handleOrders(state *AcmeState, url *url.URL, req *http.Request, resp http.R
 	})
 }
 func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	var orderIdentifier string
-	if index := strings.Index(url.Path, "/order/"); index == -1 {
+	parts := strings.Split(strings.TrimPrefix(url.Path, "/order/"), "/")
+	if len(parts) != 1 {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed order identifier")
 		return
-	} else {
-		orderIdentifier = url.Path[index+7:]
 	}
+	orderIdentifier := parts[0]
 
 	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
@@ -553,22 +576,16 @@ func handleOrder(state *AcmeState, url *url.URL, req *http.Request, resp http.Re
 	sendOrderResource(http.StatusOK, order, url, resp)
 }
 func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	var orderIdentifier string
-	var idIndex int
-	if indexId := strings.Index(url.Path, "/auth/"); indexId == -1 {
+	parts := strings.Split(strings.TrimPrefix(url.Path, "/auth/"), "/")
+	if len(parts) != 2 {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed authorization identifier")
 		return
-	} else if indexIndex := strings.Index(url.Path[indexId+6:], "/"); indexIndex == -1 {
+	}
+	orderIdentifier := parts[0]
+	authIndex, err := strconv.Atoi(parts[1])
+	if err != nil {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed authorization identifier")
 		return
-	} else {
-		indexIndex += indexId + 6
-		orderIdentifier = url.Path[indexId+6 : indexIndex]
-		var err error
-		if idIndex, err = strconv.Atoi(url.Path[indexIndex+1:]); err != nil {
-			acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed authorization identifier")
-			return
-		}
 	}
 
 	rawPayload, account := authenticateRequest(state, url, req, resp)
@@ -586,11 +603,11 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 	}
 	order.UpdateOrder()
 
-	if idIndex >= len(order.Authorizations) {
+	if authIndex >= len(order.Authorizations) {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown authorization identifier")
 		return
 	}
-	auth := &order.Authorizations[idIndex]
+	auth := &order.Authorizations[authIndex]
 
 	if len(rawPayload) != 0 {
 		payload := struct {
@@ -608,6 +625,17 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 		order.UpdateOrder()
 	}
 
+	challengeList := make([]any, 0, len(auth.Challenges))
+	for j, ch := range auth.Challenges {
+		challengeList = append(challengeList, map[string]string{
+			"type":      ch.Type,
+			"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v/%v", orderIdentifier, authIndex, j)),
+			"status":    string(ch.Status),
+			"token":     ch.Token,
+			"validated": ch.Validated,
+		})
+	}
+
 	respondWithJson(http.StatusOK, resp, map[string]any{
 		"status":  string(auth.Status),
 		"expires": order.ExpiryTime.Format(time.RFC3339Nano),
@@ -615,40 +643,29 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 			"type":  "dns",
 			"value": auth.Identifier,
 		},
-		"challenges": []any{map[string]string{
-			"type":      auth.ChallengeType,
-			"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v", orderIdentifier, idIndex)),
-			"status":    string(auth.Status),
-			"token":     auth.Token,
-			"validated": auth.Validated,
-		}},
+		"challenges": challengeList,
 	})
 }
 func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	var orderIdentifier string
-	var idIndex int
-	if indexId := strings.Index(url.Path, "/challenge/"); indexId == -1 {
+	parts := strings.Split(strings.TrimPrefix(url.Path, "/challenge/"), "/")
+	if len(parts) != 3 {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
 		return
-	} else if indexIndex := strings.Index(url.Path[indexId+11:], "/"); indexIndex == -1 {
+	}
+	orderIdentifier := parts[0]
+	authIndex, err := strconv.Atoi(parts[1])
+	if err != nil {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
 		return
-	} else {
-		indexIndex += indexId + 11
-		orderIdentifier = url.Path[indexId+11 : indexIndex]
-		var err error
-		if idIndex, err = strconv.Atoi(url.Path[indexIndex+1:]); err != nil {
-			acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
-			return
-		}
+	}
+	challengeIndex, err := strconv.Atoi(parts[2])
+	if err != nil {
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed challenge identifier")
+		return
 	}
 
 	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
-		return
-	}
-	if !bytes.Equal(rawPayload, []byte("{}")) {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
 		return
 	}
 
@@ -662,34 +679,75 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 	}
 	order.UpdateOrder()
 
-	if idIndex >= len(order.Authorizations) {
+	if authIndex >= len(order.Authorizations) {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown authorization identifier")
 		return
 	}
-	auth := &order.Authorizations[idIndex]
+	auth := &order.Authorizations[authIndex]
 
-	if auth.Status == AuthStatusPending {
-		// TODO: implement actual challenge validation/verification
-		auth.Status = AuthStatusValid
-		auth.Validated = time.Now().Format(time.RFC3339Nano)
+	if challengeIndex >= len(auth.Challenges) {
+		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown challenge identifier")
+		return
+	}
+	challenge := &auth.Challenges[challengeIndex]
+
+	if challenge.Status == AuthStatusPending {
+		switch challenge.Type {
+		case "http-01":
+			if !bytes.Equal(rawPayload, []byte("{}")) {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
+				return
+			}
+			// TODO: implement actual http-01 challenge validation
+			challenge.Status = AuthStatusValid
+			challenge.Validated = time.Now().Format(time.RFC3339Nano)
+
+		case "software-attest-01":
+			var payload struct {
+				Report string `json:"report"`
+			}
+			if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.Report == "" {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed attestation challenge payload")
+				return
+			}
+			report, err := base64.RawURLEncoding.DecodeString(payload.Report)
+			if err != nil {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed attestation report encoding")
+				return
+			}
+			nonce, err := account.TokenAccountNonce(challenge.Token)
+			if err != nil {
+				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to compute key authorization")
+				return
+			}
+			if err := verifyAttestationReport(report, nonce, state.MetadataCas); err != nil {
+				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "attestation verification failed")
+				return
+			}
+			challenge.Status = AuthStatusValid
+			challenge.Validated = time.Now().Format(time.RFC3339Nano)
+
+		default:
+			acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "unsupported challenge type")
+			return
+		}
 	}
 
 	respondWithJson(http.StatusOK, resp, map[string]any{
-		"type":      auth.ChallengeType,
-		"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v", orderIdentifier, idIndex)),
-		"status":    string(auth.Status),
-		"token":     auth.Token,
-		"validated": auth.Validated,
+		"type":      challenge.Type,
+		"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v/%v", orderIdentifier, authIndex, challengeIndex)),
+		"status":    string(challenge.Status),
+		"token":     challenge.Token,
+		"validated": challenge.Validated,
 	})
 }
 func handleCertificate(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	var orderIdentifier string
-	if index := strings.Index(url.Path, "/certificate/"); index == -1 {
+	parts := strings.Split(strings.TrimPrefix(url.Path, "/certificate/"), "/")
+	if len(parts) != 1 {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed certificate identifier")
 		return
-	} else {
-		orderIdentifier = url.Path[index+13:]
 	}
+	orderIdentifier := parts[0]
 
 	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {
@@ -720,13 +778,12 @@ func handleCertificate(state *AcmeState, url *url.URL, req *http.Request, resp h
 	resp.Write(cert)
 }
 func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	var orderIdentifier string
-	if index := strings.Index(url.Path, "/finalize/"); index == -1 {
+	parts := strings.Split(strings.TrimPrefix(url.Path, "/finalize/"), "/")
+	if len(parts) != 1 {
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "malformed finalize identifier")
 		return
-	} else {
-		orderIdentifier = url.Path[index+10:]
 	}
+	orderIdentifier := parts[0]
 
 	rawPayload, account := authenticateRequest(state, url, req, resp)
 	if rawPayload == nil {

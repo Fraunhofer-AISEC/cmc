@@ -31,5 +31,5 @@ type Enroller interface {
 		akPublic []byte,
 		report []byte,
 	) (*x509.Certificate, error)
-	AttestEnroll(csr *x509.CertificateRequest, report []byte) (*x509.Certificate, error)
+	AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error)
 }

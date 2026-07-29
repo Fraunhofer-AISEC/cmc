@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,15 +14,43 @@ import (
 )
 
 const (
-	flagCertFile   = "cert"
-	flagKeyFile    = "key"
-	flagCACertFile = "ca-cert"
-	flagCAKeyFile  = "ca-key"
-	flagPort       = "port"
-	serverTimeout  = 60 * time.Second
+	flagCertFile    = "cert"
+	flagKeyFile     = "key"
+	flagCACertFile  = "ca-cert"
+	flagCAKeyFile   = "ca-key"
+	flagMetadataCas = "metadata-cas"
+	flagPort        = "port"
+	serverTimeout   = 60 * time.Second
 )
 
-func run(port uint16, certPath, keyPath, caCertPath, caKeyPath string) error {
+func loadMetadataCas(path string) ([]*x509.Certificate, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading metadata CAs: %w", err)
+	}
+
+	var certs []*x509.Certificate
+	for {
+		block, rest := pem.Decode(data)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("parsing metadata CA certificate: %w", err)
+			}
+			certs = append(certs, cert)
+		}
+		data = rest
+	}
+	if len(certs) == 0 {
+		return nil, fmt.Errorf("no certificates found in %s", path)
+	}
+	return certs, nil
+}
+
+func run(port uint16, certPath, keyPath, caCertPath, caKeyPath, metadataCasPath string) error {
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%v", port),
 		ReadTimeout:  serverTimeout,
@@ -39,6 +69,15 @@ func run(port uint16, certPath, keyPath, caCertPath, caKeyPath string) error {
 			return fmt.Errorf("generating ephemeral CA: %w", err)
 		}
 		log.Printf("Generated ephemeral CA certificate")
+	}
+
+	if metadataCasPath != "" {
+		cas, err := loadMetadataCas(metadataCasPath)
+		if err != nil {
+			return fmt.Errorf("loading metadata CAs: %w", err)
+		}
+		state.MetadataCas = cas
+		log.Printf("Loaded %d metadata CA(s) — software-attest-01 challenges enabled", len(cas))
 	}
 
 	// check if a raw http server should be started
@@ -87,6 +126,10 @@ func main() {
 				Name:  flagCAKeyFile,
 				Usage: "Path to CA private key for signing issued certificates (ephemeral if omitted)",
 			},
+			&cli.StringFlag{
+				Name:  flagMetadataCas,
+				Usage: "Path to PEM file with trusted metadata root CAs (enables software-attest-01 challenges)",
+			},
 			&cli.Uint16Flag{
 				Name:        flagPort,
 				Usage:       "Port the server listens on",
@@ -97,7 +140,7 @@ func main() {
 			if !c.IsSet(flagPort) {
 				return fmt.Errorf("Flag [%v] must be specified", flagPort)
 			}
-			return run(c.Uint16(flagPort), c.String(flagCertFile), c.String(flagKeyFile), c.String(flagCACertFile), c.String(flagCAKeyFile))
+			return run(c.Uint16(flagPort), c.String(flagCertFile), c.String(flagKeyFile), c.String(flagCACertFile), c.String(flagCAKeyFile), c.String(flagMetadataCas))
 		},
 	}
 

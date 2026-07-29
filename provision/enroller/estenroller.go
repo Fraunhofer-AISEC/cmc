@@ -16,6 +16,7 @@
 package estenroller
 
 import (
+	"crypto/sha1"
 	"crypto/x509"
 	"fmt"
 	"net/http"
@@ -71,7 +72,19 @@ func (e *EstEnroller) TpmCertifyEnroll(
 
 func (e *EstEnroller) AttestEnroll(
 	csr *x509.CertificateRequest,
-	report []byte,
+	generateReport func(nonce []byte) ([]byte, error),
 ) (*x509.Certificate, error) {
+	// use sha1 of the CSR's public key as nonce for the attestation report
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal CSR public key: %w", err)
+	}
+	nonce := sha1.Sum(pubKey)
+
+	report, err := generateReport(nonce[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+	}
+
 	return est.AttestEnroll(e.client, e.Addr, e.bearerToken, csr, report)
 }
