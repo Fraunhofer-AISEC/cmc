@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -29,6 +30,19 @@ import (
 
 	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
 )
+
+// kataK8sMountRe matches the source path pattern kata + containerd use for the
+// pod-level bind mounts they inject (/etc/hosts, /etc/hostname,
+// /var/run/secrets/kubernetes.io/serviceaccount, /dev/termination-log):
+//
+//	/run/kata-containers/shared/containers/<container-id>-<16 hex>-<name>
+//
+// At the point where this regex is applied, the container-id substring has
+// already been replaced with the "<container-id>" placeholder and the 16-hex is a
+// containerd-generated digest that is not stable across pod restarts and must be replaced
+// too, otherwise the mount source changes between measurements of the same pod.
+var kataK8sMountRe = regexp.MustCompile(
+	`^(/run/kata-containers/shared/containers/<container-id>-)[0-9a-f]{16}(-[a-z][a-z0-9-]*)$`)
 
 func derefInt64(p *int64) int64 {
 	if p == nil {
@@ -128,11 +142,20 @@ func Normalize(id string, configRaw []byte) ([]byte, error) {
 	config.Root = nil
 
 	// Docker-volume source paths (anonymous and named) contain
-	// non-deterministic components and can be normalized, as this is Dockercan -internal
-	// storage, as they start empty.
+	// non-deterministic components and can be normalized, as this is Docker-internal
+	// storage, and they start empty.
 	for i := range config.Mounts {
-		if strings.HasPrefix(config.Mounts[i].Source, "/var/lib/docker/volumes/") {
+		src := config.Mounts[i].Source
+		if strings.HasPrefix(src, "/var/lib/docker/volumes/") {
 			config.Mounts[i].Source = "<docker-volume>"
+			continue
+		}
+		// kata + containerd inject pod bind mounts whose source carries a per-mount hex digest,
+		// e.g. /run/kata-containers/shared/containers/<container-id>-a1b2c3d4e5f60718-hosts
+		// Replace the hex with a placeholder so the source (and the
+		// mount ordering via SortSpec) is stable across pod restarts.
+		if match := kataK8sMountRe.FindStringSubmatch(src); match != nil {
+			config.Mounts[i].Source = match[1] + "<kata-mount-hash>" + match[2]
 		}
 	}
 
