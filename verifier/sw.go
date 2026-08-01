@@ -26,6 +26,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	jcs "github.com/Fraunhofer-AISEC/cmc/jsoncanonicalizer"
+	"github.com/Fraunhofer-AISEC/cmc/measure"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -288,6 +289,17 @@ func CalculateSpecHash(spec *specs.Spec) ([]byte, error) {
 	data, err := json.Marshal(spec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Sort unordered arrays into canonical order so the reference matches the measurement side
+	var sorted specs.Spec
+	if err := json.Unmarshal(data, &sorted); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config for canonical sort: %w", err)
+	}
+	measure.SortSpec(&sorted)
+	data, err = json.Marshal(&sorted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal sorted config: %w", err)
 	}
 
 	// Transform to RFC 8785 canonical JSON form for reproducible hashing
