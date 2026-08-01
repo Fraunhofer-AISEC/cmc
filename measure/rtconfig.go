@@ -127,9 +127,6 @@ func Normalize(id string, configRaw []byte) ([]byte, error) {
 	// path from the config.json.
 	config.Root = nil
 
-	// List environment variables alphabetically to guarantee reproducibility
-	slices.Sort(config.Process.Env)
-
 	// Docker-volume source paths (anonymous and named) contain
 	// non-deterministic components and can be normalized, as this is Dockercan -internal
 	// storage, as they start empty.
@@ -139,7 +136,40 @@ func Normalize(id string, configRaw []byte) ([]byte, error) {
 		}
 	}
 
-	// List mounts alphabetically to guarantee reproducibility
+	SortSpec(&config)
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Transform to RFC 8785 canonical JSON form for reproducible hashing
+	tbh, err := jcs.Transform(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cannonicalize json: %w", err)
+	}
+
+	return tbh, nil
+}
+
+// SortSpec sorts all array fields of an OCI runtime spec whose element order
+// carries no semantics. It produces a canonical form for reproducible hashing.
+func SortSpec(config *specs.Spec) {
+	if config == nil {
+		return
+	}
+
+	if config.Process != nil {
+		slices.Sort(config.Process.Env)
+		if config.Process.Capabilities != nil {
+			slices.Sort(config.Process.Capabilities.Bounding)
+			slices.Sort(config.Process.Capabilities.Effective)
+			slices.Sort(config.Process.Capabilities.Inheritable)
+			slices.Sort(config.Process.Capabilities.Permitted)
+			slices.Sort(config.Process.Capabilities.Ambient)
+		}
+	}
+
 	sort.Slice(config.Mounts, func(i, j int) bool {
 		if config.Mounts[i].Source == config.Mounts[j].Source {
 			return config.Mounts[i].Destination < config.Mounts[j].Destination
@@ -147,7 +177,6 @@ func Normalize(id string, configRaw []byte) ([]byte, error) {
 		return config.Mounts[i].Source < config.Mounts[j].Source
 	})
 
-	// Sort linux arrays alphabetically
 	if config.Linux != nil {
 		slices.Sort(config.Linux.MaskedPaths)
 		slices.Sort(config.Linux.ReadonlyPaths)
@@ -182,26 +211,6 @@ func Normalize(id string, configRaw []byte) ([]byte, error) {
 			})
 		}
 	}
-	if config.Process.Capabilities != nil {
-		slices.Sort(config.Process.Capabilities.Bounding)
-		slices.Sort(config.Process.Capabilities.Effective)
-		slices.Sort(config.Process.Capabilities.Inheritable)
-		slices.Sort(config.Process.Capabilities.Permitted)
-		slices.Sort(config.Process.Capabilities.Ambient)
-	}
-
-	data, err := json.Marshal(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	// Transform to RFC 8785 canonical JSON form for reproducible hashing
-	tbh, err := jcs.Transform(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to cannonicalize json: %w", err)
-	}
-
-	return tbh, nil
 }
 
 func isHex(s string) bool {

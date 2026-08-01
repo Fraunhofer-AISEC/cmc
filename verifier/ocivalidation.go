@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/measure"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -29,6 +30,18 @@ func ConvertSpec(s ar.Serializer, spec *specs.Spec) (map[string]interface{}, err
 	data, err := s.Marshal(spec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// Sort unordered arrays into canonical order so validation compares reference
+	// and measurement in the same form.
+	var sorted specs.Spec
+	if err := s.Unmarshal(data, &sorted); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config for canonical sort: %w", err)
+	}
+	measure.SortSpec(&sorted)
+	data, err = s.Marshal(&sorted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal sorted config: %w", err)
 	}
 
 	conv := make(map[string]interface{})
