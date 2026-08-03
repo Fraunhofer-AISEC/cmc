@@ -27,6 +27,17 @@ import (
 
 const timeout = 10 * time.Second
 
+// atlsTimeout returns the effective aTLS handshake deadline duration.
+// If c.AtlsTimeout is set it takes precedence; otherwise the package default
+// (10 s) is used. This is the single authoritative source for the timeout
+// value, shared by both Listener (via handshake) and Dial.
+func atlsTimeout(c *CmcConfig) time.Duration {
+	if c != nil && c.AtlsTimeout != nil {
+		return *c.AtlsTimeout
+	}
+	return timeout
+}
+
 /* Struct to implement Listener interface
  * holds net.Listener and adds additional functionality to it */
 type Listener struct {
@@ -57,11 +68,12 @@ func (ln Listener) Accept() (net.Conn, error) {
 
 func (ln Listener) handshake(conn net.Conn) error {
 
-	err := conn.SetReadDeadline(time.Now().Add(timeout))
+	t := atlsTimeout(ln.CmcConfig)
+	err := conn.SetReadDeadline(time.Now().Add(t))
 	if err != nil {
 		return fmt.Errorf("failed to set read deadline: %w", err)
 	}
-	err = conn.SetWriteDeadline(time.Now().Add(timeout))
+	err = conn.SetWriteDeadline(time.Now().Add(t))
 	if err != nil {
 		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
