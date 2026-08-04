@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -454,7 +455,7 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		if err != nil {
 			log.Warnf("failed to read publish token: %v", err)
 		} else {
-			c.publishToken = token
+			c.publishToken = bytes.TrimSpace(token)
 		}
 	}
 

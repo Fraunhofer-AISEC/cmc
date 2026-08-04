@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/tls"
 	"crypto/x509"
@@ -101,6 +102,7 @@ func NewServer(c *config) (*Server, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read publish token: %w", err)
 		}
+		publishToken = bytes.TrimSpace(publishToken)
 	}
 
 	var publishClientCert *tls.Certificate
