@@ -65,3 +65,8 @@ the International Data Spaces (IDS), see [IDS Example Setup](./doc/ids-example-s
 
 A description of tools and helper programs can be found in the
 [Tools Documentation](./doc/tools.md).
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for information about the
+contribution process.
