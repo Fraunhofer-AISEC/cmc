@@ -16,6 +16,7 @@
 package attestedtls
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"fmt"
 	"strings"
@@ -27,7 +28,7 @@ import (
 )
 
 const (
-	atlsHandshakeVersion = "1.1.0"
+	atlsHandshakeVersion = "1.2.0"
 )
 
 type AtlsHandshakeRequest struct {
@@ -51,7 +52,7 @@ type AtlsHandshakeComplete struct {
 
 var log = logrus.WithField("service", "atls")
 
-func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc *CmcConfig, endpoint Endpoint) error {
+func atlsHandshakeStart(conn *tls.Conn, chbindings, ownTlsCert []byte, fingerprint string, cc *CmcConfig, endpoint Endpoint) error {
 
 	if cc == nil {
 		return fmt.Errorf("internal error: atls handshake start: cmc config object is nil")
@@ -66,6 +67,14 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 	ownAddr := conn.LocalAddr().String()
 	peerAddr := conn.RemoteAddr().String()
+
+	// Extract the peer's TLS leaf cert. Together with ownTlsCert this is used to introduce
+	// asymmetric report nonces and to bind each report nonce to the prover's TLS identity, so a
+	// peer cannot reflect the report back (the exporter secret is symmetric)
+	var peerTlsCert []byte
+	if pcs := conn.ConnectionState().PeerCertificates; len(pcs) > 0 {
+		peerTlsCert = pcs[0].Raw
+	}
 
 	// Wrap ResultCb to inject verifier identity before the application callback runs
 	originalCb := cc.ResultCb
@@ -90,6 +99,15 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	}
 
 	attestSelf, attestPeer := convertAttestMode(cc.Attest, endpoint)
+
+	if attestSelf && len(ownTlsCert) == 0 {
+		return fmt.Errorf(
+			"cannot bind attestation report to TLS identity: no local TLS leaf cert available")
+	}
+	if attestPeer && len(peerTlsCert) == 0 {
+		return fmt.Errorf(
+			"cannot verify peer attestation report: no peer TLS leaf cert available")
+	}
 
 	if attestPeer {
 		// Check if we have cached items for the peer identified by its certificate fingerprint.
@@ -134,8 +152,11 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	// Generate attestation report of own endpoint if configured
 	if attestSelf {
 		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
+		// Bind the report nonce to our own TLS leaf certificate, so a peer
+		// cannot pass this report off as their own by reflecting it back.
+		outNonce := bindReportNonce(chbindings, ownTlsCert)
 		// Obtain attestation report from local cmcd
-		ownResp.Report, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
+		ownResp.Report, err = cc.CmcApi.obtainAR(cc, outNonce, req.Cached)
 		if err != nil {
 			ownResp.Error = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
 			log.Warn(ownResp.Error)
@@ -181,11 +202,12 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 	// Verify attestation report from peer if configured
 	if attestPeer {
-
-		// Verify AR from listener with own channel bindings
+		// Verify AR from peer with the nonce bound to the peer's TLS leaf
+		// certificate and the TLS session
+		inNonce := bindReportNonce(chbindings, peerTlsCert)
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
 		err = cc.CmcApi.verifyAR(cc,
-			peerResp.Report, chbindings, cc.Policies,
+			peerResp.Report, inNonce, cc.Policies,
 			fingerprint, peerAddr)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
@@ -389,6 +411,17 @@ func sendAtlsComplete(conn *tls.Conn, s ar.Serializer, complete AtlsHandshakeCom
 	}
 
 	return nil
+}
+
+// bindReportNonce derives the attestation report nonce from the RFC 5705 TLS exporter output and
+// the prover's TLS leaf certificate. Both sides of a TLS session derive the same exporter output,
+// so using it alone as the nonce allows a peer to replay the report it received back at us. Mixing
+// the prover's TLS leaf cert into the nonce makes each side's expected nonce asymmetric.
+func bindReportNonce(chbindings, tlsLeafCertDer []byte) []byte {
+	h := sha256.New()
+	h.Write(chbindings)
+	h.Write(tlsLeafCertDer)
+	return h.Sum(nil)
 }
 
 func convertAttestMode(attest AttestSelect, endpoint Endpoint) (bool, bool) {

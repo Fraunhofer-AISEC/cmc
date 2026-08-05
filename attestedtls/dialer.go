@@ -80,9 +80,11 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	}
 	log.Debugf("Successfully retrieved peer TLS fingerprint: %v", fingerprint)
 
+	ownTlsCert := ownLeafCertDer(config)
+
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
-	err = atlsHandshakeStart(conn, chbindings, fingerprint, cc, Endpoint_Client)
+	err = atlsHandshakeStart(conn, chbindings, ownTlsCert, fingerprint, cc, Endpoint_Client)
 	if err != nil {
 		// Only log the error, still send handshake complete message to inform peer
 		log.Warnf("atls handshake failed: %v", err)
