@@ -38,10 +38,7 @@ func init() {
 
 func (a SocketApi) generate(c *config) error {
 
-	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
 
 	log.Infof("Sending socket request type 'Attest' to %v", c.CmcAddr)
 
@@ -134,10 +131,7 @@ func (a SocketApi) verify(c *config) error {
 
 func (a SocketApi) enroll(c *config) error {
 
-	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
 
 	log.Infof("Sending socket request type 'TLSCreate' to %v", c.CmcAddr)
 
@@ -201,10 +195,7 @@ func (a SocketApi) enroll(c *config) error {
 
 func (a SocketApi) updateCerts(c *config) error {
 
-	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
 
 	log.Infof("Sending socket request type 'UpdateCerts' to %v", c.CmcAddr)
 
@@ -261,10 +252,7 @@ func (a SocketApi) updateCerts(c *config) error {
 
 func (a SocketApi) updateMetadata(c *config) error {
 
-	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
 
 	log.Infof("Sending socket request type 'UpdateMetadata' to %v", c.CmcAddr)
 
@@ -322,10 +310,7 @@ func (a SocketApi) updateMetadata(c *config) error {
 func verifySocketRequest(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
-	network, addr, err := internal.GetNetworkAndAddr(c.CmcAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)

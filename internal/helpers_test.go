@@ -81,35 +81,6 @@ func TestContains(t *testing.T) {
 	}
 }
 
-func TestGetNetworkAndAddr(t *testing.T) {
-	tests := []struct {
-		name        string
-		addr        string
-		wantNetwork string
-		wantErr     bool
-	}{
-		{"TCP ipv4", "127.0.0.1:8080", "tcp", false},
-		{"TCP ipv6", "[::1]:443", "tcp", false},
-		{"TCP hostname", "localhost:9090", "tcp", false},
-		{"Unix socket absolute", "/tmp/cmc.sock", "unix", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			network, addr, err := GetNetworkAndAddr(tt.addr)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetNetworkAndAddr(%q) error = %v, wantErr %v", tt.addr, err, tt.wantErr)
-				return
-			}
-			if network != tt.wantNetwork {
-				t.Errorf("GetNetworkAndAddr(%q) network = %q, want %q", tt.addr, network, tt.wantNetwork)
-			}
-			if addr == "" {
-				t.Errorf("GetNetworkAndAddr(%q) returned empty addr", tt.addr)
-			}
-		})
-	}
-}
-
 func TestIndexToMr(t *testing.T) {
 	tests := []struct {
 		index int

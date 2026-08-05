@@ -22,9 +22,26 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
+
+// Splits cmc address into net.Dial network and the address itself. Addresses can either be
+// specified with explicit unit:// or tcp://, otherwise, anything containing a ":" is treated
+// as host:port and anything else as unix domain socket file path
+func GetNetworkAndAddr(addr string) (string, string) {
+	switch {
+	case strings.HasPrefix(addr, "unix://"):
+		return "unix", strings.TrimPrefix(addr, "unix://")
+	case strings.HasPrefix(addr, "tcp://"):
+		return "tcp", strings.TrimPrefix(addr, "tcp://")
+	case strings.Contains(addr, ":"):
+		return "tcp", addr
+	default:
+		return "unix", addr
+	}
+}
 
 // Receive receives data from a socket with the following format
 //

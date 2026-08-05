@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -48,21 +47,6 @@ func Contains(elem string, list []string) bool {
 		}
 	}
 	return false
-}
-
-// Tests if the address is a network address in the form ip:port. In this
-// case, returns "tcp" to be used as the transport layer, otherwise assumes
-// that the address is a unix domain socket
-func GetNetworkAndAddr(addr string) (string, string, error) {
-	if _, _, err := net.SplitHostPort(addr); err == nil {
-		return "tcp", addr, nil
-	} else {
-		a, err := filepath.Abs(addr)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to parse address '%v': %w", addr, err)
-		}
-		return "unix", a, nil
-	}
 }
 
 // IndexToMr uses the mapping according to UEFI Spec 2.10 Section 38.4.1
