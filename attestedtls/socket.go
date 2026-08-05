@@ -26,7 +26,6 @@ import (
 	// local modules
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type SocketApi struct{}
@@ -42,10 +41,7 @@ func (a SocketApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) (
 		return nil, fmt.Errorf("internal error: cmc config is nil")
 	}
 
-	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(cc.CmcAddr)
 
 	// Establish connection
 	log.Debugf("Sending attestation request to cmcd via %v on %v", network, addr)
@@ -113,10 +109,7 @@ func (a SocketApi) verifyAR(
 		return fmt.Errorf("internal error: cmc config is nil")
 	}
 
-	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
-	if err != nil {
-		return fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(cc.CmcAddr)
 
 	// Establish connection
 	log.Debugf("Sending verification request to cmcd via %v on %v", network, addr)
@@ -200,10 +193,7 @@ func (a SocketApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.Sign
 		return nil, fmt.Errorf("internal error: cmc config is nil")
 	}
 
-	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(cc.CmcAddr)
 
 	// Establish connection
 	log.Debugf("Sending TLS sign request to cmcd via %v on %v", network, addr)
@@ -268,10 +258,7 @@ func (a SocketApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 		return nil, fmt.Errorf("internal error: cmc config is nil")
 	}
 
-	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(cc.CmcAddr)
 
 	// Establish connection
 	log.Debugf("Sending TLS certificate request to cmcd via %v on %v", network, addr)
@@ -335,10 +322,7 @@ func (a SocketApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, 
 		return nil, fmt.Errorf("internal error: cmc config is nil")
 	}
 
-	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(cc.CmcAddr)
 
 	// Establish connection
 	log.Debugf("Sending peer cache request to cmcd via %v on %v", network, addr)
@@ -401,10 +385,7 @@ func (a SocketApi) createKey(cc *CmcConfig) (string, error) {
 		return "", fmt.Errorf("internal error: cmc config is nil")
 	}
 
-	network, addr, err := internal.GetNetworkAndAddr(cc.CmcAddr)
-	if err != nil {
-		return "", fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(cc.CmcAddr)
 
 	// Establish connection
 	log.Debugf("Sending TLS create request to cmcd via %v on %v", network, addr)

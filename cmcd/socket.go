@@ -44,10 +44,7 @@ func init() {
 
 func (s SocketServer) Serve(address string, cmc *c.Cmc) error {
 
-	network, addr, err := internal.GetNetworkAndAddr(address)
-	if err != nil {
-		return fmt.Errorf("failed to get network and address: %w", err)
-	}
+	network, addr := api.GetNetworkAndAddr(address)
 
 	log.Infof("Waiting for requests on %v (%v)", addr, network)
 
