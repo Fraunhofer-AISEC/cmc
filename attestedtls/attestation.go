@@ -27,7 +27,14 @@ import (
 )
 
 const (
-	atlsHandshakeVersion = "1.1.0"
+	atlsHandshakeVersion = "1.3.0"
+
+	// Per-role TLS exporter labels used in the RFC 5705 exporter secret nonce generation. The
+	// is symmetric across the two TLS endpoints, which is why we need client an server labels
+	// to prevent reflection attacks, where an illegitimate peer simply reflects back the
+	// attestation report it received during the handshake.
+	exporterLabelClient = "EXPORTER-CMC-Attestation-Client"
+	exporterLabelServer = "EXPORTER-CMC-Attestation-Server"
 )
 
 type AtlsHandshakeRequest struct {
@@ -51,7 +58,7 @@ type AtlsHandshakeComplete struct {
 
 var log = logrus.WithField("service", "atls")
 
-func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, cc *CmcConfig, endpoint Endpoint) error {
+func atlsHandshakeStart(conn *tls.Conn, fingerprint string, cc *CmcConfig, endpoint Endpoint) error {
 
 	if cc == nil {
 		return fmt.Errorf("internal error: atls handshake start: cmc config object is nil")
@@ -66,6 +73,12 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 
 	ownAddr := conn.LocalAddr().String()
 	peerAddr := conn.RemoteAddr().String()
+
+	// Derive role-specific TLS channel bindings (RFC 5705, RFC 9266)
+	ownBinding, peerBinding, err := createRoleBindings(conn, endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to derive attestation channel bindings: %w", err)
+	}
 
 	// Wrap ResultCb to inject verifier identity before the application callback runs
 	originalCb := cc.ResultCb
@@ -135,7 +148,7 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	if attestSelf {
 		log.Debugf("Prover %v: attesting own endpoint", ownAddr)
 		// Obtain attestation report from local cmcd
-		ownResp.Report, err = cc.CmcApi.obtainAR(cc, chbindings, req.Cached)
+		ownResp.Report, err = cc.CmcApi.obtainAR(cc, ownBinding, req.Cached)
 		if err != nil {
 			ownResp.Error = fmt.Errorf("internal error: prover %v: could not obtain own AR: %w", ownAddr, err).Error()
 			log.Warn(ownResp.Error)
@@ -182,10 +195,10 @@ func atlsHandshakeStart(conn *tls.Conn, chbindings []byte, fingerprint string, c
 	// Verify attestation report from peer if configured
 	if attestPeer {
 
-		// Verify AR from listener with own channel bindings
+		// Verify AR from peer against the peer's role-tagged exporter output.
 		log.Debugf("Verifier %v: verifying attestation report from %v", ownAddr, peerAddr)
 		err = cc.CmcApi.verifyAR(cc,
-			peerResp.Report, chbindings, cc.Policies,
+			peerResp.Report, peerBinding, cc.Policies,
 			fingerprint, peerAddr)
 		if err != nil {
 			return fmt.Errorf("verifier %v: failed to attest %v: %w", ownAddr, peerAddr, err)
@@ -389,6 +402,23 @@ func sendAtlsComplete(conn *tls.Conn, s ar.Serializer, complete AtlsHandshakeCom
 	}
 
 	return nil
+}
+
+// createRoleBindings derives the role-tagged RFC 5705 exporter values for this connection
+func createRoleBindings(conn *tls.Conn, endpoint Endpoint) (own, peer []byte, err error) {
+	cs := conn.ConnectionState()
+	clientBinding, err := cs.ExportKeyingMaterial(exporterLabelClient, nil, 32)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to export %q: %w", exporterLabelClient, err)
+	}
+	serverBinding, err := cs.ExportKeyingMaterial(exporterLabelServer, nil, 32)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to export %q: %w", exporterLabelServer, err)
+	}
+	if endpoint == Endpoint_Client {
+		return clientBinding, serverBinding, nil
+	}
+	return serverBinding, clientBinding, nil
 }
 
 func convertAttestMode(attest AttestSelect, endpoint Endpoint) (bool, bool) {
