@@ -34,14 +34,6 @@ type PrivateKey struct {
 	pubKey     crypto.PublicKey
 }
 
-// ownLeafCertDer returns the DER encoding of the first TLS leaf certificate, or nil if none is set
-func ownLeafCertDer(cfg *tls.Config) []byte {
-	if cfg == nil || len(cfg.Certificates) == 0 || len(cfg.Certificates[0].Certificate) == 0 {
-		return nil
-	}
-	return cfg.Certificates[0].Certificate[0]
-}
-
 // Implementation of Sign() in crypto.Signer iface
 // Contacts cmcd for sign operation and returns received signature
 func (priv PrivateKey) Sign(random io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {

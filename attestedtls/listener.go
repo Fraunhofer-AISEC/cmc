@@ -101,11 +101,9 @@ func (ln Listener) handshake(conn net.Conn) error {
 	}
 	log.Debugf("Successfully retrieved peer TLS fingerprint: %v", fingerprint)
 
-	ownTlsCert := ownLeafCertDer(ln.Config)
-
 	// Perform remote attestation with unique channel binding as specified in RFC5056,
 	// RFC5705, and RFC9266
-	err = atlsHandshakeStart(tlsConn, chbindings, ownTlsCert, fingerprint, ln.CmcConfig, Endpoint_Server)
+	err = atlsHandshakeStart(tlsConn, chbindings, fingerprint, ln.CmcConfig, Endpoint_Server)
 	if err != nil {
 		// Only log the error, still send handshake complete message to inform peer
 		log.Warnf("atls handshake failed: %v", err)
