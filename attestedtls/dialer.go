@@ -64,12 +64,7 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	if !cs.HandshakeComplete {
 		return nil, errors.New("internal error: handshake not complete")
 	}
-
-	log.Debug("TLS handshake complete, generating channel bindings")
-	chbindings, err := cs.ExportKeyingMaterial("EXPORTER-Channel-Binding", nil, 32)
-	if err != nil {
-		return nil, fmt.Errorf("failed to export keying material for channel binding: %w", err)
-	}
+	log.Debug("TLS handshake complete")
 
 	// Retrieve peer's TLS leaf certificate fingerprint to be used as peer ID for peer cache
 	log.Debug("Retrieving TLS certificate fingerprint as peer ID")
@@ -80,9 +75,8 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	}
 	log.Debugf("Successfully retrieved peer TLS fingerprint: %v", fingerprint)
 
-	// Perform remote attestation with unique channel binding as specified in RFC5056,
-	// RFC5705, and RFC9266
-	err = atlsHandshakeStart(conn, chbindings, fingerprint, cc, Endpoint_Client)
+	// Perform remote attestation
+	err = atlsHandshakeStart(conn, fingerprint, cc, Endpoint_Client)
 	if err != nil {
 		// Only log the error, still send handshake complete message to inform peer
 		log.Warnf("atls handshake failed: %v", err)
