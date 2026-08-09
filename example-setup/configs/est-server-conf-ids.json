@@ -18,6 +18,7 @@
     "verifyEkCert": false,
     "tpmEkCertDb": "../../data-ids/tpm-ek-certs.db",
     "logLevel": "trace",
+	"vendorCache": "../../data/est-server-vendor-cache",
     "omspFolder": "../../data/omsp-raw",
     "omspKey": "../../data/pki/omsp-key.pem",
     "omspCaChain": [

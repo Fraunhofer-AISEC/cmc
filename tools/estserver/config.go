@@ -52,7 +52,7 @@ type config struct {
 	HttpFolder       string   `json:"httpFolder"`
 	VerifyEkCert     bool     `json:"verifyEkCert"`
 	TpmEkCertDb      string   `json:"tpmEkCertDb,omitempty"`
-	VcekCacheFolder  string   `json:"vcekCacheFolder,omitempty"`
+	VendorCache      string   `json:"vendorCache,omitempty"`
 	LogLevel         string   `json:"logLevel"`
 	LogFile          string   `json:"logFile,omitempty"`
 	AuthMethods      []string `json:"authMethods,omitempty"`
@@ -92,7 +92,7 @@ const (
 	httpFolderFlag       = "http-folder"
 	verifyEkCertFlag     = "verify-ek-cert"
 	tpmEkCertDbFlag      = "tpm-ek-cert-db"
-	vcekCacheFolderFlag  = "vcek-cache-folder"
+	vendorCacheFlag      = "vendor-cache"
 	logLevelFlag         = "log-level"
 	logFileFlag          = "log-file"
 	authMethodsFlag      = "auth-methods"
@@ -159,8 +159,8 @@ var flags = []cli.Flag{
 		Usage: "database for EK cert chain verification",
 	},
 	&cli.StringFlag{
-		Name:  vcekCacheFolderFlag,
-		Usage: "folder to cache AMD SNP VCEKs",
+		Name:  vendorCacheFlag,
+		Usage: "folder for caching hardware vendor collateral (SNP VCEK/CA)",
 	},
 	&cli.StringFlag{
 		Name:  logLevelFlag,
@@ -275,8 +275,8 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(tpmEkCertDbFlag) {
 		c.TpmEkCertDb = cmd.String(tpmEkCertDbFlag)
 	}
-	if cmd.IsSet(vcekCacheFolderFlag) {
-		c.VcekCacheFolder = cmd.String(vcekCacheFolderFlag)
+	if cmd.IsSet(vendorCacheFlag) {
+		c.VendorCache = cmd.String(vendorCacheFlag)
 	}
 	if cmd.IsSet(logLevelFlag) {
 		c.LogLevel = cmd.String(logLevelFlag)
@@ -412,7 +412,7 @@ func printConfig(c *config) {
 	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
-	log.Debugf("\tVCEK Cache Folder   : %v", c.VcekCacheFolder)
+	log.Debugf("\tVendor Cache Folder : %v", c.VendorCache)
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
 	log.Debugf("\tToken Path          : %v", c.TokenPath)

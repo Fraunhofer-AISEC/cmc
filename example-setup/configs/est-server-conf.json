@@ -22,6 +22,7 @@
     "tokenPath": "../../data/token_store",
     "publishResults": "http://localhost:8080/results",
     "publishFile": "attestation-result.json",
+	"vendorCache": "../../data/est-server-vendor-cache",
     "omspFolder": "../../data/omsp-raw",
     "omspKey": "../../data/pki/omsp-key.pem",
     "omspCaChain": [

@@ -116,7 +116,7 @@ func NewServer(c *config) (*Server, error) {
 
 	// Use the system CA root store regardless of the CMC trust
 	// pool as the AMD KDS is a production service under a global ca
-	snpEndorser, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, c.VcekCacheFolder, nil, true)
+	snpEndorser, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, c.VendorCache, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snp endorser: %w", err)
 	}
