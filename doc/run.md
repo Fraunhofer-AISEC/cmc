@@ -120,16 +120,19 @@ See [SGX-Setup](./setup-sgx.md).
 Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
-# Run the caddy atls reverse proxy and hello world plain HTTP server
+# Run the caddy atls reverse proxy and hello world plain HTTP server on localhost:4445
 cd cmc/tools/caddy-atls
 ./caddy run --config ../../example-setups/configs/hello-world-reverse-proxy.caddyfile
 
-# Run the cmcctl HTTP CONNECT proxy on localhost:4443
+# Run the cmcctl HTTP (CONNECT) proxy on localhost:4443
 cd cmc/cmcctl
 ./cmcctl proxy -config ../example-setup/configs/cmcctl-conf.json --allow-system-certs=true --attest server
 
-# Request from legacy HTTP server via aTLS reverse proxy
+# Request via proxy in HTTP CONNECT mode
 curl -p -x http://localhost:4443 http://localhost:4445/
+
+# Request via proxy in standard mode
+curl -x http://localhost:4443 http://localhost:4445/
 ```
 
 This runs the following setup:
