@@ -29,7 +29,7 @@ func createToken(c *config) error {
 		return errors.New("path to token store must be specified via config")
 	}
 
-	token, err := est.CreateAndCacheToken(c.TokenStore)
+	token, err := est.CreateToken(c.TokenStore, est.TokenOptions{MaxUses: c.TokenMaxUses, Subject: c.TokenSubject})
 	if err != nil {
 		return fmt.Errorf("failed to create and cache token: %w", err)
 	}
