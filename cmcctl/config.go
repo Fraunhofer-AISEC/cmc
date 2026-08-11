@@ -94,6 +94,8 @@ type config struct {
 	LogLevel         string   `json:"logLevel"`
 	LogFile          string   `json:"logFile"`
 	TokenStore       string   `json:"tokenStore"`
+	TokenMaxUses     int      `json:"tokenMaxUses"`
+	TokenSubject     string   `json:"tokenSubject"`
 	PublishTokenFile string   `json:"publishToken"`
 	PublishCert      string   `json:"publishCert"`
 	PublishKey       string   `json:"publishKey"`
@@ -138,6 +140,8 @@ const (
 	logLevelFlag       = "log-level"
 	logFileFlag        = "log-file"
 	tokenStoreFlag     = "token-store"
+	tokenMaxUsesFlag   = "token-max-uses"
+	tokenSubjectFlag   = "token-subject"
 	publishTokenFlag   = "publish-token"
 	publishCertFlag    = "publish-cert"
 	publishKeyFlag     = "publish-key"
@@ -237,6 +241,14 @@ var flags = append([]cli.Flag{
 	&cli.StringFlag{
 		Name:  tokenStoreFlag,
 		Usage: "path to token store for token mode",
+	},
+	&cli.IntFlag{
+		Name:  tokenMaxUsesFlag,
+		Usage: "maximum number of times a newly created token may be redeemed (0 = unlimited)",
+	},
+	&cli.StringFlag{
+		Name:  tokenSubjectFlag,
+		Usage: "restrict a newly created token to this subject; leave empty for no restriction",
 	},
 	&cli.StringFlag{
 		Name:  publishTokenFlag,
@@ -364,6 +376,12 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	}
 	if cmd.IsSet(tokenStoreFlag) {
 		c.TokenStore = cmd.String(tokenStoreFlag)
+	}
+	if cmd.IsSet(tokenMaxUsesFlag) {
+		c.TokenMaxUses = int(cmd.Int(tokenMaxUsesFlag))
+	}
+	if cmd.IsSet(tokenSubjectFlag) {
+		c.TokenSubject = cmd.String(tokenSubjectFlag)
 	}
 	if cmd.IsSet(publishTokenFlag) {
 		c.PublishTokenFile = cmd.String(publishTokenFlag)
@@ -539,6 +557,8 @@ func (c *config) Print() {
 	log.Debugf("\tHTTP Header              : %v", c.Header)
 	log.Debugf("\tHTTP Method              : %v", c.Method)
 	log.Debugf("\tToken Store              : %v", c.TokenStore)
+	log.Debugf("\tToken Max Uses           : %v", c.TokenMaxUses)
+	log.Debugf("\tToken Subject            : %v", c.TokenSubject)
 	log.Debugf("\tBackend Token            : %v", c.PublishTokenFile)
 	log.Debugf("\tTLS Cert Common Name     : %v", c.TlsCn)
 	log.Debugf("\tTLS Cert DNS Names       : %v", c.TlsDnsNames)
