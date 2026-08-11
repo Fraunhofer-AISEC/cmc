@@ -17,6 +17,7 @@ package snppolicy
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -40,6 +41,7 @@ const (
 	abiMajorFlag     = "abi-major"
 	abiMinorFlag     = "abi-minor"
 	versionsFlag     = "versions"
+	hostDataFlag     = "host-data"
 )
 
 var Command = &cli.Command{
@@ -82,6 +84,10 @@ var Command = &cli.Command{
 			Name:  versionsFlag,
 			Usage: "paths to SNP version JSON files (created with 'create snp-version'), comma-separated",
 		},
+		&cli.StringFlag{
+			Name:  hostDataFlag,
+			Usage: "expected HostData value as a hex string (32 bytes); omit to skip the check",
+		},
 	),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		_, err := global.GetConfig(cmd)
@@ -113,6 +119,17 @@ var Command = &cli.Command{
 				}
 				p.VersionPolicy = append(p.VersionPolicy, *v)
 			}
+		}
+
+		if cmd.IsSet(hostDataFlag) {
+			b, err := hex.DecodeString(cmd.String(hostDataFlag))
+			if err != nil {
+				return fmt.Errorf("failed to decode --host-data: %w", err)
+			}
+			if len(b) != 32 {
+				return fmt.Errorf("--host-data must be exactly 32 bytes (64 hex chars), got %d bytes", len(b))
+			}
+			p.HostData = b
 		}
 
 		return create.Output(cmd, &p)

@@ -167,6 +167,7 @@ type SnpResult struct {
 	TcbCheck        TcbCheck     `json:"tcbCheck" cbor:"2,keyasint"`
 	PolicyCheck     PolicyCheck  `json:"policyCheck" cbor:"3,keyasint"`
 	ExtensionsCheck []Result     `json:"extensionsCheck" cbor:"4,keyasint"`
+	HostDataCheck   Result       `json:"hostDataCheck,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 type VersionCheck struct {
@@ -971,6 +972,7 @@ func (r *SnpResult) PrintErr() {
 	for i := range r.ExtensionsCheck {
 		r.ExtensionsCheck[i].PrintErr("SNP VCEK extension %v", i)
 	}
+	r.HostDataCheck.PrintErr("SNP host data check")
 }
 
 func (r *SgxResult) PrintErr() {
