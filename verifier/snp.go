@@ -469,7 +469,7 @@ func verifySnpSignature(
 
 	// Verify the SNP certificate chain (independent of signature check)
 	ca := certs[len(certs)-1]
-	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca})
+	x509Chains, err := internal.VerifyCertChain(certs[:len(certs)-1], []*x509.Certificate{ca}, []x509.ExtKeyUsage{x509.ExtKeyUsageAny})
 	chainOk := err == nil
 	if !chainOk {
 		log.Warnf("Failed to verify certificate chain: %v", err)

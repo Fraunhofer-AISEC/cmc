@@ -113,7 +113,7 @@ func VerifyIas(
 	ca := certs[len(certs)-1]
 
 	// Verify certificate chain
-	x509Chains, err := internal.VerifyCertChain(certs, []*x509.Certificate{ca})
+	x509Chains, err := internal.VerifyCertChain(certs, []*x509.Certificate{ca}, []x509.ExtKeyUsage{x509.ExtKeyUsageAny})
 	if err != nil {
 		log.Warnf("Failed to verify certificate chain: %v", err)
 		result.Summary.Fail(ar.VerifyCertChain)
