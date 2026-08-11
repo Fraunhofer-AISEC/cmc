@@ -259,7 +259,7 @@ func verifyBootStrapToken(tokenPath string, req *http.Request) error {
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 	token = strings.TrimSpace(token)
 
-	if err := est.VerifyToken(tokenPath, token); err != nil {
+	if err := est.VerifyToken(tokenPath, token, ""); err != nil {
 		return fmt.Errorf("failed to verify bootstrap token: %w", err)
 	}
 
