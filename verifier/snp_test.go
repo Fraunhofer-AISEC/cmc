@@ -482,6 +482,60 @@ func TestVerifySnp(t *testing.T) {
 			want:  ar.StatusFail,
 			want1: false,
 		},
+		{
+			name: "HostData Match Policy",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
+				},
+				caFingerprints: validFingerprints,
+				policy: &ar.SnpPolicy{
+					ReportMinVersion: validMinVersion,
+					ReportMaxVersion: validMaxVersion,
+					GuestPolicy:      validSnpPolicy,
+					VersionPolicy: []ar.SnpVersion{
+						{Name: "Milan", Fw: validFw, Tcb: validTcb},
+					},
+					HostData: make([]byte, 32),
+				},
+				refvals: validRefvals,
+				nonce:   validNonce,
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
+			name: "HostData Mismatch Policy",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
+				},
+				caFingerprints: validFingerprints,
+				policy: &ar.SnpPolicy{
+					ReportMinVersion: validMinVersion,
+					ReportMaxVersion: validMaxVersion,
+					GuestPolicy:      validSnpPolicy,
+					VersionPolicy: []ar.SnpVersion{
+						{Name: "Milan", Fw: validFw, Tcb: validTcb},
+					},
+					HostData: validHostData,
+				},
+				refvals: validRefvals,
+				nonce:   validNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -492,6 +546,40 @@ func TestVerifySnp(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("verifySnp() got1 = %v, want %v", got1, tt.want)
+			}
+		})
+	}
+}
+
+func Test_verifySnpHostData(t *testing.T) {
+	type args struct {
+		got      []byte
+		expected []byte
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want1 bool
+	}{
+		{
+			name:  "Match",
+			args:  args{got: make([]byte, 32), expected: make([]byte, 32)},
+			want1: true,
+		},
+		{
+			name: "Mismatch",
+			args: args{
+				got:      make([]byte, 32),
+				expected: validHostData,
+			},
+			want1: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, got1 := verifySnpHostData(tt.args.got, tt.args.expected)
+			if got1 != tt.want1 {
+				t.Errorf("verifySnpHostData() = %v, want %v", got1, tt.want1)
 			}
 		})
 	}
@@ -1076,4 +1164,11 @@ AFZEAwoKCQ==
 
 	validFingerprints   = []string{"69D063B45344D26A2E94E1F4210DE49EF555308287D4C174445C95639A540BCD"}
 	invalidFingerprints = []string{"AAD063B45344D26A2E94E1F4210DE49EF555308287D4C174445C95639A540BCD"}
+
+	validHostData = []byte{
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
+		0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+		0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
+	}
 )

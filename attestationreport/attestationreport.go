@@ -357,6 +357,7 @@ type SnpPolicy struct {
 	ReportMaxVersion uint32         `json:"reportMaxVersion" cbor:"1,keyasint"`
 	GuestPolicy      SnpGuestPolicy `json:"policy" cbor:"2,keyasint"`
 	VersionPolicy    []SnpVersion   `json:"versions" cbor:"3,keyasint"`
+	HostData         HexByte        `json:"hostData,omitempty" cbor:"4,keyasint,omitempty"`
 }
 
 // RtMrHashChainElem represents the attestation report
