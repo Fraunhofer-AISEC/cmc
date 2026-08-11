@@ -170,7 +170,7 @@ func (s cborSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 				certChain = append(certChain, x509Cert)
 			}
 
-			x509Chains, err := internal.VerifyCertChain(certChain, roots)
+			x509Chains, err := internal.VerifyCertChain(certChain, roots, []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning})
 			if err != nil {
 				result.Summary.Status = StatusFail
 				result.SignatureCheck[i].CertChainCheck.Fail(VerifyCertChain, err)

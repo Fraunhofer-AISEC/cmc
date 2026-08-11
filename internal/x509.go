@@ -231,8 +231,9 @@ func CreateCertPool(roots []*x509.Certificate, allowSystemCerts bool) (*x509.Cer
 }
 
 // verifyCertChain tries to verify the certificate chain certs with leaf
-// certificate first up to one of the root certificates in cas
-func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x509.Certificate, error) {
+// certificate first up to one of the root certificates in cas.
+// ekus specifies the extended key usages, pass x509.ExtKeyUsageAny to skip EKU enforcement.
+func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate, ekus []x509.ExtKeyUsage) ([][]*x509.Certificate, error) {
 
 	if len(certs) == 0 {
 		return nil, errors.New("no certificate chain provided")
@@ -261,7 +262,7 @@ func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate) ([][]*x
 	opts := x509.VerifyOptions{
 		Intermediates: intermediates,
 		Roots:         roots,
-		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		KeyUsages:     ekus,
 	}
 
 	chains, err := leafCert.Verify(opts)

@@ -16,6 +16,7 @@
 package internal
 
 import (
+	"crypto/x509"
 	"testing"
 )
 
@@ -226,7 +227,7 @@ func TestVerifyCertChain(t *testing.T) {
 			}
 
 			// Test
-			if _, err := VerifyCertChain(certs, cas); (err != nil) != tt.wantErr {
+			if _, err := VerifyCertChain(certs, cas, []x509.ExtKeyUsage{x509.ExtKeyUsageAny}); (err != nil) != tt.wantErr {
 				t.Errorf("VerifyCertChain() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

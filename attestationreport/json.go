@@ -128,7 +128,7 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 	}
 
 	opts := x509.VerifyOptions{
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning},
 		Roots:     rootpool,
 	}
 
