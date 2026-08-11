@@ -568,7 +568,8 @@ func verifyCollateralElem(elem []byte, signature string, cn, tbsJsonKey string, 
 	// Verify issuer certificate chain
 	_, err := internal.VerifyCertChain(
 		[]*x509.Certificate{cert},
-		[]*x509.Certificate{ca})
+		[]*x509.Certificate{ca},
+		[]x509.ExtKeyUsage{x509.ExtKeyUsageAny})
 	if err != nil {
 		log.Warnf("Failed to collateral issuer certificate chain: %v", err)
 		return ar.VerifyCertChain
@@ -1051,7 +1052,8 @@ func VerifyPckCertChain(quoteCerts SgxCertificates, pckCrl, rootCrl *x509.Revoca
 	// verify PCK certificate chain
 	x509CertChains, err := internal.VerifyCertChain(
 		[]*x509.Certificate{quoteCerts.PCKCert, quoteCerts.IntermediateCert},
-		[]*x509.Certificate{quoteCerts.RootCACert})
+		[]*x509.Certificate{quoteCerts.RootCACert},
+		[]x509.ExtKeyUsage{x509.ExtKeyUsageAny})
 	if err != nil {
 		log.Warnf("Failed to verify pck certificate chain: %v", err)
 		return nil, ar.VerifyPCKChain

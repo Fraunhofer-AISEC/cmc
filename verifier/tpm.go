@@ -99,7 +99,7 @@ func VerifyTpm(
 		result.Summary.Status = ar.StatusFail
 	}
 
-	x509Chains, err := internal.VerifyCertChain(mCerts, cas)
+	x509Chains, err := internal.VerifyCertChain(mCerts, cas, []x509.ExtKeyUsage{x509.ExtKeyUsageAny})
 	if err != nil {
 		log.Warnf("Failed to verify TPM quote certificate chain: %v", err)
 		result.Summary.Status = ar.StatusFail
