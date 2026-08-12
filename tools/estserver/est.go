@@ -23,7 +23,9 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"time"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
@@ -95,7 +97,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -199,7 +201,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -293,9 +295,10 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 
 	// Verify attestation report if authentication method attestation is activated
+	var attestResult *ar.AttestationResult
 	if s.authMethods.Has(internal.AuthAttestation) {
 		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.rootCas))
-		err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
+		attestResult, err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
 			s.publishNetwork, s.publishFile, s.publishToken,
 			s.rootCas, s.allowSystemCerts, s.publishClientCert)
 		if err != nil {
@@ -304,7 +307,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		}
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -357,8 +360,9 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Verify attestation report if authentication method attestation is activated
+	var attestResult *ar.AttestationResult
 	if s.authMethods.Has(internal.AuthAttestation) {
-		err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
+		attestResult, err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
 			s.publishNetwork, s.publishFile, s.publishToken,
 			s.rootCas, s.allowSystemCerts, s.publishClientCert)
 		if err != nil {
@@ -367,7 +371,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0])
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -389,11 +393,19 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// enrollCert generates a new certificate signed by the CA
+// enrollCert generates a new certificate from a CSR signed by the CA. The naming policy determines
+// the certificate fields. The `result` is the attestation result (can be nil for enrollment paths t
+// hat skip attestation). A `validity` of zero uses the default.
 func enrollCert(csr *x509.CertificateRequest, key crypto.PrivateKey, parent *x509.Certificate,
+	policy NamingPolicy, result *ar.AttestationResult, validity time.Duration,
 ) (*x509.Certificate, error) {
 
-	tmpl, err := internal.CreateCert(csr)
+	fields, err := policy.Assign(csr, validity, result)
+	if err != nil {
+		return nil, fmt.Errorf("naming policy rejected enrollment: %w", err)
+	}
+
+	tmpl, err := internal.PrepareCert(csr, fields)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cert from CSR: %w", err)
 	}
