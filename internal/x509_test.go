@@ -16,8 +16,16 @@
 package internal
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"net"
+	"net/url"
 	"testing"
+	"time"
 )
 
 func TestParseCert(t *testing.T) {
@@ -232,6 +240,115 @@ func TestVerifyCertChain(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newTestCSR(t *testing.T) *x509.CertificateRequest {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err != nil {
+		t.Fatalf("create CSR: %v", err)
+	}
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		t.Fatalf("parse CSR: %v", err)
+	}
+	return csr
+}
+
+func TestCreateCert_DefaultValidity(t *testing.T) {
+	csr := newTestCSR(t)
+	before := time.Now()
+	tmpl, err := PrepareCert(csr, CertFields{Subject: pkix.Name{CommonName: "test"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := before.Add(DefaultCertValidity)
+	if tmpl.NotAfter.Before(want.Add(-time.Minute)) || tmpl.NotAfter.After(want.Add(time.Minute)) {
+		t.Errorf("NotAfter %v not within 1 minute of expected %v", tmpl.NotAfter, want)
+	}
+}
+
+func TestCreateCert_CustomValidity(t *testing.T) {
+	csr := newTestCSR(t)
+	want := 48 * time.Hour
+	before := time.Now()
+	tmpl, err := PrepareCert(csr, CertFields{ValidFor: want})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantNotAfter := before.Add(want)
+	if tmpl.NotAfter.Before(wantNotAfter.Add(-time.Minute)) || tmpl.NotAfter.After(wantNotAfter.Add(time.Minute)) {
+		t.Errorf("NotAfter %v not within 1 minute of expected %v", tmpl.NotAfter, wantNotAfter)
+	}
+}
+
+func TestCreateCert_SANs(t *testing.T) {
+	csr := newTestCSR(t)
+	uri, _ := url.Parse("https://example.com/id")
+	ip := net.ParseIP("10.0.0.1")
+	fields := CertFields{
+		DNSNames:    []string{"svc.local"},
+		IPAddresses: []net.IP{ip},
+		URIs:        []*url.URL{uri},
+	}
+	tmpl, err := PrepareCert(csr, fields)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tmpl.DNSNames) != 1 || tmpl.DNSNames[0] != "svc.local" {
+		t.Errorf("DNSNames: %v", tmpl.DNSNames)
+	}
+	if len(tmpl.IPAddresses) != 1 || !tmpl.IPAddresses[0].Equal(ip) {
+		t.Errorf("IPAddresses: %v", tmpl.IPAddresses)
+	}
+	if len(tmpl.URIs) != 1 || tmpl.URIs[0].String() != uri.String() {
+		t.Errorf("URIs: %v", tmpl.URIs)
+	}
+}
+
+func TestCreateCert_Subject(t *testing.T) {
+	csr := newTestCSR(t)
+	subject := pkix.Name{CommonName: "device.example.com", Organization: []string{"Acme"}}
+	tmpl, err := PrepareCert(csr, CertFields{Subject: subject})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tmpl.Subject.CommonName != subject.CommonName {
+		t.Errorf("CommonName: got %q, want %q", tmpl.Subject.CommonName, subject.CommonName)
+	}
+	if len(tmpl.Subject.Organization) != 1 || tmpl.Subject.Organization[0] != "Acme" {
+		t.Errorf("Organization: got %v, want [Acme]", tmpl.Subject.Organization)
+	}
+}
+
+func TestCreateCert_RawSubjectTakesPrecedence(t *testing.T) {
+	// Build a CSR with a known subject so we have a real DER-encoded RawSubject.
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csrTmpl := &x509.CertificateRequest{
+		Subject: pkix.Name{CommonName: "original", Organization: []string{"OrigOrg"}},
+	}
+	der, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, key)
+	src, _ := x509.ParseCertificateRequest(der)
+
+	// A different CSR provides the public key; src.RawSubject overrides its subject.
+	keyCsr := newTestCSR(t)
+	fields := CertFields{
+		RawSubject: src.RawSubject,
+		Subject:    pkix.Name{CommonName: "ignored"},
+	}
+	tmpl, err := PrepareCert(keyCsr, fields)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(tmpl.RawSubject, src.RawSubject) {
+		t.Errorf("RawSubject not preserved verbatim")
+	}
+	// Subject field in the template is irrelevant when RawSubject is set; the
+	// resulting parsed certificate will reflect the RawSubject bytes.
 }
 
 var (

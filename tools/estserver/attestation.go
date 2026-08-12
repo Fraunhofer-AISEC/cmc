@@ -34,17 +34,17 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	report []byte, publishResults, publishOcsf, publishNetwork, publishFile string, publishToken []byte,
 	publishRootCas []*x509.Certificate, publishAllowSystemCerts bool,
 	publishClientCert *tls.Certificate,
-) error {
+) (*ar.AttestationResult, error) {
 
 	if len(report) == 0 {
-		return fmt.Errorf("failed to verify attestation report: no report was provided")
+		return nil, fmt.Errorf("failed to verify attestation report: no report was provided")
 	}
 
 	// Use Subject Key Identifier (SKI) as nonce
 	// We use SHA-256 instead of SHA-1 for the SKI as we control both sides
 	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
 	if err != nil {
-		return fmt.Errorf("failed to parse CSR public key: %w", err)
+		return nil, fmt.Errorf("failed to parse CSR public key: %w", err)
 	}
 	nonce := sha256.Sum256(pubKey)
 
@@ -67,8 +67,8 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 		publishRootCas, publishAllowSystemCerts, publishClientCert)
 
 	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
-		return fmt.Errorf("failed to verify attestation report")
+		return nil, fmt.Errorf("failed to verify attestation report")
 	}
 
-	return nil
+	return result, nil
 }

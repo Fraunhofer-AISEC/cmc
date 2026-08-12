@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -329,7 +330,23 @@ func CreateCsr(priv crypto.PrivateKey, cn string, dns, ips []string) (*x509.Cert
 	return csr, nil
 }
 
-func CreateCert(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+// CertFields holds the naming and lifetime fields the CA will set. RawSubject takes precedence
+// over Subject when non-nil
+type CertFields struct {
+	RawSubject  []byte
+	Subject     pkix.Name
+	DNSNames    []string
+	IPAddresses []net.IP
+	URIs        []*url.URL
+	ValidFor    time.Duration
+}
+
+// DefaultCertValidity is the lifetime used when CertFields.ValidFor is zero.
+const DefaultCertValidity = 24 * 180 * time.Hour
+
+// PrepareCert builds an x509.Certificate template from the CSR's public key
+// and the supplied fields, but does not yet sign.
+func PrepareCert(csr *x509.CertificateRequest, fields CertFields) (*x509.Certificate, error) {
 
 	// Check that CSR is self-signed
 	err := csr.CheckSignature()
@@ -350,17 +367,24 @@ func CreateCert(csr *x509.CertificateRequest) (*x509.Certificate, error) {
 		return nil, fmt.Errorf("failed to generate serial number for certificate: %w", err)
 	}
 
+	validity := fields.ValidFor
+	if validity == 0 {
+		validity = DefaultCertValidity
+	}
+
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
-		RawSubject:            csr.RawSubject,
+		RawSubject:            fields.RawSubject,
+		Subject:               fields.Subject,
 		SubjectKeyId:          ski[:],
 		NotBefore:             time.Now().Add(-24 * time.Hour),
-		NotAfter:              time.Now().Add(24 * 180 * time.Hour),
+		NotAfter:              time.Now().Add(validity),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              csr.DNSNames,
-		IPAddresses:           csr.IPAddresses,
+		DNSNames:              fields.DNSNames,
+		IPAddresses:           fields.IPAddresses,
+		URIs:                  fields.URIs,
 	}
 
 	return tmpl, nil

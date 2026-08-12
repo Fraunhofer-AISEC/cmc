@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
@@ -68,15 +69,17 @@ type config struct {
 	OmspKey          string   `json:"omspKey"`
 	OmspCaChain      []string `json:"omspCaChain"`
 	OmspUrl          string   `json:"omspUrl"`
+	CertValidity     string   `json:"certValidity,omitempty"`
 
-	estCaKey    crypto.PrivateKey
-	estCaChain  []*x509.Certificate
-	tlsKey      crypto.PrivateKey
-	tlsCaChain  []*x509.Certificate
-	rootCas     []*x509.Certificate
-	authMethods internal.AuthMethod
-	omspKey     crypto.PrivateKey
-	omspCaChain []*x509.Certificate
+	estCaKey     crypto.PrivateKey
+	estCaChain   []*x509.Certificate
+	tlsKey       crypto.PrivateKey
+	tlsCaChain   []*x509.Certificate
+	rootCas      []*x509.Certificate
+	authMethods  internal.AuthMethod
+	omspKey      crypto.PrivateKey
+	omspCaChain  []*x509.Certificate
+	certValidity time.Duration
 }
 
 const (
@@ -107,6 +110,7 @@ const (
 	omspKeyFlag          = "omsp-key"
 	omspCaChainFlag      = "omsp-ca-chain"
 	omspUrlFlag          = "omsp-url"
+	certValidityFlag     = "cert-validity"
 )
 
 var flags = []cli.Flag{
@@ -218,6 +222,10 @@ var flags = []cli.Flag{
 		Name:  omspUrlFlag,
 		Usage: "URL of the OMSP endpoint",
 	},
+	&cli.StringFlag{
+		Name:  certValidityFlag,
+		Usage: "lifetime of enrolled certs as a Go duration string (e.g. 4320h). default: 180 days",
+	},
 }
 
 func getConfig(cmd *cli.Command) (*config, error) {
@@ -320,6 +328,9 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(omspUrlFlag) {
 		c.OmspUrl = cmd.String(omspUrlFlag)
 	}
+	if cmd.IsSet(certValidityFlag) {
+		c.CertValidity = cmd.String(certValidityFlag)
+	}
 
 	// Configure the logger
 	if c.LogFile != "" {
@@ -388,6 +399,16 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		log.Info("OMSP not configured, OMSP requests will not be served")
 	}
 
+	if c.CertValidity != "" {
+		c.certValidity, err = time.ParseDuration(c.CertValidity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certValidity %q: %w", c.CertValidity, err)
+		}
+		if c.certValidity <= 0 {
+			return nil, fmt.Errorf("certValidity must be positive, got %v", c.certValidity)
+		}
+	}
+
 	// Print the parsed configuration
 	printConfig(c)
 
@@ -425,4 +446,5 @@ func printConfig(c *config) {
 	log.Debugf("\tOMSP Key File       : %v", c.OmspKey)
 	log.Debugf("\tOMSP CA cert chain  : %v", strings.Join(c.OmspCaChain, ","))
 	log.Debugf("\tOMSP URL            : %v", c.OmspUrl)
+	log.Debugf("\tCert Validity       : %v", c.CertValidity)
 }
