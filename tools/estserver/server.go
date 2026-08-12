@@ -53,6 +53,8 @@ type Server struct {
 	publishToken      []byte
 	allowSystemCerts  bool
 	publishClientCert *tls.Certificate
+	namingPolicy      NamingPolicy
+	certValidity      time.Duration
 
 	//Configuration of OMSP server for fetching manifest revocation information
 	omspFolder  string
@@ -150,6 +152,8 @@ func NewServer(c *config) (*Server, error) {
 		publishToken:      publishToken,
 		allowSystemCerts:  c.AllowSystemCerts,
 		publishClientCert: publishClientCert,
+		namingPolicy:      CsrPassthrough{},
+		certValidity:      c.certValidity,
 		omspFolder:        c.OmspFolder,
 		omspKey:           c.omspKey,
 		omspCaChain:       c.omspCaChain,
