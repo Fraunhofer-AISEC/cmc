@@ -519,6 +519,9 @@ func TestVerify(t *testing.T) {
 				got.PrintErr()
 				t.Errorf("Result.Success = %v, want %v", got.Summary.Status, tt.want)
 			}
+			if got.Name != validMetaInfo.Name {
+				t.Errorf("Name = %q, want %q", got.Name, validMetaInfo.Name)
+			}
 		})
 	}
 }

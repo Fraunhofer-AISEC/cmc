@@ -41,6 +41,7 @@ type AttestationResult struct {
 	Summary      Result              `json:"summary" cbor:"2,keyasint"`
 	Prover       Endpoint            `json:"prover" cbor:"3,keyasint"`
 	Verifier     Endpoint            `json:"verifier,omitempty" cbor:"4,keyasint,omitempty"`
+	Name         string              `json:"name,omitempty" cbor:"10,keyasint,omitempty"`
 	Created      string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
 	Freshness    Result              `json:"freshness" cbor:"6,keyasint"`
 	CertLevel    int                 `json:"certLevel" cbor:"7,keyasint"`
