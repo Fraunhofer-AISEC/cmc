@@ -129,6 +129,7 @@ func Verify(
 		result.Warn(ar.VerifyMetadata)
 	}
 	result.Metadata = metaResults
+	result.Name = metaResults.ImageDescriptionResult.Name
 	if report.Name != "" {
 		result.Prover.Hostname = report.Name
 	} else {
