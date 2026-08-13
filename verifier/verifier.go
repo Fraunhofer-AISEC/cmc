@@ -54,12 +54,36 @@ var (
 // format against the supplied nonce. This includes verifying the integrity of the overall
 // report, which is bound to the hardware nonce, verifying the certificate
 // chains of all attestation report elements as well as verifying the measurements against
-// the reference values and the compatibility of software artefacts.
+// the reference values and the compatibility of software artefacts. It also enforces the peer
+// authorization from the signed metadata based on the provided local role
 func Verify(
 	arRaw, nonce []byte,
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
 	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
 	peer string, peerAddr string, checkOmsp bool,
+	localRole string,
+) *ar.AttestationResult {
+	return verifyInternal(arRaw, nonce, policies, policyEngine, policyOverwrite,
+		metadataCas, peerCache, peer, peerAddr, checkOmsp, localRole, false)
+}
+
+// VerifyBootstrap performs a reduced set of verification without peer authorization, peer cache,
+// and peer address, which is used for bootstrap attestation during certificate enrollment
+func VerifyBootstrap(
+	arRaw, nonce []byte,
+	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
+	metadataCas []*x509.Certificate,
+) *ar.AttestationResult {
+	return verifyInternal(arRaw, nonce, policies, policyEngine, policyOverwrite,
+		metadataCas, nil, "", "", false, "", true)
+}
+
+func verifyInternal(
+	arRaw, nonce []byte,
+	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
+	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
+	peer string, peerAddr string, checkOmsp bool,
+	localRole string, skipPeerAuth bool,
 ) *ar.AttestationResult {
 
 	result := &ar.AttestationResult{
@@ -321,6 +345,15 @@ Loop:
 		result.Fail(ar.InvalidCertLevel, fmt.Errorf("certification level %v requires hw trust anchor", aggCertLevel))
 	}
 	result.CertLevel = aggCertLevel
+
+	// Check if we are allowed to establish a connection with this peer in case peer policies are
+	// provided
+	if !skipPeerAuth {
+		result.PeerAuth = verifyPeerAuthorization(localRole, &result.Metadata)
+		if result.PeerAuth.Status == ar.StatusFail {
+			result.Summary.Status = ar.StatusFail
+		}
+	}
 
 	// Add additional information
 	result.Created = time.Now().Format(time.RFC3339Nano)

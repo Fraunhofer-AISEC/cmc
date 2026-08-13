@@ -86,7 +86,7 @@ var Command = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:  hostDataFlag,
-			Usage: "expected HostData value as a hex string (32 bytes); omit to skip the check",
+			Usage: "expected HostData value as a hex string (32 bytes), omit to skip the check",
 		},
 	),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
