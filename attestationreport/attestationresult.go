@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.4.0"
+	resultVersion = "3.5.0"
 )
 
 func GetResultVersion() string {
@@ -48,6 +48,7 @@ type AttestationResult struct {
 	Measurements []MeasurementResult `json:"measurements" cbor:"8,keyasint"`
 	Metadata     MetadataSummary     `json:"metadata" cbor:"9,keyasint"`
 	PeerAuth     Result              `json:"peerAuth,omitempty" cbor:"11,keyasint,omitempty"`
+	Claims       map[string][]byte   `json:"claims,omitempty" cbor:"12,keyasint,omitempty"`
 }
 
 type Endpoint struct {

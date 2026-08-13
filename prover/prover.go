@@ -30,9 +30,11 @@ var log = logrus.WithField("service", "ar")
 
 // Generate generates an attestation report with the provided nonce and metadata. The metadata must
 // either be in the form of JWS tokens infull serialization format or CBOR COSE tokens. The function
-// takes a list of drivers for collecting the measurements from a hardware or software interface
-func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers []drivers.Driver,
-	s ar.Serializer, alg crypto.Hash,
+// takes a list of drivers for collecting the measurements from a hardware or software interface.
+// The optional claims are prover-asserted key/value pairs placed into the report context and
+// therefore covered by the hardware evidence
+func Generate(nonce []byte, claims map[string][]byte, cached []string, metadata map[string][]byte,
+	drivers []drivers.Driver, s ar.Serializer, alg crypto.Hash,
 ) ([]byte, error) {
 
 	log.Debugf("Generating attestation report with nonce %x", nonce)
@@ -59,7 +61,16 @@ func Generate(nonce []byte, cached []string, metadata map[string][]byte, drivers
 			Alg:      alg.String(),
 			Nonce:    nonce,
 			Metadata: map[string][]byte{},
+			Claims:   claims,
 		},
+	}
+
+	if len(claims) > 0 {
+		names := make([]string, 0, len(claims))
+		for name := range claims {
+			names = append(names, name)
+		}
+		log.Debugf("Asserting %v claim(s) in report context: %v", len(claims), names)
 	}
 
 	log.Debug("Adding metadata to Attestation Report..")

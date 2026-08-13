@@ -405,7 +405,8 @@ func prepareEnroll(priv crypto.PrivateKey, p *KeyEnrollmentParams) (*x509.Certif
 	nonce := sha256.Sum256(pubKey)
 
 	// Fetch attestation report as part of client authentication
-	report, err := prover.Generate(nonce[:], nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)
+	report, err := prover.Generate(nonce[:], nil, nil, p.Metadata, p.Drivers, p.Serializer,
+		p.ArHashAlg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}

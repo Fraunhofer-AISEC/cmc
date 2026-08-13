@@ -63,7 +63,7 @@ func (a LibApi) generate(c *config) error {
 	a.cmc.UpdateOmsps()
 
 	// Generate attestation report
-	report, err := prover.Generate(nonce, nil, a.cmc.GetMetadata(), a.cmc.Drivers, c.serializer,
+	report, err := prover.Generate(nonce, nil, nil, a.cmc.GetMetadata(), a.cmc.Drivers, c.serializer,
 		a.cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to generate attestation report: %w", err)
