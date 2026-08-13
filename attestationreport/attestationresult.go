@@ -168,7 +168,7 @@ type SnpResult struct {
 	TcbCheck        TcbCheck     `json:"tcbCheck" cbor:"2,keyasint"`
 	PolicyCheck     PolicyCheck  `json:"policyCheck" cbor:"3,keyasint"`
 	ExtensionsCheck []Result     `json:"extensionsCheck" cbor:"4,keyasint"`
-	HostDataCheck   Result       `json:"hostDataCheck,omitempty" cbor:"5,keyasint,omitempty"`
+	HostDataCheck   Result       `json:"hostDataCheck" cbor:"5,keyasint"`
 }
 
 type VersionCheck struct {
