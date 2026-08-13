@@ -52,9 +52,9 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 		hex.EncodeToString(nonce[:]))
 
 	// Verify the attestation report
-	result := verifier.Verify(report, nonce[:],
+	result := verifier.VerifyBootstrap(report, nonce[:],
 		nil, verifier.PolicyEngineSelect_None, false,
-		cas, nil, "", "", false)
+		cas)
 
 	hostname, _ := internal.Fqdn()
 	result.Verifier = ar.Endpoint{Hostname: hostname}
