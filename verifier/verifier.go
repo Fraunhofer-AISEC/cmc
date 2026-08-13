@@ -188,6 +188,12 @@ func verifyInternal(
 	log.Tracef("Recalculated %v context hash %x for encoded context with user nonce %x and length %v",
 		alg.String(), evidenceNonce, report.Context.Nonce, len(report.GetEncodedContext()))
 
+	// Add the prover's claims. They need no separate checkas they are part of the hashed context
+	if len(report.Context.Claims) > 0 {
+		result.Claims = report.Context.Claims
+		log.Debugf("Report carries %v prover-asserted claim(s)", len(report.Context.Claims))
+	}
+
 	refVals, err := collectComponents(metaResults.ManifestResults, metaResults.ImageDescriptionResult.Descriptions)
 	if err != nil {
 		result.Fail(ar.RefValTypeNotSupported, err)

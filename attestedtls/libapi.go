@@ -62,7 +62,7 @@ func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]b
 	// Request updated OMSP responses if stored ones are too old
 	a.cmc.UpdateOmsps()
 
-	report, err := prover.Generate(chbindings, cached, a.cmc.GetMetadata(), a.cmc.Drivers,
+	report, err := prover.Generate(chbindings, nil, cached, a.cmc.GetMetadata(), a.cmc.Drivers,
 		cc.Serializer, a.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)

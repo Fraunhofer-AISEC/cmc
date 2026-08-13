@@ -103,7 +103,7 @@ func (s *GrpcServer) Attest(ctx context.Context, req *grpcapi.AttestationRequest
 	// Request updated OMSP responses if stored ones are too old
 	s.cmc.UpdateOmsps()
 
-	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.GetMetadata(), s.cmc.Drivers,
+	report, err := prover.Generate(req.Nonce, req.Claims, req.Cached, s.cmc.GetMetadata(), s.cmc.Drivers,
 		s.serializer, s.cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
