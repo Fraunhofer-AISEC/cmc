@@ -35,6 +35,7 @@ message AttestationRequest {
   string version = 1;
   bytes nonce = 2;
   repeated string cached = 3;
+  map<string, bytes> claims = 4;
 }
 
 message AttestationResponse {

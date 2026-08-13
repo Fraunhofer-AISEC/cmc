@@ -23,7 +23,7 @@ import (
 
 // The version of the API
 const (
-	apiVersion = "1.4.0"
+	apiVersion = "1.4.1"
 )
 
 func GetVersion() string {
@@ -56,9 +56,10 @@ const (
 )
 
 type AttestationRequest struct {
-	Version string   `json:"version" cbor:"0,keyasint"`
-	Nonce   []byte   `json:"nonce" cbor:"1,keyasint"`
-	Cached  []string `json:"cached,omitempty" cbor:"2,keyasint,omitempty"`
+	Version string            `json:"version" cbor:"0,keyasint"`
+	Nonce   []byte            `json:"nonce" cbor:"1,keyasint"`
+	Cached  []string          `json:"cached,omitempty" cbor:"2,keyasint,omitempty"`
+	Claims  map[string][]byte `json:"claims,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type AttestationResponse struct {
