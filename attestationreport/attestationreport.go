@@ -120,8 +120,11 @@ type Evidence struct {
 }
 
 // Context contains all data required to interpret the evidence. This comprises evidence
-// collateral, e.g., TPM event logs, metadata, e.g. manifests with reference hashes, as well as
-// CA certificates
+// collateral, e.g., TPM event logs, metadata, e.g. manifests with reference hashes, CA
+// certificates, the user nonce, as well as prover-asserted claims. The reason to have claims
+// alongside the nonce is that they can be stable and extractable: a verifier that performed the
+// remote attestation has proof that the attested peer's software stack chose the value.
+// The whole context is hashed into the hardware evidence nonce.
 type Context struct {
 	Type       string            `json:"type" cbor:"0,keyasint"`
 	Alg        string            `json:"alg" cbor:"1,keyasint"`                          // Hash algorithm for metadata digests and integrity
@@ -130,6 +133,7 @@ type Context struct {
 	Digests    []string          `json:"digests" cbor:"4,keyasint"`                      // Manifest Digests with hash alg "hash"
 	Metadata   map[string][]byte `json:"metadata,omitempty" cbor:"5,keyasint,omitempty"` // Metadata (not cached)
 	Certs      map[string][]byte `json:"certs,omitempty" cbor:"6,keyasint,omitempty"`    // DER encoded certs for verifying metadata (JWS: x5t/kid)
+	Claims     map[string][]byte `json:"claims,omitempty" cbor:"7,keyasint,omitempty"`   // Prover-asserted key/value claims
 }
 
 // Collateral contains the event logs and hardware trust anchor CA certificates required

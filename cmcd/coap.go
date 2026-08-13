@@ -99,8 +99,8 @@ func (s CoapServer) Attest(w mux.ResponseWriter, r *mux.Message) {
 	// Request updated OMSP responses if stored ones are too old
 	s.cmc.UpdateOmsps()
 
-	report, err := prover.Generate(req.Nonce, req.Cached, s.cmc.GetMetadata(), s.cmc.Drivers,
-		ser, s.cmc.HashAlg)
+	report, err := prover.Generate(req.Nonce, req.Claims, req.Cached, s.cmc.GetMetadata(),
+		s.cmc.Drivers, ser, s.cmc.HashAlg)
 	if err != nil {
 		sendCoapError(w, r, codes.InternalServerError,
 			"failed to generate attestation report: %v", err)
