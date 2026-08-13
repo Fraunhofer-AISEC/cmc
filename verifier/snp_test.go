@@ -37,10 +37,11 @@ func TestVerifySnp(t *testing.T) {
 		refvals        []ar.Component
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  ar.Status
-		want1 bool
+		name             string
+		args             args
+		want             ar.Status
+		want1            bool
+		wantHostDataGot  string // "" means skip the HostDataCheck.Got check
 	}{
 		{
 			name: "ValidAttestationReport",
@@ -70,8 +71,9 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want:            ar.StatusSuccess,
+			want1:           true,
+			wantHostDataGot: "0000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name: "Invalid Signature",
@@ -506,8 +508,9 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want:            ar.StatusSuccess,
+			want1:           true,
+			wantHostDataGot: "0000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name: "HostData Mismatch Policy",
@@ -533,8 +536,9 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want:            ar.StatusFail,
+			want1:           false,
+			wantHostDataGot: "0000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 	for _, tt := range tests {
@@ -547,6 +551,14 @@ func TestVerifySnp(t *testing.T) {
 			if got1 != tt.want1 {
 				t.Errorf("verifySnp() got1 = %v, want %v", got1, tt.want)
 			}
+			if tt.wantHostDataGot != "" {
+				if got.SnpResult == nil {
+					t.Error("verifySnp() SnpResult is nil, want non-nil")
+				} else if got.SnpResult.HostDataCheck.Got != tt.wantHostDataGot {
+					t.Errorf("verifySnp() SnpResult.HostDataCheck.Got = %q, want %q",
+						got.SnpResult.HostDataCheck.Got, tt.wantHostDataGot)
+				}
+			}
 		})
 	}
 }
@@ -557,29 +569,52 @@ func Test_verifySnpHostData(t *testing.T) {
 		expected []byte
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want1 bool
+		name         string
+		args         args
+		wantOk       bool
+		wantGot      string
+		wantExpected string
+		wantStatus   ar.Status
 	}{
 		{
-			name:  "Match",
-			args:  args{got: make([]byte, 32), expected: make([]byte, 32)},
-			want1: true,
+			name:         "No Policy",
+			args:         args{got: make([]byte, 32), expected: nil},
+			wantOk:       true,
+			wantGot:      "0000000000000000000000000000000000000000000000000000000000000000",
+			wantExpected: "",
+			wantStatus:   ar.StatusSuccess,
 		},
 		{
-			name: "Mismatch",
-			args: args{
-				got:      make([]byte, 32),
-				expected: validHostData,
-			},
-			want1: false,
+			name:         "Match",
+			args:         args{got: make([]byte, 32), expected: make([]byte, 32)},
+			wantOk:       true,
+			wantGot:      "0000000000000000000000000000000000000000000000000000000000000000",
+			wantExpected: "0000000000000000000000000000000000000000000000000000000000000000",
+			wantStatus:   ar.StatusSuccess,
+		},
+		{
+			name:         "Mismatch",
+			args:         args{got: make([]byte, 32), expected: validHostData},
+			wantOk:       false,
+			wantGot:      "0000000000000000000000000000000000000000000000000000000000000000",
+			wantExpected: "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+			wantStatus:   ar.StatusFail,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got1 := verifySnpHostData(tt.args.got, tt.args.expected)
-			if got1 != tt.want1 {
-				t.Errorf("verifySnpHostData() = %v, want %v", got1, tt.want1)
+			r, ok := verifySnpHostData(tt.args.got, tt.args.expected)
+			if ok != tt.wantOk {
+				t.Errorf("verifySnpHostData() ok = %v, want %v", ok, tt.wantOk)
+			}
+			if r.Got != tt.wantGot {
+				t.Errorf("verifySnpHostData() Got = %q, want %q", r.Got, tt.wantGot)
+			}
+			if r.Expected != tt.wantExpected {
+				t.Errorf("verifySnpHostData() Expected = %q, want %q", r.Expected, tt.wantExpected)
+			}
+			if r.Status != tt.wantStatus {
+				t.Errorf("verifySnpHostData() Status = %v, want %v", r.Status, tt.wantStatus)
 			}
 		})
 	}

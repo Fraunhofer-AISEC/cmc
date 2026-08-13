@@ -229,12 +229,9 @@ func VerifySnp(
 	if !ret {
 		ok = false
 	}
-	// Verify HostData if the policy specifies an expected value
-	if len(policy.HostData) > 0 {
-		result.SnpResult.HostDataCheck, ret = verifySnpHostData(s.HostData[:], policy.HostData)
-		if !ret {
-			ok = false
-		}
+	result.SnpResult.HostDataCheck, ret = verifySnpHostData(s.HostData[:], policy.HostData)
+	if !ret {
+		ok = false
 	}
 
 	result.Summary.Status = ar.StatusFromBool(ok)
@@ -243,16 +240,21 @@ func VerifySnp(
 }
 
 func verifySnpHostData(got []byte, expected []byte) (ar.Result, bool) {
-	r := ar.Result{}
+	r := ar.Result{
+		Got:    fmt.Sprintf("%x", got),
+		Status: ar.StatusSuccess,
+	}
+	if len(expected) == 0 {
+		log.Debug("SNP HostData: no policy constraint configured")
+		return r, true
+	}
+	r.Expected = fmt.Sprintf("%x", expected)
 	if !bytes.Equal(got, expected) {
 		log.Warnf("SNP HostData mismatch: expected %x, got %x", expected, got)
 		r.Status = ar.StatusFail
-		r.Expected = fmt.Sprintf("%x", expected)
-		r.Got = fmt.Sprintf("%x", got)
 		return r, false
 	}
 	log.Debug("Successfully verified SNP HostData")
-	r.Status = ar.StatusSuccess
 	return r, true
 }
 
