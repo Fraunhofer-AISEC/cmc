@@ -512,6 +512,7 @@ func TestVerify(t *testing.T) {
 				[]*x509.Certificate{certchain[len(certchain)-1]},
 				nil, "", "",
 				true,
+				"",
 			)
 			log.Info("Finished FUT")
 			if got.Summary.Status != tt.want {

@@ -51,10 +51,10 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	log.Debugf("Verifying attestation report with SKI as nonce: %v",
 		hex.EncodeToString(nonce[:]))
 
-	// Verify the attestation report
-	result := verifier.Verify(report, nonce[:],
+	// During enrollment, we never check
+	result := verifier.VerifyBootstrap(report, nonce[:],
 		nil, verifier.PolicyEngineSelect_None, false,
-		cas, nil, "", "", false)
+		cas)
 
 	hostname, _ := internal.Fqdn()
 	result.Verifier = ar.Endpoint{Hostname: hostname}
