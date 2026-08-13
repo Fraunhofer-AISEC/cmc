@@ -51,6 +51,7 @@ type Cmc struct {
 	PeerCache          *peercache.Cache
 	PolicyEngineSelect verifier.PolicyEngineSelect
 	PolicyOverwrite    bool
+	LocalRole          string
 	Drivers            []drv.Driver
 	HashAlg            crypto.Hash
 	KeyMgr             *keymgr.KeyMgr
@@ -204,6 +205,9 @@ func NewCmc(c *Config) (*Cmc, error) {
 	cmc.PolicyEngineSelect = sel
 	cmc.PolicyOverwrite = c.PolicyOverwrite
 
+	// Extract the local role for optional peer authorization from our own image description
+	cmc.LocalRole = deriveLocalRole(metadata)
+
 	// Load cached metadata from known peers
 	cmc.PeerCache, err = peercache.Load(c.PeerCache)
 	if err != nil {
@@ -211,6 +215,35 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	return cmc, nil
+}
+
+// deriveLocalRole extracts the local image description name from the loaded metadata. Returns ""
+// if no image description is present
+func deriveLocalRole(metadata map[string][]byte) string {
+	found := ""
+	for _, raw := range metadata {
+		s, err := ar.DetectSerialization(raw)
+		if err != nil {
+			continue
+		}
+		payload, err := s.GetPayload(raw)
+		if err != nil {
+			continue
+		}
+		var m ar.Metadata
+		if err := s.Unmarshal(payload, &m); err != nil {
+			continue
+		}
+		if m.Type != ar.TYPE_IMAGE_DESCRIPTION || m.Name == "" {
+			continue
+		}
+		if found != "" && found != m.Name {
+			log.Warnf("Multiple local image descriptions present (%q, %q); set localRole explicitly", found, m.Name)
+			return ""
+		}
+		found = m.Name
+	}
+	return found
 }
 
 func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvider, error) {

@@ -179,6 +179,7 @@ type Manifest struct {
 type ImageDescription struct {
 	Location     string                `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
 	Descriptions []ManifestDescription `json:"descriptions,omitempty" cbor:"21,keyasint,omitempty"`
+	AllowedPeers []string              `json:"peers,omitempty" cbor:"22,keyasint,omitempty"`
 }
 
 // ManifestDescription links the manifests into the ImageDescription

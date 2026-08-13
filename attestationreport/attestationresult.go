@@ -47,6 +47,7 @@ type AttestationResult struct {
 	CertLevel    int                 `json:"certLevel" cbor:"7,keyasint"`
 	Measurements []MeasurementResult `json:"measurements" cbor:"8,keyasint"`
 	Metadata     MetadataSummary     `json:"metadata" cbor:"9,keyasint"`
+	PeerAuth     Result              `json:"peerAuth,omitempty" cbor:"11,keyasint,omitempty"`
 }
 
 type Endpoint struct {
@@ -577,6 +578,8 @@ const (
 	ManifestRevoked
 	ManifestRevocationUnknown
 	ManifestOutdated
+	PeerNotAuthorized
+	LocalRoleUnknown
 )
 
 func (e ErrorCode) String() string {
@@ -759,6 +762,10 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (No revocation information for manifest available)", int(e))
 	case ManifestOutdated:
 		return fmt.Sprintf("%v (Manifest outdated)", int(e))
+	case PeerNotAuthorized:
+		return fmt.Sprintf("%v (Peer not authorized by local role)", int(e))
+	case LocalRoleUnknown:
+		return fmt.Sprintf("%v (Local role unknown, peer authorization skipped)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -1070,6 +1077,8 @@ func (r *AttestationResult) PrintErr() {
 	for _, s := range r.Metadata.ImageDescriptionResult.SignatureCheck {
 		s.PrintErr(TYPE_IMAGE_DESCRIPTION)
 	}
+
+	r.PeerAuth.PrintErr("Peer authorization check")
 
 	r.Metadata.CompatibilityResult.Summary.PrintErr("Metadata compatibility check")
 	for _, mr := range r.Metadata.CompatibilityResult.ManifestCompatibility {

@@ -42,6 +42,7 @@ const (
 	locationFlag     = "location"
 	descriptionsFlag = "descriptions"
 	addDescFlag      = "add-description"
+	allowedPeerFlag  = "allowed-peer"
 )
 
 var Command = &cli.Command{
@@ -83,6 +84,10 @@ var Command = &cli.Command{
 		&cli.StringFlag{
 			Name:  addDescFlag,
 			Usage: "path to a manifest description JSON file to add/replace in an existing image description",
+		},
+		&cli.StringSliceFlag{
+			Name:  allowedPeerFlag,
+			Usage: "authorized peer role (repeatable)",
 		},
 	),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -155,6 +160,11 @@ func buildImageDescription(cmd *cli.Command) (*ar.Metadata, error) {
 			return nil, err
 		}
 		m.Descriptions = addOrReplaceDescription(m.Descriptions, *desc)
+	}
+
+	if cmd.IsSet(allowedPeerFlag) {
+		allowedPeers := cmd.StringSlice(allowedPeerFlag)
+		m.AllowedPeers = append(m.AllowedPeers, allowedPeers...)
 	}
 
 	return m, nil
