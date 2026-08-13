@@ -19,7 +19,7 @@ import "fmt"
 
 // The version of the API
 const (
-	apiVersion = "1.4.0"
+	apiVersion = "1.4.1"
 )
 
 func GetVersion() string {
