@@ -56,15 +56,15 @@ type imaTemplate struct {
 	Data    []byte
 }
 
-// GetImaMeasurements returns all hashes extended by the IMA into the TPM
-// IMA PCR as read from the sysfs
-func GetImaMeasurements(file string) ([]ar.Component, error) {
+// GetImaMeasurements returns all hashes extended by the IMA as read from the sysfs, tagged with
+// the specified trust anchor
+func GetImaMeasurements(file, ta string) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	components, err := parseImaRuntimeDigests(data)
+	components, err := parseImaRuntimeDigests(data, ta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
@@ -74,9 +74,9 @@ func GetImaMeasurements(file string) ([]ar.Component, error) {
 
 // GetImaArtifacts wraps the retrieved IMA event entries into
 // an artifacts map
-func GetImaArtifacts(file string) (map[int]ar.Artifact, error) {
+func GetImaArtifacts(file, ta string) (map[int]ar.Artifact, error) {
 
-	events, err := GetImaMeasurements(file)
+	events, err := GetImaMeasurements(file, ta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ima measurements: %w", err)
 	}
@@ -103,7 +103,7 @@ func GetImaArtifacts(file string) (map[int]ar.Artifact, error) {
 	return artifacts, nil
 }
 
-func parseImaRuntimeDigests(data []byte) ([]ar.Component, error) {
+func parseImaRuntimeDigests(data []byte, ta string) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 
@@ -164,7 +164,7 @@ func parseImaRuntimeDigests(data []byte) ([]ar.Component, error) {
 		}
 
 		event := ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, int(header.Pcr)),
+			Type: ar.CycloneDxType(ta, int(header.Pcr)),
 			Name: filepath.Base(eventName),
 			Hashes: []ar.ReferenceHash{
 				{
@@ -175,7 +175,7 @@ func parseImaRuntimeDigests(data []byte) ([]ar.Component, error) {
 			Description: eventName, // Full path
 			Optional:    true,
 		}
-		event.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+		event.SetTrustAnchor(ta)
 		event.SetIndex(int(header.Pcr))
 
 		components = append(components, event)

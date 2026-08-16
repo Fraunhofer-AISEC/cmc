@@ -59,6 +59,7 @@ const (
 	TYPE_EVIDENCE_AZURE_SNP = "azure SNP Evidence"
 	TYPE_EVIDENCE_AZURE_TDX = "azure TDX Evidence"
 	TYPE_EVIDENCE_AZURE_TPM = "azure vTPM Evidence"
+	TYPE_EVIDENCE_SWIMA     = "SWIMA Evidence"
 
 	// Artifact type fields
 	TYPE_PCR_SUMMARY    = "PCR Summary"
@@ -88,12 +89,13 @@ const (
 	PROPERTY_INDEX        = "cmc.index"
 
 	// Trust anchor property values
-	TRUST_ANCHOR_TPM = "TPM"
-	TRUST_ANCHOR_TDX = "TDX"
-	TRUST_ANCHOR_SNP = "SNP"
-	TRUST_ANCHOR_SGX = "SGX"
-	TRUST_ANCHOR_IAS = "IAS"
-	TRUST_ANCHOR_SW  = "SW"
+	TRUST_ANCHOR_TPM   = "TPM"
+	TRUST_ANCHOR_TDX   = "TDX"
+	TRUST_ANCHOR_SNP   = "SNP"
+	TRUST_ANCHOR_SGX   = "SGX"
+	TRUST_ANCHOR_IAS   = "IAS"
+	TRUST_ANCHOR_SW    = "SW"
+	TRUST_ANCHOR_SWIMA = "SWIMA"
 )
 
 // AttestationReport represents the self-contained attestation report comprising evidences,
@@ -121,10 +123,8 @@ type Evidence struct {
 
 // Context contains all data required to interpret the evidence. This comprises evidence
 // collateral, e.g., TPM event logs, metadata, e.g. manifests with reference hashes, CA
-// certificates, the user nonce, as well as prover-asserted claims. The reason to have claims
-// alongside the nonce is that they can be stable and extractable: a verifier that performed the
-// remote attestation has proof that the attested peer's software stack chose the value.
-// The whole context is hashed into the hardware evidence nonce.
+// certificates, as well as optional prover-asserted claims. The context is hashed into the
+// hardware evidence nonce
 type Context struct {
 	Type       string            `json:"type" cbor:"0,keyasint"`
 	Alg        string            `json:"alg" cbor:"1,keyasint"`                          // Hash algorithm for metadata digests and integrity
@@ -587,6 +587,8 @@ func CycloneDxType(ta string, index int) string {
 	case TRUST_ANCHOR_SNP:
 		return TYPE_FIRMWARE
 	case TRUST_ANCHOR_SW:
+		return TYPE_APP
+	case TRUST_ANCHOR_SWIMA:
 		return TYPE_APP
 	default:
 		return TYPE_DATA
