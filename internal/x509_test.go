@@ -326,7 +326,7 @@ func TestCreateCert_Subject(t *testing.T) {
 }
 
 func TestCreateCert_RawSubjectTakesPrecedence(t *testing.T) {
-	// Build a CSR with a known subject so we have a real DER-encoded RawSubject.
+	// Build a CSR with a known subject to get a real DER-encoded RawSubject
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	csrTmpl := &x509.CertificateRequest{
 		Subject: pkix.Name{CommonName: "original", Organization: []string{"OrigOrg"}},
@@ -334,7 +334,7 @@ func TestCreateCert_RawSubjectTakesPrecedence(t *testing.T) {
 	der, _ := x509.CreateCertificateRequest(rand.Reader, csrTmpl, key)
 	src, _ := x509.ParseCertificateRequest(der)
 
-	// A different CSR provides the public key; src.RawSubject overrides its subject.
+	// A different CSR provides the public key, src.RawSubject overrides its subject
 	keyCsr := newTestCSR(t)
 	fields := CertFields{
 		RawSubject: src.RawSubject,
@@ -347,8 +347,8 @@ func TestCreateCert_RawSubjectTakesPrecedence(t *testing.T) {
 	if !bytes.Equal(tmpl.RawSubject, src.RawSubject) {
 		t.Errorf("RawSubject not preserved verbatim")
 	}
-	// Subject field in the template is irrelevant when RawSubject is set; the
-	// resulting parsed certificate will reflect the RawSubject bytes.
+	// The subject in the template is irrelevant if RawSubject is set, the parsed certificate
+	// reflects the RawSubject bytes
 }
 
 var (

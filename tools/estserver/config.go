@@ -224,7 +224,7 @@ var flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  certValidityFlag,
-		Usage: "lifetime of enrolled certs as a Go duration string (e.g. 4320h). default: 180 days",
+		Usage: "lifetime of enrolled certificates as a Go duration string, e.g. 4320h",
 	},
 }
 
