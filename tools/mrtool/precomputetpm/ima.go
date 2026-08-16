@@ -30,9 +30,11 @@ import (
 )
 
 // PerformImaPrecomputation walks the specified paths, hashes each regular file, and produces IMA
-// reference values tagged with the specified trust anchor
+// reference values tagged with the specified trust anchor. When execOnly is true, files without any
+// executable-mode bit are skipped, matching an IMA policy that only measures BPRM_CHECK /
+// MMAP_CHECK on MAY_EXEC (executables and libraries).
 func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []string, strip,
-	prepend string, imaTemplate string,
+	prepend string, imaTemplate string, execOnly bool,
 ) ([]*ar.Component, error) {
 
 	refvals := make([]*ar.Component, 0)
@@ -87,9 +89,14 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 				log.Debugf("error accessing %q: %v", path, err)
 				return nil
 			}
-			if info.Mode().IsRegular() {
-				fileCh <- path
+			if !info.Mode().IsRegular() {
+				return nil
 			}
+			if execOnly && info.Mode().Perm()&0o111 == 0 {
+				log.Tracef("skipping non-executable %q", path)
+				return nil
+			}
+			fileCh <- path
 			return nil
 		})
 		if err != nil {
