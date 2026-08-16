@@ -16,6 +16,7 @@
 package precomputetpm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -30,9 +31,9 @@ import (
 )
 
 // PerformImaPrecomputation walks the specified paths, hashes each regular file, and produces IMA
-// reference values tagged with the specified trust anchor. When execOnly is true, files without any
-// executable-mode bit are skipped, matching an IMA policy that only measures BPRM_CHECK /
-// MMAP_CHECK on MAY_EXEC (executables and libraries).
+// reference values tagged with the specified trust anchor. When execOnly is true, files that are
+// neither mode-executable nor ELF objects are skipped, matching an IMA policy that only measures
+// BPRM_CHECK / MMAP_CHECK on MAY_EXEC (executables and libraries).
 func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []string, strip,
 	prepend string, imaTemplate string, execOnly bool,
 ) ([]*ar.Component, error) {
@@ -84,7 +85,15 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 
 	// Walk all given paths
 	for _, root := range paths {
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		rootInfo, err := os.Stat(root)
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat path %q: %w", root, err)
+		}
+		if rootInfo.Mode().IsRegular() {
+			fileCh <- root
+			continue
+		}
+		err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				log.Debugf("error accessing %q: %v", path, err)
 				return nil
@@ -92,7 +101,7 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 			if !info.Mode().IsRegular() {
 				return nil
 			}
-			if execOnly && info.Mode().Perm()&0o111 == 0 {
+			if execOnly && !isMeasurable(path, info) {
 				log.Tracef("skipping non-executable %q", path)
 				return nil
 			}
@@ -110,6 +119,29 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 	collectWg.Wait()
 
 	return refvals, nil
+}
+
+// isMeasurable reports whether a file can end up in the IMA log of a policy that measures
+// BPRM_CHECK / MMAP_CHECK on MAY_EXEC.
+func isMeasurable(path string, info os.FileInfo) bool {
+
+	if info.Mode().Perm()&0o111 != 0 {
+		return true
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		log.Debugf("error opening %q: %v", path, err)
+		return false
+	}
+	defer f.Close()
+
+	var magic [4]byte
+	if _, err := io.ReadFull(f, magic[:]); err != nil {
+		return false
+	}
+
+	return bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'})
 }
 
 func precomputeImaTemplate(hash []byte, path string, template string) ([]byte, error) {
