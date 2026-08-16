@@ -306,6 +306,13 @@ Loop:
 			}
 			result.Measurements = append(result.Measurements, *r)
 
+		case ar.TYPE_EVIDENCE_SWIMA:
+			r, ok := VerifySwima(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SWIMA])
+			if !ok {
+				result.Fail(ar.VerifyMeasurement, errors.New("IMA measurement"))
+			}
+			result.Measurements = append(result.Measurements, *r)
+
 		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM:
 			var tdxPolicy *ar.TdxPolicy
 			var snpPolicy *ar.SnpPolicy
@@ -869,7 +876,8 @@ func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestD
 
 			switch ta {
 			case ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_SNP,
-				ar.TRUST_ANCHOR_SGX, ar.TRUST_ANCHOR_IAS, ar.TRUST_ANCHOR_SW:
+				ar.TRUST_ANCHOR_SGX, ar.TRUST_ANCHOR_IAS, ar.TRUST_ANCHOR_SW,
+				ar.TRUST_ANCHOR_SWIMA:
 			default:
 				return nil, fmt.Errorf("unsupported trust anchor %q", ta)
 			}

@@ -29,7 +29,8 @@ import (
 )
 
 type ParseImaPcrConf struct {
-	Eventlog string
+	Eventlog    string
+	TrustAnchor string
 }
 
 const (
@@ -37,7 +38,8 @@ const (
 )
 
 const (
-	imaEventlogFlag = "eventlog"
+	imaEventlogFlag    = "eventlog"
+	imaTrustAnchorFlag = "trust-anchor"
 )
 
 var (
@@ -52,6 +54,11 @@ var Command = &cli.Command{
 			Name:  imaEventlogFlag,
 			Usage: "ima eventlog input file",
 			Value: DEFAULT_BINARY_RUNTIME_MEASUREMENTS,
+		},
+		&cli.StringFlag{
+			Name:  imaTrustAnchorFlag,
+			Usage: "trust anchor tag for the emitted reference values (TPM or IMA)",
+			Value: ar.TRUST_ANCHOR_TPM,
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -82,7 +89,7 @@ func run(cmd *cli.Command) error {
 
 	log.Infof("Parsing IMA TPM PCR eventlog %q...", pcrConf.Eventlog)
 
-	artifacts, err := ima.GetImaArtifacts(pcrConf.Eventlog)
+	artifacts, err := ima.GetImaArtifacts(pcrConf.Eventlog, pcrConf.TrustAnchor)
 	if err != nil {
 		return fmt.Errorf("failed to parse ima runtime digestes: %w", err)
 	}
@@ -110,7 +117,8 @@ func run(cmd *cli.Command) error {
 
 func getConfig(cmd *cli.Command) (*ParseImaPcrConf, error) {
 	c := &ParseImaPcrConf{
-		Eventlog: cmd.String(imaEventlogFlag),
+		Eventlog:    cmd.String(imaEventlogFlag),
+		TrustAnchor: cmd.String(imaTrustAnchorFlag),
 	}
 	return c, nil
 }
