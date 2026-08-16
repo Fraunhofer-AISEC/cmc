@@ -394,8 +394,8 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 }
 
 // enrollCert generates a new certificate from a CSR signed by the CA. The naming policy determines
-// the certificate fields. The `result` is the attestation result (can be nil for enrollment paths t
-// hat skip attestation). A `validity` of zero uses the default.
+// the certificate fields. The attestation result can be nil for enrollment paths without
+// attestation, a validity of zero uses the default
 func enrollCert(csr *x509.CertificateRequest, key crypto.PrivateKey, parent *x509.Certificate,
 	policy NamingPolicy, result *ar.AttestationResult, validity time.Duration,
 ) (*x509.Certificate, error) {

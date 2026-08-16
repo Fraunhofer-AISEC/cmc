@@ -231,9 +231,9 @@ func CreateCertPool(roots []*x509.Certificate, allowSystemCerts bool) (*x509.Cer
 	return rootpool, nil
 }
 
-// verifyCertChain tries to verify the certificate chain certs with leaf
-// certificate first up to one of the root certificates in cas.
-// ekus specifies the extended key usages, pass x509.ExtKeyUsageAny to skip EKU enforcement.
+// verifyCertChain tries to verify the certificate chain certs with leaf certificate first up to
+// one of the root certificates in cas. ekus specifies the extended key usages to be enforced,
+// pass x509.ExtKeyUsageAny to skip the enforcement
 func VerifyCertChain(certs []*x509.Certificate, cas []*x509.Certificate, ekus []x509.ExtKeyUsage) ([][]*x509.Certificate, error) {
 
 	if len(certs) == 0 {
@@ -331,7 +331,7 @@ func CreateCsr(priv crypto.PrivateKey, cn string, dns, ips []string) (*x509.Cert
 }
 
 // CertFields holds the naming and lifetime fields the CA will set. RawSubject takes precedence
-// over Subject when non-nil
+// over Subject if non-nil
 type CertFields struct {
 	RawSubject  []byte
 	Subject     pkix.Name
@@ -341,11 +341,11 @@ type CertFields struct {
 	ValidFor    time.Duration
 }
 
-// DefaultCertValidity is the lifetime used when CertFields.ValidFor is zero.
+// DefaultCertValidity is the lifetime used if CertFields.ValidFor is zero
 const DefaultCertValidity = 24 * 180 * time.Hour
 
-// PrepareCert builds an x509.Certificate template from the CSR's public key
-// and the supplied fields, but does not yet sign.
+// PrepareCert builds an x509.Certificate template from the CSR's public key and the supplied
+// fields without signing it
 func PrepareCert(csr *x509.CertificateRequest, fields CertFields) (*x509.Certificate, error) {
 
 	// Check that CSR is self-signed

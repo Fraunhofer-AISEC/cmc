@@ -23,14 +23,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-// NamingPolicy determines the subject and SANs the CA will put into a certificate.
-// result can be null for enrollment paths that do not perform attestation.
+// NamingPolicy determines the subject and SANs the CA will put into a certificate. The result can
+// be nil for enrollment paths without attestation
 type NamingPolicy interface {
 	Assign(csr *x509.CertificateRequest, validity time.Duration, result *ar.AttestationResult) (internal.CertFields, error)
 }
 
-// CsrPassthrough copies subject and SANs verbatim from the CSR. This is the
-// default policy and preserves the behaviour prior to U2.
+// CsrPassthrough copies subject and SANs verbatim from the CSR. This is the default policy
 type CsrPassthrough struct{}
 
 func (CsrPassthrough) Assign(csr *x509.CertificateRequest, validity time.Duration, _ *ar.AttestationResult,

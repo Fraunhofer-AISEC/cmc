@@ -63,8 +63,7 @@ func TestCsrPassthrough_CopiesAllFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// RawSubject must be byte-identical to the CSR's to preserve the original
-	// DER encoding (string types, OID ordering, non-standard attributes).
+	// RawSubject must be byte-identical to the CSR's to preserve the original DER encoding
 	if !bytes.Equal(fields.RawSubject, csr.RawSubject) {
 		t.Errorf("RawSubject mismatch: passthrough must copy DER bytes verbatim")
 	}
@@ -92,7 +91,7 @@ func TestCsrPassthrough_EmptyCSR(t *testing.T) {
 
 func TestCsrPassthrough_IgnoresAttestationResult(t *testing.T) {
 	csr := makeCSR(t, pkix.Name{CommonName: "node"}, nil, nil, nil)
-	// nil result must not cause a panic
+	// A nil result must not cause a panic
 	fields, err := CsrPassthrough{}.Assign(csr, internal.DefaultCertValidity, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

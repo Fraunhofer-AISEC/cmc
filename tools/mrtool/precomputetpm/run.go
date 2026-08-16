@@ -141,20 +141,20 @@ func run(cmd *cli.Command) error {
 	}
 
 	if tpmConf.BuildrootManifest != "" {
-		manifest, err := parseBuildrootManifest(tpmConf.BuildrootManifest)
+		manifest, err := ParseBuildrootManifest(tpmConf.BuildrootManifest)
 		if err != nil {
 			return fmt.Errorf("failed to parse buildroot manifest: %w", err)
 		}
 
 		var pathToPackage map[string]string
 		if tpmConf.PackageFileList != "" {
-			pathToPackage, err = parsePackageFileList(tpmConf.PackageFileList)
+			pathToPackage, err = ParsePackageFileList(tpmConf.PackageFileList)
 			if err != nil {
 				return fmt.Errorf("failed to parse package file list: %w", err)
 			}
 		}
 
-		augmentRefvals(refvals, manifest, pathToPackage)
+		AugmentRefvals(refvals, manifest, pathToPackage)
 	}
 
 	// Write eventlog to stdout if requested
@@ -375,14 +375,14 @@ func precompute(pcrNums []int, tpmConf *Config) ([]*ar.Component, []*ar.Componen
 	return pcrs, components, nil
 }
 
-type manifestEntry struct {
+type ManifestEntry struct {
 	Name          string
 	Version       string
 	SourceArchive string
 	SourceSite    string
 }
 
-func parseBuildrootManifest(path string) (map[string]*manifestEntry, error) {
+func ParseBuildrootManifest(path string) (map[string]*ManifestEntry, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open manifest: %w", err)
@@ -395,7 +395,7 @@ func parseBuildrootManifest(path string) (map[string]*manifestEntry, error) {
 		return nil, fmt.Errorf("failed to read manifest CSV: %w", err)
 	}
 
-	entries := make(map[string]*manifestEntry)
+	entries := make(map[string]*ManifestEntry)
 	for i, record := range records {
 		if i == 0 {
 			continue
@@ -403,7 +403,7 @@ func parseBuildrootManifest(path string) (map[string]*manifestEntry, error) {
 		if len(record) < 6 {
 			continue
 		}
-		entries[record[0]] = &manifestEntry{
+		entries[record[0]] = &ManifestEntry{
 			Name:          record[0],
 			Version:       record[1],
 			SourceArchive: record[4],
@@ -414,7 +414,7 @@ func parseBuildrootManifest(path string) (map[string]*manifestEntry, error) {
 	return entries, nil
 }
 
-func parsePackageFileList(path string) (map[string]string, error) {
+func ParsePackageFileList(path string) (map[string]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open package file list: %w", err)
@@ -441,7 +441,7 @@ func parsePackageFileList(path string) (map[string]string, error) {
 	return pathToPackage, nil
 }
 
-func augmentRefvals(refvals []*ar.Component, manifest map[string]*manifestEntry, pathToPackage map[string]string) {
+func AugmentRefvals(refvals []*ar.Component, manifest map[string]*ManifestEntry, pathToPackage map[string]string) {
 	for _, rv := range refvals {
 		pkgName := rv.Name
 		if pathToPackage != nil {

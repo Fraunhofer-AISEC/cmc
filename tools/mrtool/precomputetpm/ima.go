@@ -29,7 +29,11 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, strip, prepend string, imaTemplate string) ([]*ar.Component, error) {
+// PerformImaPrecomputation walks the specified paths, hashes each regular file, and produces IMA
+// reference values tagged with the specified trust anchor
+func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []string, strip,
+	prepend string, imaTemplate string,
+) ([]*ar.Component, error) {
 
 	refvals := make([]*ar.Component, 0)
 	fileCh := make(chan string, 100)
@@ -38,7 +42,7 @@ func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, str
 	if bootAggregate != nil {
 		log.Debugf("Precomputing boot aggregate...")
 
-		refval, err := precomputeImaBootAggregate(bootAggregate, imaTemplate, pcr, false)
+		refval, err := precomputeImaBootAggregate(ta, bootAggregate, imaTemplate, pcr, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to precompute boot_aggregate: %w", err)
 		}
@@ -56,7 +60,7 @@ func performImaPrecomputation(pcr int, bootAggregate []byte, paths []string, str
 		go func() {
 			defer wg.Done()
 			for path := range fileCh {
-				refval, err := precomputeImaEntry(path, strip, prepend, imaTemplate, pcr, true)
+				refval, err := precomputeImaEntry(ta, path, strip, prepend, imaTemplate, pcr, true)
 				if err != nil {
 					log.Errorf("error hashing %q: %v", path, err)
 					continue
@@ -130,7 +134,8 @@ func precomputeImaTemplate(hash []byte, path string, template string) ([]byte, e
 	return th[:], nil
 }
 
-func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional bool) (*ar.Component, error) {
+func precomputeImaBootAggregate(ta string, hash []byte, template string, pcr int, optional bool,
+) (*ar.Component, error) {
 
 	tmpl, err := precomputeImaTemplate(hash, "boot_aggregate", template)
 	if err != nil {
@@ -138,14 +143,15 @@ func precomputeImaBootAggregate(hash []byte, template string, pcr int, optional 
 	}
 
 	// Create reference value
-	r := newTPMComponent(pcr, "boot_aggregate",
+	r := newComponent(ta, pcr, "boot_aggregate",
 		[]ar.ReferenceHash{{Alg: "SHA-256", Content: tmpl}}, "")
 	r.Optional = optional
 
 	return r, nil
 }
 
-func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional bool) (*ar.Component, error) {
+func precomputeImaEntry(ta, path, strip, prepend, template string, pcr int, optional bool,
+) (*ar.Component, error) {
 
 	fileHash, err := hashFile(path)
 	if err != nil {
@@ -160,7 +166,7 @@ func precomputeImaEntry(path, strip, prepend, template string, pcr int, optional
 	}
 
 	// Create reference value
-	r := newTPMComponent(pcr, filepath.Base(hashedPath),
+	r := newComponent(ta, pcr, filepath.Base(hashedPath),
 		[]ar.ReferenceHash{{Alg: "SHA-256", Content: tmpl}}, hashedPath)
 	r.Optional = optional
 
