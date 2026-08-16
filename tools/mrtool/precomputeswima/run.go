@@ -116,10 +116,14 @@ func run(cmd *cli.Command) error {
 
 	log.Infof("Precomputing SWIMA reference values for %v path(s)...", len(cfg.ImaPaths))
 
+	// On a TPM-less system Linux IMA still records boot_aggregate as the first log entry, with an
+	// all-zero hash (no PCRs to aggregate).
+	bootAggregate := make([]byte, 32)
+
 	refvals, err := precomputetpm.PerformImaPrecomputation(
 		ar.TRUST_ANCHOR_SWIMA,
 		cfg.Pcr,
-		nil, // no boot aggregate: standalone SWIMA has no TPM PCR to seed
+		bootAggregate,
 		cfg.ImaPaths,
 		cfg.ImaStrip,
 		cfg.ImaPrepend,
