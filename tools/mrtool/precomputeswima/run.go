@@ -38,6 +38,7 @@ type Config struct {
 	ImaStrip          string
 	ImaPrepend        string
 	ImaTemplate       string
+	ImaExecOnly       bool
 	Pcr               int
 	BuildrootManifest string
 	PackageFileList   string
@@ -48,6 +49,7 @@ const (
 	imaStripFlag          = "ima-strip"
 	imaPrependFlag        = "ima-prepend"
 	imaTemplateFlag       = "ima-template"
+	imaExecOnlyFlag       = "ima-exec-only"
 	pcrFlag               = "pcr"
 	buildrootManifestFlag = "buildroot-manifest"
 	packageFileListFlag   = "package-file-list"
@@ -55,8 +57,9 @@ const (
 
 var flags = []cli.Flag{
 	&cli.StringFlag{
-		Name:  imaPathFlag,
-		Usage: "comma-separated paths or single files (binaries or config files) to create IMA reference values for",
+		Name: imaPathFlag,
+		Usage: "comma-separated paths or single files (binaries or config files) to create IMA " +
+			"reference values for",
 	},
 	&cli.StringFlag{
 		Name:  imaStripFlag,
@@ -71,18 +74,26 @@ var flags = []cli.Flag{
 		Usage: "IMA template name (ima-ng or ima-sig)",
 		Value: "ima-sig",
 	},
+	&cli.BoolFlag{
+		Name: imaExecOnlyFlag,
+		Usage: "Skip files without any executable-mode bit. This matches an IMA policy that " +
+			"only measures BPRM_CHECK/MMAP_CHECK on MAY_EXEC (executables and libraries)",
+	},
 	&cli.IntFlag{
-		Name:  pcrFlag,
-		Usage: "PCR index tag emitted on the reference values (default 10 to match the Linux IMA convention)",
+		Name: pcrFlag,
+		Usage: "PCR index tag emitted on the reference values (default 10 to match the Linux " +
+			"IMA convention)",
 		Value: 10,
 	},
 	&cli.StringFlag{
-		Name:  buildrootManifestFlag,
-		Usage: "Path to a buildroot manifest CSV file to augment reference values with package URLs and versions",
+		Name: buildrootManifestFlag,
+		Usage: "Path to a buildroot manifest CSV file to augment reference values with package " +
+			"URLs and versions",
 	},
 	&cli.StringFlag{
-		Name:  packageFileListFlag,
-		Usage: "Path to a buildroot packages-file-list.txt for mapping file names to package names (requires --buildroot-manifest)",
+		Name: packageFileListFlag,
+		Usage: "Path to a buildroot packages-file-list.txt for mapping file names to package " +
+			"names (requires --buildroot-manifest)",
 	},
 }
 
@@ -128,6 +139,7 @@ func run(cmd *cli.Command) error {
 		cfg.ImaStrip,
 		cfg.ImaPrepend,
 		cfg.ImaTemplate,
+		cfg.ImaExecOnly,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to precompute IMA refvals: %w", err)
@@ -163,6 +175,7 @@ func run(cmd *cli.Command) error {
 func getConfig(cmd *cli.Command) (*Config, error) {
 	c := &Config{
 		ImaTemplate: cmd.String(imaTemplateFlag),
+		ImaExecOnly: cmd.Bool(imaExecOnlyFlag),
 		Pcr:         int(cmd.Int(pcrFlag)),
 	}
 	if cmd.IsSet(imaPathFlag) {

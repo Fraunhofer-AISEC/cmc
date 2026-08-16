@@ -45,6 +45,7 @@ type Config struct {
 	ImaStrip          string
 	ImaPrepend        string
 	ImaTemplate       string
+	ImaExecOnly       bool
 	BootAggregate     []byte
 	PrintAggregate    bool
 	BuildrootManifest string
@@ -59,6 +60,7 @@ const (
 	imaStripFlag          = "ima-strip"
 	imaPrependFlag        = "ima-prepend"
 	imaTemplateFlag       = "ima-template"
+	imaExecOnlyFlag       = "ima-exec-only"
 	bootAggregateFlag     = "boot-aggregate"
 	printAggregateFlag    = "print-aggregate"
 	mokListsFlag          = "moklists"
@@ -69,10 +71,12 @@ const (
 var flags = []cli.Flag{
 	&cli.StringFlag{Name: systemUuidFlag, Usage: "Path to GRUB command file for PCR8"},
 	&cli.StringFlag{Name: grubcmdsFlag, Usage: "Path to GRUB command file for PCR8"},
-	&cli.StringFlag{Name: pathFlag, Usage: "Comma-separated list of folders/files to be extended into PCR9"},
+	&cli.StringFlag{Name: pathFlag, Usage: "Comma-separated list of folders/files to be extended " +
+		"into PCR9"},
 	&cli.StringFlag{
-		Name:  imaPathFlag,
-		Usage: "comma-separated paths or single files (binaries or config files) to create ima reference values for to be measured into PCR10",
+		Name: imaPathFlag,
+		Usage: "comma-separated paths or single files (binaries or config files) to create ima " +
+			"reference values for to be measured into PCR10",
 	},
 	&cli.StringFlag{
 		Name:  imaStripFlag,
@@ -87,23 +91,31 @@ var flags = []cli.Flag{
 		Usage: "IMA template name (ima-ng or ima-sig)",
 		Value: "ima-sig",
 	},
+	&cli.BoolFlag{
+		Name: imaExecOnlyFlag,
+		Usage: "Skip files without any executable-mode bit. This matches an IMA policy that " +
+			"only measures BPRM_CHECK/MMAP_CHECK on MAY_EXEC (executables and libraries)",
+	},
 	&cli.StringFlag{
-		Name:  bootAggregateFlag,
-		Usage: "Boot aggregate (PCRs 0-9) passed as a hex-string to be included as a reference value in IMA PCR10",
+		Name: bootAggregateFlag,
+		Usage: "Boot aggregate (PCRs 0-9) passed as a hex-string to be included as a reference " +
+			"value in IMA PCR10",
 	},
 	&cli.BoolFlag{
 		Name:  printAggregateFlag,
 		Usage: "Print the aggregated PCR value over the selected PCRs",
 	},
-	&cli.StringFlag{Name: mokListsFlag, Usage: "Comma-separated list of UEFI MokList variable data files as written to " +
-		"/sys/firmware/efi/efivars to be extended into PCR14"},
+	&cli.StringFlag{Name: mokListsFlag, Usage: "Comma-separated list of UEFI MokList variable " +
+		"data files as written to /sys/firmware/efi/efivars to be extended into PCR14"},
 	&cli.StringFlag{
-		Name:  buildrootManifestFlag,
-		Usage: "Path to a buildroot manifest CSV file to augment reference values with package URLs and versions",
+		Name: buildrootManifestFlag,
+		Usage: "Path to a buildroot manifest CSV file to augment reference values with package " +
+			"URLs and versions",
 	},
 	&cli.StringFlag{
-		Name:  packageFileListFlag,
-		Usage: "Path to a buildroot packages-file-list.txt for mapping file names to package names (requires --buildroot-manifest)",
+		Name: packageFileListFlag,
+		Usage: "Path to a buildroot packages-file-list.txt for mapping file names to package " +
+			"names (requires --buildroot-manifest)",
 	},
 }
 
@@ -228,6 +240,7 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	}
 
 	c.ImaTemplate = cmd.String(imaTemplateFlag)
+	c.ImaExecOnly = cmd.Bool(imaExecOnlyFlag)
 
 	if cmd.IsSet(bootAggregateFlag) {
 		b, err := hex.DecodeString(cmd.String(bootAggregateFlag))
@@ -282,6 +295,7 @@ func (c *Config) print() {
 	}
 
 	log.Debugf("\tima-template  : %q", c.ImaTemplate)
+	log.Debugf("\tima-exec-only : %v", c.ImaExecOnly)
 	if len(c.ImaPaths) > 0 {
 		log.Debugf("\tIMA Paths     :")
 		for _, path := range c.ImaPaths {
