@@ -202,6 +202,14 @@ func (a LibApi) createKey(cc *CmcConfig) (string, error) {
 		return "", errors.New("internal error: cmc is nil")
 	}
 
+	if a.cmc == nil {
+		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		if err != nil {
+			return "", fmt.Errorf("failed to initialize CMC: %v", err)
+		}
+		a.cmc = cmc
+	}
+
 	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  cc.KeyConfig,
 		Metadata:   a.cmc.GetMetadata(),
