@@ -363,13 +363,18 @@ func (c *Client) finalizeAndDownload(csr *x509.CertificateRequest, order *acmeOr
 	return cert, nil
 }
 
-func (c *Client) keyAuthorizationNonce(token string) ([]byte, error) {
+func (c *Client) keyAuthorizationCSRNonce(token string, csr *x509.CertificateRequest) ([]byte, error) {
 	jwk := jose.JSONWebKey{Key: c.key.Public(), Algorithm: string(jose.ES256)}
 	thumbprint, err := jwk.Thumbprint(crypto.SHA256)
 	if err != nil {
 		return nil, fmt.Errorf("computing JWK thumbprint: %w", err)
 	}
-	keyAuth := token + "." + base64.RawURLEncoding.EncodeToString(thumbprint)
+	pubKeyDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling CSR public key: %w", err)
+	}
+	pubKeyHash := sha256.Sum256(pubKeyDER)
+	keyAuth := token + "." + base64.RawURLEncoding.EncodeToString(thumbprint) + "." + base64.RawURLEncoding.EncodeToString(pubKeyHash[:])
 	hash := sha256.Sum256([]byte(keyAuth))
 	return hash[:], nil
 }
@@ -438,7 +443,7 @@ func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(
 		if ch.Type != "software-attest-01" {
 			return nil, nil
 		}
-		keyAuth, err := c.keyAuthorizationNonce(ch.Token)
+		keyAuth, err := c.keyAuthorizationCSRNonce(ch.Token, csr)
 		if err != nil {
 			return nil, fmt.Errorf("computing key authorization: %w", err)
 		}
@@ -448,6 +453,7 @@ func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(
 		}
 		return map[string]any{
 			"report": base64.RawURLEncoding.EncodeToString(report),
+			"csr":    base64.RawURLEncoding.EncodeToString(csr.Raw),
 		}, nil
 	}, nonce, dir, accountURL)
 	if err != nil {
