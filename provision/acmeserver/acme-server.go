@@ -213,7 +213,7 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
 	respondWithJson(status, resp, result)
 }
-func verifyAttestationReport(report []byte, nonce []byte, cas []*x509.Certificate) error {
+func verifyAttestationReport(report []byte, nonce []byte, csrPubKey any, cas []*x509.Certificate) error {
 	if len(report) == 0 {
 		return fmt.Errorf("empty attestation report")
 	}
@@ -705,8 +705,9 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		case "software-attest-01":
 			var payload struct {
 				Report string `json:"report"`
+				CSR    string `json:"csr"`
 			}
-			if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.Report == "" {
+			if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.Report == "" || payload.CSR == "" {
 				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed attestation challenge payload")
 				return
 			}
@@ -715,15 +716,35 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed attestation report encoding")
 				return
 			}
-			nonce, err := account.TokenAccountNonce(challenge.Token)
+			csrDER, err := base64.RawURLEncoding.DecodeString(payload.CSR)
+			if err != nil {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR encoding in attestation challenge")
+				return
+			}
+			challengeCSR, err := x509.ParseCertificateRequest(csrDER)
+			if err != nil {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR in attestation challenge")
+				return
+			}
+			if err := challengeCSR.CheckSignature(); err != nil {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid CSR signature in attestation challenge")
+				return
+			}
+			pubKeyDER, err := x509.MarshalPKIXPublicKey(challengeCSR.PublicKey)
+			if err != nil {
+				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to marshal CSR public key")
+				return
+			}
+			nonce, err := account.TokenAccountCSRNonce(challenge.Token, pubKeyDER)
 			if err != nil {
 				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to compute key authorization")
 				return
 			}
-			if err := verifyAttestationReport(report, nonce, state.MetadataCas); err != nil {
+			if err := verifyAttestationReport(report, nonce, challengeCSR.PublicKey, state.MetadataCas); err != nil {
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "attestation verification failed")
 				return
 			}
+			order.AttestedKey = pubKeyDER
 			challenge.Status = AuthStatusValid
 			challenge.Validated = time.Now().Format(time.RFC3339Nano)
 
@@ -842,6 +863,18 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 	if !slices.Equal(orderDNS, csrDNS) {
 		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "CSR identifiers do not match order identifiers")
 		return
+	}
+
+	if order.AttestedKey != nil {
+		csrPubKeyDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+		if err != nil {
+			acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to marshal CSR public key")
+			return
+		}
+		if !bytes.Equal(csrPubKeyDER, order.AttestedKey) {
+			acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "CSR public key does not match attested key")
+			return
+		}
 	}
 
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))

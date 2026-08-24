@@ -150,6 +150,7 @@ type AcmeOrder struct {
 	ExpiryTime       time.Time
 	Authorizations   []AcmeAuthorization
 	Certificate      []byte
+	AttestedKey      []byte
 }
 
 func (o *AcmeOrder) UpdateOrder() {
@@ -258,12 +259,13 @@ func (a *AcmeAccount) OrderIDs() []string {
 	}
 	return ids
 }
-func (a *AcmeAccount) TokenAccountNonce(token string) ([]byte, error) {
+func (a *AcmeAccount) TokenAccountCSRNonce(token string, csrPubKeyDER []byte) ([]byte, error) {
 	thumbprint, err := RawKeyThumbprint(a.Jwk)
 	if err != nil {
 		return nil, fmt.Errorf("computing raw jwk thumbprint: %w", err)
 	}
-	keyAuth := token + "." + base64.RawURLEncoding.EncodeToString(thumbprint)
+	pubKeyHash := sha256.Sum256(csrPubKeyDER)
+	keyAuth := token + "." + base64.RawURLEncoding.EncodeToString(thumbprint) + "." + base64.RawURLEncoding.EncodeToString(pubKeyHash[:])
 	hash := sha256.Sum256([]byte(keyAuth))
 	return hash[:], nil
 }
