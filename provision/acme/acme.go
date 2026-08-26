@@ -418,7 +418,7 @@ func (c *Client) TpmCertifyEnroll(
 	csr *x509.CertificateRequest,
 	ikParams attest.CertificationParameters,
 	akPublic []byte,
-	report []byte,
+	generateReport func(nonce []byte) ([]byte, error),
 ) (*x509.Certificate, error) {
 	return nil, fmt.Errorf("ACME provisioner: TpmCertifyEnroll not yet implemented")
 }
