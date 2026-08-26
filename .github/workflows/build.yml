@@ -33,7 +33,7 @@ jobs:
           pushd tools/estserver
           go build -ldflags="-s -w" -trimpath
           popd
-          pushd provision/acmeserver
+          pushd tools/acmeserver
           go build -ldflags="-s -w" -trimpath
           popd
           pushd tools/cmcbackend
@@ -88,7 +88,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: acmeserver
-          path: provision/acmeserver/acmeserver
+          path: tools/acmeserver/acmeserver
       - name: "Upload metatool"
         uses: actions/upload-artifact@v7
         with:
