@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/asn1"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/google/go-attestation/attest"
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -260,6 +262,54 @@ func VerifyIk(ikParams attest.CertificationParameters, akPubRaw []byte) error {
 	}
 	log.Debug("Successfully verified IK with AK")
 
+	return nil
+}
+
+// VerifyAkBinding verifies that the AK public area that certified an IK (see
+// VerifyIk) belongs to the AK that signed the TPM quote of the verified
+// attestation report. Without this binding, IK certification and report
+// verification are unconnected: a client could present an IK certified by an
+// arbitrary AK together with a genuine report signed by a different AK.
+func VerifyAkBinding(result *ar.AttestationResult, akPubRaw []byte) error {
+	akPub, err := tpm2.DecodePublic(akPubRaw)
+	if err != nil {
+		return fmt.Errorf("decode public failed: %w", err)
+	}
+	akKey, err := akPub.Key()
+	if err != nil {
+		return fmt.Errorf("failed to extract AK public: %w", err)
+	}
+	akPkix, err := x509.MarshalPKIXPublicKey(akKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal AK public key: %w", err)
+	}
+
+	foundTpmMeasurement := false
+	for _, m := range result.Measurements {
+		if m.Type != "TPM Result" {
+			continue
+		}
+		foundTpmMeasurement = true
+		if len(m.Signature.Certs) == 0 {
+			return fmt.Errorf("TPM measurement contains no certificate chains")
+		}
+		// The leaf of each verified chain is the AK cert that signed the quote
+		for _, chain := range m.Signature.Certs {
+			if len(chain) == 0 {
+				return fmt.Errorf("TPM measurement contains an empty certificate chain")
+			}
+			block, _ := pem.Decode([]byte(chain[0].PublicKey))
+			if block == nil {
+				return fmt.Errorf("failed to decode quote signer public key")
+			}
+			if !bytes.Equal(block.Bytes, akPkix) {
+				return fmt.Errorf("TPM quote was not signed by the AK that certified the IK")
+			}
+		}
+	}
+	if !foundTpmMeasurement {
+		return fmt.Errorf("attestation report contains no TPM measurement to bind the AK to")
+	}
 	return nil
 }
 

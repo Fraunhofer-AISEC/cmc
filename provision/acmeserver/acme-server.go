@@ -236,9 +236,9 @@ func decodeChallengeCsr(csrB64 string) (*x509.CertificateRequest, []byte, error)
 	return csr, pubKeyDER, nil
 }
 
-func verifyAttestationReport(report []byte, nonce []byte, csrPubKey any, cas []*x509.Certificate) error {
+func verifyAttestationReport(report []byte, nonce []byte, cas []*x509.Certificate) (*attestationreport.AttestationResult, error) {
 	if len(report) == 0 {
-		return fmt.Errorf("empty attestation report")
+		return nil, fmt.Errorf("empty attestation report")
 	}
 
 	result := verifier.Verify(report, nonce, nil,
@@ -246,9 +246,9 @@ func verifyAttestationReport(report []byte, nonce []byte, csrPubKey any, cas []*
 		cas, nil, "", "", false)
 
 	if result.Summary.Status != attestationreport.StatusSuccess && result.Summary.Status != attestationreport.StatusWarn {
-		return fmt.Errorf("attestation verification failed: %s", result.Summary.Status)
+		return nil, fmt.Errorf("attestation verification failed: %s", result.Summary.Status)
 	}
-	return nil
+	return result, nil
 }
 
 func handleNotFound(url *url.URL, resp http.ResponseWriter) {
@@ -744,7 +744,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed attestation report encoding")
 				return
 			}
-			challengeCSR, pubKeyDER, err := decodeChallengeCsr(payload.CSR)
+			_, pubKeyDER, err := decodeChallengeCsr(payload.CSR)
 			if err != nil {
 				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, fmt.Sprintf("invalid CSR in attestation challenge: %v", err))
 				return
@@ -754,7 +754,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to compute key authorization")
 				return
 			}
-			if err := verifyAttestationReport(report, nonce, challengeCSR.PublicKey, state.MetadataCas); err != nil {
+			if _, err := verifyAttestationReport(report, nonce, state.MetadataCas); err != nil {
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "attestation verification failed")
 				return
 			}
@@ -826,8 +826,14 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to compute key authorization")
 				return
 			}
-			if err := verifyAttestationReport(report, nonce, challengeCSR.PublicKey, state.MetadataCas); err != nil {
+			result, err := verifyAttestationReport(report, nonce, state.MetadataCas)
+			if err != nil {
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "attestation verification failed")
+				return
+			}
+			// Verify the certifying AK is the AK that signed the report's TPM quote
+			if err := provision.VerifyAkBinding(result, akPublic); err != nil {
+				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "AK binding verification failed")
 				return
 			}
 			order.AttestedKey = pubKeyDER

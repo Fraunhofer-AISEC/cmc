@@ -16,8 +16,111 @@
 package provision
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"testing"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
+
+// encodeTestAk creates a TPM2B_PUBLIC area for the given ECDSA key
+func encodeTestAk(t *testing.T, key *ecdsa.PublicKey) []byte {
+	t.Helper()
+	pub := tpm2.Public{
+		Type:       tpm2.AlgECC,
+		NameAlg:    tpm2.AlgSHA256,
+		Attributes: tpm2.FlagSignerDefault,
+		ECCParameters: &tpm2.ECCParams{
+			Sign:    &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256},
+			CurveID: tpm2.CurveNISTP256,
+			Point: tpm2.ECPoint{
+				XRaw: key.X.Bytes(),
+				YRaw: key.Y.Bytes(),
+			},
+		},
+	}
+	raw, err := pub.Encode()
+	if err != nil {
+		t.Fatalf("failed to encode TPM public area: %v", err)
+	}
+	return raw
+}
+
+// pemTestKey encodes a public key as PKIX PEM as found in X509CertExtracted
+func pemTestKey(t *testing.T, key *ecdsa.PublicKey) string {
+	t.Helper()
+	der, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		t.Fatalf("failed to marshal public key: %v", err)
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
+}
+
+func TestVerifyAkBinding(t *testing.T) {
+	akKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	akPubRaw := encodeTestAk(t, &akKey.PublicKey)
+
+	makeResult := func(measurementType, leafPubKeyPem string) *ar.AttestationResult {
+		return &ar.AttestationResult{
+			Measurements: []ar.MeasurementResult{
+				{
+					Type: measurementType,
+					Signature: ar.SignatureResult{
+						Certs: [][]ar.X509CertExtracted{
+							{{PublicKey: leafPubKeyPem}},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		result  *ar.AttestationResult
+		wantErr bool
+	}{
+		{
+			"MatchingAk",
+			makeResult("TPM Result", pemTestKey(t, &akKey.PublicKey)),
+			false,
+		},
+		{
+			"MismatchedAk",
+			makeResult("TPM Result", pemTestKey(t, &otherKey.PublicKey)),
+			true,
+		},
+		{
+			"NoTpmMeasurement",
+			makeResult("SNP Result", pemTestKey(t, &akKey.PublicKey)),
+			true,
+		},
+		{
+			"NoCertChains",
+			&ar.AttestationResult{Measurements: []ar.MeasurementResult{{Type: "TPM Result"}}},
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := VerifyAkBinding(tt.result, akPubRaw)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("VerifyAkBinding() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
 func Test_parseIntelEkCert(t *testing.T) {
 	type args struct {
