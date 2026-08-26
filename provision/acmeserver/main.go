@@ -77,7 +77,7 @@ func run(port uint16, certPath, keyPath, caCertPath, caKeyPath, metadataCasPath 
 			return fmt.Errorf("loading metadata CAs: %w", err)
 		}
 		state.MetadataCas = cas
-		log.Printf("Loaded %d metadata CA(s) — software-attest-01 challenges enabled", len(cas))
+		log.Printf("Loaded %d metadata CA(s) — cmc-software-attest-01 and cmc-tpm-certify-01 challenges enabled", len(cas))
 	}
 
 	// check if a raw http server should be started
@@ -128,7 +128,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:  flagMetadataCas,
-				Usage: "Path to PEM file with trusted metadata root CAs (enables software-attest-01 challenges)",
+				Usage: "Path to PEM file with trusted metadata root CAs (enables cmc-software-attest-01 and cmc-tpm-certify-01 challenges)",
 			},
 			&cli.Uint16Flag{
 				Name:        flagPort,

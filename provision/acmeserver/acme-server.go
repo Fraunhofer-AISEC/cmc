@@ -34,7 +34,9 @@ import (
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
+	"github.com/google/go-attestation/attest"
 )
 
 const (
@@ -213,6 +215,27 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
 	respondWithJson(status, resp, result)
 }
+// decodeChallengeCsr decodes and validates a base64url-encoded CSR from a
+// challenge payload and returns it together with its DER-encoded public key.
+func decodeChallengeCsr(csrB64 string) (*x509.CertificateRequest, []byte, error) {
+	csrDER, err := base64.RawURLEncoding.DecodeString(csrB64)
+	if err != nil {
+		return nil, nil, fmt.Errorf("malformed CSR encoding")
+	}
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("malformed CSR")
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, nil, fmt.Errorf("invalid CSR signature")
+	}
+	pubKeyDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal CSR public key")
+	}
+	return csr, pubKeyDER, nil
+}
+
 func verifyAttestationReport(report []byte, nonce []byte, csrPubKey any, cas []*x509.Certificate) error {
 	if len(report) == 0 {
 		return fmt.Errorf("empty attestation report")
@@ -420,9 +443,14 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 			{Type: "http-01", Token: rand.Text(), Status: AuthStatusPending},
 		}
 		if len(state.MetadataCas) > 0 {
-			challenges = append(challenges, AcmeChallenge{
-				Type: "software-attest-01", Token: rand.Text(), Status: AuthStatusPending,
-			})
+			challenges = append(challenges,
+				AcmeChallenge{
+					Type: "cmc-software-attest-01", Token: rand.Text(), Status: AuthStatusPending,
+				},
+				AcmeChallenge{
+					Type: "cmc-tpm-certify-01", Token: rand.Text(), Status: AuthStatusPending,
+				},
+			)
 		}
 		auths = append(auths, AcmeAuthorization{
 			Identifier: ident.Value,
@@ -702,7 +730,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 			challenge.Status = AuthStatusValid
 			challenge.Validated = time.Now().Format(time.RFC3339Nano)
 
-		case "software-attest-01":
+		case "cmc-software-attest-01":
 			var payload struct {
 				Report string `json:"report"`
 				CSR    string `json:"csr"`
@@ -716,23 +744,81 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed attestation report encoding")
 				return
 			}
-			csrDER, err := base64.RawURLEncoding.DecodeString(payload.CSR)
+			challengeCSR, pubKeyDER, err := decodeChallengeCsr(payload.CSR)
 			if err != nil {
-				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR encoding in attestation challenge")
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, fmt.Sprintf("invalid CSR in attestation challenge: %v", err))
 				return
 			}
-			challengeCSR, err := x509.ParseCertificateRequest(csrDER)
+			nonce, err := account.TokenAccountCSRNonce(challenge.Token, pubKeyDER)
 			if err != nil {
-				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR in attestation challenge")
+				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to compute key authorization")
 				return
 			}
-			if err := challengeCSR.CheckSignature(); err != nil {
-				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid CSR signature in attestation challenge")
+			if err := verifyAttestationReport(report, nonce, challengeCSR.PublicKey, state.MetadataCas); err != nil {
+				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "attestation verification failed")
 				return
 			}
-			pubKeyDER, err := x509.MarshalPKIXPublicKey(challengeCSR.PublicKey)
+			order.AttestedKey = pubKeyDER
+			challenge.Status = AuthStatusValid
+			challenge.Validated = time.Now().Format(time.RFC3339Nano)
+
+		case "cmc-tpm-certify-01":
+			var payload struct {
+				Report              string `json:"report"`
+				CSR                 string `json:"csr"`
+				AkPublic            string `json:"akPublic"`
+				IkPublic            string `json:"ikPublic"`
+				IkCreateData        string `json:"ikCreateData"`
+				IkCreateAttestation string `json:"ikCreateAttestation"`
+				IkCreateSignature   string `json:"ikCreateSignature"`
+			}
+			if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.Report == "" ||
+				payload.CSR == "" || payload.AkPublic == "" || payload.IkPublic == "" ||
+				payload.IkCreateData == "" || payload.IkCreateAttestation == "" ||
+				payload.IkCreateSignature == "" {
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed tpm certify challenge payload")
+				return
+			}
+			var report, akPublic, ikPublic, ikCreateData, ikCreateAttestation, ikCreateSignature []byte
+			for _, field := range []struct {
+				name string
+				src  string
+				dst  *[]byte
+			}{
+				{"report", payload.Report, &report},
+				{"akPublic", payload.AkPublic, &akPublic},
+				{"ikPublic", payload.IkPublic, &ikPublic},
+				{"ikCreateData", payload.IkCreateData, &ikCreateData},
+				{"ikCreateAttestation", payload.IkCreateAttestation, &ikCreateAttestation},
+				{"ikCreateSignature", payload.IkCreateSignature, &ikCreateSignature},
+			} {
+				var err error
+				*field.dst, err = base64.RawURLEncoding.DecodeString(field.src)
+				if err != nil {
+					acmeError(resp, http.StatusBadRequest, AcmeErrMalformed,
+						fmt.Sprintf("malformed %v encoding in tpm certify challenge", field.name))
+					return
+				}
+			}
+			challengeCSR, pubKeyDER, err := decodeChallengeCsr(payload.CSR)
 			if err != nil {
-				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to marshal CSR public key")
+				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, fmt.Sprintf("invalid CSR in tpm certify challenge: %v", err))
+				return
+			}
+			// Verify the IK was certified by the AK
+			ikParams := attest.CertificationParameters{
+				Public:            ikPublic,
+				CreateData:        ikCreateData,
+				CreateAttestation: ikCreateAttestation,
+				CreateSignature:   ikCreateSignature,
+			}
+			if err := provision.VerifyIk(ikParams, akPublic); err != nil {
+				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "IK certification verification failed")
+				return
+			}
+			// Verify the certified IK is actually the CSR public key
+			if err := provision.VerifyTpmCsr(ikPublic, challengeCSR); err != nil {
+				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "certified key does not match CSR public key")
 				return
 			}
 			nonce, err := account.TokenAccountCSRNonce(challenge.Token, pubKeyDER)

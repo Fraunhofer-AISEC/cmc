@@ -379,7 +379,9 @@ func (c *Client) keyAuthorizationCSRNonce(token string, csr *x509.CertificateReq
 	return hash[:], nil
 }
 
-func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+// enroll runs the common ACME enrollment flow: account setup, order creation,
+// challenge completion via the given handler, and finalization.
+func (c *Client) enroll(csr *x509.CertificateRequest, handler challengeHandler) (*x509.Certificate, error) {
 	dir, err := c.fetchDirectory()
 	if err != nil {
 		return nil, fmt.Errorf("fetching directory: %w", err)
@@ -395,17 +397,21 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 		return nil, err
 	}
 
-	nonce, err = c.completeChallenges(order.Authorizations, func(ch acmeChallenge) (any, error) {
-		if ch.Type == "http-01" {
-			return map[string]any{}, nil
-		}
-		return nil, nil
-	}, nonce, dir, accountURL)
+	nonce, err = c.completeChallenges(order.Authorizations, handler, nonce, dir, accountURL)
 	if err != nil {
 		return nil, err
 	}
 
-	cert, err := c.finalizeAndDownload(csr, order, nonce, dir, accountURL)
+	return c.finalizeAndDownload(csr, order, nonce, dir, accountURL)
+}
+
+func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+	cert, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
+		if ch.Type == "http-01" {
+			return map[string]any{}, nil
+		}
+		return nil, nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -414,33 +420,50 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 	return cert, nil
 }
 
+// TpmCertifyEnroll enrolls a TPM-resident key via the custom cmc-tpm-certify-01
+// challenge. The standardized device-attest-01 challenge
+// (draft-ietf-acme-device-attest) is not usable here, as it is designed for
+// attesting machines via permanent-identifier identifiers, not dns identifiers.
 func (c *Client) TpmCertifyEnroll(
 	csr *x509.CertificateRequest,
 	ikParams attest.CertificationParameters,
 	akPublic []byte,
 	generateReport func(nonce []byte) ([]byte, error),
 ) (*x509.Certificate, error) {
-	return nil, fmt.Errorf("ACME provisioner: TpmCertifyEnroll not yet implemented")
-}
-
-func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error) {
-	dir, err := c.fetchDirectory()
-	if err != nil {
-		return nil, fmt.Errorf("fetching directory: %w", err)
-	}
-
-	accountURL, nonce, err := c.ensureAccount(dir.newAccount, dir.newNonce, nil)
-	if err != nil {
-		return nil, fmt.Errorf("ensuring account: %w", err)
-	}
-
-	order, nonce, err := c.createOrder(csr, nonce, dir, accountURL)
+	cert, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
+		if ch.Type != "cmc-tpm-certify-01" {
+			return nil, nil
+		}
+		keyAuth, err := c.keyAuthorizationCSRNonce(ch.Token, csr)
+		if err != nil {
+			return nil, fmt.Errorf("computing key authorization: %w", err)
+		}
+		report, err := generateReport(keyAuth)
+		if err != nil {
+			return nil, fmt.Errorf("generating attestation report: %w", err)
+		}
+		b64 := base64.RawURLEncoding.EncodeToString
+		return map[string]any{
+			"report":              b64(report),
+			"csr":                 b64(csr.Raw),
+			"akPublic":            b64(akPublic),
+			"ikPublic":            b64(ikParams.Public),
+			"ikCreateData":        b64(ikParams.CreateData),
+			"ikCreateAttestation": b64(ikParams.CreateAttestation),
+			"ikCreateSignature":   b64(ikParams.CreateSignature),
+		}, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	nonce, err = c.completeChallenges(order.Authorizations, func(ch acmeChallenge) (any, error) {
-		if ch.Type != "software-attest-01" {
+	log.Debug("ACME TPM certify enrollment completed successfully")
+	return cert, nil
+}
+
+func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error) {
+	cert, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
+		if ch.Type != "cmc-software-attest-01" {
 			return nil, nil
 		}
 		keyAuth, err := c.keyAuthorizationCSRNonce(ch.Token, csr)
@@ -455,12 +478,7 @@ func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(
 			"report": base64.RawURLEncoding.EncodeToString(report),
 			"csr":    base64.RawURLEncoding.EncodeToString(csr.Raw),
 		}, nil
-	}, nonce, dir, accountURL)
-	if err != nil {
-		return nil, err
-	}
-
-	cert, err := c.finalizeAndDownload(csr, order, nonce, dir, accountURL)
+	})
 	if err != nil {
 		return nil, err
 	}
