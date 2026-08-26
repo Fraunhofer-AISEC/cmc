@@ -22,7 +22,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -374,9 +373,9 @@ func tpmEnroll(provisioner Enroller, tpmKey *tpmdriver.TpmKey, akPublic []byte, 
 		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
 	}
 
-	csr, report, err := prepareEnroll(tpmKey, p)
+	csr, err := internal.CreateCsr(tpmKey, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create CSR: %w", err)
 	}
 
 	ikParams, err := tpmKey.GetCertificationParameters()
@@ -384,35 +383,14 @@ func tpmEnroll(provisioner Enroller, tpmKey *tpmdriver.TpmKey, akPublic []byte, 
 		return nil, fmt.Errorf("failed to get tpm key certification parameters: %w", err)
 	}
 
-	cert, err := provisioner.TpmCertifyEnroll(csr, ikParams, akPublic, report)
+	generateReport := func(nonce []byte) ([]byte, error) {
+		return prover.Generate(nonce, nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)
+	}
+
+	cert, err := provisioner.TpmCertifyEnroll(csr, ikParams, akPublic, generateReport)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
 	return append([]*x509.Certificate{cert}, caCerts...), nil
-}
-
-func prepareEnroll(priv crypto.PrivateKey, p *KeyEnrollmentParams) (*x509.CertificateRequest, []byte, error) {
-
-	// Create CSR for authentication with provided properties
-	csr, err := internal.CreateCsr(priv, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create CSRs: %w", err)
-	}
-
-	// Use Subject Key Identifier (SKI) as nonce for attestation report
-	// We use SHA-256 instead of SHA-1 for the SKI as we control both sides
-	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse CSR public key: %v", err)
-	}
-	nonce := sha256.Sum256(pubKey)
-
-	// Fetch attestation report as part of client authentication
-	report, err := prover.Generate(nonce[:], nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
-	}
-
-	return csr, report, nil
 }

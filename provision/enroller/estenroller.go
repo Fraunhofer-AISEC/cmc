@@ -16,7 +16,7 @@
 package estenroller
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"fmt"
 	"net/http"
@@ -65,8 +65,18 @@ func (e *EstEnroller) TpmCertifyEnroll(
 	csr *x509.CertificateRequest,
 	ikParams attest.CertificationParameters,
 	akPublic []byte,
-	report []byte,
+	generateReport func(nonce []byte) ([]byte, error),
 ) (*x509.Certificate, error) {
+	nonce, err := csrNonce(csr)
+	if err != nil {
+		return nil, err
+	}
+
+	report, err := generateReport(nonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+	}
+
 	return est.TpmCertifyEnroll(e.client, e.Addr, e.bearerToken, csr, ikParams, akPublic, report)
 }
 
@@ -74,17 +84,27 @@ func (e *EstEnroller) AttestEnroll(
 	csr *x509.CertificateRequest,
 	generateReport func(nonce []byte) ([]byte, error),
 ) (*x509.Certificate, error) {
-	// use sha1 of the CSR's public key as nonce for the attestation report
-	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	nonce, err := csrNonce(csr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal CSR public key: %w", err)
+		return nil, err
 	}
-	nonce := sha1.Sum(pubKey)
 
-	report, err := generateReport(nonce[:])
+	report, err := generateReport(nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
 	return est.AttestEnroll(e.client, e.Addr, e.bearerToken, csr, report)
+}
+
+// csrNonce derives the attestation report nonce from the CSR's public key as
+// the EST protocol has no server-provided nonce. The EST server recomputes
+// SHA-256 over the DER-encoded public key for verification.
+func csrNonce(csr *x509.CertificateRequest) ([]byte, error) {
+	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal CSR public key: %w", err)
+	}
+	nonce := sha256.Sum256(pubKey)
+	return nonce[:], nil
 }

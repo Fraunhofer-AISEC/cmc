@@ -29,7 +29,7 @@ type Enroller interface {
 		csr *x509.CertificateRequest,
 		ikParams attest.CertificationParameters,
 		akPublic []byte,
-		report []byte,
+		generateReport func(nonce []byte) ([]byte, error),
 	) (*x509.Certificate, error)
 	AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error)
 }
