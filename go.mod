@@ -12,7 +12,7 @@ require (
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-jose/go-jose/v4 v4.1.4
-	github.com/google/go-attestation v0.6.0
+	github.com/google/go-attestation v0.6.1
 	github.com/google/go-configfs-tsm v0.3.3
 	github.com/google/go-eventlog v0.0.2
 	github.com/google/go-sev-guest v0.14.1
