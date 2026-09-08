@@ -473,16 +473,13 @@ func VerifyIntelQuoteSignature(reportRaw []byte, quoteSignature any,
 		return result, false
 	}
 
-	// Get x and y from public key
-	pubX := new(big.Int)
-	pubX.SetBytes(ak_pub[:32])
-	pubY := new(big.Int)
-	pubY.SetBytes(ak_pub[32:])
-
-	ecdsa_ak_pub := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     pubX,
-		Y:     pubY,
+	// Parse the raw X || Y bytes as an uncompressed SEC1 public key (0x04 || X || Y).
+	uncompressed := append([]byte{0x04}, ak_pub[:]...)
+	ecdsa_ak_pub, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), uncompressed)
+	if err != nil {
+		log.Warnf("Failed to parse ECDSA attestation key: %v", err)
+		result.SignCheck.Fail(ar.ExtractPubKey)
+		return result, false
 	}
 
 	// Verify ECDSA Signature represented by r and s
