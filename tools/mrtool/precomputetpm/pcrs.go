@@ -531,7 +531,7 @@ func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr10(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	refvals, err := PerformImaPrecomputation(ar.TRUST_ANCHOR_TPM, 10, c.BootAggregate, c.ImaPaths,
-		c.ImaStrip, c.ImaPrepend, c.ImaTemplate, c.ImaExecOnly)
+		c.ImaStrip, c.ImaPrepend, c.ImaTemplate, c.ImaExecOnly, c.ImaSeeds)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to precompute IMA refvals: %w", err)
 	}
