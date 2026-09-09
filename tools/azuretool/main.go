@@ -124,11 +124,14 @@ func main() {
 				},
 			},
 			{
-				Name: "compute-reportdata",
+				Name: "precompute-reportdata",
 				Usage: "Compute the expected REPORTDATA (SHA256 of the Azure runtime-claims " +
 					"JSON) that Azure firmware will produce for a supplied user nonce. Takes " +
 					"the firmware-generated fields (vTPM AK / EK JWKs, VM configuration) from " +
-					"an rtdata blob acquired via get-azure-rtdata.",
+					"an rtdata blob acquired via get-azure-rtdata. The user-data value in " +
+					"the rtdata blob is byte-substituted with the supplied nonce before " +
+					"hashing, so a fresh REPORTDATA can be precomputed without re-fetching " +
+					"rtdata from the VM.",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     inFlag,
@@ -136,8 +139,10 @@ func main() {
 						Required: true,
 					},
 					&cli.StringFlag{
-						Name:     userdataFlag,
-						Usage:    "raw string user nonce",
+						Name: userdataFlag,
+						Usage: "raw string user nonce to compute REPORTDATA for. Overrides " +
+							"the user-data field embedded in the rtdata blob (which is only " +
+							"a snapshot of the NV-index value at the time rtdata was captured)",
 						Required: true,
 					},
 				},
