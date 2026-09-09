@@ -31,11 +31,14 @@ import (
 )
 
 // PerformImaPrecomputation walks the specified paths, hashes each regular file, and produces IMA
-// reference values tagged with the specified trust anchor. When execOnly is true, files that are
+// reference values tagged with the specified trust anchor. If execOnly is set, files that are
 // neither mode-executable nor ELF objects are skipped, matching an IMA policy that only measures
-// BPRM_CHECK / MMAP_CHECK on MAY_EXEC (executables and libraries).
+// executables and libraries. If seeds are given, the directories in paths are not measured
+// entirely, but only provide the index for resolving the seeds' transitive shared library
+// dependencies, which then, together with the seeds, make up the reference values. Paths naming a
+// file directly are always measured.
 func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []string, strip,
-	prepend string, imaTemplate string, execOnly bool,
+	prepend string, imaTemplate string, execOnly bool, seeds []string,
 ) ([]*ar.Component, error) {
 
 	refvals := make([]*ar.Component, 0)
@@ -83,7 +86,9 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 		}
 	}()
 
-	// Walk all given paths
+	// Files are measured directly, directories are either walked or indexed, depending on
+	// whether seeds were given
+	var dirs []string
 	for _, root := range paths {
 		rootInfo, err := os.Stat(root)
 		if err != nil {
@@ -93,23 +98,38 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 			fileCh <- root
 			continue
 		}
-		err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.Debugf("error accessing %q: %v", path, err)
-				return nil
-			}
-			if !info.Mode().IsRegular() {
-				return nil
-			}
-			if execOnly && !isMeasurable(path, info) {
-				log.Tracef("skipping non-executable %q", path)
-				return nil
-			}
-			fileCh <- path
-			return nil
-		})
+		dirs = append(dirs, root)
+	}
+
+	if len(seeds) > 0 {
+		closure, err := imaClosure(dirs, seeds)
 		if err != nil {
-			return nil, fmt.Errorf("error walking the path %q: %w", root, err)
+			return nil, fmt.Errorf("failed to compute the dependency closure: %w", err)
+		}
+		log.Debugf("Closure of %v seed(s): %v file(s)", len(seeds), len(closure))
+		for _, path := range closure {
+			fileCh <- path
+		}
+	} else {
+		for _, root := range dirs {
+			err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					log.Debugf("error accessing %q: %v", path, err)
+					return nil
+				}
+				if !info.Mode().IsRegular() {
+					return nil
+				}
+				if execOnly && !isMeasurable(path, info) {
+					log.Tracef("skipping non-executable %q", path)
+					return nil
+				}
+				fileCh <- path
+				return nil
+			})
+			if err != nil {
+				return nil, fmt.Errorf("error walking the path %q: %w", root, err)
+			}
 		}
 	}
 
@@ -121,13 +141,21 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 	return refvals, nil
 }
 
-// isMeasurable reports whether a file can end up in the IMA log of a policy that measures
-// BPRM_CHECK / MMAP_CHECK on MAY_EXEC.
+// isMeasurable reports whether a file can end up in the IMA log of a policy that only measures
+// executables and libraries
 func isMeasurable(path string, info os.FileInfo) bool {
 
 	if info.Mode().Perm()&0o111 != 0 {
 		return true
 	}
+
+	return hasElfMagic(path)
+}
+
+// hasElfMagic reports whether path starts with the ELF magic. Shared libraries are commonly
+// shipped without the executable mode bits set, so the mode alone is not sufficient to determine
+// whether a file can be mapped executable
+func hasElfMagic(path string) bool {
 
 	f, err := os.Open(path)
 	if err != nil {

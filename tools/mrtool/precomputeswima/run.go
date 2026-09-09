@@ -35,6 +35,7 @@ var (
 
 type Config struct {
 	ImaPaths          []string
+	ImaSeeds          []string
 	ImaStrip          string
 	ImaPrepend        string
 	ImaTemplate       string
@@ -46,6 +47,7 @@ type Config struct {
 
 const (
 	imaPathFlag           = "ima-path"
+	imaSeedFlag           = "ima-seed"
 	imaStripFlag          = "ima-strip"
 	imaPrependFlag        = "ima-prepend"
 	imaTemplateFlag       = "ima-template"
@@ -62,6 +64,12 @@ var flags = []cli.Flag{
 			"reference values for",
 	},
 	&cli.StringFlag{
+		Name: imaSeedFlag,
+		Usage: "comma-separated executables from which the transitive shared library " +
+			"dependencies are resolved, using the directories in --ima-path as index instead of " +
+			"measuring them entirely",
+	},
+	&cli.StringFlag{
 		Name:  imaStripFlag,
 		Usage: "Optional ima path prefix which is stripped from the actual path in the output",
 	},
@@ -76,13 +84,12 @@ var flags = []cli.Flag{
 	},
 	&cli.BoolFlag{
 		Name: imaExecOnlyFlag,
-		Usage: "Skip files without any executable-mode bit. This matches an IMA policy that " +
-			"only measures BPRM_CHECK/MMAP_CHECK on MAY_EXEC (executables and libraries)",
+		Usage: "Skip files that are neither mode-executable nor ELF objects, matching an IMA " +
+			"policy which only measures executables and libraries",
 	},
 	&cli.IntFlag{
-		Name: pcrFlag,
-		Usage: "PCR index tag emitted on the reference values (default 10 to match the Linux " +
-			"IMA convention)",
+		Name:  pcrFlag,
+		Usage: "PCR index tag emitted on the reference values",
 		Value: 10,
 	},
 	&cli.StringFlag{
@@ -125,10 +132,14 @@ func run(cmd *cli.Command) error {
 		return fmt.Errorf("no --ima-path provided")
 	}
 
-	log.Infof("Precomputing SWIMA reference values for %v path(s)...", len(cfg.ImaPaths))
+	if len(cfg.ImaSeeds) > 0 {
+		log.Infof("Precomputing SWIMA reference values for the closure of %v seed(s) over %v path(s)...",
+			len(cfg.ImaSeeds), len(cfg.ImaPaths))
+	} else {
+		log.Infof("Precomputing SWIMA reference values for %v path(s)...", len(cfg.ImaPaths))
+	}
 
-	// On a TPM-less system Linux IMA still records boot_aggregate as the first log entry, with an
-	// all-zero hash (no PCRs to aggregate).
+	// On TPM-less systems, IMA still records boot_aggregate as first log entry with an all-zero hash
 	bootAggregate := make([]byte, 32)
 
 	refvals, err := precomputetpm.PerformImaPrecomputation(
@@ -140,6 +151,7 @@ func run(cmd *cli.Command) error {
 		cfg.ImaPrepend,
 		cfg.ImaTemplate,
 		cfg.ImaExecOnly,
+		cfg.ImaSeeds,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to precompute IMA refvals: %w", err)
@@ -180,6 +192,9 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	}
 	if cmd.IsSet(imaPathFlag) {
 		c.ImaPaths = strings.Split(cmd.String(imaPathFlag), ",")
+	}
+	if cmd.IsSet(imaSeedFlag) {
+		c.ImaSeeds = strings.Split(cmd.String(imaSeedFlag), ",")
 	}
 	if cmd.IsSet(imaStripFlag) {
 		c.ImaStrip = cmd.String(imaStripFlag)

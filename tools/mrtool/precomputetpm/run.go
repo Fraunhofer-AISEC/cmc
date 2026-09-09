@@ -42,6 +42,7 @@ type Config struct {
 	Path              []string
 	MokLists          []string
 	ImaPaths          []string
+	ImaSeeds          []string
 	ImaStrip          string
 	ImaPrepend        string
 	ImaTemplate       string
@@ -57,6 +58,7 @@ const (
 	grubcmdsFlag          = "grubcmds"
 	pathFlag              = "paths"
 	imaPathFlag           = "ima-path"
+	imaSeedFlag           = "ima-seed"
 	imaStripFlag          = "ima-strip"
 	imaPrependFlag        = "ima-prepend"
 	imaTemplateFlag       = "ima-template"
@@ -69,14 +71,28 @@ const (
 )
 
 var flags = []cli.Flag{
-	&cli.StringFlag{Name: systemUuidFlag, Usage: "Path to GRUB command file for PCR8"},
-	&cli.StringFlag{Name: grubcmdsFlag, Usage: "Path to GRUB command file for PCR8"},
-	&cli.StringFlag{Name: pathFlag, Usage: "Comma-separated list of folders/files to be extended " +
-		"into PCR9"},
+	&cli.StringFlag{
+		Name:  systemUuidFlag,
+		Usage: "Path to GRUB command file for PCR8",
+	},
+	&cli.StringFlag{
+		Name:  grubcmdsFlag,
+		Usage: "Path to GRUB command file for PCR8",
+	},
+	&cli.StringFlag{
+		Name:  pathFlag,
+		Usage: "Comma-separated list of folders/files to be extended into PCR9",
+	},
 	&cli.StringFlag{
 		Name: imaPathFlag,
 		Usage: "comma-separated paths or single files (binaries or config files) to create ima " +
 			"reference values for to be measured into PCR10",
+	},
+	&cli.StringFlag{
+		Name: imaSeedFlag,
+		Usage: "comma-separated executables from which the transitive shared library " +
+			"dependencies are resolved, using the directories in --ima-path as index instead of " +
+			"measuring them entirely",
 	},
 	&cli.StringFlag{
 		Name:  imaStripFlag,
@@ -93,8 +109,8 @@ var flags = []cli.Flag{
 	},
 	&cli.BoolFlag{
 		Name: imaExecOnlyFlag,
-		Usage: "Skip files without any executable-mode bit. This matches an IMA policy that " +
-			"only measures BPRM_CHECK/MMAP_CHECK on MAY_EXEC (executables and libraries)",
+		Usage: "Skip files that are neither mode-executable nor ELF objects, matching an IMA " +
+			"policy which only measures executables and libraries",
 	},
 	&cli.StringFlag{
 		Name: bootAggregateFlag,
@@ -106,7 +122,8 @@ var flags = []cli.Flag{
 		Usage: "Print the aggregated PCR value over the selected PCRs",
 	},
 	&cli.StringFlag{Name: mokListsFlag, Usage: "Comma-separated list of UEFI MokList variable " +
-		"data files as written to /sys/firmware/efi/efivars to be extended into PCR14"},
+		"data files as written to /sys/firmware/efi/efivars to be extended into PCR14",
+	},
 	&cli.StringFlag{
 		Name: buildrootManifestFlag,
 		Usage: "Path to a buildroot manifest CSV file to augment reference values with package " +
@@ -232,6 +249,9 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	if cmd.IsSet(imaPathFlag) {
 		c.ImaPaths = strings.Split(cmd.String(imaPathFlag), ",")
 	}
+	if cmd.IsSet(imaSeedFlag) {
+		c.ImaSeeds = strings.Split(cmd.String(imaSeedFlag), ",")
+	}
 	if cmd.IsSet(imaStripFlag) {
 		c.ImaStrip = cmd.String(imaStripFlag)
 	}
@@ -300,6 +320,12 @@ func (c *Config) print() {
 		log.Debugf("\tIMA Paths     :")
 		for _, path := range c.ImaPaths {
 			log.Debugf("\t\t%q", path)
+		}
+	}
+	if len(c.ImaSeeds) > 0 {
+		log.Debugf("\tIMA Seeds     :")
+		for _, seed := range c.ImaSeeds {
+			log.Debugf("\t\t%q", seed)
 		}
 	}
 	if c.ImaStrip != "" {
