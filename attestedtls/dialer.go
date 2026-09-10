@@ -42,13 +42,18 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	}
 
 	// Create TLS connection
+	t := atlsTimeout(cc)
 	var dialer net.Dialer
-	dialer.Timeout = timeout
-	dialer.Deadline = (time.Now().Add(timeout))
+	dialer.Timeout = t
+	dialer.Deadline = time.Now().Add(t)
 	conn, err := tls.DialWithDialer(&dialer, network, addr, config)
 	if err != nil {
 		details := fmt.Sprintf("%v certificate chain(s) provided: ", len(config.Certificates))
 		for _, cert := range config.Certificates {
+			if cert.Leaf == nil {
+				details = details + "(leaf not parsed); "
+				continue
+			}
 			strIPs := make([]string, len(cert.Leaf.IPAddresses))
 			for i, ip := range cert.Leaf.IPAddresses {
 				strIPs[i] = ip.String()

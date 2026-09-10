@@ -18,6 +18,7 @@ package attestedtls
 import (
 	"crypto/x509"
 	"fmt"
+	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -60,6 +61,7 @@ type CmcConfig struct {
 	KeyConfig    api.TLSKeyConfig
 	ResultCb     func(result *ar.AttestationResult)
 	LibApiConfig *cmc.Config
+	AtlsTimeout  *time.Duration // Overrides the default 10 s aTLS handshake deadline; must be positive; nil uses the default
 }
 
 type ConnectionOption[T any] func(*T) error
@@ -178,6 +180,18 @@ func WithResultCb(cb func(result *ar.AttestationResult)) ConnectionOption[CmcCon
 func WithLibApiCmcConfig(config *cmc.Config) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) error {
 		c.LibApiConfig = config
+		return nil
+	}
+}
+
+// WithAtlsTimeout overrides the default aTLS handshake deadline (10 s).
+// d must be positive; non-positive values are rejected.
+func WithAtlsTimeout(d time.Duration) ConnectionOption[CmcConfig] {
+	return func(c *CmcConfig) error {
+		if d <= 0 {
+			return fmt.Errorf("AtlsTimeout must be positive, got %v", d)
+		}
+		c.AtlsTimeout = &d
 		return nil
 	}
 }
