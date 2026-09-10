@@ -30,6 +30,30 @@ var (
 	log = logrus.WithField("service", "mrtool")
 )
 
+// InitrdOption records where the firmware places the "initrd=initrd" option
+// in the UEFI LoadOptions relative to the fw_cfg kernel command line. See
+// tools/mrtool/tcg/cmdline.go for the exact placement semantics.
+type InitrdOption int
+
+const (
+	InitrdOptionNone InitrdOption = iota
+	InitrdOptionPrefix
+	InitrdOptionSuffix
+)
+
+func (o InitrdOption) String() string {
+	switch o {
+	case InitrdOptionPrefix:
+		return "prefix"
+	case InitrdOptionSuffix:
+		return "suffix"
+	case InitrdOptionNone:
+		return "none"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(o))
+	}
+}
+
 type Conf struct {
 	Ovmf         string
 	AcpiRsdp     string
@@ -48,7 +72,7 @@ type Conf struct {
 	Kernel       string
 	Initrd       string
 	Cmdline      string
-	Qemu         bool
+	InitrdOption InitrdOption
 	AddZeros     int
 	StripNewline bool
 	Gpt          string
@@ -95,7 +119,7 @@ const (
 	kernelFlag       = "kernel"
 	initrdFlag       = "initrd"
 	cmdlineFlag      = "cmdline"
-	qemuFlag         = "qemu"
+	initrdOptionFlag = "initrd-option"
 	addzerosFlag     = "addzeros"
 	stripnewlineFlag = "stripnewline"
 	gptFlag          = "gpt"
@@ -114,50 +138,128 @@ const (
 )
 
 var Flags = []cli.Flag{
-	&cli.StringFlag{Name: ovmfFlag, Usage: "The filename of the OVMF.fd file to be measured into PCR0/MRTD"},
+	&cli.StringFlag{
+		Name:  ovmfFlag,
+		Usage: "The filename of the OVMF.fd file to be measured into PCR0/MRTD",
+	},
 	&cli.StringFlag{Name: acpirsdpFlag, Usage: "Path to QEMU etc/acpi/rsdp file for PCR1/RTMR0"},
-	&cli.StringFlag{Name: acpitablesFlag, Usage: "Path to QEMU etc/acpi/tables file for PCR1/RTMR0"},
-	&cli.StringFlag{Name: tableloaderFlag, Usage: "Path to QEMU etc/table-loader file for PCR1/RTMR0"},
+	&cli.StringFlag{
+		Name:  acpitablesFlag,
+		Usage: "Path to QEMU etc/acpi/tables file for PCR1/RTMR0",
+	},
+	&cli.StringFlag{Name: tableloaderFlag,
+		Usage: "Path to QEMU etc/table-loader file for PCR1/RTMR0"},
 	&cli.StringFlag{Name: tpmlogFlag, Usage: "Path to QEMU etc/tpm/log file for PCR1/RTMR0"},
-	&cli.StringFlag{Name: smbiosTablesFlag, Usage: "Path to a DMI dump (/sys/firmware/dmi/tables/DMI) captured from a reference VM; EDK2 SmbiosMeasurementDxe filter is applied before hashing (mutually exclusive with --smbios-*)"},
-
-	&cli.StringFlag{Name: smbiosRamSizeFlag, Usage: "Spec-mode: guest RAM size (e.g. 4G, 8192M); enables spec mode"},
+	&cli.StringFlag{
+		Name: smbiosTablesFlag,
+		Usage: "Path to a DMI dump (/sys/firmware/dmi/tables/DMI) captured from a reference VM; " +
+			"EDK2 SmbiosMeasurementDxe filter is applied before hashing (mutually exclusive with " +
+			"--smbios-*)",
+	},
+	&cli.StringFlag{
+		Name:  smbiosRamSizeFlag,
+		Usage: "Spec-mode: guest RAM size (e.g. 4G, 8192M); enables spec mode",
+	},
 	&cli.IntFlag{Name: smbiosSocketsFlag, Usage: "Spec-mode: number of CPU sockets"},
 	&cli.StringFlag{Name: smbiosRamBelow4GFlag, Usage: "Spec-mode: override below-4G RAM split"},
 	&cli.StringFlag{Name: smbiosManufacturerFlag, Usage: "Spec-mode: SMBIOS Manufacturer string"},
 	&cli.StringFlag{Name: smbiosProductFlag, Usage: "Spec-mode: SMBIOS ProductName"},
-	&cli.StringFlag{Name: smbiosMachineVersionFlag, Usage: "Spec-mode: SMBIOS Type Version (e.g. pc-q35-10.1)"},
-	&cli.StringFlag{Name: smbiosProcessorIdFlag, Usage: "Spec-mode: SMBIOS ProcessorID as 16-hex-digit string (Default matches QEMU -cpu EPYC-v4)"},
-	&cli.IntFlag{Name: smbiosChassisSecurityFlag, Usage: "Spec-mode: SMBIOS Type 3 ChassisSecurityStatus byte"},
+	&cli.StringFlag{
+		Name:  smbiosMachineVersionFlag,
+		Usage: "Spec-mode: SMBIOS Type Version (e.g. pc-q35-10.1)",
+	},
+	&cli.StringFlag{
+		Name: smbiosProcessorIdFlag,
+		Usage: "Spec-mode: SMBIOS ProcessorID as 16-hex-digit string (Default matches QEMU " +
+			"-cpu EPYC-v4)",
+	},
+	&cli.IntFlag{
+		Name:  smbiosChassisSecurityFlag,
+		Usage: "Spec-mode: SMBIOS Type 3 ChassisSecurityStatus byte",
+	},
 	&cli.StringFlag{Name: smbiosBiosVendorFlag, Usage: "Spec-mode: SMBIOS Vendor"},
 	&cli.StringFlag{Name: smbiosBiosVersionFlag, Usage: "Spec-mode: SMBIOS BIOSVersion"},
-	&cli.StringFlag{Name: smbiosBiosDateFlag, Usage: "Spec-mode: SMBIOS BIOSReleaseDate (MM/DD/YYYY)"},
-
-	&cli.StringFlag{Name: bootorderFlag, Usage: "Comma-separated list of UEFI boot order numbers to be measured into PCR1/RTMR0"},
-	&cli.StringFlag{Name: bootxxxxFlag, Usage: "Comma-separated list of UEFI Boot#### variable data files to be measured into PCR1/RTMR0"},
-	&cli.BoolFlag{Name: nobootvarsFlag, Usage: "Do not measure UEFI boot variables into PCR1/RTMR0"},
-	&cli.StringFlag{Name: driversFlag, Usage: "Comma-separated list of driver EFI files (PE/COFF or Option ROM format) to be measured into PCR2"},
-	&cli.StringFlag{Name: bootloadersFlag, Usage: "Comma-separated list of bootloader EFI images to be measured into PCR4/RTMR1"},
-	&cli.StringFlag{Name: loaderConfsFlag, Usage: "Comma-separated list of bootloader configuration files to be measured into PCR5"},
-	&cli.StringFlag{Name: kernelFlag, Usage: "Path to a direct boot kernel image (PE/COFF format) measured into PCR4/RTMR1"},
+	&cli.StringFlag{
+		Name:  smbiosBiosDateFlag,
+		Usage: "Spec-mode: SMBIOS BIOSReleaseDate (MM/DD/YYYY)",
+	},
+	&cli.StringFlag{
+		Name:  bootorderFlag,
+		Usage: "Comma-separated list of UEFI boot order numbers to be measured into PCR1/RTMR0",
+	},
+	&cli.StringFlag{
+		Name: bootxxxxFlag,
+		Usage: "Comma-separated list of UEFI Boot#### variable data files to be measured into " +
+			"PCR1/RTMR0",
+	},
+	&cli.BoolFlag{
+		Name:  nobootvarsFlag,
+		Usage: "Do not measure UEFI boot variables into PCR1/RTMR0",
+	},
+	&cli.StringFlag{
+		Name: driversFlag,
+		Usage: "Comma-separated list of driver EFI files (PE/COFF or Option ROM format) to be " +
+			"measured into PCR2",
+	},
+	&cli.StringFlag{Name: bootloadersFlag,
+		Usage: "Comma-separated list of bootloader EFI images to be measured into PCR4/RTMR1"},
+	&cli.StringFlag{Name: loaderConfsFlag,
+		Usage: "Comma-separated list of bootloader configuration files to be measured into PCR5"},
+	&cli.StringFlag{Name: kernelFlag,
+		Usage: "Path to a direct boot kernel image (PE/COFF format) measured into PCR4/RTMR1"},
 	&cli.StringFlag{Name: configFlag, Usage: "Path to kernel configuration file"},
 	&cli.StringFlag{Name: initrdFlag, Usage: "The filename of the initrd/initramfs"},
 	&cli.StringFlag{Name: cmdlineFlag, Usage: "Kernel commandline"},
-	&cli.BoolFlag{Name: qemuFlag, Usage: "QEMU VM (appends initrd=initrd to kernel cmdline)"},
+	&cli.StringFlag{
+		Name: initrdOptionFlag,
+		Usage: "Where the firmware places the initrd=initrd option in the UEFI LoadOptions " +
+			"measured into PCR9: 'prefix' (initrd=initrd <cmdline>, edk2 with the reordered " +
+			"QemuLoadImageLib), 'suffix' (<cmdline> initrd=initrd, older edk2), or 'none' " +
+			"(default, no option injected)"},
 	&cli.IntFlag{Name: addzerosFlag, Usage: "Add <num> trailing zeros to kernel cmdline", Value: 1},
-	&cli.BoolFlag{Name: stripnewlineFlag, Usage: "Strip potential newline character from the cmdline"},
-	&cli.StringFlag{Name: gptFlag, Usage: "Path to EFI GPT partition table file to be extended into PCR5/RTMR1"},
-	&cli.StringFlag{Name: securebootFlag, Usage: "UEFI secure boot SecureBoot variable data file to be measured into PCR7/RTMR0"},
-	&cli.StringFlag{Name: pkFlag, Usage: "UEFI secure boot Platform Key (PK) variable data file to be measured into PCR7/RTMR0"},
-	&cli.StringFlag{Name: kekFlag, Usage: "UEFI secure boot Key Exchange Key (KEK) variable data file to be measured into PCR7/RTMR0"},
-	&cli.StringFlag{Name: dbFlag, Usage: "UEFI secure boot DB variable data file to be measured into PCR7/RTMR0"},
-	&cli.StringFlag{Name: dbxFlag, Usage: "UEFI secure boot DBX variable data file to be measured into PCR7/RTMR0"},
-	&cli.StringFlag{Name: sbatlevelFlag, Usage: "SBAT level string for measuring DBX authority into PCR7"},
+	&cli.BoolFlag{
+		Name:  stripnewlineFlag,
+		Usage: "Strip potential newline character from the cmdline",
+	},
+	&cli.StringFlag{
+		Name:  gptFlag,
+		Usage: "Path to EFI GPT partition table file to be extended into PCR5/RTMR1",
+	},
+	&cli.StringFlag{
+		Name:  securebootFlag,
+		Usage: "UEFI secure boot SecureBoot variable data file to be measured into PCR7/RTMR0",
+	},
+	&cli.StringFlag{
+		Name: pkFlag,
+		Usage: "UEFI secure boot Platform Key (PK) variable data file to be measured into " +
+			"PCR7/RTMR0",
+	},
+	&cli.StringFlag{
+		Name: kekFlag,
+		Usage: "UEFI secure boot Key Exchange Key (KEK) variable data file to be measured into " +
+			"PCR7/RTMR0",
+	},
+	&cli.StringFlag{
+		Name:  dbFlag,
+		Usage: "UEFI secure boot DB variable data file to be measured into PCR7/RTMR0",
+	},
+	&cli.StringFlag{
+		Name:  dbxFlag,
+		Usage: "UEFI secure boot DBX variable data file to be measured into PCR7/RTMR0",
+	},
+	&cli.StringFlag{
+		Name:  sbatlevelFlag,
+		Usage: "SBAT level string for measuring DBX authority into PCR7"},
 	&cli.StringFlag{Name: dumppeiFlag, Usage: "Optional path to folder to dump the measured PEIFV"},
 	&cli.StringFlag{Name: dumpdxeFlag, Usage: "Optional path to folder to dump the measured DXEFV"},
-	&cli.StringFlag{Name: dumpkernelFlag, Usage: "Optional path to folder to dump the measured kernel"},
+	&cli.StringFlag{
+		Name:  dumpkernelFlag,
+		Usage: "Optional path to folder to dump the measured kernel"},
 	&cli.StringFlag{Name: dumpgptFlag, Usage: "Optional path to folder to dump the measured GPT"},
-	&cli.StringFlag{Name: dumpsmbiosFlag, Usage: "Optional path to folder to dump the measured smbios tables"},
+	&cli.StringFlag{
+		Name:  dumpsmbiosFlag,
+		Usage: "Optional path to folder to dump the measured smbios tables",
+	},
 }
 
 func GetTcgConf(cmd *cli.Command) (*Conf, error) {
@@ -222,7 +324,21 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 		c.Cmdline = cmd.String(cmdlineFlag)
 	}
 
-	c.Qemu = cmd.Bool(qemuFlag)
+	switch v := cmd.String(initrdOptionFlag); v {
+	case "", "none":
+		c.InitrdOption = InitrdOptionNone
+	case "prefix":
+		c.InitrdOption = InitrdOptionPrefix
+	case "suffix":
+		c.InitrdOption = InitrdOptionSuffix
+	default:
+		return nil, fmt.Errorf(`invalid --%s %q: must be "prefix", "suffix", or "none"`,
+			initrdOptionFlag, v)
+	}
+	if c.InitrdOption != InitrdOptionNone && c.Initrd == "" {
+		return nil, fmt.Errorf("--%s %s requires --%s: the firmware only injects "+
+			"initrd=initrd when an initrd is provided", initrdOptionFlag, c.InitrdOption, initrdFlag)
+	}
 
 	// default initialize to 1
 	if cmd.IsSet(addzerosFlag) {
@@ -336,9 +452,7 @@ func (c *Conf) Print() {
 	if c.Cmdline != "" {
 		log.Debugf("\tCmdline: %q", c.Cmdline)
 	}
-	if c.Qemu {
-		log.Debugf("\tQEMU: true")
-	}
+	log.Debugf("\tInitrdOption: %s", c.InitrdOption)
 	if c.AddZeros != 0 {
 		log.Debugf("\tAddZeros: %d", c.AddZeros)
 	}

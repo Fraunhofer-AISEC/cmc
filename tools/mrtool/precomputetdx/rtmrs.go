@@ -417,7 +417,7 @@ func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
 	refvals := make([]*ar.Component, 0)
 
 	rtmr, refvals, err := tcg.MeasureCmdline(crypto.SHA384, tcg.TDX, rtmr, refvals, tcg.INDEX_RTMR2,
-		c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, false)
+		c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, tcg.InitrdOptionNone)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
 	}
