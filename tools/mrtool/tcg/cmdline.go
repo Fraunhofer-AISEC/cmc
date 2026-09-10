@@ -26,7 +26,7 @@ import (
 )
 
 func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
-	index int, cmdline, eventType string, zeros int, stripLf, appendInitrd bool,
+	index int, cmdline, eventType string, zeros int, stripLf bool, initrdOption InitrdOption,
 ) ([]byte, []*ar.Component, error) {
 
 	// Read the commandline
@@ -43,10 +43,16 @@ func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*a
 	// interpret the cmdline as utf-8
 	cmdLineStr := string(cmdLineData)
 
-	// OvmfPkg/Library/X86QemuLoadImageLib/X86QemuLoadImageLib.c#L570
-	// OVMF appends initrd=initrd if initial ramdisk was specified
-	if appendInitrd {
-		cmdLineStr = fmt.Sprintf("%s initrd=initrd", cmdLineStr)
+	// OvmfPkg/Library/{X86,Generic}QemuLoadImageLib/*QemuLoadImageLib.c: OVMF injects
+	// initrd=initrd when an initial ramdisk is provided. Older edk2 appends it as a
+	// suffix (" initrd=initrd"), newer edk2 (post-reorder) inserts it as a prefix
+	// ("initrd=initrd ").
+	switch initrdOption {
+	case InitrdOptionPrefix:
+		cmdLineStr = "initrd=initrd " + cmdLineStr
+	case InitrdOptionSuffix:
+		cmdLineStr = cmdLineStr + " initrd=initrd"
+	case InitrdOptionNone:
 	}
 
 	// Interpret bytes as ascii/utf-8 and encode as utf-16
@@ -68,8 +74,7 @@ func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*a
 }
 
 func MeasureCmdlineNarrow(alg crypto.Hash, ta TrustAnchor, digest []byte,
-	refvals []*ar.Component, index int, cmdline, eventType string, zeros int, stripLf,
-	appendInitrd bool,
+	refvals []*ar.Component, index int, cmdline, eventType string, zeros int, stripLf bool,
 ) ([]byte, []*ar.Component, error) {
 
 	// Read the commandline

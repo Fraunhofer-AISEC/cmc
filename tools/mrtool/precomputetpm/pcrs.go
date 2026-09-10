@@ -508,7 +508,7 @@ func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	if c.Cmdline != "" {
 		pcr, refvals, err = tcg.MeasureCmdline(crypto.SHA256, tcg.TPM, pcr, refvals, 9,
-			c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, (c.Qemu && (c.Initrd != "")))
+			c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, c.InitrdOption)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
 		}
@@ -556,7 +556,7 @@ func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	if c.Cmdline != "" {
 		pcr, refvals, err = tcg.MeasureCmdlineNarrow(crypto.SHA256, tcg.TPM, pcr, refvals, 11,
-			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline, (c.Qemu && (c.Initrd != "")))
+			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
 		}
@@ -584,7 +584,7 @@ func PrecomputePcr12(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	if c.Cmdline != "" {
 		pcr, refvals, err = tcg.MeasureCmdline(crypto.SHA256, tcg.TPM, pcr, refvals, 12,
-			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline, (c.Qemu && (c.Initrd != "")))
+			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline, tcg.InitrdOptionNone)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
 		}
