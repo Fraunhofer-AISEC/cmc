@@ -209,3 +209,10 @@ require (
 )
 
 tool github.com/caddyserver/xcaddy/cmd/xcaddy
+
+// github.com/google/cel-go is pulled indirectly by caddy. The upstream repo
+// was moved to github.com/cel-expr/cel-go without a redirect, so
+// GOPROXY=direct builds cannot resolve the old path. We redirect to the new
+// repo at the same version caddy v2.11.4 already uses.
+// Remove as soon as a new caddy release is shipped.
+replace github.com/google/cel-go => github.com/cel-expr/cel-go v0.28.1
