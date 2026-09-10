@@ -67,17 +67,18 @@ func (azure *Azure) Init(c *drivers.DriverConfig) error {
 		return fmt.Errorf("missing endorser provider")
 	}
 
-	snpEndorser, err := c.Endorsers.Snp()
-	if err != nil {
-		return fmt.Errorf("failed to get azure endorser: %w", err)
+	// Endorsers are trust-anchor-specific and only needed when we actually use
+	// them (SNP endorser for VCEK enrollment, TDX endorser for collateral fetch).
+	if snpEndorser, err := c.Endorsers.Snp(); err == nil {
+		azure.snpEndorser = snpEndorser
+	} else {
+		log.Debugf("SNP endorser unavailable: %v (this is normal on TDX machines)", err)
 	}
-	azure.snpEndorser = snpEndorser
-
-	tdxEndorser, err := c.Endorsers.Tdx()
-	if err != nil {
-		return fmt.Errorf("failed to get azure endorser: %w", err)
+	if tdxEndorser, err := c.Endorsers.Tdx(); err == nil {
+		azure.tdxEndorser = tdxEndorser
+	} else {
+		log.Debugf("TDX endorser unavailable: %v (this is normal on SNP machines)", err)
 	}
-	azure.tdxEndorser = tdxEndorser
 
 	azure.DriverConfig = c
 	azure.pcrs = getQuotePcrs(c.ExcludePcrs)
