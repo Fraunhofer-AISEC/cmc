@@ -626,10 +626,17 @@ func DecodeSnpReport(report []byte) (snpreport, error) {
 	return s, nil
 }
 
-func GetSnpCodeName(familyId, modelId uint8) string {
+func GetSnpCodeName(familyId, modelId uint8) (string, error) {
 
 	log.Debugf("Get code name for combined family ID 0x%x, combined model id 0x%x",
 		familyId, modelId)
+
+	// SNP report version < 3 does not populate CpuFamilyId/CpuModelId (both read
+	// as 0 from the Reserved2 region). The oldest platform we support that emits
+	// such reports is Milan, so treat family == 0 as an implicit Milan.
+	if familyId == 0 {
+		return "Milan", nil
+	}
 
 	// Siena/Bergamo use the same root keys as Genoa:
 	// https://www.amd.com/content/dam/amd/en/documents/epyc-technical-docs/specifications/57230.pdf
@@ -639,24 +646,21 @@ func GetSnpCodeName(familyId, modelId uint8) string {
 	case 0x19:
 		switch {
 		case modelId <= 0xF:
-			return "Milan"
+			return "Milan", nil
 		case modelId >= 0x10 && modelId <= 0x1F:
-			return "Genoa"
+			return "Genoa", nil
 		case modelId >= 0xA0 && modelId <= 0xAF:
 			// Bergamo and Siena also use Genoa PKI
-			return "Genoa"
+			return "Genoa", nil
 		}
 	case 0x1A:
 		if modelId < 0x1F {
-			return "Turin"
+			return "Turin", nil
 		}
-	default:
-		return "Milan"
 	}
 
-	// Use default Milan (Milan servers do not support these attestation report fields
-	// and are the oldest servers we support)
-	return "Milan"
+	return "", fmt.Errorf("unknown AMD EPYC generation (family 0x%x, model 0x%x): "+
+		"cannot map to a VCEK PKI code name", familyId, modelId)
 }
 
 func min(v []uint8) uint8 {
@@ -693,7 +697,11 @@ func getSnpVersionPolicy(report *snpreport, cert *x509.Certificate, policy *ar.S
 		return nil, "", fmt.Errorf("failed to get versioned SNP policy: certificate is nil")
 	}
 
-	codeName := strings.ToLower(GetSnpCodeName(report.CpuFamilyId, report.CpuModelId))
+	rawCodeName, err := GetSnpCodeName(report.CpuFamilyId, report.CpuModelId)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get versioned SNP policy: %w", err)
+	}
+	codeName := strings.ToLower(rawCodeName)
 	codeNameCert := strings.ToLower(cert.Issuer.CommonName)
 	log.Debugf("EPYC Code Name: %v / %v", codeName, codeNameCert)
 
