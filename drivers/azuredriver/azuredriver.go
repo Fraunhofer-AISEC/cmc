@@ -205,13 +205,15 @@ func (azure *Azure) provision() error {
 		return fmt.Errorf("failed to get azure cert chain: %w", err)
 	}
 
-	// Store FMSPC TODO ONLY WORKS WITH TDX
-	exts, err := pcs.PckCertificateExtensions(azure.ccAkChain[0])
-	if err != nil {
-		return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+	// FMSPC only exists for Intel TDX (PCK cert); SNP uses a VCEK with no FMSPC
+	if azure.vmType == ar.TYPE_EVIDENCE_AZURE_TDX {
+		exts, err := pcs.PckCertificateExtensions(azure.ccAkChain[0])
+		if err != nil {
+			return fmt.Errorf("failed to get PCK certificate extensions: %w", err)
+		}
+		azure.fmspc = exts.FMSPC
+		log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 	}
-	azure.fmspc = exts.FMSPC
-	log.Tracef("PCK FMSPC: %v", exts.FMSPC)
 
 	return nil
 }
