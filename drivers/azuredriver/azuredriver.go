@@ -326,7 +326,7 @@ func (azure *Azure) loadCredentials() error {
 		return fmt.Errorf("stored AK chain at %v is empty", azure.StoragePath)
 	}
 
-	if azure.ccAkChain[0].Subject.CommonName == "Intel SGX PCK Certificate" {
+	if hasSgxPckExtension(azure.ccAkChain[0]) {
 		azure.vmType = ar.TYPE_EVIDENCE_AZURE_TDX
 		// Store FMSPC
 		exts, err := pcs.PckCertificateExtensions(azure.ccAkChain[0])
@@ -340,6 +340,16 @@ func (azure *Azure) loadCredentials() error {
 	}
 
 	return nil
+}
+
+// hasSgxPckExtension reports whether the certificate carries the Intel SGX extension OID
+func hasSgxPckExtension(cert *x509.Certificate) bool {
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(pcs.OidSgxExtension) {
+			return true
+		}
+	}
+	return false
 }
 
 func (azure *Azure) saveCredentials() error {
