@@ -320,7 +320,10 @@ func (snp *Snp) fetchAk() error {
 
 	log.Debugf("Fetched Chip ID from attestation report: %x", s.ChipId[:])
 
-	codeName := verifier.GetSnpCodeName(s.CpuFamilyId, s.CpuModelId)
+	codeName, err := verifier.GetSnpCodeName(s.CpuFamilyId, s.CpuModelId)
+	if err != nil {
+		return fmt.Errorf("failed to determine EPYC code name from attestation report: %w", err)
+	}
 
 	log.Debugf("Fetched EPYC code name from attestation report: %q", codeName)
 

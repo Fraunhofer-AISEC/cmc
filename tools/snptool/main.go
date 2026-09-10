@@ -149,7 +149,10 @@ func main() {
 						return fmt.Errorf("failed to decode SNP report: %w", err)
 					}
 
-					codeName := verifier.GetSnpCodeName(report.CpuFamilyId, report.CpuModelId)
+					codeName, err := verifier.GetSnpCodeName(report.CpuFamilyId, report.CpuModelId)
+					if err != nil {
+						return fmt.Errorf("failed to determine EPYC code name: %w", err)
+					}
 
 					log.Debugf("Fetched code name %q for family ID 0x%x, model ID 0x%x", codeName,
 						report.CpuFamilyId, report.CpuModelId)
@@ -353,7 +356,10 @@ func parseReport(in string) error {
 		return fmt.Errorf("failed to decode SNP report: %w", err)
 	}
 
-	codeName := verifier.GetSnpCodeName(report.CpuFamilyId, report.CpuModelId)
+	codeName, err := verifier.GetSnpCodeName(report.CpuFamilyId, report.CpuModelId)
+	if err != nil {
+		log.Warnf("could not identify EPYC generation: %v (TCB fields will be shown without field decoding)", err)
+	}
 
 	fmt.Printf("Version:           %v\n", report.Version)
 	fmt.Printf("GuestSvn:          %v\n", report.GuestSvn)
@@ -452,7 +458,7 @@ func getSnpCodeName() (string, error) {
 	combinedFamily := uint8(basicFamily + extendedFamily)
 	combinedModel := uint8((extendedModel << 4) | baseModel)
 
-	return verifier.GetSnpCodeName(combinedFamily, combinedModel), nil
+	return verifier.GetSnpCodeName(combinedFamily, combinedModel)
 }
 
 func parseVcek(c *x509.Certificate) error {

@@ -181,7 +181,7 @@ func (azure *Azure) UpdateCerts() error {
 func provisioningRequired(p string) bool {
 	// Stateless operation always requires provisioning
 	if p == "" {
-		log.Info("Aure Provisioning REQUIRED")
+		log.Info("Azure Provisioning REQUIRED")
 		return true
 	}
 
@@ -197,12 +197,14 @@ func provisioningRequired(p string) bool {
 }
 
 func (azure *Azure) provision() error {
-	var err error
 
 	// Fetch CC certificate chain for Attestation Key
-	err = azure.fetchAk()
+	err := azure.fetchAk()
 	if err != nil {
 		return fmt.Errorf("failed to get azure cert chain: %w", err)
+	}
+	if len(azure.ccAkChain) == 0 || azure.ccAkChain[0] == nil {
+		return fmt.Errorf("provisioning produced an empty AK chain")
 	}
 
 	// FMSPC only exists for Intel TDX (PCK cert); SNP uses a VCEK with no FMSPC
@@ -242,7 +244,7 @@ func (azure *Azure) fetchSnpAk(data []byte) error {
 
 	// Initial checks
 	if azure.snpEndorser == nil {
-		return fmt.Errorf("SNP endorser not configures. Cannot fetch SNP certificate chain")
+		return fmt.Errorf("SNP endorser not configured. Cannot fetch SNP certificate chain")
 	}
 
 	s, err := verifier.DecodeSnpReport(data)
@@ -252,12 +254,15 @@ func (azure *Azure) fetchSnpAk(data []byte) error {
 
 	akType, err := internal.GetAkType(s.KeySelection)
 	if err != nil {
-		return fmt.Errorf("could not determine SNP attestation report attestation key")
+		return fmt.Errorf("could not determine SNP attestation report attestation key: %w", err)
 	}
 
 	log.Debugf("Fetched Chip ID from attestation report: %x", s.ChipId[:])
 
-	codeName := verifier.GetSnpCodeName(s.CpuFamilyId, s.CpuModelId)
+	codeName, err := verifier.GetSnpCodeName(s.CpuFamilyId, s.CpuModelId)
+	if err != nil {
+		return fmt.Errorf("failed to determine EPYC code name from attestation report: %w", err)
+	}
 
 	log.Debugf("Fetched EPYC code name from attestation report: %q", codeName)
 
@@ -316,6 +321,9 @@ func (azure *Azure) loadCredentials() error {
 		return fmt.Errorf("failed to parse AK certs: %w", err)
 	}
 	log.Debugf("Parsed stored AK chain of length %v", len(azure.ccAkChain))
+	if len(azure.ccAkChain) == 0 || azure.ccAkChain[0] == nil {
+		return fmt.Errorf("stored AK chain at %v is empty", azure.StoragePath)
+	}
 
 	if azure.ccAkChain[0].Subject.CommonName == "Intel SGX PCK Certificate" {
 		azure.vmType = ar.TYPE_EVIDENCE_AZURE_TDX
