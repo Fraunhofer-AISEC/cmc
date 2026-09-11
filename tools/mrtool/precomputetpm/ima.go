@@ -92,6 +92,9 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 	for _, root := range paths {
 		rootInfo, err := os.Stat(root)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("user specified IMA path %q does not exist", root)
+			}
 			return nil, fmt.Errorf("failed to stat path %q: %w", root, err)
 		}
 		if rootInfo.Mode().IsRegular() {
