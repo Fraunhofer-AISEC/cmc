@@ -90,3 +90,12 @@ Parses the eventlog for RTMR0-3
 ```sh
 mrtool parse tdx --mrs 1,2,3,4
 ```
+
+### Parse a TPM Quote
+
+Decode a signed TPMS_ATTEST TPM quote or a `[quote|sig]` blob produced by `azuretool get-vtpm-quote`
+and print its fields. The format is auto-detected.
+
+```sh
+mrtool parse tpm-quote --in quote.bin
+```
