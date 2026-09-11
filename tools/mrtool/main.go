@@ -27,6 +27,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsesmbios"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetdx"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetpm"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetpmquote"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputesnp"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputeswima"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/precomputetdx"
@@ -50,6 +51,7 @@ func main() {
 				Usage: "parse measurements from event logs",
 				Commands: []*cli.Command{
 					parsetpm.Command,
+					parsetpmquote.Command,
 					parsetdx.Command,
 					parseima.Command,
 					parsesmbios.Command,
