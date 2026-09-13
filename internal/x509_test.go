@@ -20,14 +20,18 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -305,6 +309,124 @@ func TestVerifyCertChain(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestMatchCaFingerprint covers the pinning of a trust anchor by fingerprint, which is what
+// allows a certificate chain to be transported with the evidence, including its root.
+func TestMatchCaFingerprint(t *testing.T) {
+	ca, err := ParseCert(ca1)
+	if err != nil {
+		t.Fatalf("failed to parse CA: %v", err)
+	}
+	digest := sha256.Sum256(ca.Raw)
+	fingerprint := hex.EncodeToString(digest[:])
+	other := strings.Repeat("ab", sha256.Size)
+
+	tests := []struct {
+		name            string
+		refFingerprints []string
+		wantMatch       string
+		wantErr         bool
+		wantParseErr    bool
+	}{
+		{name: "single match", refFingerprints: []string{fingerprint}, wantMatch: fingerprint},
+		{
+			name:            "match among several",
+			refFingerprints: []string{other, fingerprint},
+			wantMatch:       fingerprint,
+		},
+		{
+			name:            "surrounding whitespace tolerated",
+			refFingerprints: []string{" " + fingerprint + "\n"},
+			wantMatch:       " " + fingerprint + "\n",
+		},
+		{name: "no match", refFingerprints: []string{other}, wantErr: true},
+		{name: "no reference fingerprints", refFingerprints: nil, wantErr: true},
+		{
+			// A fingerprint the metadata author mistyped must be distinguishable from a
+			// mismatch, the caller reports it as a metadata error
+			name:            "malformed reference",
+			refFingerprints: []string{"not hex"},
+			wantErr:         true,
+			wantParseErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			match, err := MatchCaFingerprint(ca, tt.refFingerprints)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("MatchCaFingerprint() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if errors.Is(err, ErrParseFingerprint) != tt.wantParseErr {
+				t.Errorf("MatchCaFingerprint() error = %v, want ErrParseFingerprint %v",
+					err, tt.wantParseErr)
+			}
+			if match != tt.wantMatch {
+				t.Errorf("MatchCaFingerprint() = %q, want %q", match, tt.wantMatch)
+			}
+		})
+	}
+
+	t.Run("rejects a different CA with the same subject", func(t *testing.T) {
+		other, err := ParseCert(ca2)
+		if err != nil {
+			t.Fatalf("failed to parse CA: %v", err)
+		}
+		if _, err := MatchCaFingerprint(other, []string{fingerprint}); err == nil {
+			t.Error("MatchCaFingerprint() accepted a CA whose fingerprint is not pinned")
+		}
+	})
+}
+
+// TestSelfSignedRoot covers finding the root of a chain which carries it, as the NVIDIA
+// device identity and RIM signing chains do.
+func TestSelfSignedRoot(t *testing.T) {
+	leaf, err := ParseCert(leaf1)
+	if err != nil {
+		t.Fatalf("failed to parse leaf: %v", err)
+	}
+	inter, err := ParseCert(inter1)
+	if err != nil {
+		t.Fatalf("failed to parse intermediate: %v", err)
+	}
+	ca, err := ParseCert(ca1)
+	if err != nil {
+		t.Fatalf("failed to parse CA: %v", err)
+	}
+
+	t.Run("chain with root", func(t *testing.T) {
+		root, err := SelfSignedRoot([]*x509.Certificate{leaf, inter, ca})
+		if err != nil {
+			t.Fatalf("SelfSignedRoot() error = %v", err)
+		}
+		if !root.Equal(ca) {
+			t.Errorf("SelfSignedRoot() = %q, want %q", root.Subject.CommonName, ca.Subject.CommonName)
+		}
+	})
+
+	t.Run("chain without root", func(t *testing.T) {
+		if _, err := SelfSignedRoot([]*x509.Certificate{leaf, inter}); err == nil {
+			t.Error("SelfSignedRoot() found a root in a chain that has none")
+		}
+	})
+
+	t.Run("empty chain", func(t *testing.T) {
+		if _, err := SelfSignedRoot(nil); err == nil {
+			t.Error("SelfSignedRoot() found a root in an empty chain")
+		}
+	})
+
+	t.Run("self-issued with a broken signature", func(t *testing.T) {
+		// A self-issued certificate whose self-signature does not verify must not be
+		// returned as a root, otherwise anyone could mint one for an arbitrary subject
+		tampered := *ca
+		tampered.Signature = append([]byte{}, ca.Signature...)
+		tampered.Signature[len(tampered.Signature)-1] ^= 0x01
+		if _, err := SelfSignedRoot([]*x509.Certificate{leaf, inter, &tampered}); err == nil {
+			t.Error("SelfSignedRoot() accepted an invalid self-signature")
+		}
+	})
 }
 
 func newTestCSR(t *testing.T) *x509.CertificateRequest {

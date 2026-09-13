@@ -27,6 +27,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/imagedesc"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/manifest"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/manifestdesc"
+	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/nvidiapolicy"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/sgxpolicy"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/snppolicy"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/snpversion"
@@ -53,6 +54,7 @@ func main() {
 					snpversion.Command,
 					tdxpolicy.Command,
 					sgxpolicy.Command,
+					nvidiapolicy.Command,
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
 					return cli.ShowSubcommandHelp(c)

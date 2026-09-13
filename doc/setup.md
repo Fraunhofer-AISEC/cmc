@@ -95,6 +95,7 @@ example guides:
 - [SNP-Setup](./setup-snp.md)
 - [SGX-Setup](./setup-sgx.md)
 - [TDX-Setup](./setup-tdx.md)
+- [NVIDIA-CC-GPU-Setup](./setup-nvidia.md)
 
 
 ### Further documentation

@@ -39,6 +39,12 @@ type DriverConfig struct {
 	// AppendEbsEvent reconstructs the ExitBootServices EV_EFI_ACTION events for PCR 5,
 	// which is only required for TPM2.0 with legacy TPM eventlog format v1
 	AppendEbsEvent bool
+	// VendorCache is the folder in which drivers cache hardware vendor collateral, such
+	// as the NVIDIA RIMs and OCSP responses. If empty, collateral is not cached on disk
+	VendorCache string
+	// ExtendedChecks instructs drivers to additionally collect evidence that is not
+	// covered by the hardware signature, such as the NVIDIA GPU state queried via NVML
+	ExtendedChecks bool
 }
 
 // Driver is an interface representing a driver for a hardware trust anchor,

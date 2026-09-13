@@ -360,7 +360,7 @@ func CollectComponents(manifests []Metadata, descriptions []ManifestDescription,
 			switch ta {
 			case TRUST_ANCHOR_TPM, TRUST_ANCHOR_TDX, TRUST_ANCHOR_SNP,
 				TRUST_ANCHOR_SGX, TRUST_ANCHOR_IAS, TRUST_ANCHOR_SW,
-				TRUST_ANCHOR_SWIMA:
+				TRUST_ANCHOR_SWIMA, TRUST_ANCHOR_NVIDIA:
 			default:
 				return nil, fmt.Errorf("unsupported trust anchor %q", ta)
 			}

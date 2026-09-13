@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -223,6 +224,49 @@ func StorePrivateKeyPem(file string, key crypto.PrivateKey) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 	return nil
+}
+
+// ErrParseFingerprint indicates that a reference CA fingerprint from metadata could not be decoded
+var ErrParseFingerprint = errors.New("failed to decode reference CA fingerprint")
+
+// MatchCaFingerprint compares the SHA-256 fingerprint of the given CA certificate against the
+// reference fingerprints from the signed metadata and returns the matching reference.
+func MatchCaFingerprint(ca *x509.Certificate, refFingerprints []string) (string, error) {
+	fingerprint := sha256.Sum256(ca.Raw)
+
+	for _, ref := range refFingerprints {
+		refFingerprint, err := hex.DecodeString(strings.TrimSpace(ref))
+		if err != nil {
+			return "", fmt.Errorf("%w %q: %v", ErrParseFingerprint, ref, err)
+		}
+		if bytes.Equal(refFingerprint, fingerprint[:]) {
+			log.Debugf("Found matching CA fingerprint %v", ref)
+			return ref, nil
+		}
+		log.Tracef("Reference CA fingerprint %v does not match %x, continue..",
+			ref, fingerprint[:])
+	}
+
+	return "", fmt.Errorf("CA fingerprint %x does not match any of the %v reference fingerprints",
+		fingerprint[:], len(refFingerprints))
+}
+
+// SelfSignedRoot returns the first self-signed certificate of the given chain, i.e. its root.
+// It is used for chains which carry their own root, such as the NVIDIA device identity and RIM
+// signing chains.
+func SelfSignedRoot(chain []*x509.Certificate) (*x509.Certificate, error) {
+	for _, cert := range chain {
+		if !bytes.Equal(cert.RawSubject, cert.RawIssuer) {
+			continue
+		}
+		if err := cert.CheckSignatureFrom(cert); err != nil {
+			return nil, fmt.Errorf("self-issued certificate %q carries an invalid self-signature: %w",
+				cert.Subject.CommonName, err)
+		}
+		return cert, nil
+	}
+
+	return nil, errors.New("certificate chain does not contain a self-signed root")
 }
 
 func CreateCertPool(roots []*x509.Certificate, allowSystemCerts bool) (*x509.CertPool, error) {

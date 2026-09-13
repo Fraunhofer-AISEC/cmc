@@ -29,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.7.0"
+	reportVersion = "3.8.0"
 )
 
 func GetReportVersion() string {
@@ -50,6 +50,7 @@ const (
 	TYPE_ENCODING_CBOR = "cbor"
 
 	// Evidence type fields
+	TYPE_EVIDENCE_NVIDIA    = "NVIDIA Evidence"
 	TYPE_EVIDENCE_SNP       = "SNP Evidence"
 	TYPE_EVIDENCE_SW        = "SW Evidence"
 	TYPE_EVIDENCE_SGX       = "SGX Evidence"
@@ -71,12 +72,13 @@ const (
 	TYPE_RESULT_IMA = "IMA Result"
 
 	// Artifact type fields
-	TYPE_PCR_SUMMARY    = "PCR Summary"
-	TYPE_PCR_EVENTLOG   = "PCR Eventlog"
-	TYPE_TDX_COLLATERAL = "TDX Collateral"
-	TYPE_SGX_COLLATERAL = "SGX Collateral"
-	TYPE_SW_EVENTLOG    = "SW Eventlog"
-	TYPE_CC_EVENTLOG    = "CC Eventlog"
+	TYPE_PCR_SUMMARY       = "PCR Summary"
+	TYPE_PCR_EVENTLOG      = "PCR Eventlog"
+	TYPE_TDX_COLLATERAL    = "TDX Collateral"
+	TYPE_SGX_COLLATERAL    = "SGX Collateral"
+	TYPE_NVIDIA_COLLATERAL = "NVIDIA Collateral"
+	TYPE_SW_EVENTLOG       = "SW Eventlog"
+	TYPE_CC_EVENTLOG       = "CC Eventlog"
 
 	// Component name fields
 	NAME_PCR_INIT_VALUE = "TPM_PCR_INIT_VALUE"
@@ -101,13 +103,14 @@ const (
 	PROPERTY_INDEX        = "cmc.index"
 
 	// Trust anchor property values
-	TRUST_ANCHOR_TPM   = "TPM"
-	TRUST_ANCHOR_TDX   = "TDX"
-	TRUST_ANCHOR_SNP   = "SNP"
-	TRUST_ANCHOR_SGX   = "SGX"
-	TRUST_ANCHOR_IAS   = "IAS"
-	TRUST_ANCHOR_SW    = "SW"
-	TRUST_ANCHOR_SWIMA = "SWIMA"
+	TRUST_ANCHOR_TPM    = "TPM"
+	TRUST_ANCHOR_TDX    = "TDX"
+	TRUST_ANCHOR_SNP    = "SNP"
+	TRUST_ANCHOR_SGX    = "SGX"
+	TRUST_ANCHOR_IAS    = "IAS"
+	TRUST_ANCHOR_SW     = "SW"
+	TRUST_ANCHOR_SWIMA  = "SWIMA"
+	TRUST_ANCHOR_NVIDIA = "NVIDIA"
 )
 
 // AttestationReport represents the self-contained attestation report comprising evidences,
@@ -159,6 +162,13 @@ type Collateral struct {
 
 // Metadata represents attestation report reference descriptions and manifests containing
 // the reference hashes. This structure already holds the unpacked and validated item.
+// The embedded structs are flattened into a single CBOR map, so their keyasint keys must not
+// overlap:
+//
+//	MetaInfo         :  0 - 9
+//	Manifest         : 10 - 39
+//	ImageDescription : 40 - 49
+//	OmspResponse     : 50 - 59
 type Metadata struct {
 	MetaInfo
 	Manifest
@@ -188,13 +198,14 @@ type Manifest struct {
 	SgxPolicy      *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
 	Details        map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
 	OmspServer     string                 `json:"omspServer,omitempty" cbor:"19,keyasint,omitempty"`
+	NvidiaPolicy   *NvidiaPolicy          `json:"nvidiaPolicy,omitempty" cbor:"20,keyasint,omitempty"`
 }
 
 // ImageDescription ties together all manifests
 type ImageDescription struct {
-	Location     string                `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
-	Descriptions []ManifestDescription `json:"descriptions,omitempty" cbor:"21,keyasint,omitempty"`
-	AllowedPeers []string              `json:"peers,omitempty" cbor:"22,keyasint,omitempty"`
+	Location     string                `json:"location,omitempty" cbor:"40,keyasint,omitempty"`
+	Descriptions []ManifestDescription `json:"descriptions,omitempty" cbor:"41,keyasint,omitempty"`
+	AllowedPeers []string              `json:"peers,omitempty" cbor:"42,keyasint,omitempty"`
 }
 
 // ManifestDescription links the manifests into the ImageDescription
@@ -210,9 +221,9 @@ type ManifestDescription struct {
 // Structure and content were developed based on the definition of OCSP responses for certificate status requests (RFC 6960).
 // Certificates, Signature Algorithms and Signatures are provided by transferring the OmspResponse as JWS or signed CBOR.
 type OmspResponse struct {
-	Server     string               `json:"server,omitempty" cbor:"30,keyasint,omitempty"`
-	ProducedAt string               `json:"producedAt,omitempty" cbor:"31,keyasint,omitempty"`
-	Responses  []SingleOmspResponse `json:"responses,omitempty" cbor:"32,keyasint,omitempty"`
+	Server     string               `json:"server,omitempty" cbor:"50,keyasint,omitempty"`
+	ProducedAt string               `json:"producedAt,omitempty" cbor:"51,keyasint,omitempty"`
+	Responses  []SingleOmspResponse `json:"responses,omitempty" cbor:"52,keyasint,omitempty"`
 }
 
 type SingleOmspResponse struct {
@@ -270,6 +281,7 @@ type Component struct {
 	// measurement, Intel TDX MRTD and MRSEAM), not for registers built by extending
 	// individual measurements
 	AlternativeGroup string                 `json:"alternativeGroup,omitempty" cbor:"11,keyasint,omitempty"`
+	NvidiaCollateral *NvidiaCollateral      `json:"nvidiaCollateral,omitempty" cbor:"12,keyasint,omitempty"` // TODO move
 	OciRules         map[string]interface{} `json:"-" cbor:"-"`
 }
 
@@ -334,6 +346,17 @@ type IntelCollateral struct {
 	TcbInfoRootCert            []byte `json:"tcbInfoRootCert" cbor:"7,keyasint"`
 	QeIdentityIntermediateCert []byte `json:"qeIdentityIntermediateCert" cbor:"8,keyasint"`
 	QeIdentityRootCert         []byte `json:"qeIdentityRootCert" cbor:"9,keyasint"`
+}
+
+// NvidiaCollateral is a helper struct for NVIDIA GPU collateral. It carries the
+// reference integrity manifests (RIMs) for the GPU driver and VBIOS as well as the
+// OCSP responses required to establish that the device and RIM signing certificate
+// chains have not been revoked. Keys are the driver/VBIOS version or the device UUID.
+type NvidiaCollateral struct {
+	OcspResponsesDeviceCerts map[string][]string `json:"ocspResponsesDeviceCerts,omitempty" cbor:"0,keyasint,omitempty"`
+	DriverRIMs               map[string]string   `json:"driverRims,omitempty" cbor:"1,keyasint,omitempty"`
+	VbiosRIMs                map[string]string   `json:"vbiosRims,omitempty" cbor:"2,keyasint,omitempty"`
+	OcspResponsesRIMCerts    map[string][]string `json:"ocspResponsesRimCerts,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 // CrtData represents the measurement of an OCI container, comprising the OCI
@@ -407,6 +430,61 @@ type SgxPolicy struct {
 	IsvSvn              uint16        `json:"isvSvn" cbor:"3,keyasint"`
 	Attributes          SGXAttributes `json:"attributes" cbor:"4,keyasint"`
 	AcceptedTcbStatuses []string      `json:"acceptedTcbStatuses,omitempty" cbor:"5,keyasint,omitempty"`
+}
+
+// NvidiaPolicy defines the attestation policy enforced during NVIDIA GPU verification.
+// All fields are optional (zero value = not enforced) unless noted.
+type NvidiaPolicy struct {
+	// VbiosMinVersion is the minimum acceptable VBIOS version (inclusive, numeric dotted comparison)
+	VbiosMinVersion string `json:"vbiosMinVersion,omitempty" cbor:"0,keyasint,omitempty"`
+	// DriverMinVersion is the minimum acceptable driver version (inclusive, numeric dotted comparison)
+	DriverMinVersion string `json:"driverMinVersion,omitempty" cbor:"1,keyasint,omitempty"`
+	// AllowedArchitectures is an allowlist of GPU architecture names (e.g. ["HOPPER", "BLACKWELL"]).
+	// Empty means all known architectures are permitted
+	AllowedArchitectures []string `json:"allowedArchitectures,omitempty" cbor:"2,keyasint,omitempty"`
+	// EnforceNonce requires the GPU attestation report to echo the supplied nonce
+	EnforceNonce bool `json:"enforceNonce,omitempty" cbor:"3,keyasint,omitempty"`
+	// RequireOCSPForRIMs rejects RIMs whose signing chain has no valid OCSP response
+	RequireOCSPForRIMs bool `json:"requireOcspForRims,omitempty" cbor:"4,keyasint,omitempty"`
+	// DeviceCaFingerprints contains the SHA-256 fingerprints of the accepted NVIDIA device
+	// identity root CAs.
+	DeviceCaFingerprints []string `json:"deviceCaFingerprints,omitempty" cbor:"6,keyasint,omitempty"`
+	// RimCaFingerprints contains the SHA-256 fingerprints of the accepted NVIDIA RIM signing
+	// root CAs.
+	RimCaFingerprints []string `json:"rimCaFingerprints,omitempty" cbor:"7,keyasint,omitempty"`
+	// ExtraSecurityPolicy holds the optional checks which rely on evidence outside the
+	// signed attestation report. It is nested here rather than being a Manifest field of
+	// its own because it only applies in combination with the checks above, and because
+	// it is only evaluated if the driver was run with extended checks enabled
+	ExtraSecurityPolicy *NvidiaExtraSecurityPolicy `json:"extraSecurityPolicy,omitempty" cbor:"5,keyasint,omitempty"`
+}
+
+// NvidiaExtraSecurityPolicy defines additional, optional NVIDIA GPU checks which rely
+// on measurements that are not covered by the signed GPU attestation report and
+// therefore require the driver to be run with extended checks enabled
+type NvidiaExtraSecurityPolicy struct {
+	// RequireSupplementalEvidence rejects reports which do not carry the unsigned
+	// supplemental measurements this policy inspects
+	RequireSupplementalEvidence bool `json:"requireSupplementalEvidence,omitempty" cbor:"0,keyasint,omitempty"`
+	// AllowedUUIDs, if non-empty, restricts attestation to this exact set of GPU UUIDs
+	AllowedUUIDs []string `json:"allowedUuids,omitempty" cbor:"1,keyasint,omitempty"`
+	// DeniedUUIDs is a denylist; any GPU whose UUID appears here is rejected even if it
+	// would otherwise pass all checks (e.g. known-compromised devices)
+	DeniedUUIDs []string `json:"deniedUuids,omitempty" cbor:"2,keyasint,omitempty"`
+
+	InforomOemMinVersion   string `json:"inforomOemMinVersion,omitempty" cbor:"3,keyasint,omitempty"`
+	InforomEccMinVersion   string `json:"inforomEccMinVersion,omitempty" cbor:"4,keyasint,omitempty"`
+	InforomPowerMinVersion string `json:"inforomPowerMinVersion,omitempty" cbor:"5,keyasint,omitempty"`
+	InforomImageMinVersion string `json:"inforomImageMinVersion,omitempty" cbor:"6,keyasint,omitempty"`
+
+	GspFirmwareMinVersion string `json:"gspFirmwareMinVersion,omitempty" cbor:"7,keyasint,omitempty"`
+	RequireGspEnabled     *bool  `json:"requireGspEnabled,omitempty" cbor:"8,keyasint,omitempty"`
+	RequireGspDefault     *bool  `json:"requireGspDefault,omitempty" cbor:"9,keyasint,omitempty"`
+	RequireInforomValid   *bool  `json:"requireInforomValid,omitempty" cbor:"10,keyasint,omitempty"`
+
+	MigCurrentModeExpected *uint32  `json:"migCurrentModeExpected,omitempty" cbor:"11,keyasint,omitempty"`
+	MigPendingModeExpected *uint32  `json:"migPendingModeExpected,omitempty" cbor:"12,keyasint,omitempty"`
+	InforomConfigChecksums []string `json:"inforomConfigChecksums,omitempty" cbor:"13,keyasint,omitempty"`
 }
 
 // SGX attributes according to
