@@ -94,7 +94,8 @@ Currently supported tags for the `cmcd` and `cmcctl` are:
 - `tpm` Enables the TPM driver
 - `snp` Enables the SNP driver
 - `tdx` Enables the Intel TDX driver
-- `sgx` Enables the Intel SGX driver
+- `sgx` Enables the Intel SGX driver (requires cgo, see [setup-sgx.md](./setup-sgx.md))
+- `nvidia` Enables the NVIDIA CC GPU driver (requires cgo, see [setup-nvidia.md](./setup-nvidia.md))
 - `sw` Enables the container driver
 
 To build the cmcd/cmcctl with `socket` and `tpm` support:

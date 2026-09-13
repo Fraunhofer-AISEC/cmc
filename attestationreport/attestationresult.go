@@ -173,15 +173,16 @@ type CompatibilityResult struct {
 //
 
 type MeasurementResult struct {
-	Type      string          `json:"type" cbor:"0,keyasint"`
-	Summary   Result          `json:"summary" cbor:"1,keyasint"`
-	Freshness Result          `json:"freshness" cbor:"2,keyasint"`
-	Signature SignatureResult `json:"signature" cbor:"3,keyasint"`
-	Artifacts []DigestResult  `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
-	TpmResult *TpmResult      `json:"tpmResult,omitempty" cbor:"5,keyasint,omitempty"`
-	SnpResult *SnpResult      `json:"snpResult,omitempty" cbor:"6,keyasint,omitempty"`
-	SgxResult *SgxResult      `json:"sgxResult,omitempty" cbor:"7,keyasint,omitempty"`
-	TdxResult *TdxResult      `json:"tdxResult,omitempty" cbor:"8,keyasint,omitempty"`
+	Type         string          `json:"type" cbor:"0,keyasint"`
+	Summary      Result          `json:"summary" cbor:"1,keyasint"`
+	Freshness    Result          `json:"freshness" cbor:"2,keyasint"`
+	Signature    SignatureResult `json:"signature" cbor:"3,keyasint"`
+	Artifacts    []DigestResult  `json:"artifacts,omitempty" cbor:"4,keyasint,omitempty"`
+	TpmResult    *TpmResult      `json:"tpmResult,omitempty" cbor:"5,keyasint,omitempty"`
+	SnpResult    *SnpResult      `json:"snpResult,omitempty" cbor:"6,keyasint,omitempty"`
+	SgxResult    *SgxResult      `json:"sgxResult,omitempty" cbor:"7,keyasint,omitempty"`
+	TdxResult    *TdxResult      `json:"tdxResult,omitempty" cbor:"8,keyasint,omitempty"`
+	NvidiaResult *NvidiaResult   `json:"nvidiaResult,omitempty" cbor:"9,keyasint,omitempty"`
 }
 
 const (
@@ -1069,6 +1070,27 @@ func (r *TdAttributesCheck) PrintErr(format string, args ...interface{}) {
 	r.Kl.PrintErr("%v KL", prefix)
 }
 
+// NvidiaResult represents the results of the verification of an NVIDIA GPU
+// attestation report. A check which was never reached, because an earlier one
+// failed, carries the zero status rather than a failure of its own
+type NvidiaResult struct {
+	MeasurementSignatureCheck Result `json:"signatureCheck" cbor:"0,keyasint"`
+	MeasurementRIMCheck       Result `json:"measurementCheck" cbor:"1,keyasint"`
+	RIMSignatureCheck         Result `json:"rimSignatureCheck" cbor:"2,keyasint"`
+	RIMRecencyCheck           Result `json:"rimRecencyCheck" cbor:"3,keyasint"`
+	DeviceRecencyCheck        Result `json:"deviceRecencyCheck" cbor:"4,keyasint"`
+	PolicyCheck               Result `json:"policyCheck" cbor:"5,keyasint"`
+}
+
+func (r *NvidiaResult) PrintErr() {
+	r.MeasurementSignatureCheck.PrintErr("NVIDIA attestation report signature check")
+	r.MeasurementRIMCheck.PrintErr("NVIDIA measurement check against RIM reference values")
+	r.RIMSignatureCheck.PrintErr("NVIDIA RIM signature check")
+	r.RIMRecencyCheck.PrintErr("NVIDIA RIM recency (OCSP) check")
+	r.DeviceRecencyCheck.PrintErr("NVIDIA device certificate recency (OCSP) check")
+	r.PolicyCheck.PrintErr("NVIDIA policy check")
+}
+
 func (r *SnpResult) PrintErr() {
 	r.VersionMatch.PrintErr("SNP report version match")
 	r.FwCheck.PrintErr("SNP firmware version")
@@ -1146,6 +1168,9 @@ func (r *AttestationResult) PrintErr() {
 		}
 		if m.SnpResult != nil {
 			m.SnpResult.PrintErr()
+		}
+		if m.NvidiaResult != nil {
+			m.NvidiaResult.PrintErr()
 		}
 		if m.SgxResult != nil {
 			m.SgxResult.PrintErr()

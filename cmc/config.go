@@ -91,6 +91,7 @@ type Attestation struct {
 	Drivers         []string   `toml:"drivers"          flag:"drivers" default:"auto" enum:"@drivers" usage:"comma-separated list of attestation report drivers, auto selects all detected hardware drivers (tpm, snp, tdx), empty runs a verifier-only CMC"`
 	HashAlg         string     `toml:"hash_alg"         flag:"hash-alg" default:"sha256" enum:"sha256,sha384,sha512" usage:"hash algorithm for attestation report integrity"`
 	MeasurementLogs bool       `toml:"measurement_logs" flag:"measurement-logs" default:"true" usage:"include measured events in measurement and validation report"`
+	ExtendedChecks  bool       `toml:"extended_checks"  flag:"extended-checks" usage:"additionally collect evidence that is not covered by the hardware signature, such as the NVIDIA GPU state queried via NVML"`
 	Tpm             Tpm        `toml:"tpm"`
 	Snp             Snp        `toml:"snp"`
 	Tdx             Tdx        `toml:"tdx"`
@@ -208,8 +209,8 @@ func (c *Config) MetadataCacheDir() string { return c.cacheDir(metadataCacheDir)
 // PeerCacheDir is the folder peer metadata is cached in to reduce attestation report size
 func (c *Config) PeerCacheDir() string { return c.cacheDir(peerCacheDir) }
 
-// VendorCacheDir is the folder hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)
-// is cached in
+// VendorCacheDir is the folder hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral,
+// NVIDIA RIMs and OCSP responses) is cached in
 func (c *Config) VendorCacheDir() string { return c.cacheDir(vendorCacheDir) }
 
 // cacheDir returns a cache subfolder of the storage folder, or an empty string if no

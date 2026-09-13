@@ -87,7 +87,7 @@ func TestFlagNames(t *testing.T) {
 	want := []string{
 		"addr", "allow-system-certs", "append-ebs", "attest", "attestation-only-trust",
 		"ca-store-path", "cert-policy-arc", "cmc", "config", "count", "ctr-log", "ctr-trust-anchor", "data", "drivers",
-		"dry-run", "enrollment-server", "exclude-pcrs", "hash-alg", "header", "key-config",
+		"dry-run", "enrollment-server", "exclude-pcrs", "extended-checks", "hash-alg", "header", "key-config",
 		"key-id", "key-type", "kubeadm-path", "log-file", "log-level", "measurement-logs",
 		"metadata", "method", "mtls", "nonce", "omsp-format", "peer-cert-level", "policies", "policy-engine",
 		"policy-overwrite", "publish-cert", "publish-key",

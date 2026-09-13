@@ -3,6 +3,7 @@ module github.com/Fraunhofer-AISEC/cmc
 go 1.26.8
 
 require (
+	github.com/beevik/etree v1.8.0
 	github.com/caddyserver/caddy/v2 v2.11.9
 	github.com/containerd/containerd/v2 v2.3.7
 	github.com/containerd/continuity v0.5.0
@@ -26,6 +27,7 @@ require (
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/robertkrimen/otto v0.5.1
+	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spiffe/go-spiffe/v2 v2.7.0
 	github.com/spiffe/spire-plugin-sdk v1.16.0
@@ -115,6 +117,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgx/v5 v5.11.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josephspurrier/goversioninfo v1.5.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect

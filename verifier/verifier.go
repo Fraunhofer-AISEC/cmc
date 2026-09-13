@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -271,6 +272,9 @@ Loop:
 			addMeasurements(result, "IAS", *VerifyIas(ev, col, evidenceNonce, root.CaFingerprints,
 				refVals[ar.TRUST_ANCHOR_IAS]))
 
+		case ar.TYPE_EVIDENCE_NVIDIA:
+			addMeasurements(result, "NVIDIA", *VerifyNvidia(ev, col, evidenceNonce, metadata.Manifests))
+
 		case ar.TYPE_EVIDENCE_SW:
 			addMeasurements(result, "SW", *VerifySw(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SW]))
 
@@ -397,9 +401,11 @@ var evidenceTrustAnchors = map[string][]string{
 	ar.TYPE_EVIDENCE_AZURE_SNP: {ar.TRUST_ANCHOR_SNP},
 	ar.TYPE_EVIDENCE_AZURE_TDX: {ar.TRUST_ANCHOR_TDX},
 	ar.TYPE_EVIDENCE_AZURE_TPM: {ar.TRUST_ANCHOR_TPM},
+	ar.TYPE_EVIDENCE_NVIDIA:    {ar.TRUST_ANCHOR_NVIDIA},
 }
 
-// hardwareTrustAnchors are the trust anchors whose evidence is signed by hardware
+// hardwareTrustAnchors are the trust anchors whose evidence is signed by hardware. NVIDIA is not
+// included, as a GPU attestation report proves the state of the GPU, not of the host platform
 var hardwareTrustAnchors = []string{
 	ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_SNP, ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_SGX,
 	ar.TRUST_ANCHOR_IAS,
@@ -516,32 +522,23 @@ func verifyCaFingerprint(ca *x509.Certificate, refFingerprints []string) ar.Resu
 
 	log.Debugf("Checking %v CA fingerprints", len(refFingerprints))
 
-	caFingerprint := sha256.Sum256(ca.Raw)
-
-	for _, fp := range refFingerprints {
-		refFingerprint, err := hex.DecodeString(fp)
-		if err != nil {
-			log.Warnf("Failed to decode CA fingerprint %v: %v", fp, err)
+	match, err := internal.MatchCaFingerprint(ca, refFingerprints)
+	if err != nil {
+		if errors.Is(err, internal.ErrParseFingerprint) {
+			log.Warnf("Failed to decode CA fingerprint: %v", err)
 			result.Fail(ar.ParseCAFingerprint)
 			return result
 		}
-		if bytes.Equal(refFingerprint, caFingerprint[:]) {
-			log.Debugf("Found matching CA fingerprint %x", refFingerprint)
-			result.Got = fp
-			result.Status = ar.StatusSuccess
-			return result
-		} else {
-			log.Warnf("Root Manifest CA fingerprint %x does not match measurement CA fingerprint %x. Continue..",
-				refFingerprint, caFingerprint[:])
-			continue
-		}
+		log.Warnf("Failed to find matching CA fingerprint: %v", err)
+		caFingerprint := sha256.Sum256(ca.Raw)
+		result.Status = ar.StatusFail
+		result.ExpectedOneOf = refFingerprints
+		result.Got = hex.EncodeToString(caFingerprint[:])
+		return result
 	}
 
-	log.Warn("Failed to find matching CA fingerprint")
-
-	result.Status = ar.StatusFail
-	result.ExpectedOneOf = refFingerprints
-	result.Got = hex.EncodeToString(caFingerprint[:])
+	result.Got = match
+	result.Status = ar.StatusSuccess
 	return result
 }
 

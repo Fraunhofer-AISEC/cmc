@@ -1293,6 +1293,9 @@
         },
         "tdxResult": {
           "$ref": "#/$defs/TdxResult"
+        },
+        "nvidiaResult": {
+          "$ref": "#/$defs/NvidiaResult"
         }
       },
       "type": "object"
@@ -1419,6 +1422,29 @@
             "$ref": "#/$defs/LinuxIDMapping"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "NvidiaResult": {
+      "properties": {
+        "signatureCheck": {
+          "$ref": "#/$defs/Result"
+        },
+        "measurementCheck": {
+          "$ref": "#/$defs/Result"
+        },
+        "rimSignatureCheck": {
+          "$ref": "#/$defs/Result"
+        },
+        "rimRecencyCheck": {
+          "$ref": "#/$defs/Result"
+        },
+        "deviceRecencyCheck": {
+          "$ref": "#/$defs/Result"
+        },
+        "policyCheck": {
+          "$ref": "#/$defs/Result"
         }
       },
       "type": "object"

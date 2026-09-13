@@ -33,25 +33,26 @@ import (
 var log = logrus.WithField("service", "metatool")
 
 const (
-	inFlag          = "in"
-	nameFlag        = "name"
-	versionFlag     = "version"
-	descriptionFlag = "description"
-	notBeforeFlag   = "not-before"
-	notAfterFlag    = "not-after"
-	devCommonFlag   = "developer-common-name"
-	baseLayersFlag  = "base-layers"
-	caFingerprtFlag = "ca-fingerprints"
-	detailsFlag     = "details"
-	sbomFlag        = "sbom"
-	sbomFormatFlag  = "sbom-format"
-	componentsFlag  = "components"
-	specVersionFlag = "spec-version"
-	sbomVersionFlag = "sbom-version"
-	snpPolicyFlag   = "snp-policy"
-	tdxPolicyFlag   = "tdx-policy"
-	sgxPolicyFlag   = "sgx-policy"
-	omspFlag        = "omsp"
+	inFlag           = "in"
+	nameFlag         = "name"
+	versionFlag      = "version"
+	descriptionFlag  = "description"
+	notBeforeFlag    = "not-before"
+	notAfterFlag     = "not-after"
+	devCommonFlag    = "developer-common-name"
+	baseLayersFlag   = "base-layers"
+	caFingerprtFlag  = "ca-fingerprints"
+	detailsFlag      = "details"
+	sbomFlag         = "sbom"
+	sbomFormatFlag   = "sbom-format"
+	componentsFlag   = "components"
+	specVersionFlag  = "spec-version"
+	sbomVersionFlag  = "sbom-version"
+	snpPolicyFlag    = "snp-policy"
+	tdxPolicyFlag    = "tdx-policy"
+	sgxPolicyFlag    = "sgx-policy"
+	nvidiaPolicyFlag = "nvidia-policy"
+	omspFlag         = "omsp"
 )
 
 var Command = &cli.Command{
@@ -131,6 +132,10 @@ var Command = &cli.Command{
 		&cli.StringFlag{
 			Name:  sgxPolicyFlag,
 			Usage: "path to a JSON file containing an SGX policy",
+		},
+		&cli.StringFlag{
+			Name:  nvidiaPolicyFlag,
+			Usage: "path to a JSON file containing an NVIDIA GPU policy",
 		},
 		&cli.StringFlag{
 			Name:  omspFlag,
@@ -233,6 +238,13 @@ func buildManifest(cmd *cli.Command) (*ar.Metadata, error) {
 			return nil, fmt.Errorf("failed to load SGX policy: %w", err)
 		}
 		m.SgxPolicy = p
+	}
+	if cmd.IsSet(nvidiaPolicyFlag) {
+		p, err := create.LoadJSON[ar.NvidiaPolicy](cmd.String(nvidiaPolicyFlag))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load NVIDIA policy: %w", err)
+		}
+		m.NvidiaPolicy = p
 	}
 	if cmd.IsSet(omspFlag) && cmd.String(omspFlag) != "" {
 		m.OmspServer = cmd.String(omspFlag)

@@ -67,6 +67,9 @@
         },
         "alternativeGroup": {
           "type": "string"
+        },
+        "nvidiaCollateral": {
+          "$ref": "#/$defs/NvidiaCollateral"
         }
       },
       "type": "object"
@@ -1231,6 +1234,41 @@
             "$ref": "#/$defs/LinuxIDMapping"
           },
           "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "NvidiaCollateral": {
+      "properties": {
+        "ocspResponsesDeviceCerts": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "driverRims": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "vbiosRims": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "ocspResponsesRimCerts": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "object"
         }
       },
       "type": "object"

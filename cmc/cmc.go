@@ -188,6 +188,8 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 		Vmpl:            c.Attestation.Snp.Vmpl,
 		StoragePath:     c.Storage.Data,
 		AppendEbsEvent:  c.Attestation.Tpm.AppendEbsEvent,
+		VendorCache:     c.VendorCacheDir(),
+		ExtendedChecks:  c.Attestation.ExtendedChecks,
 	}
 	if err := addEndorsers(driverConf, c, rootCas, allowSystemCerts); err != nil {
 		return nil, err

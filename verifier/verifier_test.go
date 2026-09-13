@@ -486,6 +486,10 @@ func TestAttestLevel(t *testing.T) {
 			[]string{ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_SW}},
 		{"azure tdx", []string{ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM},
 			ar.LevelHardware, []string{ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_TPM}},
+		{"nvidia", []string{ar.TYPE_EVIDENCE_NVIDIA}, ar.LevelSoftware,
+			[]string{ar.TRUST_ANCHOR_NVIDIA}},
+		{"snp and nvidia", []string{ar.TYPE_EVIDENCE_SNP, ar.TYPE_EVIDENCE_NVIDIA}, ar.LevelHardware,
+			[]string{ar.TRUST_ANCHOR_SNP, ar.TRUST_ANCHOR_NVIDIA}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
