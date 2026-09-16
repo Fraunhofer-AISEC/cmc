@@ -68,6 +68,14 @@ func VerifyTpm(
 	}
 	log.Tracef("Detected %v quote hash algorithm", quoteHashAlg.String())
 
+	// Retrieve the hash algorithm the TPM used to calculate the aggregated PCR digest
+	aggHashAlg, err := quoteSigHash(evidence.Signature)
+	if err != nil {
+		result.Summary.Fail(ar.ParseEvidence, err)
+		return result, false
+	}
+	log.Tracef("Detected %v aggregated PCR hash algorithm", aggHashAlg.String())
+
 	// Verify nonce with nonce from TPM Quote
 	result.Freshness = verifyNonce(tpmsAttest.ExtraData, nonce)
 	if result.Freshness.Status != ar.StatusSuccess {
@@ -78,7 +86,7 @@ func VerifyTpm(
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
 	tpmResult, artifacts, ok := verifyPcrs(collateral.Artifacts,
-		tpmsAttest.AttestedQuoteInfo.PCRDigest, refComponents, quoteHashAlg)
+		tpmsAttest.AttestedQuoteInfo.PCRDigest, refComponents, quoteHashAlg, aggHashAlg)
 	if !ok {
 		log.Warn("failed to recalculate PCRs")
 		result.Summary.Status = ar.StatusFail
@@ -121,8 +129,12 @@ func VerifyTpm(
 	return result, result.Summary.Status == ar.StatusSuccess
 }
 
+// verifyPcrs recalculates the PCRs from the measurement artifacts and the reference values.
+// quoteHashAlg is the hash algorithm of the quoted PCR bank, aggHashAlg the hash algorithm
+// the TPM used to calculate the aggregated PCR digest contained in the quote
 func verifyPcrs(artifacts []ar.Artifact,
-	aggregatedQuotePcr []byte, refComponents []ar.Component, quoteHashAlg crypto.Hash,
+	aggregatedQuotePcr []byte, refComponents []ar.Component,
+	quoteHashAlg, aggHashAlg crypto.Hash,
 ) (*ar.TpmResult, []ar.DigestResult, bool) {
 	success := true
 	pcrResults := make([]ar.DigestResult, 0)
@@ -144,20 +156,41 @@ func verifyPcrs(artifacts []ar.Artifact,
 		// Initialize calculated PCR if not yet initialized, afterwards extend
 		// reference values
 		if _, ok := calculatedPcrs[pcr]; !ok {
-			calculatedPcrs[pcr] = make([]byte, 32)
+			calculatedPcrs[pcr] = make([]byte, quoteHashAlg.Size())
 		}
 
 		if artifact.Type == ar.TYPE_PCR_EVENTLOG {
 			// Measurement contains a detailed measurement list (e.g. retrieved from bios
 			// measurement logs or ima runtime measurement logs)
 			log.Tracef("PCR%v measurement contains event log", artifact.Index)
-			measuredSummary := make([]byte, 32)
+			measuredSummary := make([]byte, quoteHashAlg.Size())
 			for _, event := range artifact.Events {
 
 				eventHash := event.GetHash(quoteHashAlg)
+				if len(eventHash) == 0 {
+					measResult := ar.DigestResult{
+						Type:        "Measurement",
+						Index:       pcr,
+						Success:     false,
+						Launched:    true,
+						Name:        event.Name,
+						EventData:   event.EventData,
+						CtrDetails:  event.CtrData,
+						Description: event.Description,
+						Version:     event.Version,
+						PackageUrl:  event.PackageUrl,
+						HashAlg:     quoteHashAlg.String(),
+					}
+					detailedResults = append(detailedResults, measResult)
+					log.Warnf("PCR%v measurement %v does not contain a %v digest",
+						pcr, event.Name, quoteHashAlg.String())
+					success = false
+					pcrResult.Success = false
+					continue
+				}
 
 				// First event could be a TPM_PCR_INIT_VALUE
-				if event.Name == "TPM_PCR_INIT_VALUE" {
+				if event.Name == ar.NAME_PCR_INIT_VALUE {
 					calculatedPcrs[pcr] = eventHash
 					measuredSummary = eventHash
 					continue
@@ -249,8 +282,15 @@ func verifyPcrs(artifacts []ar.Artifact,
 				if idx == pcr {
 
 					refHash := ref.GetHash(quoteHashAlg)
+					if len(refHash) == 0 {
+						log.Warnf("PCR%v reference value %v does not contain a %v digest",
+							pcr, ref.Name, quoteHashAlg.String())
+						success = false
+						pcrResult.Success = false
+						continue
+					}
 
-					if ref.Name == "TPM_PCR_INIT_VALUE" {
+					if ref.Name == ar.NAME_PCR_INIT_VALUE {
 						calculatedPcrs[pcr] = refHash
 						continue
 					}
@@ -299,6 +339,14 @@ func verifyPcrs(artifacts []ar.Artifact,
 			}
 			// Then we compare the calculated value with the PCR measurement summary
 			eventHash := artifact.Events[0].GetHash(quoteHashAlg)
+			if len(eventHash) == 0 {
+				log.Warnf("PCR%v measurement summary does not contain a %v digest",
+					pcr, quoteHashAlg.String())
+				pcrResult.Success = false
+				success = false
+				pcrResults = append(pcrResults, pcrResult)
+				continue
+			}
 			equal := bytes.Equal(calculatedPcrs[pcr], eventHash)
 			if equal {
 				pcrResult.Digest = calculatedPcrs[pcr]
@@ -349,6 +397,14 @@ func verifyPcrs(artifacts []ar.Artifact,
 			continue
 		}
 		refHash := ref.GetHash(quoteHashAlg)
+		if len(refHash) == 0 {
+			if !ref.Optional {
+				log.Warnf("Required PCR%v reference value %v does not contain a %v digest",
+					idx, ref.Name, quoteHashAlg.String())
+				success = false
+			}
+			continue
+		}
 
 		foundPcr := false
 		for _, measuredPcr := range artifacts {
@@ -424,7 +480,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 		log.Tracef("Aggregating PCR %v: %x", pcr, calculatedPcrs[pcr])
 		sum = append(sum, calculatedPcrs[pcr]...)
 	}
-	verPcr, err := internal.Hash(quoteHashAlg, sum)
+	verPcr, err := internal.Hash(aggHashAlg, sum)
 	if err != nil {
 		log.Warnf("Failed to hash aggregated quote PCR: %v", err)
 		success = false
@@ -550,8 +606,14 @@ func verifyQuoteECDSA(quote []byte, sig *tpm2.Signature, cert *x509.Certificate)
 
 // Searches for a specific hash value in the reference values
 func getReferenceValue(alg crypto.Hash, hash []byte, pcr int, refVals []ar.Component) *ar.Component {
+	if len(hash) == 0 {
+		return nil
+	}
 	for _, ref := range refVals {
 		refHash := ref.GetHash(alg)
+		if len(refHash) == 0 {
+			continue
+		}
 		idx, err := ref.GetIndex()
 		if err != nil {
 			continue
@@ -561,6 +623,32 @@ func getReferenceValue(alg crypto.Hash, hash []byte, pcr int, refVals []ar.Compo
 		}
 	}
 	return nil
+}
+
+// quoteSigHash returns the hash algorithm of the quote signature scheme. The TPM calculates
+// the aggregated PCR digest contained in the quote (TPMS_QUOTE_INFO.pcrDigest) with this
+// algorithm, which is independent of the hash algorithm of the quoted PCR bank
+func quoteSigHash(sig []byte) (crypto.Hash, error) {
+
+	tpmtSig, err := tpm2.DecodeSignature(bytes.NewBuffer(sig))
+	if err != nil {
+		return 0, fmt.Errorf("failed to decode quote signature: %w", err)
+	}
+
+	switch tpmtSig.Alg {
+	case tpm2.AlgRSASSA, tpm2.AlgRSAPSS:
+		if tpmtSig.RSA == nil {
+			return 0, fmt.Errorf("quote signature does not contain RSA parameters")
+		}
+		return tpmtSig.RSA.HashAlg.Hash()
+	case tpm2.AlgECDSA:
+		if tpmtSig.ECC == nil {
+			return 0, fmt.Errorf("quote signature does not contain ECC parameters")
+		}
+		return tpmtSig.ECC.HashAlg.Hash()
+	default:
+		return 0, fmt.Errorf("signature algorithm %v not supported", tpmtSig.Alg)
+	}
 }
 
 func tpmAlgoToHash(in tpm2.Algorithm) (crypto.Hash, error) {

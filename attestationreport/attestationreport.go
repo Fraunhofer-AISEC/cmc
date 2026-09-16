@@ -69,6 +69,9 @@ const (
 	TYPE_SW_EVENTLOG    = "SW Eventlog"
 	TYPE_CC_EVENTLOG    = "CC Eventlog"
 
+	// Component name fields
+	NAME_PCR_INIT_VALUE = "TPM_PCR_INIT_VALUE"
+
 	// Reference metadata type fields
 	TYPE_CONTEXT              = "Context"
 	TYPE_MANIFEST             = "Manifest"

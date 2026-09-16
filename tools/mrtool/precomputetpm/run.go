@@ -17,6 +17,7 @@ package precomputetpm
 
 import (
 	"context"
+	"crypto"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -25,6 +26,7 @@ import (
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 	"github.com/sirupsen/logrus"
@@ -37,6 +39,9 @@ var (
 
 type Config struct {
 	*tcg.Conf
+	HashAlg           crypto.Hash
+	AggregateHashAlg  crypto.Hash
+	ImaHashAlg        crypto.Hash
 	SystemUuid        string
 	GrubCmds          string
 	Path              []string
@@ -54,6 +59,9 @@ type Config struct {
 }
 
 const (
+	hashAlgFlag           = "hash-alg"
+	aggregateHashAlgFlag  = "aggregate-hash-alg"
+	imaHashAlgFlag        = "ima-hash-alg"
 	systemUuidFlag        = "systemuuid"
 	grubcmdsFlag          = "grubcmds"
 	pathFlag              = "paths"
@@ -71,6 +79,25 @@ const (
 )
 
 var flags = []cli.Flag{
+	&cli.StringFlag{
+		Name: hashAlgFlag,
+		Usage: "Hash algorithm of the TPM PCR bank the measurements are extended into. " +
+			"Possible: SHA-1, SHA-256, SHA-384",
+		Value: crypto.SHA256.String(),
+	},
+	&cli.StringFlag{
+		Name: aggregateHashAlgFlag,
+		Usage: "Hash algorithm the TPM uses to calculate the aggregated PCR value contained " +
+			"in a quote. This is the hash algorithm of the signature scheme of the attestation " +
+			"key and therefore independent of the PCR bank. Possible: SHA-1, SHA-256, SHA-384",
+		Value: crypto.SHA256.String(),
+	},
+	&cli.StringFlag{
+		Name: imaHashAlgFlag,
+		Usage: "Hash algorithm the IMA policy uses to hash the measured files, as configured " +
+			"via the kernel parameter ima_hash. Possible: SHA-1, SHA-256, SHA-384",
+		Value: crypto.SHA256.String(),
+	},
 	&cli.StringFlag{
 		Name:  systemUuidFlag,
 		Usage: "Path to GRUB command file for PCR8",
@@ -207,7 +234,8 @@ func run(cmd *cli.Command) error {
 	// Calculate aggregate and write to stdout if requested
 	if tpmConf.PrintAggregate {
 
-		aggregate, err := tcg.PrecomputeAggregatePcrValue(pcrs)
+		aggregate, err := tcg.PrecomputeAggregatePcrValue(pcrs, tpmConf.HashAlg,
+			tpmConf.AggregateHashAlg)
 		if err != nil {
 			return fmt.Errorf("failed to precomptue aggregated PCR value: %w", err)
 		}
@@ -233,6 +261,19 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	c.Conf, err = tcg.GetTcgConf(cmd)
 	if err != nil {
 		return nil, err
+	}
+
+	c.HashAlg, err = internal.HashFromString(cmd.String(hashAlgFlag))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %v: %w", hashAlgFlag, err)
+	}
+	c.AggregateHashAlg, err = internal.HashFromString(cmd.String(aggregateHashAlgFlag))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %v: %w", aggregateHashAlgFlag, err)
+	}
+	c.ImaHashAlg, err = internal.HashFromString(cmd.String(imaHashAlgFlag))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %v: %w", imaHashAlgFlag, err)
 	}
 
 	if cmd.IsSet(systemUuidFlag) {
@@ -298,6 +339,10 @@ func (c *Config) print() {
 	log.Debugf("Precompute TPM PCR configuration:")
 
 	c.Conf.Print()
+
+	log.Debugf("\thash-alg          : %v", c.HashAlg.String())
+	log.Debugf("\taggregate-hash-alg: %v", c.AggregateHashAlg.String())
+	log.Debugf("\tima-hash-alg      : %v", c.ImaHashAlg.String())
 
 	if c.SystemUuid != "" {
 		log.Debugf("\tSystem UUID: %q", c.SystemUuid)

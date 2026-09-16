@@ -17,7 +17,7 @@ package precomputetpm
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // PerformImaPrecomputation walks the specified paths, hashes each regular file, and produces IMA
@@ -36,9 +37,11 @@ import (
 // executables and libraries. If seeds are given, the directories in paths are not measured
 // entirely, but only provide the index for resolving the seeds' transitive shared library
 // dependencies, which then, together with the seeds, make up the reference values. Paths naming a
-// file directly are always measured.
-func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []string, strip,
-	prepend string, imaTemplate string, execOnly bool, seeds []string,
+// file directly are always measured. tmplAlg is the hash algorithm of the PCR bank the template
+// hashes are extended into, fileAlg the hash algorithm the IMA policy uses to hash the files
+func PerformImaPrecomputation(ta string, tmplAlg, fileAlg crypto.Hash, pcr int,
+	bootAggregate []byte, paths []string, strip, prepend string, imaTemplate string,
+	execOnly bool, seeds []string,
 ) ([]*ar.Component, error) {
 
 	refvals := make([]*ar.Component, 0)
@@ -48,7 +51,8 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 	if bootAggregate != nil {
 		log.Debugf("Precomputing boot aggregate...")
 
-		refval, err := precomputeImaBootAggregate(ta, bootAggregate, imaTemplate, pcr, false)
+		refval, err := precomputeImaBootAggregate(ta, tmplAlg, fileAlg, bootAggregate,
+			imaTemplate, pcr, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to precompute boot_aggregate: %w", err)
 		}
@@ -66,7 +70,8 @@ func PerformImaPrecomputation(ta string, pcr int, bootAggregate []byte, paths []
 		go func() {
 			defer wg.Done()
 			for path := range fileCh {
-				refval, err := precomputeImaEntry(ta, path, strip, prepend, imaTemplate, pcr, true)
+				refval, err := precomputeImaEntry(ta, tmplAlg, fileAlg, path, strip, prepend,
+					imaTemplate, pcr, true)
 				if err != nil {
 					log.Errorf("error hashing %q: %v", path, err)
 					continue
@@ -175,14 +180,20 @@ func hasElfMagic(path string) bool {
 	return bytes.Equal(magic[:], []byte{0x7f, 'E', 'L', 'F'})
 }
 
-func precomputeImaTemplate(hash []byte, path string, template string) ([]byte, error) {
+// precomputeImaTemplate creates the IMA template for the specified file digest and path and
+// returns the template hash, which is the digest extended into the PCR. tmplAlg is the hash
+// algorithm of the PCR bank, fileAlg the hash algorithm of the file digest
+func precomputeImaTemplate(tmplAlg, fileAlg crypto.Hash, hash []byte, path string, template string,
+) ([]byte, error) {
 
-	const hashAlgo = "sha256:"
-	if len(hash) != sha256.Size {
-		return nil, fmt.Errorf("unexpected hash length %v", len(hash))
+	if len(hash) != fileAlg.Size() {
+		return nil, fmt.Errorf("unexpected %v hash length %v", fileAlg.String(), len(hash))
 	}
 
-	imaDigestLen := uint32(len(hashAlgo) + 1 + sha256.Size)
+	// The IMA template contains the hash algorithm of the file digest as a prefix
+	hashAlgo := imaAlgoPrefix(fileAlg)
+
+	imaDigestLen := uint32(len(hashAlgo) + 1 + fileAlg.Size())
 	pathLen := uint32(len(path) + 1)
 	sigLen := uint32(0)
 
@@ -199,45 +210,55 @@ func precomputeImaTemplate(hash []byte, path string, template string) ([]byte, e
 		return nil, fmt.Errorf("template %q not supported", template)
 	}
 
-	th := sha256.Sum256(tmpl)
+	th, err := internal.Hash(tmplAlg, tmpl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash ima template: %w", err)
+	}
 
-	return th[:], nil
+	return th, nil
 }
 
-func precomputeImaBootAggregate(ta string, hash []byte, template string, pcr int, optional bool,
+// imaAlgoPrefix returns the hash algorithm name as it is used in the IMA template, e.g. "sha256:"
+func imaAlgoPrefix(alg crypto.Hash) string {
+	return strings.ToLower(strings.ReplaceAll(alg.String(), "-", "")) + ":"
+}
+
+func precomputeImaBootAggregate(ta string, tmplAlg, fileAlg crypto.Hash, hash []byte,
+	template string, pcr int, optional bool,
 ) (*ar.Component, error) {
 
-	tmpl, err := precomputeImaTemplate(hash, "boot_aggregate", template)
+	tmpl, err := precomputeImaTemplate(tmplAlg, fileAlg, hash, "boot_aggregate", template)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precompute ima template: %w", err)
 	}
 
 	// Create reference value
 	r := newComponent(ta, pcr, "boot_aggregate",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: tmpl}}, "")
+		[]ar.ReferenceHash{{Alg: tmplAlg.String(), Content: tmpl}}, "")
 	r.Optional = optional
 
 	return r, nil
 }
 
-func precomputeImaEntry(ta, path, strip, prepend, template string, pcr int, optional bool,
+func precomputeImaEntry(ta string, tmplAlg, fileAlg crypto.Hash, path, strip, prepend,
+	template string, pcr int, optional bool,
 ) (*ar.Component, error) {
 
-	fileHash, err := hashFile(path)
+	fileHash, err := hashFile(fileAlg, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash file: %w", err)
 	}
 
 	hashedPath := modifyPath(path, strip, prepend)
 
-	tmpl, err := precomputeImaTemplate(fileHash, hashedPath, template)
+	tmpl, err := precomputeImaTemplate(tmplAlg, fileAlg, fileHash, hashedPath, template)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precompute ima template: %w", err)
 	}
 
 	// Create reference value
 	r := newComponent(ta, pcr, filepath.Base(hashedPath),
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: tmpl}}, hashedPath)
+		[]ar.ReferenceHash{{Alg: tmplAlg.String(), Content: tmpl}}, hashedPath)
 	r.Optional = optional
 
 	log.Tracef("%s: %x", r.Name, tmpl)
@@ -257,7 +278,7 @@ func buildTemplate(hashAlgo string, hash []byte, path string, imaDigestLen, path
 	buf = append(buf, []byte(hashAlgo)...)
 	buf = append(buf, 0)
 
-	// sha256 hash
+	// file hash
 	buf = append(buf, hash...)
 
 	// path_len
@@ -277,14 +298,18 @@ func buildTemplate(hashAlgo string, hash []byte, path string, imaDigestLen, path
 	return buf
 }
 
-func hashFile(path string) ([]byte, error) {
+func hashFile(alg crypto.Hash, path string) ([]byte, error) {
+	if !alg.Available() {
+		return nil, fmt.Errorf("hash algorithm not available: %v", alg)
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	h := sha256.New()
+	h := alg.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return nil, err
 	}

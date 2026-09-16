@@ -143,7 +143,9 @@ func (i *Swima) GetCollateral() ([]ar.Collateral, error) {
 		return nil, fmt.Errorf("failed to stat IMA runtime measurements at %v: %w", logPath, err)
 	}
 
-	artifactmap, err := ima.GetImaArtifacts(logPath, ar.TRUST_ANCHOR_SWIMA)
+	// SWIMA is a software-only trust anchor without a TPM PCR bank. The template hashes are
+	// always calculated with SHA-256
+	artifactmap, err := ima.GetImaArtifacts(logPath, ar.TRUST_ANCHOR_SWIMA, crypto.SHA256)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read IMA runtime measurements: %w", err)
 	}

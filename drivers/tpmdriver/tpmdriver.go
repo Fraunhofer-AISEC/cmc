@@ -550,7 +550,8 @@ func GetEventLogs(pcrs []int, ctrLog bool, ctrLogFile string, alg crypto.Hash) (
 		return nil, fmt.Errorf("failed to get binary bios measurements: %w", err)
 	}
 
-	runtimeMeasurements, err := ima.GetImaArtifacts(ima.DEFAULT_BINARY_RUNTIME_MEASUREMENTS, ar.TRUST_ANCHOR_TPM)
+	runtimeMeasurements, err := ima.GetImaArtifacts(ima.DEFAULT_BINARY_RUNTIME_MEASUREMENTS,
+		ar.TRUST_ANCHOR_TPM, alg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ima runtime measurements: %w", err)
 	}

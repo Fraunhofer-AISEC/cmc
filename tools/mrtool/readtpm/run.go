@@ -17,11 +17,13 @@ package readtpm
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 	"github.com/google/go-attestation/attest"
@@ -30,11 +32,15 @@ import (
 )
 
 type ParsePcrsConf struct {
-	PrintAggregate bool
+	PrintAggregate   bool
+	HashAlg          crypto.Hash
+	AggregateHashAlg crypto.Hash
 }
 
 const (
 	printAggregateFlag = "print-aggregate"
+	hashAlgFlag        = "hash-alg"
+	aggregateAlgFlag   = "aggregate-hash-alg"
 )
 
 var (
@@ -48,6 +54,20 @@ var Command = &cli.Command{
 		&cli.BoolFlag{
 			Name:  printAggregateFlag,
 			Usage: "Print the aggregated PCR value over the selected PCRs",
+		},
+		&cli.StringFlag{
+			Name: hashAlgFlag,
+			Usage: "Hash algorithm of the TPM PCR bank to read. " +
+				"Possible: SHA-1, SHA-256, SHA-384",
+			Value: crypto.SHA256.String(),
+		},
+		&cli.StringFlag{
+			Name: aggregateAlgFlag,
+			Usage: "Hash algorithm the TPM uses to calculate the aggregated PCR value contained " +
+				"in a quote. This is the hash algorithm of the signature scheme of the " +
+				"attestation key and therefore independent of the PCR bank. " +
+				"Possible: SHA-1, SHA-256, SHA-384",
+			Value: crypto.SHA256.String(),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -76,7 +96,12 @@ func run(cmd *cli.Command) error {
 		return fmt.Errorf("failed to check parse pcrs config: %w", err)
 	}
 
-	log.Info("Reading TPM PCRs")
+	log.Infof("Reading %v TPM PCRs", pcrConf.HashAlg.String())
+
+	attestAlg, err := internal.CryptoToAttestHash(pcrConf.HashAlg)
+	if err != nil {
+		return fmt.Errorf("failed to convert hash algorithm: %w", err)
+	}
 
 	// Read PCRs from TPM and write to stdout
 	tpm, err := attest.OpenTPM(&attest.OpenConfig{})
@@ -85,7 +110,7 @@ func run(cmd *cli.Command) error {
 	}
 	defer tpm.Close()
 
-	pcrs, err := tpm.PCRs(attest.HashSHA256)
+	pcrs, err := tpm.PCRs(attestAlg)
 	if err != nil {
 		return fmt.Errorf("failed to get TPM PCRs: %w", err)
 	}
@@ -98,7 +123,7 @@ func run(cmd *cli.Command) error {
 				Name: ar.TYPE_PCR_SUMMARY,
 				Hashes: []ar.ReferenceHash{
 					{
-						Alg:     "SHA-256",
+						Alg:     pcrConf.HashAlg.String(),
 						Content: pcr.Digest[:],
 					},
 				},
@@ -119,7 +144,8 @@ func run(cmd *cli.Command) error {
 
 	// Calculate aggregate and write to stdout
 	if pcrConf.PrintAggregate {
-		aggregate, err := tcg.PrecomputeAggregatePcrValue(refvals)
+		aggregate, err := tcg.PrecomputeAggregatePcrValue(refvals, pcrConf.HashAlg,
+			pcrConf.AggregateHashAlg)
 		if err != nil {
 			return fmt.Errorf("failed to calculate aggregate PCR value")
 		}
@@ -137,8 +163,21 @@ func run(cmd *cli.Command) error {
 }
 
 func getConfig(cmd *cli.Command) (*ParsePcrsConf, error) {
+
+	alg, err := internal.HashFromString(cmd.String(hashAlgFlag))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %v: %w", hashAlgFlag, err)
+	}
+
+	aggAlg, err := internal.HashFromString(cmd.String(aggregateAlgFlag))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %v: %w", aggregateAlgFlag, err)
+	}
+
 	c := &ParsePcrsConf{
-		PrintAggregate: cmd.Bool(printAggregateFlag),
+		PrintAggregate:   cmd.Bool(printAggregateFlag),
+		HashAlg:          alg,
+		AggregateHashAlg: aggAlg,
 	}
 	return c, nil
 }

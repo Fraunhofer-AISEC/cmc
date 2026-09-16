@@ -18,8 +18,6 @@ package precomputetpm
 import (
 	"bufio"
 	"bytes"
-	"crypto"
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,6 +41,43 @@ func newComponent(ta string, index int, name string, hashes []ar.ReferenceHash, 
 	return c
 }
 
+// hashExtend hashes the specified data with the configured PCR bank hash algorithm, creates a
+// reference value for the resulting digest and extends the PCR with it
+func (c *Config) hashExtend(pcr []byte, refvals []*ar.Component, index int, name string,
+	data []byte, desc string,
+) ([]byte, []*ar.Component, error) {
+
+	digest, err := internal.Hash(c.HashAlg, data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to hash: %w", err)
+	}
+
+	return c.extendDigest(pcr, refvals, index, name, digest, desc)
+}
+
+// extendDigest creates a reference value for the specified digest and extends the PCR with it
+func (c *Config) extendDigest(pcr []byte, refvals []*ar.Component, index int, name string,
+	digest []byte, desc string,
+) ([]byte, []*ar.Component, error) {
+
+	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, index, name,
+		[]ar.ReferenceHash{{Alg: c.HashAlg.String(), Content: digest}}, desc))
+
+	pcr, err := internal.Extend(c.HashAlg, pcr, digest)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to extend: %w", err)
+	}
+
+	return pcr, refvals, nil
+}
+
+// pcrSummary creates the reference value for the final PCR value
+func (c *Config) pcrSummary(index int, pcr []byte) *ar.Component {
+	return newComponent(ar.TRUST_ANCHOR_TPM, index, ar.TYPE_PCR_SUMMARY,
+		[]ar.ReferenceHash{{Alg: c.HashAlg.String(), Content: pcr}},
+		fmt.Sprintf("PCR%v", index))
+}
+
 type DriverFileType int
 
 const (
@@ -54,13 +89,13 @@ const (
 func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_S_CRTM_VERSION
 	// For VMs, this is usually { 0x0, 0x0 }
 	var rv *ar.Component
-	rv, pcr, err = tcg.CreateExtendRefval(crypto.SHA256, tcg.TPM, 0, pcr, []byte{0x0, 0x0},
+	rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 0, pcr, []byte{0x0, 0x0},
 		"EV_S_CRTM_VERSION", "CRTM Version String")
 	if err != nil {
 		return nil, nil, fmt.Errorf("faied to measure CRTM version: %w", err)
@@ -68,21 +103,20 @@ func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 	refvals = append(refvals, rv)
 
 	// EV_EFI_PLATFORM_FIRMWARE_BLOB
-	pcr, refvals, err = tcg.MeasureOvmf(crypto.SHA256, tcg.TPM, pcr, refvals, 0, c.Ovmf)
+	pcr, refvals, err = tcg.MeasureOvmf(c.HashAlg, tcg.TPM, pcr, refvals, 0, c.Ovmf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure OVMF: %w", err)
 	}
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 0, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, "HASH(0000)"))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 0, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(0000)")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 0, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR0")
+	pcrSummary := c.pcrSummary(0, pcr)
 
 	return pcrSummary, refvals, nil
 }
@@ -90,11 +124,11 @@ func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_PLATFORM_CONFIG_FLAGS: ACPI tables
-	pcr, refvals, err = tcg.CalculateAcpiTables(crypto.SHA256, tcg.TPM, pcr, refvals,
+	pcr, refvals, err = tcg.CalculateAcpiTables(c.HashAlg, tcg.TPM, pcr, refvals,
 		1, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
@@ -122,7 +156,7 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to filter SMBIOS tables: %w", err)
 		}
 		var rv *ar.Component
-		rv, pcr, err = tcg.CreateExtendRefval(crypto.SHA256, tcg.TPM, 1, pcr,
+		rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 1, pcr,
 			filtered, "EV_EFI_HANDOFF_TABLES", "smbios-tables")
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
@@ -137,29 +171,29 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// EV_EFI_VARIABLE_BOOT: boot variables
-	pcr, refvals, err = tcg.MeasureEfiBootVars(crypto.SHA256, tcg.TPM, pcr, refvals,
+	pcr, refvals, err = tcg.MeasureEfiBootVars(c.HashAlg, tcg.TPM, pcr, refvals,
 		1, c.BootOrder, c.BootXxxx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
 	}
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 1, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, "HASH(0000)"))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 1, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(0000)")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 1, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR1")
+	pcrSummary := c.pcrSummary(1, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr2(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	pcr := make([]byte, 32)
+	var err error
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_EFI_BOOT_SERVICES_DRIVER
@@ -185,52 +219,54 @@ func PrecomputePcr2(c *Config) (*ar.Component, []*ar.Component, error) {
 			}
 		}
 
-		hash, err := tcg.MeasurePeCoff(crypto.SHA256, data)
+		hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 2, "EV_EFI_BOOT_SERVICES_DRIVER",
-			[]ar.ReferenceHash{{Alg: "SHA-256", Content: hash[:]}}, filepath.Base(f)))
-		pcr = internal.ExtendSha256(pcr, hash[:])
+		pcr, refvals, err = c.extendDigest(pcr, refvals, 2, "EV_EFI_BOOT_SERVICES_DRIVER",
+			hash, filepath.Base(f))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure driver %v: %w", f, err)
+		}
 	}
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 2, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, "HASH(0000)"))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 2, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(0000)")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 2, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR2")
+	pcrSummary := c.pcrSummary(2, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr3(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	pcr := make([]byte, 32)
+	var err error
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 3, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, "HASH(0000)"))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 3, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(0000)")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 3, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR3")
+	pcrSummary := c.pcrSummary(3, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	pcr := make([]byte, 32)
+	var err error
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure bootloaders if present
@@ -241,14 +277,16 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to read file: %w", err)
 		}
 
-		hash, err := tcg.MeasurePeCoff(crypto.SHA256, data)
+		hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 4, "EV_EFI_BOOT_SERVICES_APPLICATION",
-			[]ar.ReferenceHash{{Alg: "SHA-256", Content: hash[:]}}, filepath.Base(f)))
-		pcr = internal.ExtendSha256(pcr, hash[:])
+		pcr, refvals, err = c.extendDigest(pcr, refvals, 4, "EV_EFI_BOOT_SERVICES_APPLICATION",
+			hash, filepath.Base(f))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure bootloader %v: %w", f, err)
+		}
 	}
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
@@ -273,14 +311,16 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 			}
 		}
 
-		hash, err := tcg.MeasurePeCoff(crypto.SHA256, data)
+		hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 4, "EV_EFI_BOOT_SERVICES_APPLICATION",
-			[]ar.ReferenceHash{{Alg: "SHA-256", Content: hash[:]}}, filepath.Base(c.Kernel)))
-		pcr = internal.ExtendSha256(pcr, hash[:])
+		pcr, refvals, err = c.extendDigest(pcr, refvals, 4, "EV_EFI_BOOT_SERVICES_APPLICATION",
+			hash, filepath.Base(c.Kernel))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure kernel: %w", err)
+		}
 
 		if c.DumpKernel != "" {
 			err = os.WriteFile(c.DumpKernel, data, 0644)
@@ -293,50 +333,51 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 	// EV_EFI_ACTION: "Calling EFI Application from Boot Option"
 	// TCG PCClient Firmware Spec: https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
 	actionData := []byte("Calling EFI Application from Boot Option")
-	actionHash := sha256.Sum256(actionData)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 4, "EV_EFI_ACTION",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: actionHash[:]}},
-		"Calling EFI Application from Boot Option"))
-	pcr = internal.ExtendSha256(pcr, actionHash[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 4, "EV_EFI_ACTION", actionData,
+		string(actionData))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
+	}
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 4, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, ""))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 4, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 4, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR4")
+	pcrSummary := c.pcrSummary(4, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr5(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	pcr := make([]byte, 32)
+	var err error
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 5, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, ""))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 5, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// EV_EFI_GPT
 	// Calculate UEFI GPT partition table if provided. The raw disk data can be
 	// provided, the function will find the GPT partition table if present
 	if c.Gpt != "" {
-		hash, description, err := tcg.MeasureGptFromFile(sha256.New(), c.Gpt, c.DumpGpt)
+		hash, description, err := tcg.MeasureGptFromFile(c.HashAlg.New(), c.Gpt, c.DumpGpt)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
 		}
 
-		refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 5, "EV_EFI_GPT_EVENT",
-			[]ar.ReferenceHash{{Alg: "SHA-256", Content: hash[:]}}, description))
-		pcr = internal.ExtendSha256(pcr, hash[:])
+		pcr, refvals, err = c.extendDigest(pcr, refvals, 5, "EV_EFI_GPT_EVENT", hash, description)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
+		}
 	}
 
 	// EV_EVENT_TAG
@@ -348,38 +389,38 @@ func PrecomputePcr5(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to read bootloader file: %w", err)
 		}
 
-		hash := sha256.Sum256(data)
-		refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 5, "EV_EVENT_TAG",
-			[]ar.ReferenceHash{{Alg: "SHA-256", Content: hash[:]}}, ""))
-		pcr = internal.ExtendSha256(pcr, hash[:])
+		pcr, refvals, err = c.hashExtend(pcr, refvals, 5, "EV_EVENT_TAG", data, "")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure bootloader config %v: %w", conf, err)
+		}
 	}
 
 	// EV_EFI_ACTION "Exit Boot Services Invocation"
 	actionData1 := []byte("Exit Boot Services Invocation")
-	actionHash1 := sha256.Sum256(actionData1)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 5, "EV_EFI_ACTION",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: actionHash1[:]}},
-		"Exit Boot Services Invocation"))
-	pcr = internal.ExtendSha256(pcr, actionHash1[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 5, "EV_EFI_ACTION", actionData1,
+		string(actionData1))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
+	}
 
 	// EV_EFI_ACTION "Exit Boot Services Returned with Success"
 	actionData2 := []byte("Exit Boot Services Returned with Success")
-	actionHash2 := sha256.Sum256(actionData2)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 5, "EV_EFI_ACTION",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: actionHash2[:]}},
-		"Exit Boot Services Returned with Success"))
-	pcr = internal.ExtendSha256(pcr, actionHash2[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 5, "EV_EFI_ACTION", actionData2,
+		string(actionData2))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 5, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR5")
+	pcrSummary := c.pcrSummary(5, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr6(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	pcr := make([]byte, 32)
+	var err error
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_COMPACT_HASH
@@ -403,22 +444,22 @@ func PrecomputePcr6(c *Config) (*ar.Component, []*ar.Component, error) {
 
 		log.Debugf("Hashing UUID: %q", uuidString)
 
-		hash := sha256.Sum256([]byte(uuidString))
-		refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 6, "EV_COMPACT_HASH",
-			[]ar.ReferenceHash{{Alg: "SHA-256", Content: hash[:]}}, ""))
-		pcr = internal.ExtendSha256(pcr, hash[:])
+		pcr, refvals, err = c.hashExtend(pcr, refvals, 6, "EV_COMPACT_HASH",
+			[]byte(uuidString), "")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure system UUID: %w", err)
+		}
 	}
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 6, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, ""))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 6, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 6, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR6")
+	pcrSummary := c.pcrSummary(6, pcr)
 
 	return pcrSummary, refvals, nil
 }
@@ -426,38 +467,37 @@ func PrecomputePcr6(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr7(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
-	pcr, refvals, err = tcg.MeasureSecureBootVariables(crypto.SHA256, tcg.TPM, pcr, refvals, 7, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
+	pcr, refvals, err = tcg.MeasureSecureBootVariables(c.HashAlg, tcg.TPM, pcr, refvals, 7, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure secure boot variables: %w", err)
 	}
 
 	// EV_SEPARATOR
-	sep := []byte{0x0, 0x0, 0x0, 0x0}
-	hashSep := sha256.Sum256(sep)
-	refvals = append(refvals, newComponent(ar.TRUST_ANCHOR_TPM, 7, "EV_SEPARATOR",
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: hashSep[:]}}, ""))
-	pcr = internal.ExtendSha256(pcr, hashSep[:])
+	pcr, refvals, err = c.hashExtend(pcr, refvals, 7, "EV_SEPARATOR",
+		[]byte{0x0, 0x0, 0x0, 0x0}, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	}
 
 	if c.SbatLevel != "" {
-		pcr, refvals, err = tcg.MeasureSbatLevel(crypto.SHA256, tcg.TPM, pcr, refvals, 7, c.SbatLevel)
+		pcr, refvals, err = tcg.MeasureSbatLevel(c.HashAlg, tcg.TPM, pcr, refvals, 7, c.SbatLevel)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure SbatLevel: %w", err)
 		}
 	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 7, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR7")
+	pcrSummary := c.pcrSummary(7, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	if c.GrubCmds != "" {
@@ -473,7 +513,7 @@ func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 			line := scanner.Bytes()
 
 			var rv *ar.Component
-			rv, pcr, err = tcg.CreateExtendRefval(crypto.SHA256, tcg.TPM, 8, pcr, line,
+			rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 8, pcr, line,
 				"EV_IPL", string(line))
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to create reference values: %w", err)
@@ -487,8 +527,7 @@ func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 8, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR8")
+	pcrSummary := c.pcrSummary(8, pcr)
 
 	return pcrSummary, refvals, nil
 }
@@ -496,18 +535,18 @@ func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	if len(c.Path) > 0 {
-		pcr, refvals, err = tcg.MeasureFiles(crypto.SHA256, tcg.TPM, pcr, refvals, 9, c.Path)
+		pcr, refvals, err = tcg.MeasureFiles(c.HashAlg, tcg.TPM, pcr, refvals, 9, c.Path)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure files: %w", err)
 		}
 	}
 
 	if c.Cmdline != "" {
-		pcr, refvals, err = tcg.MeasureCmdline(crypto.SHA256, tcg.TPM, pcr, refvals, 9,
+		pcr, refvals, err = tcg.MeasureCmdline(c.HashAlg, tcg.TPM, pcr, refvals, 9,
 			c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, c.InitrdOption)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
@@ -515,23 +554,23 @@ func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	if c.Initrd != "" {
-		pcr, refvals, err = tcg.MeasureFile(crypto.SHA256, tcg.TPM, "EV_EVENT_TAG", pcr, refvals, 9, c.Initrd)
+		pcr, refvals, err = tcg.MeasureFile(c.HashAlg, tcg.TPM, "EV_EVENT_TAG", pcr, refvals, 9, c.Initrd)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure initrd: %w", err)
 		}
 	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 9, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR9")
+	pcrSummary := c.pcrSummary(9, pcr)
 
 	return pcrSummary, refvals, nil
 }
 
 func PrecomputePcr10(c *Config) (*ar.Component, []*ar.Component, error) {
 
-	refvals, err := PerformImaPrecomputation(ar.TRUST_ANCHOR_TPM, 10, c.BootAggregate, c.ImaPaths,
-		c.ImaStrip, c.ImaPrepend, c.ImaTemplate, c.ImaExecOnly, c.ImaSeeds)
+	refvals, err := PerformImaPrecomputation(ar.TRUST_ANCHOR_TPM, c.HashAlg, c.ImaHashAlg, 10,
+		c.BootAggregate, c.ImaPaths, c.ImaStrip, c.ImaPrepend, c.ImaTemplate, c.ImaExecOnly,
+		c.ImaSeeds)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to precompute IMA refvals: %w", err)
 	}
@@ -544,18 +583,18 @@ func PrecomputePcr10(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	if len(c.Path) > 0 {
-		pcr, refvals, err = tcg.MeasureFiles(crypto.SHA256, tcg.TPM, pcr, refvals, 11, c.Path)
+		pcr, refvals, err = tcg.MeasureFiles(c.HashAlg, tcg.TPM, pcr, refvals, 11, c.Path)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure files: %w", err)
 		}
 	}
 
 	if c.Cmdline != "" {
-		pcr, refvals, err = tcg.MeasureCmdlineNarrow(crypto.SHA256, tcg.TPM, pcr, refvals, 11,
+		pcr, refvals, err = tcg.MeasureCmdlineNarrow(c.HashAlg, tcg.TPM, pcr, refvals, 11,
 			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
@@ -563,15 +602,14 @@ func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	if c.Initrd != "" {
-		pcr, refvals, err = tcg.MeasureFile(crypto.SHA256, tcg.TPM, "EV_EVENT_TAG", pcr, refvals, 11, c.Initrd)
+		pcr, refvals, err = tcg.MeasureFile(c.HashAlg, tcg.TPM, "EV_EVENT_TAG", pcr, refvals, 11, c.Initrd)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure initrd: %w", err)
 		}
 	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 11, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR11")
+	pcrSummary := c.pcrSummary(11, pcr)
 
 	return pcrSummary, refvals, nil
 }
@@ -579,11 +617,11 @@ func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr12(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	if c.Cmdline != "" {
-		pcr, refvals, err = tcg.MeasureCmdline(crypto.SHA256, tcg.TPM, pcr, refvals, 12,
+		pcr, refvals, err = tcg.MeasureCmdline(c.HashAlg, tcg.TPM, pcr, refvals, 12,
 			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline, tcg.InitrdOptionNone)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
@@ -591,8 +629,7 @@ func PrecomputePcr12(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 12, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR12")
+	pcrSummary := c.pcrSummary(12, pcr)
 
 	return pcrSummary, refvals, nil
 }
@@ -600,18 +637,17 @@ func PrecomputePcr12(c *Config) (*ar.Component, []*ar.Component, error) {
 func PrecomputePcr14(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
-	pcr := make([]byte, 32)
+	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
 	// EV_IPL: EFI MOK-Lists
-	pcr, refvals, err = tcg.MeasureMoklists(crypto.SHA256, tcg.TPM, pcr, refvals, 14, c.MokLists)
+	pcr, refvals, err = tcg.MeasureMoklists(c.HashAlg, tcg.TPM, pcr, refvals, 14, c.MokLists)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to measure MOK lists: %w", err)
 	}
 
 	// Create final reference value
-	pcrSummary := newComponent(ar.TRUST_ANCHOR_TPM, 14, ar.TYPE_PCR_SUMMARY,
-		[]ar.ReferenceHash{{Alg: "SHA-256", Content: pcr}}, "PCR14")
+	pcrSummary := c.pcrSummary(14, pcr)
 
 	return pcrSummary, refvals, nil
 }
