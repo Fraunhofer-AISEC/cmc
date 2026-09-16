@@ -17,7 +17,6 @@ package tcg
 
 import (
 	"crypto"
-	"crypto/sha256"
 	"fmt"
 	"sort"
 
@@ -25,25 +24,43 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-func PrecomputeFinalPcrValues(refvals []*ar.Component) ([]*ar.Component, error) {
+// PrecomputeFinalPcrValues calculates the final PCR values from the specified reference values
+// of the individual measurements. alg is the hash algorithm of the PCR bank the measurements
+// were extended into
+func PrecomputeFinalPcrValues(refvals []*ar.Component, alg crypto.Hash) ([]*ar.Component, error) {
 
 	summaryMap := make(map[int][]byte)
 
 	for _, rv := range refvals {
 
-		hash := rv.GetHash(crypto.SHA256)
+		hash := rv.GetHash(alg)
+		if len(hash) == 0 {
+			return nil, fmt.Errorf("reference value %v does not contain a %v digest",
+				rv.Name, alg.String())
+		}
 		idx, err := rv.GetIndex()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get index: %w", err)
 		}
 
-		old, ok := summaryMap[idx]
-		if !ok {
+		// The PCR initialization value and PCR summaries are not extended but represent the
+		// PCR value itself
+		if rv.Name == ar.NAME_PCR_INIT_VALUE || rv.Name == ar.TYPE_PCR_SUMMARY {
 			summaryMap[idx] = hash
 			continue
 		}
+
+		// All PCRs are initialized with zeroes unless an explicit initialization value is
+		// present in the event log
+		old, ok := summaryMap[idx]
+		if !ok {
+			old = make([]byte, alg.Size())
+		}
 		log.Tracef("extending hash: %x", old)
-		summaryMap[idx] = internal.ExtendSha256(old, hash)
+		summaryMap[idx], err = internal.Extend(alg, old, hash)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extend PCR%v: %w", idx, err)
+		}
 		log.Tracef("data          : %x", hash)
 		log.Tracef("extended hash : %x", summaryMap[idx])
 	}
@@ -56,7 +73,7 @@ func PrecomputeFinalPcrValues(refvals []*ar.Component) ([]*ar.Component, error) 
 			Name: ar.TYPE_PCR_SUMMARY,
 			Hashes: []ar.ReferenceHash{
 				{
-					Alg:     "SHA-256",
+					Alg:     alg.String(),
 					Content: val[:],
 				},
 			},
@@ -76,22 +93,30 @@ func PrecomputeFinalPcrValues(refvals []*ar.Component) ([]*ar.Component, error) 
 	return summaries, nil
 }
 
-func PrecomputeAggregatePcrValue(refvals []*ar.Component) (*ar.Component, error) {
-	pcrValues, err := PrecomputeFinalPcrValues(refvals)
+// PrecomputeAggregatePcrValue calculates the aggregated PCR value as it is contained in a TPM
+// quote. alg is the hash algorithm of the quoted PCR bank, aggAlg the hash algorithm the TPM
+// uses to calculate the aggregated PCR digest, which is the hash algorithm of the signature
+// scheme of the attestation key and therefore independent of the PCR bank
+func PrecomputeAggregatePcrValue(refvals []*ar.Component, alg, aggAlg crypto.Hash,
+) (*ar.Component, error) {
+	pcrValues, err := PrecomputeFinalPcrValues(refvals, alg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate final PCR values")
 	}
-	hash := sha256.New()
+	if !aggAlg.Available() {
+		return nil, fmt.Errorf("hash algorithm not available: %v", aggAlg)
+	}
+	hash := aggAlg.New()
 
 	for _, val := range pcrValues {
-		hash.Write(val.GetHash(crypto.SHA256))
+		hash.Write(val.GetHash(alg))
 	}
 	aggregateHash := hash.Sum(nil)
 	aggregate := &ar.Component{
 		Type: "TPM PCR Aggregate",
 		Hashes: []ar.ReferenceHash{
 			{
-				Alg:     "SHA-256",
+				Alg:     aggAlg.String(),
 				Content: aggregateHash,
 			},
 		},

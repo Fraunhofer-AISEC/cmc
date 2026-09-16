@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -237,11 +238,24 @@ func parseBiosMeasurements(data []byte, addEventData bool, algs []crypto.Hash) (
 	} else {
 		// Eventlog format version 1 directly starts with extended events
 		log.Trace("Detected event log format version 1")
-		return parseBiosMeasurementsV1(data)
+		return parseBiosMeasurementsV1(data, tpmAlgs)
 	}
 }
 
-func parseBiosMeasurementsV1(data []byte) ([]ar.Component, error) {
+func parseBiosMeasurementsV1(data []byte, algs []tpm2.Algorithm) ([]ar.Component, error) {
+
+	// The legacy event log format contains SHA-1 digests only
+	for _, alg := range algs {
+		if alg != tpm2.AlgSHA1 {
+			hashAlg, err := internal.Tpm2ToCryptoHash(alg)
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf(
+				"event log format version 1 does not contain %v digests, only SHA-1",
+				hashAlg.String())
+		}
+	}
 
 	buf := bytes.NewBuffer(data)
 	extends := make([]ar.Component, 0)
@@ -264,7 +278,7 @@ func parseBiosMeasurementsV1(data []byte) ([]ar.Component, error) {
 			Name: eventtypeToString(event.EventType),
 			Hashes: []ar.ReferenceHash{
 				{
-					Alg:     "SHA-1",
+					Alg:     crypto.SHA1.String(),
 					Content: event.Digest[:],
 				},
 			},
@@ -295,10 +309,9 @@ func parseBiosMeasurementsV2(data []byte, addEventData bool, algs []tpm2.Algorit
 		eventName := eventtypeToString(eventType)
 		binary.Read(buf, binary.LittleEndian, &digestCount)
 
-		var sha256Digest ar.HexByte
-		var sha384Digest ar.HexByte
-		foundSha256 := false
-		foundSha384 := false
+		// Collect the digests of all PCR banks the event was extended into. Digests of
+		// hash algorithms not supported by the CMC are filtered out later on
+		digests := make(map[tpm2.Algorithm]ar.HexByte, digestCount)
 		for i := 0; i < int(digestCount); i++ {
 			var digestAlgorithmID uint16
 			binary.Read(buf, binary.LittleEndian, &digestAlgorithmID)
@@ -311,25 +324,7 @@ func parseBiosMeasurementsV2(data []byte, addEventData bool, algs []tpm2.Algorit
 			}
 			digest := make(ar.HexByte, digestLength)
 			binary.Read(buf, binary.LittleEndian, &digest)
-			switch digestAlgorithmID {
-			case uint16(tpm2.AlgSHA256):
-				sha256Digest = make(ar.HexByte, SHA256_DIGEST_LEN)
-				copy(sha256Digest, digest)
-				foundSha256 = true
-			case uint16(tpm2.AlgSHA384):
-				sha384Digest = make(ar.HexByte, SHA384_DIGEST_LEN)
-				copy(sha384Digest, digest)
-				foundSha384 = true
-			}
-			//other digest types will be implicitly skipped
-		}
-
-		availableAlgs := make([]tpm2.Algorithm, 0)
-		if foundSha256 {
-			availableAlgs = append(availableAlgs, tpm2.AlgSHA256)
-		}
-		if foundSha384 {
-			availableAlgs = append(availableAlgs, tpm2.AlgSHA384)
+			digests[tpm2.Algorithm(digestAlgorithmID)] = digest
 		}
 
 		var eventSize uint32
@@ -357,7 +352,7 @@ func parseBiosMeasurementsV2(data []byte, addEventData bool, algs []tpm2.Algorit
 		if !initializedPCR[pcrIndex] {
 			//generate the locality entry
 			entry, skipEvent, err := generateLocalityEntry(int(pcrIndex), eventType, eventData,
-				algs, availableAlgs)
+				algs, digests)
 			if err != nil {
 				log.Debug(err)
 			} else {
@@ -383,42 +378,12 @@ func parseBiosMeasurementsV2(data []byte, addEventData bool, algs []tpm2.Algorit
 		extend.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
 		extend.SetIndex(int(pcrIndex))
 
-		// If no algs are specified, add all available PCR banks
-		if len(algs) == 0 {
-			if sha256Digest != nil {
-				extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
-					Alg:     "SHA-256",
-					Content: sha256Digest,
-				})
-			}
-			if sha384Digest != nil {
-				extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
-					Alg:     "SHA-384",
-					Content: sha384Digest,
-				})
-			}
-		} else {
-			for _, alg := range algs {
-				switch alg {
-				case tpm2.AlgSHA256:
-					if sha256Digest == nil {
-						return nil, fmt.Errorf("event log does not contain SHA-256 digest")
-					}
-					extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
-						Alg:     "SHA-256",
-						Content: sha256Digest,
-					})
-				case tpm2.AlgSHA384:
-					if sha384Digest == nil {
-						return nil, fmt.Errorf("event log does not contain SHA-384 digest")
-					}
-					extend.Hashes = append(extend.Hashes, ar.ReferenceHash{
-						Alg:     "SHA-384",
-						Content: sha384Digest,
-					})
-				}
-			}
+		hashes, err := refHashes(digests, algs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get digests for PCR%v event %v: %w",
+				pcrIndex, eventName, err)
 		}
+		extend.Hashes = hashes
 
 		if extendedeventData != nil {
 			extend.Description = extendedeventData.StringContent
@@ -433,8 +398,52 @@ func parseBiosMeasurementsV2(data []byte, addEventData bool, algs []tpm2.Algorit
 	return extends, nil
 }
 
+// availableAlgs returns the hash algorithms of the digests of an event log entry which are
+// supported by the CMC in a deterministic order
+func availableAlgs(digests map[tpm2.Algorithm]ar.HexByte) []tpm2.Algorithm {
+	algs := make([]tpm2.Algorithm, 0, len(digests))
+	for alg := range digests {
+		if _, err := internal.Tpm2ToCryptoHash(alg); err != nil {
+			// Digests of unsupported hash algorithms are implicitly skipped
+			continue
+		}
+		algs = append(algs, alg)
+	}
+	slices.Sort(algs)
+	return algs
+}
+
+// refHashes converts the digests of an event log entry into reference hashes for the specified
+// hash algorithms. If no algorithms are specified, the digests of all supported PCR banks
+// present in the event log entry are returned
+func refHashes(digests map[tpm2.Algorithm]ar.HexByte, algs []tpm2.Algorithm,
+) ([]ar.ReferenceHash, error) {
+
+	if len(algs) == 0 {
+		algs = availableAlgs(digests)
+	}
+
+	hashes := make([]ar.ReferenceHash, 0, len(algs))
+	for _, alg := range algs {
+		hashAlg, err := internal.Tpm2ToCryptoHash(alg)
+		if err != nil {
+			return nil, err
+		}
+		digest, ok := digests[alg]
+		if !ok {
+			return nil, fmt.Errorf("event log does not contain %v digest", hashAlg.String())
+		}
+		hashes = append(hashes, ar.ReferenceHash{
+			Alg:     hashAlg.String(),
+			Content: digest,
+		})
+	}
+
+	return hashes, nil
+}
+
 func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, algs []tpm2.Algorithm,
-	availableAlgs []tpm2.Algorithm) (ar.Component, bool, error) {
+	digests map[tpm2.Algorithm]ar.HexByte) (ar.Component, bool, error) {
 	var found_hcrtm bool
 	var locality byte
 	skipEvent := false
@@ -464,50 +473,35 @@ func generateLocalityEntry(pcrIndex int, eventType uint32, eventData []uint8, al
 
 	entry := ar.Component{
 		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, pcrIndex),
-		Name: "TPM_PCR_INIT_VALUE",
+		Name: ar.NAME_PCR_INIT_VALUE,
 	}
 	entry.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
 	entry.SetIndex(pcrIndex)
 
 	// If no algs are specified, add all available PCR banks
-	if len(algs) == 0 {
-		for _, alg := range availableAlgs {
-			switch alg {
-			case tpm2.AlgSHA256:
-				digest := make([]byte, 32)
-				digest[31] = locality
-				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
-					Alg:     "SHA-256",
-					Content: digest,
-				})
-			case tpm2.AlgSHA384:
-				digest := make([]byte, 48)
-				digest[47] = locality
-				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
-					Alg:     "SHA-384",
-					Content: digest,
-				})
-			}
+	initAlgs := algs
+	if len(initAlgs) == 0 {
+		initAlgs = availableAlgs(digests)
+	}
+
+	// The PCR init value is a zero-filled digest of the size of the respective hash algorithm
+	// with the startup locality in the last byte
+	for _, alg := range initAlgs {
+		hashAlg, err := internal.Tpm2ToCryptoHash(alg)
+		if err != nil {
+			return ar.Component{}, skipEvent, err
 		}
-	} else {
-		for _, alg := range algs {
-			switch alg {
-			case tpm2.AlgSHA256:
-				digest := make([]byte, 32)
-				digest[31] = locality
-				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
-					Alg:     "SHA-256",
-					Content: digest,
-				})
-			case tpm2.AlgSHA384:
-				digest := make([]byte, 48)
-				digest[47] = locality
-				entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
-					Alg:     "SHA-384",
-					Content: digest,
-				})
-			}
-		}
+		digest := make([]byte, hashAlg.Size())
+		digest[hashAlg.Size()-1] = locality
+		entry.Hashes = append(entry.Hashes, ar.ReferenceHash{
+			Alg:     hashAlg.String(),
+			Content: digest,
+		})
+	}
+
+	if len(entry.Hashes) == 0 {
+		return ar.Component{}, skipEvent, fmt.Errorf(
+			"PCR%v event log entry does not contain any supported digest", pcrIndex)
 	}
 
 	//generate the Locality

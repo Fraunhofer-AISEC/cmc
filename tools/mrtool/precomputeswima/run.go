@@ -17,6 +17,7 @@ package precomputeswima
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -142,8 +143,12 @@ func run(cmd *cli.Command) error {
 	// On TPM-less systems, IMA still records boot_aggregate as first log entry with an all-zero hash
 	bootAggregate := make([]byte, 32)
 
+	// SWIMA is a software-only trust anchor without a TPM PCR bank. The template hashes and
+	// the file digests are always calculated with SHA-256
 	refvals, err := precomputetpm.PerformImaPrecomputation(
 		ar.TRUST_ANCHOR_SWIMA,
+		crypto.SHA256,
+		crypto.SHA256,
 		cfg.Pcr,
 		bootAggregate,
 		cfg.ImaPaths,

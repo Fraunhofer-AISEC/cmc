@@ -17,12 +17,14 @@ package parseima
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/ima"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
@@ -31,6 +33,7 @@ import (
 type ParseImaPcrConf struct {
 	Eventlog    string
 	TrustAnchor string
+	HashAlg     crypto.Hash
 }
 
 const (
@@ -40,6 +43,7 @@ const (
 const (
 	imaEventlogFlag    = "eventlog"
 	imaTrustAnchorFlag = "trust-anchor"
+	imaHashAlgFlag     = "hash-alg"
 )
 
 var (
@@ -59,6 +63,12 @@ var Command = &cli.Command{
 			Name:  imaTrustAnchorFlag,
 			Usage: "trust anchor tag for the emitted reference values (TPM or IMA)",
 			Value: ar.TRUST_ANCHOR_TPM,
+		},
+		&cli.StringFlag{
+			Name: imaHashAlgFlag,
+			Usage: "hash algorithm of the PCR bank the IMA measurements are extended into. " +
+				"Possible: SHA-1, SHA-256, SHA-384",
+			Value: crypto.SHA256.String(),
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -89,7 +99,7 @@ func run(cmd *cli.Command) error {
 
 	log.Infof("Parsing IMA TPM PCR eventlog %q...", pcrConf.Eventlog)
 
-	artifacts, err := ima.GetImaArtifacts(pcrConf.Eventlog, pcrConf.TrustAnchor)
+	artifacts, err := ima.GetImaArtifacts(pcrConf.Eventlog, pcrConf.TrustAnchor, pcrConf.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to parse ima runtime digestes: %w", err)
 	}
@@ -116,9 +126,14 @@ func run(cmd *cli.Command) error {
 }
 
 func getConfig(cmd *cli.Command) (*ParseImaPcrConf, error) {
+	alg, err := internal.HashFromString(cmd.String(imaHashAlgFlag))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse %v: %w", imaHashAlgFlag, err)
+	}
 	c := &ParseImaPcrConf{
 		Eventlog:    cmd.String(imaEventlogFlag),
 		TrustAnchor: cmd.String(imaTrustAnchorFlag),
+		HashAlg:     alg,
 	}
 	return c, nil
 }

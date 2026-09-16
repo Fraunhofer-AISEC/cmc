@@ -17,7 +17,7 @@ package ima
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 var log = logrus.WithField("service", "ima")
@@ -57,14 +58,15 @@ type imaTemplate struct {
 }
 
 // GetImaMeasurements returns all hashes extended by the IMA as read from the sysfs, tagged with
-// the specified trust anchor
-func GetImaMeasurements(file, ta string) ([]ar.Component, error) {
+// the specified trust anchor. alg is the hash algorithm of the PCR bank the measurements are
+// extended into
+func GetImaMeasurements(file, ta string, alg crypto.Hash) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	components, err := parseImaRuntimeDigests(data, ta)
+	components, err := parseImaRuntimeDigests(data, ta, alg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IMA runtime digests: %w", err)
 	}
@@ -74,9 +76,9 @@ func GetImaMeasurements(file, ta string) ([]ar.Component, error) {
 
 // GetImaArtifacts wraps the retrieved IMA event entries into
 // an artifacts map
-func GetImaArtifacts(file, ta string) (map[int]ar.Artifact, error) {
+func GetImaArtifacts(file, ta string, alg crypto.Hash) (map[int]ar.Artifact, error) {
 
-	events, err := GetImaMeasurements(file, ta)
+	events, err := GetImaMeasurements(file, ta, alg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ima measurements: %w", err)
 	}
@@ -103,7 +105,7 @@ func GetImaArtifacts(file, ta string) (map[int]ar.Artifact, error) {
 	return artifacts, nil
 }
 
-func parseImaRuntimeDigests(data []byte, ta string) ([]ar.Component, error) {
+func parseImaRuntimeDigests(data []byte, ta string, alg crypto.Hash) ([]ar.Component, error) {
 
 	buf := bytes.NewBuffer(data)
 
@@ -152,10 +154,18 @@ func parseImaRuntimeDigests(data []byte, ta string) ([]ar.Component, error) {
 			template.Data = append(template.Data, addData...)
 		}
 
-		// Even in case of SHA256 PCRs, the template hash from IMA is a
-		// SHA1 hash and cannot be used. Instead, the SHA256 hash of the
-		// template must be calculated manually
-		digest := sha256.Sum256(template.Data)
+		// The template hash from IMA is always a SHA1 hash. Thus, it can only be used
+		// for the SHA1 PCR bank. For all other banks, the template hash must be
+		// calculated manually with the respective hash algorithm
+		var digest []byte
+		if alg == crypto.SHA1 {
+			digest = template.header.Digest[:]
+		} else {
+			digest, err = internal.Hash(alg, template.Data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to hash IMA template: %w", err)
+			}
+		}
 
 		// Parse the template data to retrieve additional information
 		_, eventName, err := parseTemplateData(&template)
@@ -168,8 +178,8 @@ func parseImaRuntimeDigests(data []byte, ta string) ([]ar.Component, error) {
 			Name: filepath.Base(eventName),
 			Hashes: []ar.ReferenceHash{
 				{
-					Alg:     "SHA-256",
-					Content: digest[:],
+					Alg:     alg.String(),
+					Content: digest,
 				},
 			},
 			Description: eventName, // Full path
