@@ -25,6 +25,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -399,19 +400,7 @@ func (c *Client) enroll(csr *x509.CertificateRequest, handler challengeHandler) 
 }
 
 func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
-	cert, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
-		if ch.Type == "http-01" {
-			//TODO: Not yet implemented
-			return map[string]any{}, nil
-		}
-		return nil, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	log.Debug("ACME simple enrollment completed successfully")
-	return cert, nil
+	return nil, errors.New("SimpleEnroll for ACME is not yet implemented")
 }
 
 func (c *Client) TpmCertifyEnroll(
