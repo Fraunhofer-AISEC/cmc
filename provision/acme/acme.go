@@ -44,10 +44,6 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// New creates a new ACME provisioner client. If key is nil, an ephemeral ECDSA
-// P-256 key is generated and SimpleEnroll will always create a new account. If
-// a key is provided, SimpleEnroll will first attempt to look up an existing
-// account before creating one.
 func New(addr string, key *ecdsa.PrivateKey) (*Client, error) {
 	ephemeral := false
 	if key == nil {
@@ -70,6 +66,25 @@ type acmeDirectory struct {
 	newNonce   string
 	newAccount string
 	newOrder   string
+}
+
+type acmeChallenge struct {
+	Type   string `json:"type"`
+	URL    string `json:"url"`
+	Status string `json:"status"`
+	Token  string `json:"token"`
+}
+
+type acmeAuth struct {
+	Status     string          `json:"status"`
+	Challenges []acmeChallenge `json:"challenges"`
+}
+
+type acmeOrder struct {
+	Status         string   `json:"status"`
+	Authorizations []string `json:"authorizations"`
+	Finalize       string   `json:"finalize"`
+	Certificate    string   `json:"certificate"`
 }
 
 func (c *Client) fetchDirectory() (*acmeDirectory, error) {
@@ -113,11 +128,10 @@ type staticNonce string
 
 func (n staticNonce) Nonce() (string, error) { return string(n), nil }
 
-// signedPost sends a JWS-signed POST to the given URL. If nonce is nil, a fresh nonce is fetched from nonceURL.
-// If accountURL is empty, the public key is embedded in the protected header (for new-account requests). Otherwise kid is set to accountURL.
-// Returns the fresh nonce from the Replay-Nonce response header, or nil if none was present.
 func (c *Client) signedPost(url string, nonce *string, nonceURL, accountURL string, payload any) (*http.Response, []byte, *string, error) {
 	var n string
+
+	// check if a nonce is already available and otherwise fetch a new nonce to be used for this signed post-message
 	if nonce != nil {
 		n = *nonce
 	} else {
@@ -142,6 +156,7 @@ func (c *Client) signedPost(url string, nonce *string, nonceURL, accountURL stri
 		NonceSource: staticNonce(n),
 	}).WithHeader("url", url)
 
+	// check if an account already exists and embed the id into the protected header
 	var signingKey jose.SigningKey
 	if accountURL == "" {
 		opts.EmbedJWK = true
@@ -179,15 +194,15 @@ func (c *Client) signedPost(url string, nonce *string, nonceURL, accountURL stri
 		return nil, nil, nil, fmt.Errorf("reading response body: %w", err)
 	}
 
+	// check if the response contained a new nonce to be used for the upcoming requests
 	if n := resp.Header.Get("Replay-Nonce"); n != "" {
 		return resp, respBody, &n, nil
 	}
 	return resp, respBody, nil, nil
 }
 
-// ensureAccount either looks up an existing account (when a key was provided externally) or creates a new one (when the key is ephemeral).
-// Important: tos are automatically accepted.
 func (c *Client) ensureAccount(newAccountURL, nonceURL string, nonce *string) (string, *string, error) {
+	// check if an account key was provided, in which case we first need to check if an account URL for it already exists
 	if !c.ephemeral {
 		resp, _, nextNonce, err := c.signedPost(newAccountURL, nonce, nonceURL, "", map[string]any{
 			"onlyReturnExisting": true,
@@ -207,6 +222,7 @@ func (c *Client) ensureAccount(newAccountURL, nonceURL string, nonce *string) (s
 		nonce = nextNonce
 	}
 
+	// important: tos are automatically accepted!
 	resp, body, nextNonce, err := c.signedPost(newAccountURL, nonce, nonceURL, "", map[string]any{
 		"termsOfServiceAgreed": true,
 	})
@@ -226,25 +242,6 @@ func (c *Client) ensureAccount(newAccountURL, nonceURL string, nonce *string) (s
 
 func (c *Client) CaCerts() ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("ACME provisioner: CaCerts not yet implemented")
-}
-
-type acmeChallenge struct {
-	Type   string `json:"type"`
-	URL    string `json:"url"`
-	Status string `json:"status"`
-	Token  string `json:"token"`
-}
-
-type acmeAuth struct {
-	Status     string          `json:"status"`
-	Challenges []acmeChallenge `json:"challenges"`
-}
-
-type acmeOrder struct {
-	Status         string   `json:"status"`
-	Authorizations []string `json:"authorizations"`
-	Finalize       string   `json:"finalize"`
-	Certificate    string   `json:"certificate"`
 }
 
 func (c *Client) createOrder(csr *x509.CertificateRequest, nonce *string, dir *acmeDirectory, accountURL string) (*acmeOrder, *string, error) {
@@ -270,8 +267,6 @@ func (c *Client) createOrder(csr *x509.CertificateRequest, nonce *string, dir *a
 	return &order, nonce, nil
 }
 
-// challengeHandler returns the payload to send for a given challenge.
-// Returning nil signals that this challenge type is not handled and should be skipped.
 type challengeHandler func(ch acmeChallenge) (any, error)
 
 func (c *Client) completeChallenges(authURLs []string, handler challengeHandler, nonce *string, dir *acmeDirectory, accountURL string) (*string, error) {
@@ -379,8 +374,6 @@ func (c *Client) keyAuthorizationCSRNonce(token string, csr *x509.CertificateReq
 	return hash[:], nil
 }
 
-// enroll runs the common ACME enrollment flow: account setup, order creation,
-// challenge completion via the given handler, and finalization.
 func (c *Client) enroll(csr *x509.CertificateRequest, handler challengeHandler) (*x509.Certificate, error) {
 	dir, err := c.fetchDirectory()
 	if err != nil {
@@ -408,6 +401,7 @@ func (c *Client) enroll(csr *x509.CertificateRequest, handler challengeHandler) 
 func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
 	cert, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
 		if ch.Type == "http-01" {
+			//TODO: Not yet implemented
 			return map[string]any{}, nil
 		}
 		return nil, nil
@@ -420,10 +414,6 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 	return cert, nil
 }
 
-// TpmCertifyEnroll enrolls a TPM-resident key via the custom cmc-tpm-certify-01
-// challenge. The standardized device-attest-01 challenge
-// (draft-ietf-acme-device-attest) is not usable here, as it is designed for
-// attesting machines via permanent-identifier identifiers, not dns identifiers.
 func (c *Client) TpmCertifyEnroll(
 	csr *x509.CertificateRequest,
 	ikParams attest.CertificationParameters,

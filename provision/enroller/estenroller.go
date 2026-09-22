@@ -97,9 +97,6 @@ func (e *EstEnroller) AttestEnroll(
 	return est.AttestEnroll(e.client, e.Addr, e.bearerToken, csr, report)
 }
 
-// csrNonce derives the attestation report nonce from the CSR's public key as
-// the EST protocol has no server-provided nonce. The EST server recomputes
-// SHA-256 over the DER-encoded public key for verification.
 func csrNonce(csr *x509.CertificateRequest) ([]byte, error) {
 	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
 	if err != nil {

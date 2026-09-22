@@ -138,7 +138,7 @@ func main() {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if !c.IsSet(flagPort) {
-				return fmt.Errorf("Flag [%v] must be specified", flagPort)
+				return fmt.Errorf("flag [%v] must be specified", flagPort)
 			}
 			return run(c.Uint16(flagPort), c.String(flagCertFile), c.String(flagKeyFile), c.String(flagCACertFile), c.String(flagCAKeyFile), c.String(flagMetadataCas))
 		},

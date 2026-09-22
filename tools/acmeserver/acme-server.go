@@ -215,6 +215,7 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
 	respondWithJson(status, resp, result)
 }
+
 // decodeChallengeCsr decodes and validates a base64url-encoded CSR from a
 // challenge payload and returns it together with its DER-encoded public key.
 func decodeChallengeCsr(csrB64 string) (*x509.CertificateRequest, []byte, error) {
@@ -241,9 +242,9 @@ func verifyAttestationReport(report []byte, nonce []byte, cas []*x509.Certificat
 		return nil, fmt.Errorf("empty attestation report")
 	}
 
-	result := verifier.Verify(report, nonce, nil,
+	result := verifier.VerifyBootstrap(report, nonce, nil,
 		verifier.PolicyEngineSelect_None, false,
-		cas, nil, "", "", false)
+		cas)
 
 	if result.Summary.Status != attestationreport.StatusSuccess && result.Summary.Status != attestationreport.StatusWarn {
 		return nil, fmt.Errorf("attestation verification failed: %s", result.Summary.Status)
@@ -805,7 +806,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, fmt.Sprintf("invalid CSR in tpm certify challenge: %v", err))
 				return
 			}
-			// Verify the IK was certified by the AK
+
 			ikParams := attest.CertificationParameters{
 				Public:            ikPublic,
 				CreateData:        ikCreateData,
@@ -816,7 +817,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "IK certification verification failed")
 				return
 			}
-			// Verify the certified IK is actually the CSR public key
+
 			if err := provision.VerifyTpmCsr(ikPublic, challengeCSR); err != nil {
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "certified key does not match CSR public key")
 				return
@@ -831,7 +832,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "attestation verification failed")
 				return
 			}
-			// Verify the certifying AK is the AK that signed the report's TPM quote
+
 			if err := provision.VerifyAkBinding(result, akPublic); err != nil {
 				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "AK binding verification failed")
 				return

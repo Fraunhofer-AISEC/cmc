@@ -42,10 +42,12 @@ const (
 )
 
 func ValidateContact(contact string) bool {
+	// rudimentary and in no way complete mail verification scheme
 	match, _ := regexp.MatchString("mailto:[a-zA-Z0-9]((-|_)?[a-zA-Z0-9])*@[a-zA-Z0-9]((-|_)?[a-zA-Z0-9])*\\.[a-zA-Z][a-zA-Z]+", contact)
 	return match
 }
 func ValidateIdentifier(identifier string) bool {
+	// rudimentary and not complete identifier verification scheme
 	match, _ := regexp.MatchString("[a-zA-Z0-9](-?[a-zA-Z0-9])*(\\.[a-zA-Z0-9](-?[a-zA-Z0-9])*)*", identifier)
 	return match
 }
@@ -171,7 +173,7 @@ func (o *AcmeOrder) UpdateOrder() {
 			}
 		}
 
-		// An authorization is valid if any of its challenges is valid
+		// authorization is valid if any of its challenges is valid
 		if auth.Status != AuthStatusDeactivated && auth.Status != AuthStatusExpired {
 			for j := range auth.Challenges {
 				if auth.Challenges[j].Status == AuthStatusValid {
@@ -188,8 +190,7 @@ func (o *AcmeOrder) UpdateOrder() {
 		}
 	}
 
-	// Order becomes ready when all authorizations are valid; a finalized (valid)
-	// order keeps its status even after authorizations expire
+	// order is ready when all authorizations are valid (once valid, it cannot expire anymore)
 	if validCount == len(o.Authorizations) && o.Status == OrderStatusPending {
 		o.Status = OrderStatusReady
 	} else if invalidCount > 0 && o.Status != OrderStatusValid {
@@ -197,12 +198,8 @@ func (o *AcmeOrder) UpdateOrder() {
 	}
 }
 
-// AcmeAccount fields Identifier and TosAccepted are immutable after
-// creation (set before the account is published to the shared map).
-// They can be read without holding the mutex. The Jwk and Contacts
-// fields may be updated (key rollover / contact update) and must be
-// read under account.mux. The Deactivated flag is accessed via atomic
-// operations. The orders map must only be accessed while holding mux.
+// identifier and tos-accepted can be read with out holding the mutex
+// jwk and contacts and orders must be accessed while holding mux
 type AcmeAccount struct {
 	mux         sync.Mutex
 	Deactivated atomic.Bool
