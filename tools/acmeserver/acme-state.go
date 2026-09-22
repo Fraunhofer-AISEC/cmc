@@ -256,6 +256,14 @@ func (a *AcmeAccount) OrderIDs() []string {
 	}
 	return ids
 }
+
+func (a *AcmeAccount) TokenKeyAuthorization(token string) (string, error) {
+	thumbprint, err := RawKeyThumbprint(a.Jwk)
+	if err != nil {
+		return "", fmt.Errorf("computing raw jwk thumbprint: %w", err)
+	}
+	return token + "." + base64.RawURLEncoding.EncodeToString(thumbprint), nil
+}
 func (a *AcmeAccount) TokenAccountCSRNonce(token string, csrPubKeyDER []byte) ([]byte, error) {
 	thumbprint, err := RawKeyThumbprint(a.Jwk)
 	if err != nil {
@@ -275,6 +283,7 @@ type AcmeState struct {
 	CAKey       *ecdsa.PrivateKey
 	CAx509      *x509.Certificate
 	MetadataCas []*x509.Certificate
+	Http01Port  uint16
 }
 
 func NewAcmeState() *AcmeState {
