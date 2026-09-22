@@ -130,7 +130,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:  flagMetadataCas,
-				Usage: "Path to PEM file with trusted metadata root CAs (enables cmc-software-attest-01 and cmc-tpm-certify-01 challenges)",
+				Usage: "Path to PEM file with trusted metadata root CAs (necessary for cmc-software-attest-01 and cmc-tpm-certify-01 challenges)",
 			},
 			&cli.Uint16Flag{
 				Name:        flagPort,
