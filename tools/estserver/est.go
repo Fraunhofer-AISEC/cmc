@@ -305,6 +305,13 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
 			return
 		}
+
+		// Verify the certifying AK is the AK that signed the report's TPM quote
+		err = provision.VerifyAkBinding(attestResult, akPublic)
+		if err != nil {
+			writeHttpErrorf(w, "Failed to verify AK binding: %v", err)
+			return
+		}
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)
