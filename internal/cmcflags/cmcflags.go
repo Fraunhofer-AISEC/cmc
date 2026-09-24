@@ -92,7 +92,7 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  EnrollmentModeFlag,
-		Usage: "enrollment mode [acme, est]",
+		Usage: "enrollment mode [acme, est, self]",
 	},
 	&cli.StringFlag{
 		Name:  EnrollmentAddrFlag,

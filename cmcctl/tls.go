@@ -90,35 +90,11 @@ func dial(c *config) error {
 
 func listen(c *config) error {
 
-	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
-	if err != nil {
-		return fmt.Errorf("failed to create cert pool: %w", err)
-	}
-
-	// Load certificate
-	cert, err := getTlsCert(c)
-	if err != nil {
-		return fmt.Errorf("failed to get TLS Certificate: %w", err)
-	}
-
-	var clientAuth tls.ClientAuthType
-	if c.Mtls {
-		// Mandate client authentication
-		clientAuth = tls.RequireAndVerifyClientCert
-	} else {
-		// Make client authentication optional
-		clientAuth = tls.VerifyClientCertIfGiven
-	}
-
 	// Create TLS config
-	tlsConf := &tls.Config{
-		Certificates:  []tls.Certificate{cert},
-		ClientAuth:    clientAuth,
-		ClientCAs:     rootpool,
-		Renegotiation: tls.RenegotiateNever,
+	tlsConf, err := createServerTlsConf(c)
+	if err != nil {
+		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-
-	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
@@ -181,31 +157,100 @@ func handleConnection(conn net.Conn) {
 	}
 }
 
+// useAttestationOnlyTrust returns whether the validation of the peer's certificate chain shall be
+// replaced by remote attestation of the peer. Authorization is then enforced through the
+// attestation instead of through the certificate chain.
+func useAttestationOnlyTrust(c *config, peer atls.AttestSelect) (bool, error) {
+	if !c.AttestationOnlyTrust {
+		return false, nil
+	}
+	if c.attest != peer && c.attest != atls.Attest_Mutual {
+		return false, fmt.Errorf(
+			"attestation-only trust requires the attestation of the peer, but attestation mode is %q",
+			c.Attest)
+	}
+	return true, nil
+}
+
 func createClientTlsConf(c *config) (*tls.Config, error) {
 
-	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	attestationOnly, err := useAttestationOnlyTrust(c, atls.Attest_Server)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cert pool: %w", err)
+		return nil, err
 	}
 
-	if !c.Mtls {
-		// Create TLS config with root CA only
-		return &tls.Config{
-			RootCAs:       rootpool,
-			Renegotiation: tls.RenegotiateNever,
-		}, nil
+	tlsConf := &tls.Config{
+		Renegotiation: tls.RenegotiateNever,
 	}
 
-	// Retrieve cert from CMC for mTLS
+	if attestationOnly {
+		// Trust the server based on its attestation report only, e.g. if it uses a self-signed
+		// certificate
+		log.Debug("Skipping server certificate chain validation: server is attested")
+		tlsConf.InsecureSkipVerify = true
+	} else {
+		rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cert pool: %w", err)
+		}
+		tlsConf.RootCAs = rootpool
+	}
+
+	if c.Mtls {
+		// Retrieve cert from CMC for mTLS
+		cert, err := getTlsCert(c)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get TLS cert: %w", err)
+		}
+		tlsConf.Certificates = []tls.Certificate{cert}
+	}
+
+	internal.PrintTlsConfig(tlsConf, c.rootCas)
+
+	return tlsConf, nil
+}
+
+func createServerTlsConf(c *config) (*tls.Config, error) {
+
+	// The client certificate is only validated if the client authenticates via mTLS
+	attestationOnly := false
+	if c.Mtls {
+		var err error
+		attestationOnly, err = useAttestationOnlyTrust(c, atls.Attest_Client)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Load certificate
 	cert, err := getTlsCert(c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get TLS cert: %w", err)
+		return nil, fmt.Errorf("failed to get TLS certificate: %w", err)
 	}
 
-	// Create TLS config with root CA and own certificate
 	tlsConf := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      rootpool,
+		Certificates:  []tls.Certificate{cert},
+		Renegotiation: tls.RenegotiateNever,
+	}
+
+	if attestationOnly {
+		// Trust the client based on its attestation report only, e.g. if it uses a self-signed
+		// certificate
+		log.Debug("Skipping client certificate chain validation: client is attested")
+		tlsConf.ClientAuth = tls.RequireAnyClientCert
+	} else {
+		rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cert pool: %w", err)
+		}
+		tlsConf.ClientCAs = rootpool
+		if c.Mtls {
+			// Mandate client authentication
+			tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
+		} else {
+			// Make client authentication optional
+			tlsConf.ClientAuth = tls.VerifyClientCertIfGiven
+		}
 	}
 
 	internal.PrintTlsConfig(tlsConf, c.rootCas)

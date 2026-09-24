@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"golang.org/x/exp/maps"
 
@@ -46,6 +47,9 @@ var (
 	log = logrus.WithField("service", "keymgr")
 )
 
+// selfSignedValidity is the lifetime of self-signed TLS certificates
+const selfSignedValidity = 24 * 365 * time.Hour
+
 type KeyFormat int
 
 const (
@@ -60,6 +64,7 @@ type KeyMgr struct {
 	certsPath   string
 	tpm         *tpmdriver.Tpm
 	provisioner Enroller
+	selfSigned  bool // selfSigned creates self-signed TLS certificates
 }
 
 type key struct {
@@ -75,13 +80,18 @@ type KeyEnrollmentParams struct {
 	ArHashAlg  crypto.Hash
 }
 
-func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enroller) (*KeyMgr, error) {
+func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enroller, selfSigned bool) (*KeyMgr, error) {
+
+	if provisioner == nil && !selfSigned {
+		return nil, fmt.Errorf("no provisioner configured for certificate enrollment")
+	}
 
 	mgr := &KeyMgr{
 		keyPath:     path.Join(storagePath, "keys"),
 		certsPath:   path.Join(storagePath, "certs"),
 		keys:        map[string]key{},
 		provisioner: provisioner,
+		selfSigned:  selfSigned,
 	}
 
 	// Add drivers for hardware keys (currently only tpm keys supported)
@@ -122,6 +132,9 @@ func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
 		if mgr.tpm == nil {
 			return "", fmt.Errorf("failed to enroll tpm key: tpm support disabled")
 		}
+		if mgr.selfSigned {
+			return "", fmt.Errorf("self-signed certificates are not supported for tpm keys")
+		}
 		tpmKey, err := tpmdriver.NewKey(mgr.tpm, p.KeyConfig.Alg)
 		if err != nil {
 			return "", fmt.Errorf("failed to create TPM key: %w", err)
@@ -154,7 +167,12 @@ func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
 			return "", fmt.Errorf("failed to create key: %w", err)
 		}
 
-		certChain, err := simpleEnroll(mgr.provisioner, priv, p)
+		var certChain []*x509.Certificate
+		if mgr.selfSigned {
+			certChain, err = selfSign(priv, p)
+		} else {
+			certChain, err = simpleEnroll(mgr.provisioner, priv, p)
+		}
 		if err != nil {
 			return "", fmt.Errorf("failed to enroll cert: %w", err)
 		}
@@ -412,4 +430,41 @@ func prepareEnroll(priv crypto.PrivateKey, p *KeyEnrollmentParams) (*x509.Certif
 	}
 
 	return csr, report, nil
+}
+
+// selfSign creates a self-signed TLS certificate for the given key. It is used in enrollment
+// mode "self", where no PKI is shared between the prover and its peers. Peers must then establish
+// trust through attestation.
+func selfSign(priv crypto.Signer, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
+
+	// Create a CSR with the configured properties, which is then self-signed instead of being
+	// sent to an enrollment server
+	csr, err := internal.CreateCsr(priv, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CSR: %w", err)
+	}
+
+	tmpl, err := internal.PrepareCert(csr, internal.CertFields{
+		Subject:     csr.Subject,
+		DNSNames:    csr.DNSNames,
+		IPAddresses: csr.IPAddresses,
+		ValidFor:    selfSignedValidity,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare certificate: %w", err)
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, priv.Public(), priv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create self-signed certificate: %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse self-signed certificate: %w", err)
+	}
+
+	log.Debugf("Created self-signed TLS certificate %v", cert.Subject.CommonName)
+
+	return []*x509.Certificate{cert}, nil
 }

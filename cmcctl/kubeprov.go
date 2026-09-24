@@ -16,7 +16,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -26,7 +25,6 @@ import (
 	"sync"
 
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type joinInfo struct {
@@ -36,31 +34,10 @@ type joinInfo struct {
 }
 
 func kubeprovServe(c *config) error {
-	rootPool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+	tlsConf, err := createServerTlsConf(c)
 	if err != nil {
-		return fmt.Errorf("failed to create cert pool: %w", err)
+		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-
-	cert, err := getTlsCert(c)
-	if err != nil {
-		return fmt.Errorf("failed to get TLS certificate: %w", err)
-	}
-
-	var clientAuth tls.ClientAuthType
-	if c.Mtls {
-		clientAuth = tls.RequireAndVerifyClientCert
-	} else {
-		clientAuth = tls.VerifyClientCertIfGiven
-	}
-
-	tlsConf := &tls.Config{
-		Certificates:  []tls.Certificate{cert},
-		ClientAuth:    clientAuth,
-		ClientCAs:     rootPool,
-		Renegotiation: tls.RenegotiateNever,
-	}
-
-	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
 		atls.WithCmcAddr(c.CmcAddr),

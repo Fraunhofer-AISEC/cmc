@@ -17,7 +17,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"io"
 	golog "log"
@@ -31,7 +30,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	ahttp "github.com/Fraunhofer-AISEC/cmc/attestedhttp"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/sirupsen/logrus"
 )
@@ -58,8 +56,6 @@ func request(c *config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-
-	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	// Create an attested HTTP Transport structure. This is a wrapper around http.Transport,
 	// look for the descriptions of the parameters there. Additionally, the aTLS parameters
@@ -139,35 +135,11 @@ func request(c *config) error {
 
 func serve(c *config) error {
 
-	rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
-	if err != nil {
-		return fmt.Errorf("failed to create cert pool: %w", err)
-	}
-
-	// Load certificate
-	cert, err := getTlsCert(c)
-	if err != nil {
-		return fmt.Errorf("failed to get TLS Certificate: %w", err)
-	}
-
-	var clientAuth tls.ClientAuthType
-	if c.Mtls {
-		// Mandate client authentication
-		clientAuth = tls.RequireAndVerifyClientCert
-	} else {
-		// Make client authentication optional
-		clientAuth = tls.VerifyClientCertIfGiven
-	}
-
 	// Overwrite specified TLS config to enforce aTLS as configured
-	tlsConfig := &tls.Config{
-		Certificates:  []tls.Certificate{cert},
-		ClientAuth:    clientAuth,
-		ClientCAs:     rootpool,
-		Renegotiation: tls.RenegotiateNever,
+	tlsConfig, err := createServerTlsConf(c)
+	if err != nil {
+		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
-
-	internal.PrintTlsConfig(tlsConfig, c.rootCas)
 
 	// Create an attested HTTP server. The inner http.Server can be
 	// configured as usual. Additionally, aTLS parameters must be
