@@ -73,38 +73,39 @@ var (
 )
 
 type config struct {
-	Addr             string   `json:"addr"`
-	ReportFile       string   `json:"report"`
-	ResultFile       string   `json:"result"`
-	NonceFile        string   `json:"nonce"`
-	KeyIdFile        string   `json:"keyId"`
-	KeyType          string   `json:"keyType"`
-	KeyConfig        string   `json:"keyConfig"`
-	CaStorePath      string   `json:"caStorePath"`
-	Mtls             bool     `json:"mtls"`
-	Attest           string   `json:"attest"`
-	PoliciesFile     string   `json:"policies"`
-	PublishResults   string   `json:"publishResults"`
-	PublishOcsf      string   `json:"publishOcsf"`
-	PublishNetwork   string   `json:"publishNetwork"`
-	Header           []string `json:"header"`
-	Method           string   `json:"method"`
-	Data             string   `json:"data"`
-	Serialization    string   `json:"serialization"`
-	LogLevel         string   `json:"logLevel"`
-	LogFile          string   `json:"logFile"`
-	TokenStore       string   `json:"tokenStore"`
-	TokenMaxUses     int      `json:"tokenMaxUses"`
-	TokenSubject     string   `json:"tokenSubject"`
-	PublishTokenFile string   `json:"publishToken"`
-	PublishCert      string   `json:"publishCert"`
-	PublishKey       string   `json:"publishKey"`
-	TlsCn            string   `json:"tlsCn"`
-	TlsDnsNames      []string `json:"tlsDnsNames"`
-	TlsIpAddresses   []string `json:"tlsIpAddresses"`
-	KubeadmPath      string   `json:"kubeadmPath"`
-	KubeprovCount    int      `json:"kubeprovCount"`
-	KubeprovDryRun   bool     `json:"kubeprovDryRun"`
+	Addr                 string   `json:"addr"`
+	ReportFile           string   `json:"report"`
+	ResultFile           string   `json:"result"`
+	NonceFile            string   `json:"nonce"`
+	KeyIdFile            string   `json:"keyId"`
+	KeyType              string   `json:"keyType"`
+	KeyConfig            string   `json:"keyConfig"`
+	CaStorePath          string   `json:"caStorePath"`
+	Mtls                 bool     `json:"mtls"`
+	Attest               string   `json:"attest"`
+	AttestationOnlyTrust bool     `json:"attestationOnlyTrust"`
+	PoliciesFile         string   `json:"policies"`
+	PublishResults       string   `json:"publishResults"`
+	PublishOcsf          string   `json:"publishOcsf"`
+	PublishNetwork       string   `json:"publishNetwork"`
+	Header               []string `json:"header"`
+	Method               string   `json:"method"`
+	Data                 string   `json:"data"`
+	Serialization        string   `json:"serialization"`
+	LogLevel             string   `json:"logLevel"`
+	LogFile              string   `json:"logFile"`
+	TokenStore           string   `json:"tokenStore"`
+	TokenMaxUses         int      `json:"tokenMaxUses"`
+	TokenSubject         string   `json:"tokenSubject"`
+	PublishTokenFile     string   `json:"publishToken"`
+	PublishCert          string   `json:"publishCert"`
+	PublishKey           string   `json:"publishKey"`
+	TlsCn                string   `json:"tlsCn"`
+	TlsDnsNames          []string `json:"tlsDnsNames"`
+	TlsIpAddresses       []string `json:"tlsIpAddresses"`
+	KubeadmPath          string   `json:"kubeadmPath"`
+	KubeprovCount        int      `json:"kubeprovCount"`
+	KubeprovDryRun       bool     `json:"kubeprovDryRun"`
 	cmc.Config
 
 	rootCas           []*x509.Certificate
@@ -130,6 +131,7 @@ const (
 	policiesFlag       = "policies"
 	mtlsFlag           = "mtls"
 	attestFlag         = "attest"
+	attestOnlyFlag     = "attestation-only-trust"
 	publishResultsFlag = "publish-results"
 	publishOcsfFlag    = "publish-ocsf"
 	publishNetworkFlag = "publish-network"
@@ -201,6 +203,12 @@ var flags = append([]cli.Flag{
 	&cli.StringFlag{
 		Name:  attestFlag,
 		Usage: "remote attestation mode [mutual, client, server, none]",
+	},
+	&cli.BoolFlag{
+		Name: attestOnlyFlag,
+		Usage: "establish trust in the peer through its attestation report only, without " +
+			"validating its TLS certificate chain, e.g. if the peer uses a self-signed " +
+			"certificate. Requires the peer to be attested",
 	},
 	&cli.StringFlag{
 		Name:  publishResultsFlag,
@@ -346,6 +354,9 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	}
 	if cmd.IsSet(attestFlag) {
 		c.Attest = cmd.String(attestFlag)
+	}
+	if cmd.IsSet(attestOnlyFlag) {
+		c.AttestationOnlyTrust = cmd.Bool(attestOnlyFlag)
 	}
 	if cmd.IsSet(publishResultsFlag) {
 		c.PublishResults = cmd.String(publishResultsFlag)
@@ -548,6 +559,7 @@ func (c *config) Print() {
 	log.Debugf("\tMtls                     : %v", c.Mtls)
 	log.Debugf("\tLogLevel                 : %v", c.LogLevel)
 	log.Debugf("\tAttest                   : %v", c.Attest)
+	log.Debugf("\tAttestation-only trust   : %v", c.AttestationOnlyTrust)
 	log.Debugf("\tAPI Serializer           : %v", c.Serialization)
 	log.Debugf("\tPublish Results          : %v", c.PublishResults)
 	log.Debugf("\tPublish OCSF             : %v", c.PublishOcsf)

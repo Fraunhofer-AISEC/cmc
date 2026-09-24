@@ -79,6 +79,36 @@ cmcctl listen --config example-setup/configs/installed/cmcctl-conf.json --addr "
 cmcctl dial --config example-setup/configs/installed/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
 ```
 
+### Establish Attested TLS Connections without a shared PKI
+
+By default, TLS certificates are enrolled via EST, which requires a shared PKI between prover and
+verifier to. If this is not desired, e.g. for testing or when the CVM image is built
+independently of the verifier, the `cmcd` can create self-signed TLS certificates
+instead. This enables TLS channels which are solely authenticated through the attestation:
+
+```json
+{
+    "enrollmentMode": "self"
+}
+```
+
+The peer must then be configured to establish trust based on the attestation report only, without
+validating the certificate chain:
+
+```sh
+# Run an attested TLS server with a self-signed TLS certificate
+cmcctl listen --config <cmcctl-config> --addr "$(hostname --fqdn):4443" --attest server
+
+# Run an attested TLS client trusting the server based on its attestation report only
+cmcctl dial --config <cmcctl-config> --addr "$(hostname --fqdn):4443" --attest server \
+    --attestation-only-trust
+```
+
+The attestation report is bound to the TLS session via an RFC 5705 exporter-derived nonce. It
+therefore proves that the peer terminating the connection is genuine, without requiring a shared
+PKI. `--attestation-only-trust` is only allowed if the peer is actually attested, i.e., in
+attestation mode `server` (or `mutual` when combined with `--mtls`).
+
 ### Establish Attested HTTPS Connections
 
 Prerequisite: [cmcd running](./run.md#run-the-cmcd)

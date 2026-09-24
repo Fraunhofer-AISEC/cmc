@@ -184,14 +184,20 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	// Create provisioner for key manager, which is used to enroll certificates for created keys,
-	// e.g. via EST or ACME protocol
-	provisioner, err := createEnroller(c, rootCas)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create enroller: %w", err)
+	// e.g. via EST or ACME protocol. In enrollment mode "self", TLS certificates are self-signed
+	// and no enrollment protocol and thus no provisioner is required
+	selfSigned := strings.EqualFold(c.EnrollmentMode, "self")
+	var provisioner keymgr.Enroller
+	if !selfSigned {
+		provisioner, err = createEnroller(c, rootCas)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create enroller: %w", err)
+		}
 	}
 
 	// Create key manager
-	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage, "tls_key_store"), cmc.Drivers, provisioner)
+	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage, "tls_key_store"), cmc.Drivers, provisioner,
+		selfSigned)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
 	}
