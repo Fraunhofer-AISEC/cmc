@@ -1,10 +1,10 @@
 module github.com/Fraunhofer-AISEC/cmc
 
-go 1.26.3
+go 1.26.8
 
 require (
 	github.com/caddyserver/caddy/v2 v2.11.4
-	github.com/containerd/containerd/v2 v2.3.5
+	github.com/containerd/containerd/v2 v2.3.6
 	github.com/containerd/continuity v0.5.0
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/edgelesssys/ego v1.9.1
