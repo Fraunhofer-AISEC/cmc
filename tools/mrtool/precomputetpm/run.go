@@ -39,23 +39,25 @@ var (
 
 type Config struct {
 	*tcg.Conf
-	HashAlg           crypto.Hash
-	AggregateHashAlg  crypto.Hash
-	ImaHashAlg        crypto.Hash
-	SystemUuid        string
-	GrubCmds          string
-	Path              []string
-	MokLists          []string
-	ImaPaths          []string
-	ImaSeeds          []string
-	ImaStrip          string
-	ImaPrepend        string
-	ImaTemplate       string
-	ImaExecOnly       bool
-	BootAggregate     []byte
-	PrintAggregate    bool
-	BuildrootManifest string
-	PackageFileList   string
+	HashAlg             crypto.Hash
+	AggregateHashAlg    crypto.Hash
+	ImaHashAlg          crypto.Hash
+	SystemUuid          string
+	MachineArchitecture string
+	Uki                 string
+	GrubCmds            string
+	Path                []string
+	MokLists            []string
+	ImaPaths            []string
+	ImaSeeds            []string
+	ImaStrip            string
+	ImaPrepend          string
+	ImaTemplate         string
+	ImaExecOnly         bool
+	BootAggregate       []byte
+	PrintAggregate      bool
+	BuildrootManifest   string
+	PackageFileList     string
 }
 
 const (
@@ -63,6 +65,8 @@ const (
 	aggregateHashAlgFlag  = "aggregate-hash-alg"
 	imaHashAlgFlag        = "ima-hash-alg"
 	systemUuidFlag        = "systemuuid"
+	machineArchFlag       = "machine-architecture"
+	ukiFlag               = "uki"
 	grubcmdsFlag          = "grubcmds"
 	pathFlag              = "paths"
 	imaPathFlag           = "ima-path"
@@ -101,6 +105,16 @@ var flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  systemUuidFlag,
 		Usage: "Path to GRUB command file for PCR8",
+	},
+	&cli.StringFlag{
+		Name: machineArchFlag,
+		Usage: "Machine architecture (e.g. X64) which OpenHCL measure as " +
+			"{\"MachineArchitecture\": \"<arch>\"} into PCR6",
+	},
+	&cli.StringFlag{
+		Name: ukiFlag,
+		Usage: "Path to a Unified Kernel Image whose section names and section contents are " +
+			"measured by systemd-stub into PCR11",
 	},
 	&cli.StringFlag{
 		Name:  grubcmdsFlag,
@@ -279,6 +293,12 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	if cmd.IsSet(systemUuidFlag) {
 		c.SystemUuid = cmd.String(systemUuidFlag)
 	}
+	if cmd.IsSet(machineArchFlag) {
+		c.MachineArchitecture = cmd.String(machineArchFlag)
+	}
+	if cmd.IsSet(ukiFlag) {
+		c.Uki = cmd.String(ukiFlag)
+	}
 	if cmd.IsSet(grubcmdsFlag) {
 		c.GrubCmds = cmd.String(grubcmdsFlag)
 	}
@@ -346,6 +366,14 @@ func (c *Config) print() {
 
 	if c.SystemUuid != "" {
 		log.Debugf("\tSystem UUID: %q", c.SystemUuid)
+	}
+
+	if c.MachineArchitecture != "" {
+		log.Debugf("\tMachine architecture: %q", c.MachineArchitecture)
+	}
+
+	if c.Uki != "" {
+		log.Debugf("\tUKI: %q", c.Uki)
 	}
 
 	if c.GrubCmds != "" {

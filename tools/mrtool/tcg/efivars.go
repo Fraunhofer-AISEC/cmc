@@ -224,7 +224,10 @@ func createVariable(val SecBootVariableType) ([]byte, error) {
 
 	data := val.Data
 	if val.Path != "" {
-		data, err = os.ReadFile(val.Path)
+		// The file may contain the raw variable data, a full UEFI_VARIABLE_DATA
+		// structure, or the 4-byte EFI variable attributes header which the
+		// kernel prepends in /sys/firmware/efi/efivars
+		data, err = readEfiVariableFromFile(val.Path, val.VendorGuid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read variable file: %w", err)
 		}
