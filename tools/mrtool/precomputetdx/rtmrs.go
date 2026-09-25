@@ -138,11 +138,14 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
 	}
 
-	// EV_EFI_VARIABLE_BOOT boot variables
-	rtmr, refvals, err = tcg.MeasureEfiBootVars(crypto.SHA384, tcg.TDX, rtmr, refvals,
-		tcg.INDEX_RTMR0, c.BootOrder, c.BootXxxx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
+	// EV_EFI_VARIABLE_BOOT boot variables. Some firmwares, such OpenHCL do not measure boot
+	// variables
+	if !c.NoBootVars {
+		rtmr, refvals, err = tcg.MeasureEfiBootVars(crypto.SHA384, tcg.TDX, rtmr, refvals,
+			tcg.INDEX_RTMR0, c.BootOrder, c.BootXxxx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
+		}
 	}
 
 	// EV_EFI_VARIABLE_AUTHORITY: SbatLevel

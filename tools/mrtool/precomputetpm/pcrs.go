@@ -170,11 +170,14 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	// EV_EFI_VARIABLE_BOOT: boot variables
-	pcr, refvals, err = tcg.MeasureEfiBootVars(c.HashAlg, tcg.TPM, pcr, refvals,
-		1, c.BootOrder, c.BootXxxx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
+	// EV_EFI_VARIABLE_BOOT: boot variables. Some firmwares, such as OpenHCL, do not measure boot
+	// variables
+	if !c.NoBootVars {
+		pcr, refvals, err = tcg.MeasureEfiBootVars(c.HashAlg, tcg.TPM, pcr, refvals,
+			1, c.BootOrder, c.BootXxxx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to calculate EFI boot variables: %w", err)
+		}
 	}
 
 	// EV_SEPARATOR
@@ -451,6 +454,20 @@ func PrecomputePcr6(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
+	// EV_COMPACT_HASH: machine architecture, measured by OpenHCL
+	if c.MachineArchitecture != "" {
+
+		archString := fmt.Sprintf("{\"MachineArchitecture\": %q}", c.MachineArchitecture)
+
+		log.Debugf("Hashing machine architecture: %q", archString)
+
+		pcr, refvals, err = c.hashExtend(pcr, refvals, 6, "EV_COMPACT_HASH",
+			[]byte(archString), archString)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure machine architecture: %w", err)
+		}
+	}
+
 	// EV_SEPARATOR
 	pcr, refvals, err = c.hashExtend(pcr, refvals, 6, "EV_SEPARATOR",
 		[]byte{0x0, 0x0, 0x0, 0x0}, "")
@@ -585,6 +602,15 @@ func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 	var err error
 	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
+
+	// systemd-stub measures the name and the contents of every section of the
+	// Unified Kernel Image it was linked into
+	if c.Uki != "" {
+		pcr, refvals, err = tcg.MeasureUki(c.HashAlg, tcg.TPM, pcr, refvals, 11, c.Uki)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure UKI: %w", err)
+		}
+	}
 
 	if len(c.Path) > 0 {
 		pcr, refvals, err = tcg.MeasureFiles(c.HashAlg, tcg.TPM, pcr, refvals, 11, c.Path)
