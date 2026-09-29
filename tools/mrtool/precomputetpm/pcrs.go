@@ -18,10 +18,13 @@ package precomputetpm
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -86,6 +89,16 @@ const (
 	OptionROM
 )
 
+// utf16LeNullTerminated encodes a string the way UEFI firmwares store CHAR16 strings: as
+// little-endian UTF-16 code units followed by a NUL terminator
+func utf16LeNullTerminated(s string) []byte {
+	buf := make([]byte, 0, (len(s)+1)*2)
+	for _, unit := range utf16.Encode([]rune(s)) {
+		buf = binary.LittleEndian.AppendUint16(buf, unit)
+	}
+	return binary.LittleEndian.AppendUint16(buf, 0)
+}
+
 func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	var err error
@@ -93,19 +106,43 @@ func PrecomputePcr0(c *Config) (*ar.Component, []*ar.Component, error) {
 	refvals := make([]*ar.Component, 0)
 
 	// EV_S_CRTM_VERSION
-	// For VMs, this is usually { 0x0, 0x0 }
+	// For VMs, this is usually { 0x0, 0x0 }. Firmwares which do expose a version string, such as
+	// the GCE firmware, measure it as a NUL-terminated UTF-16LE string instead.
+	crtmVersion := []byte{0x0, 0x0}
+	if c.CrtmVersion != "" {
+		crtmVersion = utf16LeNullTerminated(c.CrtmVersion)
+	}
+
 	var rv *ar.Component
-	rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 0, pcr, []byte{0x0, 0x0},
+	rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 0, pcr, crtmVersion,
 		"EV_S_CRTM_VERSION", "CRTM Version String")
 	if err != nil {
 		return nil, nil, fmt.Errorf("faied to measure CRTM version: %w", err)
 	}
 	refvals = append(refvals, rv)
 
-	// EV_EFI_PLATFORM_FIRMWARE_BLOB
-	pcr, refvals, err = tcg.MeasureOvmf(c.HashAlg, tcg.TPM, pcr, refvals, 0, c.Ovmf)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to measure OVMF: %w", err)
+	// EV_EFI_PLATFORM_FIRMWARE_BLOB. Cloud firmwares are not distributed as a firmware blob and
+	// do not record this event, so it is only measured if an OVMF image is given.
+	if c.Ovmf != "" {
+		pcr, refvals, err = tcg.MeasureOvmf(c.HashAlg, tcg.TPM, pcr, refvals, 0, c.Ovmf)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure OVMF: %w", err)
+		}
+	}
+
+	// EV_NONHOST_INFO: description of the non-host platform the firmware runs on
+	if c.NonHostInfo != "" {
+		nonHostInfo, err := hex.DecodeString(c.NonHostInfo)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to decode non-host info: %w", err)
+		}
+
+		rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 0, pcr, nonHostInfo,
+			"EV_NONHOST_INFO", "Non-Host Platform Info")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure non-host info: %w", err)
+		}
+		refvals = append(refvals, rv)
 	}
 
 	// EV_SEPARATOR

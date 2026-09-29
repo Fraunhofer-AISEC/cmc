@@ -56,6 +56,8 @@ func (o InitrdOption) String() string {
 
 type Conf struct {
 	Ovmf         string
+	CrtmVersion  string
+	NonHostInfo  string
 	AcpiRsdp     string
 	AcpiTables   string
 	TableLoader  string
@@ -91,6 +93,8 @@ type Conf struct {
 
 const (
 	ovmfFlag         = "ovmf"
+	crtmVersionFlag  = "crtm-version"
+	nonhostInfoFlag  = "nonhost-info"
 	acpirsdpFlag     = "acpirsdp"
 	acpitablesFlag   = "acpitables"
 	tableloaderFlag  = "tableloader"
@@ -141,6 +145,17 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  ovmfFlag,
 		Usage: "The filename of the OVMF.fd file to be measured into PCR0/MRTD",
+	},
+	&cli.StringFlag{
+		Name: crtmVersionFlag,
+		Usage: "Firmware version string measured as EV_S_CRTM_VERSION into PCR0, encoded as a " +
+			"NUL-terminated UTF-16LE string (e.g. \"GCE Virtual Firmware v2\"). Firmwares " +
+			"without a version string measure { 0x00, 0x00 }, which is the default",
+	},
+	&cli.StringFlag{
+		Name: nonhostInfoFlag,
+		Usage: "EV_NONHOST_INFO event data measured into PCR0 as a hex string. Firmwares " +
+			"running on a non-host platform describe it here.",
 	},
 	&cli.StringFlag{Name: acpirsdpFlag, Usage: "Path to QEMU etc/acpi/rsdp file for PCR1/RTMR0"},
 	&cli.StringFlag{
@@ -268,6 +283,12 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	if cmd.IsSet(ovmfFlag) {
 		c.Ovmf = cmd.String(ovmfFlag)
 	}
+	if cmd.IsSet(crtmVersionFlag) {
+		c.CrtmVersion = cmd.String(crtmVersionFlag)
+	}
+	if cmd.IsSet(nonhostInfoFlag) {
+		c.NonHostInfo = cmd.String(nonhostInfoFlag)
+	}
 	if cmd.IsSet(acpirsdpFlag) {
 		c.AcpiRsdp = cmd.String(acpirsdpFlag)
 	}
@@ -394,6 +415,12 @@ func (c *Conf) Print() {
 
 	if c.Ovmf != "" {
 		log.Debugf("\tOVMF: %q", c.Ovmf)
+	}
+	if c.CrtmVersion != "" {
+		log.Debugf("\tCRTM Version: %q", c.CrtmVersion)
+	}
+	if c.NonHostInfo != "" {
+		log.Debugf("\tNonHostInfo: %q", c.NonHostInfo)
 	}
 	if c.AcpiRsdp != "" {
 		log.Debugf("\tACPI RSDP: %q", c.AcpiRsdp)
