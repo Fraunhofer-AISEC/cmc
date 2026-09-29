@@ -23,6 +23,8 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
+// CreateExtendRefval hashes data, records it as a reference value for the measurement register
+// idx and extends mrDigest with it.
 func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data []byte, name, desc string,
 ) (*ar.Component, []byte, error) {
 
@@ -30,6 +32,14 @@ func CreateExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, data
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to hash: %w", err)
 	}
+
+	return ExtendRefval(alg, ta, idx, mrDigest, hash, name, desc)
+}
+
+// ExtendRefval records an already computed digest as a reference value for the measurement
+// register idx and extends mrDigest with it.
+func ExtendRefval(alg crypto.Hash, ta TrustAnchor, idx int, mrDigest, hash []byte, name, desc string,
+) (*ar.Component, []byte, error) {
 
 	mrDigestNew, err := internal.Extend(alg, mrDigest, hash)
 	if err != nil {

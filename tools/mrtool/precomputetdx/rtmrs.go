@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 )
 
@@ -59,21 +58,11 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 	}
 	tdHobHash := sha512.Sum384(tdHob)
 
-	rtmr = internal.ExtendSha384(rtmr, tdHobHash[:])
-	comp := &ar.Component{
-		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR0),
-		Name: "EV_EFI_HANDOFF_TABLES",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: tdHobHash[:],
-			},
-		},
-		Description: "RTMR0: TD Hob passed from host VMM to guest firmware",
+	rtmr, refvals, err = extendDigest(rtmr, refvals, tcg.INDEX_RTMR0, "EV_EFI_HANDOFF_TABLES",
+		tdHobHash[:], "TD Hob passed from host VMM to guest firmware")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure TD Hob: %w", err)
 	}
-	comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	comp.SetIndex(tcg.INDEX_RTMR0)
-	refvals = append(refvals, comp)
 
 	// Configuration Firmware Volume (CFV)
 	if c.Ovmf != "" {
@@ -87,21 +76,11 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to measure ovmf: %w", err)
 		}
 
-		rtmr = internal.ExtendSha384(rtmr, cfvHash[:])
-		comp := &ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR0),
-			Name: "EV_EFI_PLATFORM_FIRMWARE_BLOB2",
-			Hashes: []ar.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: cfvHash[:],
-				},
-			},
-			Description: "RTMR0: Configuration Firmware Volume",
+		rtmr, refvals, err = extendDigest(rtmr, refvals, tcg.INDEX_RTMR0,
+			"EV_EFI_PLATFORM_FIRMWARE_BLOB2", cfvHash[:], "Configuration Firmware Volume")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure CFV: %w", err)
 		}
-		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-		comp.SetIndex(tcg.INDEX_RTMR0)
-		refvals = append(refvals, comp)
 	}
 
 	// Measure UEFI Secure Boot Variables: SecureBoot, PK, KEK, db, dbx
@@ -113,23 +92,12 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	// EV_SEPARATOR
 	evSeparator := []byte{0x00, 0x00, 0x00, 0x00}
-	evHash := sha512.Sum384(evSeparator)
 
-	rtmr = internal.ExtendSha384(rtmr, evHash[:])
-	comp = &ar.Component{
-		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR0),
-		Name: "EV_SEPARATOR",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: evHash[:],
-			},
-		},
-		Description: "RTMR0: HASH(00000000)",
+	rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR0, "EV_SEPARATOR", evSeparator,
+		"HASH(00000000)")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
 	}
-	comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	comp.SetIndex(tcg.INDEX_RTMR0)
-	refvals = append(refvals, comp)
 
 	// EV_PLATFORM_CONFIG_FLAGS: ACPI tables
 	rtmr, refvals, err = tcg.CalculateAcpiTables(crypto.SHA384, tcg.TDX, rtmr, refvals,
@@ -159,40 +127,14 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	// Terminating EV_SEPARATOR is extended only in edk2-stable202408.01
 	if c.OvmfVersion == "edk2-stable202408.01" {
-		// EV_SEPARATOR
-		rtmr = internal.ExtendSha384(rtmr, evHash[:])
-		comp := &ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR0),
-			Name: "EV_SEPARATOR",
-			Hashes: []ar.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: evHash[:],
-				},
-			},
-			Description: "RTMR0: HASH(00000000)",
+		rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR0, "EV_SEPARATOR",
+			evSeparator, "HASH(00000000)")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
 		}
-		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-		comp.SetIndex(tcg.INDEX_RTMR0)
-		refvals = append(refvals, comp)
 	}
 
-	// Create RTMR0 final reference value
-	rtmrSummary := &ar.Component{
-		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR0),
-		Name:        "RTMR Summary",
-		Description: "RTMR0",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: rtmr,
-			},
-		},
-	}
-	rtmrSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	rtmrSummary.SetIndex(tcg.INDEX_RTMR0)
-
-	return rtmrSummary, refvals, nil
+	return rtmrSummary(tcg.INDEX_RTMR0, rtmr), refvals, nil
 }
 
 /**
@@ -232,21 +174,11 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		comp := &ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-			Name: "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Hashes: []ar.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: hash[:],
-				},
-			},
-			Description: fmt.Sprintf("RTMR1: %v", filepath.Base(c.Kernel)),
+		rtmr, refvals, err = extendDigest(rtmr, refvals, tcg.INDEX_RTMR1,
+			"EV_EFI_BOOT_SERVICES_APPLICATION", hash, filepath.Base(c.Kernel))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure kernel: %w", err)
 		}
-		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-		comp.SetIndex(tcg.INDEX_RTMR1)
-		refvals = append(refvals, comp)
-		rtmr = internal.ExtendSha384(rtmr, hash[:])
 
 		if c.DumpKernel != "" {
 			err = os.WriteFile(c.DumpKernel, data, 0644)
@@ -260,42 +192,19 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	// EV_EFI_ACTION
 	// https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
-	h1 := sha512.Sum384([]byte(EFI_CALLING_EFI_APPLICATION))
-	comp := &ar.Component{
-		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-		Name: "EV_EFI_ACTION",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: h1[:],
-			},
-		},
-		Description: fmt.Sprintf("RTMR1: %v", EFI_CALLING_EFI_APPLICATION),
+	rtmr, refvals, err := hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_ACTION",
+		[]byte(EFI_CALLING_EFI_APPLICATION), EFI_CALLING_EFI_APPLICATION)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
 	}
-	comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	comp.SetIndex(tcg.INDEX_RTMR1)
-	refvals = append(refvals, comp)
-	rtmr = internal.ExtendSha384(rtmr, h1[:])
 
 	// EV_SEPARATOR (extended only in some OVMF versions)
 	if !strings.EqualFold(c.OvmfVersion, "edk2-stable202408.01") {
-		sep := []byte{0x0, 0x0, 0x0, 0x0}
-		hashSep := sha512.Sum384(sep)
-		comp := &ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-			Name: "EV_SEPARATOR",
-			Hashes: []ar.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: hashSep[:],
-				},
-			},
-			Description: "RTMR1: HASH(00000000)",
+		rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_SEPARATOR",
+			[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(00000000)")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
 		}
-		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-		comp.SetIndex(tcg.INDEX_RTMR1)
-		refvals = append(refvals, comp)
-		rtmr = internal.ExtendSha384(rtmr, hashSep[:])
 	}
 
 	// EV_EFI_GPT_EVENT
@@ -307,21 +216,11 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
 		}
 
-		comp := &ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-			Name: "EV_EFI_GPT_EVENT",
-			Hashes: []ar.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: hash[:],
-				},
-			},
-			Description: description,
+		rtmr, refvals, err = extendDigest(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_GPT_EVENT",
+			hash, description)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
 		}
-		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-		comp.SetIndex(tcg.INDEX_RTMR1)
-		refvals = append(refvals, comp)
-		rtmr = internal.ExtendSha384(rtmr, hash[:])
 	}
 
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure bootloaders if present
@@ -337,75 +236,28 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
 		}
 
-		comp := &ar.Component{
-			Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-			Name: "EV_EFI_BOOT_SERVICES_APPLICATION",
-			Hashes: []ar.ReferenceHash{
-				{
-					Alg:     "SHA-384",
-					Content: hash[:],
-				},
-			},
-			Description: filepath.Base(f),
+		rtmr, refvals, err = extendDigest(rtmr, refvals, tcg.INDEX_RTMR1,
+			"EV_EFI_BOOT_SERVICES_APPLICATION", hash, filepath.Base(f))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure bootloader %v: %w", f, err)
 		}
-		comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-		comp.SetIndex(tcg.INDEX_RTMR1)
-		refvals = append(refvals, comp)
-		rtmr = internal.ExtendSha384(rtmr, hash[:])
 	}
 
 	// EV_EFI_ACTION
-	h2 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_INVOCATION))
-	comp = &ar.Component{
-		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-		Name: "EV_EFI_ACTION",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: h2[:],
-			},
-		},
-		Description: fmt.Sprintf("RTMR1: %v", EFI_EXIT_BOOT_SERVICES_INVOCATION),
+	rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_ACTION",
+		[]byte(EFI_EXIT_BOOT_SERVICES_INVOCATION), EFI_EXIT_BOOT_SERVICES_INVOCATION)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
 	}
-	comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	comp.SetIndex(tcg.INDEX_RTMR1)
-	refvals = append(refvals, comp)
-	rtmr = internal.ExtendSha384(rtmr, h2[:])
 
 	// EV_EFI_ACTION
-	h3 := sha512.Sum384([]byte(EFI_EXIT_BOOT_SERVICES_SUCCEEDED))
-	comp = &ar.Component{
-		Type: ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-		Name: "EV_EFI_ACTION",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: h3[:],
-			},
-		},
-		Description: fmt.Sprintf("RTMR1: %v", EFI_EXIT_BOOT_SERVICES_SUCCEEDED),
+	rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_ACTION",
+		[]byte(EFI_EXIT_BOOT_SERVICES_SUCCEEDED), EFI_EXIT_BOOT_SERVICES_SUCCEEDED)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
 	}
-	comp.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	comp.SetIndex(tcg.INDEX_RTMR1)
-	refvals = append(refvals, comp)
-	rtmr = internal.ExtendSha384(rtmr, h3[:])
 
-	// Create RTMR1 final reference value
-	rtmrSummary := &ar.Component{
-		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR1),
-		Name:        "RTMR Summary",
-		Description: "RTMR1",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: rtmr[:],
-			},
-		},
-	}
-	rtmrSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	rtmrSummary.SetIndex(tcg.INDEX_RTMR1)
-
-	return rtmrSummary, refvals, nil
+	return rtmrSummary(tcg.INDEX_RTMR1, rtmr), refvals, nil
 }
 
 /**
@@ -425,22 +277,7 @@ func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
 	}
 
-	// Create RTMR2 final reference value
-	rtmrSummary := &ar.Component{
-		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR2),
-		Name:        "RTMR Summary",
-		Description: "RTMR2",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: rtmr[:],
-			},
-		},
-	}
-	rtmrSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	rtmrSummary.SetIndex(tcg.INDEX_RTMR2)
-
-	return rtmrSummary, refvals, nil
+	return rtmrSummary(tcg.INDEX_RTMR2, rtmr), refvals, nil
 }
 
 /**
@@ -454,20 +291,5 @@ func PrecomputeRtmr3(c *Config) (*ar.Component, []*ar.Component, error) {
 	rtmr := make([]byte, sha512.Size384)
 	refvals := make([]*ar.Component, 0)
 
-	// Create RTMR3 final reference value
-	rtmrSummary := &ar.Component{
-		Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TDX, tcg.INDEX_RTMR3),
-		Name:        "RTMR Summary",
-		Description: "RTMR3",
-		Hashes: []ar.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: rtmr[:],
-			},
-		},
-	}
-	rtmrSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
-	rtmrSummary.SetIndex(tcg.INDEX_RTMR3)
-
-	return rtmrSummary, refvals, nil
+	return rtmrSummary(tcg.INDEX_RTMR3, rtmr), refvals, nil
 }
