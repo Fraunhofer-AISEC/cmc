@@ -70,7 +70,7 @@ func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*a
 		return nil, nil, fmt.Errorf("failed to create reference value: %w", err)
 	}
 
-	return digest, []*ar.Component{refval}, nil
+	return digest, append(refvals, refval), nil
 }
 
 func MeasureCmdlineNarrow(alg crypto.Hash, ta TrustAnchor, digest []byte,
@@ -101,5 +101,5 @@ func MeasureCmdlineNarrow(alg crypto.Hash, ta TrustAnchor, digest []byte,
 		return nil, nil, fmt.Errorf("failed to create reference value: %w", err)
 	}
 
-	return digest, []*ar.Component{refval}, nil
+	return digest, append(refvals, refval), nil
 }
