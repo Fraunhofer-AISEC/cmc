@@ -656,7 +656,9 @@ func PrecomputePcr11(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	if c.Cmdline != "" {
+	// The kernel commandline of a UKI is measured as its .cmdline section and must not be
+	// measured a second time, so it is only measured on its own if no UKI is given
+	if c.Cmdline != "" && c.Uki == "" {
 		pcr, refvals, err = tcg.MeasureCmdlineNarrow(c.HashAlg, tcg.TPM, pcr, refvals, 11,
 			c.Cmdline, "EV_IPL", c.AddZeros, c.StripNewline)
 		if err != nil {
