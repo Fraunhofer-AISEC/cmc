@@ -310,7 +310,7 @@ func performSnpSetupVmcbSaveAreaPage(eip uint64, vmmType VmmType) ([]byte, error
 		}
 		save.Ss.Attribute = 0x92
 		save.Tr.Attribute = 0x83
-		save.Rdx = 0x0
+		save.Rdx = 0x600
 		save.Mxcsr = 0x0
 		save.X87Fcw = 0x0
 	}
@@ -394,6 +394,12 @@ func performSnpPrecomputation(config *PrecomputeSnpConf) ([]byte, error) {
 	log.Debugf("SEV metadata: %d descriptor(s)", len(descs))
 
 	for i, desc := range descs {
+		// EC2 launches the CPUID page after every other metadata page instead of in
+		// descriptor order, so skip it here and measure it in the second pass below
+		if config.vmmType == VmmTypeEc2.Value && desc.Type == sevDescTypeCpuid {
+			continue
+		}
+
 		var pageType PageType
 		switch desc.Type {
 		case sevDescTypeSnpSecMem:
@@ -421,6 +427,21 @@ func performSnpPrecomputation(config *PrecomputeSnpConf) ([]byte, error) {
 				content = hashTablePage
 			}
 			hashDigest = performSnpUpdatePageInfo(hashDigest, content, pageType, uint64(desc.Base+pg))
+		}
+	}
+
+	if config.vmmType == VmmTypeEc2.Value {
+		for i, desc := range descs {
+			if desc.Type != sevDescTypeCpuid {
+				continue
+			}
+
+			log.Debugf("  desc[%d]: base=0x%08x len=0x%08x type=%d -> page_type=%d (deferred)",
+				i, desc.Base, desc.Len, desc.Type, snpPageTypeCpuid)
+
+			for pg := uint32(0); pg < desc.Len; pg += 4096 {
+				hashDigest = performSnpUpdatePageInfo(hashDigest, nil, snpPageTypeCpuid, uint64(desc.Base+pg))
+			}
 		}
 	}
 
