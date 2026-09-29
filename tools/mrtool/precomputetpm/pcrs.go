@@ -309,6 +309,36 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 	pcr := make([]byte, c.HashAlg.Size())
 	refvals := make([]*ar.Component, 0)
 
+	// EV_EFI_ACTION: "Calling EFI Application from Boot Option" and the terminating EV_SEPARATOR
+	// TCG PCClient Firmware Spec: https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf
+	// 10.4.4 defines the action string. The spec is self-contradictory about the order: 8.2.4
+	// requires the action of the first boot attempt before the EV_SEPARATOR, while 3.3.4.5
+	// implies the opposite. Observed firmwares follow 8.2.4, so the order is configurable.
+	preOs := func(pcr []byte, refvals []*ar.Component) ([]byte, []*ar.Component, error) {
+
+		actionData := []byte("Calling EFI Application from Boot Option")
+		pcr, refvals, err := c.hashExtend(pcr, refvals, 4, "EV_EFI_ACTION", actionData,
+			string(actionData))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
+		}
+
+		pcr, refvals, err = c.hashExtend(pcr, refvals, 4, "EV_SEPARATOR",
+			[]byte{0x0, 0x0, 0x0, 0x0}, "")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+		}
+
+		return pcr, refvals, nil
+	}
+
+	if c.SeparatorFirst {
+		pcr, refvals, err = preOs(pcr, refvals)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure bootloaders if present
 	for _, f := range c.Bootloaders {
 
@@ -370,20 +400,11 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	// EV_EFI_ACTION: "Calling EFI Application from Boot Option"
-	// TCG PCClient Firmware Spec: https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
-	actionData := []byte("Calling EFI Application from Boot Option")
-	pcr, refvals, err = c.hashExtend(pcr, refvals, 4, "EV_EFI_ACTION", actionData,
-		string(actionData))
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
-	}
-
-	// EV_SEPARATOR
-	pcr, refvals, err = c.hashExtend(pcr, refvals, 4, "EV_SEPARATOR",
-		[]byte{0x0, 0x0, 0x0, 0x0}, "")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+	if !c.SeparatorFirst {
+		pcr, refvals, err = preOs(pcr, refvals)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// Create final reference value
