@@ -248,7 +248,7 @@ func SaveReport(reportFile, nonceFile string, report []byte, nonce []byte) error
 func LoadReport(reportFile, nonceFile string, s ar.Serializer) ([]byte, []byte, error) {
 	nonce, err := os.ReadFile(nonceFile)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read faile %v: %w", nonceFile, err)
+		return nil, nil, fmt.Errorf("failed to read file %v: %w", nonceFile, err)
 	}
 
 	data, err := os.ReadFile(reportFile)
