@@ -55,40 +55,41 @@ func (o InitrdOption) String() string {
 }
 
 type Conf struct {
-	Ovmf         string
-	CrtmVersion  string
-	NonHostInfo  string
-	AcpiRsdp     string
-	AcpiTables   string
-	TableLoader  string
-	TpmLog       string
-	SmbiosTables string
-	SmbiosSpec   *SmbiosSpec
-	BootOrder    []string
-	BootXxxx     []string
-	NoBootVars   bool
-	Drivers      []string
-	Bootloaders  []string
-	LoaderConfs  []string
-	Config       string
-	Kernel       string
-	Initrd       string
-	Cmdline      string
-	InitrdOption InitrdOption
-	AddZeros     int
-	StripNewline bool
-	Gpt          string
-	SecureBoot   string
-	Pk           string
-	Kek          string
-	Db           string
-	Dbx          string
-	SbatLevel    string
-	DumpPei      string
-	DumpDxe      string
-	DumpKernel   string
-	DumpGpt      string
-	DumpSmbios   string
+	Ovmf           string
+	CrtmVersion    string
+	NonHostInfo    string
+	AcpiRsdp       string
+	AcpiTables     string
+	TableLoader    string
+	TpmLog         string
+	SmbiosTables   string
+	SmbiosSpec     *SmbiosSpec
+	BootOrder      []string
+	BootXxxx       []string
+	NoBootVars     bool
+	Drivers        []string
+	Bootloaders    []string
+	SeparatorFirst bool
+	LoaderConfs    []string
+	Config         string
+	Kernel         string
+	Initrd         string
+	Cmdline        string
+	InitrdOption   InitrdOption
+	AddZeros       int
+	StripNewline   bool
+	Gpt            string
+	SecureBoot     string
+	Pk             string
+	Kek            string
+	Db             string
+	Dbx            string
+	SbatLevel      string
+	DumpPei        string
+	DumpDxe        string
+	DumpKernel     string
+	DumpGpt        string
+	DumpSmbios     string
 }
 
 const (
@@ -113,26 +114,27 @@ const (
 	smbiosBiosVersionFlag     = "smbios-bios-version"
 	smbiosBiosDateFlag        = "smbios-bios-date"
 
-	bootorderFlag    = "bootorder"
-	bootxxxxFlag     = "bootxxxx"
-	nobootvarsFlag   = "nobootvars"
-	driversFlag      = "drivers"
-	bootloadersFlag  = "bootloaders"
-	loaderConfsFlag  = "loaderconfs"
-	configFlag       = "config"
-	kernelFlag       = "kernel"
-	initrdFlag       = "initrd"
-	cmdlineFlag      = "cmdline"
-	initrdOptionFlag = "initrd-option"
-	addzerosFlag     = "addzeros"
-	stripnewlineFlag = "stripnewline"
-	gptFlag          = "gpt"
-	securebootFlag   = "secureboot"
-	pkFlag           = "pk"
-	kekFlag          = "kek"
-	dbFlag           = "db"
-	dbxFlag          = "dbx"
-	sbatlevelFlag    = "sbatlevel"
+	bootorderFlag      = "bootorder"
+	bootxxxxFlag       = "bootxxxx"
+	nobootvarsFlag     = "nobootvars"
+	driversFlag        = "drivers"
+	bootloadersFlag    = "bootloaders"
+	separatorFirstFlag = "separator-first"
+	loaderConfsFlag    = "loaderconfs"
+	configFlag         = "config"
+	kernelFlag         = "kernel"
+	initrdFlag         = "initrd"
+	cmdlineFlag        = "cmdline"
+	initrdOptionFlag   = "initrd-option"
+	addzerosFlag       = "addzeros"
+	stripnewlineFlag   = "stripnewline"
+	gptFlag            = "gpt"
+	securebootFlag     = "secureboot"
+	pkFlag             = "pk"
+	kekFlag            = "kek"
+	dbFlag             = "db"
+	dbxFlag            = "dbx"
+	sbatlevelFlag      = "sbatlevel"
 
 	dumppeiFlag    = "dumppei"
 	dumpdxeFlag    = "dumpdxe"
@@ -218,6 +220,12 @@ var Flags = []cli.Flag{
 	},
 	&cli.StringFlag{Name: bootloadersFlag,
 		Usage: "Comma-separated list of bootloader EFI images to be measured into PCR4/RTMR1"},
+	&cli.BoolFlag{
+		Name: separatorFirstFlag,
+		Usage: "Record the EV_EFI_ACTION \"Calling EFI Application from Boot Option\" and the " +
+			"EV_SEPARATOR of PCR4 before the boot application instead of after it, as required " +
+			"by TCG PC Client PFP 10.4.4.",
+	},
 	&cli.StringFlag{Name: loaderConfsFlag,
 		Usage: "Comma-separated list of bootloader configuration files to be measured into PCR5"},
 	&cli.StringFlag{Name: kernelFlag,
@@ -329,6 +337,9 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	if cmd.IsSet(bootloadersFlag) {
 		c.Bootloaders = strings.Split(cmd.String(bootloadersFlag), ",")
 	}
+
+	c.SeparatorFirst = cmd.Bool(separatorFirstFlag)
+
 	if cmd.IsSet(loaderConfsFlag) {
 		c.LoaderConfs = strings.Split(cmd.String(loaderConfsFlag), ",")
 	}
@@ -465,6 +476,9 @@ func (c *Conf) Print() {
 		for _, path := range c.Bootloaders {
 			log.Debugf("\t\t%q", path)
 		}
+	}
+	if c.SeparatorFirst {
+		log.Debugf("\tSeparator first: true")
 	}
 
 	if c.Config != "" {
