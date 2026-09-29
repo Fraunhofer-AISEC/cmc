@@ -278,6 +278,21 @@ func PrecomputePcr2(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
 	}
 
+	// Firmwares that reuse the TDX measurement register index as the vTPM PCR index record the
+	// partition table and the boot application here rather than in PCR5 and PCR4, see
+	// --tdx-vtpm-log
+	if c.TdxVtpmLog {
+		pcr, refvals, err = c.measureGpt(pcr, refvals, 2)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		pcr, refvals, err = c.measureBootApplications(pcr, refvals, 2)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// Create final reference value
 	pcrSummary := c.pcrSummary(2, pcr)
 
@@ -339,64 +354,10 @@ func PrecomputePcr4(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure bootloaders if present
-	for _, f := range c.Bootloaders {
-
-		data, err := os.ReadFile(f)
+	if !c.TdxVtpmLog {
+		pcr, refvals, err = c.measureBootApplications(pcr, refvals, 4)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read file: %w", err)
-		}
-
-		hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
-		}
-
-		pcr, refvals, err = c.extendDigest(pcr, refvals, 4, "EV_EFI_BOOT_SERVICES_APPLICATION",
-			hash, filepath.Base(f))
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure bootloader %v: %w", f, err)
-		}
-	}
-
-	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
-	if c.Kernel != "" {
-
-		data, err := os.ReadFile(c.Kernel)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read file: %w", err)
-		}
-
-		// Manipulate real-mode kernel header with configuration constants set by the
-		// bootloader: https://docs.kernel.org/arch/x86/boot.html
-		if c.Config != "" {
-			hdr, err := tcg.LoadKernelSetupHeader(c.Config)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to read file: %w", err)
-			}
-
-			err = tcg.PrepareKernel(data, hdr)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to prepare kernel: %w", err)
-			}
-		}
-
-		hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
-		}
-
-		pcr, refvals, err = c.extendDigest(pcr, refvals, 4, "EV_EFI_BOOT_SERVICES_APPLICATION",
-			hash, filepath.Base(c.Kernel))
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure kernel: %w", err)
-		}
-
-		if c.DumpKernel != "" {
-			err = os.WriteFile(c.DumpKernel, data, 0644)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to write kernel: %w", err)
-			}
+			return nil, nil, err
 		}
 	}
 
@@ -426,18 +387,10 @@ func PrecomputePcr5(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
 	}
 
-	// EV_EFI_GPT
-	// Calculate UEFI GPT partition table if provided. The raw disk data can be
-	// provided, the function will find the GPT partition table if present
-	if c.Gpt != "" {
-		hash, description, err := tcg.MeasureGptFromFile(c.HashAlg.New(), c.Gpt, c.DumpGpt)
+	if !c.TdxVtpmLog {
+		pcr, refvals, err = c.measureGpt(pcr, refvals, 5)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
-		}
-
-		pcr, refvals, err = c.extendDigest(pcr, refvals, 5, "EV_EFI_GPT_EVENT", hash, description)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
+			return nil, nil, err
 		}
 	}
 

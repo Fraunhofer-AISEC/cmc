@@ -37,6 +37,7 @@ type Config struct {
 	TdxModule   string
 	MrSeam      string
 	Mrtd        string
+	Uki         string
 	OvmfVersion string
 	QemuVersion string
 	RamSize     uint64
@@ -46,6 +47,7 @@ const (
 	tdxmoduleFlag   = "tdxmodule"
 	mrseamFlag      = "mrseam"
 	mrtdFlag        = "mrtd"
+	ukiFlag         = "uki"
 	ovmfversionFlag = "ovmfversion"
 	qemuversionFlag = "qemuversion"
 	ramsizeFlag     = "ramsize"
@@ -59,6 +61,9 @@ var flags = []cli.Flag{
 	&cli.StringFlag{Name: tdxmoduleFlag, Usage: "Path to the TDX-module binary"},
 	&cli.StringFlag{Name: mrseamFlag, Usage: "The MRSEAM hash (alternative to --tdxmodule if hash is supplied externally)"},
 	&cli.StringFlag{Name: mrtdFlag, Usage: "The MRTD hash (alternative to --ovmf if hash is supplied externally)"},
+	&cli.StringFlag{Name: ukiFlag,
+		Usage: "Path to a Unified Kernel Image measured section-wise into RTMR2 by systemd-stub. " +
+			"Takes precedence over the --cmdline EV_EVENT_TAG"},
 	&cli.StringFlag{Name: ovmfversionFlag, Usage: "The version of the OVMF image", Value: defaultOvmfVersion},
 	&cli.StringFlag{Name: qemuversionFlag, Usage: "QEMU version", Value: defaultQemuVersion},
 	&cli.StringFlag{Name: ramsizeFlag,
@@ -141,6 +146,9 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	if cmd.IsSet(mrtdFlag) {
 		c.Mrtd = cmd.String(mrtdFlag)
 	}
+	if cmd.IsSet(ukiFlag) {
+		c.Uki = cmd.String(ukiFlag)
+	}
 	if cmd.IsSet(ovmfversionFlag) {
 		c.OvmfVersion = cmd.String(ovmfversionFlag)
 	} else {
@@ -180,6 +188,9 @@ func (c *Config) print() {
 	}
 	if c.Mrtd != "" {
 		log.Debugf("\tMRTD: %q", c.Mrtd)
+	}
+	if c.Uki != "" {
+		log.Debugf("\tUKI: %q", c.Uki)
 	}
 	if c.OvmfVersion != "" {
 		log.Debugf("\tOVMF Version: %q", c.OvmfVersion)

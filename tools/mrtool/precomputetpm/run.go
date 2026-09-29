@@ -58,6 +58,7 @@ type Config struct {
 	PrintAggregate      bool
 	BuildrootManifest   string
 	PackageFileList     string
+	TdxVtpmLog          bool
 }
 
 const (
@@ -80,6 +81,7 @@ const (
 	mokListsFlag          = "moklists"
 	buildrootManifestFlag = "buildroot-manifest"
 	packageFileListFlag   = "package-file-list"
+	tdxVtpmLogFlag        = "tdx-vtpm-log"
 )
 
 var flags = []cli.Flag{
@@ -115,6 +117,16 @@ var flags = []cli.Flag{
 		Name: ukiFlag,
 		Usage: "Path to a Unified Kernel Image whose section names and section contents are " +
 			"measured by systemd-stub into PCR11",
+	},
+	&cli.BoolFlag{
+		Name: tdxVtpmLogFlag,
+		Usage: "Mirror the TDX measurement register indices into the vTPM event log. TDX " +
+			"firmwares map PCRs to RTMRs (PCR0->MRTD, PCR1,7->RTMR0, PCR2-6->RTMR1, " +
+			"PCR8-15->RTMR2). Firmwares that reflect the CCEL into a vTPM alongside it may " +
+			"reuse the measurement register index as PCR index for the events they route " +
+			"through the TDX path, so the EV_EFI_GPT_EVENT (PCR5) and the boot application " +
+			"EV_EFI_BOOT_SERVICES_APPLICATION (PCR4) end up in PCR2 instead. Observed on GCE " +
+			"Intel TDX Confidential VMs",
 	},
 	&cli.StringFlag{
 		Name:  grubcmdsFlag,
@@ -298,6 +310,9 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	}
 	if cmd.IsSet(ukiFlag) {
 		c.Uki = cmd.String(ukiFlag)
+	}
+	if cmd.IsSet(tdxVtpmLogFlag) {
+		c.TdxVtpmLog = cmd.Bool(tdxVtpmLogFlag)
 	}
 	if cmd.IsSet(grubcmdsFlag) {
 		c.GrubCmds = cmd.String(grubcmdsFlag)
