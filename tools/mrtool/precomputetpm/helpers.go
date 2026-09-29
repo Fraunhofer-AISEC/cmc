@@ -18,7 +18,101 @@ package precomputetpm
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/tcg"
 )
+
+// measureGpt records the EV_EFI_GPT_EVENT of the UEFI partition table into the given PCR. The raw
+// disk data can be provided, the GPT partition table is located within it if present.
+func (c *Config) measureGpt(pcr []byte, refvals []*ar.Component, index int,
+) ([]byte, []*ar.Component, error) {
+
+	if c.Gpt == "" {
+		return pcr, refvals, nil
+	}
+
+	hash, description, err := tcg.MeasureGptFromFile(c.HashAlg.New(), c.Gpt, c.DumpGpt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
+	}
+
+	pcr, refvals, err = c.extendDigest(pcr, refvals, index, "EV_EFI_GPT_EVENT", hash, description)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure GPT: %w", err)
+	}
+
+	return pcr, refvals, nil
+}
+
+// measureBootApplications records an EV_EFI_BOOT_SERVICES_APPLICATION into the given PCR for every
+// bootloader and for a directly booted kernel.
+func (c *Config) measureBootApplications(pcr []byte, refvals []*ar.Component, index int,
+) ([]byte, []*ar.Component, error) {
+
+	for _, f := range c.Bootloaders {
+
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
+		}
+
+		pcr, refvals, err = c.extendDigest(pcr, refvals, index,
+			"EV_EFI_BOOT_SERVICES_APPLICATION", hash, filepath.Base(f))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure bootloader %v: %w", f, err)
+		}
+	}
+
+	if c.Kernel == "" {
+		return pcr, refvals, nil
+	}
+
+	data, err := os.ReadFile(c.Kernel)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Manipulate real-mode kernel header with configuration constants set by the
+	// bootloader: https://docs.kernel.org/arch/x86/boot.html
+	if c.Config != "" {
+		hdr, err := tcg.LoadKernelSetupHeader(c.Config)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		err = tcg.PrepareKernel(data, hdr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to prepare kernel: %w", err)
+		}
+	}
+
+	hash, err := tcg.MeasurePeCoff(c.HashAlg, data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure PE image: %w", err)
+	}
+
+	pcr, refvals, err = c.extendDigest(pcr, refvals, index, "EV_EFI_BOOT_SERVICES_APPLICATION",
+		hash, filepath.Base(c.Kernel))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure kernel: %w", err)
+	}
+
+	if c.DumpKernel != "" {
+		err = os.WriteFile(c.DumpKernel, data, 0644)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to write kernel: %w", err)
+		}
+	}
+
+	return pcr, refvals, nil
+}
 
 func detectDriverFileType(file string) (DriverFileType, error) {
 

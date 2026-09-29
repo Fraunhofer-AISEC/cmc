@@ -148,6 +148,44 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 	rtmr := make([]byte, 48)
 	refvals := make([]*ar.Component, 0)
 
+	// EV_EFI_ACTION and the terminating EV_SEPARATOR. The TCG PC Client Platform Firmware Profile
+	// is self-contradictory about the order, see PrecomputePcr4, so it is configurable here as
+	// well. RTMR1 aggregates PCR2-6, so the separator is extended only once.
+	preOs := func(rtmr []byte, refvals []*ar.Component) ([]byte, []*ar.Component, error) {
+
+		// https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
+		rtmr, refvals, err := hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_ACTION",
+			[]byte(EFI_CALLING_EFI_APPLICATION), EFI_CALLING_EFI_APPLICATION)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
+		}
+
+		// EV_SEPARATOR (extended only in some OVMF versions)
+		if !strings.EqualFold(c.OvmfVersion, "edk2-stable202408.01") {
+			rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_SEPARATOR",
+				[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(00000000)")
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+			}
+		}
+
+		return rtmr, refvals, nil
+	}
+
+	var err error
+	if c.SeparatorFirst {
+		rtmr, refvals, err = preOs(rtmr, refvals)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// A UEFI boot option can load a unified kernel image instead of a kernel, in which case the
+	// boot application is the bootloader
+	if c.Kernel == "" && len(c.Bootloaders) == 0 {
+		return nil, nil, fmt.Errorf("kernel or bootloader must be specified for RTMR1")
+	}
+
 	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
 	if c.Kernel != "" {
 		data, err := os.ReadFile(c.Kernel)
@@ -186,24 +224,12 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 				return nil, nil, fmt.Errorf("failed to write kernel: %w", err)
 			}
 		}
-	} else {
-		return nil, nil, fmt.Errorf("kernel must be specified for RTMR1")
 	}
 
-	// EV_EFI_ACTION
-	// https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf 10.4.4
-	rtmr, refvals, err := hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_ACTION",
-		[]byte(EFI_CALLING_EFI_APPLICATION), EFI_CALLING_EFI_APPLICATION)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
-	}
-
-	// EV_SEPARATOR (extended only in some OVMF versions)
-	if !strings.EqualFold(c.OvmfVersion, "edk2-stable202408.01") {
-		rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_SEPARATOR",
-			[]byte{0x0, 0x0, 0x0, 0x0}, "HASH(00000000)")
+	if !c.SeparatorFirst {
+		rtmr, refvals, err = preOs(rtmr, refvals)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
+			return nil, nil, err
 		}
 	}
 
@@ -271,10 +297,22 @@ func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
 	rtmr := make([]byte, sha512.Size384)
 	refvals := make([]*ar.Component, 0)
 
-	rtmr, refvals, err := tcg.MeasureCmdline(crypto.SHA384, tcg.TDX, rtmr, refvals, tcg.INDEX_RTMR2,
-		c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, tcg.InitrdOptionNone)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
+	var err error
+	if c.Uki != "" {
+		// systemd-stub measures the UKI section-wise. The command line is one of those sections,
+		// so it must not be measured again.
+		rtmr, refvals, err = tcg.MeasureUki(crypto.SHA384, tcg.TDX, rtmr, refvals,
+			tcg.INDEX_RTMR2, c.Uki)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure UKI: %w", err)
+		}
+	} else {
+		rtmr, refvals, err = tcg.MeasureCmdline(crypto.SHA384, tcg.TDX, rtmr, refvals,
+			tcg.INDEX_RTMR2, c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline,
+			tcg.InitrdOptionNone)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
+		}
 	}
 
 	return rtmrSummary(tcg.INDEX_RTMR2, rtmr), refvals, nil
