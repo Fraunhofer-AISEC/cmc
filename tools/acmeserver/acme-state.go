@@ -283,7 +283,6 @@ type AcmeState struct {
 	CAKey       *ecdsa.PrivateKey
 	CAx509      *x509.Certificate
 	MetadataCas []*x509.Certificate
-	Http01Port  uint16
 }
 
 func NewAcmeState() *AcmeState {

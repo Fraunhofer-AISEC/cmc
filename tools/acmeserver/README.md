@@ -24,7 +24,6 @@ If a TLS certificate and key are provided, the server serves the ACME protocol o
 | `--ca-cert` | Path to CA certificate used to sign issued certificates (ephemeral CA if omitted) |
 | `--ca-key` | Path to CA private key used to sign issued certificates (ephemeral CA if omitted) |
 | `--metadata-cas` | Path to PEM file with trusted metadata root CAs (required for `cmc-software-attest-01` and `cmc-tpm-certify-01`) |
-| `--http01-port`  | Port used to fetch `http-01` key authorizations from clients (default: 80) |
 
 Examples:
 
@@ -42,11 +41,7 @@ Orders expire after 4 hours. Issued certificates are valid for 90 days and the s
 
 ### Challenges
 
-The server provides one authorization for each `dns` identifier in an order. Each authorization offers the following challenges, of which at least one needs to be fulfilled: `cmc-software-attest-01`, `cmc-tpm-certify-01`, `cmc-simple-01`, and `http-01`.
-
-`http-01`:
-
-The standard HTTP challenge. The client responds with an empty payload (`{}`) and must serve the key authorization at `http://<identifier>/.well-known/acme-challenge/<token>` on the port specified via the the arguments.
+The server provides one authorization for each `dns` identifier in an order. Each authorization offers the following challenges, of which at least one needs to be fulfilled: `cmc-software-attest-01`, `cmc-tpm-certify-01`, and `cmc-simple-01`.
 
 `cmc-simple-01`:
 

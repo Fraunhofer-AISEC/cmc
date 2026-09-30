@@ -24,9 +24,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"math/big"
-	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -49,10 +47,6 @@ const (
 	AcmeErrUnauthorized          = "urn:ietf:params:acme:error:unauthorized"
 	AcmeErrUnsupportedIdentifier = "urn:ietf:params:acme:error:unsupportedIdentifier"
 	AcmeErrServerInternal        = "urn:ietf:params:acme:error:serverInternal"
-
-	Http01DefaultPort       = 80
-	Http01ValidationTimeout = 10 * time.Second
-	Http01MaxResponseSize   = 4096
 )
 
 func acmeError(resp http.ResponseWriter, status int, errType string, detail string) {
@@ -444,7 +438,6 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	auths := make([]AcmeAuthorization, 0, len(payload.Identifier))
 	for _, ident := range payload.Identifier {
 		challenges := []AcmeChallenge{
-			{Type: "http-01", Token: rand.Text(), Status: AuthStatusPending},
 			{Type: "cmc-simple-01", Token: rand.Text(), Status: AuthStatusPending},
 		}
 		if len(state.MetadataCas) > 0 {
@@ -726,43 +719,6 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 
 	if challenge.Status == AuthStatusPending {
 		switch challenge.Type {
-		case "http-01":
-			if !bytes.Equal(rawPayload, []byte("{}")) {
-				acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed request payload")
-				return
-			}
-			keyAuth, err := account.TokenKeyAuthorization(challenge.Token)
-			if err != nil {
-				acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to compute key authorization")
-				return
-			}
-
-			challengeURL := fmt.Sprintf("http://%v/.well-known/acme-challenge/%v",
-				net.JoinHostPort(auth.Identifier, strconv.Itoa(int(state.Http01Port))), challenge.Token)
-			client := &http.Client{Timeout: Http01ValidationTimeout}
-			keyAuthResp, err := client.Get(challengeURL)
-			if err != nil {
-				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "failed to fetch key authorization")
-				return
-			}
-			defer keyAuthResp.Body.Close()
-			if keyAuthResp.StatusCode != http.StatusOK {
-				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized,
-					fmt.Sprintf("key authorization fetch returned status %d", keyAuthResp.StatusCode))
-				return
-			}
-			body, err := io.ReadAll(io.LimitReader(keyAuthResp.Body, Http01MaxResponseSize))
-			if err != nil {
-				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "failed to read key authorization")
-				return
-			}
-			if strings.TrimSpace(string(body)) != keyAuth {
-				acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "key authorization does not match")
-				return
-			}
-			challenge.Status = AuthStatusValid
-			challenge.Validated = time.Now().Format(time.RFC3339Nano)
-
 		case "cmc-simple-01":
 			var payload struct {
 				Authorization string `json:"authorization"`

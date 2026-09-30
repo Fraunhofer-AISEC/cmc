@@ -20,7 +20,6 @@ const (
 	flagCAKeyFile   = "ca-key"
 	flagMetadataCas = "metadata-cas"
 	flagPort        = "port"
-	flagHttp01Port  = "http01-port"
 	serverTimeout   = 60 * time.Second
 )
 
@@ -51,7 +50,7 @@ func loadMetadataCas(path string) ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
-func run(port, http01Port uint16, certPath, keyPath, caCertPath, caKeyPath, metadataCasPath string) error {
+func run(port uint16, certPath, keyPath, caCertPath, caKeyPath, metadataCasPath string) error {
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%v", port),
 		ReadTimeout:  serverTimeout,
@@ -59,7 +58,6 @@ func run(port, http01Port uint16, certPath, keyPath, caCertPath, caKeyPath, meta
 		IdleTimeout:  serverTimeout,
 	}
 	state := NewAcmeState()
-	state.Http01Port = http01Port
 
 	if caCertPath != "" && caKeyPath != "" {
 		if err := state.LoadCA(caCertPath, caKeyPath); err != nil {
@@ -137,17 +135,12 @@ func main() {
 				Usage:       "Port the server listens on",
 				HideDefault: true,
 			},
-			&cli.Uint16Flag{
-				Name:  flagHttp01Port,
-				Usage: "Port used to fetch http-01 key authorizations from clients",
-				Value: Http01DefaultPort,
-			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if !c.IsSet(flagPort) {
 				return fmt.Errorf("flag [%v] must be specified", flagPort)
 			}
-			return run(c.Uint16(flagPort), c.Uint16(flagHttp01Port), c.String(flagCertFile), c.String(flagKeyFile), c.String(flagCACertFile), c.String(flagCAKeyFile), c.String(flagMetadataCas))
+			return run(c.Uint16(flagPort), c.String(flagCertFile), c.String(flagKeyFile), c.String(flagCACertFile), c.String(flagCAKeyFile), c.String(flagMetadataCas))
 		},
 	}
 
