@@ -21,15 +21,17 @@ import (
 	"github.com/google/go-attestation/attest"
 )
 
-// Enroller is an interface for TLS key enrollment via e.g., EST or ACME
+// Enroller is an interface for TLS key enrollment via e.g., EST or ACME. Each enrollment method
+// returns the complete certificate chain of the enrolled key, starting with the leaf certificate,
+// followed by the issuing CA certificate(s). Whether the chain includes the root CA certificate
+// depends on the enrollment protocol and server.
 type Enroller interface {
-	CaCerts() ([]*x509.Certificate, error)
-	SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error)
+	SimpleEnroll(csr *x509.CertificateRequest) ([]*x509.Certificate, error)
 	TpmCertifyEnroll(
 		csr *x509.CertificateRequest,
 		ikParams attest.CertificationParameters,
 		akPublic []byte,
 		generateReport func(nonce []byte) ([]byte, error),
-	) (*x509.Certificate, error)
-	AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error)
+	) ([]*x509.Certificate, error)
+	AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) ([]*x509.Certificate, error)
 }

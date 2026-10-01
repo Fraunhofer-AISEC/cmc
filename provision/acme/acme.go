@@ -107,10 +107,6 @@ func New(directoryURL string, opts Options) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) CaCerts() ([]*x509.Certificate, error) {
-	return nil, fmt.Errorf("ACME provisioner: CaCerts not yet implemented")
-}
-
 func (c *Client) accountThumbprint() ([]byte, error) {
 	jwk := jose.JSONWebKey{Key: c.key.Public(), Algorithm: string(jose.ES256)}
 	thumbprint, err := jwk.Thumbprint(crypto.SHA256)
@@ -161,7 +157,7 @@ func (c *Client) enroll(csr *x509.CertificateRequest, handler challengeHandler) 
 	return s.finalizeAndDownload(csr, order)
 }
 
-func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) ([]*x509.Certificate, error) {
 	chain, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
 		if ch.Type != ChallengeSimple {
 			return nil, nil
@@ -180,15 +176,10 @@ func (c *Client) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, 
 		return nil, err
 	}
 	log.Debug("ACME simple enrollment completed successfully")
-	return chain[0], nil
+	return chain, nil
 }
 
-func (c *Client) TpmCertifyEnroll(
-	csr *x509.CertificateRequest,
-	ikParams attest.CertificationParameters,
-	akPublic []byte,
-	generateReport func(nonce []byte) ([]byte, error),
-) (*x509.Certificate, error) {
+func (c *Client) TpmCertifyEnroll(csr *x509.CertificateRequest, ikParams attest.CertificationParameters, akPublic []byte, generateReport func(nonce []byte) ([]byte, error)) ([]*x509.Certificate, error) {
 	chain, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
 		if ch.Type != ChallengeTpmCertify {
 			return nil, nil
@@ -218,10 +209,10 @@ func (c *Client) TpmCertifyEnroll(
 		return nil, err
 	}
 	log.Debug("ACME TPM certify enrollment completed successfully")
-	return chain[0], nil
+	return chain, nil
 }
 
-func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) (*x509.Certificate, error) {
+func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(nonce []byte) ([]byte, error)) ([]*x509.Certificate, error) {
 	chain, err := c.enroll(csr, func(ch acmeChallenge) (any, error) {
 		if ch.Type != ChallengeSoftwareAttest {
 			return nil, nil
@@ -245,5 +236,5 @@ func (c *Client) AttestEnroll(csr *x509.CertificateRequest, generateReport func(
 		return nil, err
 	}
 	log.Debug("ACME attestation enrollment completed successfully")
-	return chain[0], nil
+	return chain, nil
 }

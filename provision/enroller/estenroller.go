@@ -53,12 +53,12 @@ func New(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token 
 	}, nil
 }
 
-func (e *EstEnroller) CaCerts() ([]*x509.Certificate, error) {
-	return est.CaCerts(e.client, e.Addr, e.bearerToken)
-}
-
-func (e *EstEnroller) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
-	return est.SimpleEnroll(e.client, e.Addr, e.bearerToken, csr)
+func (e *EstEnroller) SimpleEnroll(csr *x509.CertificateRequest) ([]*x509.Certificate, error) {
+	cert, err := est.SimpleEnroll(e.client, e.Addr, e.bearerToken, csr)
+	if err != nil {
+		return nil, err
+	}
+	return e.chain(cert)
 }
 
 func (e *EstEnroller) TpmCertifyEnroll(
@@ -66,7 +66,7 @@ func (e *EstEnroller) TpmCertifyEnroll(
 	ikParams attest.CertificationParameters,
 	akPublic []byte,
 	generateReport func(nonce []byte) ([]byte, error),
-) (*x509.Certificate, error) {
+) ([]*x509.Certificate, error) {
 	nonce, err := csrNonce(csr)
 	if err != nil {
 		return nil, err
@@ -77,13 +77,17 @@ func (e *EstEnroller) TpmCertifyEnroll(
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	return est.TpmCertifyEnroll(e.client, e.Addr, e.bearerToken, csr, ikParams, akPublic, report)
+	cert, err := est.TpmCertifyEnroll(e.client, e.Addr, e.bearerToken, csr, ikParams, akPublic, report)
+	if err != nil {
+		return nil, err
+	}
+	return e.chain(cert)
 }
 
 func (e *EstEnroller) AttestEnroll(
 	csr *x509.CertificateRequest,
 	generateReport func(nonce []byte) ([]byte, error),
-) (*x509.Certificate, error) {
+) ([]*x509.Certificate, error) {
 	nonce, err := csrNonce(csr)
 	if err != nil {
 		return nil, err
@@ -94,7 +98,19 @@ func (e *EstEnroller) AttestEnroll(
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
 
-	return est.AttestEnroll(e.client, e.Addr, e.bearerToken, csr, report)
+	cert, err := est.AttestEnroll(e.client, e.Addr, e.bearerToken, csr, report)
+	if err != nil {
+		return nil, err
+	}
+	return e.chain(cert)
+}
+
+func (e *EstEnroller) chain(cert *x509.Certificate) ([]*x509.Certificate, error) {
+	caCerts, err := est.CaCerts(e.client, e.Addr, e.bearerToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve CA certs: %w", err)
+	}
+	return append([]*x509.Certificate{cert}, caCerts...), nil
 }
 
 func csrNonce(csr *x509.CertificateRequest) ([]byte, error) {

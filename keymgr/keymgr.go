@@ -362,11 +362,6 @@ func detectKeyFormat(data []byte) KeyFormat {
 
 func simpleEnroll(provisioner Enroller, priv crypto.PrivateKey, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
 
-	caCerts, err := provisioner.CaCerts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
-	}
-
 	csr, err := internal.CreateCsr(priv, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CSR: %w", err)
@@ -376,20 +371,15 @@ func simpleEnroll(provisioner Enroller, priv crypto.PrivateKey, p *KeyEnrollment
 		return prover.Generate(nonce, nil, nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)
 	}
 
-	cert, err := provisioner.AttestEnroll(csr, generateReport)
+	certChain, err := provisioner.AttestEnroll(csr, generateReport)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
-	return append([]*x509.Certificate{cert}, caCerts...), nil
+	return certChain, nil
 }
 
 func tpmEnroll(provisioner Enroller, tpmKey *tpmdriver.TpmKey, akPublic []byte, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
-
-	caCerts, err := provisioner.CaCerts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
-	}
 
 	csr, err := internal.CreateCsr(tpmKey, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
 	if err != nil {
@@ -405,12 +395,12 @@ func tpmEnroll(provisioner Enroller, tpmKey *tpmdriver.TpmKey, akPublic []byte, 
 		return prover.Generate(nonce, nil, nil, p.Metadata, p.Drivers, p.Serializer, p.ArHashAlg)
 	}
 
-	cert, err := provisioner.TpmCertifyEnroll(csr, ikParams, akPublic, generateReport)
+	certChain, err := provisioner.TpmCertifyEnroll(csr, ikParams, akPublic, generateReport)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
 	}
 
-	return append([]*x509.Certificate{cert}, caCerts...), nil
+	return certChain, nil
 }
 
 // selfSign creates a self-signed TLS certificate for the given key. It is used in enrollment
