@@ -316,7 +316,10 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 		}
 		return enroller, nil
 	case "acme":
-		acmeclient, err := acme.New(c.EnrollmentAddr, nil)
+		acmeclient, err := acme.New(c.EnrollmentAddr, acme.Options{
+			RootCAs:          rootCas,
+			AllowSystemCerts: c.AllowSystemCerts,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ACME client: %w", err)
 		}
