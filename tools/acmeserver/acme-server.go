@@ -270,7 +270,6 @@ func handleDirectory(url *url.URL, req *http.Request, resp http.ResponseWriter) 
 		"keyChange":  makeFullURL(url, "/key-change"),
 		"meta": map[string]any{
 			"termsOfService":          makeFullURL(url, "/tos"),
-			"caaIdentities":           []string{"test.com"},
 			"externalAccountRequired": false,
 		},
 	})
@@ -941,6 +940,12 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 	}
 	if err := csr.CheckSignature(); err != nil {
 		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid CSR signature")
+		return
+	}
+
+	// only support dns identifiers, reject on any other requested names
+	if len(csr.IPAddresses) > 0 || len(csr.URIs) > 0 || len(csr.EmailAddresses) > 0 {
+		acmeError(resp, http.StatusBadRequest, AcmeErrUnsupportedIdentifier, "CSR contains non-dns subject alternative names")
 		return
 	}
 
