@@ -40,6 +40,12 @@ import (
 )
 
 const (
+	ChallengeSimple         = "cmc-simple-01"
+	ChallengeSoftwareAttest = "cmc-software-attest-01"
+	ChallengeTpmCertify     = "cmc-tpm-certify-01"
+)
+
+const (
 	AcmeErrAccountDoesNotExist   = "urn:ietf:params:acme:error:accountDoesNotExist"
 	AcmeErrBadNonce              = "urn:ietf:params:acme:error:badNonce"
 	AcmeErrMalformed             = "urn:ietf:params:acme:error:malformed"
@@ -86,8 +92,6 @@ func handleAcmeDispatch(state *AcmeState, req *http.Request, resp http.ResponseW
 		handleNewOrder(state, url, req, resp)
 	case url.Path == "/tos":
 		handleTermsOfService(url, req, resp)
-	case url.Path == "/ca":
-		handleCA(state, url, req, resp)
 	case url.Path == "/key-change":
 		handleKeyChange(state, url, req, resp)
 	case strings.HasPrefix(url.Path, "/account/"):
@@ -268,7 +272,6 @@ func handleDirectory(url *url.URL, req *http.Request, resp http.ResponseWriter) 
 			"termsOfService":          makeFullURL(url, "/tos"),
 			"caaIdentities":           []string{"test.com"},
 			"externalAccountRequired": false,
-			"caCertificate":           makeFullURL(url, "/ca"),
 		},
 	})
 }
@@ -282,17 +285,6 @@ func handleTermsOfService(url *url.URL, req *http.Request, resp http.ResponseWri
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
 	resp.Write([]byte("Be friendly! :)\n"))
-}
-func handleCA(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
-	if req.Method != http.MethodGet {
-		resp.Header().Add("Allow", http.MethodGet)
-		resp.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	setLinkDirectory(url, resp)
-	resp.Header().Set("Content-Type", "application/pem-certificate-chain")
-	resp.WriteHeader(http.StatusOK)
-	resp.Write(state.CACert)
 }
 func handleNewNonce(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
@@ -438,15 +430,15 @@ func handleNewOrder(state *AcmeState, url *url.URL, req *http.Request, resp http
 	auths := make([]AcmeAuthorization, 0, len(payload.Identifier))
 	for _, ident := range payload.Identifier {
 		challenges := []AcmeChallenge{
-			{Type: "cmc-simple-01", Token: rand.Text(), Status: AuthStatusPending},
+			{Type: ChallengeSimple, Token: rand.Text(), Status: AuthStatusPending},
 		}
 		if len(state.MetadataCas) > 0 {
 			challenges = append(challenges,
 				AcmeChallenge{
-					Type: "cmc-software-attest-01", Token: rand.Text(), Status: AuthStatusPending,
+					Type: ChallengeSoftwareAttest, Token: rand.Text(), Status: AuthStatusPending,
 				},
 				AcmeChallenge{
-					Type: "cmc-tpm-certify-01", Token: rand.Text(), Status: AuthStatusPending,
+					Type: ChallengeTpmCertify, Token: rand.Text(), Status: AuthStatusPending,
 				},
 			)
 		}
@@ -719,7 +711,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 
 	if challenge.Status == AuthStatusPending {
 		switch challenge.Type {
-		case "cmc-simple-01":
+		case ChallengeSimple:
 			var payload struct {
 				Authorization string `json:"authorization"`
 			}
@@ -740,7 +732,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 			challenge.Status = AuthStatusValid
 			challenge.Validated = time.Now().Format(time.RFC3339Nano)
 
-		case "cmc-software-attest-01":
+		case ChallengeSoftwareAttest:
 			var payload struct {
 				Report string `json:"report"`
 				CSR    string `json:"csr"`
@@ -772,7 +764,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 			challenge.Status = AuthStatusValid
 			challenge.Validated = time.Now().Format(time.RFC3339Nano)
 
-		case "cmc-tpm-certify-01":
+		case ChallengeTpmCertify:
 			var payload struct {
 				Report              string `json:"report"`
 				CSR                 string `json:"csr"`

@@ -54,3 +54,7 @@ A custom challenge mimicing the cmc, which validates a cmc attestation report. T
 `cmc-tpm-certify-01`:
 
 An extension of `cmc-software-attest-01`, which also proves that the certified key (IK) lives in the same TPM as the attestation key (AK), which signed the report. In addition to `report` and `csr`, the payload contains the base64url encoded fields `akPublic`, `ikPublic`, `ikCreateData`, `ikCreateAttestation`, and `ikCreateSignature`. Similarily to `cmc-software-attest-01`, the attested key is also bound to the order for the finalization.
+
+### Open Topics
+
+As of now, the server does not serve a real ToS, just a simple static text.
