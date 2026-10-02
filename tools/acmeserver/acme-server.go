@@ -17,14 +17,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
-	"math/big"
+	"log"
 	"net/http"
 	"net/url"
 	"slices"
@@ -215,9 +214,30 @@ func sendOrderResource(status int, order *AcmeOrder, url *url.URL, resp http.Res
 	if order.Certificate != nil {
 		result["certificate"] = makeFullURL(url, fmt.Sprintf("/certificate/%v", order.Identifier))
 	}
+	if order.Error != "" {
+		result["error"] = map[string]any{
+			"type":   AcmeErrServerInternal,
+			"detail": order.Error,
+		}
+	}
+	if order.Status == OrderStatusProcessing {
+		resp.Header().Set("Retry-After", strconv.Itoa(int(ProcessingRetryAfter.Seconds())))
+	}
 
 	resp.Header().Set("Location", makeFullURL(url, fmt.Sprintf("/order/%v", order.Identifier)))
 	respondWithJson(status, resp, result)
+}
+func challengeResource(ch *AcmeChallenge, url *url.URL, orderIdentifier string, authIndex, challengeIndex int) map[string]any {
+	result := map[string]any{
+		"type":   ch.Type,
+		"url":    makeFullURL(url, fmt.Sprintf("/challenge/%v/%v/%v", orderIdentifier, authIndex, challengeIndex)),
+		"status": string(ch.Status),
+		"token":  ch.Token,
+	}
+	if ch.Validated != "" {
+		result["validated"] = ch.Validated
+	}
+	return result
 }
 
 func decodeChallengeCsr(csrB64 string) (*x509.CertificateRequest, []byte, error) {
@@ -251,6 +271,90 @@ func verifyAttestationReport(report []byte, nonce []byte, cas []*x509.Certificat
 		return nil, fmt.Errorf("attestation verification failed: %s", result.Summary.Status)
 	}
 	return result, nil
+}
+func validateFinalizeRequest(order *AcmeOrder, rawPayload []byte, resp http.ResponseWriter) (*x509.CertificateRequest, bool) {
+	if order.Status != OrderStatusReady {
+		acmeError(resp, http.StatusForbidden, AcmeErrOrderNotReady, "order is not ready for finalization")
+		return nil, false
+	}
+
+	payload := struct {
+		CSR string `json:"csr"`
+	}{}
+	if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.CSR == "" {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed finalize payload")
+		return nil, false
+	}
+
+	csrDER, err := base64.RawURLEncoding.DecodeString(payload.CSR)
+	if err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR encoding")
+		return nil, false
+	}
+
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR")
+		return nil, false
+	}
+	if err := csr.CheckSignature(); err != nil {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid CSR signature")
+		return nil, false
+	}
+
+	// only support dns identifiers, reject on any other requested names
+	if len(csr.IPAddresses) > 0 || len(csr.URIs) > 0 || len(csr.EmailAddresses) > 0 {
+		acmeError(resp, http.StatusBadRequest, AcmeErrUnsupportedIdentifier, "CSR contains non-dns subject alternative names")
+		return nil, false
+	}
+
+	orderDNS := make([]string, 0, len(order.Authorizations))
+	for _, auth := range order.Authorizations {
+		orderDNS = append(orderDNS, auth.Identifier)
+	}
+	sort.Strings(orderDNS)
+
+	csrDNS := make([]string, len(csr.DNSNames))
+	copy(csrDNS, csr.DNSNames)
+	sort.Strings(csrDNS)
+
+	if !slices.Equal(orderDNS, csrDNS) {
+		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "CSR identifiers do not match order identifiers")
+		return nil, false
+	}
+
+	if order.AttestedKey != nil {
+		csrPubKeyDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
+		if err != nil {
+			acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to marshal CSR public key")
+			return nil, false
+		}
+		if !bytes.Equal(csrPubKeyDER, order.AttestedKey) {
+			acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "CSR public key does not match attested key")
+			return nil, false
+		}
+	}
+
+	return csr, true
+}
+func issueOrder(issuer Issuer, account *AcmeAccount, order *AcmeOrder, csr *x509.CertificateRequest, done chan struct{}) {
+	ctx, cancel := context.WithTimeout(context.Background(), IssueTimeout)
+	defer cancel()
+
+	chain, err := issuer.Issue(ctx, csr)
+
+	account.mux.Lock()
+	defer account.mux.Unlock()
+	defer close(done)
+
+	if err != nil {
+		log.Printf("Issuing certificate for order %v failed: %v", order.Identifier, err)
+		order.Status = OrderStatusInvalid
+		order.Error = err.Error()
+		return
+	}
+	order.Certificate = chain
+	order.Status = OrderStatusValid
 }
 
 func handleNotFound(url *url.URL, resp http.ResponseWriter) {
@@ -644,13 +748,7 @@ func handleAuth(state *AcmeState, url *url.URL, req *http.Request, resp http.Res
 
 	challengeList := make([]any, 0, len(auth.Challenges))
 	for j, ch := range auth.Challenges {
-		challengeList = append(challengeList, map[string]string{
-			"type":      ch.Type,
-			"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v/%v", orderIdentifier, authIndex, j)),
-			"status":    string(ch.Status),
-			"token":     ch.Token,
-			"validated": ch.Validated,
-		})
+		challengeList = append(challengeList, challengeResource(&ch, url, orderIdentifier, authIndex, j))
 	}
 
 	respondWithJson(http.StatusOK, resp, map[string]any{
@@ -847,13 +945,7 @@ func handleChallenge(state *AcmeState, url *url.URL, req *http.Request, resp htt
 		}
 	}
 
-	respondWithJson(http.StatusOK, resp, map[string]any{
-		"type":      challenge.Type,
-		"url":       makeFullURL(url, fmt.Sprintf("/challenge/%v/%v/%v", orderIdentifier, authIndex, challengeIndex)),
-		"status":    string(challenge.Status),
-		"token":     challenge.Token,
-		"validated": challenge.Validated,
-	})
+	respondWithJson(http.StatusOK, resp, challengeResource(challenge, url, orderIdentifier, authIndex, challengeIndex))
 }
 func handleCertificate(state *AcmeState, url *url.URL, req *http.Request, resp http.ResponseWriter) {
 	parts := strings.Split(strings.TrimPrefix(url.Path, "/certificate/"), "/")
@@ -905,107 +997,34 @@ func handleFinalize(state *AcmeState, url *url.URL, req *http.Request, resp http
 	}
 
 	account.mux.Lock()
-	defer account.mux.Unlock()
-
 	order := account.orders[orderIdentifier]
 	if order == nil {
+		account.mux.Unlock()
 		acmeError(resp, http.StatusNotFound, AcmeErrMalformed, "unknown order identifier")
 		return
 	}
 	order.UpdateOrder()
 
-	if order.Status != OrderStatusReady {
-		acmeError(resp, http.StatusForbidden, AcmeErrOrderNotReady, "order is not ready for finalization")
+	csr, ok := validateFinalizeRequest(order, rawPayload, resp)
+	if !ok {
+		account.mux.Unlock()
 		return
 	}
 
-	payload := struct {
-		CSR string `json:"csr"`
-	}{}
-	if err := json.Unmarshal(rawPayload, &payload); err != nil || payload.CSR == "" {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed finalize payload")
-		return
+	// unlock the account while issuing to allow other requests (like order polling) to be possible
+	order.Status = OrderStatusProcessing
+	done := make(chan struct{})
+	account.mux.Unlock()
+
+	go issueOrder(state.Issuer, account, order, csr, done)
+
+	// give fast issuers chance to answer synchronously
+	select {
+	case <-done:
+	case <-time.After(FinalizeGracePeriod):
 	}
 
-	csrDER, err := base64.RawURLEncoding.DecodeString(payload.CSR)
-	if err != nil {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR encoding")
-		return
-	}
-
-	csr, err := x509.ParseCertificateRequest(csrDER)
-	if err != nil {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "malformed CSR")
-		return
-	}
-	if err := csr.CheckSignature(); err != nil {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "invalid CSR signature")
-		return
-	}
-
-	// only support dns identifiers, reject on any other requested names
-	if len(csr.IPAddresses) > 0 || len(csr.URIs) > 0 || len(csr.EmailAddresses) > 0 {
-		acmeError(resp, http.StatusBadRequest, AcmeErrUnsupportedIdentifier, "CSR contains non-dns subject alternative names")
-		return
-	}
-
-	orderDNS := make([]string, 0, len(order.Authorizations))
-	for _, auth := range order.Authorizations {
-		orderDNS = append(orderDNS, auth.Identifier)
-	}
-	sort.Strings(orderDNS)
-
-	csrDNS := make([]string, len(csr.DNSNames))
-	copy(csrDNS, csr.DNSNames)
-	sort.Strings(csrDNS)
-
-	if !slices.Equal(orderDNS, csrDNS) {
-		acmeError(resp, http.StatusBadRequest, AcmeErrMalformed, "CSR identifiers do not match order identifiers")
-		return
-	}
-
-	if order.AttestedKey != nil {
-		csrPubKeyDER, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-		if err != nil {
-			acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to marshal CSR public key")
-			return
-		}
-		if !bytes.Equal(csrPubKeyDER, order.AttestedKey) {
-			acmeError(resp, http.StatusForbidden, AcmeErrUnauthorized, "CSR public key does not match attested key")
-			return
-		}
-	}
-
-	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to generate serial number")
-		return
-	}
-
-	notBefore := time.Now()
-	notAfter := notBefore.Add(OrderLifeTime)
-	template := &x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject:      pkix.Name{CommonName: csr.DNSNames[0]},
-		DNSNames:     csr.DNSNames,
-		NotBefore:    notBefore,
-		NotAfter:     notAfter,
-		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, template, state.CAx509, csr.PublicKey, state.CAKey)
-	if err != nil {
-		acmeError(resp, http.StatusInternalServerError, AcmeErrServerInternal, "failed to sign certificate")
-		return
-	}
-
-	var chain bytes.Buffer
-	pem.Encode(&chain, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	pem.Encode(&chain, &pem.Block{Type: "CERTIFICATE", Bytes: state.CAx509.Raw})
-
-	order.Certificate = chain.Bytes()
-	order.Status = OrderStatusValid
-
+	account.mux.Lock()
+	defer account.mux.Unlock()
 	sendOrderResource(http.StatusOK, order, url, resp)
 }

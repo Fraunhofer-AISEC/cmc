@@ -16,18 +16,12 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
-	"math/big"
 	mrand "math/rand/v2"
-	"os"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -39,6 +33,11 @@ const (
 	AccountIdLength uint          = 8
 	OrderTimeWindow time.Duration = 4 * time.Hour
 	OrderLifeTime   time.Duration = 90 * 24 * time.Hour
+
+	IssueTimeout           time.Duration = 10 * time.Minute
+	UpstreamRequestTimeout time.Duration = 60 * time.Second
+	FinalizeGracePeriod    time.Duration = 1 * time.Second
+	ProcessingRetryAfter   time.Duration = 5 * time.Second
 )
 
 func ValidateContact(contact string) bool {
@@ -119,10 +118,11 @@ const (
 	AccountStatusValid       AccountStatus = "valid"
 	AccountStatusDeactivated AccountStatus = "deactivated"
 
-	OrderStatusPending OrderStatus = "pending"
-	OrderStatusReady   OrderStatus = "ready"
-	OrderStatusValid   OrderStatus = "valid"
-	OrderStatusInvalid OrderStatus = "invalid"
+	OrderStatusPending    OrderStatus = "pending"
+	OrderStatusReady      OrderStatus = "ready"
+	OrderStatusProcessing OrderStatus = "processing"
+	OrderStatusValid      OrderStatus = "valid"
+	OrderStatusInvalid    OrderStatus = "invalid"
 
 	AuthStatusPending     AuthStatus = "pending"
 	AuthStatusValid       AuthStatus = "valid"
@@ -153,9 +153,15 @@ type AcmeOrder struct {
 	Authorizations   []AcmeAuthorization
 	Certificate      []byte
 	AttestedKey      []byte
+	Error            string
 }
 
 func (o *AcmeOrder) UpdateOrder() {
+	// the authorizations dont affect the order anymore, once it is being processed or is finished
+	if o.Status == OrderStatusProcessing || o.Status == OrderStatusValid || o.Status == OrderStatusInvalid {
+		return
+	}
+
 	validCount, invalidCount := 0, 0
 
 	expired := time.Now().After(o.ExpiryTime)
@@ -190,10 +196,10 @@ func (o *AcmeOrder) UpdateOrder() {
 		}
 	}
 
-	// order is ready when all authorizations are valid (once valid, it cannot expire anymore)
+	// order is ready when all authorizations are valid
 	if validCount == len(o.Authorizations) && o.Status == OrderStatusPending {
 		o.Status = OrderStatusReady
-	} else if invalidCount > 0 && o.Status != OrderStatusValid {
+	} else if invalidCount > 0 {
 		o.Status = OrderStatusInvalid
 	}
 }
@@ -279,86 +285,17 @@ type AcmeState struct {
 	mux         sync.Mutex
 	Nonce       AcmeNonceHandler
 	accounts    map[string]*AcmeAccount
-	CACert      []byte
-	CAKey       *ecdsa.PrivateKey
-	CAx509      *x509.Certificate
+	Issuer      Issuer
 	MetadataCas []*x509.Certificate
 }
 
-func NewAcmeState() *AcmeState {
-	return &AcmeState{accounts: make(map[string]*AcmeAccount)}
+func NewAcmeState(issuer Issuer) *AcmeState {
+	return &AcmeState{
+		accounts: make(map[string]*AcmeAccount),
+		Issuer:   issuer,
+	}
 }
 
-func (s *AcmeState) LoadCA(certPath, keyPath string) error {
-	certPEM, err := os.ReadFile(certPath)
-	if err != nil {
-		return fmt.Errorf("reading CA certificate: %w", err)
-	}
-	keyPEM, err := os.ReadFile(keyPath)
-	if err != nil {
-		return fmt.Errorf("reading CA key: %w", err)
-	}
-
-	certBlock, _ := pem.Decode(certPEM)
-	if certBlock == nil {
-		return fmt.Errorf("no PEM block found in CA certificate file")
-	}
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
-	if err != nil {
-		return fmt.Errorf("parsing CA certificate: %w", err)
-	}
-
-	keyBlock, _ := pem.Decode(keyPEM)
-	if keyBlock == nil {
-		return fmt.Errorf("no PEM block found in CA key file")
-	}
-	key, err := x509.ParseECPrivateKey(keyBlock.Bytes)
-	if err != nil {
-		return fmt.Errorf("parsing CA key (expected EC private key): %w", err)
-	}
-
-	s.CACert = certPEM
-	s.CAKey = key
-	s.CAx509 = cert
-	return nil
-}
-
-func (s *AcmeState) GenerateEphemeralCA() error {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return fmt.Errorf("generating CA key: %w", err)
-	}
-
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName:   "ACME Test Server Ephemeral CA",
-			Organization: []string{"Fraunhofer AISEC"},
-		},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		MaxPathLen:            0,
-		MaxPathLenZero:        true,
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	if err != nil {
-		return fmt.Errorf("creating CA certificate: %w", err)
-	}
-
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return fmt.Errorf("parsing generated CA certificate: %w", err)
-	}
-
-	s.CACert = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	s.CAKey = key
-	s.CAx509 = cert
-	return nil
-}
 func (s *AcmeState) LookupAccountByKey(jwk string) *AcmeAccount {
 	s.mux.Lock()
 	defer s.mux.Unlock()
