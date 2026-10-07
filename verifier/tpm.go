@@ -141,6 +141,11 @@ func verifyPcrs(artifacts []ar.Artifact,
 	detailedResults := make([]ar.DigestResult, 0)
 	calculatedPcrs := make(map[int][]byte)
 
+	quotedPcrs := make(map[int]struct{}, len(artifacts))
+	for _, a := range artifacts {
+		quotedPcrs[a.Index] = struct{}{}
+	}
+
 	// Iterate over the provided measurement
 	log.Debugf("Recalculating PCRs with %v measurement artifacts...", len(artifacts))
 	for _, artifact := range artifacts {
@@ -448,6 +453,10 @@ func verifyPcrs(artifacts []ar.Artifact,
 			}
 		}
 		if !foundPcr {
+			if _, quoted := quotedPcrs[idx]; !quoted {
+				// PCR was excluded from the quote, skip its reference values
+				continue
+			}
 			log.Warnf("Failed to find measurement for required PCR%v reference value %v: %v",
 				idx, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
