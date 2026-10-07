@@ -167,7 +167,13 @@ func verifyPcrs(artifacts []ar.Artifact,
 		if artifact.Type == ar.TYPE_PCR_EVENTLOG {
 			// Measurement contains a detailed measurement list (e.g. retrieved from bios
 			// measurement logs or ima runtime measurement logs)
-			log.Tracef("PCR%v measurement contains event log", artifact.Index)
+			if len(artifact.Events) == 0 {
+				log.Tracef("PCR%v event log contains no events: recalculating as all-zero",
+					artifact.Index)
+			} else {
+				log.Tracef("PCR%v measurement contains event log with %v events",
+					artifact.Index, len(artifact.Events))
+			}
 			measuredSummary := make([]byte, quoteHashAlg.Size())
 			for _, event := range artifact.Events {
 
@@ -480,6 +486,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 	// Calculate aggregated quote PCR: Hash all reference values together
 	log.Debugf("Calculating aggregated quote PCR")
 	sum := make([]byte, 0)
+	aggregated := make([]int, 0, len(artifacts))
 	for i := range artifacts {
 		pcr := artifacts[i].Index
 		_, ok := calculatedPcrs[pcr]
@@ -488,6 +495,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 		}
 		log.Tracef("Aggregating PCR %v: %x", pcr, calculatedPcrs[pcr])
 		sum = append(sum, calculatedPcrs[pcr]...)
+		aggregated = append(aggregated, pcr)
 	}
 	verPcr, err := internal.Hash(aggHashAlg, sum)
 	if err != nil {
@@ -502,6 +510,12 @@ func verifyPcrs(artifacts []ar.Artifact,
 		aggPcrQuoteMatch.Status = ar.StatusSuccess
 	} else {
 		log.Warnf("Aggregated PCR does not match Quote PCR: %x vs. %x", verPcr[:], aggregatedQuotePcr)
+		// Log the recalculated values to allow comparing them against the actual PCR contents of the TPM
+		log.Warnf("Recalculated %v PCR values aggregated into the digest above:",
+			quoteHashAlg.String())
+		for _, pcr := range aggregated {
+			log.Warnf("\tPCR%-2v: %x", pcr, calculatedPcrs[pcr])
+		}
 		aggPcrQuoteMatch.Status = ar.StatusFail
 		aggPcrQuoteMatch.Expected = hex.EncodeToString(verPcr[:])
 		aggPcrQuoteMatch.Got = hex.EncodeToString(aggregatedQuotePcr)
