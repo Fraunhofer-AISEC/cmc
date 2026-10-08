@@ -1,17 +1,11 @@
-// Parse the attestation result
+// Parse the result
 var obj = JSON.parse(json);
 
-var success = true;
-
-// Basic checks
-if (obj.type != "Attestation Result") {
-    console.log("[PolicyEngine] Invalid type");
-    success = false;
+// Downgrade a failed verification to a warning
+if (obj.summary.status == "fail") {
+    console.log("Downgrading failed attestation result to warn");
+    obj.summary.status = "warn";
 }
 
-// Overwrite the result from failed to warning
-obj.summary.status = "warn"
-
-var ret = JSON.stringify(obj);
-
-ret
+// Return modified result
+JSON.stringify(obj)
