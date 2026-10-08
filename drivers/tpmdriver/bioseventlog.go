@@ -141,10 +141,54 @@ type TCG_AlgorithmSize struct {
 	DigestSize  uint16
 }
 
-func GetBiosArtifacts(file string, addEventData bool, algs []crypto.Hash) (map[int]ar.Artifact, error) {
+// PCR the firmware measures the ExitBootServices EV_EFI_ACTION events into
+const PCR_EXIT_BOOT_SERVICES = 5
+
+// ASCII strings the firmware measures as EV_EFI_ACTION events into PCR 5 while handling
+// ExitBootServices, as specified by the TCG PC Client Platform Firmware Profile
+var exitBootServicesActions = []string{
+	"Exit Boot Services Invocation",
+	"Exit Boot Services Returned with Success",
+}
+
+// exitBootServicesEvents reconstructs the EV_EFI_ACTION events the firmware measures into PCR 5
+// during ExitBootServices. This is only required for TPM2.0 with legay event log format version 1,
+// which does not support EFI_TCG2_FINAL_EVENTS_TABLE, which carries events measured after the
+// firmware handed out the event log. Those events are therefore extended into the TPM, because in
+// this case, they can never appear in the log, making it impossible to replay PCR 5 from the log
+// alone. The measured strings are fixed so this does not open up an attack vector.
+func exitBootServicesEvents() ([]ar.Component, error) {
+
+	components := make([]ar.Component, 0, len(exitBootServicesActions))
+	for _, action := range exitBootServicesActions {
+		digest, err := internal.Hash(crypto.SHA1, []byte(action))
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash EV_EFI_ACTION %q: %w", action, err)
+		}
+		component := ar.Component{
+			Type:        ar.CycloneDxType(ar.TRUST_ANCHOR_TPM, PCR_EXIT_BOOT_SERVICES),
+			Name:        eventtypeToString(EV_EFI_ACTION),
+			Description: action,
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     crypto.SHA1.String(),
+					Content: digest,
+				},
+			},
+		}
+		component.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
+		component.SetIndex(PCR_EXIT_BOOT_SERVICES)
+		components = append(components, component)
+	}
+
+	return components, nil
+}
+
+func GetBiosArtifacts(file string, addEventData, appendExitBootServices bool, algs []crypto.Hash,
+) (map[int]ar.Artifact, error) {
 
 	// Get single events
-	components, err := GetBiosMeasurements(file, addEventData, algs)
+	components, err := GetBiosMeasurements(file, addEventData, appendExitBootServices, algs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bios measurements: %w", err)
 	}
@@ -177,13 +221,15 @@ func GetBiosArtifacts(file string, addEventData bool, algs []crypto.Hash) (map[i
 // GetBiosMeasurements retrieves the measurements recorded into the TPM PCRs by BIOS, UEFI and IPL.
 // The file with the binary measurements (e.g., /sys/kernel/security/tpm0/binary_bios_measurements)
 // must be specified
-func GetBiosMeasurements(file string, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
+func GetBiosMeasurements(file string, addEventData, appendExitBootServices bool,
+	algs []crypto.Hash,
+) ([]ar.Component, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	digests, err := parseBiosMeasurements(data, addEventData, algs)
+	digests, err := parseBiosMeasurements(data, addEventData, appendExitBootServices, algs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse binary bios measurements event log: %w", err)
 	}
@@ -191,7 +237,9 @@ func GetBiosMeasurements(file string, addEventData bool, algs []crypto.Hash) ([]
 	return digests, nil
 }
 
-func parseBiosMeasurements(data []byte, addEventData bool, algs []crypto.Hash) ([]ar.Component, error) {
+func parseBiosMeasurements(data []byte, addEventData, appendExitBootServices bool,
+	algs []crypto.Hash,
+) ([]ar.Component, error) {
 
 	tpmAlgs := make([]tpm2.Algorithm, 0, len(algs))
 	for _, alg := range algs {
@@ -230,6 +278,9 @@ func parseBiosMeasurements(data []byte, addEventData bool, algs []crypto.Hash) (
 		switch specIdEvent.FamilyVersionMajor {
 		case 2:
 			log.Trace("Detected event log format version 2")
+			if appendExitBootServices {
+				log.Warn("Ignoring ExitBootServices reconstruction: only applies to event log format version 1")
+			}
 			return parseBiosMeasurementsV2(buf.Bytes(), addEventData, tpmAlgs)
 		default:
 			return nil, fmt.Errorf("unsuported Eventlog version %v.%v", specIdEvent.FamilyVersionMajor,
@@ -238,11 +289,12 @@ func parseBiosMeasurements(data []byte, addEventData bool, algs []crypto.Hash) (
 	} else {
 		// Eventlog format version 1 directly starts with extended events
 		log.Trace("Detected event log format version 1")
-		return parseBiosMeasurementsV1(data, tpmAlgs)
+		return parseBiosMeasurementsV1(data, appendExitBootServices, tpmAlgs)
 	}
 }
 
-func parseBiosMeasurementsV1(data []byte, algs []tpm2.Algorithm) ([]ar.Component, error) {
+func parseBiosMeasurementsV1(data []byte, appendExitBootServices bool, algs []tpm2.Algorithm,
+) ([]ar.Component, error) {
 
 	// The legacy event log format contains SHA-1 digests only
 	for _, alg := range algs {
@@ -286,6 +338,17 @@ func parseBiosMeasurementsV1(data []byte, algs []tpm2.Algorithm) ([]ar.Component
 		component.SetTrustAnchor(ar.TRUST_ANCHOR_TPM)
 		component.SetIndex(int(event.PcrIndex))
 		extends = append(extends, component)
+	}
+
+	// Must be appended last, as the firmware measures them after all other logged events
+	if appendExitBootServices {
+		events, err := exitBootServicesEvents()
+		if err != nil {
+			return nil, err
+		}
+		log.Debugf("Reconstructing %v ExitBootServices EV_EFI_ACTION events for PCR%v",
+			len(events), PCR_EXIT_BOOT_SERVICES)
+		extends = append(extends, events...)
 	}
 
 	return extends, nil

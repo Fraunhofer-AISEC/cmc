@@ -37,6 +37,7 @@ type ParsePcrsConf struct {
 	Eventlog         string
 	PrintAggregate   bool
 	EventData        bool
+	AppendEbs        bool
 	Algorithms       []string
 	AggregateHashAlg crypto.Hash
 }
@@ -51,6 +52,7 @@ const (
 	eventDataFlag      = "event-data"
 	algorithmFlag      = "algorithms"
 	aggregateAlgFlag   = "aggregate-hash-alg"
+	appendEbsFlag      = "append-ebs"
 )
 
 var (
@@ -87,6 +89,15 @@ var Command = &cli.Command{
 				"attestation key and therefore independent of the PCR bank. " +
 				"Possible: SHA-1, SHA-256, SHA-384",
 			Value: crypto.SHA256.String(),
+		},
+		&cli.BoolFlag{
+			Name: appendEbsFlag,
+			Usage: "reconstruct the ExitBootServices EV_EFI_ACTION events for PCR 5. This is " +
+				"only required for TPM2.0 which uses legacy event log format v1, which does not " +
+				"support EFI_TCG2_FINAL_EVENTS_TABLE, which carries events measured after the " +
+				"firmware handed out the event log. Those events are therefore extended into the " +
+				"TPM, as they can never appear in the log, making it impossible to replay PCR 5 " +
+				"from the log. NOTE: Must match the cmcd conig used by the attested device",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -130,7 +141,8 @@ func run(cmd *cli.Command) error {
 		log.Trace("No algorithms specified: retrieving all available PCR banks")
 	}
 
-	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, pcrConf.EventData, algs)
+	refvals, err := tpmdriver.GetBiosMeasurements(pcrConf.Eventlog, pcrConf.EventData,
+		pcrConf.AppendEbs, algs)
 	if err != nil {
 		return fmt.Errorf("failed to read binary bios measurements: %w", err)
 	}
@@ -206,6 +218,7 @@ func getConfig(cmd *cli.Command) (*ParsePcrsConf, error) {
 		Eventlog:       cmd.String(tpmEventlogFlag),
 		PrintAggregate: cmd.Bool(printAggregateFlag),
 		EventData:      cmd.Bool(eventDataFlag),
+		AppendEbs:      cmd.Bool(appendEbsFlag),
 	}
 
 	aggAlg, err := internal.HashFromString(cmd.String(aggregateAlgFlag))
@@ -229,6 +242,7 @@ func (c *ParsePcrsConf) Print() {
 	log.Debugf("\tEventlog : %v\n", c.Eventlog)
 	log.Debugf("\tAggregate: %v\n", c.PrintAggregate)
 	log.Debugf("\tEventData: %v\n", c.EventData)
+	log.Debugf("\tAppendEbs: %v\n", c.AppendEbs)
 	log.Debugf("\tAlgos    : %v\n", c.Algorithms)
 	log.Debugf("\tAggAlg   : %v\n", c.AggregateHashAlg.String())
 }

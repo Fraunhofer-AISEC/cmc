@@ -34,6 +34,9 @@ type DriverConfig struct {
 	CtrDriver       string
 	Vmpl            int
 	Endorsers       EndorserProvider
+	// AppendEbsEvent reconstructs the ExitBootServices EV_EFI_ACTION events for PCR 5,
+	// which is only required for TPM2.0 with legacy TPM eventlog format v1
+	AppendEbsEvent bool
 }
 
 // Driver is an interface representing a driver for a hardware trust anchor,
