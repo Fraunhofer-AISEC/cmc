@@ -83,13 +83,15 @@ func (ln Listener) handshake(conn net.Conn) error {
 		return errors.New("internal error: failed to convert to tlsconn")
 	}
 
+	peer := conn.RemoteAddr().String()
+
 	// Usually, not required, as the the first Read or Write will call it
 	// automatically. We run it here to export the keying material for
 	// channel binding before sending the first message
-	log.Debug("Connection established. Performing TLS handshake..")
+	log.Debugf("Connection from %v established. Performing TLS handshake..", peer)
 	err = tlsConn.Handshake()
 	if err != nil {
-		return fmt.Errorf("TLS handshake failed: %w", err)
+		return tlsHandshakeError(err, ln.Config, peer, "")
 	}
 
 	log.Debug("Connection established, getting connection state")

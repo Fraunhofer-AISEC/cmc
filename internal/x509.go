@@ -214,12 +214,13 @@ func CreateCertPool(roots []*x509.Certificate, allowSystemCerts bool) (*x509.Cer
 	var rootpool *x509.CertPool
 
 	if allowSystemCerts {
-		log.Trace("Adding system cert pool to trusted root CAs")
+		log.Debug("Adding system cert pool to trusted root CAs")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
 			return nil, fmt.Errorf("failed to add system cert pool: %w", err)
 		}
 	} else {
+		log.Debug("Not trusting system cert pool, only the configured root CAs are trusted")
 		rootpool = x509.NewCertPool()
 	}
 
