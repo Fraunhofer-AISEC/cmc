@@ -48,20 +48,7 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 	dialer.Deadline = time.Now().Add(t)
 	conn, err := tls.DialWithDialer(&dialer, network, addr, config)
 	if err != nil {
-		details := fmt.Sprintf("%v certificate chain(s) provided: ", len(config.Certificates))
-		for _, cert := range config.Certificates {
-			if cert.Leaf == nil {
-				details = details + "(leaf not parsed); "
-				continue
-			}
-			strIPs := make([]string, len(cert.Leaf.IPAddresses))
-			for i, ip := range cert.Leaf.IPAddresses {
-				strIPs[i] = ip.String()
-			}
-			details = details + fmt.Sprintf("CN=%v with DNSNames %v, IPAddresses %v; ",
-				cert.Leaf.Subject.CommonName, cert.Leaf.DNSNames, strIPs)
-		}
-		return nil, fmt.Errorf("failed to establish tls connection: %w. %v", err, details)
+		return nil, tlsHandshakeError(err, config, addr, serverName(config, addr))
 	}
 
 	log.Debug("Connection established, getting connection state")
