@@ -12,7 +12,8 @@ library. Two Caddy modules are registered:
 ## Build
 
 The plugin is compiled into a custom Caddy binary via
-[`xcaddy`](https://github.com/caddyserver/xcaddy):
+[`xcaddy`](https://github.com/caddyserver/xcaddy). Run this from the repository root, as the
+`--replace` path must point to the directory containing the cmc `go.mod`:
 
 ```bash
 CGO_ENABLED=1 go tool xcaddy build --with github.com/Fraunhofer-AISEC/cmc/tools/atlscaddy \
