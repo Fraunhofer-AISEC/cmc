@@ -407,8 +407,14 @@ func ExtKeyUsageToString(usage []x509.ExtKeyUsage) []string {
 
 // ExtractX509Infos extracts relevant attributes from cert and transform some attribute
 // into a more human-readable form by translating enums to a string representations.
+// Returns an empty X509CertExtracted if cert is nil.
 func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 	certExtracted := X509CertExtracted{}
+
+	if cert == nil {
+		log.Warnf("Cannot extract infos from nil certificate")
+		return certExtracted
+	}
 
 	certExtracted.Version = cert.Version
 	certExtracted.SerialNumber = cert.SerialNumber.Text(16)
