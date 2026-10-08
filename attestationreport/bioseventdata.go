@@ -853,20 +853,36 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 		binary.Read(buf, binary.LittleEndian, &signatureListSize)
 		binary.Read(buf, binary.LittleEndian, &signatureHeaderSize)
 		binary.Read(buf, binary.LittleEndian, &signatureSize)
+		readBytes += 28
+
+		//a signature list contains at least its own header, and a signature contains at
+		//least the signature owner GUID
+		if int(signatureListSize) < 28 || signatureSize < 16 {
+			log.Debugf("Invalid signature list (listsize %v, signature size %v)",
+				signatureListSize, signatureSize)
+			break
+		}
 
 		//parsing the Signature Header
-		sigdb.SignatureHeader = buf.Next(int(signatureHeaderSize))
+		headerSize := min(int(signatureHeaderSize), buf.Len())
+		sigdb.SignatureHeader = buf.Next(headerSize)
+		readBytes += headerSize
 
 		//parsing the signatures
-		//countes how often a certificate has been parsed
-		counter := 0
-		//2nd condition determines if SignatureDB contains multiple Certificates
+		//remaining bytes of this signature list
+		remaining := int(signatureListSize) - 28 - headerSize
 		certsize := int(signatureSize) - 16
 		certs := make([]UEFICertificate, 0) //if they are empty, dispose
 		hashes := make([]Hash, 0)           //if they are empty, dispose
 
-		for buf.Len() >= int(signatureSize) && int(signatureListSize)-counter*int(signatureSize) >= int(signatureSize) {
-			sigOwner, err := readGUID(buf)
+		for buf.Len() >= int(signatureSize) && remaining >= int(signatureSize) {
+			//each signature is parsed from its own buffer, so that an unparsable
+			//signature does not affect the remaining signatures of the list
+			sig := bytes.NewBuffer(buf.Next(int(signatureSize)))
+			remaining -= int(signatureSize)
+			readBytes += int(signatureSize)
+
+			sigOwner, err := readGUID(sig)
 			if err != nil {
 				log.Debugf("Failed to read signature owner GUID: %v", err)
 				break
@@ -876,29 +892,40 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 			case "a5c059a1-94e4-4aa7-87b5-ab155c2bf072": //EFI_CERT_X509_GUID
 				cert := UEFICertificate{}
 				cert.SignatureOwnerGUID = sigOwner
-				cert.Certificates = parseVariableDataX509_GUID(buf, certsize)
+				cert.Certificates, err = parseVariableDataX509_GUID(sig, certsize)
+				if err != nil {
+					log.Debugf("Failed to parse UEFI certificate: %v", err)
+					continue
+				}
 				certs = append(certs, cert)
 			case "826ca512-cf10-4ac9-b187-be01496631bd": //EFI_CERT_SHA1_GUID
 				hash := Hash{}
 				hash.SignatureOwnerGUID = sigOwner
-				hash.Hash = parseVariableDataHash_GUID(buf, SHA1_DIGEST_LEN)
+				hash.Hash = parseVariableDataHash_GUID(sig, SHA1_DIGEST_LEN)
 				hashes = append(hashes, hash)
 			case "c1c41626-504c-4092-aca9-41f936934328": //EFI_CERT_SHA256_GUID
 				hash := Hash{}
 				hash.SignatureOwnerGUID = sigOwner
-				hash.Hash = parseVariableDataHash_GUID(buf, SHA256_DIGEST_LEN)
+				hash.Hash = parseVariableDataHash_GUID(sig, SHA256_DIGEST_LEN)
 				hashes = append(hashes, hash)
 			case "ff3e5307-9fd0-48c9-85f1-8ad56c701e01": //EFI_CERT_SHA384_GUID
 				hash := Hash{}
 				hash.SignatureOwnerGUID = sigOwner
-				hash.Hash = parseVariableDataHash_GUID(buf, SHA384_DIGEST_LEN)
+				hash.Hash = parseVariableDataHash_GUID(sig, SHA384_DIGEST_LEN)
 				hashes = append(hashes, hash)
 			default:
 				log.Debugf("Signature GUID %v", sigdb.SignatureTypeGUID)
 			}
 			//incomplete, to support more types: (Unified Extensible Firmware Interface Specification 2.10 p.1427)
-			counter++
 		}
+		//skip trailing bytes of the list that do not form a complete signature, so that
+		//the next signature list starts at the correct offset
+		if remaining > 0 {
+			skipped := min(remaining, buf.Len())
+			buf.Next(skipped)
+			readBytes += skipped
+		}
+
 		if len(certs) > 0 {
 			sigdb.Certificates = certs
 		}
@@ -912,17 +939,25 @@ func parseEFISignaturedb(buf *bytes.Buffer, signatureDBSize int) []SignatureData
 
 	return signatureDatabase
 }
-func parseVariableDataX509_GUID(buf *bytes.Buffer, certsize int) X509CertExtracted {
+func parseVariableDataX509_GUID(buf *bytes.Buffer, certsize int) (X509CertExtracted, error) {
+	if certsize <= 0 {
+		return X509CertExtracted{}, fmt.Errorf("signature contains no certificate data")
+	}
+	if buf.Len() < certsize {
+		return X509CertExtracted{}, fmt.Errorf("buffer too short for certificate (%v vs %v)",
+			buf.Len(), certsize)
+	}
+
 	certBuf := make([]uint8, certsize)
 	binary.Read(buf, binary.LittleEndian, &certBuf)
 
 	cert, err := x509.ParseCertificate(certBuf)
 	if err != nil {
-		log.Debug("Failed to parse certificate:")
+		return X509CertExtracted{}, fmt.Errorf("failed to parse certificate: %w", err)
 	}
 
 	//extract the cert
-	return ExtractX509Infos(cert)
+	return ExtractX509Infos(cert), nil
 }
 
 // hashlen in bytes e.g. (32 = sha256)
