@@ -35,12 +35,14 @@ function checkRoles(signatureResults, expectedRoles){
 	return true;
 }
 
-//Verify AR was signed by a device
-if (!checkRoles(obj.reportSignatureCheck, ["device"])) {
-    console.log("[PolicyEngine] Role check for Attestation Report Signature failed")
-    success = false;
-} else {
-	console.log("[PolicyEngine] Role check for Attestation Report Signature successful")
+//Verify the measurements were signed by a device
+for (i=0; i < obj.measurements.length; i++){
+	if (!checkRoles([obj.measurements[i].signature], ["device"])) {
+		console.log("[PolicyEngine] Role check for Measurement Signature", obj.measurements[i].type, "failed")
+		success = false;
+	} else {
+		console.log("[PolicyEngine] Role check for Measurement Signature successful")
+	}
 }
 
 //Verify roles used to sign manifests
@@ -54,8 +56,8 @@ for (i=0; i < obj.metadata.manifestResults.length; i++){
 }
 
 //Verify roles used to sign Company Description
-if (obj.metadata.compDescResult) {
-	if (!checkRoles(obj.metadata.compDescResult.signatureValidation, ["Operator", "Evaluator", "Certifier"])) {
+if (obj.metadata.companyDescriptionResult) {
+	if (!checkRoles(obj.metadata.companyDescriptionResult.signatureValidation, ["Operator", "Evaluator", "Certifier"])) {
 		console.log("[PolicyEngine] Role check for Company Description Signatures failed")
 		success = false;
 	} else {
