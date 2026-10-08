@@ -55,6 +55,7 @@ const (
 	TpmKeyAlgFlag        = "tpm-key-alg"
 	UseOmspFlag          = "use-omsp"
 	OmspFormatFlag       = "omsp-format"
+	AppendEbsFlag        = "append-ebs"
 )
 
 var Flags = []cli.Flag{
@@ -184,6 +185,14 @@ var Flags = []cli.Flag{
 		Usage: "Indicates which serialization format to use for revocation information for " +
 			"manifests [json cbor]",
 	},
+	&cli.BoolFlag{
+		Name: AppendEbsFlag,
+		Usage: "reconstruct the ExitBootServices EV_EFI_ACTION events for PCR 5. This is only " +
+			"required for TPM2.0 which uses legacy event log format v1, which does not support " +
+			"EFI_TCG2_FINAL_EVENTS_TABLE, which carries events measured after the firmware " +
+			"handed out the event log. Those events are therefore extended into the TPM, as they " +
+			"can never appear in the log, making it impossible to replay PCR 5 from the log",
+	},
 }
 
 // Override applies CLI flag values to the given cmc.Config, only overwriting
@@ -276,6 +285,9 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	}
 	if cmd.IsSet(OmspFormatFlag) {
 		c.OmspFormat = cmd.String(OmspFormatFlag)
+	}
+	if cmd.IsSet(AppendEbsFlag) {
+		c.AppendEbsEvent = cmd.Bool(AppendEbsFlag)
 	}
 
 	return nil

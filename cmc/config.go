@@ -48,6 +48,7 @@ type Config struct {
 	TpmKeyAlg        string   `json:"tpmKeyAlg,omitempty"`
 	UseOmsp          bool     `json:"useOmsp,omitempty"`
 	OmspFormat       string   `json:"omspFormat,omitempty"`
+	AppendEbsEvent   bool     `json:"appendEbsEvent,omitempty"`
 }
 
 func (c *Config) Print() {
@@ -65,6 +66,9 @@ func (c *Config) Print() {
 	log.Debugf("\tMetadata locations             : %v", strings.Join(c.MetadataLocation, ","))
 	if len(c.ExcludePcrs) > 0 {
 		log.Debugf("\tExclude TPM PCRs               : %v", c.ExcludePcrs)
+	}
+	if c.AppendEbsEvent {
+		log.Debugf("\tAppend ExitBootServices events : %v", c.AppendEbsEvent)
 	}
 	log.Debugf("\tAPI                            : %v", c.Api)
 	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)

@@ -157,6 +157,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 		Vmpl:            c.Vmpl,
 		Endorsers:       endorser,
 		StoragePath:     c.Storage,
+		AppendEbsEvent:  c.AppendEbsEvent,
 	}
 
 	// Initialize drivers

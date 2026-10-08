@@ -67,7 +67,8 @@ func Test_parseBiosMeasurements(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.addRawEventData, tt.args.algs)
+			refvals, err := parseBiosMeasurements(tt.args.data, tt.args.addRawEventData, false,
+				tt.args.algs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseBiosMeasurements() error = %v, wantErr %v", err, tt.wantErr)
 				//maybe print the return value of the BIOS Measurements
