@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -86,7 +87,8 @@ func VerifyTpm(
 	// PCR value. In case of a measurement list, also extend the measured values to re-calculate
 	// the measured PCR value
 	tpmResult, artifacts, ok := verifyPcrs(collateral.Artifacts,
-		tpmsAttest.AttestedQuoteInfo.PCRDigest, refComponents, quoteHashAlg, aggHashAlg)
+		tpmsAttest.AttestedQuoteInfo.PCRSelection.PCRs, tpmsAttest.AttestedQuoteInfo.PCRDigest,
+		refComponents, quoteHashAlg, aggHashAlg)
 	if !ok {
 		log.Warn("failed to recalculate PCRs")
 		result.Summary.Status = ar.StatusFail
@@ -130,9 +132,10 @@ func VerifyTpm(
 }
 
 // verifyPcrs recalculates the PCRs from the measurement artifacts and the reference values.
-// quoteHashAlg is the hash algorithm of the quoted PCR bank, aggHashAlg the hash algorithm
-// the TPM used to calculate the aggregated PCR digest contained in the quote
-func verifyPcrs(artifacts []ar.Artifact,
+// quotedPcrSelection is the PCR selection authenticated by the TPM quote, quoteHashAlg is the
+// hash algorithm of the quoted PCR bank, aggHashAlg the hash algorithm the TPM used to
+// calculate the aggregated PCR digest contained in the quote
+func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 	aggregatedQuotePcr []byte, refComponents []ar.Component,
 	quoteHashAlg, aggHashAlg crypto.Hash,
 ) (*ar.TpmResult, []ar.DigestResult, bool) {
@@ -141,9 +144,18 @@ func verifyPcrs(artifacts []ar.Artifact,
 	detailedResults := make([]ar.DigestResult, 0)
 	calculatedPcrs := make(map[int][]byte)
 
-	quotedPcrs := make(map[int]struct{}, len(artifacts))
-	for _, a := range artifacts {
-		quotedPcrs[a.Index] = struct{}{}
+	// The aggregated PCR digest in the quote only binds the sequence of quoted PCR values, not
+	// the PCR index each value was taken from. Bind the measurement artifacts to the PCR
+	// selection authenticated by the quote before interpreting them, otherwise a prover could
+	// present quoted PCR values under arbitrary PCR indices
+	quotedPcrs, pcrSelectionMatch := verifyPcrSelection(artifacts, quotedPcrSelection)
+	if pcrSelectionMatch.Status != ar.StatusSuccess {
+		tpmResult := &ar.TpmResult{
+			PcrSelectionMatch: pcrSelectionMatch,
+		}
+		tpmResult.AggPcrQuoteMatch.Fail(ar.PcrSelectionNoMatch,
+			fmt.Errorf("aggregated PCR not evaluated: measured PCRs do not match quoted PCR selection"))
+		return tpmResult, detailedResults, false
 	}
 
 	// Iterate over the provided measurement
@@ -459,7 +471,7 @@ func verifyPcrs(artifacts []ar.Artifact,
 			}
 		}
 		if !foundPcr {
-			if _, quoted := quotedPcrs[idx]; !quoted {
+			if !slices.Contains(quotedPcrs, idx) {
 				// PCR was excluded from the quote, skip its reference values
 				continue
 			}
@@ -483,12 +495,13 @@ func verifyPcrs(artifacts []ar.Artifact,
 		}
 	}
 
-	// Calculate aggregated quote PCR: Hash all reference values together
+	// Calculate aggregated quote PCR: Hash all reference values together. The TPM calculates
+	// the aggregated PCR digest over the quoted PCR values in ascending PCR index order, so
+	// aggregate in that order instead of the order the artifacts happen to be provided in
 	log.Debugf("Calculating aggregated quote PCR")
 	sum := make([]byte, 0)
-	aggregated := make([]int, 0, len(artifacts))
-	for i := range artifacts {
-		pcr := artifacts[i].Index
+	aggregated := make([]int, 0, len(quotedPcrs))
+	for _, pcr := range quotedPcrs {
 		_, ok := calculatedPcrs[pcr]
 		if !ok {
 			continue
@@ -528,6 +541,50 @@ func verifyPcrs(artifacts []ar.Artifact,
 	}
 
 	return tpmResult, detailedResults, success
+}
+
+// verifyPcrSelection checks that the PCR indices of the measurement artifacts match the PCR
+// selection authenticated by the TPM quote exactly. The aggregated PCR digest contained
+// in the quote is the hash over the quoted PCR values in ascending PCR index order and therefore
+// binds the sequence of values, but not the PCR index each value originates from. Without this
+// check, a prover could assign quoted PCR values to arbitrary PCR indices. Returns the quoted PCR
+// selection in ascending order.
+func verifyPcrSelection(artifacts []ar.Artifact, quotedPcrSelection []int) ([]int, ar.Result) {
+
+	result := ar.Result{Status: ar.StatusSuccess}
+
+	// Sanity check
+	for i, pcr := range quotedPcrSelection {
+		if i > 0 && pcr <= quotedPcrSelection[i-1] {
+			result.Fail(ar.PcrSelectionNoMatch,
+				fmt.Errorf("quoted PCR selection %v is not strictly ascending", quotedPcrSelection))
+			return nil, result
+		}
+	}
+
+	measured := make([]int, 0, len(artifacts))
+	for _, a := range artifacts {
+		if slices.Contains(measured, a.Index) {
+			result.Fail(ar.PcrSelectionNoMatch,
+				fmt.Errorf("measurement contains multiple artifacts for PCR%v", a.Index))
+			return nil, result
+		}
+		measured = append(measured, a.Index)
+	}
+	slices.Sort(measured)
+
+	if !slices.Equal(quotedPcrSelection, measured) {
+		result.Fail(ar.PcrSelectionNoMatch,
+			fmt.Errorf("measured PCRs %v do not match quoted PCR selection %v",
+				measured, quotedPcrSelection))
+		result.Expected = fmt.Sprintf("%v", quotedPcrSelection)
+		result.Got = fmt.Sprintf("%v", measured)
+		return nil, result
+	}
+
+	log.Debugf("Measured PCRs match quoted PCR selection %v", quotedPcrSelection)
+
+	return quotedPcrSelection, result
 }
 
 func VerifyTpmQuoteSignature(quote, sig []byte, cert *x509.Certificate) ar.Result {
