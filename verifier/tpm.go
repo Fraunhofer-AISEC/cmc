@@ -471,17 +471,20 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 			}
 		}
 		if !foundPcr {
-			if !slices.Contains(quotedPcrs, idx) {
-				// PCR was excluded from the quote, skip its reference values
+			// The PCR is not covered by the quote at all. The prover chooses which PCRs it
+			// quotes, so a reference value must not be skipped just because its PCR is absent.
+			if ref.Optional {
+				log.Debugf("PCR%v not quoted, skipping optional reference value %v",
+					idx, ref.Name)
 				continue
 			}
-			log.Warnf("Failed to find measurement for required PCR%v reference value %v: %v",
-				idx, ref.Name, hex.EncodeToString(refHash))
+			log.Warnf("PCR%v is not covered by the quote (quoted PCRs: %v), required reference value %v: %v",
+				idx, quotedPcrs, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
 				Type:        ar.TRUST_ANCHOR_TPM,
 				Name:        ref.Name,
 				Index:       idx,
-				Success:     ref.Optional,
+				Success:     false,
 				Launched:    false,
 				Digest:      refHash,
 				Description: ref.Description,
