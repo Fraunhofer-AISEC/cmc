@@ -480,6 +480,54 @@ func TestVerifyTpm(t *testing.T) {
 			want1: false,
 		},
 		{
+			// Measurement: Eventlog
+			// Reference Values: Eventlog with an additional required reference value for PCR8,
+			// which the prover did not quote. Such reference values must not be skipped, as the
+			// prover would otherwise be able to drop policy requirements by excluding PCRs
+			name: "Invalid Unquoted Required Reference Value",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog,
+					Certs:     validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: append(slices.Clone(validComponents), unquotedRequiredComponent),
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Eventlog
+			// Reference Values: Eventlog with an additional optional reference value for PCR8,
+			// which the prover did not quote. Reference values that need not be attested are
+			// declared optional in the signed metadata
+			name: "Valid Unquoted Optional Reference Value",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog,
+					Certs:     validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: append(slices.Clone(validComponents), unquotedOptionalComponent),
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
 			// Measurement: Eventlog provided in descending PCR index order. The aggregated quote
 			// PCR is calculated in ascending PCR index order, independently of the order the
 			// artifacts are provided in
@@ -1201,6 +1249,33 @@ var (
 				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
 				{Name: ar.PROPERTY_INDEX, Value: "4"},
 			},
+		},
+	}
+)
+
+var (
+	// Reference value for PCR8, which is not part of the quoted PCR selection {1,4}. The prover
+	// chooses the quoted PCR selection, so required reference values for PCRs it does not quote
+	// must not be skipped
+	unquotedRequiredComponent = ar.Component{
+		Type:   ar.TYPE_FIRMWARE,
+		Name:   "Unquoted PCR8 Reference Value",
+		Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+			{Name: ar.PROPERTY_INDEX, Value: "8"},
+		},
+	}
+
+	// Same reference value, but explicitly declared optional in the signed metadata
+	unquotedOptionalComponent = ar.Component{
+		Type:     ar.TYPE_FIRMWARE,
+		Name:     "Unquoted Optional PCR8 Reference Value",
+		Optional: true,
+		Hashes:   []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}},
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
+			{Name: ar.PROPERTY_INDEX, Value: "8"},
 		},
 	}
 )
