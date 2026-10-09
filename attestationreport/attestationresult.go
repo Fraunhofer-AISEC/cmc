@@ -156,8 +156,9 @@ type BooleanMatch struct {
 //
 
 type TpmResult struct {
-	PcrMatch         []DigestResult `json:"pcrMatch" cbor:"0,keyasint"`
-	AggPcrQuoteMatch Result         `json:"aggPcrQuoteMatch" cbor:"1,keyasint"`
+	PcrMatch          []DigestResult `json:"pcrMatch" cbor:"0,keyasint"`
+	AggPcrQuoteMatch  Result         `json:"aggPcrQuoteMatch" cbor:"1,keyasint"`
+	PcrSelectionMatch Result         `json:"pcrSelectionMatch" cbor:"2,keyasint"`
 }
 
 //
@@ -587,6 +588,7 @@ const (
 	ManifestOutdated
 	PeerNotAuthorized
 	LocalRoleUnknown
+	PcrSelectionNoMatch
 )
 
 func (e ErrorCode) String() string {
@@ -773,6 +775,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Peer not authorized by local role)", int(e))
 	case LocalRoleUnknown:
 		return fmt.Sprintf("%v (Local role unknown, peer authorization skipped)", int(e))
+	case PcrSelectionNoMatch:
+		return fmt.Sprintf("%v (Measured PCRs do not match quoted PCR selection)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
@@ -1045,6 +1049,7 @@ func (r *AttestationResult) PrintErr() {
 			}
 		}
 		if m.TpmResult != nil {
+			m.TpmResult.PcrSelectionMatch.PrintErr("PCR selection verification")
 			m.TpmResult.AggPcrQuoteMatch.PrintErr("Aggregated PCR verification")
 			for _, p := range m.TpmResult.PcrMatch {
 				if !p.Success {

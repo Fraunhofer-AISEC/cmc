@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"slices"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -386,6 +387,122 @@ func TestVerifyTpm(t *testing.T) {
 			want:  ar.StatusFail,
 			want1: false,
 		},
+		// The quote authenticates the PCR selection {1,4}. The measurement artifacts must be
+		// bound to that selection.
+		{
+			// Measurement: Eventlog, relabeled as PCR8/PCR9
+			// Reference Values: Eventlog, relabeled as PCR8/PCR9
+			name: "Invalid PCR Selection Relabeled",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: relabelArtifacts(validArtifactsEventlog, map[int]int{1: 8, 4: 9}),
+					Certs:     validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: relabelComponents(validComponents, map[int]int{1: 8, 4: 9}),
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Eventlog for PCR1 only, while the quote selects PCR1 and PCR4
+			// Reference Values: Eventlog
+			name: "Invalid PCR Selection Missing",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog[:1],
+					Certs:     validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: validComponents,
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Eventlog for PCR1, PCR4 and an additional unquoted PCR8
+			// Reference Values: Eventlog
+			name: "Invalid PCR Selection Additional",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(slices.Clone(validArtifactsEventlog),
+						ar.Artifact{Type: ar.TYPE_PCR_EVENTLOG, Index: 8}),
+					Certs: validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: validComponents,
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Eventlog with a duplicate artifact for PCR1
+			// Reference Values: Eventlog
+			name: "Invalid PCR Selection Duplicate",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(slices.Clone(validArtifactsEventlog),
+						validArtifactsEventlog[0]),
+					Certs: validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: validComponents,
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// Measurement: Eventlog provided in descending PCR index order. The aggregated quote
+			// PCR is calculated in ascending PCR index order, independently of the order the
+			// artifacts are provided in
+			// Reference Values: Eventlog
+			name: "Valid Unordered Artifacts",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: []ar.Artifact{validArtifactsEventlog[1], validArtifactsEventlog[0]},
+					Certs:     validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: validComponents,
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
 	}
 
 	logrus.SetLevel(logrus.TraceLevel)
@@ -402,6 +519,127 @@ func TestVerifyTpm(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVerifyPcrSelection(t *testing.T) {
+	tests := []struct {
+		name      string
+		artifacts []ar.Artifact
+		quoted    []int
+		want      ar.Status
+	}{
+		{
+			name:      "Valid",
+			artifacts: artifactsForPcrs(1, 4),
+			quoted:    []int{1, 4},
+			want:      ar.StatusSuccess,
+		},
+		{
+			name:      "Valid Unordered",
+			artifacts: artifactsForPcrs(4, 1),
+			quoted:    []int{1, 4},
+			want:      ar.StatusSuccess,
+		},
+		{
+			name:      "Invalid Relabeled",
+			artifacts: artifactsForPcrs(8, 9),
+			quoted:    []int{1, 4},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Partially Relabeled",
+			artifacts: artifactsForPcrs(1, 9),
+			quoted:    []int{1, 4},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Missing",
+			artifacts: artifactsForPcrs(1),
+			quoted:    []int{1, 4},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Additional",
+			artifacts: artifactsForPcrs(1, 4, 8),
+			quoted:    []int{1, 4},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Duplicate Artifact",
+			artifacts: artifactsForPcrs(1, 4, 4),
+			quoted:    []int{1, 4},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Duplicate Selection",
+			artifacts: artifactsForPcrs(1, 4),
+			quoted:    []int{1, 4, 4},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Non-Ascending Selection",
+			artifacts: artifactsForPcrs(1, 4),
+			quoted:    []int{4, 1},
+			want:      ar.StatusFail,
+		},
+		{
+			name:      "Invalid Empty Measurement",
+			artifacts: nil,
+			quoted:    []int{1, 4},
+			want:      ar.StatusFail,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			quoted, result := verifyPcrSelection(tt.artifacts, tt.quoted)
+			if result.Status != tt.want {
+				t.Errorf("verifyPcrSelection() --GOT-- = %v, --WANT-- %v", result.Status, tt.want)
+			}
+			if tt.want == ar.StatusSuccess && !slices.IsSorted(quoted) {
+				t.Errorf("verifyPcrSelection() returned unsorted PCR selection %v", quoted)
+			}
+		})
+	}
+}
+
+// artifactsForPcrs creates empty measurement artifacts for the given PCR indices
+func artifactsForPcrs(indices ...int) []ar.Artifact {
+	artifacts := make([]ar.Artifact, 0, len(indices))
+	for _, i := range indices {
+		artifacts = append(artifacts, ar.Artifact{Type: ar.TYPE_PCR_EVENTLOG, Index: i})
+	}
+	return artifacts
+}
+
+// relabelArtifacts copies the artifacts and remaps their PCR indices, preserving the order of
+// the slice and thus the order the PCR values are aggregated in
+func relabelArtifacts(artifacts []ar.Artifact, m map[int]int) []ar.Artifact {
+	out := make([]ar.Artifact, 0, len(artifacts))
+	for _, a := range artifacts {
+		c := a
+		if idx, ok := m[a.Index]; ok {
+			c.Index = idx
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// relabelComponents copies the reference values and remaps their PCR index property
+func relabelComponents(components []ar.Component, m map[int]int) []ar.Component {
+	out := make([]ar.Component, 0, len(components))
+	for _, c := range components {
+		cp := c
+		cp.Properties = slices.Clone(c.Properties)
+		if idx, err := cp.GetIndex(); err == nil {
+			if n, ok := m[idx]; ok {
+				cp.SetIndex(n)
+			}
+		}
+		out = append(out, cp)
+	}
+	return out
 }
 
 func dec(s string) []byte {
