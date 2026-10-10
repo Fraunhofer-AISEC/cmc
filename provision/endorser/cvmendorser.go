@@ -74,8 +74,9 @@ func NewDirectProvider(vendorCacheFolder string) (*CvmEndorser, error) {
 
 // NewCpsProvider builds an endorser that fetches both SNP and TDX collateral
 // from a single caching proxy server (Caching Proxy Service) at baseUrl. The
-// proxy is expected to expose AMD-KDS-shaped /vcek + /vlek endpoints as well
-// as Intel-PCS-shaped /sgx and /tdx endpoints.
+// proxy is expected to expose AMD-KDS-shaped /vcek + /vlek endpoints, the
+// Intel-PCS-shaped /sgx and /tdx endpoints, as well as the Intel root CA CRL
+// under IntelRootCaCrlPath.
 func NewCpsProvider(
 	vendorCacheFolder string,
 	baseUrl string,
@@ -84,8 +85,10 @@ func NewCpsProvider(
 ) (*CvmEndorser, error) {
 
 	// Use the provided root cas and optionally additionally the system root store
-	// as we are using a custom PCCS service
-	tdx, err := NewTdxEndorser(baseUrl, vendorCacheFolder, rootCas, allowSystemCerts)
+	// as we are using a custom PCCS service. The root CA CRL is also fetched from
+	// the proxy, so that the CVM does not require internet access
+	tdx, err := NewTdxEndorser(baseUrl, vendorCacheFolder, rootCas, allowSystemCerts,
+		WithProxiedRootCaCrl())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TDX cps endorser: %w", err)
 	}

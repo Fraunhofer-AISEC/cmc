@@ -43,6 +43,7 @@ type Server struct {
 	estCaChain        []*x509.Certificate
 	rootCas           []*x509.Certificate
 	snpEndorser       *endorser.SnpEndorser
+	tdxEndorser       *endorser.TdxEndorser
 	tpmConf           provision.TpmConfig
 	authMethods       internal.AuthMethod
 	tokenPath         string
@@ -123,6 +124,21 @@ func NewServer(c *config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create snp endorser: %w", err)
 	}
 
+	// Collateral proxy for Intel TDX/SGX is optional, as it requires an upstream
+	// Intel PCS or PCCS
+	var tdxEndorser *endorser.TdxEndorser
+	if c.IntelPcsUrl != "" {
+		// Additionally use the system CA root store regardless of the CMC trust pool:
+		// the Intel PCS is a production service under a global CA, and the root CA CRL
+		// is always fetched from the Intel distribution point. Custom PCCS instances
+		// with their own certificate are configured via intelPcsRootCas
+		tdxEndorser, err = endorser.NewTdxEndorser(c.IntelPcsUrl, c.VendorCache,
+			c.intelPcsRootCas, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create tdx endorser: %w", err)
+		}
+	}
+
 	s := &http.Server{
 		Addr:              c.EstAddr,
 		Handler:           nil,
@@ -143,6 +159,7 @@ func NewServer(c *config) (*Server, error) {
 			DbPath:       c.TpmEkCertDb,
 		},
 		snpEndorser:       snpEndorser,
+		tdxEndorser:       tdxEndorser,
 		authMethods:       c.authMethods,
 		tokenPath:         c.TokenPath,
 		publishResults:    c.PublishResults,
@@ -169,10 +186,8 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc(est.EndpointPrefix+est.TpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
 	http.HandleFunc(est.EndpointPrefix+est.AttestEnrollEndpoint, server.handleAttestEnroll)
 
-	// AMD KDS-shaped SNP collateral endpoints (proxy and cache for rate-limited AMD KDS)
-	http.HandleFunc("GET /vcek/v1/{codeName}/cert_chain", server.handleVcekCertChain)
-	http.HandleFunc("GET /vlek/v1/{codeName}/cert_chain", server.handleVlekCertChain)
-	http.HandleFunc("GET /vcek/v1/{codeName}/{chipId}", server.handleVcek)
+	// Hardware vendor collateral endpoints
+	server.registerCollateralEndpoints(http.DefaultServeMux)
 
 	// Metadata file serving
 	httpHandleMetadata(c.HttpFolder)
@@ -190,6 +205,29 @@ func NewServer(c *config) (*Server, error) {
 	http.HandleFunc("/", server.handleNotFound)
 
 	return server, nil
+}
+
+// registerCollateralEndpoints registers the hardware vendor collateral endpoints,
+// which proxy and cache the rate-limited AMD KDS and the Intel PCS or a PCCS. The
+// endpoints mirror the vendor APIs, so that CVMs can fetch all collateral from a
+// single address without requiring internet access. The Intel endpoints are only
+// served if an upstream Intel PCS or PCCS is configured
+func (s *Server) registerCollateralEndpoints(mux *http.ServeMux) {
+
+	mux.HandleFunc("GET /vcek/v1/{codeName}/cert_chain", s.handleVcekCertChain)
+	mux.HandleFunc("GET /vlek/v1/{codeName}/cert_chain", s.handleVlekCertChain)
+	mux.HandleFunc("GET /vcek/v1/{codeName}/{chipId}", s.handleVcek)
+
+	if s.tdxEndorser == nil {
+		return
+	}
+
+	mux.HandleFunc("GET /sgx/certification/v4/pckcrl", s.handlePckCrl)
+	mux.HandleFunc("GET /sgx/certification/v4/tcb", s.handleSgxTcbInfo)
+	mux.HandleFunc("GET /tdx/certification/v4/tcb", s.handleTdxTcbInfo)
+	mux.HandleFunc("GET /sgx/certification/v4/qe/identity", s.handleSgxQeIdentity)
+	mux.HandleFunc("GET /tdx/certification/v4/qe/identity", s.handleTdxQeIdentity)
+	mux.HandleFunc("GET "+endorser.IntelRootCaCrlPath, s.handleRootCaCrl)
 }
 
 func (s *Server) Serve() error {
@@ -251,6 +289,21 @@ func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) 
 	msg := fmt.Sprintf(format, args...)
 	log.Warnf("%v", msg)
 	http.Error(w, msg, http.StatusBadRequest)
+}
+
+// writeBadRequest rejects a malformed collateral proxy request
+func writeBadRequest(w http.ResponseWriter, format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Warnf("%v", msg)
+	http.Error(w, msg, http.StatusBadRequest)
+}
+
+// writeProxyError reports a failure to obtain collateral from the upstream
+// vendor service (AMD KDS, Intel PCS or PCCS)
+func writeProxyError(w http.ResponseWriter, format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Warnf("%v", msg)
+	http.Error(w, msg, http.StatusBadGateway)
 }
 
 func verifyBootStrapToken(tokenPath string, req *http.Request) error {

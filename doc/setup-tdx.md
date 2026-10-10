@@ -34,6 +34,40 @@ run-tdx-pccs
 run-tdx-qgs
 ```
 
+## TDX Collateral
+
+Verifying a TDX quote requires Intel collateral (TCB info, QE identity, PCK CRL and the Intel
+root CA CRL). The CVM can fetch it directly from the Intel PCS or the PCCS (`endorsementMode`
+`direct`), which requires the CVM to have internet access and to trust the public CAs.
+
+Alternatively, the *estserver* proxies and caches the collateral, so that the CVM obtains
+everything from a single address under a single CA. Configure the upstream service in the
+[EST server configuration](../example-setup/configs/est-server-conf.json):
+```json
+{
+    "vendorCache": "data/est-server-vendor-cache",
+    "intelPcsUrl": "https://localhost:8081",
+    "intelPcsRootCas": [ "data/pki/tdx-pccs-cert.pem" ]
+}
+```
+`intelPcsUrl` is the address of the PCCS started via `run-tdx-pccs`, or
+`https://api.trustedservices.intel.com` to use the Intel PCS directly. `intelPcsRootCas` are the
+root CAs of that service, which are required for the certificate of the PCCS shipped with the CMC.
+The collateral is cached in `vendorCache`. Cached collateral is refreshed every 24 hours and
+continues to be served if the upstream service becomes unavailable.
+
+The CVM then uses `cps` endorsement mode, which fetches both AMD and Intel collateral from the
+*estserver*, and therefore requires neither internet access nor the public CAs:
+```json
+{
+    "endorsementMode": "cps",
+    "endorsementAddr": "https://10.0.2.2:9000/",
+    "allowSystemCerts": false,
+    "rootCas": [ "/var/ca.pem" ]
+}
+```
+This configuration is identical for Intel TDX and AMD SEV-SNP CVMs.
+
 ## TDX Run
 
 the `cmcd` and the `cmcctl` including their [configuration files](./run.md) must be installed

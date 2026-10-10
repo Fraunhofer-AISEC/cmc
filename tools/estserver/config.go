@@ -54,6 +54,8 @@ type config struct {
 	VerifyEkCert     bool     `json:"verifyEkCert"`
 	TpmEkCertDb      string   `json:"tpmEkCertDb,omitempty"`
 	VendorCache      string   `json:"vendorCache,omitempty"`
+	IntelPcsUrl      string   `json:"intelPcsUrl,omitempty"`
+	IntelPcsRootCas  []string `json:"intelPcsRootCas,omitempty"`
 	LogLevel         string   `json:"logLevel"`
 	LogFile          string   `json:"logFile,omitempty"`
 	AuthMethods      []string `json:"authMethods,omitempty"`
@@ -71,15 +73,16 @@ type config struct {
 	OmspUrl          string   `json:"omspUrl"`
 	CertValidity     string   `json:"certValidity,omitempty"`
 
-	estCaKey     crypto.PrivateKey
-	estCaChain   []*x509.Certificate
-	tlsKey       crypto.PrivateKey
-	tlsCaChain   []*x509.Certificate
-	rootCas      []*x509.Certificate
-	authMethods  internal.AuthMethod
-	omspKey      crypto.PrivateKey
-	omspCaChain  []*x509.Certificate
-	certValidity time.Duration
+	estCaKey        crypto.PrivateKey
+	estCaChain      []*x509.Certificate
+	tlsKey          crypto.PrivateKey
+	tlsCaChain      []*x509.Certificate
+	rootCas         []*x509.Certificate
+	intelPcsRootCas []*x509.Certificate
+	authMethods     internal.AuthMethod
+	omspKey         crypto.PrivateKey
+	omspCaChain     []*x509.Certificate
+	certValidity    time.Duration
 }
 
 const (
@@ -96,6 +99,8 @@ const (
 	verifyEkCertFlag     = "verify-ek-cert"
 	tpmEkCertDbFlag      = "tpm-ek-cert-db"
 	vendorCacheFlag      = "vendor-cache"
+	intelPcsUrlFlag      = "intel-pcs-url"
+	intelPcsRootCasFlag  = "intel-pcs-root-cas"
 	logLevelFlag         = "log-level"
 	logFileFlag          = "log-file"
 	authMethodsFlag      = "auth-methods"
@@ -164,7 +169,15 @@ var flags = []cli.Flag{
 	},
 	&cli.StringFlag{
 		Name:  vendorCacheFlag,
-		Usage: "folder for caching hardware vendor collateral (SNP VCEK/CA)",
+		Usage: "folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)",
+	},
+	&cli.StringFlag{
+		Name:  intelPcsUrlFlag,
+		Usage: "URL of the upstream Intel PCS or PCCS to proxy TDX/SGX collateral from",
+	},
+	&cli.StringFlag{
+		Name:  intelPcsRootCasFlag,
+		Usage: "comma-separated paths to root CAs of the upstream Intel PCS or PCCS",
 	},
 	&cli.StringFlag{
 		Name:  logLevelFlag,
@@ -286,6 +299,12 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(vendorCacheFlag) {
 		c.VendorCache = cmd.String(vendorCacheFlag)
 	}
+	if cmd.IsSet(intelPcsUrlFlag) {
+		c.IntelPcsUrl = cmd.String(intelPcsUrlFlag)
+	}
+	if cmd.IsSet(intelPcsRootCasFlag) {
+		c.IntelPcsRootCas = strings.Split(cmd.String(intelPcsRootCasFlag), ",")
+	}
 	if cmd.IsSet(logLevelFlag) {
 		c.LogLevel = cmd.String(logLevelFlag)
 	}
@@ -373,6 +392,18 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		return nil, fmt.Errorf("failed to load trusted metadata CAs: %w", err)
 	}
 
+	// The Intel PCS proxy is optional, and so are its root CAs: the Intel PCS
+	// itself is a production service under a global CA
+	if len(c.IntelPcsRootCas) > 0 {
+		c.intelPcsRootCas, err = internal.ReadCerts(c.IntelPcsRootCas)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Intel PCS root CAs: %w", err)
+		}
+	}
+	if c.IntelPcsUrl == "" {
+		log.Info("Intel PCS not configured, TDX/SGX collateral requests will not be served")
+	}
+
 	if !c.VerifyEkCert {
 		log.Warn("UNSAFE: Verification of EK certificate chain turned off via config")
 	}
@@ -434,6 +465,8 @@ func printConfig(c *config) {
 	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
 	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
 	log.Debugf("\tVendor Cache Folder : %v", c.VendorCache)
+	log.Debugf("\tIntel PCS URL       : %v", c.IntelPcsUrl)
+	log.Debugf("\tIntel PCS root CAs  : %v", strings.Join(c.IntelPcsRootCas, ","))
 	log.Debugf("\tLog Level           : %v", c.LogLevel)
 	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
 	log.Debugf("\tToken Path          : %v", c.TokenPath)

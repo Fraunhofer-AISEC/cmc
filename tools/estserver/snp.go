@@ -124,15 +124,3 @@ func parseTcbField(query map[string][]string, name string) (uint8, error) {
 	}
 	return uint8(v), nil
 }
-
-func writeBadRequest(w http.ResponseWriter, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	log.Warnf("%v", msg)
-	http.Error(w, msg, http.StatusBadRequest)
-}
-
-func writeProxyError(w http.ResponseWriter, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	log.Warnf("%v", msg)
-	http.Error(w, msg, http.StatusBadGateway)
-}

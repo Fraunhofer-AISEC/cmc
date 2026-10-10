@@ -36,6 +36,11 @@ do not run your own service, you can start the docker container shipped with the
 run-tdx-pccs
 ```
 
+The *estserver* can proxy and cache the SGX collateral of that service, so that enclaves obtain
+it from a single address under a single CA. See
+[TDX Collateral](./setup-tdx.md#tdx-collateral) for the configuration, which is identical for
+Intel SGX.
+
 ## SGX Run
 
 `cmc-docker` can be prepended to any command. However, as the configuration files have relative
