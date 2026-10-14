@@ -121,7 +121,7 @@ est_params=(
 )
 
 cmc_params=(
-    "--cmc-addr" "localhost:9955" \
+    "--cmc-addr" "127.0.0.1:9955" \
     "--provision-auth" "none" \
     "--endorsement-mode" "est" \
     "--endorsement-addr" "https://localhost:9000" \
@@ -151,7 +151,7 @@ cmcctl_params=(
     "--mtls" \
     "--attest" "mutual" \
     "--log-level" "trace" \
-    "--cmc-addr" "localhost:9955" \
+    "--cmc-addr" "127.0.0.1:9955" \
     "--key-config" "EC256" \
     "--key-type" "tpm" \
     "--key-id" "${data}/key-id" \
