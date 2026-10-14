@@ -212,7 +212,7 @@ func getEnvelopesByName(c *gin.Context, db *Db) {
 	c.IndentedJSON(http.StatusOK, results)
 }
 
-// getLatestResults returns a list of the latest result of each device
+// getLatestResults returns an overview of the latest result of each device
 func getLatestResults(c *gin.Context, db *Db) {
 
 	log.Trace("in GET /latestresults")

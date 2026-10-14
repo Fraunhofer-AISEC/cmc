@@ -19,7 +19,7 @@ GET    /results                      # Retrieve all attestation results
 GET    /results/:name/latest         # Retrieve latest result from prover :name
 GET    /resultsbyid/:id              # Retrieve a result by its SHA-256 :id
 GET    /envelopes/:name              # Retrieve all result envelopes for prover :name
-GET    /latestresults                # Retrieve the latest result from each prover
+GET    /latestresults                # Retrieve an overview of the latest result from each prover
 GET    /devices                      # Retrieve all prover names
 ```
 

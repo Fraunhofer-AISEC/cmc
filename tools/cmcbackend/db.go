@@ -49,6 +49,24 @@ type ResultEnvelope struct {
 	Result  any       `json:"result"`
 }
 
+// ResultOverview summarizes a result through values extracted from it
+type ResultOverview struct {
+	Id               string            `json:"id"`
+	Prover           string            `json:"prover"`
+	Created          string            `json:"created"`
+	Status           ar.Status         `json:"status"`
+	Version          string            `json:"version"`
+	MeasurementTypes []string          `json:"measurementTypes,omitempty"`
+	Image            *ImageDescription `json:"image,omitempty"`
+	Details          []json.RawMessage `json:"details,omitempty"`
+}
+
+type ImageDescription struct {
+	Name        string `json:"name,omitempty"`
+	Location    string `json:"location,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 func NewDb(path string, maxRowsPerProver, maxRows int) (*Db, error) {
 
 	log.Tracef("Opening database %v", path)
@@ -80,6 +98,11 @@ func NewDb(path string, maxRowsPerProver, maxRows int) (*Db, error) {
 		if err = createOcsfTable(db, maxRows); err != nil {
 			return nil, fmt.Errorf("failed to create OCSF table: %w", err)
 		}
+	}
+
+	// Runs on every start, as databases created by earlier versions lack the index
+	if err = createResultsIndex(db); err != nil {
+		return nil, fmt.Errorf("failed to create results index: %w", err)
 	}
 
 	// Create network events table
@@ -329,12 +352,31 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 	return results, nil
 }
 
-func (db *Db) GetLatestResults() ([]*ResultEnvelope, error) {
+func (db *Db) GetLatestResults() ([]*ResultOverview, error) {
 
-	// Extract the prover name from the JSON attestation result and sort by date
-	stmt := fmt.Sprintf(`SELECT id, prover, MAX(created), status, result FROM %v
-	GROUP BY prover`,
-		tableResults)
+	log.Trace("Querying latest result overviews")
+
+	// Select the latest row per prover by serial: the created timestamps carry
+	// the verifier's local timezone offset and do not compare correctly across zones
+	stmt := fmt.Sprintf(`
+SELECT
+    r.id,
+    r.prover,
+    r.created,
+    r.status,
+    json_extract(r.result, '$.version'),
+    (SELECT json_group_array(json_extract(m.value, '$.type'))
+        FROM json_each(r.result, '$.measurements') m),
+    json_extract(r.result, '$.metadata.imageDescriptionResult.name'),
+    json_extract(r.result, '$.metadata.imageDescriptionResult.location'),
+    json_extract(r.result, '$.metadata.imageDescriptionResult.description'),
+    (SELECT json_group_array(json(json_extract(m.value, '$.details')))
+        FROM json_each(r.result, '$.metadata.manifestResults') m
+        WHERE json_extract(m.value, '$.details') IS NOT NULL)
+FROM %v r
+JOIN (SELECT prover, MAX(serial) AS serial FROM %v GROUP BY prover) latest
+    ON r.serial = latest.serial
+ORDER BY r.prover`, tableResults, tableResults)
 
 	rows, err := db.db.Query(stmt)
 	if err != nil {
@@ -342,35 +384,57 @@ func (db *Db) GetLatestResults() ([]*ResultEnvelope, error) {
 	}
 	defer rows.Close()
 
-	results := make([]*ResultEnvelope, 0)
+	results := make([]*ResultOverview, 0)
 	for rows.Next() {
 		var id string
 		var prover string
 		var created string
 		var status ar.Status
-		var data string
-		err = rows.Scan(&id, &prover, &created, &status, &data)
+		var version, types, name, location, description, details sql.NullString
+		err = rows.Scan(&id, &prover, &created, &status, &version, &types, &name,
+			&location, &description, &details)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		result := new(any)
-		err := json.Unmarshal([]byte(data), result)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal attestation result: %w", err)
-		}
-
-		resultEnvelope := &ResultEnvelope{
-			Type:    "Validation Report",
+		overview := &ResultOverview{
 			Id:      id,
 			Prover:  prover,
 			Created: created,
 			Status:  status,
-			Result:  *result,
+			Version: version.String,
 		}
 
-		results = append(results, resultEnvelope)
+		if types.Valid {
+			err = json.Unmarshal([]byte(types.String), &overview.MeasurementTypes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal measurement types: %w", err)
+			}
+		}
+
+		// Kept as raw JSON to retain the original key order
+		if details.Valid {
+			err = json.Unmarshal([]byte(details.String), &overview.Details)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal manifest details: %w", err)
+			}
+		}
+
+		if name.String != "" || location.String != "" || description.String != "" {
+			overview.Image = &ImageDescription{
+				Name:        name.String,
+				Location:    location.String,
+				Description: description.String,
+			}
+		}
+
+		results = append(results, overview)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate rows: %w", err)
+	}
+
+	log.Tracef("Returning %v latest result overviews", len(results))
 
 	return results, nil
 }
@@ -725,6 +789,22 @@ END;`, tableResults, tableResults, tableResults, maxRowsPerProver, tableResults,
 	}
 
 	log.Tracef("Created table %v with per-prover and total limits", tableResults)
+	return nil
+}
+
+func createResultsIndex(db *sql.DB) error {
+
+	log.Tracef("Creating index on %v", tableResults)
+
+	sqlStmt := fmt.Sprintf(
+		`CREATE INDEX IF NOT EXISTS idx_results_prover_serial ON %v (prover, serial);`,
+		tableResults)
+
+	_, err := db.Exec(sqlStmt)
+	if err != nil {
+		return fmt.Errorf("failed to exec sqlite3 create index statement: %w", err)
+	}
+
 	return nil
 }
 
