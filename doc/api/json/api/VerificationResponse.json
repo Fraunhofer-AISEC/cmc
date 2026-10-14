@@ -564,7 +564,8 @@
     },
     "HexByte": {
       "type": "string",
-      "contentEncoding": "base64"
+      "pattern": "^([0-9a-fA-F]{2})*$",
+      "contentEncoding": "base16"
     },
     "Hook": {
       "properties": {

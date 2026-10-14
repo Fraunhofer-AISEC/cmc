@@ -25,6 +25,7 @@ import (
 	"fmt"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/invopop/jsonschema"
 )
 
 type jsonSerializer struct{}
@@ -218,6 +219,16 @@ func (h *HexByte) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// JSONSchema describes HexByte as a hex string for the generated JSON schema,
+// which otherwise treats it like a plain []byte (base64)
+func (HexByte) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Type:            "string",
+		ContentEncoding: "base16",
+		Pattern:         "^([0-9a-fA-F]{2})*$",
+	}
 }
 
 // MarshalJSON marshals an attestation report with encoded context,
