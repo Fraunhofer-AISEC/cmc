@@ -1,0 +1,13 @@
+{
+    "addr": "localhost:8080",
+    "db": "../data/monitoring.db",
+    "log": "info",
+    "maxRows": 400,
+    "maxRowsPerProver": 20,
+    "defaultCategory": "demo",
+    "categories": [
+        { "id": "demo", "label": "Attestation Demo" },
+        { "id": "ids", "label": "Industrial Data Space" },
+        { "id": "cvm", "label": "Confidential VMs" }
+    ]
+}

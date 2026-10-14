@@ -34,6 +34,8 @@ const (
 	tableResults       = "results"
 	tableOcsfFindings  = "ocsf_findings"
 	tableNetworkEvents = "network_events"
+
+	defaultCategory = "default"
 )
 
 type Db struct {
@@ -52,6 +54,7 @@ type ResultEnvelope struct {
 // ResultOverview summarizes a result through values extracted from it
 type ResultOverview struct {
 	Id               string            `json:"id"`
+	Category         string            `json:"category"`
 	Prover           string            `json:"prover"`
 	Created          string            `json:"created"`
 	Status           ar.Status         `json:"status"`
@@ -67,7 +70,7 @@ type ImageDescription struct {
 	Description string `json:"description,omitempty"`
 }
 
-func NewDb(path string, maxRowsPerProver, maxRows int) (*Db, error) {
+func NewDb(path string, maxRowsPerProver, maxRows int, defaultCategory string) (*Db, error) {
 
 	log.Tracef("Opening database %v", path)
 
@@ -78,42 +81,24 @@ func NewDb(path string, maxRowsPerProver, maxRows int) (*Db, error) {
 
 	log.Tracef("Openend database %v", path)
 
-	// Create results table
-	ok, err := tableExists(db, tableResults)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check tables: %w", err)
+	if err = createTables(db); err != nil {
+		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
-	if !ok {
-		if err = createResultsTable(db, maxRowsPerProver, maxRows); err != nil {
-			return nil, fmt.Errorf("failed to create results table: %w", err)
+
+	// Schema steps below run on every start, so that databases created by
+	// earlier versions are migrated and configuration changes take effect
+	for _, table := range []string{tableResults, tableOcsfFindings, tableNetworkEvents} {
+		if err = addCategoryColumn(db, table, defaultCategory); err != nil {
+			return nil, fmt.Errorf("failed to migrate table %v: %w", table, err)
 		}
 	}
 
-	// Create OCSF findings table
-	ok, err = tableExists(db, tableOcsfFindings)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check tables: %w", err)
-	}
-	if !ok {
-		if err = createOcsfTable(db, maxRows); err != nil {
-			return nil, fmt.Errorf("failed to create OCSF table: %w", err)
-		}
+	if err = createIndexes(db); err != nil {
+		return nil, fmt.Errorf("failed to create indexes: %w", err)
 	}
 
-	// Runs on every start, as databases created by earlier versions lack the index
-	if err = createResultsIndex(db); err != nil {
-		return nil, fmt.Errorf("failed to create results index: %w", err)
-	}
-
-	// Create network events table
-	ok, err = tableExists(db, tableNetworkEvents)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check tables: %w", err)
-	}
-	if !ok {
-		if err = createNetworkTable(db, maxRows); err != nil {
-			return nil, fmt.Errorf("failed to create network table: %w", err)
-		}
+	if err = createTriggers(db, maxRowsPerProver, maxRows); err != nil {
+		return nil, fmt.Errorf("failed to create triggers: %w", err)
 	}
 
 	return &Db{db: db}, nil
@@ -123,9 +108,18 @@ func (db *Db) Close() {
 	db.db.Close()
 }
 
+// categoryFilter returns an SQL condition and its argument. An empty category
+// matches all categories.
+func categoryFilter(category string) (string, []any) {
+	if category == "" {
+		return "1=1", nil
+	}
+	return "category = ?", []any{category}
+}
+
 // Result methods
 
-func (db *Db) InsertResult(data []byte) error {
+func (db *Db) InsertResult(data []byte, category string) error {
 
 	if !json.Valid(data) {
 		return fmt.Errorf("provided data is not valid JSON")
@@ -142,7 +136,8 @@ func (db *Db) InsertResult(data []byte) error {
 		return errors.New("cannot insert into database: The result prover field is empty")
 	}
 
-	log.Tracef("Inserting prover '%v' into %v", header.Prover.Hostname, tableResults)
+	log.Tracef("Inserting prover '%v' into %v (category %v)",
+		header.Prover.Hostname, tableResults, category)
 
 	// Create ID through hashing
 	digest := sha256.Sum256(data)
@@ -150,9 +145,9 @@ func (db *Db) InsertResult(data []byte) error {
 
 	// Insert everything into the database
 	insert := fmt.Sprintf(`INSERT INTO %v
-		(id, prover, created, status, result)
+		(id, category, prover, created, status, result)
 		VALUES
-		(?, ?, ?, ?, json(?))`, tableResults)
+		(?, ?, ?, ?, ?, json(?))`, tableResults)
 
 	tx, err := db.db.Begin()
 	if err != nil {
@@ -166,7 +161,8 @@ func (db *Db) InsertResult(data []byte) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(id[:], header.Prover.Hostname, header.Created, header.Summary.Status, string(data))
+	_, err = stmt.Exec(id[:], category, header.Prover.Hostname, header.Created,
+		header.Summary.Status, string(data))
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
 	}
@@ -174,13 +170,15 @@ func (db *Db) InsertResult(data []byte) error {
 	return nil
 }
 
-func (db *Db) GetAllStatistics() ([]*ResultEnvelope, error) {
+func (db *Db) GetAllStatistics(category string) ([]*ResultEnvelope, error) {
 
 	log.Trace("Querying all result statistics")
 
-	stmt := fmt.Sprintf("SELECT id, prover, created, status FROM %v;", tableResults)
+	filter, args := categoryFilter(category)
+	stmt := fmt.Sprintf("SELECT id, prover, created, status FROM %v WHERE %v;",
+		tableResults, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -214,13 +212,15 @@ func (db *Db) GetAllStatistics() ([]*ResultEnvelope, error) {
 	return results, nil
 }
 
-func (db *Db) GetAllResults() ([]*ResultEnvelope, error) {
+func (db *Db) GetAllResults(category string) ([]*ResultEnvelope, error) {
 
 	log.Trace("Querying all results")
 
-	stmt := fmt.Sprintf("SELECT id, prover, created, status, result FROM %v;", tableResults)
+	filter, args := categoryFilter(category)
+	stmt := fmt.Sprintf("SELECT id, prover, created, status, result FROM %v WHERE %v;",
+		tableResults, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -262,15 +262,16 @@ func (db *Db) GetAllResults() ([]*ResultEnvelope, error) {
 	return results, nil
 }
 
-func (db *Db) GetEnvelopesByProver(name string) ([]*ResultEnvelope, error) {
+func (db *Db) GetEnvelopesByProver(name, category string) ([]*ResultEnvelope, error) {
 
 	// Use the prover name from the JSON attestation result
+	filter, args := categoryFilter(category)
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status FROM %s
-		WHERE prover = ?
-		ORDER BY created DESC`,
-		tableResults)
+		WHERE prover = ? AND %v
+		ORDER BY serial DESC`,
+		tableResults, filter)
 
-	rows, err := db.db.Query(stmt, name)
+	rows, err := db.db.Query(stmt, append([]any{name}, args...)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -301,17 +302,18 @@ func (db *Db) GetEnvelopesByProver(name string) ([]*ResultEnvelope, error) {
 	return results, nil
 }
 
-func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
+func (db *Db) GetLatestResult(name, category string) ([]*ResultEnvelope, error) {
 
 	log.Trace("Querying latest results")
 
-	// Extract the prover name from the JSON attestation result and sort by date
+	// Extract the prover name from the JSON attestation result
+	filter, args := categoryFilter(category)
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status, result FROM %v
-	WHERE prover=?
-	ORDER BY created DESC LIMIT 1`,
-		tableResults)
+	WHERE prover=? AND %v
+	ORDER BY serial DESC LIMIT 1`,
+		tableResults, filter)
 
-	rows, err := db.db.Query(stmt, name)
+	rows, err := db.db.Query(stmt, append([]any{name}, args...)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -352,15 +354,17 @@ func (db *Db) GetLatestResult(name string) ([]*ResultEnvelope, error) {
 	return results, nil
 }
 
-func (db *Db) GetLatestResults() ([]*ResultOverview, error) {
+func (db *Db) GetLatestResults(category string) ([]*ResultOverview, error) {
 
 	log.Trace("Querying latest result overviews")
 
 	// Select the latest row per prover by serial: the created timestamps carry
 	// the verifier's local timezone offset and do not compare correctly across zones
+	filter, args := categoryFilter(category)
 	stmt := fmt.Sprintf(`
 SELECT
     r.id,
+    r.category,
     r.prover,
     r.created,
     r.status,
@@ -373,12 +377,12 @@ SELECT
     (SELECT json_group_array(json(json_extract(m.value, '$.details')))
         FROM json_each(r.result, '$.metadata.manifestResults') m
         WHERE json_extract(m.value, '$.details') IS NOT NULL)
-FROM %v r
-JOIN (SELECT prover, MAX(serial) AS serial FROM %v GROUP BY prover) latest
+FROM %[1]v r
+JOIN (SELECT MAX(serial) AS serial FROM %[1]v WHERE %[2]v GROUP BY category, prover) latest
     ON r.serial = latest.serial
-ORDER BY r.prover`, tableResults, tableResults)
+ORDER BY r.category, r.prover`, tableResults, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -387,22 +391,24 @@ ORDER BY r.prover`, tableResults, tableResults)
 	results := make([]*ResultOverview, 0)
 	for rows.Next() {
 		var id string
+		var cat string
 		var prover string
 		var created string
 		var status ar.Status
 		var version, types, name, location, description, details sql.NullString
-		err = rows.Scan(&id, &prover, &created, &status, &version, &types, &name,
+		err = rows.Scan(&id, &cat, &prover, &created, &status, &version, &types, &name,
 			&location, &description, &details)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		overview := &ResultOverview{
-			Id:      id,
-			Prover:  prover,
-			Created: created,
-			Status:  status,
-			Version: version.String,
+			Id:       id,
+			Category: cat,
+			Prover:   prover,
+			Created:  created,
+			Status:   status,
+			Version:  version.String,
 		}
 
 		if types.Valid {
@@ -439,14 +445,15 @@ ORDER BY r.prover`, tableResults, tableResults)
 	return results, nil
 }
 
-func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
+func (db *Db) GetResultById(id, category string) ([]*ResultEnvelope, error) {
 
 	// Extract the prover name from the JSON attestation result
+	filter, args := categoryFilter(category)
 	stmt := fmt.Sprintf(`SELECT id, prover, created, status, result FROM %v
-		WHERE id=?`,
-		tableResults)
+		WHERE id=? AND %v LIMIT 1`,
+		tableResults, filter)
 
-	rows, err := db.db.Query(stmt, id)
+	rows, err := db.db.Query(stmt, append([]any{id}, args...)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -485,12 +492,13 @@ func (db *Db) GetResultById(id string) ([]*ResultEnvelope, error) {
 	return results, nil
 }
 
-func (db *Db) GetDeviceNames() ([]string, error) {
+func (db *Db) GetDeviceNames(category string) ([]string, error) {
 
-	// Extract the prover name from the JSON attestation result and sort by date
-	stmt := fmt.Sprintf(`SELECT DISTINCT prover FROM %v`, tableResults)
+	// Extract the prover name from the JSON attestation result
+	filter, args := categoryFilter(category)
+	stmt := fmt.Sprintf(`SELECT DISTINCT prover FROM %v WHERE %v`, tableResults, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -521,7 +529,7 @@ type ocsfFindingHeader struct {
 	} `json:"finding_info"`
 }
 
-func (db *Db) InsertOcsfFinding(data []byte) error {
+func (db *Db) InsertOcsfFinding(data []byte, category string) error {
 
 	if !json.Valid(data) {
 		return fmt.Errorf("provided data is not valid JSON")
@@ -544,9 +552,9 @@ func (db *Db) InsertOcsfFinding(data []byte) error {
 	id := hex.EncodeToString(digest[:])
 
 	insert := fmt.Sprintf(`INSERT INTO %v
-		(id, time, finding_uid, finding)
+		(id, category, time, finding_uid, finding)
 		VALUES
-		(?, ?, ?, json(?))`, tableOcsfFindings)
+		(?, ?, ?, ?, json(?))`, tableOcsfFindings)
 
 	tx, err := db.db.Begin()
 	if err != nil {
@@ -560,7 +568,7 @@ func (db *Db) InsertOcsfFinding(data []byte) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(id, header.Time, findingUID, string(data))
+	_, err = stmt.Exec(id, category, header.Time, findingUID, string(data))
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
 	}
@@ -568,13 +576,15 @@ func (db *Db) InsertOcsfFinding(data []byte) error {
 	return nil
 }
 
-func (db *Db) GetAllOcsfFindings() ([]any, error) {
+func (db *Db) GetAllOcsfFindings(category string) ([]any, error) {
 
 	log.Trace("Querying all OCSF findings")
 
-	stmt := fmt.Sprintf("SELECT finding FROM %v ORDER BY serial DESC;", tableOcsfFindings)
+	filter, args := categoryFilter(category)
+	stmt := fmt.Sprintf("SELECT finding FROM %v WHERE %v ORDER BY serial DESC;",
+		tableOcsfFindings, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -604,7 +614,7 @@ func (db *Db) GetAllOcsfFindings() ([]any, error) {
 
 // Network event methods
 
-func (db *Db) InsertNetworkEvent(data []byte) error {
+func (db *Db) InsertNetworkEvent(data []byte, category string) error {
 
 	if !json.Valid(data) {
 		return fmt.Errorf("provided data is not valid JSON")
@@ -623,9 +633,9 @@ func (db *Db) InsertNetworkEvent(data []byte) error {
 	id := hex.EncodeToString(digest[:])
 
 	insert := fmt.Sprintf(`INSERT INTO %v
-		(id, verifier, prover, status, time, event)
+		(id, category, verifier, prover, status, time, event)
 		VALUES
-		(?, ?, ?, ?, ?, json(?))`, tableNetworkEvents)
+		(?, ?, ?, ?, ?, ?, json(?))`, tableNetworkEvents)
 
 	tx, err := db.db.Begin()
 	if err != nil {
@@ -639,7 +649,7 @@ func (db *Db) InsertNetworkEvent(data []byte) error {
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(id, header.Verifier.Hostname, header.Prover.Hostname,
+	_, err = stmt.Exec(id, category, header.Verifier.Hostname, header.Prover.Hostname,
 		header.Status, header.Time, string(data))
 	if err != nil {
 		return fmt.Errorf("failed to execute statement: %w", err)
@@ -648,13 +658,15 @@ func (db *Db) InsertNetworkEvent(data []byte) error {
 	return nil
 }
 
-func (db *Db) GetAllNetworkEvents() ([]any, error) {
+func (db *Db) GetAllNetworkEvents(category string) ([]any, error) {
 
 	log.Trace("Querying all network events")
 
-	stmt := fmt.Sprintf("SELECT event FROM %v ORDER BY serial DESC;", tableNetworkEvents)
+	filter, args := categoryFilter(category)
+	stmt := fmt.Sprintf("SELECT event FROM %v WHERE %v ORDER BY serial DESC;",
+		tableNetworkEvents, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -682,18 +694,20 @@ func (db *Db) GetAllNetworkEvents() ([]any, error) {
 	return results, nil
 }
 
-func (db *Db) GetNetworkGraph() ([]any, error) {
+func (db *Db) GetNetworkGraph(category string) ([]any, error) {
 
 	log.Trace("Querying network graph")
 
-	stmt := fmt.Sprintf(`SELECT event FROM %v
+	filter, args := categoryFilter(category)
+	stmt := fmt.Sprintf(`SELECT event FROM %[1]v
 		WHERE serial IN (
-			SELECT MAX(serial) FROM %v
-			GROUP BY verifier, prover
+			SELECT MAX(serial) FROM %[1]v
+			WHERE %[2]v
+			GROUP BY category, verifier, prover
 		)
-		ORDER BY serial DESC;`, tableNetworkEvents, tableNetworkEvents)
+		ORDER BY serial DESC;`, tableNetworkEvents, filter)
 
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
 	}
@@ -721,167 +735,168 @@ func (db *Db) GetNetworkGraph() ([]any, error) {
 	return results, nil
 }
 
-// Table creation helpers
+// Schema helpers
 
-func tableExists(db *sql.DB, table string) (bool, error) {
-	stmt := fmt.Sprintf("SELECT name FROM sqlite_master WHERE type='table' AND name='%v';",
-		table)
+func createTables(db *sql.DB) error {
 
-	rows, err := db.Query(stmt)
-	if err != nil {
-		return false, fmt.Errorf("failed to exec sqlite3 statement: %w", err)
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		log.Tracef("Table %v exists", table)
-		return true, nil
-	}
-
-	log.Tracef("Table %v does not exist", table)
-	return false, nil
-}
-
-func createResultsTable(db *sql.DB, maxRowsPerProver int, maxTotalRows int) error {
-
-	log.Tracef("Creating table %v", tableResults)
-
-	sqlStmt := fmt.Sprintf(`
-CREATE TABLE %v (
+	stmts := []string{
+		fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %v (
     serial INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL,
+    category TEXT NOT NULL,
     prover TEXT,
     created TEXT,
     status TEXT,
     result TEXT
-);`, tableResults)
-	_, err := db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 create statement: %w", err)
-	}
-
-	log.Tracef("Setting combined trigger for per-prover and total limits")
-
-	// Combined trigger for per-prover and total limits
-	sqlStmt = fmt.Sprintf(`
-CREATE TRIGGER limit_size AFTER INSERT ON %v
-BEGIN
-    DELETE FROM %v
-    WHERE serial IN (
-        SELECT serial
-        FROM %v
-        WHERE prover = NEW.prover
-        ORDER BY serial DESC
-        LIMIT -1 OFFSET %v
-    );
-    DELETE FROM %v
-    WHERE serial IN (
-        SELECT serial
-        FROM %v
-        ORDER BY serial DESC
-        LIMIT -1 OFFSET %v
-    );
-END;`, tableResults, tableResults, tableResults, maxRowsPerProver, tableResults, tableResults, maxTotalRows)
-
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 combined trigger statement: %w", err)
-	}
-
-	log.Tracef("Created table %v with per-prover and total limits", tableResults)
-	return nil
-}
-
-func createResultsIndex(db *sql.DB) error {
-
-	log.Tracef("Creating index on %v", tableResults)
-
-	sqlStmt := fmt.Sprintf(
-		`CREATE INDEX IF NOT EXISTS idx_results_prover_serial ON %v (prover, serial);`,
-		tableResults)
-
-	_, err := db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 create index statement: %w", err)
-	}
-
-	return nil
-}
-
-func createOcsfTable(db *sql.DB, maxTotalRows int) error {
-
-	log.Tracef("Creating OCSF table %v", tableOcsfFindings)
-
-	sqlStmt := fmt.Sprintf(`
-CREATE TABLE %v (
+);`, tableResults),
+		fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %v (
     serial INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL,
+    category TEXT NOT NULL,
     time TEXT,
     finding_uid TEXT,
     finding TEXT
-);`, tableOcsfFindings)
-	_, err := db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 create statement: %w", err)
-	}
-
-	sqlStmt = fmt.Sprintf(`
-CREATE TRIGGER limit_ocsf_size AFTER INSERT ON %v
-BEGIN
-    DELETE FROM %v
-    WHERE serial IN (
-        SELECT serial
-        FROM %v
-        ORDER BY serial DESC
-        LIMIT -1 OFFSET %v
-    );
-END;`, tableOcsfFindings, tableOcsfFindings, tableOcsfFindings, maxTotalRows)
-
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 trigger statement: %w", err)
-	}
-
-	log.Tracef("Created OCSF table %v with total limit %v", tableOcsfFindings, maxTotalRows)
-	return nil
-}
-
-func createNetworkTable(db *sql.DB, maxTotalRows int) error {
-
-	log.Tracef("Creating network table %v", tableNetworkEvents)
-
-	sqlStmt := fmt.Sprintf(`
-CREATE TABLE %v (
+);`, tableOcsfFindings),
+		fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %v (
     serial INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL,
+    category TEXT NOT NULL,
     verifier TEXT,
     prover TEXT,
     status TEXT,
     time TEXT,
     event TEXT
-);`, tableNetworkEvents)
-	_, err := db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 create statement: %w", err)
+);`, tableNetworkEvents),
 	}
 
-	sqlStmt = fmt.Sprintf(`
-CREATE TRIGGER limit_network_size AFTER INSERT ON %v
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to exec sqlite3 create statement: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// addCategoryColumn migrates tables created before categories were introduced.
+// Existing rows are assigned the default category, so that they stay visible.
+func addCategoryColumn(db *sql.DB, table, defaultCategory string) error {
+
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%v);", table))
+	if err != nil {
+		return fmt.Errorf("failed to query table info: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("failed to scan row: %w", err)
+		}
+		if name == "category" {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate rows: %w", err)
+	}
+
+	log.Infof("Migrating table %v: adding category %v to existing rows", table, defaultCategory)
+
+	stmt := fmt.Sprintf(`ALTER TABLE %v ADD COLUMN category TEXT NOT NULL DEFAULT '%v';`,
+		table, defaultCategory)
+	if _, err := db.Exec(stmt); err != nil {
+		return fmt.Errorf("failed to add category column: %w", err)
+	}
+
+	return nil
+}
+
+func createIndexes(db *sql.DB) error {
+
+	stmts := []string{
+		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_results_category_prover_serial
+			ON %v (category, prover, serial);`, tableResults),
+		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_ocsf_category_serial
+			ON %v (category, serial);`, tableOcsfFindings),
+		fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_network_category_serial
+			ON %v (category, serial);`, tableNetworkEvents),
+	}
+
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to exec sqlite3 create index statement: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// createTriggers enforces the row limits within each category. They are
+// recreated on every start so that changed limits take effect.
+func createTriggers(db *sql.DB, maxRowsPerProver, maxRows int) error {
+
+	stmts := []string{
+		`DROP TRIGGER IF EXISTS limit_size;`,
+		`DROP TRIGGER IF EXISTS limit_ocsf_size;`,
+		`DROP TRIGGER IF EXISTS limit_network_size;`,
+		fmt.Sprintf(`
+CREATE TRIGGER limit_size AFTER INSERT ON %[1]v
 BEGIN
-    DELETE FROM %v
+    DELETE FROM %[1]v
     WHERE serial IN (
         SELECT serial
-        FROM %v
+        FROM %[1]v
+        WHERE category = NEW.category AND prover = NEW.prover
         ORDER BY serial DESC
-        LIMIT -1 OFFSET %v
+        LIMIT -1 OFFSET %[2]v
     );
-END;`, tableNetworkEvents, tableNetworkEvents, tableNetworkEvents, maxTotalRows)
-
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		return fmt.Errorf("failed to exec sqlite3 trigger statement: %w", err)
+    DELETE FROM %[1]v
+    WHERE serial IN (
+        SELECT serial
+        FROM %[1]v
+        WHERE category = NEW.category
+        ORDER BY serial DESC
+        LIMIT -1 OFFSET %[3]v
+    );
+END;`, tableResults, maxRowsPerProver, maxRows),
+		fmt.Sprintf(`
+CREATE TRIGGER limit_ocsf_size AFTER INSERT ON %[1]v
+BEGIN
+    DELETE FROM %[1]v
+    WHERE serial IN (
+        SELECT serial
+        FROM %[1]v
+        WHERE category = NEW.category
+        ORDER BY serial DESC
+        LIMIT -1 OFFSET %[2]v
+    );
+END;`, tableOcsfFindings, maxRows),
+		fmt.Sprintf(`
+CREATE TRIGGER limit_network_size AFTER INSERT ON %[1]v
+BEGIN
+    DELETE FROM %[1]v
+    WHERE serial IN (
+        SELECT serial
+        FROM %[1]v
+        WHERE category = NEW.category
+        ORDER BY serial DESC
+        LIMIT -1 OFFSET %[2]v
+    );
+END;`, tableNetworkEvents, maxRows),
 	}
 
-	log.Tracef("Created network table %v with total limit %v", tableNetworkEvents, maxTotalRows)
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to exec sqlite3 trigger statement: %w", err)
+		}
+	}
+
 	return nil
 }

@@ -28,15 +28,19 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var categoryCheck = regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
+
 type server struct {
-	addr  string
-	db    *Db
-	token []byte
-	debug bool
+	addr            string
+	db              *Db
+	token           []byte
+	debug           bool
+	categories      []Category
+	defaultCategory string
 }
 
 func newServer(c *config) (*server, error) {
-	db, err := NewDb(c.Db, c.MaxRowsPerProver, c.MaxRows)
+	db, err := NewDb(c.Db, c.MaxRowsPerProver, c.MaxRows, c.DefaultCategory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
@@ -50,63 +54,56 @@ func newServer(c *config) (*server, error) {
 	}
 
 	return &server{
-		addr:  c.Addr,
-		db:    db,
-		token: token,
-		debug: c.Debug,
+		addr:            c.Addr,
+		db:              db,
+		token:           token,
+		debug:           c.Debug,
+		categories:      c.Categories,
+		defaultCategory: c.DefaultCategory,
 	}, nil
 }
 
-func (s *server) handleGetStatistics(c *gin.Context) {
-	getStatistics(c, s.db)
+func (s *server) knownCategory(id string) bool {
+	for _, cat := range s.categories {
+		if cat.Id == id {
+			return true
+		}
+	}
+	return false
 }
 
-func (s *server) handleGetResults(c *gin.Context) {
-	getResults(c, s.db)
+// resolveCategory validates the category parameter of a request, falling back
+// to the given category if it is absent
+func (s *server) resolveCategory(c *gin.Context, fallback string) (string, error) {
+	category := c.Query("category")
+	if category == "" {
+		return fallback, nil
+	}
+	if !categoryCheck.MatchString(category) || !s.knownCategory(category) {
+		return "", fmt.Errorf("unknown category %q", category)
+	}
+	return category, nil
 }
 
-func (s *server) handlePostResult(c *gin.Context) {
-	postResult(c, s.db, s.token)
+// withCategory resolves the category of a request and rejects unknown ones
+func (s *server) withCategory(fallback string, handler func(*gin.Context, string)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		category, err := s.resolveCategory(c, fallback)
+		if err != nil {
+			msg := fmt.Sprintf("Invalid request: %v", err)
+			c.IndentedJSON(http.StatusBadRequest, gin.H{"message": msg})
+			log.Warn(msg)
+			return
+		}
+		handler(c, category)
+	}
 }
 
-func (s *server) handleGetEnvelopesByName(c *gin.Context) {
-	getEnvelopesByName(c, s.db)
-}
-
-func (s *server) handleGetLatestResult(c *gin.Context) {
-	getLatestResult(c, s.db)
-}
-
-func (s *server) handleGetLatestResults(c *gin.Context) {
-	getLatestResults(c, s.db)
-}
-
-func (s *server) handleGetResultById(c *gin.Context) {
-	getResultById(c, s.db)
-}
-
-func (s *server) handleGetDevices(c *gin.Context) {
-	getDevices(c, s.db)
-}
-
-func (s *server) handleGetOcsfFindings(c *gin.Context) {
-	getOcsfFindings(c, s.db)
-}
-
-func (s *server) handlePostOcsfDetectionFinding(c *gin.Context) {
-	postOcsfFinding(c, s.db, s.token)
-}
-
-func (s *server) handlePostNetworkEvent(c *gin.Context) {
-	postNetworkEvent(c, s.db, s.token)
-}
-
-func (s *server) handleGetNetworkEvents(c *gin.Context) {
-	getNetworkEvents(c, s.db)
-}
-
-func (s *server) handleGetNetworkGraph(c *gin.Context) {
-	getNetworkGraph(c, s.db)
+func (s *server) handleGetCategories(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"default":    s.defaultCategory,
+		"categories": s.categories,
+	})
 }
 
 func (s *server) serve() {
@@ -128,30 +125,44 @@ func (s *server) serve() {
 		ExposeHeaders: []string{"Content-Length"},
 	}))
 
-	router.GET("/statistics", s.handleGetStatistics)
-	router.GET("/results", s.handleGetResults)
-	router.POST("/results", s.handlePostResult)
-	router.GET("/envelopes/:name", s.handleGetEnvelopesByName)
-	router.GET("/results/:name/latest", s.handleGetLatestResult)
-	router.GET("/resultsbyid/:id", s.handleGetResultById)
-	router.GET("/latestresults", s.handleGetLatestResults)
-	router.GET("/devices", s.handleGetDevices)
-	router.GET("/ocsf-detection-finding", s.handleGetOcsfFindings)
-	router.POST("/ocsf-detection-finding", s.handlePostOcsfDetectionFinding)
-	router.POST("/network-events", s.handlePostNetworkEvent)
-	router.GET("/network-events", s.handleGetNetworkEvents)
-	router.GET("/network-graph", s.handleGetNetworkGraph)
+	// An absent category matches all categories on queries and selects the
+	// default category on inserts
+	get := func(h func(*gin.Context, *Db, string)) gin.HandlerFunc {
+		return s.withCategory("", func(c *gin.Context, category string) {
+			h(c, s.db, category)
+		})
+	}
+	post := func(h func(*gin.Context, *Db, []byte, string)) gin.HandlerFunc {
+		return s.withCategory(s.defaultCategory, func(c *gin.Context, category string) {
+			h(c, s.db, s.token, category)
+		})
+	}
+
+	router.GET("/categories", s.handleGetCategories)
+	router.GET("/statistics", get(getStatistics))
+	router.GET("/results", get(getResults))
+	router.POST("/results", post(postResult))
+	router.GET("/envelopes/:name", get(getEnvelopesByName))
+	router.GET("/results/:name/latest", get(getLatestResult))
+	router.GET("/resultsbyid/:id", get(getResultById))
+	router.GET("/latestresults", get(getLatestResults))
+	router.GET("/devices", get(getDevices))
+	router.GET("/ocsf-detection-finding", get(getOcsfFindings))
+	router.POST("/ocsf-detection-finding", post(postOcsfFinding))
+	router.POST("/network-events", post(postNetworkEvent))
+	router.GET("/network-events", get(getNetworkEvents))
+	router.GET("/network-graph", get(getNetworkGraph))
 
 	router.Run(s.addr)
 }
 
 // getStatistics retrieves the headers of all results for generic evaluation
-func getStatistics(c *gin.Context, db *Db) {
+func getStatistics(c *gin.Context, db *Db, category string) {
 
 	log.Trace("in GET /statistics")
 
 	// Query results from database
-	results, err := db.GetAllStatistics()
+	results, err := db.GetAllStatistics(category)
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve statistics: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -166,12 +177,12 @@ func getStatistics(c *gin.Context, db *Db) {
 }
 
 // getResults responds with the list of all results as JSON
-func getResults(c *gin.Context, db *Db) {
+func getResults(c *gin.Context, db *Db, category string) {
 
 	log.Trace("in GET /results")
 
 	// Query results from database
-	results, err := db.GetAllResults()
+	results, err := db.GetAllResults(category)
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve results: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -186,7 +197,7 @@ func getResults(c *gin.Context, db *Db) {
 }
 
 // getEnvelopesByName responds with the envelopes (without result)
-func getEnvelopesByName(c *gin.Context, db *Db) {
+func getEnvelopesByName(c *gin.Context, db *Db, category string) {
 
 	name, err := getName(c)
 	if err != nil {
@@ -194,7 +205,7 @@ func getEnvelopesByName(c *gin.Context, db *Db) {
 	}
 
 	// Get device from database
-	results, err := db.GetEnvelopesByProver(name)
+	results, err := db.GetEnvelopesByProver(name, category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to retrieve results: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -213,12 +224,12 @@ func getEnvelopesByName(c *gin.Context, db *Db) {
 }
 
 // getLatestResults returns an overview of the latest result of each device
-func getLatestResults(c *gin.Context, db *Db) {
+func getLatestResults(c *gin.Context, db *Db, category string) {
 
 	log.Trace("in GET /latestresults")
 
 	// Query results from database
-	results, err := db.GetLatestResults()
+	results, err := db.GetLatestResults(category)
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve latest results: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -235,7 +246,7 @@ func getLatestResults(c *gin.Context, db *Db) {
 }
 
 // getLatestResult responds with the latest result for the specified device
-func getLatestResult(c *gin.Context, db *Db) {
+func getLatestResult(c *gin.Context, db *Db, category string) {
 
 	name, err := getName(c)
 	if err != nil {
@@ -243,7 +254,7 @@ func getLatestResult(c *gin.Context, db *Db) {
 	}
 
 	// Get latest result from database
-	result, err := db.GetLatestResult(name)
+	result, err := db.GetLatestResult(name, category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to retrieve result: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -268,7 +279,7 @@ func getLatestResult(c *gin.Context, db *Db) {
 }
 
 // postResult adds a result from JSON
-func postResult(c *gin.Context, db *Db, token []byte) {
+func postResult(c *gin.Context, db *Db, token []byte, category string) {
 
 	err := authorize(c.Request, token)
 	if err != nil {
@@ -289,7 +300,7 @@ func postResult(c *gin.Context, db *Db, token []byte) {
 	}
 
 	// Store device in database
-	err = db.InsertResult(body)
+	err = db.InsertResult(body, category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to insert data into DB: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -301,11 +312,11 @@ func postResult(c *gin.Context, db *Db, token []byte) {
 }
 
 // getOcsfFindings returns all stored OCSF detection findings
-func getOcsfFindings(c *gin.Context, db *Db) {
+func getOcsfFindings(c *gin.Context, db *Db, category string) {
 
 	log.Trace("in GET /ocsf-detection-finding")
 
-	results, err := db.GetAllOcsfFindings()
+	results, err := db.GetAllOcsfFindings(category)
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve OCSF findings: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -319,7 +330,7 @@ func getOcsfFindings(c *gin.Context, db *Db) {
 }
 
 // postOcsfFinding adds an OCSF detection finding from JSON
-func postOcsfFinding(c *gin.Context, db *Db, token []byte) {
+func postOcsfFinding(c *gin.Context, db *Db, token []byte, category string) {
 
 	err := authorize(c.Request, token)
 	if err != nil {
@@ -339,7 +350,7 @@ func postOcsfFinding(c *gin.Context, db *Db, token []byte) {
 		return
 	}
 
-	err = db.InsertOcsfFinding(body)
+	err = db.InsertOcsfFinding(body, category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to insert OCSF finding into DB: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -351,7 +362,7 @@ func postOcsfFinding(c *gin.Context, db *Db, token []byte) {
 }
 
 // postNetworkEvent adds a network event from JSON
-func postNetworkEvent(c *gin.Context, db *Db, token []byte) {
+func postNetworkEvent(c *gin.Context, db *Db, token []byte, category string) {
 
 	err := authorize(c.Request, token)
 	if err != nil {
@@ -371,7 +382,7 @@ func postNetworkEvent(c *gin.Context, db *Db, token []byte) {
 		return
 	}
 
-	err = db.InsertNetworkEvent(body)
+	err = db.InsertNetworkEvent(body, category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to insert network event into DB: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -383,11 +394,11 @@ func postNetworkEvent(c *gin.Context, db *Db, token []byte) {
 }
 
 // getNetworkEvents returns all stored network events
-func getNetworkEvents(c *gin.Context, db *Db) {
+func getNetworkEvents(c *gin.Context, db *Db, category string) {
 
 	log.Trace("in GET /network-events")
 
-	results, err := db.GetAllNetworkEvents()
+	results, err := db.GetAllNetworkEvents(category)
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve network events: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -401,11 +412,11 @@ func getNetworkEvents(c *gin.Context, db *Db) {
 }
 
 // getNetworkGraph returns the latest event per (verifier, prover) pair for graph visualization
-func getNetworkGraph(c *gin.Context, db *Db) {
+func getNetworkGraph(c *gin.Context, db *Db, category string) {
 
 	log.Trace("in GET /network-graph")
 
-	results, err := db.GetNetworkGraph()
+	results, err := db.GetNetworkGraph(category)
 	if err != nil {
 		msg := fmt.Sprintf("failed to retrieve network graph: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -419,7 +430,7 @@ func getNetworkGraph(c *gin.Context, db *Db) {
 }
 
 // getResultById gets a result by its ID
-func getResultById(c *gin.Context, db *Db) {
+func getResultById(c *gin.Context, db *Db, category string) {
 
 	id, err := getId(c)
 	if err != nil {
@@ -427,7 +438,7 @@ func getResultById(c *gin.Context, db *Db) {
 	}
 
 	// Get latest result from database
-	result, err := db.GetResultById(id)
+	result, err := db.GetResultById(id, category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to retrieve result: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
@@ -446,10 +457,10 @@ func getResultById(c *gin.Context, db *Db) {
 }
 
 // getDevices returns a list of all devices for which there is a report stored in the database
-func getDevices(c *gin.Context, db *Db) {
+func getDevices(c *gin.Context, db *Db, category string) {
 
 	// Get device names from database
-	result, err := db.GetDeviceNames()
+	result, err := db.GetDeviceNames(category)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to retrieve device names: %v", err)
 		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": msg})
