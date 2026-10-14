@@ -16,6 +16,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"reflect"
@@ -74,14 +75,14 @@ const resultMinimal = `{
 func newTestDb(t *testing.T, results ...string) *Db {
 	t.Helper()
 
-	db, err := NewDb(filepath.Join(t.TempDir(), "test.db"), 20, 400)
+	db, err := NewDb(filepath.Join(t.TempDir(), "test.db"), 20, 400, defaultCategory)
 	if err != nil {
 		t.Fatalf("failed to create database: %v", err)
 	}
 	t.Cleanup(db.Close)
 
 	for _, r := range results {
-		if err := db.InsertResult([]byte(r)); err != nil {
+		if err := db.InsertResult([]byte(r), defaultCategory); err != nil {
 			t.Fatalf("failed to insert result: %v", err)
 		}
 	}
@@ -93,7 +94,7 @@ func Test_GetLatestResults(t *testing.T) {
 	// Insertion order determines which result is the latest one
 	db := newTestDb(t, resultFull, resultMinimal, resultFullNewer)
 
-	results, err := db.GetLatestResults()
+	results, err := db.GetLatestResults(defaultCategory)
 	if err != nil {
 		t.Fatalf("failed to get latest results: %v", err)
 	}
@@ -149,7 +150,7 @@ func Test_GetLatestResults(t *testing.T) {
 func Test_GetLatestResultsDetails(t *testing.T) {
 	db := newTestDb(t, resultFull)
 
-	results, err := db.GetLatestResults()
+	results, err := db.GetLatestResults(defaultCategory)
 	if err != nil {
 		t.Fatalf("failed to get latest results: %v", err)
 	}
@@ -187,7 +188,7 @@ func Test_GetLatestResultsDetails(t *testing.T) {
 func Test_GetLatestResultsFields(t *testing.T) {
 	db := newTestDb(t, resultFull)
 
-	results, err := db.GetLatestResults()
+	results, err := db.GetLatestResults(defaultCategory)
 	if err != nil {
 		t.Fatalf("failed to get latest results: %v", err)
 	}
@@ -211,9 +212,152 @@ func Test_GetLatestResultsFields(t *testing.T) {
 	}
 	sort.Strings(got)
 
-	want := []string{"created", "details", "id", "image", "measurementTypes",
-		"prover", "status", "version"}
+	want := []string{"category", "created", "details", "id", "image",
+		"measurementTypes", "prover", "status", "version"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("expected fields %v, got %v", want, got)
+	}
+}
+
+func Test_Categories(t *testing.T) {
+	db := newTestDb(t)
+
+	for _, c := range []string{"demo-a", "demo-b"} {
+		if err := db.InsertResult([]byte(resultFull), c); err != nil {
+			t.Fatalf("failed to insert result: %v", err)
+		}
+	}
+	if err := db.InsertResult([]byte(resultMinimal), "demo-a"); err != nil {
+		t.Fatalf("failed to insert result: %v", err)
+	}
+
+	tests := []struct {
+		category string
+		want     int
+	}{
+		{"demo-a", 2},
+		{"demo-b", 1},
+		{"demo-c", 0},
+		{"", 3},
+	}
+
+	for _, test := range tests {
+		results, err := db.GetLatestResults(test.category)
+		if err != nil {
+			t.Fatalf("failed to get latest results: %v", err)
+		}
+		if len(results) != test.want {
+			t.Errorf("category %q: expected %v results, got %v",
+				test.category, test.want, len(results))
+		}
+		for _, r := range results {
+			if test.category != "" && r.Category != test.category {
+				t.Errorf("expected category %q, got %q", test.category, r.Category)
+			}
+		}
+	}
+
+	names, err := db.GetDeviceNames("demo-b")
+	if err != nil {
+		t.Fatalf("failed to get device names: %v", err)
+	}
+	if !reflect.DeepEqual(names, []string{"prover-a"}) {
+		t.Errorf("unexpected device names: %v", names)
+	}
+}
+
+// The row limits must apply within a category, so that a busy deployment
+// cannot evict the provers of another one
+func Test_CategoryLimits(t *testing.T) {
+	db, err := NewDb(filepath.Join(t.TempDir(), "test.db"), 2, 3, defaultCategory)
+	if err != nil {
+		t.Fatalf("failed to create database: %v", err)
+	}
+	t.Cleanup(db.Close)
+
+	if err := db.InsertResult([]byte(resultMinimal), "quiet"); err != nil {
+		t.Fatalf("failed to insert result: %v", err)
+	}
+
+	// Exceed both the per-prover and the total limit of the other category
+	for i := 0; i < 10; i++ {
+		if err := db.InsertResult([]byte(resultFull), "busy"); err != nil {
+			t.Fatalf("failed to insert result: %v", err)
+		}
+	}
+
+	quiet, err := db.GetLatestResults("quiet")
+	if err != nil {
+		t.Fatalf("failed to get latest results: %v", err)
+	}
+	if len(quiet) != 1 {
+		t.Errorf("expected the quiet category to be untouched, got %v results", len(quiet))
+	}
+
+	busy, err := db.GetEnvelopesByProver("prover-a", "busy")
+	if err != nil {
+		t.Fatalf("failed to get envelopes: %v", err)
+	}
+	if len(busy) != 2 {
+		t.Errorf("expected 2 rows after the per-prover limit, got %v", len(busy))
+	}
+}
+
+// Databases created before categories existed must keep working
+func Test_CategoryMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+
+	legacy, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	_, err = legacy.Exec(`
+CREATE TABLE results (
+    serial INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL,
+    prover TEXT,
+    created TEXT,
+    status TEXT,
+    result TEXT
+);
+INSERT INTO results (id, prover, created, status, result)
+VALUES ('abc', 'legacy-prover', '2025-01-01T10:00:00Z', 'success', json('{"version":"3.5.0"}'));`)
+	if err != nil {
+		t.Fatalf("failed to create legacy table: %v", err)
+	}
+	legacy.Close()
+
+	db, err := NewDb(path, 20, 400, "demo")
+	if err != nil {
+		t.Fatalf("failed to open migrated database: %v", err)
+	}
+	t.Cleanup(db.Close)
+
+	// Existing rows must land in the configured default category, otherwise
+	// they are invisible to a client filtering by a configured category
+	results, err := db.GetLatestResults("demo")
+	if err != nil {
+		t.Fatalf("failed to get latest results: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 migrated result, got %v", len(results))
+	}
+	if results[0].Prover != "legacy-prover" {
+		t.Errorf("unexpected prover: %v", results[0].Prover)
+	}
+	if results[0].Category != "demo" {
+		t.Errorf("expected category %q, got %q", "demo", results[0].Category)
+	}
+
+	// New results must end up alongside the migrated ones
+	if err := db.InsertResult([]byte(resultFull), "demo"); err != nil {
+		t.Fatalf("failed to insert result: %v", err)
+	}
+	results, err = db.GetLatestResults("demo")
+	if err != nil {
+		t.Fatalf("failed to get latest results: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results after inserting, got %v", len(results))
 	}
 }

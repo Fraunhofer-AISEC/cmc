@@ -28,14 +28,23 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+// Category separates independent deployments within the same database. The
+// row limits apply to each category individually.
+type Category struct {
+	Id    string `json:"id"`
+	Label string `json:"label"`
+}
+
 type config struct {
-	Addr             string `json:"addr"`
-	Db               string `json:"db"`
-	LogLevel         string `json:"log"`
-	MaxRows          int    `json:"maxRows"`
-	MaxRowsPerProver int    `json:"maxRowsPerProver"`
-	Token            string `json:"token"`
-	Debug            bool   `json:"debug"`
+	Addr             string     `json:"addr"`
+	Db               string     `json:"db"`
+	LogLevel         string     `json:"log"`
+	MaxRows          int        `json:"maxRows"`
+	MaxRowsPerProver int        `json:"maxRowsPerProver"`
+	Categories       []Category `json:"categories"`
+	DefaultCategory  string     `json:"defaultCategory"`
+	Token            string     `json:"token"`
+	Debug            bool       `json:"debug"`
 }
 
 const (
@@ -152,6 +161,10 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	}
 	log.SetLevel(l)
 
+	if err := c.resolveCategories(); err != nil {
+		return nil, err
+	}
+
 	// Convert file path to absolute path
 	c.Db, err = filepath.Abs(c.Db)
 	if err != nil {
@@ -169,6 +182,38 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	return c, nil
 }
 
+// resolveCategories applies the defaults and rejects malformed definitions
+func (c *config) resolveCategories() error {
+
+	if len(c.Categories) == 0 {
+		c.Categories = []Category{{Id: defaultCategory, Label: "Default"}}
+	}
+
+	seen := make(map[string]bool, len(c.Categories))
+	for i, cat := range c.Categories {
+		if !categoryCheck.MatchString(cat.Id) {
+			return fmt.Errorf("category id %q must be URL-safe (A-Z a-z 0-9 . _ ~ -)", cat.Id)
+		}
+		if seen[cat.Id] {
+			return fmt.Errorf("duplicate category id %q", cat.Id)
+		}
+		seen[cat.Id] = true
+
+		if cat.Label == "" {
+			c.Categories[i].Label = cat.Id
+		}
+	}
+
+	if c.DefaultCategory == "" {
+		c.DefaultCategory = c.Categories[0].Id
+	}
+	if !seen[c.DefaultCategory] {
+		return fmt.Errorf("default category %q is not configured", c.DefaultCategory)
+	}
+
+	return nil
+}
+
 func printConfig(c *config) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -180,8 +225,15 @@ func printConfig(c *config) {
 	log.Debugf("\tListen address            : %v", c.Addr)
 	log.Debugf("\tSQLite database           : %v", c.Db)
 	log.Debugf("\tLogging level             : %v", c.LogLevel)
-	log.Debugf("\tMaximum Entries           : %v", c.MaxRows)
-	log.Debugf("\tMaximum Entries per Prover: %v", c.MaxRowsPerProver)
+	log.Debugf("\tMaximum Entries           : %v (per category)", c.MaxRows)
+	log.Debugf("\tMaximum Entries per Prover: %v (per category)", c.MaxRowsPerProver)
+	for _, cat := range c.Categories {
+		def := ""
+		if cat.Id == c.DefaultCategory {
+			def = " (default)"
+		}
+		log.Debugf("\tCategory                  : %v - %v%v", cat.Id, cat.Label, def)
+	}
 	log.Debugf("\tToken                     : %v", c.Token)
 	log.Debugf("\tGIN Debug                 : %v", c.Debug)
 }
