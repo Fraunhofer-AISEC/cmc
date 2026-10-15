@@ -259,8 +259,9 @@ var (
 
 	validVtpmArtifactsAzure = []ar.Artifact{
 		{
-			Type:  ar.TYPE_PCR_EVENTLOG,
-			Index: 1,
+			Type:    ar.TYPE_PCR_EVENTLOG,
+			Index:   1,
+			Summary: dec("8995d3db25b1af43015eb185f39c4aea2a67ce2f680ddbf48dc194bfc0904f8b"),
 			Events: []ar.Component{
 				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("7b11c1133330cd161071bf23a0c9b6ce5320a8f3a0f83620035a72be46df4104")}}},
 				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("8eb7015e8ea3fbf779dd748b47cfe12d29affaac907d2a4613cb062b3f2635e2")}}},

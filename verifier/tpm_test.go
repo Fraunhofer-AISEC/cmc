@@ -551,6 +551,29 @@ func TestVerifyTpm(t *testing.T) {
 			want:  ar.StatusSuccess,
 			want1: true,
 		},
+		{
+			// Measurement: Eventlog which does not recalculate to the measured value of PCR4
+			// Reference Values: Eventlog
+			name: "Invalid Pcr Summary",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: withSummaries(validArtifactsEventlog,
+						map[int][]byte{4: invalidPcr4}),
+					Certs: validTpmCertChain,
+				},
+				nonce:      validTpmNonce,
+				s:          getJsonSerializer(),
+				components: validComponents,
+				cas:        []*x509.Certificate{validCa},
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
 	}
 
 	logrus.SetLevel(logrus.TraceLevel)
@@ -660,6 +683,19 @@ func artifactsForPcrs(indices ...int) []ar.Artifact {
 	return artifacts
 }
 
+// withSummaries copies the artifacts and replaces the measured value of the given PCRs
+func withSummaries(artifacts []ar.Artifact, m map[int][]byte) []ar.Artifact {
+	out := make([]ar.Artifact, 0, len(artifacts))
+	for _, a := range artifacts {
+		c := a
+		if summary, ok := m[a.Index]; ok {
+			c.Summary = summary
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // relabelArtifacts copies the artifacts and remaps their PCR indices, preserving the order of
 // the slice and thus the order the PCR values are aggregated in
 func relabelArtifacts(artifacts []ar.Artifact, m map[int]int) []ar.Artifact {
@@ -718,44 +754,26 @@ var (
 
 	invalidSignature, _ = hex.DecodeString("0014000b0100740e077a77ff6ac21754d036f751f5f8ec5ec59448aab05bb5fd2b5d81df58bde3550d855ecf16cd25e36b5688122cfaac1a86ab94954b81d49a1b7fc7648ad26b8b808ce846fe7fd49355d2461d049904e97aa687749d55510f09b7c8610b95b6d557ebdaa25a19bfa1663f236419a1a8d974dd05b14de7f28fbce0a54c3ac428a9cf7f0752cc290580ff8d63e33050c0f53582ae24fe4d30792da71d5ef93581e3371147ed4732a0c0c0461489b1b64b1f28dd5153dbc674f04a21e279833433eabec1642cd386fdca6e52b583b2c914ebcd3c7a334214dc5e7c02880b033e321cb261ed6044785e70599d269511f83a20ee45034f0803d623763d461ce763")
 
+	validPcr1 = dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")
+	validPcr4 = dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")
+
+	invalidPcr4 = dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")
+
 	validArtifactsSummary = []ar.Artifact{
-		{
-			Type:  ar.TYPE_PCR_SUMMARY,
-			Index: 1,
-			Events: []ar.Component{
-				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")}}},
-			},
-		},
-		{
-			Type:  ar.TYPE_PCR_SUMMARY,
-			Index: 4,
-			Events: []ar.Component{
-				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("d3f67dbed9bce9d391a3567edad08971339e4dbabadd5b7eaf082860296e5e72")}}},
-			},
-		},
+		{Type: ar.TYPE_PCR_SUMMARY, Index: 1, Summary: validPcr1},
+		{Type: ar.TYPE_PCR_SUMMARY, Index: 4, Summary: validPcr4},
 	}
 
 	invalidArtifactsSummary = []ar.Artifact{
-		{
-			Type:  ar.TYPE_PCR_SUMMARY,
-			Index: 1,
-			Events: []ar.Component{
-				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("5f96aec0a6b390185495c35bc76dceb9fa6addb4e59b6fc1b3e1992eeb08a5c6")}}},
-			},
-		},
-		{
-			Type:  ar.TYPE_PCR_SUMMARY,
-			Index: 4,
-			Events: []ar.Component{
-				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("1fe8f1a49cf178748a6f6167473bca3cf882ff70b4b4e458e2421c871c9c5bb9")}}},
-			},
-		},
+		{Type: ar.TYPE_PCR_SUMMARY, Index: 1, Summary: validPcr1},
+		{Type: ar.TYPE_PCR_SUMMARY, Index: 4, Summary: invalidPcr4},
 	}
 
 	validArtifactsEventlog = []ar.Artifact{
 		{
-			Type:  ar.TYPE_PCR_EVENTLOG,
-			Index: 1,
+			Type:    ar.TYPE_PCR_EVENTLOG,
+			Index:   1,
+			Summary: validPcr1,
 			Events: []ar.Component{
 				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("ef5631c7bbb8d98ad220e211933fcde16aac6154cf229fea3c728fb0f2c27e39")}}},
 				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("131462b45df65ac00834c7e73356c246037456959674acd24b08357690a03845")}}},
@@ -769,8 +787,9 @@ var (
 			},
 		},
 		{
-			Type:  ar.TYPE_PCR_EVENTLOG,
-			Index: 4,
+			Type:    ar.TYPE_PCR_EVENTLOG,
+			Index:   4,
+			Summary: validPcr4,
 			Events: []ar.Component{
 				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("3d6772b4f84ed47595d72a2c4c5ffd15f5bb72c7507fe26f2aaee2c69d5633ba")}}},
 				{Hashes: []ar.ReferenceHash{{Alg: "SHA-256", Content: dec("df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119")}}},

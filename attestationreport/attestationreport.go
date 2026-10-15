@@ -29,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.3.0"
+	reportVersion = "3.4.0"
 )
 
 func GetReportVersion() string {
@@ -283,22 +283,19 @@ type SwEvidence struct {
 	Sha256 []byte `json:"sha256,omitempty" cbor:"1,keyasint,omitempty"`
 }
 
-// Artifact represents the digests of a measurement.
-// If the type is 'PCR Summary', 'Events' contains the final PCR value of PCR 'Pcr' and 'Index'
-// contains the number of the PCR.
-// If the type is 'PCR Eventlog', 'Events' contains a list of the extends that lead to the final
-// PCR value and 'Index' contains the number of the PCR. The list is retrieved by the prover, e.g.,
-// from the TPM binary bios measurements list or the IMA runtime measurements list.
-// If the type is 'SW Eventlog', 'Events' contains a list of digests that have been recorded as
-// SW measurements
-// If the type is 'TDX Collateral', 'Events' contains the TDX collateral, which includes the
-// TDX TCB info, the quoting enclave identity and the certicate revocation lists.
-// It the type is CC Eventlog, 'Events' contains a list of the extends that lead to the final
-// TDX RTMR value and 'Index' contains the number of the RTMR.
+// Artifact represents the measurements of a single measurement register with index `Index`
+// Type 'PCR Summary' contains the final PCR values in `Summary`.
+// Type 'PCR Eventlog', contains a list of the extended `Events` that lead to the final PCR value.
+// Type 'SW Eventlog' contains a list of `Events` that have been recorded as SW measurements.
+// Type 'TDX Collateral' contains the TDX collateral as `Events`, which includes the TDX TCB info,
+// the quoting enclave identity and the certicate revocation lists.
+// Type 'CC Eventlog', a list of the extended `Events` that lead to the final TDX RTMR value
+// Artifact represents the measurements of a single measurement register.
 type Artifact struct {
-	Type   string      `json:"type" cbor:"0,keyasint"`
-	Index  int         `json:"index" cbor:"1,keyasint"`
-	Events []Component `json:"events,omitempty" cbor:"2,keyasint,omitempty"`
+	Type    string      `json:"type" cbor:"0,keyasint"`
+	Index   int         `json:"index" cbor:"1,keyasint"`
+	Summary HexByte     `json:"summary" cbor:"2,keyasint"`
+	Events  []Component `json:"events,omitempty" cbor:"3,keyasint,omitempty"`
 }
 
 type IntelQuoteType uint32
