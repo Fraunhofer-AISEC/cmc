@@ -28,6 +28,7 @@ import (
 	"maps"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -192,24 +193,29 @@ func (t *Tpm) GetEvidence(nonce []byte) ([]ar.Evidence, error) {
 
 func (t *Tpm) GetCollateral() ([]ar.Collateral, error) {
 
-	artifacts := make([]ar.Artifact, 0)
+	pcrs, err := t.GetPcrs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get prs: %w", err)
+	}
 
+	var artifacts []ar.Artifact
 	if t.MeasurementLogs {
-		events, err := GetEventLogs(t.pcrs, t.ctrLog, t.AppendEbsEvent, t.CtrLog, t.HashAlg)
+		artifacts, err = GetEventLogs(t.pcrs, t.ctrLog, t.AppendEbsEvent, t.CtrLog, t.HashAlg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get event logs: %w", err)
 		}
-		artifacts = append(artifacts, events...)
 	} else {
-		pcrs, err := t.GetPcrs()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get prs: %w", err)
-		}
-		artifacts = append(artifacts, pcrs...)
+		artifacts = CreateSummaryArtifacts(t.pcrs)
+	}
+
+	err = SetPcrSummaries(artifacts, pcrs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set PCR summaries: %w", err)
 	}
 
 	// Just for logging
 	for _, elem := range artifacts {
+		log.Tracef("PCR%v %v: %x", elem.Index, elem.Type, elem.Summary)
 		for _, event := range elem.Events {
 			for _, h := range event.Hashes {
 				log.Tracef("PCR%v %v: %v=%x", elem.Index, elem.Type, h.Alg, h.Content)
@@ -487,7 +493,8 @@ func (t *Tpm) GetQuote(nonce []byte) (*attest.Quote, error) {
 	return quote, nil
 }
 
-func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
+// GetPcrs reads the values of the configured PCRs from the TPM
+func (t *Tpm) GetPcrs() (map[int][]byte, error) {
 	// Only one instance can have access to the tpm at
 	// the same time
 	t.lock()
@@ -504,33 +511,23 @@ func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 	}
 	log.Debug("Finished reading PCRs from TPM")
 
-	// Collect artifacts into map
-	artifactmap := map[int]ar.Artifact{}
+	// Only return the configured PCRs
+	values := make(map[int][]byte, len(t.pcrs))
 	for _, pcr := range pcrs {
-		artifactmap[pcr.Index] = ar.Artifact{
-			Type:  ar.TYPE_PCR_SUMMARY,
-			Index: pcr.Index,
-			Events: []ar.Component{
-				{
-					Hashes: []ar.ReferenceHash{
-						{
-							Alg:     pcr.DigestAlg.String(),
-							Content: pcr.Digest,
-						},
-					},
-				},
-			},
+		if slices.Contains(t.pcrs, pcr.Index) {
+			values[pcr.Index] = pcr.Digest
 		}
 	}
 
-	// Only return specified PCR artifacts
-	artifacts := make([]ar.Artifact, 0, len(t.pcrs))
-	for _, pcr := range t.pcrs {
-		artifact, ok := artifactmap[pcr]
-		if !ok {
-			return nil, fmt.Errorf("internal error: PCR%v not present", pcr)
-		}
-		artifacts = append(artifacts, artifact)
+	return values, nil
+}
+
+// CreateSummaryArtifacts creates artifacts for the given PCRs which carry the measured PCR value only
+func CreateSummaryArtifacts(pcrs []int) []ar.Artifact {
+
+	artifacts := make([]ar.Artifact, 0, len(pcrs))
+	for _, pcr := range pcrs {
+		artifacts = append(artifacts, ar.Artifact{Type: ar.TYPE_PCR_SUMMARY, Index: pcr})
 	}
 
 	// Sort artifacts list with ascending PCR index
@@ -538,7 +535,21 @@ func (t *Tpm) GetPcrs() ([]ar.Artifact, error) {
 		return artifacts[i].Index < artifacts[j].Index
 	})
 
-	return artifacts, nil
+	return artifacts
+}
+
+// SetPcrSummaries sets the measured PCR value for each artifact.
+func SetPcrSummaries(artifacts []ar.Artifact, pcrs map[int][]byte) error {
+
+	for i, artifact := range artifacts {
+		digest, ok := pcrs[artifact.Index]
+		if !ok {
+			return fmt.Errorf("no measured value for PCR%v", artifact.Index)
+		}
+		artifacts[i].Summary = digest
+	}
+
+	return nil
 }
 
 func GetEventLogs(pcrs []int, ctrLog, appendExitBootServices bool, ctrLogFile string,
@@ -565,7 +576,10 @@ func GetEventLogs(pcrs []int, ctrLog, appendExitBootServices bool, ctrLogFile st
 		if err != nil {
 			return nil, fmt.Errorf("failed to get container runtime measurements: %w", err)
 		}
-		artifactmap[containerMeasurement.Index] = *containerMeasurement
+		// No container measurements are present if no containers were started yet
+		if containerMeasurement != nil {
+			artifactmap[containerMeasurement.Index] = *containerMeasurement
+		}
 	}
 
 	// Add artifacts for PCRs with no events. This is required to reconstruct the aggregated
@@ -618,7 +632,7 @@ func GetContainerArtifacts(path string) (*ar.Artifact, error) {
 		return nil, fmt.Errorf("failed to detect atls response serializationt: %v", err)
 	}
 
-	var eventlog *ar.Artifact
+	eventlog := new(ar.Artifact)
 	err = s.Unmarshal(data, eventlog)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal measurement list: %w", err)

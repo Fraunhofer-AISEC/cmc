@@ -19,6 +19,7 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -58,25 +59,30 @@ func (azure *Azure) GetVtpmEvidence(nonce []byte) (*ar.Evidence, error) {
 
 func (azure *Azure) GetVtpmCollateral() (*ar.Collateral, error) {
 
-	artifacts := make([]ar.Artifact, 0)
+	pcrs, err := azure.GetVtpmPcrs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get prs: %w", err)
+	}
 
+	var artifacts []ar.Artifact
 	if azure.MeasurementLogs {
-		events, err := tpmdriver.GetEventLogs(azure.pcrs, azure.ctrLog,
+		artifacts, err = tpmdriver.GetEventLogs(azure.pcrs, azure.ctrLog,
 			azure.AppendEbsEvent, azure.CtrLog, azure.HashAlg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get event logs: %w", err)
 		}
-		artifacts = append(artifacts, events...)
 	} else {
-		pcrs, err := azure.GetVtpmPcrs()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get prs: %w", err)
-		}
-		artifacts = append(artifacts, pcrs...)
+		artifacts = tpmdriver.CreateSummaryArtifacts(azure.pcrs)
+	}
+
+	err = tpmdriver.SetPcrSummaries(artifacts, pcrs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set PCR summaries: %w", err)
 	}
 
 	// Just for logging
 	for _, elem := range artifacts {
+		log.Tracef("PCR%v %v: %x", elem.Index, elem.Type, elem.Summary)
 		for _, event := range elem.Events {
 			for _, h := range event.Hashes {
 				log.Tracef("PCR%v %v: %v=%x", elem.Index, elem.Type, h.Alg, h.Content)
@@ -130,7 +136,8 @@ func GetVtpmQuote(pcrs []int, nonce []byte) ([]byte, []byte, error) {
 	return quote, rawSig, nil
 }
 
-func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
+// GetVtpmPcrs reads the values of the configured PCRs from the vTPM
+func (azure *Azure) GetVtpmPcrs() (map[int][]byte, error) {
 
 	log.Debugf("Reading PCRs...")
 
@@ -139,7 +146,7 @@ func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
 		return nil, err
 	}
 
-	artifacts := make([]ar.Artifact, 0, len(azure.pcrs))
+	values := make(map[int][]byte, len(azure.pcrs))
 
 	tpm, err := OpenTpm()
 	if err != nil {
@@ -159,27 +166,12 @@ func (azure *Azure) GetVtpmPcrs() ([]ar.Artifact, error) {
 			return nil, fmt.Errorf("failed to read PCR: %w", err)
 		}
 
-		for pcr, digest := range pcrs {
-			artifacts = append(artifacts, ar.Artifact{
-				Type:  ar.TYPE_PCR_SUMMARY,
-				Index: pcr,
-				Events: []ar.Component{
-					{
-						Hashes: []ar.ReferenceHash{
-							{
-								Alg:     azure.HashAlg.String(),
-								Content: digest,
-							},
-						},
-					},
-				},
-			})
-		}
+		maps.Copy(values, pcrs)
 	}
 
 	log.Debugf("Successfully read PCRs")
 
-	return artifacts, nil
+	return values, nil
 }
 
 func GetVtpmAkCert() ([]byte, error) {

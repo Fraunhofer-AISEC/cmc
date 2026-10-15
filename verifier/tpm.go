@@ -282,20 +282,25 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 				}
 				detailedResults = append(detailedResults, measResult)
 			}
+			// Cross-checking the eventlog recalculation against the measured PCR detects eventlogs
+			// which do not reflect the actual PCR value. Note that both PCRs and eventlogs are
+			// not authenticated, which required checking the aggregate against the quote digest.
+			if !bytes.Equal(measuredSummary, artifact.Summary) {
+				log.Warnf("PCR%v eventlog recalculation %v does not match measured PCR %v",
+					pcr, hex.EncodeToString(measuredSummary),
+					hex.EncodeToString(artifact.Summary))
+				success = false
+				pcrResult.Success = false
+			}
+
 			pcrResult.Digest = calculatedPcrs[pcr]
-			if !bytes.Equal(measuredSummary, calculatedPcrs[pcr]) {
-				pcrResult.Measured = hex.EncodeToString(measuredSummary)
+			if !bytes.Equal(artifact.Summary, calculatedPcrs[pcr]) {
+				pcrResult.Measured = hex.EncodeToString(artifact.Summary)
 			}
 
 		} else if artifact.Type == ar.TYPE_PCR_SUMMARY {
-			// Measurement contains just the summary PCR value
+			// Measurement contains just the measured PCR value
 			log.Tracef("PCR%v measurement contains PCR summary", artifact.Index)
-			if len(artifact.Events) != 1 {
-				log.Warnf("Expected exactly one event for artifact type %q, got %v",
-					ar.TYPE_PCR_SUMMARY, len(artifact.Events))
-				success = false
-				continue
-			}
 			for _, ref := range refComponents {
 				idx, err := ref.GetIndex()
 				if err != nil {
@@ -360,28 +365,17 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 				}
 
 			}
-			// Then we compare the calculated value with the PCR measurement summary
-			eventHash := artifact.Events[0].GetHash(quoteHashAlg)
-			if len(eventHash) == 0 {
-				log.Warnf("PCR%v measurement summary does not contain a %v digest",
-					pcr, quoteHashAlg.String())
-				pcrResult.Success = false
-				success = false
-				pcrResults = append(pcrResults, pcrResult)
-				continue
-			}
-			equal := bytes.Equal(calculatedPcrs[pcr], eventHash)
+			// Then we compare the calculated value with the measured PCR value
+			equal := bytes.Equal(calculatedPcrs[pcr], artifact.Summary)
+			pcrResult.Digest = calculatedPcrs[pcr]
+			pcrResult.Success = equal
 			if equal {
-				pcrResult.Digest = calculatedPcrs[pcr]
-				pcrResult.Success = true
 				log.Tracef("PCR%v match: %x", pcr, calculatedPcrs[pcr])
 			} else {
 				log.Warnf("PCR%v mismatch: measured: %v, calculated: %v", pcr,
-					hex.EncodeToString(eventHash),
+					hex.EncodeToString(artifact.Summary),
 					hex.EncodeToString(calculatedPcrs[pcr]))
-				pcrResult.Digest = calculatedPcrs[pcr]
-				pcrResult.Measured = hex.EncodeToString(eventHash)
-				pcrResult.Success = false
+				pcrResult.Measured = hex.EncodeToString(artifact.Summary)
 				success = false
 			}
 			// If the measurement only contains the final PCR value, set all reference values
