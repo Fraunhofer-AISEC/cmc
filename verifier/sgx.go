@@ -285,7 +285,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	if !mrEnclaveOk {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TRUST_ANCHOR_SGX,
+				Type:       ar.TYPE_DIGEST_REFERENCE_VALUE,
 				Name:       refval.Name,
 				Digest:     refval.GetHash(crypto.SHA256),
 				Success:    false,
@@ -295,11 +295,11 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       "Measurement",
+				Type:       ar.TYPE_DIGEST_MEASUREMENT,
 				Name:       refval.Name,
 				Digest:     body.MRENCLAVE[:],
 				Success:    false,
-				Launched:   false,
+				Launched:   true,
 				PackageUrl: refval.PackageUrl,
 				HashAlg:    crypto.SHA256.String(),
 			})
@@ -308,7 +308,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	} else {
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       "Measurement",
+				Type:       ar.TYPE_DIGEST_MEASUREMENT,
 				Name:       refval.Name,
 				Digest:     body.MRENCLAVE[:],
 				Success:    true,
@@ -323,7 +323,7 @@ func VerifySgxQuoteBody(body *EnclaveReportBody, tcbInfo *pcs.TdxTcbInfo,
 	mrSignerOk := bytes.Equal(sgxReferencePolicy.MrSigner, body.MRSIGNER[:])
 	result.Artifacts = append(result.Artifacts,
 		ar.DigestResult{
-			Type:     ar.TRUST_ANCHOR_SGX,
+			Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
 			Name:     "MrSigner",
 			Digest:   sgxReferencePolicy.MrSigner,
 			Measured: hex.EncodeToString(body.MRSIGNER[:]),

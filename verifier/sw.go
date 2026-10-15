@@ -118,7 +118,7 @@ func VerifySw(
 		}
 		if !found {
 			res := ar.DigestResult{
-				Type:       ar.TRUST_ANCHOR_SW,
+				Type:       ar.TYPE_DIGEST_REFERENCE_VALUE,
 				Success:    ref.Optional, // Only fail attestation if component is mandatory
 				Launched:   false,
 				Name:       ref.Name,
@@ -173,7 +173,7 @@ func VerifySw(
 
 					found = true
 					r := ar.DigestResult{
-						Type:       "Verified",
+						Type:       ar.TYPE_DIGEST_VERIFIED,
 						Name:       ref.Name,
 						Success:    true,
 						Launched:   true,
@@ -192,7 +192,7 @@ func VerifySw(
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:       "Measurement",
+					Type:       ar.TYPE_DIGEST_MEASUREMENT,
 					Success:    false,
 					Launched:   true,
 					Name:       event.Name,

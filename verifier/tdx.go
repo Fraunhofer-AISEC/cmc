@@ -458,7 +458,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			if !elPresent {
 				detailedResults = append(detailedResults,
 					ar.DigestResult{
-						Type:     "Measurement",
+						Type:     ar.TYPE_DIGEST_MEASUREMENT,
 						Name:     internal.IndexToMr(i),
 						Digest:   measuredMrs[i],
 						Index:    i,
@@ -497,9 +497,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 				success = false
 				continue
 			}
-			t := ar.TRUST_ANCHOR_TDX
+			t := ar.TYPE_DIGEST_REFERENCE_VALUE
 			if successMrs[idx] {
-				t = "Verified"
+				t = ar.TYPE_DIGEST_VERIFIED
 			}
 			detailedResults = append(detailedResults,
 				ar.DigestResult{
@@ -528,9 +528,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 							break
 						}
 					}
-					t := "Measurement"
+					t := ar.TYPE_DIGEST_MEASUREMENT
 					if found {
-						t = "Verified"
+						t = ar.TYPE_DIGEST_VERIFIED
 					}
 					r := ar.DigestResult{
 						Type:        t,
@@ -542,7 +542,9 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 						HashAlg:     crypto.SHA384.String(),
 					}
 					r.Success = found
-					r.Launched = found
+					// The event is part of the eventlog and was therefore launched, independently
+					// of whether a matching reference value exists
+					r.Launched = true
 					detailedResults = append(detailedResults, r)
 
 					if r.Success {
@@ -582,7 +584,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:        ar.TRUST_ANCHOR_TDX,
+					Type:        ar.TYPE_DIGEST_REFERENCE_VALUE,
 					Name:        refval.Name,
 					Index:       idx,
 					Success:     false,
@@ -618,7 +620,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNER
 	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TRUST_ANCHOR_TDX,
+		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
 		Name:     "MrOwner",
 		Digest:   refTdId.MrOwner,
 		Success:  success,
@@ -628,11 +630,11 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	if !success {
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
-			Type:     "Measurement",
+			Type:     ar.TYPE_DIGEST_MEASUREMENT,
 			Name:     "MROWNER",
 			Digest:   report.MrOwner[:],
 			Success:  false,
-			Launched: false,
+			Launched: true,
 			HashAlg:  crypto.SHA384.String(),
 		})
 	}
@@ -640,7 +642,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNERCONFIG
 	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TRUST_ANCHOR_TDX,
+		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
 		Name:     "MROWNERCONFIG",
 		Digest:   refTdId.MrOwnerConfig,
 		Success:  success,
@@ -649,18 +651,18 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	if !success {
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
-			Type:     "Measurement",
+			Type:     ar.TYPE_DIGEST_MEASUREMENT,
 			Name:     "MROWNERCONFIG",
 			Digest:   report.MrOwnerConfig[:],
 			Success:  false,
-			Launched: false,
+			Launched: true,
 		})
 	}
 
 	// Verify MRCONFIGID
 	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TRUST_ANCHOR_TDX,
+		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
 		Name:     "MRCONFIGID",
 		Digest:   refTdId.MrConfigId,
 		Success:  success,
@@ -669,18 +671,18 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	if !success {
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
-			Type:     "Measurement",
+			Type:     ar.TYPE_DIGEST_MEASUREMENT,
 			Name:     "MRCONFIGID",
 			Digest:   report.MrConfigId[:],
 			Success:  false,
-			Launched: false,
+			Launched: true,
 		})
 	}
 
 	// Verify MRSIGNERSEAM
 	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TRUST_ANCHOR_TDX,
+		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
 		Name:     "MRSIGNERSEAM",
 		Digest:   tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes,
 		Success:  success,
@@ -690,11 +692,11 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	if !success {
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
-			Type:     "Measurement",
+			Type:     ar.TYPE_DIGEST_MEASUREMENT,
 			Name:     "MRSIGNERSEAM",
 			Digest:   report.MrSignerSeam[:],
 			Success:  false,
-			Launched: false,
+			Launched: true,
 			HashAlg:  crypto.SHA384.String(),
 		})
 	}

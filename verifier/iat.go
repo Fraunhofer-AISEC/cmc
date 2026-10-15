@@ -164,7 +164,7 @@ func VerifyIas(
 					Digest:     ref.GetHash(crypto.SHA256),
 					Success:    false,
 					Launched:   false,
-					Type:       ar.TRUST_ANCHOR_IAS,
+					Type:       ar.TYPE_DIGEST_REFERENCE_VALUE,
 					PackageUrl: ref.PackageUrl,
 					HashAlg:    crypto.SHA256.String(),
 				})
@@ -196,7 +196,7 @@ func VerifyIas(
 				Digest:   swc.MeasurementValue,
 				Success:  false,
 				Launched: true,
-				Type:     "Measurement",
+				Type:     ar.TYPE_DIGEST_MEASUREMENT,
 				HashAlg:  crypto.SHA256.String(),
 			})
 		}

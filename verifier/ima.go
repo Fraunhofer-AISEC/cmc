@@ -98,7 +98,7 @@ func VerifySwima(
 		}
 		if !found {
 			res := ar.DigestResult{
-				Type:    ar.TRUST_ANCHOR_SWIMA,
+				Type:    ar.TYPE_DIGEST_REFERENCE_VALUE,
 				Success: ref.Optional,
 				Name:    ref.Name,
 				Index:   refIdx,
@@ -130,7 +130,7 @@ func VerifySwima(
 				if refIdx == art.Index && bytes.Equal(ref.GetHash(crypto.SHA256), eventHash) {
 					found = true
 					r := ar.DigestResult{
-						Type:     "Verified",
+						Type:     ar.TYPE_DIGEST_VERIFIED,
 						Name:     ref.Name,
 						Success:  true,
 						Launched: true,
@@ -144,7 +144,7 @@ func VerifySwima(
 			}
 			if !found {
 				r := ar.DigestResult{
-					Type:     "Measurement",
+					Type:     ar.TYPE_DIGEST_MEASUREMENT,
 					Success:  false,
 					Launched: true,
 					Name:     event.Name,

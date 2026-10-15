@@ -168,7 +168,7 @@ func VerifySnp(
 			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TRUST_ANCHOR_SNP,
+				Type:       ar.TYPE_DIGEST_REFERENCE_VALUE,
 				Name:       snpReferenceValue.Name,
 				Digest:     snpReferenceValue.GetHash(crypto.SHA384),
 				Success:    false,
@@ -178,7 +178,7 @@ func VerifySnp(
 			})
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       "Measurement",
+				Type:       ar.TYPE_DIGEST_MEASUREMENT,
 				Name:       snpReferenceValue.Name,
 				Digest:     s.Measurement[:],
 				Success:    false,
