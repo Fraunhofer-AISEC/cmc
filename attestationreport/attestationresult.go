@@ -125,6 +125,12 @@ type MeasurementResult struct {
 	TdxResult *TdxResult      `json:"tdxResult,omitempty" cbor:"8,keyasint,omitempty"`
 }
 
+const (
+	TYPE_DIGEST_VERIFIED        = "Verified"        // measurement with matching reference value
+	TYPE_DIGEST_MEASUREMENT     = "Measurement"     // measurement without matching reference value
+	TYPE_DIGEST_REFERENCE_VALUE = "Reference Value" // reference value with no matching measurement
+)
+
 // DigestResult represents a generic result for a digest that was processed
 // during attestation. The Index is the unique identifier for the result: This is the number of the
 // PCR in case of TPM reference values, the MR index according to UEFI Spec 2.10 Section 38.4.1 in

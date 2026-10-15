@@ -192,7 +192,7 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 				eventHash := event.GetHash(quoteHashAlg)
 				if len(eventHash) == 0 {
 					measResult := ar.DigestResult{
-						Type:        "Measurement",
+						Type:        ar.TYPE_DIGEST_MEASUREMENT,
 						Index:       pcr,
 						Success:     false,
 						Launched:    true,
@@ -231,7 +231,7 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 				ref := getReferenceValue(quoteHashAlg, eventHash, pcr, refComponents)
 				if ref == nil {
 					measResult := ar.DigestResult{
-						Type:        "Measurement",
+						Type:        ar.TYPE_DIGEST_MEASUREMENT,
 						Index:       pcr,
 						Digest:      eventHash,
 						Success:     false,
@@ -268,7 +268,7 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 					pcr, nameInfo, hex.EncodeToString(eventHash))
 
 				measResult := ar.DigestResult{
-					Type:        "Verified",
+					Type:        ar.TYPE_DIGEST_VERIFIED,
 					Index:       pcr,
 					Digest:      eventHash,
 					Success:     true,
@@ -447,7 +447,7 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 				}
 				if !foundEvent {
 					result := ar.DigestResult{
-						Type:        ar.TRUST_ANCHOR_TPM,
+						Type:        ar.TYPE_DIGEST_REFERENCE_VALUE,
 						Name:        ref.Name,
 						Index:       idx,
 						Success:     ref.Optional,
@@ -481,7 +481,7 @@ func verifyPcrs(artifacts []ar.Artifact, quotedPcrSelection []int,
 			log.Warnf("PCR%v is not covered by the quote (quoted PCRs: %v), required reference value %v: %v",
 				idx, quotedPcrs, ref.Name, hex.EncodeToString(refHash))
 			result := ar.DigestResult{
-				Type:        ar.TRUST_ANCHOR_TPM,
+				Type:        ar.TYPE_DIGEST_REFERENCE_VALUE,
 				Name:        ref.Name,
 				Index:       idx,
 				Success:     false,
