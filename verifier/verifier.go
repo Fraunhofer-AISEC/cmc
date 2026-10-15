@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -339,6 +340,8 @@ Loop:
 				fmt.Errorf("unsupported measurement type %q", evtype))
 		}
 	}
+
+	sortArtifacts(result.Measurements)
 
 	// The lowest certification level of all manifests determines the certification
 	// level for the device's software stack
@@ -846,6 +849,16 @@ func checkValidity(val *ar.Validity) ar.Result {
 	}
 
 	return result
+}
+
+// sortArtifacts sorts the artifacts of each measurement by measurement register index.
+func sortArtifacts(measurements []ar.MeasurementResult) {
+	for i := range measurements {
+		artifacts := measurements[i].Artifacts
+		sort.SliceStable(artifacts, func(a, b int) bool {
+			return artifacts[a].Index < artifacts[b].Index
+		})
+	}
 }
 
 func collectComponents(metadata []ar.MetadataResult, descriptions []ar.ManifestDescription) (map[string][]ar.Component, error) {

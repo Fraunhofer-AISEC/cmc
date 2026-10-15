@@ -26,6 +26,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"slices"
 	"testing"
 	"time"
 
@@ -524,6 +525,36 @@ func TestVerify(t *testing.T) {
 				t.Errorf("Name = %q, want %q", got.Name, validMetaInfo.Name)
 			}
 		})
+	}
+}
+
+func Test_sortArtifacts(t *testing.T) {
+
+	measurements := []ar.MeasurementResult{
+		{
+			Type: "TPM Result",
+			Artifacts: []ar.DigestResult{
+				{Index: 1, Name: "pcr1-event1", Type: ar.TYPE_DIGEST_VERIFIED},
+				{Index: 1, Name: "pcr1-event2", Type: ar.TYPE_DIGEST_MEASUREMENT},
+				{Index: 4, Name: "pcr4-event1", Type: ar.TYPE_DIGEST_VERIFIED},
+				{Index: 1, Name: "pcr1-refval", Type: ar.TYPE_DIGEST_REFERENCE_VALUE},
+				{Index: 4, Name: "pcr4-refval", Type: ar.TYPE_DIGEST_REFERENCE_VALUE},
+			},
+		},
+		{
+			Type: "SW Result",
+		},
+	}
+
+	sortArtifacts(measurements)
+
+	want := []string{"pcr1-event1", "pcr1-event2", "pcr1-refval", "pcr4-event1", "pcr4-refval"}
+	got := make([]string, 0, len(measurements[0].Artifacts))
+	for _, a := range measurements[0].Artifacts {
+		got = append(got, a.Name)
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("sortArtifacts() --GOT-- %v, --WANT-- %v", got, want)
 	}
 }
 
