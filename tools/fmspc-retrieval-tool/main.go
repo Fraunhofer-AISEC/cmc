@@ -25,8 +25,9 @@ const (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "fmspc-retrieval-tool",
-		Usage: "Retrieve an FMSPC value from Intel's PCK certificate service",
+		Name:    "fmspc-retrieval-tool",
+		Usage:   "Retrieve an FMSPC value from Intel's PCK certificate service",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     encryptedPpidFlag,

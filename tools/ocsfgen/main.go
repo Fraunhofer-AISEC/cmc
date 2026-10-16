@@ -25,6 +25,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
@@ -58,8 +59,9 @@ const (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "ocsfgen",
-		Usage: "A tool to generate OCSF detection findings based on attestation results",
+		Name:    "ocsfgen",
+		Usage:   "A tool to generate OCSF detection findings based on attestation results",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  logLevelFlag,

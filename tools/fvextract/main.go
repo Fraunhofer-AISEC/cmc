@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 const (
@@ -26,8 +28,9 @@ const (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "fvextract",
-		Usage: "Extract a UEFI firmware volume (peifv/dxefv) from a QEMU memory dump",
+		Name:    "fvextract",
+		Usage:   "Extract a UEFI firmware volume (peifv/dxefv) from a QEMU memory dump",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     refFlag,

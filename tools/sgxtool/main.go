@@ -186,6 +186,7 @@ func main() {
 	cmd := &cli.Command{
 		Name:     "sgxtool",
 		Usage:    "SGX quote and collateral inspection utility",
+		Version:  internal.GetVersionInfo().String(),
 		Commands: subcommands,
 	}
 

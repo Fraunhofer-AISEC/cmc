@@ -33,16 +33,17 @@ var (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "cmcd",
-		Usage: "generates and verifies TPM, AMD SEV-SNP, Intel TDX, as well as SGX attestation evidence",
-		Flags: Flags,
+		Name:    "cmcd",
+		Usage:   "generates and verifies TPM, AMD SEV-SNP, Intel TDX, as well as SGX attestation evidence",
+		Version: internal.GetVersionInfo().String(),
+		Flags:   Flags,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			c, err := GetConfig(cmd)
 			if err != nil {
 				return err
 			}
 
-			log.Infof("Running cmc %v", internal.GetVersion())
+			log.Infof("Running cmcd %v", internal.GetVersionInfo())
 
 			cmcInst, err := cmc.NewCmc(&c.Config)
 			if err != nil {

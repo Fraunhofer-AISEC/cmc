@@ -33,6 +33,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type hashJob struct {
@@ -53,16 +55,17 @@ var (
 )
 
 const (
-	outFlag = "out"
-	osFlag  = "os"
+	outFlag  = "out"
+	osFlag   = "os"
 	cpusFlag = "cpus"
-	logFlag = "log"
+	logFlag  = "log"
 )
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "pkghasher",
-		Usage: "Hash the files installed by system packages to produce reference values",
+		Name:    "pkghasher",
+		Usage:   "Hash the files installed by system packages to produce reference values",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  outFlag,

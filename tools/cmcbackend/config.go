@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -184,26 +183,4 @@ func printConfig(c *config) {
 	log.Debugf("\tMaximum Entries per Prover: %v", c.MaxRowsPerProver)
 	log.Debugf("\tToken                     : %v", c.Token)
 	log.Debugf("\tGIN Debug                 : %v", c.Debug)
-}
-
-func getVersion() string {
-	version := "unknown"
-	if info, ok := debug.ReadBuildInfo(); ok {
-		if strings.EqualFold(info.Main.Version, "(devel)") {
-			commit := "unknown"
-			created := "unknown"
-			for _, elem := range info.Settings {
-				if strings.EqualFold(elem.Key, "vcs.revision") {
-					commit = elem.Value
-				}
-				if strings.EqualFold(elem.Key, "vcs.time") {
-					created = elem.Value
-				}
-			}
-			version = fmt.Sprintf("%v, commit %v, created %v", info.Main.Version, commit, created)
-		} else {
-			version = info.Main.Version
-		}
-	}
-	return version
 }

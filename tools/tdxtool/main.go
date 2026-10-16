@@ -194,6 +194,7 @@ func main() {
 	cmd := &cli.Command{
 		Name:     "tdxtool",
 		Usage:    "TDX quote and collateral inspection utility",
+		Version:  internal.GetVersionInfo().String(),
 		Commands: subcommands,
 	}
 

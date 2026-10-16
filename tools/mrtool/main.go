@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parseima"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsesmbios"
@@ -44,7 +45,8 @@ func main() {
 		Name: "mrtool",
 		Usage: "A tool to precompute and parse measurement registers (TPM PCRs, Intel TDX MRTD/RTMRs, AMD SEV-SNP MR) " +
 			"to be used as reference values for attesting (confidential) virtual machines",
-		Flags: global.Flags,
+		Version: internal.GetVersionInfo().String(),
+		Flags:   global.Flags,
 		Commands: []*cli.Command{
 			{
 				Name:  "parse",

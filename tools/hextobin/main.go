@@ -26,6 +26,8 @@ import (
 	"unicode"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 const (
@@ -37,8 +39,9 @@ const (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "hextobin",
-		Usage: "Convert a hex-encoded input file to a binary output file",
+		Name:    "hextobin",
+		Usage:   "Convert a hex-encoded input file to a binary output file",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     inFlag,
