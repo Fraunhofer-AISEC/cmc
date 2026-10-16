@@ -32,6 +32,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 
 	"github.com/invopop/jsonschema"
 )
@@ -76,8 +77,9 @@ func main() {
 	log.SetLevel(log.TraceLevel)
 
 	cmd := &cli.Command{
-		Name:  "schema-generator",
-		Usage: "Generate JSON Schema definitions for CMC Go packages",
+		Name:    "schema-generator",
+		Usage:   "Generate JSON Schema definitions for CMC Go packages",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  packageFlag,

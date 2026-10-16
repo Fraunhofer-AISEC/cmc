@@ -21,20 +21,23 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "estserver",
-		Usage: "EST provisioning server with attestation support",
-		Flags: flags,
+		Name:    "estserver",
+		Usage:   "EST provisioning server with attestation support",
+		Version: internal.GetVersionInfo().String(),
+		Flags:   flags,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			config, err := getConfig(cmd)
 			if err != nil {
 				return err
 			}
 
-			log.Info("Starting EST server..")
+			log.Infof("Starting EST server %v", internal.GetVersionInfo())
 
 			s, err := NewServer(config)
 			if err != nil {

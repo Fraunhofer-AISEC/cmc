@@ -29,6 +29,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/azuredriver"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	"github.com/google/go-tpm/legacy/tpm2"
 	log "github.com/sirupsen/logrus"
@@ -59,6 +60,7 @@ func main() {
 			"including metadata), and interact with the vTPM. For design details about the " +
 			"Azure-specific CVM guest attestation, refer to: " +
 			"https://learn.microsoft.com/en-us/azure/confidential-computing/guest-attestation-confidential-virtual-machines-design",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  outFlag,

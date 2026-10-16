@@ -21,13 +21,16 @@ import (
 	"os"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "cmcctl",
-		Usage: "CLI client for the CMC daemon",
-		Flags: flags,
+		Name:    "cmcctl",
+		Usage:   "CLI client for the CMC daemon",
+		Version: internal.GetVersionInfo().String(),
+		Flags:   flags,
 		Commands: []*cli.Command{
 			{
 				Name:  "generate",

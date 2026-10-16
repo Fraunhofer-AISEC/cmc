@@ -63,8 +63,9 @@ var (
 func main() {
 
 	cmd := &cli.Command{
-		Name:  "snptool",
-		Usage: "A tool to fetch and parse AMD SEV-SNP attestation reports and certificate chains",
+		Name:    "snptool",
+		Usage:   "A tool to fetch and parse AMD SEV-SNP attestation reports and certificate chains",
+		Version: internal.GetVersionInfo().String(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  logLevelFlag,

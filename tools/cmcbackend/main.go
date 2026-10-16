@@ -21,18 +21,21 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func main() {
 
 	log.SetLevel(log.TraceLevel)
 
-	log.Infof("Starting cmc-backend %v", getVersion())
+	log.Infof("Starting cmc-backend %v", internal.GetVersionInfo())
 
 	cmd := &cli.Command{
-		Name:  "cmcbackend",
-		Usage: "CMC backend server for storing and providing attestation-results",
-		Flags: flags,
+		Name:    "cmcbackend",
+		Usage:   "CMC backend server for storing and providing attestation-results",
+		Version: internal.GetVersionInfo().String(),
+		Flags:   flags,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			c, err := getConfig(cmd)
 			if err != nil {

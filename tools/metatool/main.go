@@ -22,6 +22,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/convert"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/imagedesc"
 	"github.com/Fraunhofer-AISEC/cmc/tools/metatool/create/manifest"
@@ -36,9 +37,10 @@ import (
 
 func main() {
 	cmd := &cli.Command{
-		Name:  "metatool",
-		Usage: "A tool to create, sign, and convert attestation metadata (manifests, image descriptions, manifest descriptions)",
-		Flags: global.Flags,
+		Name:    "metatool",
+		Usage:   "A tool to create, sign, and convert attestation metadata (manifests, image descriptions, manifest descriptions)",
+		Version: internal.GetVersionInfo().String(),
+		Flags:   global.Flags,
 		Commands: []*cli.Command{
 			{
 				Name:  "create",

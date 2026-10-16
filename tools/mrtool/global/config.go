@@ -118,7 +118,7 @@ func GetConfig(cmd *cli.Command) (*Config, error) {
 }
 
 func (c *Config) Print() {
-	log.Infof("Running mrtool version %v", internal.GetVersion())
+	log.Infof("Running mrtool %v", internal.GetVersionInfo())
 	log.Debugf("Global Config")
 	log.Debugf("\tMRs      : %v\n", c.Mrs)
 	log.Debugf("\tLogLevel : %v\n", c.LogLevel)
