@@ -45,7 +45,7 @@ const (
  * - QEMU FW Cfg Files as passed to OVMF
  * - EFI Boot variables
  */
-func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
+func PrecomputeRtmr0(c *Config) ([]*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR0...")
 
 	rtmr := make([]byte, sha512.Size384)
@@ -134,7 +134,7 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	return rtmrSummary(tcg.INDEX_RTMR0, rtmr), refvals, nil
+	return []*ar.Component{rtmrSummary(tcg.INDEX_RTMR0, rtmr)}, refvals, nil
 }
 
 /**
@@ -142,7 +142,7 @@ func PrecomputeRtmr0(c *Config) (*ar.Component, []*ar.Component, error) {
  *
  * RTMR1 contains the Linux kernel PE/COFF image measurement as well as some boot strings.
  */
-func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
+func PrecomputeRtmr1(c *Config) ([]*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR1...")
 
 	rtmr := make([]byte, 48)
@@ -283,7 +283,7 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to measure EV_EFI_ACTION: %w", err)
 	}
 
-	return rtmrSummary(tcg.INDEX_RTMR1, rtmr), refvals, nil
+	return []*ar.Component{rtmrSummary(tcg.INDEX_RTMR1, rtmr)}, refvals, nil
 }
 
 /**
@@ -291,7 +291,7 @@ func PrecomputeRtmr1(c *Config) (*ar.Component, []*ar.Component, error) {
  *
  * RTMR2 contains the Linux kernel command line.
  */
-func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
+func PrecomputeRtmr2(c *Config) ([]*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR2...")
 
 	rtmr := make([]byte, sha512.Size384)
@@ -315,7 +315,7 @@ func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	return rtmrSummary(tcg.INDEX_RTMR2, rtmr), refvals, nil
+	return []*ar.Component{rtmrSummary(tcg.INDEX_RTMR2, rtmr)}, refvals, nil
 }
 
 /**
@@ -323,11 +323,11 @@ func PrecomputeRtmr2(c *Config) (*ar.Component, []*ar.Component, error) {
  *
  * RTMR3 is currently empty.
  */
-func PrecomputeRtmr3(c *Config) (*ar.Component, []*ar.Component, error) {
+func PrecomputeRtmr3(c *Config) ([]*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR3...")
 
 	rtmr := make([]byte, sha512.Size384)
 	refvals := make([]*ar.Component, 0)
 
-	return rtmrSummary(tcg.INDEX_RTMR3, rtmr), refvals, nil
+	return []*ar.Component{rtmrSummary(tcg.INDEX_RTMR3, rtmr)}, refvals, nil
 }

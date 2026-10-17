@@ -55,6 +55,12 @@ func VerifySgx(
 
 	log.Debug("Verifying SGX measurements")
 
+	// Alternative reference values are not supported for SGX
+	if err := checkNoAlternatives(refComponents); err != nil {
+		result.Summary.Fail(ar.RefValAltUnsupported, err)
+		return result, false
+	}
+
 	if len(refComponents) == 0 {
 		log.Warnf("Could not find SGX reference value")
 		result.Summary.Fail(ar.RefValNotPresent)

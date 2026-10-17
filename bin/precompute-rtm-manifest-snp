@@ -34,7 +34,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 [--vcpus #] [--vmm-type TYPE] [--ovmf PATH] [--omsp <omsp endpoint>]"
+      echo "Usage: $0 [--vcpus #[,#..]] [--vmm-type TYPE] [--ovmf PATH] [--omsp <omsp endpoint>]"
+      echo "       --vcpus accepts a list (e.g. 1,2,4,8,16) to generate one alternative"
+      echo "       reference value per vCPU count"
       exit 1
       ;;
   esac

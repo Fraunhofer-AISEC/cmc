@@ -18,6 +18,9 @@
         "peer": {
           "type": "string"
         },
+        "peerAddr": {
+          "type": "string"
+        },
         "policies": {
           "type": "string",
           "contentEncoding": "base64"

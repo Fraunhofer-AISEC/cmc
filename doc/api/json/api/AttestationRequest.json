@@ -16,6 +16,13 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "claims": {
+          "additionalProperties": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "object"
         }
       },
       "type": "object"

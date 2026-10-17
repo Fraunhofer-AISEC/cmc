@@ -8,8 +8,31 @@ source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
+# Optional list of accepted TDX-module hashes, used where the TDX-module version cannot be
+# predicted. Without it, the TDX-module binary from the artifacts folder is measured
+mrseam=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mrseam)
+      mrseam="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--mrseam <hash>[,<hash>..]]"
+      exit 1
+      ;;
+  esac
+done
+
+mrseam_args=()
+if [[ -n "${mrseam}" ]]; then
+  mrseam_args=(--mrseam "${mrseam}")
+fi
+
 "${bin}/generate-image-description" "tdx-device.test.de"
 
-"${bin}/precompute-rtm-manifest-tdx" --omsp "https://localhost:9000/omsp"
+"${bin}/precompute-rtm-manifest-tdx" "${mrseam_args[@]}" --omsp "https://localhost:9000/omsp"
 
 "${bin}/precompute-os-manifest-tdx" --omsp "https://localhost:9000/omsp"

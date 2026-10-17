@@ -120,19 +120,15 @@ func VerifySnp(
 		log.Warn("Could not find SNP reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
-	} else if len(refComponents) > 1 {
-		log.Warnf("Report contains %v reference values. Currently, only 1 SNP reference value is supported",
-			len(refComponents))
-		result.Summary.Fail(ar.RefValMultiple)
-		return result, false
 	}
 
-	snpReferenceValue := refComponents[0]
-	ta, err := snpReferenceValue.GetTrustAnchor()
-	if err != nil || ta != ar.TRUST_ANCHOR_SNP {
-		log.Warnf("SNP reference value invalid trust anchor %v (err: %v)", ta, err)
-		result.Summary.Fail(ar.RefValType)
-		return result, false
+	for _, ref := range refComponents {
+		ta, err := ref.GetTrustAnchor()
+		if err != nil || ta != ar.TRUST_ANCHOR_SNP {
+			log.Warnf("SNP reference value invalid trust anchor %v (err: %v)", ta, err)
+			result.Summary.Fail(ar.RefValType)
+			return result, false
+		}
 	}
 
 	if policy == nil {
@@ -162,45 +158,50 @@ func VerifySnp(
 	}
 	result.Signature = sig
 
-	// Compare Measurements
-	if !bytes.Equal(s.Measurement[:], snpReferenceValue.GetHash(crypto.SHA384)) {
-		log.Warnf("Failed to verify SNP reference value. Expected %x, got %x",
-			snpReferenceValue.GetHash(crypto.SHA384), s.Measurement[:])
+	// Compare Measurements. The manifest may declare several alternatives, of which exactly one
+	// must match the measurement
+	matched, alternatives, errCode, err := matchDirectRefval(crypto.SHA384, s.Measurement[:],
+		refComponents)
+	if err != nil {
+		log.Warnf("Failed to verify SNP reference value: %v", err)
+		result.Summary.Fail(errCode, err)
+		for _, ref := range alternatives {
+			result.Artifacts = append(result.Artifacts,
+				ar.DigestResult{
+					Type:       ar.TYPE_DIGEST_REFERENCE_VALUE,
+					Name:       ref.Name,
+					Digest:     ref.GetHash(crypto.SHA384),
+					Success:    false,
+					Launched:   false,
+					PackageUrl: ref.PackageUrl,
+					HashAlg:    crypto.SHA384.String(),
+				})
+		}
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Type:       ar.TYPE_DIGEST_REFERENCE_VALUE,
-				Name:       snpReferenceValue.Name,
-				Digest:     snpReferenceValue.GetHash(crypto.SHA384),
-				Success:    false,
-				Launched:   false,
-				PackageUrl: snpReferenceValue.PackageUrl,
-				HashAlg:    crypto.SHA384.String(),
-			})
-		result.Artifacts = append(result.Artifacts,
-			ar.DigestResult{
-				Type:       ar.TYPE_DIGEST_MEASUREMENT,
-				Name:       snpReferenceValue.Name,
-				Digest:     s.Measurement[:],
-				Success:    false,
-				Launched:   true,
-				PackageUrl: snpReferenceValue.PackageUrl,
-				HashAlg:    crypto.SHA384.String(),
+				Type:     ar.TYPE_DIGEST_MEASUREMENT,
+				Name:     "SNP Measurement",
+				Digest:   s.Measurement[:],
+				Success:  false,
+				Launched: true,
+				HashAlg:  crypto.SHA384.String(),
 			})
 
 		ok = false
 	} else {
 		log.Debug("Successfully verified SNP reference value")
-		// As we previously checked, that the attestation report contains exactly one
-		// SNP reference value, we can set this here:
 		result.Artifacts = append(result.Artifacts,
 			ar.DigestResult{
-				Name:       snpReferenceValue.Name,
+				Type:       ar.TYPE_DIGEST_VERIFIED,
+				Name:       matched.Name,
 				Digest:     s.Measurement[:],
 				Success:    true,
 				Launched:   true,
-				PackageUrl: snpReferenceValue.PackageUrl,
+				PackageUrl: matched.PackageUrl,
 				HashAlg:    crypto.SHA384.String(),
 			})
+		result.Artifacts = append(result.Artifacts,
+			alternativeResults(crypto.SHA384, 0, alternatives)...)
 	}
 
 	// Verify the SNP report version

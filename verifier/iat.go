@@ -74,6 +74,13 @@ func VerifyIas(
 		result.Summary.Fail(ar.RefValNotPresent)
 		return result, false
 	}
+
+	// Alternative reference values are not supported for IAS measurements
+	if err := checkNoAlternatives(refComponents); err != nil {
+		result.Summary.Fail(ar.RefValAltUnsupported, err)
+		return result, false
+	}
+
 	s, err := ar.NewCborSerializer()
 	if err != nil {
 		result.Summary.Fail(ar.Internal, err)

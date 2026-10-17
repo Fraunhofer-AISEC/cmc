@@ -29,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.4.0"
+	reportVersion = "3.5.0"
 )
 
 func GetReportVersion() string {
@@ -245,18 +245,24 @@ type Sbom struct {
 // -             | 4           |   RTMR3
 // -             | 5           |   MRSEAM (not in UEFI spec)
 type Component struct {
-	Type            string                 `json:"type" cbor:"0,keyasint"`
-	Name            string                 `json:"name" cbor:"1,keyasint"`
-	Hashes          []ReferenceHash        `json:"hashes,omitempty" cbor:"2,keyasint,omitempty"`
-	Version         string                 `json:"version,omitempty" cbor:"3,keyasint,omitempty"`
-	Optional        bool                   `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
-	Description     string                 `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
-	Properties      []Property             `json:"properties,omitempty" cbor:"6,keyasint,omitempty"`
-	EventData       *EventData             `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
-	CtrData         *CtrData               `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
-	IntelCollateral *IntelCollateral       `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
-	PackageUrl      string                 `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
-	OciRules        map[string]interface{} `json:"-" cbor:"-"`
+	Type            string           `json:"type" cbor:"0,keyasint"`
+	Name            string           `json:"name" cbor:"1,keyasint"`
+	Hashes          []ReferenceHash  `json:"hashes,omitempty" cbor:"2,keyasint,omitempty"`
+	Version         string           `json:"version,omitempty" cbor:"3,keyasint,omitempty"`
+	Optional        bool             `json:"optional,omitempty" cbor:"4,keyasint,omitempty"`
+	Description     string           `json:"description,omitempty" cbor:"5,keyasint,omitempty"`
+	Properties      []Property       `json:"properties,omitempty" cbor:"6,keyasint,omitempty"`
+	EventData       *EventData       `json:"eventdata,omitempty" cbor:"7,keyasint,omitempty"`
+	CtrData         *CtrData         `json:"ctrData,omitempty" cbor:"8,keyasint,omitempty"`
+	IntelCollateral *IntelCollateral `json:"intelCollateral,omitempty" cbor:"9,keyasint,omitempty"` // TODO move
+	PackageUrl      string           `json:"purl,omitempty" cbor:"10,keyasint,omitempty"`
+	// Reference values that share a non-empty AlternativeGroup and measurement index describe
+	// mutually exclusive states of that measurement: exactly one of them must match. Only
+	// supported for measurement registers which directly hold a digest (AMD SEV-SNP
+	// measurement, Intel TDX MRTD and MRSEAM), not for registers built by extending
+	// individual measurements
+	AlternativeGroup string                 `json:"alternativeGroup,omitempty" cbor:"11,keyasint,omitempty"`
+	OciRules         map[string]interface{} `json:"-" cbor:"-"`
 }
 
 // Property represents a CycloneDX component property (name-value pair)
@@ -265,6 +271,9 @@ type Property struct {
 	Value string `json:"value" cbor:"1,keyasint"`
 }
 
+// ReferenceHash is the digest of a component under a single hash algorithm. A component carries
+// at most one hash per algorithm: multiple hashes are the same input under different algorithms.
+// Use Component.AlternativeGroup to express alternatives.
 type ReferenceHash struct {
 	Alg     string  `json:"alg" cbor:"0,keyasint"`
 	Content HexByte `json:"content" cbor:"1,keyasint"`

@@ -51,6 +51,13 @@ func VerifyTpm(
 
 	log.Debugf("Verifying TPM measurements against %v reference values...", len(refComponents))
 
+	// PCRs are recalculated by extending the individual measurements, which does not support
+	// alternative reference values
+	if err := checkNoAlternatives(refComponents); err != nil {
+		result.Summary.Fail(ar.RefValAltUnsupported, err)
+		return result, false
+	}
+
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(evidence.Data)
 	if err != nil {

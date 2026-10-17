@@ -71,7 +71,7 @@ var tdxMetadataGuid = []byte{
 
 // PrecomputeMrtd calculates the TDX Build-Time Measurement Register (MRTD).
 // The MRTD contains the digest of the OVMF as hashed by the Intel TDX module.
-func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
+func PrecomputeMrtd(c *Config) ([]*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing MRTD...")
 
 	var mrtd []byte
@@ -146,7 +146,7 @@ func PrecomputeMrtd(c *Config) (*ar.Component, []*ar.Component, error) {
 	mrtdSummary.SetTrustAnchor(ar.TRUST_ANCHOR_TDX)
 	mrtdSummary.SetIndex(tcg.INDEX_MRTD)
 
-	return mrtdSummary, refvals, nil
+	return []*ar.Component{mrtdSummary}, refvals, nil
 }
 
 func getOvmfMetadataOffset(ovmfData []byte) (uint64, error) {
