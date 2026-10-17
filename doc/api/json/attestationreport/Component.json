@@ -32,9 +32,6 @@
         "name": {
           "type": "string"
         },
-        "index": {
-          "type": "integer"
-        },
         "hashes": {
           "items": {
             "$ref": "#/$defs/ReferenceHash"
@@ -50,6 +47,12 @@
         "description": {
           "type": "string"
         },
+        "properties": {
+          "items": {
+            "$ref": "#/$defs/Property"
+          },
+          "type": "array"
+        },
         "eventdata": {
           "$ref": "#/$defs/EventData"
         },
@@ -58,6 +61,12 @@
         },
         "intelCollateral": {
           "$ref": "#/$defs/IntelCollateral"
+        },
+        "purl": {
+          "type": "string"
+        },
+        "alternativeGroup": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -556,43 +565,43 @@
     },
     "IntelCollateral": {
       "properties": {
-        "TcbInfo": {
+        "tcbInfo": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "QeIdentity": {
+        "qeIdentity": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "RootCaCrl": {
+        "rootCaCrl": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "PckCrl": {
+        "pckCrl": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "PckCrlIntermediateCert": {
+        "pckCrlIntermediateCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "PckCrlRootCert": {
+        "pckCrlRootCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "TcbInfoIntermediateCert": {
+        "tcbInfoIntermediateCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "TcbInfoRootCert": {
+        "tcbInfoRootCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "QeIdentityIntermediateCert": {
+        "qeIdentityIntermediateCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "QeIdentityRootCert": {
+        "qeIdentityRootCert": {
           "type": "string",
           "contentEncoding": "base64"
         }
@@ -1312,6 +1321,17 @@
         },
         "execCPUAffinity": {
           "$ref": "#/$defs/CPUAffinity"
+        }
+      },
+      "type": "object"
+    },
+    "Property": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
         }
       },
       "type": "object"

@@ -66,6 +66,26 @@ mrtool precompute tdx \
     --cmdline linux.cmdline
 ```
 
+#### Precompute alternative reference values
+
+Measurements that cannot be predicted can be precomputed as a set of mutually exclusive
+alternatives, of which exactly one must match during verification. See
+[Alternative Reference Values](../../doc/metadata.md#alternative-reference-values).
+
+The TDX module a TD is launched on is chosen by the host, so accept any of several `MRSEAM`
+hashes:
+```sh
+mrtool precompute tdx --mrs 5 --mrseam <hash>,<hash>,<hash>
+```
+
+The AMD SEV-SNP launch digest depends on the number of vCPUs, so accept any of several counts:
+```sh
+mrtool precompute snp --ovmf OVMF.fd --vcpus 1,2,4,8,16
+```
+
+Both flags also accept already precomputed digests (`--mrseam`, `--snp-digest`) and may be
+repeated instead of using a comma-separated list.
+
 ### Parse Eventlogs
 
 Parsing the event logs requires a reference machine. The `mrtool` uses the default locations,

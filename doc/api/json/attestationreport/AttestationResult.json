@@ -14,6 +14,12 @@
           "$ref": "#/$defs/Result"
         },
         "prover": {
+          "$ref": "#/$defs/Endpoint"
+        },
+        "verifier": {
+          "$ref": "#/$defs/Endpoint"
+        },
+        "name": {
           "type": "string"
         },
         "created": {
@@ -33,6 +39,16 @@
         },
         "metadata": {
           "$ref": "#/$defs/MetadataSummary"
+        },
+        "peerAuth": {
+          "$ref": "#/$defs/Result"
+        },
+        "claims": {
+          "additionalProperties": {
+            "type": "string",
+            "contentEncoding": "base64"
+          },
+          "type": "object"
         }
       },
       "type": "object"
@@ -107,9 +123,6 @@
         "name": {
           "type": "string"
         },
-        "index": {
-          "type": "integer"
-        },
         "hashes": {
           "items": {
             "$ref": "#/$defs/ReferenceHash"
@@ -125,6 +138,12 @@
         "description": {
           "type": "string"
         },
+        "properties": {
+          "items": {
+            "$ref": "#/$defs/Property"
+          },
+          "type": "array"
+        },
         "eventdata": {
           "$ref": "#/$defs/EventData"
         },
@@ -133,6 +152,12 @@
         },
         "intelCollateral": {
           "$ref": "#/$defs/IntelCollateral"
+        },
+        "purl": {
+          "type": "string"
+        },
+        "alternativeGroup": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -171,6 +196,9 @@
         "digest": {
           "$ref": "#/$defs/HexByte"
         },
+        "hashAlg": {
+          "type": "string"
+        },
         "measured": {
           "type": "string"
         },
@@ -182,6 +210,12 @@
         },
         "ctrDetails": {
           "$ref": "#/$defs/CtrData"
+        },
+        "version": {
+          "type": "string"
+        },
+        "purl": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -293,6 +327,20 @@
           "type": "array"
         },
         "optionaldata": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Endpoint": {
+      "properties": {
+        "hostname": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        },
+        "peerId": {
           "type": "string"
         }
       },
@@ -666,43 +714,43 @@
     },
     "IntelCollateral": {
       "properties": {
-        "TcbInfo": {
+        "tcbInfo": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "QeIdentity": {
+        "qeIdentity": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "RootCaCrl": {
+        "rootCaCrl": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "PckCrl": {
+        "pckCrl": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "PckCrlIntermediateCert": {
+        "pckCrlIntermediateCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "PckCrlRootCert": {
+        "pckCrlRootCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "TcbInfoIntermediateCert": {
+        "tcbInfoIntermediateCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "TcbInfoRootCert": {
+        "tcbInfoRootCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "QeIdentityIntermediateCert": {
+        "qeIdentityIntermediateCert": {
           "type": "string",
           "contentEncoding": "base64"
         },
-        "QeIdentityRootCert": {
+        "qeIdentityRootCert": {
           "type": "string",
           "contentEncoding": "base64"
         }
@@ -1305,6 +1353,9 @@
         },
         "manifest": {
           "type": "string"
+        },
+        "ociRules": {
+          "type": "object"
         }
       },
       "type": "object"
@@ -1394,12 +1445,33 @@
         "details": {
           "type": "object"
         },
+        "omspServer": {
+          "type": "string"
+        },
         "location": {
           "type": "string"
         },
         "descriptions": {
           "items": {
             "$ref": "#/$defs/ManifestDescription"
+          },
+          "type": "array"
+        },
+        "peers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "server": {
+          "type": "string"
+        },
+        "producedAt": {
+          "type": "string"
+        },
+        "responses": {
+          "items": {
+            "$ref": "#/$defs/SingleOmspResponse"
           },
           "type": "array"
         },
@@ -1414,6 +1486,21 @@
             "$ref": "#/$defs/SignatureResult"
           },
           "type": "array"
+        },
+        "manifestHash": {
+          "type": "string"
+        },
+        "omspValidity": {
+          "$ref": "#/$defs/Result"
+        },
+        "omspStatus": {
+          "$ref": "#/$defs/Result"
+        },
+        "revocationTime": {
+          "type": "string"
+        },
+        "revocationReason": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -1440,6 +1527,12 @@
         },
         "compatibilityResult": {
           "$ref": "#/$defs/CompatibilityResult"
+        },
+        "omspSignatureResults": {
+          "items": {
+            "$ref": "#/$defs/MetadataResult"
+          },
+          "type": "array"
         }
       },
       "type": "object"
@@ -1597,6 +1690,17 @@
         },
         "execCPUAffinity": {
           "$ref": "#/$defs/CPUAffinity"
+        }
+      },
+      "type": "object"
+    },
+    "Property": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
         }
       },
       "type": "object"
@@ -1880,6 +1984,29 @@
       },
       "type": "object"
     },
+    "SingleOmspResponse": {
+      "properties": {
+        "manifestHash": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "thisUpdate": {
+          "type": "string"
+        },
+        "nextUpdate": {
+          "type": "string"
+        },
+        "revocationTime": {
+          "type": "string"
+        },
+        "revocationReason": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "SnpFw": {
       "properties": {
         "build": {
@@ -1936,6 +2063,9 @@
             "$ref": "#/$defs/SnpVersion"
           },
           "type": "array"
+        },
+        "hostData": {
+          "$ref": "#/$defs/HexByte"
         }
       },
       "type": "object"
@@ -1959,6 +2089,9 @@
             "$ref": "#/$defs/Result"
           },
           "type": "array"
+        },
+        "hostDataCheck": {
+          "$ref": "#/$defs/Result"
         }
       },
       "type": "object"
@@ -2296,6 +2429,9 @@
           "type": "array"
         },
         "aggPcrQuoteMatch": {
+          "$ref": "#/$defs/Result"
+        },
+        "pcrSelectionMatch": {
           "$ref": "#/$defs/Result"
         }
       },

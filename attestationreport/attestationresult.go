@@ -129,6 +129,7 @@ const (
 	TYPE_DIGEST_VERIFIED        = "Verified"        // measurement with matching reference value
 	TYPE_DIGEST_MEASUREMENT     = "Measurement"     // measurement without matching reference value
 	TYPE_DIGEST_REFERENCE_VALUE = "Reference Value" // reference value with no matching measurement
+	TYPE_DIGEST_ALTERNATIVE     = "Alternative"     // accepted alternative which was not launched
 )
 
 // DigestResult represents a generic result for a digest that was processed
@@ -554,6 +555,8 @@ const (
 	SignatureLength
 	PolicyNotPresent
 	RefValMultiple
+	RefValAltUnsupported
+	RefValAltGroup
 	RefValNotPresent
 	RefValType
 	RefValNoMatch
@@ -701,6 +704,10 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Policy not present error)", int(e))
 	case RefValMultiple:
 		return fmt.Sprintf("%v (Reference value multiple error)", int(e))
+	case RefValAltUnsupported:
+		return fmt.Sprintf("%v (Reference value alternatives unsupported error)", int(e))
+	case RefValAltGroup:
+		return fmt.Sprintf("%v (Reference value alternative group error)", int(e))
 	case RefValNotPresent:
 		return fmt.Sprintf("%v (Reference value not present error)", int(e))
 	case RefValType:

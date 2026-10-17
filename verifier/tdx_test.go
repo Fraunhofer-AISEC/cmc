@@ -177,6 +177,78 @@ func TestVerifyTdx(t *testing.T) {
 			want1: true,
 		},
 		{
+			name: "Valid MRSEAM Alternatives",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        mrSeamAlternatives,
+				nonce:          validTDXNonce,
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
+			name: "No Matching MRSEAM Alternative",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        mrSeamNoMatch,
+				nonce:          validTDXNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			name: "Multiple MRSEAM Reference Values Without Alternative Group",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        mrSeamUngrouped,
+				nonce:          validTDXNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			name: "Alternative Group On Extended Register",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        altGroupOnRtmr,
+				nonce:          validTDXNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
 			name: "Invalid Report Signature",
 			args: args{
 				evidence: ar.Evidence{
@@ -550,6 +622,10 @@ var (
 		},
 	}
 
+	// Alternatives for the MRSEAM reference value contained in validTdxRefvals
+	validMrSeam     = "7bf063280e94fb051f5dd7b1fc59ce9aac42bb961df8d44b709c9b0ff87a7b4df648657ba6d1189589feab1d5a3c9a9d"
+	MrSeamAlt1      = "aaf063280e94fb051f5dd7b1fc59ce9aac42bb961df8d44b709c9b0ff87a7b4df648657ba6d1189589feab1d5a3c9a9d"
+	MrSeamAlt2      = "bbf063280e94fb051f5dd7b1fc59ce9aac42bb961df8d44b709c9b0ff87a7b4df648657ba6d1189589feab1d5a3c9a9d"
 	validTdxRefvals = []ar.Component{
 		{
 			Type:        ar.TYPE_FIRMWARE,
@@ -1943,7 +2019,81 @@ var (
 			},
 		},
 	}
+
+	tdxTestPolicy = &ar.TdxPolicy{
+		QuoteVersion: 0x04,
+		TdId: ar.TDId{
+			MrOwner:       mrOwner,
+			MrOwnerConfig: mrOwnerConfig,
+			MrConfigId:    mrConfigId,
+		},
+		TdAttributes: ar.TDAttributes{
+			SeptVEDisable: true,
+		},
+		Xfam: validXFAM,
+		AcceptedTcbStatuses: []string{
+			string(pcs.TcbComponentStatusUpToDate),
+			string(pcs.TcbComponentStatusOutOfDate),
+		},
+	}
+
+	// The valid TDX-module is neither the first nor the last alternative
+	mrSeamAlternatives = tdxRefvalsWithMrSeam("tdx-module",
+		MrSeamAlt1, validMrSeam, MrSeamAlt2)
+
+	mrSeamNoMatch = tdxRefvalsWithMrSeam("tdx-module", MrSeamAlt1, MrSeamAlt2)
+
+	// Multiple MRSEAM reference values without an alternative group
+	mrSeamUngrouped = tdxRefvalsWithMrSeam("", MrSeamAlt1, validMrSeam)
+
+	// An alternative group on RTMR0, which is recalculated by extending the measurements
+	altGroupOnRtmr = tdxRefvalsWithGroupOnRtmr0("ramsize")
 )
+
+// tdxRefvalsWithMrSeam returns the valid TDX reference values with the MRSEAM reference value
+// replaced by the given alternatives
+func tdxRefvalsWithMrSeam(group string, digests ...string) []ar.Component {
+
+	refvals := make([]ar.Component, 0, len(validTdxRefvals)+len(digests))
+	for _, rv := range validTdxRefvals {
+		if idx, err := rv.GetIndex(); err == nil && idx == 5 {
+			continue
+		}
+		refvals = append(refvals, rv)
+	}
+
+	for _, d := range digests {
+		c := ar.Component{
+			Type:             ar.TYPE_FIRMWARE,
+			Name:             "TDX-Module",
+			Hashes:           []ar.ReferenceHash{{Alg: "SHA-384", Content: dec(d)}},
+			Description:      "MRSEAM: TDX-Module",
+			AlternativeGroup: group,
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
+				{Name: ar.PROPERTY_INDEX, Value: "5"},
+			},
+		}
+		refvals = append(refvals, c)
+	}
+
+	return refvals
+}
+
+// tdxRefvalsWithGroupOnRtmr0 returns the valid TDX reference values with the given alternative
+// group declared on the RTMR0 reference values
+func tdxRefvalsWithGroupOnRtmr0(group string) []ar.Component {
+
+	refvals := make([]ar.Component, 0, len(validTdxRefvals))
+	for _, rv := range validTdxRefvals {
+		if idx, err := rv.GetIndex(); err == nil && idx == 1 {
+			rv.AlternativeGroup = group
+		}
+		refvals = append(refvals, rv)
+	}
+
+	return refvals
+}
 
 // Run: fetch-test-collateral tdx <quote>
 var (

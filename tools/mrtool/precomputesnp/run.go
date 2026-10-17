@@ -30,14 +30,18 @@ import (
 )
 
 type PrecomputeSnpConf struct {
-	Kernel    string
-	InitRfs   string
-	CmdLine   string
-	OvmfFile  string
-	vcpuCount int
-	vmmType   VmmType
-	SnpDigest []byte
+	Kernel     string
+	InitRfs    string
+	CmdLine    string
+	OvmfFile   string
+	vcpuCounts []int
+	vmmType    VmmType
+	SnpDigests [][]byte
 }
+
+// alternativeGroup marks the generated reference values as mutually exclusive states of the SNP
+// measurement register, of which exactly one must match
+const alternativeGroup = "snp-measurement"
 
 const (
 	kernelFlag    = "kernel"
@@ -87,19 +91,22 @@ var Command = &cli.Command{
 			Name:  cmdFlag,
 			Usage: "Filename of the kernel commandline (if it should be included in the measurement)",
 		},
-		&cli.UintFlag{
-			Name:  vcpuCountFlag,
-			Usage: "Set number of vCPUs to use",
-			Value: 1,
+		&cli.UintSliceFlag{
+			Name: vcpuCountFlag,
+			Usage: "Number of vCPUs to use. Accepts a list (e.g. 1,2,4,8,16) to generate one " +
+				"alternative reference value per vCPU count",
+			Value: []uint{1},
 		},
 		&cli.StringFlag{
 			Name:  vmmTypeFlag,
 			Usage: fmt.Sprintf("VMM type to use [%s, %s]", VmmTypeQemu.Label, VmmTypeEc2.Label),
 			Value: VmmTypeQemu.Label,
 		},
-		&cli.StringFlag{
-			Name:  snpDigestFlag,
-			Usage: "Already precomputed hexadecimal SNP launch digest to generate a reference value for (alternative to specifying OVMF)",
+		&cli.StringSliceFlag{
+			Name: snpDigestFlag,
+			Usage: "Already precomputed hexadecimal SNP launch digest to generate a reference " +
+				"value for (alternative to specifying OVMF). Accepts a list to generate one " +
+				"alternative reference value per digest",
 		},
 	},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -124,37 +131,58 @@ func run(cmd *cli.Command) error {
 
 	log.Info("Precomputing AMD SEV-SNP measurement register...")
 
-	var hash []byte
-	var description string
-	if len(snpConfig.SnpDigest) > 0 {
-		hash = snpConfig.SnpDigest
-		description = "SNP launch digest"
-	} else {
-		hash, err = performSnpPrecomputation(snpConfig)
-		if err != nil {
-			return fmt.Errorf("failed to perform snp precomputation: %w", err)
-		}
-		description = fmt.Sprintf("SNP launch digest for %d vCPUs", snpConfig.vcpuCount)
+	type digest struct {
+		hash        []byte
+		description string
 	}
 
-	// setup the reference value for the event log (as slice with single value)
-	comp := attestationreport.Component{
-		Type: attestationreport.CycloneDxType(attestationreport.TRUST_ANCHOR_SNP, 0),
-		Name: "SNP Launch Digest",
-		Hashes: []attestationreport.ReferenceHash{
-			{
-				Alg:     "SHA-384",
-				Content: hash[:],
-			},
-		},
-		Description: description,
+	digests := make([]digest, 0)
+	if len(snpConfig.SnpDigests) > 0 {
+		for _, d := range snpConfig.SnpDigests {
+			digests = append(digests, digest{hash: d, description: "SNP launch digest"})
+		}
+	} else {
+		for _, vcpus := range snpConfig.vcpuCounts {
+			hash, err := performSnpPrecomputation(snpConfig, vcpus)
+			if err != nil {
+				return fmt.Errorf("failed to perform snp precomputation for %v vCPUs: %w",
+					vcpus, err)
+			}
+			digests = append(digests, digest{
+				hash:        hash,
+				description: fmt.Sprintf("SNP launch digest for %d vCPUs", vcpus),
+			})
+		}
 	}
-	comp.SetTrustAnchor(attestationreport.TRUST_ANCHOR_SNP)
-	comp.SetIndex(0)
-	refValue := [1]attestationreport.Component{comp}
+
+	// Several digests are mutually exclusive states of the single SNP measurement register, so
+	// they must be declared as alternatives for the verifier to accept any one of them
+	group := ""
+	if len(digests) > 1 {
+		group = alternativeGroup
+	}
+
+	refValues := make([]attestationreport.Component, 0, len(digests))
+	for _, d := range digests {
+		comp := attestationreport.Component{
+			Type: attestationreport.CycloneDxType(attestationreport.TRUST_ANCHOR_SNP, 0),
+			Name: "SNP Launch Digest",
+			Hashes: []attestationreport.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: d.hash,
+				},
+			},
+			Description:      d.description,
+			AlternativeGroup: group,
+		}
+		comp.SetTrustAnchor(attestationreport.TRUST_ANCHOR_SNP)
+		comp.SetIndex(0)
+		refValues = append(refValues, comp)
+	}
 
 	// marshal eventlog
-	data, err := json.MarshalIndent(refValue, "", "    ")
+	data, err := json.MarshalIndent(refValues, "", "    ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal reference values: %w", err)
 	}
@@ -185,26 +213,32 @@ func getConfig(cmd *cli.Command) (*PrecomputeSnpConf, error) {
 		config.OvmfFile = cmd.String(ovmfFlag)
 	}
 	if cmd.IsSet(snpDigestFlag) {
-		s := cmd.String(snpDigestFlag)
-		digest, err := hex.DecodeString(s)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode provided SNP launch digest %q: %w", s, err)
+		for _, s := range cmd.StringSlice(snpDigestFlag) {
+			digest, err := hex.DecodeString(s)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode provided SNP launch digest %q: %w", s, err)
+			}
+			config.SnpDigests = append(config.SnpDigests, digest)
 		}
-		config.SnpDigest = digest
 	}
 
 	// [vcpuCountFlag] must be available, as its defaulted
-	config.vcpuCount = int(cmd.Uint(vcpuCountFlag))
+	for _, v := range cmd.UintSlice(vcpuCountFlag) {
+		if v == 0 {
+			return nil, fmt.Errorf("number of vcpus must be greater than zero. See mrtool precompute snp --help")
+		}
+		config.vcpuCounts = append(config.vcpuCounts, int(v))
+	}
 
 	// validate the config
 	if cmd.IsSet(ovmfFlag) && cmd.IsSet(snpDigestFlag) {
 		return nil, fmt.Errorf("flags %q and %q cannot both be set", ovmfFlag, snpDigestFlag)
 	}
-	if len(config.OvmfFile) == 0 && len(config.SnpDigest) == 0 {
+	if len(config.OvmfFile) == 0 && len(config.SnpDigests) == 0 {
 		return nil, fmt.Errorf("either OVMF must or precomputed SNP launch digest must be specified. See mrtool precompute snp --help")
 	}
-	if config.vcpuCount <= 0 {
-		return nil, fmt.Errorf("number of vcpus must be greater than zero. See mrtool precompute snp --help")
+	if len(config.vcpuCounts) == 0 {
+		return nil, fmt.Errorf("number of vcpus must be specified. See mrtool precompute snp --help")
 	}
 
 	// match the vmm-type ([vmmTypeFlag] must be set, as its defaulted)
@@ -231,8 +265,9 @@ func getConfig(cmd *cli.Command) (*PrecomputeSnpConf, error) {
 	if len(config.OvmfFile) > 0 {
 		log.Debugf("\tOVMF file         : %q", config.OvmfFile)
 	}
-	if len(config.SnpDigest) > 0 {
-		log.Debugf("\tSNP Launch Digest: %x", config.SnpDigest)
+	for _, d := range config.SnpDigests {
+		log.Debugf("\tSNP Launch Digest : %x", d)
 	}
+	log.Debugf("\tvCPU counts       : %v", config.vcpuCounts)
 	return config, nil
 }

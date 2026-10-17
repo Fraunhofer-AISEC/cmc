@@ -360,8 +360,8 @@ func findSevMetadata(ovmfData []byte) ([]ovmfSevMetadataDesc, error) {
 	return descs, nil
 }
 
-func performSnpPrecomputation(config *PrecomputeSnpConf) ([]byte, error) {
-	log.Debug("Precomputing SNP measurement registers...")
+func performSnpPrecomputation(config *PrecomputeSnpConf, vcpuCount int) ([]byte, error) {
+	log.Debugf("Precomputing SNP measurement register for %v vCPUs...", vcpuCount)
 
 	// read the ovmf data
 	ovmfData, err := os.ReadFile(config.OvmfFile)
@@ -455,7 +455,7 @@ func performSnpPrecomputation(config *PrecomputeSnpConf) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup vmcb save area: %w", err)
 	}
-	for i := 1; i < config.vcpuCount; i += 1 {
+	for i := 1; i < vcpuCount; i += 1 {
 		hashDigest = performSnpUpdatePageInfo(hashDigest, tempPage, snpPageTypeVmsa, 0xfffffffff000)
 	}
 

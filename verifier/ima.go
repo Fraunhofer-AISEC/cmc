@@ -41,6 +41,12 @@ func VerifySwima(
 	}
 	ok := true
 
+	// Alternative reference values are not supported for IMA measurements
+	if err := checkNoAlternatives(refComponents); err != nil {
+		result.Summary.Fail(ar.RefValAltUnsupported, err)
+		return result, false
+	}
+
 	s, err := ar.NewJsonSerializer()
 	if err != nil {
 		result.Summary.Fail(ar.Internal, err)

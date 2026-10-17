@@ -44,6 +44,12 @@ func VerifySw(
 	}
 	ok := true
 
+	// Alternative reference values are not supported for SW measurements
+	if err := checkNoAlternatives(refComponents); err != nil {
+		result.Summary.Fail(ar.RefValAltUnsupported, err)
+		return result, false
+	}
+
 	// SW Evidence is always JSON serialized, as OCI specs are JSON
 	s, err := ar.NewJsonSerializer()
 	if err != nil {

@@ -56,6 +56,53 @@ also with the [mrtool](../tools/mrtool/README.md)
 See the metadata generation and precomputation scripts in the [bin](../bin/) folder for various
 examples.
 
+### Alternative Reference Values
+
+Some measurements cannot be predicted when the manifest is created. The AMD SEV-SNP launch digest
+depends on the number of vCPUs the VM is started with, and the Intel TDX module a TD is launched
+on is chosen by the host.
+
+For these cases a manifest can declare several reference values for the same measurement as
+mutually exclusive alternatives, of which exactly one must match. Alternatives are marked by
+giving every reference value of the set the same non-empty `alternativeGroup`:
+
+```json
+[
+  {
+    "name": "TDX-Module", "alternativeGroup": "tdx-module",
+    "hashes": [{ "alg": "SHA-384", "content": "aa.." }],
+    "properties": [{ "name": "cmc.ta", "value": "TDX" }, { "name": "cmc.index", "value": "5" }]
+  },
+  {
+    "name": "TDX-Module", "alternativeGroup": "tdx-module",
+    "hashes": [{ "alg": "SHA-384", "content": "bb.." }],
+    "properties": [{ "name": "cmc.ta", "value": "TDX" }, { "name": "cmc.index", "value": "5" }]
+  }
+]
+```
+
+The [mrtool](../tools/mrtool/README.md) generates such sets when a list is passed to the
+corresponding flag, and sets the group automatically:
+
+```sh
+mrtool precompute snp --ovmf OVMF.fd --vcpus 1,2,4,8,16
+mrtool precompute tdx --mrs 5 --mrseam <hash>,<hash>,<hash>
+```
+
+The following rules apply:
+
+- Alternatives are only supported for measurement registers which directly hold a digest: the AMD
+  SEV-SNP measurement and the Intel TDX `MRTD` and `MRSEAM`. Registers built by extending the
+  individual measurements (TPM PCRs, TDX RTMRs) reject them, because recalculating such a register
+  would require selecting one alternative per extended measurement.
+- Several reference values for one of those registers without an `alternativeGroup` are rejected
+  as ambiguous rather than silently treated as alternatives.
+- A `hashes` array holds at most one digest per algorithm. Multiple hashes are the same input
+  under different hash algorithms.
+
+The attestation result reports the alternative that matched as `Verified` and the remaining ones
+as `Alternative` with `launched` set to false.
+
 ## Signing Metadata
 
 Metadata can be signed during creation with the [metatool](../tools/metatool/) (see

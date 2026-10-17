@@ -416,28 +416,6 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 
 	elPresent := ccelPresent(artifacts)
 
-	// Recalculate the expected MR values based on the reference values
-	calculatedMrs := make([][]byte, NUM_TDX_MRS)
-	for i := 0; i < NUM_TDX_MRS; i++ {
-		calculatedMrs[i] = make([]byte, 48)
-	}
-	for _, refval := range refvals {
-		idx, err := refval.GetIndex()
-		if err != nil {
-			return nil, nil, ar.IllegalTdxMrIndex, false
-		}
-		if idx >= NUM_TDX_MRS {
-			return nil, nil, ar.IllegalTdxMrIndex, false
-		}
-		if idx == 0 || idx == 5 {
-			copy(calculatedMrs[idx], refval.GetHash(crypto.SHA384))
-		} else {
-			calculatedMrs[idx] = internal.ExtendSha384(calculatedMrs[idx], refval.GetHash(crypto.SHA384))
-			log.Tracef("Extended %v: %v = %x", internal.IndexToMr(idx), refval.Name,
-				refval.GetHash(crypto.SHA384))
-		}
-	}
-
 	measuredMrs := [][]byte{
 		body.MrTd[:],
 		body.RtMr0[:],
@@ -445,6 +423,85 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		body.RtMr2[:],
 		body.RtMr3[:],
 		body.MrSeam[:],
+	}
+
+	// Group the reference values by measurement register
+	refsPerMr := make([][]ar.Component, NUM_TDX_MRS)
+	for _, refval := range refvals {
+		idx, err := refval.GetIndex()
+		if err != nil {
+			return nil, nil, ar.IllegalTdxMrIndex, false
+		}
+		if idx < 0 || idx >= NUM_TDX_MRS {
+			return nil, nil, ar.IllegalTdxMrIndex, false
+		}
+		refsPerMr[idx] = append(refsPerMr[idx], refval)
+	}
+
+	// Recalculate the expected MR values based on the reference values. MRTD and MRSEAM directly
+	// hold a digest and therefore support alternative reference values, the RTMRs are recalculated
+	// by extending the individual measurements
+	calculatedMrs := make([][]byte, NUM_TDX_MRS)
+	for idx, refs := range refsPerMr {
+		calculatedMrs[idx] = make([]byte, 48)
+
+		if !directTdxMr(idx) {
+			if err := checkNoAlternatives(refs); err != nil {
+				log.Warnf("Failed to verify %v: %v", internal.IndexToMr(idx), err)
+				return nil, nil, ar.RefValAltUnsupported, false
+			}
+			for _, refval := range refs {
+				calculatedMrs[idx] = internal.ExtendSha384(calculatedMrs[idx],
+					refval.GetHash(crypto.SHA384))
+				log.Tracef("Extended %v: %v = %x", internal.IndexToMr(idx), refval.Name,
+					refval.GetHash(crypto.SHA384))
+			}
+			continue
+		}
+
+		if len(refs) == 0 {
+			continue
+		}
+
+		matched, alternatives, errCode, err := matchDirectRefval(crypto.SHA384, measuredMrs[idx],
+			refs)
+		if err != nil {
+			log.Warnf("Failed to verify %v: %v", internal.IndexToMr(idx), err)
+			// An ambiguous or malformed set of reference values cannot be evaluated at all,
+			// whereas a measurement matching none of them is reported as an MR mismatch below
+			if errCode != ar.RefValNoMatch {
+				return nil, nil, errCode, false
+			}
+			for _, ref := range refs {
+				detailedResults = append(detailedResults, ar.DigestResult{
+					Type:        ar.TYPE_DIGEST_REFERENCE_VALUE,
+					Name:        ref.Name,
+					Index:       idx,
+					Digest:      ref.GetHash(crypto.SHA384),
+					Success:     false,
+					Launched:    false,
+					Description: ref.Description,
+					PackageUrl:  ref.PackageUrl,
+					HashAlg:     crypto.SHA384.String(),
+				})
+			}
+			continue
+		}
+
+		copy(calculatedMrs[idx], matched.GetHash(crypto.SHA384))
+		detailedResults = append(detailedResults, ar.DigestResult{
+			Type:        ar.TYPE_DIGEST_VERIFIED,
+			Name:        matched.Name,
+			Index:       idx,
+			Digest:      matched.GetHash(crypto.SHA384),
+			Success:     true,
+			Launched:    true,
+			Description: matched.Description,
+			PackageUrl:  matched.PackageUrl,
+			HashAlg:     crypto.SHA384.String(),
+		})
+		detailedResults = append(detailedResults,
+			alternativeResults(crypto.SHA384, idx, alternatives)...)
 	}
 
 	successMrs := make([]bool, NUM_TDX_MRS)
@@ -491,28 +548,29 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		// did not match. Instead, we set all reference values of a certain MR to false in case the
 		// comparison of the recalculated MR with the measured MR fails
 		log.Debug("Verifying reference values based on MR")
-		for _, refval := range refvals {
-			idx, err := refval.GetIndex()
-			if err != nil {
-				success = false
+		for idx, refs := range refsPerMr {
+			// MRTD and MRSEAM are matched individually and already reported above
+			if directTdxMr(idx) {
 				continue
 			}
 			t := ar.TYPE_DIGEST_REFERENCE_VALUE
 			if successMrs[idx] {
 				t = ar.TYPE_DIGEST_VERIFIED
 			}
-			detailedResults = append(detailedResults,
-				ar.DigestResult{
-					Type:        t,
-					Name:        refval.Name,
-					Index:       idx,
-					Digest:      refval.GetHash(crypto.SHA384),
-					Success:     successMrs[idx],
-					Launched:    successMrs[idx],
-					Description: refval.Description,
-					PackageUrl:  refval.PackageUrl,
-					HashAlg:     crypto.SHA384.String(),
-				})
+			for _, refval := range refs {
+				detailedResults = append(detailedResults,
+					ar.DigestResult{
+						Type:        t,
+						Name:        refval.Name,
+						Index:       idx,
+						Digest:      refval.GetHash(crypto.SHA384),
+						Success:     successMrs[idx],
+						Launched:    successMrs[idx],
+						Description: refval.Description,
+						PackageUrl:  refval.PackageUrl,
+						HashAlg:     crypto.SHA384.String(),
+					})
+			}
 		}
 	} else {
 		// If the CC eventlog is present, we can display the individual measurements
@@ -767,6 +825,14 @@ func verifyTdxTdAttributes(measuredAttributes [8]byte, refTdAttributes *ar.TDAtt
 		refTdAttributes.Kl, getBit(measuredAttributes[:], 31))
 
 	return result, ok
+}
+
+// directTdxMr reports whether the measurement register with the given index directly holds a
+// digest instead of being built by extending the individual measurements. MRTD (index 0) is set
+// by the TDX module from the initial TD contents, MRSEAM (index 5) by the SEAM loader from the
+// TDX module itself
+func directTdxMr(index int) bool {
+	return index == 0 || index == 5
 }
 
 // ccelPresent checks if there are CC Eventlog artifacts in the measurement

@@ -34,8 +34,8 @@ var (
 
 type Config struct {
 	*tcg.Conf
-	TdxModule   string
-	MrSeam      string
+	TdxModules  []string
+	MrSeams     []string
 	Mrtd        string
 	Uki         string
 	OvmfVersion string
@@ -58,8 +58,12 @@ const (
 )
 
 var flags = []cli.Flag{
-	&cli.StringFlag{Name: tdxmoduleFlag, Usage: "Path to the TDX-module binary"},
-	&cli.StringFlag{Name: mrseamFlag, Usage: "The MRSEAM hash (alternative to --tdxmodule if hash is supplied externally)"},
+	&cli.StringSliceFlag{Name: tdxmoduleFlag,
+		Usage: "Path to the TDX-module binary. Accepts a list to generate one alternative " +
+			"reference value per accepted TDX-module version"},
+	&cli.StringSliceFlag{Name: mrseamFlag,
+		Usage: "The MRSEAM hash (alternative to --tdxmodule if hash is supplied externally). " +
+			"Accepts a list to generate one alternative reference value per hash"},
 	&cli.StringFlag{Name: mrtdFlag, Usage: "The MRTD hash (alternative to --ovmf if hash is supplied externally)"},
 	&cli.StringFlag{Name: ukiFlag,
 		Usage: "Path to a Unified Kernel Image measured section-wise into RTMR2 by systemd-stub. " +
@@ -138,10 +142,10 @@ func getConfig(cmd *cli.Command) (*Config, error) {
 	}
 
 	if cmd.IsSet(tdxmoduleFlag) {
-		c.TdxModule = cmd.String(tdxmoduleFlag)
+		c.TdxModules = cmd.StringSlice(tdxmoduleFlag)
 	}
 	if cmd.IsSet(mrseamFlag) {
-		c.MrSeam = cmd.String(mrseamFlag)
+		c.MrSeams = cmd.StringSlice(mrseamFlag)
 	}
 	if cmd.IsSet(mrtdFlag) {
 		c.Mrtd = cmd.String(mrtdFlag)
@@ -180,11 +184,11 @@ func (c *Config) print() {
 
 	c.Conf.Print()
 
-	if c.TdxModule != "" {
-		log.Debugf("\tTDX Module: %q", c.TdxModule)
+	for _, m := range c.TdxModules {
+		log.Debugf("\tTDX Module: %q", m)
 	}
-	if c.MrSeam != "" {
-		log.Debugf("\tMRSEAM: %q", c.MrSeam)
+	for _, m := range c.MrSeams {
+		log.Debugf("\tMRSEAM: %q", m)
 	}
 	if c.Mrtd != "" {
 		log.Debugf("\tMRTD: %q", c.Mrtd)
@@ -216,42 +220,42 @@ func precompute(mrNums []int, conf *Config) ([]*ar.Component, []*ar.Component, e
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute MRSEAM: %w", err)
 			}
-			rtmrs = append(rtmrs, rtmr)
+			rtmrs = append(rtmrs, rtmr...)
 			refvals = append(refvals, rv...)
 		case rtmrNum == tcg.INDEX_MRTD:
 			rtmr, rv, err := PrecomputeMrtd(conf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute MRTD: %w", err)
 			}
-			rtmrs = append(rtmrs, rtmr)
+			rtmrs = append(rtmrs, rtmr...)
 			refvals = append(refvals, rv...)
 		case rtmrNum == tcg.INDEX_RTMR0:
 			rtmr, rv, err := PrecomputeRtmr0(conf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute RTMR0: %w", err)
 			}
-			rtmrs = append(rtmrs, rtmr)
+			rtmrs = append(rtmrs, rtmr...)
 			refvals = append(refvals, rv...)
 		case rtmrNum == tcg.INDEX_RTMR1:
 			rtmr, rv, err := PrecomputeRtmr1(conf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute RTMR1: %w", err)
 			}
-			rtmrs = append(rtmrs, rtmr)
+			rtmrs = append(rtmrs, rtmr...)
 			refvals = append(refvals, rv...)
 		case rtmrNum == tcg.INDEX_RTMR2:
 			rtmr, rv, err := PrecomputeRtmr2(conf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute RTMR2: %w", err)
 			}
-			rtmrs = append(rtmrs, rtmr)
+			rtmrs = append(rtmrs, rtmr...)
 			refvals = append(refvals, rv...)
 		case rtmrNum == tcg.INDEX_RTMR3:
 			rtmr, rv, err := PrecomputeRtmr3(conf)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to precompute RTMR3: %w", err)
 			}
-			rtmrs = append(rtmrs, rtmr)
+			rtmrs = append(rtmrs, rtmr...)
 			refvals = append(refvals, rv...)
 		case rtmrNum < tcg.MR_LEN:
 			return nil, nil, fmt.Errorf("MR%v precomputation not yet implemented", rtmrNum)

@@ -37,11 +37,11 @@ func TestVerifySnp(t *testing.T) {
 		refvals        []ar.Component
 	}
 	tests := []struct {
-		name             string
-		args             args
-		want             ar.Status
-		want1            bool
-		wantHostDataGot  string // "" means skip the HostDataCheck.Got check
+		name            string
+		args            args
+		want            ar.Status
+		want1           bool
+		wantHostDataGot string // "" means skip the HostDataCheck.Got check
 	}{
 		{
 			name: "ValidAttestationReport",
@@ -377,6 +377,126 @@ func TestVerifySnp(t *testing.T) {
 			want1: false,
 		},
 		{
+			name: "Valid Alternative Reference Values",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
+				},
+				caFingerprints: validFingerprints,
+				policy: &ar.SnpPolicy{
+					ReportMinVersion: validMinVersion,
+					ReportMaxVersion: validMaxVersion,
+					GuestPolicy:      validSnpPolicy,
+					VersionPolicy: []ar.SnpVersion{
+						{
+							Name: "Milan",
+							Fw:   validFw,
+							Tcb:  validTcb,
+						},
+					},
+				},
+				refvals: validRefvalAlternatives,
+				nonce:   validNonce,
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
+			name: "No Matching Alternative Reference Value",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
+				},
+				caFingerprints: validFingerprints,
+				policy: &ar.SnpPolicy{
+					ReportMinVersion: validMinVersion,
+					ReportMaxVersion: validMaxVersion,
+					GuestPolicy:      validSnpPolicy,
+					VersionPolicy: []ar.SnpVersion{
+						{
+							Name: "Milan",
+							Fw:   validFw,
+							Tcb:  validTcb,
+						},
+					},
+				},
+				refvals: noMatchRefvalAlternatives,
+				nonce:   validNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			name: "Multiple Reference Values Without Alternative Group",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
+				},
+				caFingerprints: validFingerprints,
+				policy: &ar.SnpPolicy{
+					ReportMinVersion: validMinVersion,
+					ReportMaxVersion: validMaxVersion,
+					GuestPolicy:      validSnpPolicy,
+					VersionPolicy: []ar.SnpVersion{
+						{
+							Name: "Milan",
+							Fw:   validFw,
+							Tcb:  validTcb,
+						},
+					},
+				},
+				refvals: ungroupedRefvals,
+				nonce:   validNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			name: "Inconsistent Alternative Groups",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_SNP,
+					Data: validReport,
+				},
+				collateral: ar.Collateral{
+					Type:  ar.TYPE_EVIDENCE_SNP,
+					Certs: validCertChain,
+				},
+				caFingerprints: validFingerprints,
+				policy: &ar.SnpPolicy{
+					ReportMinVersion: validMinVersion,
+					ReportMaxVersion: validMaxVersion,
+					GuestPolicy:      validSnpPolicy,
+					VersionPolicy: []ar.SnpVersion{
+						{
+							Name: "Milan",
+							Fw:   validFw,
+							Tcb:  validTcb,
+						},
+					},
+				},
+				refvals: mismatchedGroupRefvals,
+				nonce:   validNonce,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
 			name: "Invalid TCB",
 			args: args{
 				evidence: ar.Evidence{
@@ -648,6 +768,28 @@ func Test_checkMinVersion(t *testing.T) {
 	}
 }
 
+// snpAlternatives creates SNP reference values declaring the given alternative group
+func snpAlternatives(group string, measurements ...[]byte) []ar.Component {
+	refvals := make([]ar.Component, 0, len(measurements))
+	for _, m := range measurements {
+		refvals = append(refvals, ar.Component{
+			Type: ar.TYPE_FIRMWARE,
+			Name: "SNP Launch Digest",
+			Hashes: []ar.ReferenceHash{
+				{
+					Alg:     "SHA-384",
+					Content: m,
+				},
+			},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SNP},
+			},
+			AlternativeGroup: group,
+		})
+	}
+	return refvals
+}
+
 var (
 	validRefvals = []ar.Component{
 		{
@@ -693,6 +835,20 @@ var (
 			},
 		},
 	}
+
+	// The valid measurement is neither the first nor the last alternative
+	validRefvalAlternatives = snpAlternatives("snp-measurement",
+		invalidMeasurement, validMeasurement, otherInvalidMeasurement)
+
+	noMatchRefvalAlternatives = snpAlternatives("snp-measurement",
+		invalidMeasurement, otherInvalidMeasurement)
+
+	// Multiple reference values for a single measurement without an alternative group
+	ungroupedRefvals = snpAlternatives("", invalidMeasurement, validMeasurement)
+
+	mismatchedGroupRefvals = append(
+		snpAlternatives("snp-measurement", validMeasurement),
+		snpAlternatives("other-group", invalidMeasurement)...)
 
 	validReport = []byte{0x02, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1141,6 +1297,8 @@ AFZEAwoKCQ==
 	validMeasurement, _ = hex.DecodeString("5131eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c")
 
 	invalidMeasurement, _ = hex.DecodeString("ab31eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c")
+
+	otherInvalidMeasurement, _ = hex.DecodeString("cd31eed7db07e1eb84954019fcdc5903688f15a9eb95ea59c751fd902dd09dfe51956abe38d7cc25bc912256b1bf384c")
 
 	validCertChain = [][]byte{validVcek.Raw, askMilan.Raw, arkMilan.Raw}
 
