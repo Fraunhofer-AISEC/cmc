@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/urfave/cli/v3"
 
@@ -32,11 +33,12 @@ func main() {
 		Name:    "cmcctl",
 		Usage:   "CLI client for the CMC daemon",
 		Version: collectVersion(),
-		Flags:   flags,
+		Flags:   globalFlags,
 		Commands: []*cli.Command{
 			{
 				Name:  "generate",
 				Usage: "Generate attestation report",
+				Flags: reportFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -48,6 +50,7 @@ func main() {
 			{
 				Name:  "verify",
 				Usage: "Verify attestation report",
+				Flags: slices.Concat(reportFlags, policyFlags, publishFlags),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -59,6 +62,7 @@ func main() {
 			{
 				Name:  "enroll-key",
 				Usage: "Create and enroll a new TLS key",
+				Flags: tlsIdentityFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -70,6 +74,8 @@ func main() {
 			{
 				Name:  "dial",
 				Usage: "Establish attested TLS client",
+				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags,
+					payloadFlags),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -84,6 +90,7 @@ func main() {
 			{
 				Name:  "listen",
 				Usage: "Establish attested TLS server",
+				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -98,6 +105,8 @@ func main() {
 			{
 				Name:  "request",
 				Usage: "Perform an attested HTTPS request",
+				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags,
+					payloadFlags, httpFlags),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -112,6 +121,7 @@ func main() {
 			{
 				Name:  "serve",
 				Usage: "Establish an attested HTTPS server",
+				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -126,6 +136,7 @@ func main() {
 			{
 				Name:  "token",
 				Usage: "Request a bootstrap token for EST certificate requests",
+				Flags: tokenFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -137,6 +148,7 @@ func main() {
 			{
 				Name:  "provision",
 				Usage: "Retrieve provisioning data for CVMs",
+				Flags: provisionFlags,
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -176,6 +188,7 @@ func main() {
 			{
 				Name:  "proxy",
 				Usage: "Forward data over attested TLS using HTTP",
+				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := getConfig(cmd)
 					if err != nil {
@@ -194,16 +207,13 @@ func main() {
 					{
 						Name:  "serve",
 						Usage: "Distribute kubeadm join tokens to attested workers",
-						Flags: []cli.Flag{
-							&cli.IntFlag{
-								Name:  kubeprovCountFlag,
-								Usage: "number of workers to serve before exiting (0 = unlimited)",
-							},
-							&cli.StringFlag{
-								Name:  kubeadmPathFlag,
-								Usage: "path to kubeadm binary",
-							},
-						},
+						Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, kubeprovFlags,
+							[]cli.Flag{
+								&cli.IntFlag{
+									Name:  kubeprovCountFlag,
+									Usage: "number of workers to serve before exiting (0 = unlimited)",
+								},
+							}),
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c, err := getConfig(cmd)
 							if err != nil {
@@ -218,16 +228,13 @@ func main() {
 					{
 						Name:  "join",
 						Usage: "Join this node to a Kubernetes cluster via attested provisioning",
-						Flags: []cli.Flag{
-							&cli.BoolFlag{
-								Name:  kubeprovDryRunFlag,
-								Usage: "print join info without executing kubeadm",
-							},
-							&cli.StringFlag{
-								Name:  kubeadmPathFlag,
-								Usage: "path to kubeadm binary",
-							},
-						},
+						Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, kubeprovFlags,
+							[]cli.Flag{
+								&cli.BoolFlag{
+									Name:  kubeprovDryRunFlag,
+									Usage: "print join info without executing kubeadm",
+								},
+							}),
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c, err := getConfig(cmd)
 							if err != nil {
