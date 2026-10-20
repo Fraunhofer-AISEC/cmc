@@ -18,7 +18,6 @@ package main
 import (
 	"crypto"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -253,13 +252,8 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	}
 
 	if cmd.IsSet(configFlag) {
-		data, err := os.ReadFile(cmd.String(configFlag))
-		if err != nil {
-			return nil, fmt.Errorf("failed to read config file '%v': %w", cmd.String(configFlag), err)
-		}
-		err = json.Unmarshal(data, c)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+		if err := internal.ReadConfig(cmd.String(configFlag), c); err != nil {
+			return nil, err
 		}
 	}
 

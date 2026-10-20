@@ -9,7 +9,6 @@
         "https://10.0.2.2:9000/vm-metadata"
     ],
     "drivers": [ "tpm", "sw" ],
-    "keyConfig": "EC256",
     "hashAlg": "SHA256",
     "tpmKeyAlg": "EC256",
     "api": "socket",
@@ -21,7 +20,6 @@
     "ctr": true,
     "ctrDriver": "sw",
     "ctrLog": "/tmp/container_measurements",
-    "ctrPcr": 11,
     "rootCas": [
         "/var/metadata-ca.pem",
         "/var/ca.pem"

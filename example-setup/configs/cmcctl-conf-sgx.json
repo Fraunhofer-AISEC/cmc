@@ -1,9 +1,9 @@
 {
-    "addr": [
-      "localhost:4443"
-    ],
-    "provAddr": "https://localhost:9000/",
-    "provisionMode": "est",
+    "addr": "localhost:4443",
+    "endorsementMode": "est",
+    "endorsementAddr": "https://localhost:9000/",
+    "enrollmentMode": "est",
+    "enrollmentAddr": "https://localhost:9000/",
     "provisionAuth": [ "none" ],
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
@@ -14,7 +14,7 @@
     "caStorePath": "data/pki/ca.pem",
     "mtls": true,
     "attest": "mutual",
-    "measurementLog": false,
+    "measurementLogs": false,
     "publishResults": "http://nuc-02.sos.aisec.fraunhofer.de:8080/results",
     "logLevel": "trace",
     "api": "libapi",
@@ -26,7 +26,6 @@
     "drivers": [
       "sgx"
     ],
-    "ima": false,
     "storage": "data/cmcctl-internal",
     "cache": "data/cmcctl-cache",
     "peerCache": "data/cmc-peer-cache",

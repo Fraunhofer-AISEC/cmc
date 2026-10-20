@@ -1,5 +1,4 @@
 {
-    "tokenAddr": "127.0.0.1:9001",
     "estAddr": "0.0.0.0:9000",
     "estCaKey": "../../data-ids/pki/device_sub_ca-key.pem",
     "estCaChain": [

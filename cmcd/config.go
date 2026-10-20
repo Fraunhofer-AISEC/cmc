@@ -16,7 +16,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,6 +27,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/cmcflags"
 )
 
@@ -77,13 +77,8 @@ func GetConfig(cmd *cli.Command) (*Config, error) {
 	if cmd.IsSet(configFlag) {
 		files := strings.Split(cmd.String(configFlag), ",")
 		for _, f := range files {
-			data, err := os.ReadFile(f)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read cmcd config file %v: %v", f, err)
-			}
-			err = json.Unmarshal(data, c)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
+			if err := internal.ReadConfig(f, c); err != nil {
+				return nil, err
 			}
 		}
 	}
