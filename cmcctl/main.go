@@ -22,6 +22,8 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
+	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
@@ -29,7 +31,7 @@ func main() {
 	cmd := &cli.Command{
 		Name:    "cmcctl",
 		Usage:   "CLI client for the CMC daemon",
-		Version: internal.GetVersionInfo().String(),
+		Version: collectVersion(),
 		Flags:   flags,
 		Commands: []*cli.Command{
 			{
@@ -246,4 +248,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func collectVersion() string {
+	return fmt.Sprintf("%v, cmcd api version %v, atls protocol version %v",
+		internal.GetVersionInfo().String(),
+		api.GetVersion(),
+		attestedtls.GetAtlsProtocolVersion())
 }
