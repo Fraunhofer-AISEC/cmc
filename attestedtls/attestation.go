@@ -58,6 +58,10 @@ type AtlsHandshakeComplete struct {
 
 var log = logrus.WithField("service", "atls")
 
+func GetAtlsProtocolVersion() string {
+	return atlsProtocolVersion
+}
+
 func atlsHandshakeStart(conn *tls.Conn, fingerprint string, cc *CmcConfig, endpoint Endpoint) error {
 
 	if cc == nil {
