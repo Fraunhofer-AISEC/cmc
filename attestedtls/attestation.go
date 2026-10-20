@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	atlsHandshakeVersion = "1.3.0"
+	atlsProtocolVersion = "1.3.0"
 
 	// Per-role TLS exporter labels used in the RFC 5705 exporter secret nonce generation. The
 	// is symmetric across the two TLS endpoints, which is why we need client an server labels
@@ -141,7 +141,7 @@ func atlsHandshakeStart(conn *tls.Conn, fingerprint string, cc *CmcConfig, endpo
 	}
 
 	ownResp := AtlsHandshakeResponse{
-		Version: atlsHandshakeVersion,
+		Version: atlsProtocolVersion,
 	}
 
 	// Generate attestation report of own endpoint if configured
@@ -219,7 +219,7 @@ func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error
 
 	// Finally send and receive handshake complete
 	complete := AtlsHandshakeComplete{
-		Version: atlsHandshakeVersion,
+		Version: atlsProtocolVersion,
 		Success: handshakeError == nil,
 	}
 	if handshakeError != nil {
@@ -347,7 +347,7 @@ func sendAtlsRequest(conn *tls.Conn, s ar.Serializer, attest AttestSelect, cache
 	// Create request
 	// TODO Extended report and cached metadata configuration
 	req := &AtlsHandshakeRequest{
-		Version:        atlsHandshakeVersion,
+		Version:        atlsProtocolVersion,
 		Attest:         attest,
 		ExtendedReport: false,
 		Cached:         cache,
@@ -461,8 +461,8 @@ func (req *AtlsHandshakeRequest) CheckVersion() error {
 	if req == nil {
 		return fmt.Errorf("internal error: AtlsHandshakeRequest is nil")
 	}
-	if !strings.EqualFold(atlsHandshakeVersion, req.Version) {
-		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeRequest version %v, got %v", atlsHandshakeVersion, req.Version)
+	if !strings.EqualFold(atlsProtocolVersion, req.Version) {
+		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeRequest version %v, got %v", atlsProtocolVersion, req.Version)
 	}
 	return nil
 }
@@ -471,8 +471,8 @@ func (resp *AtlsHandshakeResponse) CheckVersion() error {
 	if resp == nil {
 		return fmt.Errorf("internal error: AtlsHandshakeResponse is nil")
 	}
-	if !strings.EqualFold(atlsHandshakeVersion, resp.Version) {
-		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeResponse version %v, got %v", atlsHandshakeVersion, resp.Version)
+	if !strings.EqualFold(atlsProtocolVersion, resp.Version) {
+		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeResponse version %v, got %v", atlsProtocolVersion, resp.Version)
 	}
 	return nil
 }
@@ -481,8 +481,8 @@ func (complete *AtlsHandshakeComplete) CheckVersion() error {
 	if complete == nil {
 		return fmt.Errorf("internal error: AtlsHandshakeComplete is nil")
 	}
-	if !strings.EqualFold(atlsHandshakeVersion, complete.Version) {
-		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeComplete version %v, got %v", atlsHandshakeVersion, complete.Version)
+	if !strings.EqualFold(atlsProtocolVersion, complete.Version) {
+		return fmt.Errorf("API version mismatch. Expected AtlsHandshakeComplete version %v, got %v", atlsProtocolVersion, complete.Version)
 	}
 	return nil
 }
