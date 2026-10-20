@@ -196,19 +196,17 @@ cmc_params=(
     "--use-omsp=true" \
 )
 
+# Global cmcctl options, accepted by every subcommand
 cmcctl_params=(
-    "--report" "attestation-report" \
-    "--result" "attestation-result.json" \
-    "--nonce" "nonce" \
     "--root-cas" "${data}/pki/ca.pem" \
-    "--mtls" \
-    "--attest" "mutual" \
     "--log-level" "trace" \
     "--cmc-addr" "127.0.0.1:9955" \
-    "--key-config" "EC256" \
-    "--key-type" "tpm" \
-    "--key-id" "${data}/key-id" \
 )
+
+# Subcommand-scoped cmcctl options, only accepted by the subcommands they apply to
+report_params="--report attestation-report --nonce nonce"
+result_params="--result attestation-result.json"
+tls_params="--mtls --attest mutual --key-config EC256 --key-type tpm --key-id ${data}/key-id"
 
 attest_success=("success" "fail")
 
@@ -222,11 +220,11 @@ protocols=("grpc" "coap" "socket")
 
 commands_server=("generate" "listen" "serve")
 
-commands_params_server=("" "--addr 0.0.0.0:4443" "--addr 0.0.0.0:8082")
+commands_params_server=("${report_params}" "--addr 0.0.0.0:4443 ${tls_params} ${result_params}" "--addr 0.0.0.0:8082 ${tls_params} ${result_params}")
 
 commands_client=("verify" "dial" "request")
 
-commands_params_client=("" "--addr ${hostname}:4443" "--addr https://${hostname}:8082/post --method POST --data \"hello ahttps\"")
+commands_params_client=("${report_params} ${result_params}" "--addr ${hostname}:4443 ${tls_params} ${result_params}" "--addr https://${hostname}:8082/post --method POST --data \"hello ahttps\" ${tls_params} ${result_params}")
 
 commands_server_ready_msg=("Wrote attestation response" "Serving under" "Serving HTTPS under")
 

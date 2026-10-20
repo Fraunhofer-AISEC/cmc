@@ -154,27 +154,80 @@ const (
 	kubeprovDryRunFlag = "dry-run"
 )
 
-var flags = append([]cli.Flag{
+// globalFlags apply to every subcommand and are registered on the root command.
+var globalFlags = append([]cli.Flag{
 	&cli.StringFlag{
 		Name:  configFlag,
 		Usage: "JSON configuration file(s), comma-separated",
 	},
 	&cli.StringFlag{
-		Name:  addrFlag,
-		Usage: "address to connect to / listen on via attested TLS / HTTPS",
+		Name:  serializationFlag,
+		Usage: "serialization for requests and attestation reports [json, cbor]",
 	},
+	&cli.StringFlag{
+		Name:  logLevelFlag,
+		Usage: fmt.Sprintf("logging level: %v", strings.Join(logLevelKeys(), ",")),
+	},
+	&cli.StringFlag{
+		Name:  logFileFlag,
+		Usage: "file to log to instead of stdout/stderr",
+	},
+}, cmcflags.Flags...)
+
+// reportFlags configure the files an attestation report is written to and read from.
+var reportFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  reportFlag,
 		Usage: "output file for the attestation report",
 	},
 	&cli.StringFlag{
+		Name:  nonceFlag,
+		Usage: "output file for the nonce",
+	},
+}
+
+// policyFlags configure the optional attestation policies applied to a verification.
+var policyFlags = []cli.Flag{
+	&cli.StringFlag{
+		Name:  policiesFlag,
+		Usage: "JSON policies file for custom verification",
+	},
+}
+
+// publishFlags configure where attestation results are stored and published to.
+var publishFlags = []cli.Flag{
+	&cli.StringFlag{
 		Name:  resultFlag,
 		Usage: "output file for the attestation result",
 	},
 	&cli.StringFlag{
-		Name:  nonceFlag,
-		Usage: "output file for the nonce",
+		Name:  publishResultsFlag,
+		Usage: "HTTP address to publish attestation results to",
 	},
+	&cli.StringFlag{
+		Name:  publishOcsfFlag,
+		Usage: "HTTP address to publish OCSF detection findings to",
+	},
+	&cli.StringFlag{
+		Name:  publishNetworkFlag,
+		Usage: "HTTP address to publish lightweight network events to",
+	},
+	&cli.StringFlag{
+		Name:  publishTokenFlag,
+		Usage: "path to token for backend authorization",
+	},
+	&cli.StringFlag{
+		Name:  publishCertFlag,
+		Usage: "client certificate for mTLS authentication when publishing",
+	},
+	&cli.StringFlag{
+		Name:  publishKeyFlag,
+		Usage: "client key for mTLS authentication when publishing",
+	},
+}
+
+// tlsIdentityFlags configure the key and certificate used as the local TLS identity.
+var tlsIdentityFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  keyidFlag,
 		Usage: "file to store the key ID of the (hardware-backed) TLS key",
@@ -188,12 +241,24 @@ var flags = append([]cli.Flag{
 		Usage: "key configuration [EC256, EC384, EC512, RSA2048, RSA4096]",
 	},
 	&cli.StringFlag{
-		Name:  caStorePathFlag,
-		Usage: "path to store CA certs retrieved with provision command",
+		Name:  tlsCnFlag,
+		Usage: "common name for the TLS certificate",
 	},
 	&cli.StringFlag{
-		Name:  policiesFlag,
-		Usage: "JSON policies file for custom verification",
+		Name:  tlsDnsNamesFlag,
+		Usage: "comma-separated DNS SANs for the TLS certificate",
+	},
+	&cli.StringFlag{
+		Name:  tlsIpAddressesFlag,
+		Usage: "comma-separated IP SANs for the TLS certificate",
+	},
+}
+
+// atlsFlags configure the attested TLS connection itself.
+var atlsFlags = []cli.Flag{
+	&cli.StringFlag{
+		Name:  addrFlag,
+		Usage: "address to connect to / listen on via attested TLS / HTTPS",
 	},
 	&cli.BoolFlag{
 		Name:  mtlsFlag,
@@ -209,42 +274,30 @@ var flags = append([]cli.Flag{
 			"validating its TLS certificate chain, e.g. if the peer uses a self-signed " +
 			"certificate. Requires the peer to be attested",
 	},
+}
+
+// payloadFlags configure the data sent over an established connection.
+var payloadFlags = []cli.Flag{
 	&cli.StringFlag{
-		Name:  publishResultsFlag,
-		Usage: "HTTP address to publish attestation results to",
+		Name:  dataFlag,
+		Usage: "aTLS payload for dial or HTTP body for POST/PUT requests",
 	},
-	&cli.StringFlag{
-		Name:  publishOcsfFlag,
-		Usage: "HTTP address to publish OCSF detection findings to",
-	},
-	&cli.StringFlag{
-		Name:  publishNetworkFlag,
-		Usage: "HTTP address to publish lightweight network events to",
-	},
-	&cli.StringFlag{
-		Name:  serializationFlag,
-		Usage: "serialization for requests and attestation reports [json, cbor]",
-	},
-	&cli.StringFlag{
-		Name:  headerFlag,
-		Usage: "comma-separated headers for HTTP requests",
-	},
+}
+
+// httpFlags configure attested HTTPS requests.
+var httpFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  methodFlag,
 		Usage: "HTTP request method (GET, POST, PUT, HEAD)",
 	},
 	&cli.StringFlag{
-		Name:  dataFlag,
-		Usage: "aTLS payload for dial or HTTP body for POST/PUT requests",
+		Name:  headerFlag,
+		Usage: "comma-separated headers for HTTP requests",
 	},
-	&cli.StringFlag{
-		Name:  logLevelFlag,
-		Usage: fmt.Sprintf("logging level: %v", strings.Join(logLevelKeys(), ",")),
-	},
-	&cli.StringFlag{
-		Name:  logFileFlag,
-		Usage: "file to log to instead of stdout/stderr",
-	},
+}
+
+// tokenFlags configure the creation of EST bootstrap tokens.
+var tokenFlags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  tokenStoreFlag,
 		Usage: "path to token store for token mode",
@@ -257,31 +310,23 @@ var flags = append([]cli.Flag{
 		Name:  tokenSubjectFlag,
 		Usage: "restrict a newly created token to this subject; leave empty for no restriction",
 	},
+}
+
+// provisionFlags configure the retrieval of provisioning data for CVMs.
+var provisionFlags = []cli.Flag{
 	&cli.StringFlag{
-		Name:  publishTokenFlag,
-		Usage: "path to token for backend authorization",
+		Name:  caStorePathFlag,
+		Usage: "path to store CA certs retrieved with provision command",
 	},
+}
+
+// kubeprovFlags are shared by the kubeprov subcommands.
+var kubeprovFlags = []cli.Flag{
 	&cli.StringFlag{
-		Name:  publishCertFlag,
-		Usage: "client certificate for mTLS authentication when publishing",
+		Name:  kubeadmPathFlag,
+		Usage: "path to kubeadm binary",
 	},
-	&cli.StringFlag{
-		Name:  publishKeyFlag,
-		Usage: "client key for mTLS authentication when publishing",
-	},
-	&cli.StringFlag{
-		Name:  tlsCnFlag,
-		Usage: "common name for TLS certificate created via enroll-key",
-	},
-	&cli.StringFlag{
-		Name:  tlsDnsNamesFlag,
-		Usage: "comma-separated DNS SANs for TLS certificate created via enroll-key",
-	},
-	&cli.StringFlag{
-		Name:  tlsIpAddressesFlag,
-		Usage: "comma-separated IP SANs for TLS certificate created via enroll-key",
-	},
-}, cmcflags.Flags...)
+}
 
 func logLevelKeys() []string {
 	keys := make([]string, 0, len(logLevels))
