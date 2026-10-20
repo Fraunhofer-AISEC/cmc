@@ -573,19 +573,9 @@ func PrecomputePcr9(c *Config) (*ar.Component, []*ar.Component, error) {
 		}
 	}
 
-	if c.Cmdline != "" {
-		pcr, refvals, err = tcg.MeasureCmdline(c.HashAlg, tcg.TPM, pcr, refvals, 9,
-			c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline, c.InitrdOption)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
-		}
-	}
-
-	if c.Initrd != "" {
-		pcr, refvals, err = tcg.MeasureFile(c.HashAlg, tcg.TPM, "EV_EVENT_TAG", pcr, refvals, 9, c.Initrd)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure initrd: %w", err)
-		}
+	pcr, refvals, err = c.MeasureKernelHandoff(c.HashAlg, tcg.TPM, pcr, refvals, 9)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure kernel handoff: %w", err)
 	}
 
 	// Create final reference value

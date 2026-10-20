@@ -19,6 +19,38 @@ import (
 	"testing"
 )
 
+func TestChainloaded(t *testing.T) {
+	bootloaders := []string{"systemd-bootx64.efi"}
+
+	tests := []struct {
+		name string
+		conf Conf
+		want bool
+	}{
+		{"Chainloaded", Conf{Kernel: "linux", Bootloaders: bootloaders}, true},
+		{"Direct Kernel Boot", Conf{Kernel: "bzImage"}, false},
+		{"Unified Kernel Image", Conf{Bootloaders: bootloaders}, false},
+		{"Nothing Specified", Conf{}, false},
+		{
+			"Override Direct",
+			Conf{Kernel: "linux", Bootloaders: bootloaders, LoadOptions: LoadOptionsDirect},
+			false,
+		},
+		{
+			"Override Chainloaded",
+			Conf{Kernel: "bzImage", LoadOptions: LoadOptionsChainloaded},
+			true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.conf.Chainloaded(); got != tt.want {
+				t.Errorf("Chainloaded() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func Test_parseHexUint64(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case

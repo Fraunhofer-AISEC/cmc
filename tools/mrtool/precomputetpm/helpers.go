@@ -47,7 +47,7 @@ func (c *Config) measureGpt(pcr []byte, refvals []*ar.Component, index int,
 }
 
 // measureBootApplications records an EV_EFI_BOOT_SERVICES_APPLICATION into the given PCR for every
-// bootloader and for a directly booted kernel.
+// bootloader and for the kernel, in load order.
 func (c *Config) measureBootApplications(pcr []byte, refvals []*ar.Component, index int,
 ) ([]byte, []*ar.Component, error) {
 

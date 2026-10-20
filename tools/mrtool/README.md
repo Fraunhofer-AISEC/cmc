@@ -66,6 +66,30 @@ mrtool precompute tdx \
     --cmdline linux.cmdline
 ```
 
+#### Direct kernel boot and chainloading bootloaders
+
+The measurements differ depending on whether the kernel is booted directly by the firmware or via
+different bootloaders. The `mrtool` tries to automatically infer the boot path based on the
+specified `--kernel` and `--bootloader` arguments. `--loadoptions {direct,chainloaded}` overrides
+the inference.
+
+- **Direct kernel boot** (`--kernel` alone), as performed by QEMU `-kernel`: the firmware loads
+  the kernel itself and measures it into PCR4/RTMR1 before the `EV_EFI_GPT_EVENT`, as the boot
+  device is not involved.
+- **Chainloaded kernel** (`--kernel` together with `--bootloaders`), e.g. *systemd-boot* booting a
+  BLS Type#1 entry: the kernel is only loaded once its bootloader runs and is therefore measured
+  after it.
+- **Unified kernel image**: A unified kernel image is measured section-wise by systemd-stub, see
+  `--uki`.
+- **GRUB**: GRUB measures the kernel itself and produces no `EV_IPL` even though a bootloader is
+  involved, so it needs `--loadoptions direct`.
+
+The distinction also decides how the UEFI LoadOptions carrying the kernel command line are
+recorded in PCR9/RTMR2. EDK2 records the LoadOptions of a chainloaded kernel twice over the same
+digest, once as `EV_IPL` and once as an `EV_EVENT_TAG` tagged `LOADED_IMAGE::LoadOptions`, whereas
+a firmware-loaded kernel only gets the `EV_EVENT_TAG`. The initrd is measured into PCR9/RTMR2 as an
+`EV_EVENT_TAG` tagged `Linux initrd` in both cases.
+
 #### Precompute alternative reference values
 
 Measurements that cannot be predicted can be precomputed as a set of mutually exclusive

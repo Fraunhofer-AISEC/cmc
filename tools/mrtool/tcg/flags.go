@@ -41,6 +41,48 @@ const (
 	InitrdOptionSuffix
 )
 
+// LoadOptionsModel states how the firmware recorded the UEFI LoadOptions carrying the kernel
+// command line, see Conf.MeasureKernelHandoff.
+type LoadOptionsModel int
+
+const (
+	// LoadOptionsAuto infers the model from the artifacts, see Conf.Chainloaded
+	LoadOptionsAuto LoadOptionsModel = iota
+	LoadOptionsDirect
+	LoadOptionsChainloaded
+)
+
+func (m LoadOptionsModel) String() string {
+	switch m {
+	case LoadOptionsDirect:
+		return "direct"
+	case LoadOptionsChainloaded:
+		return "chainloaded"
+	case LoadOptionsAuto:
+		return "auto"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(m))
+	}
+}
+
+// Chainloaded reports whether the kernel was loaded by an EFI bootloader instead of by the
+// firmware itself. Unless --loadoptions states it explicitly, it is inferred from the artifacts:
+// a kernel accompanied by bootloaders is chainloaded by the last of them, a kernel without is
+// loaded by the firmware from fw_cfg.
+//
+// Loaders which measure the kernel themselves instead of letting the firmware do it, such as
+// GRUB, do not produce the chainloaded LoadOptions and need --loadoptions direct.
+func (c *Conf) Chainloaded() bool {
+	switch c.LoadOptions {
+	case LoadOptionsDirect:
+		return false
+	case LoadOptionsChainloaded:
+		return true
+	default:
+		return c.Kernel != "" && len(c.Bootloaders) > 0
+	}
+}
+
 func (o InitrdOption) String() string {
 	switch o {
 	case InitrdOptionPrefix:
@@ -76,6 +118,7 @@ type Conf struct {
 	Initrd         string
 	Cmdline        string
 	InitrdOption   InitrdOption
+	LoadOptions    LoadOptionsModel
 	AddZeros       int
 	StripNewline   bool
 	Gpt            string
@@ -126,6 +169,7 @@ const (
 	initrdFlag         = "initrd"
 	cmdlineFlag        = "cmdline"
 	initrdOptionFlag   = "initrd-option"
+	loadOptionsFlag    = "loadoptions"
 	addzerosFlag       = "addzeros"
 	stripnewlineFlag   = "stripnewline"
 	gptFlag            = "gpt"
@@ -219,7 +263,8 @@ var Flags = []cli.Flag{
 			"measured into PCR2",
 	},
 	&cli.StringFlag{Name: bootloadersFlag,
-		Usage: "Comma-separated list of bootloader EFI images to be measured into PCR4/RTMR1"},
+		Usage: "Comma-separated list of bootloader EFI images in load order to be measured into " +
+			"PCR4/RTMR1. The kernel they chainload is passed as --kernel"},
 	&cli.BoolFlag{
 		Name: separatorFirstFlag,
 		Usage: "Record the EV_EFI_ACTION \"Calling EFI Application from Boot Option\" and the " +
@@ -229,16 +274,31 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{Name: loaderConfsFlag,
 		Usage: "Comma-separated list of bootloader configuration files to be measured into PCR5"},
 	&cli.StringFlag{Name: kernelFlag,
-		Usage: "Path to a direct boot kernel image (PE/COFF format) measured into PCR4/RTMR1"},
-	&cli.StringFlag{Name: configFlag, Usage: "Path to kernel configuration file"},
-	&cli.StringFlag{Name: initrdFlag, Usage: "The filename of the initrd/initramfs"},
+		Usage: "Path to the kernel image (PE/COFF format) measured into PCR4/RTMR1. Without " +
+			"--bootloaders the firmware loads it itself and measures it before the " +
+			"EV_EFI_GPT_EVENT, otherwise it is chainloaded and measured after its bootloaders"},
+	&cli.StringFlag{
+		Name: configFlag,
+		Usage: "Path to a kernel configuration file holding the real-mode setup header " +
+			"constants the loader fills in before the kernel is measured"},
+	&cli.StringFlag{
+		Name: initrdFlag,
+		Usage: "The filename of the initrd/initramfs. The firmware serves it to the kernel over " +
+			"LoadFile2 and measures it into PCR9/RTMR2"},
 	&cli.StringFlag{Name: cmdlineFlag, Usage: "Kernel commandline"},
 	&cli.StringFlag{
 		Name: initrdOptionFlag,
 		Usage: "Where the firmware places the initrd=initrd option in the UEFI LoadOptions " +
-			"measured into PCR9: 'prefix' (initrd=initrd <cmdline>, edk2 with the reordered " +
+			"measured into PCR9/RTMR2: 'prefix' (initrd=initrd <cmdline>, edk2 with the reordered " +
 			"QemuLoadImageLib), 'suffix' (<cmdline> initrd=initrd, older edk2), or 'none' " +
 			"(default, no option injected)"},
+	&cli.StringFlag{
+		Name: loadOptionsFlag,
+		Usage: "How the firmware recorded the UEFI LoadOptions carrying the kernel command " +
+			"line in PCR9/RTMR2: 'direct' (a single EV_EVENT_TAG, kernel loaded by the " +
+			"firmware) or 'chainloaded' (an additional preceding EV_IPL over the same digest, " +
+			"kernel loaded by an EFI bootloader). Inferred from --kernel and --bootloaders if " +
+			"unset"},
 	&cli.IntFlag{Name: addzerosFlag, Usage: "Add <num> trailing zeros to kernel cmdline", Value: 1},
 	&cli.BoolFlag{
 		Name:  stripnewlineFlag,
@@ -372,6 +432,18 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 			"initrd=initrd when an initrd is provided", initrdOptionFlag, c.InitrdOption, initrdFlag)
 	}
 
+	switch v := cmd.String(loadOptionsFlag); v {
+	case "", "auto":
+		c.LoadOptions = LoadOptionsAuto
+	case "direct":
+		c.LoadOptions = LoadOptionsDirect
+	case "chainloaded":
+		c.LoadOptions = LoadOptionsChainloaded
+	default:
+		return nil, fmt.Errorf(`invalid --%s %q: must be "direct", "chainloaded" or "auto"`,
+			loadOptionsFlag, v)
+	}
+
 	// default initialize to 1
 	if cmd.IsSet(addzerosFlag) {
 		c.AddZeros = cmd.Int(addzerosFlag)
@@ -494,6 +566,7 @@ func (c *Conf) Print() {
 		log.Debugf("\tCmdline: %q", c.Cmdline)
 	}
 	log.Debugf("\tInitrdOption: %s", c.InitrdOption)
+	log.Debugf("\tLoadOptions: %s (chainloaded: %v)", c.LoadOptions, c.Chainloaded())
 	if c.AddZeros != 0 {
 		log.Debugf("\tAddZeros: %d", c.AddZeros)
 	}
