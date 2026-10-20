@@ -17,12 +17,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
+	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
@@ -35,7 +37,7 @@ func main() {
 	cmd := &cli.Command{
 		Name:    "cmcd",
 		Usage:   "generates and verifies TPM, AMD SEV-SNP, Intel TDX, as well as SGX attestation evidence",
-		Version: internal.GetVersionInfo().String(),
+		Version: collectVersion(),
 		Flags:   Flags,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			c, err := GetConfig(cmd)
@@ -68,4 +70,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func collectVersion() string {
+	return fmt.Sprintf("%v, cmcd api version %v",
+		internal.GetVersionInfo().String(),
+		api.GetVersion())
 }
