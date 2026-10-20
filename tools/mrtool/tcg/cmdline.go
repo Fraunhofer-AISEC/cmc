@@ -25,6 +25,48 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
+// MeasureKernelHandoff measures the artifacts the firmware hands over to the kernel into
+// PCR9/RTMR2: the UEFI LoadOptions carrying the command line and, if present, the initrd.
+//
+// EDK2 records the LoadOptions of a chainloaded kernel twice over the same digest: once as
+// EV_IPL and once as an EV_EVENT_TAG tagged 0x8f3b22ed (LOADED_IMAGE::LoadOptions). A kernel
+// loaded by the firmware itself only gets the EV_EVENT_TAG, see Conf.Chainloaded. The initrd is
+// measured as an EV_EVENT_TAG tagged 0x8f3b22ec (Linux initrd) in both cases, as EDK2 serves it
+// to the kernel over LoadFile2 either way. The tags are event data only and do not enter the
+// digests.
+func (c *Conf) MeasureKernelHandoff(alg crypto.Hash, ta TrustAnchor, digest []byte,
+	refvals []*ar.Component, index int,
+) ([]byte, []*ar.Component, error) {
+
+	var err error
+
+	if c.Cmdline != "" {
+		if c.Chainloaded() {
+			digest, refvals, err = MeasureCmdline(alg, ta, digest, refvals, index, c.Cmdline,
+				"EV_IPL", c.AddZeros, c.StripNewline, c.InitrdOption)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to measure load options: %w", err)
+			}
+		}
+
+		digest, refvals, err = MeasureCmdline(alg, ta, digest, refvals, index, c.Cmdline,
+			"EV_EVENT_TAG", c.AddZeros, c.StripNewline, c.InitrdOption)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
+		}
+	}
+
+	if c.Initrd != "" {
+		digest, refvals, err = MeasureFile(alg, ta, "EV_EVENT_TAG", digest, refvals, index,
+			c.Initrd)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to measure initrd: %w", err)
+		}
+	}
+
+	return digest, refvals, nil
+}
+
 func MeasureCmdline(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
 	index int, cmdline, eventType string, zeros int, stripLf bool, initrdOption InitrdOption,
 ) ([]byte, []*ar.Component, error) {

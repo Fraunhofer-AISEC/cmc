@@ -186,8 +186,10 @@ func PrecomputeRtmr1(c *Config) ([]*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("kernel or bootloader must be specified for RTMR1")
 	}
 
-	// EV_EFI_BOOT_SERVICES_APPLICATION: Measure kernel if present
-	if c.Kernel != "" {
+	// EV_EFI_BOOT_SERVICES_APPLICATION
+	measureKernel := func(rtmr []byte, refvals []*ar.Component,
+	) ([]byte, []*ar.Component, error) {
+
 		data, err := os.ReadFile(c.Kernel)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read file: %w", err)
@@ -223,6 +225,18 @@ func PrecomputeRtmr1(c *Config) ([]*ar.Component, []*ar.Component, error) {
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to write kernel: %w", err)
 			}
+		}
+
+		return rtmr, refvals, nil
+	}
+
+	// A kernel the firmware loads itself from fw_cfg is measured before the boot device is
+	// touched. A chainloaded kernel is only loaded once its bootloader runs and is therefore
+	// measured after it, below.
+	if c.Kernel != "" && len(c.Bootloaders) == 0 {
+		rtmr, refvals, err = measureKernel(rtmr, refvals)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -269,6 +283,15 @@ func PrecomputeRtmr1(c *Config) ([]*ar.Component, []*ar.Component, error) {
 		}
 	}
 
+	// EV_EFI_BOOT_SERVICES_APPLICATION: the chainloaded kernel, in load order after its
+	// bootloaders
+	if c.Kernel != "" && len(c.Bootloaders) > 0 {
+		rtmr, refvals, err = measureKernel(rtmr, refvals)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	// EV_EFI_ACTION
 	rtmr, refvals, err = hashExtend(rtmr, refvals, tcg.INDEX_RTMR1, "EV_EFI_ACTION",
 		[]byte(EFI_EXIT_BOOT_SERVICES_INVOCATION), EFI_EXIT_BOOT_SERVICES_INVOCATION)
@@ -289,7 +312,7 @@ func PrecomputeRtmr1(c *Config) ([]*ar.Component, []*ar.Component, error) {
 /**
  * Calculates RTMR2
  *
- * RTMR2 contains the Linux kernel command line.
+ * RTMR2 contains the Linux kernel command line and the initrd.
  */
 func PrecomputeRtmr2(c *Config) ([]*ar.Component, []*ar.Component, error) {
 	log.Debugf("Precomputing RTMR2...")
@@ -307,11 +330,14 @@ func PrecomputeRtmr2(c *Config) ([]*ar.Component, []*ar.Component, error) {
 			return nil, nil, fmt.Errorf("failed to measure UKI: %w", err)
 		}
 	} else {
-		rtmr, refvals, err = tcg.MeasureCmdline(crypto.SHA384, tcg.TDX, rtmr, refvals,
-			tcg.INDEX_RTMR2, c.Cmdline, "EV_EVENT_TAG", c.AddZeros, c.StripNewline,
-			tcg.InitrdOptionNone)
+		if c.Cmdline == "" {
+			return nil, nil, fmt.Errorf("UKI or kernel commandline must be specified for RTMR2")
+		}
+
+		rtmr, refvals, err = c.MeasureKernelHandoff(crypto.SHA384, tcg.TDX, rtmr, refvals,
+			tcg.INDEX_RTMR2)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure cmdline: %w", err)
+			return nil, nil, fmt.Errorf("failed to measure kernel handoff: %w", err)
 		}
 	}
 
