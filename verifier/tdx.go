@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -553,14 +554,10 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			if directTdxMr(idx) {
 				continue
 			}
-			t := ar.TYPE_DIGEST_REFERENCE_VALUE
-			if successMrs[idx] {
-				t = ar.TYPE_DIGEST_VERIFIED
-			}
 			for _, refval := range refs {
 				detailedResults = append(detailedResults,
 					ar.DigestResult{
-						Type:        t,
+						Type:        ar.DigestTypeFromBool(successMrs[idx], ar.TYPE_DIGEST_REFERENCE_VALUE),
 						Name:        refval.Name,
 						Index:       idx,
 						Digest:      refval.GetHash(crypto.SHA384),
@@ -580,29 +577,34 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 				log.Debugf("Verifying %v %v eventlog events", len(artifact.Events), internal.IndexToMr(artifact.Index))
 				for _, event := range artifact.Events {
 					found := false
-					for _, refval := range refvals {
-						if bytes.Equal(refval.GetHash(crypto.SHA384), event.GetHash(crypto.SHA384)) {
+					var refval ar.Component
+					for _, ref := range refvals {
+						if bytes.Equal(ref.GetHash(crypto.SHA384), event.GetHash(crypto.SHA384)) {
 							found = true
+							refval = ref
 							break
 						}
 					}
-					t := ar.TYPE_DIGEST_MEASUREMENT
-					if found {
-						t = ar.TYPE_DIGEST_VERIFIED
-					}
 					r := ar.DigestResult{
-						Type:        t,
+						Type:        ar.DigestTypeFromBool(found, ar.TYPE_DIGEST_MEASUREMENT),
 						Name:        event.Name,
+						Launched:    true,
+						Success:     found,
 						Index:       artifact.Index,
 						Digest:      event.GetHash(crypto.SHA384),
 						Description: event.Description,
-						PackageUrl:  event.PackageUrl,
 						HashAlg:     crypto.SHA384.String(),
 					}
-					r.Success = found
-					// The event is part of the eventlog and was therefore launched, independently
-					// of whether a matching reference value exists
-					r.Launched = true
+					if r.Success {
+						// Always use the refvals description if present, as it is more verbose
+						nameInfo := refval.Name
+						if event.Name != "" && !strings.EqualFold(refval.Name, event.Name) {
+							nameInfo += ": " + event.Name
+						}
+						r.Name = nameInfo
+						r.Description = refval.Description
+						r.PackageUrl = refval.PackageUrl
+					}
 					detailedResults = append(detailedResults, r)
 
 					if r.Success {
@@ -678,8 +680,8 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNER
 	success := bytes.Equal(refTdId.MrOwner[:], report.MrOwner[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
-		Name:     "MrOwner",
+		Type:     ar.DigestTypeFromBool(success, ar.TYPE_DIGEST_REFERENCE_VALUE),
+		Name:     "MROWNER",
 		Digest:   refTdId.MrOwner,
 		Success:  success,
 		Launched: success,
@@ -700,13 +702,15 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	// Verify MROWNERCONFIG
 	success = bytes.Equal(refTdId.MrOwnerConfig[:], report.MrOwnerConfig[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
+		Type:     ar.DigestTypeFromBool(success, ar.TYPE_DIGEST_REFERENCE_VALUE),
 		Name:     "MROWNERCONFIG",
 		Digest:   refTdId.MrOwnerConfig,
 		Success:  success,
 		Launched: success,
+		HashAlg:  crypto.SHA384.String(),
 	})
 	if !success {
+		// Also add the measurement to the result for comparison against the reference value
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     ar.TYPE_DIGEST_MEASUREMENT,
@@ -714,19 +718,22 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 			Digest:   report.MrOwnerConfig[:],
 			Success:  false,
 			Launched: true,
+			HashAlg:  crypto.SHA384.String(),
 		})
 	}
 
 	// Verify MRCONFIGID
 	success = bytes.Equal(refTdId.MrConfigId[:], report.MrConfigId[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
+		Type:     ar.DigestTypeFromBool(success, ar.TYPE_DIGEST_REFERENCE_VALUE),
 		Name:     "MRCONFIGID",
 		Digest:   refTdId.MrConfigId,
 		Success:  success,
 		Launched: success,
+		HashAlg:  crypto.SHA384.String(),
 	})
 	if !success {
+		// Also add the measurement to the result for comparison against the reference value
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     ar.TYPE_DIGEST_MEASUREMENT,
@@ -734,13 +741,14 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 			Digest:   report.MrConfigId[:],
 			Success:  false,
 			Launched: true,
+			HashAlg:  crypto.SHA384.String(),
 		})
 	}
 
 	// Verify MRSIGNERSEAM
 	success = bytes.Equal(tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes, report.MrSignerSeam[:])
 	results = append(results, ar.DigestResult{
-		Type:     ar.TYPE_DIGEST_REFERENCE_VALUE,
+		Type:     ar.DigestTypeFromBool(success, ar.TYPE_DIGEST_REFERENCE_VALUE),
 		Name:     "MRSIGNERSEAM",
 		Digest:   tcbInfo.TcbInfo.TdxModule.Mrsigner.Bytes,
 		Success:  success,
@@ -748,6 +756,7 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 		HashAlg:  crypto.SHA384.String(),
 	})
 	if !success {
+		// Also add the measurement to the result for comparison against the reference value
 		tdIdSuccess = false
 		results = append(results, ar.DigestResult{
 			Type:     ar.TYPE_DIGEST_MEASUREMENT,

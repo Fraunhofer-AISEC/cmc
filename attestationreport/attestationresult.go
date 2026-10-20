@@ -836,6 +836,13 @@ func StatusFromBool(ok bool) Status {
 	}
 }
 
+func DigestTypeFromBool(matched bool, unmatched string) string {
+	if matched {
+		return TYPE_DIGEST_VERIFIED
+	}
+	return unmatched
+}
+
 func (r *AttestationResult) Fail(code ErrorCode, errs ...error) {
 	if len(errs) > 0 {
 		for _, err := range errs {
