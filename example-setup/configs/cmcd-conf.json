@@ -23,7 +23,6 @@
     "ctr": true,
     "ctrDriver": "sw",
     "ctrLog": "/tmp/container_measurements",
-    "ctrPcr": 11,
     "rootCas": [
         "../data/pki/ca.pem"
     ],

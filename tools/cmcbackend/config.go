@@ -16,7 +16,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +24,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/exp/maps"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 // Category separates independent deployments within the same database. The
@@ -121,12 +122,8 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(configFlag) {
 		configFile := cmd.String(configFlag)
 		log.Infof("Loading config from file %v", configFile)
-		data, err := os.ReadFile(configFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read cmcd config file %v: %v", configFile, err)
-		}
-		if err := json.Unmarshal(data, c); err != nil {
-			return nil, fmt.Errorf("failed to parse cmcd config: %v", err)
+		if err := internal.ReadConfig(configFile, c); err != nil {
+			return nil, err
 		}
 	}
 

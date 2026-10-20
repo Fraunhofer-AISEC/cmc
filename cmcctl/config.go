@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -306,13 +305,8 @@ func getConfig(cmd *cli.Command) (*config, error) {
 	if cmd.IsSet(configFlag) {
 		files := strings.Split(cmd.String(configFlag), ",")
 		for _, f := range files {
-			data, err := os.ReadFile(f)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read cmcctl config file %v: %v", f, err)
-			}
-			err = json.Unmarshal(data, c)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse cmcctl config: %v", err)
+			if err := internal.ReadConfig(f, c); err != nil {
+				return nil, err
 			}
 		}
 	}
