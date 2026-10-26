@@ -22,8 +22,12 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -157,6 +161,67 @@ func TestParseCertsDer(t *testing.T) {
 			}
 			if len(got) != tt.wantLen {
 				t.Errorf("ParseCerts() len = %v, want %v", got, tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestReadCerts(t *testing.T) {
+	tests := []struct {
+		name    string
+		files   [][]byte
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "Single PEM certificate",
+			files:   [][]byte{leaf1},
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "Single DER certificate",
+			files:   [][]byte{leaf1Der},
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "PEM bundle",
+			files:   [][]byte{append(append(slices.Clone(leaf1), inter1...), ca1...)},
+			wantLen: 3,
+			wantErr: false,
+		},
+		{
+			name:    "Multiple files",
+			files:   [][]byte{append(slices.Clone(leaf1), inter1...), ca1},
+			wantLen: 3,
+			wantErr: false,
+		},
+		{
+			name:    "Invalid certificate",
+			files:   [][]byte{leaf1, []byte("abc")},
+			wantLen: 0,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			paths := make([]string, 0, len(tt.files))
+			for i, data := range tt.files {
+				p := filepath.Join(t.TempDir(), fmt.Sprintf("cert%v", i))
+				if err := os.WriteFile(p, data, 0644); err != nil {
+					t.Fatalf("failed to write test file: %v", err)
+				}
+				paths = append(paths, p)
+			}
+
+			got, err := ReadCerts(paths)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ReadCerts() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if len(got) != tt.wantLen {
+				t.Errorf("ReadCerts() len = %v, want %v", len(got), tt.wantLen)
 			}
 		})
 	}
