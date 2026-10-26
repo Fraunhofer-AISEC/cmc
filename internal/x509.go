@@ -52,6 +52,15 @@ func ParseCert(data []byte) (*x509.Certificate, error) {
 	return cert, nil
 }
 
+// ParseCerts parses all certificates contained in a PEM or DER encoded blob
+// into a list of X.509 certificates
+func ParseCerts(data []byte) ([]*x509.Certificate, error) {
+	if block, _ := pem.Decode(data); block != nil {
+		return parseCertBlobPem(data)
+	}
+	return parseCertsDer(data)
+}
+
 // ReadCert reads a PEM or DER encoded certificate from a file
 func ReadCert(path string) (*x509.Certificate, error) {
 
@@ -68,7 +77,8 @@ func ReadCert(path string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// ReadCerts reads PEM or DER encoded certificates from a list of files
+// ReadCerts reads PEM or DER encoded certificates from a list of files. Each
+// file may contain multiple concatenated certificates
 func ReadCerts(paths []string) ([]*x509.Certificate, error) {
 
 	if len(paths) == 0 {
@@ -77,11 +87,15 @@ func ReadCerts(paths []string) ([]*x509.Certificate, error) {
 
 	certs := make([]*x509.Certificate, 0, len(paths))
 	for _, p := range paths {
-		cert, err := ReadCert(p)
+		data, err := os.ReadFile(p)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to read %v: %w", p, err)
 		}
-		certs = append(certs, cert)
+		c, err := ParseCerts(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse %v: %w", p, err)
+		}
+		certs = append(certs, c...)
 	}
 	return certs, nil
 }
