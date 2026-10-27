@@ -83,6 +83,13 @@ func PrecomputeRtmr0(c *Config) ([]*ar.Component, []*ar.Component, error) {
 		}
 	}
 
+	// EV_PLATFORM_CONFIG_FLAGS: the fw_cfg data QemuBootOrderLib reads while building the boot options
+	rtmr, refvals, err = tcg.CalculateQemuBootFwCfg(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, c.BootMenuWait, c.FwCfgBootOrder)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to calculate qemu boot fw_cfg: %w", err)
+	}
+
 	// Measure UEFI Secure Boot Variables: SecureBoot, PK, KEK, db, dbx
 	rtmr, refvals, err = tcg.MeasureSecureBootVariables(crypto.SHA384, tcg.TDX, rtmr, refvals,
 		tcg.INDEX_RTMR0, c.SecureBoot, c.Pk, c.Kek, c.Db, c.Dbx)
@@ -104,6 +111,14 @@ func PrecomputeRtmr0(c *Config) ([]*ar.Component, []*ar.Component, error) {
 		tcg.INDEX_RTMR0, c.AcpiRsdp, c.AcpiTables, c.TableLoader, c.TpmLog)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
+	}
+
+	// EV_EFI_HANDOFF_TABLES: the SMBIOS table, installed over the ACPI tables and measured by
+	// SmbiosMeasurementDxe
+	rtmr, refvals, err = tcg.MeasureSmbiosTables(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, c.SmbiosTables, c.SmbiosSpec, c.DumpSmbios)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
 	}
 
 	// EV_EFI_VARIABLE_BOOT boot variables. Some firmwares, such OpenHCL do not measure boot

@@ -17,10 +17,60 @@ package tcg
 
 import (
 	"bytes"
+	"crypto"
 	"encoding/binary"
 	"fmt"
+	"os"
 	"strings"
+
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
+
+// MeasureSmbiosTables measures the SMBIOS structure table as EV_EFI_HANDOFF_TABLES, the way
+// EDK2's MdeModulePkg/Universal/SmbiosMeasurementDxe does. The event data it logs is an
+// EFI_HANDOFF_TABLE_POINTERS naming SMBIOS_TABLE_GUID.
+// The table can be captured from a DMI dump on a reference VM or from a qemu-equivalent spec.
+func MeasureSmbiosTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
+	index int, smbiosTables string, spec *SmbiosSpec, dump string,
+) ([]byte, []*ar.Component, error) {
+
+	var blob []byte
+	var err error
+	switch {
+	case smbiosTables != "":
+		blob, err = os.ReadFile(smbiosTables)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read SMBIOS tables: %w", err)
+		}
+	case spec != nil:
+		blob, err = BuildSmbiosTable(*spec)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to encode SMBIOS spec: %w", err)
+		}
+	default:
+		return digest, refvals, nil
+	}
+
+	filtered, err := FilterSmbiosForMeasurement(blob)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to filter SMBIOS tables: %w", err)
+	}
+
+	rv, digest, err := CreateExtendRefval(alg, ta, index, digest, filtered,
+		"EV_EFI_HANDOFF_TABLES", "smbios-tables")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
+	}
+	refvals = append(refvals, rv)
+
+	if dump != "" {
+		if err := os.WriteFile(dump, filtered, 0644); err != nil {
+			return nil, nil, fmt.Errorf("failed to write smbios dump: %w", err)
+		}
+	}
+
+	return digest, refvals, nil
+}
 
 const (
 	smbiosTypeBios               = 0
