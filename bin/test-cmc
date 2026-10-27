@@ -7,19 +7,36 @@ source "${dir}/bin/utils.sh"
 
 data="${dir}/data"
 
+# Seconds to wait for a component to report readiness before the run is considered failed
+wait_timeout=120
+# Lines of component output shown when a step fails
+log_tail_lines=30
+
 # Cleanup to kill all running processes
 trap "exit" INT TERM
 trap cleanup EXIT
 
 cleanup() {
 
-    if [[ ! $? -eq 0 ]]; then
+    local rc=$?
+
+    if [[ ! ${rc} -eq 0 ]]; then
         printf "[\033[31;1mFAILED\033[0m]\nCleaning up..\n"
+        if [[ -d "${log_dir:-}" ]]; then
+            printf "Logs: %s\n" "${log_dir}"
+        fi
+    fi
+    if [[ -n "${sudo_keepalive_pid:-}" ]]; then
+        kill "${sudo_keepalive_pid}" > /dev/null 2>&1 || true
     fi
     kill_process "cmcd"
     kill_process "cmcctl"
     kill_process "estserver"
-    stty sane
+    if [[ -t 0 ]]; then
+        stty sane
+    fi
+
+    exit "${rc}"
 }
 
 kill_process() {
@@ -34,7 +51,7 @@ kill_process() {
 
     pkill -SIGINT "${process_name}" > /dev/null 2>&1
     if [ $? -eq 1 ]; then
-        sudo pkill -SIGINT "${process_name}" > /dev/null 2>&1
+        sudo -n pkill -SIGINT "${process_name}" > /dev/null 2>&1
         if [ $? -eq 1 ]; then
             printf "FAIL\n"
             set -e
@@ -45,7 +62,7 @@ kill_process() {
     sleep 0.2
 
     if pgrep -x "${process_name}" > /dev/null; then
-        sudo pkill -9 "${process_name}" > /dev/null 2>&1
+        sudo -n pkill -9 "${process_name}" > /dev/null 2>&1
         sleep 0.2
     fi
 
@@ -64,6 +81,9 @@ wait_for_message() {
     local process_pid=$1
     local output_file=$2
     local message=$3
+    local timeout=${4:-${wait_timeout}}
+
+    local deadline=$(( SECONDS + timeout ))
 
     while kill -0 ${process_pid} 2>/dev/null; do
         sleep 0.3
@@ -71,6 +91,14 @@ wait_for_message() {
             if grep -q "${message}" "${output_file}"; then
                 return 0
             fi
+        fi
+        # Without a timeout, a component that starts but never becomes ready would hang the
+        # whole run until the CI job is killed
+        if (( SECONDS >= deadline )); then
+            printf "\nTimeout after %ss waiting for '%s' in logfile %s\n" \
+                "${timeout}" "${message}" "${output_file}"
+            print_log_tail "${output_file}"
+            return 1
         fi
     done
 
@@ -81,7 +109,32 @@ wait_for_message() {
     fi
 
     printf "\nExpected message: '%s' not found in logfile %s\n" "${message}" "${output_file}"
+    print_log_tail "${output_file}"
     return 1
+}
+
+print_log_tail() {
+    local output_file=$1
+
+    if [[ -f "${output_file}" ]]; then
+        printf -- "--- last %s lines of %s ---\n" "${log_tail_lines}" "${output_file}"
+        tail -n "${log_tail_lines}" "${output_file}"
+        printf -- "---\n"
+    fi
+}
+
+# Assert that a component logged the expected message, showing the log on failure so that a CI
+# run reports why it failed instead of only that it failed
+check_message() {
+    local output_file=$1
+    local message=$2
+
+    if ! grep -q "${message}" "${output_file}"; then
+        printf "\nExpected message: '%s' not found in logfile %s\n" "${message}" "${output_file}"
+        print_log_tail "${output_file}"
+        print_log_tail "${output_file}.out"
+        return 1
+    fi
 }
 
 
@@ -99,7 +152,7 @@ storage="${data}/cmc-internal"
 cache="${data}/cmc-cache"
 peercache="${data}/cmc-peer-cache"
 ctrlog="${data}/cmc-container-measurements"
-hostname="$(hostname --fqdn)"
+hostname="$(hostname --fqdn 2>/dev/null || hostname)"
 
 est_params=(
     "--est-addr"            "0.0.0.0:9000" \
@@ -191,24 +244,45 @@ go build -C "${dir}/tools/estserver"
 go build -C "${dir}/tools/mrtool"
 go build -C "${dir}/tools/metatool"
 
+# The components need root privileges for TPM and measurement log access. They are started
+# detached from the terminal and can therefore neither prompt for a password nor be answered, so
+# make sure sudo works non-interactively before anything is started
+sudo_keepalive_pid=""
+if ! sudo -n true > /dev/null 2>&1; then
+    if [[ ! -t 0 ]]; then
+        echo "sudo requires a password, but there is no terminal to prompt on."
+        echo "Configure passwordless sudo for this user. Abort.."
+        exit 1
+    fi
+    echo "Caching sudo credentials for the test run.."
+    sudo -v
+    # The matrix runs longer than the sudo timestamp timeout, so refresh the credentials
+    while true; do
+        sleep 50
+        sudo -n -v < /dev/null > /dev/null 2>&1 || exit
+    done &
+    sudo_keepalive_pid=$!
+    disown
+fi
+
 # Clean start
 echo "Wiping internal folders for fresh start..."
-sudo rm -rf "${metadata_raw}"
-sudo rm -rf "${metadata_signed}"
-sudo rm -rf "${omsp_data}"
-sudo rm -rf "${storage}"
-sudo rm -rf "${cache}"
-sudo rm -rf "${peercache}"
-sudo rm -rf "${log_dir}"
+sudo -n rm -rf "${metadata_raw}"
+sudo -n rm -rf "${metadata_signed}"
+sudo -n rm -rf "${omsp_data}"
+sudo -n rm -rf "${storage}"
+sudo -n rm -rf "${cache}"
+sudo -n rm -rf "${peercache}"
+sudo -n rm -rf "${log_dir}"
 
 mkdir -p "${log_dir}"
 
 # Start est server
 echo "Starting est server..."
-sudo "${dir}/tools/estserver/estserver" "${est_params[@]}" &
+setsid -w sudo -n "${dir}/tools/estserver/estserver" "${est_params[@]}" \
+    < /dev/null > "${log_dir}/estserver.out" 2>&1 &
 disown
 sleep 0.2
-stty sane
 
 echo "Performing tests"
 
@@ -240,16 +314,16 @@ do
                     cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}.log"
 
                     echo "Starting cmcd"
-                    sudo "${dir}/cmcd/cmcd" \
+                    setsid -w sudo -n "${dir}/cmcd/cmcd" \
                         "${cmc_params[@]}" \
                         --log-file "${cmc_log}" \
                         --omsp-format "${omsp_serializer}" \
                         --api "${protocols[i]}" \
+                        < /dev/null > "${cmc_log}.out" 2>&1 \
                         &
                     cmc_pid="$!"
                     disown
                     wait_for_message "$cmc_pid" "${cmc_log}" "Waiting for.*requests"
-                    stty sane
                     echo "Restarted cmcd -----------------------------------------------------------------"
 
                     for j in "${!commands_server[@]}"
@@ -259,27 +333,27 @@ do
 
                         printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | OMSP %s | API %-6s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${omsp_serializer}" "${protocols[i]}"
 
-                        "${dir}/cmcctl/cmcctl" \
+                        setsid -w "${dir}/cmcctl/cmcctl" \
                             "${commands_server[j]}" \
                             "${cmcctl_params[@]}" \
                             --log-file "${server_log}" \
                             --api ${protocols[i]} \
                             --serialization ${api_serializer} \
                             ${commands_params_server[j]} \
+                            < /dev/null > "${server_log}.out" 2>&1 \
                             &
                         disown
                         wait_for_message $! "${server_log}" "${commands_server_ready_msg[j]}"
-                        stty sane
 
                         set +e
-                        "${dir}/cmcctl/cmcctl" \
+                        setsid -w timeout "${wait_timeout}" "${dir}/cmcctl/cmcctl" \
                             "${commands_client[j]}" \
                             "${cmcctl_params[@]}" \
                             --log-file "${client_log}" \
                             --serialization "${api_serializer}" \
                             --api "${protocols[i]}" \
-                            ${commands_params_client[j]}
-                        stty sane
+                            ${commands_params_client[j]} \
+                            < /dev/null > "${client_log}.out" 2>&1
                         set -e
 
                         if [[ "${success}" == "success" ]]; then
@@ -291,8 +365,8 @@ do
                         fi
 
                         # Verify the server and client output
-                        grep -q "${wait_msg_server}" "${server_log}"
-                        grep -q "${wait_msg_client}" "${client_log}"
+                        check_message "${server_log}" "${wait_msg_server}"
+                        check_message "${client_log}" "${wait_msg_client}"
                         printf "[\033[32;1m  OK  \033[0m]\n"
 
                         kill_process "cmcctl"
