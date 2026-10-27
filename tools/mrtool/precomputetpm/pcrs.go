@@ -171,40 +171,13 @@ func PrecomputePcr1(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to calculate acpi tables: %w", err)
 	}
 
-	// SMBIOS tables recorded as EV_EFI_HANDOFF_TABLES.
-	var smbiosBlob []byte
-	switch {
-	// Capture mode: the input is /sys/firmware/dmi/tables/DMI dumped from a reference VM
-	case c.SmbiosTables != "":
-		smbiosBlob, err = os.ReadFile(c.SmbiosTables)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read SMBIOS tables: %w", err)
-		}
-	// Spec mode: encode the table from the spec, matching what OVMF would install
-	case c.SmbiosSpec != nil:
-		smbiosBlob, err = tcg.BuildSmbiosTable(*c.SmbiosSpec)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to encode SMBIOS spec: %w", err)
-		}
-	}
-	if smbiosBlob != nil {
-		filtered, err := tcg.FilterSmbiosForMeasurement(smbiosBlob)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to filter SMBIOS tables: %w", err)
-		}
-		var rv *ar.Component
-		rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 1, pcr,
-			filtered, "EV_EFI_HANDOFF_TABLES", "smbios-tables")
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
-		}
-		refvals = append(refvals, rv)
-
-		if c.DumpSmbios != "" {
-			if err := os.WriteFile(c.DumpSmbios, filtered, 0644); err != nil {
-				return nil, nil, fmt.Errorf("failed to write smbios dump: %w", err)
-			}
-		}
+	// SMBIOS tables recorded as EV_EFI_HANDOFF_TABLES. Capture mode takes a
+	// /sys/firmware/dmi/tables/DMI dump from a reference VM, spec mode encodes the table OVMF
+	// would install from a qemu-equivalent spec.
+	pcr, refvals, err = tcg.MeasureSmbiosTables(c.HashAlg, tcg.TPM, pcr, refvals, 1,
+		c.SmbiosTables, c.SmbiosSpec, c.DumpSmbios)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure SMBIOS tables: %w", err)
 	}
 
 	// EV_EFI_VARIABLE_BOOT: boot variables. Some firmwares, such as OpenHCL, do not measure boot

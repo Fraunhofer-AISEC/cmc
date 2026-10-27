@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -106,6 +107,8 @@ type Conf struct {
 	TpmLog         string
 	SmbiosTables   string
 	SmbiosSpec     *SmbiosSpec
+	FwCfgBootOrder string
+	BootMenuWait   *uint16
 	BootOrder      []string
 	BootXxxx       []string
 	NoBootVars     bool
@@ -156,6 +159,9 @@ const (
 	smbiosBiosVendorFlag      = "smbios-bios-vendor"
 	smbiosBiosVersionFlag     = "smbios-bios-version"
 	smbiosBiosDateFlag        = "smbios-bios-date"
+
+	fwcfgBootOrderFlag = "fwcfg-bootorder"
+	bootMenuWaitFlag   = "boot-menu-wait"
 
 	bootorderFlag      = "bootorder"
 	bootxxxxFlag       = "bootxxxx"
@@ -243,6 +249,16 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  smbiosBiosDateFlag,
 		Usage: "Spec-mode: SMBIOS BIOSReleaseDate (MM/DD/YYYY)",
+	},
+	&cli.StringFlag{
+		Name: fwcfgBootOrderFlag,
+		Usage: "Path to the QEMU bootorder fw_cfg file, measured as EV_PLATFORM_CONFIG_FLAGS " +
+			"into PCR1/RTMR0 by QemuBootOrderLib.",
+	},
+	&cli.UintFlag{
+		Name: bootMenuWaitFlag,
+		Usage: "QEMU etc/boot-menu-wait timeout, measured as EV_PLATFORM_CONFIG_FLAGS into " +
+			"PCR1/RTMR0 by QemuBootOrderLib, passed as a value",
 	},
 	&cli.StringFlag{
 		Name:  bootorderFlag,
@@ -382,6 +398,17 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	}
 	c.SmbiosSpec = spec
 
+	if cmd.IsSet(fwcfgBootOrderFlag) {
+		c.FwCfgBootOrder = cmd.String(fwcfgBootOrderFlag)
+	}
+	if cmd.IsSet(bootMenuWaitFlag) {
+		wait := cmd.Uint(bootMenuWaitFlag)
+		if wait > math.MaxUint16 {
+			return nil, fmt.Errorf("--%s must fit a UINT16, got %v", bootMenuWaitFlag, wait)
+		}
+		w := uint16(wait)
+		c.BootMenuWait = &w
+	}
 	if cmd.IsSet(bootorderFlag) {
 		c.BootOrder = strings.Split(cmd.String(bootorderFlag), ",")
 	}

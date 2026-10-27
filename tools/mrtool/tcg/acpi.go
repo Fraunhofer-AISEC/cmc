@@ -17,11 +17,53 @@ package tcg
 
 import (
 	"crypto"
+	"encoding/binary"
 	"fmt"
 	"os"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
+
+// CalculateQemuBootFwCfg measures the fw_cfg data EDK2's QemuBootOrderLib consumes while
+// setting up the boot options: first etc/boot-menu-wait, then bootorder.
+func CalculateQemuBootFwCfg(alg crypto.Hash, ta TrustAnchor, digest []byte,
+	refvals []*ar.Component, index int, bootMenuWait *uint16, bootOrder string,
+) ([]byte, []*ar.Component, error) {
+
+	if bootMenuWait != nil {
+		data := make([]byte, 2)
+		binary.LittleEndian.PutUint16(data, *bootMenuWait)
+
+		var rv *ar.Component
+		var err error
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
+			"EV_PLATFORM_CONFIG_FLAGS", "etc/boot-menu-wait")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create etc/boot-menu-wait reference value: %w",
+				err)
+		}
+
+		refvals = append(refvals, rv)
+	}
+
+	if bootOrder != "" {
+		data, err := os.ReadFile(bootOrder)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to read bootorder file: %w", err)
+		}
+
+		var rv *ar.Component
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data,
+			"EV_PLATFORM_CONFIG_FLAGS", "bootorder")
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create bootorder reference value: %w", err)
+		}
+
+		refvals = append(refvals, rv)
+	}
+
+	return digest, refvals, nil
+}
 
 func CalculateAcpiTables(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.Component,
 	index int, acpiRspd, acpiTables, tableLoader, tpmLog string,
