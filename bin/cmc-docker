@@ -11,7 +11,8 @@ uidn=$(id -un)
 gidn=$(id -gn)
 
 name="cmc$(printf "%s" "${dir}" | tr '/' '-')"
-hostname="cmc-docker"
+# Inherit the host's name as the container is transparent
+hostname="$(hostname --fqdn 2>/dev/null || hostname)"
 
 qgs_path="/var/run/tdx-qgs"
 
@@ -82,6 +83,9 @@ else
     args=("${@}")
 fi
 
+# Only allocate a pseudo-terminal when there is one, so that the script also works in CI
+test -t 0 && tty="--tty" || tty=""
+
 docker exec \
 --user "${uid}":"${gid}" \
 --env HOME="${HOME}" \
@@ -89,5 +93,5 @@ docker exec \
 --env LANG=C.UTF-8 \
 --workdir "${dir}" \
 --interactive \
---tty \
+${tty} \
 "${name}" "${args[@]}"
