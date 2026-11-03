@@ -16,7 +16,10 @@
 package measure
 
 import (
+	"bytes"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -57,6 +60,22 @@ func TestGetConfigMeasurement(t *testing.T) {
 }
 
 func TestNormalize(t *testing.T) {
+	// Normalize resolves hook symlinks, so use a symlink under our control instead of a host binary
+	dir := t.TempDir()
+	target := filepath.Join(dir, "dockerd")
+	if err := os.WriteFile(target, nil, 0755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "exe")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	placeholder := []byte("<hook-path>")
+
 	type args struct {
 		id         string
 		configData []byte
@@ -71,9 +90,9 @@ func TestNormalize(t *testing.T) {
 			name: "normalize_Success",
 			args: args{
 				id:         "8d6f55b059bca4d130b60e29807c5a5f63014b8673ad7cee69b7fb84b03b6443",
-				configData: dockerConfig,
+				configData: bytes.ReplaceAll(dockerConfig, placeholder, []byte(link)),
 			},
-			want:    normalizedDockerConfig,
+			want:    bytes.ReplaceAll(normalizedDockerConfig, placeholder, []byte(resolved)),
 			wantErr: false,
 		},
 	}
@@ -92,7 +111,7 @@ func TestNormalize(t *testing.T) {
 }
 
 var (
-	normalizedDockerConfig = []byte(`{"hooks":{"prestart":[{"args":["libnetwork-setkey","-exec-root=/var/run/docker","<container-id>","<docker-network-controller-id>"],"path":"/usr/bin/ls"}]},"linux":{"cgroupsPath":"system.slice:docker:<container-id>","maskedPaths":["/proc/asound","/sys/devices/virtual/powercap"],"namespaces":[{"type":"mount"}],"readonlyPaths":["/proc/bus","/proc/sysrq-trigger"],"resources":{"blockIO":{},"devices":[{"access":"rwm","allow":false}]},"seccomp":{"architectures":["SCMP_ARCH_X32","SCMP_ARCH_X86_64"],"defaultAction":"SCMP_ACT_ERRNO","defaultErrnoRet":1,"syscalls":[{"action":"SCMP_ACT_ALLOW","names":["chroot"]}]},"sysctl":{"net.ipv4.ip_unprivileged_port_start":"0","net.ipv4.ping_group_range":"0 2147483647"}},"mounts":[{"destination":"/etc/resolv.conf","options":["rbind","rprivate"],"source":"/var/lib/docker/containers/<container-id>/resolv.conf","type":"bind"}],"ociVersion":"1.2.0","process":{"args":["/bin/sh"],"capabilities":{"permitted":["CAP_CHOWN","CAP_DAC_OVERRIDE"]},"cwd":"/","env":["HOSTNAME=<container-id>","PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","TERM=xterm"],"user":{"gid":0,"uid":0}}}`)
+	normalizedDockerConfig = []byte(`{"hooks":{"prestart":[{"args":["libnetwork-setkey","-exec-root=/var/run/docker","<container-id>","<docker-network-controller-id>"],"path":"<hook-path>"}]},"linux":{"cgroupsPath":"system.slice:docker:<container-id>","maskedPaths":["/proc/asound","/sys/devices/virtual/powercap"],"namespaces":[{"type":"mount"}],"readonlyPaths":["/proc/bus","/proc/sysrq-trigger"],"resources":{"blockIO":{},"devices":[{"access":"rwm","allow":false}]},"seccomp":{"architectures":["SCMP_ARCH_X32","SCMP_ARCH_X86_64"],"defaultAction":"SCMP_ACT_ERRNO","defaultErrnoRet":1,"syscalls":[{"action":"SCMP_ACT_ALLOW","names":["chroot"]}]},"sysctl":{"net.ipv4.ip_unprivileged_port_start":"0","net.ipv4.ping_group_range":"0 2147483647"}},"mounts":[{"destination":"/etc/resolv.conf","options":["rbind","rprivate"],"source":"/var/lib/docker/containers/<container-id>/resolv.conf","type":"bind"}],"ociVersion":"1.2.0","process":{"args":["/bin/sh"],"capabilities":{"permitted":["CAP_CHOWN","CAP_DAC_OVERRIDE"]},"cwd":"/","env":["HOSTNAME=<container-id>","PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","TERM=xterm"],"user":{"gid":0,"uid":0}}}`)
 
 	dockerConfig = []byte(`
 {
@@ -141,7 +160,7 @@ var (
   "hooks": {
     "prestart": [
       {
-        "path": "/usr/bin/ls",
+        "path": "<hook-path>",
         "args": [
           "libnetwork-setkey",
           "-exec-root=/var/run/docker",
