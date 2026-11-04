@@ -40,6 +40,9 @@ jobs:
           pushd tools/cmcbackend
           go build -ldflags="-s -w" -trimpath
           popd
+          pushd tools/rvps
+          go build -ldflags="-s -w" -trimpath
+          popd
           pushd tools/snptool
           go build -ldflags="-s -w" -trimpath
           popd
@@ -100,6 +103,11 @@ jobs:
         with:
           name: cmcbackend
           path: tools/cmcbackend/cmcbackend
+      - name: "Upload rvps"
+        uses: actions/upload-artifact@v7
+        with:
+          name: rvps
+          path: tools/rvps/rvps
       - name: "Upload tdxtool"
         uses: actions/upload-artifact@v7
         with:
@@ -157,6 +165,7 @@ jobs:
             artifacts/metatool/metatool
             artifacts/mrtool/mrtool
             artifacts/cmcbackend/cmcbackend
+            artifacts/rvps/rvps
             artifacts/tdxtool/tdxtool
             artifacts/snptool/snptool
             artifacts/azuretool/azuretool

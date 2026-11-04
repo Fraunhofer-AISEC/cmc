@@ -74,6 +74,7 @@ go install -C "${dir}/tools/tdxtool"
 go install -C "${dir}/tools/snptool"
 go install -C "${dir}/tools/tdxtool"
 go install -C "${dir}/tools/cmcbackend"
+go install -C "${dir}/tools/rvps"
 
 # Build CMC to be present in local folders
 echo "Locally Building CMC"
@@ -86,6 +87,7 @@ go build -C "${dir}/tools/tdxtool"
 go build -C "${dir}/tools/snptool"
 go build -C "${dir}/tools/tdxtool"
 go build -C "${dir}/tools/cmcbackend"
+go build -C "${dir}/tools/rvps"
 
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"

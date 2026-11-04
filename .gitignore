@@ -15,6 +15,7 @@ cmcctl/ca.pem
 **/attestation-result.json
 tools/estserver/estserver
 tools/cmcbackend/cmcbackend
+tools/rvps/rvps
 tools/backend/monitoring.db
 tools/metasign/metasign
 tools/metaconv/metaconv
@@ -42,3 +43,4 @@ est/server/server
 attestationreport/cache/*
 /tmp/*
 /tools/cmcbackend/*.db
+/tools/rvps/*.db
