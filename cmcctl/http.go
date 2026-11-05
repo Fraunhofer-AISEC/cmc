@@ -57,6 +57,10 @@ func request(c *config) error {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
+	// Wait for pending publishing before the command exits
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	// Create an attested HTTP Transport structure. This is a wrapper around http.Transport,
 	// look for the descriptions of the parameters there. Additionally, the aTLS parameters
 	// must be configured
@@ -72,13 +76,10 @@ func request(c *config) error {
 		LibApiCmcConfig: &c.Config,
 		CmcPolicies:     c.policies,
 		ResultCb: func(result *ar.AttestationResult) {
-			// Publish the attestation result asynchronously if publishing address was specified and
-			// and attestation was performed
+			// Publish asynchronously
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
-				wg := new(sync.WaitGroup)
 				wg.Add(1)
-				defer wg.Wait()
-				go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, wg,
+				go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, &wg,
 					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 			}
 		},
