@@ -217,13 +217,9 @@ func forwardProxy(c *config) error {
 			atls.WithMtls(c.Mtls),
 			atls.WithAttest(c.attest),
 			atls.WithResultCb(func(result *ar.AttestationResult) {
-				// Publish the attestation result asynchronously if publishing address was specified and
-				// and attestation was performed
+				// Publish asynchronously
 				if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
-					wg := new(sync.WaitGroup)
-					wg.Add(1)
-					defer wg.Wait()
-					go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, wg,
+					go pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
 						c.rootCas, c.AllowSystemCerts, c.publishClientCert)
 				}
 			}),
