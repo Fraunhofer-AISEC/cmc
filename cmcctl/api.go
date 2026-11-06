@@ -15,6 +15,18 @@
 
 package main
 
+import "slices"
+
+// availableApis returns the APIs compiled into this binary
+func availableApis() []string {
+	names := make([]string, 0, len(apis))
+	for name := range apis {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
 type Api interface {
 	generate(c *config) error
 	verify(c *config) error

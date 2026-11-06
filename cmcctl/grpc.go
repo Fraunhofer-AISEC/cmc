@@ -48,9 +48,9 @@ func (a GrpcApi) generate(c *config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Infof("Sending grpc request type 'Attest' to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'Attest' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -93,9 +93,9 @@ func (a GrpcApi) verify(c *config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Infof("Sending grpc request type 'Verify' to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'Verify' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -149,9 +149,9 @@ func (a GrpcApi) enroll(c *config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Infof("Sending grpc request type 'TLSCreate' to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'TLSCreate' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -203,9 +203,9 @@ func (a GrpcApi) updateCerts(c *config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Infof("Sending grpc request type 'UpdateCerts' to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'UpdateCerts' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -238,9 +238,9 @@ func (a GrpcApi) updateMetadata(c *config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
 	defer cancel()
 
-	log.Infof("Sending grpc request type 'UpdateMetadata' to %v", c.CmcAddr)
+	log.Infof("Sending grpc request type 'UpdateMetadata' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}

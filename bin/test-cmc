@@ -149,8 +149,6 @@ metadata_raw="${data}/metadata-raw"
 metadata_signed="${data}/metadata-signed"
 omsp_data="${data}/omsp-raw"
 storage="${data}/cmc-internal"
-cache="${data}/cmc-cache"
-peercache="${data}/cmc-peer-cache"
 ctrlog="${data}/cmc-container-measurements"
 hostname="$(hostname --fqdn 2>/dev/null || hostname)"
 
@@ -174,21 +172,15 @@ est_params=(
 )
 
 cmc_params=(
-    "--cmc-addr" "127.0.0.1:9955" \
     "--provision-auth" "none" \
-    "--endorsement-mode" "est" \
-    "--endorsement-addr" "https://localhost:9000" \
-    "--enrollment-mode" "est" \
-    "--enrollment-addr" "https://localhost:9000" \
+    "--endorsement" "est:https://localhost:9000" \
+    "--enrollment" "est:https://localhost:9000" \
     "--metadata" "file://${metadata_signed}" \
     "--drivers" "tpm,sw" \
     "--hash-alg" "sha256" \
     "--log-level" "trace" \
     "--storage" "${storage}" \
-    "--cache" "${cache}"
-    "--peer-cache" "${peercache}" \
     "--measurement-logs" \
-    "--ctr" \
     "--ctr-driver" "sw" \
     "--ctr-log" "${ctrlog}" \
     "--root-cas" "${data}/pki/ca.pem" \
@@ -200,7 +192,6 @@ cmc_params=(
 cmcctl_params=(
     "--root-cas" "${data}/pki/ca.pem" \
     "--log-level" "trace" \
-    "--cmc-addr" "127.0.0.1:9955" \
 )
 
 # Subcommand-scoped cmcctl options, only accepted by the subcommands they apply to
@@ -269,8 +260,6 @@ sudo -n rm -rf "${metadata_raw}"
 sudo -n rm -rf "${metadata_signed}"
 sudo -n rm -rf "${omsp_data}"
 sudo -n rm -rf "${storage}"
-sudo -n rm -rf "${cache}"
-sudo -n rm -rf "${peercache}"
 sudo -n rm -rf "${log_dir}"
 
 mkdir -p "${log_dir}"
@@ -316,7 +305,7 @@ do
                         "${cmc_params[@]}" \
                         --log-file "${cmc_log}" \
                         --omsp-format "${omsp_serializer}" \
-                        --api "${protocols[i]}" \
+                        --cmc "${protocols[i]}://127.0.0.1:9955" \
                         < /dev/null > "${cmc_log}.out" 2>&1 \
                         &
                     cmc_pid="$!"
@@ -335,7 +324,7 @@ do
                             "${commands_server[j]}" \
                             "${cmcctl_params[@]}" \
                             --log-file "${server_log}" \
-                            --api ${protocols[i]} \
+                            --cmc "${protocols[i]}://127.0.0.1:9955" \
                             --serialization ${api_serializer} \
                             ${commands_params_server[j]} \
                             < /dev/null > "${server_log}.out" 2>&1 \
@@ -349,7 +338,7 @@ do
                             "${cmcctl_params[@]}" \
                             --log-file "${client_log}" \
                             --serialization "${api_serializer}" \
-                            --api "${protocols[i]}" \
+                            --cmc "${protocols[i]}://127.0.0.1:9955" \
                             ${commands_params_client[j]} \
                             < /dev/null > "${client_log}.out" 2>&1
                         set -e

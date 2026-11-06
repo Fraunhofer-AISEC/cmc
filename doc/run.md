@@ -8,12 +8,20 @@ Multiple configuration files can be specified as a comma-separated list. If a sp
 option is present in multiple configuration file, the last configuration file takes precedence.
 
 The commandline flags for each executable can be shown via the `--help` flag. The JSON configuration
-options have the same names in camel case (e.g. *cmcAddr*), while commandline flags use kebab case
-(e.g. *--cmc-addr*).
+options have the same names in camel case (e.g. *ctrDriver*), while commandline flags use kebab case
+(e.g. *--ctr-driver*).
 
 Furthermore, exemplary JSON configuration file examples can be found in the `examples/` folder of
-this repository. Paths in the configuration file can either be absolete or relative to the working
-directory.
+this repository. Paths in the configuration file can either be absolete or relative to the directory
+of the config file itself.
+
+Some options combine several values into a single string:
+
+| Option        | Form                | Examples                                                                                      |
+| ------------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| `cmc`         | `<api>://<address>` | `socket:///run/cmc/cmc.sock`, `socket://127.0.0.1:9955`, `grpc://127.0.0.1:9955`, or `libapi` |
+| `endorsement` | `<mode>[:<url>]`    | `direct`, `host`, `est:https://localhost:9000`, `cps:https://localhost:9000`                  |
+| `enrollment`  | `<mode>[:<url>]`    | `self`, `est:https://localhost:9000`                                                          |
 
 ## cmcctl commands
 
@@ -88,7 +96,7 @@ instead. This enables TLS channels which are solely authenticated through the at
 
 ```json
 {
-    "enrollmentMode": "self"
+    "enrollment": "self"
 }
 ```
 

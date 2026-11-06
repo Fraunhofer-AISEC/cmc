@@ -47,14 +47,19 @@ func main() {
 
 			log.Infof("Running cmcd %v", internal.GetVersionInfo())
 
+			cmcApi, addr, err := internal.ParseApiEndpoint(c.Cmc)
+			if err != nil {
+				return cli.Exit(err, 1)
+			}
+			server, ok := servers[cmcApi]
+			if !ok {
+				return cli.Exit(fmt.Sprintf("API %q is not implemented, available: %v", cmcApi,
+					strings.Join(availableApis(), ", ")), 1)
+			}
+
 			cmcInst, err := cmc.NewCmc(&c.Config)
 			if err != nil {
 				return err
-			}
-
-			server, ok := servers[strings.ToLower(c.Api)]
-			if !ok {
-				return cli.Exit("API '"+c.Api+"' is not implemented", 1)
 			}
 
 			err = notifySystemd()
@@ -62,7 +67,7 @@ func main() {
 				return err
 			}
 
-			return server.Serve(c.CmcAddr, cmcInst)
+			return server.Serve(addr, cmcInst)
 		},
 	}
 

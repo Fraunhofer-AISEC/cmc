@@ -1,7 +1,7 @@
 {
     "addr": "localhost:4443",
     "tlsDnsNames": [ "localhost" ],
-    "cmcAddr": "localhost:9955",
+    "cmc": "socket://localhost:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
@@ -14,7 +14,6 @@
     "publishResults": "http://localhost:8080/results",
     "publishOcsf": "http://localhost:8080/ocsf-detection-finding",
     "logLevel": "trace",
-    "api": "socket",
     "serialization": "json",
     "keyConfig": "EC256",
     "keyType": "tpm",

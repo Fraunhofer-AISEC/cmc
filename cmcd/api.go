@@ -18,6 +18,8 @@
 package main
 
 import (
+	"slices"
+
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 )
 
@@ -25,4 +27,14 @@ var servers = map[string]Server{}
 
 type Server interface {
 	Serve(addr string, cmc *cmc.Cmc) error
+}
+
+// availableApis returns the APIs compiled into this binary
+func availableApis() []string {
+	apis := make([]string, 0, len(servers))
+	for api := range servers {
+		apis = append(apis, api)
+	}
+	slices.Sort(apis)
+	return apis
 }

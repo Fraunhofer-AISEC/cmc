@@ -210,9 +210,9 @@ func forwardProxy(c *config) error {
 		log.Debugf("Dialing TLS address: %v", addr)
 
 		conn, err := atls.Dial("tcp", addr, tlsConf,
-			atls.WithCmcAddr(c.CmcAddr),
+			atls.WithCmcAddr(c.cmcAddr),
 			atls.WithCmcPolicies(c.policies),
-			atls.WithCmcApi(c.Api),
+			atls.WithCmcApi(c.apiName),
 			atls.WithSerializer(c.serializer),
 			atls.WithMtls(c.Mtls),
 			atls.WithAttest(c.attest),

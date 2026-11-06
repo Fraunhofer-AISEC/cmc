@@ -109,7 +109,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	}
 
 	// Read metadata from the file system
-	metadata, err := GetMetadata(c.MetadataLocation, c.Cache, rootCas, c.AllowSystemCerts, cmc.HashAlg)
+	metadata, err := GetMetadata(c.MetadataLocation, c.MetadataCacheDir(), rootCas, c.AllowSystemCerts, cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
@@ -153,7 +153,6 @@ func NewCmc(c *Config) (*Cmc, error) {
 		MeasurementLogs: c.MeasurementLogs,
 		CtrLog:          c.CtrLog,
 		CtrDriver:       c.CtrDriver,
-		Ctr:             c.Ctr,
 		Vmpl:            c.Vmpl,
 		Endorsers:       endorser,
 		StoragePath:     c.Storage,
@@ -177,7 +176,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 	cmc.Drivers = usedDrivers
 
 	// Check container driver
-	if c.Ctr {
+	if c.CtrDriver != "" {
 		if !internal.Contains(c.CtrDriver, c.Drivers) {
 			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
 				c.CtrDriver)
@@ -187,7 +186,8 @@ func NewCmc(c *Config) (*Cmc, error) {
 	// Create provisioner for key manager, which is used to enroll certificates for created keys,
 	// e.g. via EST or ACME protocol. In enrollment mode "self", TLS certificates are self-signed
 	// and no enrollment protocol and thus no provisioner is required
-	selfSigned := strings.EqualFold(c.EnrollmentMode, "self")
+	enrollmentMode, _ := internal.ParseModeAddr(c.Enrollment)
+	selfSigned := enrollmentMode == "self"
 	var provisioner keymgr.Enroller
 	if !selfSigned {
 		provisioner, err = createEnroller(c, rootCas)
@@ -205,18 +205,20 @@ func NewCmc(c *Config) (*Cmc, error) {
 	cmc.KeyMgr = keyMgr
 
 	// Get policy engine and overwrite policies
-	sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
-	if !ok {
-		log.Tracef("No optional policy engine selected or %v not implemented", c.PolicyEngine)
+	if c.PolicyEngine != "" {
+		sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
+		if !ok {
+			return nil, fmt.Errorf("policy engine %v not implemented", c.PolicyEngine)
+		}
+		cmc.PolicyEngineSelect = sel
+		cmc.PolicyOverwrite = c.PolicyOverwrite
 	}
-	cmc.PolicyEngineSelect = sel
-	cmc.PolicyOverwrite = c.PolicyOverwrite
 
 	// Extract the local role for optional peer authorization from our own image description
 	cmc.LocalRole = deriveLocalRole(metadata)
 
 	// Load cached metadata from known peers
-	cmc.PeerCache, err = peercache.Load(c.PeerCache)
+	cmc.PeerCache, err = peercache.Load(c.PeerCacheDir())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load peer cache: %w", err)
 	}
@@ -261,9 +263,14 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	switch c.EndorsementMode {
+	mode, addr := internal.ParseModeAddr(c.Endorsement)
+
+	switch mode {
 	case "est":
 		// TPM-only attestation must use EST endorsement mode as credential activation is mandatory
+		if addr == "" {
+			return nil, fmt.Errorf("est endorsement requires an address (endorsement: est:<url>)")
+		}
 		var token []byte
 		if authMethods.Has(internal.AuthToken) {
 			token, err = os.ReadFile(c.ProvisionToken)
@@ -271,25 +278,26 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		endorser, err := endorser.NewEstEndorser(c.EndorsementAddr, rootCas, c.AllowSystemCerts, token)
+		endorser, err := endorser.NewEstEndorser(addr, rootCas, c.AllowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
 		return endorser, nil
 	case "direct":
 		// Direct endorsement supports TDX (Intel PCS) and SNP (AMD KDS)
-		return endorser.NewDirectProvider(c.VendorCache)
+		return endorser.NewDirectProvider(c.VendorCacheDir())
 	case "cps":
 		// CPS endorsement supports TDX (PCCS) and SNP (custom caching proxy service)
-		if c.EndorsementAddr == "" {
-			return nil, fmt.Errorf("cps endorsement mode requires endorsementAddr")
+		if addr == "" {
+			return nil, fmt.Errorf("cps endorsement requires an address (endorsement: cps:<url>)")
 		}
-		return endorser.NewCpsProvider(c.VendorCache, c.EndorsementAddr, rootCas, c.AllowSystemCerts)
+		return endorser.NewCpsProvider(c.VendorCacheDir(), addr, rootCas, c.AllowSystemCerts)
 	case "host":
 		// Host endorsement supports SNP via the SNP_GET_EXT_REPORT API
 		return endorser.NewSnpHostEndorser()
 	default:
-		return nil, fmt.Errorf("unknown endorser type %q", c.EndorsementMode)
+		return nil, fmt.Errorf(
+			"unknown endorsement %q: expected direct, host, est:<url> or cps:<url>", c.Endorsement)
 	}
 }
 
@@ -301,8 +309,13 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	switch c.EnrollmentMode {
+	mode, addr := internal.ParseModeAddr(c.Enrollment)
+
+	switch mode {
 	case "est":
+		if addr == "" {
+			return nil, fmt.Errorf("est enrollment requires an address (enrollment: est:<url>)")
+		}
 		var token []byte
 		if authMethods.Has(internal.AuthToken) {
 			token, err = os.ReadFile(c.ProvisionToken)
@@ -310,7 +323,7 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		enroller, err := estenroller.New(c.EnrollmentAddr, rootCas, c.AllowSystemCerts, token)
+		enroller, err := estenroller.New(addr, rootCas, c.AllowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
@@ -318,6 +331,6 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 	case "acme":
 		return nil, fmt.Errorf("ACME provisioning not yet implemented")
 	default:
-		return nil, fmt.Errorf("unknown provisioner %q", c.EnrollmentMode)
+		return nil, fmt.Errorf("unknown enrollment %q: expected self or est:<url>", c.Enrollment)
 	}
 }

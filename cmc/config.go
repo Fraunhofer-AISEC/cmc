@@ -16,53 +16,81 @@
 package cmc
 
 import (
+	"path/filepath"
 	"strings"
 )
 
+// Subfolders of the storage folder
+const (
+	metadataCacheDir = "metadata-cache"
+	peerCacheDir     = "peer-cache"
+	vendorCacheDir   = "vendor-cache"
+)
+
 type Config struct {
-	CmcAddr          string   `json:"cmcAddr,omitempty"`
-	ProvisionToken   string   `json:"provisionToken,omitempty"`
-	ProvisionAuth    []string `json:"provisionAuth,omitempty"`
-	EndorsementMode  string   `json:"endorsementMode,omitempty"`
-	EndorsementAddr  string   `json:"endorsementAddr,omitempty"`
-	EnrollmentMode   string   `json:"enrollmentMode,omitempty"`
-	EnrollmentAddr   string   `json:"enrollmentAddr,omitempty"`
+	// Cmc is the CMC API and the address it is served on or connected to, in the form
+	// <api>://<address>, e.g. socket:///run/cmc/cmc.sock or grpc://127.0.0.1:9955
+	Cmc            string   `json:"cmc,omitempty"`
+	ProvisionToken string   `json:"provisionToken,omitempty"`
+	ProvisionAuth  []string `json:"provisionAuth,omitempty"`
+	// Endorsement is the mode used to fetch driver certificates and collateral, optionally
+	// followed by the address of the endorsement server, e.g. est:https://localhost:9000
+	Endorsement string `json:"endorsement,omitempty"`
+	// Enrollment is the mode used to enroll certificates, optionally followed by the address
+	// of the enrollment server, e.g. est:https://localhost:9000, or self for self-signed
+	// certificates
+	Enrollment       string   `json:"enrollment,omitempty"`
 	MetadataLocation []string `json:"metadata,omitempty"`
 	Drivers          []string `json:"drivers,omitempty"`
 	ExcludePcrs      []int    `json:"excludePcrs,omitempty"`
 	HashAlg          string   `json:"hashAlg,omitempty"`
-	Api              string   `json:"api,omitempty"`
 	PolicyEngine     string   `json:"policyEngine,omitempty"`
 	PolicyOverwrite  bool     `json:"policyOverwrite,omitempty"`
-	Storage          string   `json:"storage,omitempty"`
-	Cache            string   `json:"cache,omitempty"`
-	PeerCache        string   `json:"peerCache,omitempty"`
-	MeasurementLogs  bool     `json:"measurementLogs,omitempty"`
-	Ctr              bool     `json:"ctr,omitempty"`
+	// Storage is the folder for all data the CMC persists, including the caches
+	Storage         string `json:"storage,omitempty"`
+	MeasurementLogs bool   `json:"measurementLogs,omitempty"`
+	// CtrDriver is the driver used to measure containers. An empty value disables container
+	// measurements
 	CtrDriver        string   `json:"ctrDriver,omitempty"`
 	CtrLog           string   `json:"ctrLog,omitempty"`
 	RootCas          []string `json:"rootCas,omitempty"`
 	AllowSystemCerts bool     `json:"allowSystemCerts"`
 	Vmpl             int      `json:"vmpl,omitempty"`
-	VendorCache      string   `json:"vendorCache,omitempty"`
 	TpmKeyAlg        string   `json:"tpmKeyAlg,omitempty"`
 	UseOmsp          bool     `json:"useOmsp,omitempty"`
 	OmspFormat       string   `json:"omspFormat,omitempty"`
 	AppendEbsEvent   bool     `json:"appendEbsEvent,omitempty"`
 }
 
+// MetadataCacheDir is the folder metadata is cached in for offline backup
+func (c *Config) MetadataCacheDir() string { return c.cacheDir(metadataCacheDir) }
+
+// PeerCacheDir is the folder peer metadata is cached in to reduce attestation report size
+func (c *Config) PeerCacheDir() string { return c.cacheDir(peerCacheDir) }
+
+// VendorCacheDir is the folder hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)
+// is cached in
+func (c *Config) VendorCacheDir() string { return c.cacheDir(vendorCacheDir) }
+
+// cacheDir returns a cache subfolder of the storage folder, or an empty string if no
+// storage folder is configured, which disables caching
+func (c *Config) cacheDir(name string) string {
+	if c.Storage == "" {
+		return ""
+	}
+	return filepath.Join(c.Storage, name)
+}
+
 func (c *Config) Print() {
 
 	log.Debugf("Using the following cmc configuration:")
-	log.Debugf("\tCMC listen address             : %v", c.CmcAddr)
+	log.Debugf("\tCMC API endpoint               : %v", c.Cmc)
 	log.Debugf("\tProvision authentication       : %v", strings.Join(c.ProvisionAuth, ","))
 	if c.ProvisionToken != "" {
 		log.Debugf("\tProvisioning token             : %v", c.ProvisionToken)
 	}
-	log.Debugf("\tEndorsement mode               : %v", c.EndorsementMode)
-	log.Debugf("\tEndorsement server URL         : %v", c.EndorsementAddr)
-	log.Debugf("\tEnrollment mode                : %v", c.EnrollmentMode)
-	log.Debugf("\tEnrollment server URL          : %v", c.EnrollmentAddr)
+	log.Debugf("\tEndorsement                    : %v", c.Endorsement)
+	log.Debugf("\tEnrollment                     : %v", c.Enrollment)
 	log.Debugf("\tMetadata locations             : %v", strings.Join(c.MetadataLocation, ","))
 	if len(c.ExcludePcrs) > 0 {
 		log.Debugf("\tExclude TPM PCRs               : %v", c.ExcludePcrs)
@@ -70,29 +98,22 @@ func (c *Config) Print() {
 	if c.AppendEbsEvent {
 		log.Debugf("\tAppend ExitBootServices events : %v", c.AppendEbsEvent)
 	}
-	log.Debugf("\tAPI                            : %v", c.Api)
 	log.Debugf("\tPolicy engine                  : %v", c.PolicyEngine)
 	log.Debugf("\tPolicy overwrite enabled       : %v", c.PolicyOverwrite)
 	log.Debugf("\tHash algorithm                 : %v", c.HashAlg)
 	log.Debugf("\tDrivers                        : %v", strings.Join(c.Drivers, ","))
 	log.Debugf("\tMeasurement log                : %v", c.MeasurementLogs)
-	log.Debugf("\tMeasure containers             : %v", c.Ctr)
-	if c.Ctr {
+	if c.CtrDriver != "" {
 		log.Debugf("\tContainer driver               : %v", c.CtrDriver)
 		log.Debugf("\tContainer measurements         : %v", c.CtrLog)
+	} else {
+		log.Debugf("\tMeasure containers             : false")
 	}
 	if c.Storage != "" {
-		log.Debugf("\tInternal storage path          : %v", c.Storage)
-	}
-	if c.Cache != "" {
-		log.Debugf("\tMetadata cache path            : %v", c.Cache)
-	}
-	if c.PeerCache != "" {
-		log.Debugf("\tPeer cache path                : %v", c.PeerCache)
+		log.Debugf("\tStorage path                   : %v", c.Storage)
 	}
 	log.Debugf("\tMetadata root CA paths         : %v", strings.Join(c.RootCas, ","))
 	log.Debugf("\tAllow system root CAs:         : %v", c.AllowSystemCerts)
-	log.Debugf("\tVendor collateral cache folder : %v", c.VendorCache)
 	log.Debugf("\tTPM AK key algorithm           : %v", c.TpmKeyAlg)
 	log.Debugf("\tSupport manifest revocation    : %v", c.UseOmsp)
 	if c.OmspFormat != "" {

@@ -40,9 +40,9 @@ func kubeprovServe(c *config) error {
 	}
 
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
-		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(c.Api),
+		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
@@ -139,9 +139,9 @@ func kubeprovJoin(c *config) error {
 	}
 
 	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
-		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(c.Api),
+		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),

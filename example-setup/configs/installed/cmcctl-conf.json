@@ -1,6 +1,6 @@
 {
     "addr": "cmc-docker:4443",
-    "cmcAddr": "localhost:9955",
+    "cmc": "socket://localhost:9955",
     "report": "attestation-report",
     "result": "attestation-result.json",
     "nonce": "nonce",
@@ -12,7 +12,6 @@
     "attest": "mutual",
     "publishResults": "http://localhost:8080/results",
     "logLevel": "trace",
-    "api": "socket",
     "serialization": "cbor",
     "keyConfig": "EC256",
     "keyType": "tpm",
