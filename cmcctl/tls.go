@@ -33,7 +33,7 @@ import (
 
 // Creates TLS connection between this client and a server and performs a remote
 // attestation of the server before exchanging exemplary messages with it
-func dial(c *config) error {
+func dial(c *Config) error {
 
 	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
@@ -44,36 +44,36 @@ func dial(c *config) error {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
-	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
+	conn, err := atls.Dial("tcp", c.Atls.Addr, tlsConf,
 		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
-		atls.WithMtls(c.Mtls),
+		atls.WithMtls(c.Atls.Mtls),
 		atls.WithAttest(c.attest),
 		atls.WithResultCb(func(result *ar.AttestationResult) {
 			// Publish asynchronously
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
 				wg.Add(1)
-				go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, &wg,
-					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+				go pub.PublishAsync(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, result, &wg,
+					c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 			}
 		}),
-		atls.WithLibApiCmcConfig(&c.Config))
+		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(timeoutSec * time.Second))
 
-	if len(c.Data) == 0 {
+	if len(c.Request.Data) == 0 {
 		log.Info("No data to send via atls configured. Finished")
 		return nil
 	}
 
 	// Send configured data
-	log.Infof("Sending to peer: %q", c.Data)
-	_, err = conn.Write([]byte(c.Data))
+	log.Infof("Sending to peer: %q", c.Request.Data)
+	_, err = conn.Write([]byte(c.Request.Data))
 	if err != nil {
 		return fmt.Errorf("failed to write: %v", err)
 	}
@@ -89,7 +89,7 @@ func dial(c *config) error {
 	return nil
 }
 
-func listen(c *config) error {
+func listen(c *Config) error {
 
 	// Create TLS config
 	tlsConf, err := createServerTlsConf(c)
@@ -98,28 +98,28 @@ func listen(c *config) error {
 	}
 
 	// Listen: TLS connection
-	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
+	ln, err := atls.Listen("tcp", c.Atls.Addr, tlsConf,
 		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
-		atls.WithMtls(c.Mtls),
+		atls.WithMtls(c.Atls.Mtls),
 		atls.WithAttest(c.attest),
 		atls.WithResultCb(func(result *ar.AttestationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
-					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+				go pub.Publish(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, result,
+					c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 			}
 		}),
-		atls.WithLibApiCmcConfig(&c.Config))
+		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
 	if err != nil {
 		return fmt.Errorf("failed to listen for connections: %w", err)
 	}
 	defer ln.Close()
 
-	log.Infof("Serving under %v", c.Addr)
+	log.Infof("Serving under %v", c.Atls.Addr)
 
 	for {
 		// Accept connection and perform remote attestation
@@ -161,19 +161,19 @@ func handleConnection(conn net.Conn) {
 // useAttestationOnlyTrust returns whether the validation of the peer's certificate chain shall be
 // replaced by remote attestation of the peer. Authorization is then enforced through the
 // attestation instead of through the certificate chain.
-func useAttestationOnlyTrust(c *config, peer atls.AttestSelect) (bool, error) {
-	if !c.AttestationOnlyTrust {
+func useAttestationOnlyTrust(c *Config, peer atls.AttestSelect) (bool, error) {
+	if !c.Atls.AttestationOnlyTrust {
 		return false, nil
 	}
 	if c.attest != peer && c.attest != atls.Attest_Mutual {
 		return false, fmt.Errorf(
 			"attestation-only trust requires the attestation of the peer, but attestation mode is %q",
-			c.Attest)
+			c.Atls.Attest)
 	}
 	return true, nil
 }
 
-func createClientTlsConf(c *config) (*tls.Config, error) {
+func createClientTlsConf(c *Config) (*tls.Config, error) {
 
 	attestationOnly, err := useAttestationOnlyTrust(c, atls.Attest_Server)
 	if err != nil {
@@ -190,14 +190,14 @@ func createClientTlsConf(c *config) (*tls.Config, error) {
 		log.Debug("Skipping server certificate chain validation: server is attested")
 		tlsConf.InsecureSkipVerify = true
 	} else {
-		rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+		rootpool, err := internal.CreateCertPool(c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
 		tlsConf.RootCAs = rootpool
 	}
 
-	if c.Mtls {
+	if c.Atls.Mtls {
 		// Retrieve cert from CMC for mTLS
 		cert, err := getTlsCert(c)
 		if err != nil {
@@ -211,11 +211,11 @@ func createClientTlsConf(c *config) (*tls.Config, error) {
 	return tlsConf, nil
 }
 
-func createServerTlsConf(c *config) (*tls.Config, error) {
+func createServerTlsConf(c *Config) (*tls.Config, error) {
 
 	// The client certificate is only validated if the client authenticates via mTLS
 	attestationOnly := false
-	if c.Mtls {
+	if c.Atls.Mtls {
 		var err error
 		attestationOnly, err = useAttestationOnlyTrust(c, atls.Attest_Client)
 		if err != nil {
@@ -240,12 +240,12 @@ func createServerTlsConf(c *config) (*tls.Config, error) {
 		log.Debug("Skipping client certificate chain validation: client is attested")
 		tlsConf.ClientAuth = tls.RequireAnyClientCert
 	} else {
-		rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+		rootpool, err := internal.CreateCertPool(c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
 		tlsConf.ClientCAs = rootpool
-		if c.Mtls {
+		if c.Atls.Mtls {
 			// Mandate client authentication
 			tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
 		} else {
@@ -259,7 +259,7 @@ func createServerTlsConf(c *config) (*tls.Config, error) {
 	return tlsConf, nil
 }
 
-func getTlsCert(c *config) (tls.Certificate, error) {
+func getTlsCert(c *Config) (tls.Certificate, error) {
 
 	fqdn, err := internal.Fqdn()
 	if err != nil {
@@ -268,26 +268,26 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 
 	// Use configured CN, DNS names and IP addresses for SANs if specified, otherwise use FQDN
 	cn := fqdn
-	if c.TlsCn != "" {
-		cn = c.TlsCn
+	if c.Identity.Cn != "" {
+		cn = c.Identity.Cn
 	}
 	dnsNames := []string{fqdn}
-	if len(c.TlsDnsNames) > 0 {
-		dnsNames = c.TlsDnsNames
+	if len(c.Identity.DnsNames) > 0 {
+		dnsNames = c.Identity.DnsNames
 	}
 
-	log.Tracef("Fetching TLS %v %v certificate", c.KeyType, c.KeyConfig)
+	log.Tracef("Fetching TLS %v %v certificate", c.Identity.KeyType, c.Identity.KeyConfig)
 
-	return atls.GetOrCreateCert(&c.keyId, c.KeyIdFile,
+	return atls.GetOrCreateCert(&c.keyId, c.Identity.KeyId,
 		atls.WithKeyConfig(api.TLSKeyConfig{
-			Type:        c.KeyType,
-			Alg:         c.KeyConfig,
+			Type:        c.Identity.KeyType,
+			Alg:         c.Identity.KeyConfig,
 			Cn:          cn,
 			DNSNames:    dnsNames,
-			IPAddresses: c.TlsIpAddresses,
+			IPAddresses: c.Identity.IpAddresses,
 		}),
 		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
-		atls.WithLibApiCmcConfig(&c.Config))
+		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
 }

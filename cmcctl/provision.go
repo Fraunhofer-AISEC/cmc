@@ -40,7 +40,7 @@ var (
 	}
 )
 
-func retrieveProvisioningData(c *config) error {
+func retrieveProvisioningData(c *Config) error {
 
 	// Read cmdline
 	log.Tracef("Reading cmdline...")
@@ -81,17 +81,17 @@ func retrieveProvisioningData(c *config) error {
 
 	// Store CA and bootstrap token
 	log.Tracef("Storing provisioning data...")
-	err = os.WriteFile(c.CaStorePath, data["ca"], 0644)
+	err = os.WriteFile(c.Publish.CaStore, data["ca"], 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write: %w", err)
 	}
-	log.Tracef("Stored CA to %v", c.CaStorePath)
+	log.Tracef("Stored CA to %v", c.Publish.CaStore)
 
-	err = os.WriteFile(c.ProvisionToken, data["token"], 0600)
+	err = os.WriteFile(c.Publish.ProvisionToken, data["token"], 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write: %w", err)
 	}
-	log.Tracef("Stored token to %v", c.ProvisionToken)
+	log.Tracef("Stored token to %v", c.Publish.ProvisionToken)
 
 	log.Trace("Finished")
 

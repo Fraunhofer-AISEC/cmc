@@ -1,28 +1,42 @@
 {
-    "estAddr": "0.0.0.0:9000",
-    "estCaKey": "data/pki/ca-key.pem",
-    "estCaChain": [
-        "data/pki/ca.pem"
-    ],
-    "tlsKey": "data/pki/est-tls-key.pem",
-    "tlsCaChain": [
-        "data/pki/est-tls.pem",
-        "data/pki/ca.pem"
-    ],
-    "rootCas": [
-        "data/pki/ca.pem",
-        "example-setup/vm-config/metadata-ca.pem"
-    ],
-    "httpFolder": "example-setup/vm-config/vm-metadata",
-    "verifyEkCert": false,
-    "tpmEkCertDb": "data/tpm-ek-certs.db",
-    "logLevel": "trace",
-    "authMethods": [ "none" ],
-    "omspFolder": "data/omsp-raw",
-    "omspKey": "data/pki/omsp-key.pem",
-    "omspCaChain": [
-        "data/pki/omsp.pem",
-        "data/pki/ca.pem"
-    ],
-    "omspUrl": "https://10.0.2.2:9000/omsp"
+    "log": {
+        "level": "trace"
+    },
+    "trust": {
+        "rootCas": [
+            "../../data/pki/ca.pem",
+            "metadata-ca.pem"
+        ]
+    },
+    "est": {
+        "address": "0.0.0.0:9000",
+        "caKey": "../../data/pki/ca-key.pem",
+        "caChain": [
+            "../../data/pki/ca.pem"
+        ],
+        "tlsKey": "../../data/pki/est-tls-key.pem",
+        "tlsCaChain": [
+            "../../data/pki/est-tls.pem",
+            "../../data/pki/ca.pem"
+        ],
+        "auth": [
+            "none"
+        ]
+    },
+    "http": {
+        "folder": "vm-metadata"
+    },
+    "tpm": {
+        "verifyEkCert": false,
+        "ekCertDb": "../../data/tpm-ek-certs.db"
+    },
+    "omsp": {
+        "folder": "../../data/omsp-raw",
+        "key": "../../data/pki/omsp-key.pem",
+        "caChain": [
+            "../../data/pki/omsp.pem",
+            "../../data/pki/ca.pem"
+        ],
+        "url": "https://10.0.2.2:9000/omsp"
+    }
 }

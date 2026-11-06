@@ -1,25 +1,54 @@
 {
-    "cmc": "socket://localhost:9955",
-    "provisionAuth": [ "attestation" ],
-    "provisionToken": "../data/provision_token",
-    "endorsement": "est:https://localhost:9000/",
-    "enrollment": "est:https://localhost:9000/",
-    "metadata": [
-        "file://../data/metadata-signed"
-    ],
-    "drivers": [ "tpm", "sw" ],
-    "excludePcrs": [ ],
-    "hashAlg": "SHA256",
-    "policyEngine": "js",
-    "policyOverwrite": false,
-    "logLevel": "trace",
-    "storage": "../data/cmc-internal/",
-    "measurementLogs": true,
-    "ctrDriver": "sw",
-    "ctrLog": "/tmp/container_measurements",
-    "rootCas": [
-        "../data/pki/ca.pem"
-    ],
-    "tpmKeyAlg": "EC256",
-    "useOmsp": false
+    "log": {
+        "level": "trace"
+    },
+    "api": {
+        "endpoint": "socket://localhost:9955"
+    },
+    "trust": {
+        "rootCas": [
+            "../../data/pki/ca.pem"
+        ]
+    },
+    "cmc": {
+        "attestation": {
+            "drivers": [
+                "tpm",
+                "sw"
+            ],
+            "hashAlg": "sha256",
+            "measurementLogs": true,
+            "tpm": {
+                "keyAlg": "ec256",
+                "excludePcrs": []
+            },
+            "containers": {
+                "driver": "sw",
+                "log": "/tmp/container_measurements"
+            }
+        },
+        "metadata": {
+            "locations": [
+                "file://../../data/metadata-signed"
+            ],
+            "omsp": {
+                "enabled": false
+            }
+        },
+        "provisioning": {
+            "auth": [
+                "attestation"
+            ],
+            "token": "../../data/provision_token",
+            "endorsement": "est:https://localhost:9000/",
+            "enrollment": "est:https://localhost:9000/"
+        },
+        "policies": {
+            "engine": "js",
+            "allowOverwrite": false
+        },
+        "storage": {
+            "data": "../../data/cmc-internal"
+        }
+    }
 }

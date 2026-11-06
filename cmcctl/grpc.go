@@ -42,7 +42,7 @@ func init() {
 	apis["grpc"] = GrpcApi{}
 }
 
-func (a GrpcApi) generate(c *config) error {
+func (a GrpcApi) generate(c *Config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -79,7 +79,7 @@ func (a GrpcApi) generate(c *config) error {
 	}
 
 	// Save the attestation report for the verifier
-	err = pub.SaveReport(c.ReportFile, c.NonceFile, response.Report, nonce)
+	err = pub.SaveReport(c.Publish.Report, c.Publish.Nonce, response.Report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -87,7 +87,7 @@ func (a GrpcApi) generate(c *config) error {
 	return nil
 }
 
-func (a GrpcApi) verify(c *config) error {
+func (a GrpcApi) verify(c *Config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -103,7 +103,7 @@ func (a GrpcApi) verify(c *config) error {
 	client := grpcapi.NewCMCServiceClient(conn)
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
+	report, nonce, err := pub.LoadReport(c.Publish.Report, c.Publish.Nonce, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}
@@ -132,8 +132,8 @@ func (a GrpcApi) verify(c *config) error {
 		return fmt.Errorf("failed to unmarshal grpc attestation result")
 	}
 
-	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
-		c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+	err = pub.Publish(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, result,
+		c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
@@ -143,7 +143,7 @@ func (a GrpcApi) verify(c *config) error {
 	return nil
 }
 
-func (a GrpcApi) enroll(c *config) error {
+func (a GrpcApi) enroll(c *Config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -166,16 +166,16 @@ func (a GrpcApi) enroll(c *config) error {
 	}
 
 	log.Tracef("Requesting key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
-		c.KeyType, c.KeyConfig, c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
+		c.Identity.KeyType, c.Identity.KeyConfig, c.Identity.Cn, c.Identity.DnsNames, c.Identity.IpAddresses)
 
 	request := grpcapi.TLSCreateRequest{
 		Version: api.GetVersion(),
 		KeyConfig: &grpcapi.TLSKeyConfig{
-			Type:        c.KeyType,
-			Alg:         c.KeyConfig,
-			Cn:          c.TlsCn,
-			DnsNames:    c.TlsDnsNames,
-			IpAddresses: c.TlsIpAddresses,
+			Type:        c.Identity.KeyType,
+			Alg:         c.Identity.KeyConfig,
+			Cn:          c.Identity.Cn,
+			DnsNames:    c.Identity.DnsNames,
+			IpAddresses: c.Identity.IpAddresses,
 		},
 	}
 	response, err := client.TLSCreate(ctx, &request)
@@ -188,7 +188,7 @@ func (a GrpcApi) enroll(c *config) error {
 			api.GetVersion(), response.Version)
 	}
 
-	if err := internal.SaveKeyId(c.KeyIdFile, response.KeyId); err != nil {
+	if err := internal.SaveKeyId(c.Identity.KeyId, response.KeyId); err != nil {
 		return err
 	}
 
@@ -197,7 +197,7 @@ func (a GrpcApi) enroll(c *config) error {
 	return nil
 }
 
-func (a GrpcApi) updateCerts(c *config) error {
+func (a GrpcApi) updateCerts(c *Config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -232,7 +232,7 @@ func (a GrpcApi) updateCerts(c *config) error {
 	return nil
 }
 
-func (a GrpcApi) updateMetadata(c *config) error {
+func (a GrpcApi) updateMetadata(c *Config) error {
 
 	// Establish connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)

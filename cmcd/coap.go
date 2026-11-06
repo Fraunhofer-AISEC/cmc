@@ -145,7 +145,7 @@ func (s CoapServer) Verify(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("verifying attestation report")
 	result := verifier.Verify(req.Report, req.Nonce, req.Policies, s.cmc.PolicyEngineSelect,
-		s.cmc.PolicyOverwrite, s.cmc.RootCas, s.cmc.PeerCache, req.Peer, req.PeerAddr, s.cmc.UseOmsp,
+		s.cmc.PolicyOverwrite, s.cmc.RootCas, s.cmc.PeerCache, req.Peer, req.PeerAddr, s.cmc.Metadata.Omsp.Enabled,
 		s.cmc.LocalRole)
 
 	resp := &api.VerificationResponse{
@@ -185,7 +185,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Measurer: Recording measurement")
 	var success bool
-	err = m.Measure(&req.Event, ser, s.cmc.CtrLog, s.cmc.CtrDriver)
+	err = m.Measure(&req.Event, ser, s.cmc.Attestation.Containers.Log, s.cmc.Attestation.Containers.Driver)
 	if err != nil {
 		log.Errorf("Failed to record measurement: %v", err)
 		success = false

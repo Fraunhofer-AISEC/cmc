@@ -28,15 +28,15 @@ OMSP response are provided in the standardized JWS or CBOR format.
 
 The OMSP server can be started with:
 ```sh
-estserver -config example-setup/configs/installed/est-server-conf.json
+estserver --config example-setup/configs/est-server-conf.json
 ```
 It expects the following configuration information in a config file or via commandline:
-* omspFolder: A folder with pre-generated JSON files specifying the revocation status for each
+* omsp.folder: A folder with pre-generated JSON files specifying the revocation status for each
 manifest named based on the SHA256 hash of the signed manifest (`<hash>.json`).
-* omspKey: A private key for signing the OMSP responses.
-* omspCaChain: The certificate chain linking the public key belonging to the private `omspKey` to a
-trusted CA.
-* omspURL: The URL of the OMSP endpoint. This must match the URL referrenced in the manifests
+* omsp.key: A private key for signing the OMSP responses.
+* omsp.caChain: The certificate chain linking the public key belonging to the private `omsp.key` to
+a trusted CA.
+* omsp.url: The URL of the OMSP endpoint. This must match the URL referrenced in the manifests
 this OMSP server provides a status for.
 
 For the example-setup, OMSP responses can be generated after metadata has been generated and signed,
@@ -69,13 +69,19 @@ optional parameter `--omsp <omsp endpoint>` to set the OMSP endpoint.
 OMSP Stapling can be activated in the CMC via the JSON configuratino file properties:
 ```json
 {
-    "useOmsp": true,
-    "oscpFormat": "json" // or "cbor"
+    "cmc": {
+        "metadata": {
+            "omsp": {
+                "enabled": true,
+                "format": "json"
+            }
+        }
+    }
 }
 ```
 or via CLI flags:
 ```sh
-cmcd -config ../example-setup/configs/installed/cmcd-conf.json --use-omsp=true --omsp-format json
+cmcd --config example-setup/configs/cmcd-conf.json --use-omsp=true --omsp-format json
 ```
 
 Acting as a prover, the CMC generates and sends OMSP Requests to all OMSP servers listed in the used

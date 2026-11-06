@@ -48,7 +48,7 @@ func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]b
 	}
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -87,7 +87,7 @@ func (a LibApi) verifyAR(
 	}
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -104,7 +104,7 @@ func (a LibApi) verifyAR(
 
 	log.Debug("Verifier: verifying attestation report")
 	result := verifier.Verify(req.Report, req.Nonce, req.Policies, a.cmc.PolicyEngineSelect,
-		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, req.Peer, req.PeerAddr, a.cmc.UseOmsp,
+		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, req.Peer, req.PeerAddr, a.cmc.Metadata.Omsp.Enabled,
 		a.cmc.LocalRole)
 
 	// Return attestation result via callback if specified
@@ -132,7 +132,7 @@ func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerO
 	}
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -159,7 +159,7 @@ func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 	}
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -184,7 +184,7 @@ func (a LibApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, err
 	}
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -203,7 +203,7 @@ func (a LibApi) createKey(cc *CmcConfig) (string, error) {
 	}
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig)
+		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
 		if err != nil {
 			return "", fmt.Errorf("failed to initialize CMC: %v", err)
 		}

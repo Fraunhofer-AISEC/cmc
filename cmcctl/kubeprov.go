@@ -33,26 +33,26 @@ type joinInfo struct {
 	CACertHash string `json:"caCertHash"`
 }
 
-func kubeprovServe(c *config) error {
+func kubeprovServe(c *Config) error {
 	tlsConf, err := createServerTlsConf(c)
 	if err != nil {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
-	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
+	ln, err := atls.Listen("tcp", c.Atls.Addr, tlsConf,
 		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
-		atls.WithMtls(c.Mtls),
+		atls.WithMtls(c.Atls.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithLibApiCmcConfig(&c.Config))
+		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
 	defer ln.Close()
 
-	log.Infof("Serving on %v", c.Addr)
+	log.Infof("Serving on %v", c.Atls.Addr)
 
 	var wg sync.WaitGroup
 	served := 0
@@ -66,11 +66,11 @@ func kubeprovServe(c *config) error {
 		wg.Add(1)
 		go func(conn net.Conn) {
 			defer wg.Done()
-			kubeprovHandleConn(conn, c.KubeadmPath)
+			kubeprovHandleConn(conn, c.Kubeprov.KubeadmPath)
 		}(conn)
 
 		served++
-		if c.KubeprovCount > 0 && served >= c.KubeprovCount {
+		if c.Kubeprov.Count > 0 && served >= c.Kubeprov.Count {
 			log.Infof("Served %d worker(s), waiting for handlers to finish", served)
 			wg.Wait()
 			log.Infof("All handlers finished, exiting")
@@ -132,20 +132,20 @@ func parseJoinCommand(line string) (*joinInfo, error) {
 	return info, nil
 }
 
-func kubeprovJoin(c *config) error {
+func kubeprovJoin(c *Config) error {
 	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
 		return fmt.Errorf("failed to create TLS config: %w", err)
 	}
 
-	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
+	conn, err := atls.Dial("tcp", c.Atls.Addr, tlsConf,
 		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
 		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
-		atls.WithMtls(c.Mtls),
+		atls.WithMtls(c.Atls.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithLibApiCmcConfig(&c.Config))
+		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %w", err)
 	}
@@ -163,13 +163,13 @@ func kubeprovJoin(c *config) error {
 
 	log.Infof("Received join info: server=%v", info.APIServer)
 
-	if c.KubeprovDryRun {
+	if c.Kubeprov.DryRun {
 		fmt.Printf("apiServer: %s\ntoken: %s\ncaCertHash: %s\n",
 			info.APIServer, info.Token, info.CACertHash)
 		return nil
 	}
 
-	return execKubeadmJoin(c.KubeadmPath, &info)
+	return execKubeadmJoin(c.Kubeprov.KubeadmPath, &info)
 }
 
 func execKubeadmJoin(kubeadmPath string, info *joinInfo) error {

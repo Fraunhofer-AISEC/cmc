@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
@@ -27,6 +26,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
 var (
@@ -38,43 +38,88 @@ func main() {
 		Name:    "cmcd",
 		Usage:   "generates and verifies TPM, AMD SEV-SNP, Intel TDX, as well as SGX attestation evidence",
 		Version: collectVersion(),
-		Flags:   Flags,
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			c, err := GetConfig(cmd)
-			if err != nil {
-				return err
-			}
-
-			log.Infof("Running cmcd %v", internal.GetVersionInfo())
-
-			cmcApi, addr, err := internal.ParseApiEndpoint(c.Cmc)
-			if err != nil {
-				return cli.Exit(err, 1)
-			}
-			server, ok := servers[cmcApi]
-			if !ok {
-				return cli.Exit(fmt.Sprintf("API %q is not implemented, available: %v", cmcApi,
-					strings.Join(availableApis(), ", ")), 1)
-			}
-
-			cmcInst, err := cmc.NewCmc(&c.Config)
-			if err != nil {
-				return err
-			}
-
-			err = notifySystemd()
-			if err != nil {
-				return err
-			}
-
-			return server.Serve(addr, cmcInst)
+		Flags:   flags(),
+		Action:  serve,
+		Commands: []*cli.Command{
+			{
+				Name:  "config",
+				Usage: "Inspect the configuration without starting the cmcd",
+				Commands: []*cli.Command{
+					{
+						Name:   "validate",
+						Usage:  "Load and validate the configuration, exit code 0 if it is valid",
+						Action: validateConfig,
+					},
+					{
+						Name:   "print",
+						Usage:  "Print the effective configuration, with secrets redacted",
+						Action: printEffectiveConfig,
+					},
+				},
+			},
 		},
 	}
 
-	err := cmd.Run(context.Background(), os.Args)
-	if err != nil {
-		log.Fatal(err)
+	// Errors are printed directly rather than logged, so that the multi-line
+	// report of a bad configuration stays readable
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
+
+func serve(_ context.Context, cmd *cli.Command) error {
+
+	c, err := getConfig(cmd)
+	if err != nil {
+		return err
+	}
+	if err := setupLogging(c); err != nil {
+		return err
+	}
+	printConfig(c)
+
+	log.Infof("Running cmcd %v", internal.GetVersionInfo())
+
+	// The API is validated as part of the configuration
+	name, addr, _ := internal.ParseApiEndpoint(c.Api.Endpoint)
+
+	rootCas, err := internal.ReadCerts(c.Trust.RootCas)
+	if err != nil {
+		return fmt.Errorf("failed to read trusted root CA certificates: %w", err)
+	}
+
+	cmcInst, err := cmc.NewCmc(&c.Cmc, rootCas, c.Trust.AllowSystemCerts)
+	if err != nil {
+		return err
+	}
+
+	if err := notifySystemd(); err != nil {
+		return err
+	}
+
+	return servers[name].Serve(addr, cmcInst)
+}
+
+func validateConfig(_ context.Context, cmd *cli.Command) error {
+	if _, err := getConfig(cmd); err != nil {
+		return err
+	}
+	fmt.Println("configuration is valid")
+	return nil
+}
+
+func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
+	c, err := getConfig(cmd)
+	if err != nil {
+		return err
+	}
+	s, err := config.Redacted(c)
+	if err != nil {
+		return err
+	}
+	fmt.Println(s)
+	return nil
 }
 
 func collectVersion() string {

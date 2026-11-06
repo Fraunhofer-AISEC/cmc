@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Fraunhofer AISEC
+// Copyright (c) 2025 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
-	"golang.org/x/exp/maps"
 
-	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
 )
 
 // Category separates independent deployments within the same database. The
@@ -35,201 +34,141 @@ type Category struct {
 	Label string `json:"label"`
 }
 
-type config struct {
-	Addr             string     `json:"addr"`
-	Db               string     `json:"db"`
-	LogLevel         string     `json:"log"`
-	MaxRows          int        `json:"maxRows"`
-	MaxRowsPerProver int        `json:"maxRowsPerProver"`
-	Categories       []Category `json:"categories"`
-	DefaultCategory  string     `json:"defaultCategory"`
-	Token            string     `json:"token"`
-	Debug            bool       `json:"debug"`
+// httpConfig configures the HTTP server the results are published to.
+type httpConfig struct {
+	Address string `json:"address" flag:"addr"  default:"localhost:8080" usage:"HTTP listen address"`
+	Token   string `json:"token"   flag:"token" path:"true" usage:"file with the HTTP authorization token clients have to present"`
+	Debug   bool   `json:"debug"   flag:"debug" usage:"activate GIN debug mode"`
 }
 
-const (
-	configFlag           = "config"
-	addrFlag             = "addr"
-	dbFlag               = "db"
-	logFlag              = "log"
-	maxRowsFlag          = "maxrows"
-	maxRowsPerProverFlag = "maxrowsperprover"
-	tokenFlag            = "token"
-	debugFlag            = "debug"
-)
-
-var (
-	logLevels = map[string]log.Level{
-		"panic": log.PanicLevel,
-		"fatal": log.FatalLevel,
-		"error": log.ErrorLevel,
-		"warn":  log.WarnLevel,
-		"info":  log.InfoLevel,
-		"debug": log.DebugLevel,
-		"trace": log.TraceLevel,
-	}
-)
-
-var flags = []cli.Flag{
-	&cli.StringFlag{
-		Name:  configFlag,
-		Usage: "configuration file",
-	},
-	&cli.StringFlag{
-		Name:  addrFlag,
-		Usage: "HTTP listen address (default: localhost:8080)",
-	},
-	&cli.StringFlag{
-		Name:  dbFlag,
-		Usage: "SQLite3 database path (default: monitoring.db)",
-	},
-	&cli.StringFlag{
-		Name:  logFlag,
-		Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
-	},
-	&cli.IntFlag{
-		Name:  maxRowsFlag,
-		Usage: "maximum number of results which can be stored in the database (default: 400)",
-	},
-	&cli.IntFlag{
-		Name:  maxRowsPerProverFlag,
-		Usage: "maximum number of results per prover which can be stored in the database (default: 20)",
-	},
-	&cli.StringFlag{
-		Name:  tokenFlag,
-		Usage: "optional HTTP authorization token",
-	},
-	&cli.BoolFlag{
-		Name:  debugFlag,
-		Usage: "activate GIN debug mode",
-	},
+// databaseConfig configures the SQLite database and how much it may hold.
+// Both limits apply to each category individually, so a busy deployment
+// cannot evict the provers of another one.
+type databaseConfig struct {
+	Path             string `json:"path"             flag:"db" default:"monitoring.db" path:"true" usage:"SQLite3 database path"`
+	MaxRows          int    `json:"maxRows"          flag:"max-rows" default:"400" usage:"maximum number of results stored per category"`
+	MaxRowsPerProver int    `json:"maxRowsPerProver" flag:"max-rows-per-prover" default:"20" usage:"maximum number of results stored per prover and category"`
 }
 
-func getConfig(cmd *cli.Command) (*config, error) {
-	var err error
+// categoriesConfig declares the independent deployments served from the same
+// database. Both options are file-only, as a list of records has no sensible
+// command line syntax and the default has to name one of its entries.
+type categoriesConfig struct {
+	Default string     `json:"default" flag:"-"`
+	List    []Category `json:"list"    flag:"-"`
+}
 
-	// Create default configuration
-	c := &config{
-		Addr:             "localhost:8080",
-		Db:               "monitoring.db",
-		LogLevel:         "trace",
-		MaxRows:          400,
-		MaxRowsPerProver: 20,
-		Debug:            false,
-	}
+type Config struct {
+	Log        sections.Log     `json:"log"`
+	Http       httpConfig       `json:"http" category:"HTTP"`
+	Database   databaseConfig   `json:"database"`
+	Categories categoriesConfig `json:"categories"`
+}
 
-	// Obtain custom configuration from file if specified
-	if cmd.IsSet(configFlag) {
-		configFile := cmd.String(configFlag)
-		log.Infof("Loading config from file %v", configFile)
-		if err := internal.ReadConfig(configFile, c); err != nil {
-			return nil, err
+// Validate checks the rules that span more than one option. It is called by
+// config.Load after the checks derived from the struct tags.
+func (c *Config) Validate(r *config.Report) {
+
+	seen := make(map[string]bool, len(c.Categories.List))
+	for i, cat := range c.Categories.List {
+		switch {
+		case !categoryCheck.MatchString(cat.Id):
+			r.Errorf(fmt.Sprintf("categories.list[%v].id", i),
+				"%q must be URL-safe (A-Z a-z 0-9 . _ ~ -)", cat.Id)
+		case seen[cat.Id]:
+			r.Errorf(fmt.Sprintf("categories.list[%v].id", i), "duplicate category %q", cat.Id)
 		}
+		seen[cat.Id] = true
 	}
 
-	// Overwrite config file configuration with given command line arguments
-	if cmd.IsSet(addrFlag) {
-		c.Addr = cmd.String(addrFlag)
+	// An empty list is filled with a single default category by resolve, so
+	// only a default naming a category that was configured can be wrong
+	if c.Categories.Default != "" && len(seen) > 0 && !seen[c.Categories.Default] {
+		r.Errorf("categories.default", "%q is not one of the configured categories %v",
+			c.Categories.Default, categoryIds(c.Categories.List))
 	}
-	if cmd.IsSet(dbFlag) {
-		c.Db = cmd.String(dbFlag)
-	}
-	if cmd.IsSet(logFlag) {
-		c.LogLevel = cmd.String(logFlag)
-	}
-	if cmd.IsSet(maxRowsFlag) {
-		c.MaxRows = cmd.Int(maxRowsFlag)
-	}
-	if cmd.IsSet(maxRowsPerProverFlag) {
-		c.MaxRowsPerProver = cmd.Int(maxRowsPerProverFlag)
-	}
-	if cmd.IsSet(tokenFlag) {
-		c.Token = cmd.String(tokenFlag)
-	}
-	if cmd.IsSet(debugFlag) {
-		c.Debug = cmd.Bool(debugFlag)
-	}
+}
 
-	// Configure the logger
-	l, ok := logLevels[strings.ToLower(c.LogLevel)]
-	if !ok {
-		return nil, fmt.Errorf("log level %v does not exist", c.LogLevel)
+func categoryIds(cats []Category) []string {
+	ids := make([]string, 0, len(cats))
+	for _, c := range cats {
+		ids = append(ids, c.Id)
 	}
-	log.SetLevel(l)
+	return ids
+}
 
-	if err := c.resolveCategories(); err != nil {
+// flags returns the command line flags of the backend. A fresh set is built
+// per call, as a flag carries the state of the command it is parsed for and
+// must not be shared between commands.
+func flags() []cli.Flag {
+	return append([]cli.Flag{config.FileFlag()}, config.Flags(&Config{})...)
+}
+
+// getConfig loads and validates the configuration without touching anything
+// outside the config files, so that it can also serve "cmcbackend config".
+func getConfig(cmd *cli.Command) (*Config, error) {
+	c := &Config{}
+	if err := config.Load(cmd, c); err != nil {
 		return nil, err
 	}
-
-	// Convert file path to absolute path
-	c.Db, err = filepath.Abs(c.Db)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get path for database: %w", err)
-	}
-	if c.Token != "" {
-		c.Token, err = filepath.Abs(c.Token)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get path for authorization token: %w", err)
-		}
-	}
-
-	printConfig(c)
-
 	return c, nil
 }
 
-// resolveCategories applies the defaults and rejects malformed definitions
-func (c *config) resolveCategories() error {
+// setupLogging applies the log section to the global logger.
+func setupLogging(c *Config) error {
 
-	if len(c.Categories) == 0 {
-		c.Categories = []Category{{Id: defaultCategory, Label: "Default"}}
-	}
-
-	seen := make(map[string]bool, len(c.Categories))
-	for i, cat := range c.Categories {
-		if !categoryCheck.MatchString(cat.Id) {
-			return fmt.Errorf("category id %q must be URL-safe (A-Z a-z 0-9 . _ ~ -)", cat.Id)
+	if c.Log.File != "" {
+		file, err := os.OpenFile(c.Log.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
 		}
-		if seen[cat.Id] {
-			return fmt.Errorf("duplicate category id %q", cat.Id)
-		}
-		seen[cat.Id] = true
-
-		if cat.Label == "" {
-			c.Categories[i].Label = cat.Id
-		}
+		log.SetOutput(file)
 	}
 
-	if c.DefaultCategory == "" {
-		c.DefaultCategory = c.Categories[0].Id
+	// The level is restricted to the logrus levels by the enum tag
+	l, err := log.ParseLevel(strings.ToLower(c.Log.Level))
+	if err != nil {
+		return fmt.Errorf("failed to parse log level: %w", err)
 	}
-	if !seen[c.DefaultCategory] {
-		return fmt.Errorf("default category %q is not configured", c.DefaultCategory)
-	}
+	log.SetLevel(l)
 
 	return nil
 }
 
-func printConfig(c *config) {
+// resolve fills in the values that are derived from the validated
+// configuration rather than configured directly.
+func (c *Config) resolve() {
+
+	if len(c.Categories.List) == 0 {
+		c.Categories.List = []Category{{Id: defaultCategory, Label: "Default"}}
+	}
+	for i, cat := range c.Categories.List {
+		if cat.Label == "" {
+			c.Categories.List[i].Label = cat.Id
+		}
+	}
+	if c.Categories.Default == "" {
+		c.Categories.Default = c.Categories.List[0].Id
+	}
+}
+
+func printConfig(c *Config) {
+
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Warnf("Failed to get working directory: %v", err)
 	}
-	log.Debugf("Running cmc-backend from working directory %v", wd)
+	log.Infof("Running cmcbackend from working directory %v", wd)
 
-	log.Debugf("Using the following configuration:")
-	log.Debugf("\tListen address            : %v", c.Addr)
-	log.Debugf("\tSQLite database           : %v", c.Db)
-	log.Debugf("\tLogging level             : %v", c.LogLevel)
-	log.Debugf("\tMaximum Entries           : %v (per category)", c.MaxRows)
-	log.Debugf("\tMaximum Entries per Prover: %v (per category)", c.MaxRowsPerProver)
-	for _, cat := range c.Categories {
-		def := ""
-		if cat.Id == c.DefaultCategory {
-			def = " (default)"
-		}
-		log.Debugf("\tCategory                  : %v - %v%v", cat.Id, cat.Label, def)
+	s, err := config.Redacted(c)
+	if err != nil {
+		log.Warnf("Failed to render configuration: %v", err)
+		return
 	}
-	log.Debugf("\tToken                     : %v", c.Token)
-	log.Debugf("\tGIN Debug                 : %v", c.Debug)
+
+	// One record per line, as the logger escapes an embedded newline
+	log.Debug("Using the following configuration:")
+	for line := range strings.SplitSeq(s, "\n") {
+		log.Debugf("\t%v", line)
+	}
 }

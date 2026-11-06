@@ -64,7 +64,7 @@ type Server struct {
 	omspUrl     string
 }
 
-func NewServer(c *config) (*Server, error) {
+func NewServer(c *Config) (*Server, error) {
 
 	var tlsCaChain [][]byte
 	for _, c := range c.tlsCaChain {
@@ -90,7 +90,7 @@ func NewServer(c *config) (*Server, error) {
 	// The client does authenticate itself via a certificate if configured
 	if c.authMethods.Has(internal.AuthCertificate) {
 		log.Debugf("Enforcing client authentication via certificate")
-		rootpool, err := internal.CreateCertPool(c.rootCas, c.AllowSystemCerts)
+		rootpool, err := internal.CreateCertPool(c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
@@ -99,9 +99,9 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	var publishToken []byte
-	if c.PublishToken != "" {
+	if c.Publish.Token != "" {
 		var err error
-		publishToken, err = os.ReadFile(c.PublishToken)
+		publishToken, err = os.ReadFile(c.Publish.Token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read publish token: %w", err)
 		}
@@ -109,8 +109,8 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	var publishClientCert *tls.Certificate
-	if c.PublishCert != "" && c.PublishKey != "" {
-		cert, err := tls.LoadX509KeyPair(c.PublishCert, c.PublishKey)
+	if c.Publish.Cert != "" && c.Publish.Key != "" {
+		cert, err := tls.LoadX509KeyPair(c.Publish.Cert, c.Publish.Key)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load publish client cert: %w", err)
 		}
@@ -119,7 +119,7 @@ func NewServer(c *config) (*Server, error) {
 
 	// Use the system CA root store regardless of the CMC trust
 	// pool as the AMD KDS is a production service under a global ca
-	snpEndorser, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, c.VendorCache, nil, true)
+	snpEndorser, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, c.Storage.VendorCache, nil, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create snp endorser: %w", err)
 	}
@@ -127,12 +127,12 @@ func NewServer(c *config) (*Server, error) {
 	// Collateral proxy for Intel TDX/SGX is optional, as it requires an upstream
 	// Intel PCS or PCCS
 	var tdxEndorser *endorser.TdxEndorser
-	if c.IntelPcsUrl != "" {
+	if c.IntelPcs.Url != "" {
 		// Additionally use the system CA root store regardless of the CMC trust pool:
 		// the Intel PCS is a production service under a global CA, and the root CA CRL
 		// is always fetched from the Intel distribution point. Custom PCCS instances
 		// with their own certificate are configured via intelPcsRootCas
-		tdxEndorser, err = endorser.NewTdxEndorser(c.IntelPcsUrl, c.VendorCache,
+		tdxEndorser, err = endorser.NewTdxEndorser(c.IntelPcs.Url, c.Storage.VendorCache,
 			c.intelPcsRootCas, true)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tdx endorser: %w", err)
@@ -140,7 +140,7 @@ func NewServer(c *config) (*Server, error) {
 	}
 
 	s := &http.Server{
-		Addr:              c.EstAddr,
+		Addr:              c.Est.Address,
 		Handler:           nil,
 		TLSConfig:         tlsCfg,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -155,26 +155,26 @@ func NewServer(c *config) (*Server, error) {
 		estCaChain: c.estCaChain,
 		rootCas:    c.rootCas,
 		tpmConf: provision.TpmConfig{
-			VerifyEkCert: c.VerifyEkCert,
-			DbPath:       c.TpmEkCertDb,
+			VerifyEkCert: c.Tpm.VerifyEkCert,
+			DbPath:       c.Tpm.EkCertDb,
 		},
 		snpEndorser:       snpEndorser,
 		tdxEndorser:       tdxEndorser,
 		authMethods:       c.authMethods,
-		tokenPath:         c.TokenPath,
-		publishResults:    c.PublishResults,
-		publishOcsf:       c.PublishOcsf,
-		publishNetwork:    c.PublishNetwork,
-		publishFile:       c.PublishFile,
+		tokenPath:         c.Est.TokenPath,
+		publishResults:    c.Publish.Results,
+		publishOcsf:       c.Publish.Ocsf,
+		publishNetwork:    c.Publish.Network,
+		publishFile:       c.Publish.File,
 		publishToken:      publishToken,
-		allowSystemCerts:  c.AllowSystemCerts,
+		allowSystemCerts:  c.Trust.AllowSystemCerts,
 		publishClientCert: publishClientCert,
 		namingPolicy:      CsrPassthrough{},
 		certValidity:      c.certValidity,
-		omspFolder:        c.OmspFolder,
+		omspFolder:        c.Omsp.Folder,
 		omspKey:           c.omspKey,
 		omspCaChain:       c.omspCaChain,
-		omspUrl:           c.OmspUrl,
+		omspUrl:           c.Omsp.Url,
 	}
 
 	// EST endpoints
@@ -190,11 +190,11 @@ func NewServer(c *config) (*Server, error) {
 	server.registerCollateralEndpoints(http.DefaultServeMux)
 
 	// Metadata file serving
-	httpHandleMetadata(c.HttpFolder)
+	httpHandleMetadata(c.Http.Folder)
 
 	// OMSP Server for fetching manifest revocation information (optional)
-	if c.OmspUrl != "" {
-		u, err := url.Parse(c.OmspUrl)
+	if c.Omsp.Url != "" {
+		u, err := url.Parse(c.Omsp.Url)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse omsp Endpoint from provided OmspURL: %w", err)
 		}

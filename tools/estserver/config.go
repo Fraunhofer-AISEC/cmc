@@ -20,58 +20,76 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
-	"golang.org/x/exp/maps"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
 )
 
-var (
-	logLevels = map[string]log.Level{
-		"panic": log.PanicLevel,
-		"fatal": log.FatalLevel,
-		"error": log.ErrorLevel,
-		"warn":  log.WarnLevel,
-		"info":  log.InfoLevel,
-		"debug": log.DebugLevel,
-		"trace": log.TraceLevel,
-	}
-)
+type estConfig struct {
+	Address      string   `json:"address"      flag:"est-addr"     default:"0.0.0.0:9000" usage:"EST server address to listen for requests"`
+	CaKey        string   `json:"caKey"        flag:"est-ca-key"   path:"true" usage:"path to the EST CA key for signing CSRs"`
+	CaChain      []string `json:"caChain"      flag:"est-ca-chain" path:"true" usage:"comma-separated paths to EST CA certificate chain"`
+	TlsKey       string   `json:"tlsKey"       flag:"tls-key"      path:"true" usage:"TLS key for EST HTTPS server"`
+	TlsCaChain   []string `json:"tlsCaChain"   flag:"tls-ca-chain" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
+	CertValidity string   `json:"certValidity" flag:"cert-validity" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
+	Auth         []string `json:"auth"         flag:"auth-methods" default:"attestation" enum:"none,token,certificate,attestation" usage:"client authentication methods, certificate applies to all endpoints of the server"`
+	TokenPath    string   `json:"tokenPath"    flag:"token-path"   path:"true" usage:"token store for verifying bootstrap tokens"`
+}
 
-type config struct {
-	EstAddr          string   `json:"estAddr"`
-	EstCaKey         string   `json:"estCaKey"`
-	EstCaChain       []string `json:"estCaChain"`
-	TlsKey           string   `json:"tlsKey"`
-	TlsCaChain       []string `json:"tlsCaChain"`
-	RootCas          []string `json:"rootCas"`
-	AllowSystemCerts bool     `json:"allowSystemCerts"`
-	HttpFolder       string   `json:"httpFolder"`
-	VerifyEkCert     bool     `json:"verifyEkCert"`
-	TpmEkCertDb      string   `json:"tpmEkCertDb,omitempty"`
-	VendorCache      string   `json:"vendorCache,omitempty"`
-	IntelPcsUrl      string   `json:"intelPcsUrl,omitempty"`
-	IntelPcsRootCas  []string `json:"intelPcsRootCas,omitempty"`
-	LogLevel         string   `json:"logLevel"`
-	LogFile          string   `json:"logFile,omitempty"`
-	AuthMethods      []string `json:"authMethods,omitempty"`
-	TokenPath        string   `json:"tokenPath"`
-	PublishResults   string   `json:"publishResults"`
-	PublishOcsf      string   `json:"publishOcsf"`
-	PublishNetwork   string   `json:"publishNetwork"`
-	PublishFile      string   `json:"publishFile"`
-	PublishToken     string   `json:"publishToken"`
-	PublishCert      string   `json:"publishCert"`
-	PublishKey       string   `json:"publishKey"`
-	OmspFolder       string   `json:"omspFolder"`
-	OmspKey          string   `json:"omspKey"`
-	OmspCaChain      []string `json:"omspCaChain"`
-	OmspUrl          string   `json:"omspUrl"`
-	CertValidity     string   `json:"certValidity,omitempty"`
+type httpConfig struct {
+	Folder string `json:"folder" flag:"http-folder" path:"true" usage:"folder to be served via HTTP"`
+}
 
+type tpmConfig struct {
+	VerifyEkCert bool   `json:"verifyEkCert" flag:"verify-ek-cert" default:"true" usage:"verify TPM EK certificate chains"`
+	EkCertDb     string `json:"ekCertDb"     flag:"tpm-ek-cert-db" path:"true" usage:"database for EK cert chain verification"`
+}
+
+type intelPcsConfig struct {
+	Url     string   `json:"url"     flag:"intel-pcs-url"       usage:"URL of the upstream Intel PCS or PCCS to proxy TDX/SGX collateral from"`
+	RootCas []string `json:"rootCas" flag:"intel-pcs-root-cas" path:"true" usage:"comma-separated paths to root CAs of the upstream Intel PCS or PCCS"`
+}
+
+type omspConfig struct {
+	Folder  string   `json:"folder"  flag:"omsp-folder"   path:"true" usage:"folder with pre-generated revocation status JSON files for SW manifests"`
+	Key     string   `json:"key"     flag:"omsp-key"      path:"true" usage:"private key for signing OMSP responses"`
+	CaChain []string `json:"caChain" flag:"omsp-ca-chain" path:"true" usage:"comma-separated certificate chain for the OMSP signing key"`
+	Url     string   `json:"url"     flag:"omsp-url"      usage:"URL of the OMSP endpoint"`
+}
+
+type publishConfig struct {
+	Results string `json:"results" flag:"publish-results" usage:"HTTP address to publish attestation results to"`
+	Ocsf    string `json:"ocsf"    flag:"publish-ocsf"    usage:"HTTP address to publish OCSF detection findings to"`
+	Network string `json:"network" flag:"publish-network" usage:"HTTP address to publish lightweight network events to"`
+	File    string `json:"file"    flag:"publish-file"    path:"true" usage:"file to publish attestation reports to"`
+	Token   string `json:"token"   flag:"publish-token"   path:"true" usage:"file with the HTTP authorization token for publishing attestation results"`
+	Cert    string `json:"cert"    flag:"publish-cert"    path:"true" usage:"client certificate for mTLS authentication when publishing"`
+	Key     string `json:"key"     flag:"publish-key"     path:"true" usage:"client key for mTLS authentication when publishing"`
+}
+
+type storageConfig struct {
+	VendorCache string `json:"vendorCache" flag:"vendor-cache" path:"true" usage:"folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)"`
+}
+
+type Config struct {
+	Log      sections.Log   `json:"log"`
+	Trust    sections.Trust `json:"trust"`
+	Est      estConfig      `json:"est"      category:"EST"`
+	Http     httpConfig     `json:"http"`
+	Tpm      tpmConfig      `json:"tpm"      category:"TPM"`
+	IntelPcs intelPcsConfig `json:"intelPcs" category:"INTEL PCS"`
+	Omsp     omspConfig     `json:"omsp"     category:"OMSP"`
+	Publish  publishConfig  `json:"publish"`
+	Storage  storageConfig  `json:"storage"`
+
+	// Values derived from the configuration above by resolve
 	estCaKey        crypto.PrivateKey
 	estCaChain      []*x509.Certificate
 	tlsKey          crypto.PrivateKey
@@ -84,363 +102,170 @@ type config struct {
 	certValidity    time.Duration
 }
 
-const (
-	configFlag           = "config"
-	tokenPathFlag        = "token-path"
-	estAddrFlag          = "est-addr"
-	estCaKeyFlag         = "est-ca-key"
-	estCaChainFlag       = "est-ca-chain"
-	tlsKeyFlag           = "tls-key"
-	tlsCaChainFlag       = "tls-ca-chain"
-	rootCasFlag          = "root-cas"
-	allowSystemCertsFlag = "allow-system-certs"
-	httpFolderFlag       = "http-folder"
-	verifyEkCertFlag     = "verify-ek-cert"
-	tpmEkCertDbFlag      = "tpm-ek-cert-db"
-	vendorCacheFlag      = "vendor-cache"
-	intelPcsUrlFlag      = "intel-pcs-url"
-	intelPcsRootCasFlag  = "intel-pcs-root-cas"
-	logLevelFlag         = "log-level"
-	logFileFlag          = "log-file"
-	authMethodsFlag      = "auth-methods"
-	publishResultsFlag   = "publish-results"
-	publishOcsfFlag      = "publish-ocsf"
-	publishNetworkFlag   = "publish-network"
-	publishFileFlag      = "publish-file"
-	publishTokenFlag     = "publish-token"
-	publishCertFlag      = "publish-cert"
-	publishKeyFlag       = "publish-key"
-	omspFolderFlag       = "omsp-folder"
-	omspKeyFlag          = "omsp-key"
-	omspCaChainFlag      = "omsp-ca-chain"
-	omspUrlFlag          = "omsp-url"
-	certValidityFlag     = "cert-validity"
-)
-
-var flags = []cli.Flag{
-	&cli.StringFlag{
-		Name:  configFlag,
-		Usage: "JSON configuration file",
-	},
-	&cli.StringFlag{
-		Name:  tokenPathFlag,
-		Usage: "local address to request tokens",
-	},
-	&cli.StringFlag{
-		Name:  estAddrFlag,
-		Usage: "EST server address to listen for requests",
-	},
-	&cli.StringFlag{
-		Name:  estCaKeyFlag,
-		Usage: "path to the EST CA key for signing CSRs",
-	},
-	&cli.StringFlag{
-		Name:  estCaChainFlag,
-		Usage: "comma-separated paths to EST CA certificate chain",
-	},
-	&cli.StringFlag{
-		Name:  tlsKeyFlag,
-		Usage: "TLS key for EST HTTPS server",
-	},
-	&cli.StringFlag{
-		Name:  tlsCaChainFlag,
-		Usage: "comma-separated paths to TLS certificate chain for EST HTTPS server",
-	},
-	&cli.StringFlag{
-		Name:  rootCasFlag,
-		Usage: "comma-separated paths to trusted root CAs",
-	},
-	&cli.BoolFlag{
-		Name:  allowSystemCertsFlag,
-		Usage: "allow using the system cert pool as trusted root CAs",
-	},
-	&cli.StringFlag{
-		Name:  httpFolderFlag,
-		Usage: "folder to be served via HTTP",
-	},
-	&cli.BoolFlag{
-		Name:  verifyEkCertFlag,
-		Usage: "verify TPM EK certificate chains",
-	},
-	&cli.StringFlag{
-		Name:  tpmEkCertDbFlag,
-		Usage: "database for EK cert chain verification",
-	},
-	&cli.StringFlag{
-		Name:  vendorCacheFlag,
-		Usage: "folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)",
-	},
-	&cli.StringFlag{
-		Name:  intelPcsUrlFlag,
-		Usage: "URL of the upstream Intel PCS or PCCS to proxy TDX/SGX collateral from",
-	},
-	&cli.StringFlag{
-		Name:  intelPcsRootCasFlag,
-		Usage: "comma-separated paths to root CAs of the upstream Intel PCS or PCCS",
-	},
-	&cli.StringFlag{
-		Name:  logLevelFlag,
-		Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
-	},
-	&cli.StringFlag{
-		Name:  logFileFlag,
-		Usage: "file to log to instead of stdout/stderr",
-	},
-	&cli.StringFlag{
-		Name:  authMethodsFlag,
-		Usage: "client authentication methods (none,token,certificate,attestation)",
-	},
-	&cli.StringFlag{
-		Name:  publishResultsFlag,
-		Usage: "HTTP address to publish attestation results to",
-	},
-	&cli.StringFlag{
-		Name:  publishOcsfFlag,
-		Usage: "HTTP address to publish OCSF detection findings to",
-	},
-	&cli.StringFlag{
-		Name:  publishNetworkFlag,
-		Usage: "HTTP address to publish lightweight network events to",
-	},
-	&cli.StringFlag{
-		Name:  publishFileFlag,
-		Usage: "file to publish attestation reports to",
-	},
-	&cli.StringFlag{
-		Name:  publishTokenFlag,
-		Usage: "HTTP authorization token for publishing attestation results",
-	},
-	&cli.StringFlag{
-		Name:  publishCertFlag,
-		Usage: "client certificate for mTLS authentication when publishing",
-	},
-	&cli.StringFlag{
-		Name:  publishKeyFlag,
-		Usage: "client key for mTLS authentication when publishing",
-	},
-	&cli.StringFlag{
-		Name:  omspFolderFlag,
-		Usage: "folder with pre-generated revocation status JSON files for SW manifests",
-	},
-	&cli.StringFlag{
-		Name:  omspKeyFlag,
-		Usage: "private key for signing OMSP responses",
-	},
-	&cli.StringFlag{
-		Name:  omspCaChainFlag,
-		Usage: "comma-separated certificate chain for the OMSP signing key",
-	},
-	&cli.StringFlag{
-		Name:  omspUrlFlag,
-		Usage: "URL of the OMSP endpoint",
-	},
-	&cli.StringFlag{
-		Name:  certValidityFlag,
-		Usage: "lifetime of enrolled certificates as a Go duration string, e.g. 4320h",
-	},
+// flags returns the command line flags of the EST server. A fresh set is
+// built per call, as a flag carries the state of the command it is parsed
+// for and must not be shared between commands.
+func flags() []cli.Flag {
+	return append([]cli.Flag{config.FileFlag()}, config.Flags(&Config{})...)
 }
 
-func getConfig(cmd *cli.Command) (*config, error) {
-	var ok bool
-	var err error
+// getConfig loads and validates the configuration without touching anything
+// outside the config files, so that it can also serve "estserver config".
+func getConfig(cmd *cli.Command) (*Config, error) {
+	c := &Config{}
+	if err := config.Load(cmd, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
 
-	c := &config{
-		EstAddr:      "0.0.0.0:9000",
-		VerifyEkCert: true,
-		LogLevel:     "info",
-		AuthMethods:  []string{"attestation"},
+// Validate checks the rules that span more than one option. It is called by
+// config.Load after the checks derived from the struct tags.
+func (c *Config) Validate(r *config.Report) {
+
+	if c.Est.CaKey == "" {
+		r.Missing("est.caKey", "est-ca-key")
+	}
+	if len(c.Est.CaChain) == 0 {
+		r.Missing("est.caChain", "est-ca-chain")
+	}
+	if c.Est.TlsKey == "" {
+		r.Missing("est.tlsKey", "tls-key")
+	}
+	if len(c.Est.TlsCaChain) == 0 {
+		r.Missing("est.tlsCaChain", "tls-ca-chain")
 	}
 
-	if cmd.IsSet(configFlag) {
-		if err := internal.ReadConfig(cmd.String(configFlag), c); err != nil {
-			return nil, err
+	if c.Est.CertValidity != "" {
+		d, err := time.ParseDuration(c.Est.CertValidity)
+		switch {
+		case err != nil:
+			r.Errorf("est.certValidity", "%q is not a duration, e.g. 4320h", c.Est.CertValidity)
+		case d <= 0:
+			r.Errorf("est.certValidity", "must be positive, got %v", d)
 		}
 	}
 
-	if cmd.IsSet(tokenPathFlag) {
-		c.TokenPath = cmd.String(tokenPathFlag)
+	// OMSP is optional. If any OMSP option is set, require all of them
+	type option struct {
+		path string
+		set  bool
 	}
-	if cmd.IsSet(estAddrFlag) {
-		c.EstAddr = cmd.String(estAddrFlag)
+	omsp := []option{
+		{"omsp.url", c.Omsp.Url != ""},
+		{"omsp.key", c.Omsp.Key != ""},
+		{"omsp.folder", c.Omsp.Folder != ""},
+		{"omsp.caChain", len(c.Omsp.CaChain) > 0},
 	}
-	if cmd.IsSet(estCaKeyFlag) {
-		c.EstCaKey = cmd.String(estCaKeyFlag)
+	if slices.ContainsFunc(omsp, func(o option) bool { return o.set }) {
+		for _, o := range omsp {
+			if !o.set {
+				r.Errorf(o.path, "incomplete OMSP configuration: omsp.url, omsp.key, omsp.folder "+
+					"and omsp.caChain must all be set to enable OMSP")
+			}
+		}
 	}
-	if cmd.IsSet(estCaChainFlag) {
-		c.EstCaChain = strings.Split(cmd.String(estCaChainFlag), ",")
-	}
-	if cmd.IsSet(tlsKeyFlag) {
-		c.TlsKey = cmd.String(tlsKeyFlag)
-	}
-	if cmd.IsSet(tlsCaChainFlag) {
-		c.TlsCaChain = strings.Split(cmd.String(tlsCaChainFlag), ",")
-	}
-	if cmd.IsSet(rootCasFlag) {
-		c.RootCas = strings.Split(cmd.String(rootCasFlag), ",")
-	}
-	if cmd.IsSet(allowSystemCertsFlag) {
-		c.AllowSystemCerts = cmd.Bool(allowSystemCertsFlag)
-	}
-	if cmd.IsSet(httpFolderFlag) {
-		c.HttpFolder = cmd.String(httpFolderFlag)
-	}
-	if cmd.IsSet(verifyEkCertFlag) {
-		c.VerifyEkCert = cmd.Bool(verifyEkCertFlag)
-	}
-	if cmd.IsSet(tpmEkCertDbFlag) {
-		c.TpmEkCertDb = cmd.String(tpmEkCertDbFlag)
-	}
-	if cmd.IsSet(vendorCacheFlag) {
-		c.VendorCache = cmd.String(vendorCacheFlag)
-	}
-	if cmd.IsSet(intelPcsUrlFlag) {
-		c.IntelPcsUrl = cmd.String(intelPcsUrlFlag)
-	}
-	if cmd.IsSet(intelPcsRootCasFlag) {
-		c.IntelPcsRootCas = strings.Split(cmd.String(intelPcsRootCasFlag), ",")
-	}
-	if cmd.IsSet(logLevelFlag) {
-		c.LogLevel = cmd.String(logLevelFlag)
-	}
-	if cmd.IsSet(logFileFlag) {
-		c.LogFile = cmd.String(logFileFlag)
-	}
-	if cmd.IsSet(authMethodsFlag) {
-		c.AuthMethods = strings.Split(cmd.String(authMethodsFlag), ",")
-	}
-	if cmd.IsSet(publishResultsFlag) {
-		c.PublishResults = cmd.String(publishResultsFlag)
-	}
-	if cmd.IsSet(publishOcsfFlag) {
-		c.PublishOcsf = cmd.String(publishOcsfFlag)
-	}
-	if cmd.IsSet(publishNetworkFlag) {
-		c.PublishNetwork = cmd.String(publishNetworkFlag)
-	}
-	if cmd.IsSet(publishFileFlag) {
-		c.PublishFile = cmd.String(publishFileFlag)
-	}
-	if cmd.IsSet(publishTokenFlag) {
-		c.PublishToken = cmd.String(publishTokenFlag)
-	}
-	if cmd.IsSet(publishCertFlag) {
-		c.PublishCert = cmd.String(publishCertFlag)
-	}
-	if cmd.IsSet(publishKeyFlag) {
-		c.PublishKey = cmd.String(publishKeyFlag)
-	}
-	if cmd.IsSet(omspFolderFlag) {
-		c.OmspFolder = cmd.String(omspFolderFlag)
-	}
-	if cmd.IsSet(omspKeyFlag) {
-		c.OmspKey = cmd.String(omspKeyFlag)
-	}
-	if cmd.IsSet(omspCaChainFlag) {
-		c.OmspCaChain = strings.Split(cmd.String(omspCaChainFlag), ",")
-	}
-	if cmd.IsSet(omspUrlFlag) {
-		c.OmspUrl = cmd.String(omspUrlFlag)
-	}
-	if cmd.IsSet(certValidityFlag) {
-		c.CertValidity = cmd.String(certValidityFlag)
-	}
+}
 
-	// Configure the logger
-	if c.LogFile != "" {
-		file, err := os.OpenFile(c.LogFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+// setupLogging applies the log section to the global logger.
+func setupLogging(c *Config) error {
+
+	if c.Log.File != "" {
+		file, err := os.OpenFile(c.Log.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open log file: %w", err)
+			return fmt.Errorf("failed to open log file: %w", err)
 		}
 		log.SetOutput(file)
 	}
-	l, ok := logLevels[strings.ToLower(c.LogLevel)]
-	if !ok {
-		log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
-		l = log.InfoLevel
+
+	// The level is restricted to the logrus levels by the enum tag
+	l, err := log.ParseLevel(strings.ToLower(c.Log.Level))
+	if err != nil {
+		return fmt.Errorf("failed to parse log level: %w", err)
 	}
 	log.SetLevel(l)
 
-	// Load specified files
-	c.estCaKey, err = internal.LoadPrivateKey(c.EstCaKey)
+	return nil
+}
+
+// resolve loads the keys, certificates and other collateral the validated
+// configuration points to. Unlike loading and validating, this touches the
+// file system.
+func (c *Config) resolve() error {
+
+	var err error
+
+	c.estCaKey, err = internal.LoadPrivateKey(c.Est.CaKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
+		return fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.estCaChain, err = internal.ReadCerts(c.EstCaChain)
+	c.estCaChain, err = internal.ReadCerts(c.Est.CaChain)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
+		return fmt.Errorf("failed to load certificate chain: %w", err)
 	}
 
-	c.tlsKey, err = internal.LoadPrivateKey(c.TlsKey)
+	c.tlsKey, err = internal.LoadPrivateKey(c.Est.TlsKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
+		return fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	c.tlsCaChain, err = internal.ReadCerts(c.TlsCaChain)
+	c.tlsCaChain, err = internal.ReadCerts(c.Est.TlsCaChain)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load certificate chain: %w", err)
+		return fmt.Errorf("failed to load certificate chain: %w", err)
 	}
 
-	c.rootCas, err = internal.ReadCerts(c.RootCas)
+	c.rootCas, err = internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load trusted metadata CAs: %w", err)
+		return fmt.Errorf("failed to load trusted metadata CAs: %w", err)
 	}
 
 	// The Intel PCS proxy is optional, and so are its root CAs: the Intel PCS
 	// itself is a production service under a global CA
-	if len(c.IntelPcsRootCas) > 0 {
-		c.intelPcsRootCas, err = internal.ReadCerts(c.IntelPcsRootCas)
+	if len(c.IntelPcs.RootCas) > 0 {
+		c.intelPcsRootCas, err = internal.ReadCerts(c.IntelPcs.RootCas)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load Intel PCS root CAs: %w", err)
+			return fmt.Errorf("failed to load Intel PCS root CAs: %w", err)
 		}
 	}
-	if c.IntelPcsUrl == "" {
+	if c.IntelPcs.Url == "" {
 		log.Info("Intel PCS not configured, TDX/SGX collateral requests will not be served")
 	}
 
-	if !c.VerifyEkCert {
+	if !c.Tpm.VerifyEkCert {
 		log.Warn("UNSAFE: Verification of EK certificate chain turned off via config")
 	}
 
-	c.authMethods, err = internal.ParseAuthMethods(c.AuthMethods)
+	c.authMethods, err = internal.ParseAuthMethods(c.Est.Auth)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
+		return fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	// OMSP is optional. If any OMSP field is set, require all of them.
-	if c.OmspUrl != "" || c.OmspKey != "" || c.OmspFolder != "" || len(c.OmspCaChain) > 0 {
-		if c.OmspUrl == "" || c.OmspKey == "" || c.OmspFolder == "" || len(c.OmspCaChain) == 0 {
-			return nil, fmt.Errorf("incomplete OMSP configuration: omspUrl, omspKey, omspFolder, and omspCaChain must all be set to enable OMSP")
-		}
-		c.omspKey, err = internal.LoadPrivateKey(c.OmspKey)
+	// OMSP is optional, and validated to be either complete or absent
+	if c.Omsp.Url != "" {
+		c.omspKey, err = internal.LoadPrivateKey(c.Omsp.Key)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load private OMSP key: %w", err)
+			return fmt.Errorf("failed to load private OMSP key: %w", err)
 		}
-		c.omspCaChain, err = internal.ReadCerts(c.OmspCaChain)
+		c.omspCaChain, err = internal.ReadCerts(c.Omsp.CaChain)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load OMSP certificate chain: %w", err)
+			return fmt.Errorf("failed to load OMSP certificate chain: %w", err)
 		}
 	} else {
 		log.Info("OMSP not configured, OMSP requests will not be served")
 	}
 
-	if c.CertValidity != "" {
-		c.certValidity, err = time.ParseDuration(c.CertValidity)
+	if c.Est.CertValidity != "" {
+		c.certValidity, err = time.ParseDuration(c.Est.CertValidity)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse certValidity %q: %w", c.CertValidity, err)
-		}
-		if c.certValidity <= 0 {
-			return nil, fmt.Errorf("certValidity must be positive, got %v", c.certValidity)
+			return fmt.Errorf("failed to parse certValidity %q: %w", c.Est.CertValidity, err)
 		}
 	}
 
-	// Print the parsed configuration
-	printConfig(c)
-
-	return c, nil
+	return nil
 }
 
-func printConfig(c *config) {
+func printConfig(c *Config) {
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -448,30 +273,15 @@ func printConfig(c *config) {
 	}
 	log.Infof("Running estserver from working directory %v", wd)
 
+	s, err := config.Redacted(c)
+	if err != nil {
+		log.Warnf("Failed to render configuration: %v", err)
+		return
+	}
+
+	// One record per line, as the logger escapes an embedded newline
 	log.Debug("Using the following configuration:")
-	log.Debugf("\tEST server address  : %v", c.EstAddr)
-	log.Debugf("\tEST CA key file     : %v", c.EstCaKey)
-	log.Debugf("\tEST CA cert chain   : %v", strings.Join(c.EstCaChain, ","))
-	log.Debugf("\tTLS Key File        : %v", c.TlsKey)
-	log.Debugf("\tTLS CA cert chain   : %v", strings.Join(c.TlsCaChain, ","))
-	log.Debugf("\tTrusted root CAs    : %v", strings.Join(c.RootCas, ","))
-	log.Debugf("\tFolders to be served: %v", c.HttpFolder)
-	log.Debugf("\tVerify EK Cert      : %v", c.VerifyEkCert)
-	log.Debugf("\tTPM EK DB           : %v", c.TpmEkCertDb)
-	log.Debugf("\tVendor Cache Folder : %v", c.VendorCache)
-	log.Debugf("\tIntel PCS URL       : %v", c.IntelPcsUrl)
-	log.Debugf("\tIntel PCS root CAs  : %v", strings.Join(c.IntelPcsRootCas, ","))
-	log.Debugf("\tLog Level           : %v", c.LogLevel)
-	log.Debugf("\tAuth Methods        : %v", c.authMethods.String())
-	log.Debugf("\tToken Path          : %v", c.TokenPath)
-	log.Debugf("\tPublish Results     : %v", c.PublishResults)
-	log.Debugf("\tPublish OCSF        : %v", c.PublishOcsf)
-	log.Debugf("\tPublish Network     : %v", c.PublishNetwork)
-	log.Debugf("\tPublish File        : %v", c.PublishFile)
-	log.Debugf("\tPublish Token       : %v", c.PublishToken)
-	log.Debugf("\tOMSP folder         : %v", c.OmspFolder)
-	log.Debugf("\tOMSP Key File       : %v", c.OmspKey)
-	log.Debugf("\tOMSP CA cert chain  : %v", strings.Join(c.OmspCaChain, ","))
-	log.Debugf("\tOMSP URL            : %v", c.OmspUrl)
-	log.Debugf("\tCert Validity       : %v", c.CertValidity)
+	for line := range strings.SplitSeq(s, "\n") {
+		log.Debugf("\t%v", line)
+	}
 }
