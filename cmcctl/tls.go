@@ -45,9 +45,9 @@ func dial(c *config) error {
 	defer wg.Wait()
 
 	conn, err := atls.Dial("tcp", c.Addr, tlsConf,
-		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(c.Api),
+		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
@@ -99,9 +99,9 @@ func listen(c *config) error {
 
 	// Listen: TLS connection
 	ln, err := atls.Listen("tcp", c.Addr, tlsConf,
-		atls.WithCmcAddr(c.CmcAddr),
+		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcPolicies(c.policies),
-		atls.WithCmcApi(c.Api),
+		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Mtls),
 		atls.WithAttest(c.attest),
@@ -286,8 +286,8 @@ func getTlsCert(c *config) (tls.Certificate, error) {
 			DNSNames:    dnsNames,
 			IPAddresses: c.TlsIpAddresses,
 		}),
-		atls.WithCmcAddr(c.CmcAddr),
-		atls.WithCmcApi(c.Api),
+		atls.WithCmcAddr(c.cmcAddr),
+		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
 		atls.WithLibApiCmcConfig(&c.Config))
 }

@@ -38,9 +38,9 @@ func init() {
 
 func (a SocketApi) generate(c *config) error {
 
-	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
+	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
-	log.Infof("Sending socket request type 'Attest' to %v", c.CmcAddr)
+	log.Infof("Sending socket request type 'Attest' to %v", c.cmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)
@@ -101,7 +101,7 @@ func (a SocketApi) generate(c *config) error {
 
 func (a SocketApi) verify(c *config) error {
 
-	log.Infof("Sending socket request type 'Verify' to %v", c.CmcAddr)
+	log.Infof("Sending socket request type 'Verify' to %v", c.cmcAddr)
 
 	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
 	if err != nil {
@@ -131,9 +131,9 @@ func (a SocketApi) verify(c *config) error {
 
 func (a SocketApi) enroll(c *config) error {
 
-	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
+	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
-	log.Infof("Sending socket request type 'TLSCreate' to %v", c.CmcAddr)
+	log.Infof("Sending socket request type 'TLSCreate' to %v", c.cmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)
@@ -195,9 +195,9 @@ func (a SocketApi) enroll(c *config) error {
 
 func (a SocketApi) updateCerts(c *config) error {
 
-	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
+	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
-	log.Infof("Sending socket request type 'UpdateCerts' to %v", c.CmcAddr)
+	log.Infof("Sending socket request type 'UpdateCerts' to %v", c.cmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)
@@ -252,9 +252,9 @@ func (a SocketApi) updateCerts(c *config) error {
 
 func (a SocketApi) updateMetadata(c *config) error {
 
-	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
+	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
-	log.Infof("Sending socket request type 'UpdateMetadata' to %v", c.CmcAddr)
+	log.Infof("Sending socket request type 'UpdateMetadata' to %v", c.cmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)
@@ -310,7 +310,7 @@ func (a SocketApi) updateMetadata(c *config) error {
 func verifySocketRequest(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
-	network, addr := api.GetNetworkAndAddr(c.CmcAddr)
+	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
 	// Establish connection
 	conn, err := net.Dial(network, addr)

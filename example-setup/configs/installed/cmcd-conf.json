@@ -1,26 +1,20 @@
 {
-    "cmcAddr": "localhost:9955",
+    "cmc": "socket://localhost:9955",
     "provisionAuth": [ "attestation" ],
     "provisionToken": "data/provision_token",
-    "endorsementMode": "est",
-    "endorsementAddr": "https://localhost:9000/",
-    "enrollmentMode": "est",
-    "enrollmentAddr": "https://localhost:9000/",
+    "endorsement": "est:https://localhost:9000/",
+    "enrollment": "est:https://localhost:9000/",
     "metadata": [
         "file://data/metadata-signed"
     ],
     "drivers": [ "tpm" ],
     "excludePcrs": [ ],
     "hashAlg": "SHA256",
-    "api": "socket",
     "policyEngine": "js",
     "policyOverwrite": false,
     "logLevel": "trace",
     "storage": "data/cmc-internal/",
-    "cache": "data/cmc-cache/",
-    "peerCache": "data/cmc-peer-cache",
     "measurementLogs": true,
-    "ctr": false,
     "rootCas": [
         "data/pki/ca.pem"
     ],

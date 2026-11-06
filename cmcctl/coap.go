@@ -43,10 +43,10 @@ func init() {
 
 func (a CoapApi) generate(c *config) error {
 
-	log.Infof("Sending coap request type 'Attest' to %v", c.CmcAddr)
+	log.Infof("Sending coap request type 'Attest' to %v", c.cmcAddr)
 
 	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
+	conn, err := udp.Dial(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -109,7 +109,7 @@ func (a CoapApi) generate(c *config) error {
 
 func (a CoapApi) verify(c *config) error {
 
-	log.Infof("Sending coap request type 'Verify' to %v", c.CmcAddr)
+	log.Infof("Sending coap request type 'Verify' to %v", c.cmcAddr)
 
 	// Read the attestation report and the nonce previously stored
 	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
@@ -145,10 +145,10 @@ func (a CoapApi) verify(c *config) error {
 
 func (a CoapApi) enroll(c *config) error {
 
-	log.Infof("Sending coap request type 'TLSCreate' to %v", c.CmcAddr)
+	log.Infof("Sending coap request type 'TLSCreate' to %v", c.cmcAddr)
 
 	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
+	conn, err := udp.Dial(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -213,10 +213,10 @@ func (a CoapApi) enroll(c *config) error {
 
 func (a CoapApi) updateCerts(c *config) error {
 
-	log.Infof("Sending coap request type 'UpdateCerts' to %v", c.CmcAddr)
+	log.Infof("Sending coap request type 'UpdateCerts' to %v", c.cmcAddr)
 
 	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
+	conn, err := udp.Dial(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -273,10 +273,10 @@ func (a CoapApi) updateCerts(c *config) error {
 
 func (a CoapApi) updateMetadata(c *config) error {
 
-	log.Infof("Sending coap request type 'UpdateMetadata' to %v", c.CmcAddr)
+	log.Infof("Sending coap request type 'UpdateMetadata' to %v", c.cmcAddr)
 
 	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
+	conn, err := udp.Dial(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("error dialing: %w", err)
 	}
@@ -335,7 +335,7 @@ func verifyInternal(c *config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
 	// Establish connection
-	conn, err := udp.Dial(c.CmcAddr)
+	conn, err := udp.Dial(c.cmcAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing: %w", err)
 	}

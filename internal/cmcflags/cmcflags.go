@@ -27,31 +27,24 @@ import (
 )
 
 const (
-	CmcAddrFlag          = "cmc-addr"
+	CmcFlag              = "cmc"
 	ProvisionTokenFlag   = "provision-token"
 	ProvisionAuthFlag    = "provision-auth"
-	EndorsementModeFlag  = "endorsement-mode"
-	EndorsementAddrFlag  = "endorsement-addr"
-	EnrollmentModeFlag   = "enrollment-mode"
-	EnrollmentAddrFlag   = "enrollment-addr"
+	EndorsementFlag      = "endorsement"
+	EnrollmentFlag       = "enrollment"
 	MetadataFlag         = "metadata"
 	DriversFlag          = "drivers"
 	ExcludePcrsFlag      = "exclude-pcrs"
 	HashAlgFlag          = "hash-alg"
-	ApiFlag              = "api"
 	PolicyEngineFlag     = "policy-engine"
 	PolicyOverwriteFlag  = "policy-overwrite"
 	StorageFlag          = "storage"
-	CacheFlag            = "cache"
-	PeerCacheFlag        = "peer-cache"
 	MeasurementLogsFlag  = "measurement-logs"
-	CtrFlag              = "ctr"
 	CtrDriverFlag        = "ctr-driver"
 	CtrLogFlag           = "ctr-log"
 	RootCasFlag          = "root-cas"
 	AllowSystemCertsFlag = "allow-system-certs"
 	VmplFlag             = "vmpl"
-	VendorCacheFlag      = "vendor-cache"
 	TpmKeyAlgFlag        = "tpm-key-alg"
 	UseOmspFlag          = "use-omsp"
 	OmspFormatFlag       = "omsp-format"
@@ -60,8 +53,10 @@ const (
 
 var Flags = []cli.Flag{
 	&cli.StringFlag{
-		Name:  CmcAddrFlag,
-		Usage: "CMC server address",
+		Name: CmcFlag,
+		Usage: "CMC API and address in the form <api>://<address>, e.g. " +
+			"socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955 or " +
+			"coap://127.0.0.1:9955",
 	},
 	&cli.StringFlag{
 		Name:  ProvisionTokenFlag,
@@ -72,32 +67,26 @@ var Flags = []cli.Flag{
 		Usage: "provisioning authentication methods [none token certificate attestation]",
 	},
 	&cli.StringFlag{
-		Name: EndorsementModeFlag,
-		Usage: "endorsement mode for fetching driver certs and collateral [direct cps host est]:\n" +
+		Name: EndorsementFlag,
+		Usage: "endorsement mode for fetching driver certs and collateral, with the server\n" +
+			"\t\taddress for the modes that require one [direct host est:<url> cps:<url>]:\n" +
 			"\t\tdirect\n" +
 			"\t\t\tSNP: fetch AMD SNP VCEK/CA directly from AMD KDS (rate-limited: 10s per request)\n" +
 			"\t\t\tTDX: fetch TDX collateral directly from Intel PCS\n" +
 			"\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n" +
-			"\t\tcps:\n" +
+			"\t\tcps:<url>\n" +
 			"\t\t\tSNP: Fetch AMD SNP VCEK/CA from custom caching proxy service (CPS)\n" +
 			"\t\t\tTDX: Fetch TDX collateral from Provisioning Certififcation Caching Service (PCCS)\n" +
 			"\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n" +
 			"\t\thost:\n" +
 			"\t\t\tSNP: Fetch AMD SNP VCEK/CA from the local hypervisor via SNP_GET_EXT_REPORT\n" +
-			"\t\test:\n" +
+			"\t\test:<url>\n" +
 			"\t\t\tTPM: Enroll TPM EK certificate via Enrollment over Secure Transport (EST) server\n",
 	},
 	&cli.StringFlag{
-		Name:  EndorsementAddrFlag,
-		Usage: "address of the EST endorsement server",
-	},
-	&cli.StringFlag{
-		Name:  EnrollmentModeFlag,
-		Usage: "enrollment mode [acme, est, self]",
-	},
-	&cli.StringFlag{
-		Name:  EnrollmentAddrFlag,
-		Usage: "address of the ACME/EST enrollment server",
+		Name: EnrollmentFlag,
+		Usage: "enrollment mode, with the address of the enrollment server for the modes that " +
+			"require one [self est:<url>]",
 	},
 	&cli.StringFlag{
 		Name:  MetadataFlag,
@@ -117,10 +106,6 @@ var Flags = []cli.Flag{
 		Usage: "hash algorithm for attestation report integrity",
 	},
 	&cli.StringFlag{
-		Name:  ApiFlag,
-		Usage: "API to use [coap grpc libapi socket]",
-	},
-	&cli.StringFlag{
 		Name:  PolicyEngineFlag,
 		Usage: fmt.Sprintf("policy engine: %v", maps.Keys(cmc.GetPolicyEngines())),
 	},
@@ -129,28 +114,17 @@ var Flags = []cli.Flag{
 		Usage: "allow attestation policies to overwrite attestation result properties",
 	},
 	&cli.StringFlag{
-		Name:  StorageFlag,
-		Usage: "folder to store internal CMC data",
-	},
-	&cli.StringFlag{
-		Name:  CacheFlag,
-		Usage: "folder to cache metadata for offline backup",
-	},
-	&cli.StringFlag{
-		Name:  PeerCacheFlag,
-		Usage: "folder to cache peer metadata to reduce attestation report size",
+		Name: StorageFlag,
+		Usage: "folder for all data the CMC persists, such as keys, the metadata cache, the " +
+			"peer cache and the hardware vendor collateral cache",
 	},
 	&cli.BoolFlag{
 		Name:  MeasurementLogsFlag,
 		Usage: "include measured events in measurement and validation report",
 	},
-	&cli.BoolFlag{
-		Name:  CtrFlag,
-		Usage: "conduct container measurements",
-	},
 	&cli.StringFlag{
 		Name:  CtrDriverFlag,
-		Usage: "driver to use for container measurements",
+		Usage: "driver to use for container measurements, empty to not measure containers",
 	},
 	&cli.StringFlag{
 		Name:  CtrLogFlag,
@@ -167,10 +141,6 @@ var Flags = []cli.Flag{
 	&cli.IntFlag{
 		Name:  VmplFlag,
 		Usage: "SNP Virtual Machine Privilege Level (VMPL)",
-	},
-	&cli.StringFlag{
-		Name:  VendorCacheFlag,
-		Usage: "folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)",
 	},
 	&cli.StringFlag{
 		Name:  TpmKeyAlgFlag,
@@ -198,8 +168,8 @@ var Flags = []cli.Flag{
 // Override applies CLI flag values to the given cmc.Config, only overwriting
 // fields for flags that were explicitly set on the command line.
 func Override(cmd *cli.Command, c *cmc.Config) error {
-	if cmd.IsSet(CmcAddrFlag) {
-		c.CmcAddr = cmd.String(CmcAddrFlag)
+	if cmd.IsSet(CmcFlag) {
+		c.Cmc = cmd.String(CmcFlag)
 	}
 	if cmd.IsSet(MetadataFlag) {
 		c.MetadataLocation = strings.Split(cmd.String(MetadataFlag), ",")
@@ -217,9 +187,6 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	if cmd.IsSet(HashAlgFlag) {
 		c.HashAlg = cmd.String(HashAlgFlag)
 	}
-	if cmd.IsSet(ApiFlag) {
-		c.Api = cmd.String(ApiFlag)
-	}
 	if cmd.IsSet(PolicyEngineFlag) {
 		c.PolicyEngine = cmd.String(PolicyEngineFlag)
 	}
@@ -229,17 +196,8 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	if cmd.IsSet(StorageFlag) {
 		c.Storage = cmd.String(StorageFlag)
 	}
-	if cmd.IsSet(CacheFlag) {
-		c.Cache = cmd.String(CacheFlag)
-	}
-	if cmd.IsSet(PeerCacheFlag) {
-		c.PeerCache = cmd.String(PeerCacheFlag)
-	}
 	if cmd.IsSet(MeasurementLogsFlag) {
 		c.MeasurementLogs = cmd.Bool(MeasurementLogsFlag)
-	}
-	if cmd.IsSet(CtrFlag) {
-		c.Ctr = cmd.Bool(CtrFlag)
 	}
 	if cmd.IsSet(CtrDriverFlag) {
 		c.CtrDriver = cmd.String(CtrDriverFlag)
@@ -262,20 +220,11 @@ func Override(cmd *cli.Command, c *cmc.Config) error {
 	if cmd.IsSet(ProvisionAuthFlag) {
 		c.ProvisionAuth = strings.Split(cmd.String(ProvisionAuthFlag), ",")
 	}
-	if cmd.IsSet(EndorsementModeFlag) {
-		c.EndorsementMode = cmd.String(EndorsementModeFlag)
+	if cmd.IsSet(EndorsementFlag) {
+		c.Endorsement = cmd.String(EndorsementFlag)
 	}
-	if cmd.IsSet(EndorsementAddrFlag) {
-		c.EndorsementAddr = cmd.String(EndorsementAddrFlag)
-	}
-	if cmd.IsSet(EnrollmentModeFlag) {
-		c.EnrollmentMode = cmd.String(EnrollmentModeFlag)
-	}
-	if cmd.IsSet(EnrollmentAddrFlag) {
-		c.EnrollmentAddr = cmd.String(EnrollmentAddrFlag)
-	}
-	if cmd.IsSet(VendorCacheFlag) {
-		c.VendorCache = cmd.String(VendorCacheFlag)
+	if cmd.IsSet(EnrollmentFlag) {
+		c.Enrollment = cmd.String(EnrollmentFlag)
 	}
 	if cmd.IsSet(TpmKeyAlgFlag) {
 		c.TpmKeyAlg = cmd.String(TpmKeyAlgFlag)

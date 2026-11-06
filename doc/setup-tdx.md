@@ -37,7 +37,7 @@ run-tdx-qgs
 ## TDX Collateral
 
 Verifying a TDX quote requires Intel collateral (TCB info, QE identity, PCK CRL and the Intel
-root CA CRL). The CVM can fetch it directly from the Intel PCS or the PCCS (`endorsementMode`
+root CA CRL). The CVM can fetch it directly from the Intel PCS or the PCCS (`endorsement`
 `direct`), which requires the CVM to have internet access and to trust the public CAs.
 
 Alternatively, the *estserver* proxies and caches the collateral, so that the CVM obtains
@@ -60,8 +60,7 @@ The CVM then uses `cps` endorsement mode, which fetches both AMD and Intel colla
 *estserver*, and therefore requires neither internet access nor the public CAs:
 ```json
 {
-    "endorsementMode": "cps",
-    "endorsementAddr": "https://10.0.2.2:9000/",
+    "endorsement": "cps:https://10.0.2.2:9000/",
     "allowSystemCerts": false,
     "rootCas": [ "/var/ca.pem" ]
 }

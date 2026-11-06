@@ -98,7 +98,7 @@ func (t *Tpm) Init(c *drivers.DriverConfig) error {
 	t.endorser = endorser
 
 	t.DriverConfig = c
-	t.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
+	t.ctrLog = strings.EqualFold(c.CtrDriver, "tpm")
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {

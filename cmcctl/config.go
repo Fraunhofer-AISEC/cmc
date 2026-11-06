@@ -109,6 +109,8 @@ type config struct {
 
 	rootCas           []*x509.Certificate
 	policies          []byte
+	apiName           string
+	cmcAddr           string
 	api               Api
 	serializer        ar.Serializer
 	attest            atls.AttestSelect
@@ -341,7 +343,7 @@ func getConfig(cmd *cli.Command) (*config, error) {
 
 	c := &config{
 		Config: cmc.Config{
-			Api: "socket",
+			Cmc: "socket://127.0.0.1:9955",
 		},
 		Serialization: "cbor",
 		Attest:        "mutual",
@@ -493,6 +495,17 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
+	// Get API and the address of the cmcd
+	c.apiName, c.cmcAddr, err = internal.ParseApiEndpoint(c.Cmc)
+	if err != nil {
+		return nil, err
+	}
+	c.api, ok = apis[c.apiName]
+	if !ok {
+		return nil, fmt.Errorf("API %q is not implemented, available: %v", c.apiName,
+			strings.Join(availableApis(), ", "))
+	}
+
 	c.Print()
 
 	// Parse root CAs
@@ -545,12 +558,6 @@ func getConfig(cmd *cli.Command) (*config, error) {
 		return nil, fmt.Errorf("serializer %v is not implemented", c.Serialization)
 	}
 
-	// Get API
-	c.api, ok = apis[strings.ToLower(c.Api)]
-	if !ok {
-		return nil, fmt.Errorf("API '%v' is not implemented", c.Api)
-	}
-
 	// Get attestation mode
 	c.attest, err = atls.ParseAttestMode(c.Attest)
 	if err != nil {
@@ -586,7 +593,7 @@ func (c *config) Print() {
 
 	log.Debugf("Using the following configuration:")
 	log.Debugf("\tAddress                  : %v", c.Addr)
-	log.Debugf("\tCMC API Address          : %v", c.CmcAddr)
+	log.Debugf("\tCMC API endpoint         : %v", c.Cmc)
 	log.Debugf("\tReportFile               : %v", c.ReportFile)
 	log.Debugf("\tResultFile               : %v", c.ResultFile)
 	log.Debugf("\tNonceFile                : %v", c.NonceFile)
@@ -603,7 +610,6 @@ func (c *config) Print() {
 	log.Debugf("\tPublish Results          : %v", c.PublishResults)
 	log.Debugf("\tPublish OCSF             : %v", c.PublishOcsf)
 	log.Debugf("\tPublish Network          : %v", c.PublishNetwork)
-	log.Debugf("\tApi                      : %v", c.Api)
 	log.Debugf("\tTLS / HTTP Payload       : %v", c.Data)
 	log.Debugf("\tHTTP Header              : %v", c.Header)
 	log.Debugf("\tHTTP Method              : %v", c.Method)
@@ -617,7 +623,7 @@ func (c *config) Print() {
 	if c.PoliciesFile != "" {
 		log.Debugf("\tPoliciesFile            : %v", c.PoliciesFile)
 	}
-	if strings.EqualFold(c.Api, "libapi") {
+	if c.apiName == "libapi" {
 		c.Config.Print()
 	}
 }

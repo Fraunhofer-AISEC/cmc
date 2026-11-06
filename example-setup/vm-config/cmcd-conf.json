@@ -1,23 +1,17 @@
 {
-    "cmcAddr": "0.0.0.0:9955",
+    "cmc": "socket://0.0.0.0:9955",
     "provisionAuth": [ "none" ],
-    "endorsementMode": "est",
-    "endorsementAddr": "https://10.0.2.2:9000/",
-    "enrollmentMode": "est",
-    "enrollmentAddr": "https://10.0.2.2:9000/",
+    "endorsement": "est:https://10.0.2.2:9000/",
+    "enrollment": "est:https://10.0.2.2:9000/",
     "metadata": [
         "https://10.0.2.2:9000/vm-metadata"
     ],
     "drivers": [ "tpm", "sw" ],
     "hashAlg": "SHA256",
     "tpmKeyAlg": "EC256",
-    "api": "socket",
     "logLevel": "trace",
     "storage": "/var/cmc/internal/",
-    "cache": "/var/cmc/cache/",
-    "peerCache": "/var/cmc/peer-cache",
     "measurementLogs": true,
-    "ctr": true,
     "ctrDriver": "sw",
     "ctrLog": "/tmp/container_measurements",
     "rootCas": [

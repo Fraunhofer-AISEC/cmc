@@ -1,6 +1,6 @@
 {
     "addr": "https://ubuntu:4443",
-    "cmcAddr": "localhost:9955",
+    "cmc": "socket://localhost:9955",
     "report": "data/attestation-report",
     "result": "data/attestation-result.json",
     "nonce": "data/nonce",
@@ -11,7 +11,6 @@
     "mtls": false,
     "attest": "server",
     "logLevel": "trace",
-    "api": "socket",
     "serialization": "json",
     "keyConfig": "EC256",
     "keyType": "sw",

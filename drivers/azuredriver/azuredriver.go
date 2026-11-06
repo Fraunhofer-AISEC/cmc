@@ -82,7 +82,7 @@ func (azure *Azure) Init(c *drivers.DriverConfig) error {
 
 	azure.DriverConfig = c
 	azure.pcrs = getQuotePcrs(c.ExcludePcrs)
-	azure.ctrLog = c.Ctr && strings.EqualFold(c.CtrDriver, "tpm")
+	azure.ctrLog = strings.EqualFold(c.CtrDriver, "tpm")
 
 	// Create storage folder for storage of internal data if not existing
 	if c.StoragePath != "" {
