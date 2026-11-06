@@ -7,9 +7,10 @@ commandline flag supersedes.
 Multiple configuration files can be specified as a comma-separated list. If a specific configuration
 option is present in multiple configuration file, the last configuration file takes precedence.
 
-The commandline flags for each executable can be shown via the `--help` flag. The JSON configuration
-options have the same names in camel case (e.g. *ctrDriver*), while commandline flags use kebab case
-(e.g. *--ctr-driver*).
+The commandline flags for each executable can be shown via the `--help` flag, which groups them by
+the configuration section they belong to. JSON configuration options are grouped into those same
+sections and named in camel case (e.g. *cmc.attestation.containers.driver*), while commandline
+flags stay flat and use kebab case (e.g. *--ctr-driver*).
 
 Furthermore, exemplary JSON configuration file examples can be found in the `examples/` folder of
 this repository. Paths in the configuration file can either be absolete or relative to the directory
@@ -46,7 +47,16 @@ The cmcctl provides the following subcommands:
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-estserver --config example-setup/configs/installed/est-server-conf.json
+estserver --config example-setup/configs/est-server-conf.json
+```
+Every binary can load and inspect its configuration without doing anything else:
+
+```sh
+# Load and validate the configuration, exit code 0 if it is valid
+estserver config validate --config example-setup/configs/est-server-conf.json
+
+# Print the effective configuration, after defaults, config files and flags, secrets redacted
+cmcd config print --config example-setup/configs/cmcd-conf.json
 ```
 
 ### Run the cmcd
@@ -55,11 +65,11 @@ Prerequisite: [est server running](./run.md#run-the-est-and-provisioning-server)
 
 ```sh
 # Run the cmcd
-cmcd --config example-setup/configs/installed/cmcd-conf.json
+cmcd --config example-setup/configs/cmcd-conf.json
 
 # NOTE: for setups that require root, e.g., to access the tpm, make sure the installed go binaries
 # are found:
-sudo env PATH="$HOME/go/bin:$PATH" cmcd --config example-setup/configs/installed/cmcd-conf.json
+sudo env PATH="$HOME/go/bin:$PATH" cmcd --config example-setup/configs/cmcd-conf.json
 ```
 
 ### Generate and Verify Attestation Reports
@@ -68,10 +78,10 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
-cmcctl generate --config example-setup/configs/installed/cmcctl-conf.json
+cmcctl generate --config example-setup/configs/cmcctl-conf.json
 
 # Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
-cmcctl verify --config example-setup/configs/installed/cmcctl-conf.json
+cmcctl verify --config example-setup/configs/cmcctl-conf.json
 ```
 
 ### Establish Attested TLS Connections
@@ -81,10 +91,10 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 ```sh
 
 # Run an attested TLS server
-cmcctl listen --config example-setup/configs/installed/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
+cmcctl listen --config example-setup/configs/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-cmcctl dial --config example-setup/configs/installed/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
+cmcctl dial --config example-setup/configs/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
 ```
 
 ### Establish Attested TLS Connections without a shared PKI
@@ -96,7 +106,7 @@ instead. This enables TLS channels which are solely authenticated through the at
 
 ```json
 {
-    "enrollment": "self"
+    "cmc": { "provisioning": { "enrollment": "self" } }
 }
 ```
 
@@ -123,12 +133,12 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run two attested HTTPS servers
-cmcctl serve --config example-setup/configs/installed/cmcctl-conf.json --addr "$(hostname --fqdn):8082"
+cmcctl serve --config example-setup/configs/cmcctl-conf.json --addr "$(hostname --fqdn):8082"
 
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections
 cmcctl request \
-    --config example-setup/configs/installed/cmcctl-conf.json \
+    --config example-setup/configs/cmcctl-conf.json \
     --addr "https://$(hostname --fqdn):8082" \
     --method POST \
     --data "hello from attested HTTPS client" \

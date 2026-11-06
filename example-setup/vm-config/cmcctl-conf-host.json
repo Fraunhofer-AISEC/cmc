@@ -1,18 +1,30 @@
 {
-    "addr": "https://ubuntu:4443",
-    "cmc": "socket://localhost:9955",
-    "report": "data/attestation-report",
-    "result": "data/attestation-result.json",
-    "nonce": "data/nonce",
-    "rootCas": [
-        "data/pki/ca.pem"
-    ],
-    "caStorePath": "data/pki/ca.pem",
-    "mtls": false,
-    "attest": "server",
-    "logLevel": "trace",
-    "serialization": "json",
-    "keyConfig": "EC256",
-    "keyType": "sw",
-    "keyId": "data/key_id"
+    "log": {
+        "level": "trace"
+    },
+    "api": {
+        "endpoint": "socket://localhost:9955",
+        "serialization": "json"
+    },
+    "trust": {
+        "rootCas": [
+            "../../data/pki/ca.pem"
+        ]
+    },
+    "atls": {
+        "addr": "https://ubuntu:4443",
+        "mtls": false,
+        "attest": "server"
+    },
+    "identity": {
+        "keyId": "../../data/key_id",
+        "keyType": "sw",
+        "keyConfig": "EC256"
+    },
+    "publish": {
+        "report": "../../data/attestation-report",
+        "result": "../../data/attestation-result.json",
+        "nonce": "../../data/nonce",
+        "caStore": "../../data/pki/ca.pem"
+    }
 }

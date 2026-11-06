@@ -1,23 +1,39 @@
 {
-    "addr": "localhost:4443",
-    "tlsDnsNames": [ "localhost" ],
-    "cmc": "socket://localhost:9955",
-    "report": "attestation-report",
-    "result": "attestation-result.json",
-    "nonce": "nonce",
-    "rootCas": [
-        "../data/pki/ca.pem"
-    ],
-    "caStorePath": "../data/pki/ca.pem",
-    "mtls": true,
-    "attest": "mutual",
-    "publishResults": "http://localhost:8080/results",
-    "publishOcsf": "http://localhost:8080/ocsf-detection-finding",
-    "logLevel": "trace",
-    "serialization": "json",
-    "keyConfig": "EC256",
-    "keyType": "tpm",
-    "keyId": "../data/key_id",
-    "tokenStore": "../data/token_store",
-    "provisionToken": "../data/provision_token"
+    "log": {
+        "level": "trace"
+    },
+    "api": {
+        "endpoint": "socket://localhost:9955",
+        "serialization": "json"
+    },
+    "trust": {
+        "rootCas": [
+            "../../data/pki/ca.pem"
+        ]
+    },
+    "atls": {
+        "addr": "localhost:4443",
+        "mtls": true,
+        "attest": "mutual"
+    },
+    "identity": {
+        "keyId": "../../data/key_id",
+        "keyType": "tpm",
+        "keyConfig": "EC256",
+        "dnsNames": [
+            "localhost"
+        ]
+    },
+    "publish": {
+        "report": "../../data/attestation-report",
+        "result": "../../data/attestation-result.json",
+        "nonce": "../../data/nonce",
+        "caStore": "../../data/pki/ca.pem",
+        "results": "http://localhost:8080/results",
+        "ocsf": "http://localhost:8080/ocsf-detection-finding",
+        "provisionToken": "../../data/provision_token"
+    },
+    "token": {
+        "store": "../../data/token_store"
+    }
 }

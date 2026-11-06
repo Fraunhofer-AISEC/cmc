@@ -36,7 +36,7 @@ func init() {
 	apis["socket"] = SocketApi{}
 }
 
-func (a SocketApi) generate(c *config) error {
+func (a SocketApi) generate(c *Config) error {
 
 	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
@@ -91,7 +91,7 @@ func (a SocketApi) generate(c *config) error {
 	}
 
 	// Save the attestation response for the verifier
-	err = pub.SaveReport(c.ReportFile, c.NonceFile, resp.Report, nonce)
+	err = pub.SaveReport(c.Publish.Report, c.Publish.Nonce, resp.Report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -99,11 +99,11 @@ func (a SocketApi) generate(c *config) error {
 	return nil
 }
 
-func (a SocketApi) verify(c *config) error {
+func (a SocketApi) verify(c *Config) error {
 
 	log.Infof("Sending socket request type 'Verify' to %v", c.cmcAddr)
 
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
+	report, nonce, err := pub.LoadReport(c.Publish.Report, c.Publish.Nonce, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}
@@ -120,8 +120,8 @@ func (a SocketApi) verify(c *config) error {
 		return fmt.Errorf("failed to verify: %w", err)
 	}
 
-	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, resp.Result,
-		c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+	err = pub.Publish(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, resp.Result,
+		c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 	if err != nil {
 		return fmt.Errorf("failed to publish result: %w", err)
 	}
@@ -129,7 +129,7 @@ func (a SocketApi) verify(c *config) error {
 	return nil
 }
 
-func (a SocketApi) enroll(c *config) error {
+func (a SocketApi) enroll(c *Config) error {
 
 	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
@@ -142,16 +142,16 @@ func (a SocketApi) enroll(c *config) error {
 	}
 
 	log.Tracef("Requesting key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
-		c.KeyType, c.KeyConfig, c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
+		c.Identity.KeyType, c.Identity.KeyConfig, c.Identity.Cn, c.Identity.DnsNames, c.Identity.IpAddresses)
 
 	req := &api.TLSCreateRequest{
 		Version: api.GetVersion(),
 		KeyConfig: api.TLSKeyConfig{
-			Type:        c.KeyType,
-			Alg:         c.KeyConfig,
-			Cn:          c.TlsCn,
-			DNSNames:    c.TlsDnsNames,
-			IPAddresses: c.TlsIpAddresses,
+			Type:        c.Identity.KeyType,
+			Alg:         c.Identity.KeyConfig,
+			Cn:          c.Identity.Cn,
+			DNSNames:    c.Identity.DnsNames,
+			IPAddresses: c.Identity.IpAddresses,
 		},
 	}
 
@@ -184,7 +184,7 @@ func (a SocketApi) enroll(c *config) error {
 		return fmt.Errorf("failed to unmarshal tls create response: %w", err)
 	}
 
-	if err := internal.SaveKeyId(c.KeyIdFile, resp.KeyId); err != nil {
+	if err := internal.SaveKeyId(c.Identity.KeyId, resp.KeyId); err != nil {
 		return err
 	}
 
@@ -193,7 +193,7 @@ func (a SocketApi) enroll(c *config) error {
 	return nil
 }
 
-func (a SocketApi) updateCerts(c *config) error {
+func (a SocketApi) updateCerts(c *Config) error {
 
 	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
@@ -250,7 +250,7 @@ func (a SocketApi) updateCerts(c *config) error {
 	return nil
 }
 
-func (a SocketApi) updateMetadata(c *config) error {
+func (a SocketApi) updateMetadata(c *Config) error {
 
 	network, addr := api.GetNetworkAndAddr(c.cmcAddr)
 
@@ -307,7 +307,7 @@ func (a SocketApi) updateMetadata(c *config) error {
 	return nil
 }
 
-func verifySocketRequest(c *config, req *api.VerificationRequest,
+func verifySocketRequest(c *Config, req *api.VerificationRequest,
 ) (*api.VerificationResponse, error) {
 
 	network, addr := api.GetNetworkAndAddr(c.cmcAddr)

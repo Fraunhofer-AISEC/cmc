@@ -30,11 +30,13 @@ Categories separate independent deployments within the same database, so that th
 frontend can show them as separate demos. They are declared in the config file:
 
 ```json
-"defaultCategory": "demo",
-"categories": [
-    { "id": "demo", "label": "Attestation Demo" },
-    { "id": "ids",  "label": "Industrial Data Space" }
-]
+"categories": {
+    "default": "demo",
+    "list": [
+        { "id": "demo", "label": "Attestation Demo" },
+        { "id": "ids",  "label": "Industrial Data Space" }
+    ]
+}
 ```
 
 Publishers select their category through the query parameter of the URL they post to,
@@ -44,10 +46,17 @@ the parameter the default category is used, unknown categories are rejected.
 All GET endpoints accept the same `?category=` parameter to filter their results.
 Omitting it returns the entries of all categories.
 
-`maxRows` and `maxRowsPerProver` apply to each category individually, so a busy
+`database.maxRows` and `database.maxRowsPerProver` apply to each category individually, so a busy
 deployment cannot evict the provers of another one. Both limits take effect on
 restart, also for existing databases. See
 `example-setup/configs/cmcbackend-conf.json` for a complete example.
+
+The configuration can be checked without starting the server, as for the other binaries:
+
+```sh
+cmcbackend config validate --config example-setup/configs/cmcbackend-conf.json
+cmcbackend config print --config example-setup/configs/cmcbackend-conf.json
+```
 
 **OCSF Detection Findings**
 ```sh

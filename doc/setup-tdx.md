@@ -45,24 +45,28 @@ everything from a single address under a single CA. Configure the upstream servi
 [EST server configuration](../example-setup/configs/est-server-conf.json):
 ```json
 {
-    "vendorCache": "data/est-server-vendor-cache",
-    "intelPcsUrl": "https://localhost:8081",
-    "intelPcsRootCas": [ "data/pki/tdx-pccs-cert.pem" ]
+    "storage": { "vendorCache": "../../data/est-server-vendor-cache" },
+    "intelPcs": {
+        "url": "https://localhost:8081",
+        "rootCas": [ "../../data/pki/tdx-pccs-cert.pem" ]
+    }
 }
 ```
-`intelPcsUrl` is the address of the PCCS started via `run-tdx-pccs`, or
-`https://api.trustedservices.intel.com` to use the Intel PCS directly. `intelPcsRootCas` are the
+`intelPcs.url` is the address of the PCCS started via `run-tdx-pccs`, or
+`https://api.trustedservices.intel.com` to use the Intel PCS directly. `intelPcs.rootCas` are the
 root CAs of that service, which are required for the certificate of the PCCS shipped with the CMC.
-The collateral is cached in `vendorCache`. Cached collateral is refreshed every 24 hours and
+The collateral is cached in `storage.vendorCache`. Cached collateral is refreshed every 24 hours and
 continues to be served if the upstream service becomes unavailable.
 
 The CVM then uses `cps` endorsement mode, which fetches both AMD and Intel collateral from the
 *estserver*, and therefore requires neither internet access nor the public CAs:
 ```json
 {
-    "endorsement": "cps:https://10.0.2.2:9000/",
-    "allowSystemCerts": false,
-    "rootCas": [ "/var/ca.pem" ]
+    "cmc": { "provisioning": { "endorsement": "cps:https://10.0.2.2:9000/" } },
+    "trust": {
+        "allowSystemCerts": false,
+        "rootCas": [ "/var/ca.pem" ]
+    }
 }
 ```
 This configuration is identical for Intel TDX and AMD SEV-SNP CVMs.

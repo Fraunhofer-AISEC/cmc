@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,119 +18,120 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	"github.com/Fraunhofer-AISEC/cmc/internal/cmcflags"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
 )
 
-type Config struct {
-	LogLevel string `json:"logLevel,omitempty"`
-	LogFile  string `json:"logFile,omitempty"`
-	cmc.Config
+// apiConfig configures the API the cmcd serves.
+type apiConfig struct {
+	Endpoint string `json:"endpoint" flag:"cmc" usage:"CMC API and address in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955 or coap://127.0.0.1:9955"`
 }
 
-const (
-	configFlag   = "config"
-	logLevelFlag = "log-level"
-	logFileFlag  = "log-file"
-)
+// Config is the cmcd configuration. Everything the CMC itself reads sits in
+// the cmc section, which is transparent here, so that its subsections keep
+// their own help categories.
+type Config struct {
+	Log   sections.Log   `json:"log"`
+	Api   apiConfig      `json:"api"`
+	Trust sections.Trust `json:"trust"`
+	Cmc   cmc.Config     `json:"cmc" category:"-"`
+}
 
-var (
-	logLevels = map[string]logrus.Level{
-		"panic": logrus.PanicLevel,
-		"fatal": logrus.FatalLevel,
-		"error": logrus.ErrorLevel,
-		"warn":  logrus.WarnLevel,
-		"info":  logrus.InfoLevel,
-		"debug": logrus.DebugLevel,
-		"trace": logrus.TraceLevel,
-	}
-)
+// Validate checks the rules that span more than one option. The sections of
+// the embedded CMC check their own rules, which config.Load picks up wherever
+// the section is used.
+func (c *Config) Validate(r *config.Report) {
 
-var Flags = append([]cli.Flag{
-	&cli.StringFlag{
-		Name:  configFlag,
-		Usage: "JSON configuration file(s), comma-separated",
-	},
-	&cli.StringFlag{
-		Name:  logLevelFlag,
-		Usage: fmt.Sprintf("logging level %v", maps.Keys(logLevels)),
-	},
-	&cli.StringFlag{
-		Name:  logFileFlag,
-		Usage: "file to log to instead of stdout/stderr",
-	},
-}, cmcflags.Flags...)
-
-func GetConfig(cmd *cli.Command) (*Config, error) {
-
-	c := &Config{}
-
-	if cmd.IsSet(configFlag) {
-		files := strings.Split(cmd.String(configFlag), ",")
-		for _, f := range files {
-			if err := internal.ReadConfig(f, c); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	err := cmcflags.Override(cmd, &c.Config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cmc config: %w", err)
-	}
-
-	if cmd.IsSet(logLevelFlag) {
-		c.LogLevel = cmd.String(logLevelFlag)
-	}
-	if cmd.IsSet(logFileFlag) {
-		c.LogFile = cmd.String(logFileFlag)
-	}
-
-	// Configure the logger
-	if c.LogFile != "" {
-		lf, err := filepath.Abs(c.LogFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get logfile path: %w", err)
-		}
-		file, err := os.OpenFile(lf, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-		if err != nil {
-			log.Fatal(err)
-		}
-		logrus.SetOutput(file)
-	}
-	if c.LogLevel != "" {
-		l, ok := logLevels[strings.ToLower(c.LogLevel)]
-		if !ok {
-			log.Warnf("LogLevel %v does not exist. Default to info level", c.LogLevel)
-			l = logrus.InfoLevel
-		}
-		logrus.SetLevel(l)
+	// The set of APIs depends on the build tags, so it cannot be an enum tag
+	if c.Api.Endpoint == "" {
+		r.Missing("api.endpoint", "cmc")
 	} else {
-		logrus.SetLevel(logrus.InfoLevel)
+		name, _, err := internal.ParseApiEndpoint(c.Api.Endpoint)
+		switch {
+		case err != nil:
+			r.Errorf("api.endpoint", "%v", err)
+		case servers[name] == nil:
+			r.Errorf("api.endpoint", "API %q is not implemented, available: %v",
+				name, strings.Join(availableApis(), ", "))
+		}
 	}
 
-	c.Print()
+	// Unlike cmcctl, the cmcd always runs a CMC, so it always needs something
+	// to attest with and something to attest against
+	if len(c.Cmc.Attestation.Drivers) == 0 {
+		r.Missing("cmc.attestation.drivers", "drivers")
+	}
+	if len(c.Cmc.Metadata.Locations) == 0 {
+		r.Missing("cmc.metadata.locations", "metadata")
+	}
+	if len(c.Trust.RootCas) == 0 && !c.Trust.AllowSystemCerts {
+		r.Errorf("trust.rootCas",
+			"required option is not set (--root-cas), unless trust.allowSystemCerts is enabled")
+	}
+}
 
+// flags returns the command line flags of the cmcd. A fresh set is built per
+// call, as a flag carries the state of the command it is parsed for and must
+// not be shared between commands.
+func flags() []cli.Flag {
+	return append([]cli.Flag{config.FileFlag()}, config.Flags(&Config{})...)
+}
+
+// getConfig loads and validates the configuration without touching anything
+// outside the config files, so that it can also serve "cmcd config".
+func getConfig(cmd *cli.Command) (*Config, error) {
+	c := &Config{}
+	if err := config.Load(cmd, c); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
-func (c *Config) Print() {
+// setupLogging applies the log section to the global logger.
+func setupLogging(c *Config) error {
+
+	if c.Log.File != "" {
+		file, err := os.OpenFile(c.Log.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		logrus.SetOutput(file)
+	}
+
+	// The level is restricted to the logrus levels by the enum tag
+	l, err := logrus.ParseLevel(strings.ToLower(c.Log.Level))
+	if err != nil {
+		return fmt.Errorf("failed to parse log level: %w", err)
+	}
+	logrus.SetLevel(l)
+
+	return nil
+}
+
+func printConfig(c *Config) {
+
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Warnf("Failed to get working directory: %v", err)
 	}
-	log.Infof("Running cmc from working directory %v", wd)
+	log.Infof("Running cmcd from working directory %v", wd)
 
-	c.Config.Print()
+	s, err := config.Redacted(c)
+	if err != nil {
+		log.Warnf("Failed to render configuration: %v", err)
+		return
+	}
 
-	log.Debugf("\tLog Level                     : %v", c.LogLevel)
+	// One record per line, as the logger escapes an embedded newline
+	log.Debug("Using the following configuration:")
+	for line := range strings.SplitSeq(s, "\n") {
+		log.Debugf("\t%v", line)
+	}
 }

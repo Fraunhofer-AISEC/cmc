@@ -42,10 +42,10 @@ func init() {
 	apis["libapi"] = LibApi{}
 }
 
-func (a LibApi) generate(c *config) error {
+func (a LibApi) generate(c *Config) error {
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Config)
+		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -70,7 +70,7 @@ func (a LibApi) generate(c *config) error {
 	}
 
 	// Save the attestation report for the verifier
-	err = pub.SaveReport(c.ReportFile, c.NonceFile, report, nonce)
+	err = pub.SaveReport(c.Publish.Report, c.Publish.Nonce, report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -78,9 +78,9 @@ func (a LibApi) generate(c *config) error {
 	return nil
 }
 
-func (a LibApi) verify(c *config) error {
+func (a LibApi) verify(c *Config) error {
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Config)
+		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -88,7 +88,7 @@ func (a LibApi) verify(c *config) error {
 	}
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.ReportFile, c.NonceFile, c.serializer)
+	report, nonce, err := pub.LoadReport(c.Publish.Report, c.Publish.Nonce, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}
@@ -96,14 +96,14 @@ func (a LibApi) verify(c *config) error {
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
 	resp := verifier.Verify(report, nonce, c.policies, a.cmc.PolicyEngineSelect,
-		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, "", "", a.cmc.UseOmsp,
+		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, "", "", a.cmc.Metadata.Omsp.Enabled,
 		a.cmc.LocalRole)
 
 	hostname, _ := internal.Fqdn()
 	resp.Verifier = ar.Endpoint{Hostname: hostname}
 
-	err = pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, resp,
-		c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+	err = pub.Publish(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, resp,
+		c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 	if err != nil {
 		return fmt.Errorf("failed to save result: %w", err)
 	}
@@ -111,10 +111,10 @@ func (a LibApi) verify(c *config) error {
 	return nil
 }
 
-func (a LibApi) enroll(c *config) error {
+func (a LibApi) enroll(c *Config) error {
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Config)
+		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -122,16 +122,16 @@ func (a LibApi) enroll(c *config) error {
 	}
 
 	log.Tracef("Requested key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
-		c.KeyType, c.KeyConfig,
-		c.TlsCn, c.TlsDnsNames, c.TlsIpAddresses)
+		c.Identity.KeyType, c.Identity.KeyConfig,
+		c.Identity.Cn, c.Identity.DnsNames, c.Identity.IpAddresses)
 
 	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig: api.TLSKeyConfig{
-			Type:        c.KeyType,
-			Alg:         c.KeyConfig,
-			Cn:          c.TlsCn,
-			DNSNames:    c.TlsDnsNames,
-			IPAddresses: c.TlsIpAddresses,
+			Type:        c.Identity.KeyType,
+			Alg:         c.Identity.KeyConfig,
+			Cn:          c.Identity.Cn,
+			DNSNames:    c.Identity.DnsNames,
+			IPAddresses: c.Identity.IpAddresses,
 		},
 		Metadata:  a.cmc.GetMetadata(),
 		Drivers:   a.cmc.Drivers,
@@ -141,7 +141,7 @@ func (a LibApi) enroll(c *config) error {
 		return fmt.Errorf("failed to enroll key: %v", err)
 	}
 
-	if err := internal.SaveKeyId(c.KeyIdFile, keyId); err != nil {
+	if err := internal.SaveKeyId(c.Identity.KeyId, keyId); err != nil {
 		return err
 	}
 
@@ -150,10 +150,10 @@ func (a LibApi) enroll(c *config) error {
 	return nil
 }
 
-func (a LibApi) updateCerts(c *config) error {
+func (a LibApi) updateCerts(c *Config) error {
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Config)
+		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}
@@ -169,10 +169,10 @@ func (a LibApi) updateCerts(c *config) error {
 	return nil
 }
 
-func (a LibApi) updateMetadata(c *config) error {
+func (a LibApi) updateMetadata(c *Config) error {
 
 	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Config)
+		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return fmt.Errorf("failed to initialize CMC: %v", err)
 		}

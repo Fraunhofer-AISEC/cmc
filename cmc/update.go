@@ -42,14 +42,14 @@ func UpdateMetadata(cmc *Cmc) error {
 	}
 
 	// Read metadata from the file system
-	metadata, err := GetMetadata(cmc.MetadataLocation, cmc.MetadataCacheDir(), cmc.RootCas, cmc.AllowSystemCerts,
+	metadata, err := GetMetadata(cmc.Metadata.Locations, cmc.MetadataCacheDir(), cmc.RootCas, cmc.AllowSystemCerts,
 		cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to get metadata: %v", err)
 	}
 
 	// Request and cache revocation status of all used manifests (if CMC is configured to use OMSP)
-	if cmc.UseOmsp {
+	if cmc.Metadata.Omsp.Enabled {
 		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.OmspSerializer, cmc.RootCas, cmc.HashAlg)
 		if err != nil {
 			return fmt.Errorf("failed to get omsp responses: %v", err)

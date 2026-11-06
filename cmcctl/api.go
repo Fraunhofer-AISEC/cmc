@@ -28,9 +28,9 @@ func availableApis() []string {
 }
 
 type Api interface {
-	generate(c *config) error
-	verify(c *config) error
-	enroll(c *config) error
-	updateMetadata(c *config) error
-	updateCerts(c *config) error
+	generate(c *Config) error
+	verify(c *Config) error
+	enroll(c *Config) error
+	updateMetadata(c *Config) error
+	updateCerts(c *Config) error
 }

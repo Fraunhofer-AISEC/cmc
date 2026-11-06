@@ -56,6 +56,7 @@ type Cmc struct {
 	HashAlg            crypto.Hash
 	KeyMgr             *keymgr.KeyMgr
 	RootCas            []*x509.Certificate
+	AllowSystemCerts   bool
 	OmspHashes         []string //stores keys for retrieving OmspResponses from metadata map
 	OmspSerializer     ar.Serializer
 	*Config
@@ -89,34 +90,32 @@ func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
 	return policyEngines
 }
 
-func NewCmc(c *Config) (*Cmc, error) {
+// NewCmc creates a CMC from its configuration and the trust anchors of the
+// caller. The root CAs are passed in rather than configured here, as a binary
+// that runs a CMC needs the same anchors for TLS and has already read them.
+func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc, error) {
 
-	// Read trusted root CAs
-	rootCas, err := internal.ReadCerts(c.RootCas)
+	alg, err := internal.HashFromString(c.Attestation.HashAlg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read trusted root CA certificates: %w", err)
-	}
-
-	alg, err := internal.HashFromString(c.HashAlg)
-	if err != nil {
-		return nil, fmt.Errorf("configured hash alg %q is unsupported: %w", c.HashAlg, err)
+		return nil, fmt.Errorf("configured hash alg %q is unsupported: %w", c.Attestation.HashAlg, err)
 	}
 
 	cmc := &Cmc{
-		HashAlg: alg,
-		RootCas: rootCas,
-		Config:  c,
+		HashAlg:          alg,
+		RootCas:          rootCas,
+		AllowSystemCerts: allowSystemCerts,
+		Config:           c,
 	}
 
 	// Read metadata from the file system
-	metadata, err := GetMetadata(c.MetadataLocation, c.MetadataCacheDir(), rootCas, c.AllowSystemCerts, cmc.HashAlg)
+	metadata, err := GetMetadata(c.Metadata.Locations, c.MetadataCacheDir(), rootCas, allowSystemCerts, cmc.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get metadata: %v", err)
 	}
 
 	// Request and cache revocation status of all used manifests (if CMC is configured to use OMSP)
-	if cmc.UseOmsp {
-		switch c.OmspFormat {
+	if cmc.Metadata.Omsp.Enabled {
+		switch c.Metadata.Omsp.Format {
 		case "json":
 			cmc.OmspSerializer, err = ar.NewJsonSerializer()
 			if err != nil {
@@ -128,7 +127,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 				return nil, fmt.Errorf("failed to generate CBOR serializer: %v", err)
 			}
 		default:
-			return nil, fmt.Errorf("OMSP serializer type %v not supported", c.OmspFormat)
+			return nil, fmt.Errorf("OMSP serializer type %v not supported", c.Metadata.Omsp.Format)
 		}
 		metadata, cmc.OmspHashes, err = AddOmspToMetadata(metadata, cmc.OmspSerializer, cmc.RootCas, alg)
 		if err != nil {
@@ -140,7 +139,7 @@ func NewCmc(c *Config) (*Cmc, error) {
 
 	// Create endorser, which is used to fetch vendor certificate chains,
 	// such as the AMD SNP VCEK or Intel TDX PCK chain
-	endorser, err := createEndorser(c, rootCas)
+	endorser, err := createEndorser(c, rootCas, allowSystemCerts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create endorser: %w", err)
 	}
@@ -148,20 +147,20 @@ func NewCmc(c *Config) (*Cmc, error) {
 	// Create driver configuration
 	driverConf := &drv.DriverConfig{
 		HashAlg:         alg,
-		KeyAlg:          c.TpmKeyAlg,
-		ExcludePcrs:     c.ExcludePcrs,
-		MeasurementLogs: c.MeasurementLogs,
-		CtrLog:          c.CtrLog,
-		CtrDriver:       c.CtrDriver,
-		Vmpl:            c.Vmpl,
+		KeyAlg:          c.Attestation.Tpm.KeyAlg,
+		ExcludePcrs:     c.Attestation.Tpm.ExcludePcrs,
+		MeasurementLogs: c.Attestation.MeasurementLogs,
+		CtrLog:          c.Attestation.Containers.Log,
+		CtrDriver:       c.Attestation.Containers.Driver,
+		Vmpl:            c.Attestation.Snp.Vmpl,
 		Endorsers:       endorser,
-		StoragePath:     c.Storage,
-		AppendEbsEvent:  c.AppendEbsEvent,
+		StoragePath:     c.Storage.Data,
+		AppendEbsEvent:  c.Attestation.Tpm.AppendEbsEvent,
 	}
 
 	// Initialize drivers
 	usedDrivers := make([]drv.Driver, 0)
-	for _, driver := range c.Drivers {
+	for _, driver := range c.Attestation.Drivers {
 		d, ok := drivers[strings.ToLower(driver)]
 		if !ok {
 			return nil, fmt.Errorf("driver %v not implemented", driver)
@@ -176,28 +175,28 @@ func NewCmc(c *Config) (*Cmc, error) {
 	cmc.Drivers = usedDrivers
 
 	// Check container driver
-	if c.CtrDriver != "" {
-		if !internal.Contains(c.CtrDriver, c.Drivers) {
+	if c.Attestation.Containers.Driver != "" {
+		if !internal.Contains(c.Attestation.Containers.Driver, c.Attestation.Drivers) {
 			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
-				c.CtrDriver)
+				c.Attestation.Containers.Driver)
 		}
 	}
 
 	// Create provisioner for key manager, which is used to enroll certificates for created keys,
 	// e.g. via EST or ACME protocol. In enrollment mode "self", TLS certificates are self-signed
 	// and no enrollment protocol and thus no provisioner is required
-	enrollmentMode, _ := internal.ParseModeAddr(c.Enrollment)
+	enrollmentMode, _ := internal.ParseModeAddr(c.Provisioning.Enrollment)
 	selfSigned := enrollmentMode == "self"
 	var provisioner keymgr.Enroller
 	if !selfSigned {
-		provisioner, err = createEnroller(c, rootCas)
+		provisioner, err = createEnroller(c, rootCas, allowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create enroller: %w", err)
 		}
 	}
 
 	// Create key manager
-	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage, "tls_key_store"), cmc.Drivers, provisioner,
+	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage.Data, "tls_key_store"), cmc.Drivers, provisioner,
 		selfSigned)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
@@ -205,13 +204,13 @@ func NewCmc(c *Config) (*Cmc, error) {
 	cmc.KeyMgr = keyMgr
 
 	// Get policy engine and overwrite policies
-	if c.PolicyEngine != "" {
-		sel, ok := policyEngines[strings.ToLower(c.PolicyEngine)]
+	if c.Policies.Engine != "" {
+		sel, ok := policyEngines[strings.ToLower(c.Policies.Engine)]
 		if !ok {
-			return nil, fmt.Errorf("policy engine %v not implemented", c.PolicyEngine)
+			return nil, fmt.Errorf("policy engine %v not implemented", c.Policies.Engine)
 		}
 		cmc.PolicyEngineSelect = sel
-		cmc.PolicyOverwrite = c.PolicyOverwrite
+		cmc.PolicyOverwrite = c.Policies.AllowOverwrite
 	}
 
 	// Extract the local role for optional peer authorization from our own image description
@@ -255,15 +254,15 @@ func deriveLocalRole(metadata map[string][]byte) string {
 	return found
 }
 
-func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvider, error) {
+func createEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (drv.EndorserProvider, error) {
 	var err error
 
-	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
+	authMethods, err := internal.ParseAuthMethods(c.Provisioning.Auth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	mode, addr := internal.ParseModeAddr(c.Endorsement)
+	mode, addr := internal.ParseModeAddr(c.Provisioning.Endorsement)
 
 	switch mode {
 	case "est":
@@ -273,12 +272,12 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 		}
 		var token []byte
 		if authMethods.Has(internal.AuthToken) {
-			token, err = os.ReadFile(c.ProvisionToken)
+			token, err = os.ReadFile(c.Provisioning.Token)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		endorser, err := endorser.NewEstEndorser(addr, rootCas, c.AllowSystemCerts, token)
+		endorser, err := endorser.NewEstEndorser(addr, rootCas, allowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
@@ -291,25 +290,25 @@ func createEndorser(c *Config, rootCas []*x509.Certificate) (drv.EndorserProvide
 		if addr == "" {
 			return nil, fmt.Errorf("cps endorsement requires an address (endorsement: cps:<url>)")
 		}
-		return endorser.NewCpsProvider(c.VendorCacheDir(), addr, rootCas, c.AllowSystemCerts)
+		return endorser.NewCpsProvider(c.VendorCacheDir(), addr, rootCas, allowSystemCerts)
 	case "host":
 		// Host endorsement supports SNP via the SNP_GET_EXT_REPORT API
 		return endorser.NewSnpHostEndorser()
 	default:
 		return nil, fmt.Errorf(
-			"unknown endorsement %q: expected direct, host, est:<url> or cps:<url>", c.Endorsement)
+			"unknown endorsement %q: expected direct, host, est:<url> or cps:<url>", c.Provisioning.Endorsement)
 	}
 }
 
-func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, error) {
+func createEnroller(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (keymgr.Enroller, error) {
 	var err error
 
-	authMethods, err := internal.ParseAuthMethods(c.ProvisionAuth)
+	authMethods, err := internal.ParseAuthMethods(c.Provisioning.Auth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 	}
 
-	mode, addr := internal.ParseModeAddr(c.Enrollment)
+	mode, addr := internal.ParseModeAddr(c.Provisioning.Enrollment)
 
 	switch mode {
 	case "est":
@@ -318,12 +317,12 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 		}
 		var token []byte
 		if authMethods.Has(internal.AuthToken) {
-			token, err = os.ReadFile(c.ProvisionToken)
+			token, err = os.ReadFile(c.Provisioning.Token)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read token: %v", err)
 			}
 		}
-		enroller, err := estenroller.New(addr, rootCas, c.AllowSystemCerts, token)
+		enroller, err := estenroller.New(addr, rootCas, allowSystemCerts, token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create EST client: %w", err)
 		}
@@ -331,6 +330,6 @@ func createEnroller(c *Config, rootCas []*x509.Certificate) (keymgr.Enroller, er
 	case "acme":
 		return nil, fmt.Errorf("ACME provisioning not yet implemented")
 	default:
-		return nil, fmt.Errorf("unknown enrollment %q: expected self or est:<url>", c.Enrollment)
+		return nil, fmt.Errorf("unknown enrollment %q: expected self or est:<url>", c.Provisioning.Enrollment)
 	}
 }

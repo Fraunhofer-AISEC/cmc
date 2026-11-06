@@ -18,6 +18,7 @@ package attestedhttp
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -57,15 +58,17 @@ type Transport struct {
 	// as we enforce aTLS as the underlying transport protocol
 
 	// Additional aTLS parameters
-	Attest          atls.AttestSelect
-	MutualTls       bool
-	CmcAddr         string
-	CmcApi          string
-	Serializer      ar.Serializer
-	LibApiCmcConfig *cmc.Config
-	CmcPolicies     []byte
-	ReadTimeout     time.Duration
-	ResultCb        func(result *ar.AttestationResult)
+	Attest                 atls.AttestSelect
+	MutualTls              bool
+	CmcAddr                string
+	CmcApi                 string
+	Serializer             ar.Serializer
+	LibApiCmcConfig        *cmc.Config
+	LibApiRootCas          []*x509.Certificate
+	LibApiAllowSystemCerts bool
+	CmcPolicies            []byte
+	ReadTimeout            time.Duration
+	ResultCb               func(result *ar.AttestationResult)
 }
 
 // Wrapper for net/http Client
@@ -191,7 +194,8 @@ func prepareClient(c *Client) error {
 				conn, err := atls.Dial("tcp", addr, c.Transport.TLSClientConfig,
 					atls.WithSerializer(c.Transport.Serializer),
 					atls.WithAttest(c.Transport.Attest),
-					atls.WithLibApiCmcConfig(c.Transport.LibApiCmcConfig),
+					atls.WithLibApiCmcConfig(c.Transport.LibApiCmcConfig, c.Transport.LibApiRootCas,
+						c.Transport.LibApiAllowSystemCerts),
 					atls.WithCmcAddr(c.Transport.CmcAddr),
 					atls.WithCmcApi(c.Transport.CmcApi),
 					atls.WithCmcPolicies(c.Transport.CmcPolicies),

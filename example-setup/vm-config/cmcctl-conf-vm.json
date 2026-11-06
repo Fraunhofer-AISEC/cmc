@@ -1,18 +1,30 @@
 {
-    "addr": "0.0.0.0:4443",
-    "cmc": "socket://localhost:9955",
-    "report": "/var/cmcctl/attestation-report",
-    "result": "/var/cmcctl/attestation-result.json",
-    "nonce": "/var/cmcctl/nonce",
-    "rootCas": [
-        "/var/ca.pem"
-    ],
-    "caStorePath": "/var/ca.pem",
-    "mtls": false,
-    "attest": "server",
-    "logLevel": "trace",
-    "serialization": "json",
-    "keyConfig": "EC256",
-    "keyType": "tpm",
-    "keyId": "../data/key_id"
+    "log": {
+        "level": "trace"
+    },
+    "api": {
+        "endpoint": "socket://localhost:9955",
+        "serialization": "json"
+    },
+    "trust": {
+        "rootCas": [
+            "/var/ca.pem"
+        ]
+    },
+    "atls": {
+        "addr": "0.0.0.0:4443",
+        "mtls": false,
+        "attest": "server"
+    },
+    "identity": {
+        "keyId": "/var/cmcctl/key_id",
+        "keyType": "tpm",
+        "keyConfig": "EC256"
+    },
+    "publish": {
+        "report": "/var/cmcctl/attestation-report",
+        "result": "/var/cmcctl/attestation-result.json",
+        "nonce": "/var/cmcctl/nonce",
+        "caStore": "/var/ca.pem"
+    }
 }

@@ -39,27 +39,28 @@ type server struct {
 	defaultCategory string
 }
 
-func newServer(c *config) (*server, error) {
-	db, err := NewDb(c.Db, c.MaxRowsPerProver, c.MaxRows, c.DefaultCategory)
+func newServer(c *Config) (*server, error) {
+	db, err := NewDb(c.Database.Path, c.Database.MaxRowsPerProver, c.Database.MaxRows,
+		c.Categories.Default)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	var token []byte
-	if c.Token != "" {
-		token, err = os.ReadFile(c.Token)
+	if c.Http.Token != "" {
+		token, err = os.ReadFile(c.Http.Token)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read token file: %w", err)
 		}
 	}
 
 	return &server{
-		addr:            c.Addr,
+		addr:            c.Http.Address,
 		db:              db,
 		token:           token,
-		debug:           c.Debug,
-		categories:      c.Categories,
-		defaultCategory: c.DefaultCategory,
+		debug:           c.Http.Debug,
+		categories:      c.Categories.List,
+		defaultCategory: c.Categories.Default,
 	}, nil
 }
 

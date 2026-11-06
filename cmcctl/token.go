@@ -23,22 +23,22 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 )
 
-func createToken(c *config) error {
+func createToken(c *Config) error {
 
-	if c.TokenStore == "" {
+	if c.Token.Store == "" {
 		return errors.New("path to token store must be specified via config")
 	}
 
-	token, err := est.CreateToken(c.TokenStore, est.TokenOptions{MaxUses: c.TokenMaxUses, Subject: c.TokenSubject})
+	token, err := est.CreateToken(c.Token.Store, est.TokenOptions{MaxUses: c.Token.MaxUses, Subject: c.Token.Subject})
 	if err != nil {
 		return fmt.Errorf("failed to create and cache token: %w", err)
 	}
 
 	// If path to token is provided, store in file, otherwise print to stdout
-	if c.ProvisionToken == "" {
+	if c.Publish.ProvisionToken == "" {
 		fmt.Printf("%v", token)
 	} else {
-		err = os.WriteFile(c.ProvisionToken, []byte(token), 0600)
+		err = os.WriteFile(c.Publish.ProvisionToken, []byte(token), 0600)
 		if err != nil {
 			return fmt.Errorf("failed to store token: %w", err)
 		}

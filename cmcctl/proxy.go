@@ -82,14 +82,14 @@ func proxyRawConnections(client, server io.ReadWriteCloser) {
 	wg.Wait()
 }
 
-func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.ResponseWriter, req *http.Request) {
+func proxyHttpRequest(proxyTransport *http.Transport, c *Config, w http.ResponseWriter, req *http.Request) {
 	log.Debug("Using standard HTTP proxy mode")
 
 	via := req.Header.Get("Via")
 	// Check the Via header to verify that we are not in a routing loop (RFC 9110, sec. 7.6.3)
 	if via != "" {
 		for hop := range strings.SplitSeq(via, ",") {
-			if strings.Contains(hop, c.Addr) {
+			if strings.Contains(hop, c.Atls.Addr) {
 				http.Error(w, "Proxy loop detected", http.StatusLoopDetected)
 				log.Debug("Proxy loop detected")
 				return
@@ -101,7 +101,7 @@ func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.Response
 	newReq := req.Clone(req.Context())
 
 	// Add ourselves to the Via header (RFC 9110, sec 7.6.3)
-	newReq.Header.Set("Via", fmt.Sprintf("%s%d.%d %s", via, req.ProtoMajor, req.ProtoMinor, c.Addr))
+	newReq.Header.Set("Via", fmt.Sprintf("%s%d.%d %s", via, req.ProtoMajor, req.ProtoMinor, c.Atls.Addr))
 
 	// Remove connection and known hop-by-hop headers from the request (RFC 9110, sec 7.6.1)
 	var filteredHeaders []string
@@ -136,7 +136,7 @@ func proxyHttpRequest(proxyTransport *http.Transport, c *config, w http.Response
 	}
 }
 
-func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Request) {
+func proxyTunnel(dial dialFunc, c *Config, w http.ResponseWriter, req *http.Request) {
 	log.Debug("Using HTTP CONNECT tunneling")
 
 	// The connect proxy scheme only supports parsing host and port (required, since no protocol is allowed).
@@ -199,7 +199,7 @@ func proxyTunnel(dial dialFunc, c *config, w http.ResponseWriter, req *http.Requ
 // The HTTP proxy implementation follows RFC 9110, section 7.6.
 // The semantics of the HTTP CONNECT method are defined in RFC 9110, section 9.3.6.
 // Note that the HTTP CONNECT proxy currently breaks HTTP2 connections.
-func forwardProxy(c *config) error {
+func forwardProxy(c *Config) error {
 
 	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
@@ -214,16 +214,16 @@ func forwardProxy(c *config) error {
 			atls.WithCmcPolicies(c.policies),
 			atls.WithCmcApi(c.apiName),
 			atls.WithSerializer(c.serializer),
-			atls.WithMtls(c.Mtls),
+			atls.WithMtls(c.Atls.Mtls),
 			atls.WithAttest(c.attest),
 			atls.WithResultCb(func(result *ar.AttestationResult) {
 				// Publish asynchronously
 				if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
-					go pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
-						c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+					go pub.Publish(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, result,
+						c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 				}
 			}),
-			atls.WithLibApiCmcConfig(&c.Config))
+			atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
 		if err != nil {
 			return nil, fmt.Errorf("failed to dial server: %w", err)
 		}
@@ -245,7 +245,7 @@ func forwardProxy(c *config) error {
 		}
 	}
 
-	log.Infof("Starting HTTP proxy on %s", c.Addr)
+	log.Infof("Starting HTTP proxy on %s", c.Atls.Addr)
 
-	return http.ListenAndServe(c.Addr, http.HandlerFunc(proxyHandler))
+	return http.ListenAndServe(c.Atls.Addr, http.HandlerFunc(proxyHandler))
 }

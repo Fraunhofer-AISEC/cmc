@@ -17,40 +17,93 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
 func main() {
-
-	log.SetLevel(log.TraceLevel)
-
-	log.Infof("Starting cmc-backend %v", internal.GetVersionInfo())
 
 	cmd := &cli.Command{
 		Name:    "cmcbackend",
 		Usage:   "CMC backend server for storing and providing attestation-results",
 		Version: internal.GetVersionInfo().String(),
-		Flags:   flags,
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			c, err := getConfig(cmd)
-			if err != nil {
-				return err
-			}
-			s, err := newServer(c)
-			if err != nil {
-				return err
-			}
-			s.serve()
-			return nil
+		Flags:   flags(),
+		Action:  serve,
+		Commands: []*cli.Command{
+			{
+				Name:  "config",
+				Usage: "Inspect the configuration without starting the server",
+				Commands: []*cli.Command{
+					{
+						Name:   "validate",
+						Usage:  "Load and validate the configuration, exit code 0 if it is valid",
+						Action: validateConfig,
+					},
+					{
+						Name:   "print",
+						Usage:  "Print the effective configuration, with secrets redacted",
+						Action: printEffectiveConfig,
+					},
+				},
+			},
 		},
 	}
 
+	// Errors are printed directly rather than logged, so that the multi-line
+	// report of a bad configuration stays readable
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
+
+func serve(_ context.Context, cmd *cli.Command) error {
+
+	c, err := getConfig(cmd)
+	if err != nil {
+		return err
+	}
+	if err := setupLogging(c); err != nil {
+		return err
+	}
+	c.resolve()
+	printConfig(c)
+
+	log.Infof("Starting cmc-backend %v", internal.GetVersionInfo())
+
+	s, err := newServer(c)
+	if err != nil {
+		return err
+	}
+	s.serve()
+
+	return nil
+}
+
+func validateConfig(_ context.Context, cmd *cli.Command) error {
+	if _, err := getConfig(cmd); err != nil {
+		return err
+	}
+	fmt.Println("configuration is valid")
+	return nil
+}
+
+func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
+	c, err := getConfig(cmd)
+	if err != nil {
+		return err
+	}
+	c.resolve()
+	s, err := config.Redacted(c)
+	if err != nil {
+		return err
+	}
+	fmt.Println(s)
+	return nil
 }

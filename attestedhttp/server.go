@@ -16,6 +16,7 @@
 package attestedhttp
 
 import (
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,14 +31,16 @@ type Server struct {
 	*http.Server
 
 	// Additional aTLS parameters
-	Attest          atls.AttestSelect
-	MutualTls       bool
-	CmcAddr         string
-	CmcApi          string
-	Serializer      ar.Serializer
-	LibApiCmcConfig *cmc.Config
-	CmcPolicies     []byte
-	ResultCb        func(result *ar.AttestationResult)
+	Attest                 atls.AttestSelect
+	MutualTls              bool
+	CmcAddr                string
+	CmcApi                 string
+	Serializer             ar.Serializer
+	LibApiCmcConfig        *cmc.Config
+	LibApiRootCas          []*x509.Certificate
+	LibApiAllowSystemCerts bool
+	CmcPolicies            []byte
+	ResultCb               func(result *ar.AttestationResult)
 }
 
 func (s *Server) ListenAndServe() error {
@@ -55,7 +58,8 @@ func (s *Server) ListenAndServe() error {
 		atls.WithMtls(s.MutualTls),
 		atls.WithAttest(s.Attest),
 		atls.WithResultCb(s.ResultCb),
-		atls.WithLibApiCmcConfig(s.LibApiCmcConfig))
+		atls.WithLibApiCmcConfig(s.LibApiCmcConfig, s.LibApiRootCas,
+			s.LibApiAllowSystemCerts))
 	if err != nil {
 		return fmt.Errorf("failed to listen for connections: %w", err)
 	}

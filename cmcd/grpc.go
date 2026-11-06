@@ -129,7 +129,7 @@ func (s *GrpcServer) Verify(ctx context.Context, req *grpcapi.VerificationReques
 
 	result := verifier.Verify(req.Report, req.Nonce, req.Policies, s.cmc.PolicyEngineSelect,
 		s.cmc.PolicyOverwrite, s.cmc.RootCas, s.cmc.PeerCache, req.Peer, req.PeerAddr,
-		s.cmc.UseOmsp, s.cmc.LocalRole)
+		s.cmc.Metadata.Omsp.Enabled, s.cmc.LocalRole)
 
 	// grpc only: marshal attestation result in JSON as we do not have protobuf
 	// definitions
@@ -171,7 +171,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 	}
 
 	err = m.Measure(toComponent(req.MeasureEvent, spec), s.serializer,
-		s.cmc.CtrLog, s.cmc.CtrDriver)
+		s.cmc.Attestation.Containers.Log, s.cmc.Attestation.Containers.Driver)
 	if err != nil {
 		log.Errorf("Failed to record measurement: %v", err)
 		success = false

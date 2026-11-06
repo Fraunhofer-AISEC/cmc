@@ -19,13 +19,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
 	"github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
 func main() {
@@ -33,14 +33,14 @@ func main() {
 		Name:    "cmcctl",
 		Usage:   "CLI client for the CMC daemon",
 		Version: collectVersion(),
-		Flags:   globalFlags,
+		Flags:   globalFlags(libapiSelected(os.Args)),
 		Commands: []*cli.Command{
 			{
 				Name:  "generate",
 				Usage: "Generate attestation report",
-				Flags: reportFlags,
+				Flags: flags(withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -50,9 +50,9 @@ func main() {
 			{
 				Name:  "verify",
 				Usage: "Verify attestation report",
-				Flags: slices.Concat(reportFlags, policyFlags, publishFlags),
+				Flags: flags(withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -62,9 +62,9 @@ func main() {
 			{
 				Name:  "enroll-key",
 				Usage: "Create and enroll a new TLS key",
-				Flags: tlsIdentityFlags,
+				Flags: flags(withIdentity),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -74,14 +74,13 @@ func main() {
 			{
 				Name:  "dial",
 				Usage: "Establish attested TLS client",
-				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags,
-					payloadFlags),
+				Flags: flags(withAtls, withIdentity, withPublish, withRequest),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if len(c.RootCas) == 0 {
+					if len(c.Trust.RootCas) == 0 {
 						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return dial(c)
@@ -90,13 +89,13 @@ func main() {
 			{
 				Name:  "listen",
 				Usage: "Establish attested TLS server",
-				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags),
+				Flags: flags(withAtls, withIdentity, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if len(c.RootCas) == 0 {
+					if len(c.Trust.RootCas) == 0 {
 						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return listen(c)
@@ -105,14 +104,13 @@ func main() {
 			{
 				Name:  "request",
 				Usage: "Perform an attested HTTPS request",
-				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags,
-					payloadFlags, httpFlags),
+				Flags: flags(withAtls, withIdentity, withPublish, withRequest),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if len(c.RootCas) == 0 {
+					if len(c.Trust.RootCas) == 0 {
 						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return request(c)
@@ -121,13 +119,13 @@ func main() {
 			{
 				Name:  "serve",
 				Usage: "Establish an attested HTTPS server",
-				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags),
+				Flags: flags(withAtls, withIdentity, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if len(c.RootCas) == 0 {
+					if len(c.Trust.RootCas) == 0 {
 						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return serve(c)
@@ -136,9 +134,9 @@ func main() {
 			{
 				Name:  "token",
 				Usage: "Request a bootstrap token for EST certificate requests",
-				Flags: tokenFlags,
+				Flags: flags(withToken),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -148,16 +146,16 @@ func main() {
 			{
 				Name:  "provision",
 				Usage: "Retrieve provisioning data for CVMs",
-				Flags: provisionFlags,
+				Flags: flags(withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if c.CaStorePath == "" {
+					if c.Publish.CaStore == "" {
 						return fmt.Errorf("path to store CA must be specified via config file or command line")
 					}
-					if c.ProvisionToken == "" {
+					if c.Publish.ProvisionToken == "" {
 						return fmt.Errorf("provision token must be specified via config file or command line")
 					}
 					return retrieveProvisioningData(c)
@@ -167,7 +165,7 @@ func main() {
 				Name:  "update-certs",
 				Usage: "Triggers updating the CMC AK and IK certificates",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -178,7 +176,7 @@ func main() {
 				Name:  "update-metadata",
 				Usage: "Triggers updating the CMC metadata",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -188,13 +186,13 @@ func main() {
 			{
 				Name:  "proxy",
 				Usage: "Forward data over attested TLS using HTTP",
-				Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, publishFlags),
+				Flags: flags(withAtls, withIdentity, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := getConfig(cmd)
+					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if len(c.RootCas) == 0 {
+					if len(c.Trust.RootCas) == 0 {
 						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return forwardProxy(c)
@@ -207,19 +205,13 @@ func main() {
 					{
 						Name:  "serve",
 						Usage: "Distribute kubeadm join tokens to attested workers",
-						Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, kubeprovFlags,
-							[]cli.Flag{
-								&cli.IntFlag{
-									Name:  kubeprovCountFlag,
-									Usage: "number of workers to serve before exiting (0 = unlimited)",
-								},
-							}),
+						Flags: flags(withAtls, withIdentity, withKubeprov),
 						Action: func(ctx context.Context, cmd *cli.Command) error {
-							c, err := getConfig(cmd)
+							c, err := loadConfig(cmd)
 							if err != nil {
 								return err
 							}
-							if len(c.RootCas) == 0 {
+							if len(c.Trust.RootCas) == 0 {
 								return fmt.Errorf("path to root CAs must be specified via config file or command line")
 							}
 							return kubeprovServe(c)
@@ -228,19 +220,13 @@ func main() {
 					{
 						Name:  "join",
 						Usage: "Join this node to a Kubernetes cluster via attested provisioning",
-						Flags: slices.Concat(atlsFlags, tlsIdentityFlags, policyFlags, kubeprovFlags,
-							[]cli.Flag{
-								&cli.BoolFlag{
-									Name:  kubeprovDryRunFlag,
-									Usage: "print join info without executing kubeadm",
-								},
-							}),
+						Flags: flags(withAtls, withIdentity, withKubeprov),
 						Action: func(ctx context.Context, cmd *cli.Command) error {
-							c, err := getConfig(cmd)
+							c, err := loadConfig(cmd)
 							if err != nil {
 								return err
 							}
-							if len(c.RootCas) == 0 {
+							if len(c.Trust.RootCas) == 0 {
 								return fmt.Errorf("path to root CAs must be specified via config file or command line")
 							}
 							return kubeprovJoin(c)
@@ -248,13 +234,54 @@ func main() {
 					},
 				},
 			},
+			{
+				Name:  "config",
+				Usage: "Inspect the configuration without contacting the CMC",
+				Commands: []*cli.Command{
+					{
+						Name:   "validate",
+						Usage:  "Load and validate the configuration, exit code 0 if it is valid",
+						Flags:  flags(allSections...),
+						Action: validateConfig,
+					},
+					{
+						Name:   "print",
+						Usage:  "Print the effective configuration, with secrets redacted",
+						Flags:  flags(allSections...),
+						Action: printEffectiveConfig,
+					},
+				},
+			},
 		},
 	}
 
-	err := cmd.Run(context.Background(), os.Args)
-	if err != nil {
-		log.Fatal(err)
+	// Errors are printed directly rather than logged, so that the multi-line
+	// report of a bad configuration stays readable
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
+
+func validateConfig(_ context.Context, cmd *cli.Command) error {
+	if _, err := getConfig(cmd); err != nil {
+		return err
+	}
+	fmt.Println("configuration is valid")
+	return nil
+}
+
+func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
+	c, err := getConfig(cmd)
+	if err != nil {
+		return err
+	}
+	s, err := config.Redacted(c)
+	if err != nil {
+		return err
+	}
+	fmt.Println(s)
+	return nil
 }
 
 func collectVersion() string {

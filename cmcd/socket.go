@@ -191,7 +191,7 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	// Verify attestation report
 	result := verifier.Verify(req.Report, req.Nonce,
 		req.Policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
-		cmc.RootCas, cmc.PeerCache, req.Peer, req.PeerAddr, cmc.UseOmsp,
+		cmc.RootCas, cmc.PeerCache, req.Peer, req.PeerAddr, cmc.Metadata.Omsp.Enabled,
 		cmc.LocalRole)
 
 	resp := &api.VerificationResponse{
@@ -233,7 +233,7 @@ func measure(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Debug("Measurer: recording measurement")
 	var success bool
-	err = m.Measure(&req.Event, s, cmc.CtrLog, cmc.CtrDriver)
+	err = m.Measure(&req.Event, s, cmc.Attestation.Containers.Log, cmc.Attestation.Containers.Driver)
 	if err != nil {
 		log.Errorf("Failed to measure: %v", err)
 		success = false

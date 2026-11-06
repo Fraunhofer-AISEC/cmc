@@ -50,7 +50,7 @@ const (
 )
 
 // Creates an attested HTTPS connection and performs the specified requests
-func request(c *config) error {
+func request(c *Config) error {
 
 	tlsConf, err := createClientTlsConf(c)
 	if err != nil {
@@ -68,19 +68,21 @@ func request(c *config) error {
 		IdleConnTimeout: 60 * time.Second,
 		TLSClientConfig: tlsConf,
 
-		Attest:          c.attest,
-		MutualTls:       c.Mtls,
-		CmcAddr:         c.cmcAddr,
-		CmcApi:          c.apiName,
-		Serializer:      c.serializer,
-		LibApiCmcConfig: &c.Config,
-		CmcPolicies:     c.policies,
+		Attest:                 c.attest,
+		MutualTls:              c.Atls.Mtls,
+		CmcAddr:                c.cmcAddr,
+		CmcApi:                 c.apiName,
+		Serializer:             c.serializer,
+		LibApiCmcConfig:        &c.Cmc,
+		LibApiRootCas:          c.rootCas,
+		LibApiAllowSystemCerts: c.Trust.AllowSystemCerts,
+		CmcPolicies:            c.policies,
 		ResultCb: func(result *ar.AttestationResult) {
 			// Publish asynchronously
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
 				wg.Add(1)
-				go pub.PublishAsync(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result, &wg,
-					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+				go pub.PublishAsync(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, result, &wg,
+					c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 			}
 		},
 	}
@@ -88,21 +90,21 @@ func request(c *config) error {
 	// Create an attested HTTPS Client
 	client := &ahttp.Client{Transport: transport}
 
-	log.Debugf("HTTP %v request to %v", c.Method, c.Addr)
+	log.Debugf("HTTP %v request to %v", c.Request.Method, c.Atls.Addr)
 
 	// Create a new HTTP request and add body in case of POST or PUT request
 	var body io.Reader
-	if strings.EqualFold(c.Method, "POST") || strings.EqualFold(c.Method, "PUT") {
-		body = io.NopCloser(bytes.NewBuffer([]byte(c.Data)))
+	if strings.EqualFold(c.Request.Method, "POST") || strings.EqualFold(c.Request.Method, "PUT") {
+		body = io.NopCloser(bytes.NewBuffer([]byte(c.Request.Data)))
 	}
-	req, err := http.NewRequest(c.Method, c.Addr, body)
+	req, err := http.NewRequest(c.Request.Method, c.Atls.Addr, body)
 	if err != nil {
 		return fmt.Errorf("failed to make new HTTP request: %v", err)
 	}
 
 	// Set the user specified HTTP headers
-	log.Tracef("Number of specified headers: %v", len(c.Header))
-	for _, h := range c.Header {
+	log.Tracef("Number of specified headers: %v", len(c.Request.Header))
+	for _, h := range c.Request.Header {
 		s := strings.SplitN(h, ":", 2)
 		if len(s) != 2 {
 			return fmt.Errorf("invalid header %v", h)
@@ -114,7 +116,7 @@ func request(c *config) error {
 	// Perform the actual, user specified request
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("HTTP %v failed: %v", c.Method, err)
+		return fmt.Errorf("HTTP %v failed: %v", c.Request.Method, err)
 	}
 	defer resp.Body.Close()
 
@@ -134,7 +136,7 @@ func request(c *config) error {
 	return nil
 }
 
-func serve(c *config) error {
+func serve(c *Config) error {
 
 	// Overwrite specified TLS config to enforce aTLS as configured
 	tlsConfig, err := createServerTlsConf(c)
@@ -147,7 +149,7 @@ func serve(c *config) error {
 	// specified
 	server := &ahttp.Server{
 		Server: &http.Server{
-			Addr:      c.Addr,
+			Addr:      c.Atls.Addr,
 			TLSConfig: tlsConfig,
 			ErrorLog: golog.New(writerFunc(func(p []byte) (int, error) {
 				logrus.WithField("service", "cmcctl").
@@ -155,19 +157,21 @@ func serve(c *config) error {
 				return len(p), nil
 			}), "", 0),
 		},
-		Attest:          c.attest,
-		MutualTls:       c.Mtls,
-		CmcAddr:         c.cmcAddr,
-		CmcApi:          c.apiName,
-		Serializer:      c.serializer,
-		LibApiCmcConfig: &c.Config,
-		CmcPolicies:     c.policies,
+		Attest:                 c.attest,
+		MutualTls:              c.Atls.Mtls,
+		CmcAddr:                c.cmcAddr,
+		CmcApi:                 c.apiName,
+		Serializer:             c.serializer,
+		LibApiCmcConfig:        &c.Cmc,
+		LibApiRootCas:          c.rootCas,
+		LibApiAllowSystemCerts: c.Trust.AllowSystemCerts,
+		CmcPolicies:            c.policies,
 		ResultCb: func(result *ar.AttestationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified
 				// and result is not empty
-				go pub.Publish(c.PublishResults, c.PublishOcsf, c.PublishNetwork, c.publishToken, c.ResultFile, result,
-					c.rootCas, c.AllowSystemCerts, c.publishClientCert)
+				go pub.Publish(c.Publish.Results, c.Publish.Ocsf, c.Publish.Network, c.publishToken, c.Publish.Result, result,
+					c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 			}
 		},
 	}
