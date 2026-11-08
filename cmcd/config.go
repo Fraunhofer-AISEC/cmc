@@ -16,12 +16,7 @@
 package main
 
 import (
-	"fmt"
-	"os"
 	"strings"
-
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -74,64 +69,5 @@ func (c *Config) Validate(r *config.Report) {
 	if len(c.Trust.RootCas) == 0 && !c.Trust.AllowSystemCerts {
 		r.Errorf("trust.rootCas",
 			"required option is not set (--root-cas), unless trust.allowSystemCerts is enabled")
-	}
-}
-
-// flags returns the command line flags of the cmcd. A fresh set is built per
-// call, as a flag carries the state of the command it is parsed for and must
-// not be shared between commands.
-func flags() []cli.Flag {
-	return append([]cli.Flag{config.FileFlag()}, config.Flags(&Config{})...)
-}
-
-// getConfig loads and validates the configuration without touching anything
-// outside the config files, so that it can also serve "cmcd config".
-func getConfig(cmd *cli.Command) (*Config, error) {
-	c := &Config{}
-	if err := config.Load(cmd, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
-// setupLogging applies the log section to the global logger.
-func setupLogging(c *Config) error {
-
-	if c.Log.File != "" {
-		file, err := os.OpenFile(c.Log.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
-		}
-		logrus.SetOutput(file)
-	}
-
-	// The level is restricted to the logrus levels by the enum tag
-	l, err := logrus.ParseLevel(strings.ToLower(c.Log.Level))
-	if err != nil {
-		return fmt.Errorf("failed to parse log level: %w", err)
-	}
-	logrus.SetLevel(l)
-
-	return nil
-}
-
-func printConfig(c *Config) {
-
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Warnf("Failed to get working directory: %v", err)
-	}
-	log.Infof("Running cmcd from working directory %v", wd)
-
-	s, err := config.Redacted(c)
-	if err != nil {
-		log.Warnf("Failed to render configuration: %v", err)
-		return
-	}
-
-	// One record per line, as the logger escapes an embedded newline
-	log.Debug("Using the following configuration:")
-	for line := range strings.SplitSeq(s, "\n") {
-		log.Debugf("\t%v", line)
 	}
 }

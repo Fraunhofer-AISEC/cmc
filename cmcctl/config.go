@@ -210,7 +210,7 @@ func globalFlags(libapi bool) []cli.Flag {
 func libapiSelected(args []string) bool {
 
 	endpoint := ""
-	for _, file := range splitList(argValue(args, config.FileFlagName)) {
+	for _, file := range config.SplitList(argValue(args, config.FileFlagName)) {
 		if e := apiEndpointOf(file); e != "" {
 			endpoint = e
 		}
@@ -258,17 +258,6 @@ func apiEndpointOf(file string) string {
 	return c.Api.Endpoint
 }
 
-// splitList splits a comma-separated flag value into its trimmed entries.
-func splitList(s string) []string {
-	var out []string
-	for _, v := range strings.Split(s, ",") {
-		if v = strings.TrimSpace(v); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
 // flags returns the command line flags of the sections a subcommand uses.
 // The global ones are deliberately not repeated here: a local flag of the
 // same name shadows the inherited one, which would make it unusable before
@@ -308,53 +297,22 @@ var (
 		withKubeprov}
 )
 
-// getConfig loads and validates the configuration without touching anything
-// outside the config files, so that it can also serve "cmcctl config".
-func getConfig(cmd *cli.Command) (*Config, error) {
-	c := &Config{}
-	if err := config.Load(cmd, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // loadConfig loads the configuration and everything it points to, as the
 // subcommands that actually do something need it.
 func loadConfig(cmd *cli.Command) (*Config, error) {
 
-	c, err := getConfig(cmd)
+	c, err := config.New[Config](cmd)
 	if err != nil {
 		return nil, err
 	}
-	if err := setupLogging(c); err != nil {
+	if err := c.Log.Setup(); err != nil {
 		return nil, err
 	}
-	printConfig(c)
+	config.LogEffective("cmcctl", c)
 	if err := c.resolve(); err != nil {
 		return nil, err
 	}
 	return c, nil
-}
-
-// setupLogging applies the log section to the global logger.
-func setupLogging(c *Config) error {
-
-	if c.Log.File != "" {
-		file, err := os.OpenFile(c.Log.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
-		}
-		logrus.SetOutput(file)
-	}
-
-	// The level is restricted to the logrus levels by the enum tag
-	l, err := logrus.ParseLevel(strings.ToLower(c.Log.Level))
-	if err != nil {
-		return fmt.Errorf("failed to parse log level: %w", err)
-	}
-	logrus.SetLevel(l)
-
-	return nil
 }
 
 // resolve loads the certificates, policies and credentials the validated
@@ -425,25 +383,4 @@ func (c *Config) resolve() error {
 	}
 
 	return nil
-}
-
-func printConfig(c *Config) {
-
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Warnf("Failed to get working directory: %v", err)
-	}
-	log.Infof("Running cmcctl from working directory %v", wd)
-
-	s, err := config.Redacted(c)
-	if err != nil {
-		log.Warnf("Failed to render configuration: %v", err)
-		return
-	}
-
-	// One record per line, as the logger escapes an embedded newline
-	log.Debug("Using the following configuration:")
-	for line := range strings.SplitSeq(s, "\n") {
-		log.Debugf("\t%v", line)
-	}
 }

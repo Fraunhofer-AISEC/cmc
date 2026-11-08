@@ -18,10 +18,38 @@
 // exactly once. Sections that only one binary has stay with that binary.
 package sections
 
+import (
+	"fmt"
+	"os"
+
+	"github.com/sirupsen/logrus"
+)
+
 // Log configures the global logger.
 type Log struct {
 	Level string `json:"level" flag:"log-level" default:"info" enum:"panic,fatal,error,warn,info,debug,trace" usage:"logging level"`
 	File  string `json:"file"  flag:"log-file"  path:"true" usage:"file to log to instead of stdout/stderr"`
+}
+
+// Setup applies the log section to the global logger.
+func (l *Log) Setup() error {
+
+	if l.File != "" {
+		file, err := os.OpenFile(l.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		logrus.SetOutput(file)
+	}
+
+	// The level is restricted to the logrus levels by the enum tag
+	level, err := logrus.ParseLevel(l.Level)
+	if err != nil {
+		return fmt.Errorf("failed to parse log level: %w", err)
+	}
+	logrus.SetLevel(level)
+
+	return nil
 }
 
 // Trust configures the root CAs used to authenticate metadata, attestation

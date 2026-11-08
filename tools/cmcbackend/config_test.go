@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
 // run loads the configuration the way the cmcbackend binary does.
@@ -35,9 +37,9 @@ func run(t *testing.T, args ...string) (*Config, error) {
 
 	cmd := &cli.Command{
 		Name:  "cmcbackend",
-		Flags: flags(),
+		Flags: config.AllFlags(&Config{}),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = getConfig(cmd)
+			c, loadErr = config.New[Config](cmd)
 			return nil
 		},
 	}
@@ -89,7 +91,7 @@ func TestFlagNames(t *testing.T) {
 	}
 
 	var got []string
-	for _, f := range flags() {
+	for _, f := range config.AllFlags(&Config{}) {
 		got = append(got, f.Names()...)
 	}
 	slices.Sort(got)

@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
 // run loads the configuration the way the estserver binary does.
@@ -34,9 +36,9 @@ func run(t *testing.T, args ...string) (*Config, error) {
 
 	cmd := &cli.Command{
 		Name:  "estserver",
-		Flags: flags(),
+		Flags: config.AllFlags(&Config{}),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = getConfig(cmd)
+			c, loadErr = config.New[Config](cmd)
 			return nil
 		},
 	}

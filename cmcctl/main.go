@@ -264,7 +264,7 @@ func main() {
 }
 
 func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := getConfig(cmd); err != nil {
+	if _, err := config.New[Config](cmd); err != nil {
 		return err
 	}
 	fmt.Println("configuration is valid")
@@ -272,7 +272,7 @@ func validateConfig(_ context.Context, cmd *cli.Command) error {
 }
 
 func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := getConfig(cmd)
+	c, err := config.New[Config](cmd)
 	if err != nil {
 		return err
 	}

@@ -19,13 +19,10 @@ import (
 	"crypto"
 	"crypto/x509"
 	"fmt"
-	"os"
 	"slices"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v3"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
@@ -102,23 +99,6 @@ type Config struct {
 	certValidity    time.Duration
 }
 
-// flags returns the command line flags of the EST server. A fresh set is
-// built per call, as a flag carries the state of the command it is parsed
-// for and must not be shared between commands.
-func flags() []cli.Flag {
-	return append([]cli.Flag{config.FileFlag()}, config.Flags(&Config{})...)
-}
-
-// getConfig loads and validates the configuration without touching anything
-// outside the config files, so that it can also serve "estserver config".
-func getConfig(cmd *cli.Command) (*Config, error) {
-	c := &Config{}
-	if err := config.Load(cmd, c); err != nil {
-		return nil, err
-	}
-	return c, nil
-}
-
 // Validate checks the rules that span more than one option. It is called by
 // config.Load after the checks derived from the struct tags.
 func (c *Config) Validate(r *config.Report) {
@@ -165,27 +145,6 @@ func (c *Config) Validate(r *config.Report) {
 			}
 		}
 	}
-}
-
-// setupLogging applies the log section to the global logger.
-func setupLogging(c *Config) error {
-
-	if c.Log.File != "" {
-		file, err := os.OpenFile(c.Log.File, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
-		}
-		log.SetOutput(file)
-	}
-
-	// The level is restricted to the logrus levels by the enum tag
-	l, err := log.ParseLevel(strings.ToLower(c.Log.Level))
-	if err != nil {
-		return fmt.Errorf("failed to parse log level: %w", err)
-	}
-	log.SetLevel(l)
-
-	return nil
 }
 
 // resolve loads the keys, certificates and other collateral the validated
@@ -263,25 +222,4 @@ func (c *Config) resolve() error {
 	}
 
 	return nil
-}
-
-func printConfig(c *Config) {
-
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Warnf("Failed to get working directory: %v", err)
-	}
-	log.Infof("Running estserver from working directory %v", wd)
-
-	s, err := config.Redacted(c)
-	if err != nil {
-		log.Warnf("Failed to render configuration: %v", err)
-		return
-	}
-
-	// One record per line, as the logger escapes an embedded newline
-	log.Debug("Using the following configuration:")
-	for line := range strings.SplitSeq(s, "\n") {
-		log.Debugf("\t%v", line)
-	}
 }
