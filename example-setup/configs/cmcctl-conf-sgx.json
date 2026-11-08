@@ -19,11 +19,13 @@
     "identity": {
         "keyConfig": "ec256"
     },
-    "publish": {
+    "files": {
         "report": "../../data/attestation-report",
-        "result": "../../data/attestation-result.json",
         "nonce": "../../data/nonce",
-        "caStore": "../../data/pki/ca.pem",
+        "caStore": "../../data/pki/ca.pem"
+    },
+    "publish": {
+        "result": "../../data/attestation-result.json",
         "results": "http://nuc-02.sos.aisec.fraunhofer.de:8080/results"
     },
     "cmc": {

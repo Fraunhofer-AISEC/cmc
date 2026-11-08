@@ -79,7 +79,7 @@ func (a GrpcApi) generate(c *Config) error {
 	}
 
 	// Save the attestation report for the verifier
-	err = pub.SaveReport(c.Publish.Report, c.Publish.Nonce, response.Report, nonce)
+	err = pub.SaveReport(c.Files.Report, c.Files.Nonce, response.Report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -103,7 +103,7 @@ func (a GrpcApi) verify(c *Config) error {
 	client := grpcapi.NewCMCServiceClient(conn)
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.Publish.Report, c.Publish.Nonce, c.serializer)
+	report, nonce, err := pub.LoadReport(c.Files.Report, c.Files.Nonce, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}

@@ -70,7 +70,7 @@ func (a LibApi) generate(c *Config) error {
 	}
 
 	// Save the attestation report for the verifier
-	err = pub.SaveReport(c.Publish.Report, c.Publish.Nonce, report, nonce)
+	err = pub.SaveReport(c.Files.Report, c.Files.Nonce, report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -88,7 +88,7 @@ func (a LibApi) verify(c *Config) error {
 	}
 
 	// Read the attestation report and the nonce previously stored
-	report, nonce, err := pub.LoadReport(c.Publish.Report, c.Publish.Nonce, c.serializer)
+	report, nonce, err := pub.LoadReport(c.Files.Report, c.Files.Nonce, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}

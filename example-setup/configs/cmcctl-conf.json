@@ -24,14 +24,16 @@
             "localhost"
         ]
     },
-    "publish": {
+    "files": {
         "report": "../../data/attestation-report",
-        "result": "../../data/attestation-result.json",
         "nonce": "../../data/nonce",
         "caStore": "../../data/pki/ca.pem",
-        "results": "http://localhost:8080/results",
-        "ocsf": "http://localhost:8080/ocsf-detection-finding",
         "provisionToken": "../../data/provision_token"
+    },
+    "publish": {
+        "result": "../../data/attestation-result.json",
+        "results": "http://localhost:8080/results",
+        "ocsf": "http://localhost:8080/ocsf-detection-finding"
     },
     "token": {
         "store": "../../data/token_store"

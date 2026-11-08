@@ -113,12 +113,15 @@ func TestSubcommandFlags(t *testing.T) {
 		return out
 	}
 
-	generate := names(flags(withPublish))
+	generate := names(flags(withFiles))
 	if slices.Contains(generate, "mtls") {
 		t.Error("generate must not register the atls section")
 	}
+	if slices.Contains(generate, "publish-results") {
+		t.Error("generate must not register the publish section")
+	}
 	if !slices.Contains(generate, "report") {
-		t.Error("generate must register the publish section")
+		t.Error("generate must register the files section")
 	}
 	// The global flags are inherited from the root command. Repeating them
 	// on a subcommand would shadow them and make them unusable before the
@@ -227,7 +230,7 @@ func TestGlobalFlagsWorkBeforeAndAfterTheSubcommand(t *testing.T) {
 			Flags: globalFlags(true),
 			Commands: []*cli.Command{{
 				Name:   "dial",
-				Flags:  flags(withAtls, withIdentity, withPublish),
+				Flags:  flags(withAtls, withIdentity, withFiles, withPublish),
 				Action: action,
 			}},
 		}

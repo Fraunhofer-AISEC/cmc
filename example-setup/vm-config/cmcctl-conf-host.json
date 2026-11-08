@@ -21,10 +21,12 @@
         "keyType": "sw",
         "keyConfig": "ec256"
     },
-    "publish": {
+    "files": {
         "report": "../../data/attestation-report",
-        "result": "../../data/attestation-result.json",
         "nonce": "../../data/nonce",
         "caStore": "../../data/pki/ca.pem"
+    },
+    "publish": {
+        "result": "../../data/attestation-result.json"
     }
 }
