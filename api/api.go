@@ -88,7 +88,7 @@ type TLSCreateRequest struct {
 
 type TLSKeyConfig struct {
 	Type        string   `json:"type" cbor:"1,keyasint" jsonschema:"enum=tpm,enum=sw,enum=snp"`
-	Alg         string   `json:"alg" cbor:"2,keyasint" jsonschema:"enum=EC256,enum=EC384,enum=EC521,enum=RSA2048,enum=RSA4096"`
+	Alg         string   `json:"alg" cbor:"2,keyasint" jsonschema:"enum=ec256,enum=ec384,enum=ec521,enum=rsa2048,enum=rsa4096"`
 	Cn          string   `json:"cn" cbor:"3,keyasint"`
 	DNSNames    []string `json:"dnsNames,omitempty" cbor:"4,keyasint,omitempty"`
 	IPAddresses []string `json:"ipAddresses,omitempty" cbor:"5,keyasint,omitempty"`

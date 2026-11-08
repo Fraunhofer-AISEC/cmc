@@ -87,7 +87,7 @@ type httpsConfig struct {
 type identityConfig struct {
 	KeyId       string   `json:"keyId"       flag:"key-id"     path:"true" usage:"file to store the key ID of the (hardware-backed) TLS key"`
 	KeyType     string   `json:"keyType"     flag:"key-type"   enum:"tpm,sw" usage:"CMC key/certificate type"`
-	KeyConfig   string   `json:"keyConfig"   flag:"key-config" default:"EC256" enum:"EC256,EC384,EC521,RSA2048,RSA4096" usage:"key configuration"`
+	KeyConfig   string   `json:"keyConfig"   flag:"key-config" default:"ec256" enum:"ec256,ec384,ec521,rsa2048,rsa4096" usage:"key configuration"`
 	Cn          string   `json:"cn"          flag:"tls-cn"     usage:"common name for the TLS certificate"`
 	DnsNames    []string `json:"dnsNames"    flag:"tls-dns-names" usage:"comma-separated DNS SANs for the TLS certificate"`
 	IpAddresses []string `json:"ipAddresses" flag:"tls-ip-addresses" usage:"comma-separated IP SANs for the TLS certificate"`
@@ -135,11 +135,10 @@ type Config struct {
 	Token    tokenConfig    `json:"token"`
 	Kubeprov kubeprovConfig `json:"kubeprov"`
 
-	// Everything the embedded CMC reads, and nothing else, so that one
-	// category covers exactly the options that need --cmc libapi
+	// embedded cmc config, only required in libapi mode.
 	Cmc cmc.Config `json:"cmc" category:"EMBEDDED CMC"`
 
-	// Values derived from the configuration above by resolve
+	// Values derived from the configuration above by resolve.
 	rootCas           []*x509.Certificate
 	policies          []byte
 	apiName           string

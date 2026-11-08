@@ -133,19 +133,19 @@ func (tpmKey *TpmKey) GetCertificationParameters() (attest.CertificationParamete
 func KeyAlgFromString(in string) (*attest.KeyConfig, error) {
 	out := &attest.KeyConfig{}
 	switch in {
-	case "EC256":
+	case "ec256":
 		out.Algorithm = attest.ECDSA
 		out.Size = 256
-	case "EC384":
+	case "ec384":
 		out.Algorithm = attest.ECDSA
 		out.Size = 384
-	case "EC521":
+	case "ec521":
 		out.Algorithm = attest.ECDSA
 		out.Size = 521
-	case "RSA2048":
+	case "rsa2048":
 		out.Algorithm = attest.RSA
 		out.Size = 2048
-	case "RSA4096":
+	case "rsa4096":
 		out.Algorithm = attest.RSA
 		out.Size = 4096
 	default:

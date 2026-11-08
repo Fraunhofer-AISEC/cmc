@@ -17,7 +17,7 @@
         "attest": "mutual"
     },
     "identity": {
-        "keyConfig": "EC256"
+        "keyConfig": "ec256"
     },
     "publish": {
         "report": "../../data/attestation-report",
