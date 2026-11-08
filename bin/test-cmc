@@ -184,7 +184,7 @@ cmc_params=(
     "--ctr-driver" "sw" \
     "--ctr-log" "${ctrlog}" \
     "--root-cas" "${data}/pki/ca.pem" \
-    "--tpm-key-alg" "EC256" \
+    "--tpm-key-alg" "ec256" \
     "--use-omsp=true" \
 )
 
@@ -197,7 +197,7 @@ cmcctl_params=(
 # Subcommand-scoped cmcctl options, only accepted by the subcommands they apply to
 report_params="--report attestation-report --nonce nonce"
 result_params="--result attestation-result.json"
-tls_params="--mtls --attest mutual --key-config EC256 --key-type tpm --key-id ${data}/key-id"
+tls_params="--mtls --attest mutual --key-config ec256 --key-type tpm --key-id ${data}/key-id"
 
 attest_success=("success" "fail")
 

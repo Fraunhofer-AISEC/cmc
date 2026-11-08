@@ -851,9 +851,9 @@ func createAk(tpm *attest.TPM, keyAlg string) (*attest.AK, error) {
 	log.Debugf("Creating new AK with algorithm %v", keyAlg)
 	akConfig := &attest.AKConfig{}
 	switch keyAlg {
-	case "EC256":
+	case "ec256":
 		akConfig.Algorithm = attest.ECDSA
-	case "RSA2048":
+	case "rsa2048":
 		akConfig.Algorithm = attest.RSA
 	default:
 		return nil, fmt.Errorf("unsupported TPM AK key algorithm: %v", keyAlg)

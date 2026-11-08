@@ -19,7 +19,7 @@
     "identity": {
         "keyId": "../../data/key_id",
         "keyType": "sw",
-        "keyConfig": "EC256"
+        "keyConfig": "ec256"
     },
     "publish": {
         "report": "../../data/attestation-report",

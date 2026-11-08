@@ -227,15 +227,15 @@ func (mgr *KeyMgr) GetKeyIds() []string {
 func newSwKey(keyAlg string) (crypto.Signer, error) {
 
 	switch keyAlg {
-	case "EC256":
+	case "ec256":
 		return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	case "EC384":
+	case "ec384":
 		return ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
-	case "EC521":
+	case "ec521":
 		return ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
-	case "RSA2048":
+	case "rsa2048":
 		return rsa.GenerateKey(rand.Reader, 2048)
-	case "RSA4096":
+	case "rsa4096":
 		return rsa.GenerateKey(rand.Reader, 4096)
 	default:
 		return nil, fmt.Errorf("unsupported key algorithm %q", keyAlg)

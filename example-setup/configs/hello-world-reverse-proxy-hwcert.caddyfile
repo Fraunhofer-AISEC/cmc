@@ -32,7 +32,7 @@ https://localhost:4445 {
 		serializer json
 		key_id_file ./cmc-key.id
 		key_type tpm
-		key_alg EC256
+		key_alg ec256
 		common_name localhost
 		dns_names localhost
 	}

@@ -19,7 +19,7 @@
     "identity": {
         "keyId": "/var/cmcctl/key_id",
         "keyType": "tpm",
-        "keyConfig": "EC256"
+        "keyConfig": "ec256"
     },
     "publish": {
         "report": "/var/cmcctl/attestation-report",

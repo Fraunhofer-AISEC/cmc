@@ -40,8 +40,8 @@ type CmcCertConfig struct {
 	// KeyType selects the CMC key driver: "tpm", "snp", or "sw"
 	KeyType string `json:"key_type,omitempty"`
 
-	// KeyAlg selects the key algorithm: "EC256", "EC384", "EC521",
-	// "RSA2048", or "RSA4096".
+	// KeyAlg selects the key algorithm: "ec256", "ec384", "ec521",
+	// "rsa2048", or "rsa4096".
 	KeyAlg string `json:"key_alg,omitempty"`
 
 	// CommonName is the CN placed on the freshly created certificate

@@ -19,7 +19,7 @@
     "identity": {
         "keyId": "../../data/key_id",
         "keyType": "tpm",
-        "keyConfig": "EC256",
+        "keyConfig": "ec256",
         "dnsNames": [
             "localhost"
         ]

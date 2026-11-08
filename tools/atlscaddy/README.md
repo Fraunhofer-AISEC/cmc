@@ -106,7 +106,7 @@ The `cmc` block additionally accepts the following options:
 | `key_id`       | UUID                     | Reuse an existing CMC key.                             |
 | `key_id_file`  | `path`                   | Persists the assigned key ID across restarts.          |
 | `key_type`     | `tpm`, `snp`, `sw`       | CMC key driver                                         |
-| `key_alg`      | e.g., `EC256`, `RSA4096` | Key algorithm                                          |
+| `key_alg`      | e.g., `ec256`, `rsa4096` | Key algorithm                                          |
 | `common_name`  | string                   | CN placed on the freshly-created certificate           |
 | `dns_names`    | list                     | DNS SANs                                               |
 | `ip_addresses` | list                     | IP SANs                                                |
