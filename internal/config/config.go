@@ -16,15 +16,15 @@
 // Package config derives command line flags, defaults, validation and the printed configuration
 // from a tagged struct. Each configuration value supports the following struct tags:
 //
-//  json      key in the config file.
-//  flag      flag name. Flag:"-" marks an option that can only be set in a config file.
-//  usage     flag help text.
-//  default   value applied before config files and flags are read, and shown in --help.
-//  enum      comma-separated allowed values. A value of the form "@name" resolves against the
-//            registry filled by RegisterEnum, so it can respect build tags.
-//  path      a relative value coming from a config file is resolved against that file's directory.
-//            Values coming from a flag are not modigied. path:"uri" resolves the path of a file:// URI
-//  secret    the value is redacted by Redacted
+//	json      key in the config file.
+//	flag      flag name. Flag:"-" marks an option that can only be set in a config file.
+//	usage     flag help text.
+//	default   value applied before config files and flags are read, and shown in --help.
+//	enum      comma-separated allowed values. A value of the form "@name" resolves against the
+//	          registry filled by RegisterEnum, so it can respect build tags.
+//	path      a relative value coming from a config file is resolved against that file's directory.
+//	          Values coming from a flag are not modified. path:"uri" resolves the path of a file:// URI
+//	secret    the value is redacted by Redacted
 //
 // A section may carry a category tag, which sets the group the section's flags appear under in
 // --help. It defaults to the upper-cased section key. A category of "-" makes the section
@@ -71,7 +71,7 @@ func Load(cmd *cli.Command, root any) error {
 	r := &Report{}
 
 	s.applyDefaults()
-	for _, file := range splitList(cmd.String(FileFlagName)) {
+	for _, file := range SplitList(cmd.String(FileFlagName)) {
 		s.applyFile(file, r)
 	}
 
@@ -88,6 +88,24 @@ func Load(cmd *cli.Command, root any) error {
 	}
 
 	return r.err()
+}
+
+// New allocates a configuration of type T and loads it with Load. T must be a
+// struct type that Load accepts a pointer to.
+func New[T any](cmd *cli.Command) (*T, error) {
+	c := new(T)
+	if err := Load(cmd, c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// AllFlags returns FileFlag followed by the flags of every option of root,
+// for a command that accepts the whole configuration. A fresh set is built per
+// call, as a flag carries the state of the command it is parsed for and must
+// not be shared between commands.
+func AllFlags(root any) []cli.Flag {
+	return append([]cli.Flag{FileFlag()}, Flags(root)...)
 }
 
 // Flags derives the command line flags from the tagged struct root. If

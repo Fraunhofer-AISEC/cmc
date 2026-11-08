@@ -32,7 +32,7 @@ func main() {
 		Name:    "estserver",
 		Usage:   "EST provisioning server with attestation support",
 		Version: internal.GetVersionInfo().String(),
-		Flags:   flags(),
+		Flags:   config.AllFlags(&Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
 			{
@@ -64,15 +64,15 @@ func main() {
 
 func serve(ctx context.Context, cmd *cli.Command) error {
 
-	c, err := getConfig(cmd)
+	c, err := config.New[Config](cmd)
 	if err != nil {
 		return err
 	}
 
-	if err := setupLogging(c); err != nil {
+	if err := c.Log.Setup(); err != nil {
 		return err
 	}
-	printConfig(c)
+	config.LogEffective("estserver", c)
 
 	log.Infof("Starting EST server %v", internal.GetVersionInfo())
 
@@ -90,7 +90,7 @@ func serve(ctx context.Context, cmd *cli.Command) error {
 
 func validateConfig(ctx context.Context, cmd *cli.Command) error {
 
-	if _, err := getConfig(cmd); err != nil {
+	if _, err := config.New[Config](cmd); err != nil {
 		return err
 	}
 
@@ -101,7 +101,7 @@ func validateConfig(ctx context.Context, cmd *cli.Command) error {
 
 func printEffectiveConfig(ctx context.Context, cmd *cli.Command) error {
 
-	c, err := getConfig(cmd)
+	c, err := config.New[Config](cmd)
 	if err != nil {
 		return err
 	}

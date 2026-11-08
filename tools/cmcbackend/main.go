@@ -33,7 +33,7 @@ func main() {
 		Name:    "cmcbackend",
 		Usage:   "CMC backend server for storing and providing attestation-results",
 		Version: internal.GetVersionInfo().String(),
-		Flags:   flags(),
+		Flags:   config.AllFlags(&Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
 			{
@@ -65,15 +65,15 @@ func main() {
 
 func serve(_ context.Context, cmd *cli.Command) error {
 
-	c, err := getConfig(cmd)
+	c, err := config.New[Config](cmd)
 	if err != nil {
 		return err
 	}
-	if err := setupLogging(c); err != nil {
+	if err := c.Log.Setup(); err != nil {
 		return err
 	}
 	c.resolve()
-	printConfig(c)
+	config.LogEffective("cmcbackend", c)
 
 	log.Infof("Starting cmc-backend %v", internal.GetVersionInfo())
 
@@ -87,7 +87,7 @@ func serve(_ context.Context, cmd *cli.Command) error {
 }
 
 func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := getConfig(cmd); err != nil {
+	if _, err := config.New[Config](cmd); err != nil {
 		return err
 	}
 	fmt.Println("configuration is valid")
@@ -95,7 +95,7 @@ func validateConfig(_ context.Context, cmd *cli.Command) error {
 }
 
 func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := getConfig(cmd)
+	c, err := config.New[Config](cmd)
 	if err != nil {
 		return err
 	}

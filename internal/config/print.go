@@ -18,8 +18,37 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 )
+
+// LogEffective logs the working directory of the binary name at info level
+// and the effective configuration root, secrets redacted, at debug level.
+func LogEffective(name string, root any) {
+
+	l := logrus.WithField("service", name)
+
+	wd, err := os.Getwd()
+	if err != nil {
+		l.Warnf("Failed to get working directory: %v", err)
+	}
+	l.Infof("Running %v from working directory %v", name, wd)
+
+	s, err := Redacted(root)
+	if err != nil {
+		l.Warnf("Failed to render configuration: %v", err)
+		return
+	}
+
+	// One record per line, as the logger escapes an embedded newline
+	l.Debug("Using the following configuration:")
+	for line := range strings.SplitSeq(s, "\n") {
+		l.Debugf("\t%v", line)
+	}
+}
 
 // Redaction is what the value of a secret option is replaced with.
 const Redaction = "***"

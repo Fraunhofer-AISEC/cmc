@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
 // run loads the configuration the way a cmcctl subcommand does, with every
@@ -38,7 +40,7 @@ func run(t *testing.T, args ...string) (*Config, error) {
 		Name:  "cmcctl",
 		Flags: append(globalFlags(true), flags(allSections...)...),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = getConfig(cmd)
+			c, loadErr = config.New[Config](cmd)
 			return nil
 		},
 	}
@@ -158,7 +160,7 @@ func TestLibapiFlagsAreListedOnlyWhenTheyApply(t *testing.T) {
 			Flags: globalFlags(libapi),
 			Action: func(_ context.Context, cmd *cli.Command) error {
 				var err error
-				c, err = getConfig(cmd)
+				c, err = config.New[Config](cmd)
 				return err
 			},
 		}
@@ -217,7 +219,7 @@ func TestGlobalFlagsWorkBeforeAndAfterTheSubcommand(t *testing.T) {
 		var c *Config
 		action := func(_ context.Context, cmd *cli.Command) error {
 			var err error
-			c, err = getConfig(cmd)
+			c, err = config.New[Config](cmd)
 			return err
 		}
 		cmd := &cli.Command{

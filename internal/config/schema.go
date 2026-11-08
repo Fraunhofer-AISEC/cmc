@@ -218,7 +218,7 @@ func (s *schema) leaf(sf reflect.StructField, v reflect.Value, path, category st
 		if after, ok := strings.CutPrefix(e, "@"); ok {
 			f.enumRef = after
 		} else {
-			f.enum = splitList(e)
+			f.enum = SplitList(e)
 		}
 	}
 
@@ -278,7 +278,7 @@ func (f *field) assign(raw string) error {
 		f.value.SetInt(int64(n))
 
 	case kindStringSlice:
-		parts := splitList(raw)
+		parts := SplitList(raw)
 		out := reflect.MakeSlice(f.value.Type(), len(parts), len(parts))
 		for i, p := range parts {
 			out.Index(i).SetString(p)
@@ -286,7 +286,7 @@ func (f *field) assign(raw string) error {
 		f.value.Set(out)
 
 	case kindIntSlice:
-		parts := splitList(raw)
+		parts := SplitList(raw)
 		out := reflect.MakeSlice(f.value.Type(), len(parts), len(parts))
 		for i, p := range parts {
 			n, err := strconv.Atoi(p)
@@ -303,9 +303,9 @@ func (f *field) assign(raw string) error {
 	return nil
 }
 
-// splitList splits a comma-separated command line or tag value. Empty input
+// SplitList splits a comma-separated command line or tag value. Empty input
 // yields no elements rather than one empty element.
-func splitList(s string) []string {
+func SplitList(s string) []string {
 	if strings.TrimSpace(s) == "" {
 		return nil
 	}
