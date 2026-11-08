@@ -91,7 +91,7 @@ func (a SocketApi) generate(c *Config) error {
 	}
 
 	// Save the attestation response for the verifier
-	err = pub.SaveReport(c.Publish.Report, c.Publish.Nonce, resp.Report, nonce)
+	err = pub.SaveReport(c.Files.Report, c.Files.Nonce, resp.Report, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to save report: %w", err)
 	}
@@ -103,7 +103,7 @@ func (a SocketApi) verify(c *Config) error {
 
 	log.Infof("Sending socket request type 'Verify' to %v", c.cmcAddr)
 
-	report, nonce, err := pub.LoadReport(c.Publish.Report, c.Publish.Nonce, c.serializer)
+	report, nonce, err := pub.LoadReport(c.Files.Report, c.Files.Nonce, c.serializer)
 	if err != nil {
 		return fmt.Errorf("failed to load report: %w", err)
 	}

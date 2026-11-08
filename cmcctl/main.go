@@ -38,7 +38,7 @@ func main() {
 			{
 				Name:  "generate",
 				Usage: "Generate attestation report",
-				Flags: flags(withPublish),
+				Flags: flags(withFiles),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -50,7 +50,7 @@ func main() {
 			{
 				Name:  "verify",
 				Usage: "Verify attestation report",
-				Flags: flags(withPublish),
+				Flags: flags(withFiles, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -74,7 +74,7 @@ func main() {
 			{
 				Name:  "dial",
 				Usage: "Establish attested TLS client",
-				Flags: flags(withAtls, withIdentity, withPublish, withRequest),
+				Flags: flags(withAtls, withIdentity, withFiles, withPublish, withRequest),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -89,7 +89,7 @@ func main() {
 			{
 				Name:  "listen",
 				Usage: "Establish attested TLS server",
-				Flags: flags(withAtls, withIdentity, withPublish),
+				Flags: flags(withAtls, withIdentity, withFiles, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -104,7 +104,7 @@ func main() {
 			{
 				Name:  "request",
 				Usage: "Perform an attested HTTPS request",
-				Flags: flags(withAtls, withIdentity, withPublish, withRequest),
+				Flags: flags(withAtls, withIdentity, withFiles, withPublish, withRequest),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -119,7 +119,7 @@ func main() {
 			{
 				Name:  "serve",
 				Usage: "Establish an attested HTTPS server",
-				Flags: flags(withAtls, withIdentity, withPublish),
+				Flags: flags(withAtls, withIdentity, withFiles, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -134,7 +134,7 @@ func main() {
 			{
 				Name:  "token",
 				Usage: "Request a bootstrap token for EST certificate requests",
-				Flags: flags(withToken),
+				Flags: flags(withToken, withFiles),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -146,16 +146,16 @@ func main() {
 			{
 				Name:  "provision",
 				Usage: "Retrieve provisioning data for CVMs",
-				Flags: flags(withPublish),
+				Flags: flags(withFiles),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
 					}
-					if c.Publish.CaStore == "" {
+					if c.Files.CaStore == "" {
 						return fmt.Errorf("path to store CA must be specified via config file or command line")
 					}
-					if c.Publish.ProvisionToken == "" {
+					if c.Files.ProvisionToken == "" {
 						return fmt.Errorf("provision token must be specified via config file or command line")
 					}
 					return retrieveProvisioningData(c)
@@ -186,7 +186,7 @@ func main() {
 			{
 				Name:  "proxy",
 				Usage: "Forward data over attested TLS using HTTP",
-				Flags: flags(withAtls, withIdentity, withPublish),
+				Flags: flags(withAtls, withIdentity, withFiles, withPublish),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
@@ -205,7 +205,7 @@ func main() {
 					{
 						Name:  "serve",
 						Usage: "Distribute kubeadm join tokens to attested workers",
-						Flags: flags(withAtls, withIdentity, withKubeprov),
+						Flags: flags(withAtls, withIdentity, withFiles, withKubeprov),
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c, err := loadConfig(cmd)
 							if err != nil {
@@ -220,7 +220,7 @@ func main() {
 					{
 						Name:  "join",
 						Usage: "Join this node to a Kubernetes cluster via attested provisioning",
-						Flags: flags(withAtls, withIdentity, withKubeprov),
+						Flags: flags(withAtls, withIdentity, withFiles, withKubeprov),
 						Action: func(ctx context.Context, cmd *cli.Command) error {
 							c, err := loadConfig(cmd)
 							if err != nil {

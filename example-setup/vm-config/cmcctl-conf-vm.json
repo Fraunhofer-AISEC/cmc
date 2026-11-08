@@ -21,10 +21,12 @@
         "keyType": "tpm",
         "keyConfig": "ec256"
     },
-    "publish": {
+    "files": {
         "report": "/var/cmcctl/attestation-report",
-        "result": "/var/cmcctl/attestation-result.json",
         "nonce": "/var/cmcctl/nonce",
         "caStore": "/var/ca.pem"
+    },
+    "publish": {
+        "result": "/var/cmcctl/attestation-result.json"
     }
 }

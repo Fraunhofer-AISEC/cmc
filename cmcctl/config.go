@@ -93,20 +93,24 @@ type identityConfig struct {
 	IpAddresses []string `json:"ipAddresses" flag:"tls-ip-addresses" usage:"comma-separated IP SANs for the TLS certificate"`
 }
 
-// publishConfig configures what cmcctl writes and publishes.
-type publishConfig struct {
-	Report         string `json:"report"   flag:"report"        path:"true" usage:"output file for the attestation report"`
-	Nonce          string `json:"nonce"    flag:"nonce"         path:"true" usage:"output file for the nonce"`
-	Result         string `json:"result"   flag:"result"        path:"true" usage:"output file for the attestation result"`
-	CaStore        string `json:"caStore"  flag:"ca-store-path" path:"true" usage:"file to store the CA certs retrieved by the provision command"`
+// filesConfig configures the local files cmcctl reads and writes itself.
+type filesConfig struct {
+	Policies       string `json:"policies"       flag:"policies"            path:"true" usage:"JSON policies file for custom verification"`
+	Report         string `json:"report"         flag:"report"              path:"true" usage:"attestation report file, written by generate and read by verify"`
+	Nonce          string `json:"nonce"          flag:"nonce"               path:"true" usage:"nonce file, written by generate and read by verify"`
+	CaStore        string `json:"caStore"        flag:"ca-store-path"       path:"true" usage:"file to store the CA certs retrieved by the provision command"`
 	ProvisionToken string `json:"provisionToken" flag:"provision-token-out" path:"true" usage:"file to store the bootstrap token created by the token subcommand or retrieved by the provision subcommand"`
-	Policies       string `json:"policies" flag:"policies"      path:"true" usage:"JSON policies file for custom verification"`
-	Results        string `json:"results" flag:"publish-results" usage:"HTTP address to publish attestation results to"`
-	Ocsf           string `json:"ocsf"    flag:"publish-ocsf"    usage:"HTTP address to publish OCSF detection findings to"`
-	Network        string `json:"network" flag:"publish-network" usage:"HTTP address to publish lightweight network events to"`
-	Token          string `json:"token"   flag:"publish-token"   path:"true" usage:"file with the token for backend authorization"`
-	Cert           string `json:"cert"    flag:"publish-cert"    path:"true" usage:"client certificate for mTLS authentication when publishing"`
-	Key            string `json:"key"     flag:"publish-key"     path:"true" usage:"client key for mTLS authentication when publishing"`
+}
+
+// publishConfig configures where cmcctl publishes attestation results to.
+type publishConfig struct {
+	Result  string `json:"result"  flag:"result"          path:"true" usage:"output file for the attestation result"`
+	Results string `json:"results" flag:"publish-results" usage:"HTTP address to publish attestation results to"`
+	Ocsf    string `json:"ocsf"    flag:"publish-ocsf"    usage:"HTTP address to publish OCSF detection findings to"`
+	Network string `json:"network" flag:"publish-network" usage:"HTTP address to publish lightweight network events to"`
+	Token   string `json:"token"   flag:"publish-token"   path:"true" usage:"file with the token for backend authorization"`
+	Cert    string `json:"cert"    flag:"publish-cert"    path:"true" usage:"client certificate for mTLS authentication when publishing"`
+	Key     string `json:"key"     flag:"publish-key"     path:"true" usage:"client key for mTLS authentication when publishing"`
 }
 
 // tokenConfig configures the creation of EST bootstrap tokens.
@@ -131,6 +135,7 @@ type Config struct {
 	Atls     atlsConfig     `json:"atls"`
 	Request  httpsConfig    `json:"request"`
 	Identity identityConfig `json:"identity"`
+	Files    filesConfig    `json:"files"`
 	Publish  publishConfig  `json:"publish"`
 	Token    tokenConfig    `json:"token"`
 	Kubeprov kubeprovConfig `json:"kubeprov"`
@@ -287,13 +292,14 @@ var (
 	withAtls     section = func(c *Config) any { return &c.Atls }
 	withRequest  section = func(c *Config) any { return &c.Request }
 	withIdentity section = func(c *Config) any { return &c.Identity }
+	withFiles    section = func(c *Config) any { return &c.Files }
 	withPublish  section = func(c *Config) any { return &c.Publish }
 	withToken    section = func(c *Config) any { return &c.Token }
 	withKubeprov section = func(c *Config) any { return &c.Kubeprov }
 
 	// allSections is used by the config subcommand, which inspects the whole
 	// configuration rather than what one subcommand needs
-	allSections = []section{withAtls, withRequest, withIdentity, withPublish, withToken,
+	allSections = []section{withAtls, withRequest, withIdentity, withFiles, withPublish, withToken,
 		withKubeprov}
 )
 
@@ -337,9 +343,9 @@ func (c *Config) resolve() error {
 		return fmt.Errorf("failed to read trusted root CAs: %w", err)
 	}
 
-	if c.Publish.Policies != "" {
+	if c.Files.Policies != "" {
 		log.Debug("Adding specified policies")
-		c.policies, err = os.ReadFile(c.Publish.Policies)
+		c.policies, err = os.ReadFile(c.Files.Policies)
 		if err != nil {
 			return fmt.Errorf("failed to read policies file: %w", err)
 		}
