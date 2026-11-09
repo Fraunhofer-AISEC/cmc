@@ -9,7 +9,7 @@ NotifyAccess=all
 Restart=always
 RestartSec=10
 User=root
-ExecStart=cmcd -config /etc/cmcd-conf.json
+ExecStart=cmcd -config /etc/cmcd.toml
 
 [Install]
 WantedBy=multi-user.target

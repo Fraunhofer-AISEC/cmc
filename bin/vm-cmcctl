@@ -12,4 +12,4 @@ fi
 
 cd "${dir}"
 
-exec "${dir}/cmcctl/cmcctl" "${cmd}" -config "${dir}/example-setup/vm-config/cmcctl-conf-host.json" "$@"
+exec "${dir}/cmcctl/cmcctl" "${cmd}" -config "${dir}/example-setup/vm-config/cmcctl-host.toml" "$@"

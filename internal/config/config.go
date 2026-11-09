@@ -16,7 +16,7 @@
 // Package config derives command line flags, defaults, validation and the printed configuration
 // from a tagged struct. Each configuration value supports the following struct tags:
 //
-//	json      key in the config file.
+//	toml      key in the config file.
 //	flag      flag name. Flag:"-" marks an option that can only be set in a config file.
 //	usage     flag help text.
 //	default   value applied before config files and flags are read, and shown in --help.
@@ -51,7 +51,7 @@ const FileFlagName = "config"
 func FileFlag() cli.Flag {
 	return &cli.StringFlag{
 		Name:  FileFlagName,
-		Usage: "comma-separated JSON configuration files, later files take precedence",
+		Usage: "comma-separated TOML configuration files, later files take precedence",
 	}
 }
 

@@ -42,32 +42,30 @@ root CA CRL). The CVM can fetch it directly from the Intel PCS or the PCCS (`end
 
 Alternatively, the *estserver* proxies and caches the collateral, so that the CVM obtains
 everything from a single address under a single CA. Configure the upstream service in the
-[EST server configuration](../example-setup/configs/est-server-conf.json):
-```json
-{
-    "storage": { "vendorCache": "../../data/est-server-vendor-cache" },
-    "intelPcs": {
-        "url": "https://localhost:8081",
-        "rootCas": [ "../../data/pki/tdx-pccs-cert.pem" ]
-    }
-}
+[EST server configuration](../example-setup/configs/est-server.toml):
+```toml
+[storage]
+vendor_cache = "../../data/est-server-vendor-cache"
+
+[intel_pcs]
+url = "https://localhost:8081"
+root_cas = ["../../data/pki/tdx-pccs-cert.pem"]
 ```
-`intelPcs.url` is the address of the PCCS started via `run-tdx-pccs`, or
-`https://api.trustedservices.intel.com` to use the Intel PCS directly. `intelPcs.rootCas` are the
+`intel_pcs.url` is the address of the PCCS started via `run-tdx-pccs`, or
+`https://api.trustedservices.intel.com` to use the Intel PCS directly. `intel_pcs.root_cas` are the
 root CAs of that service, which are required for the certificate of the PCCS shipped with the CMC.
-The collateral is cached in `storage.vendorCache`. Cached collateral is refreshed every 24 hours and
+The collateral is cached in `storage.vendor_cache`. Cached collateral is refreshed every 24 hours and
 continues to be served if the upstream service becomes unavailable.
 
 The CVM then uses `cps` endorsement mode, which fetches both AMD and Intel collateral from the
 *estserver*, and therefore requires neither internet access nor the public CAs:
-```json
-{
-    "cmc": { "provisioning": { "endorsement": "cps:https://10.0.2.2:9000/" } },
-    "trust": {
-        "allowSystemCerts": false,
-        "rootCas": [ "/var/ca.pem" ]
-    }
-}
+```toml
+[trust]
+allow_system_certs = false
+root_cas = ["/var/ca.pem"]
+
+[cmc.provisioning]
+endorsement = "cps:https://10.0.2.2:9000/"
 ```
 This configuration is identical for Intel TDX and AMD SEV-SNP CVMs.
 

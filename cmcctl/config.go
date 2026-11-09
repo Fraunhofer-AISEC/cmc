@@ -19,12 +19,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
@@ -64,84 +64,84 @@ func init() {
 
 // apiConfig configures how cmcctl reaches the CMC.
 type apiConfig struct {
-	Endpoint      string `json:"endpoint"      flag:"cmc" default:"socket://127.0.0.1:9955" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
-	Serialization string `json:"serialization" flag:"serialization" default:"cbor" enum:"json,cbor" usage:"serialization for requests and attestation reports"`
+	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket://127.0.0.1:9955" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
+	Serialization string `toml:"serialization" flag:"serialization" default:"cbor" enum:"json,cbor" usage:"serialization for requests and attestation reports"`
 }
 
 // atlsConfig configures the attested TLS connection.
 type atlsConfig struct {
-	Addr                 string `json:"addr"   flag:"addr"   usage:"address to connect to / listen on via attested TLS / HTTPS"`
-	Mtls                 bool   `json:"mtls"   flag:"mtls"   usage:"perform mutual TLS"`
-	Attest               string `json:"attest" flag:"attest" default:"mutual" enum:"mutual,client,server,none" usage:"remote attestation mode"`
-	AttestationOnlyTrust bool   `json:"attestationOnlyTrust" flag:"attestation-only-trust" usage:"establish trust in the peer through its attestation report only, without validating its TLS certificate chain, e.g. if the peer uses a self-signed certificate. Requires the peer to be attested"`
+	Addr                 string `toml:"addr"                   flag:"addr"   usage:"address to connect to / listen on via attested TLS / HTTPS"`
+	Mtls                 bool   `toml:"mtls"                   flag:"mtls"   usage:"perform mutual TLS"`
+	Attest               string `toml:"attest"                 flag:"attest" default:"mutual" enum:"mutual,client,server,none" usage:"remote attestation mode"`
+	AttestationOnlyTrust bool   `toml:"attestation_only_trust" flag:"attestation-only-trust" usage:"establish trust in the peer through its attestation report only, without validating its TLS certificate chain, e.g. if the peer uses a self-signed certificate. Requires the peer to be attested"`
 }
 
 // httpsConfig configures attested HTTPS requests.
 type httpsConfig struct {
-	Method string   `json:"method" flag:"method" default:"GET" enum:"GET,POST,PUT,HEAD" usage:"HTTP request method"`
-	Header []string `json:"header" flag:"header" usage:"comma-separated headers for HTTP requests"`
-	Data   string   `json:"data"   flag:"data"   usage:"aTLS payload for dial or HTTP body for POST/PUT requests"`
+	Method string   `toml:"method" flag:"method" default:"GET" enum:"GET,POST,PUT,HEAD" usage:"HTTP request method"`
+	Header []string `toml:"header" flag:"header" usage:"comma-separated headers for HTTP requests"`
+	Data   string   `toml:"data"   flag:"data"   usage:"aTLS payload for dial or HTTP body for POST/PUT requests"`
 }
 
 // identityConfig confgures cmcctl's TLS identity.
 type identityConfig struct {
-	KeyId       string   `json:"keyId"       flag:"key-id"     path:"true" usage:"file to store the key ID of the (hardware-backed) TLS key"`
-	KeyType     string   `json:"keyType"     flag:"key-type"   enum:"tpm,sw" usage:"CMC key/certificate type"`
-	KeyConfig   string   `json:"keyConfig"   flag:"key-config" default:"ec256" enum:"ec256,ec384,ec521,rsa2048,rsa4096" usage:"key configuration"`
-	Cn          string   `json:"cn"          flag:"tls-cn"     usage:"common name for the TLS certificate"`
-	DnsNames    []string `json:"dnsNames"    flag:"tls-dns-names" usage:"comma-separated DNS SANs for the TLS certificate"`
-	IpAddresses []string `json:"ipAddresses" flag:"tls-ip-addresses" usage:"comma-separated IP SANs for the TLS certificate"`
+	KeyId       string   `toml:"key_id"       flag:"key-id"     path:"true" usage:"file to store the key ID of the (hardware-backed) TLS key"`
+	KeyType     string   `toml:"key_type"     flag:"key-type"   enum:"tpm,sw" usage:"CMC key/certificate type"`
+	KeyConfig   string   `toml:"key_config"   flag:"key-config" default:"ec256" enum:"ec256,ec384,ec521,rsa2048,rsa4096" usage:"key configuration"`
+	Cn          string   `toml:"cn"           flag:"tls-cn"     usage:"common name for the TLS certificate"`
+	DnsNames    []string `toml:"dns_names"    flag:"tls-dns-names" usage:"comma-separated DNS SANs for the TLS certificate"`
+	IpAddresses []string `toml:"ip_addresses" flag:"tls-ip-addresses" usage:"comma-separated IP SANs for the TLS certificate"`
 }
 
 // filesConfig configures the local files cmcctl reads and writes itself.
 type filesConfig struct {
-	Policies       string `json:"policies"       flag:"policies"            path:"true" usage:"JSON policies file for custom verification"`
-	Report         string `json:"report"         flag:"report"              path:"true" usage:"attestation report file, written by generate and read by verify"`
-	Nonce          string `json:"nonce"          flag:"nonce"               path:"true" usage:"nonce file, written by generate and read by verify"`
-	CaStore        string `json:"caStore"        flag:"ca-store-path"       path:"true" usage:"file to store the CA certs retrieved by the provision command"`
-	ProvisionToken string `json:"provisionToken" flag:"provision-token-out" path:"true" usage:"file to store the bootstrap token created by the token subcommand or retrieved by the provision subcommand"`
+	Policies       string `toml:"policies"        flag:"policies"            path:"true" usage:"JSON policies file for custom verification"`
+	Report         string `toml:"report"          flag:"report"              path:"true" usage:"attestation report file, written by generate and read by verify"`
+	Nonce          string `toml:"nonce"           flag:"nonce"               path:"true" usage:"nonce file, written by generate and read by verify"`
+	CaStore        string `toml:"ca_store"        flag:"ca-store-path"       path:"true" usage:"file to store the CA certs retrieved by the provision command"`
+	ProvisionToken string `toml:"provision_token" flag:"provision-token-out" path:"true" usage:"file to store the bootstrap token created by the token subcommand or retrieved by the provision subcommand"`
 }
 
 // publishConfig configures where cmcctl publishes attestation results to.
 type publishConfig struct {
-	Result  string `json:"result"  flag:"result"          path:"true" usage:"output file for the attestation result"`
-	Results string `json:"results" flag:"publish-results" usage:"HTTP address to publish attestation results to"`
-	Ocsf    string `json:"ocsf"    flag:"publish-ocsf"    usage:"HTTP address to publish OCSF detection findings to"`
-	Network string `json:"network" flag:"publish-network" usage:"HTTP address to publish lightweight network events to"`
-	Token   string `json:"token"   flag:"publish-token"   path:"true" usage:"file with the token for backend authorization"`
-	Cert    string `json:"cert"    flag:"publish-cert"    path:"true" usage:"client certificate for mTLS authentication when publishing"`
-	Key     string `json:"key"     flag:"publish-key"     path:"true" usage:"client key for mTLS authentication when publishing"`
+	Result  string `toml:"result"  flag:"result"          path:"true" usage:"output file for the attestation result"`
+	Results string `toml:"results" flag:"publish-results" usage:"HTTP address to publish attestation results to"`
+	Ocsf    string `toml:"ocsf"    flag:"publish-ocsf"    usage:"HTTP address to publish OCSF detection findings to"`
+	Network string `toml:"network" flag:"publish-network" usage:"HTTP address to publish lightweight network events to"`
+	Token   string `toml:"token"   flag:"publish-token"   path:"true" usage:"file with the token for backend authorization"`
+	Cert    string `toml:"cert"    flag:"publish-cert"    path:"true" usage:"client certificate for mTLS authentication when publishing"`
+	Key     string `toml:"key"     flag:"publish-key"     path:"true" usage:"client key for mTLS authentication when publishing"`
 }
 
 // tokenConfig configures the creation of EST bootstrap tokens.
 type tokenConfig struct {
-	Store   string `json:"store"   flag:"token-store"     path:"true" usage:"path to token store for token mode"`
-	MaxUses int    `json:"maxUses" flag:"token-max-uses"  usage:"maximum number of times a newly created token may be redeemed (0 = unlimited)"`
-	Subject string `json:"subject" flag:"token-subject"   usage:"restrict a newly created token to this subject; leave empty for no restriction"`
+	Store   string `toml:"store"    flag:"token-store"     path:"true" usage:"path to token store for token mode"`
+	MaxUses int    `toml:"max_uses" flag:"token-max-uses"  usage:"maximum number of times a newly created token may be redeemed (0 = unlimited)"`
+	Subject string `toml:"subject"  flag:"token-subject"   usage:"restrict a newly created token to this subject; leave empty for no restriction"`
 }
 
 // kubeprovConfig configures Kubernetes node provisioning over attested TLS.
 type kubeprovConfig struct {
-	KubeadmPath string `json:"kubeadmPath" flag:"kubeadm-path" default:"kubeadm" usage:"path to kubeadm binary"`
-	Count       int    `json:"count"       flag:"count"        usage:"number of workers to serve before exiting (0 = unlimited)"`
-	DryRun      bool   `json:"dryRun"      flag:"dry-run"      usage:"print join info without executing kubeadm"`
+	KubeadmPath string `toml:"kubeadm_path" flag:"kubeadm-path" default:"kubeadm" usage:"path to kubeadm binary"`
+	Count       int    `toml:"count"        flag:"count"        usage:"number of workers to serve before exiting (0 = unlimited)"`
+	DryRun      bool   `toml:"dry_run"      flag:"dry-run"      usage:"print join info without executing kubeadm"`
 }
 
 // Config is the cmcctl configuration.
 type Config struct {
-	Log      sections.Log   `json:"log"`
-	Api      apiConfig      `json:"api"`
-	Trust    sections.Trust `json:"trust"`
-	Atls     atlsConfig     `json:"atls"`
-	Request  httpsConfig    `json:"request"`
-	Identity identityConfig `json:"identity"`
-	Files    filesConfig    `json:"files"`
-	Publish  publishConfig  `json:"publish"`
-	Token    tokenConfig    `json:"token"`
-	Kubeprov kubeprovConfig `json:"kubeprov"`
+	Log      sections.Log   `toml:"log"`
+	Api      apiConfig      `toml:"api"`
+	Trust    sections.Trust `toml:"trust"`
+	Atls     atlsConfig     `toml:"atls"`
+	Request  httpsConfig    `toml:"request"`
+	Identity identityConfig `toml:"identity"`
+	Files    filesConfig    `toml:"files"`
+	Publish  publishConfig  `toml:"publish"`
+	Token    tokenConfig    `toml:"token"`
+	Kubeprov kubeprovConfig `toml:"kubeprov"`
 
 	// embedded cmc config, only required in libapi mode.
-	Cmc cmc.Config `json:"cmc" category:"EMBEDDED CMC"`
+	Cmc cmc.Config `toml:"cmc" category:"EMBEDDED CMC"`
 
 	// Values derived from the configuration above by resolve.
 	rootCas           []*x509.Certificate
@@ -181,7 +181,7 @@ func (c *Config) Validate(r *config.Report) {
 	}
 
 	if c.Atls.AttestationOnlyTrust && c.Atls.Attest != "server" && c.Atls.Attest != "mutual" {
-		r.Errorf("atls.attestationOnlyTrust",
+		r.Errorf("atls.attestation_only_trust",
 			"requires the peer to be attested, but atls.attest is %q", c.Atls.Attest)
 	}
 }
@@ -254,10 +254,10 @@ func apiEndpointOf(file string) string {
 
 	var c struct {
 		Api struct {
-			Endpoint string `json:"endpoint"`
-		} `json:"api"`
+			Endpoint string `toml:"endpoint"`
+		} `toml:"api"`
 	}
-	if json.Unmarshal(data, &c) != nil {
+	if toml.Unmarshal(data, &c) != nil {
 		return ""
 	}
 	return c.Api.Endpoint

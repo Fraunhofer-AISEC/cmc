@@ -53,7 +53,7 @@ func run(t *testing.T, args ...string) (*Config, error) {
 // repository still loads and validates.
 func TestExampleConfigs(t *testing.T) {
 
-	files, err := filepath.Glob("../example-setup/*/cmcd-conf*.json")
+	files, err := filepath.Glob("../example-setup/*/cmcd*.toml")
 	if err != nil {
 		t.Fatalf("failed to list example configs: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestRequiredOptions(t *testing.T) {
 		t.Fatal("expected an error for a configuration without any option")
 	}
 	for _, want := range []string{"api.endpoint", "cmc.attestation.drivers",
-		"cmc.metadata.locations", "trust.rootCas"} {
+		"cmc.metadata.locations", "trust.root_cas"} {
 		if !strings.Contains(err.Error(), want+": required option is not set") {
 			t.Errorf("error does not report %v as required:\n%v", want, err)
 		}

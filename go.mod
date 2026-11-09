@@ -22,6 +22,7 @@ require (
 	github.com/invopop/jsonschema v0.14.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/opencontainers/runtime-spec v1.3.0
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/plgd-dev/go-coap/v3 v3.5.4
 	github.com/robertkrimen/otto v0.5.1
 	github.com/sirupsen/logrus v1.10.2
@@ -130,7 +131,6 @@ require (
 	github.com/nlnwa/whatwg-url v0.6.2 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
-	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/pion/dtls/v3 v3.1.8 // indirect
 	github.com/pion/logging v0.2.4 // indirect
 	github.com/pion/transport/v4 v4.1.0 // indirect

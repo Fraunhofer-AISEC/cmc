@@ -40,22 +40,23 @@ frontend can show them as separate demos. They are declared in the config file:
 ```
 
 Publishers select their category through the query parameter of the URL they post to,
-for example `"publishResults": "http://localhost:8080/results?category=ids"`. Without
-the parameter the default category is used, unknown categories are rejected.
+for example `results = "http://localhost:8080/results?category=ids"` in the `[publish]` section of
+the cmcctl configuration. Without the parameter the default category is used, unknown categories
+are rejected.
 
 All GET endpoints accept the same `?category=` parameter to filter their results.
 Omitting it returns the entries of all categories.
 
-`database.maxRows` and `database.maxRowsPerProver` apply to each category individually, so a busy
-deployment cannot evict the provers of another one. Both limits take effect on
+`database.max_rows` and `database.max_rows_per_prover` apply to each category individually, so a
+busy deployment cannot evict the provers of another one. Both limits take effect on
 restart, also for existing databases. See
-`example-setup/configs/cmcbackend-conf.json` for a complete example.
+`example-setup/configs/cmcbackend.toml` for a complete example.
 
 The configuration can be checked without starting the server, as for the other binaries:
 
 ```sh
-cmcbackend config validate --config example-setup/configs/cmcbackend-conf.json
-cmcbackend config print --config example-setup/configs/cmcbackend-conf.json
+cmcbackend config validate --config example-setup/configs/cmcbackend.toml
+cmcbackend config print --config example-setup/configs/cmcbackend.toml
 ```
 
 **OCSF Detection Findings**

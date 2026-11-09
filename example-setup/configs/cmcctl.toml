@@ -1,0 +1,34 @@
+[log]
+level = "trace"
+
+[api]
+endpoint = "socket://localhost:9955"
+serialization = "json"
+
+[trust]
+root_cas = ["../../data/pki/ca.pem"]
+
+[atls]
+addr = "localhost:4443"
+mtls = true
+attest = "mutual"
+
+[identity]
+key_id = "../../data/key_id"
+key_type = "tpm"
+key_config = "ec256"
+dns_names = ["localhost"]
+
+[files]
+report = "../../data/attestation-report"
+nonce = "../../data/nonce"
+ca_store = "../../data/pki/ca.pem"
+provision_token = "../../data/provision_token"
+
+[publish]
+result = "../../data/attestation-result.json"
+results = "http://localhost:8080/results"
+ocsf = "http://localhost:8080/ocsf-detection-finding"
+
+[token]
+store = "../../data/token_store"

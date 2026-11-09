@@ -1,0 +1,35 @@
+[log]
+level = "trace"
+
+[api]
+endpoint = "socket://0.0.0.0:9955"
+
+[trust]
+root_cas = ["/var/metadata-ca.pem", "/var/ca.pem"]
+
+[cmc.attestation]
+drivers = ["tpm", "sw"]
+hash_alg = "sha256"
+measurement_logs = true
+
+[cmc.attestation.tpm]
+key_alg = "ec256"
+
+[cmc.attestation.containers]
+driver = "sw"
+log = "/tmp/container_measurements"
+
+[cmc.metadata]
+locations = ["https://10.0.2.2:9000/vm-metadata"]
+
+[cmc.metadata.omsp]
+enabled = true
+format = "json"
+
+[cmc.provisioning]
+auth = ["none"]
+endorsement = "est:https://10.0.2.2:9000/"
+enrollment = "est:https://10.0.2.2:9000/"
+
+[cmc.storage]
+data = "/var/cmc/internal"

@@ -1,0 +1,27 @@
+[log]
+level = "trace"
+
+[api]
+endpoint = "socket://localhost:9955"
+serialization = "json"
+
+[trust]
+root_cas = ["/var/ca.pem"]
+
+[atls]
+addr = "0.0.0.0:4443"
+mtls = false
+attest = "server"
+
+[identity]
+key_id = "/var/cmcctl/key_id"
+key_type = "tpm"
+key_config = "ec256"
+
+[files]
+report = "/var/cmcctl/attestation-report"
+nonce = "/var/cmcctl/nonce"
+ca_store = "/var/ca.pem"
+
+[publish]
+result = "/var/cmcctl/attestation-result.json"

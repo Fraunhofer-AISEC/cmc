@@ -27,8 +27,8 @@ import (
 
 // Log configures the global logger.
 type Log struct {
-	Level string `json:"level" flag:"log-level" default:"info" enum:"panic,fatal,error,warn,info,debug,trace" usage:"logging level"`
-	File  string `json:"file"  flag:"log-file"  path:"true" usage:"file to log to instead of stdout/stderr"`
+	Level string `toml:"level" flag:"log-level" default:"info" enum:"panic,fatal,error,warn,info,debug,trace" usage:"logging level"`
+	File  string `toml:"file"  flag:"log-file"  path:"true" usage:"file to log to instead of stdout/stderr"`
 }
 
 // Setup applies the log section to the global logger.
@@ -55,6 +55,6 @@ func (l *Log) Setup() error {
 // Trust configures the root CAs used to authenticate metadata, attestation
 // reports and TLS peers.
 type Trust struct {
-	RootCas          []string `json:"rootCas"          flag:"root-cas"           path:"true" usage:"comma-separated paths to trusted root CA PEM files"`
-	AllowSystemCerts bool     `json:"allowSystemCerts" flag:"allow-system-certs" usage:"allow using the system cert pool as trusted root CAs"`
+	RootCas          []string `toml:"root_cas"           flag:"root-cas"           path:"true" usage:"comma-separated paths to trusted root CA PEM files"`
+	AllowSystemCerts bool     `toml:"allow_system_certs" flag:"allow-system-certs" usage:"allow using the system cert pool as trusted root CAs"`
 }
