@@ -8,13 +8,13 @@ the easiest way of making using of the CMC attestation framework.
 
 ### Integration into Generic Projects
 
-As the *cmcd* provides gRPC, CoAP, and socket APIs, it can be integrated into projects in any
+As the *cmcd* provides gRPC and socket APIs, it can be integrated into projects in any
 programming language. Attestation reports can be generated and verified using the `generate`
 and `verify` endpoint of the *cmcd*. See [APIs and Protocols](#apis-and-protocols).
 
 ### APIs and Protocols
 
-For a description of the `cmcd` gRPC, CoaP and socket APIs, refer to [CMCD API](./cmcd-api.md).
+For a description of the `cmcd` gRPC and socket APIs, refer to [CMCD API](./cmcd-api.md).
 These can be used to get certificates and generate and verify attestation reports.
 
 For a description of the attested TLS attestation protocol, refer to

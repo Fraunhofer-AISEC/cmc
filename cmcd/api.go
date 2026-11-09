@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Contains the API definitions for the CoAP and unix domain socket API
-// The gRPC API is in a separate file
+// Contains the API definitions for the socket API. The gRPC API is in a separate file
 package main
 
 import (

@@ -79,20 +79,20 @@ client-side `cmcctl proxy` and server-side `caddy-atls` reverse proxy refer to t
 
 All custom blocks accept the following options:
 
-| Option        | Values                               | Notes                            |
-| ------------- | ------------------------------------ | -------------------------------- |
-| `cmc_api`     | `socket`, `grpc`, `coap`             | API used to reach the CMC daemon |
-| `cmc_addr`    | `host:port`                          | CMC daemon address               |
-| `serializer`  | `json`, `cbor`                       | Attestation report encoding      |
-| `policy_file` | `path`                               | Path to a CMC policy file        |
+| Option        | Values            | Notes                            |
+| ------------- | ----------------- | -------------------------------- |
+| `cmc_api`     | `socket`, `grpc`  | API used to reach the CMC daemon |
+| `cmc_addr`    | `host:port`       | CMC daemon address               |
+| `serializer`  | `json`, `cbor`    | Attestation report encoding      |
+| `policy_file` | `path`            | Path to a CMC policy file        |
 
 ### `atls` listener wrapper (`caddy.listeners.atls`)
 
 The `atls` block additionally accepts the following options:
 
-| Option        | Values                               | Notes                            |
-| ------------- | ------------------------------------ | -------------------------------- |
-| `attest`      | `mutual`, `client`, `server`, `none` | Which side is required to attest |
+| Option   | Values                               | Notes                            |
+| -------- | ------------------------------------ | -------------------------------- |
+| `attest` | `mutual`, `client`, `server`, `none` | Which side is required to attest |
 
 The `atls` wrapper must appear **first** in `listener_wrappers` because it
 wraps the raw TLS listener.

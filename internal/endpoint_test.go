@@ -28,7 +28,6 @@ func TestParseApiEndpoint(t *testing.T) {
 		{"unix socket", "socket:///run/cmc/cmc.sock", "socket", "/run/cmc/cmc.sock", false},
 		{"tcp socket", "socket://127.0.0.1:9955", "socket", "127.0.0.1:9955", false},
 		{"grpc", "grpc://127.0.0.1:9955", "grpc", "127.0.0.1:9955", false},
-		{"coap", "coap://localhost:9955", "coap", "localhost:9955", false},
 		{"uppercase api", "GRPC://127.0.0.1:9955", "grpc", "127.0.0.1:9955", false},
 		{"explicit network", "socket://unix:///run/cmc.sock", "socket", "unix:///run/cmc.sock", false},
 		{"libapi", "libapi", "libapi", "", false},

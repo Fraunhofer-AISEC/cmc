@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/plgd-dev/go-coap/v3/message"
 )
 
 // Verifier can either be a list of trusted CA certificates, or a trusted public key,
@@ -53,19 +52,6 @@ func DetectSerialization(payload []byte) (Serializer, error) {
 		return s, nil
 	} else {
 		return nil, fmt.Errorf("failed to detect serialization")
-	}
-}
-
-// GetMediaType returns the media type that corresponds to the serializer
-func GetMediaType(s Serializer) message.MediaType {
-	switch s.(type) {
-	case jsonSerializer:
-		return message.AppJSON
-	case cborSerializer:
-		return message.AppCBOR
-	default:
-		log.Warnf("unknown serializer type %T", s)
-		return message.TextPlain
 	}
 }
 

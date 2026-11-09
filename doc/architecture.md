@@ -22,7 +22,7 @@ The figure shows how the core components interact with each other. The main soft
 - The *cmcd* daemon acts as an attestation prover and verifier: It collects evidence from different
 hardware trust anchors and combines it with signed metadata describing the platform to produce
 attestation reports. (prover), or validates the evidences against the metadata (verifier).
-The *cmcd* provides a socket, a gRPC, as well as a CoAP REST API.
+The *cmcd* provides a socket and a gRPC API.
 - The *cmcctl* can be used to control the *cmcd*, to generate and verify attestation reports and to
 create exemplary attested tls and https connections.
 - The *keymgr* for optionally creating and managing hardware keys and certificates for attested TLS
@@ -128,18 +128,17 @@ The following components correspond to the packages / directories of this reposi
 
 ### cmcd, cmc
 The CMC (*cmcd*) is the main component running on the platform. On request, the cmcd either
-generates or verifies an attestation-report, i.e. the state of the platform. The cmcd provides
-different APIs, such as gRPC, CoAP or simple sockets. For the generation and verification of
-attestation reports, the *cmcd* relies on the *attestationreport* package. The functionality is
-divided into the daemon (*cmcd*) and the *cmc* package, so that the *cmc* package can also be
-used standalone.
+generates or verifies an attestation-report, i.e. the state of the platform. The cmcd provides a
+gRPC and a socket API. For the generation and verification of attestation reports, the *cmcd* relies
+on the *attestationreport* package. The functionality is divided into the daemon (*cmcd*) and the
+*cmc* package, so that the *cmc* package can also be used standalone.
 
 ### cmcctl
 The *cmcctl* can generate and verify attestation reports and establish attested TLS as well as
-attested HTTPS connections. For the latter, it makes use of the *attestedtls* and
-*attestedhttp* packages. Usually, the *cmcctl* interacts with the *cmcd* via the *cmc* gRPC, CoAP or
-socket API. However, the cmcctl can also act as a standalone application, i.e., integrate
-all *cmc* functionality via their go API.
+attested HTTPS connections. For the latter, it makes use of the *attestedtls* and *attestedhttp*
+packages. Usually, the *cmcctl* interacts with the *cmcd* via the *cmc* gRPC or socket API. However,
+the cmcctl can also act as a standalone application, i.e., integrate all *cmc* functionality via
+their go API.
 
 ### attestationreport, prover, verifier
 The *attestationreport*, *prover* and *verifier* packages provide a generic JSON/CBOR-based

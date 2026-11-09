@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2025 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Contains the API definitions for the CoAP and socket API.
-// The gRPC API is in a separate file
+// Contains the API definitions for the socket API. The gRPC API is in a separate file
 package api
 
 import (

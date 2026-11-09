@@ -26,7 +26,6 @@ import (
 //	socket:///run/cmc/cmc.sock
 //	socket://127.0.0.1:9955
 //	grpc://127.0.0.1:9955
-//	coap://127.0.0.1:9955
 //
 // APIs that do not take an address, such as the libapi, may be given as a bare name.
 // The API name is not validated here, as the set of available APIs depends on the
