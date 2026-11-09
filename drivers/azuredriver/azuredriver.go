@@ -272,7 +272,7 @@ func (azure *Azure) fetchSnpAk(data []byte) error {
 	case internal.VCEK:
 		// VCEK is used, request enrollment for SNP chip ID and TCB
 		log.Debug("Enrolling VCEK")
-		akCert, err = azure.snpEndorser.GetSnpVcek(codeName, s.ChipId[:], s.CurrentTcb)
+		akCert, err = azure.snpEndorser.GetSnpVcek(codeName, s.ChipId[:], s.ReportedTcb)
 		if err != nil {
 			return fmt.Errorf("failed to enroll SNP: %w", err)
 		}
