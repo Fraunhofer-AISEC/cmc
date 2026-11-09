@@ -203,6 +203,9 @@ func verifyInternal(
 
 	hwAttest := false
 
+	// Hardware policies and CA fingerprints are taken from the root manifest
+	root := rootManifest(metaResults.ManifestResults)
+
 	// Collect evidence collateral into a map for combined processing with evidences
 	collateral := make(map[string]ar.Collateral)
 	for _, em := range report.Context.Collateral {
@@ -243,13 +246,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SNP:
-			var snpPolicy *ar.SnpPolicy
-			var caFingerprints []string
-			if len(metaResults.ManifestResults) > 0 {
-				snpPolicy = metaResults.ManifestResults[0].SnpPolicy
-				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
-			}
-			r, ok := VerifySnp(ev, col, evidenceNonce, snpPolicy, caFingerprints,
+			r, ok := VerifySnp(ev, col, evidenceNonce, root.SnpPolicy, root.CaFingerprints,
 				refVals[ar.TRUST_ANCHOR_SNP])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
@@ -258,13 +255,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_TDX:
-			var tdxPolicy *ar.TdxPolicy
-			var caFingerprints []string
-			if len(metaResults.ManifestResults) > 0 {
-				tdxPolicy = metaResults.ManifestResults[0].TdxPolicy
-				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
-			}
-			r, ok := VerifyTdx(ev, col, evidenceNonce, tdxPolicy, caFingerprints,
+			r, ok := VerifyTdx(ev, col, evidenceNonce, root.TdxPolicy, root.CaFingerprints,
 				refVals[ar.TRUST_ANCHOR_TDX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
@@ -273,13 +264,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SGX:
-			var sgxPolicy *ar.SgxPolicy
-			var caFingerprints []string
-			if len(metaResults.ManifestResults) > 0 {
-				sgxPolicy = metaResults.ManifestResults[0].SgxPolicy
-				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
-			}
-			r, ok := VerifySgx(ev, col, evidenceNonce, sgxPolicy, caFingerprints,
+			r, ok := VerifySgx(ev, col, evidenceNonce, root.SgxPolicy, root.CaFingerprints,
 				refVals[ar.TRUST_ANCHOR_SGX])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
@@ -288,11 +273,7 @@ Loop:
 			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_IAS:
-			var caFingerprints []string
-			if len(metaResults.ManifestResults) > 0 {
-				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
-			}
-			r, ok := VerifyIas(ev, col, evidenceNonce, caFingerprints,
+			r, ok := VerifyIas(ev, col, evidenceNonce, root.CaFingerprints,
 				refVals[ar.TRUST_ANCHOR_IAS])
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
@@ -315,16 +296,8 @@ Loop:
 			result.Measurements = append(result.Measurements, *r)
 
 		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM:
-			var tdxPolicy *ar.TdxPolicy
-			var snpPolicy *ar.SnpPolicy
-			var caFingerprints []string
-			if len(metaResults.ManifestResults) > 0 {
-				tdxPolicy = metaResults.ManifestResults[0].TdxPolicy
-				snpPolicy = metaResults.ManifestResults[0].SnpPolicy
-				caFingerprints = metaResults.ManifestResults[0].CaFingerprints
-			}
 			results, ok := VerifyAzure(report.Evidences, report.Context.Collateral, evidenceNonce,
-				tdxPolicy, snpPolicy, caFingerprints, refVals[ar.TRUST_ANCHOR_TDX],
+				root.TdxPolicy, root.SnpPolicy, root.CaFingerprints, refVals[ar.TRUST_ANCHOR_TDX],
 				refVals[ar.TRUST_ANCHOR_SNP], refVals[ar.TRUST_ANCHOR_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
@@ -739,7 +712,7 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 	// Organize manifests by BaseLayer
 	foundRoot := false
 	for _, m := range manifests {
-		if len(m.BaseLayers) == 1 && m.Name == m.BaseLayers[0] {
+		if isRootManifest(m) {
 			// Check that there is exactly one root of trust manifest
 			if foundRoot {
 				log.Warnf("Found additional root of trust manifest %v (already got %v)", m.Name, root.Name)
@@ -808,6 +781,23 @@ func processManifests(manifests []ar.MetadataResult) ([]ar.MetadataResult, []ar.
 	sorted = append(sorted, unplaced...)
 
 	return sorted, results, ar.NotSpecified, success
+}
+
+// isRootManifest reports whether the manifest is a root of trust manifest, i.e., its only
+// base layer is itself
+func isRootManifest(m ar.MetadataResult) bool {
+	return len(m.BaseLayers) == 1 && m.Name == m.BaseLayers[0]
+}
+
+// rootManifest returns the first root of trust manifest or an empty result if there is none.
+// Multiple root manifests are rejected during metadata verification.
+func rootManifest(manifests []ar.MetadataResult) ar.MetadataResult {
+	for _, m := range manifests {
+		if isRootManifest(m) {
+			return m
+		}
+	}
+	return ar.MetadataResult{}
 }
 
 func hasCompatibleBaseLayer(baseLayers []string, processed map[string]bool) bool {

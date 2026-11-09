@@ -636,6 +636,43 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 	}
 }
 
+func Test_rootManifest(t *testing.T) {
+	tests := []struct {
+		name      string
+		manifests []ar.MetadataResult
+		want      string
+	}{
+		{
+			name:      "Root First",
+			manifests: []ar.MetadataResult{validRtmResult, validOsResult, validAppResult},
+			want:      validRtmResult.Name,
+		},
+		{
+			name:      "Root Last",
+			manifests: []ar.MetadataResult{validAppResult, validOsResult, validRtmResult},
+			want:      validRtmResult.Name,
+		},
+		{
+			name:      "No Root",
+			manifests: []ar.MetadataResult{validOsResult, validAppResult},
+			want:      "",
+		},
+		{
+			name:      "No Manifests",
+			manifests: nil,
+			want:      "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := rootManifest(tt.manifests); got.Name != tt.want {
+				t.Errorf("rootManifest() --GOT-- %q, --WANT-- %q", got.Name, tt.want)
+			}
+		})
+	}
+}
+
 // variables for Test_collectComponents
 var (
 	refs = []ar.Component{
