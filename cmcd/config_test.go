@@ -107,10 +107,26 @@ func TestRequiredOptions(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a configuration without any option")
 	}
-	for _, want := range []string{"cmc.attestation.drivers", "cmc.metadata.locations"} {
-		if !strings.Contains(err.Error(), want+": required option is not set") {
-			t.Errorf("error does not report %v as required:\n%v", want, err)
-		}
+	if !strings.Contains(err.Error(), "cmc.metadata.locations: required option is not set") {
+		t.Errorf("error does not report cmc.metadata.locations as required:\n%v", err)
+	}
+	if strings.Contains(err.Error(), "cmc.attestation.drivers") {
+		t.Errorf("drivers default to auto but are reported:\n%v", err)
+	}
+
+	_, err = run(t, "--drivers", "", "--metadata", "file://m")
+	if err == nil || !strings.Contains(err.Error(), "cmc.attestation.drivers: required option is not set") {
+		t.Errorf("error does not report empty drivers as missing: %v", err)
+	}
+}
+
+func TestDefaultDrivers(t *testing.T) {
+	c, err := run(t, "--metadata", "file://m")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !slices.Equal(c.Cmc.Attestation.Drivers, []string{"auto"}) {
+		t.Errorf("drivers = %v, want [auto]", c.Cmc.Attestation.Drivers)
 	}
 }
 
@@ -129,6 +145,9 @@ func TestInvalidValues(t *testing.T) {
 		{"endorsement", []string{"--endorsement", "est"}, "cmc.provisioning.endorsement: est endorsement requires an address"},
 		{"enrollment", []string{"--enrollment", "carrier-pigeon"}, "cmc.provisioning.enrollment: unknown mode"},
 		{"container trust anchor", []string{"--ctr-trust-anchor", "tpm"}, `cmc.attestation.containers.trust_anchor: "tpm" requires the tpm driver in cmc.attestation.drivers`},
+		{"container trust anchor auto", []string{"--drivers", "auto", "--ctr-trust-anchor", "tpm"}, ""},
+		{"container trust anchor auto sw", []string{"--drivers", "auto", "--ctr-trust-anchor", "sw"}, `"sw" requires the sw driver`},
+		{"auto with sw", []string{"--drivers", "auto,sw", "--ctr-trust-anchor", "sw"}, ""},
 		{"container trust anchor enum", []string{"--ctr-trust-anchor", "snp"}, `"snp" is not one of`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

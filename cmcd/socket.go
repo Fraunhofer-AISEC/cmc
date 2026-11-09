@@ -359,12 +359,6 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	log.Info("Received socket request type 'TLSCert'")
 
-	if len(cmc.Drivers) == 0 {
-		sendError(conn, s, "TLS cert: no drivers configured")
-		return
-	}
-	d := cmc.Drivers[0]
-
 	// Parse the message and return the TLS signing request
 	req := new(api.TLSCertRequest)
 	err := s.Unmarshal(payload, req)
@@ -385,7 +379,7 @@ func tlscert(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 		sendError(conn, s, "failed to get certchain: %v", err)
 		return
 	}
-	log.Debugf("Obtained TLS cert from %v", d.Name())
+	log.Debugf("Obtained TLS cert chain of length %v for key %v", len(certChain), req.KeyId)
 
 	// Create response
 	resp := &api.TLSCertResponse{

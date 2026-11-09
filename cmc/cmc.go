@@ -18,9 +18,12 @@ package cmc
 import (
 	"crypto"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -84,6 +87,47 @@ func (cmc *Cmc) UpdateMetadata(metadata map[string][]byte) {
 
 func GetDrivers() map[string]drv.Driver {
 	return drivers
+}
+
+// resolveDrivers returns the names of the drivers to use without duplicates.
+// The value auto expands to all drivers whose hardware is detected.
+func resolveDrivers(names []string) ([]string, error) {
+	resolved := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.ToLower(name)
+		if name == autoDriver {
+			detected := detectDrivers()
+			log.Infof("Automatically detected drivers: %v", detected)
+			for _, d := range detected {
+				if !slices.Contains(resolved, d) {
+					resolved = append(resolved, d)
+				}
+			}
+			continue
+		}
+		if _, ok := drivers[name]; !ok {
+			return nil, fmt.Errorf("driver %v not implemented", name)
+		}
+		if !slices.Contains(resolved, name) {
+			resolved = append(resolved, name)
+		}
+	}
+	if len(resolved) == 0 {
+		return nil, errors.New("no drivers configured or detected")
+	}
+	return resolved, nil
+}
+
+// detectDrivers returns the sorted names of the compiled-in drivers whose
+// hardware is present
+func detectDrivers() []string {
+	detected := make([]string, 0)
+	for _, name := range slices.Sorted(maps.Keys(drivers)) {
+		if d, ok := drivers[name].(drv.Detector); ok && d.Detect() {
+			detected = append(detected, name)
+		}
+	}
+	return detected
 }
 
 func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
@@ -159,23 +203,22 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 	}
 
 	// Initialize drivers
-	usedDrivers := make([]drv.Driver, 0)
-	for _, driver := range c.Attestation.Drivers {
-		d, ok := drivers[strings.ToLower(driver)]
-		if !ok {
-			return nil, fmt.Errorf("driver %v not implemented", driver)
-		}
-
-		err = d.Init(driverConf)
+	driverNames, err := resolveDrivers(c.Attestation.Drivers)
+	if err != nil {
+		return nil, err
+	}
+	usedDrivers := make([]drv.Driver, 0, len(driverNames))
+	for _, name := range driverNames {
+		err = drivers[name].Init(driverConf)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize driver: %w", err)
+			return nil, fmt.Errorf("failed to initialize %v driver: %w", name, err)
 		}
-		usedDrivers = append(usedDrivers, d)
+		usedDrivers = append(usedDrivers, drivers[name])
 	}
 	cmc.Drivers = usedDrivers
 
 	// Check container trust anchor
-	if t := c.Attestation.Containers.TrustAnchor; t != "" && !internal.Contains(t, c.Attestation.Drivers) {
+	if t := c.Attestation.Containers.TrustAnchor; t != "" && !slices.Contains(driverNames, t) {
 		return nil, fmt.Errorf("container trust anchor %v requires the %v driver", t, t)
 	}
 

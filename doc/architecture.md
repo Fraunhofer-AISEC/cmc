@@ -147,7 +147,8 @@ serialization format to summarize the metadata describing the software running o
 platform. Enabling trust in this metadata requires a hardware-based Root-of-Trust (RoT) that
 provides the possibility to store keys and measurements of the software running on the platform.
 The *attestationreport* therefore implements generic interfaces. These interfaces must be
-implemented by *drivers* that provide access to a hardware based RoT.
+implemented by *drivers* that provide access to a hardware based RoT. Drivers whose hardware can be
+detected implement the `drivers.Detector` interface and are selected by the `auto` drivers value.
 
 ### keymgr
 

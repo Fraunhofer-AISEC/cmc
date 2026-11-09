@@ -32,10 +32,15 @@ const (
 	vendorCacheDir   = "vendor-cache"
 )
 
+// autoDriver is the drivers value that selects all drivers whose hardware is
+// detected. Software based drivers and drivers that cannot be detected
+// reliably (azure, sgx) must be configured explicitly.
+const autoDriver = "auto"
+
 func init() {
 	// The available drivers and policy engines depend on the build tags of the
 	// binary, so the enums behind them are resolved at validation time
-	config.RegisterEnum("drivers", func() []string { return maps.Keys(drivers) })
+	config.RegisterEnum("drivers", func() []string { return append(maps.Keys(drivers), autoDriver) })
 	config.RegisterEnum("policyengines", func() []string { return maps.Keys(policyEngines) })
 }
 
@@ -61,7 +66,7 @@ type Containers struct {
 // Attestation configures what evidence is collected and how it is bound
 // together into an attestation report.
 type Attestation struct {
-	Drivers         []string   `toml:"drivers"          flag:"drivers" enum:"@drivers" usage:"comma-separated list of attestation report drivers"`
+	Drivers         []string   `toml:"drivers"          flag:"drivers" default:"auto" enum:"@drivers" usage:"comma-separated list of attestation report drivers, auto selects all detected hardware drivers (tpm, snp, tdx)"`
 	HashAlg         string     `toml:"hash_alg"         flag:"hash-alg" default:"sha256" enum:"sha256,sha384,sha512" usage:"hash algorithm for attestation report integrity"`
 	MeasurementLogs bool       `toml:"measurement_logs" flag:"measurement-logs" usage:"include measured events in measurement and validation report"`
 	Tpm             Tpm        `toml:"tpm"`
@@ -74,8 +79,10 @@ type Attestation struct {
 // derived from the struct tags, and must not touch the file system.
 func (a *Attestation) Validate(r *config.Report) {
 
-	// The driver providing the container trust anchor must be configured
-	if t := a.Containers.TrustAnchor; t != "" && !slices.Contains(a.Drivers, t) {
+	// The driver providing the container trust anchor must be configured. Auto
+	// can only provide the tpm, whose presence is checked when the CMC starts
+	if t := a.Containers.TrustAnchor; t != "" && !slices.Contains(a.Drivers, t) &&
+		!(t == "tpm" && slices.Contains(a.Drivers, autoDriver)) {
 		r.Errorf("containers.trust_anchor", "%q requires the %v driver in %v %v", t, t,
 			r.Path("drivers"), a.Drivers)
 	}

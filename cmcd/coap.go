@@ -302,12 +302,6 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Infof("Received coap request type 'TLSCert' from %v", w.Conn().RemoteAddr())
 
-	if len(s.cmc.Drivers) == 0 {
-		sendCoapError(w, r, codes.InternalServerError,
-			"Failed to sign: No valid drivers specified in config")
-		return
-	}
-
 	// Parse the CoAP message and return the TLS signing request
 	req := new(api.TLSCertRequest)
 	ser, err := unmarshal(r, req)
@@ -329,7 +323,7 @@ func (s CoapServer) TlsCert(w mux.ResponseWriter, r *mux.Message) {
 		sendCoapError(w, r, codes.InternalServerError, "failed to get cert chain: %v", err)
 		return
 	}
-	log.Debugf("Obtained TLS cert %v", certChain[0].Subject.CommonName)
+	log.Debugf("Obtained TLS cert chain of length %v for key %v", len(certChain), req.KeyId)
 
 	// Create response
 	resp := &api.TLSCertResponse{

@@ -47,6 +47,9 @@ var log = logrus.WithField("service", "tdxdriver")
 const (
 	akChainFile = "tdx_ak_chain.pem"
 
+	// tdxDevicePath is the TDX guest device, which backs the configfs TSM reports
+	tdxDevicePath = "/dev/tdx_guest"
+
 	DEFAULT_CCEL_ACPI_TABLE = "/sys/firmware/acpi/tables/data/CCEL"
 )
 
@@ -62,6 +65,12 @@ type Tdx struct {
 // Name returns the name of the driver
 func (s *Tdx) Name() string {
 	return "TDX driver"
+}
+
+// Detect reports whether the TDX guest device is present
+func (s *Tdx) Detect() bool {
+	_, err := os.Stat(tdxDevicePath)
+	return err == nil
 }
 
 // Init initializes the TDX driver with the specifified configuration

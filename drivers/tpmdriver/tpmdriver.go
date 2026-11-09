@@ -80,6 +80,12 @@ func (t *Tpm) Name() string {
 	return "TPM driver"
 }
 
+// Detect reports whether a TPM device is present
+func (t *Tpm) Detect() bool {
+	_, err := GetTpmDevicePath()
+	return err == nil
+}
+
 // Init opens and initializes a TPM object, checks if provisioning is
 // required and if so, creates and activates a new attestation key (AK)
 func (t *Tpm) Init(c *drivers.DriverConfig) error {
