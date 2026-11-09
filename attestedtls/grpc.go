@@ -262,10 +262,11 @@ func (a GrpcApi) createKey(cc *CmcConfig) (string, error) {
 	req := api.TLSCreateRequest{
 		Version: api.GetVersion(),
 		KeyConfig: &api.TLSKeyConfig{
-			Type:     cc.KeyConfig.Type,
-			Alg:      cc.KeyConfig.Alg,
-			Cn:       cc.KeyConfig.Cn,
-			DnsNames: cc.KeyConfig.DNSNames,
+			Type:        cc.KeyConfig.Type,
+			Alg:         cc.KeyConfig.Alg,
+			Cn:          cc.KeyConfig.Cn,
+			DnsNames:    cc.KeyConfig.DNSNames,
+			IpAddresses: cc.KeyConfig.IPAddresses,
 		},
 	}
 
