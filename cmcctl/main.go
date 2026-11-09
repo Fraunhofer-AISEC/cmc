@@ -47,6 +47,9 @@ func main() {
 					if err != nil {
 						return err
 					}
+					if err := c.initCmc(); err != nil {
+						return err
+					}
 					return c.api.generate(c)
 				},
 			},
@@ -57,6 +60,9 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
+						return err
+					}
+					if err := c.initCmc(); err != nil {
 						return err
 					}
 					return c.api.verify(c)
@@ -71,6 +77,9 @@ func main() {
 					if err != nil {
 						return err
 					}
+					if err := c.initCmc(); err != nil {
+						return err
+					}
 					return c.api.enroll(c)
 				},
 			},
@@ -81,6 +90,9 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
+						return err
+					}
+					if err := c.initCmc(); err != nil {
 						return err
 					}
 					return dial(c)
@@ -95,6 +107,9 @@ func main() {
 					if err != nil {
 						return err
 					}
+					if err := c.initCmc(); err != nil {
+						return err
+					}
 					return listen(c)
 				},
 			},
@@ -107,6 +122,9 @@ func main() {
 					if err != nil {
 						return err
 					}
+					if err := c.initCmc(); err != nil {
+						return err
+					}
 					return request(c)
 				},
 			},
@@ -117,6 +135,9 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
+						return err
+					}
+					if err := c.initCmc(); err != nil {
 						return err
 					}
 					return serve(c)
@@ -154,6 +175,9 @@ func main() {
 					if err != nil {
 						return err
 					}
+					if err := c.initCmc(); err != nil {
+						return err
+					}
 					return c.api.updateCerts(c)
 				},
 			},
@@ -163,6 +187,9 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
+						return err
+					}
+					if err := c.initCmc(); err != nil {
 						return err
 					}
 					return c.api.updateMetadata(c)
@@ -175,6 +202,9 @@ func main() {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					c, err := loadConfig(cmd)
 					if err != nil {
+						return err
+					}
+					if err := c.initCmc(); err != nil {
 						return err
 					}
 					return forwardProxy(c)
@@ -196,6 +226,9 @@ func main() {
 							if len(c.Trust.RootCas) == 0 {
 								return fmt.Errorf("path to root CAs must be specified via config file or command line")
 							}
+							if err := c.initCmc(); err != nil {
+								return err
+							}
 							return kubeprovServe(c)
 						},
 					},
@@ -210,6 +243,9 @@ func main() {
 							}
 							if len(c.Trust.RootCas) == 0 {
 								return fmt.Errorf("path to root CAs must be specified via config file or command line")
+							}
+							if err := c.initCmc(); err != nil {
+								return err
 							}
 							return kubeprovJoin(c)
 						},

@@ -223,7 +223,7 @@ func forwardProxy(c *Config) error {
 						c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 				}
 			}),
-			atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
+			atls.WithLibApiCmc(c.cmc))
 		if err != nil {
 			return nil, fmt.Errorf("failed to dial server: %w", err)
 		}
