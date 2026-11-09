@@ -1,22 +1,21 @@
 # CMC API
 
 This document describes the *cmcd* APIs. For documentation, where this API is used, refer to
-[Architecture](./architecture.md). The *cmcd* provides a [gRPC](https://grpc.io/),
-[CoAP](https://datatracker.ietf.org/doc/html/rfc7252), and socket API.
+[Architecture](./architecture.md). The *cmcd* provides a [gRPC](https://grpc.io/) and a socket API.
 The socket api supports TCP as well as
 [Unix domain sockets](https://man7.org/linux/man-pages/man7/unix.7.html).
 
-The gRPC API uses [protobuf](https://protobuf.dev/) for serialization. The CoAP and socket API
-support [JSON](https://datatracker.ietf.org/doc/html/rfc8259) and
-[CBOR](https://datatracker.ietf.org/doc/html/rfc8949) for serialization.
-The *cmcd* automatically detects the serialization of requests.
+The gRPC API uses [protobuf](https://protobuf.dev/) for serialization. The socket API supports
+[JSON](https://datatracker.ietf.org/doc/html/rfc8259) and
+[CBOR](https://datatracker.ietf.org/doc/html/rfc8949) for serialization. The *cmcd* automatically
+detects the serialization of requests.
 
 The following sections describe the API requests and responses. For protobuf the
 [proto3](https://protobuf.dev/programming-guides/proto3/) message syntax is used, for JSON,
 [JSON Schema](https://json-schema.org/) is used and for CBOR,
 [CDDL](https://datatracker.ietf.org/doc/html/rfc8610) is used.
 
-In the repository, the CoAP and socket API is defined in [api.go](../api/api.go) and the gRPC API
+In the repository, the socket API is defined in [api.go](../api/api.go) and the gRPC API
 is defined in [grpcapi.proto](../grpcapi/grpcapi.proto).
 
 ## API endpoints
@@ -44,17 +43,6 @@ The gRPC API provides the following services:
 - `rpc PeerCache(PeerCacheRequest) returns (PeerCacheResponse)`
 - `rpc Measure(MeasureRequest) returns (MeasureResponse)`
 
-### CoAP
-
-The CoAP API provides the following endpoints:
-
-- `POST /Attest`
-- `POST /Verify`
-- `POST /TLSSign`
-- `POST /TLSCert`
-- `POST /PeerCache`
-- `POST /Measure`
-
 ### Socket
 
 The socket API uses a simple header followed by a serialized payload:
@@ -79,7 +67,7 @@ The following message types are defined:
 ## Payloads
 
 This section describes the serialized messages / payloads of the API endpoints. Note that the
-gRPC APIs only supports protobuf, while the socket and CoAP APIs only support JSON and CBOR.
+gRPC APIs only supports protobuf, while the socket API only supports JSON and CBOR.
 
 All JSON schema definitions can be found [here](./api/json/). For each message, the link
 to the JSON schema definition is provided in the following sections. CBOR and protobuf definitions

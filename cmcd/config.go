@@ -26,7 +26,7 @@ import (
 
 // apiConfig configures the API the cmcd serves.
 type apiConfig struct {
-	Endpoint string `toml:"endpoint" flag:"cmc" default:"socket://{run}/cmc.sock" usage:"CMC API and address in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955 or coap://127.0.0.1:9955"`
+	Endpoint string `toml:"endpoint" flag:"cmc" default:"socket://{run}/cmc.sock" usage:"CMC API and address in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955 or grpc://127.0.0.1:9955"`
 }
 
 // Config is the cmcd configuration. Everything the CMC itself reads sits in

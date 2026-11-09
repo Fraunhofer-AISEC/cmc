@@ -79,7 +79,6 @@ want to build via additional tags.
 Currently supported tags for the `cmcd` and `cmcctl` are:
 - `nodefaults` Disables all features
 - `grpc` Enables the gRPC API
-- `coap` Enables the CoAP API
 - `socket` Enables the socket API
 - `libapi` Enables the library API
 - `tpm` Enables the TPM driver

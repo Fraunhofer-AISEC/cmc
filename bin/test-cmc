@@ -207,7 +207,7 @@ api_serializers=("json" "cbor")
 
 omsp_serializers=("json" "cbor")
 
-protocols=("grpc" "coap" "socket")
+protocols=("grpc" "socket")
 
 commands_server=("generate" "listen" "serve")
 
