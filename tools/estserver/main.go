@@ -27,12 +27,15 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
+// binaryName selects the config file and data folder of the binary
+const binaryName = "estserver"
+
 func main() {
 	cmd := &cli.Command{
-		Name:    "estserver",
+		Name:    binaryName,
 		Usage:   "EST provisioning server with attestation support",
 		Version: internal.GetVersionInfo().String(),
-		Flags:   config.AllFlags(&Config{}),
+		Flags:   config.AllFlags(binaryName, &Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
 			{
@@ -64,7 +67,7 @@ func main() {
 
 func serve(ctx context.Context, cmd *cli.Command) error {
 
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}
@@ -72,7 +75,10 @@ func serve(ctx context.Context, cmd *cli.Command) error {
 	if err := c.Log.Setup(); err != nil {
 		return err
 	}
-	config.LogEffective("estserver", c)
+	config.LogEffective(cmd, binaryName, c)
+	if err := config.DirsOf(binaryName).Create(); err != nil {
+		return err
+	}
 
 	log.Infof("Starting EST server %v", internal.GetVersionInfo())
 
@@ -90,7 +96,7 @@ func serve(ctx context.Context, cmd *cli.Command) error {
 
 func validateConfig(ctx context.Context, cmd *cli.Command) error {
 
-	if _, err := config.New[Config](cmd); err != nil {
+	if _, err := config.New[Config](cmd, binaryName); err != nil {
 		return err
 	}
 
@@ -101,7 +107,7 @@ func validateConfig(ctx context.Context, cmd *cli.Command) error {
 
 func printEffectiveConfig(ctx context.Context, cmd *cli.Command) error {
 
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}

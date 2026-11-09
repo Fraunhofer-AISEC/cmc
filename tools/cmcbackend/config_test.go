@@ -28,6 +28,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
+// TestMain hides the config file of the user running the tests, which would
+// otherwise be loaded whenever a test does not pass --config.
+func TestMain(m *testing.M) {
+	os.Setenv("XDG_CONFIG_HOME", "/nonexistent")
+	os.Exit(m.Run())
+}
+
 // run loads the configuration the way the cmcbackend binary does.
 func run(t *testing.T, args ...string) (*Config, error) {
 	t.Helper()
@@ -37,9 +44,9 @@ func run(t *testing.T, args ...string) (*Config, error) {
 
 	cmd := &cli.Command{
 		Name:  "cmcbackend",
-		Flags: config.AllFlags(&Config{}),
+		Flags: config.AllFlags(binaryName, &Config{}),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = config.New[Config](cmd)
+			c, loadErr = config.New[Config](cmd, binaryName)
 			return nil
 		},
 	}
@@ -91,7 +98,7 @@ func TestFlagNames(t *testing.T) {
 	}
 
 	var got []string
-	for _, f := range config.AllFlags(&Config{}) {
+	for _, f := range config.AllFlags(binaryName, &Config{}) {
 		got = append(got, f.Names()...)
 	}
 	slices.Sort(got)

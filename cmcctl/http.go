@@ -152,7 +152,7 @@ func serve(c *Config) error {
 			Addr:      c.Atls.Addr,
 			TLSConfig: tlsConfig,
 			ErrorLog: golog.New(writerFunc(func(p []byte) (int, error) {
-				logrus.WithField("service", "cmcctl").
+				logrus.WithField("service", binaryName).
 					Warn(strings.TrimSpace(string(p)))
 				return len(p), nil
 			}), "", 0),

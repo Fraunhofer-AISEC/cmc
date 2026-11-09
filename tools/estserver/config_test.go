@@ -17,15 +17,24 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
+
+// TestMain hides the config file of the user running the tests, which would
+// otherwise be loaded whenever a test does not pass --config.
+func TestMain(m *testing.M) {
+	os.Setenv("XDG_CONFIG_HOME", "/nonexistent")
+	os.Exit(m.Run())
+}
 
 // run loads the configuration the way the estserver binary does.
 func run(t *testing.T, args ...string) (*Config, error) {
@@ -36,9 +45,9 @@ func run(t *testing.T, args ...string) (*Config, error) {
 
 	cmd := &cli.Command{
 		Name:  "estserver",
-		Flags: config.AllFlags(&Config{}),
+		Flags: config.AllFlags(binaryName, &Config{}),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = config.New[Config](cmd)
+			c, loadErr = config.New[Config](cmd, binaryName)
 			return nil
 		},
 	}
@@ -70,22 +79,20 @@ func TestExampleConfigs(t *testing.T) {
 	}
 }
 
-func TestRequiredOptions(t *testing.T) {
-	_, err := run(t)
-	if err == nil {
-		t.Fatal("expected an error for a configuration without any option")
+// TestDefaults checks that the estserver needs no option to be configured, as
+// every key and certificate has a default location.
+func TestDefaults(t *testing.T) {
+	c, err := run(t)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, want := range []string{"est.ca_key", "est.ca_chain", "est.tls_key", "est.tls_ca_chain"} {
-		if !strings.Contains(err.Error(), want+": required option is not set") {
-			t.Errorf("error does not report %v as required:\n%v", want, err)
-		}
+	if d, _ := time.ParseDuration(c.Est.CertValidity); d != internal.DefaultCertValidity {
+		t.Errorf("est.cert_validity = %v, want %v", d, internal.DefaultCertValidity)
 	}
 }
 
 func TestIncompleteOmsp(t *testing.T) {
-	c, err := run(t,
-		"--est-ca-key", "k", "--est-ca-chain", "c", "--tls-key", "k", "--tls-ca-chain", "c",
-		"--omsp-url", "https://localhost:9000/omsp")
+	c, err := run(t, "--omsp-url", "https://localhost:9000/omsp")
 	if err == nil {
 		t.Fatalf("expected an error for an incomplete OMSP configuration, got %+v", c)
 	}
@@ -97,10 +104,6 @@ func TestIncompleteOmsp(t *testing.T) {
 }
 
 func TestCertValidity(t *testing.T) {
-	base := []string{
-		"--est-ca-key", "k", "--est-ca-chain", "c", "--tls-key", "k", "--tls-ca-chain", "c",
-	}
-
 	for _, tt := range []struct {
 		value string
 		want  string
@@ -111,7 +114,7 @@ func TestCertValidity(t *testing.T) {
 		{"0s", "must be positive"},
 	} {
 		t.Run(tt.value, func(t *testing.T) {
-			_, err := run(t, append(slices.Clone(base), "--cert-validity", tt.value)...)
+			_, err := run(t, "--cert-validity", tt.value)
 			switch {
 			case tt.want == "" && err != nil:
 				t.Errorf("unexpected error: %v", err)

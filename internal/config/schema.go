@@ -220,6 +220,9 @@ func (s *schema) leaf(sf reflect.StructField, v reflect.Value, path, category st
 	}
 
 	f.def, f.hasDef = sf.Tag.Lookup("default")
+	if strings.Contains((Dirs{}).expand(f.def), "{") {
+		panicf("%v: unknown placeholder in default %q, expected {config}, {data} or {run}", path, f.def)
+	}
 
 	if e := sf.Tag.Get("enum"); e != "" {
 		if after, ok := strings.CutPrefix(e, "@"); ok {
@@ -252,13 +255,14 @@ func (s *schema) leaf(sf reflect.StructField, v reflect.Value, path, category st
 	s.fields = append(s.fields, f)
 }
 
-// applyDefaults writes the default tags into the struct.
-func (s *schema) applyDefaults() {
+// applyDefaults writes the default tags into the struct, with the
+// placeholders expanded to the directories d.
+func (s *schema) applyDefaults(d Dirs) {
 	for _, f := range s.fields {
 		if !f.hasDef {
 			continue
 		}
-		if err := f.assign(f.def); err != nil {
+		if err := f.assign(d.expand(f.def)); err != nil {
 			panicf("%v: invalid default %q: %v", f.path, f.def, err)
 		}
 	}

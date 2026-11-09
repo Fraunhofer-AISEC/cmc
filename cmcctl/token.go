@@ -16,7 +16,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
@@ -24,10 +23,6 @@ import (
 )
 
 func createToken(c *Config) error {
-
-	if c.Token.Store == "" {
-		return errors.New("path to token store must be specified via config")
-	}
 
 	token, err := est.CreateToken(c.Token.Store, est.TokenOptions{MaxUses: c.Token.MaxUses, Subject: c.Token.Subject})
 	if err != nil {

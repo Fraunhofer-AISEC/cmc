@@ -55,7 +55,7 @@ type Snp struct {
 // driver is given.
 type Containers struct {
 	Driver string `toml:"driver" flag:"ctr-driver" usage:"driver to use for container measurements, empty to not measure containers"`
-	Log    string `toml:"log"    flag:"ctr-log"    path:"true" usage:"container runtime measurements path"`
+	Log    string `toml:"log"    flag:"ctr-log"    default:"{run}/container-measurements" path:"true" usage:"container runtime measurements path, only used if a container driver is set"`
 }
 
 // Attestation configures what evidence is collected and how it is bound
@@ -98,7 +98,7 @@ type Metadata struct {
 // (endorsement) and how certificates are enrolled (enrollment).
 type Provisioning struct {
 	Auth  []string `toml:"auth"  flag:"provision-auth"  default:"attestation" enum:"none,token,certificate,attestation" usage:"provisioning authentication methods"`
-	Token string   `toml:"token" flag:"provision-token" path:"true" usage:"bootstrap token for EST client authentication"`
+	Token string   `toml:"token" flag:"provision-token" default:"{data}/provision-token" path:"true" usage:"bootstrap token for EST client authentication, only read with token authentication"`
 	// Endorsement is the mode used to fetch driver certificates and collateral,
 	// optionally followed by the address of the endorsement server
 	Endorsement string `toml:"endorsement" flag:"endorsement" usage:"endorsement mode for fetching driver certs and collateral, with the server address for the modes that require one [direct host est:<url> cps:<url>]:\n\t\tdirect\n\t\t\tSNP: fetch AMD SNP VCEK/CA directly from AMD KDS (rate-limited: 10s per request)\n\t\t\tTDX: fetch TDX collateral directly from Intel PCS\n\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n\t\tcps:<url>\n\t\t\tSNP: Fetch AMD SNP VCEK/CA from custom caching proxy service (CPS)\n\t\t\tTDX: Fetch TDX collateral from Provisioning Certification Caching Service (PCCS)\n\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n\t\thost\n\t\t\tSNP: Fetch AMD SNP VCEK/CA from the local hypervisor via SNP_GET_EXT_REPORT\n\t\test:<url>\n\t\t\tTPM: Enroll TPM EK certificate via Enrollment over Secure Transport (EST) server"`
@@ -151,7 +151,7 @@ type Policies struct {
 
 // Storage configures the folder the CMC persists data in.
 type Storage struct {
-	Data string `toml:"data" flag:"storage" path:"true" usage:"folder for all data the CMC persists, such as keys, the metadata cache, the peer cache and the hardware vendor collateral cache"`
+	Data string `toml:"data" flag:"storage" default:"{data}" path:"true" usage:"folder for all data the CMC persists, such as keys, the metadata cache, the peer cache and the hardware vendor collateral cache"`
 }
 
 // Config is the configuration of an embedded CMC. It is required for embedding the CMC as a libary

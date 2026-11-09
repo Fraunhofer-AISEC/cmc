@@ -24,11 +24,13 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
 )
 
-// LogEffective logs the working directory of the binary name at info level
-// and the effective configuration root, secrets redacted, at debug level.
-func LogEffective(name string, root any) {
+// LogEffective logs the working directory of the binary name and the config
+// files that cmd loaded at info level, and the effective configuration root,
+// secrets redacted, at debug level.
+func LogEffective(cmd *cli.Command, name string, root any) {
 
 	l := logrus.WithField("service", name)
 
@@ -37,6 +39,14 @@ func LogEffective(name string, root any) {
 		l.Warnf("Failed to get working directory: %v", err)
 	}
 	l.Infof("Running %v from working directory %v", name, wd)
+
+	if files := Files(cmd, name); len(files) > 0 {
+		l.Infof("Using config files %v", strings.Join(files, ", "))
+	} else if !cmd.IsSet(FileFlagName) {
+		l.Infof("Using no config file, %v does not exist", DefaultFile(name))
+	} else {
+		l.Info("Using no config file")
+	}
 
 	s, err := Redacted(root)
 	if err != nil {

@@ -27,13 +27,16 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
+// binaryName selects the config file and data folder of the binary
+const binaryName = "cmcbackend"
+
 func main() {
 
 	cmd := &cli.Command{
-		Name:    "cmcbackend",
+		Name:    binaryName,
 		Usage:   "CMC backend server for storing and providing attestation-results",
 		Version: internal.GetVersionInfo().String(),
-		Flags:   config.AllFlags(&Config{}),
+		Flags:   config.AllFlags(binaryName, &Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
 			{
@@ -65,7 +68,7 @@ func main() {
 
 func serve(_ context.Context, cmd *cli.Command) error {
 
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}
@@ -73,7 +76,10 @@ func serve(_ context.Context, cmd *cli.Command) error {
 		return err
 	}
 	c.resolve()
-	config.LogEffective("cmcbackend", c)
+	config.LogEffective(cmd, binaryName, c)
+	if err := config.DirsOf(binaryName).Create(); err != nil {
+		return err
+	}
 
 	log.Infof("Starting cmc-backend %v", internal.GetVersionInfo())
 
@@ -87,7 +93,7 @@ func serve(_ context.Context, cmd *cli.Command) error {
 }
 
 func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := config.New[Config](cmd); err != nil {
+	if _, err := config.New[Config](cmd, binaryName); err != nil {
 		return err
 	}
 	fmt.Println("configuration is valid")
@@ -95,7 +101,7 @@ func validateConfig(_ context.Context, cmd *cli.Command) error {
 }
 
 func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}

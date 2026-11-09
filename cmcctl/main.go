@@ -28,9 +28,12 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
+// binaryName selects the config file and data folder of the binary
+const binaryName = "cmcctl"
+
 func main() {
 	cmd := &cli.Command{
-		Name:    "cmcctl",
+		Name:    binaryName,
 		Usage:   "CLI client for the CMC daemon",
 		Version: collectVersion(),
 		Flags:   globalFlags(libapiSelected(os.Args)),
@@ -80,9 +83,6 @@ func main() {
 					if err != nil {
 						return err
 					}
-					if len(c.Trust.RootCas) == 0 {
-						return fmt.Errorf("path to root CAs must be specified via config file or command line")
-					}
 					return dial(c)
 				},
 			},
@@ -94,9 +94,6 @@ func main() {
 					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
-					}
-					if len(c.Trust.RootCas) == 0 {
-						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return listen(c)
 				},
@@ -110,9 +107,6 @@ func main() {
 					if err != nil {
 						return err
 					}
-					if len(c.Trust.RootCas) == 0 {
-						return fmt.Errorf("path to root CAs must be specified via config file or command line")
-					}
 					return request(c)
 				},
 			},
@@ -124,9 +118,6 @@ func main() {
 					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
-					}
-					if len(c.Trust.RootCas) == 0 {
-						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return serve(c)
 				},
@@ -151,12 +142,6 @@ func main() {
 					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
-					}
-					if c.Files.CaStore == "" {
-						return fmt.Errorf("path to store CA must be specified via config file or command line")
-					}
-					if c.Files.ProvisionToken == "" {
-						return fmt.Errorf("provision token must be specified via config file or command line")
 					}
 					return retrieveProvisioningData(c)
 				},
@@ -191,9 +176,6 @@ func main() {
 					c, err := loadConfig(cmd)
 					if err != nil {
 						return err
-					}
-					if len(c.Trust.RootCas) == 0 {
-						return fmt.Errorf("path to root CAs must be specified via config file or command line")
 					}
 					return forwardProxy(c)
 				},
@@ -264,7 +246,7 @@ func main() {
 }
 
 func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := config.New[Config](cmd); err != nil {
+	if _, err := config.New[Config](cmd, binaryName); err != nil {
 		return err
 	}
 	fmt.Println("configuration is valid")
@@ -272,7 +254,7 @@ func validateConfig(_ context.Context, cmd *cli.Command) error {
 }
 
 func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}
