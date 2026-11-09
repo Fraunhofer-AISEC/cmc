@@ -53,7 +53,7 @@ func run(t *testing.T, args ...string) (*Config, error) {
 // the repository still loads and validates.
 func TestExampleConfigs(t *testing.T) {
 
-	files, err := filepath.Glob("../../example-setup/*/est-server-conf*.json")
+	files, err := filepath.Glob("../../example-setup/*/est-server*.toml")
 	if err != nil {
 		t.Fatalf("failed to list example configs: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestRequiredOptions(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a configuration without any option")
 	}
-	for _, want := range []string{"est.caKey", "est.caChain", "est.tlsKey", "est.tlsCaChain"} {
+	for _, want := range []string{"est.ca_key", "est.ca_chain", "est.tls_key", "est.tls_ca_chain"} {
 		if !strings.Contains(err.Error(), want+": required option is not set") {
 			t.Errorf("error does not report %v as required:\n%v", want, err)
 		}
@@ -89,7 +89,7 @@ func TestIncompleteOmsp(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error for an incomplete OMSP configuration, got %+v", c)
 	}
-	for _, want := range []string{"omsp.key", "omsp.folder", "omsp.caChain"} {
+	for _, want := range []string{"omsp.key", "omsp.folder", "omsp.ca_chain"} {
 		if !strings.Contains(err.Error(), want+": incomplete OMSP configuration") {
 			t.Errorf("error does not report %v as missing:\n%v", want, err)
 		}

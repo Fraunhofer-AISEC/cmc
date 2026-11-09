@@ -25,39 +25,39 @@ import (
 // Category separates independent deployments within the same database. The
 // row limits apply to each category individually.
 type Category struct {
-	Id    string `json:"id"`
-	Label string `json:"label"`
+	Id    string `json:"id"    toml:"id"`
+	Label string `json:"label" toml:"label"`
 }
 
 // httpConfig configures the HTTP server the results are published to.
 type httpConfig struct {
-	Address string `json:"address" flag:"addr"  default:"localhost:8080" usage:"HTTP listen address"`
-	Token   string `json:"token"   flag:"token" path:"true" usage:"file with the HTTP authorization token clients have to present"`
-	Debug   bool   `json:"debug"   flag:"debug" usage:"activate GIN debug mode"`
+	Address string `toml:"address" flag:"addr"  default:"localhost:8080" usage:"HTTP listen address"`
+	Token   string `toml:"token"   flag:"token" path:"true" usage:"file with the HTTP authorization token clients have to present"`
+	Debug   bool   `toml:"debug"   flag:"debug" usage:"activate GIN debug mode"`
 }
 
 // databaseConfig configures the SQLite database and how much it may hold.
 // Both limits apply to each category individually, so a busy deployment
 // cannot evict the provers of another one.
 type databaseConfig struct {
-	Path             string `json:"path"             flag:"db" default:"monitoring.db" path:"true" usage:"SQLite3 database path"`
-	MaxRows          int    `json:"maxRows"          flag:"max-rows" default:"400" usage:"maximum number of results stored per category"`
-	MaxRowsPerProver int    `json:"maxRowsPerProver" flag:"max-rows-per-prover" default:"20" usage:"maximum number of results stored per prover and category"`
+	Path             string `toml:"path"                flag:"db" default:"monitoring.db" path:"true" usage:"SQLite3 database path"`
+	MaxRows          int    `toml:"max_rows"            flag:"max-rows" default:"400" usage:"maximum number of results stored per category"`
+	MaxRowsPerProver int    `toml:"max_rows_per_prover" flag:"max-rows-per-prover" default:"20" usage:"maximum number of results stored per prover and category"`
 }
 
 // categoriesConfig declares the independent deployments served from the same
 // database. Both options are file-only, as a list of records has no sensible
 // command line syntax and the default has to name one of its entries.
 type categoriesConfig struct {
-	Default string     `json:"default" flag:"-"`
-	List    []Category `json:"list"    flag:"-"`
+	Default string     `toml:"default" flag:"-"`
+	List    []Category `toml:"list"    flag:"-"`
 }
 
 type Config struct {
-	Log        sections.Log     `json:"log"`
-	Http       httpConfig       `json:"http" category:"HTTP"`
-	Database   databaseConfig   `json:"database"`
-	Categories categoriesConfig `json:"categories"`
+	Log        sections.Log     `toml:"log"`
+	Http       httpConfig       `toml:"http" category:"HTTP"`
+	Database   databaseConfig   `toml:"database"`
+	Categories categoriesConfig `toml:"categories"`
 }
 
 // Validate checks the rules that span more than one option. It is called by

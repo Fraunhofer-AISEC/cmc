@@ -26,17 +26,17 @@ import (
 
 // apiConfig configures the API the cmcd serves.
 type apiConfig struct {
-	Endpoint string `json:"endpoint" flag:"cmc" usage:"CMC API and address in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955 or coap://127.0.0.1:9955"`
+	Endpoint string `toml:"endpoint" flag:"cmc" usage:"CMC API and address in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955 or coap://127.0.0.1:9955"`
 }
 
 // Config is the cmcd configuration. Everything the CMC itself reads sits in
 // the cmc section, which is transparent here, so that its subsections keep
 // their own help categories.
 type Config struct {
-	Log   sections.Log   `json:"log"`
-	Api   apiConfig      `json:"api"`
-	Trust sections.Trust `json:"trust"`
-	Cmc   cmc.Config     `json:"cmc" category:"-"`
+	Log   sections.Log   `toml:"log"`
+	Api   apiConfig      `toml:"api"`
+	Trust sections.Trust `toml:"trust"`
+	Cmc   cmc.Config     `toml:"cmc" category:"-"`
 }
 
 // Validate checks the rules that span more than one option. The sections of
@@ -67,7 +67,7 @@ func (c *Config) Validate(r *config.Report) {
 		r.Missing("cmc.metadata.locations", "metadata")
 	}
 	if len(c.Trust.RootCas) == 0 && !c.Trust.AllowSystemCerts {
-		r.Errorf("trust.rootCas",
-			"required option is not set (--root-cas), unless trust.allowSystemCerts is enabled")
+		r.Errorf("trust.root_cas",
+			"required option is not set (--root-cas), unless trust.allow_system_certs is enabled")
 	}
 }

@@ -16,12 +16,13 @@
 package config
 
 import (
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
 	"github.com/sirupsen/logrus"
 )
 
@@ -53,8 +54,8 @@ func LogEffective(name string, root any) {
 // Redaction is what the value of a secret option is replaced with.
 const Redaction = "***"
 
-// Redacted renders the effective configuration as indented JSON, in the
-// layout a config file uses, with every option tagged secret replaced by
+// Redacted renders the effective configuration as TOML, in the layout a
+// config file uses, with every option tagged secret replaced by
 // Redaction. The configuration itself is not modified.
 func Redacted(root any) (string, error) {
 
@@ -86,10 +87,11 @@ func Redacted(root any) (string, error) {
 		}
 	}
 
-	b, err := json.MarshalIndent(cp.Interface(), "", "  ")
-	if err != nil {
+	var b bytes.Buffer
+	enc := toml.NewEncoder(&b).SetIndentTables(true)
+	if err := enc.Encode(cp.Interface()); err != nil {
 		return "", fmt.Errorf("failed to marshal configuration: %w", err)
 	}
 
-	return string(b), nil
+	return strings.TrimSuffix(b.String(), "\n"), nil
 }

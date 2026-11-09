@@ -259,8 +259,8 @@ genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${vm_config}/network-config" \
     "${vm_config}/cmcd.service" \
     "${vm_config}/cmcctl.service" \
-    "${vm_config}/cmcctl-conf-vm.json" \
-    "${vm_config}/cmcd-conf.json" \
+    "${vm_config}/cmcctl-vm.toml" \
+    "${vm_config}/cmcd.toml" \
     "${dir}/cmcd/cmcd" \
     "${dir}/cmcctl/cmcctl" \
     "${dir}/tools/mrtool/mrtool" \

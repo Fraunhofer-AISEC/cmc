@@ -54,7 +54,7 @@ func run(t *testing.T, args ...string) (*Config, error) {
 func write(t *testing.T, body string) string {
 	t.Helper()
 
-	file := filepath.Join(t.TempDir(), "c.json")
+	file := filepath.Join(t.TempDir(), "c.toml")
 	if err := os.WriteFile(file, []byte(body), 0600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -65,7 +65,7 @@ func write(t *testing.T, body string) string {
 // repository still loads and validates.
 func TestExampleConfigs(t *testing.T) {
 
-	files, err := filepath.Glob("../../example-setup/*/cmcbackend-conf*.json")
+	files, err := filepath.Glob("../../example-setup/*/cmcbackend*.toml")
 	if err != nil {
 		t.Fatalf("failed to list example configs: %v", err)
 	}
@@ -113,9 +113,9 @@ func TestDefaults(t *testing.T) {
 	case c.Http.Address != "localhost:8080":
 		t.Errorf("http.address = %q", c.Http.Address)
 	case c.Database.MaxRows != 400:
-		t.Errorf("database.maxRows = %v", c.Database.MaxRows)
+		t.Errorf("database.max_rows = %v", c.Database.MaxRows)
 	case c.Database.MaxRowsPerProver != 20:
-		t.Errorf("database.maxRowsPerProver = %v", c.Database.MaxRowsPerProver)
+		t.Errorf("database.max_rows_per_prover = %v", c.Database.MaxRowsPerProver)
 	}
 
 	// Without a configured category, resolve invents a single default one
@@ -133,12 +133,12 @@ func TestCategories(t *testing.T) {
 		body string
 		want string
 	}{
-		{"valid", `{"categories":{"default":"a","list":[{"id":"a","label":"A"},{"id":"b"}]}}`, ""},
-		{"not url safe", `{"categories":{"list":[{"id":"a/b"}]}}`, "must be URL-safe"},
-		{"duplicate", `{"categories":{"list":[{"id":"a"},{"id":"a"}]}}`, "duplicate category"},
-		{"unknown default", `{"categories":{"default":"c","list":[{"id":"a"}]}}`,
+		{"valid", "[categories]\ndefault = \"a\"\nlist = [{ id = \"a\", label = \"A\" }, { id = \"b\" }]", ""},
+		{"not url safe", "[[categories.list]]\nid = \"a/b\"", "must be URL-safe"},
+		{"duplicate", "[categories]\nlist = [{ id = \"a\" }, { id = \"a\" }]", "duplicate category"},
+		{"unknown default", "[categories]\ndefault = \"c\"\nlist = [{ id = \"a\" }]",
 			"is not one of the configured categories"},
-		{"not a list", `{"categories":{"list":{"id":"a"}}}`, "cannot use"},
+		{"not a list", "[categories.list]\nid = \"a\"", "categories.list: expected record list"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c, err := run(t, "--config", write(t, tt.body))
@@ -166,7 +166,7 @@ func TestCategories(t *testing.T) {
 // the config file rather than next to the working directory.
 func TestPathsResolveAgainstConfigFile(t *testing.T) {
 
-	file := write(t, `{"database":{"path":"db/monitoring.db"}}`)
+	file := write(t, "[database]\npath = \"db/monitoring.db\"")
 
 	c, err := run(t, "--config", file)
 	if err != nil {

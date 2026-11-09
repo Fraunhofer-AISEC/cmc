@@ -1,6 +1,6 @@
 # Run
 
-All binaries can be configured via JSON configuration files and commandline flags. If a
+All binaries can be configured via TOML configuration files and commandline flags. If a
 configuration option is specified both via configuration file and commandline flag, the
 commandline flag supersedes.
 
@@ -8,13 +8,13 @@ Multiple configuration files can be specified as a comma-separated list. If a sp
 option is present in multiple configuration file, the last configuration file takes precedence.
 
 The commandline flags for each executable can be shown via the `--help` flag, which groups them by
-the configuration section they belong to. JSON configuration options are grouped into those same
-sections and named in camel case (e.g. *cmc.attestation.containers.driver*), while commandline
-flags stay flat and use kebab case (e.g. *--ctr-driver*).
+the configuration section they belong to. TOML configuration options are grouped into those same
+sections (tables) and named in snake case (e.g. *cmc.attestation.hash_alg*), while commandline
+flags stay flat and use kebab case (e.g. *--hash-alg*).
 
-Furthermore, exemplary JSON configuration file examples can be found in the `examples/` folder of
-this repository. Paths in the configuration file can either be absolete or relative to the directory
-of the config file itself.
+Furthermore, exemplary TOML configuration files can be found in the `example-setup/configs/` folder
+of this repository. Paths in the configuration file can either be absolute or relative to the
+directory of the config file itself.
 
 Some options combine several values into a single string:
 
@@ -47,16 +47,16 @@ The cmcctl provides the following subcommands:
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-estserver --config example-setup/configs/est-server-conf.json
+estserver --config example-setup/configs/est-server.toml
 ```
 Every binary can load and inspect its configuration without doing anything else:
 
 ```sh
 # Load and validate the configuration, exit code 0 if it is valid
-estserver config validate --config example-setup/configs/est-server-conf.json
+estserver config validate --config example-setup/configs/est-server.toml
 
 # Print the effective configuration, after defaults, config files and flags, secrets redacted
-cmcd config print --config example-setup/configs/cmcd-conf.json
+cmcd config print --config example-setup/configs/cmcd.toml
 ```
 
 ### Run the cmcd
@@ -65,11 +65,11 @@ Prerequisite: [est server running](./run.md#run-the-est-and-provisioning-server)
 
 ```sh
 # Run the cmcd
-cmcd --config example-setup/configs/cmcd-conf.json
+cmcd --config example-setup/configs/cmcd.toml
 
 # NOTE: for setups that require root, e.g., to access the tpm, make sure the installed go binaries
 # are found:
-sudo env PATH="$HOME/go/bin:$PATH" cmcd --config example-setup/configs/cmcd-conf.json
+sudo env PATH="$HOME/go/bin:$PATH" cmcd --config example-setup/configs/cmcd.toml
 ```
 
 ### Generate and Verify Attestation Reports
@@ -78,10 +78,10 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
-cmcctl generate --config example-setup/configs/cmcctl-conf.json
+cmcctl generate --config example-setup/configs/cmcctl.toml
 
 # Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
-cmcctl verify --config example-setup/configs/cmcctl-conf.json
+cmcctl verify --config example-setup/configs/cmcctl.toml
 ```
 
 ### Establish Attested TLS Connections
@@ -91,10 +91,10 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 ```sh
 
 # Run an attested TLS server
-cmcctl listen --config example-setup/configs/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
+cmcctl listen --config example-setup/configs/cmcctl.toml --addr "$(hostname --fqdn):4443"
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-cmcctl dial --config example-setup/configs/cmcctl-conf.json --addr "$(hostname --fqdn):4443"
+cmcctl dial --config example-setup/configs/cmcctl.toml --addr "$(hostname --fqdn):4443"
 ```
 
 ### Establish Attested TLS Connections without a shared PKI
@@ -133,12 +133,12 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run two attested HTTPS servers
-cmcctl serve --config example-setup/configs/cmcctl-conf.json --addr "$(hostname --fqdn):8082"
+cmcctl serve --config example-setup/configs/cmcctl.toml --addr "$(hostname --fqdn):8082"
 
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections
 cmcctl request \
-    --config example-setup/configs/cmcctl-conf.json \
+    --config example-setup/configs/cmcctl.toml \
     --addr "https://$(hostname --fqdn):8082" \
     --method POST \
     --data "hello from attested HTTPS client" \
@@ -174,7 +174,7 @@ cd cmc
 
 # Run the cmcctl HTTP (CONNECT) proxy on localhost:4443
 cd cmc/cmcctl
-./cmcctl proxy -config ../example-setup/configs/cmcctl-conf.json --allow-system-certs=true --attest server
+./cmcctl proxy -config ../example-setup/configs/cmcctl.toml --allow-system-certs=true --attest server
 
 # Request via proxy (running on localhost:4443) in HTTP CONNECT mode
 curl -p -x http://localhost:4443 http://localhost:4445/

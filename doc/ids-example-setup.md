@@ -19,10 +19,10 @@ with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` reposit
 ```sh
 DATA=<metadata-folder>
 # Start the EST server that supplies the certificates and metadata for the cmcd
-server --config $DATA/est-server-conf-ids.json
+server --config $DATA/est-server-ids.toml
 
 # Build and run the cmcd
-cmcd --config $DATA/cmcd-conf.json --metadata https://127.0.0.1:9000/metadata-signed
+cmcd --config $DATA/cmcd.toml --metadata https://127.0.0.1:9000/metadata-signed
 
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
 cmcctl generate

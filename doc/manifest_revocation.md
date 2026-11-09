@@ -28,13 +28,13 @@ OMSP response are provided in the standardized JWS or CBOR format.
 
 The OMSP server can be started with:
 ```sh
-estserver --config example-setup/configs/est-server-conf.json
+estserver --config example-setup/configs/est-server.toml
 ```
 It expects the following configuration information in a config file or via commandline:
 * omsp.folder: A folder with pre-generated JSON files specifying the revocation status for each
 manifest named based on the SHA256 hash of the signed manifest (`<hash>.json`).
 * omsp.key: A private key for signing the OMSP responses.
-* omsp.caChain: The certificate chain linking the public key belonging to the private `omsp.key` to
+* omsp.ca_chain: The certificate chain linking the public key belonging to the private `omsp.key` to
 a trusted CA.
 * omsp.url: The URL of the OMSP endpoint. This must match the URL referrenced in the manifests
 this OMSP server provides a status for.
@@ -81,7 +81,7 @@ OMSP Stapling can be activated in the CMC via the JSON configuratino file proper
 ```
 or via CLI flags:
 ```sh
-cmcd --config example-setup/configs/cmcd-conf.json --use-omsp=true --omsp-format json
+cmcd --config example-setup/configs/cmcd.toml --use-omsp=true --omsp-format json
 ```
 
 Acting as a prover, the CMC generates and sends OMSP Requests to all OMSP servers listed in the used

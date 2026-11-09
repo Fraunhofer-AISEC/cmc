@@ -28,21 +28,21 @@ import (
 )
 
 type logSection struct {
-	Level string `json:"level" flag:"log-level" default:"info" enum:"debug,info,warn"`
-	File  string `json:"file"  flag:"log-file"  path:"true"`
+	Level string `toml:"level" flag:"log-level" default:"info" enum:"debug,info,warn"`
+	File  string `toml:"file"  flag:"log-file"  path:"true"`
 }
 
 type serverSection struct {
-	Address  string   `json:"address"  flag:"addr"     default:"localhost:1234"`
-	Name     string   `json:"name"     flag:"name"`
-	Roots    []string `json:"roots"    flag:"roots"    path:"true"`
-	Token    string   `json:"token"    flag:"token"    secret:"true"`
-	Workers  int      `json:"workers"  flag:"workers"  default:"4"`
-	Debug    bool     `json:"debug"    flag:"debug"`
-	Ports    []int    `json:"ports"    flag:"ports"`
-	Internal string   `json:"internal" flag:"-"`
-	Drivers  []string `json:"drivers"  flag:"drivers"  enum:"@testdrivers"`
-	Sources  []string `json:"sources"  flag:"sources"  path:"uri"`
+	Address  string   `toml:"address"  flag:"addr"     default:"localhost:1234"`
+	Name     string   `toml:"name"     flag:"name"`
+	Roots    []string `toml:"roots"    flag:"roots"    path:"true"`
+	Token    string   `toml:"token"    flag:"token"    secret:"true"`
+	Workers  int      `toml:"workers"  flag:"workers"  default:"4"`
+	Debug    bool     `toml:"debug"    flag:"debug"`
+	Ports    []int    `toml:"ports"    flag:"ports"`
+	Internal string   `toml:"internal" flag:"-"`
+	Drivers  []string `toml:"drivers"  flag:"drivers"  enum:"@testdrivers"`
+	Sources  []string `toml:"sources"  flag:"sources"  path:"uri"`
 }
 
 func (s *serverSection) Validate(r *Report) {
@@ -52,8 +52,8 @@ func (s *serverSection) Validate(r *Report) {
 }
 
 type testConfig struct {
-	Log    logSection    `json:"log"`
-	Server serverSection `json:"server" category:"SERVER"`
+	Log    logSection    `toml:"log"`
+	Server serverSection `toml:"server" category:"SERVER"`
 }
 
 func init() {
@@ -110,13 +110,19 @@ func TestDefaults(t *testing.T) {
 
 func TestPrecedence(t *testing.T) {
 	dir := t.TempDir()
-	first := write(t, dir, "a.json", `{
-		"log":    { "level": "debug" },
-		"server": { "name": "from-a", "address": "a:1", "workers": 1 }
-	}`)
-	second := write(t, dir, "b.json", `{
-		"server": { "address": "b:2" }
-	}`)
+	first := write(t, dir, "a.toml", `
+[log]
+level = "debug"
+
+[server]
+name = "from-a"
+address = "a:1"
+workers = 1
+`)
+	second := write(t, dir, "b.toml", `
+[server]
+address = "b:2"
+`)
 
 	c := &testConfig{}
 	err := load(t, c, []string{"--config", first + "," + second, "--workers", "9"})
@@ -144,9 +150,12 @@ func TestPrecedence(t *testing.T) {
 
 func TestTypes(t *testing.T) {
 	dir := t.TempDir()
-	file := write(t, dir, "c.json", `{
-		"server": { "name": "n", "debug": true, "ports": [1, 2, 3] }
-	}`)
+	file := write(t, dir, "c.toml", `
+[server]
+name = "n"
+debug = true
+ports = [1, 2, 3]
+`)
 
 	c := &testConfig{}
 	if err := load(t, c, []string{"--config", file}); err != nil {
@@ -176,10 +185,14 @@ func TestTypes(t *testing.T) {
 func TestPathsResolveAgainstConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	abs := filepath.Join(dir, "absolute.pem")
-	file := write(t, dir, "c.json", `{
-		"log":    { "file": "logs/est.log" },
-		"server": { "name": "n", "roots": ["pki/ca.pem", "`+abs+`"] }
-	}`)
+	file := write(t, dir, "c.toml", `
+[log]
+file = "logs/est.log"
+
+[server]
+name = "n"
+roots = ["pki/ca.pem", "`+abs+`"]
+`)
 
 	c := &testConfig{}
 	// A path given on the command line stays relative to the working
@@ -210,14 +223,16 @@ func TestPathsResolveAgainstConfigFile(t *testing.T) {
 // given as a file:// URI next to an https:// one.
 func TestUriPathsResolveAgainstConfigFile(t *testing.T) {
 	dir := t.TempDir()
-	file := write(t, dir, "c.json", `{
-		"server": { "name": "n", "sources": [
-			"file://metadata-signed",
-			"file:///etc/cmc/metadata",
-			"https://example.org/metadata",
-			"plain/path"
-		]}
-	}`)
+	file := write(t, dir, "c.toml", `
+[server]
+name = "n"
+sources = [
+	"file://metadata-signed",
+	"file:///etc/cmc/metadata",
+	"https://example.org/metadata",
+	"plain/path",
+]
+`)
 
 	c := &testConfig{}
 	if err := load(t, c, []string{"--config", file}); err != nil {
@@ -248,10 +263,14 @@ func TestMissing(t *testing.T) {
 
 func TestEnum(t *testing.T) {
 	dir := t.TempDir()
-	file := write(t, dir, "c.json", `{
-		"log":    { "level": "verbose" },
-		"server": { "name": "n", "drivers": ["tpm", "snp"] }
-	}`)
+	file := write(t, dir, "c.toml", `
+[log]
+level = "verbose"
+
+[server]
+name = "n"
+drivers = ["tpm", "snp"]
+`)
 
 	c := &testConfig{}
 	err := load(t, c, []string{"--config", file})
@@ -270,10 +289,13 @@ func TestEnum(t *testing.T) {
 
 func TestUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
-	file := write(t, dir, "c.json", `{
-		"server": { "name": "n", "nope": 1 },
-		"stray":  true
-	}`)
+	file := write(t, dir, "c.toml", `
+stray = true
+
+[server]
+name = "n"
+nope = 1
+`)
 
 	c := &testConfig{}
 	err := load(t, c, []string{"--config", file})
@@ -303,8 +325,8 @@ func TestErrorsAreCollected(t *testing.T) {
 }
 
 type validated struct {
-	A string `json:"a" flag:"a"`
-	B string `json:"b" flag:"b"`
+	A string `toml:"a" flag:"a"`
+	B string `toml:"b" flag:"b"`
 }
 
 func (v *validated) Validate(r *Report) {
@@ -314,7 +336,7 @@ func (v *validated) Validate(r *Report) {
 }
 
 type validatedConfig struct {
-	Sec validated `json:"sec"`
+	Sec validated `toml:"sec"`
 }
 
 func TestValidator(t *testing.T) {
@@ -350,10 +372,10 @@ func TestRedacted(t *testing.T) {
 	if strings.Contains(s, "super-secret") {
 		t.Errorf("secret leaked into the printed configuration:\n%v", s)
 	}
-	if !strings.Contains(s, `"token": "`+Redaction+`"`) {
+	if !strings.Contains(s, `token = '`+Redaction+`'`) {
 		t.Errorf("secret not redacted:\n%v", s)
 	}
-	if !strings.Contains(s, `"address": "localhost:1"`) {
+	if !strings.Contains(s, `address = 'localhost:1'`) {
 		t.Errorf("non-secret option missing:\n%v", s)
 	}
 	// The configuration itself must be untouched
@@ -435,34 +457,34 @@ func TestMalformedStructsPanic(t *testing.T) {
 	}{
 		{"missing flag tag", &struct {
 			S struct {
-				A string `json:"a"`
-			} `json:"s"`
+				A string `toml:"a"`
+			} `toml:"s"`
 		}{}},
-		{"missing json tag", &struct {
+		{"missing toml tag", &struct {
 			S struct {
 				A string `flag:"a"`
-			} `json:"s"`
+			} `toml:"s"`
 		}{}},
 		{"duplicate flag", &struct {
 			S struct {
-				A string `json:"a" flag:"x"`
-				B string `json:"b" flag:"x"`
-			} `json:"s"`
+				A string `toml:"a" flag:"x"`
+				B string `toml:"b" flag:"x"`
+			} `toml:"s"`
 		}{}},
 		{"unsupported type", &struct {
 			S struct {
-				A float64 `json:"a" flag:"a"`
-			} `json:"s"`
+				A float64 `toml:"a" flag:"a"`
+			} `toml:"s"`
 		}{}},
 		{"enum on int", &struct {
 			S struct {
-				A int `json:"a" flag:"a" enum:"1,2"`
-			} `json:"s"`
+				A int `toml:"a" flag:"a" enum:"1,2"`
+			} `toml:"s"`
 		}{}},
 		{"unknown path mode", &struct {
 			S struct {
-				A string `json:"a" flag:"a" path:"yes"`
-			} `json:"s"`
+				A string `toml:"a" flag:"a" path:"yes"`
+			} `toml:"s"`
 		}{}},
 		{"not a pointer", testConfig{}},
 	}
@@ -482,8 +504,8 @@ func TestMalformedStructsPanic(t *testing.T) {
 func TestUnknownEnumRegistry(t *testing.T) {
 	c := &struct {
 		S struct {
-			A string `json:"a" flag:"a" enum:"@nosuchregistry"`
-		} `json:"s"`
+			A string `toml:"a" flag:"a" enum:"@nosuchregistry"`
+		} `toml:"s"`
 	}{}
 	c.S.A = "x"
 
@@ -506,28 +528,91 @@ func TestUnknownEnumRegistry(t *testing.T) {
 
 func TestWrongTypeInFile(t *testing.T) {
 	dir := t.TempDir()
-	file := write(t, dir, "c.json", `{ "server": { "name": "n", "workers": "many" } }`)
+	file := write(t, dir, "c.toml", `
+[server]
+name = "n"
+workers = "many"
+`)
 
 	c := &testConfig{}
 	err := load(t, c, []string{"--config", file})
 	if err == nil {
 		t.Fatal("expected an error for a wrongly typed value")
 	}
-	if !strings.Contains(err.Error(), "server.workers: cannot use string as int") {
-		t.Errorf("unexpected error: %v", err)
+	if want := "server.workers: expected int (" + file + ":4:11)"; !strings.Contains(err.Error(), want) {
+		t.Errorf("error %v does not contain %q", err, want)
 	}
 }
 
-func TestSectionExpectedToBeObject(t *testing.T) {
+func TestWrongTypeInRecord(t *testing.T) {
+	type record struct {
+		Id string `toml:"id"`
+	}
+	c := &struct {
+		S struct {
+			List []record `toml:"list" flag:"-"`
+		} `toml:"s"`
+	}{}
+
 	dir := t.TempDir()
-	file := write(t, dir, "c.json", `{ "log": "debug" }`)
+	file := write(t, dir, "c.toml", `
+[[s.list]]
+id = "a"
+
+[[s.list]]
+id = 2
+`)
+
+	var err error
+	cmd := &cli.Command{
+		Name:  "test",
+		Flags: []cli.Flag{FileFlag()},
+		Action: func(_ context.Context, cmd *cli.Command) error {
+			err = Load(cmd, c)
+			return nil
+		},
+	}
+	if runErr := cmd.Run(context.Background(), []string{"test", "--config", file}); runErr != nil {
+		t.Fatalf("failed to run command: %v", runErr)
+	}
+	if want := "s.list.id: expected string (" + file + ":6:6)"; err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("error %v does not contain %q", err, want)
+	}
+}
+
+func TestSyntaxError(t *testing.T) {
+	dir := t.TempDir()
+	file := write(t, dir, "c.toml", `
+[server
+name = "n"
+`)
+
+	c := &testConfig{}
+	err := load(t, c, []string{"--config", file})
+	if err == nil {
+		t.Fatal("expected an error for malformed TOML")
+	}
+	if want := "failed to parse config file " + file + ":2:8:"; !strings.Contains(err.Error(), want) {
+		t.Errorf("error %v does not contain %q", err, want)
+	}
+}
+
+func TestSectionExpectedToBeTable(t *testing.T) {
+	dir := t.TempDir()
+	file := write(t, dir, "c.toml", `
+log = "debug"
+
+[server]
+name = "n"
+`)
 
 	c := &testConfig{}
 	err := load(t, c, []string{"--config", file})
 	if err == nil {
 		t.Fatal("expected an error for a section given as a scalar")
 	}
-	if !strings.Contains(err.Error(), "log: expected an object") {
+	// Reported once by the survey, not again by the decoder
+	if n := strings.Count(err.Error(), "\n  "); n != 1 || !strings.Contains(err.Error(), "log: expected a table") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

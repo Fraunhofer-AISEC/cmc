@@ -16,14 +16,14 @@
 package config
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 // applyFile merges one config file into the configuration. Options the file
@@ -38,15 +38,10 @@ func (s *schema) applyFile(file string, r *Report) {
 	}
 
 	// Survey the keys the file sets first. This yields every unknown key at
-	// once and with its own message, which encoding/json cannot do
+	// once and with its own message, which the decoder cannot do
 	var tree map[string]any
-	d := json.NewDecoder(bytes.NewReader(data))
-	if err := d.Decode(&tree); err != nil {
-		r.Errorf("", "failed to parse config file %v: %v", file, err)
-		return
-	}
-	if d.More() {
-		r.Errorf("", "failed to parse config file %v: unexpected data after JSON object", file)
+	if err := toml.Unmarshal(data, &tree); err != nil {
+		s.decodeError(err, file, r)
 		return
 	}
 
@@ -59,13 +54,8 @@ func (s *schema) applyFile(file string, r *Report) {
 	// Decode into a fresh struct of the same type, so that the keys the file
 	// does not mention stay untouched in the real configuration
 	tmp := reflect.New(s.root.Type())
-	if err := json.Unmarshal(data, tmp.Interface()); err != nil {
-		var te *json.UnmarshalTypeError
-		if errors.As(err, &te) && te.Field != "" {
-			r.Errorf(te.Field, "cannot use %v as %v (%v)", te.Value, te.Type, file)
-		} else {
-			r.Errorf("", "failed to parse config file %v: %v", file, err)
-		}
+	if err := toml.Unmarshal(data, tmp.Interface()); err != nil {
+		s.decodeError(err, file, r)
 		return
 	}
 	decoded := newSchemaFor(tmp.Elem())
@@ -80,7 +70,62 @@ func (s *schema) applyFile(file string, r *Report) {
 	}
 }
 
-// survey walks the decoded JSON and collects the paths of the options the
+// decodeError reports an error of the TOML decoder with its position in the
+// file. A value of the wrong type is reported for the option it belongs to.
+func (s *schema) decodeError(err error, file string, r *Report) {
+
+	var de *toml.DecodeError
+	if !errors.As(err, &de) {
+		r.Errorf("", "failed to parse config file %v: %v", file, err)
+		return
+	}
+
+	row, col := de.Position()
+	msg := strings.TrimPrefix(de.Error(), "toml: ")
+	path := strings.Join(de.Key(), ".")
+
+	if strings.HasPrefix(msg, "cannot decode") {
+		// survey has already reported a section that is not a table
+		if s.sections[path] {
+			return
+		}
+		if want := s.typeOf(de.Key()); want != kindInvalid {
+			r.Errorf(path, "expected %v (%v:%v:%v)", want, file, row, col)
+			return
+		}
+	}
+
+	r.Errorf("", "failed to parse config file %v:%v:%v: %v", file, row, col, msg)
+}
+
+// typeOf returns the kind of the option or record field at key, or
+// kindInvalid if key does not name one.
+func (s *schema) typeOf(key []string) kind {
+
+	for i := len(key); i > 0; i-- {
+		f, ok := s.byPath[strings.Join(key[:i], ".")]
+		if !ok {
+			continue
+		}
+		if i == len(key) {
+			return f.kind
+		}
+		// A field inside a record of a record list
+		if f.kind != kindStructSlice || i != len(key)-1 {
+			return kindInvalid
+		}
+		t := f.value.Type().Elem()
+		for j := range t.NumField() {
+			if name, _, _ := strings.Cut(t.Field(j).Tag.Get("toml"), ","); name == key[i] {
+				return kindOf(t.Field(j).Type)
+			}
+		}
+		return kindInvalid
+	}
+	return kindInvalid
+}
+
+// survey walks the decoded TOML and collects the paths of the options the
 // file sets, reporting every key that is not one.
 func (s *schema) survey(node map[string]any, prefix, file string, present *[]string, r *Report) {
 
@@ -96,7 +141,12 @@ func (s *schema) survey(node map[string]any, prefix, file string, present *[]str
 			path = prefix + "." + k
 		}
 
-		if _, ok := s.byPath[path]; ok {
+		if f, ok := s.byPath[path]; ok {
+			// The decoder accepts a single table for a record list
+			if _, isList := node[k].([]any); f.kind == kindStructSlice && !isList {
+				r.Errorf(path, "expected %v (%v)", f.kind, file)
+				continue
+			}
 			*present = append(*present, path)
 			continue
 		}
@@ -104,7 +154,7 @@ func (s *schema) survey(node map[string]any, prefix, file string, present *[]str
 		if s.sections[path] {
 			sub, ok := node[k].(map[string]any)
 			if !ok {
-				r.Errorf(path, "expected an object (%v)", file)
+				r.Errorf(path, "expected a table (%v)", file)
 				continue
 			}
 			s.survey(sub, path, file, present, r)

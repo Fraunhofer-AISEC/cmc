@@ -137,12 +137,12 @@ func (s *schema) walk(v reflect.Value, path, category string) {
 			continue
 		}
 
-		name, _, _ := strings.Cut(sf.Tag.Get("json"), ",")
+		name, _, _ := strings.Cut(sf.Tag.Get("toml"), ",")
 		if name == "-" {
 			continue
 		}
 		if name == "" {
-			panicf("%v.%v: missing json tag", t, sf.Name)
+			panicf("%v.%v: missing toml tag", t, sf.Name)
 		}
 
 		p := name

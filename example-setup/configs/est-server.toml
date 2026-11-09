@@ -1,0 +1,34 @@
+[log]
+level = "trace"
+
+[trust]
+root_cas = ["../../data/pki/ca.pem"]
+
+[est]
+address = "0.0.0.0:9000"
+ca_key = "../../data/pki/ca-key.pem"
+ca_chain = ["../../data/pki/ca.pem"]
+tls_key = "../../data/pki/est-tls-key.pem"
+tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
+auth = ["attestation"]
+token_path = "../../data/token_store"
+
+[http]
+folder = "../../data/metadata-signed"
+
+[tpm]
+verify_ek_cert = false
+ek_cert_db = "../../data/tpm-ek-certs.db"
+
+[omsp]
+folder = "../../data/omsp-raw"
+key = "../../data/pki/omsp-key.pem"
+ca_chain = ["../../data/pki/omsp.pem", "../../data/pki/ca.pem"]
+url = "https://localhost:9000/omsp"
+
+[publish]
+results = "http://localhost:8080/results"
+file = "../../data/attestation-result.json"
+
+[storage]
+vendor_cache = "../../data/est-server-vendor-cache"

@@ -55,7 +55,7 @@ func run(t *testing.T, args ...string) (*Config, error) {
 // repository still loads and validates.
 func TestExampleConfigs(t *testing.T) {
 
-	files, err := filepath.Glob("../example-setup/*/cmcctl-conf*.json")
+	files, err := filepath.Glob("../example-setup/*/cmcctl*.toml")
 	if err != nil {
 		t.Fatalf("failed to list example configs: %v", err)
 	}
@@ -181,8 +181,8 @@ func TestLibapiFlagsAreListedOnlyWhenTheyApply(t *testing.T) {
 // whether the embedded CMC options are listed.
 func TestLibapiSelected(t *testing.T) {
 
-	file := filepath.Join(t.TempDir(), "c.json")
-	if err := os.WriteFile(file, []byte(`{"api":{"endpoint":"libapi"}}`), 0600); err != nil {
+	file := filepath.Join(t.TempDir(), "c.toml")
+	if err := os.WriteFile(file, []byte("[api]\nendpoint = \"libapi\""), 0600); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -245,7 +245,7 @@ func TestGlobalFlagsWorkBeforeAndAfterTheSubcommand(t *testing.T) {
 
 	for _, c := range []*Config{before, after} {
 		if !slices.Equal(c.Trust.RootCas, []string{"ca.pem"}) {
-			t.Errorf("trust.rootCas = %v, want [ca.pem]", c.Trust.RootCas)
+			t.Errorf("trust.root_cas = %v, want [ca.pem]", c.Trust.RootCas)
 		}
 	}
 }
