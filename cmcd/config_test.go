@@ -84,7 +84,7 @@ func TestExampleConfigs(t *testing.T) {
 func TestFlagNames(t *testing.T) {
 
 	want := []string{
-		"allow-system-certs", "append-ebs", "cmc", "config", "ctr-driver", "ctr-log", "drivers",
+		"allow-system-certs", "append-ebs", "cmc", "config", "ctr-log", "ctr-trust-anchor", "drivers",
 		"endorsement", "enrollment", "exclude-pcrs", "hash-alg", "log-file", "log-level",
 		"measurement-logs", "metadata", "omsp-format", "policy-engine", "policy-overwrite",
 		"provision-auth", "provision-token", "root-cas", "storage", "tpm-key-alg", "use-omsp",
@@ -128,7 +128,8 @@ func TestInvalidValues(t *testing.T) {
 		{"hashAlg", []string{"--hash-alg", "SHA256"}, `"SHA256" is not one of`},
 		{"endorsement", []string{"--endorsement", "est"}, "cmc.provisioning.endorsement: est endorsement requires an address"},
 		{"enrollment", []string{"--enrollment", "carrier-pigeon"}, "cmc.provisioning.enrollment: unknown mode"},
-		{"container driver", []string{"--ctr-driver", "tpm"}, `cmc.attestation.containers.driver: "tpm" is not in cmc.attestation.drivers`},
+		{"container trust anchor", []string{"--ctr-trust-anchor", "tpm"}, `cmc.attestation.containers.trust_anchor: "tpm" requires the tpm driver in cmc.attestation.drivers`},
+		{"container trust anchor enum", []string{"--ctr-trust-anchor", "snp"}, `"snp" is not one of`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := run(t, append(slices.Clone(base), tt.args...)...)

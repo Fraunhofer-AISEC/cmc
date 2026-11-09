@@ -151,7 +151,7 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 		ExcludePcrs:     c.Attestation.Tpm.ExcludePcrs,
 		MeasurementLogs: c.Attestation.MeasurementLogs,
 		CtrLog:          c.Attestation.Containers.Log,
-		CtrDriver:       c.Attestation.Containers.Driver,
+		CtrTrustAnchor:  c.Attestation.Containers.TrustAnchor,
 		Vmpl:            c.Attestation.Snp.Vmpl,
 		Endorsers:       endorser,
 		StoragePath:     c.Storage.Data,
@@ -174,12 +174,9 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 	}
 	cmc.Drivers = usedDrivers
 
-	// Check container driver
-	if c.Attestation.Containers.Driver != "" {
-		if !internal.Contains(c.Attestation.Containers.Driver, c.Attestation.Drivers) {
-			return nil, fmt.Errorf("cannot use %v as container driver: driver not configured",
-				c.Attestation.Containers.Driver)
-		}
+	// Check container trust anchor
+	if t := c.Attestation.Containers.TrustAnchor; t != "" && !internal.Contains(t, c.Attestation.Drivers) {
+		return nil, fmt.Errorf("container trust anchor %v requires the %v driver", t, t)
 	}
 
 	// Create provisioner for key manager, which is used to enroll certificates for created keys,

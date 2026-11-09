@@ -171,7 +171,7 @@ func (s *GrpcServer) Measure(ctx context.Context, req *grpcapi.MeasureRequest) (
 	}
 
 	err = m.Measure(toComponent(req.MeasureEvent, spec), s.serializer,
-		s.cmc.Attestation.Containers.Log, s.cmc.Attestation.Containers.Driver)
+		s.cmc.Attestation.Containers.Log, s.cmc.Attestation.Containers.TrustAnchor)
 	if err != nil {
 		log.Errorf("Failed to record measurement: %v", err)
 		success = false

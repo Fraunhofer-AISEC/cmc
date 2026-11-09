@@ -29,8 +29,7 @@ type DriverConfig struct {
 	ExcludePcrs     []int
 	MeasurementLogs bool
 	CtrLog          string
-	ExtCtrLog       bool
-	CtrDriver       string // Driver used to measure containers, empty value disables container measurements
+	CtrTrustAnchor  string // Trust anchor for container measurements, empty disables them
 	Vmpl            int
 	Endorsers       EndorserProvider
 	// AppendEbsEvent reconstructs the ExitBootServices EV_EFI_ACTION events for PCR 5,

@@ -33,7 +33,7 @@ import (
 
 var log = logrus.WithField("service", "measure")
 
-func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error {
+func Measure(event *ar.Component, s ar.Serializer, logFile, trustAnchor string) error {
 
 	if s == nil {
 		return errors.New("internal error: serializer is nil")
@@ -105,8 +105,8 @@ func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error
 		return fmt.Errorf("failed to write measurement list: %w", err)
 	}
 
-	// Write the entry to the specified driver, if any
-	if strings.EqualFold(driver, "tpm") {
+	// Extend the entry into the trust anchor. On Azure, the vTPM is accessed like a TPM
+	if strings.EqualFold(trustAnchor, "tpm") || strings.EqualFold(trustAnchor, "azure") {
 		addr, err := getTpmAddr()
 		if err != nil {
 			return fmt.Errorf("failed to get TPM path: %v", err)
@@ -125,10 +125,10 @@ func Measure(event *ar.Component, s ar.Serializer, logFile, driver string) error
 		}
 
 		log.Debugf("Recorded measurement %v into PCR%v", event.Name, index)
-	} else if strings.EqualFold(driver, "sw") {
+	} else if strings.EqualFold(trustAnchor, "sw") {
 		log.Tracef("Nothing to do for SW driver")
 	} else {
-		return fmt.Errorf("unknown driver '%v'", driver)
+		return fmt.Errorf("unknown container trust anchor '%v'", trustAnchor)
 	}
 
 	return nil

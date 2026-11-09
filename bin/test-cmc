@@ -181,7 +181,7 @@ cmc_params=(
     "--log-level" "trace" \
     "--storage" "${storage}" \
     "--measurement-logs" \
-    "--ctr-driver" "sw" \
+    "--ctr-trust-anchor" "sw" \
     "--ctr-log" "${ctrlog}" \
     "--root-cas" "${data}/pki/ca.pem" \
     "--tpm-key-alg" "ec256" \
