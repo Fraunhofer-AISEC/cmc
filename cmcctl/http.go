@@ -68,15 +68,13 @@ func request(c *Config) error {
 		IdleConnTimeout: 60 * time.Second,
 		TLSClientConfig: tlsConf,
 
-		Attest:                 c.attest,
-		MutualTls:              c.Atls.Mtls,
-		CmcAddr:                c.cmcAddr,
-		CmcApi:                 c.apiName,
-		Serializer:             c.serializer,
-		LibApiCmcConfig:        &c.Cmc,
-		LibApiRootCas:          c.rootCas,
-		LibApiAllowSystemCerts: c.Trust.AllowSystemCerts,
-		CmcPolicies:            c.policies,
+		Attest:      c.attest,
+		MutualTls:   c.Atls.Mtls,
+		CmcAddr:     c.cmcAddr,
+		CmcApi:      c.apiName,
+		Serializer:  c.serializer,
+		LibApiCmc:   c.cmc,
+		CmcPolicies: c.policies,
 		ResultCb: func(result *ar.AttestationResult) {
 			// Publish asynchronously
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Server {
@@ -157,15 +155,13 @@ func serve(c *Config) error {
 				return len(p), nil
 			}), "", 0),
 		},
-		Attest:                 c.attest,
-		MutualTls:              c.Atls.Mtls,
-		CmcAddr:                c.cmcAddr,
-		CmcApi:                 c.apiName,
-		Serializer:             c.serializer,
-		LibApiCmcConfig:        &c.Cmc,
-		LibApiRootCas:          c.rootCas,
-		LibApiAllowSystemCerts: c.Trust.AllowSystemCerts,
-		CmcPolicies:            c.policies,
+		Attest:      c.attest,
+		MutualTls:   c.Atls.Mtls,
+		CmcAddr:     c.cmcAddr,
+		CmcApi:      c.apiName,
+		Serializer:  c.serializer,
+		LibApiCmc:   c.cmc,
+		CmcPolicies: c.policies,
 		ResultCb: func(result *ar.AttestationResult) {
 			if c.attest == atls.Attest_Mutual || c.attest == atls.Attest_Client {
 				// Publish the attestation result if publishing address was specified

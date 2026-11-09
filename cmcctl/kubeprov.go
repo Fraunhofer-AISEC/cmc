@@ -46,7 +46,7 @@ func kubeprovServe(c *Config) error {
 		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Atls.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
+		atls.WithLibApiCmc(c.cmc))
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
@@ -145,7 +145,7 @@ func kubeprovJoin(c *Config) error {
 		atls.WithSerializer(c.serializer),
 		atls.WithMtls(c.Atls.Mtls),
 		atls.WithAttest(c.attest),
-		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
+		atls.WithLibApiCmc(c.cmc))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %w", err)
 	}

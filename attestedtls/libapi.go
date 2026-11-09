@@ -32,38 +32,40 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
-type LibApi struct {
-	cmc *cmc.Cmc
-}
+type LibApi struct{}
 
 func init() {
 	CmcApis["libapi"] = LibApi{}
 }
 
-// Obtains attestation report from CMCd
+// libApiCmc returns the embedded CMC the connection is configured with
+func libApiCmc(cc *CmcConfig) (*cmc.Cmc, error) {
+	if cc == nil {
+		return nil, errors.New("internal error: CMC config is nil")
+	}
+	if cc.LibApiCmc == nil {
+		return nil, errors.New("no embedded CMC configured: use WithLibApiCmc")
+	}
+	return cc.LibApiCmc, nil
+}
+
+// Obtains attestation report from the embedded CMC
 func (a LibApi) obtainAR(cc *CmcConfig, chbindings []byte, cached []string) ([]byte, error) {
 
-	if cc == nil {
-		return nil, errors.New("internal error: cmc is nil")
+	cmcInst, err := libApiCmc(cc)
+	if err != nil {
+		return nil, err
 	}
 
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
-
-	if len(a.cmc.Drivers) == 0 {
+	if len(cmcInst.Drivers) == 0 {
 		return nil, errors.New("no drivers configured")
 	}
 
 	// Request updated OMSP responses if stored ones are too old
-	a.cmc.UpdateOmsps()
+	cmcInst.UpdateOmsps()
 
-	report, err := prover.Generate(chbindings, nil, cached, a.cmc.GetMetadata(), a.cmc.Drivers,
-		cc.Serializer, a.cmc.HashAlg)
+	report, err := prover.Generate(chbindings, nil, cached, cmcInst.GetMetadata(), cmcInst.Drivers,
+		cc.Serializer, cmcInst.HashAlg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate attestation report: %w", err)
 	}
@@ -82,16 +84,9 @@ func (a LibApi) verifyAR(
 	peer, peerAddr string,
 ) error {
 
-	if cc == nil {
-		return errors.New("internal error: cmc is nil")
-	}
-
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
-		if err != nil {
-			return fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
+	cmcInst, err := libApiCmc(cc)
+	if err != nil {
+		return err
 	}
 
 	req := &api.VerificationRequest{
@@ -103,9 +98,9 @@ func (a LibApi) verifyAR(
 	}
 
 	log.Debug("Verifier: verifying attestation report")
-	result := verifier.Verify(req.Report, req.Nonce, req.Policies, a.cmc.PolicyEngineSelect,
-		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, req.Peer, req.PeerAddr, a.cmc.Metadata.Omsp.Enabled,
-		a.cmc.LocalRole)
+	result := verifier.Verify(req.Report, req.Nonce, req.Policies, cmcInst.PolicyEngineSelect,
+		cmcInst.PolicyOverwrite, cmcInst.RootCas, cmcInst.PeerCache, req.Peer, req.PeerAddr, cmcInst.Metadata.Omsp.Enabled,
+		cmcInst.LocalRole)
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {
@@ -127,19 +122,12 @@ func (a LibApi) verifyAR(
 
 func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 
-	if cc == nil {
-		return nil, errors.New("internal error: cmc is nil")
+	cmcInst, err := libApiCmc(cc)
+	if err != nil {
+		return nil, err
 	}
 
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
-
-	key, err := a.cmc.KeyMgr.GetKey(cc.KeyId)
+	key, err := cmcInst.KeyMgr.GetKey(cc.KeyId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key: %w", err)
 	}
@@ -154,20 +142,13 @@ func (a LibApi) fetchSignature(cc *CmcConfig, digest []byte, opts crypto.SignerO
 
 func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 
-	if cc == nil {
-		return nil, errors.New("internal error: cmc is nil")
-	}
-
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
+	cmcInst, err := libApiCmc(cc)
+	if err != nil {
+		return nil, err
 	}
 
 	// Retrieve certificates
-	certChain, err := a.cmc.KeyMgr.GetCertChain(cc.KeyId)
+	certChain, err := cmcInst.KeyMgr.GetCertChain(cc.KeyId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cert chain: %v", err)
 	}
@@ -179,43 +160,29 @@ func (a LibApi) fetchCerts(cc *CmcConfig) ([][]byte, error) {
 // Fetches the peer cache from the cmcd
 func (a LibApi) fetchPeerCache(cc *CmcConfig, fingerprint string) ([]string, error) {
 
-	if cc == nil {
-		return nil, errors.New("internal error: cmc is nil")
-	}
-
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
+	cmcInst, err := libApiCmc(cc)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Debugf("Fetching peer cache for peer: %v", fingerprint)
 
-	return a.cmc.PeerCache.GetKeys(fingerprint), nil
+	return cmcInst.PeerCache.GetKeys(fingerprint), nil
 }
 
 func (a LibApi) createKey(cc *CmcConfig) (string, error) {
 
-	if cc == nil {
-		return "", errors.New("internal error: cmc is nil")
+	cmcInst, err := libApiCmc(cc)
+	if err != nil {
+		return "", err
 	}
 
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(cc.LibApiConfig, cc.LibApiRootCas, cc.LibApiAllowSystemCerts)
-		if err != nil {
-			return "", fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
-
-	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
+	keyId, err := cmcInst.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  cc.KeyConfig,
-		Metadata:   a.cmc.GetMetadata(),
-		Drivers:    a.cmc.Drivers,
+		Metadata:   cmcInst.GetMetadata(),
+		Drivers:    cmcInst.Drivers,
 		Serializer: cc.Serializer,
-		ArHashAlg:  a.cmc.HashAlg,
+		ArHashAlg:  cmcInst.HashAlg,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create key: %v", err)

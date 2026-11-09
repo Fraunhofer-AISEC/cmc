@@ -50,20 +50,18 @@ const (
 
 // CmcConfig holds the relevant parameters to interact with the cmcd
 type CmcConfig struct {
-	CmcAddr                string
-	CmcApi                 CmcApi
-	Serializer             ar.Serializer
-	IdentityCas            []*x509.Certificate
-	Policies               []byte
-	Mtls                   bool
-	Attest                 AttestSelect
-	KeyId                  string
-	KeyConfig              api.TLSKeyConfig
-	ResultCb               func(result *ar.AttestationResult)
-	LibApiConfig           *cmc.Config
-	LibApiRootCas          []*x509.Certificate
-	LibApiAllowSystemCerts bool
-	AtlsTimeout            *time.Duration // Overrides the default 10 s aTLS handshake deadline; must be positive; nil uses the default
+	CmcAddr     string
+	CmcApi      CmcApi
+	Serializer  ar.Serializer
+	IdentityCas []*x509.Certificate
+	Policies    []byte
+	Mtls        bool
+	Attest      AttestSelect
+	KeyId       string
+	KeyConfig   api.TLSKeyConfig
+	ResultCb    func(result *ar.AttestationResult)
+	LibApiCmc   *cmc.Cmc
+	AtlsTimeout *time.Duration // Overrides the default 10 s aTLS handshake deadline; must be positive; nil uses the default
 }
 
 type ConnectionOption[T any] func(*T) error
@@ -177,17 +175,12 @@ func WithResultCb(cb func(result *ar.AttestationResult)) ConnectionOption[CmcCon
 	}
 }
 
-// WithLibApiCmcConfig takes the configuration of an embedded CMC, together
-// with the trust anchors it is to use. This is only required for the Lib API,
-// where the CMC is integrated directly into the binary instead of using the
-// cmcd.
-func WithLibApiCmcConfig(config *cmc.Config, rootCas []*x509.Certificate,
-	allowSystemCerts bool,
-) ConnectionOption[CmcConfig] {
+// WithLibApiCmc takes an initialized embedded CMC. This is only required for
+// the Lib API, where the CMC is integrated directly into the binary instead
+// of using the cmcd.
+func WithLibApiCmc(cmcInst *cmc.Cmc) ConnectionOption[CmcConfig] {
 	return func(c *CmcConfig) error {
-		c.LibApiConfig = config
-		c.LibApiRootCas = rootCas
-		c.LibApiAllowSystemCerts = allowSystemCerts
+		c.LibApiCmc = cmcInst
 		return nil
 	}
 }

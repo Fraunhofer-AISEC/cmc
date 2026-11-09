@@ -59,7 +59,7 @@ func dial(c *Config) error {
 					c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 			}
 		}),
-		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
+		atls.WithLibApiCmc(c.cmc))
 	if err != nil {
 		return fmt.Errorf("failed to dial server: %v", err)
 	}
@@ -113,7 +113,7 @@ func listen(c *Config) error {
 					c.rootCas, c.Trust.AllowSystemCerts, c.publishClientCert)
 			}
 		}),
-		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
+		atls.WithLibApiCmc(c.cmc))
 	if err != nil {
 		return fmt.Errorf("failed to listen for connections: %w", err)
 	}
@@ -289,5 +289,5 @@ func getTlsCert(c *Config) (tls.Certificate, error) {
 		atls.WithCmcAddr(c.cmcAddr),
 		atls.WithCmcApi(c.apiName),
 		atls.WithSerializer(c.serializer),
-		atls.WithLibApiCmcConfig(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts))
+		atls.WithLibApiCmc(c.cmc))
 }

@@ -154,6 +154,7 @@ type Config struct {
 	publishToken      []byte
 	publishClientCert *tls.Certificate
 	keyId             string
+	cmc               *cmc.Cmc
 }
 
 // Validate checks the rules that span more than one option. The sections of
@@ -396,5 +397,20 @@ func (c *Config) resolve() error {
 		}
 	}
 
+	return nil
+}
+
+// initCmc initializes the embedded CMC in libapi mode. It is only called by
+// the subcommands that use the CMC, as initialization reads metadata and sets
+// up the attestation drivers.
+func (c *Config) initCmc() error {
+	if c.apiName != "libapi" {
+		return nil
+	}
+	var err error
+	c.cmc, err = cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
+	if err != nil {
+		return fmt.Errorf("failed to initialize embedded CMC: %w", err)
+	}
 	return nil
 }

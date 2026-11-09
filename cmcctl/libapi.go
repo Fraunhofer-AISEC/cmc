@@ -34,23 +34,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
-type LibApi struct {
-	cmc *cmc.Cmc
-}
+type LibApi struct{}
 
 func init() {
 	apis["libapi"] = LibApi{}
 }
 
 func (a LibApi) generate(c *Config) error {
-
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
-		if err != nil {
-			return fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
 
 	// Generate random nonce
 	nonce := make([]byte, 8)
@@ -60,11 +50,11 @@ func (a LibApi) generate(c *Config) error {
 	}
 
 	// Request updated OMSP responses if stored ones are too old
-	a.cmc.UpdateOmsps()
+	c.cmc.UpdateOmsps()
 
 	// Generate attestation report
-	report, err := prover.Generate(nonce, nil, nil, a.cmc.GetMetadata(), a.cmc.Drivers, c.serializer,
-		a.cmc.HashAlg)
+	report, err := prover.Generate(nonce, nil, nil, c.cmc.GetMetadata(), c.cmc.Drivers, c.serializer,
+		c.cmc.HashAlg)
 	if err != nil {
 		return fmt.Errorf("failed to generate attestation report: %w", err)
 	}
@@ -79,13 +69,6 @@ func (a LibApi) generate(c *Config) error {
 }
 
 func (a LibApi) verify(c *Config) error {
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
-		if err != nil {
-			return fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
 
 	// Read the attestation report and the nonce previously stored
 	report, nonce, err := pub.LoadReport(c.Files.Report, c.Files.Nonce, c.serializer)
@@ -95,9 +78,9 @@ func (a LibApi) verify(c *Config) error {
 
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
-	resp := verifier.Verify(report, nonce, c.policies, a.cmc.PolicyEngineSelect,
-		a.cmc.PolicyOverwrite, a.cmc.RootCas, a.cmc.PeerCache, "", "", a.cmc.Metadata.Omsp.Enabled,
-		a.cmc.LocalRole)
+	resp := verifier.Verify(report, nonce, c.policies, c.cmc.PolicyEngineSelect,
+		c.cmc.PolicyOverwrite, c.cmc.RootCas, c.cmc.PeerCache, "", "",
+		c.cmc.Metadata.Omsp.Enabled, c.cmc.LocalRole)
 
 	hostname, _ := internal.Fqdn()
 	resp.Verifier = ar.Endpoint{Hostname: hostname}
@@ -113,19 +96,11 @@ func (a LibApi) verify(c *Config) error {
 
 func (a LibApi) enroll(c *Config) error {
 
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
-		if err != nil {
-			return fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
-
 	log.Tracef("Requested key parameters: type %q, alg %q, cn %q, dns %q, ips %q",
 		c.Identity.KeyType, c.Identity.KeyConfig,
 		c.Identity.Cn, c.Identity.DnsNames, c.Identity.IpAddresses)
 
-	keyId, err := a.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
+	keyId, err := c.cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig: api.TLSKeyConfig{
 			Type:        c.Identity.KeyType,
 			Alg:         c.Identity.KeyConfig,
@@ -133,9 +108,9 @@ func (a LibApi) enroll(c *Config) error {
 			DNSNames:    c.Identity.DnsNames,
 			IPAddresses: c.Identity.IpAddresses,
 		},
-		Metadata:  a.cmc.GetMetadata(),
-		Drivers:   a.cmc.Drivers,
-		ArHashAlg: a.cmc.HashAlg,
+		Metadata:  c.cmc.GetMetadata(),
+		Drivers:   c.cmc.Drivers,
+		ArHashAlg: c.cmc.HashAlg,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to enroll key: %v", err)
@@ -152,16 +127,8 @@ func (a LibApi) enroll(c *Config) error {
 
 func (a LibApi) updateCerts(c *Config) error {
 
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
-		if err != nil {
-			return fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
-
 	// Generate attestation report
-	err := cmc.UpdateCerts(a.cmc)
+	err := cmc.UpdateCerts(c.cmc)
 	if err != nil {
 		return fmt.Errorf("failed to update certs: %v", err)
 	}
@@ -171,16 +138,8 @@ func (a LibApi) updateCerts(c *Config) error {
 
 func (a LibApi) updateMetadata(c *Config) error {
 
-	if a.cmc == nil {
-		cmc, err := cmc.NewCmc(&c.Cmc, c.rootCas, c.Trust.AllowSystemCerts)
-		if err != nil {
-			return fmt.Errorf("failed to initialize CMC: %v", err)
-		}
-		a.cmc = cmc
-	}
-
 	// Generate attestation report
-	err := cmc.UpdateMetadata(a.cmc)
+	err := cmc.UpdateMetadata(c.cmc)
 	if err != nil {
 		return fmt.Errorf("failed to update certs: %v", err)
 	}
