@@ -12,7 +12,7 @@ drivers = ["tpm", "sw"]
 measurement_logs = true
 
 [cmc.attestation.containers]
-driver = "sw"
+trust_anchor = "sw"
 log = "/tmp/container_measurements"
 
 [cmc.metadata]

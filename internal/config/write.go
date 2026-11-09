@@ -168,13 +168,15 @@ func writeComment(b *strings.Builder, f *field) {
 		line := "#"
 		for word := range strings.FieldsSeq(para) {
 			if len(line)+1+len(word) > commentWidth && line != "#" {
-				b.WriteString(line + "\n")
+				b.WriteString(line)
+				b.WriteString("\n")
 				line = "#"
 			}
 			line += " " + word
 		}
 		if line != "#" {
-			b.WriteString(line + "\n")
+			b.WriteString(line)
+			b.WriteString("\n")
 		}
 	}
 }

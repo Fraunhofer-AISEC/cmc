@@ -185,7 +185,7 @@ func (s CoapServer) Measure(w mux.ResponseWriter, r *mux.Message) {
 
 	log.Debug("Measurer: Recording measurement")
 	var success bool
-	err = m.Measure(&req.Event, ser, s.cmc.Attestation.Containers.Log, s.cmc.Attestation.Containers.Driver)
+	err = m.Measure(&req.Event, ser, s.cmc.Attestation.Containers.Log, s.cmc.Attestation.Containers.TrustAnchor)
 	if err != nil {
 		log.Errorf("Failed to record measurement: %v", err)
 		success = false

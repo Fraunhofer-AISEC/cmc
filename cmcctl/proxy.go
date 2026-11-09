@@ -136,7 +136,7 @@ func proxyHttpRequest(proxyTransport *http.Transport, c *Config, w http.Response
 	}
 }
 
-func proxyTunnel(dial dialFunc, c *Config, w http.ResponseWriter, req *http.Request) {
+func proxyTunnel(dial dialFunc, _ *Config, w http.ResponseWriter, req *http.Request) {
 	log.Debug("Using HTTP CONNECT tunneling")
 
 	// The connect proxy scheme only supports parsing host and port (required, since no protocol is allowed).

@@ -72,7 +72,7 @@ func (sw *Sw) Init(c *drivers.DriverConfig) error {
 	}
 
 	sw.DriverConfig = c
-	sw.ctr = strings.EqualFold(c.CtrDriver, "sw")
+	sw.ctr = strings.EqualFold(c.CtrTrustAnchor, "sw")
 	sw.serializer = s
 
 	// Create storage folder for storage of internal data if not existing

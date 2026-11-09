@@ -52,10 +52,10 @@ type Snp struct {
 }
 
 // Containers configures container measurements, which are disabled if no
-// driver is given.
+// trust anchor is given.
 type Containers struct {
-	Driver string `toml:"driver" flag:"ctr-driver" usage:"driver to use for container measurements, empty to not measure containers"`
-	Log    string `toml:"log"    flag:"ctr-log"    default:"{run}/container-measurements" path:"true" usage:"container runtime measurements path, only used if a container driver is set"`
+	TrustAnchor string `toml:"trust_anchor" flag:"ctr-trust-anchor" enum:"tpm,sw,azure" usage:"trust anchor for container measurements: tpm and azure extend them into a (v)TPM PCR, sw signs them with the sw driver key, empty to not measure containers"`
+	Log         string `toml:"log"          flag:"ctr-log"          default:"{run}/container-measurements" path:"true" usage:"container runtime measurements path, only used if a container trust anchor is set"`
 }
 
 // Attestation configures what evidence is collected and how it is bound
@@ -74,9 +74,10 @@ type Attestation struct {
 // derived from the struct tags, and must not touch the file system.
 func (a *Attestation) Validate(r *config.Report) {
 
-	// Containers are measured by one of the configured attestation drivers
-	if d := a.Containers.Driver; d != "" && !slices.Contains(a.Drivers, d) {
-		r.Errorf("containers.driver", "%q is not in %v %v", d, r.Path("drivers"), a.Drivers)
+	// The driver providing the container trust anchor must be configured
+	if t := a.Containers.TrustAnchor; t != "" && !slices.Contains(a.Drivers, t) {
+		r.Errorf("containers.trust_anchor", "%q requires the %v driver in %v %v", t, t,
+			r.Path("drivers"), a.Drivers)
 	}
 }
 
