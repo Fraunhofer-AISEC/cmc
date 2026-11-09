@@ -45,7 +45,7 @@ var (
 
 	serializers = map[string]ar.Serializer{}
 
-	log = logrus.WithField("service", "cmcctl")
+	log = logrus.WithField("service", binaryName)
 )
 
 func init() {
@@ -64,13 +64,13 @@ func init() {
 
 // apiConfig configures how cmcctl reaches the CMC.
 type apiConfig struct {
-	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket://127.0.0.1:9955" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
+	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket://{run}/cmc.sock" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
 	Serialization string `toml:"serialization" flag:"serialization" default:"cbor" enum:"json,cbor" usage:"serialization for requests and attestation reports"`
 }
 
 // atlsConfig configures the attested TLS connection.
 type atlsConfig struct {
-	Addr                 string `toml:"addr"                   flag:"addr"   usage:"address to connect to / listen on via attested TLS / HTTPS"`
+	Addr                 string `toml:"addr"                   flag:"addr"   default:"localhost:4443" usage:"address to connect to / listen on via attested TLS / HTTPS"`
 	Mtls                 bool   `toml:"mtls"                   flag:"mtls"   usage:"perform mutual TLS"`
 	Attest               string `toml:"attest"                 flag:"attest" default:"mutual" enum:"mutual,client,server,none" usage:"remote attestation mode"`
 	AttestationOnlyTrust bool   `toml:"attestation_only_trust" flag:"attestation-only-trust" usage:"establish trust in the peer through its attestation report only, without validating its TLS certificate chain, e.g. if the peer uses a self-signed certificate. Requires the peer to be attested"`
@@ -85,8 +85,8 @@ type httpsConfig struct {
 
 // identityConfig confgures cmcctl's TLS identity.
 type identityConfig struct {
-	KeyId       string   `toml:"key_id"       flag:"key-id"     path:"true" usage:"file to store the key ID of the (hardware-backed) TLS key"`
-	KeyType     string   `toml:"key_type"     flag:"key-type"   enum:"tpm,sw" usage:"CMC key/certificate type"`
+	KeyId       string   `toml:"key_id"       flag:"key-id"     default:"{data}/key-id" path:"true" usage:"file to store the key ID of the (hardware-backed) TLS key"`
+	KeyType     string   `toml:"key_type"     flag:"key-type"   default:"sw" enum:"tpm,sw" usage:"CMC key/certificate type"`
 	KeyConfig   string   `toml:"key_config"   flag:"key-config" default:"ec256" enum:"ec256,ec384,ec521,rsa2048,rsa4096" usage:"key configuration"`
 	Cn          string   `toml:"cn"           flag:"tls-cn"     usage:"common name for the TLS certificate"`
 	DnsNames    []string `toml:"dns_names"    flag:"tls-dns-names" usage:"comma-separated DNS SANs for the TLS certificate"`
@@ -96,10 +96,10 @@ type identityConfig struct {
 // filesConfig configures the local files cmcctl reads and writes itself.
 type filesConfig struct {
 	Policies       string `toml:"policies"        flag:"policies"            path:"true" usage:"JSON policies file for custom verification"`
-	Report         string `toml:"report"          flag:"report"              path:"true" usage:"attestation report file, written by generate and read by verify"`
-	Nonce          string `toml:"nonce"           flag:"nonce"               path:"true" usage:"nonce file, written by generate and read by verify"`
-	CaStore        string `toml:"ca_store"        flag:"ca-store-path"       path:"true" usage:"file to store the CA certs retrieved by the provision command"`
-	ProvisionToken string `toml:"provision_token" flag:"provision-token-out" path:"true" usage:"file to store the bootstrap token created by the token subcommand or retrieved by the provision subcommand"`
+	Report         string `toml:"report"          flag:"report"              default:"attestation-report" path:"true" usage:"attestation report file, written by generate and read by verify"`
+	Nonce          string `toml:"nonce"           flag:"nonce"               default:"nonce" path:"true" usage:"nonce file, written by generate and read by verify"`
+	CaStore        string `toml:"ca_store"        flag:"ca-store-path"       default:"{data}/ca.pem" path:"true" usage:"file to store the CA certs retrieved by the provision command"`
+	ProvisionToken string `toml:"provision_token" flag:"provision-token-out" default:"{data}/provision-token" path:"true" usage:"file to store the bootstrap token created by the token subcommand or retrieved by the provision subcommand"`
 }
 
 // publishConfig configures where cmcctl publishes attestation results to.
@@ -115,7 +115,7 @@ type publishConfig struct {
 
 // tokenConfig configures the creation of EST bootstrap tokens.
 type tokenConfig struct {
-	Store   string `toml:"store"    flag:"token-store"     path:"true" usage:"path to token store for token mode"`
+	Store   string `toml:"store"    flag:"token-store"     default:"{data}/tokens" path:"true" usage:"path to token store for token mode"`
 	MaxUses int    `toml:"max_uses" flag:"token-max-uses"  usage:"maximum number of times a newly created token may be redeemed (0 = unlimited)"`
 	Subject string `toml:"subject"  flag:"token-subject"   usage:"restrict a newly created token to this subject; leave empty for no restriction"`
 }
@@ -197,13 +197,13 @@ func (c *Config) Validate(r *config.Report) {
 func globalFlags(libapi bool) []cli.Flag {
 
 	c := &Config{}
-	flags := append([]cli.Flag{config.FileFlag()},
-		config.Flags(c, &c.Log, &c.Api, &c.Trust)...)
+	flags := append([]cli.Flag{config.FileFlag(binaryName)},
+		config.Flags(binaryName, c, &c.Log, &c.Api, &c.Trust)...)
 
 	if libapi {
-		return append(flags, config.Flags(c, &c.Cmc)...)
+		return append(flags, config.Flags(binaryName, c, &c.Cmc)...)
 	}
-	return append(flags, config.HiddenFlags(c, &c.Cmc)...)
+	return append(flags, config.HiddenFlags(binaryName, c, &c.Cmc)...)
 }
 
 // libapiSelected reports whether the CMC is going to run inside this process.
@@ -214,13 +214,18 @@ func globalFlags(libapi bool) []cli.Flag {
 // or a config file is reported by the regular configuration loading.
 func libapiSelected(args []string) bool {
 
+	files := []string{config.DefaultFile(binaryName)}
+	if v, ok := argValue(args, config.FileFlagName); ok {
+		files = config.SplitList(v)
+	}
+
 	endpoint := ""
-	for _, file := range config.SplitList(argValue(args, config.FileFlagName)) {
+	for _, file := range files {
 		if e := apiEndpointOf(file); e != "" {
 			endpoint = e
 		}
 	}
-	if e := argValue(args, "cmc"); e != "" {
+	if e, _ := argValue(args, "cmc"); e != "" {
 		endpoint = e
 	}
 
@@ -229,19 +234,19 @@ func libapiSelected(args []string) bool {
 }
 
 // argValue returns the value of --name or -name, given either as a separate
-// argument or after an equals sign.
-func argValue(args []string, name string) string {
+// argument or after an equals sign, and whether it was given at all.
+func argValue(args []string, name string) (string, bool) {
 	for i, a := range args {
 		for _, prefix := range []string{"--" + name, "-" + name} {
 			if a == prefix && i+1 < len(args) {
-				return args[i+1]
+				return args[i+1], true
 			}
 			if v, found := strings.CutPrefix(a, prefix+"="); found {
-				return v
+				return v, true
 			}
 		}
 	}
-	return ""
+	return "", false
 }
 
 // apiEndpointOf reads api.endpoint out of a config file.
@@ -280,7 +285,7 @@ func flags(pick ...section) []cli.Flag {
 		selected = append(selected, p(c))
 	}
 
-	return config.Flags(c, selected...)
+	return config.Flags(binaryName, c, selected...)
 }
 
 // section selects one section of a configuration. Flags are generated from a
@@ -307,14 +312,17 @@ var (
 // subcommands that actually do something need it.
 func loadConfig(cmd *cli.Command) (*Config, error) {
 
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return nil, err
 	}
 	if err := c.Log.Setup(); err != nil {
 		return nil, err
 	}
-	config.LogEffective("cmcctl", c)
+	config.LogEffective(cmd, binaryName, c)
+	if err := config.DirsOf(binaryName).Create(); err != nil {
+		return nil, err
+	}
 	if err := c.resolve(); err != nil {
 		return nil, err
 	}
@@ -340,7 +348,7 @@ func (c *Config) resolve() error {
 
 	c.rootCas, err = internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
-		return fmt.Errorf("failed to read trusted root CAs: %w", err)
+		return fmt.Errorf("trust.root_cas: failed to read trusted root CAs: %w", err)
 	}
 
 	if c.Files.Policies != "" {

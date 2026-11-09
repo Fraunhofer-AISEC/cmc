@@ -55,6 +55,6 @@ func (l *Log) Setup() error {
 // Trust configures the root CAs used to authenticate metadata, attestation
 // reports and TLS peers.
 type Trust struct {
-	RootCas          []string `toml:"root_cas"           flag:"root-cas"           path:"true" usage:"comma-separated paths to trusted root CA PEM files"`
+	RootCas          []string `toml:"root_cas"           flag:"root-cas"           default:"{data}/ca.pem" path:"true" usage:"comma-separated paths to trusted root CA PEM files"`
 	AllowSystemCerts bool     `toml:"allow_system_certs" flag:"allow-system-certs" usage:"allow using the system cert pool as trusted root CAs"`
 }

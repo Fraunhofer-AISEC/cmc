@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -27,6 +28,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
+// TestMain hides the config file of the user running the tests, which would
+// otherwise be loaded whenever a test does not pass --config.
+func TestMain(m *testing.M) {
+	os.Setenv("XDG_CONFIG_HOME", "/nonexistent")
+	os.Exit(m.Run())
+}
+
 // run loads the configuration the way the cmcd binary does.
 func run(t *testing.T, args ...string) (*Config, error) {
 	t.Helper()
@@ -36,9 +44,9 @@ func run(t *testing.T, args ...string) (*Config, error) {
 
 	cmd := &cli.Command{
 		Name:  "cmcd",
-		Flags: config.AllFlags(&Config{}),
+		Flags: config.AllFlags(binaryName, &Config{}),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = config.New[Config](cmd)
+			c, loadErr = config.New[Config](cmd, binaryName)
 			return nil
 		},
 	}
@@ -84,7 +92,7 @@ func TestFlagNames(t *testing.T) {
 	}
 
 	var got []string
-	for _, f := range config.AllFlags(&Config{}) {
+	for _, f := range config.AllFlags(binaryName, &Config{}) {
 		got = append(got, f.Names()...)
 	}
 	slices.Sort(got)
@@ -99,8 +107,7 @@ func TestRequiredOptions(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a configuration without any option")
 	}
-	for _, want := range []string{"api.endpoint", "cmc.attestation.drivers",
-		"cmc.metadata.locations", "trust.root_cas"} {
+	for _, want := range []string{"cmc.attestation.drivers", "cmc.metadata.locations"} {
 		if !strings.Contains(err.Error(), want+": required option is not set") {
 			t.Errorf("error does not report %v as required:\n%v", want, err)
 		}
@@ -108,10 +115,7 @@ func TestRequiredOptions(t *testing.T) {
 }
 
 func TestInvalidValues(t *testing.T) {
-	base := []string{
-		"--drivers", "sw", "--metadata", "file://m", "--root-cas", "ca.pem",
-		"--cmc", "socket://localhost:9955",
-	}
+	base := []string{"--drivers", "sw", "--metadata", "file://m"}
 
 	for _, tt := range []struct {
 		name string

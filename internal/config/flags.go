@@ -25,7 +25,9 @@ import (
 
 // cliFlag builds the command line flag for a single option. Slices are
 // string flags holding a comma-separated list, as they have always been.
-func (f *field) cliFlag(hidden bool) cli.Flag {
+func (f *field) cliFlag(d Dirs, hidden bool) cli.Flag {
+
+	def := d.expand(f.def)
 
 	usage := f.usage
 	if allowed, err := f.allowed(); err == nil && len(allowed) > 0 {
@@ -38,7 +40,7 @@ func (f *field) cliFlag(hidden bool) cli.Flag {
 			Name:        f.flag,
 			Usage:       usage,
 			Category:    f.category,
-			DefaultText: f.def,
+			DefaultText: def,
 			Hidden:      hidden,
 		}
 	case kindInt:
@@ -46,7 +48,7 @@ func (f *field) cliFlag(hidden bool) cli.Flag {
 			Name:        f.flag,
 			Usage:       usage,
 			Category:    f.category,
-			DefaultText: f.def,
+			DefaultText: def,
 			Hidden:      hidden,
 		}
 	default:
@@ -54,7 +56,7 @@ func (f *field) cliFlag(hidden bool) cli.Flag {
 			Name:        f.flag,
 			Usage:       usage,
 			Category:    f.category,
-			DefaultText: f.def,
+			DefaultText: def,
 			Hidden:      hidden,
 		}
 	}

@@ -30,15 +30,18 @@ import (
 )
 
 var (
-	log = logrus.WithField("service", "cmcd")
+	log = logrus.WithField("service", binaryName)
 )
+
+// binaryName selects the config file and data folder of the binary
+const binaryName = "cmcd"
 
 func main() {
 	cmd := &cli.Command{
-		Name:    "cmcd",
+		Name:    binaryName,
 		Usage:   "generates and verifies TPM, AMD SEV-SNP, Intel TDX, as well as SGX attestation evidence",
 		Version: collectVersion(),
-		Flags:   config.AllFlags(&Config{}),
+		Flags:   config.AllFlags(binaryName, &Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
 			{
@@ -70,14 +73,17 @@ func main() {
 
 func serve(_ context.Context, cmd *cli.Command) error {
 
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}
 	if err := c.Log.Setup(); err != nil {
 		return err
 	}
-	config.LogEffective("cmcd", c)
+	config.LogEffective(cmd, binaryName, c)
+	if err := config.DirsOf(binaryName).Create(); err != nil {
+		return err
+	}
 
 	log.Infof("Running cmcd %v", internal.GetVersionInfo())
 
@@ -86,7 +92,7 @@ func serve(_ context.Context, cmd *cli.Command) error {
 
 	rootCas, err := internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
-		return fmt.Errorf("failed to read trusted root CA certificates: %w", err)
+		return fmt.Errorf("trust.root_cas: failed to read trusted root CAs: %w", err)
 	}
 
 	cmcInst, err := cmc.NewCmc(&c.Cmc, rootCas, c.Trust.AllowSystemCerts)
@@ -102,7 +108,7 @@ func serve(_ context.Context, cmd *cli.Command) error {
 }
 
 func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := config.New[Config](cmd); err != nil {
+	if _, err := config.New[Config](cmd, binaryName); err != nil {
 		return err
 	}
 	fmt.Println("configuration is valid")
@@ -110,7 +116,7 @@ func validateConfig(_ context.Context, cmd *cli.Command) error {
 }
 
 func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := config.New[Config](cmd)
+	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return err
 	}

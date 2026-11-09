@@ -31,22 +31,22 @@ import (
 
 type estConfig struct {
 	Address      string   `toml:"address"       flag:"est-addr"     default:"0.0.0.0:9000" usage:"EST server address to listen for requests"`
-	CaKey        string   `toml:"ca_key"        flag:"est-ca-key"   path:"true" usage:"path to the EST CA key for signing CSRs"`
-	CaChain      []string `toml:"ca_chain"      flag:"est-ca-chain" path:"true" usage:"comma-separated paths to EST CA certificate chain"`
-	TlsKey       string   `toml:"tls_key"       flag:"tls-key"      path:"true" usage:"TLS key for EST HTTPS server"`
-	TlsCaChain   []string `toml:"tls_ca_chain"  flag:"tls-ca-chain" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
-	CertValidity string   `toml:"cert_validity" flag:"cert-validity" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
+	CaKey        string   `toml:"ca_key"        flag:"est-ca-key"   default:"{data}/ca-key.pem" path:"true" usage:"path to the EST CA key for signing CSRs"`
+	CaChain      []string `toml:"ca_chain"      flag:"est-ca-chain" default:"{data}/ca-chain.pem" path:"true" usage:"comma-separated paths to EST CA certificate chain"`
+	TlsKey       string   `toml:"tls_key"       flag:"tls-key"      default:"{data}/tls-key.pem" path:"true" usage:"TLS key for EST HTTPS server"`
+	TlsCaChain   []string `toml:"tls_ca_chain"  flag:"tls-ca-chain" default:"{data}/tls-chain.pem" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
+	CertValidity string   `toml:"cert_validity" flag:"cert-validity" default:"4320h" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
 	Auth         []string `toml:"auth"          flag:"auth-methods" default:"attestation" enum:"none,token,certificate,attestation" usage:"client authentication methods, certificate applies to all endpoints of the server"`
-	TokenPath    string   `toml:"token_path"    flag:"token-path"   path:"true" usage:"token store for verifying bootstrap tokens"`
+	TokenPath    string   `toml:"token_path"    flag:"token-path"   default:"{data}/tokens" path:"true" usage:"token store for verifying bootstrap tokens"`
 }
 
 type httpConfig struct {
-	Folder string `toml:"folder" flag:"http-folder" path:"true" usage:"folder to be served via HTTP"`
+	Folder string `toml:"folder" flag:"http-folder" default:"{data}/http" path:"true" usage:"folder to be served via HTTP"`
 }
 
 type tpmConfig struct {
 	VerifyEkCert bool   `toml:"verify_ek_cert" flag:"verify-ek-cert" default:"true" usage:"verify TPM EK certificate chains"`
-	EkCertDb     string `toml:"ek_cert_db"     flag:"tpm-ek-cert-db" path:"true" usage:"database for EK cert chain verification"`
+	EkCertDb     string `toml:"ek_cert_db"     flag:"tpm-ek-cert-db" default:"{data}/ek-cert-db" path:"true" usage:"database for EK cert chain verification"`
 }
 
 type intelPcsConfig struct {
@@ -72,7 +72,7 @@ type publishConfig struct {
 }
 
 type storageConfig struct {
-	VendorCache string `toml:"vendor_cache" flag:"vendor-cache" path:"true" usage:"folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)"`
+	VendorCache string `toml:"vendor_cache" flag:"vendor-cache" default:"{data}/vendor-cache" path:"true" usage:"folder for caching hardware vendor collateral (SNP VCEK/CA, TDX/SGX collateral)"`
 }
 
 type Config struct {
@@ -103,27 +103,12 @@ type Config struct {
 // config.Load after the checks derived from the struct tags.
 func (c *Config) Validate(r *config.Report) {
 
-	if c.Est.CaKey == "" {
-		r.Missing("est.ca_key", "est-ca-key")
-	}
-	if len(c.Est.CaChain) == 0 {
-		r.Missing("est.ca_chain", "est-ca-chain")
-	}
-	if c.Est.TlsKey == "" {
-		r.Missing("est.tls_key", "tls-key")
-	}
-	if len(c.Est.TlsCaChain) == 0 {
-		r.Missing("est.tls_ca_chain", "tls-ca-chain")
-	}
-
-	if c.Est.CertValidity != "" {
-		d, err := time.ParseDuration(c.Est.CertValidity)
-		switch {
-		case err != nil:
-			r.Errorf("est.cert_validity", "%q is not a duration, e.g. 4320h", c.Est.CertValidity)
-		case d <= 0:
-			r.Errorf("est.cert_validity", "must be positive, got %v", d)
-		}
+	d, err := time.ParseDuration(c.Est.CertValidity)
+	switch {
+	case err != nil:
+		r.Errorf("est.cert_validity", "%q is not a duration, e.g. 4320h", c.Est.CertValidity)
+	case d <= 0:
+		r.Errorf("est.cert_validity", "must be positive, got %v", d)
 	}
 
 	// OMSP is optional. If any OMSP option is set, require all of them
@@ -156,27 +141,27 @@ func (c *Config) resolve() error {
 
 	c.estCaKey, err = internal.LoadPrivateKey(c.Est.CaKey)
 	if err != nil {
-		return fmt.Errorf("failed to load private key: %w", err)
+		return fmt.Errorf("est.ca_key: failed to load EST CA key: %w", err)
 	}
 
 	c.estCaChain, err = internal.ReadCerts(c.Est.CaChain)
 	if err != nil {
-		return fmt.Errorf("failed to load certificate chain: %w", err)
+		return fmt.Errorf("est.ca_chain: failed to load EST CA chain: %w", err)
 	}
 
 	c.tlsKey, err = internal.LoadPrivateKey(c.Est.TlsKey)
 	if err != nil {
-		return fmt.Errorf("failed to load private key: %w", err)
+		return fmt.Errorf("est.tls_key: failed to load TLS key: %w", err)
 	}
 
 	c.tlsCaChain, err = internal.ReadCerts(c.Est.TlsCaChain)
 	if err != nil {
-		return fmt.Errorf("failed to load certificate chain: %w", err)
+		return fmt.Errorf("est.tls_ca_chain: failed to load TLS certificate chain: %w", err)
 	}
 
 	c.rootCas, err = internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
-		return fmt.Errorf("failed to load trusted metadata CAs: %w", err)
+		return fmt.Errorf("trust.root_cas: failed to load trusted root CAs: %w", err)
 	}
 
 	// The Intel PCS proxy is optional, and so are its root CAs: the Intel PCS
@@ -214,12 +199,8 @@ func (c *Config) resolve() error {
 		log.Info("OMSP not configured, OMSP requests will not be served")
 	}
 
-	if c.Est.CertValidity != "" {
-		c.certValidity, err = time.ParseDuration(c.Est.CertValidity)
-		if err != nil {
-			return fmt.Errorf("failed to parse cert_validity %q: %w", c.Est.CertValidity, err)
-		}
-	}
+	// Validated as part of the configuration
+	c.certValidity, _ = time.ParseDuration(c.Est.CertValidity)
 
 	return nil
 }

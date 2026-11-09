@@ -40,7 +40,7 @@ type httpConfig struct {
 // Both limits apply to each category individually, so a busy deployment
 // cannot evict the provers of another one.
 type databaseConfig struct {
-	Path             string `toml:"path"                flag:"db" default:"monitoring.db" path:"true" usage:"SQLite3 database path"`
+	Path             string `toml:"path"                flag:"db" default:"{data}/monitoring.db" path:"true" usage:"SQLite3 database path"`
 	MaxRows          int    `toml:"max_rows"            flag:"max-rows" default:"400" usage:"maximum number of results stored per category"`
 	MaxRowsPerProver int    `toml:"max_rows_per_prover" flag:"max-rows-per-prover" default:"20" usage:"maximum number of results stored per prover and category"`
 }

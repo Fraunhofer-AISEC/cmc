@@ -28,6 +28,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 )
 
+// TestMain hides the config file of the user running the tests, which would
+// otherwise be loaded whenever a test does not pass --config.
+func TestMain(m *testing.M) {
+	os.Setenv("XDG_CONFIG_HOME", "/nonexistent")
+	os.Exit(m.Run())
+}
+
 // run loads the configuration the way a cmcctl subcommand does, with every
 // section registered.
 func run(t *testing.T, args ...string) (*Config, error) {
@@ -40,7 +47,7 @@ func run(t *testing.T, args ...string) (*Config, error) {
 		Name:  "cmcctl",
 		Flags: append(globalFlags(true), flags(allSections...)...),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			c, loadErr = config.New[Config](cmd)
+			c, loadErr = config.New[Config](cmd, binaryName)
 			return nil
 		},
 	}
@@ -163,7 +170,7 @@ func TestLibapiFlagsAreListedOnlyWhenTheyApply(t *testing.T) {
 			Flags: globalFlags(libapi),
 			Action: func(_ context.Context, cmd *cli.Command) error {
 				var err error
-				c, err = config.New[Config](cmd)
+				c, err = config.New[Config](cmd, binaryName)
 				return err
 			},
 		}
@@ -222,7 +229,7 @@ func TestGlobalFlagsWorkBeforeAndAfterTheSubcommand(t *testing.T) {
 		var c *Config
 		action := func(_ context.Context, cmd *cli.Command) error {
 			var err error
-			c, err = config.New[Config](cmd)
+			c, err = config.New[Config](cmd, binaryName)
 			return err
 		}
 		cmd := &cli.Command{

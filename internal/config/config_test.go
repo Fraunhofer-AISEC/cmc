@@ -60,6 +60,13 @@ func init() {
 	RegisterEnum("testdrivers", func() []string { return []string{"tpm", "sw"} })
 }
 
+// TestMain fixes the standard directories, so that no test depends on the
+// real user or environment.
+func TestMain(m *testing.M) {
+	baseDirs = func() Dirs { return Dirs{Config: "/cfg", Data: "/data", Run: "/run"} }
+	os.Exit(m.Run())
+}
+
 // load runs Load the way a command would, with args as the command line.
 func load(t *testing.T, c *testConfig, args []string) error {
 	t.Helper()
@@ -67,9 +74,9 @@ func load(t *testing.T, c *testConfig, args []string) error {
 	var loadErr error
 	cmd := &cli.Command{
 		Name:  "test",
-		Flags: append([]cli.Flag{FileFlag()}, Flags(c)...),
+		Flags: append([]cli.Flag{FileFlag("test")}, Flags("test", c)...),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			loadErr = Load(cmd, c)
+			loadErr = Load(cmd, "test", c)
 			return nil
 		},
 	}
@@ -356,9 +363,9 @@ func TestValidator(t *testing.T) {
 		c := &validatedConfig{}
 		cmd := &cli.Command{
 			Name:  "test",
-			Flags: append([]cli.Flag{FileFlag()}, Flags(c)...),
+			Flags: append([]cli.Flag{FileFlag("test")}, Flags("test", c)...),
 			Action: func(_ context.Context, cmd *cli.Command) error {
-				err := Load(cmd, c)
+				err := Load(cmd, "test", c)
 				if err == nil || !strings.Contains(err.Error(), tt.want) {
 					t.Errorf("error %v does not contain %q", err, tt.want)
 				}
@@ -398,7 +405,7 @@ func TestRedacted(t *testing.T) {
 
 func TestFlags(t *testing.T) {
 	c := &testConfig{}
-	flags := Flags(c)
+	flags := Flags("test", c)
 
 	byName := map[string]cli.Flag{}
 	for _, f := range flags {
@@ -449,7 +456,7 @@ func names(m map[string]cli.Flag) func(func(string) bool) {
 
 func TestFlagsPerSection(t *testing.T) {
 	c := &testConfig{}
-	flags := Flags(c, &c.Log)
+	flags := Flags("test", c, &c.Log)
 
 	var names []string
 	for _, f := range flags {
@@ -498,6 +505,11 @@ func TestMalformedStructsPanic(t *testing.T) {
 				A string `toml:"a" flag:"a" path:"yes"`
 			} `toml:"s"`
 		}{}},
+		{"unknown placeholder", &struct {
+			S struct {
+				A string `toml:"a" flag:"a" default:"{home}/a"`
+			} `toml:"s"`
+		}{}},
 		{"not a pointer", testConfig{}},
 	}
 
@@ -508,7 +520,7 @@ func TestMalformedStructsPanic(t *testing.T) {
 					t.Error("expected a panic")
 				}
 			}()
-			Flags(tt.cfg)
+			Flags("test", tt.cfg)
 		})
 	}
 }
@@ -524,9 +536,9 @@ func TestUnknownEnumRegistry(t *testing.T) {
 	var err error
 	cmd := &cli.Command{
 		Name:  "test",
-		Flags: append([]cli.Flag{FileFlag()}, Flags(c)...),
+		Flags: append([]cli.Flag{FileFlag("test")}, Flags("test", c)...),
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			err = Load(cmd, c)
+			err = Load(cmd, "test", c)
 			return nil
 		},
 	}
@@ -578,9 +590,9 @@ id = 2
 	var err error
 	cmd := &cli.Command{
 		Name:  "test",
-		Flags: []cli.Flag{FileFlag()},
+		Flags: []cli.Flag{FileFlag("test")},
 		Action: func(_ context.Context, cmd *cli.Command) error {
-			err = Load(cmd, c)
+			err = Load(cmd, "test", c)
 			return nil
 		},
 	}
@@ -645,5 +657,149 @@ func TestEveryLeafIsReachable(t *testing.T) {
 	}
 	if len(s.fields) != 12 {
 		t.Errorf("got %v options, want 12", len(s.fields))
+	}
+}
+
+func TestDirs(t *testing.T) {
+	tests := []struct {
+		name string
+		root bool
+		env  map[string]string
+		want Dirs
+	}{
+		{"root ignores XDG", true, map[string]string{"XDG_CONFIG_HOME": "/x/config"},
+			Dirs{Config: "/etc/cmc", Data: "/var/lib/cmc", Run: "/run/cmc", root: true}},
+		{"user without XDG", false, nil,
+			Dirs{Config: "/home/u/.config/cmc", Data: "/home/u/.local/share/cmc",
+				Run: "/home/u/.local/share/cmc/run"}},
+		{"user with XDG", false,
+			map[string]string{"XDG_CONFIG_HOME": "/x/config", "XDG_DATA_HOME": "/x/data",
+				"XDG_RUNTIME_DIR": "/x/run"},
+			Dirs{Config: "/x/config/cmc", Data: "/x/data/cmc", Run: "/x/run/cmc"}},
+		{"run falls back to XDG data", false, map[string]string{"XDG_DATA_HOME": "/x/data"},
+			Dirs{Config: "/home/u/.config/cmc", Data: "/x/data/cmc", Run: "/x/data/cmc/run"}},
+		{"relative XDG is ignored", false,
+			map[string]string{"XDG_CONFIG_HOME": "x/config", "XDG_RUNTIME_DIR": "x/run"},
+			Dirs{Config: "/home/u/.config/cmc", Data: "/home/u/.local/share/cmc",
+				Run: "/home/u/.local/share/cmc/run"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dirsFrom(tt.root, func(k string) string { return tt.env[k] }, "/home/u")
+			if got != tt.want {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+type placeholderConfig struct {
+	Shared struct {
+		Ca string `toml:"ca" flag:"ca" default:"{data}/ca.pem" path:"true"`
+	} `toml:"shared"`
+	Own struct {
+		Socket string   `toml:"socket" flag:"socket" default:"socket://{run}/cmc.sock"`
+		Files  []string `toml:"files"  flag:"files"  default:"{config}/a,{data}/b"`
+	} `toml:"own"`
+}
+
+func TestPlaceholderDefaults(t *testing.T) {
+
+	// A shared section gets the data folder of the binary it runs in
+	for _, name := range []string{"a", "b"} {
+		c := &placeholderConfig{}
+		cmd := &cli.Command{
+			Name:  name,
+			Flags: AllFlags(name, c),
+			Action: func(_ context.Context, cmd *cli.Command) error {
+				return Load(cmd, name, c)
+			},
+		}
+		if err := cmd.Run(context.Background(), []string{name}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if want := "/data/" + name + "/ca.pem"; c.Shared.Ca != want {
+			t.Errorf("shared.ca = %q, want %q", c.Shared.Ca, want)
+		}
+		if want := "socket:///run/cmc.sock"; c.Own.Socket != want {
+			t.Errorf("own.socket = %q, want %q", c.Own.Socket, want)
+		}
+		if want := []string{"/cfg/a", "/data/" + name + "/b"}; !slices.Equal(c.Own.Files, want) {
+			t.Errorf("own.files = %q, want %q", c.Own.Files, want)
+		}
+
+		for _, f := range Flags(name, c, &c.Shared) {
+			if got, want := f.(*cli.StringFlag).DefaultText, "/data/"+name+"/ca.pem"; got != want {
+				t.Errorf("--ca default text = %q, want %q", got, want)
+			}
+		}
+	}
+}
+
+func TestCreateDirs(t *testing.T) {
+	tmp := t.TempDir()
+	d := Dirs{Data: filepath.Join(tmp, "data", "bin"), Run: filepath.Join(tmp, "run")}
+
+	if err := d.Create(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, dir := range []string{d.Data, d.Run} {
+		fi, err := os.Stat(dir)
+		if err != nil {
+			t.Fatalf("%v was not created: %v", dir, err)
+		}
+		if fi.Mode().Perm() != 0700 {
+			t.Errorf("%v has mode %v, want 0700", dir, fi.Mode().Perm())
+		}
+	}
+}
+
+func TestDiscovery(t *testing.T) {
+
+	dir := t.TempDir()
+	orig := baseDirs
+	baseDirs = func() Dirs { return Dirs{Config: dir, Data: "/data", Run: "/run"} }
+	t.Cleanup(func() { baseDirs = orig })
+
+	other := write(t, t.TempDir(), "other.toml", "[server]\nname = \"other\"\n")
+
+	// The default file is missing
+	c := &testConfig{}
+	if err := load(t, c, []string{"--name", "flag"}); err != nil {
+		t.Fatalf("missing default file: unexpected error: %v", err)
+	}
+
+	write(t, dir, "test.toml", "[server]\nname = \"default\"\nroots = [\"ca.pem\"]\n")
+
+	tests := []struct {
+		name  string
+		args  []string
+		want  string
+		roots []string
+	}{
+		{"default file without --config", nil, "default", []string{filepath.Join(dir, "ca.pem")}},
+		{"default file ignored with --config", []string{"--config", other}, "other", nil},
+		{"empty --config disables the default file", []string{"--config=", "--name", "flag"}, "flag", nil},
+		{"flags override the default file", []string{"--name", "flag"}, "flag", []string{filepath.Join(dir, "ca.pem")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &testConfig{}
+			if err := load(t, c, tt.args); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if c.Server.Name != tt.want {
+				t.Errorf("server.name = %q, want %q", c.Server.Name, tt.want)
+			}
+			if !slices.Equal(c.Server.Roots, tt.roots) {
+				t.Errorf("server.roots = %q, want %q", c.Server.Roots, tt.roots)
+			}
+		})
+	}
+
+	if got, want := FileFlag("test").(*cli.StringFlag).DefaultText, filepath.Join(dir, "test.toml")+", if it exists"; got != want {
+		t.Errorf("--config default text = %q, want %q", got, want)
 	}
 }
