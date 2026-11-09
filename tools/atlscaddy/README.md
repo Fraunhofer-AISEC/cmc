@@ -90,9 +90,10 @@ All custom blocks accept the following options:
 
 The `atls` block additionally accepts the following options:
 
-| Option   | Values                               | Notes                            |
-| -------- | ------------------------------------ | -------------------------------- |
-| `attest` | `mutual`, `client`, `server`, `none` | Which side is required to attest |
+| Option              | Values                               | Notes                                    |
+| ------------------- | ------------------------------------ | ---------------------------------------- |
+| `attest`            | `mutual`, `client`, `server`, `none` | Which side is required to attest         |
+| `handshake_timeout` | duration, e.g. `5s`                  | TLS and aTLS deadline (default 10s)      |
 
 The `atls` wrapper must appear **first** in `listener_wrappers` because it
 wraps the raw TLS listener.

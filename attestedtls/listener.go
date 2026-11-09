@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -38,44 +39,91 @@ func atlsTimeout(c *CmcConfig) time.Duration {
 	return timeout
 }
 
-/* Struct to implement Listener interface
- * holds net.Listener and adds additional functionality to it */
+// Listener wraps a TLS listener and performs the aTLS handshake on accepted connections.
+// Handshakes run concurrently in the background, so slow or silent peers do not block other
+// connections. Accept only returns connections that completed the handshake.
 type Listener struct {
-	net.Listener // embedded interface
-	*CmcConfig   // embedded struct
-	*tls.Config  // embedded struct
+	net.Listener
+	cc        *CmcConfig
+	config    *tls.Config
+	conns     chan net.Conn
+	errs      chan error
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
-// Implementation of Accept() in net.Listener iface
-// Calls Accept of the net.Listnener and additionally performs remote attestation
-// after connection establishment before returning the connection
-func (ln Listener) Accept() (net.Conn, error) {
-
-	// Accept TLS connection
-	conn, err := ln.Listener.Accept()
-	if err != nil {
-		return nil, fmt.Errorf("failed to accept connection: %w", err)
+// NewListener wraps a listener that returns *tls.Conn connections. The TLS config is only used
+// for diagnostics on handshake errors and may be nil.
+func NewListener(inner net.Listener, config *tls.Config, cc *CmcConfig) *Listener {
+	ln := &Listener{
+		Listener: inner,
+		cc:       cc,
+		config:   config,
+		conns:    make(chan net.Conn),
+		errs:     make(chan error),
+		done:     make(chan struct{}),
 	}
+	go ln.serve()
+	return ln
+}
 
-	// Return temporary net error to avoid shutdown of the calling server
+// Accept returns the next connection that completed the aTLS handshake. Errors of the
+// underlying listener are returned unwrapped so that callers can inspect them.
+func (ln *Listener) Accept() (net.Conn, error) {
+	select {
+	case conn := <-ln.conns:
+		return conn, nil
+	case err := <-ln.errs:
+		return nil, err
+	case <-ln.done:
+		return nil, net.ErrClosed
+	}
+}
+
+// Close stops accepting connections and closes the underlying listener
+func (ln *Listener) Close() error {
+	ln.closeOnce.Do(func() { close(ln.done) })
+	return ln.Listener.Close()
+}
+
+func (ln *Listener) serve() {
+	for {
+		conn, err := ln.Listener.Accept()
+		if errors.Is(err, net.ErrClosed) {
+			ln.closeOnce.Do(func() { close(ln.done) })
+			return
+		}
+		if err != nil {
+			// Hand the error to the caller, which decides whether to retry
+			select {
+			case ln.errs <- err:
+				continue
+			case <-ln.done:
+				return
+			}
+		}
+		go ln.handle(conn)
+	}
+}
+
+func (ln *Listener) handle(conn net.Conn) {
 	if err := ln.handshake(conn); err != nil {
+		log.Warnf("%v", err)
 		conn.Close()
-		return nil, acceptError{err}
+		return
 	}
-
-	return conn, nil
+	select {
+	case ln.conns <- conn:
+	case <-ln.done:
+		conn.Close()
+	}
 }
 
-func (ln Listener) handshake(conn net.Conn) error {
+func (ln *Listener) handshake(conn net.Conn) error {
 
-	t := atlsTimeout(ln.CmcConfig)
-	err := conn.SetReadDeadline(time.Now().Add(t))
+	err := conn.SetDeadline(time.Now().Add(atlsTimeout(ln.cc)))
 	if err != nil {
-		return fmt.Errorf("failed to set read deadline: %w", err)
-	}
-	err = conn.SetWriteDeadline(time.Now().Add(t))
-	if err != nil {
-		return fmt.Errorf("failed to set write deadline: %w", err)
+		return fmt.Errorf("failed to set deadline: %w", err)
 	}
 
 	tlsConn, ok := conn.(*tls.Conn)
@@ -91,7 +139,7 @@ func (ln Listener) handshake(conn net.Conn) error {
 	log.Debugf("Connection from %v established. Performing TLS handshake..", peer)
 	err = tlsConn.Handshake()
 	if err != nil {
-		return tlsHandshakeError(err, ln.Config, peer, "")
+		return tlsHandshakeError(err, ln.config, peer, "")
 	}
 
 	log.Debug("Connection established, getting connection state")
@@ -111,14 +159,20 @@ func (ln Listener) handshake(conn net.Conn) error {
 	log.Debugf("Successfully retrieved peer TLS fingerprint: %v", fingerprint)
 
 	// Perform remote attestation
-	err = atlsHandshakeStart(tlsConn, fingerprint, ln.CmcConfig, Endpoint_Server)
+	err = atlsHandshakeStart(tlsConn, fingerprint, ln.cc, Endpoint_Server)
 	if err != nil {
 		// Only log the error, still send handshake complete message to inform peer
 		log.Warnf("atls handshake failed: %v", err)
 	}
-	err = aTlsHandshakeComplete(tlsConn, ln.CmcConfig.Serializer, err)
+	err = aTlsHandshakeComplete(tlsConn, ln.cc.Serializer, err)
 	if err != nil {
 		return fmt.Errorf("atls handshake failed: %w", err)
+	}
+
+	// Remove the handshake deadline, the application manages its own timeouts
+	err = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return fmt.Errorf("failed to reset deadline: %w", err)
 	}
 
 	log.Info("Server-side aTLS connection complete")
@@ -126,21 +180,8 @@ func (ln Listener) handshake(conn net.Conn) error {
 	return nil
 }
 
-// Implementation of Close in net.Listener iface
-// Only calls original Close(), since no new functionality required
-func (ln Listener) Close() error {
-	return ln.Listener.Close()
-}
-
-// Implementation of Addr in net.Listener iface
-// Only calls original Addr(), since no new functionality required
-func (ln Listener) Addr() net.Addr {
-	return ln.Listener.Addr()
-}
-
-// Wrapper for tls.Listen
-// Returns custom Listener that will perform additional remote attestation
-// operations right after successful TLS connection establishment
+// Listen wraps tls.Listen and returns a Listener that performs the aTLS handshake on
+// accepted connections
 func Listen(network, laddr string, config *tls.Config, moreConfigs ...ConnectionOption[CmcConfig]) (net.Listener, error) {
 
 	cc, err := NewCmcConfig(moreConfigs...)
@@ -148,26 +189,10 @@ func Listen(network, laddr string, config *tls.Config, moreConfigs ...Connection
 		return nil, fmt.Errorf("failed to retrieve CMC config: %w", err)
 	}
 
-	listener := Listener{
-		CmcConfig: cc,
-	}
-
-	// Listen
 	ln, err := tls.Listen(network, laddr, config)
 	if err != nil {
-		return listener, fmt.Errorf("failed to listen: %w", err)
+		return nil, fmt.Errorf("failed to listen: %w", err)
 	}
-	listener.Listener = ln
-	listener.Config = config
 
-	return net.Listener(listener), nil
+	return NewListener(ln, config, cc), nil
 }
-
-// Implements the net.Error interface
-type acceptError struct {
-	err error
-}
-
-func (e acceptError) Error() string   { return e.err.Error() }
-func (e acceptError) Timeout() bool   { return false }
-func (e acceptError) Temporary() bool { return true }
