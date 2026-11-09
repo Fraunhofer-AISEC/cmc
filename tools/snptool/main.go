@@ -163,7 +163,7 @@ func main() {
 						return fmt.Errorf("failed to create SNP endorser: %w", err)
 					}
 
-					url, err := endorser.SnpVcekUrl(codeName, report.ChipId[:], report.CurrentTcb)
+					url, err := endorser.SnpVcekUrl(codeName, report.ChipId[:], report.ReportedTcb)
 					if err != nil {
 						return fmt.Errorf("failed to assemble snp vcek url: %w", err)
 					}
@@ -413,9 +413,9 @@ func parseReport(in string) error {
 	fmt.Printf("    name           %s\n", codeName)
 	fmt.Printf("ChipId:            %v\n", hex.EncodeToString(report.ChipId[:]))
 	parseTcbDetails(codeName, "CurrentTcb:", report.CurrentTcb)
-	parseTcbDetails(codeName, "ReportedTcb:", report.CurrentTcb)
-	parseTcbDetails(codeName, "CommittedTcb:", report.CurrentTcb)
-	parseTcbDetails(codeName, "LaunchTcb:", report.CurrentTcb)
+	parseTcbDetails(codeName, "ReportedTcb:", report.ReportedTcb)
+	parseTcbDetails(codeName, "CommittedTcb:", report.CommittedTcb)
+	parseTcbDetails(codeName, "LaunchTcb:", report.LaunchTcb)
 	fmt.Printf("CurrentMajor:      0x%02x (%d)\n", report.CurrentMajor, report.CurrentMajor)
 	fmt.Printf("CurrentMinor:      0x%02x (%d)\n", report.CurrentMinor, report.CurrentMinor)
 	fmt.Printf("CurrentBuild:      0x%02x (%d)\n", report.CurrentBuild, report.CurrentBuild)
