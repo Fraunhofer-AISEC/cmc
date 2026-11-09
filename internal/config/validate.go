@@ -27,6 +27,9 @@ import (
 // root and on every section that implements it, and must only report
 // problems: it must not read files or contact the network, so that a
 // configuration can be checked without side effects.
+//
+// The paths passed to the Report are relative to the section that implements
+// Validate, as a section does not know where it is embedded.
 type Validator interface {
 	Validate(r *Report)
 }
@@ -37,13 +40,26 @@ type Validator interface {
 type Report struct {
 	errs  []string
 	warns []string
+	scope string
+}
+
+// Path returns the full config path of key, which is relative to the section
+// currently being validated, for use in a message.
+func (r *Report) Path(key string) string {
+	switch {
+	case r.scope == "":
+		return key
+	case key == "":
+		return r.scope
+	}
+	return r.scope + "." + key
 }
 
 // Errorf records an invalid configuration value. The path is the dotted
-// config path of the offending option, and may be empty for a problem that
-// does not belong to a single option.
+// config path of the offending option, relative to the section being
+// validated. An empty path refers to the section itself.
 func (r *Report) Errorf(path, format string, args ...any) {
-	r.errs = append(r.errs, prefix(path, format, args...))
+	r.errs = append(r.errs, prefix(r.Path(path), format, args...))
 }
 
 // Missing records that an option the configuration needs is not set. Whether
@@ -60,7 +76,7 @@ func (r *Report) Missing(path, flag string) {
 
 // Warnf records an option that is accepted but has no effect.
 func (r *Report) Warnf(path, format string, args ...any) {
-	r.warns = append(r.warns, prefix(path, format, args...))
+	r.warns = append(r.warns, prefix(r.Path(path), format, args...))
 }
 
 func prefix(path, format string, args ...any) string {
@@ -116,6 +132,8 @@ func (s *schema) validate(r *Report) {
 	}
 
 	for _, v := range s.validators {
-		v.Validate(r)
+		r.scope = v.path
+		v.v.Validate(r)
 	}
+	r.scope = ""
 }

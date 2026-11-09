@@ -76,8 +76,7 @@ func (a *Attestation) Validate(r *config.Report) {
 
 	// Containers are measured by one of the configured attestation drivers
 	if d := a.Containers.Driver; d != "" && !slices.Contains(a.Drivers, d) {
-		r.Errorf("attestation.containers.driver",
-			"%q is not in attestation.drivers %v", d, a.Drivers)
+		r.Errorf("containers.driver", "%q is not in %v %v", d, r.Path("drivers"), a.Drivers)
 	}
 }
 
@@ -120,11 +119,11 @@ func (p *Provisioning) Validate(r *config.Report) {
 		case "direct", "host":
 		case "est", "cps":
 			if addr == "" {
-				r.Errorf("provisioning.endorsement",
+				r.Errorf("endorsement",
 					"%v endorsement requires an address, e.g. %v:https://localhost:9000", mode, mode)
 			}
 		default:
-			r.Errorf("provisioning.endorsement",
+			r.Errorf("endorsement",
 				"unknown mode %q, expected direct, host, est:<url> or cps:<url>", mode)
 		}
 	}
@@ -135,11 +134,11 @@ func (p *Provisioning) Validate(r *config.Report) {
 		case "self":
 		case "est":
 			if addr == "" {
-				r.Errorf("provisioning.enrollment",
+				r.Errorf("enrollment",
 					"est enrollment requires an address, e.g. est:https://localhost:9000")
 			}
 		default:
-			r.Errorf("provisioning.enrollment", "unknown mode %q, expected self or est:<url>", mode)
+			r.Errorf("enrollment", "unknown mode %q, expected self or est:<url>", mode)
 		}
 	}
 }
