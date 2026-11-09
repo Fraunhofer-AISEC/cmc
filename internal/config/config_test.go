@@ -331,31 +331,43 @@ type validated struct {
 
 func (v *validated) Validate(r *Report) {
 	if (v.A == "") != (v.B == "") {
-		r.Errorf("sec", "a and b must be set together")
+		r.Errorf("", "a and b must be set together")
+	}
+	if v.A == "bad" {
+		r.Errorf("a", "conflicts with %v", r.Path("b"))
 	}
 }
 
 type validatedConfig struct {
-	Sec validated `toml:"sec"`
+	Outer struct {
+		Sec validated `toml:"sec"`
+	} `toml:"outer"`
 }
 
 func TestValidator(t *testing.T) {
-	c := &validatedConfig{}
-	cmd := &cli.Command{
-		Name:  "test",
-		Flags: append([]cli.Flag{FileFlag()}, Flags(c)...),
-		Action: func(_ context.Context, cmd *cli.Command) error {
-			err := Load(cmd, c)
-			if err == nil {
-				t.Error("expected an error from the validator")
-			} else if !strings.Contains(err.Error(), "sec: a and b must be set together") {
-				t.Errorf("unexpected error: %v", err)
-			}
-			return nil
-		},
-	}
-	if err := cmd.Run(context.Background(), []string{"test", "--a", "x"}); err != nil {
-		t.Fatalf("failed to run command: %v", err)
+	for _, tt := range []struct {
+		args []string
+		want string
+	}{
+		// Paths reported by a section are prefixed with the section's path
+		{[]string{"--a", "x"}, "outer.sec: a and b must be set together"},
+		{[]string{"--a", "bad", "--b", "y"}, "outer.sec.a: conflicts with outer.sec.b"},
+	} {
+		c := &validatedConfig{}
+		cmd := &cli.Command{
+			Name:  "test",
+			Flags: append([]cli.Flag{FileFlag()}, Flags(c)...),
+			Action: func(_ context.Context, cmd *cli.Command) error {
+				err := Load(cmd, c)
+				if err == nil || !strings.Contains(err.Error(), tt.want) {
+					t.Errorf("error %v does not contain %q", err, tt.want)
+				}
+				return nil
+			},
+		}
+		if err := cmd.Run(context.Background(), append([]string{"test"}, tt.args...)); err != nil {
+			t.Fatalf("failed to run command: %v", err)
+		}
 	}
 }
 

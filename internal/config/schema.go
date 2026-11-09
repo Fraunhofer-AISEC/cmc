@@ -93,6 +93,13 @@ type field struct {
 	value    reflect.Value
 }
 
+// validator is a Validator together with the path of the section it
+// validates, which is empty for the root.
+type validator struct {
+	path string
+	v    Validator
+}
+
 // schema is the flattened view of a configuration struct.
 type schema struct {
 	root       reflect.Value
@@ -100,7 +107,7 @@ type schema struct {
 	byPath     map[string]*field
 	byFlag     map[string]*field
 	sections   map[string]bool
-	validators []Validator
+	validators []validator
 }
 
 func newSchema(root any) *schema {
@@ -126,7 +133,7 @@ func (s *schema) walk(v reflect.Value, path, category string) {
 
 	if v.CanAddr() {
 		if val, ok := v.Addr().Interface().(Validator); ok {
-			s.validators = append(s.validators, val)
+			s.validators = append(s.validators, validator{path, val})
 		}
 	}
 

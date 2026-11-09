@@ -122,9 +122,9 @@ func TestInvalidValues(t *testing.T) {
 		{"api", []string{"--cmc", "carrier-pigeon://localhost"}, `API "carrier-pigeon" is not implemented`},
 		{"driver", []string{"--drivers", "hal9000"}, `"hal9000" is not one of`},
 		{"hashAlg", []string{"--hash-alg", "SHA256"}, `"SHA256" is not one of`},
-		{"endorsement", []string{"--endorsement", "est"}, "est endorsement requires an address"},
-		{"enrollment", []string{"--enrollment", "carrier-pigeon"}, "unknown mode"},
-		{"container driver", []string{"--ctr-driver", "tpm"}, `"tpm" is not in attestation.drivers`},
+		{"endorsement", []string{"--endorsement", "est"}, "cmc.provisioning.endorsement: est endorsement requires an address"},
+		{"enrollment", []string{"--enrollment", "carrier-pigeon"}, "cmc.provisioning.enrollment: unknown mode"},
+		{"container driver", []string{"--ctr-driver", "tpm"}, `cmc.attestation.containers.driver: "tpm" is not in cmc.attestation.drivers`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := run(t, append(slices.Clone(base), tt.args...)...)
