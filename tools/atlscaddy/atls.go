@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
 	"github.com/caddyserver/caddy/v2"
@@ -22,7 +23,8 @@ func init() {
 type ATlsModule struct {
 	CmcOptions
 
-	AttestationMode string `json:"attestation_mode,omitempty"`
+	AttestationMode  string         `json:"attestation_mode,omitempty"`
+	HandshakeTimeout caddy.Duration `json:"handshake_timeout,omitempty"`
 
 	cmcConfig *atls.CmcConfig
 	logger    *zap.Logger
@@ -62,6 +64,11 @@ func (m *ATlsModule) createConfig() error {
 		opts = append(opts, atls.WithAttest(attest))
 	}
 
+	if m.HandshakeTimeout != 0 {
+		m.logger.Debug("Configuring handshake timeout", zap.Duration("handshake_timeout", time.Duration(m.HandshakeTimeout)))
+		opts = append(opts, atls.WithAtlsTimeout(time.Duration(m.HandshakeTimeout)))
+	}
+
 	cmcConfig, err := atls.NewCmcConfig(opts...)
 	if err != nil {
 		return fmt.Errorf("invalid aTLS config: %w", err)
@@ -91,12 +98,7 @@ func (m *ATlsModule) WrapListener(l net.Listener) net.Listener {
 	m.logger.Debug("Wrapping listener with aTLS", zap.String("address", l.Addr().String()))
 	// TODO: We would actually need to verify that the listener is actually a TLS listener, but tls.listener is private.
 	// 		 Reflection would work, but is not clean and would interfere with other legitimate listeners like https_redirect.
-	return &atls.Listener{
-		Listener:  l,
-		CmcConfig: m.cmcConfig,
-		// This is unused anyway, right?
-		Config: nil,
-	}
+	return atls.NewListener(l, nil, m.cmcConfig)
 }
 
 func (m *ATlsModule) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
@@ -116,6 +118,15 @@ func (m *ATlsModule) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				return d.ArgErr()
 			}
 			m.AttestationMode = d.Val()
+		case "handshake_timeout":
+			if !d.NextArg() {
+				return d.ArgErr()
+			}
+			t, err := caddy.ParseDuration(d.Val())
+			if err != nil {
+				return d.Errf("invalid handshake_timeout %q: %v", d.Val(), err)
+			}
+			m.HandshakeTimeout = caddy.Duration(t)
 		default:
 			return d.Errf("unknown atls directive %q", d.Val())
 		}
