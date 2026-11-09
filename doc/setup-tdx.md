@@ -61,7 +61,6 @@ The CVM then uses `cps` endorsement mode, which fetches both AMD and Intel colla
 *estserver*, and therefore requires neither internet access nor the public CAs:
 ```toml
 [trust]
-allow_system_certs = false
 root_cas = ["/var/ca.pem"]
 
 [cmc.provisioning]

@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=10
 User=root
-ExecStart=cmcctl serve -config /etc/cmcctl-vm.toml
+ExecStart=cmcctl serve
 
 [Install]
 WantedBy=multi-user.target

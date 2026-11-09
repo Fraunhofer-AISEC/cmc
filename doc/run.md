@@ -1,20 +1,45 @@
 # Run
 
-All binaries can be configured via TOML configuration files and commandline flags. If a
-configuration option is specified both via configuration file and commandline flag, the
-commandline flag supersedes.
+## Configuration
 
-Multiple configuration files can be specified as a comma-separated list. If a specific configuration
-option is present in multiple configuration file, the last configuration file takes precedence.
+All binaries can be configured via TOML configuration files and commandline flags. Values apply in
+the order defaults, configuration files, commandline flags, so a flag supersedes a file.
+
+Without `--config`, each binary reads its default file `<config dir>/<binary>.toml` (`cmcd.toml`,
+`cmcctl.toml`, `estserver.toml`, `cmcbackend.toml`) if it exists. `--config` replaces the default
+file with a comma-separated list of files, where later files take precedence.
+
+| Directory | root                    | non-root                                                      |
+| --------- | ----------------------- | ------------------------------------------------------------- |
+| config    | `/etc/cmc`              | `$XDG_CONFIG_HOME/cmc` (`~/.config/cmc`)                      |
+| data      | `/var/lib/cmc/<binary>` | `$XDG_DATA_HOME/cmc/<binary>` (`~/.local/share/cmc/<binary>`) |
+| run       | `/run/cmc`              | `$XDG_RUNTIME_DIR/cmc` (`~/.local/share/cmc/run`)             |
+
+The defaults of options holding files, such as the trusted root CAs or the cmcd socket, live in
+these directories. `--help` shows the expanded defaults.
 
 The commandline flags for each executable can be shown via the `--help` flag, which groups them by
 the configuration section they belong to. TOML configuration options are grouped into those same
 sections (tables) and named in snake case (e.g. *cmc.attestation.hash_alg*), while commandline
-flags stay flat and use kebab case (e.g. *--hash-alg*).
+flags stay flat and use kebab case (e.g. *--hash-alg*). Relative paths in a configuration file are
+relative to the directory of that file, relative paths in flags to the working directory.
 
-Furthermore, exemplary TOML configuration files can be found in the `example-setup/configs/` folder
-of this repository. Paths in the configuration file can either be absolute or relative to the
-directory of the config file itself.
+Exemplary TOML configuration files can be found in the `example-setup/configs/` folder of this
+repository. Every binary can inspect and write its configuration with the `config` subcommand:
+
+```sh
+# Load and validate the configuration, exit code 0 if it is valid
+estserver config validate --config example-setup/configs/est-server.toml
+
+# Print the effective configuration, secrets redacted. --minimal prints only non-default options
+cmcd config print --config example-setup/configs/cmcd.toml --minimal
+
+# Write the defaults plus the given flags and --config files to the default file. Every option is
+# documented, options at their default are commented out. --minimal writes only non-default options,
+# --output selects another file (- for stdout) and --force overwrites an existing file or writes an
+# invalid configuration
+sudo cmcd config init --drivers tpm --metadata https://metadata.example.com/
+```
 
 Some options combine several values into a single string:
 
@@ -48,15 +73,6 @@ The cmcctl provides the following subcommands:
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
 estserver --config example-setup/configs/est-server.toml
-```
-Every binary can load and inspect its configuration without doing anything else:
-
-```sh
-# Load and validate the configuration, exit code 0 if it is valid
-estserver config validate --config example-setup/configs/est-server.toml
-
-# Print the effective configuration, after defaults, config files and flags, secrets redacted
-cmcd config print --config example-setup/configs/cmcd.toml
 ```
 
 ### Run the cmcd

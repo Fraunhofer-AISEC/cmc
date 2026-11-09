@@ -216,24 +216,7 @@ func main() {
 					},
 				},
 			},
-			{
-				Name:  "config",
-				Usage: "Inspect the configuration without contacting the CMC",
-				Commands: []*cli.Command{
-					{
-						Name:   "validate",
-						Usage:  "Load and validate the configuration, exit code 0 if it is valid",
-						Flags:  flags(allSections...),
-						Action: validateConfig,
-					},
-					{
-						Name:   "print",
-						Usage:  "Print the effective configuration, with secrets redacted",
-						Flags:  flags(allSections...),
-						Action: printEffectiveConfig,
-					},
-				},
-			},
+			config.Command[Config](binaryName, func() []cli.Flag { return flags(allSections...) }),
 		},
 	}
 
@@ -243,27 +226,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := config.New[Config](cmd, binaryName); err != nil {
-		return err
-	}
-	fmt.Println("configuration is valid")
-	return nil
-}
-
-func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := config.New[Config](cmd, binaryName)
-	if err != nil {
-		return err
-	}
-	s, err := config.Redacted(c)
-	if err != nil {
-		return err
-	}
-	fmt.Println(s)
-	return nil
 }
 
 func collectVersion() string {

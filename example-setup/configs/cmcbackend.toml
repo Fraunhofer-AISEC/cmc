@@ -1,13 +1,5 @@
-[log]
-level = "info"
-
-[http]
-address = "localhost:8080"
-
 [database]
 path = "../../data/monitoring.db"
-max_rows = 400
-max_rows_per_prover = 20
 
 [categories]
 default = "demo"

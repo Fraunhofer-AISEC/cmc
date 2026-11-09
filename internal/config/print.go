@@ -16,13 +16,9 @@
 package config
 
 import (
-	"bytes"
-	"fmt"
 	"os"
-	"reflect"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
@@ -48,7 +44,7 @@ func LogEffective(cmd *cli.Command, name string, root any) {
 		l.Info("Using no config file")
 	}
 
-	s, err := Redacted(root)
+	s, err := redacted(root)
 	if err != nil {
 		l.Warnf("Failed to render configuration: %v", err)
 		return
@@ -59,49 +55,4 @@ func LogEffective(cmd *cli.Command, name string, root any) {
 	for line := range strings.SplitSeq(s, "\n") {
 		l.Debugf("\t%v", line)
 	}
-}
-
-// Redaction is what the value of a secret option is replaced with.
-const Redaction = "***"
-
-// Redacted renders the effective configuration as TOML, in the layout a
-// config file uses, with every option tagged secret replaced by
-// Redaction. The configuration itself is not modified.
-func Redacted(root any) (string, error) {
-
-	s := newSchema(root)
-
-	// Work on a copy, so that redacting does not destroy the live values.
-	// Slices are shared with the original, but secrets are replaced as a
-	// whole rather than element-wise, so the original stays intact
-	cp := reflect.New(s.root.Type())
-	cp.Elem().Set(s.root)
-
-	for _, f := range newSchemaFor(cp.Elem()).fields {
-		if !f.secret {
-			continue
-		}
-		switch f.kind {
-		case kindString:
-			if f.value.String() != "" {
-				f.value.SetString(Redaction)
-			}
-		case kindStringSlice:
-			if n := f.value.Len(); n > 0 {
-				out := reflect.MakeSlice(f.value.Type(), n, n)
-				for i := range n {
-					out.Index(i).SetString(Redaction)
-				}
-				f.value.Set(out)
-			}
-		}
-	}
-
-	var b bytes.Buffer
-	enc := toml.NewEncoder(&b).SetIndentTables(true)
-	if err := enc.Encode(cp.Interface()); err != nil {
-		return "", fmt.Errorf("failed to marshal configuration: %w", err)
-	}
-
-	return strings.TrimSuffix(b.String(), "\n"), nil
 }

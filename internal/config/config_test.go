@@ -286,7 +286,7 @@ drivers = ["tpm", "snp"]
 	}
 	for _, want := range []string{
 		`log.level: "verbose" is not one of [debug info warn]`,
-		`server.drivers[1]: "snp" is not one of [tpm sw]`,
+		`server.drivers[1]: "snp" is not one of [sw tpm]`,
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %v does not contain %q", err, want)
@@ -384,7 +384,7 @@ func TestRedacted(t *testing.T) {
 	c.Server.Token = "super-secret"
 	c.Server.Address = "localhost:1"
 
-	s, err := Redacted(c)
+	s, err := redacted(c)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -5,12 +5,10 @@ level = "trace"
 root_cas = ["../../data/pki/ca.pem"]
 
 [est]
-address = "0.0.0.0:9000"
 ca_key = "../../data/pki/ca-key.pem"
 ca_chain = ["../../data/pki/ca.pem"]
 tls_key = "../../data/pki/est-tls-key.pem"
 tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
-auth = ["attestation"]
 token_path = "../../data/token_store"
 
 [http]

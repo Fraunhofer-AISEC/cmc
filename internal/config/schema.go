@@ -18,6 +18,7 @@ package config
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -353,5 +354,8 @@ func (f *field) allowed() ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown enum registry %q", f.enumRef)
 	}
-	return fn(), nil
+	// A registry is usually filled from a map, so sort for a stable order
+	values := slices.Clone(fn())
+	slices.Sort(values)
+	return values, nil
 }

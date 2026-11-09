@@ -29,14 +29,17 @@ GET    /categories                   # Retrieve the configured categories and th
 Categories separate independent deployments within the same database, so that the
 frontend can show them as separate demos. They are declared in the config file:
 
-```json
-"categories": {
-    "default": "demo",
-    "list": [
-        { "id": "demo", "label": "Attestation Demo" },
-        { "id": "ids",  "label": "Industrial Data Space" }
-    ]
-}
+```toml
+[categories]
+default = "demo"
+
+[[categories.list]]
+id = "demo"
+label = "Attestation Demo"
+
+[[categories.list]]
+id = "ids"
+label = "Industrial Data Space"
 ```
 
 Publishers select their category through the query parameter of the URL they post to,
@@ -52,11 +55,13 @@ busy deployment cannot evict the provers of another one. Both limits take effect
 restart, also for existing databases. See
 `example-setup/configs/cmcbackend.toml` for a complete example.
 
-The configuration can be checked without starting the server, as for the other binaries:
+The configuration can be checked and written without starting the server, as for the other
+binaries (see [Configuration](../../doc/run.md#configuration)):
 
 ```sh
 cmcbackend config validate --config example-setup/configs/cmcbackend.toml
 cmcbackend config print --config example-setup/configs/cmcbackend.toml
+cmcbackend config init --config example-setup/configs/cmcbackend.toml --minimal
 ```
 
 **OCSF Detection Findings**

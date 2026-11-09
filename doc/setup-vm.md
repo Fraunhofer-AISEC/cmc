@@ -135,8 +135,8 @@ The services can also be stopped and manually run:
 systemctl stop cmcd
 systemctl stop cmcctl
 
-cmcd --config /etc/cmcd.toml
-cmcctl --config /etc/cmcctl-vm.toml
+cmcd
+cmcctl serve
 ```
 
 ### Update VM Configuration

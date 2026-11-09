@@ -38,22 +38,7 @@ func main() {
 		Flags:   config.AllFlags(binaryName, &Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
-			{
-				Name:  "config",
-				Usage: "inspect the configuration without starting the server",
-				Commands: []*cli.Command{
-					{
-						Name:   "validate",
-						Usage:  "load and validate the configuration, without any side effects",
-						Action: validateConfig,
-					},
-					{
-						Name:   "print",
-						Usage:  "print the effective configuration as JSON, secrets redacted",
-						Action: printEffectiveConfig,
-					},
-				},
-			},
+			config.Command[Config](binaryName, nil),
 		},
 	}
 
@@ -92,32 +77,4 @@ func serve(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return s.Serve()
-}
-
-func validateConfig(ctx context.Context, cmd *cli.Command) error {
-
-	if _, err := config.New[Config](cmd, binaryName); err != nil {
-		return err
-	}
-
-	fmt.Println("configuration is valid")
-
-	return nil
-}
-
-func printEffectiveConfig(ctx context.Context, cmd *cli.Command) error {
-
-	c, err := config.New[Config](cmd, binaryName)
-	if err != nil {
-		return err
-	}
-
-	s, err := config.Redacted(c)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(s)
-
-	return nil
 }

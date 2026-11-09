@@ -9,14 +9,11 @@ serialization = "json"
 root_cas = ["../../data/pki/ca.pem"]
 
 [atls]
-addr = "localhost:4443"
 mtls = true
-attest = "mutual"
 
 [identity]
 key_id = "../../data/key_id"
 key_type = "tpm"
-key_config = "ec256"
 dns_names = ["localhost"]
 
 [files]
