@@ -25,7 +25,7 @@
 //	          registry filled by RegisterEnum, so it can respect build tags.
 //	path      a relative value coming from a config file is resolved against that file's directory.
 //	          Values coming from a flag are not modified. path:"uri" resolves the path of a file:// URI
-//	secret    the value is redacted by Redacted
+//	secret    the value is redacted when the configuration is printed or logged
 //
 // A section may carry a category tag, which sets the group the section's flags appear under in
 // --help. It defaults to the upper-cased section key. A category of "-" makes the section
@@ -35,6 +35,9 @@
 // Values are applied in the order defaults, config files, then the flags that were explicitly set.
 // The config files are those given by --config in that order. Without --config, the default file
 // {config}/<binary>.toml is used if it exists.
+//
+// Command provides the config subcommand, which validates, prints and writes the configuration. The
+// written file documents every option with its usage, and comments out the options at their default.
 package config
 
 import (
@@ -44,7 +47,6 @@ import (
 	"os"
 	"path/filepath"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 
@@ -99,28 +101,32 @@ func defaultFiles(name string) []string {
 // Load panics if root is not a well-formed configuration struct, as that is a
 // programming error rather than a configuration error.
 func Load(cmd *cli.Command, name string, root any) error {
-
-	s := newSchema(root)
 	r := &Report{}
+	newSchema(root).load(cmd, DirsOf(name), Files(cmd, name), r)
+	r.logWarnings()
+	return r.err()
+}
 
-	s.applyDefaults(DirsOf(name))
-	for _, file := range Files(cmd, name) {
+// load applies the defaults expanded with d, the config files and the flags
+// that were explicitly set, and validates the result. It reports whether the
+// files could be applied.
+func (s *schema) load(cmd *cli.Command, d Dirs, files []string, r *Report) bool {
+
+	s.applyDefaults(d)
+	for _, file := range files {
 		s.applyFile(file, r)
 	}
 
 	// A config file that could not be applied makes every later check report
 	// a value that was never really configured, so stop before validation
 	// rather than burying the actual problem in follow-up errors
-	if len(r.errs) == 0 {
-		s.applyFlags(cmd, r)
-		s.validate(r)
+	if len(r.errs) > 0 {
+		return false
 	}
 
-	for _, w := range r.warns {
-		log.Warn(w)
-	}
-
-	return r.err()
+	s.applyFlags(cmd, r)
+	s.validate(r)
+	return true
 }
 
 // New allocates a configuration of type T and loads it with Load. T must be a

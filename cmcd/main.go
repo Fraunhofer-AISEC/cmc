@@ -44,22 +44,7 @@ func main() {
 		Flags:   config.AllFlags(binaryName, &Config{}),
 		Action:  serve,
 		Commands: []*cli.Command{
-			{
-				Name:  "config",
-				Usage: "Inspect the configuration without starting the cmcd",
-				Commands: []*cli.Command{
-					{
-						Name:   "validate",
-						Usage:  "Load and validate the configuration, exit code 0 if it is valid",
-						Action: validateConfig,
-					},
-					{
-						Name:   "print",
-						Usage:  "Print the effective configuration, with secrets redacted",
-						Action: printEffectiveConfig,
-					},
-				},
-			},
+			config.Command[Config](binaryName, nil),
 		},
 	}
 
@@ -105,27 +90,6 @@ func serve(_ context.Context, cmd *cli.Command) error {
 	}
 
 	return servers[name].Serve(addr, cmcInst)
-}
-
-func validateConfig(_ context.Context, cmd *cli.Command) error {
-	if _, err := config.New[Config](cmd, binaryName); err != nil {
-		return err
-	}
-	fmt.Println("configuration is valid")
-	return nil
-}
-
-func printEffectiveConfig(_ context.Context, cmd *cli.Command) error {
-	c, err := config.New[Config](cmd, binaryName)
-	if err != nil {
-		return err
-	}
-	s, err := config.Redacted(c)
-	if err != nil {
-		return err
-	}
-	fmt.Println(s)
-	return nil
 }
 
 func collectVersion() string {

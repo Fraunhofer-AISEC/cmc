@@ -43,8 +43,9 @@ runcmd:
   - cp /mnt/cmcd /usr/bin/
   - cp /mnt/cmcctl /usr/bin/
   - cp /mnt/mrtool /usr/bin/
-  - cp /mnt/cmcd.toml /etc/cmcd.toml
-  - cp /mnt/cmcctl-vm.toml /etc/cmcctl-vm.toml
+  - mkdir -p /etc/cmc
+  - cp /mnt/cmcd.toml /etc/cmc/cmcd.toml
+  - cp /mnt/cmcctl-vm.toml /etc/cmc/cmcctl.toml
   - cp /mnt/cmcd.service /etc/systemd/system/cmcd.service
   - cp /mnt/cmcctl.service /etc/systemd/system/cmcctl.service
   - cp /mnt/ca.pem /var/ca.pem

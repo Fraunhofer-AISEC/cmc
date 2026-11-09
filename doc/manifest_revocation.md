@@ -66,18 +66,11 @@ The generation scripts for the manifests (in `/bin/generate*` and `/bin/precompu
 optional parameter `--omsp <omsp endpoint>` to set the OMSP endpoint.
 
 ### Configure CMC to support manifest revocation
-OMSP Stapling can be activated in the CMC via the JSON configuratino file properties:
-```json
-{
-    "cmc": {
-        "metadata": {
-            "omsp": {
-                "enabled": true,
-                "format": "json"
-            }
-        }
-    }
-}
+OMSP Stapling can be activated in the CMC via the TOML configuration file:
+```toml
+[cmc.metadata.omsp]
+enabled = true
+format = "json"
 ```
 or via CLI flags:
 ```sh

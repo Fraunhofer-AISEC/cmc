@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // A Validator is a configuration struct or section with rules that span more
@@ -85,6 +87,12 @@ func prefix(path, format string, args ...any) string {
 		return msg
 	}
 	return path + ": " + msg
+}
+
+func (r *Report) logWarnings() {
+	for _, w := range r.warns {
+		log.Warn(w)
+	}
 }
 
 // err renders the collected errors as a single error, listing them one per

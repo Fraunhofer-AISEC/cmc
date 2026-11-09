@@ -10,13 +10,10 @@ root_cas = ["../../data/pki/ca.pem"]
 
 [atls]
 addr = "https://ubuntu:4443"
-mtls = false
 attest = "server"
 
 [identity]
 key_id = "../../data/key_id"
-key_type = "sw"
-key_config = "ec256"
 
 [files]
 report = "../../data/attestation-report"
