@@ -256,11 +256,6 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (
 		return nil, fmt.Errorf("version check failed: %w", err)
 	}
 
-	if len(s.cmc.Drivers) == 0 {
-		return nil, errors.New("TLS cert: no drivers configured")
-	}
-	d := s.cmc.Drivers[0]
-
 	// provide TLS certificate chain
 	certChain, err := s.cmc.KeyMgr.GetCertChain(req.KeyId)
 	if err != nil {
@@ -268,7 +263,7 @@ func (s *GrpcServer) TLSCert(ctx context.Context, req *grpcapi.TLSCertRequest) (
 	}
 
 	certs := internal.WriteCertsPem(certChain)
-	log.Debugf("Obtained %v TLS Cert(s) from %v", len(certs), d.Name())
+	log.Debugf("Obtained TLS cert chain of length %v for key %v", len(certs), req.KeyId)
 
 	resp := &grpcapi.TLSCertResponse{
 		Version:     grpcapi.GetVersion(),

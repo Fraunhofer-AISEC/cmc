@@ -38,7 +38,7 @@ cmcd config print --config example-setup/configs/cmcd.toml --minimal
 # documented, options at their default are commented out. --minimal writes only non-default options,
 # --output selects another file (- for stdout) and --force overwrites an existing file or writes an
 # invalid configuration
-sudo cmcd config init --drivers tpm --metadata https://metadata.example.com/
+sudo cmcd config init --metadata https://metadata.example.com/
 ```
 
 Some options combine several values into a single string:
@@ -48,6 +48,11 @@ Some options combine several values into a single string:
 | `cmc`         | `<api>://<address>` | `socket:///run/cmc/cmc.sock`, `socket://127.0.0.1:9955`, `grpc://127.0.0.1:9955`, or `libapi` |
 | `endorsement` | `<mode>[:<url>]`    | `direct`, `host`, `est:https://localhost:9000`, `cps:https://localhost:9000`                  |
 | `enrollment`  | `<mode>[:<url>]`    | `self`, `est:https://localhost:9000`                                                          |
+
+The `drivers` option defaults to `auto`, which selects every driver whose device is present: `tpm`
+(`/dev/tpmrm0` or `/dev/tpm0`), `snp` (`/dev/sev-guest`) and `tdx` (`/dev/tdx_guest`). The `azure`,
+`sgx`, `sw` and `swima` drivers are never detected and must be listed explicitly, e.g.
+`drivers = ["auto", "sw"]`. On Azure CVMs, `auto` only finds the vTPM.
 
 ## cmcctl commands
 

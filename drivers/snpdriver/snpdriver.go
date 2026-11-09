@@ -40,6 +40,9 @@ var log = logrus.WithField("service", "snpdriver")
 
 const (
 	akChainFile = "snp_ak_chain.pem"
+
+	// snpDevicePath is the device used by client.OpenDevice
+	snpDevicePath = "/dev/sev-guest"
 )
 
 var (
@@ -67,6 +70,12 @@ type SnpCertTableEntry struct {
 // Name returns the name of the driver
 func (s *Snp) Name() string {
 	return "SNP driver"
+}
+
+// Detect reports whether the SEV-SNP guest device is present
+func (s *Snp) Detect() bool {
+	_, err := os.Stat(snpDevicePath)
+	return err == nil
 }
 
 // Init initializaes the SNP driver with the specifified configuration
@@ -212,7 +221,7 @@ func GetExtendedReport(vmpl int) ([]byte, []byte, error) {
 
 	d, err := client.OpenDevice()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open /dev/sev-guest")
+		return nil, nil, fmt.Errorf("failed to open %v: %w", snpDevicePath, err)
 	}
 	defer d.Close()
 

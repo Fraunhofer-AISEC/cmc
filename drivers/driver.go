@@ -52,3 +52,9 @@ type Driver interface {
 	Name() string
 	UpdateCerts() error
 }
+
+// Detector is implemented by drivers whose hardware can be detected, so that
+// they can be selected automatically
+type Detector interface {
+	Detect() bool
+}

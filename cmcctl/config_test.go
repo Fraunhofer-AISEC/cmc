@@ -265,7 +265,7 @@ func TestLibapiRequiresMetadataAndDrivers(t *testing.T) {
 		t.Errorf("a client without an embedded CMC needs no drivers: %v", err)
 	}
 
-	_, err := run(t, "--cmc", "libapi")
+	_, err := run(t, "--cmc", "libapi", "--drivers", "")
 	if err == nil {
 		t.Fatal("expected an error for an embedded CMC without drivers or metadata")
 	}
@@ -273,6 +273,14 @@ func TestLibapiRequiresMetadataAndDrivers(t *testing.T) {
 		if !strings.Contains(err.Error(), want+": required option is not set") {
 			t.Errorf("error does not report %v as required:\n%v", want, err)
 		}
+	}
+
+	c, err := run(t, "--cmc", "libapi", "--metadata", "file://m")
+	if err != nil {
+		t.Fatalf("drivers default to auto, but got: %v", err)
+	}
+	if !slices.Equal(c.Cmc.Attestation.Drivers, []string{"auto"}) {
+		t.Errorf("drivers = %v, want [auto]", c.Cmc.Attestation.Drivers)
 	}
 }
 
