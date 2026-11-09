@@ -50,17 +50,37 @@ func NewHttpClient(rootCas []*x509.Certificate, allowSystemCerts bool, clientCer
 	}
 
 	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:            rootpool,
-				InsecureSkipVerify: false,
-				Certificates:       clientCerts,
+		Transport: &diagTransport{
+			base: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs:            rootpool,
+					InsecureSkipVerify: false,
+					Certificates:       clientCerts,
+				},
+				DisableKeepAlives: false,
 			},
-			DisableKeepAlives: false,
+			rootCas: rootCas,
 		},
 	}
 
 	return client, nil
+}
+
+// diagTransport enriches TLS errors of the wrapped transport with diagnostic information
+type diagTransport struct {
+	base    *http.Transport
+	rootCas []*x509.Certificate
+}
+
+func (t *diagTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		details := TlsErrorDetails(err, t.base.TLSClientConfig, req.URL.Hostname(), t.rootCas)
+		if details != "" {
+			return nil, fmt.Errorf("%w\n%v", err, details)
+		}
+	}
+	return resp, err
 }
 
 func Request(
