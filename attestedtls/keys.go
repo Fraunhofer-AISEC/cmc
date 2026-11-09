@@ -23,8 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"slices"
+
+	"github.com/Fraunhofer-AISEC/cmc/api"
 )
 
 // PrivateKey Wrapper implementing crypto.Signer interface
@@ -48,16 +52,27 @@ func (priv PrivateKey) Public() crypto.PublicKey {
 }
 
 // GetOrCreateCert retrieves an existing TLS certificate by key ID, or creates
-// a new one if retrieval fails. The key ID is updated in place and persisted
-// to keyIdFile if non-empty.
+// a new one if retrieval fails or the certificate names do not match the
+// configured CN, DNS names and IP addresses. The key ID is updated in place
+// and persisted to keyIdFile if non-empty.
 func GetOrCreateCert(keyId *string, keyIdFile string, opts ...ConnectionOption[CmcConfig]) (tls.Certificate, error) {
 	if *keyId != "" {
 		cert, err := GetCert(append(opts, WithKeyId(*keyId))...)
 		if err == nil {
-			log.Tracef("Found key with key id %s", *keyId)
-			return cert, nil
+			cc, err := NewCmcConfig(opts...)
+			if err != nil {
+				return tls.Certificate{}, fmt.Errorf("failed to retrieve CMC config: %w", err)
+			}
+			err = matchesKeyConfig(cert.Leaf, cc.KeyConfig)
+			if err == nil {
+				log.Tracef("Found key with key id %s", *keyId)
+				return cert, nil
+			}
+			log.Warnf("Certificate for key ID %v does not match configuration: %v. Creating new key",
+				*keyId, err)
+		} else {
+			log.Warnf("Failed to retrieve certificate for key ID %v. Creating new key", *keyId)
 		}
-		log.Warnf("Failed to retrieve certificate for key ID %v. Creating new key", *keyId)
 	}
 
 	newId, err := CreateCert(append(opts, WithKeyId(*keyId))...)
@@ -80,6 +95,41 @@ func GetOrCreateCert(keyId *string, keyIdFile string, opts ...ConnectionOption[C
 		return tls.Certificate{}, fmt.Errorf("failed to retrieve certificate for key ID %v: %w", newId, err)
 	}
 	return cert, nil
+}
+
+// matchesKeyConfig checks whether the certificate subject CN and SANs equal the configured ones
+func matchesKeyConfig(cert *x509.Certificate, kc api.TLSKeyConfig) error {
+	if cert.Subject.CommonName != kc.Cn {
+		return fmt.Errorf("CN %q, configured %q", cert.Subject.CommonName, kc.Cn)
+	}
+
+	if !slices.Equal(sortedUnique(cert.DNSNames), sortedUnique(kc.DNSNames)) {
+		return fmt.Errorf("DNS names %v, configured %v", cert.DNSNames, kc.DNSNames)
+	}
+
+	certIps := make([]string, 0, len(cert.IPAddresses))
+	for _, ip := range cert.IPAddresses {
+		certIps = append(certIps, ip.String())
+	}
+	confIps := make([]string, 0, len(kc.IPAddresses))
+	for _, s := range kc.IPAddresses {
+		ip := net.ParseIP(s)
+		if ip == nil {
+			return fmt.Errorf("failed to parse configured IP %v", s)
+		}
+		confIps = append(confIps, ip.String())
+	}
+	if !slices.Equal(sortedUnique(certIps), sortedUnique(confIps)) {
+		return fmt.Errorf("IP addresses %v, configured %v", cert.IPAddresses, kc.IPAddresses)
+	}
+
+	return nil
+}
+
+func sortedUnique(s []string) []string {
+	c := slices.Clone(s)
+	slices.Sort(c)
+	return slices.Compact(c)
 }
 
 func CreateCert(moreConfigs ...ConnectionOption[CmcConfig]) (string, error) {
