@@ -88,7 +88,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "get-report",
-				Usage: "Retrieve and AMD SEV-SNP attestation report from the AMD PSP",
+				Usage: "Retrieve an AMD SEV-SNP attestation report from the AMD PSP",
 				Action: func(ctx context.Context, c *cli.Command) error {
 
 					config, err := GetConfig(c)
@@ -98,7 +98,7 @@ func main() {
 
 					quote, err := getReport(config)
 					if err != nil {
-						return fmt.Errorf("failed to get SNP Quote: %w", err)
+						return fmt.Errorf("failed to get SNP report: %w", err)
 					}
 
 					if config.Out == "" {
@@ -115,7 +115,7 @@ func main() {
 			},
 			{
 				Name:  "parse-report",
-				Usage: "Parse and AMD SEV-SNP attestation report",
+				Usage: "Parse an AMD SEV-SNP attestation report",
 				Action: func(ctx context.Context, c *cli.Command) error {
 
 					config, err := GetConfig(c)
@@ -286,7 +286,7 @@ func getReport(c *Config) ([]byte, error) {
 
 	data, err := snpdriver.GetReport(nonce, c.Vmpl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP Quote: %w", err)
+		return nil, fmt.Errorf("failed to get SNP report: %w", err)
 	}
 
 	return data, nil

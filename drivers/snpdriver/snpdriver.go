@@ -168,7 +168,7 @@ func (snp *Snp) GetCollateral() ([]ar.Collateral, error) {
 func GetReport(nonce []byte, vmpl int) ([]byte, error) {
 
 	if len(nonce) > 64 {
-		return nil, errors.New("user Data must be at most 64 bytes")
+		return nil, errors.New("user data must be at most 64 bytes")
 	}
 
 	log.Debugf("Generating SNP attestation report on VMPL %v with nonce: %v", vmpl,
@@ -183,7 +183,7 @@ func GetReport(nonce []byte, vmpl int) ([]byte, error) {
 	copy(ud[:], nonce)
 	buf, err := qp.GetRawQuoteAtLevel(ud, uint(vmpl))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SNP attestation report")
+		return nil, fmt.Errorf("failed to get SNP attestation report: %w", err)
 	}
 
 	log.Debug("Generated SNP attestation report")
