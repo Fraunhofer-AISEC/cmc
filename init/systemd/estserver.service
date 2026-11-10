@@ -1,0 +1,17 @@
+[Unit]
+Description=CMC EST provisioning server
+Documentation=https://github.com/Fraunhofer-AISEC/cmc
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=@BINDIR@/estserver
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=@WANTEDBY@

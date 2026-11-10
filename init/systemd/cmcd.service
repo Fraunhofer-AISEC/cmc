@@ -1,0 +1,17 @@
+[Unit]
+Description=CMC attestation daemon
+Documentation=https://github.com/Fraunhofer-AISEC/cmc
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+ExecStart=@BINDIR@/cmcd
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+
+[Install]
+WantedBy=@WANTEDBY@

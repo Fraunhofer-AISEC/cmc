@@ -8,16 +8,18 @@ instead of `setup-cmc tdx`). This omits installing prerequisites.
 ## TDX Setup
 
 Creates the PKI and metadata for running the CMC within TDX Confidential VMs (also called
-Trusted Domains (TDs)):
+Trusted Domains (TDs)). The CMC must be [built and installed](./setup.md#build-and-install-the-cmc)
+first.
 ```sh
 source env.bash
-cmc-docker setup-cmc tdx
+cmc-docker setup-cmc tdx <artifacts>
 ```
 
-This script calls [generate-rtm-manifest-tdx](../bin/generate-rtm-manifest-tdx) and
-[generate-os-manifest-tdx](../bin/generate-os-manifest-tdx). In both scripts, the
-path to all artifacts required for precomputing the measurement registers must be set
-(see [Intel TDX Manual Metadata Generation](./setup-tdx.md#intel-tdx-manual-metadata-generation))
+`<artifacts>` is the folder with all artifacts required for precomputing the measurement registers,
+such as the TDX module, OVMF, kernel and kernel cmdline. The script calls
+[precompute-rtm-manifest-tdx](../bin/precompute-rtm-manifest-tdx) and
+[precompute-os-manifest-tdx](../bin/precompute-os-manifest-tdx), which list the expected file
+names. See [Intel TDX Manual Metadata Generation](./setup-tdx.md#intel-tdx-manual-metadata-generation)
 for more information.
 
 ## TDX Build
@@ -90,8 +92,8 @@ Precomputing the measurement registers requires a reproducibly built OVMF, kerne
 cmdline and configuration parameters as input.
 
 For a complete setup including precomputing all measurement registers, see
-[generate-rtm-manifest-tdx](../bin/generate-rtm-manifest-sgx) and
-[generate-os-manifest-tdx](../bin/generate-os-manifest-tdx).
+[precompute-rtm-manifest-tdx](../bin/precompute-rtm-manifest-tdx) and
+[precompute-os-manifest-tdx](../bin/precompute-os-manifest-tdx).
 
 ### Further documentation
 

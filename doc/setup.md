@@ -6,9 +6,17 @@ running the *cmcd*.  It was tested on Ubuntu 24.04 LTS.
 > Note: For general information on the attestation metadata formats and an explanation of the different
 > components, see [Architecture](./architecture.md) and [Metadata](./metadata.md).
 
-## Setup environment
+## Overview
 
-This simply adds `cmc/bin` to the PATH, so that the scripts can be run:
+The example setups consist of three steps:
+
+1. [Install the prerequisites](#prerequisites), or use Docker
+2. [Build and install the CMC](#build-and-install-the-cmc)
+3. Run the platform-specific setup script, which generates an example PKI and metadata under
+   `data/`, see [Platform-specific Example Setup](#platform-specific-example-setup-and-metadata-generation)
+
+The scripts in `bin/` only use the installed binaries and never build them. Add the scripts to the
+PATH with:
 ```sh
 source env.bash
 ```
@@ -42,11 +50,6 @@ If docker is not used, the following prerequisites must be installed:
 
 Building the *cmcd* requires *go*. Follow https://golang.org/doc/install.
 
-If you use the installed binaries, make sure to add the following line to your `$HOME/.profile`:
-```sh
-export PATH=$PATH:$HOME/go/bin
-```
-
 Furthermore, several packages must be installed for building the *cmc* and generating metadata:
 ```sh
 sudo apt install -y build-essential libssl-dev golang-cfssl jq yq
@@ -66,6 +69,21 @@ sudo apt install -y moreutils sqlite3 zlib1g-dev libssl-dev protoc-gen-go protoc
                     libgnutls28-dev socat zlib1g-dev libseccomp-dev moreutils python-is-python3 \
                     libtool expect
 ```
+
+## Build and Install the CMC
+
+Builds all binaries into `build/` and installs them for the current user into `~/.local/bin`:
+```sh
+make build-all
+make install-all
+
+# Or within docker
+cmc-docker make build-all install-all
+```
+
+Make sure `~/.local/bin` is in your PATH. After changing the code, run both commands again so that
+the scripts use the new binaries. For system-wide installations and the individual components, see
+[Build and Install](./build-and-install.md).
 
 ## Platform-specific Example Setup and Metadata Generation
 

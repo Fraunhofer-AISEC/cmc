@@ -1,32 +1,34 @@
 # Quick Demo Setup IDS Use Case
 The CMC repository contains a complete local example setup including a demo CA and all configurations and metadata matching the requirements for representing the certification scheme from the the International Data Spaces (IDS) .
 
-The setup script `example-setup/setup-cmc-ids` sets up everything to quickly test remote attestation with the IDS specific roles and CAs.
-It was tested on Ubuntu 22.04 LTS.
+The setup script `setup-cmc` with the `-i` flag sets up everything to quickly test remote
+attestation with the IDS specific roles and CAs.
 
 ## Setup
 > :warning: **Note:** You should run this only for testing on a development machine
 
+The CMC must be [built and installed](./setup.md#build-and-install-the-cmc) first. The IDS PKI
+additionally requires `sqlite3`.
 ```sh
 git clone https://github.com/Fraunhofer-AISEC/cmc.git
-<cmc-folder>/example-setup/setup-cmc-ids <cmc-folder> <metadata-folder>
+cd cmc
+source env.bash
+setup-cmc -i tpm
 ```
-with `<cmc-folder>` as the relative or absolute path to the cloned `cmc` repository and
-`<metadata-folder>` as an arbitrary folder where metadata and configuration files are stored.
+The PKI and metadata are stored in `data/`.
 
 ## Run the CMC
 
 ```sh
-DATA=<metadata-folder>
 # Start the EST server that supplies the certificates and metadata for the cmcd
-estserver --config $DATA/est-server-ids.toml
+estserver --config example-setup/configs/est-server-ids.toml
 
-# Build and run the cmcd
-cmcd --config $DATA/cmcd.toml --metadata https://127.0.0.1:9000/metadata-signed
+# Run the cmcd
+sudo "$(command -v cmcd)" --config example-setup/configs/cmcd.toml --metadata https://127.0.0.1:9000/metadata-signed
 
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
 cmcctl generate
 
 # Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
-cmcctl verify --root-cas $DATA/pki/ca.pem --policies $DATA/policies-ids.js
+cmcctl verify --root-cas data/pki/ca.pem --policies example-setup/policies/policies-ids.js
 ```

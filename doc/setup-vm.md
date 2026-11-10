@@ -7,12 +7,17 @@ for running in docker, or `cmc-docker` can simply be omitted.
 
 ## VM Setup
 
-Creates an ubuntu server VM image with attached swTPM:
+Creates an ubuntu server VM image with attached swTPM. The CMC must be
+[built and installed](./setup.md#build-and-install-the-cmc) first, as the installed `cmcd`,
+`cmcctl` and `mrtool` are copied into the VM:
 ```sh
 source env.bash
 
 cmc-docker vm-setup
 ```
+
+After changing the code, rebuild and install the CMC, then copy the new binaries into the running
+VM with `cmc-docker vm-update-cmcd`.
 
 ## Run CMC
 
@@ -108,13 +113,13 @@ Simply parses the reference values from a running VM:
 cmc-docker vm-estserver
 cmc-docker vm-swtpm
 cmc-docker vm-start
-cmc-docker update-metadata-vm
+cmc-docker vm-update-metadata
 ```
 
-The `update-metadata-vm` script also deletes the cmc internal data folder so that the
+The `vm-update-metadata` script also deletes the cmc internal data folder so that the
 generation of new certificates is enforced. This can also be done manually in the vm:
 ```sh
-rm -r /var/cmc
+rm -r /var/lib/cmc/cmcd
 systemctl restart cmcd
 ```
 

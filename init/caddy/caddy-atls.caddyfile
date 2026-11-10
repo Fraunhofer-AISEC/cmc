@@ -1,0 +1,23 @@
+# Caddy terminates attested TLS on :4445 and reverse-proxies plain HTTP to a
+# backend on 127.0.0.1:8080. Adjust the site address, certificate and backend.
+{
+	auto_https disable_redirects
+	skip_install_trust
+
+	servers :4445 {
+		protocols h1 h2
+		listener_wrappers {
+			atls {
+				cmc_api socket
+				cmc_addr @RUNDIR@/cmc.sock
+				attest server
+				serializer json
+			}
+		}
+	}
+}
+
+https://localhost:4445 {
+	tls internal
+	reverse_proxy http://127.0.0.1:8080
+}
