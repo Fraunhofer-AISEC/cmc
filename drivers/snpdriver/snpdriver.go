@@ -263,7 +263,12 @@ func GetCertsFromExtReport(certTable []byte, uuids [][]byte) ([]*x509.Certificat
 
 			if bytes.Equal(entry.Uuid[:], uuid) {
 				log.Debugf("Found cert offset %v length %v", entry.Offset, entry.Length)
-				raw := certTable[entry.Offset : entry.Offset+entry.Length]
+				end := uint64(entry.Offset) + uint64(entry.Length)
+				if end > uint64(len(certTable)) {
+					return nil, fmt.Errorf("cert table entry (offset %v, length %v) exceeds table length %v",
+						entry.Offset, entry.Length, len(certTable))
+				}
+				raw := certTable[entry.Offset:end]
 				cert, err := x509.ParseCertificate(raw)
 				if err != nil {
 					return nil, fmt.Errorf("failed to parse cert: %w", err)
