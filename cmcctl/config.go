@@ -327,7 +327,7 @@ func loadPlainConfig(cmd *cli.Command) (*Config, error) {
 	if err := c.Log.Setup(); err != nil {
 		return nil, err
 	}
-	config.LogEffective(cmd, binaryName, c)
+	config.LogEffective(cmd, binaryName, c, false)
 	if err := config.DirsOf(binaryName).Create(); err != nil {
 		return nil, err
 	}
