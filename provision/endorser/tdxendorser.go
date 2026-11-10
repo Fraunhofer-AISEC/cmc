@@ -32,12 +32,14 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/google/go-tdx-guest/pcs"
 )
 
 const (
+	// PcsUrl is the address of the Intel Provisioning Certification Service
+	PcsUrl = "https://api.trustedservices.intel.com"
+
 	tdxCacheTtl = 24 * time.Hour
 
 	// IntelRootCaCrlPath is the path of the CRL distribution point within the Intel
@@ -67,19 +69,6 @@ func WithProxiedRootCaCrl() TdxOption {
 	return func(e *TdxEndorser) {
 		e.proxyRootCrl = true
 	}
-}
-
-// Implement the EndorserProvider interface
-func (endorser *TdxEndorser) Snp() (drivers.SnpEndorser, error) {
-	return nil, fmt.Errorf("internal error: requesting SNP from TDX endorser")
-}
-
-func (endorser *TdxEndorser) Tdx() (drivers.TdxEndorser, error) {
-	return endorser, nil
-}
-
-func (endorser *TdxEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return nil, fmt.Errorf("internal error: requesting TPM from TDX endorser")
 }
 
 // NewTdxEndorser initializes a new TDX endorser. baseUrl is the address of the

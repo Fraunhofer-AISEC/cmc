@@ -31,7 +31,11 @@ type DriverConfig struct {
 	CtrLog          string
 	CtrTrustAnchor  string // Trust anchor for container measurements, empty disables them
 	Vmpl            int
-	Endorsers       EndorserProvider
+	// Endorsers fetch certificates and collateral per trust anchor. They are nil
+	// if no endorsement is configured for the trust anchor
+	SnpEndorser SnpEndorser
+	TdxEndorser TdxEndorser
+	TpmEndorser TpmEndorser
 	// AppendEbsEvent reconstructs the ExitBootServices EV_EFI_ACTION events for PCR 5,
 	// which is only required for TPM2.0 with legacy TPM eventlog format v1
 	AppendEbsEvent bool

@@ -85,10 +85,10 @@ func TestFlagNames(t *testing.T) {
 
 	want := []string{
 		"allow-system-certs", "append-ebs", "cmc", "config", "ctr-log", "ctr-trust-anchor", "drivers",
-		"endorsement", "enrollment", "exclude-pcrs", "hash-alg", "log-file", "log-level",
+		"enrollment", "exclude-pcrs", "hash-alg", "log-file", "log-level",
 		"measurement-logs", "metadata", "omsp-format", "policy-engine", "policy-overwrite",
-		"provision-auth", "provision-token", "root-cas", "storage", "tpm-key-alg", "use-omsp",
-		"vmpl",
+		"provision-auth", "provision-token", "root-cas", "snp-endorsement", "storage",
+		"tdx-endorsement", "tpm-endorsement", "tpm-key-alg", "use-omsp", "vmpl",
 	}
 
 	var got []string
@@ -102,21 +102,19 @@ func TestFlagNames(t *testing.T) {
 	}
 }
 
-func TestRequiredOptions(t *testing.T) {
-	_, err := run(t)
-	if err == nil {
-		t.Fatal("expected an error for a configuration without any option")
-	}
-	if !strings.Contains(err.Error(), "cmc.metadata.locations: required option is not set") {
-		t.Errorf("error does not report cmc.metadata.locations as required:\n%v", err)
-	}
-	if strings.Contains(err.Error(), "cmc.attestation.drivers") {
-		t.Errorf("drivers default to auto but are reported:\n%v", err)
+// TestNoRequiredOptions checks that neither metadata nor drivers are required,
+// as a prover may only send evidence and empty drivers run a verifier only.
+func TestNoRequiredOptions(t *testing.T) {
+	if _, err := run(t); err != nil {
+		t.Errorf("unexpected error for a configuration without any option: %v", err)
 	}
 
-	_, err = run(t, "--drivers", "", "--metadata", "file://m")
-	if err == nil || !strings.Contains(err.Error(), "cmc.attestation.drivers: required option is not set") {
-		t.Errorf("error does not report empty drivers as missing: %v", err)
+	c, err := run(t, "--drivers", "")
+	if err != nil {
+		t.Fatalf("unexpected error for a verifier-only configuration: %v", err)
+	}
+	if len(c.Cmc.Attestation.Drivers) != 0 {
+		t.Errorf("drivers = %v, want none", c.Cmc.Attestation.Drivers)
 	}
 }
 
@@ -142,7 +140,12 @@ func TestInvalidValues(t *testing.T) {
 		{"api", []string{"--cmc", "carrier-pigeon://localhost"}, `API "carrier-pigeon" is not implemented`},
 		{"driver", []string{"--drivers", "hal9000"}, `"hal9000" is not one of`},
 		{"hashAlg", []string{"--hash-alg", "SHA256"}, `"SHA256" is not one of`},
-		{"endorsement", []string{"--endorsement", "est"}, "cmc.provisioning.endorsement: est endorsement requires an address"},
+		{"tpm endorsement", []string{"--tpm-endorsement", "est"}, "cmc.attestation.tpm.endorsement: est requires an address"},
+		{"snp endorsement", []string{"--snp-endorsement", "est:https://localhost"}, `cmc.attestation.snp.endorsement: unknown mode "est"`},
+		{"tdx endorsement", []string{"--tdx-endorsement", "host"}, `cmc.attestation.tdx.endorsement: unknown mode "host"`},
+		{"tpm endorsement self", []string{"--drivers", "tpm", "--tpm-endorsement", "self"}, "cmc.attestation.tpm.endorsement: self requires the snp or tdx driver"},
+		{"tpm endorsement self snp", []string{"--drivers", "tpm,snp", "--tpm-endorsement", "self"}, ""},
+		{"tpm endorsement self auto", []string{"--drivers", "auto", "--tpm-endorsement", "self"}, ""},
 		{"enrollment", []string{"--enrollment", "carrier-pigeon"}, "cmc.provisioning.enrollment: unknown mode"},
 		{"container trust anchor", []string{"--ctr-trust-anchor", "tpm"}, `cmc.attestation.containers.trust_anchor: "tpm" requires the tpm driver in cmc.attestation.drivers`},
 		{"container trust anchor auto", []string{"--drivers", "auto", "--ctr-trust-anchor", "tpm"}, ""},

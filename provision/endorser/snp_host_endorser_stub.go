@@ -18,25 +18,22 @@
 package endorser
 
 import (
+	"crypto/x509"
 	"fmt"
 
-	"github.com/Fraunhofer-AISEC/cmc/drivers"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type SnpHostEndorser struct{}
 
-func (endorser *SnpHostEndorser) Snp() (drivers.SnpEndorser, error) {
-	return nil, fmt.Errorf("snp host endorser not built")
-}
-
-func (endorser *SnpHostEndorser) Tdx() (drivers.TdxEndorser, error) {
-	return nil, fmt.Errorf("snp host endorser not built")
-}
-
-func (endorser *SnpHostEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return nil, fmt.Errorf("snp host endorser not built")
-}
-
 func NewSnpHostEndorser(vmpl int) (*SnpHostEndorser, error) {
+	return nil, fmt.Errorf("snp host endorser not built")
+}
+
+func (s *SnpHostEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error) {
+	return nil, fmt.Errorf("snp host endorser not built")
+}
+
+func (s *SnpHostEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
 	return nil, fmt.Errorf("snp host endorser not built")
 }

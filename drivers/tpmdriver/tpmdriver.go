@@ -94,14 +94,10 @@ func (t *Tpm) Init(c *drivers.DriverConfig) error {
 	if t == nil {
 		return errors.New("internal error: TPM object is nil")
 	}
-	if c.Endorsers == nil {
-		return fmt.Errorf("missing endorsers provider")
+	if c.TpmEndorser == nil {
+		return fmt.Errorf("no TPM endorsement configured")
 	}
-	endorser, err := c.Endorsers.Tpm()
-	if err != nil {
-		return fmt.Errorf("failed to get endorser: %w", err)
-	}
-	t.endorser = endorser
+	t.endorser = c.TpmEndorser
 
 	t.DriverConfig = c
 	t.ctrLog = strings.EqualFold(c.CtrTrustAnchor, "tpm")

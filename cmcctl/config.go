@@ -170,15 +170,6 @@ func (c *Config) Validate(r *config.Report) {
 	case apis[name] == nil:
 		r.Errorf("api.endpoint", "API %q is not implemented, available: %v",
 			name, strings.Join(availableApis(), ", "))
-	case name == "libapi":
-		// Only with an embedded CMC does cmcctl need something to attest with
-		// and something to attest against
-		if len(c.Cmc.Attestation.Drivers) == 0 {
-			r.Missing("cmc.attestation.drivers", "drivers")
-		}
-		if len(c.Cmc.Metadata.Locations) == 0 {
-			r.Missing("cmc.metadata.locations", "metadata")
-		}
 	}
 
 	if c.Atls.AttestationOnlyTrust && c.Atls.Attest != "server" && c.Atls.Attest != "mutual" {

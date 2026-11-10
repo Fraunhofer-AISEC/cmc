@@ -87,13 +87,13 @@ func TestFlagNames(t *testing.T) {
 	want := []string{
 		"addr", "allow-system-certs", "append-ebs", "attest", "attestation-only-trust",
 		"ca-store-path", "cmc", "config", "count", "ctr-log", "ctr-trust-anchor", "data", "drivers",
-		"dry-run", "endorsement", "enrollment", "exclude-pcrs", "hash-alg", "header", "key-config",
+		"dry-run", "enrollment", "exclude-pcrs", "hash-alg", "header", "key-config",
 		"key-id", "key-type", "kubeadm-path", "log-file", "log-level", "measurement-logs",
 		"metadata", "method", "mtls", "nonce", "omsp-format", "policies", "policy-engine",
 		"policy-overwrite", "provision-auth", "provision-token", "publish-cert", "publish-key",
 		"publish-network", "publish-ocsf", "publish-results", "publish-token", "report", "result",
-		"provision-token-out", "root-cas", "serialization", "storage", "tls-cn", "tls-dns-names", "tls-ip-addresses",
-		"tpm-key-alg", "token-max-uses", "token-store", "token-subject", "use-omsp", "vmpl",
+		"provision-token-out", "root-cas", "serialization", "snp-endorsement", "storage", "tdx-endorsement", "tls-cn", "tls-dns-names", "tls-ip-addresses",
+		"tpm-endorsement", "tpm-key-alg", "token-max-uses", "token-store", "token-subject", "use-omsp", "vmpl",
 	}
 	slices.Sort(want)
 
@@ -257,25 +257,19 @@ func TestGlobalFlagsWorkBeforeAndAfterTheSubcommand(t *testing.T) {
 	}
 }
 
-// TestLibapiRequiresMetadataAndDrivers checks that the options only the
-// embedded CMC needs are required exactly when cmcctl runs one.
-func TestLibapiRequiresMetadataAndDrivers(t *testing.T) {
+// TestLibapiOptions checks that an embedded CMC requires neither metadata nor
+// drivers, as empty drivers run a verifier only.
+func TestLibapiOptions(t *testing.T) {
 
 	if _, err := run(t, "--cmc", "socket://localhost:9955"); err != nil {
 		t.Errorf("a client without an embedded CMC needs no drivers: %v", err)
 	}
 
-	_, err := run(t, "--cmc", "libapi", "--drivers", "")
-	if err == nil {
-		t.Fatal("expected an error for an embedded CMC without drivers or metadata")
-	}
-	for _, want := range []string{"cmc.attestation.drivers", "cmc.metadata.locations"} {
-		if !strings.Contains(err.Error(), want+": required option is not set") {
-			t.Errorf("error does not report %v as required:\n%v", want, err)
-		}
+	if _, err := run(t, "--cmc", "libapi", "--drivers", ""); err != nil {
+		t.Errorf("unexpected error for a verifier-only embedded CMC: %v", err)
 	}
 
-	c, err := run(t, "--cmc", "libapi", "--metadata", "file://m")
+	c, err := run(t, "--cmc", "libapi")
 	if err != nil {
 		t.Fatalf("drivers default to auto, but got: %v", err)
 	}

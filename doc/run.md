@@ -43,16 +43,30 @@ sudo cmcd config init --metadata https://metadata.example.com/
 
 Some options combine several values into a single string:
 
-| Option        | Form                | Examples                                                                                      |
-| ------------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| `cmc`         | `<api>://<address>` | `socket:///run/cmc/cmc.sock`, `socket://127.0.0.1:9955`, `grpc://127.0.0.1:9955`, or `libapi` |
-| `endorsement` | `<mode>[:<url>]`    | `direct`, `host`, `est:https://localhost:9000`, `cps:https://localhost:9000`                  |
-| `enrollment`  | `<mode>[:<url>]`    | `self`, `est:https://localhost:9000`                                                          |
+| Option            | Form                | Examples                                                                                      |
+| ----------------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| `cmc`             | `<api>://<address>` | `socket:///run/cmc/cmc.sock`, `socket://127.0.0.1:9955`, `grpc://127.0.0.1:9955`, or `libapi` |
+| `tpm.endorsement` | `<mode>[:<url>]`    | `est:https://localhost:9000`, `self`                                                          |
+| `snp.endorsement` | `<mode>[:<url>]`    | `direct` (default), `host`, `cps:https://localhost:9000`                                      |
+| `tdx.endorsement` | `<mode>[:<url>]`    | `direct` (default), `cps:https://localhost:9000`                                              |
+| `enrollment`      | `<mode>[:<url>]`    | `self`, `est:https://localhost:9000`                                                          |
+
+The endorsement of a trust anchor defines how its certificates and collateral are obtained. `direct`
+fetches them from the vendor (AMD KDS, Intel PCS), `cps` from a caching proxy service such as the
+estserver or, for TDX, a PCCS, and `host` the SNP certificates from the hypervisor. The TPM AK is
+either certified by an EST server through credential activation (`est`), or self-signed (`self`) for
+a CVM vTPM, which is then bound to the `snp` or `tdx` driver as primary trust anchor. The `sgx`
+driver uses the TDX endorsement, the `azure` driver the SNP or TDX endorsement.
 
 The `drivers` option defaults to `auto`, which selects every driver whose device is present: `tpm`
 (`/dev/tpmrm0` or `/dev/tpm0`), `snp` (`/dev/sev-guest`) and `tdx` (`/dev/tdx_guest`). The `azure`,
 `sgx`, `sw` and `swima` drivers are never detected and must be listed explicitly, e.g.
-`drivers = ["auto", "sw"]`. On Azure CVMs, `auto` only finds the vTPM.
+`drivers = ["auto", "sw"]`. On Azure CVMs, `auto` only finds the vTPM. An empty list
+(`drivers = []`) runs a verifier-only CMC, which cannot generate attestation reports.
+
+`metadata` is optional. Without it, a prover only sends evidence and collateral, which a CMC
+verifier rejects for lack of reference values. A verifier-only CMC needs no metadata, as it verifies
+the metadata contained in the reports.
 
 ## cmcctl commands
 

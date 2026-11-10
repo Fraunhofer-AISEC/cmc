@@ -92,6 +92,10 @@ func GetDrivers() map[string]drv.Driver {
 // resolveDrivers returns the names of the drivers to use without duplicates.
 // The value auto expands to all drivers whose hardware is detected.
 func resolveDrivers(names []string) ([]string, error) {
+	if len(names) == 0 {
+		log.Info("No drivers configured, running as verifier only")
+		return nil, nil
+	}
 	resolved := make([]string, 0, len(names))
 	for _, name := range names {
 		name = strings.ToLower(name)
@@ -181,13 +185,6 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 
 	cmc.UpdateMetadata(metadata)
 
-	// Create endorser, which is used to fetch vendor certificate chains,
-	// such as the AMD SNP VCEK or Intel TDX PCK chain
-	endorser, err := createEndorser(c, rootCas, allowSystemCerts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create endorser: %w", err)
-	}
-
 	// Create driver configuration
 	driverConf := &drv.DriverConfig{
 		HashAlg:         alg,
@@ -197,15 +194,22 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 		CtrLog:          c.Attestation.Containers.Log,
 		CtrTrustAnchor:  c.Attestation.Containers.TrustAnchor,
 		Vmpl:            c.Attestation.Snp.Vmpl,
-		Endorsers:       endorser,
 		StoragePath:     c.Storage.Data,
 		AppendEbsEvent:  c.Attestation.Tpm.AppendEbsEvent,
+	}
+	if err := addEndorsers(driverConf, c, rootCas, allowSystemCerts); err != nil {
+		return nil, err
 	}
 
 	// Initialize drivers
 	driverNames, err := resolveDrivers(c.Attestation.Drivers)
 	if err != nil {
 		return nil, err
+	}
+	if mode, _ := internal.ParseModeAddr(c.Attestation.Tpm.Endorsement); mode == "self" &&
+		slices.Contains(driverNames, "tpm") && !slices.ContainsFunc(driverNames, isCcDriver) {
+		return nil, fmt.Errorf("tpm endorsement self requires the snp or tdx driver, drivers: %v",
+			driverNames)
 	}
 	usedDrivers := make([]drv.Driver, 0, len(driverNames))
 	for _, name := range driverNames {
@@ -217,6 +221,11 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 	}
 	cmc.Drivers = usedDrivers
 
+	if len(cmc.Drivers) > 0 && len(metadata) == 0 {
+		log.Warn("No metadata configured: generated attestation reports carry no reference values " +
+			"and fail verification by a CMC")
+	}
+
 	// Check container trust anchor
 	if t := c.Attestation.Containers.TrustAnchor; t != "" && !slices.Contains(driverNames, t) {
 		return nil, fmt.Errorf("container trust anchor %v requires the %v driver", t, t)
@@ -224,11 +233,12 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 
 	// Create provisioner for key manager, which is used to enroll certificates for created keys,
 	// e.g. via EST or ACME protocol. In enrollment mode "self", TLS certificates are self-signed
-	// and no enrollment protocol and thus no provisioner is required
+	// and no enrollment protocol and thus no provisioner is required. Without enrollment, keys
+	// cannot be enrolled
 	enrollmentMode, _ := internal.ParseModeAddr(c.Provisioning.Enrollment)
 	selfSigned := enrollmentMode == "self"
 	var provisioner keymgr.Enroller
-	if !selfSigned {
+	if enrollmentMode != "" && !selfSigned {
 		provisioner, err = createEnroller(c, rootCas, allowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create enroller: %w", err)
@@ -294,49 +304,127 @@ func deriveLocalRole(metadata map[string][]byte) string {
 	return found
 }
 
-func createEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (drv.EndorserProvider, error) {
+// addEndorsers creates the endorsers of all trust anchors with a configured
+// endorsement. They fetch vendor certificate chains and collateral, such as the
+// AMD SNP VCEK or the Intel TDX collateral, or enroll the TPM AK
+func addEndorsers(d *drv.DriverConfig, c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) error {
 	var err error
 
-	authMethods, err := internal.ParseAuthMethods(c.Provisioning.Auth)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
+	if c.Attestation.Tpm.Endorsement != "" {
+		d.TpmEndorser, err = createTpmEndorser(c, rootCas, allowSystemCerts)
+		if err != nil {
+			return fmt.Errorf("failed to create TPM endorser: %w", err)
+		}
 	}
+	if c.Attestation.Snp.Endorsement != "" {
+		d.SnpEndorser, err = createSnpEndorser(c, rootCas, allowSystemCerts)
+		if err != nil {
+			return fmt.Errorf("failed to create SNP endorser: %w", err)
+		}
+	}
+	if c.Attestation.Tdx.Endorsement != "" {
+		d.TdxEndorser, err = createTdxEndorser(c, rootCas, allowSystemCerts)
+		if err != nil {
+			return fmt.Errorf("failed to create TDX endorser: %w", err)
+		}
+	}
+	return nil
+}
 
-	mode, addr := internal.ParseModeAddr(c.Provisioning.Endorsement)
+func createTpmEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (drv.TpmEndorser, error) {
 
+	mode, addr := internal.ParseModeAddr(c.Attestation.Tpm.Endorsement)
 	switch mode {
 	case "est":
-		// TPM-only attestation must use EST endorsement mode as credential activation is mandatory
+		// Credential activation of the AK against the EST server
 		if addr == "" {
-			return nil, fmt.Errorf("est endorsement requires an address (endorsement: est:<url>)")
+			return nil, fmt.Errorf("est endorsement requires an address (est:<url>)")
+		}
+		authMethods, err := internal.ParseAuthMethods(c.Provisioning.Auth)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
 		}
 		var token []byte
 		if authMethods.Has(internal.AuthToken) {
 			token, err = os.ReadFile(c.Provisioning.Token)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read token: %v", err)
+				return nil, fmt.Errorf("failed to read token: %w", err)
 			}
 		}
-		endorser, err := endorser.NewEstEndorser(addr, rootCas, allowSystemCerts, token)
+		e, err := endorser.NewEstEndorser(addr, rootCas, allowSystemCerts, token)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create EST client: %w", err)
+			return nil, err
 		}
-		return endorser, nil
-	case "direct":
-		// Direct endorsement supports TDX (Intel PCS) and SNP (AMD KDS)
-		return endorser.NewDirectProvider(c.VendorCacheDir())
-	case "cps":
-		// CPS endorsement supports TDX (PCCS) and SNP (custom caching proxy service)
-		if addr == "" {
-			return nil, fmt.Errorf("cps endorsement requires an address (endorsement: cps:<url>)")
-		}
-		return endorser.NewCpsProvider(c.VendorCacheDir(), addr, rootCas, allowSystemCerts)
-	case "host":
-		// Host endorsement supports SNP via the SNP_GET_EXT_REPORT API
-		return endorser.NewSnpHostEndorser(c.Attestation.Snp.Vmpl)
+		return e, nil
+	case "self":
+		// Self-signed AK of a vTPM bound to the CC trust anchor
+		return &endorser.VtpmEndorser{}, nil
 	default:
-		return nil, fmt.Errorf(
-			"unknown endorsement %q: expected direct, host, est:<url> or cps:<url>", c.Provisioning.Endorsement)
+		return nil, fmt.Errorf("unknown endorsement %q: expected est:<url> or self",
+			c.Attestation.Tpm.Endorsement)
+	}
+}
+
+func createSnpEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (drv.SnpEndorser, error) {
+
+	mode, addr := internal.ParseModeAddr(c.Attestation.Snp.Endorsement)
+	switch mode {
+	case "direct":
+		// The AMD KDS is a production service under a global CA, so the
+		// system root store is used regardless of the CMC trust pool
+		e, err := endorser.NewSnpEndorser(endorser.AmdKdsUrl, c.VendorCacheDir(), nil, true)
+		if err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "cps":
+		if addr == "" {
+			return nil, fmt.Errorf("cps endorsement requires an address (cps:<url>)")
+		}
+		e, err := endorser.NewSnpEndorser(addr, c.VendorCacheDir(), rootCas, allowSystemCerts)
+		if err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "host":
+		e, err := endorser.NewSnpHostEndorser(c.Attestation.Snp.Vmpl)
+		if err != nil {
+			return nil, err
+		}
+		return e, nil
+	default:
+		return nil, fmt.Errorf("unknown endorsement %q: expected direct, host or cps:<url>",
+			c.Attestation.Snp.Endorsement)
+	}
+}
+
+func createTdxEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (drv.TdxEndorser, error) {
+
+	mode, addr := internal.ParseModeAddr(c.Attestation.Tdx.Endorsement)
+	switch mode {
+	case "direct":
+		// The Intel PCS is a production service under a global CA, so the
+		// system root store is used regardless of the CMC trust pool
+		e, err := endorser.NewTdxEndorser(endorser.PcsUrl, c.VendorCacheDir(), nil, true)
+		if err != nil {
+			return nil, err
+		}
+		return e, nil
+	case "cps":
+		// The root CA CRL is also fetched from the proxy, so that the CVM does
+		// not require internet access
+		if addr == "" {
+			return nil, fmt.Errorf("cps endorsement requires an address (cps:<url>)")
+		}
+		e, err := endorser.NewTdxEndorser(addr, c.VendorCacheDir(), rootCas, allowSystemCerts,
+			endorser.WithProxiedRootCaCrl())
+		if err != nil {
+			return nil, err
+		}
+		return e, nil
+	default:
+		return nil, fmt.Errorf("unknown endorsement %q: expected direct or cps:<url>",
+			c.Attestation.Tdx.Endorsement)
 	}
 }
 

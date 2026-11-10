@@ -53,13 +53,4 @@ func (c *Config) Validate(r *config.Report) {
 		r.Errorf("api.endpoint", "API %q is not implemented, available: %v",
 			name, strings.Join(availableApis(), ", "))
 	}
-
-	// Unlike cmcctl, the cmcd always runs a CMC, so it always needs something
-	// to attest with and something to attest against
-	if len(c.Cmc.Attestation.Drivers) == 0 {
-		r.Missing("cmc.attestation.drivers", "drivers")
-	}
-	if len(c.Cmc.Metadata.Locations) == 0 {
-		r.Missing("cmc.metadata.locations", "metadata")
-	}
 }

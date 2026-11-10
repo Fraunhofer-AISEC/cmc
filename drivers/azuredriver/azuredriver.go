@@ -63,22 +63,10 @@ func (azure *Azure) Init(c *drivers.DriverConfig) error {
 		return errors.New("internal error: Azure object is nil")
 	}
 
-	if c.Endorsers == nil {
-		return fmt.Errorf("missing endorser provider")
-	}
-
-	// Endorsers are trust-anchor-specific and only needed when we actually use
-	// them (SNP endorser for VCEK enrollment, TDX endorser for collateral fetch).
-	if snpEndorser, err := c.Endorsers.Snp(); err == nil {
-		azure.snpEndorser = snpEndorser
-	} else {
-		log.Debugf("SNP endorser unavailable: %v (this is normal on TDX machines)", err)
-	}
-	if tdxEndorser, err := c.Endorsers.Tdx(); err == nil {
-		azure.tdxEndorser = tdxEndorser
-	} else {
-		log.Debugf("TDX endorser unavailable: %v (this is normal on SNP machines)", err)
-	}
+	// Only the endorser of the underlying CC technology is used (SNP endorser
+	// for VCEK enrollment, TDX endorser for collateral fetch)
+	azure.snpEndorser = c.SnpEndorser
+	azure.tdxEndorser = c.TdxEndorser
 
 	azure.DriverConfig = c
 	azure.pcrs = getQuotePcrs(c.ExcludePcrs)

@@ -37,8 +37,9 @@ run-tdx-qgs
 ## TDX Collateral
 
 Verifying a TDX quote requires Intel collateral (TCB info, QE identity, PCK CRL and the Intel
-root CA CRL). The CVM can fetch it directly from the Intel PCS or the PCCS (`endorsement`
-`direct`), which requires the CVM to have internet access and to trust the public CAs.
+root CA CRL). The CVM can fetch it directly from the Intel PCS (`tdx.endorsement = "direct"`, the
+default), which requires the CVM to have internet access, or from a PCCS
+(`tdx.endorsement = "cps:<pccs url>"`).
 
 Alternatively, the *estserver* proxies and caches the collateral, so that the CVM obtains
 everything from a single address under a single CA. Configure the upstream service in the
@@ -57,16 +58,17 @@ root CAs of that service, which are required for the certificate of the PCCS shi
 The collateral is cached in `storage.vendor_cache`. Cached collateral is refreshed every 24 hours and
 continues to be served if the upstream service becomes unavailable.
 
-The CVM then uses `cps` endorsement mode, which fetches both AMD and Intel collateral from the
-*estserver*, and therefore requires neither internet access nor the public CAs:
+The CVM then uses `cps` endorsement mode, which fetches the collateral from the *estserver*, and
+therefore requires neither internet access nor the public CAs:
 ```toml
 [trust]
 root_cas = ["/var/ca.pem"]
 
-[cmc.provisioning]
+[cmc.attestation.tdx]
 endorsement = "cps:https://10.0.2.2:9000/"
 ```
-This configuration is identical for Intel TDX and AMD SEV-SNP CVMs.
+The *estserver* also proxies the AMD collateral, which AMD SEV-SNP CVMs use via
+`[cmc.attestation.snp]` in the same way.
 
 ## TDX Run
 

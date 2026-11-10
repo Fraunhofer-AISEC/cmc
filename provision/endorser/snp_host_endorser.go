@@ -21,29 +21,12 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/drivers/snpdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 type SnpHostEndorser struct {
 	vmpl int
-	tpm  *VtpmEndorser
-}
-
-// Implement the EndorserProvider interface
-func (endorser *SnpHostEndorser) Snp() (drivers.SnpEndorser, error) {
-	return endorser, nil
-}
-
-func (endorser *SnpHostEndorser) Tdx() (drivers.TdxEndorser, error) {
-	return nil, fmt.Errorf("internal error: requesting TDX from SNP endorser")
-}
-
-// Tpm returns a VtpmEndorser for the vTPM within the CVM, which is bound to the
-// SNP attestation report.
-func (endorser *SnpHostEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return endorser.tpm, nil
 }
 
 // NewSnpHostEndorser initializes a new SNP host endorser. It fetches certificates
@@ -51,7 +34,6 @@ func (endorser *SnpHostEndorser) Tpm() (drivers.TpmEndorser, error) {
 func NewSnpHostEndorser(vmpl int) (*SnpHostEndorser, error) {
 	return &SnpHostEndorser{
 		vmpl: vmpl,
-		tpm:  &VtpmEndorser{},
 	}, nil
 }
 

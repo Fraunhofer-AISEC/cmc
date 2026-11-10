@@ -30,11 +30,13 @@ import (
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 const (
+	// AmdKdsUrl is the address of the AMD Key Distribution Service
+	AmdKdsUrl = "https://kdsintf.amd.com"
+
 	snpMaxRetries = 3
 	lenChipId     = 64
 )
@@ -59,19 +61,6 @@ const (
 	PEM = iota
 	DER
 )
-
-// Implement the EndorserProvider interface
-func (endorser *SnpEndorser) Snp() (drivers.SnpEndorser, error) {
-	return endorser, nil
-}
-
-func (endorser *SnpEndorser) Tdx() (drivers.TdxEndorser, error) {
-	return nil, fmt.Errorf("internal error: requesting TDX from SNP endorser")
-}
-
-func (endorser *SnpEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return nil, fmt.Errorf("internal error: requesting TPM from SNP endorser")
-}
 
 // NewSnpEndorser initializes a new SNP endorser. baseUrl is the address of the
 // collateral server (AMD KDS or a caching proxy). If a vendorCacheFolder is
