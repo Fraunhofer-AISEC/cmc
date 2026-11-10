@@ -333,7 +333,7 @@ func createEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts boo
 		return endorser.NewCpsProvider(c.VendorCacheDir(), addr, rootCas, allowSystemCerts)
 	case "host":
 		// Host endorsement supports SNP via the SNP_GET_EXT_REPORT API
-		return endorser.NewSnpHostEndorser()
+		return endorser.NewSnpHostEndorser(c.Attestation.Snp.Vmpl)
 	default:
 		return nil, fmt.Errorf(
 			"unknown endorsement %q: expected direct, host, est:<url> or cps:<url>", c.Provisioning.Endorsement)

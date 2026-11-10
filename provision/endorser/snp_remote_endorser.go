@@ -99,6 +99,10 @@ func NewSnpEndorser(
 // it from the AMD server if not present
 func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error) {
 
+	if err := ValidateSnpCodeName(codeName); err != nil {
+		return nil, err
+	}
+
 	log.Tracef("Fetching %q VCEK for chip ID %x, TCB %x", codeName, chipId, tcb)
 
 	// Allow only one download and caching of the VCEK certificate in parallel
@@ -140,13 +144,17 @@ func (s *SnpEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x
 		time.Sleep(time.Duration(21) * time.Second)
 	}
 
-	return nil, fmt.Errorf("failed to get VCEK certificat after %v retries", snpMaxRetries)
+	return nil, fmt.Errorf("failed to get VCEK certificate after %v retries", snpMaxRetries)
 }
 
 // GetSnpCa implements the drivers.SnpEndorser interface. It takes the AMD epyc code name and
 // AK type (VCEK or VLEK) and gets the CA certificate from the cache or downloads it from the
 // AMD server if not present
 func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
+
+	if err := ValidateSnpCodeName(codeName); err != nil {
+		return nil, err
+	}
 
 	log.Debugf("Fetching AMD SNP %v CA", codeName)
 
@@ -276,6 +284,17 @@ func (s *SnpEndorser) SnpVcekUrl(codeName string, chipId []byte, tcbRaw uint64) 
 			tcb.Tee,
 			tcb.Snp,
 			tcb.Ucode), nil
+	}
+}
+
+// ValidateSnpCodeName checks that the code name is one of the EPYC product names
+// supported by the AMD KDS, as it is used in URLs and cache file names
+func ValidateSnpCodeName(codeName string) error {
+	switch codeName {
+	case "Milan", "Genoa", "Turin":
+		return nil
+	default:
+		return fmt.Errorf("invalid SNP code name %q (expected Milan, Genoa or Turin)", codeName)
 	}
 }
 
