@@ -135,7 +135,7 @@ func (endorser *TdxEndorser) FetchCollateral(
 
 	caType, err := getCaTypeFromPck(pckcert)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get CA type from PCK cert")
+		return nil, fmt.Errorf("failed to get CA type from PCK cert: %w", err)
 	}
 
 	log.Debug("Fetching TCB Info")

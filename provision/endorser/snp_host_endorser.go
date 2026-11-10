@@ -27,6 +27,8 @@ import (
 )
 
 type SnpHostEndorser struct {
+	vmpl int
+	tpm  *VtpmEndorser
 }
 
 // Implement the EndorserProvider interface
@@ -38,21 +40,25 @@ func (endorser *SnpHostEndorser) Tdx() (drivers.TdxEndorser, error) {
 	return nil, fmt.Errorf("internal error: requesting TDX from SNP endorser")
 }
 
+// Tpm returns a VtpmEndorser for the vTPM within the CVM, which is bound to the
+// SNP attestation report.
 func (endorser *SnpHostEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return nil, fmt.Errorf("internal error: requesting TPM from SNP endorser")
+	return endorser.tpm, nil
 }
 
 // NewSnpHostEndorser initializes a new SNP host endorser. It fetches certificates
-// via the SNP_GET_EXT_REPORT API
-func NewSnpHostEndorser() (*SnpHostEndorser, error) {
-	return &SnpHostEndorser{}, nil
+// via the SNP_GET_EXT_REPORT API at the given VMPL
+func NewSnpHostEndorser(vmpl int) (*SnpHostEndorser, error) {
+	return &SnpHostEndorser{
+		vmpl: vmpl,
+		tpm:  &VtpmEndorser{},
+	}, nil
 }
 
 // GetSnpVcek implements the drivers.SnpEndorser interface. It fetches the VCEK certificate via the
 // SNP_GET_EXT_REPORT API
 func (s *SnpHostEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64) (*x509.Certificate, error) {
-	// TODO support VMPLs other than 0 if required
-	_, certTable, err := snpdriver.GetExtendedReport(0)
+	_, certTable, err := snpdriver.GetExtendedReport(s.vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get extended report: %w", err)
 	}
@@ -66,8 +72,7 @@ func (s *SnpHostEndorser) GetSnpVcek(codeName string, chipId []byte, tcb uint64)
 // GetSnpCa implements the drivers.SnpEndorser interface. It fetches the CA certificate chain via the
 // SNP_GET_EXT_REPORT API
 func (s *SnpHostEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509.Certificate, error) {
-	// TODO support VMPLs other than 0 if required
-	_, certTable, err := snpdriver.GetExtendedReport(0)
+	_, certTable, err := snpdriver.GetExtendedReport(s.vmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get extended report: %w", err)
 	}

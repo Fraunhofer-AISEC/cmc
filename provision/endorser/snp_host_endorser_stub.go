@@ -37,6 +37,6 @@ func (endorser *SnpHostEndorser) Tpm() (drivers.TpmEndorser, error) {
 	return nil, fmt.Errorf("snp host endorser not built")
 }
 
-func NewSnpHostEndorser() (*SnpHostEndorser, error) {
+func NewSnpHostEndorser(vmpl int) (*SnpHostEndorser, error) {
 	return nil, fmt.Errorf("snp host endorser not built")
 }

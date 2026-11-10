@@ -52,7 +52,7 @@ func (e *EstEndorser) Snp() (drivers.SnpEndorser, error) {
 }
 
 func (e *EstEndorser) Tdx() (drivers.TdxEndorser, error) {
-	return nil, fmt.Errorf("EST endorser does not support SNP")
+	return nil, fmt.Errorf("EST endorser does not support TDX")
 }
 
 func (e *EstEndorser) Tpm() (drivers.TpmEndorser, error) {
