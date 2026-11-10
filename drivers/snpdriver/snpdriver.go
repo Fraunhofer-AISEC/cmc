@@ -86,15 +86,10 @@ func (snp *Snp) Init(c *drivers.DriverConfig) error {
 	if snp == nil {
 		return errors.New("internal error: SNP object is nil")
 	}
-	if c.Endorsers == nil {
-		return fmt.Errorf("missing endorser provider")
+	if c.SnpEndorser == nil {
+		return fmt.Errorf("no SNP endorsement configured")
 	}
-
-	endorser, err := c.Endorsers.Snp()
-	if err != nil {
-		return fmt.Errorf("failed to get endorser: %w", err)
-	}
-	snp.endorser = endorser
+	snp.endorser = c.SnpEndorser
 
 	snp.DriverConfig = c
 

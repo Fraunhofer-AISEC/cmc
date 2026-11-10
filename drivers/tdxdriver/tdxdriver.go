@@ -81,15 +81,10 @@ func (tdx *Tdx) Init(c *drivers.DriverConfig) error {
 	if tdx == nil {
 		return errors.New("internal error: TDX object is nil")
 	}
-	if c.Endorsers == nil {
-		return fmt.Errorf("missing endorser provider")
+	if c.TdxEndorser == nil {
+		return fmt.Errorf("no TDX endorsement configured")
 	}
-
-	endorser, err := c.Endorsers.Tdx()
-	if err != nil {
-		return fmt.Errorf("failed to get endorser: %w", err)
-	}
-	tdx.endorser = endorser
+	tdx.endorser = c.TdxEndorser
 
 	tdx.DriverConfig = c
 

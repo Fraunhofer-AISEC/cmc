@@ -18,6 +18,7 @@ package cmc
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"golang.org/x/exp/maps"
 
@@ -46,6 +47,7 @@ func init() {
 
 // Tpm configures the TPM attestation driver.
 type Tpm struct {
+	Endorsement    string `toml:"endorsement"      flag:"tpm-endorsement" default:"est:https://localhost:9000" usage:"TPM AK endorsement mode [est:<url> self]:\n\t\test:<url>\n\t\t\tperform AK credential activation with the EST server\n\t\tself\n\t\t\tself-signed AK certificate for a CVM vTPM, which is bound to the snp or tdx driver as primary trust anchor"`
 	KeyAlg         string `toml:"key_alg"          flag:"tpm-key-alg" default:"ec256" enum:"ec256,rsa2048" usage:"TPM AK key algorithm"`
 	ExcludePcrs    []int  `toml:"exclude_pcrs"     flag:"exclude-pcrs" usage:"comma-separated list of TPM PCRs to exclude from the quote"`
 	AppendEbsEvent bool   `toml:"append_ebs_event" flag:"append-ebs" usage:"reconstruct the ExitBootServices EV_EFI_ACTION events for PCR 5. Only required for TPM 2.0 with legacy event log format v1, which cannot carry the EFI_TCG2_FINAL_EVENTS_TABLE and therefore never logs those events, making PCR 5 impossible to replay"`
@@ -53,7 +55,26 @@ type Tpm struct {
 
 // Snp configures the AMD SEV-SNP attestation driver.
 type Snp struct {
-	Vmpl int `toml:"vmpl" flag:"vmpl" usage:"SNP Virtual Machine Privilege Level (VMPL)"`
+	Endorsement string `toml:"endorsement" flag:"snp-endorsement" default:"direct" usage:"SNP VCEK and CA endorsement mode, also used by the azure driver on SNP [direct cps:<url> host]:\n\t\tdirect\n\t\t\tfetch from AMD KDS (rate-limited: 10s per request)\n\t\tcps:<url>\n\t\t\tfetch from a caching proxy service (CPS) such as the estserver\n\t\thost\n\t\t\tfetch from the hypervisor via SNP_GET_EXT_REPORT"`
+	Vmpl        int    `toml:"vmpl"        flag:"vmpl" usage:"SNP Virtual Machine Privilege Level (VMPL)"`
+}
+
+// Tdx configures the Intel TDX attestation driver. The endorsement is shared
+// with the SGX driver, as both use the Intel collateral.
+type Tdx struct {
+	Endorsement string `toml:"endorsement" flag:"tdx-endorsement" default:"direct" usage:"TDX and SGX collateral endorsement mode, also used by the azure driver on TDX [direct cps:<url>]:\n\t\tdirect\n\t\t\tfetch from Intel PCS\n\t\tcps:<url>\n\t\t\tfetch from a PCCS or a caching proxy service (CPS) such as the estserver"`
+}
+
+func (t *Tpm) Validate(r *config.Report) {
+	validateModeAddr(r, "endorsement", t.Endorsement, []string{"self"}, []string{"est"})
+}
+
+func (s *Snp) Validate(r *config.Report) {
+	validateModeAddr(r, "endorsement", s.Endorsement, []string{"direct", "host"}, []string{"cps"})
+}
+
+func (t *Tdx) Validate(r *config.Report) {
+	validateModeAddr(r, "endorsement", t.Endorsement, []string{"direct"}, []string{"cps"})
 }
 
 // Containers configures container measurements, which are disabled if no
@@ -66,11 +87,12 @@ type Containers struct {
 // Attestation configures what evidence is collected and how it is bound
 // together into an attestation report.
 type Attestation struct {
-	Drivers         []string   `toml:"drivers"          flag:"drivers" default:"auto" enum:"@drivers" usage:"comma-separated list of attestation report drivers, auto selects all detected hardware drivers (tpm, snp, tdx)"`
+	Drivers         []string   `toml:"drivers"          flag:"drivers" default:"auto" enum:"@drivers" usage:"comma-separated list of attestation report drivers, auto selects all detected hardware drivers (tpm, snp, tdx), empty runs a verifier-only CMC"`
 	HashAlg         string     `toml:"hash_alg"         flag:"hash-alg" default:"sha256" enum:"sha256,sha384,sha512" usage:"hash algorithm for attestation report integrity"`
 	MeasurementLogs bool       `toml:"measurement_logs" flag:"measurement-logs" default:"true" usage:"include measured events in measurement and validation report"`
 	Tpm             Tpm        `toml:"tpm"`
 	Snp             Snp        `toml:"snp"`
+	Tdx             Tdx        `toml:"tdx"`
 	Containers      Containers `toml:"containers"`
 }
 
@@ -86,6 +108,21 @@ func (a *Attestation) Validate(r *config.Report) {
 		r.Errorf("containers.trust_anchor", "%q requires the %v driver in %v %v", t, t,
 			r.Path("drivers"), a.Drivers)
 	}
+
+	// A self-signed TPM AK is only bound through a CC trust anchor. Auto may
+	// provide one, which is checked when the CMC starts
+	if mode, _ := internal.ParseModeAddr(a.Tpm.Endorsement); mode == "self" &&
+		slices.Contains(a.Drivers, "tpm") &&
+		!slices.ContainsFunc(a.Drivers, func(d string) bool { return isCcDriver(d) || d == autoDriver }) {
+		r.Errorf("tpm.endorsement", "self requires the snp or tdx driver in %v %v",
+			r.Path("drivers"), a.Drivers)
+	}
+}
+
+// isCcDriver reports whether a driver can act as the primary trust anchor for
+// a vTPM with a self-signed AK
+func isCcDriver(name string) bool {
+	return name == "snp" || name == "tdx"
 }
 
 // Omsp configures the use of revocation information for manifests, which is
@@ -102,52 +139,43 @@ type Metadata struct {
 	Omsp      Omsp     `toml:"omsp"`
 }
 
-// Provisioning configures how driver certificates and collateral are obtained
-// (endorsement) and how certificates are enrolled (enrollment).
+// Provisioning configures how certificates are enrolled and how the CMC
+// authenticates to the provisioning server.
 type Provisioning struct {
 	Auth  []string `toml:"auth"  flag:"provision-auth"  default:"attestation" enum:"none,token,certificate,attestation" usage:"provisioning authentication methods"`
 	Token string   `toml:"token" flag:"provision-token" default:"{data}/provision-token" path:"true" usage:"bootstrap token for EST client authentication, only read with token authentication"`
-	// Endorsement is the mode used to fetch driver certificates and collateral,
-	// optionally followed by the address of the endorsement server
-	Endorsement string `toml:"endorsement" flag:"endorsement" usage:"endorsement mode for fetching driver certs and collateral, with the server address for the modes that require one [direct host est:<url> cps:<url>]:\n\t\tdirect\n\t\t\tSNP: fetch AMD SNP VCEK/CA directly from AMD KDS (rate-limited: 10s per request)\n\t\t\tTDX: fetch TDX collateral directly from Intel PCS\n\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n\t\tcps:<url>\n\t\t\tSNP: Fetch AMD SNP VCEK/CA from custom caching proxy service (CPS)\n\t\t\tTDX: Fetch TDX collateral from Provisioning Certification Caching Service (PCCS)\n\t\t\tTPM: Noop endorser. Requires tdx/snp driver (vtpm acts as secondary trust anchor)\n\t\thost\n\t\t\tSNP: Fetch AMD SNP VCEK/CA from the local hypervisor via SNP_GET_EXT_REPORT\n\t\t\tTPM: Noop endorser. Requires snp driver (vtpm acts as secondary trust anchor)\n\t\test:<url>\n\t\t\tTPM: Enroll TPM EK certificate via Enrollment over Secure Transport (EST) server"`
 	// Enrollment is the mode used to enroll certificates, optionally followed
 	// by the address of the enrollment server, or self for self-signed certificates
 	Enrollment string `toml:"enrollment" flag:"enrollment" usage:"enrollment mode, with the address of the enrollment server for the modes that require one [self est:<url>]"`
 }
 
-// Validate checks the modes of the endorsement and enrollment options, which
-// carry an optional address and can therefore not be an enum tag. An unset
-// option is reported by the binary that requires it, as what the embedded CMC
-// needs depends on how it is used.
+// Validate checks the enrollment mode. An unset enrollment is reported by the
+// binary that requires it, as what the embedded CMC needs depends on how it is
+// used.
 func (p *Provisioning) Validate(r *config.Report) {
+	validateModeAddr(r, "enrollment", p.Enrollment, []string{"self"}, []string{"est"})
+}
 
-	if p.Endorsement != "" {
-		mode, addr := internal.ParseModeAddr(p.Endorsement)
-		switch mode {
-		case "direct", "host":
-		case "est", "cps":
-			if addr == "" {
-				r.Errorf("endorsement",
-					"%v endorsement requires an address, e.g. %v:https://localhost:9000", mode, mode)
-			}
-		default:
-			r.Errorf("endorsement",
-				"unknown mode %q, expected direct, host, est:<url> or cps:<url>", mode)
-		}
+// validateModeAddr checks an option of the form <mode>[:<url>], which can not be
+// an enum tag. plain are the modes without an address, addr the modes that
+// require one. An empty value is not checked.
+func validateModeAddr(r *config.Report, key, value string, plain, addr []string) {
+	if value == "" {
+		return
 	}
-
-	if p.Enrollment != "" {
-		mode, addr := internal.ParseModeAddr(p.Enrollment)
-		switch mode {
-		case "self":
-		case "est":
-			if addr == "" {
-				r.Errorf("enrollment",
-					"est enrollment requires an address, e.g. est:https://localhost:9000")
-			}
-		default:
-			r.Errorf("enrollment", "unknown mode %q, expected self or est:<url>", mode)
+	mode, a := internal.ParseModeAddr(value)
+	switch {
+	case slices.Contains(plain, mode):
+	case slices.Contains(addr, mode):
+		if a == "" {
+			r.Errorf(key, "%v requires an address, e.g. %v:https://localhost:9000", mode, mode)
 		}
+	default:
+		expected := slices.Clone(plain)
+		for _, m := range addr {
+			expected = append(expected, m+":<url>")
+		}
+		r.Errorf(key, "unknown mode %q, expected one of %v", mode, strings.Join(expected, ", "))
 	}
 }
 

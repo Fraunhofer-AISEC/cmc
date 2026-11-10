@@ -23,12 +23,6 @@ import (
 	"github.com/google/go-attestation/attest"
 )
 
-type EndorserProvider interface {
-	Snp() (SnpEndorser, error)
-	Tdx() (TdxEndorser, error)
-	Tpm() (TpmEndorser, error)
-}
-
 // TpmEndorser provides the interface for provisioning a TPM AK. For physical
 // TPMs, the endorser performs EK-based credential activation against an external
 // service. For CVM vTPMs, a self-signed AK certificate is produced without

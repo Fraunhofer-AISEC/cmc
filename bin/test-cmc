@@ -173,7 +173,7 @@ est_params=(
 
 cmc_params=(
     "--provision-auth" "none" \
-    "--endorsement" "est:https://localhost:9000" \
+    "--tpm-endorsement" "est:https://localhost:9000" \
     "--enrollment" "est:https://localhost:9000" \
     "--metadata" "file://${metadata_signed}" \
     "--drivers" "tpm,sw" \

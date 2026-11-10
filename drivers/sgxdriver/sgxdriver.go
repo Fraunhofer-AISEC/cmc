@@ -65,15 +65,10 @@ func (sgx *Sgx) Init(c *drivers.DriverConfig) error {
 	if sgx == nil {
 		return errors.New("internal error: SGX object is nil")
 	}
-	if c.Endorsers == nil {
-		return fmt.Errorf("missing endorser provider")
+	if c.TdxEndorser == nil {
+		return fmt.Errorf("no TDX endorsement configured")
 	}
-
-	endorser, err := c.Endorsers.Tdx()
-	if err != nil {
-		return fmt.Errorf("failed to get endorser: %w", err)
-	}
-	sgx.endorser = endorser
+	sgx.endorser = c.TdxEndorser
 
 	sgx.DriverConfig = c
 

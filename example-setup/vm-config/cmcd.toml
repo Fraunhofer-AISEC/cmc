@@ -10,6 +10,9 @@ root_cas = ["/var/metadata-ca.pem", "/var/ca.pem"]
 [cmc.attestation]
 drivers = ["tpm", "sw"]
 
+[cmc.attestation.tpm]
+endorsement = "est:https://10.0.2.2:9000/"
+
 [cmc.attestation.containers]
 trust_anchor = "sw"
 log = "/tmp/container_measurements"
@@ -22,7 +25,6 @@ enabled = true
 
 [cmc.provisioning]
 auth = ["none"]
-endorsement = "est:https://10.0.2.2:9000/"
 enrollment = "est:https://10.0.2.2:9000/"
 
 [cmc.storage]

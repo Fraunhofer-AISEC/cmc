@@ -42,6 +42,9 @@ func Generate(nonce []byte, claims map[string][]byte, cached []string, metadata 
 	if s == nil {
 		return nil, errors.New("serializer not specified")
 	}
+	if len(drivers) == 0 {
+		return nil, errors.New("no drivers configured, CMC runs as verifier only")
+	}
 
 	encoding := ar.GetEncoding(s)
 

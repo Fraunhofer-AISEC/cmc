@@ -82,10 +82,6 @@ type KeyEnrollmentParams struct {
 
 func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enroller, selfSigned bool) (*KeyMgr, error) {
 
-	if provisioner == nil && !selfSigned {
-		return nil, fmt.Errorf("no provisioner configured for certificate enrollment")
-	}
-
 	mgr := &KeyMgr{
 		keyPath:     path.Join(storagePath, "keys"),
 		certsPath:   path.Join(storagePath, "certs"),
@@ -124,6 +120,10 @@ func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enrolle
 }
 
 func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
+
+	if mgr.provisioner == nil && !mgr.selfSigned {
+		return "", fmt.Errorf("no enrollment configured for certificate enrollment")
+	}
 
 	keyId := uuid.New().String()
 

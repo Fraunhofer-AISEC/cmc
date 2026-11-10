@@ -10,6 +10,9 @@ root_cas = ["../../data/pki/ca.pem"]
 [cmc.attestation]
 drivers = ["tpm", "sw"]
 
+[cmc.attestation.tpm]
+endorsement = "est:https://localhost:9000/"
+
 [cmc.attestation.containers]
 trust_anchor = "sw"
 
@@ -17,7 +20,6 @@ trust_anchor = "sw"
 locations = ["file://../../data/metadata-signed"]
 
 [cmc.provisioning]
-endorsement = "est:https://localhost:9000/"
 enrollment = "est:https://localhost:9000/"
 
 [cmc.policies]

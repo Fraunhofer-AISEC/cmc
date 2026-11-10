@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Fraunhofer-AISEC/cmc/drivers"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/google/go-attestation/attest"
@@ -45,18 +44,6 @@ func NewEstEndorser(addr string, rootCas []*x509.Certificate, allowSystemCerts b
 		bearerToken: token,
 		client:      client,
 	}, nil
-}
-
-func (e *EstEndorser) Snp() (drivers.SnpEndorser, error) {
-	return nil, fmt.Errorf("EST endorser does not support SNP")
-}
-
-func (e *EstEndorser) Tdx() (drivers.TdxEndorser, error) {
-	return nil, fmt.Errorf("EST endorser does not support TDX")
-}
-
-func (e *EstEndorser) Tpm() (drivers.TpmEndorser, error) {
-	return e, nil
 }
 
 func (e *EstEndorser) RequiresCredentialActivation() bool {
