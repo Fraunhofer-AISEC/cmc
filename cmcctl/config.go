@@ -64,7 +64,7 @@ func init() {
 
 // apiConfig configures how cmcctl reaches the CMC.
 type apiConfig struct {
-	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket://{run}/cmc.sock" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
+	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket:///run/cmc/cmc.sock" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
 	Serialization string `toml:"serialization" flag:"serialization" default:"cbor" enum:"json,cbor" usage:"serialization for requests and attestation reports"`
 }
 
@@ -207,7 +207,7 @@ func globalFlags(libapi bool) []cli.Flag {
 // or a config file is reported by the regular configuration loading.
 func libapiSelected(args []string) bool {
 
-	files := []string{config.DefaultFile(binaryName)}
+	files := config.DefaultFiles(binaryName)
 	if v, ok := argValue(args, config.FileFlagName); ok {
 		files = config.SplitList(v)
 	}

@@ -803,3 +803,23 @@ func TestDiscovery(t *testing.T) {
 		t.Errorf("--config default text = %q, want %q", got, want)
 	}
 }
+
+func TestDefaultFiles(t *testing.T) {
+
+	RegisterSystemLayer("layered")
+	defer delete(systemLayered, "layered")
+
+	if got, want := DefaultFiles("layered"), []string{"/etc/cmc/layered.toml", "/cfg/layered.toml"}; !slices.Equal(got, want) {
+		t.Errorf("DefaultFiles(layered) = %v, want %v", got, want)
+	}
+	if got, want := DefaultFiles("plain"), []string{"/cfg/plain.toml"}; !slices.Equal(got, want) {
+		t.Errorf("DefaultFiles(plain) = %v, want %v", got, want)
+	}
+
+	// For root, the system default file is the own default file
+	defer func(f func() Dirs) { baseDirs = f }(baseDirs)
+	baseDirs = func() Dirs { return dirsFrom(true, nil, "") }
+	if got, want := DefaultFiles("layered"), []string{"/etc/cmc/layered.toml"}; !slices.Equal(got, want) {
+		t.Errorf("DefaultFiles(layered) as root = %v, want %v", got, want)
+	}
+}

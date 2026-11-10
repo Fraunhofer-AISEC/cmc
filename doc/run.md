@@ -6,8 +6,10 @@ All binaries can be configured via TOML configuration files and commandline flag
 the order defaults, configuration files, commandline flags, so a flag supersedes a file.
 
 Without `--config`, each binary reads its default file `<config dir>/<binary>.toml` (`cmcd.toml`,
-`cmcctl.toml`, `estserver.toml`, `cmcbackend.toml`) if it exists. `--config` replaces the default
-file with a comma-separated list of files, where later files take precedence.
+`cmcctl.toml`, `estserver.toml`, `cmcbackend.toml`) if it exists. A non-root cmcctl first reads the
+system file `/etc/cmc/cmcctl.toml` and then its own default file, which overrides single options.
+`--config` replaces the default files with a comma-separated list of files, where later files take
+precedence.
 
 | Directory | root                    | non-root                                                      |
 | --------- | ----------------------- | ------------------------------------------------------------- |
@@ -16,7 +18,8 @@ file with a comma-separated list of files, where later files take precedence.
 | run       | `/run/cmc`              | `$XDG_RUNTIME_DIR/cmc` (`~/.local/share/cmc/run`)             |
 
 The defaults of options holding files, such as the trusted root CAs or the cmcd socket, live in
-these directories. `--help` shows the expanded defaults.
+these directories. `--help` shows the expanded defaults. The cmcctl default endpoint is always the
+socket `/run/cmc/cmc.sock` of a system cmcd, which members of the group `cmc` can access.
 
 The commandline flags for each executable can be shown via the `--help` flag, which groups them by
 the configuration section they belong to. TOML configuration options are grouped into those same

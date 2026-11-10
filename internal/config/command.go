@@ -185,8 +185,8 @@ func (s *schema) absPaths(d Dirs) error {
 	return nil
 }
 
-// writeFile writes the user's own config file, which may hold secrets, with
-// mode 0600, creating the parent directory with the mode Dirs.Create uses.
+// writeFile writes a config file with mode 0644, as configs reference secrets
+// by path only, creating the parent directory with the mode Dirs.Create uses.
 func writeFile(file, content string, root, force bool) error {
 
 	mode := os.FileMode(0700)
@@ -201,12 +201,12 @@ func writeFile(file, content string, root, force bool) error {
 	if force {
 		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	}
-	f, err := os.OpenFile(file, flags, 0600)
+	f, err := os.OpenFile(file, flags, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write %v: %w", file, err)
 	}
 	// An existing file keeps its mode on open
-	err = errors.Join(f.Chmod(0600), writeAll(f, content), f.Close())
+	err = errors.Join(f.Chmod(0644), writeAll(f, content), f.Close())
 	if err != nil {
 		return fmt.Errorf("failed to write %v: %w", file, err)
 	}

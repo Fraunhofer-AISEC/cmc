@@ -32,6 +32,9 @@ import (
 const binaryName = "cmcctl"
 
 func main() {
+	// Non-root users read the config of a system install below their own
+	config.RegisterSystemLayer(binaryName)
+
 	cmd := &cli.Command{
 		Name:    binaryName,
 		Usage:   "CLI client for the CMC daemon",

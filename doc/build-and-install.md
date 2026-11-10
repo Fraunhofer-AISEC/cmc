@@ -49,6 +49,16 @@ sudo vim /etc/cmc/cmcd.toml # Adjust to your needs
 sudo systemctl enable --now cmcd
 ```
 
+cmcd and cmcctl communicate via the socket `/run/cmc/cmc.sock` by default. `sudo make install`
+creates the group `cmc`, and cmcd grants this group access to its socket, so that cmcctl does not
+need to run as root. Without the group, only the owner of cmcd can access the socket:
+
+```sh
+sudo usermod -aG cmc $USER # Takes effect after a new login
+```
+
+For a non-root install, `make install` sets the socket of the user cmcd in `~/.config/cmc/cmcctl.toml`.
+
 The uninstall targets (`uninstall`, `uninstall-infra`, `uninstall-tools`, `uninstall-caddy`,
 `uninstall-all`) remove binaries and units, but keep configs and data.
 

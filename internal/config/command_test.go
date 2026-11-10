@@ -84,8 +84,8 @@ func TestInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("default file was not written: %v", err)
 	}
-	if fi.Mode().Perm() != 0600 {
-		t.Errorf("mode = %v, want 0600", fi.Mode().Perm())
+	if fi.Mode().Perm() != 0644 {
+		t.Errorf("mode = %v, want 0644", fi.Mode().Perm())
 	}
 	data, _ := os.ReadFile(file)
 	if !strings.Contains(string(data), "token = 'secret'") {
@@ -101,8 +101,8 @@ func TestInit(t *testing.T) {
 		t.Errorf("server.name = %q, want the file unchanged", c.Server.Name)
 	}
 
-	// With --force, the file is replaced and gets mode 0600 again
-	if err := os.Chmod(file, 0644); err != nil {
+	// With --force, the file is replaced and gets mode 0644 again
+	if err := os.Chmod(file, 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runConfig[testConfig](t, "--name", "other", "config", "init", "--force"); err != nil {
@@ -111,8 +111,8 @@ func TestInit(t *testing.T) {
 	if c := loadFile[testConfig](t, file); c.Server.Name != "other" {
 		t.Errorf("server.name = %q, want \"other\"", c.Server.Name)
 	}
-	if fi, _ := os.Stat(file); fi.Mode().Perm() != 0600 {
-		t.Errorf("mode = %v, want 0600", fi.Mode().Perm())
+	if fi, _ := os.Stat(file); fi.Mode().Perm() != 0644 {
+		t.Errorf("mode = %v, want 0644", fi.Mode().Perm())
 	}
 }
 
