@@ -146,9 +146,9 @@ func main() {
 			{
 				Name:  "token",
 				Usage: "Request a bootstrap token for EST certificate requests",
-				Flags: flags(withToken, withFiles),
+				Flags: flags(withToken),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := loadConfig(cmd)
+					c, err := loadPlainConfig(cmd)
 					if err != nil {
 						return err
 					}
@@ -160,7 +160,7 @@ func main() {
 				Usage: "Retrieve provisioning data for CVMs",
 				Flags: flags(withFiles),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					c, err := loadConfig(cmd)
+					c, err := loadPlainConfig(cmd)
 					if err != nil {
 						return err
 					}

@@ -99,7 +99,7 @@ type filesConfig struct {
 	Report         string `toml:"report"          flag:"report"              default:"attestation-report" path:"true" usage:"attestation report file, written by generate and read by verify"`
 	Nonce          string `toml:"nonce"           flag:"nonce"               default:"nonce" path:"true" usage:"nonce file, written by generate and read by verify"`
 	CaStore        string `toml:"ca_store"        flag:"ca-store-path"       default:"{data}/ca.pem" path:"true" usage:"file to store the CA certs retrieved by the provision command"`
-	ProvisionToken string `toml:"provision_token" flag:"provision-token-out" default:"{data}/provision-token" path:"true" usage:"file to store the bootstrap token created by the token subcommand or retrieved by the provision subcommand"`
+	ProvisionToken string `toml:"provision_token" flag:"provision-token-out" default:"{data}/provision-token" path:"true" usage:"file to store the bootstrap token retrieved by the provision subcommand"`
 }
 
 // publishConfig configures where cmcctl publishes attestation results to.
@@ -118,6 +118,7 @@ type tokenConfig struct {
 	Store   string `toml:"store"    flag:"token-store"     default:"{data}/tokens" path:"true" usage:"path to token store for token mode"`
 	MaxUses int    `toml:"max_uses" flag:"token-max-uses"  usage:"maximum number of times a newly created token may be redeemed (0 = unlimited)"`
 	Subject string `toml:"subject"  flag:"token-subject"   usage:"restrict a newly created token to this subject; leave empty for no restriction"`
+	Out     string `toml:"out"      flag:"token-out"       path:"true" usage:"file to store the newly created token; leave empty to print it to stdout"`
 }
 
 // kubeprovConfig configures Kubernetes node provisioning over attested TLS.
@@ -304,6 +305,21 @@ var (
 // subcommands that actually do something need it.
 func loadConfig(cmd *cli.Command) (*Config, error) {
 
+	c, err := loadPlainConfig(cmd)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.resolve(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// loadPlainConfig loads the configuration without resolving what it points to,
+// for the subcommands that do not need it and may run before the trusted root
+// CAs are provisioned.
+func loadPlainConfig(cmd *cli.Command) (*Config, error) {
+
 	c, err := config.New[Config](cmd, binaryName)
 	if err != nil {
 		return nil, err
@@ -313,9 +329,6 @@ func loadConfig(cmd *cli.Command) (*Config, error) {
 	}
 	config.LogEffective(cmd, binaryName, c)
 	if err := config.DirsOf(binaryName).Create(); err != nil {
-		return nil, err
-	}
-	if err := c.resolve(); err != nil {
 		return nil, err
 	}
 	return c, nil
