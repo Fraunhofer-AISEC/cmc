@@ -93,7 +93,7 @@ func TestFlagNames(t *testing.T) {
 		"policy-overwrite", "provision-auth", "provision-token", "publish-cert", "publish-key",
 		"publish-network", "publish-ocsf", "publish-results", "publish-token", "report", "result",
 		"provision-token-out", "root-cas", "serialization", "snp-endorsement", "storage", "tdx-endorsement", "tls-cn", "tls-dns-names", "tls-ip-addresses",
-		"tpm-endorsement", "tpm-key-alg", "token-max-uses", "token-store", "token-subject", "use-omsp", "vmpl",
+		"tpm-endorsement", "tpm-key-alg", "token-max-uses", "token-out", "token-store", "token-subject", "use-omsp", "vmpl",
 	}
 	slices.Sort(want)
 

@@ -30,10 +30,10 @@ func createToken(c *Config) error {
 	}
 
 	// If path to token is provided, store in file, otherwise print to stdout
-	if c.Files.ProvisionToken == "" {
+	if c.Token.Out == "" {
 		fmt.Printf("%v", token)
 	} else {
-		err = os.WriteFile(c.Files.ProvisionToken, []byte(token), 0600)
+		err = os.WriteFile(c.Token.Out, []byte(token), 0600)
 		if err != nil {
 			return fmt.Errorf("failed to store token: %w", err)
 		}
