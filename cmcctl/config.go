@@ -71,7 +71,7 @@ type apiConfig struct {
 // atlsConfig configures the attested TLS connection.
 type atlsConfig struct {
 	Addr                 string `toml:"addr"                   flag:"addr"   default:"localhost:4443" usage:"address to connect to / listen on via attested TLS / HTTPS"`
-	Mtls                 bool   `toml:"mtls"                   flag:"mtls"   usage:"perform mutual TLS"`
+	Mtls                 bool   `toml:"mtls"                   flag:"mtls"   default:"true" usage:"perform mutual TLS"`
 	Attest               string `toml:"attest"                 flag:"attest" default:"mutual" enum:"mutual,client,server,none" usage:"remote attestation mode"`
 	AttestationOnlyTrust bool   `toml:"attestation_only_trust" flag:"attestation-only-trust" usage:"establish trust in the peer through its attestation report only, without validating its TLS certificate chain, e.g. if the peer uses a self-signed certificate. Requires the peer to be attested"`
 }

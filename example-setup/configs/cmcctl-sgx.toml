@@ -7,9 +7,6 @@ endpoint = "libapi"
 [trust]
 root_cas = ["../../data/pki/ca.pem"]
 
-[atls]
-mtls = true
-
 [files]
 report = "../../data/attestation-report"
 nonce = "../../data/nonce"

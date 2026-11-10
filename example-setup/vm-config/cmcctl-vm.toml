@@ -9,6 +9,7 @@ serialization = "json"
 root_cas = ["/var/ca.pem"]
 
 [atls]
+mtls = false
 addr = "0.0.0.0:4443"
 attest = "server"
 

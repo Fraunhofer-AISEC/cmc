@@ -146,7 +146,7 @@ cmcctl dial --config <cmcctl-config> --addr "$(hostname --fqdn):4443" --attest s
 The attestation report is bound to the TLS session via an RFC 5705 exporter-derived nonce. It
 therefore proves that the peer terminating the connection is genuine, without requiring a shared
 PKI. `--attestation-only-trust` is only allowed if the peer is actually attested, i.e., in
-attestation mode `server` (or `mutual` when combined with `--mtls`).
+attestation mode `server` or `mutual`.
 
 ### Establish Attested HTTPS Connections
 

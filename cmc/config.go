@@ -68,7 +68,7 @@ type Containers struct {
 type Attestation struct {
 	Drivers         []string   `toml:"drivers"          flag:"drivers" default:"auto" enum:"@drivers" usage:"comma-separated list of attestation report drivers, auto selects all detected hardware drivers (tpm, snp, tdx)"`
 	HashAlg         string     `toml:"hash_alg"         flag:"hash-alg" default:"sha256" enum:"sha256,sha384,sha512" usage:"hash algorithm for attestation report integrity"`
-	MeasurementLogs bool       `toml:"measurement_logs" flag:"measurement-logs" usage:"include measured events in measurement and validation report"`
+	MeasurementLogs bool       `toml:"measurement_logs" flag:"measurement-logs" default:"true" usage:"include measured events in measurement and validation report"`
 	Tpm             Tpm        `toml:"tpm"`
 	Snp             Snp        `toml:"snp"`
 	Containers      Containers `toml:"containers"`
