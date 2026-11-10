@@ -23,6 +23,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,6 +38,10 @@ func (s *Server) handleVlekCertChain(w http.ResponseWriter, req *http.Request) {
 func (s *Server) serveSnpCertChain(w http.ResponseWriter, req *http.Request, akType internal.AkType) {
 
 	codeName := req.PathValue("codeName")
+	if err := endorser.ValidateSnpCodeName(codeName); err != nil {
+		writeBadRequest(w, "%v", err)
+		return
+	}
 
 	log.Debugf("Received %v cert_chain request for %q from %v", akType, codeName, req.RemoteAddr)
 
@@ -57,6 +62,10 @@ func (s *Server) handleVcek(w http.ResponseWriter, req *http.Request) {
 
 	codeName := req.PathValue("codeName")
 	chipIdHex := req.PathValue("chipId")
+	if err := endorser.ValidateSnpCodeName(codeName); err != nil {
+		writeBadRequest(w, "%v", err)
+		return
+	}
 
 	log.Debugf("Received /vcek request from %v", req.RemoteAddr)
 
