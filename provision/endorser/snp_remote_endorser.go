@@ -153,7 +153,8 @@ func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509
 	s.lock()
 	defer s.unlock()
 
-	der, ok := s.tryGetCachedCa(codeName)
+	key := snpCaCacheKey(akType, codeName)
+	der, ok := s.tryGetCachedCa(key)
 	if ok {
 		ca, err := x509.ParseCertificates(der)
 		if err != nil {
@@ -170,7 +171,7 @@ func (s *SnpEndorser) GetSnpCa(codeName string, akType internal.AkType) ([]*x509
 
 	log.Debugf("Successfully downloaded SNP CA")
 	joined := bytes.Join(internal.WriteCertsDer(ca), nil)
-	if err := s.cacheSnpCa(joined, codeName); err != nil {
+	if err := s.cacheSnpCa(joined, key); err != nil {
 		log.Warnf("Failed to cache SNP CA: %v", err)
 	}
 	return ca, nil
@@ -351,37 +352,43 @@ func (s *SnpEndorser) cacheVcek(vcek []byte, chipId []byte, tcb uint64) error {
 	return nil
 }
 
-// tryGetCachedCa returns the cached DER-encoded CA chain for the given code
-// name. Memory cache is checked first; on a file cache hit the entry is
-// promoted into the memory cache.
-func (s *SnpEndorser) tryGetCachedCa(codeName string) ([]byte, bool) {
+// snpCaCacheKey returns the cache key for the CA chain of the given attestation
+// key type and code name, as VCEK (ASK) and VLEK (ASVK) chains differ.
+func snpCaCacheKey(akType internal.AkType, codeName string) string {
+	return fmt.Sprintf("%v_%v", akType, codeName)
+}
 
-	if der, ok := s.cas[codeName]; ok {
-		log.Tracef("Using cached %v CA", codeName)
+// tryGetCachedCa returns the cached DER-encoded CA chain for the given cache
+// key. Memory cache is checked first; on a file cache hit the entry is
+// promoted into the memory cache.
+func (s *SnpEndorser) tryGetCachedCa(key string) ([]byte, bool) {
+
+	if der, ok := s.cas[key]; ok {
+		log.Tracef("Using cached %v CA", key)
 		return der, true
 	}
 
 	if s.cacheFolder != "" {
-		filePath := path.Join(s.cacheFolder, fmt.Sprintf("ask_ark_%v.cert", codeName))
+		filePath := path.Join(s.cacheFolder, fmt.Sprintf("ca_%v.cert", key))
 		f, err := os.ReadFile(filePath)
 		if err != nil {
-			log.Tracef("%v CA not present at %v, will be downloaded", codeName, filePath)
+			log.Tracef("%v CA not present at %v, will be downloaded", key, filePath)
 			return nil, false
 		}
-		log.Tracef("Using offline cached %v CA: %v", codeName, filePath)
-		s.cas[codeName] = f
+		log.Tracef("Using offline cached %v CA: %v", key, filePath)
+		s.cas[key] = f
 		return f, true
 	}
 
-	log.Tracef("Could not find %v CA in cache", codeName)
+	log.Tracef("Could not find %v CA in cache", key)
 	return nil, false
 }
 
 // cacheSnpCa caches the DER-encoded CA chain in memory and, if configured, on disk.
-func (s *SnpEndorser) cacheSnpCa(ca []byte, codeName string) error {
+func (s *SnpEndorser) cacheSnpCa(ca []byte, key string) error {
 
-	s.cas[codeName] = ca
-	log.Tracef("Cached %v CA in memory", codeName)
+	s.cas[key] = ca
+	log.Tracef("Cached %v CA in memory", key)
 
 	if s.cacheFolder == "" {
 		return nil
@@ -392,10 +399,10 @@ func (s *SnpEndorser) cacheSnpCa(ca []byte, codeName string) error {
 			return fmt.Errorf("failed to create vendor cache %q: %v", s.cacheFolder, err)
 		}
 	}
-	filePath := path.Join(s.cacheFolder, fmt.Sprintf("ask_ark_%v.cert", codeName))
+	filePath := path.Join(s.cacheFolder, fmt.Sprintf("ca_%v.cert", key))
 	if err := os.WriteFile(filePath, ca, 0644); err != nil {
 		return fmt.Errorf("failed to write file %v: %w", filePath, err)
 	}
-	log.Tracef("Cached %v CA at %v", codeName, filePath)
+	log.Tracef("Cached %v CA at %v", key, filePath)
 	return nil
 }
