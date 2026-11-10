@@ -34,7 +34,8 @@
 //
 // Values are applied in the order defaults, config files, then the flags that were explicitly set.
 // The config files are those given by --config in that order. Without --config, the default file
-// {config}/<binary>.toml is used if it exists.
+// {config}/<binary>.toml is used if it exists. A binary registered with RegisterSystemLayer
+// additionally reads the system default file /etc/cmc/<binary>.toml below it when not run as root.
 //
 // Command provides the config subcommand, which validates, prints and writes the configuration. The
 // written file documents every option with its usage, and comments out the options at their default.
@@ -46,6 +47,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 )
@@ -57,11 +59,26 @@ const FileFlagName = "config"
 // the default file of the binary name as default text. It returns a new flag
 // on every call, so that it can be attached to more than one command.
 func FileFlag(name string) cli.Flag {
+	text := DefaultFile(name) + ", if it exists"
+	if files := DefaultFiles(name); len(files) > 1 {
+		text = strings.Join(files, ", ") + ", if they exist"
+	}
 	return &cli.StringFlag{
 		Name:        FileFlagName,
 		Usage:       "comma-separated TOML configuration files, later files take precedence",
-		DefaultText: DefaultFile(name) + ", if it exists",
+		DefaultText: text,
 	}
+}
+
+// systemLayered holds the binaries registered with RegisterSystemLayer.
+var systemLayered = map[string]bool{}
+
+// RegisterSystemLayer makes the binary name read the system default file
+// below its own default file when not run as root, so that a system install
+// provides the settings for all users. It must be called before any
+// configuration is loaded.
+func RegisterSystemLayer(name string) {
+	systemLayered[name] = true
 }
 
 // DefaultFile returns the config file of the binary name that is used when
@@ -70,9 +87,21 @@ func DefaultFile(name string) string {
 	return filepath.Join(DirsOf(name).Config, name+".toml")
 }
 
+// DefaultFiles returns the default files of the binary name in the order they
+// apply: the system default file if the binary is registered with
+// RegisterSystemLayer and not run as root, and DefaultFile.
+func DefaultFiles(name string) []string {
+	file := DefaultFile(name)
+	system := filepath.Join(dirsFrom(true, nil, "").Config, name+".toml")
+	if systemLayered[name] && system != file {
+		return []string{system, file}
+	}
+	return []string{file}
+}
+
 // Files returns the config files Load applies for the binary name: those
-// listed by --config, or else the default file if it exists. An empty
-// --config disables the default file.
+// listed by --config, or else the default files that exist. An empty
+// --config disables the default files.
 func Files(cmd *cli.Command, name string) []string {
 	if cmd.IsSet(FileFlagName) {
 		return SplitList(cmd.String(FileFlagName))
@@ -80,14 +109,16 @@ func Files(cmd *cli.Command, name string) []string {
 	return defaultFiles(name)
 }
 
-// defaultFiles returns the default file of the binary name, or nothing if it
-// does not exist. Any other error keeps the file, so that loading reports it.
+// defaultFiles returns the default files of the binary name that exist. Any
+// other error keeps a file, so that loading reports it.
 func defaultFiles(name string) []string {
-	file := DefaultFile(name)
-	if _, err := os.Stat(file); errors.Is(err, fs.ErrNotExist) {
-		return nil
+	var files []string
+	for _, file := range DefaultFiles(name) {
+		if _, err := os.Stat(file); !errors.Is(err, fs.ErrNotExist) {
+			files = append(files, file)
+		}
 	}
-	return []string{file}
+	return files
 }
 
 // Load fills root, which must be a non-nil pointer to a tagged configuration

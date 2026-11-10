@@ -32,6 +32,8 @@ SYSTEMCTL := systemctl
 # Sandboxing is only applied to system units, as it implies PrivateUsers= for
 # user units, which breaks group-based device access, e.g. to /dev/tpmrm0
 UNIT_SED  :=
+# Members of this group may access the cmcd socket
+CMC_GROUP := cmc
 else
 MODE      := user
 XDG_CONF  := $(or $(XDG_CONFIG_HOME),$(HOME)/.config)
@@ -43,6 +45,8 @@ UNITDIR   ?= $(XDG_CONF)/systemd/user
 WANTEDBY  := default.target
 SYSTEMCTL := systemctl --user
 UNIT_SED  := -e '/^Protect/d'
+# cmcctl defaults to the socket of a system cmcd, so point it to the user cmcd
+CMCCTL_INIT_ARGS := --cmc socket://$(RUNDIR)/cmc.sock
 endif
 BINDIR ?= $(PREFIX)/bin
 
@@ -98,8 +102,18 @@ define install_configs
 	@for b in $(1); do \
 		f=$(DESTDIR)$(CONFDIR)/$$b.toml; \
 		if [ -e $$f ]; then echo "keeping existing $$f"; \
-		else $(BUILDDIR)/$$b config init --output $$f || exit 1; fi; \
+		else \
+			case $$b in cmcctl) args="$(CMCCTL_INIT_ARGS)" ;; *) args= ;; esac; \
+			$(BUILDDIR)/$$b config init --output $$f $$args || exit 1; \
+		fi; \
 	done
+endef
+
+# Creates the group granted access to the cmcd socket, unless staging into DESTDIR
+define create_group
+	@if [ -n "$(CMC_GROUP)" ] && [ -z "$(DESTDIR)" ] && ! getent group $(CMC_GROUP) >/dev/null; then \
+		groupadd --system $(CMC_GROUP) && echo "created group $(CMC_GROUP)"; \
+	fi
 endef
 
 SUBST := -e 's|@BINDIR@|$(BINDIR)|g' -e 's|@CONFDIR@|$(CONFDIR)|g' -e 's|@DATADIR@|$(DATADIR)|g' \
@@ -131,8 +145,12 @@ install: mode-notice
 	$(call install_bins,$(DEVICE))
 	$(call install_configs,$(DEVICE))
 	$(call install_units,$(DEVICE_UNITS))
+	$(call create_group)
 	@$(MAKE) --no-print-directory reload
 	@echo "Adjust $(CONFDIR)/cmcd.toml, then run '$(SYSTEMCTL) enable --now cmcd'"
+ifeq ($(MODE),system)
+	@echo "Run 'usermod -aG $(CMC_GROUP) <user>' to allow a user to access cmcd with cmcctl"
+endif
 
 install-infra: mode-notice
 	$(call check_built,$(INFRA))

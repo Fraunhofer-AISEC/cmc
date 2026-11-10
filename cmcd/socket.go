@@ -22,6 +22,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"os/user"
+	"strconv"
 	"syscall"
 
 	// local modules
@@ -34,6 +36,9 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/prover"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
+
+// socketGroup is granted access to the unix socket if it exists
+const socketGroup = "cmc"
 
 // Server is the server structure
 type SocketServer struct{}
@@ -54,6 +59,12 @@ func (s SocketServer) Serve(address string, cmc *c.Cmc) error {
 	}
 	defer socket.Close()
 
+	if network == "unix" {
+		if err := restrictSocket(addr); err != nil {
+			return err
+		}
+	}
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -70,6 +81,28 @@ func (s SocketServer) Serve(address string, cmc *c.Cmc) error {
 
 		go handleIncoming(conn, cmc)
 	}
+}
+
+// restrictSocket grants the members of socketGroup access to the unix socket
+// at path. Without that group, only the owner can access the socket.
+func restrictSocket(path string) error {
+
+	mode := os.FileMode(0600)
+	if g, err := user.LookupGroup(socketGroup); err != nil {
+		log.Debugf("Group %v not found, restricting %v to its owner", socketGroup, path)
+	} else if gid, err := strconv.Atoi(g.Gid); err != nil {
+		return fmt.Errorf("invalid gid %v of group %v: %w", g.Gid, socketGroup, err)
+	} else if err := os.Chown(path, -1, gid); err != nil {
+		log.Warnf("Failed to grant group %v access to %v, restricting it to its owner: %v",
+			socketGroup, path, err)
+	} else {
+		mode = 0660
+	}
+
+	if err := os.Chmod(path, mode); err != nil {
+		return fmt.Errorf("failed to set permissions of %v: %w", path, err)
+	}
+	return nil
 }
 
 func handleIncoming(conn net.Conn, cmc *c.Cmc) {

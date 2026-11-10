@@ -39,7 +39,7 @@ func LogEffective(cmd *cli.Command, name string, root any, print bool) {
 	if files := Files(cmd, name); len(files) > 0 {
 		l.Infof("Using config files %v", strings.Join(files, ", "))
 	} else if !cmd.IsSet(FileFlagName) {
-		l.Infof("Using no config file, %v does not exist", DefaultFile(name))
+		l.Infof("Using no config file, %v does not exist", strings.Join(DefaultFiles(name), ", "))
 	} else {
 		l.Info("Using no config file")
 	}
