@@ -18,11 +18,12 @@ You need a machine with a TPM and `/dev/tpmrm0` or `/dev/tpm0` present.
 
 ## Setup
 
-Creates the PKI and metadata for running the CMC on TPM platforms
+Creates the PKI and metadata for running the CMC on TPM platforms. The CMC must be
+[built and installed](./setup.md#build-and-install-the-cmc) first.
 ```sh
 source env.bash
 
-# Builds the CMC, generates a PKI, and generates example metadata for the platform
+# Generates a PKI and example metadata for the platform
 setup-cmc tpm
 ```
 
@@ -44,7 +45,7 @@ can be used for parsing and precomputing reference values.
 Complete examples can be found in the [generate-rtm-manifest-tpm](../bin/generate-rtm-manifest-tpm),
 [generate-os-manifest-tpm](../bin/generate-os-manifest-tpm),
 [generate-app-manifest-tpm](../bin/generate-app-manifest-tpm) and
-[generate-app-manifest-live-tpm](../bin/generate-app-manifest-live-tpm) scripts.
+[precompute-app-manifest-tpm](../bin/precompute-app-manifest-tpm) scripts.
 
 
 ---

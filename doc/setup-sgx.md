@@ -15,7 +15,8 @@ must be installed manually. In this case, you can still follow this manual, just
 ## SGX Setup
 
 Creates the PKI and metadata for running cmcctl with libapi (CMC integrated) within
-an SGX enclave:
+an SGX enclave. The CMC must be [built and installed](./setup.md#build-and-install-the-cmc) first.
+The script also builds the enclave, as its measurement is part of the metadata:
 ```sh
 source env.bash
 cmc-docker setup-cmc sgx
@@ -25,7 +26,7 @@ cmc-docker setup-cmc sgx
 
 Build the cmcctl with integrated CMC as SGX enclave:
 ```sh
-cmc-docker make -C cmcctl egocmc
+cmc-docker make egocmc
 ```
 
 ## PCCS
@@ -88,7 +89,7 @@ ISV Prod ID are assigned by the enclave author. The EGo framework sets these val
 The MRENCLAVE and MRSIGNER values for an enclave can be retrieved via the EGo CLI tool with the
 commands `ego uniqueid $ENCLAVE_PROGRAM` and `ego signerid $ENCLAVE_PROGRAM`.
 
-For a complete example, see [generate-rtm-manifest-sgx](../bin/generate-rtm-manifest-sgx).
+For a complete example, see [precompute-rtm-manifest-sgx](../bin/precompute-rtm-manifest-sgx).
 
 ### Further documentation
 

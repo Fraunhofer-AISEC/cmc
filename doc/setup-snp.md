@@ -10,24 +10,30 @@ virtual machines requires [Nix](https://nixos.org/download/)
 
 ## SNP Setup
 
-Creates the PKI and metadata for running the CMC within SNP Confidential VMs.
+Creates the PKI and metadata for running the CMC within SNP Confidential VMs. The CMC must be
+[built and installed](./setup.md#build-and-install-the-cmc) first.
 ```sh
 source env.bash
 ```
 
 ### QEMU VMs
 ```sh
-cmc-docker vm-setup
+# Builds the OVMF firmware
+cmc-docker build-edk2
 
 cmc-docker setup-cmc snp
 ```
 
 ### AWS EC2 VMs
 ```sh
-cmc-docker snp-ec2-setup
+# Builds the AWS OVMF firmware
+cmc-docker build-ovmf-aws
 
-cmc-docker setup-cmc-ec2
+cmc-docker setup-cmc snp --vmm-type ec2 --ovmf vm/images/OVMF-AWS.fd
 ```
+
+The number of vCPUs can be set with `--vcpus`, see
+[generate-metadata-snp](../bin/generate-metadata-snp).
 
 ## SNP Build
 
@@ -49,7 +55,7 @@ to automatically run the components.
 Refer to the documentation of the AMD SNP
 [virtee sev-snp-measure tool](https://github.com/virtee/sev-snp-measure).
 
-An example  can be found in the [generate-rtm-manifest-snp](../bin/generate-rtm-manifest-snp) script.
+An example can be found in the [precompute-rtm-manifest-snp](../bin/precompute-rtm-manifest-snp) script.
 
 ### Further documentation
 

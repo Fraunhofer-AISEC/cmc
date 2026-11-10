@@ -22,6 +22,9 @@ CGO_ENABLED=1 go tool xcaddy build --with github.com/Fraunhofer-AISEC/cmc/tools/
 
 `CGO_ENABLED=1` can be omitted if the cmc is built without SGX support
 
+Alternatively, `make build-caddy` builds `build/caddy-atls` and `sudo make install-caddy` installs
+it together with a systemd unit and a config, see [build and install](../../doc/build-and-install.md).
+
 ## Example setups
 
 The plugin ships with example configs:

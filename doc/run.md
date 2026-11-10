@@ -20,18 +20,19 @@ these directories. `--help` shows the expanded defaults.
 
 The commandline flags for each executable can be shown via the `--help` flag, which groups them by
 the configuration section they belong to. TOML configuration options are grouped into those same
-sections (tables) and named in snake case (e.g. *cmc.attestation.hash_alg*), while commandline
-flags stay flat and use kebab case (e.g. *--hash-alg*). Relative paths in a configuration file are
-relative to the directory of that file, relative paths in flags to the working directory.
+sections and named in snake case (e.g. *cmc.attestation.hash_alg*), while commandline flags stay
+flat and use kebab case (e.g. *--hash-alg*). Relative paths in a configuration file are relative to
+the directory of that file, relative paths in flags to the working directory.
 
-Exemplary TOML configuration files can be found in the `example-setup/configs/` folder of this
-repository. Every binary can inspect and write its configuration with the `config` subcommand:
+Apart from the default configurations, some additional exemplary TOML configuration files can be
+found in the `example-setup/configs/` folder of this repository. Every binary can inspect and write
+its configuration with the `config` subcommand:
 
 ```sh
 # Load and validate the configuration, exit code 0 if it is valid
 estserver config validate --config example-setup/configs/est-server.toml
 
-# Print the effective configuration, secrets redacted. --minimal prints only non-default options
+# Print the effective configuration. --minimal prints only non-default options
 cmcd config print --config example-setup/configs/cmcd.toml --minimal
 
 # Write the defaults plus the given flags and --config files to the default file. Every option is
@@ -64,26 +65,10 @@ The `drivers` option defaults to `auto`, which selects every driver whose device
 `drivers = ["auto", "sw"]`. On Azure CVMs, `auto` only finds the vTPM. An empty list
 (`drivers = []`) runs a verifier-only CMC, which cannot generate attestation reports.
 
-`metadata` is optional. Without it, a prover only sends evidence and collateral, which a CMC
-verifier rejects for lack of reference values. A verifier-only CMC needs no metadata, as it verifies
-the metadata contained in the reports.
+## Commands
 
-## cmcctl commands
-
-The cmcctl provides the following subcommands:
-
-- **generate**: Generate attestation report
-- **verify**: Verify attestation report
-- **enroll-key**: Create and enroll a new TLS key
-- **dial**: Establish attested TLS client
-- **listen**: Establish attested TLS server
-- **request**: Perform an attested HTTPS request
-- **serve**: Establish an attested HTTPS server
-- **token**: Request a bootstrap token for EST certificate requests
-- **provision**: Retrieve provisioning data for CVMs
-- **update-certs**: Triggers updating the CMC AK and IK certificates
-- **update-metadata**: Triggers updating the CMC metadata
-- **proxy**: Forward data over attested TLS using HTTP
+The commands a binary provides can be listed via `<binary> --help`. Command-specific options can be
+listed via `<binary> <command> --help`.
 
 ## Run the framwork
 
@@ -91,7 +76,7 @@ The cmcctl provides the following subcommands:
 
 ```sh
 # Start the EST server that supplies the certificates and metadata for the cmcd
-estserver --config example-setup/configs/est-server.toml
+estserver
 ```
 
 ### Run the cmcd
@@ -100,11 +85,7 @@ Prerequisite: [est server running](./run.md#run-the-est-and-provisioning-server)
 
 ```sh
 # Run the cmcd
-cmcd --config example-setup/configs/cmcd.toml
-
-# NOTE: for setups that require root, e.g., to access the tpm, make sure the installed go binaries
-# are found:
-sudo env PATH="$HOME/go/bin:$PATH" cmcd --config example-setup/configs/cmcd.toml
+sudo cmcd
 ```
 
 ### Generate and Verify Attestation Reports
@@ -113,10 +94,10 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run cmcctl to retrieve an attestation report (stored in current folder unless otherwise specified)
-cmcctl generate --config example-setup/configs/cmcctl.toml
+cmcctl generate
 
 # Run cmcctl to verify the attestation report (stored in current folder unless otherwise specified)
-cmcctl verify --config example-setup/configs/cmcctl.toml
+cmcctl verify
 ```
 
 ### Establish Attested TLS Connections
@@ -126,10 +107,10 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 ```sh
 
 # Run an attested TLS server
-cmcctl listen --config example-setup/configs/cmcctl.toml --addr "$(hostname --fqdn):4443"
+cmcctl listen --addr "$(hostname --fqdn):4443"
 
 # Run an attested TLS client estblishing a mutually attested TLS connection to the server
-cmcctl dial --config example-setup/configs/cmcctl.toml --addr "$(hostname --fqdn):4443"
+cmcctl dial --addr "$(hostname --fqdn):4443"
 ```
 
 ### Establish Attested TLS Connections without a shared PKI
@@ -150,11 +131,10 @@ validating the certificate chain:
 
 ```sh
 # Run an attested TLS server with a self-signed TLS certificate
-cmcctl listen --config <cmcctl-config> --addr "$(hostname --fqdn):4443" --attest server
+cmcctl listen --addr "$(hostname --fqdn):4443" --attest server
 
 # Run an attested TLS client trusting the server based on its attestation report only
-cmcctl dial --config <cmcctl-config> --addr "$(hostname --fqdn):4443" --attest server \
-    --attestation-only-trust
+cmcctl dial --addr "$(hostname --fqdn):4443" --attest server --attestation-only-trust
 ```
 
 The attestation report is bound to the TLS session via an RFC 5705 exporter-derived nonce. It
@@ -168,12 +148,11 @@ Prerequisite: [cmcd running](./run.md#run-the-cmcd)
 
 ```sh
 # Run two attested HTTPS servers
-cmcctl serve --config example-setup/configs/cmcctl.toml --addr "$(hostname --fqdn):8082"
+cmcctl serve --addr "$(hostname --fqdn):8082"
 
 # Perform multiple user-specified attested HTTPS requests to both servers. Each connection is
 # attested, while multiple requests to the same server use the established attested TLS connections
 cmcctl request \
-    --config example-setup/configs/cmcctl.toml \
     --addr "https://$(hostname --fqdn):8082" \
     --method POST \
     --data "hello from attested HTTPS client" \
@@ -209,7 +188,7 @@ cd cmc
 
 # Run the cmcctl HTTP (CONNECT) proxy on localhost:4443
 cd cmc/cmcctl
-./cmcctl proxy -config ../example-setup/configs/cmcctl.toml --allow-system-certs=true --attest server
+./cmcctl proxy --allow-system-certs=true --attest server
 
 # Request via proxy (running on localhost:4443) in HTTP CONNECT mode
 curl -p -x http://localhost:4443 http://localhost:4445/

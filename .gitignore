@@ -6,6 +6,7 @@
 /data/
 /artifacts/
 /vm/
+/build/
 cmcd/cmcd
 cmcctl/cmcctl
 cmcctl/token
