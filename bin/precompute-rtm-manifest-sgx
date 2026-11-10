@@ -4,8 +4,9 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
 
-metatool="${dir}/tools/metatool/metatool"
+require_bins metatool
 
 # Extract OMSP endpoint from parameters
 omsp=""
@@ -27,7 +28,6 @@ while [[ $i -le $# ]]; do
 done
 
 data="${dir}/data"
-cmc="${dir}"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
 
@@ -40,16 +40,16 @@ mkdir -p "${out}"
 
 echo "Using ${data} as directory for local data"
 
-# Build cmcctl enclave
-cd "${cmc}/cmcctl"
-make egocmc
+# Build and sign the cmcctl enclave, whose measurement is the reference value
+make -C "${dir}" egocmc
+enclave="${dir}/cmcctl/cmcctl"
 
 # Get the fingerprint of the Intel SGX Provisioning Certitification Root CA
 wget -O "${data}/pki/Intel_SGX_RootCA.pem" https://certificates.trustedservices.intel.com/Intel_SGX_Provisioning_Certification_RootCA.pem
 fingerprint=$(openssl x509 -in "${data}/pki/Intel_SGX_RootCA.pem" -fingerprint -noout -sha256 | sed 's/://g' | cut -d "=" -f2)
 
 # Get MRENCLAVE reference value
-mrenclave=$(echo "$(ego uniqueid cmcctl)" | awk 'NR==1')
+mrenclave=$(ego uniqueid "${enclave}" | awk 'NR==1')
 components='[
     {
       "type": "SGX Reference Value",
@@ -61,13 +61,12 @@ components='[
 ]'
 
 # Get MRSIGNER enclave signer hash
-mrsigner=$(echo "$(ego signerid cmcctl)" | awk 'NR==1')
+mrsigner=$(ego signerid "${enclave}" | awk 'NR==1')
 
-cd "${data}"
 
 # Create SGX policy
 policy_tmp=$(mktemp)
-"${metatool}" create sgx-policy \
+metatool create sgx-policy \
   --quote-version 3 \
   --initted \
   --mode64bit \
@@ -79,7 +78,7 @@ name="de.test.rtm"
 
 # Create RTM manifest
 echo "Writing ${out}/rtm.manifest.json"
-"${metatool}" create manifest \
+metatool create manifest \
   --name "${name}" \
   --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --developer-common-name "test developer" \
@@ -98,13 +97,13 @@ rm -f "${policy_tmp}"
 
 # Create manifest description and add to image description
 desc_tmp=$(mktemp)
-"${metatool}" create manifest-description \
+metatool create manifest-description \
   --name "${name}.description" \
   --manifest "${name}" \
   --out "${desc_tmp}"
 
 echo "Writing ${image_description_path}"
-"${metatool}" create image-description \
+metatool create image-description \
   --in "${image_description_path}" \
   --add-description "${desc_tmp}" \
   --out "${image_description_path}"

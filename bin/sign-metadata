@@ -6,6 +6,8 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
+require_bins metatool
+
 if [[ "$#" -ne 1 ]]; then
    echo "Usage: $(basename "$0") <cbor|json>"
    exit 1
@@ -42,7 +44,7 @@ for path in "${input}/"*; do
 
     # Convert to CBOR if specified, otherwise just copy
     if [[ "${ser,,}" = "cbor" ]]; then
-      "${dir}/tools/metatool/metatool" convert \
+      metatool convert \
         --in "${path}" \
         --out "${tmp}/${out_file}" \
         --outform cbor
@@ -51,7 +53,7 @@ for path in "${input}/"*; do
     fi
 
     # Sign metadata object
-    "${dir}/tools/metatool/metatool" sign \
+    metatool sign \
       --in "${tmp}/${out_file}" \
       --out "${out}/${out_file}" \
       --keys "${key}" \

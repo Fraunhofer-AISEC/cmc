@@ -1,13 +1,11 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
 
 data="${dir}/vm"
-vm_config="${dir}/example-setup/vm-config"
 
 debug=0
 edk_output_dir="RELEASE_CLANGPDB"
@@ -19,7 +17,8 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
-            shift
+            echo "Usage: $(basename "$0") [-d|--debug]"
+            exit 1
             ;;
     esac
 done
@@ -31,7 +30,7 @@ edk2="${data}/edk2"
     printf "[\033[34;1m EXEC \033[0m] Building edk2 firmware (%s)..\n" "${edk_output_dir}"
     git clone https://github.com/tianocore/edk2.git "${edk2}"
     cd "${edk2}"
-    git checkout edk2-stable202408.01
+    git checkout edk2-stable202502
     git submodule update --init
 }
 
@@ -39,7 +38,10 @@ cd "${edk2}"
 
 make -j "$(nproc)" -C BaseTools/
 
+# edksetup.sh does not support nounset
+set +u
 . ./edksetup.sh --reconfig
+set -u
 
 build_params=(  "-DTPM2_ENABLE=TRUE"
                 "-DFD_SIZE_2MB"
@@ -56,9 +58,9 @@ else
 fi
 
 # Build OVMF
+set +u
 build ${build_params[@]}
-
-mkdir -p "${data}/images"
+set -u
 
 # Copy OVMF to images
-install -D -m 0644 "${edk2}/Build/OvmfX64/${edk_output_dir}/FV/OVMF.fd" "${data}/images/"
+install -D -m 0644 "${edk2}/Build/OvmfX64/${edk_output_dir}/FV/OVMF.fd" "${data}/images/OVMF.fd"

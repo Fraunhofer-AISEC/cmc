@@ -4,7 +4,10 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+require_bins estserver
 
 cd "${dir}"
 
-exec "${dir}/tools/estserver/estserver" -config "${dir}/example-setup/vm-config/est-server.toml"
+exec estserver --config "${dir}/example-setup/vm-config/est-server.toml"

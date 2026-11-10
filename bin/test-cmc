@@ -225,13 +225,10 @@ commands_client_success_msg=("SUCCESS: Verification for Prover" "Client-side aTL
 commands_server_fail_msg=("Wrote attestation response" "attestation report verification failed" "attestation report verification failed")
 commands_client_fail_msg=("FAILED: Verification for Prover" "attestation report verification failed" "attestation report verification failed")
 
-# Update binaries
-echo "Updating binaries..."
-go build -C "${dir}/cmcd"
-go build -C "${dir}/cmcctl"
-go build -C "${dir}/tools/estserver"
-go build -C "${dir}/tools/mrtool"
-go build -C "${dir}/tools/metatool"
+require_bins cmcd cmcctl estserver metatool mrtool
+# sudo does not search the PATH of the user, e.g. ~/.local/bin
+cmcd="$(command -v cmcd)"
+estserver="$(command -v estserver)"
 
 # The components need root privileges for TPM and measurement log access. They are started
 # detached from the terminal and can therefore neither prompt for a password nor be answered, so
@@ -266,7 +263,7 @@ mkdir -p "${log_dir}"
 
 # Start est server
 echo "Starting est server..."
-setsid -w sudo -n "${dir}/tools/estserver/estserver" "${est_params[@]}" \
+setsid -w sudo -n "${estserver}" "${est_params[@]}" \
     < /dev/null > "${log_dir}/estserver.out" 2>&1 &
 disown
 sleep 0.2
@@ -282,14 +279,14 @@ do
 
         # Generate metadata for serializer (do not generate app manifest for failed attestation test)
         echo "Generating ${ar_serializer} metadata ======================================================="
-        generate-image-description > "${metadata_log}" 2>&1
-        generate-rtm-manifest-tpm --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
-        generate-os-manifest-tpm --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
+        "${dir}/bin/generate-image-description" > "${metadata_log}" 2>&1
+        "${dir}/bin/generate-rtm-manifest-tpm" --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
+        "${dir}/bin/generate-os-manifest-tpm" --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
         if [[ "${success}" == "success" ]]; then
-            generate-app-manifest-tpm --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
+            "${dir}/bin/generate-app-manifest-tpm" --omsp "https://localhost:9000/omsp" >> "${metadata_log}" 2>&1
         fi
-        sign-metadata "${ar_serializer}" >> "${metadata_log}" 2>&1
-        generate-omsp-responses >> "${metadata_log}" 2>&1
+        "${dir}/bin/sign-metadata" "${ar_serializer}" >> "${metadata_log}" 2>&1
+        "${dir}/bin/generate-omsp-responses" >> "${metadata_log}" 2>&1
 
         # Test CMC with the parameter matrix
         for api_serializer in "${api_serializers[@]}"
@@ -301,7 +298,7 @@ do
                     cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}.log"
 
                     echo "Starting cmcd"
-                    setsid -w sudo -n "${dir}/cmcd/cmcd" \
+                    setsid -w sudo -n "${cmcd}" \
                         "${cmc_params[@]}" \
                         --log-file "${cmc_log}" \
                         --omsp-format "${omsp_serializer}" \
@@ -320,7 +317,7 @@ do
 
                         printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | OMSP %s | API %-6s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${omsp_serializer}" "${protocols[i]}"
 
-                        setsid -w "${dir}/cmcctl/cmcctl" \
+                        setsid -w cmcctl \
                             "${commands_server[j]}" \
                             "${cmcctl_params[@]}" \
                             --log-file "${server_log}" \
@@ -333,7 +330,7 @@ do
                         wait_for_message $! "${server_log}" "${commands_server_ready_msg[j]}"
 
                         set +e
-                        setsid -w timeout "${wait_timeout}" "${dir}/cmcctl/cmcctl" \
+                        setsid -w timeout "${wait_timeout}" cmcctl \
                             "${commands_client[j]}" \
                             "${cmcctl_params[@]}" \
                             --log-file "${client_log}" \

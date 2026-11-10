@@ -1,9 +1,9 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
-dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 data="${dir}/vm"
 
@@ -16,17 +16,17 @@ tpm_sock="${data}/swtpm/swtpm-sock"
 
 [[ -f "${ovmf}" ]] || {
     echo "OVMF file ${ovmf} does not exist. Exit.."
-    exit
+    exit 1
 }
 
 [[ -f "${image}" ]] || {
    echo "Image file ${image} does not exist. Exit.."
-   exit
+   exit 1
 }
 
 [[ -S "${tpm_sock}" ]] || {
     echo "TPM socket ${tpm_sock} does not exist. Exit.."
-    exit
+    exit 1
 }
 
 qemu_opts=(
@@ -45,7 +45,7 @@ qemu_opts=(
     "-chardev socket,id=chrtpm,path=${tpm_sock}"
     "-tpmdev emulator,id=tpm0,chardev=chrtpm"
     "-device tpm-tis,tpmdev=tpm0"
-    "-drive file=${dir}/vm/images/seed.iso,media=cdrom,readonly=on"
+    "-drive file=${data}/images/seed.iso,media=cdrom,readonly=on"
 )
 
 # Start vm

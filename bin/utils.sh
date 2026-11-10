@@ -1,11 +1,14 @@
 #!/bin/bash
 
-# Returns the absolute path
-abs_path() {
-  if [[ -d "$(dirname "$1")" ]]
-  then
-    echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")" || true
-  fi
+# Exits if one of the given binaries is not found in the PATH
+require_bins() {
+  local bin
+  for bin in "$@"; do
+    command -v "${bin}" >/dev/null || {
+      printf "Error: %s not found in PATH. Build and install the CMC first, see doc/build-and-install.md\n" "${bin}" >&2
+      exit 1
+    }
+  done
 }
 
 # Updates the JSON data given in the first argument through setting the key and

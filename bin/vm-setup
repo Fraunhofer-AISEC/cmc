@@ -1,33 +1,29 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-[[ $# -lt 2 ]] || {
-    echo "Usage: $(basename $0) [-d|--debug]"
-    exit 1
-}
-
 data="${dir}/vm"
 vm_config="${dir}/example-setup/vm-config"
 
-debug=0
-edk_output_dir="RELEASE_CLANGPDB"
+edk2_args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--debug)
-            debug=1
-            edk_output_dir="DEBUG_CLANGPDB"
+            edk2_args=(--debug)
             shift
             ;;
         *)
-            shift
+            echo "Usage: $(basename "$0") [-d|--debug]"
+            exit 1
             ;;
     esac
 done
+
+require_bins cmcd cmcctl mrtool
 
 img="noble-server-cloudimg-amd64.img"
 vm_size="20G"
@@ -36,7 +32,6 @@ cloudfile="${data}/images/${img}.bkp"
 vmfile="${data}/images/${img}"
 
 qemu="${data}/qemu"
-edk2="${data}/edk2"
 swtpm_root_dir="${data}/swtpm"
 swtpm_srcs_dir="${swtpm_root_dir}/src"
 swtpm_src_dir="${swtpm_srcs_dir}/swtpm"
@@ -120,39 +115,7 @@ done
 }
 
 # Build edk2 OVMF firmware
-[ -d "${edk2}" ] || {
-    printf "[\033[34;1m EXEC \033[0m] Building edk2 firmware (%s)..\n" "${edk_output_dir}"
-    git clone https://github.com/tianocore/edk2.git "${edk2}"
-    cd "${edk2}"
-    git checkout edk2-stable202502
-    git submodule update --init
-
-    make -j "$(nproc)" -C BaseTools/
-
-    . ./edksetup.sh --reconfig
-
-    build_params=(  "-DTPM2_ENABLE=TRUE"
-                    "-DFD_SIZE_2MB"
-                    "-n $(nproc)"
-                    "-a X64"
-                    "-t CLANGPDB"
-                    "-p OvmfPkg/OvmfPkgX64.dsc")
-
-    if [[ "${debug}" -eq 1 ]]; then
-        build_params+=("-b DEBUG"
-            "-DDEBUG_ON_SERIAL_PORT=TRUE")
-    else
-        build_params+=("-b RELEASE")
-    fi
-
-    # Build OVMF
-    build ${build_params[@]}
-
-    mkdir -p "${data}/images"
-
-    # Copy OVMF to images
-    install -D -m 0644 "${edk2}/Build/OvmfX64/${edk_output_dir}/FV/OVMF.fd" "${data}/images/"
-}
+[ -f "${data}/images/OVMF.fd" ] || "${dir}/bin/build-edk2" "${edk2_args[@]}"
 
 # Build swtpm
 [[ -d "${libtpms_dir}" ]] || {
@@ -199,21 +162,13 @@ done
     swtpm_setup --tpm2 --tpmstate "${swtpm_state_dir}" --create-ek-cert
 }
 
-# Build CMC
-printf "[\033[34;1m EXEC \033[0m] Building CMC..\n"
-go build -C "${dir}/cmcctl"
-go build -C "${dir}/cmcd"
-go build -C "${dir}/tools/estserver"
-go build -C "${dir}/tools/metatool"
-go build -C "${dir}/tools/mrtool"
-
 # Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"
 
 # Generate an example PKI
 [ -d "${dir}/data/pki" ] || {
 	printf "[\033[34;1m EXEC \033[0m] Generating PKI..\n"
-	"${dir}/bin/setup-pki${script_suffix}"
+	"${dir}/bin/setup-pki"
 }
 
 # Download Ubuntu Cloud Image
@@ -253,19 +208,23 @@ mkdir -p "${data}"
 
 # Create cloud-init configuration volume
 printf "[\033[34;1m EXEC \033[0m] Generating cloud-init configuration volume..\n"
+seed="$(mktemp -d)"
+sed -e 's|@BINDIR@|/usr/bin|g' -e 's|@WANTEDBY@|multi-user.target|g' \
+    "${dir}/init/systemd/cmcd.service" > "${seed}/cmcd.service"
 genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "${vm_config}/user-data" \
     "${vm_config}/meta-data" \
     "${vm_config}/network-config" \
-    "${vm_config}/cmcd.service" \
+    "${seed}/cmcd.service" \
     "${vm_config}/cmcctl.service" \
     "${vm_config}/cmcctl-vm.toml" \
     "${vm_config}/cmcd.toml" \
-    "${dir}/cmcd/cmcd" \
-    "${dir}/cmcctl/cmcctl" \
-    "${dir}/tools/mrtool/mrtool" \
+    "$(command -v cmcd)" \
+    "$(command -v cmcctl)" \
+    "$(command -v mrtool)" \
     "${dir}/data/pki/ca.pem" \
-    "${dir}/example-setup/vm-config/metadata-ca.pem"
+    "${vm_config}/metadata-ca.pem"
+rm -rf "${seed}"
 
 # Finished successfully
 printf "[\033[32;1m  OK  \033[0m] $0\n"

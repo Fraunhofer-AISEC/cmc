@@ -1,10 +1,9 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
 
 data="${dir}/vm"
 images="${data}/images"
@@ -78,7 +77,7 @@ mkdir -p "${mnt}"
 sudo guestmount -a "${img_qcow}" -i --rw "${mnt}"
 
 # Extract and own files
-sudo rsync -a --copy-links --chown=${USER}:${USER} "${mnt}/boot" "${data}/images/"
+sudo rsync -a --copy-links --chown="$(id -un):$(id -gn)" "${mnt}/boot" "${data}/images/"
 
 # Finish
 sudo umount "${mnt}"

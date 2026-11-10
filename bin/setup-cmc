@@ -6,100 +6,66 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
+drivers="tpm, vm, snp, tdx, sgx, container"
+
 print_usage() {
-  echo "Usage: $(basename "$0") [-i] [-h] [-c] <driver>"
-  echo "       -h: print help"
+  echo "Usage: $(basename "$0") [-i] [-c] [-h] <driver> [<metadata args>]"
   echo "       -i: use ids pki instead of simple pki"
   echo "       -c: use cbor instead of json for metadata"
-  echo "       driver: tpm, sgx, snp, tdx, tdx-azure, ec2, vm"
+  echo "       -h: print help"
+  echo "       driver: ${drivers}"
+  echo "       metadata args: passed to generate-metadata-<driver>, e.g. the artifacts folder for tdx"
 }
 
-script_suffix=""
+suffix=""
 serializer="json"
 
-while getopts 'i:h:c' flag; do
+while getopts 'ich' flag; do
   case "${flag}" in
-    i)
-        script_suffix="-ids"
-        shift
-        ;;
-    c)
-        serializer="cbor"
-        shift
-        ;;
-    h)
-        print_usage
-        exit 0 ;;
+    i) suffix="-ids" ;;
+    c) serializer="cbor" ;;
+    h) print_usage
+       exit 0 ;;
     *) print_usage
        exit 1 ;;
   esac
 done
+shift $((OPTIND - 1))
 
 if [[ "$#" -lt 1 ]]; then
-   print_usage
-   exit 1
+  print_usage
+  exit 1
 fi
 
 driver="${1}"
+shift
 
-if [[ ! "${driver}" =~ ^(sgx|tpm|snp|tdx|tdx-azure|ec2|vm)$ ]]; then
-    echo "Error: Invalid driver. Expected one of sgx, tpm, snp, tdx, tdx-azure, ec2, vm"
-    exit 1
+if [[ ! -x "${dir}/bin/generate-metadata-${driver}" ]]; then
+  echo "Error: invalid driver ${driver}. Expected one of ${drivers}"
+  exit 1
 fi
+
+require_bins metatool mrtool
 
 data="${dir}/data"
-cmc="${dir}"
-
-if [[ ! -d "${cmc}" ]]; then
-  echo "CMC directory ${cmc} does not exist. Did you clone the repository? Abort.."
-  exit 1
-fi
 
 if [[ -d "${data}" ]]; then
-  echo "Data directory ${data} does already exist. Please choose a new directory. Abort.."
+  echo "Data directory ${data} does already exist. Remove it for a fresh setup. Abort.."
   exit 1
 fi
 
-echo "Using CMC: ${cmc}"
 echo "Using ${data} as directory for local data"
-
-# Install CMC
-echo "Installing CMC"
-go install -C "${dir}/cmcd"
-go install -C "${dir}/cmcctl"
-go install -C "${dir}/tools/estserver"
-go install -C "${dir}/tools/mrtool"
-go install -C "${dir}/tools/metatool"
-go install -C "${dir}/tools/tdxtool"
-go install -C "${dir}/tools/snptool"
-go install -C "${dir}/tools/tdxtool"
-go install -C "${dir}/tools/cmcbackend"
-
-# Build CMC to be present in local folders
-echo "Locally Building CMC"
-go build -C "${dir}/cmcd"
-go build -C "${dir}/cmcctl"
-go build -C "${dir}/tools/estserver"
-go build -C "${dir}/tools/mrtool"
-go build -C "${dir}/tools/metatool"
-go build -C "${dir}/tools/tdxtool"
-go build -C "${dir}/tools/snptool"
-go build -C "${dir}/tools/tdxtool"
-go build -C "${dir}/tools/cmcbackend"
-
-# Create a folder for the cmc configuration and metadata
 mkdir -p "${data}"
 
 # Generate an example PKI
-"${dir}/bin/setup-pki${script_suffix}"
+"${dir}/bin/setup-pki${suffix}"
 
 # Generate example metadata for the current machine
-"${dir}/bin/generate-metadata-${driver}"
-
-echo "signing metadata with serializer ${serializer}"
+"${dir}/bin/generate-metadata-${driver}" "$@"
 
 # Sign the metadata
-"${dir}/bin/sign-metadata${script_suffix}" "${serializer}"
+echo "Signing metadata with serializer ${serializer}"
+"${dir}/bin/sign-metadata${suffix}" "${serializer}"
 
 # Generate the OMSP responses for the signed manifests
 "${dir}/bin/generate-omsp-responses"
