@@ -26,7 +26,7 @@ import (
 // LogEffective logs the working directory of the binary name and the config
 // files that cmd loaded at info level, and the effective configuration root,
 // secrets redacted, at debug level.
-func LogEffective(cmd *cli.Command, name string, root any) {
+func LogEffective(cmd *cli.Command, name string, root any, print bool) {
 
 	l := logrus.WithField("service", name)
 
@@ -53,6 +53,6 @@ func LogEffective(cmd *cli.Command, name string, root any) {
 	// One record per line, as the logger escapes an embedded newline
 	l.Debug("Using the following configuration:")
 	for line := range strings.SplitSeq(s, "\n") {
-		l.Debugf("\t%v", line)
+		l.Tracef("\t%v", line)
 	}
 }

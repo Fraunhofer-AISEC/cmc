@@ -61,7 +61,7 @@ func serve(_ context.Context, cmd *cli.Command) error {
 		return err
 	}
 	c.resolve()
-	config.LogEffective(cmd, binaryName, c)
+	config.LogEffective(cmd, binaryName, c, false)
 	if err := config.DirsOf(binaryName).Create(); err != nil {
 		return err
 	}
