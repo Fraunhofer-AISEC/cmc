@@ -4,8 +4,9 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
 
-metatool="${dir}/tools/metatool/metatool"
+require_bins metatool mrtool
 
 # Extract OMSP endpoint before parsing the remaining parameters
 omsp=""
@@ -29,7 +30,7 @@ done
 # If ssh is not specified, the reference values are parsed from the local machine. If SSH is
 # specified, the reference values are parsed from the remote, where the mrtool must be installed
 if [[ ${#args[@]} -eq 0 ]]; then
-  mrtool=(sudo "${dir}/tools/mrtool/mrtool")
+  mrtool=(sudo "$(command -v mrtool)")
 elif [[ ${#args[@]} -eq 1 ]]; then
   mrtool=("${args[0]}" mrtool)
 elif [[ ${#args[@]} -eq 2 ]]; then
@@ -46,7 +47,7 @@ name="de.test.rtm"
 image_description_path="${out}/image.description.json"
 
 if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
@@ -65,7 +66,7 @@ fi
 
 # Create RTM manifest
 echo "Writing ${out}/rtm.manifest.json"
-"${metatool}" create manifest \
+metatool create manifest \
   --name "${name}" \
   --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --developer-common-name "test developer" \
@@ -81,13 +82,13 @@ echo "Writing ${out}/rtm.manifest.json"
 
 # Create RTM manifest description and add to image description
 desc_tmp=$(mktemp)
-"${metatool}" create manifest-description \
+metatool create manifest-description \
   --name "${name}.description" \
   --manifest "${name}" \
   --out "${desc_tmp}"
 
 echo "Writing ${image_description_path}"
-"${metatool}" create image-description \
+metatool create image-description \
   --in "${image_description_path}" \
   --add-description "${desc_tmp}" \
   --out "${image_description_path}"

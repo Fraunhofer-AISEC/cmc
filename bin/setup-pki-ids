@@ -4,7 +4,6 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
 
 input="${dir}/example-setup/pki-input-ids"
 out="${dir}/data/pki"
@@ -19,9 +18,8 @@ mkdir -p "${out}"
 cfssl gencert -initca "${input}/ca.json" | cfssljson -bare "${out}/ca"
 
 # 2. Set up an OCSP Server for the Root CA
-# Setup the database based on the .sql file derived from ~/go/src/github.com/cloudflare/cfssl/certdb/sqlite/migrations/001_CreateCertificates.sql
-# shellcheck disable=SC2002
-cat "${input}/certs_subcas.sql" | sqlite3 "${out}/certdb_subcas.db"
+# Set up the database with the schema of the cfssl sqlite certdb
+sqlite3 "${out}/certdb_subcas.db" < "${input}/certdb.sql"
 echo "{\"driver\":\"sqlite3\",\"data_source\":\"${out}/certdb_subcas.db\"}" > "${out}/sqlite_db_subcas.json"
 
 # Generate key/certificate for OCSP Signing
@@ -36,17 +34,15 @@ cfssl genkey "${input}/user_sub_ca.json" | cfssljson -bare "${out}/user_sub_ca"
 cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -db-config "${out}/sqlite_db_subcas.json" --config "${input}/ca-config.json" -profile intermediate "${out}/user_sub_ca.csr" | cfssljson -bare "${out}/user_sub_ca"
 
 # 4. Set up OCSP Servers for the User Sub CAs
-# shellcheck disable=SC2002
-cat "${input}/certs_users.sql" | sqlite3 "${out}/certdb_users.db"
+sqlite3 "${out}/certdb_users.db" < "${input}/certdb.sql"
 echo "{\"driver\":\"sqlite3\",\"data_source\":\"${out}/certdb_users.db\"}" > "${out}/sqlite_db_users.json"
 
 # Generate key/certificate for OCSP Signing
 cfssl genkey "${input}/ocsp_users.json" | cfssljson -bare "${out}/ocsp_users"
 cfssl sign -ca "${out}/user_sub_ca.pem" -ca-key "${out}/user_sub_ca-key.pem" "${out}/ocsp_users.csr" | cfssljson -bare "${out}/ocsp_users"
 
-# 5. Set up OCSP Servers for the User Sub CAs
-# shellcheck disable=SC2002
-cat "${input}/certs_devices.sql" | sqlite3 "${out}/certdb_devices.db"
+# 5. Set up OCSP Servers for the Device Sub CAs
+sqlite3 "${out}/certdb_devices.db" < "${input}/certdb.sql"
 echo "{\"driver\":\"sqlite3\",\"data_source\":\"${out}/certdb_devices.db\"}" > "${out}/sqlite_db_devices.json"
 
 # Generate key/certificate for OCSP Signing
@@ -75,13 +71,13 @@ gen certifier_B
 cfssl genkey -config "${input}/ca-config.json" -profile tlscert "${input}/cfssl-est-tls.json" | cfssljson -bare "${out}/est-tls"
 
 # Sign CSR and generate certificate for EST server TLS connections
-cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile tlscert "${out}/est-tls.csr" | cfssljson -bare "${out}/est-tls"
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile tlscert -config "${input}/ca-config.json" "${out}/est-tls.csr" | cfssljson -bare "${out}/est-tls"
 
 # Generate key and CSR for signing OMSP responses (used by provisioning server)
-cfssl genkey -config "${input}/cfssl-ca-config.json" -profile omspcert "${input}/cfssl-omsp.json" | cfssljson -bare "${out}/omsp"
+cfssl genkey -config "${input}/ca-config.json" -profile omspcert "${input}/cfssl-omsp.json" | cfssljson -bare "${out}/omsp"
 
 # Sign CSR and generate certificate for signing OMSP responses (used by provisioning server)
-cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile omspcert -config "${input}/cfssl-ca-config.json" "${out}/omsp.csr" | cfssljson -bare "${out}/omsp"
+cfssl sign -ca "${out}/ca.pem" -ca-key "${out}/ca-key.pem" -profile omspcert -config "${input}/ca-config.json" "${out}/omsp.csr" | cfssljson -bare "${out}/omsp"
 
 # Generate certificates to use with Intel TDX PCCS
 pccs_key="${out}/tdx-pccs-private.pem"

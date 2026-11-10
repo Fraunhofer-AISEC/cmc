@@ -8,7 +8,7 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 cd "${dir}"
 
 [[ $# -lt 2 ]] || {
-    echo "Usage: $(basename $0) <parse|precompute>"
+    echo "Usage: $(basename "$0") [parse|precompute]"
     exit 1
 }
 
@@ -18,34 +18,34 @@ mode="${1:-parse}"
 rm -rf "${dir}/data/metadata-raw"
 
 if [[ "${mode}" == "parse" ]]; then
-    echo "Parsing metadata..."
-  generate-metadata-vm
+  echo "Parsing metadata..."
+  "${dir}/bin/generate-metadata-vm"
 elif [[ "${mode}" == "precompute" ]]; then
-    echo "Precomputing metadata..."
-  precompute-metadata-vm
+  echo "Precomputing metadata..."
+  "${dir}/bin/precompute-metadata-vm"
 else
   echo "Unknown mode ${mode}"
   exit 1
 fi
 
-sign-metadata json
+"${dir}/bin/sign-metadata" json
 
-generate-omsp-responses
+"${dir}/bin/generate-omsp-responses"
 
 mkdir -p "${dir}/example-setup/vm-config/vm-metadata/"
 
 cp "${dir}/data/metadata-signed/"* "${dir}/example-setup/vm-config/vm-metadata/"
 cp "${dir}/data/pki/ca.pem" "${dir}/example-setup/vm-config/metadata-ca.pem"
 
-# Delete cmc internal data to enforce new certificate generation
-vm-ssh rm -rf /var/cmc
+# Delete cmcd data to enforce new certificate generation
+"${dir}/bin/vm-ssh" rm -rf /var/lib/cmc/cmcd
 
 # Restarting cmcd is required for fetching the updated metadata
 echo "Restarting services"
-vm-ssh systemctl restart cmcd
+"${dir}/bin/vm-ssh" systemctl restart cmcd
 
 sleep 2
 
-vm-ssh systemctl restart cmcctl
+"${dir}/bin/vm-ssh" systemctl restart cmcctl
 
 echo "Finished"

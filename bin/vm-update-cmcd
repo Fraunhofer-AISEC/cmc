@@ -1,30 +1,21 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-trap '[ $? -eq 0 ] && exit 0; printf "[\033[31;1mFAILED\033[0m] %s\n" "$0"' EXIT
-dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
 
-data="${dir}/vm"
-
-# Build binaries
-go build -C "${dir}/cmcd"
-go build -C "${dir}/cmcctl"
-go build -C "${dir}/tools/estserver"
-go build -C "${dir}/tools/mrtool"
+require_bins cmcd cmcctl mrtool
 
 # Stop running services in VM
-vm-ssh systemctl stop cmcd
-vm-ssh systemctl stop cmcctl
+"${dir}/bin/vm-ssh" systemctl stop cmcctl cmcd
 
-# Remove cmc internal folder to enforce generation of new certs
-vm-ssh rm -rf /var/cmc/internal
+# Remove cmcd data to enforce generation of new certs
+"${dir}/bin/vm-ssh" rm -rf /var/lib/cmc/cmcd
 
-# Copy new binaries into VM
-vm-scp cmcd/cmcd vm-ubuntu:/usr/bin/
-vm-scp cmcctl/cmcctl vm-ubuntu:/usr/bin/
-vm-scp tools/mrtool/mrtool vm-ubuntu:/usr/bin/
+# Copy the installed binaries into VM
+"${dir}/bin/vm-scp" "$(command -v cmcd)" "$(command -v cmcctl)" "$(command -v mrtool)" vm-ubuntu:/usr/bin/
 
 # Restart services
-vm-ssh systemctl start cmcd
-vm-ssh systemctl start cmcctl
+"${dir}/bin/vm-ssh" systemctl start cmcd cmcctl

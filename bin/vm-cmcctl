@@ -4,6 +4,9 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
+
+require_bins cmcctl
 
 cmd="${1:-request}"
 if [ "$#" -gt 0 ]; then
@@ -12,4 +15,4 @@ fi
 
 cd "${dir}"
 
-exec "${dir}/cmcctl/cmcctl" "${cmd}" -config "${dir}/example-setup/vm-config/cmcctl-host.toml" "$@"
+exec cmcctl "${cmd}" --config "${dir}/example-setup/vm-config/cmcctl-host.toml" "$@"

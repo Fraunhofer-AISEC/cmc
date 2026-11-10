@@ -4,22 +4,23 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/utils.sh"
-export PATH=${PATH}:${HOME}/go/bin
+source "${dir}/bin/utils.sh"
 
-if [[ "$#" -ne 2 ]]; then
-   echo "Usage: $(basename "$0") <data-folder> <cbor|json>"
+require_bins metatool
+
+if [[ "$#" -ne 1 ]]; then
+   echo "Usage: $(basename "$0") <cbor|json>"
    exit 1
 fi
 
-data=$(set -e; abs_path "${1}")
+data="${dir}/data"
 input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 out="${data}/metadata-signed"
-ser="${2}"
+ser="${1}"
 
-if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+if [[ ! -d "${input}" ]]; then
+  echo "Input directory ${input} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 

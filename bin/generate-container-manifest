@@ -4,8 +4,9 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
 
-metatool="${dir}/tools/metatool/metatool"
+require_bins metatool
 
 print_usage() {
   echo "Usage: $(basename "$0") [--omsp <omsp endpoint>] <container-engine> <container> [<container arguments>]"
@@ -62,10 +63,8 @@ if declare -p remaining &>/dev/null; then
 fi
 
 data="${dir}/data"
-cmc="${dir}"
 out="${data}/metadata-raw"
 
-runtime="${cmc}/tools/containerd-shim-cmc-v1/containerd-shim-cmc-v1"
 runc_config="/etc/runc-measure-conf.json"
 target="${target%/}"
 image_description_path="${out}/image.description.json"
@@ -109,12 +108,6 @@ if  [[ "${client}" == "ctr" ]]; then
     sudo ctr task kill -s SIGKILL REF_CONTAINER
     sudo ctr container delete REF_CONTAINER
     set -e
-elif  [[ "${client}" == "shim" ]]; then
-    containers=("${target}")
-    sudo ctr image pull "${target}"
-    set +e
-    sudo ctr run --runtime "${runtime}" -t --rm ${args} "${target}" CMC_GENERATE_APP_MANIFEST
-    set -e
 elif [[ "${client}" == "docker" ]]; then
     containers=("${target}")
     sudo docker run "${args[@]}" "${target}"
@@ -136,7 +129,7 @@ elif [[ "${client}" == "runc" ]]; then
     cd -
 else
     echo "Client ${client} not supported. Only 'docker', 'docker-compose', 'ctr' and 'runc' supported"
-    exit
+    exit 1
 fi
 
 # Restore the original runc config
@@ -178,7 +171,7 @@ for ((i = 0; i < num_containers; i++)); do
 
     # Create container manifest
     echo "Writing ${out}/${container_name}.manifest.json"
-    "${metatool}" create manifest \
+    metatool create manifest \
       --name "${container_name}" \
       --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
       --developer-common-name "test developer" \
@@ -194,7 +187,7 @@ for ((i = 0; i < num_containers; i++)); do
 
     # Create app manifest description
     desc_tmp=$(mktemp)
-    "${metatool}" create manifest-description \
+    metatool create manifest-description \
       --name "${container_name}.description" \
       --manifest "${container_name}" \
       --out "${desc_tmp}"
@@ -212,7 +205,7 @@ for ((i = 0; i < num_containers; i++)); do
 
     # Add manifest description to image description
     echo "Writing ${image_description_path}"
-    "${metatool}" create image-description \
+    metatool create image-description \
       --in "${image_description_path}" \
       --add-description "${desc_tmp}" \
       --out "${image_description_path}"

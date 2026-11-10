@@ -4,37 +4,48 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
+source "${dir}/bin/utils.sh"
 
-metatool="${dir}/tools/metatool/metatool"
+require_bins metatool mrtool
 
-# Extract OMSP endpoint from parameters
+# Extract OMSP endpoint before parsing the remaining parameters
 omsp=""
+args=()
 
 i=1
 while [[ $i -le $# ]]; do
   arg="${!i}"
   case "$arg" in
-    --omsp) 
+    --omsp)
       (( i++ ))
       omsp="${!i}"
       ;;
     *)
-      echo "Usage: $(basename $0) [--omsp <omsp endpoint>]"
-      exit 1
+      args+=("$arg")
       ;;
   esac
   (( i++ ))
 done
 
-# TODO set this to paths where your reproducible build outputs the required artifacts
-artifacts="${dir}/artifacts"
+[[ ${#args[@]} -eq 1 ]] || {
+    # Script requires path to artifacts folder containing the kernel, cmdline and configuration
+    echo "Usage: $(basename "$0") [--omsp <omsp endpoint>] <artifacts>"
+    exit 1
+}
+
+artifacts="${args[0]}"
+
+if [[ ! -d "${artifacts}" ]]; then
+  echo "Artifacts directory ${artifacts} does not exist. Abort.."
+  exit 1
+fi
 
 data="${dir}/data"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
 
 if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${1} does not exist. Did you run the setup-cmc script? Abort.."
+  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
   exit 1
 fi
 
@@ -65,7 +76,7 @@ name="de.test.os"
 
 # Create OS manifest
 echo "Writing ${out}/os.manifest.json"
-"${metatool}" create manifest \
+metatool create manifest \
   --name "${name}" \
   --version "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --developer-common-name "test developer" \
@@ -82,13 +93,13 @@ echo "Writing ${out}/os.manifest.json"
 
 # Create OS manifest description and add to image description
 desc_tmp=$(mktemp)
-"${metatool}" create manifest-description \
+metatool create manifest-description \
   --name "${name}.description" \
   --manifest "${name}" \
   --out "${desc_tmp}"
 
 echo "Writing ${image_description_path}"
-"${metatool}" create image-description \
+metatool create image-description \
   --in "${image_description_path}" \
   --add-description "${desc_tmp}" \
   --out "${image_description_path}"

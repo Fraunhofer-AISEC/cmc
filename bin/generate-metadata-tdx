@@ -4,13 +4,13 @@ set -euo pipefail
 
 trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
-source "${dir}/bin/utils.sh"
 
 bin="${dir}/bin"
 
 # Optional list of accepted TDX-module hashes, used where the TDX-module version cannot be
 # predicted. Without it, the TDX-module binary from the artifacts folder is measured
 mrseam=""
+args=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -19,12 +19,18 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     *)
-      echo "Unknown option: $1"
-      echo "Usage: $0 [--mrseam <hash>[,<hash>..]]"
-      exit 1
+      args+=("$1")
+      shift
       ;;
   esac
 done
+
+if [[ ${#args[@]} -ne 1 ]]; then
+  # The artifacts folder contains the firmware, kernel and configuration of the TD
+  echo "Usage: $(basename "$0") [--mrseam <hash>[,<hash>..]] <artifacts>"
+  exit 1
+fi
+artifacts="${args[0]}"
 
 mrseam_args=()
 if [[ -n "${mrseam}" ]]; then
@@ -33,6 +39,6 @@ fi
 
 "${bin}/generate-image-description" "tdx-device.test.de"
 
-"${bin}/precompute-rtm-manifest-tdx" "${mrseam_args[@]}" --omsp "https://localhost:9000/omsp"
+"${bin}/precompute-rtm-manifest-tdx" "${mrseam_args[@]}" --omsp "https://localhost:9000/omsp" "${artifacts}"
 
-"${bin}/precompute-os-manifest-tdx" --omsp "https://localhost:9000/omsp"
+"${bin}/precompute-os-manifest-tdx" --omsp "https://localhost:9000/omsp" "${artifacts}"

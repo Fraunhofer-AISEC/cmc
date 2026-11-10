@@ -1,8 +1,8 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 uid=$(id -u)
 gid=$(id -g)
@@ -89,7 +89,7 @@ test -t 0 && tty="--tty" || tty=""
 docker exec \
 --user "${uid}":"${gid}" \
 --env HOME="${HOME}" \
---env PATH="/usr/sbin:/sbin:/usr/bin:/bin:/usr/local/bin:/opt/ego/bin:/usr/local/go/bin:$HOME/go/bin:${dir}/bin:${dir}/vm/swtpm/src/bin" \
+--env PATH="/usr/sbin:/sbin:/usr/bin:/bin:/usr/local/bin:/opt/ego/bin:/usr/local/go/bin:$HOME/.local/bin:${dir}/bin:${dir}/vm/swtpm/src/bin" \
 --env LANG=C.UTF-8 \
 --workdir "${dir}" \
 --interactive \

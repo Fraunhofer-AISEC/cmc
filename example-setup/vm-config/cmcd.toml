@@ -26,6 +26,3 @@ enabled = true
 [cmc.provisioning]
 auth = ["none"]
 enrollment = "est:https://10.0.2.2:9000/"
-
-[cmc.storage]
-data = "/var/cmc/internal"

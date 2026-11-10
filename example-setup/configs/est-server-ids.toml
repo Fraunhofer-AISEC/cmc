@@ -5,17 +5,17 @@ level = "trace"
 root_cas = ["../../data/pki/ca.pem"]
 
 [est]
-ca_key = "../../data-ids/pki/device_sub_ca-key.pem"
-ca_chain = ["../../data-ids/pki/device_sub_ca.pem", "../../data-ids/pki/ca.pem"]
-tls_key = "../../data-ids/pki/est-tls-key.pem"
-tls_ca_chain = ["../../data-ids/pki/est-tls.pem", "../../data-ids/pki/ca.pem"]
+ca_key = "../../data/pki/device_sub_ca-key.pem"
+ca_chain = ["../../data/pki/device_sub_ca.pem", "../../data/pki/ca.pem"]
+tls_key = "../../data/pki/est-tls-key.pem"
+tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
 
 [http]
-folder = "../../data-ids/"
+folder = "../../data/"
 
 [tpm]
 verify_ek_cert = false
-ek_cert_db = "../../data-ids/tpm-ek-certs.db"
+ek_cert_db = "../../data/tpm-ek-certs.db"
 
 [omsp]
 folder = "../../data/omsp-raw"

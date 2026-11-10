@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
+dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 data="${dir}/vm"
 
