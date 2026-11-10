@@ -386,9 +386,11 @@ type RtMrHashChainElem struct {
 type TdxPolicy struct {
 	QuoteVersion        uint16       `json:"quoteVersion" cbor:"0,keyasint"`
 	TdId                TDId         `json:"tdId" cbor:"1,keyasint"`
-	Xfam                HexByte      `json:"xfam" cbor:"2,keyasint"`
+	Xfam                []HexByte    `json:"xfam" cbor:"2,keyasint"`
 	TdAttributes        TDAttributes `json:"tdAttributes" cbor:"3,keyasint"`
 	AcceptedTcbStatuses []string     `json:"acceptedTcbStatuses,omitempty" cbor:"4,keyasint,omitempty"`
+	// XfamIgnoreMask marks XFAM bits that are not checked (1 = ignore). Empty means all bits are checked
+	XfamIgnoreMask HexByte `json:"xfamIgnoreMask,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
 type SgxPolicy struct {

@@ -223,7 +223,7 @@ func VerifyTdx(
 	}
 	result.Artifacts = append(result.Artifacts, tdIdResults...)
 
-	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], policy.Xfam)
+	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], policy.Xfam, policy.XfamIgnoreMask)
 	if result.TdxResult.XfamCheck.Status != ar.StatusSuccess {
 		log.Warnf("TDX XFAM check failed")
 		result.Summary.Status = ar.StatusFail
@@ -771,12 +771,57 @@ func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbI
 	return results, tdIdSuccess
 }
 
-func verifyTdxXfam(measured, reference []byte) ar.Result {
-	return ar.Result{
-		Status:   ar.StatusFromBool(bytes.Equal(measured, reference)),
-		Got:      hex.EncodeToString(measured),
-		Expected: hex.EncodeToString(reference),
+// verifyTdxXfam checks that the measured XFAM matches one of the reference values. Bits set in
+// the ignore mask are not compared
+func verifyTdxXfam(measured []byte, references []ar.HexByte, ignoreMask []byte) ar.Result {
+	result := ar.Result{
+		Status: ar.StatusFail,
+		Got:    hex.EncodeToString(measured),
 	}
+	for _, ref := range references {
+		result.ExpectedOneOf = append(result.ExpectedOneOf, hex.EncodeToString(ref))
+	}
+	if len(ignoreMask) > 0 {
+		result.Details = fmt.Sprintf("ignore mask %v", hex.EncodeToString(ignoreMask))
+	}
+
+	if len(references) == 0 {
+		result.Details = "no reference XFAM values specified"
+		return result
+	}
+	if len(ignoreMask) != 0 && len(ignoreMask) != len(measured) {
+		result.Details = fmt.Sprintf("invalid XFAM ignore mask length %v (expected %v)",
+			len(ignoreMask), len(measured))
+		return result
+	}
+
+	for _, ref := range references {
+		if len(ref) != len(measured) {
+			result.Details = fmt.Sprintf("invalid reference XFAM length %v (expected %v)",
+				len(ref), len(measured))
+			return result
+		}
+	}
+
+	for _, ref := range references {
+		match := true
+		for i := range measured {
+			var ignore byte
+			if len(ignoreMask) > 0 {
+				ignore = ignoreMask[i]
+			}
+			if (measured[i]^ref[i])&^ignore != 0 {
+				match = false
+				break
+			}
+		}
+		if match {
+			result.Status = ar.StatusSuccess
+			return result
+		}
+	}
+
+	return result
 }
 
 func verifyTdxSeamAttributes(measured []byte) ar.Result {

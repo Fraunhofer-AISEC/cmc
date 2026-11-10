@@ -2377,7 +2377,10 @@
           "$ref": "#/$defs/TDId"
         },
         "xfam": {
-          "$ref": "#/$defs/HexByte"
+          "items": {
+            "$ref": "#/$defs/HexByte"
+          },
+          "type": "array"
         },
         "tdAttributes": {
           "$ref": "#/$defs/TDAttributes"
@@ -2387,6 +2390,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "xfamIgnoreMask": {
+          "$ref": "#/$defs/HexByte"
         }
       },
       "type": "object"
