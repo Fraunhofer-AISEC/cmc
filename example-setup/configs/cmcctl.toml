@@ -2,14 +2,10 @@
 level = "trace"
 
 [api]
-endpoint = "socket://localhost:9955"
-serialization = "json"
+endpoint = "socket://127.0.0.1:9955"
 
 [trust]
 root_cas = ["../../data/pki/ca.pem"]
-
-[atls]
-mtls = true
 
 [identity]
 key_id = "../../data/key_id"

@@ -9,7 +9,6 @@ root_cas = ["/var/metadata-ca.pem", "/var/ca.pem"]
 
 [cmc.attestation]
 drivers = ["tpm", "sw"]
-measurement_logs = true
 
 [cmc.attestation.containers]
 trust_anchor = "sw"

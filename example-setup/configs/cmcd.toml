@@ -2,24 +2,21 @@
 level = "trace"
 
 [api]
-endpoint = "socket://localhost:9955"
+endpoint = "socket://127.0.0.1:9955"
 
 [trust]
 root_cas = ["../../data/pki/ca.pem"]
 
 [cmc.attestation]
 drivers = ["tpm", "sw"]
-measurement_logs = true
 
 [cmc.attestation.containers]
 trust_anchor = "sw"
-log = "/tmp/container_measurements"
 
 [cmc.metadata]
 locations = ["file://../../data/metadata-signed"]
 
 [cmc.provisioning]
-token = "../../data/provision_token"
 endorsement = "est:https://localhost:9000/"
 enrollment = "est:https://localhost:9000/"
 
