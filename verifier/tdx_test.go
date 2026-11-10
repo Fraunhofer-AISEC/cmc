@@ -63,7 +63,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -98,7 +98,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -131,7 +131,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -164,7 +164,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -269,7 +269,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -302,7 +302,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -335,7 +335,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -368,7 +368,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -402,7 +402,7 @@ func TestVerifyTdx(t *testing.T) {
 						// Invalid debug value
 						Debug: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -433,7 +433,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -466,7 +466,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -499,7 +499,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -532,7 +532,7 @@ func TestVerifyTdx(t *testing.T) {
 					TdAttributes: ar.TDAttributes{
 						SeptVEDisable: true,
 					},
-					Xfam: validXFAM,
+					Xfam: []ar.HexByte{validXFAM},
 					AcceptedTcbStatuses: []string{
 						string(pcs.TcbComponentStatusUpToDate),
 						string(pcs.TcbComponentStatusOutOfDate),
@@ -2030,7 +2030,7 @@ var (
 		TdAttributes: ar.TDAttributes{
 			SeptVEDisable: true,
 		},
-		Xfam: validXFAM,
+		Xfam: []ar.HexByte{validXFAM},
 		AcceptedTcbStatuses: []string{
 			string(pcs.TcbComponentStatusUpToDate),
 			string(pcs.TcbComponentStatusOutOfDate),
@@ -2237,3 +2237,30 @@ FgQUImUM1lqdNInzg7SVUr9QGzknBqwwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYBAf8C
 AQEwCgYIKoZIzj0EAwIDSQAwRgIhAOW/5QkR+S9CiSDcNoowLuPRLsWGf/Yi7GSX94BgwTwgAiEA
 4J0lrHoMs+Xo5o/sX6O9QWxHRAvZUGOdRQ7cvqRXaqI=`
 )
+
+func TestVerifyTdxXfam(t *testing.T) {
+	measured := dec("e718060000000000")
+	tests := []struct {
+		name       string
+		references []ar.HexByte
+		ignoreMask []byte
+		want       ar.Status
+	}{
+		{"exact match", []ar.HexByte{dec("e718060000000000")}, nil, ar.StatusSuccess},
+		{"mismatch", []ar.HexByte{dec("e702060000000000")}, nil, ar.StatusFail},
+		{"one of multiple", []ar.HexByte{dec("e702060000000000"), dec("e718060000000000")}, nil, ar.StatusSuccess},
+		{"masked match", []ar.HexByte{dec("e702060000000000")}, dec("001a000000000000"), ar.StatusSuccess},
+		{"masked mismatch", []ar.HexByte{dec("e702060000000000")}, dec("0018000000000000"), ar.StatusFail},
+		{"no references", nil, nil, ar.StatusFail},
+		{"invalid reference length", []ar.HexByte{dec("e718")}, nil, ar.StatusFail},
+		{"invalid mask length", []ar.HexByte{dec("e718060000000000")}, dec("00"), ar.StatusFail},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := verifyTdxXfam(measured, tt.references, tt.ignoreMask)
+			if got.Status != tt.want {
+				t.Errorf("verifyTdxXfam() = %v, want %v (%v)", got.Status, tt.want, got.Details)
+			}
+		})
+	}
+}

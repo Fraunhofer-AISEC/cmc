@@ -459,7 +459,7 @@ var (
 		TdAttributes: ar.TDAttributes{
 			SeptVEDisable: true,
 		},
-		Xfam: validXFAMAzure,
+		Xfam: []ar.HexByte{validXFAMAzure},
 		AcceptedTcbStatuses: []string{
 			string(pcs.TcbComponentStatusUpToDate),
 			string(pcs.TcbComponentStatusOutOfDate),

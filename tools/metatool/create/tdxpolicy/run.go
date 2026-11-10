@@ -37,12 +37,15 @@ const (
 	mrOwnerConfigFlag = "mr-owner-config"
 	mrConfigIdFlag    = "mr-config-id"
 	xfamFlag          = "xfam"
+	xfamIgnoreFlag    = "xfam-ignore-mask"
 	debugFlag         = "debug"
 	septVEDisableFlag = "sept-ve-disable"
 	pksFlag           = "pks"
 	klFlag            = "kl"
 	acceptedTcbFlag   = "accepted-tcb-statuses"
 )
+
+const xfamLen = 8
 
 var Command = &cli.Command{
 	Name:  "tdx-policy",
@@ -64,9 +67,13 @@ var Command = &cli.Command{
 			Name:  mrConfigIdFlag,
 			Usage: "MR config ID (hex string)",
 		},
-		&cli.StringFlag{
+		&cli.StringSliceFlag{
 			Name:  xfamFlag,
-			Usage: "XFAM value (hex string)",
+			Usage: "allowed XFAM values (hex strings), comma-separated",
+		},
+		&cli.StringFlag{
+			Name:  xfamIgnoreFlag,
+			Usage: "XFAM bits to ignore during verification (hex string)",
 		},
 		&cli.BoolFlag{
 			Name:  debugFlag,
@@ -125,10 +132,24 @@ var Command = &cli.Command{
 				return fmt.Errorf("failed to decode --mr-config-id hex: %w", err)
 			}
 		}
-		if cmd.IsSet(xfamFlag) {
-			p.Xfam, err = hex.DecodeString(cmd.String(xfamFlag))
+		for _, x := range cmd.StringSlice(xfamFlag) {
+			xfam, err := hex.DecodeString(x)
 			if err != nil {
 				return fmt.Errorf("failed to decode --xfam hex: %w", err)
+			}
+			if len(xfam) != xfamLen {
+				return fmt.Errorf("invalid --xfam length %v (expected %v bytes)", len(xfam), xfamLen)
+			}
+			p.Xfam = append(p.Xfam, xfam)
+		}
+		if cmd.IsSet(xfamIgnoreFlag) {
+			p.XfamIgnoreMask, err = hex.DecodeString(cmd.String(xfamIgnoreFlag))
+			if err != nil {
+				return fmt.Errorf("failed to decode --xfam-ignore-mask hex: %w", err)
+			}
+			if len(p.XfamIgnoreMask) != xfamLen {
+				return fmt.Errorf("invalid --xfam-ignore-mask length %v (expected %v bytes)",
+					len(p.XfamIgnoreMask), xfamLen)
 			}
 		}
 		if cmd.IsSet(acceptedTcbFlag) {
