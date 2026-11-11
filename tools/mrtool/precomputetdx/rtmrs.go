@@ -131,6 +131,13 @@ func PrecomputeRtmr0(c *Config) ([]*ar.Component, []*ar.Component, error) {
 		}
 	}
 
+	// EV_EFI_VARIABLE_AUTHORITY: db entries the firmware verified the bootloader against
+	rtmr, refvals, err = tcg.MeasureAuthorities(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, "db", tcg.EfiImageSecurityDatabaseGuid, c.Db, c.DbAuthority)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure db authorities: %w", err)
+	}
+
 	// EV_EFI_VARIABLE_AUTHORITY: SbatLevel
 	if c.SbatLevel != "" {
 		rtmr, refvals, err = tcg.MeasureSbatLevel(crypto.SHA384, tcg.TDX, rtmr, refvals,
@@ -138,6 +145,13 @@ func PrecomputeRtmr0(c *Config) ([]*ar.Component, []*ar.Component, error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure SbatLevel: %w", err)
 		}
+	}
+
+	// EV_EFI_VARIABLE_AUTHORITY: MokListRT entries shim verified the images against
+	rtmr, refvals, err = tcg.MeasureAuthorities(crypto.SHA384, tcg.TDX, rtmr, refvals,
+		tcg.INDEX_RTMR0, "MokListRT", tcg.ShimLockGuid, c.MokListRT, c.MokAuthority)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure MokListRT authorities: %w", err)
 	}
 
 	// Terminating EV_SEPARATOR is extended only in edk2-stable202408.01

@@ -483,11 +483,25 @@ func PrecomputePcr7(c *Config) (*ar.Component, []*ar.Component, error) {
 		return nil, nil, fmt.Errorf("failed to measure EV_SEPARATOR: %w", err)
 	}
 
+	// EV_EFI_VARIABLE_AUTHORITY: db entries the firmware verified the bootloader against
+	pcr, refvals, err = tcg.MeasureAuthorities(c.HashAlg, tcg.TPM, pcr, refvals, 7, "db",
+		tcg.EfiImageSecurityDatabaseGuid, c.Db, c.DbAuthority)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure db authorities: %w", err)
+	}
+
 	if c.SbatLevel != "" {
 		pcr, refvals, err = tcg.MeasureSbatLevel(c.HashAlg, tcg.TPM, pcr, refvals, 7, c.SbatLevel)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to measure SbatLevel: %w", err)
 		}
+	}
+
+	// EV_EFI_VARIABLE_AUTHORITY: MokListRT entries shim verified the images against
+	pcr, refvals, err = tcg.MeasureAuthorities(c.HashAlg, tcg.TPM, pcr, refvals, 7, "MokListRT",
+		tcg.ShimLockGuid, c.MokListRT, c.MokAuthority)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to measure MokListRT authorities: %w", err)
 	}
 
 	// Create final reference value
