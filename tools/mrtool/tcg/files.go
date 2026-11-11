@@ -38,7 +38,10 @@ func MeasureFiles(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*ar.
 		switch {
 		case info.Mode().IsRegular():
 			// Regular file
-			return MeasureFile(alg, ta, "EV_IPL", digest, refvals, index, p)
+			digest, refvals, err = MeasureFile(alg, ta, "EV_IPL", digest, refvals, index, p)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to measure file: %w", err)
+			}
 
 		case info.IsDir():
 			// Directory: walk recursively
