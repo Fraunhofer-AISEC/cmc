@@ -131,6 +131,9 @@ type Conf struct {
 	Db             string
 	Dbx            string
 	SbatLevel      string
+	MokListRT      string
+	DbAuthority    []string
+	MokAuthority   []string
 	DumpPei        string
 	DumpDxe        string
 	DumpKernel     string
@@ -185,6 +188,9 @@ const (
 	dbFlag             = "db"
 	dbxFlag            = "dbx"
 	sbatlevelFlag      = "sbatlevel"
+	moklistrtFlag      = "moklistrt"
+	dbAuthorityFlag    = "db-authority"
+	mokAuthorityFlag   = "mok-authority"
 
 	dumppeiFlag    = "dumppei"
 	dumpdxeFlag    = "dumpdxe"
@@ -349,6 +355,22 @@ var Flags = []cli.Flag{
 	&cli.StringFlag{
 		Name:  sbatlevelFlag,
 		Usage: "SBAT level string for measuring DBX authority into PCR7"},
+	&cli.StringFlag{
+		Name:  moklistrtFlag,
+		Usage: "UEFI MokListRT variable data file holding the --mok-authority certificates",
+	},
+	&cli.StringFlag{
+		Name: dbAuthorityFlag,
+		Usage: "Comma-separated list of DER or PEM certificates from the --db variable the " +
+			"firmware verified the bootloader against, measured as EV_EFI_VARIABLE_AUTHORITY " +
+			"into PCR7/RTMR0",
+	},
+	&cli.StringFlag{
+		Name: mokAuthorityFlag,
+		Usage: "Comma-separated list of DER or PEM certificates from the --moklistrt variable " +
+			"shim verified the images against, measured as EV_EFI_VARIABLE_AUTHORITY into " +
+			"PCR7/RTMR0",
+	},
 	&cli.StringFlag{Name: dumppeiFlag, Usage: "Optional path to folder to dump the measured PEIFV"},
 	&cli.StringFlag{Name: dumpdxeFlag, Usage: "Optional path to folder to dump the measured DXEFV"},
 	&cli.StringFlag{
@@ -501,6 +523,15 @@ func GetTcgConf(cmd *cli.Command) (*Conf, error) {
 	if cmd.IsSet(sbatlevelFlag) {
 		c.SbatLevel = cmd.String(sbatlevelFlag)
 	}
+	if cmd.IsSet(moklistrtFlag) {
+		c.MokListRT = cmd.String(moklistrtFlag)
+	}
+	if cmd.IsSet(dbAuthorityFlag) {
+		c.DbAuthority = strings.Split(cmd.String(dbAuthorityFlag), ",")
+	}
+	if cmd.IsSet(mokAuthorityFlag) {
+		c.MokAuthority = strings.Split(cmd.String(mokAuthorityFlag), ",")
+	}
 
 	if cmd.IsSet(dumppeiFlag) {
 		c.DumpPei = cmd.String(dumppeiFlag)
@@ -620,6 +651,15 @@ func (c *Conf) Print() {
 	}
 	if c.SbatLevel != "" {
 		log.Debugf("\tSBAT Level: %q", c.SbatLevel)
+	}
+	if c.MokListRT != "" {
+		log.Debugf("\tMokListRT: %q", c.MokListRT)
+	}
+	if len(c.DbAuthority) > 0 {
+		log.Debugf("\tDB authorities: %v", c.DbAuthority)
+	}
+	if len(c.MokAuthority) > 0 {
+		log.Debugf("\tMOK authorities: %v", c.MokAuthority)
 	}
 
 	if c.SmbiosSpec != nil {

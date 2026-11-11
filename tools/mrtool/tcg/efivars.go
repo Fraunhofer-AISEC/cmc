@@ -18,10 +18,13 @@ package tcg
 import (
 	"bytes"
 	"crypto"
+	"crypto/x509"
 	"encoding/binary"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -53,6 +56,10 @@ const (
 	// CHAR16      UnicodeName[1];
 	// INT8        VariableData[1];
 	UefiVariableDataMinSize = 16 + 8 + 8
+
+	// EFI_SIGNATURE_LIST header: SignatureType GUID, SignatureListSize, SignatureHeaderSize and
+	// SignatureSize
+	SignatureListHeaderSize = 16 + 4 + 4 + 4
 )
 
 type SecBootVariableType struct {
@@ -219,6 +226,123 @@ func MeasureSbatLevel(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	refvals = append(refvals, rv)
 
 	return digest, refvals, nil
+}
+
+// SignatureData is an EFI_SIGNATURE_DATA entry of an EFI_SIGNATURE_LIST
+type SignatureData struct {
+	Owner [16]byte
+	Data  []byte
+}
+
+// ParseSignatureLists parses the EFI_SIGNATURE_LIST structures of a signature database
+// variable such as db or MokListRT and returns all EFI_SIGNATURE_DATA entries
+func ParseSignatureLists(data []byte) ([]SignatureData, error) {
+	var entries []SignatureData
+	for len(data) > 0 {
+		if len(data) < SignatureListHeaderSize {
+			return nil, fmt.Errorf("signature list too short: %d bytes", len(data))
+		}
+		listSize := uint64(binary.LittleEndian.Uint32(data[16:]))
+		headerSize := uint64(binary.LittleEndian.Uint32(data[20:]))
+		sigSize := uint64(binary.LittleEndian.Uint32(data[24:]))
+
+		if listSize > uint64(len(data)) || SignatureListHeaderSize+headerSize > listSize {
+			return nil, fmt.Errorf("invalid signature list size %d", listSize)
+		}
+		if sigSize < 16 || (listSize-SignatureListHeaderSize-headerSize)%sigSize != 0 {
+			return nil, fmt.Errorf("invalid signature size %d", sigSize)
+		}
+
+		sigs := data[SignatureListHeaderSize+headerSize : listSize]
+		for ; len(sigs) > 0; sigs = sigs[sigSize:] {
+			var e SignatureData
+			copy(e.Owner[:], sigs[:16])
+			e.Data = sigs[16:sigSize]
+			entries = append(entries, e)
+		}
+
+		data = data[listSize:]
+	}
+	return entries, nil
+}
+
+// MeasureAuthorities measures an EV_EFI_VARIABLE_AUTHORITY event for each certificate. The
+// event contains the EFI_SIGNATURE_DATA entry of the signature database variable (db or
+// MokListRT) holding the certificate, as logged by the firmware or shim when it verified an image
+// against this certificate
+func MeasureAuthorities(alg crypto.Hash, ta TrustAnchor, digest []byte,
+	refvals []*ar.Component, index int, varName string, varGuid [16]byte, varPath string,
+	certPaths []string,
+) ([]byte, []*ar.Component, error) {
+
+	if len(certPaths) == 0 {
+		return digest, refvals, nil
+	}
+	if varPath == "" {
+		return nil, nil, fmt.Errorf("%v authorities require the %v variable", varName, varName)
+	}
+
+	data, err := readEfiVariableFromFile(varPath, varGuid)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read %v: %w", varName, err)
+	}
+	entries, err := ParseSignatureLists(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse %v: %w", varName, err)
+	}
+
+	for _, certPath := range certPaths {
+		cert, err := readCert(certPath)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		idx := slices.IndexFunc(entries, func(e SignatureData) bool {
+			return bytes.Equal(e.Data, cert.Raw)
+		})
+		if idx < 0 {
+			return nil, nil, fmt.Errorf("certificate %v (%v) not found in %v", certPath,
+				cert.Subject.CommonName, varName)
+		}
+
+		sigData := slices.Concat(entries[idx].Owner[:], entries[idx].Data)
+		varData, err := createVariable(SecBootVariableType{
+			EventType:    "EV_EFI_VARIABLE_AUTHORITY",
+			VariableName: varName,
+			VendorGuid:   varGuid,
+			Data:         sigData,
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create %v authority: %w", varName, err)
+		}
+
+		var rv *ar.Component
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, varData,
+			"EV_EFI_VARIABLE_AUTHORITY", fmt.Sprintf("%v: %v", varName, cert.Subject.CommonName))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create %v authority reference value: %w",
+				varName, err)
+		}
+		refvals = append(refvals, rv)
+	}
+
+	return digest, refvals, nil
+}
+
+// readCert reads a DER or PEM encoded X.509 certificate
+func readCert(path string) (*x509.Certificate, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read certificate: %w", err)
+	}
+	if block, _ := pem.Decode(data); block != nil {
+		data = block.Bytes
+	}
+	cert, err := x509.ParseCertificate(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate %v: %w", path, err)
+	}
+	return cert, nil
 }
 
 // TCG PC Client Platform Firmware Profile Specification layout of UEFI_VARIABLE_DATA:
