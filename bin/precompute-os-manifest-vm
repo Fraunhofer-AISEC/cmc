@@ -56,7 +56,7 @@ components=$(mrtool precompute tpm \
     --kernel "${artifacts}/vmlinuz" \
     --initrd "${artifacts}/initrd" \
     --cmdline "${vm_config}/cmdline" \
-    --grubcmds "${vm_config}/grub_cmds" \
+    --grubcmds "${vm_config}/grub_cmds.json" \
     --path "${artifacts}/grub" \
     --path "${artifacts}/vmlinuz" \
     --path "${artifacts}/initrd" \
