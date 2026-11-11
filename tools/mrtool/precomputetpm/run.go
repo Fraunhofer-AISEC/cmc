@@ -482,7 +482,7 @@ func precompute(pcrNums []int, tpmConf *Config) ([]*ar.Component, []*ar.Componen
 			pcr, rv, err = PrecomputePcr11(tpmConf)
 		case pcrNum == 12:
 			pcr, rv, err = PrecomputePcr12(tpmConf)
-		case pcrNum == 13:
+		case pcrNum == 14:
 			pcr, rv, err = PrecomputePcr14(tpmConf)
 		case pcrNum < 24:
 			return nil, nil, fmt.Errorf("PCR%v precomputation not yet implemented", pcrNum)

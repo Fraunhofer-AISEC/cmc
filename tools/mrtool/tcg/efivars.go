@@ -23,17 +23,18 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"unicode/utf16"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
 var (
-	EfiGlobalVariableGuid                  = [16]byte{0x61, 0xdf, 0xe4, 0x8b, 0xca, 0x93, 0xd2, 0x11, 0xaa, 0x0d, 0x00, 0xe0, 0x98, 0x03, 0x2b, 0x8c}
-	EfiImageSecurityDatabaseGuid           = [16]byte{0xcb, 0xb2, 0x19, 0xd7, 0x3a, 0x3d, 0x96, 0x45, 0xa3, 0xbc, 0xda, 0xd0, 0x0e, 0x67, 0x65, 0x6f}
-	EfiImageSecurityDatabase1SbatLevelGuid = [16]byte{0x50, 0xab, 0x5d, 0x60, 0x46, 0xe0, 0x00, 0x43, 0xab, 0xb6, 0x3d, 0xd8, 0x10, 0xdd, 0x8b, 0x23}
-	FvNameGuid                             = [16]byte{0xc9, 0xbd, 0xb8, 0x7c, 0xeb, 0xf8, 0x34, 0x4f, 0xaa, 0xea, 0x3e, 0xe4, 0xaf, 0x65, 0x16, 0xa1}
-	FileGuid                               = [16]byte{0x21, 0xaa, 0x2c, 0x46, 0x14, 0x76, 0x03, 0x45, 0x83, 0x6e, 0x8a, 0xb6, 0xf4, 0x66, 0x23, 0x31}
+	EfiGlobalVariableGuid        = [16]byte{0x61, 0xdf, 0xe4, 0x8b, 0xca, 0x93, 0xd2, 0x11, 0xaa, 0x0d, 0x00, 0xe0, 0x98, 0x03, 0x2b, 0x8c}
+	EfiImageSecurityDatabaseGuid = [16]byte{0xcb, 0xb2, 0x19, 0xd7, 0x3a, 0x3d, 0x96, 0x45, 0xa3, 0xbc, 0xda, 0xd0, 0x0e, 0x67, 0x65, 0x6f}
+	ShimLockGuid                 = [16]byte{0x50, 0xab, 0x5d, 0x60, 0x46, 0xe0, 0x00, 0x43, 0xab, 0xb6, 0x3d, 0xd8, 0x10, 0xdd, 0x8b, 0x23}
+	FvNameGuid                   = [16]byte{0xc9, 0xbd, 0xb8, 0x7c, 0xeb, 0xf8, 0x34, 0x4f, 0xaa, 0xea, 0x3e, 0xe4, 0xaf, 0x65, 0x16, 0xa1}
+	FileGuid                     = [16]byte{0x21, 0xaa, 0x2c, 0x46, 0x14, 0x76, 0x03, 0x45, 0x83, 0x6e, 0x8a, 0xb6, 0xf4, 0x66, 0x23, 0x31}
 )
 
 const (
@@ -165,13 +166,13 @@ func MeasureMoklists(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*
 
 	for _, path := range moklists {
 
-		data, err := readEfiVariableFromFile(path, EfiImageSecurityDatabase1SbatLevelGuid)
+		data, err := readEfiVariableFromFile(path, ShimLockGuid)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read efi variable from file: %w", err)
 		}
 
 		var rv *ar.Component
-		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data, "EV_IPL", filepath.Base(path))
+		rv, digest, err = CreateExtendRefval(alg, ta, index, digest, data, "EV_IPL", mokListName(path))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create reference value for %v: %w", path, err)
 		}
@@ -182,6 +183,16 @@ func MeasureMoklists(alg crypto.Hash, ta TrustAnchor, digest []byte, refvals []*
 	return digest, refvals, nil
 }
 
+// mokListName derives the variable name shim records in the event log from an efivars
+// file name, e.g. MokListRT-605dab50-e046-4300-abb6-3dd810dd8b23 becomes MokList
+func mokListName(path string) string {
+	name := filepath.Base(path)
+	if i := strings.Index(name, "-"); i >= 0 {
+		name = name[:i]
+	}
+	return strings.TrimSuffix(name, "RT")
+}
+
 func MeasureSbatLevel(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	refvals []*ar.Component, index int, sbatlevelPath string,
 ) ([]byte, []*ar.Component, error) {
@@ -189,7 +200,7 @@ func MeasureSbatLevel(alg crypto.Hash, ta TrustAnchor, digest []byte,
 	sbat := SecBootVariableType{
 		EventType:    "EV_EFI_VARIABLE_AUTHORITY",
 		VariableName: "SbatLevel",
-		VendorGuid:   EfiImageSecurityDatabase1SbatLevelGuid,
+		VendorGuid:   ShimLockGuid,
 		Path:         sbatlevelPath,
 	}
 
