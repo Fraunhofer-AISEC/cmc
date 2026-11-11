@@ -16,10 +16,10 @@
 package precomputetpm
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -517,27 +517,23 @@ func PrecomputePcr8(c *Config) (*ar.Component, []*ar.Component, error) {
 
 	if c.GrubCmds != "" {
 
-		file, err := os.Open(c.GrubCmds)
+		data, err := os.ReadFile(c.GrubCmds)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to open grub cmds file: %w", err)
+			return nil, nil, fmt.Errorf("failed to read grub cmds file: %w", err)
 		}
-		defer file.Close()
+		var cmds []string
+		if err := json.Unmarshal(data, &cmds); err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal grub cmds file: %w", err)
+		}
 
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			line := scanner.Bytes()
-
+		for _, cmd := range cmds {
 			var rv *ar.Component
-			rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 8, pcr, line,
-				"EV_IPL", string(line))
+			rv, pcr, err = tcg.CreateExtendRefval(c.HashAlg, tcg.TPM, 8, pcr, []byte(cmd),
+				"EV_IPL", cmd)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to create reference values: %w", err)
 			}
 			refvals = append(refvals, rv)
-		}
-
-		if err := scanner.Err(); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan grub commands file: %w", err)
 		}
 	}
 

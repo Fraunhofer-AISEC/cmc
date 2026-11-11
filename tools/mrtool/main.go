@@ -24,6 +24,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/global"
+	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsegrubcmds"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parseima"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsesmbios"
 	"github.com/Fraunhofer-AISEC/cmc/tools/mrtool/parsetdx"
@@ -57,6 +58,7 @@ func main() {
 					parsetdx.Command,
 					parseima.Command,
 					parsesmbios.Command,
+					parsegrubcmds.Command,
 				},
 				Action: func(ctx context.Context, c *cli.Command) error {
 					return cli.ShowSubcommandHelp(c)

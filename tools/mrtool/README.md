@@ -128,6 +128,24 @@ PCR values for PCRs 0-9
 mrtool parse tpm --mrs 0,1,2,3,4,5,6,7,8,9
 ```
 
+#### Parse GRUB commands
+
+GRUB measures every executed command and the kernel command line as strings into PCR8, after
+variable expansion and including the multi-line bodies of `menuentry` and `submenu`. As this
+cannot be derived from `grub.cfg` without a GRUB script interpreter, the strings are extracted
+from the event log of a reference boot into a JSON list, which `precompute tpm --grubcmds` takes
+as input:
+```sh
+mrtool parse grubcmds > grub_cmds.json
+mrtool precompute tpm --mrs 8 --grubcmds grub_cmds.json
+```
+
+The list depends on the GRUB configuration, the kernel version and the grubenv state, e.g.,
+`recordfail` after an unclean shutdown, and must be regenerated if any of them changes. This is a
+**highly experimental feature** as a last resort. In general, we recommend to **NOT USE GRUB**. Use
+a UEFI direct boot, **a Unified Kernel Image (UKI)**, or *systemd-boot* if you require a bootloader
+instead.
+
 ## Parse the TDX CC eventlog
 
 Parses the eventlog for RTMR0-3
