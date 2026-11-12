@@ -147,7 +147,7 @@ func TpmActivateEnroll(
 	var encryptedSecret []byte
 	var encryptedCert []byte
 
-	_, err = DecodeMultipart(
+	err = DecodeMultipart(
 		resp.Body,
 		[]MimeMultipart{
 			{ContentType: MimeTypeOctetStream, Data: &encryptedCredential},

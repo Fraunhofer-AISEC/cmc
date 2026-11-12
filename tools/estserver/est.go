@@ -55,11 +55,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 	}
 	encoded := est.EncodeBase64(body)
 
-	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
-		return
-	}
+	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
 func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
@@ -110,11 +106,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	}
 	encoded := est.EncodeBase64(body)
 
-	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
-		return
-	}
+	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
 func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Request) {
@@ -143,7 +135,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	var akCreateAttestation []byte
 	var akCreateSignature []byte
 
-	_, err := est.DecodeMultipart(
+	err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypeTextPlain, Data: &tpmInfo},
@@ -226,10 +218,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	err = sendResponse(w, contentType, "", payload.Bytes())
-	if err != nil {
-		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
-	}
+	sendResponse(w, contentType, "", payload.Bytes())
 }
 
 func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request) {
@@ -256,7 +245,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	var akPublic []byte
 	var report []byte
 
-	_, err := est.DecodeMultipart(
+	err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypePKCS10, Data: &csr},
@@ -327,11 +316,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 	encoded := est.EncodeBase64(body)
 
-	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
-		return
-	}
+	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
 func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
@@ -353,7 +338,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	var csr *x509.CertificateRequest
 	var report []byte
 
-	_, err := est.DecodeMultipart(
+	err := est.DecodeMultipart(
 		req.Body,
 		[]est.MimeMultipart{
 			{ContentType: est.MimeTypePKCS10, Data: &csr},
@@ -393,11 +378,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Enrolled cert %v", cert.Subject.CommonName)
 
-	err = sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to send generated certificate: %v", err)
-		return
-	}
+	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
 // enrollCert generates a new certificate from a CSR signed by the CA. The naming policy determines

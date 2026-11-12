@@ -261,8 +261,9 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	http.NotFound(w, r)
 }
 
-func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, payload []byte,
-) error {
+// sendResponse writes a successful response. Write errors are only logged, as the status
+// has already been sent
+func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, payload []byte) {
 
 	if contentType != "" {
 		w.Header().Set(internal.HttpContentTypeHeader, contentType)
@@ -273,16 +274,9 @@ func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, p
 	w.WriteHeader(http.StatusOK)
 
 	log.Tracef("Sending HTTP response")
-	n, err := w.Write(payload)
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP response: %w", err)
+	if _, err := w.Write(payload); err != nil {
+		log.Warnf("Failed to send HTTP response: %v", err)
 	}
-	if n != len(payload) {
-		log.Warnf("Failed to send HTTP response: Only %v of %v bytes sent",
-			n, len(payload))
-	}
-
-	return nil
 }
 
 func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) {

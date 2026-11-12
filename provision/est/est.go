@@ -132,80 +132,81 @@ func formatBase64(data []byte) []byte {
 	return buf.Bytes()
 }
 
-func DecodeMultipart(r io.Reader, parts []MimeMultipart, ctypeHeader string) (int, error) {
+// DecodeMultipart decodes a multipart body into the given parts. All parts must be present
+func DecodeMultipart(r io.Reader, parts []MimeMultipart, ctypeHeader string) error {
 
 	mediaType, params, err := mime.ParseMediaType(ctypeHeader)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse media type: %w", err)
+		return fmt.Errorf("failed to parse media type: %w", err)
 	}
 
 	if !strings.HasPrefix(mediaType, MimeTypeMultipart) {
-		return 0, fmt.Errorf("invalid %s %s, must begin with %s", ctypeHeader,
+		return fmt.Errorf("invalid %s %s, must begin with %s", ctypeHeader,
 			mediaType, MimeTypeMultipart)
 	}
 
 	mpr := multipart.NewReader(r, params[MimeParamBoundary])
 
-	i := 0
-	for _, part := range parts {
+	for i, part := range parts {
 		p, err := mpr.NextPart()
 		if err == io.EOF {
-			break
+			return fmt.Errorf("missing multipart %v of %v", i, len(parts))
 		} else if err != nil {
-			return 0, fmt.Errorf("failed to get multipart %v: %w", i, err)
+			return fmt.Errorf("failed to get multipart %v: %w", i, err)
 		}
 		defer p.Close()
 
 		err = checkMediaType(p, part.ContentType, internal.HttpEncodingTypeBase64)
 		if err != nil {
-			return 0, fmt.Errorf("failed to verify part type %v: %w", i, err)
+			return fmt.Errorf("failed to verify part type %v: %w", i, err)
 		}
 
 		switch t := part.Data.(type) {
 		case **x509.CertificateRequest:
 			csr, err := ParsePkcs10Csr(p)
 			if err != nil {
-				return 0, fmt.Errorf("failed to parse CSR: %w", err)
+				return fmt.Errorf("failed to parse CSR: %w", err)
 			}
 			*t = csr
 
 		case *[]byte:
 			data, err := io.ReadAll(p)
 			if err != nil {
-				return 0, fmt.Errorf("failed to read: %w", err)
+				return fmt.Errorf("failed to read: %w", err)
 			}
 			decoded, err := DecodeBase64(data)
 			if err != nil {
-				return 0, fmt.Errorf("failed to decode: %w", err)
+				return fmt.Errorf("failed to decode: %w", err)
 			}
 			*t = decoded
 
 		case *string:
 			data, err := io.ReadAll(p)
 			if err != nil {
-				return 0, fmt.Errorf("failed to read: %w", err)
+				return fmt.Errorf("failed to read: %w", err)
 			}
 			*t = string(data)
 
 		case *uint64:
 			data, err := io.ReadAll(p)
 			if err != nil {
-				return 0, fmt.Errorf("failed to read: %w", err)
+				return fmt.Errorf("failed to read: %w", err)
 			}
 			decoded, err := DecodeBase64(data)
 			if err != nil {
-				return 0, fmt.Errorf("failed to decode: %w", err)
+				return fmt.Errorf("failed to decode: %w", err)
+			}
+			if len(decoded) != 8 {
+				return fmt.Errorf("invalid uint64 part %v length %v", i, len(decoded))
 			}
 			*t = binary.LittleEndian.Uint64(decoded)
 
 		default:
-			return 0, fmt.Errorf("unknown type %v %T", i, t)
+			return fmt.Errorf("unknown type %v %T", i, t)
 		}
-
-		i++
 	}
 
-	return i, nil
+	return nil
 }
 
 func EncodeMultiPart(parts []MimeMultipart) (*bytes.Buffer, string, error) {
