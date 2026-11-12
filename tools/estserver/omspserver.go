@@ -89,62 +89,45 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 	omspResp.Server = s.omspUrl
 	omspResp.ProducedAt = time.Now().Format(time.RFC3339)
 
-	//Retrieve OMSP Responses based on manifest hash from folder specified in config
+	// Retrieve OMSP responses based on manifest hash from the configured folder
 	for _, hash := range omspReq.ManifestHashes {
-		// Retrieve the OMSP responses
 		log.Debugf("Retrieving OMSP response for manifest with hash %v", hash)
 
-		// Check that the provided hash is a valid hex string to prevent path traversal attacks
-		_, err := hex.DecodeString(hash)
-		if err != nil {
-			log.Debugf("Invalid manifest hash %v provided and ignored for response: %v", hash, err)
-			writeHttpErrorf(w, "Invalid manifest hash provided: %v", hash)
-			continue
+		// A valid hex string cannot contain path separators, which prevents path traversal
+		if _, err := hex.DecodeString(hash); err != nil || hash == "" {
+			writeHttpErrorf(w, "Invalid manifest hash %q", hash)
+			return
 		}
 		file := filepath.Join(s.omspFolder, hash+".json")
 
-		// Check that the requested file remains in the specified omspFolder to prevent path traversal attacks
-		relPath, err := filepath.Rel(s.omspFolder, file)
-		if err != nil || strings.HasPrefix(relPath, "..") {
-			log.Debugf("Invalid manifest hash %v provided and ignored for response", hash)
-			writeHttpErrorf(w, "Invalid manifest hash: %v", hash)
+		fileInfo, err := os.Stat(file)
+		if errors.Is(err, os.ErrNotExist) {
+			log.Tracef("File %v does not exist, i.e., manifest for this software is unknown", file)
+			omspResp.Responses = append(omspResp.Responses, ar.SingleOmspResponse{
+				ManifestHash: hash,
+				Status:       ar.OmspStatusUnknown,
+			})
 			continue
+		} else if err != nil {
+			writeHttpErrorf(w, "Failed to retrieve OMSP response for %v: %v", hash, err)
+			return
+		}
+		if !fileInfo.Mode().IsRegular() {
+			writeHttpErrorf(w, "OMSP response for %v is not a regular file", hash)
+			return
 		}
 
-		fileInfo, err := os.Stat(file)
+		data, err := os.ReadFile(file)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				log.Tracef("File %v does not exist, i.e., manifest for this software is unknown", file)
-				var singleResp ar.SingleOmspResponse
-				singleResp.ManifestHash = hash
-				singleResp.Status = ar.OmspStatusUnknown
-				omspResp.Responses = append(omspResp.Responses, singleResp)
-				continue
-			} else {
-				log.Warnf("Failed to retrieve information about file %v: %v", file, err)
-				writeHttpErrorf(w, "Internal error during retrieval of OMSP response: %v", err)
-			}
+			writeHttpErrorf(w, "Failed to read OMSP response for %v: %v", hash, err)
+			return
 		}
-		if fileInfo.Mode().IsRegular() {
-			log.Tracef("Reading file %v", file)
-			data, err := os.ReadFile(file)
-			if err != nil {
-				log.Warnf("Failed to read file %v", file)
-				writeHttpErrorf(w, "Internal error during retrieval of OMSP response: %v", err)
-				continue
-			}
-			var singleResp ar.SingleOmspResponse
-			err = json.Unmarshal(data, &singleResp)
-			if err != nil {
-				log.Warnf("Failed to unmarshal OMSP response: %v", err)
-				writeHttpErrorf(w, "Internal error during retrieval of OMSP response: %v", err)
-				continue
-			}
-			omspResp.Responses = append(omspResp.Responses, singleResp)
-		} else {
-			log.Warnf("File for OMSP status of manifest with hash %v is not a regular file", hash)
-			writeHttpErrorf(w, "Internal error during retrieval of OMSP response: %v", err)
+		var singleResp ar.SingleOmspResponse
+		if err := json.Unmarshal(data, &singleResp); err != nil {
+			writeHttpErrorf(w, "Failed to unmarshal OMSP response for %v: %v", hash, err)
+			return
 		}
+		omspResp.Responses = append(omspResp.Responses, singleResp)
 	}
 
 	data, err := ser.Marshal(omspResp)
@@ -157,14 +140,9 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 	log.Tracef("Signing OMSP Response with omspKey")
 	respBody, err := internal.Sign(data, s.omspKey, ser.String(), s.omspCaChain)
 	if err != nil {
-		log.Warnf("Failed to create signature: %v", err)
-		http.Error(w, "Generating signature for OMSP responses failed", http.StatusBadRequest)
+		writeHttpErrorf(w, "Failed to sign OMSP response: %v", err)
 		return
 	}
 
-	err = sendResponse(w, ct, "", []byte(respBody))
-	if err != nil {
-		writeHttpErrorf(w, "Failed to send generated OMSP response: %v", err)
-		return
-	}
+	sendResponse(w, ct, "", []byte(respBody))
 }
