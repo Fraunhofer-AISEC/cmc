@@ -82,4 +82,32 @@ func TestDecodeMultipart(t *testing.T) {
 			t.Fatal("expected error for wrong content type")
 		}
 	})
+
+	t.Run("content type parameter", func(t *testing.T) {
+		for _, tc := range []struct {
+			name    string
+			sent    string
+			wantErr bool
+		}{
+			{"matching", MimeTypePKCS7Enveloped, false},
+			{"missing", MimeTypePKCS7, true},
+			{"different", MimeTypePKCS7CertsOnly, true},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				body, ctype, err := EncodeMultiPart([]MimeMultipart{
+					{ContentType: tc.sent, Data: []byte("first")},
+				})
+				if err != nil {
+					t.Fatalf("EncodeMultiPart: %v", err)
+				}
+				var a []byte
+				err = DecodeMultipart(bytes.NewReader(body.Bytes()), []MimeMultipart{
+					{ContentType: MimeTypePKCS7Enveloped, Data: &a},
+				}, ctype)
+				if (err != nil) != tc.wantErr {
+					t.Fatalf("DecodeMultipart error %v, want error %v", err, tc.wantErr)
+				}
+			})
+		}
+	})
 }
