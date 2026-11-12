@@ -10,6 +10,10 @@ ca_chain = ["../../data/pki/device_sub_ca.pem", "../../data/pki/ca.pem"]
 tls_key = "../../data/pki/est-tls-key.pem"
 tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
 
+[est.auth]
+simpleenroll = ["none"]
+tpmactivateenroll = ["none"]
+
 [http]
 folder = "../../data/"
 
