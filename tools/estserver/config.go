@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"fmt"
+	"os"
 	"slices"
 	"time"
 
@@ -28,7 +29,13 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
+
+func init() {
+	// The available policy engines depend on the build tags of the binary
+	config.RegisterEnum("policyengines", verifier.PolicyEngines)
+}
 
 type estConfig struct {
 	Address      string     `toml:"address"       flag:"est-addr"     default:"0.0.0.0:9000" usage:"EST server address to listen for requests"`
@@ -75,6 +82,14 @@ func (a *authConfig) Validate(r *config.Report) {
 	}
 }
 
+// attestationConfig configures the verification of attestation reports of enrollment requests
+type attestationConfig struct {
+	Policies        string `toml:"policies"         flag:"policies"         path:"true" usage:"JSON policies file for custom verification of attestation reports"`
+	PolicyEngine    string `toml:"policy_engine"    flag:"policy-engine"    enum:"@policyengines" usage:"policy engine for the policies file"`
+	PolicyOverwrite bool   `toml:"policy_overwrite" flag:"policy-overwrite" usage:"allow the policies to overwrite attestation result properties"`
+	AcceptWarn      bool   `toml:"accept_warn"      flag:"accept-warn"      usage:"accept attestation results with status warn"`
+}
+
 type httpConfig struct {
 	Folder string `toml:"folder" flag:"http-folder" default:"{data}/http" path:"true" usage:"folder to be served via HTTP"`
 }
@@ -111,15 +126,16 @@ type storageConfig struct {
 }
 
 type Config struct {
-	Log      sections.Log   `toml:"log"`
-	Trust    sections.Trust `toml:"trust"`
-	Est      estConfig      `toml:"est"       category:"EST"`
-	Http     httpConfig     `toml:"http"`
-	Tpm      tpmConfig      `toml:"tpm"       category:"TPM"`
-	IntelPcs intelPcsConfig `toml:"intel_pcs" category:"INTEL PCS"`
-	Omsp     omspConfig     `toml:"omsp"      category:"OMSP"`
-	Publish  publishConfig  `toml:"publish"`
-	Storage  storageConfig  `toml:"storage"`
+	Log         sections.Log      `toml:"log"`
+	Trust       sections.Trust    `toml:"trust"`
+	Est         estConfig         `toml:"est"       category:"EST"`
+	Attestation attestationConfig `toml:"attestation"`
+	Http        httpConfig        `toml:"http"`
+	Tpm         tpmConfig         `toml:"tpm"       category:"TPM"`
+	IntelPcs    intelPcsConfig    `toml:"intel_pcs" category:"INTEL PCS"`
+	Omsp        omspConfig        `toml:"omsp"      category:"OMSP"`
+	Publish     publishConfig     `toml:"publish"`
+	Storage     storageConfig     `toml:"storage"`
 
 	// Values derived from the configuration above by resolve
 	estCaKey        crypto.PrivateKey
@@ -132,6 +148,8 @@ type Config struct {
 	omspKey         crypto.PrivateKey
 	omspCaChain     []*x509.Certificate
 	certValidity    time.Duration
+	policies        []byte
+	policyEngine    verifier.PolicyEngineSelect
 }
 
 // Validate checks the rules that span more than one option. It is called by
@@ -144,6 +162,11 @@ func (c *Config) Validate(r *config.Report) {
 		r.Errorf("est.cert_validity", "%q is not a duration, e.g. 4320h", c.Est.CertValidity)
 	case d <= 0:
 		r.Errorf("est.cert_validity", "must be positive, got %v", d)
+	}
+
+	if (c.Attestation.Policies == "") != (c.Attestation.PolicyEngine == "") {
+		r.Errorf("attestation.policies", "attestation.policies and attestation.policy_engine "+
+			"must be set together")
 	}
 
 	// OMSP is optional. If any OMSP option is set, require all of them
@@ -217,6 +240,21 @@ func (c *Config) resolve() error {
 
 	if err := c.resolveAuth(); err != nil {
 		return err
+	}
+
+	// Policies are optional, and validated to be configured together with the engine
+	if c.Attestation.Policies != "" {
+		c.policies, err = os.ReadFile(c.Attestation.Policies)
+		if err != nil {
+			return fmt.Errorf("attestation.policies: failed to read policies: %w", err)
+		}
+		c.policyEngine, err = verifier.ParsePolicyEngine(c.Attestation.PolicyEngine)
+		if err != nil {
+			return fmt.Errorf("attestation.policy_engine: %w", err)
+		}
+	}
+	if c.Attestation.AcceptWarn {
+		log.Warn("Accepting attestation results with status warn")
 	}
 
 	// OMSP is optional, and validated to be either complete or absent

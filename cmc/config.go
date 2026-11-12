@@ -24,6 +24,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 )
 
 // Subfolders of the storage folder
@@ -42,7 +43,7 @@ func init() {
 	// The available drivers and policy engines depend on the build tags of the
 	// binary, so the enums behind them are resolved at validation time
 	config.RegisterEnum("drivers", func() []string { return append(maps.Keys(drivers), autoDriver) })
-	config.RegisterEnum("policyengines", func() []string { return maps.Keys(policyEngines) })
+	config.RegisterEnum("policyengines", verifier.PolicyEngines)
 }
 
 // Tpm configures the TPM attestation driver.

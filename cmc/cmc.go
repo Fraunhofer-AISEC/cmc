@@ -42,11 +42,6 @@ import (
 var (
 	log = logrus.WithField("service", "cmc")
 
-	policyEngines = map[string]verifier.PolicyEngineSelect{
-		"js":      verifier.PolicyEngineSelect_JS,
-		"duktape": verifier.PolicyEngineSelect_DukTape,
-	}
-
 	drivers = map[string]drv.Driver{}
 )
 
@@ -132,10 +127,6 @@ func detectDrivers() []string {
 		}
 	}
 	return detected
-}
-
-func GetPolicyEngines() map[string]verifier.PolicyEngineSelect {
-	return policyEngines
 }
 
 // NewCmc creates a CMC from its configuration and the trust anchors of the
@@ -255,9 +246,9 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 
 	// Get policy engine and overwrite policies
 	if c.Policies.Engine != "" {
-		sel, ok := policyEngines[strings.ToLower(c.Policies.Engine)]
-		if !ok {
-			return nil, fmt.Errorf("policy engine %v not implemented", c.Policies.Engine)
+		sel, err := verifier.ParsePolicyEngine(c.Policies.Engine)
+		if err != nil {
+			return nil, err
 		}
 		cmc.PolicyEngineSelect = sel
 		cmc.PolicyOverwrite = c.Policies.AllowOverwrite

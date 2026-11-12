@@ -189,3 +189,30 @@ func TestAuthDisabledEndpoint(t *testing.T) {
 		t.Errorf("%v enabled with empty methods", est.EnrollEndpoint)
 	}
 }
+
+func TestPolicies(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"none", nil, ""},
+		{"complete", []string{"--policies", "policies.js", "--policy-engine", "js"}, ""},
+		{"missing engine", []string{"--policies", "policies.js"}, "attestation.policies: "},
+		{"missing policies", []string{"--policy-engine", "js"}, "attestation.policies: "},
+		{"unknown engine", []string{"--policies", "policies.js", "--policy-engine", "foo"},
+			"attestation.policy_engine: \"foo\" is not one of"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := run(t, tt.args...)
+			switch {
+			case tt.want == "" && err != nil:
+				t.Errorf("unexpected error: %v", err)
+			case tt.want != "" && err == nil:
+				t.Errorf("expected an error containing %q", tt.want)
+			case tt.want != "" && !strings.Contains(err.Error(), tt.want):
+				t.Errorf("error %v does not contain %q", err, tt.want)
+			}
+		})
+	}
+}
