@@ -26,11 +26,14 @@ for the specific APIs. For generating and verifying attestation reports, only th
 
 - `Attest`: Generates an attestation report
 - `Verify`: Verifies a provided attestation report
+- `TLSCreate`: Creates a hardware-based key and enrolls a certificate for it
 - `TLSSign`: Signs data with a hardware-based key
 - `TLSCert`: Returns the certificate chain for a hardware-based key
 - `PeerCache`: Returns cached metadata for a peer (see
   [Peer Cache Mechanism](./attestation-protocol.md#peer-cache-mechanism))
 - `Measure`: Records a measurement in a hardware trust anchor (such as TPM PCRs)
+- `UpdateCerts`: Renews the certificates of the attestation drivers
+- `UpdateMetadata`: Reloads the metadata from the configured locations
 
 ### gRPC
 
@@ -38,10 +41,13 @@ The gRPC API provides the following services:
 
 - `rpc Attest(AttestationRequest) returns (AttestationResponse)`
 - `rpc Verify(VerificationRequest) returns (VerificationResponse)`
+- `rpc TLSCreate(TLSCreateRequest) returns (TLSCreateResponse)`
 - `rpc TLSSign(TLSSignRequest) returns (TLSSignResponse)`
 - `rpc TLSCert(TLSCertRequest) returns (TLSCertResponse)`
 - `rpc PeerCache(PeerCacheRequest) returns (PeerCacheResponse)`
 - `rpc Measure(MeasureRequest) returns (MeasureResponse)`
+- `rpc UpdateCerts(UpdateCertsRequest) returns (UpdateCertsResponse)`
+- `rpc UpdateMetadata(UpdateMetadataRequest) returns (UpdateMetadataResponse)`
 
 ### Socket
 
@@ -53,16 +59,20 @@ The socket API uses a simple header followed by a serialized payload:
 | Type    | 32-bit Big Endian | Type of the payload   |
 | Payload | JSON / CBOR       | Serialized payload    |
 
-The following message types are defined:
+Requests and responses use the same type. The message types are defined in [api.go](../api/api.go).
+If a request fails, the *cmcd* responds with a `SocketError` of type `TypeError`. The following
+message types are defined:
 
-- `TypeError      = 0`
-- `TypeAttest     = 1`
-- `TypeVerify     = 2`
-- `TypeTLSSign    = 3`
-- `TypeTLSCert    = 4`
-- `TypePeerCache  = 5`
-- `TypeMeasure    = 6`
-
+- `TypeError`
+- `TypeAttest`
+- `TypeVerify`
+- `TypeTLSCreate`
+- `TypeTLSSign`
+- `TypeTLSCert`
+- `TypePeerCache`
+- `TypeMeasure`
+- `TypeUpdateCerts`
+- `TypeUpdateMetadata`
 
 ## Payloads
 
@@ -71,7 +81,7 @@ gRPC APIs only supports protobuf, while the socket API only supports JSON and CB
 
 All JSON schema definitions can be found [here](./api/json/). For each message, the link
 to the JSON schema definition is provided in the following sections. CBOR and protobuf definitions
-are directly embedded into the document.
+are directly embedded into the document. Byte strings are base64-encoded in JSON.
 
 ### Attestation Request
 
@@ -79,7 +89,8 @@ An attestation request instructs the *cmcd* to generate an attestation report wi
 `nonce`. The `cached` field is an optional list of hex-encoded hash strings of metadata already
 present in the requesting party (see
 [Peer Cache Mechanism](./attestation-protocol.md#peer-cache-mechanism) for a description of the peer
-cache mechanism).
+cache mechanism). The optional `claims` are prover-asserted key/value pairs that are placed into the
+report context.
 
 #### JSON
 See [AttestationRequest](./api/json/api/AttestationRequest.json)
@@ -89,7 +100,8 @@ See [AttestationRequest](./api/json/api/AttestationRequest.json)
 AttestationRequest = {
   0: tstr,                          ; Version - protocol version
   1: bstr,                          ; Nonce as a byte string
-  ? 2: [* tstr]                     ; Optional cached array of text strings
+  ? 2: [* tstr],                    ; Optional cached metadata digests as hex strings
+  ? 3: { tstr => bstr }             ; Optional claims as a map of strings to byte strings
 }
 ```
 
@@ -99,17 +111,14 @@ message AttestationRequest {
   string version = 1;
   bytes nonce = 2;
   repeated string cached = 3;
+  map<string, bytes> claims = 4;
 }
 ```
 
 ### Attestation Response
 
-An attestation response contains the generated attestation `report` and optional `metadata` and an
-optional list of `cacheMisses`. `metadata` is a JSON object with metadata items as properties. The
-values are the base64-encoded metadata items, the keys are their hex-encoded hash digests.
-`cacheMisses` is an array of hexadecimal-encoded hash digests. (see
-[Peer Cache Mechanism](./attestation-protocol.md#peer-cache-mechanism) for a description of the
-peer cache mechanism).
+An attestation response contains the generated attestation `report`. The report embeds the
+metadata that is not present in the requesting party's cache.
 
 #### JSON
 See [AttestationResponse](./api/json/api/AttestationResponse.json)
@@ -118,9 +127,7 @@ See [AttestationResponse](./api/json/api/AttestationResponse.json)
 ```
 AttestationResponse = {
   0: tstr,                          ; Version - protocol version
-  1: bstr,                          ; Report as a byte string
-  ? 2: { tstr => bstr },            ; Metadata as a map of strings to byte strings
-  ? 3: [* tstr]                     ; Optional cache misses array of text strings
+  1: bstr                           ; Report as a byte string
 }
 ```
 
@@ -129,21 +136,17 @@ AttestationResponse = {
 message AttestationResponse {
   string version = 1;
   bytes report = 2;
-  map<string, bytes> metadata = 3;
-  repeated string cache_misses = 4;
 }
 ```
 
 ### Verification Request
 
 A verification request provides the required inputs for the *cmcd* to verify an attestation report.
-It must contain the base64-encodee `nonce` and `report`, as well as `ca`, which is one or
-multiple certificate authorities in PEM format. All other values are optional: `metadata` and
-`cacheMisses` have the format as described in the attestation response and can simply be forwarded.
-The `peer` is the fingerprint of the peer's TLS certificate required for the peer caching mechanism.
-Policies are additional attestation policies to verify against. See
-[Peer Cache Mechanism](./attestation-protocol.md#peer-cache-mechanism) and [Policies](./policies.md)
-for information on the peer cache mechanism and the policies engine.
+It must contain the `nonce` and the `report`. All other values are optional. The `peer` is the
+fingerprint of the peer's TLS certificate required for the peer caching mechanism, `peerAddr` is
+the network address of the peer and `policies` are additional attestation policies to verify
+against. See [Peer Cache Mechanism](./attestation-protocol.md#peer-cache-mechanism) and
+[Policies](./policies.md) for information on the peer cache mechanism and the policies engine.
 
 #### JSON
 See [VerificationRequest](./api/json/api/VerificationRequest.json)
@@ -154,9 +157,8 @@ VerificationRequest = {
   0: tstr,                          ; Version - protocol version
   1: bstr,                          ; Nonce as a byte string
   2: bstr,                          ; Report as a byte string
-  3: { tstr => bstr },              ; Metadata as a map of strings to byte strings
-  ? 6: tstr,                        ; Optional peer string
-  ? 7: [* tstr],                    ; Optional cache misses array of text strings
+  ? 6: tstr,                        ; Optional peer TLS certificate fingerprint
+  ? 7: tstr,                        ; Optional peer network address
   ? 8: bstr                         ; Optional policies as a byte string
 }
 ```
@@ -167,16 +169,16 @@ message VerificationRequest {
   string version = 1;
   bytes nonce = 2;
   bytes report = 3;
-  map<string, bytes> metadata = 4;
   string peer = 7;
-  repeated string cache_misses = 8;
+  string peer_addr = 8;
   bytes policies = 9;
 }
 ```
 
 ### Verification Response
 
-A verification response contains the attestation result of the verification process.
+A verification response contains the attestation result of the verification process. In protobuf,
+the result is serialized as JSON.
 
 #### JSON
 See [VerificationResponse](./api/json/api/VerificationResponse.json)
@@ -197,11 +199,77 @@ message VerificationResponse {
 }
 ```
 
+### TLSCreate Request
+
+A TLSCreate request instructs the *cmcd* to create a new key and to enroll a certificate for it.
+The `keyConfig` specifies the key `type` (`tpm`, `sw` or `snp`), the key algorithm `alg` (`ec256`,
+`ec384`, `ec521`, `rsa2048` or `rsa4096`), the subject common name `cn` and optional DNS and IP
+subject alternative names.
+
+#### JSON
+See [TLSCreateRequest](./api/json/api/TLSCreateRequest.json)
+
+#### CBOR
+```
+TLSCreateRequest = {
+  0: tstr,                          ; Version - protocol version
+  1: TLSKeyConfig                   ; Key configuration
+}
+
+TLSKeyConfig = {
+  1: tstr,                          ; Key type
+  2: tstr,                          ; Key algorithm
+  3: tstr,                          ; Subject common name
+  ? 4: [* tstr],                    ; Optional DNS names
+  ? 5: [* tstr]                     ; Optional IP addresses
+}
+```
+
+#### Protobuf
+```protobuf
+message TLSCreateRequest {
+  string version = 1;
+  TLSKeyConfig key_config = 2;
+}
+
+message TLSKeyConfig {
+  string type = 1;
+  string alg = 2;
+  string cn = 3;
+  repeated string dns_names = 4;
+  repeated string ip_addresses = 5;
+}
+```
+
+### TLSCreate Response
+
+A TLSCreate response contains the ID of the created key, which is used to reference the key in
+subsequent TLSSign and TLSCert requests.
+
+#### JSON
+See [TLSCreateResponse](./api/json/api/TLSCreateResponse.json)
+
+#### CBOR
+```
+TLSCreateResponse = {
+  0: tstr,                          ; Version - protocol version
+  1: tstr                           ; Key ID
+}
+```
+
+#### Protobuf
+```protobuf
+message TLSCreateResponse {
+  string version = 1;
+  string key_id = 2;
+}
+```
+
 ### TLSSign Request
 
-A TLSSign request specifies `content` to be signed with hardware-based keys along with the
-hash function `hashType` and optional PSS options `pssOpts`. See [Helper Structs](#helper-structs)
-for the type and values of `hashType` and `pssOpts`.
+A TLSSign request specifies the `content` to be signed with the key identified by `keyId`. The
+content is the digest computed with the hash algorithm `hashAlg` (`SHA-256`, `SHA-384` or
+`SHA-512`).
 
 #### JSON
 See [TLSSignRequest](./api/json/api/TLSSignRequest.json)
@@ -210,9 +278,9 @@ See [TLSSignRequest](./api/json/api/TLSSignRequest.json)
 ```
 TLSSignRequest = {
   0: tstr,                          ; Version - protocol version
-  0: bstr,                          ; Content as a byte string
-  1: tstr,                          ; Hash type as a text string
-  ? 2: any                          ; Optional PSS options
+  1: tstr,                          ; Key ID
+  2: bstr,                          ; Content (digest) as a byte string
+  3: tstr                           ; Hash algorithm
 }
 ```
 
@@ -220,15 +288,15 @@ TLSSignRequest = {
 ```protobuf
 message TLSSignRequest {
   string version = 1;
-  bytes content = 2;
-  HashFunction hashtype = 3;
-  PSSOptions pssOpts = 4;
+  string key_id = 2;
+  bytes content = 3;
+  string hash_alg = 4;
 }
 ```
 
 ### TLSSign Response
 
-A TLSSign response contains the signed content.
+A TLSSign response contains the signature.
 
 #### JSON
 See [TLSSignResponse](./api/json/api/TLSSignResponse.json)
@@ -237,7 +305,7 @@ See [TLSSignResponse](./api/json/api/TLSSignResponse.json)
 ```
 TLSSignResponse = {
   0: tstr,                          ; Version - protocol version
-  1: bstr                           ; Signed content as a byte string
+  1: bstr                           ; Signature as a byte string
 }
 ```
 
@@ -251,8 +319,7 @@ message TLSSignResponse {
 
 ### TLSCert Request
 
-A TLSCert is a request to retrieve the TLS certificates corresponding to the hardware-based
-keys the CMC created. It does not require any properties.
+A TLSCert request retrieves the certificate chain of the key identified by `keyId`.
 
 #### JSON
 See [TLSCertRequest](./api/json/api/TLSCertRequest.json)
@@ -261,6 +328,7 @@ See [TLSCertRequest](./api/json/api/TLSCertRequest.json)
 ```
 TLSCertRequest = {
   0: tstr,                          ; Version - protocol version
+  1: tstr                           ; Key ID
 }
 ```
 
@@ -268,12 +336,13 @@ TLSCertRequest = {
 ```protobuf
 message TLSCertRequest {
   string version = 1;
+  string key_id = 2;
 }
 ```
 
 ### TLSCert Response
 
-A TLSCert response contains a PEM-encoded certificate chain for a hardware-based key.
+A TLSCert response contains the PEM-encoded certificate chain of the key.
 
 #### JSON
 See [TLSCertResponse](./api/json/api/TLSCertResponse.json)
@@ -296,7 +365,7 @@ message TLSCertResponse {
 
 ### PeerCache Request
 
-A PeerCache request retrieves cashed metadata for a peer identified by its TLS certificate
+A PeerCache request retrieves cached metadata for a peer identified by its TLS certificate
 fingerprint `peer` (see [Peer Cache Mechanism](./attestation-protocol.md#peer-cache-mechanism) for a
 description of the peer cache mechanism).
 
@@ -346,10 +415,10 @@ message PeerCacheResponse {
 
 ### Measure Request
 
-A Measure request contains an embedded `measureEvent`. It is used for the user-space container
-attestation mechanism to record containers into measurement lists and optionally to hardware
-attetation technologies (e.g., into TPM PCRs). This API is used by container runtimes to report
-containers they have launched.
+A Measure request contains the measured `event` as a [Component](#component). It is used for the
+user-space container attestation mechanism to record containers into measurement lists and
+optionally into hardware attestation technologies (e.g., into TPM PCRs). This API is used by
+container runtimes to report containers they have launched.
 
 #### JSON
 See [MeasureRequest](./api/json/api/MeasureRequest.json)
@@ -357,8 +426,8 @@ See [MeasureRequest](./api/json/api/MeasureRequest.json)
 #### CBOR
 ```
 MeasureRequest = {
-    0: tstr,           ; Version - a text string
-    1: MeasureEvent    ; Event - a MeasureEvent type
+  0: tstr,                          ; Version - protocol version
+  1: Component                      ; Measured event
 }
 ```
 
@@ -366,7 +435,7 @@ MeasureRequest = {
 ```protobuf
 message MeasureRequest {
   string version = 1;
-  MeasureEvent measure_envent = 2;
+  Component measure_event = 2;
 }
 ```
 
@@ -393,6 +462,96 @@ message MeasureResponse {
 }
 ```
 
+### UpdateCerts Request
+
+An UpdateCerts request instructs the *cmcd* to renew the certificates of all attestation drivers.
+It does not have any further properties.
+
+#### JSON
+See [UpdateCertsRequest](./api/json/api/UpdateCertsRequest.json)
+
+#### CBOR
+```
+UpdateCertsRequest = {
+  0: tstr                           ; Version - protocol version
+}
+```
+
+#### Protobuf
+```protobuf
+message UpdateCertsRequest {
+  string version = 1;
+}
+```
+
+### UpdateCerts Response
+
+An UpdateCerts response indicates whether the certificates were renewed successfully.
+
+#### JSON
+See [UpdateCertsResponse](./api/json/api/UpdateCertsResponse.json)
+
+#### CBOR
+```
+UpdateCertsResponse = {
+  0: tstr,                          ; Version - protocol version
+  1: bool                           ; Success as a boolean
+}
+```
+
+#### Protobuf
+```protobuf
+message UpdateCertsResponse {
+  string version = 1;
+  bool success = 2;
+}
+```
+
+### UpdateMetadata Request
+
+An UpdateMetadata request instructs the *cmcd* to reload the metadata from the configured
+locations. It does not have any further properties.
+
+#### JSON
+See [UpdateMetadataRequest](./api/json/api/UpdateMetadataRequest.json)
+
+#### CBOR
+```
+UpdateMetadataRequest = {
+  0: tstr                           ; Version - protocol version
+}
+```
+
+#### Protobuf
+```protobuf
+message UpdateMetadataRequest {
+  string version = 1;
+}
+```
+
+### UpdateMetadata Response
+
+An UpdateMetadata response indicates whether the metadata was reloaded successfully.
+
+#### JSON
+See [UpdateMetadataResponse](./api/json/api/UpdateMetadataResponse.json)
+
+#### CBOR
+```
+UpdateMetadataResponse = {
+  0: tstr,                          ; Version - protocol version
+  1: bool                           ; Success as a boolean
+}
+```
+
+#### Protobuf
+```protobuf
+message UpdateMetadataResponse {
+  string version = 1;
+  bool success = 2;
+}
+```
+
 ### Socket Error
 
 A SocketError contains an error message.
@@ -408,77 +567,51 @@ SocketError = {
 }
 ```
 
+## Component
 
-## Helper Structs and Enums
-
-The property `hashType` is an integer with the following value for the hash function:
-
-```
-SHA1         = 0
-SHA224       = 1
-SHA256       = 2
-SHA384       = 3
-SHA512       = 4
-MD4          = 5
-MD5          = 6
-MD5SHA1      = 7
-RIPEMD160    = 8
-SHA3_224     = 9
-SHA3_256     = 10
-SHA3_384     = 11
-SHA3_512     = 12
-SHA512_224   = 13
-SHA512_256   = 14
-BLAKE2s_256  = 15
-BLAKE2b_256  = 16
-BLAKE2b_384  = 17
-BLAKE2b_512  = 18
-```
-
-## PSSOptions
-
-The `PSSOptions` struct specifies the options for PSS signature schemes, including the salt length.
-
-### JSON
-See [PSSOptions](./api/json/api/PSSOptions.json)
+The `Component` struct describes a measured software component. For the Measure request, the
+relevant properties are the `type`, the `name`, the `hashes` of the event, the target index (e.g.,
+the TPM PCR) as property `cmc.index` and the container data `ctrData`. The full definition including
+all optional properties can be found in [Component](./api/json/attestationreport/Component.json).
 
 ### CBOR
 ```
-PSSOptions = {
-    0: int                             ; Salt length as an integer
+Component = {
+  0: tstr,                          ; Type
+  1: tstr,                          ; Name
+  ? 2: [* ReferenceHash],           ; Optional hashes, one per hash algorithm
+  ? 6: [* Property],                ; Optional properties, e.g. cmc.index
+  ? 8: CtrData,                     ; Optional container data
+  * int => any                      ; Further optional properties, see the JSON schema
+}
+
+ReferenceHash = {
+  0: tstr,                          ; Hash algorithm, e.g. SHA-256
+  1: bstr                           ; Digest
+}
+
+Property = {
+  0: tstr,                          ; Name
+  1: tstr                           ; Value
 }
 ```
 
 ### Protobuf
 ```protobuf
-message PSSOptions {
-  int32 salt_length = 1;
+message Component {
+  string type = 1;
+  string name = 2;
+  int32 index = 3;
+  repeated Hash hashes = 4;
+  string version = 5;
+  bool optional = 6;
+  string description = 7;
+  CtrData ctr_data = 9;
 }
-```
 
-## MeasureEvent
-
-The `MeasureEvent` struct represents an event to be measured, including a SHA256 hash and optional metadata.
-
-### JSON
-See [MeasureEvent](./api/json/attestationreport/MeasureEvent.json)
-
-### CBOR
-```
-MeasureEvent = {
-  0: bstr,                          ; SHA256 hash as a byte string
-  ? 1: tstr,                        ; Optional event name as a text string
-  ? 2: any,                         ; Optional event data as any type
-  ? 3: any                          ; Optional container data as any type
-}
-```
-
-### Protobuf
-```
-message MeasureEvent {
-  bytes sha256 = 1;
-  string event_name = 2;
-  CtrData ctr_data = 3;
+message Hash {
+  string alg = 1;
+  bytes Content = 2;
 }
 ```
 
@@ -486,9 +619,6 @@ message MeasureEvent {
 
 The `CtrData` struct represents container-related data, including hashes of OCI runtime config and
 root filesystem as well the OCI runtime config.
-
-### JSON
-See [MeasureEvent](./api/json/attestationreport/MeasureEvent.json)
 
 ### CBOR
 ```
@@ -502,8 +632,8 @@ CtrData = {
 ### Protobuf
 ```protobuf
 message CtrData {
-  bytes configSha256 = 1;
-  bytes rootfsSha256 = 2;
-  optional bytes ociSpec = 3;
+  bytes config_sha256 = 1;
+  bytes rootfs_sha256 = 2;
+  bytes oci_spec = 3;
 }
 ```

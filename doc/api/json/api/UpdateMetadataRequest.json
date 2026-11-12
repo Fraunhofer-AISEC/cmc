@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/PSSOptions",
+  "$ref": "#/$defs/UpdateMetadataRequest",
   "$defs": {
-    "PSSOptions": {
+    "UpdateMetadataRequest": {
       "properties": {
-        "SaltLength": {
-          "type": "integer"
+        "version": {
+          "type": "string"
         }
       },
       "type": "object"
