@@ -18,7 +18,8 @@ field with one of three values:
 | `fail`    | The check failed.                                      |
 
 The `summary.status` of the attestation result determines whether a peer is accepted: `success` and
-`warn` are treated as a successful verification, `fail` is rejected.
+`warn` are treated as a successful verification, `fail` is rejected. The `estserver` only issues
+certificates for `warn` results if `attestation.accept_warn` is set.
 
 ## Policy Engines
 
@@ -30,7 +31,9 @@ available and can be selected via the `policy-engine` parameter:
 | `js`      | Pure go [otto](https://github.com/robertkrimen/otto) engine, build tag `jspolicies` |
 | `duktape` | C [duktape](https://duktape.org) engine, build tag `duktapepolicies`                |
 
-Arbitrary javascript files can be passed via the `cmcctl` `policies` parameter. The policies
+Arbitrary javascript files can be passed via the `cmcctl` `policies` parameter. The `estserver`
+verifies the attestation reports of enrollment requests against the policies configured via
+`attestation.policies` and `attestation.policy_engine`. The policies
 javascript file is then used to evaluate arbitrary attributes of the JSON attestation result
 output by the `cmcd` and stored by the `cmcctl`. The attestation result can be referenced via the
 `json` variable in the script.

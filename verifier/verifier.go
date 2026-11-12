@@ -49,7 +49,36 @@ var (
 	log = logrus.WithField("service", "ar")
 
 	policyEngines = map[PolicyEngineSelect]PolicyEngine{}
+
+	policyEngineNames = map[string]PolicyEngineSelect{
+		"js":      PolicyEngineSelect_JS,
+		"duktape": PolicyEngineSelect_DukTape,
+	}
 )
+
+// PolicyEngines returns the names of the policy engines compiled into the binary
+func PolicyEngines() []string {
+	var names []string
+	for name, sel := range policyEngineNames {
+		if _, ok := policyEngines[sel]; ok {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+// ParsePolicyEngine returns the policy engine with the given name, if compiled into the binary
+func ParsePolicyEngine(name string) (PolicyEngineSelect, error) {
+	sel, ok := policyEngineNames[name]
+	if !ok {
+		return PolicyEngineSelect_None, fmt.Errorf("unknown policy engine %q", name)
+	}
+	if _, ok := policyEngines[sel]; !ok {
+		return PolicyEngineSelect_None, fmt.Errorf("policy engine %q not compiled in", name)
+	}
+	return sel, nil
+}
 
 // Verify verifies an attestation report in full serialized JWS or COSE
 // format against the supplied nonce. This includes verifying the integrity of the overall

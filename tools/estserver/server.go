@@ -31,6 +31,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
+	"github.com/Fraunhofer-AISEC/cmc/verifier"
 	log "github.com/sirupsen/logrus"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -55,6 +56,10 @@ type Server struct {
 	publishClientCert *tls.Certificate
 	namingPolicy      NamingPolicy
 	certValidity      time.Duration
+	policies          []byte
+	policyEngine      verifier.PolicyEngineSelect
+	policyOverwrite   bool
+	acceptWarn        bool
 
 	//Configuration of OMSP server for fetching manifest revocation information
 	omspFolder  string
@@ -174,6 +179,10 @@ func NewServer(c *Config) (*Server, error) {
 		publishClientCert: publishClientCert,
 		namingPolicy:      CsrPassthrough{},
 		certValidity:      c.certValidity,
+		policies:          c.policies,
+		policyEngine:      c.policyEngine,
+		policyOverwrite:   c.Attestation.PolicyOverwrite,
+		acceptWarn:        c.Attestation.AcceptWarn,
 		omspFolder:        c.Omsp.Folder,
 		omspKey:           c.omspKey,
 		omspCaChain:       c.omspCaChain,

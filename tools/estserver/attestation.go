@@ -29,8 +29,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// verifyAttestationReport verifies the report against the metadata CAs, with the hash of the
-// CSR public key as nonce, and publishes the result
+// verifyAttestationReport verifies the report against the metadata CAs and the optional policies,
+// with the hash of the CSR public key as nonce, and publishes the result. Results with status warn
+// are only accepted if configured
 func (s *Server) verifyAttestationReport(csr *x509.CertificateRequest, report []byte,
 ) (*ar.AttestationResult, error) {
 
@@ -51,8 +52,7 @@ func (s *Server) verifyAttestationReport(csr *x509.CertificateRequest, report []
 
 	// Verify the attestation report
 	result := verifier.VerifyBootstrap(report, nonce[:],
-		nil, verifier.PolicyEngineSelect_None, false,
-		s.rootCas)
+		s.policies, s.policyEngine, s.policyOverwrite, s.rootCas)
 
 	hostname, _ := internal.Fqdn()
 	result.Verifier = ar.Endpoint{Hostname: hostname}
@@ -64,8 +64,16 @@ func (s *Server) verifyAttestationReport(csr *x509.CertificateRequest, report []
 	go pub.PublishAsync(s.publishResults, s.publishOcsf, s.publishNetwork, s.publishToken,
 		s.publishFile, result, wg, s.rootCas, s.allowSystemCerts, s.publishClientCert)
 
-	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
-		return nil, fmt.Errorf("failed to verify attestation report")
+	switch result.Summary.Status {
+	case ar.StatusSuccess:
+	case ar.StatusWarn:
+		if !s.acceptWarn {
+			return nil, fmt.Errorf("attestation result has status %v, which is not accepted",
+				result.Summary.Status)
+		}
+	default:
+		return nil, fmt.Errorf("failed to verify attestation report: status %v",
+			result.Summary.Status)
 	}
 
 	return result, nil
