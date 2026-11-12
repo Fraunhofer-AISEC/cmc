@@ -280,8 +280,8 @@ func checkMediaType(part *multipart.Part, contentType, encoding string) error {
 		return fmt.Errorf("failed to parse media type %s: %w",
 			internal.HttpContentTypeHeader, err)
 	}
-	if !strings.HasPrefix(contentType, t) {
-		return fmt.Errorf("invalid %s %s, must begin with %s", internal.HttpContentTypeHeader,
+	if t != contentType {
+		return fmt.Errorf("invalid %s %s, must be %s", internal.HttpContentTypeHeader,
 			t, contentType)
 	}
 	if part.Header.Get(internal.HttpTransferEncodingHeader) != encoding {

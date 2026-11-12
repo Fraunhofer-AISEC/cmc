@@ -67,4 +67,19 @@ func TestDecodeMultipart(t *testing.T) {
 			t.Fatal("expected error for short uint64 part")
 		}
 	})
+	t.Run("wrong content type", func(t *testing.T) {
+		body, ctype, err := EncodeMultiPart([]MimeMultipart{
+			{ContentType: "application/octet", Data: []byte("first")},
+		})
+		if err != nil {
+			t.Fatalf("EncodeMultiPart: %v", err)
+		}
+		var a []byte
+		err = DecodeMultipart(bytes.NewReader(body.Bytes()), []MimeMultipart{
+			{ContentType: MimeTypeOctetStream, Data: &a},
+		}, ctype)
+		if err == nil {
+			t.Fatal("expected error for wrong content type")
+		}
+	})
 }
