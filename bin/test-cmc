@@ -152,7 +152,9 @@ storage="${data}/cmc-internal"
 ctrlog="${data}/cmc-container-measurements"
 hostname="$(hostname --fqdn 2>/dev/null || hostname)"
 
+# An empty --config disables the default config files, so that only the flags below apply
 est_params=(
+    "--config"              "" \
     "--est-addr"            "0.0.0.0:9000" \
     "--est-ca-key"          "${data}/pki/ca-key.pem" \
     "--est-ca-chain"        "${data}/pki/ca.pem" \
@@ -175,6 +177,7 @@ est_params=(
 )
 
 cmc_params=(
+    "--config" "" \
     "--provision-auth" "none" \
     "--tpm-endorsement" "est:https://localhost:9000" \
     "--enrollment" "est:https://localhost:9000" \
@@ -193,6 +196,7 @@ cmc_params=(
 
 # Global cmcctl options, accepted by every subcommand
 cmcctl_params=(
+    "--config" "" \
     "--root-cas" "${data}/pki/ca.pem" \
     "--log-level" "trace" \
 )
@@ -228,10 +232,15 @@ commands_client_success_msg=("SUCCESS: Verification for Prover" "Client-side aTL
 commands_server_fail_msg=("Wrote attestation response" "attestation report verification failed" "attestation report verification failed")
 commands_client_fail_msg=("FAILED: Verification for Prover" "attestation report verification failed" "attestation report verification failed")
 
-require_bins cmcd cmcctl estserver metatool mrtool
-# sudo does not search the PATH of the user, e.g. ~/.local/bin
-cmcd="$(command -v cmcd)"
-estserver="$(command -v estserver)"
+# Build the binaries from the current code. They are also used by the helper scripts via the PATH
+bin_dir="${dir}/build"
+echo "Building binaries..."
+make -C "${dir}" --no-print-directory BUILDDIR="${bin_dir}" \
+    "${bin_dir}/cmcd" "${bin_dir}/cmcctl" "${bin_dir}/estserver" \
+    "${bin_dir}/metatool" "${bin_dir}/mrtool"
+export PATH="${bin_dir}:${PATH}"
+cmcd="${bin_dir}/cmcd"
+estserver="${bin_dir}/estserver"
 
 # The components need root privileges for TPM and measurement log access. They are started
 # detached from the terminal and can therefore neither prompt for a password nor be answered, so
