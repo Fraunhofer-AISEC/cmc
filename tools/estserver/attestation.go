@@ -17,7 +17,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
@@ -30,10 +29,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certificate,
-	report []byte, publishResults, publishOcsf, publishNetwork, publishFile string, publishToken []byte,
-	publishRootCas []*x509.Certificate, publishAllowSystemCerts bool,
-	publishClientCert *tls.Certificate,
+// verifyAttestationReport verifies the report against the metadata CAs, with the hash of the
+// CSR public key as nonce, and publishes the result
+func (s *Server) verifyAttestationReport(csr *x509.CertificateRequest, report []byte,
 ) (*ar.AttestationResult, error) {
 
 	if len(report) == 0 {
@@ -54,7 +52,7 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	// Verify the attestation report
 	result := verifier.VerifyBootstrap(report, nonce[:],
 		nil, verifier.PolicyEngineSelect_None, false,
-		cas)
+		s.rootCas)
 
 	hostname, _ := internal.Fqdn()
 	result.Verifier = ar.Endpoint{Hostname: hostname}
@@ -63,8 +61,8 @@ func verifyAttestationReport(csr *x509.CertificateRequest, cas []*x509.Certifica
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 	defer wg.Wait()
-	go pub.PublishAsync(publishResults, publishOcsf, publishNetwork, publishToken, publishFile, result, wg,
-		publishRootCas, publishAllowSystemCerts, publishClientCert)
+	go pub.PublishAsync(s.publishResults, s.publishOcsf, s.publishNetwork, s.publishToken,
+		s.publishFile, result, wg, s.rootCas, s.allowSystemCerts, s.publishClientCert)
 
 	if result.Summary.Status != ar.StatusSuccess && result.Summary.Status != ar.StatusWarn {
 		return nil, fmt.Errorf("failed to verify attestation report")

@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -45,7 +44,7 @@ type Server struct {
 	snpEndorser       *endorser.SnpEndorser
 	tdxEndorser       *endorser.TdxEndorser
 	tpmConf           provision.TpmConfig
-	authMethods       internal.AuthMethod
+	auth              map[string]internal.AuthMethod
 	tokenPath         string
 	publishResults    string
 	publishOcsf       string
@@ -74,8 +73,7 @@ func NewServer(c *Config) (*Server, error) {
 	tlsCfg := &tls.Config{
 		MinVersion:       tls.VersionTLS12,
 		CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		// The client does authenticate itself via an attestation and/or
-		// a token as configured
+		// Client certificates are requested only if an endpoint is configured for them
 		ClientAuth: tls.NoClientCert,
 		ClientCAs:  nil,
 		Certificates: []tls.Certificate{
@@ -87,14 +85,19 @@ func NewServer(c *Config) (*Server, error) {
 		},
 	}
 
-	// The client does authenticate itself via a certificate if configured
-	if c.authMethods.Has(internal.AuthCertificate) {
-		log.Debugf("Enforcing client authentication via certificate")
+	// Client certificates are optional on the TLS layer and enforced per endpoint by authorize,
+	// so that the remaining endpoints stay reachable without
+	var certAuth internal.AuthMethod
+	for _, m := range c.auth {
+		certAuth |= m & internal.AuthCertificate
+	}
+	if certAuth != 0 {
+		log.Debugf("Requesting client certificates")
 		rootpool, err := internal.CreateCertPool(c.rootCas, c.Trust.AllowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
-		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+		tlsCfg.ClientAuth = tls.VerifyClientCertIfGiven
 		tlsCfg.ClientCAs = rootpool
 	}
 
@@ -160,7 +163,7 @@ func NewServer(c *Config) (*Server, error) {
 		},
 		snpEndorser:       snpEndorser,
 		tdxEndorser:       tdxEndorser,
-		authMethods:       c.authMethods,
+		auth:              c.auth,
 		tokenPath:         c.Est.TokenPath,
 		publishResults:    c.Publish.Results,
 		publishOcsf:       c.Publish.Ocsf,
@@ -179,12 +182,18 @@ func NewServer(c *Config) (*Server, error) {
 
 	// EST endpoints
 	http.HandleFunc(est.EndpointPrefix+est.CacertsEndpoint, server.handleCacerts)
-	http.HandleFunc(est.EndpointPrefix+est.EnrollEndpoint, server.handleSimpleenroll)
 
-	// Custom EST endpoints
-	http.HandleFunc(est.EndpointPrefix+est.TpmActivateEnrollEndpoint, server.handleTpmActivateEnroll)
-	http.HandleFunc(est.EndpointPrefix+est.TpmCertifyEnrollEndpoint, server.handleTpmCertifyEnroll)
-	http.HandleFunc(est.EndpointPrefix+est.AttestEnrollEndpoint, server.handleAttestEnroll)
+	// Enrollment endpoints, including custom ones, are only served if authentication is configured
+	for endpoint, handler := range map[string]http.HandlerFunc{
+		est.EnrollEndpoint:            server.handleSimpleenroll,
+		est.TpmActivateEnrollEndpoint: server.handleTpmActivateEnroll,
+		est.TpmCertifyEnrollEndpoint:  server.handleTpmCertifyEnroll,
+		est.AttestEnrollEndpoint:      server.handleAttestEnroll,
+	} {
+		if _, ok := c.auth[endpoint]; ok {
+			http.HandleFunc(est.EndpointPrefix+endpoint, handler)
+		}
+	}
 
 	// Hardware vendor collateral endpoints
 	server.registerCollateralEndpoints(http.DefaultServeMux)
@@ -298,21 +307,4 @@ func writeProxyError(w http.ResponseWriter, format string, args ...interface{}) 
 	msg := fmt.Sprintf(format, args...)
 	log.Warnf("%v", msg)
 	http.Error(w, msg, http.StatusBadGateway)
-}
-
-func verifyBootStrapToken(tokenPath string, req *http.Request) error {
-
-	authHeader := req.Header.Get("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		return fmt.Errorf("missing or invalid authorization header")
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	token = strings.TrimSpace(token)
-
-	if err := est.VerifyToken(tokenPath, token, ""); err != nil {
-		return fmt.Errorf("failed to verify bootstrap token: %w", err)
-	}
-
-	return nil
 }
