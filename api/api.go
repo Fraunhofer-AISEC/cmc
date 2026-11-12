@@ -22,7 +22,7 @@ import (
 
 // The version of the API
 const (
-	apiVersion = "1.4.1"
+	apiVersion = "1.5.0"
 )
 
 func GetVersion() string {

@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.5.1"
+	resultVersion = "3.6.0"
 )
 
 func GetResultVersion() string {
