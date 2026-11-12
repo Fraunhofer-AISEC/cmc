@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/TLSCreateRequest",
+  "$defs": {
+    "TLSCreateRequest": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "keyConfig": {
+          "$ref": "#/$defs/TLSKeyConfig"
+        }
+      },
+      "type": "object"
+    },
+    "TLSKeyConfig": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "tpm",
+            "sw",
+            "snp"
+          ]
+        },
+        "alg": {
+          "type": "string",
+          "enum": [
+            "ec256",
+            "ec384",
+            "ec521",
+            "rsa2048",
+            "rsa4096"
+          ]
+        },
+        "cn": {
+          "type": "string"
+        },
+        "dnsNames": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ipAddresses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  }
+}

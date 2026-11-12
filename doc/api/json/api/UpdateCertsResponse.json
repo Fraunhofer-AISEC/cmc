@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/UpdateCertsResponse",
+  "$defs": {
+    "UpdateCertsResponse": {
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  }
+}

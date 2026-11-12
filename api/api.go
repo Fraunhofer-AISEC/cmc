@@ -168,10 +168,6 @@ const (
 	MaxUnixMsgLen = 1024 * 1024 * 10
 )
 
-type PSSOptions struct {
-	SaltLength int32
-}
-
 func TypeToString(t uint32) string {
 	switch t {
 	case TypeError:
