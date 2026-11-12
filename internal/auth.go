@@ -23,8 +23,8 @@ import (
 type AuthMethod uint32
 
 const (
-	AuthNone  AuthMethod = 0
-	AuthToken AuthMethod = 1 << iota
+	AuthNone AuthMethod = 1 << iota
+	AuthToken
 	AuthCertificate
 	AuthAttestation
 )
@@ -53,11 +53,10 @@ func (a AuthMethod) Has(method AuthMethod) bool {
 }
 
 func (a AuthMethod) String() string {
-	if a == AuthNone {
-		return "none"
-	}
-
 	var parts []string
+	if a.Has(AuthNone) {
+		parts = append(parts, "none")
+	}
 	if a.Has(AuthToken) {
 		parts = append(parts, "token")
 	}

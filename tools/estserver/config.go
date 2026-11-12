@@ -27,17 +27,52 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 )
 
 type estConfig struct {
-	Address      string   `toml:"address"       flag:"est-addr"     default:"0.0.0.0:9000" usage:"EST server address to listen for requests"`
-	CaKey        string   `toml:"ca_key"        flag:"est-ca-key"   default:"{data}/ca-key.pem" path:"true" usage:"path to the EST CA key for signing CSRs"`
-	CaChain      []string `toml:"ca_chain"      flag:"est-ca-chain" default:"{data}/ca-chain.pem" path:"true" usage:"comma-separated paths to EST CA certificate chain"`
-	TlsKey       string   `toml:"tls_key"       flag:"tls-key"      default:"{data}/tls-key.pem" path:"true" usage:"TLS key for EST HTTPS server"`
-	TlsCaChain   []string `toml:"tls_ca_chain"  flag:"tls-ca-chain" default:"{data}/tls-chain.pem" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
-	CertValidity string   `toml:"cert_validity" flag:"cert-validity" default:"4320h" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
-	Auth         []string `toml:"auth"          flag:"auth-methods" default:"attestation" enum:"none,token,certificate,attestation" usage:"client authentication methods, certificate applies to all endpoints of the server"`
-	TokenPath    string   `toml:"token_path"    flag:"token-path"   default:"{data}/tokens" path:"true" usage:"token store for verifying bootstrap tokens"`
+	Address      string     `toml:"address"       flag:"est-addr"     default:"0.0.0.0:9000" usage:"EST server address to listen for requests"`
+	CaKey        string     `toml:"ca_key"        flag:"est-ca-key"   default:"{data}/ca-key.pem" path:"true" usage:"path to the EST CA key for signing CSRs"`
+	CaChain      []string   `toml:"ca_chain"      flag:"est-ca-chain" default:"{data}/ca-chain.pem" path:"true" usage:"comma-separated paths to EST CA certificate chain"`
+	TlsKey       string     `toml:"tls_key"       flag:"tls-key"      default:"{data}/tls-key.pem" path:"true" usage:"TLS key for EST HTTPS server"`
+	TlsCaChain   []string   `toml:"tls_ca_chain"  flag:"tls-ca-chain" default:"{data}/tls-chain.pem" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
+	CertValidity string     `toml:"cert_validity" flag:"cert-validity" default:"4320h" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
+	TokenPath    string     `toml:"token_path"    flag:"token-path"   default:"{data}/tokens" path:"true" usage:"token store for verifying bootstrap tokens"`
+	Auth         authConfig `toml:"auth"`
+}
+
+// authConfig holds the client authentication methods per enrollment endpoint. A request is
+// served if any of the configured methods succeeds. An empty list disables the endpoint
+type authConfig struct {
+	SimpleEnroll      []string `toml:"simpleenroll"      flag:"auth-simpleenroll"      default:"token"       enum:"none,token,certificate"             usage:"comma-separated authentication methods for /simpleenroll, empty disables the endpoint"`
+	TpmActivateEnroll []string `toml:"tpmactivateenroll" flag:"auth-tpmactivateenroll" default:"token"       enum:"none,token,certificate"             usage:"comma-separated authentication methods for /tpmactivateenroll, empty disables the endpoint"`
+	TpmCertifyEnroll  []string `toml:"tpmcertifyenroll"  flag:"auth-tpmcertifyenroll"  default:"attestation" enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /tpmcertifyenroll, empty disables the endpoint"`
+	AttestEnroll      []string `toml:"attestenroll"      flag:"auth-attestenroll"      default:"attestation" enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /attestenroll, empty disables the endpoint"`
+}
+
+// endpointAuth is the authentication configuration of a single enrollment endpoint
+type endpointAuth struct {
+	endpoint string
+	key      string
+	methods  []string
+}
+
+func (a *authConfig) endpoints() []endpointAuth {
+	return []endpointAuth{
+		{est.EnrollEndpoint, "simpleenroll", a.SimpleEnroll},
+		{est.TpmActivateEnrollEndpoint, "tpmactivateenroll", a.TpmActivateEnroll},
+		{est.TpmCertifyEnrollEndpoint, "tpmcertifyenroll", a.TpmCertifyEnroll},
+		{est.AttestEnrollEndpoint, "attestenroll", a.AttestEnroll},
+	}
+}
+
+// Validate rejects none combined with other methods, as it would make them meaningless
+func (a *authConfig) Validate(r *config.Report) {
+	for _, e := range a.endpoints() {
+		if len(e.methods) > 1 && slices.Contains(e.methods, "none") {
+			r.Errorf(e.key, "none cannot be combined with other methods")
+		}
+	}
 }
 
 type httpConfig struct {
@@ -93,7 +128,7 @@ type Config struct {
 	tlsCaChain      []*x509.Certificate
 	rootCas         []*x509.Certificate
 	intelPcsRootCas []*x509.Certificate
-	authMethods     internal.AuthMethod
+	auth            map[string]internal.AuthMethod
 	omspKey         crypto.PrivateKey
 	omspCaChain     []*x509.Certificate
 	certValidity    time.Duration
@@ -180,9 +215,8 @@ func (c *Config) resolve() error {
 		log.Warn("UNSAFE: Verification of EK certificate chain turned off via config")
 	}
 
-	c.authMethods, err = internal.ParseAuthMethods(c.Est.Auth)
-	if err != nil {
-		return fmt.Errorf("failed to parse authentication methods: %w", err)
+	if err := c.resolveAuth(); err != nil {
+		return err
 	}
 
 	// OMSP is optional, and validated to be either complete or absent
@@ -202,5 +236,27 @@ func (c *Config) resolve() error {
 	// Validated as part of the configuration
 	c.certValidity, _ = time.ParseDuration(c.Est.CertValidity)
 
+	return nil
+}
+
+// resolveAuth parses the authentication methods of the enabled enrollment endpoints
+func (c *Config) resolveAuth() error {
+	c.auth = map[string]internal.AuthMethod{}
+	for _, e := range c.Est.Auth.endpoints() {
+		if len(e.methods) == 0 {
+			log.Infof("Endpoint %v disabled", e.endpoint)
+			continue
+		}
+		methods, err := internal.ParseAuthMethods(e.methods)
+		if err != nil {
+			return fmt.Errorf("est.auth.%v: %w", e.key, err)
+		}
+		if methods.Has(internal.AuthNone) {
+			log.Warnf("UNSAFE: Endpoint %v issues certificates without client authentication", e.endpoint)
+		} else {
+			log.Infof("Endpoint %v requires authentication via %v", e.endpoint, methods)
+		}
+		c.auth[e.endpoint] = methods
+	}
 	return nil
 }

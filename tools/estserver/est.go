@@ -67,11 +67,9 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(internal.AuthToken) {
-		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
-			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
-			return
-		}
+	if _, err := s.authorize(est.EnrollEndpoint, req, nil); err != nil {
+		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		return
 	}
 
 	// Check content type pkcs10 CSR
@@ -118,11 +116,9 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if s.authMethods.Has(internal.AuthToken) {
-		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
-			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
-			return
-		}
+	if _, err := s.authorize(est.TpmActivateEnrollEndpoint, req, nil); err != nil {
+		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		return
 	}
 
 	var tpmInfo string
@@ -230,13 +226,6 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	if s.authMethods.Has(internal.AuthToken) {
-		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
-			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
-			return
-		}
-	}
-
 	var csr *x509.CertificateRequest
 	var ikPublic []byte
 	var ikCreateData []byte
@@ -283,24 +272,22 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Verify attestation report if authentication method attestation is activated
-	var attestResult *ar.AttestationResult
-	if s.authMethods.Has(internal.AuthAttestation) {
-		log.Tracef("Verifying attestation report against %v metadata CAs", len(s.rootCas))
-		attestResult, err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
-			s.publishNetwork, s.publishFile, s.publishToken,
-			s.rootCas, s.allowSystemCerts, s.publishClientCert)
-		if err != nil {
-			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
-			return
-		}
-
-		// Verify the certifying AK is the AK that signed the report's TPM quote
-		err = provision.VerifyAkBinding(attestResult, akPublic)
-		if err != nil {
-			writeHttpErrorf(w, "Failed to verify AK binding: %v", err)
-			return
-		}
+	attestResult, err := s.authorize(est.TpmCertifyEnrollEndpoint, req,
+		func() (*ar.AttestationResult, error) {
+			log.Tracef("Verifying attestation report against %v metadata CAs", len(s.rootCas))
+			result, err := s.verifyAttestationReport(csr, report)
+			if err != nil {
+				return nil, err
+			}
+			// Verify the certifying AK is the AK that signed the report's TPM quote
+			if err := provision.VerifyAkBinding(result, akPublic); err != nil {
+				return nil, fmt.Errorf("failed to verify AK binding: %w", err)
+			}
+			return result, nil
+		})
+	if err != nil {
+		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		return
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)
@@ -328,13 +315,6 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if s.authMethods.Has(internal.AuthToken) {
-		if err := verifyBootStrapToken(s.tokenPath, req); err != nil {
-			writeHttpErrorf(w, "%v (Failed to verify bootstrap token: %v)", http.StatusUnauthorized, err)
-			return
-		}
-	}
-
 	var csr *x509.CertificateRequest
 	var report []byte
 
@@ -351,16 +331,13 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Verify attestation report if authentication method attestation is activated
-	var attestResult *ar.AttestationResult
-	if s.authMethods.Has(internal.AuthAttestation) {
-		attestResult, err = verifyAttestationReport(csr, s.rootCas, report, s.publishResults, s.publishOcsf,
-			s.publishNetwork, s.publishFile, s.publishToken,
-			s.rootCas, s.allowSystemCerts, s.publishClientCert)
-		if err != nil {
-			writeHttpErrorf(w, "Failed to verify attestation report: %v", err)
-			return
-		}
+	attestResult, err := s.authorize(est.AttestEnrollEndpoint, req,
+		func() (*ar.AttestationResult, error) {
+			return s.verifyAttestationReport(csr, report)
+		})
+	if err != nil {
+		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		return
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)

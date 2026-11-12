@@ -163,7 +163,10 @@ est_params=(
     "--tls-ca-chain"        "${data}/pki/est-tls.pem" \
     "--log-level"           "trace" \
     "--log-file"            "${log_dir}/estserver.log" \
-    "--auth-methods"        "none" \
+    "--auth-simpleenroll"      "none" \
+    "--auth-tpmactivateenroll" "none" \
+    "--auth-tpmcertifyenroll"  "none" \
+    "--auth-attestenroll"      "none" \
     "--verify-ek-cert=false" \
     "--omsp-folder"           "${data}/omsp-raw" \
     "--omsp-key"              "${data}/pki/omsp-key.pem" \

@@ -17,6 +17,7 @@ package main
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 )
 
 // TestMain hides the config file of the user running the tests, which would
@@ -124,5 +126,66 @@ func TestCertValidity(t *testing.T) {
 				t.Errorf("error %v does not contain %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestAuthDefaults(t *testing.T) {
+	c, err := run(t)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := c.resolveAuth(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]internal.AuthMethod{
+		est.EnrollEndpoint:            internal.AuthToken,
+		est.TpmActivateEnrollEndpoint: internal.AuthToken,
+		est.TpmCertifyEnrollEndpoint:  internal.AuthAttestation,
+		est.AttestEnrollEndpoint:      internal.AuthAttestation,
+	}
+	if !maps.Equal(c.auth, want) {
+		t.Errorf("auth = %v, want %v", c.auth, want)
+	}
+}
+
+func TestAuth(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"multiple methods", []string{"--auth-attestenroll", "token,certificate,attestation"}, ""},
+		{"none", []string{"--auth-simpleenroll", "none"}, ""},
+		{"none combined", []string{"--auth-simpleenroll", "none,token"},
+			"est.auth.simpleenroll: none cannot be combined"},
+		{"attestation not applicable", []string{"--auth-simpleenroll", "attestation"},
+			"est.auth.simpleenroll"},
+		{"attestation not applicable to activation", []string{"--auth-tpmactivateenroll", "attestation"},
+			"est.auth.tpmactivateenroll"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := run(t, tt.args...)
+			switch {
+			case tt.want == "" && err != nil:
+				t.Errorf("unexpected error: %v", err)
+			case tt.want != "" && err == nil:
+				t.Errorf("expected an error containing %q", tt.want)
+			case tt.want != "" && !strings.Contains(err.Error(), tt.want):
+				t.Errorf("error %v does not contain %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestAuthDisabledEndpoint(t *testing.T) {
+	c, err := run(t, "--auth-simpleenroll", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := c.resolveAuth(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := c.auth[est.EnrollEndpoint]; ok {
+		t.Errorf("%v enabled with empty methods", est.EnrollEndpoint)
 	}
 }
