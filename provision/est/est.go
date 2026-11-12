@@ -274,15 +274,28 @@ func EncodeMultiPart(parts []MimeMultipart) (*bytes.Buffer, string, error) {
 	return buf, fmt.Sprintf("%s; %s=%s", MimeTypeMultipart, MimeParamBoundary, boundary), nil
 }
 
+// checkMediaType checks that the part has the media type of contentType and all of its parameters
 func checkMediaType(part *multipart.Part, contentType, encoding string) error {
-	t, _, err := mime.ParseMediaType(part.Header.Get(internal.HttpContentTypeHeader))
+	header := part.Header.Get(internal.HttpContentTypeHeader)
+	t, params, err := mime.ParseMediaType(header)
 	if err != nil {
 		return fmt.Errorf("failed to parse media type %s: %w",
 			internal.HttpContentTypeHeader, err)
 	}
-	if t != contentType {
+	wantType, wantParams, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return fmt.Errorf("internal error: failed to parse expected media type %s: %w",
+			contentType, err)
+	}
+	if t != wantType {
 		return fmt.Errorf("invalid %s %s, must be %s", internal.HttpContentTypeHeader,
-			t, contentType)
+			header, contentType)
+	}
+	for k, v := range wantParams {
+		if params[k] != v {
+			return fmt.Errorf("invalid %s %s, must be %s", internal.HttpContentTypeHeader,
+				header, contentType)
+		}
 	}
 	if part.Header.Get(internal.HttpTransferEncodingHeader) != encoding {
 		return fmt.Errorf("%s part must be %s", encoding, internal.HttpTransferEncodingHeader)

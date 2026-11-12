@@ -68,7 +68,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if _, err := s.authorize(est.EnrollEndpoint, req, nil); err != nil {
-		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		writeUnauthorized(w, err)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	}
 
 	if _, err := s.authorize(est.TpmActivateEnrollEndpoint, req, nil); err != nil {
-		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		writeUnauthorized(w, err)
 		return
 	}
 
@@ -286,7 +286,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 			return result, nil
 		})
 	if err != nil {
-		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		writeUnauthorized(w, err)
 		return
 	}
 
@@ -336,7 +336,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 			return s.verifyAttestationReport(csr, report)
 		})
 	if err != nil {
-		writeHttpErrorf(w, "%v (Failed to authenticate client: %v)", http.StatusUnauthorized, err)
+		writeUnauthorized(w, err)
 		return
 	}
 

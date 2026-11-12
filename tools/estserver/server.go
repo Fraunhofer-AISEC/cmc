@@ -303,6 +303,13 @@ func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) 
 	http.Error(w, msg, http.StatusBadRequest)
 }
 
+// writeUnauthorized rejects a request whose client could not be authenticated
+func writeUnauthorized(w http.ResponseWriter, err error) {
+	msg := fmt.Sprintf("Failed to authenticate client: %v", err)
+	log.Warnf("%v", msg)
+	http.Error(w, msg, http.StatusUnauthorized)
+}
+
 // writeBadRequest rejects a malformed collateral proxy request
 func writeBadRequest(w http.ResponseWriter, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
