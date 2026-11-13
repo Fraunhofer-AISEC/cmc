@@ -120,13 +120,7 @@ func run(cmd *cli.Command) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	r := &jsonschema.Reflector{
-		ExpandedStruct:             false,
-		Anonymous:                  true,
-		DoNotReference:             false,
-		AllowAdditionalProperties:  true,
-		RequiredFromJSONSchemaTags: true,
-	}
+	r := newReflector()
 
 	for _, o := range objects {
 		schema := r.Reflect(o)
@@ -141,6 +135,33 @@ func run(cmd *cli.Command) error {
 		}
 	}
 
+	return nil
+}
+
+func newReflector() *jsonschema.Reflector {
+	return &jsonschema.Reflector{
+		ExpandedStruct:             false,
+		Anonymous:                  true,
+		DoNotReference:             false,
+		AllowAdditionalProperties:  true,
+		RequiredFromJSONSchemaTags: true,
+		Mapper:                     mapType,
+	}
+}
+
+// mapType overrides the reflected schema of types with custom JSON marshalling.
+// It lives here rather than as JSONSchema() methods on the types, so that the
+// runtime packages do not depend on the jsonschema module.
+func mapType(t reflect.Type) *jsonschema.Schema {
+	switch t {
+	case reflect.TypeOf(ar.HexByte{}):
+		// HexByte marshals to a hex string, not to base64 like a plain []byte
+		return &jsonschema.Schema{
+			Type:            "string",
+			ContentEncoding: "base16",
+			Pattern:         "^([0-9a-fA-F]{2})*$",
+		}
+	}
 	return nil
 }
 
