@@ -74,10 +74,14 @@
     "CtrData": {
       "properties": {
         "configSha256": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "rootfsSha256": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "ociSpec": {
           "$ref": "#/$defs/Spec"
@@ -115,13 +119,19 @@
           "type": "string"
         },
         "vendordefineddata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "hid": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "uid": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "partitionnumber": {
           "type": "integer"
@@ -133,7 +143,9 @@
           "type": "integer"
         },
         "partitionsignature": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "partitionformat": {
           "type": "integer"
@@ -221,7 +233,9 @@
           "type": "string"
         },
         "rawdata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         }
       },
       "type": "object"
@@ -456,14 +470,12 @@
           "type": "string"
         },
         "hash": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         }
       },
       "type": "object"
-    },
-    "HexByte": {
-      "type": "string",
-      "contentEncoding": "base64"
     },
     "Hook": {
       "properties": {
@@ -1342,7 +1354,9 @@
           "type": "string"
         },
         "content": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         }
       },
       "type": "object"
@@ -1393,7 +1407,9 @@
           "type": "string"
         },
         "signatureheader": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "ueficertificates": {
           "items": {
@@ -1570,10 +1586,14 @@
     "UefiPlatformFirmwareBlob": {
       "properties": {
         "blobbase": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "bloblength": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         }
       },
       "type": "object"
@@ -1620,7 +1640,9 @@
           "type": "string"
         },
         "variabledata": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "guidarray": {
           "items": {
@@ -1932,10 +1954,14 @@
           "type": "boolean"
         },
         "subjectKeyId": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "authorityKeyId": {
-          "$ref": "#/$defs/HexByte"
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{2})*$",
+          "contentEncoding": "base16"
         },
         "dnsNames": {
           "items": {
