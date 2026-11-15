@@ -37,7 +37,7 @@ func VerifySwima(
 	log.Debug("Verifying IMA measurements")
 
 	result := &ar.MeasurementResult{
-		Type: "IMA Result",
+		Type: ar.TYPE_RESULT_IMA,
 	}
 	ok := true
 

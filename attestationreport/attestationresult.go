@@ -19,6 +19,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -26,7 +27,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.6.0"
+	resultVersion = "3.7.0"
 )
 
 func GetResultVersion() string {
@@ -44,11 +45,47 @@ type AttestationResult struct {
 	Name         string              `json:"name,omitempty" cbor:"10,keyasint,omitempty"`
 	Created      string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
 	Freshness    Result              `json:"freshness" cbor:"6,keyasint"`
-	CertLevel    int                 `json:"certLevel" cbor:"7,keyasint"`
+	AttestLevel  AttestLevel         `json:"attestLevel" cbor:"7,keyasint"`
 	Measurements []MeasurementResult `json:"measurements" cbor:"8,keyasint"`
 	Metadata     MetadataSummary     `json:"metadata" cbor:"9,keyasint"`
 	PeerAuth     Result              `json:"peerAuth,omitempty" cbor:"11,keyasint,omitempty"`
 	Claims       map[string][]byte   `json:"claims,omitempty" cbor:"12,keyasint,omitempty"`
+}
+
+// AttestLevel states which kind of evidence an attestation was based on
+type AttestLevel int
+
+const (
+	// LevelNone means no evidence was verified
+	LevelNone AttestLevel = 0
+	// LevelSoftware means only software-signed evidence was verified
+	LevelSoftware AttestLevel = 1
+	// LevelHardware means evidence of at least one hardware trust anchor was verified
+	LevelHardware AttestLevel = 2
+)
+
+var attestLevelNames = []string{"none", "software", "hardware"}
+
+// AttestLevelNames returns the names of all attestation levels in ascending order
+func AttestLevelNames() []string {
+	return slices.Clone(attestLevelNames)
+}
+
+func (l AttestLevel) String() string {
+	if l < 0 || int(l) >= len(attestLevelNames) {
+		return fmt.Sprintf("invalid(%d)", int(l))
+	}
+	return attestLevelNames[l]
+}
+
+// ParseAttestLevel parses the name of an attestation level
+func ParseAttestLevel(s string) (AttestLevel, error) {
+	i := slices.Index(attestLevelNames, s)
+	if i < 0 {
+		return LevelNone, fmt.Errorf("unknown attestation level %q, expected one of %v", s,
+			strings.Join(attestLevelNames, ", "))
+	}
+	return AttestLevel(i), nil
 }
 
 type Endpoint struct {
@@ -514,11 +551,11 @@ const (
 	DownloadRootCRL
 	DownloadPCKCRL
 	EvidenceLength
+	EvidenceMissing
 	EvidenceType
 	Expired
 	ExtractPubKey
 	Internal
-	InvalidCertLevel
 	JWSNoSignatures
 	JWSSignatureOrder
 	JWSPayload
@@ -622,6 +659,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Download PCK CRL error)", int(e))
 	case EvidenceLength:
 		return fmt.Sprintf("%v (Evidence length error)", int(e))
+	case EvidenceMissing:
+		return fmt.Sprintf("%v (Evidence missing error)", int(e))
 	case EvidenceType:
 		return fmt.Sprintf("%v (Evidence type error)", int(e))
 	case Expired:
@@ -630,8 +669,6 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Extract public key error)", int(e))
 	case Internal:
 		return fmt.Sprintf("%v (Internal error)", int(e))
-	case InvalidCertLevel:
-		return fmt.Sprintf("%v (Invalid certification level error)", int(e))
 	case JWSNoSignatures:
 		return fmt.Sprintf("%v (JWS no signatures error)", int(e))
 	case JWSSignatureOrder:
@@ -1056,11 +1093,11 @@ func (r *AttestationResult) PrintErr() {
 			if !a.Success {
 				var header string
 				switch m.Type {
-				case "TPM Result":
+				case TYPE_RESULT_TPM:
 					header = fmt.Sprintf("PCR%v %v", a.Index, a.Type)
-				case "TDX Result":
+				case TYPE_RESULT_TDX:
 					header = fmt.Sprintf("%v %v", internal.IndexToMr(a.Index), a.Type)
-				case "SNP Result":
+				case TYPE_RESULT_SNP:
 					header = fmt.Sprintf("%v", a.Type)
 				default:
 					header = fmt.Sprintf("%v Measurement", m.Type)

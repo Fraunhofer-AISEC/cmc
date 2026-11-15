@@ -25,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/Fraunhofer-AISEC/cmc/certpolicy"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
@@ -126,16 +127,17 @@ type storageConfig struct {
 }
 
 type Config struct {
-	Log         sections.Log      `toml:"log"`
-	Trust       sections.Trust    `toml:"trust"`
-	Est         estConfig         `toml:"est"       category:"EST"`
-	Attestation attestationConfig `toml:"attestation"`
-	Http        httpConfig        `toml:"http"`
-	Tpm         tpmConfig         `toml:"tpm"       category:"TPM"`
-	IntelPcs    intelPcsConfig    `toml:"intel_pcs" category:"INTEL PCS"`
-	Omsp        omspConfig        `toml:"omsp"      category:"OMSP"`
-	Publish     publishConfig     `toml:"publish"`
-	Storage     storageConfig     `toml:"storage"`
+	Log         sections.Log        `toml:"log"`
+	Trust       sections.Trust      `toml:"trust"`
+	CertPolicy  sections.CertPolicy `toml:"cert_policy"`
+	Est         estConfig           `toml:"est"       category:"EST"`
+	Attestation attestationConfig   `toml:"attestation"`
+	Http        httpConfig          `toml:"http"`
+	Tpm         tpmConfig           `toml:"tpm"       category:"TPM"`
+	IntelPcs    intelPcsConfig      `toml:"intel_pcs" category:"INTEL PCS"`
+	Omsp        omspConfig          `toml:"omsp"      category:"OMSP"`
+	Publish     publishConfig       `toml:"publish"`
+	Storage     storageConfig       `toml:"storage"`
 
 	// Values derived from the configuration above by resolve
 	estCaKey        crypto.PrivateKey
@@ -143,6 +145,7 @@ type Config struct {
 	tlsKey          crypto.PrivateKey
 	tlsCaChain      []*x509.Certificate
 	rootCas         []*x509.Certificate
+	certPolicies    *certpolicy.Tree
 	intelPcsRootCas []*x509.Certificate
 	auth            map[string]internal.AuthMethod
 	omspKey         crypto.PrivateKey
@@ -220,6 +223,11 @@ func (c *Config) resolve() error {
 	c.rootCas, err = internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
 		return fmt.Errorf("trust.root_cas: failed to load trusted root CAs: %w", err)
+	}
+
+	c.certPolicies, err = c.CertPolicy.Tree()
+	if err != nil {
+		return fmt.Errorf("cert_policy.arc: %w", err)
 	}
 
 	// The Intel PCS proxy is optional, and so are its root CAs: the Intel PCS

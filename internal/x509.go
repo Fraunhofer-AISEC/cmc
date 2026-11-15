@@ -354,7 +354,13 @@ type CertFields struct {
 	IPAddresses []net.IP
 	URIs        []*url.URL
 	ValidFor    time.Duration
+	ExtKeyUsage []x509.ExtKeyUsage
+	// Policies are the certificate policy OIDs (RFC 5280)
+	Policies []x509.OID
 }
+
+// TlsExtKeyUsage are the extended key usages of TLS certificates
+var TlsExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
 
 // DefaultCertValidity is the lifetime used if CertFields.ValidFor is zero
 const DefaultCertValidity = 24 * 180 * time.Hour
@@ -395,7 +401,8 @@ func PrepareCert(csr *x509.CertificateRequest, fields CertFields) (*x509.Certifi
 		NotBefore:             time.Now().Add(-24 * time.Hour),
 		NotAfter:              time.Now().Add(validity),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		ExtKeyUsage:           fields.ExtKeyUsage,
+		Policies:              fields.Policies,
 		BasicConstraintsValid: true,
 		DNSNames:              fields.DNSNames,
 		IPAddresses:           fields.IPAddresses,

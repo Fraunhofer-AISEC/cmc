@@ -71,7 +71,6 @@ metatool create manifest \
   --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
   --description "App Manifest" \
   --base-layers "de.test.os" \
-  --cert-level 1 \
   --sbom-format CycloneDX \
   --components "${components}" \
   --omsp "${omsp}" \

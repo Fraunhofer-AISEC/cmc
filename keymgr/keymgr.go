@@ -449,6 +449,7 @@ func selfSign(priv crypto.Signer, p *KeyEnrollmentParams) ([]*x509.Certificate, 
 		DNSNames:    csr.DNSNames,
 		IPAddresses: csr.IPAddresses,
 		ValidFor:    selfSignedValidity,
+		ExtKeyUsage: internal.TlsExtKeyUsage,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare certificate: %w", err)

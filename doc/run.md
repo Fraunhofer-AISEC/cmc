@@ -145,6 +145,18 @@ therefore proves that the peer terminating the connection is genuine, without re
 PKI. `--attestation-only-trust` is only allowed if the peer is actually attested, i.e., in
 attestation mode `server` or `mutual`.
 
+### Passport Model Attestation
+
+TLS certificates enrolled via EST state through their certificate policies whether and on which
+hardware the key was attested during enrollment (RATS passport model), see [EST
+Server](../tools/estserver/README.md). `cmcctl` can require them from the peer instead of attesting
+it:
+
+```sh
+cmcctl listen --addr "$(hostname --fqdn):4443" --attest none
+cmcctl dial --addr "$(hostname --fqdn):4443" --attest none --peer-cert-level hardware
+```
+
 ### Establish Attested HTTPS Connections
 
 Prerequisite: [cmcd running](./run.md#run-the-cmcd)

@@ -281,7 +281,7 @@ func VerifyAkBinding(result *ar.AttestationResult, akPubRaw []byte) error {
 
 	foundTpmMeasurement := false
 	for _, m := range result.Measurements {
-		if m.Type != "TPM Result" {
+		if m.Type != ar.TYPE_RESULT_TPM {
 			continue
 		}
 		foundTpmMeasurement = true

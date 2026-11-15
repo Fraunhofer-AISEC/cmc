@@ -41,7 +41,6 @@ const (
 	notAfterFlag    = "not-after"
 	devCommonFlag   = "developer-common-name"
 	baseLayersFlag  = "base-layers"
-	certLevelFlag   = "cert-level"
 	caFingerprtFlag = "ca-fingerprints"
 	detailsFlag     = "details"
 	sbomFlag        = "sbom"
@@ -90,10 +89,6 @@ var Command = &cli.Command{
 		&cli.StringFlag{
 			Name:  baseLayersFlag,
 			Usage: "base layer names, comma-separated",
-		},
-		&cli.IntFlag{
-			Name:  certLevelFlag,
-			Usage: "certification level",
 		},
 		&cli.StringFlag{
 			Name:  caFingerprtFlag,
@@ -199,9 +194,6 @@ func buildManifest(cmd *cli.Command) (*ar.Metadata, error) {
 	}
 	if cmd.IsSet(baseLayersFlag) {
 		m.BaseLayers = strings.Split(cmd.String(baseLayersFlag), ",")
-	}
-	if cmd.IsSet(certLevelFlag) {
-		m.CertLevel = int(cmd.Int(certLevelFlag))
 	}
 	if cmd.IsSet(caFingerprtFlag) {
 		m.CaFingerprints = strings.Split(cmd.String(caFingerprtFlag), ",")

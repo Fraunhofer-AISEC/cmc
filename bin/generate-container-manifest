@@ -179,7 +179,6 @@ for ((i = 0; i < num_containers; i++)); do
       --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
       --description "App Manifest" \
       --base-layers "de.test.os" \
-      --cert-level 1 \
       --sbom "${sbom_tmp}" \
       --omsp "${omsp}" \
       --out "${out}/${container_name}.manifest.json"

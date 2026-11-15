@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Fraunhofer-AISEC/cmc/certpolicy"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/provision"
 	"github.com/Fraunhofer-AISEC/cmc/provision/endorser"
@@ -42,6 +43,7 @@ type Server struct {
 	estCaKey          crypto.PrivateKey
 	estCaChain        []*x509.Certificate
 	rootCas           []*x509.Certificate
+	certPolicies      *certpolicy.Tree
 	snpEndorser       *endorser.SnpEndorser
 	tdxEndorser       *endorser.TdxEndorser
 	tpmConf           provision.TpmConfig
@@ -158,10 +160,11 @@ func NewServer(c *Config) (*Server, error) {
 	}
 
 	server := &Server{
-		server:     s,
-		estCaKey:   c.estCaKey,
-		estCaChain: c.estCaChain,
-		rootCas:    c.rootCas,
+		server:       s,
+		estCaKey:     c.estCaKey,
+		estCaChain:   c.estCaChain,
+		rootCas:      c.rootCas,
+		certPolicies: c.certPolicies,
 		tpmConf: provision.TpmConfig{
 			VerifyEkCert: c.Tpm.VerifyEkCert,
 			DbPath:       c.Tpm.EkCertDb,

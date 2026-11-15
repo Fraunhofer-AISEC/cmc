@@ -59,7 +59,7 @@ func VerifyIas(
 ) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{
-		Type: "IAT Result",
+		Type: ar.TYPE_RESULT_IAT,
 	}
 	ok := true
 

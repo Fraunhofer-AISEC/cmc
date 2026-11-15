@@ -56,6 +56,13 @@ also with the [mrtool](../tools/mrtool/README.md)
 See the metadata generation and precomputation scripts in the [bin](../bin/) folder for various
 examples.
 
+Each reference value belongs to a trust anchor (TPM, SNP, TDX, SGX, IAS, SW, SWIMA). The attestation
+report must contain the evidence of every trust anchor that has non-optional reference values or a
+hardware policy (`snpPolicy`, `tdxPolicy`, `sgxPolicy`) in the root manifest. A manifest with TDX
+reference values thus enforces hardware-based attestation. The attestation result states the level
+the verified evidence reached in `attestLevel`: 0 (none), 1 (software, only SW or SWIMA
+evidence) or 2 (hardware).
+
 ### Alternative Reference Values
 
 Some measurements cannot be predicted when the manifest is created. The AMD SEV-SNP launch digest

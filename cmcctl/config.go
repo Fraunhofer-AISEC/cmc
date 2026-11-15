@@ -30,6 +30,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	atls "github.com/Fraunhofer-AISEC/cmc/attestedtls"
+	"github.com/Fraunhofer-AISEC/cmc/certpolicy"
 	"github.com/Fraunhofer-AISEC/cmc/cmc"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
@@ -49,6 +50,8 @@ var (
 )
 
 func init() {
+	config.RegisterEnum("attestlevels", ar.AttestLevelNames)
+
 	jsonSer, err := ar.NewJsonSerializer()
 	if err != nil {
 		panic(fmt.Sprintf("failed to create JSON serializer: %v", err))
@@ -74,6 +77,7 @@ type atlsConfig struct {
 	Mtls                 bool   `toml:"mtls"                   flag:"mtls"   default:"true" usage:"perform mutual TLS"`
 	Attest               string `toml:"attest"                 flag:"attest" default:"mutual" enum:"mutual,client,server,none" usage:"remote attestation mode"`
 	AttestationOnlyTrust bool   `toml:"attestation_only_trust" flag:"attestation-only-trust" usage:"establish trust in the peer through its attestation report only, without validating its TLS certificate chain, e.g. if the peer uses a self-signed certificate. Requires the peer to be attested"`
+	PeerCertLevel        string `toml:"peer_cert_level"        flag:"peer-cert-level" default:"none" enum:"@attestlevels" usage:"minimum attestation level the peer's TLS certificate must state through its certificate policies, i.e., with which the EST server enrolled it"`
 }
 
 // httpsConfig configures attested HTTPS requests.
@@ -130,22 +134,24 @@ type kubeprovConfig struct {
 
 // Config is the cmcctl configuration.
 type Config struct {
-	Log      sections.Log   `toml:"log"`
-	Api      apiConfig      `toml:"api"`
-	Trust    sections.Trust `toml:"trust"`
-	Atls     atlsConfig     `toml:"atls"`
-	Request  httpsConfig    `toml:"request"`
-	Identity identityConfig `toml:"identity"`
-	Files    filesConfig    `toml:"files"`
-	Publish  publishConfig  `toml:"publish"`
-	Token    tokenConfig    `toml:"token"`
-	Kubeprov kubeprovConfig `toml:"kubeprov"`
+	Log        sections.Log        `toml:"log"`
+	Api        apiConfig           `toml:"api"`
+	Trust      sections.Trust      `toml:"trust"`
+	CertPolicy sections.CertPolicy `toml:"cert_policy"`
+	Atls       atlsConfig          `toml:"atls"`
+	Request    httpsConfig         `toml:"request"`
+	Identity   identityConfig      `toml:"identity"`
+	Files      filesConfig         `toml:"files"`
+	Publish    publishConfig       `toml:"publish"`
+	Token      tokenConfig         `toml:"token"`
+	Kubeprov   kubeprovConfig      `toml:"kubeprov"`
 
 	// embedded cmc config, only required in libapi mode.
 	Cmc cmc.Config `toml:"cmc" category:"EMBEDDED CMC"`
 
 	// Values derived from the configuration above by resolve.
 	rootCas           []*x509.Certificate
+	certPolicies      *certpolicy.Tree
 	policies          []byte
 	apiName           string
 	cmcAddr           string
@@ -177,6 +183,19 @@ func (c *Config) Validate(r *config.Report) {
 		r.Errorf("atls.attestation_only_trust",
 			"requires the peer to be attested, but atls.attest is %q", c.Atls.Attest)
 	}
+
+	// Certificate policies are only meaningful on a validated certificate chain
+	if c.Atls.AttestationOnlyTrust && c.peerCertLevel() != ar.LevelNone {
+		r.Errorf("atls.attestation_only_trust",
+			"cannot be combined with atls.peer_cert_level, as the peer certificate chain is not validated")
+	}
+}
+
+// peerCertLevel returns the minimum attestation level the peer's TLS certificate must state.
+func (c *Config) peerCertLevel() ar.AttestLevel {
+	// The level is restricted to the valid names by the enum tag
+	level, _ := ar.ParseAttestLevel(c.Atls.PeerCertLevel)
+	return level
 }
 
 // globalFlags are registered on the root command. urfave applies them to
@@ -191,7 +210,7 @@ func globalFlags(libapi bool) []cli.Flag {
 
 	c := &Config{}
 	flags := append([]cli.Flag{config.FileFlag(binaryName)},
-		config.Flags(binaryName, c, &c.Log, &c.Api, &c.Trust)...)
+		config.Flags(binaryName, c, &c.Log, &c.Api, &c.Trust, &c.CertPolicy)...)
 
 	if libapi {
 		return append(flags, config.Flags(binaryName, c, &c.Cmc)...)
@@ -354,6 +373,11 @@ func (c *Config) resolve() error {
 	c.rootCas, err = internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
 		return fmt.Errorf("trust.root_cas: failed to read trusted root CAs: %w", err)
+	}
+
+	c.certPolicies, err = c.CertPolicy.Tree()
+	if err != nil {
+		return fmt.Errorf("cert_policy.arc: %w", err)
 	}
 
 	if c.Files.Policies != "" {

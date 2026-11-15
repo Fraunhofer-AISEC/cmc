@@ -96,7 +96,7 @@ func VerifySnp(
 	log.Debug("Verifying SNP measurements")
 
 	result := &ar.MeasurementResult{
-		Type:      "SNP Result",
+		Type:      ar.TYPE_RESULT_SNP,
 		SnpResult: &ar.SnpResult{},
 	}
 	ok := true

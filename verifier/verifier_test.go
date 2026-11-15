@@ -25,6 +25,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"math/big"
 	"slices"
 	"testing"
@@ -135,50 +136,45 @@ func TestVerify(t *testing.T) {
 			},
 			want: ar.StatusSuccess,
 		},
+		// The report contains no evidence, so metadata requiring evidence must fail
 		{
-			// expected aggregated certification level in Manifests for
-			// empty measurement is max. 1 (here certification level = 3)
-			name: "Invalid Certification Level",
+			name: "Missing TDX Evidence",
 			args: args{
-				serializer: getJsonSerializer(),
-				rtmManifest: ar.Metadata{
-					MetaInfo: ar.MetaInfo{
-						Type:    ar.TYPE_MANIFEST,
-						Name:    "de.test.rtm",
-						Version: "2023-04-10T20:00:00Z",
-						Validity: &ar.Validity{
-							NotBefore: "2023-04-10T20:00:00Z",
-							NotAfter:  "2026-04-10T20:00:00Z",
-						},
-						Description: "de.test.rtm",
-					},
-					Manifest: ar.Manifest{
-						DevCommonName: "Test Developer",
-						Sbom: &ar.Sbom{
-							Components: []ar.Component{},
-						},
-						CertLevel: 3,
-					},
-				},
-				osManifest: ar.Metadata{
-					MetaInfo: ar.MetaInfo{
-						Type:    ar.TYPE_MANIFEST,
-						Name:    "de.test.os",
-						Version: "2023-04-10T20:00:00Z",
-						Validity: &ar.Validity{
-							NotBefore: "2023-04-10T20:00:00Z",
-							NotAfter:  "2026-04-10T20:00:00Z",
-						},
-						Description: "PoC Fraunhofer AISEC Sample Report",
-					},
-					Manifest: ar.Manifest{
-						DevCommonName: "Test Developer",
-						BaseLayers: []string{
-							"de.test.rtm",
-						},
-						CertLevel: 3,
-					},
-				},
+				serializer:       getJsonSerializer(),
+				rtmManifest:      rtmManifestWith(tdxComponent(false), nil),
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Optional TDX Reference Value",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      rtmManifestWith(tdxComponent(true), nil),
+				osManifest:       validOsManifest,
+				appManifest:      validAppManifest,
+				imageDescription: validImageDescription,
+				proverNonce:      validUserNonce,
+				verifierNonce:    validUserNonce,
+				encoding:         ar.TYPE_ENCODING_B64,
+				alg:              "SHA-256",
+				omspResponse:     validOmspResponse,
+			},
+			want: ar.StatusSuccess,
+		},
+		{
+			name: "Missing SNP Evidence For Policy",
+			args: args{
+				serializer:       getJsonSerializer(),
+				rtmManifest:      rtmManifestWith(nil, &ar.SnpPolicy{}),
+				osManifest:       validOsManifest,
 				appManifest:      validAppManifest,
 				imageDescription: validImageDescription,
 				proverNonce:      validUserNonce,
@@ -805,7 +801,6 @@ var (
 		},
 		Manifest: ar.Manifest{
 			DevCommonName: "Test Developer",
-			CertLevel:     1,
 			BaseLayers:    []string{"de.test.rtm"},
 			OmspServer:    "https://10.0.2.2:9000/",
 		},
@@ -827,7 +822,6 @@ var (
 			BaseLayers: []string{
 				"de.test.rtm",
 			},
-			CertLevel: 1,
 		},
 	}
 
@@ -847,7 +841,6 @@ var (
 			BaseLayers: []string{
 				"de.test.os",
 			},
-			CertLevel: 1,
 		},
 	}
 
@@ -867,7 +860,6 @@ var (
 			BaseLayers: []string{
 				"INVALID",
 			},
-			CertLevel: 1,
 		},
 	}
 
@@ -1099,4 +1091,56 @@ func getJsonSerializer() ar.Serializer {
 		log.Fatalf("test: failed to initialize json serializer: %v", err)
 	}
 	return s
+}
+
+// rtmManifestWith returns a copy of the valid RTM manifest with the given reference values and
+// SNP policy
+func rtmManifestWith(components []ar.Component, snpPolicy *ar.SnpPolicy) ar.Metadata {
+	m := validRtmManifest
+	m.Sbom = &ar.Sbom{Components: components}
+	m.SnpPolicy = snpPolicy
+	return m
+}
+
+func tdxComponent(optional bool) []ar.Component {
+	return []ar.Component{{
+		Type:     ar.TYPE_FIRMWARE,
+		Name:     "MRTD",
+		Optional: optional,
+		Hashes:   []ar.ReferenceHash{{Alg: "SHA-384", Content: make([]byte, 48)}},
+		Properties: []ar.Property{
+			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
+		},
+	}}
+}
+
+func TestAttestLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		evidences []string
+		want      ar.AttestLevel
+		covers    []string
+	}{
+		{"no evidence", nil, ar.LevelNone, nil},
+		{"sw", []string{ar.TYPE_EVIDENCE_SW}, ar.LevelSoftware, []string{ar.TRUST_ANCHOR_SW}},
+		{"tpm and sw", []string{ar.TYPE_EVIDENCE_TPM, ar.TYPE_EVIDENCE_SW}, ar.LevelHardware,
+			[]string{ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_SW}},
+		{"azure tdx", []string{ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM},
+			ar.LevelHardware, []string{ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_TPM}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var evidences []ar.Evidence
+			for _, typ := range tt.evidences {
+				evidences = append(evidences, ar.Evidence{Type: typ})
+			}
+			covered := coveredTrustAnchors(evidences)
+			if got := slices.Sorted(maps.Keys(covered)); !slices.Equal(got, slices.Sorted(slices.Values(tt.covers))) {
+				t.Errorf("coveredTrustAnchors() = %v, want %v", got, tt.covers)
+			}
+			if got := attestLevel(covered); got != tt.want {
+				t.Errorf("attestLevel() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
