@@ -48,7 +48,7 @@ func VerifySgx(
 
 	var err error
 	result := &ar.MeasurementResult{
-		Type:      "SGX Result",
+		Type:      ar.TYPE_RESULT_SGX,
 		SgxResult: &ar.SgxResult{},
 	}
 	success := true

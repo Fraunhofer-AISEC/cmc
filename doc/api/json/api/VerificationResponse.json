@@ -28,7 +28,7 @@
         "freshness": {
           "$ref": "#/$defs/Result"
         },
-        "certLevel": {
+        "attestLevel": {
           "type": "integer"
         },
         "measurements": {
@@ -1437,9 +1437,6 @@
             "type": "string"
           },
           "type": "array"
-        },
-        "certLevel": {
-          "type": "integer"
         },
         "caFingerprints": {
           "items": {

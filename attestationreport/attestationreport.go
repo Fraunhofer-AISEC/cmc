@@ -29,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.5.0"
+	reportVersion = "3.6.0"
 )
 
 func GetReportVersion() string {
@@ -60,6 +60,15 @@ const (
 	TYPE_EVIDENCE_AZURE_TDX = "azure TDX Evidence"
 	TYPE_EVIDENCE_AZURE_TPM = "azure vTPM Evidence"
 	TYPE_EVIDENCE_SWIMA     = "SWIMA Evidence"
+
+	// Measurement result type fields
+	TYPE_RESULT_TPM = "TPM Result"
+	TYPE_RESULT_SNP = "SNP Result"
+	TYPE_RESULT_TDX = "TDX Result"
+	TYPE_RESULT_SGX = "SGX Result"
+	TYPE_RESULT_IAT = "IAT Result"
+	TYPE_RESULT_SW  = "SW Result"
+	TYPE_RESULT_IMA = "IMA Result"
 
 	// Artifact type fields
 	TYPE_PCR_SUMMARY    = "PCR Summary"
@@ -173,7 +182,6 @@ type Manifest struct {
 	Sbom           *Sbom                  `json:"sbom,omitempty" cbor:"10,keyasint,omitempty"`
 	DevCommonName  string                 `json:"developerCommonName,omitempty"  cbor:"11,keyasint,omitempty"`
 	BaseLayers     []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
-	CertLevel      int                    `json:"certLevel,omitempty" cbor:"13,keyasint,omitempty"`
 	CaFingerprints []string               `json:"caFingerprints,omitempty" cbor:"14,keyasint,omitempty"`
 	SnpPolicy      *SnpPolicy             `json:"snpPolicy,omitempty" cbor:"15,keyasint,omitempty"`
 	TdxPolicy      *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`

@@ -42,7 +42,7 @@ func VerifyTpm(
 ) (*ar.MeasurementResult, bool) {
 
 	result := &ar.MeasurementResult{
-		Type: "TPM Result",
+		Type: ar.TYPE_RESULT_TPM,
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},

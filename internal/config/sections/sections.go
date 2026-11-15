@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Fraunhofer-AISEC/cmc/certpolicy"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -57,4 +59,21 @@ func (l *Log) Setup() error {
 type Trust struct {
 	RootCas          []string `toml:"root_cas"           flag:"root-cas"           default:"{data}/ca.pem" path:"true" usage:"comma-separated paths to trusted root CA PEM files"`
 	AllowSystemCerts bool     `toml:"allow_system_certs" flag:"allow-system-certs" usage:"allow using the system cert pool as trusted root CAs"`
+}
+
+// CertPolicy configures the certificate policy OIDs, which state the attestation level a key was
+// enrolled with. The EST server issues them and relying parties enforce them.
+type CertPolicy struct {
+	Arc string `toml:"arc" flag:"cert-policy-arc" default:"2.25.130688535707081957510737207999343475614" usage:"base OID of the certificate policies stating the attestation level of enrolled keys, e.g. an arc below a private enterprise number for production"`
+}
+
+func (c *CertPolicy) Validate(r *config.Report) {
+	if _, err := certpolicy.New(c.Arc); err != nil {
+		r.Errorf("arc", "%v", err)
+	}
+}
+
+// Tree returns the certificate policy tree of the configured arc.
+func (c *CertPolicy) Tree() (*certpolicy.Tree, error) {
+	return certpolicy.New(c.Arc)
 }

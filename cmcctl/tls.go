@@ -17,6 +17,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -195,6 +196,10 @@ func createClientTlsConf(c *Config) (*tls.Config, error) {
 			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
 		tlsConf.RootCAs = rootpool
+		tlsConf.VerifyConnection, err = c.peerCertVerifier()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if c.Atls.Mtls {
@@ -212,6 +217,11 @@ func createClientTlsConf(c *Config) (*tls.Config, error) {
 }
 
 func createServerTlsConf(c *Config) (*tls.Config, error) {
+
+	// Certificate policies can only be enforced on client certificates
+	if !c.Atls.Mtls && c.peerCertLevel() != ar.LevelNone {
+		return nil, errors.New("atls.peer_cert_level requires mutual TLS on the server side")
+	}
 
 	// The client certificate is only validated if the client authenticates via mTLS
 	attestationOnly := false
@@ -245,6 +255,10 @@ func createServerTlsConf(c *Config) (*tls.Config, error) {
 			return nil, fmt.Errorf("failed to create cert pool: %w", err)
 		}
 		tlsConf.ClientCAs = rootpool
+		tlsConf.VerifyConnection, err = c.peerCertVerifier()
+		if err != nil {
+			return nil, err
+		}
 		if c.Atls.Mtls {
 			// Mandate client authentication
 			tlsConf.ClientAuth = tls.RequireAndVerifyClientCert
@@ -257,6 +271,17 @@ func createServerTlsConf(c *Config) (*tls.Config, error) {
 	internal.PrintTlsConfig(tlsConf, c.rootCas)
 
 	return tlsConf, nil
+}
+
+// peerCertVerifier returns the callback that enforces the configured attestation level on the
+// peer certificate, or nil if none is configured.
+func (c *Config) peerCertVerifier() (func(tls.ConnectionState) error, error) {
+	level := c.peerCertLevel()
+	if level == ar.LevelNone {
+		return nil, nil
+	}
+	log.Debugf("Requiring peer certificate attestation level %v", level)
+	return c.certPolicies.VerifyConnection(level)
 }
 
 func getTlsCert(c *Config) (tls.Certificate, error) {

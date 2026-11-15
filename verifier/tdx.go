@@ -100,7 +100,7 @@ func VerifyTdx(
 
 	var err error
 	result := &ar.MeasurementResult{
-		Type: "TDX Result",
+		Type: ar.TYPE_RESULT_TDX,
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
 		},

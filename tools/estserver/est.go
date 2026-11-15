@@ -91,7 +91,9 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity)
+	// Keys enrolled without attestation carry no certificate policy
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity,
+		internal.TlsExtKeyUsage, nil)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -189,7 +191,9 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity)
+	// The AK only signs attestation evidence and must not be usable for TLS
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity,
+		nil, nil)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -290,7 +294,8 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
+		s.certValidity, internal.TlsExtKeyUsage, s.certPolicies.FromResult(attestResult))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -340,7 +345,8 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult, s.certValidity)
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
+		s.certValidity, internal.TlsExtKeyUsage, s.certPolicies.FromResult(attestResult))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -360,15 +366,19 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 
 // enrollCert generates a new certificate from a CSR signed by the CA. The naming policy determines
 // the certificate fields. The attestation result can be nil for enrollment paths without
-// attestation, a validity of zero uses the default
+// attestation, a validity of zero uses the default. The extended key usages and the certificate
+// policies state what the key may be used for and how it was enrolled
 func enrollCert(csr *x509.CertificateRequest, key crypto.PrivateKey, parent *x509.Certificate,
 	policy NamingPolicy, result *ar.AttestationResult, validity time.Duration,
+	ekus []x509.ExtKeyUsage, policies []x509.OID,
 ) (*x509.Certificate, error) {
 
 	fields, err := policy.Assign(csr, validity, result)
 	if err != nil {
 		return nil, fmt.Errorf("naming policy rejected enrollment: %w", err)
 	}
+	fields.ExtKeyUsage = ekus
+	fields.Policies = policies
 
 	tmpl, err := internal.PrepareCert(csr, fields)
 	if err != nil {

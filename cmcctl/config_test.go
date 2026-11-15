@@ -86,10 +86,10 @@ func TestFlagNames(t *testing.T) {
 
 	want := []string{
 		"addr", "allow-system-certs", "append-ebs", "attest", "attestation-only-trust",
-		"ca-store-path", "cmc", "config", "count", "ctr-log", "ctr-trust-anchor", "data", "drivers",
+		"ca-store-path", "cert-policy-arc", "cmc", "config", "count", "ctr-log", "ctr-trust-anchor", "data", "drivers",
 		"dry-run", "enrollment", "exclude-pcrs", "hash-alg", "header", "key-config",
 		"key-id", "key-type", "kubeadm-path", "log-file", "log-level", "measurement-logs",
-		"metadata", "method", "mtls", "nonce", "omsp-format", "policies", "policy-engine",
+		"metadata", "method", "mtls", "nonce", "omsp-format", "peer-cert-level", "policies", "policy-engine",
 		"policy-overwrite", "provision-auth", "provision-token", "publish-cert", "publish-key",
 		"publish-network", "publish-ocsf", "publish-results", "publish-token", "report", "result",
 		"provision-token-out", "root-cas", "serialization", "snp-endorsement", "storage", "tdx-endorsement", "tls-cn", "tls-dns-names", "tls-ip-addresses",
@@ -291,6 +291,13 @@ func TestInvalidValues(t *testing.T) {
 		{"keyConfig", []string{"--key-config", "EC512"}, `"EC512" is not one of`},
 		{"attestation only trust", []string{"--attestation-only-trust", "--attest", "none"},
 			"requires the peer to be attested"},
+		{"peer cert level", []string{"--peer-cert-level", "hardware"}, ""},
+		{"invalid peer cert level", []string{"--peer-cert-level", "high"}, `"high" is not one of`},
+		{"attestation only trust with peer cert level",
+			[]string{"--attestation-only-trust", "--peer-cert-level", "software"},
+			"cannot be combined with atls.peer_cert_level"},
+		{"cert policy arc", []string{"--cert-policy-arc", "1.3.6.1.4.1.32473.1"}, ""},
+		{"invalid cert policy arc", []string{"--cert-policy-arc", "1.3.x"}, "invalid certificate policy arc"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := run(t, tt.args...)

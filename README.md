@@ -25,7 +25,8 @@ Virtual Machine (VM) with attached swTPM as described in [Setup](./doc/setup.md)
 
 ## Documentation
 
-The following contents can be found in the [doc](./doc/) folder:
+The following contents can be found in the [doc](./doc/) folder and the READMEs of the different
+components:
 
 ### Setup
 
@@ -41,6 +42,11 @@ and install the go binaries.
 
 For configuring and running the go binaries, refer to the
 [Run Documentation](./doc/run.md).
+
+### EST Server
+
+Certificate enrollment and the certificate policies stating how a key was enrolled are described
+in [EST Server](./tools/estserver/README.md).
 
 ### Architecture
 

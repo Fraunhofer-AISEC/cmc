@@ -40,7 +40,7 @@ func VerifySw(
 	log.Debug("Verifying SW measurements")
 
 	result := &ar.MeasurementResult{
-		Type: "SW Result",
+		Type: ar.TYPE_RESULT_SW,
 	}
 	ok := true
 

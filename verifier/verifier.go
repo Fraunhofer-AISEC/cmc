@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 
@@ -126,7 +127,6 @@ func verifyInternal(
 			Status: ar.StatusSuccess,
 		},
 		Measurements: []ar.MeasurementResult{},
-		CertLevel:    0,
 	}
 
 	// Detect serialization format
@@ -230,8 +230,6 @@ func verifyInternal(
 		return result
 	}
 
-	hwAttest := false
-
 	// Hardware policies and CA fingerprints are taken from the root manifest
 	root := rootManifest(metaResults.ManifestResults)
 
@@ -272,7 +270,6 @@ Loop:
 				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
-			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SNP:
 			r, ok := VerifySnp(ev, col, evidenceNonce, root.SnpPolicy, root.CaFingerprints,
@@ -281,7 +278,6 @@ Loop:
 				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
-			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_TDX:
 			r, ok := VerifyTdx(ev, col, evidenceNonce, root.TdxPolicy, root.CaFingerprints,
@@ -290,7 +286,6 @@ Loop:
 				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
-			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SGX:
 			r, ok := VerifySgx(ev, col, evidenceNonce, root.SgxPolicy, root.CaFingerprints,
@@ -299,7 +294,6 @@ Loop:
 				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
-			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_IAS:
 			r, ok := VerifyIas(ev, col, evidenceNonce, root.CaFingerprints,
@@ -308,7 +302,6 @@ Loop:
 				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
 			}
 			result.Measurements = append(result.Measurements, *r)
-			hwAttest = true
 
 		case ar.TYPE_EVIDENCE_SW:
 			r, ok := VerifySw(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SW])
@@ -332,7 +325,6 @@ Loop:
 				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
 			}
 			result.Measurements = append(result.Measurements, results...)
-			hwAttest = true
 
 			// Required because we process multiple measurements for azure
 			break Loop
@@ -345,24 +337,17 @@ Loop:
 
 	sortArtifacts(result.Measurements)
 
-	// The lowest certification level of all manifests determines the certification
-	// level for the device's software stack
-	aggCertLevel := 0
-	levels := make([]int, 0)
-	for _, m := range metaResults.ManifestResults {
-		levels = append(levels, m.CertLevel)
+	// Reference values and hardware policies are only enforced if the report contains the
+	// evidence of their trust anchor, so a report must not omit required evidence
+	covered := coveredTrustAnchors(report.Evidences)
+	for _, ta := range requiredTrustAnchors(refVals, root) {
+		if !covered[ta] {
+			result.Fail(ar.EvidenceMissing, fmt.Errorf(
+				"metadata requires %v evidence, but the attestation report does not contain it", ta))
+		}
 	}
-	if len(levels) > 0 {
-		aggCertLevel = slices.Min(levels)
-	}
-	log.Debugf("Aggregated cert level: %v", aggCertLevel)
-	// If no hardware trust anchor is present, the maximum certification level is 1
-	// If there are reference values with a higher trust level present, the remote attestation
-	// must fail
-	if !hwAttest && aggCertLevel > 1 {
-		result.Fail(ar.InvalidCertLevel, fmt.Errorf("certification level %v requires hw trust anchor", aggCertLevel))
-	}
-	result.CertLevel = aggCertLevel
+	result.AttestLevel = attestLevel(covered)
+	log.Debugf("Attestation level: %v", result.AttestLevel)
 
 	// Check if we are allowed to establish a connection with this peer in case peer policies are
 	// provided
@@ -1007,6 +992,70 @@ func verifyNonce(measured, expected []byte) ar.Result {
 		Expected: hex.EncodeToString(expected),
 		Got:      hex.EncodeToString(measured),
 	}
+}
+
+// evidenceTrustAnchors maps the evidence types to the trust anchors whose reference values they
+// verify
+var evidenceTrustAnchors = map[string][]string{
+	ar.TYPE_EVIDENCE_TPM:       {ar.TRUST_ANCHOR_TPM},
+	ar.TYPE_EVIDENCE_SNP:       {ar.TRUST_ANCHOR_SNP},
+	ar.TYPE_EVIDENCE_TDX:       {ar.TRUST_ANCHOR_TDX},
+	ar.TYPE_EVIDENCE_SGX:       {ar.TRUST_ANCHOR_SGX},
+	ar.TYPE_EVIDENCE_IAS:       {ar.TRUST_ANCHOR_IAS},
+	ar.TYPE_EVIDENCE_SW:        {ar.TRUST_ANCHOR_SW},
+	ar.TYPE_EVIDENCE_SWIMA:     {ar.TRUST_ANCHOR_SWIMA},
+	ar.TYPE_EVIDENCE_AZURE_SNP: {ar.TRUST_ANCHOR_SNP},
+	ar.TYPE_EVIDENCE_AZURE_TDX: {ar.TRUST_ANCHOR_TDX},
+	ar.TYPE_EVIDENCE_AZURE_TPM: {ar.TRUST_ANCHOR_TPM},
+}
+
+// hardwareTrustAnchors are the trust anchors whose evidence is signed by hardware
+var hardwareTrustAnchors = []string{
+	ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_SNP, ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_SGX,
+	ar.TRUST_ANCHOR_IAS,
+}
+
+// coveredTrustAnchors returns the trust anchors the evidences of a report provide
+func coveredTrustAnchors(evidences []ar.Evidence) map[string]bool {
+	covered := make(map[string]bool)
+	for _, ev := range evidences {
+		for _, ta := range evidenceTrustAnchors[ev.Type] {
+			covered[ta] = true
+		}
+	}
+	return covered
+}
+
+// requiredTrustAnchors returns the sorted trust anchors with mandatory reference values or a
+// hardware policy in the root manifest
+func requiredTrustAnchors(refVals map[string][]ar.Component, root ar.MetadataResult) []string {
+	required := make(map[string]bool)
+	for ta, components := range refVals {
+		if slices.ContainsFunc(components, func(c ar.Component) bool { return !c.Optional }) {
+			required[ta] = true
+		}
+	}
+	if root.SnpPolicy != nil {
+		required[ar.TRUST_ANCHOR_SNP] = true
+	}
+	if root.TdxPolicy != nil {
+		required[ar.TRUST_ANCHOR_TDX] = true
+	}
+	if root.SgxPolicy != nil {
+		required[ar.TRUST_ANCHOR_SGX] = true
+	}
+	return slices.Sorted(maps.Keys(required))
+}
+
+// attestLevel returns the level reached by the evidence of the covered trust anchors
+func attestLevel(covered map[string]bool) ar.AttestLevel {
+	switch {
+	case slices.ContainsFunc(hardwareTrustAnchors, func(ta string) bool { return covered[ta] }):
+		return ar.LevelHardware
+	case len(covered) > 0:
+		return ar.LevelSoftware
+	}
+	return ar.LevelNone
 }
 
 // reportHasCvmAnchor reports whether the attestation report contains a hardware

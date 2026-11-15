@@ -86,7 +86,6 @@ metatool create manifest \
   --not-after "$(date -u +"%Y-%m-%dT%H:%M:%SZ" -d "+2 years")" \
   --description "RTM Manifest" \
   --base-layers "${name}" \
-  --cert-level 3 \
   --ca-fingerprints "${fingerprint}" \
   --sgx-policy "${policy_tmp}" \
   --sbom-format CycloneDX \
