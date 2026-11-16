@@ -16,26 +16,39 @@
 package verifier
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
+	"math/big"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func TestVerifyTpm(t *testing.T) {
 	type args struct {
-		evidence   ar.Evidence
-		collateral ar.Collateral
-		nonce      []byte
-		s          ar.Serializer
-		components []ar.Component
-		cas        []*x509.Certificate
+		evidence     ar.Evidence
+		collateral   ar.Collateral
+		nonce        []byte
+		s            ar.Serializer
+		components   []ar.Component
+		cas          []*x509.Certificate
+		requireAkEku bool
 	}
+
+	ekuChain, ekuCa := reissueAk(t, validAk, []asn1.ObjectIdentifier{internal.OidAkCertificate})
+	tlsChain, tlsCa := reissueAk(t, validAk, nil)
+
 	tests := []struct {
 		name  string
 		args  args
@@ -574,6 +587,72 @@ func TestVerifyTpm(t *testing.T) {
 			want:  ar.StatusFail,
 			want1: false,
 		},
+		{
+			// TPM as primary trust anchor with an AK certificate carrying tcg-kp-AIKCertificate
+			name: "Valid AK EKU",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog,
+					Certs:     ekuChain,
+				},
+				nonce:        validTpmNonce,
+				s:            getJsonSerializer(),
+				components:   validComponents,
+				cas:          []*x509.Certificate{ekuCa},
+				requireAkEku: true,
+			},
+			want:  ar.StatusSuccess,
+			want1: true,
+		},
+		{
+			// TPM as primary trust anchor with an AK certificate without EKU
+			name: "Invalid AK Without EKU",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog,
+					Certs:     validTpmCertChain,
+				},
+				nonce:        validTpmNonce,
+				s:            getJsonSerializer(),
+				components:   validComponents,
+				cas:          []*x509.Certificate{validCa},
+				requireAkEku: true,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
+		{
+			// TPM as primary trust anchor with a TLS certificate of the same CA as quote signer
+			name: "Invalid TLS Certificate As AK",
+			args: args{
+				evidence: ar.Evidence{
+					Type:      ar.TYPE_EVIDENCE_TPM,
+					Data:      validQuote,
+					Signature: validSignature,
+				},
+				collateral: ar.Collateral{
+					Artifacts: validArtifactsEventlog,
+					Certs:     tlsChain,
+				},
+				nonce:        validTpmNonce,
+				s:            getJsonSerializer(),
+				components:   validComponents,
+				cas:          []*x509.Certificate{tlsCa},
+				requireAkEku: true,
+			},
+			want:  ar.StatusFail,
+			want1: false,
+		},
 	}
 
 	logrus.SetLevel(logrus.TraceLevel)
@@ -581,7 +660,7 @@ func TestVerifyTpm(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1 := VerifyTpm(tt.args.evidence, tt.args.collateral, tt.args.nonce,
-				tt.args.cas, tt.args.components, tt.args.s)
+				tt.args.cas, tt.args.requireAkEku, tt.args.components, tt.args.s)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifyTpm() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want1)
 			}
@@ -590,6 +669,54 @@ func TestVerifyTpm(t *testing.T) {
 			}
 		})
 	}
+}
+
+// reissueAk issues a certificate for the public key of ak from a new CA with the given unknown
+// extended key usages or TLS extended key usages if nil. The quote fixtures remain valid, as they
+// are signed with the AK private key
+func reissueAk(t *testing.T, ak *x509.Certificate, unknownEkus []asn1.ObjectIdentifier,
+) ([][]byte, *x509.Certificate) {
+	t.Helper()
+
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test AK CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	caDer, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, caKey.Public(), caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := x509.ParseCertificate(caDer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpl := &x509.Certificate{
+		SerialNumber:       big.NewInt(2),
+		Subject:            ak.Subject,
+		NotBefore:          time.Now().Add(-time.Hour),
+		NotAfter:           time.Now().Add(time.Hour),
+		KeyUsage:           x509.KeyUsageDigitalSignature,
+		UnknownExtKeyUsage: unknownEkus,
+	}
+	if unknownEkus == nil {
+		tmpl.ExtKeyUsage = internal.TlsExtKeyUsage
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca, ak.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return [][]byte{der, caDer}, ca
 }
 
 func TestVerifyPcrSelection(t *testing.T) {

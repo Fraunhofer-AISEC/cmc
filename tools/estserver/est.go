@@ -19,6 +19,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/asn1"
 	"fmt"
 	"mime"
 	"net/http"
@@ -93,7 +94,7 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 
 	// Keys enrolled without attestation carry no certificate policy
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity,
-		internal.TlsExtKeyUsage, nil)
+		tlsProfile(nil))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -193,7 +194,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 
 	// The AK only signs attestation evidence and must not be usable for TLS
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity,
-		nil, nil)
+		akProfile)
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -295,7 +296,7 @@ func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
-		s.certValidity, internal.TlsExtKeyUsage, s.certPolicies.FromResult(attestResult))
+		s.certValidity, tlsProfile(s.certPolicies.FromResult(attestResult)))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -346,7 +347,7 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	}
 
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
-		s.certValidity, internal.TlsExtKeyUsage, s.certPolicies.FromResult(attestResult))
+		s.certValidity, tlsProfile(s.certPolicies.FromResult(attestResult)))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -364,21 +365,36 @@ func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
 	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
+// certProfile states what an issued key may be used for (extended key usages) and how it was
+// enrolled (certificate policies)
+type certProfile struct {
+	ekus        []x509.ExtKeyUsage
+	unknownEkus []asn1.ObjectIdentifier
+	policies    []x509.OID
+}
+
+// akProfile restricts AK certificates to signing attestation evidence
+var akProfile = certProfile{unknownEkus: []asn1.ObjectIdentifier{internal.OidAkCertificate}}
+
+// tlsProfile returns the profile of TLS certificates with the given certificate policies
+func tlsProfile(policies []x509.OID) certProfile {
+	return certProfile{ekus: internal.TlsExtKeyUsage, policies: policies}
+}
+
 // enrollCert generates a new certificate from a CSR signed by the CA. The naming policy determines
 // the certificate fields. The attestation result can be nil for enrollment paths without
-// attestation, a validity of zero uses the default. The extended key usages and the certificate
-// policies state what the key may be used for and how it was enrolled
+// attestation, a validity of zero uses the default
 func enrollCert(csr *x509.CertificateRequest, key crypto.PrivateKey, parent *x509.Certificate,
-	policy NamingPolicy, result *ar.AttestationResult, validity time.Duration,
-	ekus []x509.ExtKeyUsage, policies []x509.OID,
+	policy NamingPolicy, result *ar.AttestationResult, validity time.Duration, profile certProfile,
 ) (*x509.Certificate, error) {
 
 	fields, err := policy.Assign(csr, validity, result)
 	if err != nil {
 		return nil, fmt.Errorf("naming policy rejected enrollment: %w", err)
 	}
-	fields.ExtKeyUsage = ekus
-	fields.Policies = policies
+	fields.ExtKeyUsage = profile.ekus
+	fields.UnknownExtKeyUsage = profile.unknownEkus
+	fields.Policies = profile.policies
 
 	tmpl, err := internal.PrepareCert(csr, fields)
 	if err != nil {

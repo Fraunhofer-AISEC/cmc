@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"math/big"
 	"slices"
 	"testing"
@@ -65,26 +66,34 @@ func TestEnrollCertProfiles(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		ekus         []x509.ExtKeyUsage
-		policies     []x509.OID
+		profile      certProfile
+		wantAk       bool
 		wantPolicies []x509.OID
 	}{
-		{"simpleenroll", internal.TlsExtKeyUsage, nil, nil},
-		{"tpmactivateenroll", nil, nil, nil},
-		{"attestenroll azure tdx", internal.TlsExtKeyUsage, tree.FromResult(&ar.AttestationResult{
+		{"simpleenroll", tlsProfile(nil), false, nil},
+		{"tpmactivateenroll", akProfile, true, nil},
+		{"attestenroll azure tdx", tlsProfile(tree.FromResult(&ar.AttestationResult{
 			AttestLevel:  ar.LevelHardware,
 			Measurements: []ar.MeasurementResult{{Type: ar.TYPE_RESULT_TDX}, {Type: ar.TYPE_RESULT_TPM}},
-		}), []x509.OID{hw, tpm, tdx}},
+		})), false, []x509.OID{hw, tpm, tdx}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			csr := makeCSR(t, pkix.Name{CommonName: "leaf"}, nil, nil, nil)
-			cert, err := enrollCert(csr, caKey, ca, CsrPassthrough{}, nil, 0, tt.ekus, tt.policies)
+			cert, err := enrollCert(csr, caKey, ca, CsrPassthrough{}, nil, 0, tt.profile)
 			if err != nil {
 				t.Fatalf("enrollCert() error = %v", err)
 			}
-			if !slices.Equal(cert.ExtKeyUsage, tt.ekus) {
-				t.Errorf("ExtKeyUsage = %v, want %v", cert.ExtKeyUsage, tt.ekus)
+			if !slices.Equal(cert.ExtKeyUsage, tt.profile.ekus) {
+				t.Errorf("ExtKeyUsage = %v, want %v", cert.ExtKeyUsage, tt.profile.ekus)
+			}
+			if !slices.EqualFunc(cert.UnknownExtKeyUsage, tt.profile.unknownEkus,
+				asn1.ObjectIdentifier.Equal) {
+				t.Errorf("UnknownExtKeyUsage = %v, want %v", cert.UnknownExtKeyUsage,
+					tt.profile.unknownEkus)
+			}
+			if isAk := internal.HasUnknownExtKeyUsage(cert, internal.OidAkCertificate); isAk != tt.wantAk {
+				t.Errorf("AK EKU present = %v, want %v", isAk, tt.wantAk)
 			}
 			if !slices.EqualFunc(cert.Policies, tt.wantPolicies, x509.OID.Equal) {
 				t.Errorf("Policies = %v, want %v", cert.Policies, tt.wantPolicies)

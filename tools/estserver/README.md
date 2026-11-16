@@ -29,11 +29,14 @@ what the key may be used for and how it was enrolled:
 
 | Endpoint                             | Extended key usages        | Certificate policies       |
 | ------------------------------------ | -------------------------- | -------------------------- |
-| `/tpmactivateenroll`                 | none                       | none                       |
+| `/tpmactivateenroll`                 | `tcg-kp-AIKCertificate`    | none                       |
 | `/simpleenroll`                      | `serverAuth`, `clientAuth` | none                       |
 | `/tpmcertifyenroll`, `/attestenroll` | `serverAuth`, `clientAuth` | attestation level and TEEs |
 
 The attestation level and TEE OIDs are only issued if the client authenticated via `attestation`.
+`tcg-kp-AIKCertificate` (2.23.133.8.3, TCG EK Credential Profile) marks AK certificates. The
+verifier only accepts TPM quotes signed by an AK whose certificate carries it, so that TLS
+certificates from the same CA cannot sign quotes.
 
 ### Certificate Policy OIDs
 
