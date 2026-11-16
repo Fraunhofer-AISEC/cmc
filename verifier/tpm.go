@@ -32,11 +32,15 @@ import (
 	"github.com/google/go-tpm/legacy/tpm2"
 )
 
+// VerifyTpm verifies the TPM quote and measurements. If requireAkEku is set, the quote signing
+// AK certificate must carry tcg-kp-AIKCertificate, which is required if the TPM is the primary
+// trust anchor, so that certificates from the same CA issued for other purposes cannot sign quotes
 func VerifyTpm(
 	evidence ar.Evidence,
 	collateral ar.Collateral,
 	nonce []byte,
 	cas []*x509.Certificate,
+	requireAkEku bool,
 	refComponents []ar.Component,
 	s ar.Serializer,
 ) (*ar.MeasurementResult, bool) {
@@ -121,10 +125,15 @@ func VerifyTpm(
 		log.Warnf("Failed to verify TPM quote certificate chain: %v", err)
 		result.Summary.Status = ar.StatusFail
 		result.Signature.CertChainCheck.Fail(ar.VerifyCertChain)
+	} else if requireAkEku && !internal.HasUnknownExtKeyUsage(mCerts[0], internal.OidAkCertificate) {
+		log.Warnf("TPM quote certificate %v lacks extended key usage tcg-kp-AIKCertificate",
+			mCerts[0].Subject.CommonName)
+		result.Summary.Status = ar.StatusFail
+		result.Signature.CertChainCheck.Fail(ar.AkExtKeyUsageMissing)
 	} else {
 		result.Signature.CertChainCheck.Status = ar.StatusSuccess
+		log.Debug("Successfully verified TPM certificate chain")
 	}
-	log.Debug("Successfully verified TPM certificate chain")
 
 	//Store details from (all) validated certificate chain(s) in the report
 	result.Signature.Certs = append(result.Signature.Certs, extractX509Chains(x509Chains)...)

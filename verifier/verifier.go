@@ -260,19 +260,9 @@ Loop:
 		switch evtype := ev.Type; evtype {
 
 		case ar.TYPE_EVIDENCE_TPM:
-			// If the TPM acts as a primary trust anchor, use the privacy CA for verifying the
-			// certificate chain (required because the TPM EK is not allowed to sign). If the vTPM
-			// acts as a secondary trust anchor, we perform integrity verification through verifying
-			// the binding of the vTPM self-signed AK certificate with the hardware report.
-			tpmCas := metadataCas
-			if reportHasCvmAnchor(report.Evidences) {
-				ak, err := selfSignedAkFromCollateral(col)
-				if err == nil && ak != nil {
-					tpmCas = []*x509.Certificate{ak}
-					log.Debug("Use self-signed AK cert: report includes hardware CVM binding")
-				}
-			}
-			r, ok := VerifyTpm(ev, col, evidenceNonce, tpmCas, refVals[ar.TRUST_ANCHOR_TPM], s)
+			tpmCas, requireAkEku := tpmAkTrust(report.Evidences, col, metadataCas)
+			r, ok := VerifyTpm(ev, col, evidenceNonce, tpmCas, requireAkEku,
+				refVals[ar.TRUST_ANCHOR_TPM], s)
 			if !ok {
 				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
 			}
@@ -1075,6 +1065,23 @@ func reportHasCvmAnchor(evidences []ar.Evidence) bool {
 		}
 	}
 	return false
+}
+
+// tpmAkTrust returns the CAs to verify the TPM AK certificate chain against and whether the AK
+// certificate must carry tcg-kp-AIKCertificate. If the TPM acts as a primary trust anchor, the
+// metadata CAs (privacy CA) are used, as the TPM EK is not allowed to sign, and the AK extended
+// key usage is required. If the vTPM acts as a secondary trust anchor, integrity is verified
+// through the binding of the self-signed vTPM AK certificate with the hardware report
+func tpmAkTrust(evidences []ar.Evidence, col ar.Collateral, metadataCas []*x509.Certificate,
+) ([]*x509.Certificate, bool) {
+	if reportHasCvmAnchor(evidences) {
+		ak, err := selfSignedAkFromCollateral(col)
+		if err == nil && ak != nil {
+			log.Debug("Use self-signed AK cert: report includes hardware CVM binding")
+			return []*x509.Certificate{ak}, false
+		}
+	}
+	return metadataCas, true
 }
 
 // selfSignedAkFromCollateral returns the AK certificate from the vTPM collateral

@@ -195,7 +195,7 @@ func TestAlternativesRejectedByUnsupportedVerifiers(t *testing.T) {
 
 	verifiers := map[string]func() *ar.MeasurementResult{
 		"tpm": func() *ar.MeasurementResult {
-			r, _ := VerifyTpm(ar.Evidence{}, ar.Collateral{}, nil, nil, refs, nil)
+			r, _ := VerifyTpm(ar.Evidence{}, ar.Collateral{}, nil, nil, false, refs, nil)
 			return r
 		},
 		"sgx": func() *ar.MeasurementResult {

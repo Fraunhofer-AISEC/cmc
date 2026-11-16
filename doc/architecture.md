@@ -98,6 +98,12 @@ Each node requires a set of trusted root CAs, which are the root of trust for ma
 reference values. Users can configure whether the certificates of the system cert pool shall be
 accepted as trusted root CAs or not.
 
+If the TPM is the primary trust anchor, the AK certificate must carry the TCG extended key usage
+`tcg-kp-AIKCertificate` (2.23.133.8.3), regardless of whether it is issued by the `estserver` or a
+separate privacy CA. Otherwise, the verifier rejects the TPM quote. This prevents certificates
+for other purposes, such as TLS certificates from the same CA, from signing quotes. A self-signed
+vTPM AK bound to an SNP or TDX report and the Azure vTPM AK do not require it.
+
 If EST is used, an EST TLS CA for EST server authentication during initial certificate enrollment
 is required. Nodes (i.e., EST clients) do not need to authenticate against the server, as a
 trust anchor-based authentication and attestatoin is performed during certificate enrollment (e.g.,

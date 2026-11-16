@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -31,6 +32,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 )
@@ -355,12 +357,23 @@ type CertFields struct {
 	URIs        []*url.URL
 	ValidFor    time.Duration
 	ExtKeyUsage []x509.ExtKeyUsage
+	// UnknownExtKeyUsage are extended key usages without x509.ExtKeyUsage constant
+	UnknownExtKeyUsage []asn1.ObjectIdentifier
 	// Policies are the certificate policy OIDs (RFC 5280)
 	Policies []x509.OID
 }
 
 // TlsExtKeyUsage are the extended key usages of TLS certificates
 var TlsExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+
+// OidAkCertificate is the extended key usage tcg-kp-AIKCertificate of TPM attestation key
+// certificates (TCG EK Credential Profile)
+var OidAkCertificate = asn1.ObjectIdentifier{2, 23, 133, 8, 3}
+
+// HasUnknownExtKeyUsage reports whether the certificate carries the extended key usage oid
+func HasUnknownExtKeyUsage(cert *x509.Certificate, oid asn1.ObjectIdentifier) bool {
+	return slices.ContainsFunc(cert.UnknownExtKeyUsage, oid.Equal)
+}
 
 // DefaultCertValidity is the lifetime used if CertFields.ValidFor is zero
 const DefaultCertValidity = 24 * 180 * time.Hour
@@ -402,6 +415,7 @@ func PrepareCert(csr *x509.CertificateRequest, fields CertFields) (*x509.Certifi
 		NotAfter:              time.Now().Add(validity),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           fields.ExtKeyUsage,
+		UnknownExtKeyUsage:    fields.UnknownExtKeyUsage,
 		Policies:              fields.Policies,
 		BasicConstraintsValid: true,
 		DNSNames:              fields.DNSNames,

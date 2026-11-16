@@ -635,6 +635,7 @@ const (
 	PeerNotAuthorized
 	LocalRoleUnknown
 	PcrSelectionNoMatch
+	AkExtKeyUsageMissing
 )
 
 func (e ErrorCode) String() string {
@@ -827,6 +828,8 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Local role unknown, peer authorization skipped)", int(e))
 	case PcrSelectionNoMatch:
 		return fmt.Sprintf("%v (Measured PCRs do not match quoted PCR selection)", int(e))
+	case AkExtKeyUsageMissing:
+		return fmt.Sprintf("%v (AK certificate lacks extended key usage tcg-kp-AIKCertificate)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}

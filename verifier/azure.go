@@ -219,7 +219,8 @@ func VerifyAzure(
 	}
 
 	// Verify vTPM measurements with provided nonce
-	vtpmResult, ok := VerifyTpm(vtpmEvidence, vtpmCollateral, nonce, []*x509.Certificate{vtpmAkCert}, vtpmRefs, s)
+	vtpmResult, ok := VerifyTpm(vtpmEvidence, vtpmCollateral, nonce,
+		[]*x509.Certificate{vtpmAkCert}, false, vtpmRefs, s)
 	if !ok {
 		success = false
 	}

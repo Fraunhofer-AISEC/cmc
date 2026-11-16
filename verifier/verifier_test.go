@@ -23,6 +23,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/hex"
 	"fmt"
 	"maps"
@@ -1140,6 +1141,59 @@ func TestAttestLevel(t *testing.T) {
 			}
 			if got := attestLevel(covered); got != tt.want {
 				t.Errorf("attestLevel() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTpmAkTrust(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "vTPM AK"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		// As created by the TPM driver for the vTPM AK
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	selfSigned, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ekuChain, _ := reissueAk(t, validAk, []asn1.ObjectIdentifier{internal.OidAkCertificate})
+	metadataCas := []*x509.Certificate{validCa}
+
+	tpm := ar.Evidence{Type: ar.TYPE_EVIDENCE_TPM}
+	snp := ar.Evidence{Type: ar.TYPE_EVIDENCE_SNP}
+	tdx := ar.Evidence{Type: ar.TYPE_EVIDENCE_TDX}
+
+	tests := []struct {
+		name        string
+		evidences   []ar.Evidence
+		certs       [][]byte
+		wantCa      string
+		wantRequire bool
+	}{
+		{"tpm primary", []ar.Evidence{tpm}, ekuChain, validCa.Subject.CommonName, true},
+		{"vtpm snp", []ar.Evidence{tpm, snp}, [][]byte{selfSigned}, "vTPM AK", false},
+		{"vtpm tdx", []ar.Evidence{tdx, tpm}, [][]byte{selfSigned}, "vTPM AK", false},
+		{"self-signed without cvm", []ar.Evidence{tpm}, [][]byte{selfSigned},
+			validCa.Subject.CommonName, true},
+		{"ca-issued with cvm", []ar.Evidence{tpm, snp}, ekuChain, validCa.Subject.CommonName, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cas, require := tpmAkTrust(tt.evidences, ar.Collateral{Certs: tt.certs}, metadataCas)
+			if len(cas) != 1 || cas[0].Subject.CommonName != tt.wantCa {
+				t.Errorf("tpmAkTrust() CAs = %v, want %v", cas, tt.wantCa)
+			}
+			if require != tt.wantRequire {
+				t.Errorf("tpmAkTrust() requireAkEku = %v, want %v", require, tt.wantRequire)
 			}
 		})
 	}
