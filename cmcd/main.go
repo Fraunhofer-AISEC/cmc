@@ -48,11 +48,8 @@ func main() {
 		},
 	}
 
-	// Errors are printed directly rather than logged, so that the multi-line
-	// report of a bad configuration stays readable
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		config.Fatal(err)
 	}
 }
 
