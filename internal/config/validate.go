@@ -18,6 +18,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
@@ -95,19 +96,39 @@ func (r *Report) logWarnings() {
 	}
 }
 
-// err renders the collected errors as a single error, listing them one per
-// line, or nil if there are none.
+// A ValidationError lists the problems of an invalid configuration, one per line.
+type ValidationError struct {
+	errs []string
+}
+
+func (e *ValidationError) Error() string {
+	var b strings.Builder
+	b.WriteString("invalid configuration:")
+	for _, msg := range e.errs {
+		b.WriteString("\n  ")
+		b.WriteString(msg)
+	}
+	return b.String()
+}
+
+// err returns the collected errors as a ValidationError, or nil if there are none.
 func (r *Report) err() error {
 	if len(r.errs) == 0 {
 		return nil
 	}
-	var b strings.Builder
-	b.WriteString("invalid configuration:")
-	for _, e := range r.errs {
-		b.WriteString("\n  ")
-		b.WriteString(e)
+	return &ValidationError{errs: r.errs}
+}
+
+// Fatal reports the error that ended a binary and exits. A ValidationError is
+// printed directly, so that its multi-line report stays readable, any other
+// error is logged.
+func Fatal(err error) {
+	if _, ok := errors.AsType[*ValidationError](err); ok {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		log.Error(err)
 	}
-	return errors.New(b.String())
+	os.Exit(1)
 }
 
 func (s *schema) validate(r *Report) {
