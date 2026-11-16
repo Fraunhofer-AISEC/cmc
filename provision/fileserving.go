@@ -47,6 +47,8 @@ func FetchMetadata(addr string, rootCas []*x509.Certificate,
 	allowSystemRoots bool,
 ) ([][]byte, error) {
 
+	log.Debugf("Creating new HTTP client for fetching metadata")
+
 	// The client does authenticate itself via attestation evidence and/or token as configured
 	client, err := internal.NewHttpClient(rootCas, allowSystemRoots, nil)
 	if err != nil {

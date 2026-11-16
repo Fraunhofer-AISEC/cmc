@@ -70,6 +70,9 @@ func NewSnpEndorser(
 	rootCas []*x509.Certificate,
 	allowSystemCerts bool,
 ) (*SnpEndorser, error) {
+
+	log.Debugf("Creating new SNP endorser")
+
 	client, err := internal.NewHttpClient(rootCas, allowSystemCerts, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SNP endorser HTTP client: %w", err)

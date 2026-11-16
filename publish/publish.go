@@ -168,7 +168,7 @@ func createClient(rootCas []*x509.Certificate, allowSystemCerts bool,
 		return http.DefaultClient, nil
 	}
 
-	log.Trace("Creating HTTPS publishing client")
+	log.Debugf("Creating HTTPS publishing client")
 
 	tlsConfig := &tls.Config{}
 
