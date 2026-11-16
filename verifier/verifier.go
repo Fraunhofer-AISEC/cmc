@@ -94,6 +94,7 @@ func Verify(
 	peer string, peerAddr string, checkOmsp bool,
 	localRole string,
 ) *ar.AttestationResult {
+	log.Debugf("Verifying attestation report")
 	return verifyInternal(arRaw, nonce, policies, policyEngine, policyOverwrite,
 		metadataCas, peerCache, peer, peerAddr, checkOmsp, localRole, false)
 }
@@ -105,6 +106,7 @@ func VerifyBootstrap(
 	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
 	metadataCas []*x509.Certificate,
 ) *ar.AttestationResult {
+	log.Debugf("Verifying bootstrap attestation report")
 	return verifyInternal(arRaw, nonce, policies, policyEngine, policyOverwrite,
 		metadataCas, nil, "", "", false, "", true)
 }
@@ -139,6 +141,7 @@ func verifyInternal(
 	log.Tracef("Detected %v serialization", s.String())
 
 	// Unmarshal the attestation report
+	log.Debugf("Unmarshalling attestation report")
 	report := new(ar.AttestationReport)
 	err = s.Unmarshal(arRaw, &report)
 	if err != nil {
@@ -153,6 +156,7 @@ func verifyInternal(
 			report.Version))
 		return result
 	}
+	log.Debugf("Successfully unmarshalled attestation report")
 
 	// Retrieve cached metadata items for peer if configured
 	var cachedMetadata map[string][]byte
@@ -176,12 +180,17 @@ func verifyInternal(
 	}
 
 	// Verify and unpack metadata from attestation report
+	log.Debugf("Verifying metadata from prover %v", result.Prover.Hostname)
 	metaResults, status := verifyMetadata(metadataCas, collectedMetadata, checkOmsp)
-	if status == ar.StatusFail {
+	switch status {
+	case ar.StatusSuccess:
+		log.Debug("Successfully verified metadata")
+	case ar.StatusFail:
 		result.Fail(ar.VerifyMetadata)
-	} else if status == ar.StatusWarn {
+	case ar.StatusWarn:
 		result.Warn(ar.VerifyMetadata)
 	}
+
 	result.Metadata = metaResults
 	result.Name = metaResults.ImageDescriptionResult.Name
 	if report.Name != "" {
@@ -192,8 +201,6 @@ func verifyInternal(
 	if peerAddr != "" {
 		result.Prover.Ip = peerAddr
 	}
-
-	log.Debugf("Decoded attestation report and metadata from prover %v", result.Prover.Hostname)
 
 	// Verify the supplied nonce and construct the evidence nonce for context integrity verification
 	// NONCE_USER = Context.Nonce
@@ -408,7 +415,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 
 	for hash, meta := range metadatamap {
 
-		log.Debugf("Validating metadata item %v...", hash)
+		log.Tracef("Validating metadata item %v...", hash)
 
 		s, err := ar.DetectSerialization(meta)
 		if err != nil {
@@ -428,10 +435,10 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 			if err != nil {
 				result.Summary.Fail(ar.ExtractPayload, err)
 			} else {
-				log.Debug("Extracted unverified JWS payload")
+				log.Trace("Extracted unverified JWS payload")
 			}
 		} else {
-			log.Debugf("Signature verification of metadata item %v successful", hash)
+			log.Tracef("Signature verification of metadata item %v successful", hash)
 		}
 
 		err = s.Unmarshal(payload, &result.Metadata)
@@ -439,11 +446,11 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 			result.Summary.Fail(ar.ParseMetadata, err)
 			success = ar.StatusFail
 		} else {
-			log.Debugf("Parse metadata %v: %v successful", result.Metadata.Type, result.Metadata.Name)
+			log.Tracef("Parse metadata %v: %v successful", result.Metadata.Type, result.Metadata.Name)
 		}
 
 		if result.Metadata.Type == ar.TYPE_OMSP_RESPONSE {
-			log.Debug("Checking validity of OMSP response...")
+			log.Tracef("Checking validity of OMSP response...")
 			currentTime := time.Now()
 			notBefore, err := time.Parse(time.RFC3339, result.ProducedAt)
 			if err != nil {
@@ -460,10 +467,10 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 				log.Warn("OMSP Response invalid since ProducedAt lies in the future")
 			} else {
 				result.ValidityCheck.Status = ar.StatusSuccess
-				log.Debug("OMSP Response valid")
+				log.Trace("OMSP Response valid")
 			}
 		} else {
-			log.Debug("Checking validity of metadata item...")
+			log.Trace("Checking validity of metadata item...")
 			if result.Metadata.Validity == nil {
 				log.Warnf("Manifest %v: %v is missing validity information",
 					result.Metadata.Type, result.Metadata.Name)
@@ -478,7 +485,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 					result.Summary.Status = ar.StatusFail
 					success = ar.StatusFail
 				} else {
-					log.Debugf("Checking expiration of %v: %v successful",
+					log.Tracef("Checking expiration of %v: %v successful",
 						result.Metadata.Type, result.Metadata.Name)
 				}
 			}
@@ -502,7 +509,7 @@ func verifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 			log.Warnf("Unknown manifest type %v", result.Metadata.Type)
 			success = ar.StatusFail
 		}
-		log.Debugf("Finished validation of metadata item %v: %v", hash, result.Summary.Status)
+		log.Tracef("Finished validation of metadata item %v: %v", hash, result.Summary.Status)
 	}
 
 	if checkOmsp {
@@ -664,7 +671,7 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityR
 	}
 
 	// Check that each manifest description has a corresponding manifest
-	log.Debugf("Iterating manifest descriptions length %v", len(metadata.ImageDescriptionResult.Descriptions))
+	log.Tracef("Iterating manifest descriptions length %v", len(metadata.ImageDescriptionResult.Descriptions))
 	descriptionMatch := make([]ar.Result, 0, len(metadata.ImageDescriptionResult.Descriptions))
 	for _, desc := range metadata.ImageDescriptionResult.Descriptions {
 
@@ -684,7 +691,7 @@ func checkMetadataCompatibility(metadata *ar.MetadataSummary) *ar.CompatibilityR
 	}
 
 	// Check that each manifest has a corresponding manifest description
-	log.Debugf("Iterating manifests length %v", len(metadata.ManifestResults))
+	log.Tracef("Iterating manifests length %v", len(metadata.ManifestResults))
 	manifestMatch := make([]ar.Result, 0, len(metadata.ManifestResults))
 	for _, m := range metadata.ManifestResults {
 

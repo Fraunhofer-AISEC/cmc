@@ -36,7 +36,7 @@ type OmspRequest struct {
 // FetchRevocationStatus fetches evidence of the current revocation status for all used manifests from a remote server
 // possibly add parameter for manifest identifiers
 func FetchRevocationStatus(endpoint string, or OmspRequest, ser ar.Serializer, rootCas []*x509.Certificate, useSystemRoots bool) ([]byte, error) {
-	log.Tracef("Requesting OMSP")
+	log.Debugf("Requesting OMSP")
 
 	client, err := internal.NewHttpClient(rootCas, useSystemRoots, nil)
 	if err != nil {

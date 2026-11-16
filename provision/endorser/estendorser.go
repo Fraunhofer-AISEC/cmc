@@ -33,6 +33,9 @@ type EstEndorser struct {
 
 func NewEstEndorser(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token []byte,
 ) (*EstEndorser, error) {
+
+	log.Debugf("Creating new EST endorser")
+
 	// The client does authenticate itself via attestation evidence and/or token as configured
 	client, err := internal.NewHttpClient(rootCas, allowSystemCerts, nil)
 	if err != nil {

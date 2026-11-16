@@ -80,6 +80,9 @@ func NewTdxEndorser(
 	allowSystemCerts bool,
 	opts ...TdxOption,
 ) (*TdxEndorser, error) {
+
+	log.Debugf("Creating new TDX endorser")
+
 	client, err := internal.NewHttpClient(rootCas, allowSystemCerts, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TDX endorser HTTP client: %w", err)
