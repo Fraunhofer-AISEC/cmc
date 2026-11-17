@@ -126,6 +126,9 @@ peer_cert_level = "hardware"  # none, software or hardware
 The certificate chain must be validated, so this option cannot be combined with
 `atls.attestation_only_trust`. On the server side, it requires mutual TLS.
 
+The [Caddy aTLS plugin](../atlscaddy/README.md) enforces it on client certificates through the
+`cert_level` verifier.
+
 Other applications can use the `certpolicy` package, whose `Tree.VerifyConnection` returns a
 `tls.Config.VerifyConnection` callback. Only the policies of the leaf certificate are checked, as
 the Go standard library enforces certificate policies only if a CA in the chain requires an

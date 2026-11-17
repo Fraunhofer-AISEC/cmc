@@ -1,0 +1,59 @@
+# Demonstrates the passport model with Caddy + aTLS as a reverse proxy for
+# a legacy HTTP service. The aTLS layer performs no attestation. Instead,
+# Caddy requires a client certificate that the EST server issued after a
+# hardware-based attestation, stated through its certificate policies.
+#
+# The legacy HTTP server is also defined in this configuration. For
+# demonstration purposes only
+{
+	auto_https disable_redirects
+
+	servers :4445 {
+		protocols h1 h2
+		listener_wrappers {
+			atls {
+				cmc_api socket
+				cmc_addr 127.0.0.1:9955
+				attest none
+				serializer json
+			}
+		}
+	}
+}
+
+# Public endpoint. Terminates aTLS and forwards to the backend.
+https://localhost:4445 {
+	# Fetch the server TLS identity from cmcd at startup. Clients validate
+	# it against the CMC PKI, as the server is not attested
+	cmc_cert {
+		cmc_api socket
+		cmc_addr 127.0.0.1:9955
+		serializer json
+		key_id_file data/caddy-key.id
+		key_type tpm
+		key_alg ec256
+		common_name localhost
+		dns_names localhost
+	}
+
+	tls {
+		client_auth {
+			mode require_and_verify
+			trust_pool file {
+				pem_file data/pki/ca.pem
+			}
+			# Require a client certificate enrolled with hardware-based attestation
+			verifier cert_level {
+				level hardware
+			}
+		}
+	}
+
+	reverse_proxy http://127.0.0.1:8080
+}
+
+# "Legacy" HTTP-only demo server.
+:8080 {
+	bind 127.0.0.1
+	respond "Hello World from Legacy HTTP Server"
+}

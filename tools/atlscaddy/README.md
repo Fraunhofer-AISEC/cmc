@@ -65,6 +65,13 @@ by issuing the server's TLS certificate through the cmcd via the `cmc_cert` site
 (module `tls.certificates.cmc`), so the signing key stays inside the CMC-managed attester (TPM/SNP).
 Every TLS handshake's `CertificateVerify` is signed by the cmcd via `TLSSignRequest`.
 
+### Hello World Reverse Proxy + Passport Model
+
+[hello-world-reverse-proxy-passport.caddyfile](../../example-setup/configs/hello-world-reverse-proxy-passport.caddyfile)
+uses `attest none` at the aTLS layer and instead requires a client certificate enrolled with
+hardware-based attestation via the `cert_level` client certificate verifier (module
+`tls.client_auth.verifier.cert_level`), see [passport model](../../doc/run.md#passport-model).
+
 ## Run
 
 Run `caddy-atls` like this:
@@ -115,6 +122,17 @@ The `cmc` block additionally accepts the following options:
 | `dns_names`    | list                     | DNS SANs                                               |
 | `ip_addresses` | list                     | IP SANs                                                |
 | `tags`         | list                     | Attached to cert for use with `cert_selection` filters |
+
+### `cert_level` client certificate verifier (`tls.client_auth.verifier.cert_level`)
+
+Used as `verifier cert_level { ... }` inside a `client_auth` block with `mode require_and_verify`.
+It requires the client certificate to state a minimum attestation level through its certificate
+policies, as issued by the [EST server](../estserver/README.md):
+
+| Option  | Values                         | Notes                                                       |
+| ------- | ------------------------------ | ----------------------------------------------------------- |
+| `level` | `none`, `software`, `hardware` | Minimum attestation level                                   |
+| `arc`   | OID                            | Base OID of the certificate policies, must match the server |
 
 ## Debugging
 
