@@ -8,7 +8,9 @@ metadata and proxies the hardware vendor collateral (AMD KDS, Intel PCS).
 
 All endpoints reside below `/.well-known/est`. The authentication methods of each enrollment
 endpoint are configured in `est.auth` (`none`, `token`, `certificate`, `attestation`). An endpoint
-without methods is disabled.
+without methods is disabled. `certificate` accepts TLS client certificates chaining to
+`est.client_cas`, which must be set for this method. Neither the metadata CAs (`trust.root_cas`) nor
+the system store are trusted for client authentication.
 
 | Endpoint             | Enrolled key             | Authentication methods                        | Default       |
 | -------------------- | ------------------------ | --------------------------------------------- | ------------- |

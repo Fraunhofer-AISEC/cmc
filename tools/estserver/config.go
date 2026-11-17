@@ -46,7 +46,19 @@ type estConfig struct {
 	TlsCaChain   []string   `toml:"tls_ca_chain"  flag:"tls-ca-chain" default:"{data}/tls-chain.pem" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
 	CertValidity string     `toml:"cert_validity" flag:"cert-validity" default:"4320h" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
 	TokenPath    string     `toml:"token_path"    flag:"token-path"   default:"{data}/tokens" path:"true" usage:"token store for verifying bootstrap tokens"`
+	ClientCas    []string   `toml:"client_cas"    flag:"est-client-cas" path:"true" usage:"comma-separated paths to CAs for client certificate authentication, required by the certificate authentication method"`
 	Auth         authConfig `toml:"auth"`
+}
+
+// Validate requires client CAs if any endpoint authenticates via client certificates
+func (e *estConfig) Validate(r *config.Report) {
+	certAuth := slices.ContainsFunc(e.Auth.endpoints(), func(a endpointAuth) bool {
+		return slices.Contains(a.methods, "certificate")
+	})
+	if certAuth && len(e.ClientCas) == 0 {
+		r.Errorf("client_cas", "must be set if an endpoint is configured for certificate "+
+			"authentication")
+	}
 }
 
 // authConfig holds the client authentication methods per enrollment endpoint. A request is
@@ -141,6 +153,7 @@ type Config struct {
 	tlsKey          crypto.PrivateKey
 	tlsCaChain      []*x509.Certificate
 	rootCas         []*x509.Certificate
+	clientCas       []*x509.Certificate
 	certPolicies    *certpolicy.Tree
 	intelPcsRootCas []*x509.Certificate
 	auth            map[string]internal.AuthMethod
@@ -219,6 +232,14 @@ func (c *Config) resolve() error {
 	c.rootCas, err = internal.ReadCerts(c.Trust.RootCas)
 	if err != nil {
 		return fmt.Errorf("trust.root_cas: failed to load trusted root CAs: %w", err)
+	}
+
+	// Client CAs are validated to be set if certificate authentication is configured
+	if len(c.Est.ClientCas) > 0 {
+		c.clientCas, err = internal.ReadCerts(c.Est.ClientCas)
+		if err != nil {
+			return fmt.Errorf("est.client_cas: failed to load client CAs: %w", err)
+		}
 	}
 
 	c.certPolicies, err = c.CertPolicy.Tree()
