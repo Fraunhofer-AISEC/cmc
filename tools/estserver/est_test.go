@@ -107,6 +107,44 @@ func TestEnrollCertProfiles(t *testing.T) {
 	}
 }
 
+// TestCacerts checks that /cacerts returns the EST CA chain as certs-only PKCS#7
+func TestCacerts(t *testing.T) {
+	ca, _ := newTestCa(t, "EST CA")
+	s := &Server{estCaChain: []*x509.Certificate{ca}}
+
+	for _, tt := range []struct {
+		method string
+		want   int
+	}{
+		{http.MethodGet, http.StatusOK},
+		{http.MethodPost, http.StatusBadRequest},
+	} {
+		t.Run(tt.method, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, est.EndpointPrefix+est.CacertsEndpoint, nil)
+			rec := httptest.NewRecorder()
+
+			s.handleCacerts(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %v, want %v", rec.Code, tt.want)
+			}
+			if tt.want != http.StatusOK {
+				return
+			}
+			if ct := rec.Header().Get(internal.HttpContentTypeHeader); ct != est.MimeTypePKCS7CertsOnly {
+				t.Errorf("Content-Type = %q, want %q", ct, est.MimeTypePKCS7CertsOnly)
+			}
+			certs, err := est.ParseSimplePkiResponse(rec.Body.Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(certs) != 1 || !certs[0].Equal(ca) {
+				t.Errorf("certs = %v, want EST CA", certs)
+			}
+		})
+	}
+}
+
 func TestCsrattrs(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
@@ -200,6 +238,9 @@ func TestSimplereenroll(t *testing.T) {
 			}
 			if tt.want != http.StatusOK {
 				return
+			}
+			if ct := rec.Header().Get(internal.HttpContentTypeHeader); ct != est.MimeTypePKCS7CertsOnly {
+				t.Errorf("Content-Type = %q, want %q", ct, est.MimeTypePKCS7CertsOnly)
 			}
 			certs, err := est.ParseSimplePkiResponse(rec.Body.Bytes())
 			if err != nil {
