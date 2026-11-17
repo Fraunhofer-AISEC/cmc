@@ -118,7 +118,7 @@ func proxyHttpRequest(proxyTransport *http.Transport, c *Config, w http.Response
 	// which we want to forward to the client.
 	resp, err := proxyTransport.RoundTrip(newReq)
 	if err != nil {
-		log.Debugf("Failed to forward http request to %s: %s", req.URL, err)
+		log.Warnf("Failed to forward http request to %s: %s", req.URL, err)
 		http.Error(w, fmt.Sprintf("Failed to proxy request: %s", err), http.StatusBadGateway)
 		return
 	}
@@ -147,7 +147,7 @@ func proxyTunnel(dial dialFunc, _ *Config, w http.ResponseWriter, req *http.Requ
 	}
 	toServer, err := dial(req.Context(), "tcp", req.URL.Host)
 	if err != nil {
-		log.Debugf("Failed to dial remote server %s: %s", req.URL.Host, err)
+		log.Warnf("Failed to dial remote server %s: %s", req.URL.Host, err)
 		// TODO: Depending on the error, this is also a bad request (e.g. if the remote address rejects)
 		http.Error(w, fmt.Sprintf("Failed to dial remote server: %s", err), http.StatusInternalServerError)
 		return
