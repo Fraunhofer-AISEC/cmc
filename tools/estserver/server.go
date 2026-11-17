@@ -72,41 +72,7 @@ type Server struct {
 
 func NewServer(c *Config) (*Server, error) {
 
-	var tlsCaChain [][]byte
-	for _, c := range c.tlsCaChain {
-		tlsCaChain = append(tlsCaChain, c.Raw)
-	}
-
-	tlsCfg := &tls.Config{
-		MinVersion:       tls.VersionTLS12,
-		CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-		// Client certificates are requested only if an endpoint is configured for them
-		ClientAuth: tls.NoClientCert,
-		ClientCAs:  nil,
-		Certificates: []tls.Certificate{
-			{
-				Certificate: tlsCaChain,
-				PrivateKey:  c.tlsKey,
-				Leaf:        c.tlsCaChain[0],
-			},
-		},
-	}
-
-	// Client certificates are optional on the TLS layer and enforced per endpoint by authorize,
-	// so that the remaining endpoints stay reachable without
-	var certAuth internal.AuthMethod
-	for _, m := range c.auth {
-		certAuth |= m & internal.AuthCertificate
-	}
-	if certAuth != 0 {
-		log.Debugf("Requesting client certificates")
-		rootpool, err := internal.CreateCertPool(c.rootCas, c.Trust.AllowSystemCerts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cert pool: %w", err)
-		}
-		tlsCfg.ClientAuth = tls.VerifyClientCertIfGiven
-		tlsCfg.ClientCAs = rootpool
-	}
+	tlsCfg := newTlsConfig(c)
 
 	var publishToken []byte
 	if c.Publish.Token != "" {
@@ -224,6 +190,49 @@ func NewServer(c *Config) (*Server, error) {
 	http.HandleFunc("/", server.handleNotFound)
 
 	return server, nil
+}
+
+// newTlsConfig creates the TLS configuration of the EST server. Client certificates are optional
+// on the TLS layer and enforced per endpoint by authorize, so that the remaining endpoints stay
+// reachable without
+func newTlsConfig(c *Config) *tls.Config {
+
+	var tlsCaChain [][]byte
+	for _, c := range c.tlsCaChain {
+		tlsCaChain = append(tlsCaChain, c.Raw)
+	}
+
+	tlsCfg := &tls.Config{
+		MinVersion:       tls.VersionTLS12,
+		CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		// Client certificates are requested only if an endpoint is configured for them
+		ClientAuth: tls.NoClientCert,
+		ClientCAs:  nil,
+		Certificates: []tls.Certificate{
+			{
+				Certificate: tlsCaChain,
+				PrivateKey:  c.tlsKey,
+				Leaf:        c.tlsCaChain[0],
+			},
+		},
+	}
+
+	var certAuth internal.AuthMethod
+	for _, m := range c.auth {
+		certAuth |= m & internal.AuthCertificate
+	}
+	if certAuth != 0 {
+		// Only the dedicated client CAs are trusted, never the metadata CAs or the system store
+		log.Debugf("Requesting client certificates")
+		clientCas := x509.NewCertPool()
+		for _, ca := range c.clientCas {
+			clientCas.AddCert(ca)
+		}
+		tlsCfg.ClientAuth = tls.VerifyClientCertIfGiven
+		tlsCfg.ClientCAs = clientCas
+	}
+
+	return tlsCfg
 }
 
 // registerCollateralEndpoints registers the hardware vendor collateral endpoints,

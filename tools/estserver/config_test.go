@@ -152,7 +152,10 @@ func TestAuth(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"multiple methods", []string{"--auth-simpleenroll", "token,certificate,attestation"}, ""},
+		{"multiple methods", []string{"--auth-simpleenroll", "token,certificate,attestation",
+			"--est-client-cas", "client-ca.pem"}, ""},
+		{"certificate without client CAs", []string{"--auth-tpmactivateenroll", "certificate"},
+			"est.client_cas: must be set"},
 		{"none", []string{"--auth-simpleenroll", "none"}, ""},
 		{"none combined", []string{"--auth-simpleenroll", "none,token"},
 			"est.auth.simpleenroll: none cannot be combined"},
