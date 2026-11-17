@@ -16,7 +16,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/x509"
+	"fmt"
+	"net"
+	"net/url"
+	"slices"
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -41,4 +46,30 @@ func (CsrPassthrough) Assign(csr *x509.CertificateRequest, validity time.Duratio
 		URIs:        csr.URIs,
 		ValidFor:    validity,
 	}, nil
+}
+
+// matchCertNames checks that subject and SANs of the CSR are identical to the certificate being
+// renewed (RFC 7030 4.2.2)
+func matchCertNames(csr *x509.CertificateRequest, cert *x509.Certificate) error {
+	if !bytes.Equal(csr.RawSubject, cert.RawSubject) {
+		return fmt.Errorf("subject %v does not match certificate subject %v", csr.Subject,
+			cert.Subject)
+	}
+	if !slices.Equal(csr.DNSNames, cert.DNSNames) {
+		return fmt.Errorf("DNS names %v do not match certificate %v", csr.DNSNames, cert.DNSNames)
+	}
+	if !slices.EqualFunc(csr.IPAddresses, cert.IPAddresses, net.IP.Equal) {
+		return fmt.Errorf("IP addresses %v do not match certificate %v", csr.IPAddresses,
+			cert.IPAddresses)
+	}
+	if !slices.EqualFunc(csr.URIs, cert.URIs, func(a, b *url.URL) bool {
+		return a.String() == b.String()
+	}) {
+		return fmt.Errorf("URIs %v do not match certificate %v", csr.URIs, cert.URIs)
+	}
+	if !slices.Equal(csr.EmailAddresses, cert.EmailAddresses) {
+		return fmt.Errorf("email addresses %v do not match certificate %v", csr.EmailAddresses,
+			cert.EmailAddresses)
+	}
+	return nil
 }

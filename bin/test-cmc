@@ -158,6 +158,7 @@ est_params=(
     "--est-addr"            "0.0.0.0:9000" \
     "--est-ca-key"          "${data}/pki/ca-key.pem" \
     "--est-ca-chain"        "${data}/pki/ca.pem" \
+    "--est-client-cas"      "${data}/pki/ca.pem" \
     "--root-cas"            "${data}/pki/ca.pem" \
     "--http-folder"         "${data}" \
     "--tpm-ek-cert-db"      "${data}/tpm-ek-certs.db" \

@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"math/big"
 	"net"
 	"net/url"
 	"testing"
@@ -98,5 +99,46 @@ func TestCsrPassthrough_IgnoresAttestationResult(t *testing.T) {
 	}
 	if !bytes.Equal(fields.RawSubject, csr.RawSubject) {
 		t.Errorf("RawSubject mismatch")
+	}
+}
+
+func TestMatchCertNames(t *testing.T) {
+	uri, _ := url.Parse("spiffe://example.com/device")
+	ip := net.ParseIP("192.0.2.1")
+	subject := pkix.Name{CommonName: "device", Organization: []string{"Acme"}}
+	dnsNames := []string{"device.example.com"}
+
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "CA"}}
+	issued, err := enrollCert(makeCSR(t, subject, dnsNames, []net.IP{ip}, []*url.URL{uri}), caKey,
+		ca, CsrPassthrough{}, nil, 0, tlsProfile(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		name    string
+		csr     *x509.CertificateRequest
+		wantErr bool
+	}{
+		{"identical", makeCSR(t, subject, dnsNames, []net.IP{ip}, []*url.URL{uri}), false},
+		{"subject", makeCSR(t, pkix.Name{CommonName: "device"}, dnsNames, []net.IP{ip},
+			[]*url.URL{uri}), true},
+		{"DNS name", makeCSR(t, subject, []string{"other.example.com"}, []net.IP{ip},
+			[]*url.URL{uri}), true},
+		{"additional DNS name", makeCSR(t, subject, append(dnsNames, "other.example.com"),
+			[]net.IP{ip}, []*url.URL{uri}), true},
+		{"IP address", makeCSR(t, subject, dnsNames, []net.IP{net.ParseIP("192.0.2.2")},
+			[]*url.URL{uri}), true},
+		{"URI missing", makeCSR(t, subject, dnsNames, []net.IP{ip}, nil), true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := matchCertNames(tt.csr, issued); (err != nil) != tt.wantErr {
+				t.Errorf("err = %v, want error %v", err, tt.wantErr)
+			}
+		})
 	}
 }

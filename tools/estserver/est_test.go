@@ -16,9 +16,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -138,6 +140,73 @@ func TestCsrattrs(t *testing.T) {
 			}
 			if len(attrs) != 1 || !attrs[0].Equal(est.OidAttestation) {
 				t.Errorf("CSR attributes = %v, want %v", attrs, est.OidAttestation)
+			}
+		})
+	}
+}
+
+// TestSimplereenroll checks that /simplereenroll requires a client certificate and a CSR with
+// the subject and SANs of that certificate
+func TestSimplereenroll(t *testing.T) {
+	tree, err := certpolicy.New(certpolicy.DefaultArc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, caKey := newTestCa(t, "EST CA")
+	s := &Server{
+		estCaKey:     caKey,
+		estCaChain:   []*x509.Certificate{ca},
+		certPolicies: tree,
+		namingPolicy: CsrPassthrough{},
+		auth:         map[string]internal.AuthMethod{est.ReenrollEndpoint: internal.AuthCertificate},
+	}
+
+	subject := pkix.Name{CommonName: "device"}
+	dnsNames := []string{"device.example.com"}
+	client := createTestCert(t, &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      subject,
+		DNSNames:     dnsNames,
+		ExtKeyUsage:  internal.TlsExtKeyUsage,
+	}, ca, caKey, newTestKey(t))
+
+	for _, tt := range []struct {
+		name     string
+		cert     bool
+		subject  pkix.Name
+		dnsNames []string
+		want     int
+	}{
+		{"matching", true, subject, dnsNames, http.StatusOK},
+		{"no client certificate", false, subject, dnsNames, http.StatusUnauthorized},
+		{"subject mismatch", true, pkix.Name{CommonName: "other"}, dnsNames, http.StatusBadRequest},
+		{"SAN mismatch", true, subject, []string{"other.example.com"}, http.StatusBadRequest},
+		{"SAN missing", true, subject, nil, http.StatusBadRequest},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			csr := makeCSR(t, tt.subject, tt.dnsNames, nil, nil)
+			req := httptest.NewRequest(http.MethodPost, est.EndpointPrefix+est.ReenrollEndpoint,
+				bytes.NewReader(est.EncodeBase64(csr.Raw)))
+			req.Header.Set(internal.HttpContentTypeHeader, est.MimeTypePKCS10)
+			if tt.cert {
+				req.TLS = &tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{client, ca}}}
+			}
+			rec := httptest.NewRecorder()
+
+			s.handleSimplereenroll(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %v, want %v: %v", rec.Code, tt.want, rec.Body.String())
+			}
+			if tt.want != http.StatusOK {
+				return
+			}
+			certs, err := est.ParseSimplePkiResponse(rec.Body.Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := matchCertNames(csr, certs[0]); err != nil {
+				t.Errorf("renewed certificate names differ: %v", err)
 			}
 		})
 	}

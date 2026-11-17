@@ -31,6 +31,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 )
 
 func TestAuthorize(t *testing.T) {
@@ -81,6 +82,55 @@ func TestAuthorize(t *testing.T) {
 			}
 
 			r, err := s.authorize(endpoint, req, tt.attest)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, want error %v", err, tt.wantErr)
+			}
+			if (r != nil) != tt.wantResult {
+				t.Errorf("result = %v, want result %v", r, tt.wantResult)
+			}
+		})
+	}
+}
+
+func TestAuthorizeReenroll(t *testing.T) {
+
+	result := &ar.AttestationResult{}
+	attestOk := func() (*ar.AttestationResult, error) { return result, nil }
+	attestFail := func() (*ar.AttestationResult, error) { return nil, errors.New("invalid report") }
+
+	for _, tt := range []struct {
+		name       string
+		configured bool
+		methods    internal.AuthMethod
+		cert       bool
+		attest     attestFunc
+		wantErr    bool
+		wantResult bool
+	}{
+		{"not configured", false, 0, true, nil, true, false},
+		{"certificate", true, internal.AuthCertificate, true, nil, false, false},
+		{"certificate missing", true, internal.AuthCertificate, false, nil, true, false},
+		{"certificate with report", true, internal.AuthCertificate, true, attestOk, true, false},
+		{"certificate and attestation", true, internal.AuthCertificate | internal.AuthAttestation,
+			true, attestOk, false, true},
+		{"attestation without certificate", true,
+			internal.AuthCertificate | internal.AuthAttestation, false, attestOk, true, false},
+		{"certificate without report", true, internal.AuthCertificate | internal.AuthAttestation,
+			true, nil, true, false},
+		{"attestation fails", true, internal.AuthCertificate | internal.AuthAttestation, true,
+			attestFail, true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Server{auth: map[string]internal.AuthMethod{}}
+			if tt.configured {
+				s.auth[est.ReenrollEndpoint] = tt.methods
+			}
+			req := httptest.NewRequest("POST", est.ReenrollEndpoint, nil)
+			if tt.cert {
+				req.TLS = &tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{{}}}}
+			}
+
+			r, err := s.authorizeReenroll(req, tt.attest)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, want error %v", err, tt.wantErr)
 			}
