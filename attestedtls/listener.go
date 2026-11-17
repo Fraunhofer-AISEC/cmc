@@ -160,10 +160,7 @@ func (ln *Listener) handshake(conn net.Conn) error {
 
 	// Perform remote attestation
 	err = atlsHandshakeStart(tlsConn, fingerprint, ln.cc, Endpoint_Server)
-	if err != nil {
-		// Only log the error, still send handshake complete message to inform peer
-		log.Warnf("atls handshake failed: %v", err)
-	}
+	// On error, still send handshake complete message to inform peer
 	err = aTlsHandshakeComplete(tlsConn, ln.cc.Serializer, err)
 	if err != nil {
 		return fmt.Errorf("atls handshake failed: %w", err)

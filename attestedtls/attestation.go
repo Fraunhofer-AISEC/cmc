@@ -17,7 +17,9 @@ package attestedtls
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -100,7 +102,7 @@ func atlsHandshakeStart(conn *tls.Conn, fingerprint string, cc *CmcConfig, endpo
 		}
 	}
 
-	log.Debugf("Performing atls handshake with %v", peerAddr)
+	log.Debugf("Performing atls handshake with attesttation mode %v with peer %v", cc.Attest.String(), peerAddr)
 
 	if cc.Serializer == nil {
 		return fmt.Errorf("internal error: API serializer is nil")
@@ -221,6 +223,13 @@ func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error
 		return fmt.Errorf("internal error: API serializer is nil")
 	}
 
+	// A TLS alert from the peer, e.g., because it rejected the client certificate after the TLS
+	// 1.3 handshake, closes the connection, so the handshake complete cannot be exchanged
+	var opErr *net.OpError
+	if errors.As(handshakeError, &opErr) && opErr.Op == "remote error" {
+		return fmt.Errorf("peer %v rejected the TLS connection: %w", conn.RemoteAddr().String(), opErr)
+	}
+
 	// Finally send and receive handshake complete
 	complete := AtlsHandshakeComplete{
 		Version: atlsProtocolVersion,
@@ -230,20 +239,20 @@ func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error
 		complete.Error = handshakeError.Error()
 	}
 
-	log.Debugf("Prover %v: sending atls handshake complete to %v",
+	log.Tracef("Prover %v: sending atls handshake complete to %v",
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
 	err := sendAtlsComplete(conn, s, complete)
 	if err != nil {
-		return fmt.Errorf("%v: failed to send handshake complete to %v: %w",
-			conn.LocalAddr().String(), conn.RemoteAddr().String(), err)
+		return completeError(conn, handshakeError,
+			fmt.Errorf("failed to send handshake complete to %v: %w", conn.RemoteAddr().String(), err))
 	}
 
 	log.Tracef("Verifier %v: waiting for atls handshake complete from %v",
 		conn.LocalAddr().String(), conn.RemoteAddr().String())
 	resp, err := receiveAtlsComplete(conn)
 	if err != nil {
-		return fmt.Errorf("%v: failed to receive handshake complete from %v: %w",
-			conn.LocalAddr().String(), conn.RemoteAddr().String(), err)
+		return completeError(conn, handshakeError,
+			fmt.Errorf("failed to receive handshake complete from %v: %w", conn.RemoteAddr().String(), err))
 	}
 
 	if handshakeError == nil && resp.Success {
@@ -260,6 +269,16 @@ func aTlsHandshakeComplete(conn *tls.Conn, s ar.Serializer, handshakeError error
 	}
 
 	return nil
+}
+
+// completeError returns the failure of the handshake complete exchange, preferring the original
+// handshake error as the root cause.
+func completeError(conn *tls.Conn, handshakeError, err error) error {
+	if handshakeError != nil {
+		return fmt.Errorf("%v: attestation with peer %v failed: %w (%v)", conn.LocalAddr().String(),
+			conn.RemoteAddr().String(), handshakeError, err)
+	}
+	return fmt.Errorf("%v: %w", conn.LocalAddr().String(), err)
 }
 
 func receiveAtlsResponse(conn *tls.Conn) (*AtlsHandshakeResponse, error) {
@@ -380,7 +399,7 @@ func sendAtlsResponse(conn *tls.Conn, s ar.Serializer, resp AtlsHandshakeRespons
 		return fmt.Errorf("internal error: failed to marshal atls handshake request: %w", err)
 	}
 
-	log.Debugf("Sending atls handshake response length %v", len(payload))
+	log.Tracef("Sending atls handshake response length %v", len(payload))
 
 	// Send payload to peer
 	err = Write(payload, conn)
