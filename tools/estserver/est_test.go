@@ -24,6 +24,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -117,7 +118,7 @@ func TestCacerts(t *testing.T) {
 		want   int
 	}{
 		{http.MethodGet, http.StatusOK},
-		{http.MethodPost, http.StatusBadRequest},
+		{http.MethodPost, http.StatusMethodNotAllowed},
 	} {
 		t.Run(tt.method, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, est.EndpointPrefix+est.CacertsEndpoint, nil)
@@ -127,6 +128,11 @@ func TestCacerts(t *testing.T) {
 
 			if rec.Code != tt.want {
 				t.Fatalf("status = %v, want %v", rec.Code, tt.want)
+			}
+			if tt.want == http.StatusMethodNotAllowed {
+				if allow := rec.Header().Get("Allow"); allow != http.MethodGet {
+					t.Errorf("Allow = %q, want %q", allow, http.MethodGet)
+				}
 			}
 			if tt.want != http.StatusOK {
 				return
@@ -216,10 +222,10 @@ func TestSimplereenroll(t *testing.T) {
 		want     int
 	}{
 		{"matching", true, subject, dnsNames, http.StatusOK},
-		{"no client certificate", false, subject, dnsNames, http.StatusUnauthorized},
-		{"subject mismatch", true, pkix.Name{CommonName: "other"}, dnsNames, http.StatusBadRequest},
-		{"SAN mismatch", true, subject, []string{"other.example.com"}, http.StatusBadRequest},
-		{"SAN missing", true, subject, nil, http.StatusBadRequest},
+		{"no client certificate", false, subject, dnsNames, http.StatusForbidden},
+		{"subject mismatch", true, pkix.Name{CommonName: "other"}, dnsNames, http.StatusForbidden},
+		{"SAN mismatch", true, subject, []string{"other.example.com"}, http.StatusForbidden},
+		{"SAN missing", true, subject, nil, http.StatusForbidden},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			csr := makeCSR(t, tt.subject, tt.dnsNames, nil, nil)
@@ -248,6 +254,80 @@ func TestSimplereenroll(t *testing.T) {
 			}
 			if err := matchCertNames(csr, certs[0]); err != nil {
 				t.Errorf("renewed certificate names differ: %v", err)
+			}
+		})
+	}
+}
+
+// rejectNames is a naming policy that rejects every request
+type rejectNames struct{}
+
+func (rejectNames) Assign(*x509.CertificateRequest, time.Duration, *ar.AttestationResult,
+) (internal.CertFields, error) {
+	return internal.CertFields{}, errors.New("rejected")
+}
+
+// TestSimpleenrollStatus checks the HTTP status codes and headers of rejected /simpleenroll
+// requests
+func TestSimpleenrollStatus(t *testing.T) {
+	tree, err := certpolicy.New(certpolicy.DefaultArc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, caKey := newTestCa(t, "EST CA")
+	csr := est.EncodeBase64(makeCSR(t, pkix.Name{CommonName: "device"}, nil, nil, nil).Raw)
+
+	for _, tt := range []struct {
+		name        string
+		auth        internal.AuthMethod
+		policy      NamingPolicy
+		method      string
+		contentType string
+		body        []byte
+		want        int
+		wantHeader  string
+		wantValue   string
+	}{
+		{"success", internal.AuthNone, CsrPassthrough{}, http.MethodPost, est.MimeTypePKCS10, csr,
+			http.StatusOK, "", ""},
+		{"method", internal.AuthNone, CsrPassthrough{}, http.MethodGet, est.MimeTypePKCS10, csr,
+			http.StatusMethodNotAllowed, "Allow", http.MethodPost},
+		{"content type", internal.AuthNone, CsrPassthrough{}, http.MethodPost, "text/plain", csr,
+			http.StatusUnsupportedMediaType, "", ""},
+		{"malformed CSR", internal.AuthNone, CsrPassthrough{}, http.MethodPost,
+			est.MimeTypePKCS10, []byte("invalid"), http.StatusBadRequest, "", ""},
+		{"missing token", internal.AuthToken, CsrPassthrough{}, http.MethodPost,
+			est.MimeTypePKCS10, csr, http.StatusUnauthorized, "WWW-Authenticate", `Bearer realm="est"`},
+		{"missing certificate", internal.AuthCertificate, CsrPassthrough{}, http.MethodPost,
+			est.MimeTypePKCS10, csr, http.StatusForbidden, "", ""},
+		{"naming policy", internal.AuthNone, rejectNames{}, http.MethodPost, est.MimeTypePKCS10,
+			csr, http.StatusForbidden, "", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Server{
+				estCaKey:     caKey,
+				estCaChain:   []*x509.Certificate{ca},
+				certPolicies: tree,
+				namingPolicy: tt.policy,
+				auth:         map[string]internal.AuthMethod{est.EnrollEndpoint: tt.auth},
+			}
+			req := httptest.NewRequest(tt.method, est.EndpointPrefix+est.EnrollEndpoint,
+				bytes.NewReader(tt.body))
+			req.Header.Set(internal.HttpContentTypeHeader, tt.contentType)
+			rec := httptest.NewRecorder()
+
+			s.handleSimpleenroll(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %v, want %v: %v", rec.Code, tt.want, rec.Body.String())
+			}
+			if tt.wantHeader != "" {
+				if v := rec.Header().Get(tt.wantHeader); v != tt.wantValue {
+					t.Errorf("%v = %q, want %q", tt.wantHeader, v, tt.wantValue)
+				}
+			}
+			if v := rec.Header().Get("WWW-Authenticate"); tt.want != http.StatusUnauthorized && v != "" {
+				t.Errorf("unexpected WWW-Authenticate %q", v)
 			}
 		})
 	}

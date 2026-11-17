@@ -29,6 +29,12 @@ attestation result only.
 TPM of the EK. `/csrattrs` requests attestation evidence in the CSR if `/simpleenroll` is
 configured with `attestation`.
 
+A failed authentication is answered with 401 and a `WWW-Authenticate: Bearer` challenge if the
+endpoint accepts `token`, and with 403 otherwise, as certificates and attestation have no HTTP
+authentication scheme. Rejected evidence, CSR names or naming policy decisions also result in 403.
+Malformed requests result in 400, a wrong method in 405 with `Allow`, a wrong content type in 415,
+internal errors in 500 and failing vendor services in 502.
+
 ### Evidence in the CSR
 
 `/simpleenroll` and `/simplereenroll` accept evidence in the CSR as specified by

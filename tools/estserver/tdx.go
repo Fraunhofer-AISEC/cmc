@@ -61,13 +61,13 @@ func (s *Server) serveTcbInfo(w http.ResponseWriter, req *http.Request, quoteTyp
 
 	fmspc := req.URL.Query().Get(fmspcParam)
 	if err := endorser.ValidateFmspc(fmspc); err != nil {
-		writeBadRequest(w, "%v", err)
+		writeHttpError(w, http.StatusBadRequest, "%v", err)
 		return
 	}
 
 	tcbInfo, issuerChain, err := s.tdxEndorser.GetTcbInfo(fmspc, quoteType)
 	if err != nil {
-		writeProxyError(w, "failed to get TCB info for FMSPC %v: %v", fmspc, err)
+		writeHttpError(w, http.StatusBadGateway, "failed to get TCB info for FMSPC %v: %v", fmspc, err)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (s *Server) serveQeIdentity(w http.ResponseWriter, req *http.Request, quote
 
 	qeIdentity, issuerChain, err := s.tdxEndorser.GetQeIdentity(quoteType)
 	if err != nil {
-		writeProxyError(w, "failed to get QE identity: %v", err)
+		writeHttpError(w, http.StatusBadGateway, "failed to get QE identity: %v", err)
 		return
 	}
 
@@ -95,20 +95,20 @@ func (s *Server) handlePckCrl(w http.ResponseWriter, req *http.Request) {
 
 	ca := req.URL.Query().Get(caParam)
 	if err := endorser.ValidatePckCa(ca); err != nil {
-		writeBadRequest(w, "%v", err)
+		writeHttpError(w, http.StatusBadRequest, "%v", err)
 		return
 	}
 
 	// As the Intel PCS, return PEM unless DER is explicitly requested
 	encoding := strings.ToLower(req.URL.Query().Get(encodingParam))
 	if encoding != "" && encoding != "der" && encoding != "pem" {
-		writeBadRequest(w, "invalid encoding %q (expected der or pem)", encoding)
+		writeHttpError(w, http.StatusBadRequest, "invalid encoding %q (expected der or pem)", encoding)
 		return
 	}
 
 	der, issuerChain, err := s.tdxEndorser.GetPckCrl(ca)
 	if err != nil {
-		writeProxyError(w, "failed to get %v PCK CRL: %v", ca, err)
+		writeHttpError(w, http.StatusBadGateway, "failed to get %v PCK CRL: %v", ca, err)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (s *Server) handleRootCaCrl(w http.ResponseWriter, req *http.Request) {
 
 	crl, err := s.tdxEndorser.GetRootCaCrl()
 	if err != nil {
-		writeProxyError(w, "failed to get Intel root CA CRL: %v", err)
+		writeHttpError(w, http.StatusBadGateway, "failed to get Intel root CA CRL: %v", err)
 		return
 	}
 

@@ -306,30 +306,32 @@ func sendResponse(w http.ResponseWriter, contentType, transferEncoding string, p
 	}
 }
 
-func writeHttpErrorf(w http.ResponseWriter, format string, args ...interface{}) {
+// writeHttpError logs and sends an error response with the given status code
+func writeHttpError(w http.ResponseWriter, status int, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	log.Warnf("%v", msg)
-	http.Error(w, msg, http.StatusBadRequest)
+	http.Error(w, msg, status)
 }
 
-// writeUnauthorized rejects a request whose client could not be authenticated
-func writeUnauthorized(w http.ResponseWriter, err error) {
-	msg := fmt.Sprintf("Failed to authenticate client: %v", err)
-	log.Warnf("%v", msg)
-	http.Error(w, msg, http.StatusUnauthorized)
+// allowMethod rejects requests with a method other than the one the endpoint implements
+func allowMethod(w http.ResponseWriter, req *http.Request, method string) bool {
+	if req.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	writeHttpError(w, http.StatusMethodNotAllowed, "Method %v not allowed for %v", req.Method,
+		req.URL.Path)
+	return false
 }
 
-// writeBadRequest rejects a malformed collateral proxy request
-func writeBadRequest(w http.ResponseWriter, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	log.Warnf("%v", msg)
-	http.Error(w, msg, http.StatusBadRequest)
-}
-
-// writeProxyError reports a failure to obtain collateral from the upstream
-// vendor service (AMD KDS, Intel PCS or PCCS)
-func writeProxyError(w http.ResponseWriter, format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	log.Warnf("%v", msg)
-	http.Error(w, msg, http.StatusBadGateway)
+// writeAuthError rejects a request whose client could not be authenticated. 401 requires a
+// challenge for an HTTP authentication scheme, which only exists for token authentication.
+// Endpoints authenticating via TLS client certificates or attestation respond with 403
+func (s *Server) writeAuthError(w http.ResponseWriter, endpoint string, err error) {
+	status := http.StatusForbidden
+	if s.auth[endpoint].Has(internal.AuthToken) {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="est"`)
+		status = http.StatusUnauthorized
+	}
+	writeHttpError(w, status, "Failed to authenticate client: %v", err)
 }

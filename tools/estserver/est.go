@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/asn1"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -41,8 +42,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Received /cacerts %v request from %v", req.Method, req.RemoteAddr)
 
-	if strings.Compare(req.Method, "GET") != 0 {
-		writeHttpErrorf(w, "Only method GET implemented for cacerts request")
+	if !allowMethod(w, req, http.MethodGet) {
 		return
 	}
 
@@ -51,7 +51,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 
 	body, err := est.EncodePkcs7CertsOnly(s.estCaChain)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to encode PKCS7 certs-only: %v", err)
 		return
 	}
 	encoded := est.EncodeBase64(body)
@@ -63,8 +63,7 @@ func (s *Server) handleCsrattrs(w http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Received /csrattrs request from %v", req.RemoteAddr)
 
-	if strings.Compare(req.Method, "GET") != 0 {
-		writeHttpErrorf(w, "Only method GET implemented for csrattrs request")
+	if !allowMethod(w, req, http.MethodGet) {
 		return
 	}
 
@@ -77,7 +76,7 @@ func (s *Server) handleCsrattrs(w http.ResponseWriter, req *http.Request) {
 	// CsrAttrs ::= SEQUENCE OF AttrOrOID, the attestation attribute OID requests evidence
 	body, err := asn1.Marshal([]asn1.ObjectIdentifier{est.OidAttestation})
 	if err != nil {
-		writeHttpErrorf(w, "Failed to marshal CSR attributes: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to marshal CSR attributes: %v", err)
 		return
 	}
 
@@ -97,33 +96,32 @@ func (s *Server) handleEnroll(w http.ResponseWriter, req *http.Request, endpoint
 
 	log.Debugf("Received %v request from %v", endpoint, req.RemoteAddr)
 
-	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Only method POST implemented for %v request", endpoint)
+	if !allowMethod(w, req, http.MethodPost) {
 		return
 	}
 
 	// Check content type pkcs10 CSR
 	t, _, err := mime.ParseMediaType(req.Header.Get(internal.HttpContentTypeHeader))
 	if err != nil {
-		writeHttpErrorf(w, "failed to parse media type %s: %v",
+		writeHttpError(w, http.StatusUnsupportedMediaType, "failed to parse media type %s: %v",
 			internal.HttpContentTypeHeader, err)
 		return
 	}
 	if !strings.HasPrefix(t, est.MimeTypePKCS10) {
-		writeHttpErrorf(w, "invalid %s %s, must begin with %s", internal.HttpContentTypeHeader,
+		writeHttpError(w, http.StatusUnsupportedMediaType, "invalid %s %s, must begin with %s", internal.HttpContentTypeHeader,
 			t, est.MimeTypePKCS10)
 		return
 	}
 
 	csr, err := est.ParsePkcs10Csr(req.Body)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to parse CSR: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "Failed to parse CSR: %v", err)
 		return
 	}
 
 	att, err := est.ParseCsrAttestation(csr)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to parse CSR attestation: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "Failed to parse CSR attestation: %v", err)
 		return
 	}
 
@@ -141,14 +139,14 @@ func (s *Server) handleEnroll(w http.ResponseWriter, req *http.Request, endpoint
 		attestResult, err = s.authorize(endpoint, req, attest)
 	}
 	if err != nil {
-		writeUnauthorized(w, err)
+		s.writeAuthError(w, endpoint, err)
 		return
 	}
 
 	// RFC 7030 4.2.2: subject and SANs must be identical to the certificate being renewed
 	if endpoint == est.ReenrollEndpoint {
 		if err := matchCertNames(csr, req.TLS.VerifiedChains[0][0]); err != nil {
-			writeHttpErrorf(w, "CSR does not match client certificate: %v", err)
+			writeHttpError(w, http.StatusForbidden, "CSR does not match client certificate: %v", err)
 			return
 		}
 	}
@@ -156,7 +154,7 @@ func (s *Server) handleEnroll(w http.ResponseWriter, req *http.Request, endpoint
 	// TPM key evidence is verified regardless of the authentication methods
 	if att != nil && att.TpmCertify != nil {
 		if err := s.verifyTpmKey(csr, att, attestResult); err != nil {
-			writeHttpErrorf(w, "Failed to verify TPM key evidence: %v", err)
+			writeHttpError(w, http.StatusForbidden, "Failed to verify TPM key evidence: %v", err)
 			return
 		}
 	}
@@ -164,13 +162,13 @@ func (s *Server) handleEnroll(w http.ResponseWriter, req *http.Request, endpoint
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
 		s.certValidity, tlsProfile(s.certPolicies.FromResult(attestResult)))
 	if err != nil {
-		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
+		writeEnrollError(w, err)
 		return
 	}
 
 	body, err := est.EncodePkcs7CertsOnly([]*x509.Certificate{cert})
 	if err != nil {
-		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to encode PKCS7 certs-only: %v", err)
 		return
 	}
 	encoded := est.EncodeBase64(body)
@@ -231,13 +229,12 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 
 	log.Debugf("Received /tpmactivateenroll request from %v", req.RemoteAddr)
 
-	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Only method POST implemented for tpmactivateenroll request")
+	if !allowMethod(w, req, http.MethodPost) {
 		return
 	}
 
 	if _, err := s.authorize(est.TpmActivateEnrollEndpoint, req, nil); err != nil {
-		writeUnauthorized(w, err)
+		s.writeAuthError(w, est.TpmActivateEnrollEndpoint, err)
 		return
 	}
 
@@ -267,19 +264,19 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		req.Header.Get(internal.HttpContentTypeHeader),
 	)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "Failed to decode multipart: %v", err)
 		return
 	}
 
 	err = provision.VerifyEk(ekPubPkix, ekCertDer, tpmInfo, ekCertUrl, s.tpmConf.DbPath, s.tpmConf.VerifyEkCert)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to verify EK: %v", err)
+		writeHttpError(w, http.StatusForbidden, "Failed to verify EK: %v", err)
 		return
 	}
 
 	ekPub, err := x509.ParsePKIXPublicKey(ekPubPkix)
 	if err != nil {
-		writeHttpErrorf(w, "failed to parse PKIX public key: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "failed to parse PKIX public key: %v", err)
 		return
 	}
 
@@ -298,14 +295,14 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	// AK is a restricted, fixedTPM, fixedParent key
 	secret, encryptedCredentials, err := params.Generate()
 	if err != nil {
-		writeHttpErrorf(w, "failed to generate AK credentials: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "failed to generate AK credentials: %v", err)
 		return
 	}
 
 	// Verify that activated AK is actually the certificate public key
 	err = provision.VerifyTpmCsr(akPublic, csr)
 	if err != nil {
-		writeHttpErrorf(w, "failed to verify AK: %v", err)
+		writeHttpError(w, http.StatusForbidden, "failed to verify AK: %v", err)
 		return
 	}
 
@@ -313,14 +310,14 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity,
 		akProfile)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
+		writeEnrollError(w, err)
 		return
 	}
 
 	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES256GCM
 	encryptedCert, err := pkcs7.EncryptUsingPSK(cert.Raw, secret)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to encrypt using PSK: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to encrypt using PSK: %v", err)
 		return
 	}
 
@@ -332,7 +329,7 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 		},
 	)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to encode multipart: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to encode multipart: %v", err)
 		return
 	}
 
@@ -355,6 +352,18 @@ func tlsProfile(policies []x509.OID) certProfile {
 	return certProfile{ekus: internal.TlsExtKeyUsage, policies: policies}
 }
 
+// errNamingPolicy marks enrollment requests rejected by the naming policy
+var errNamingPolicy = errors.New("naming policy rejected enrollment")
+
+// writeEnrollError responds 403 if the naming policy rejected the request and 500 otherwise
+func writeEnrollError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	if errors.Is(err, errNamingPolicy) {
+		status = http.StatusForbidden
+	}
+	writeHttpError(w, status, "Failed to enroll certificate: %v", err)
+}
+
 // enrollCert generates a new certificate from a CSR signed by the CA. The naming policy determines
 // the certificate fields. The attestation result can be nil for enrollment paths without
 // attestation, a validity of zero uses the default
@@ -364,7 +373,7 @@ func enrollCert(csr *x509.CertificateRequest, key crypto.PrivateKey, parent *x50
 
 	fields, err := policy.Assign(csr, validity, result)
 	if err != nil {
-		return nil, fmt.Errorf("naming policy rejected enrollment: %w", err)
+		return nil, fmt.Errorf("%w: %w", errNamingPolicy, err)
 	}
 	fields.ExtKeyUsage = profile.ekus
 	fields.UnknownExtKeyUsage = profile.unknownEkus

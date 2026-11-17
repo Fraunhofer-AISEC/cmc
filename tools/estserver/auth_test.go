@@ -172,7 +172,7 @@ func TestClientCertificateCas(t *testing.T) {
 	s := &Server{auth: c.auth}
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := s.authorize(endpoint, r, nil); err != nil {
-			writeUnauthorized(w, err)
+			s.writeAuthError(w, endpoint, err)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -190,7 +190,7 @@ func TestClientCertificateCas(t *testing.T) {
 	}{
 		{"client CA", clientCa, clientCaKey, http.StatusOK, false},
 		{"metadata CA", metadataCa, metadataCaKey, 0, true},
-		{"no certificate", nil, nil, http.StatusUnauthorized, false},
+		{"no certificate", nil, nil, http.StatusForbidden, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			roots := x509.NewCertPool()

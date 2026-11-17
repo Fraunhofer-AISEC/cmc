@@ -39,7 +39,7 @@ func (s *Server) serveSnpCertChain(w http.ResponseWriter, req *http.Request, akT
 
 	codeName := req.PathValue("codeName")
 	if err := endorser.ValidateSnpCodeName(codeName); err != nil {
-		writeBadRequest(w, "%v", err)
+		writeHttpError(w, http.StatusBadRequest, "%v", err)
 		return
 	}
 
@@ -47,7 +47,7 @@ func (s *Server) serveSnpCertChain(w http.ResponseWriter, req *http.Request, akT
 
 	ca, err := s.snpEndorser.GetSnpCa(codeName, akType)
 	if err != nil {
-		writeProxyError(w, "failed to get SNP %v CA chain for %q: %v", akType, codeName, err)
+		writeHttpError(w, http.StatusBadGateway, "failed to get SNP %v CA chain for %q: %v", akType, codeName, err)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (s *Server) handleVcek(w http.ResponseWriter, req *http.Request) {
 	codeName := req.PathValue("codeName")
 	chipIdHex := req.PathValue("chipId")
 	if err := endorser.ValidateSnpCodeName(codeName); err != nil {
-		writeBadRequest(w, "%v", err)
+		writeHttpError(w, http.StatusBadRequest, "%v", err)
 		return
 	}
 
@@ -71,19 +71,19 @@ func (s *Server) handleVcek(w http.ResponseWriter, req *http.Request) {
 
 	chipId, err := hex.DecodeString(chipIdHex)
 	if err != nil {
-		writeBadRequest(w, "invalid chip id: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "invalid chip id: %v", err)
 		return
 	}
 
 	tcb, err := parseSnpTcbFromQuery(codeName, req.URL.Query())
 	if err != nil {
-		writeBadRequest(w, "%v", err)
+		writeHttpError(w, http.StatusBadRequest, "%v", err)
 		return
 	}
 
 	vcek, err := s.snpEndorser.GetSnpVcek(codeName, chipId, tcb)
 	if err != nil {
-		writeProxyError(w, "failed to get VCEK for %q chip %v tcb %x: %v", codeName, chipIdHex, tcb, err)
+		writeHttpError(w, http.StatusBadGateway, "failed to get VCEK for %q chip %v tcb %x: %v", codeName, chipIdHex, tcb, err)
 		return
 	}
 

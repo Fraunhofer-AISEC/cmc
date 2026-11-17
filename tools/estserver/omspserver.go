@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -39,8 +38,7 @@ import (
 func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Request) {
 	log.Debugf("Received /omsp request from %v", req.RemoteAddr)
 
-	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Method %v not implemented for /omsp request", req.Method)
+	if !allowMethod(w, req, http.MethodPost) {
 		return
 	}
 
@@ -52,35 +50,35 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 	case "application/json":
 		ser, err = ar.NewJsonSerializer()
 		if err != nil {
-			writeHttpErrorf(w, "failed to generate JSON serializer: %v", err)
+			writeHttpError(w, http.StatusInternalServerError, "failed to generate JSON serializer: %v", err)
 			return
 		}
 	case "application/cbor":
 		ser, err = ar.NewCborSerializer()
 		if err != nil {
-			writeHttpErrorf(w, "failed to generate CBOR serializer: %v", err)
+			writeHttpError(w, http.StatusInternalServerError, "failed to generate CBOR serializer: %v", err)
 			return
 		}
 	default:
-		writeHttpErrorf(w, "Content-Type %v not supported for /omsp request", req.Header["Content-Type"])
+		writeHttpError(w, http.StatusUnsupportedMediaType, "Content-Type %v not supported for /omsp request", req.Header["Content-Type"])
 		return
 	}
 
 	payload, err := io.ReadAll(req.Body)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to read HTTP request body: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "Failed to read HTTP request body: %v", err)
 		return
 	}
 
 	var omspReq provision.OmspRequest
 	err = ser.Unmarshal(payload, &omspReq)
 	if err != nil {
-		writeHttpErrorf(w, "failed to unmarshal OMSP request: %v", err)
+		writeHttpError(w, http.StatusBadRequest, "failed to unmarshal OMSP request: %v", err)
 		return
 	}
 
 	if omspReq.ArVersion != ar.GetReportVersion() {
-		writeHttpErrorf(w, "version mismatch for AR version: %s vs. %s", omspReq.ArVersion, ar.GetReportVersion())
+		writeHttpError(w, http.StatusBadRequest, "version mismatch for AR version: %s vs. %s", omspReq.ArVersion, ar.GetReportVersion())
 		return
 	}
 
@@ -95,7 +93,7 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 
 		// A valid hex string cannot contain path separators, which prevents path traversal
 		if _, err := hex.DecodeString(hash); err != nil || hash == "" {
-			writeHttpErrorf(w, "Invalid manifest hash %q", hash)
+			writeHttpError(w, http.StatusBadRequest, "Invalid manifest hash %q", hash)
 			return
 		}
 		file := filepath.Join(s.omspFolder, hash+".json")
@@ -109,22 +107,22 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 			})
 			continue
 		} else if err != nil {
-			writeHttpErrorf(w, "Failed to retrieve OMSP response for %v: %v", hash, err)
+			writeHttpError(w, http.StatusInternalServerError, "Failed to retrieve OMSP response for %v: %v", hash, err)
 			return
 		}
 		if !fileInfo.Mode().IsRegular() {
-			writeHttpErrorf(w, "OMSP response for %v is not a regular file", hash)
+			writeHttpError(w, http.StatusInternalServerError, "OMSP response for %v is not a regular file", hash)
 			return
 		}
 
 		data, err := os.ReadFile(file)
 		if err != nil {
-			writeHttpErrorf(w, "Failed to read OMSP response for %v: %v", hash, err)
+			writeHttpError(w, http.StatusInternalServerError, "Failed to read OMSP response for %v: %v", hash, err)
 			return
 		}
 		var singleResp ar.SingleOmspResponse
 		if err := json.Unmarshal(data, &singleResp); err != nil {
-			writeHttpErrorf(w, "Failed to unmarshal OMSP response for %v: %v", hash, err)
+			writeHttpError(w, http.StatusInternalServerError, "Failed to unmarshal OMSP response for %v: %v", hash, err)
 			return
 		}
 		omspResp.Responses = append(omspResp.Responses, singleResp)
@@ -132,7 +130,7 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 
 	data, err := ser.Marshal(omspResp)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to marshal OMSP request: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to marshal OMSP request: %v", err)
 		return
 	}
 
@@ -140,7 +138,7 @@ func (s *Server) handleRevocationRequest(w http.ResponseWriter, req *http.Reques
 	log.Tracef("Signing OMSP Response with omspKey")
 	respBody, err := internal.Sign(data, s.omspKey, ser.String(), s.omspCaChain)
 	if err != nil {
-		writeHttpErrorf(w, "Failed to sign OMSP response: %v", err)
+		writeHttpError(w, http.StatusInternalServerError, "Failed to sign OMSP response: %v", err)
 		return
 	}
 
