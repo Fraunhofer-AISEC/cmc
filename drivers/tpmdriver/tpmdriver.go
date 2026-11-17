@@ -287,8 +287,10 @@ func (t *Tpm) UpdateCerts() error {
 	return nil
 }
 
-func (t *Tpm) GetAkPublic() []byte {
-	return t.ak.AttestationParameters().Public
+// GetAkChain returns the AK certificate chain with the AK certificate first. With self-signed
+// AKs, the chain only contains the self-signed AK certificate
+func (t *Tpm) GetAkChain() []*x509.Certificate {
+	return t.akChain
 }
 
 // IsTpmProvisioningRequired reports whether the TPM driver must provision

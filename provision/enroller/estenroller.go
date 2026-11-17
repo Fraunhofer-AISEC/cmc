@@ -21,8 +21,8 @@ import (
 	"net/http"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/keymgr"
 	"github.com/Fraunhofer-AISEC/cmc/provision/est"
-	"github.com/google/go-attestation/attest"
 	"github.com/sirupsen/logrus"
 )
 
@@ -52,26 +52,24 @@ func New(addr string, rootCas []*x509.Certificate, allowSystemCerts bool, token 
 	}, nil
 }
 
-func (e *EstEnroller) CaCerts() ([]*x509.Certificate, error) {
-	return est.CaCerts(e.client, e.Addr, e.bearerToken)
-}
+// Enroll enrolls the key via /simpleenroll and returns its certificate chain from /cacerts. EST
+// has no server nonce, so the report nonce is sha256(SPKI)
+func (e *EstEnroller) Enroll(createCsr keymgr.CsrFunc) ([]*x509.Certificate, error) {
 
-func (e *EstEnroller) SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error) {
-	return est.SimpleEnroll(e.client, e.Addr, e.bearerToken, csr)
-}
+	caCerts, err := est.CaCerts(e.client, e.Addr, e.bearerToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve CA certs: %w", err)
+	}
 
-func (e *EstEnroller) TpmCertifyEnroll(
-	csr *x509.CertificateRequest,
-	ikParams attest.CertificationParameters,
-	akPublic []byte,
-	report []byte,
-) (*x509.Certificate, error) {
-	return est.TpmCertifyEnroll(e.client, e.Addr, e.bearerToken, csr, ikParams, akPublic, report)
-}
+	csr, err := createCsr(nil)
+	if err != nil {
+		return nil, err
+	}
 
-func (e *EstEnroller) AttestEnroll(
-	csr *x509.CertificateRequest,
-	report []byte,
-) (*x509.Certificate, error) {
-	return est.AttestEnroll(e.client, e.Addr, e.bearerToken, csr, report)
+	cert, err := est.SimpleEnroll(e.client, e.Addr, e.bearerToken, csr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enroll cert: %w", err)
+	}
+
+	return append([]*x509.Certificate{cert}, caCerts...), nil
 }

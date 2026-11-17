@@ -108,9 +108,11 @@ func (a LibApi) enroll(c *Config) error {
 			DNSNames:    c.Identity.DnsNames,
 			IPAddresses: c.Identity.IpAddresses,
 		},
-		Metadata:  c.cmc.GetMetadata(),
-		Drivers:   c.cmc.Drivers,
-		ArHashAlg: c.cmc.HashAlg,
+		Attest:     c.cmc.EnrollmentAttest,
+		Metadata:   c.cmc.GetMetadata(),
+		Drivers:    c.cmc.Drivers,
+		Serializer: c.serializer,
+		ArHashAlg:  c.cmc.HashAlg,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to enroll key: %v", err)

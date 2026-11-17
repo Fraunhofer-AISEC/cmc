@@ -52,10 +52,8 @@ type estConfig struct {
 // authConfig holds the client authentication methods per enrollment endpoint. A request is
 // served if any of the configured methods succeeds. An empty list disables the endpoint
 type authConfig struct {
-	SimpleEnroll      []string `toml:"simpleenroll"      flag:"auth-simpleenroll"      default:"token"       enum:"none,token,certificate"             usage:"comma-separated authentication methods for /simpleenroll, empty disables the endpoint"`
+	SimpleEnroll      []string `toml:"simpleenroll"      flag:"auth-simpleenroll"      default:"attestation" enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /simpleenroll, empty disables the endpoint. attestation verifies the attestation report in the CSR"`
 	TpmActivateEnroll []string `toml:"tpmactivateenroll" flag:"auth-tpmactivateenroll" default:"token"       enum:"none,token,certificate"             usage:"comma-separated authentication methods for /tpmactivateenroll, empty disables the endpoint"`
-	TpmCertifyEnroll  []string `toml:"tpmcertifyenroll"  flag:"auth-tpmcertifyenroll"  default:"attestation" enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /tpmcertifyenroll, empty disables the endpoint"`
-	AttestEnroll      []string `toml:"attestenroll"      flag:"auth-attestenroll"      default:"attestation" enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /attestenroll, empty disables the endpoint"`
 }
 
 // endpointAuth is the authentication configuration of a single enrollment endpoint
@@ -69,8 +67,6 @@ func (a *authConfig) endpoints() []endpointAuth {
 	return []endpointAuth{
 		{est.EnrollEndpoint, "simpleenroll", a.SimpleEnroll},
 		{est.TpmActivateEnrollEndpoint, "tpmactivateenroll", a.TpmActivateEnroll},
-		{est.TpmCertifyEnrollEndpoint, "tpmcertifyenroll", a.TpmCertifyEnroll},
-		{est.AttestEnrollEndpoint, "attestenroll", a.AttestEnroll},
 	}
 }
 

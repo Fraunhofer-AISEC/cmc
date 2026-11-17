@@ -99,11 +99,11 @@ type identityConfig struct {
 
 // filesConfig configures the local files cmcctl reads and writes itself.
 type filesConfig struct {
-	Policies       string `toml:"policies"        flag:"policies"            path:"true" usage:"JSON policies file for custom verification"`
-	Report         string `toml:"report"          flag:"report"              default:"attestation-report" path:"true" usage:"attestation report file, written by generate and read by verify"`
-	Nonce          string `toml:"nonce"           flag:"nonce"               default:"nonce" path:"true" usage:"nonce file, written by generate and read by verify"`
-	CaStore        string `toml:"ca_store"        flag:"ca-store-path"       default:"{data}/ca.pem" path:"true" usage:"file to store the CA certs retrieved by the provision command"`
-	ProvisionToken string `toml:"provision_token" flag:"provision-token-out" default:"{data}/provision-token" path:"true" usage:"file to store the bootstrap token retrieved by the provision subcommand"`
+	Policies        string `toml:"policies"         flag:"policies"             path:"true" usage:"JSON policies file for custom verification"`
+	Report          string `toml:"report"           flag:"report"               default:"attestation-report" path:"true" usage:"attestation report file, written by generate and read by verify"`
+	Nonce           string `toml:"nonce"            flag:"nonce"                default:"nonce" path:"true" usage:"nonce file, written by generate and read by verify"`
+	CaStore         string `toml:"ca_store"         flag:"ca-store-path"        default:"{data}/ca.pem" path:"true" usage:"file to store the CA certs retrieved by the provision command"`
+	EnrollmentToken string `toml:"enrollment_token" flag:"enrollment-token-out" default:"{data}/enrollment-token" path:"true" usage:"file to store the bootstrap token retrieved by the provision subcommand"`
 }
 
 // publishConfig configures where cmcctl publishes attestation results to.

@@ -12,7 +12,6 @@ tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
 token_path = "../../data/token_store"
 
 [est.auth]
-simpleenroll = ["none"]
 tpmactivateenroll = ["none"]
 
 [http]

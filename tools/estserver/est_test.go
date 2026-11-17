@@ -23,6 +23,8 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
 	"time"
@@ -30,6 +32,7 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/certpolicy"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 )
 
 func TestEnrollCertProfiles(t *testing.T) {
@@ -70,9 +73,9 @@ func TestEnrollCertProfiles(t *testing.T) {
 		wantAk       bool
 		wantPolicies []x509.OID
 	}{
-		{"simpleenroll", tlsProfile(nil), false, nil},
+		{"simpleenroll without attestation", tlsProfile(nil), false, nil},
 		{"tpmactivateenroll", akProfile, true, nil},
-		{"attestenroll azure tdx", tlsProfile(tree.FromResult(&ar.AttestationResult{
+		{"simpleenroll azure tdx", tlsProfile(tree.FromResult(&ar.AttestationResult{
 			AttestLevel:  ar.LevelHardware,
 			Measurements: []ar.MeasurementResult{{Type: ar.TYPE_RESULT_TDX}, {Type: ar.TYPE_RESULT_TPM}},
 		})), false, []x509.OID{hw, tpm, tdx}},
@@ -97,6 +100,44 @@ func TestEnrollCertProfiles(t *testing.T) {
 			}
 			if !slices.EqualFunc(cert.Policies, tt.wantPolicies, x509.OID.Equal) {
 				t.Errorf("Policies = %v, want %v", cert.Policies, tt.wantPolicies)
+			}
+		})
+	}
+}
+
+func TestCsrattrs(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		auth     internal.AuthMethod
+		want     int
+		wantAttr bool
+	}{
+		{"attestation", internal.AuthAttestation | internal.AuthToken, http.StatusOK, true},
+		{"token", internal.AuthToken, http.StatusNoContent, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Server{auth: map[string]internal.AuthMethod{est.EnrollEndpoint: tt.auth}}
+			req := httptest.NewRequest(http.MethodGet, est.EndpointPrefix+est.CsrattrsEndpoint, nil)
+			rec := httptest.NewRecorder()
+
+			s.handleCsrattrs(rec, req)
+
+			if rec.Code != tt.want {
+				t.Fatalf("status = %v, want %v", rec.Code, tt.want)
+			}
+			if !tt.wantAttr {
+				return
+			}
+			der, err := est.DecodeBase64(rec.Body.Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var attrs []asn1.ObjectIdentifier
+			if rest, err := asn1.Unmarshal(der, &attrs); err != nil || len(rest) > 0 {
+				t.Fatalf("failed to parse CSR attributes: %v", err)
+			}
+			if len(attrs) != 1 || !attrs[0].Equal(est.OidAttestation) {
+				t.Errorf("CSR attributes = %v, want %v", attrs, est.OidAttestation)
 			}
 		})
 	}

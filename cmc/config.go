@@ -140,21 +140,22 @@ type Metadata struct {
 	Omsp      Omsp     `toml:"omsp"`
 }
 
-// Provisioning configures how certificates are enrolled and how the CMC
-// authenticates to the provisioning server.
-type Provisioning struct {
-	Auth  []string `toml:"auth"  flag:"provision-auth"  default:"attestation" enum:"none,token,certificate,attestation" usage:"provisioning authentication methods"`
-	Token string   `toml:"token" flag:"provision-token" default:"{data}/provision-token" path:"true" usage:"bootstrap token for EST client authentication, only read with token authentication"`
-	// Enrollment is the mode used to enroll certificates, optionally followed
-	// by the address of the enrollment server, or self for self-signed certificates
-	Enrollment string `toml:"enrollment" flag:"enrollment" usage:"enrollment mode, with the address of the enrollment server for the modes that require one [self est:<url>]"`
+// Enrollment configures how certificates for keys created via the CMC are enrolled and how the
+// CMC authenticates to the enrollment server.
+type Enrollment struct {
+	Server string   `toml:"server" flag:"enrollment-server" usage:"enrollment mode, with the address of the enrollment server for the modes that require one [self est:<url>]"`
+	Auth   []string `toml:"auth"   flag:"enrollment-auth"   default:"attestation" enum:"none,token,attestation" usage:"comma-separated enrollment authentication methods: attestation adds the attestation report to the CSR, token sends the bootstrap token"`
+	Token  string   `toml:"token"  flag:"enrollment-token"  default:"{data}/enrollment-token" path:"true" usage:"bootstrap token for enrollment and for the TPM AK endorsement via est:<url>, only read with token authentication"`
 }
 
-// Validate checks the enrollment mode. An unset enrollment is reported by the
-// binary that requires it, as what the embedded CMC needs depends on how it is
+// Validate checks the enrollment mode and the authentication methods. An unset enrollment is
+// reported by the binary that requires it, as what the embedded CMC needs depends on how it is
 // used.
-func (p *Provisioning) Validate(r *config.Report) {
-	validateModeAddr(r, "enrollment", p.Enrollment, []string{"self"}, []string{"est"})
+func (e *Enrollment) Validate(r *config.Report) {
+	validateModeAddr(r, "server", e.Server, []string{"self"}, []string{"est"})
+	if len(e.Auth) > 1 && slices.Contains(e.Auth, "none") {
+		r.Errorf("auth", "none cannot be combined with other methods")
+	}
 }
 
 // validateModeAddr checks an option of the form <mode>[:<url>], which can not be
@@ -194,11 +195,11 @@ type Storage struct {
 // Config is the configuration of an embedded CMC. It is required for embedding the CMC as a libary
 // into other tools (libapi).
 type Config struct {
-	Attestation  Attestation  `toml:"attestation"`
-	Metadata     Metadata     `toml:"metadata"`
-	Provisioning Provisioning `toml:"provisioning"`
-	Policies     Policies     `toml:"policies"`
-	Storage      Storage      `toml:"storage"`
+	Attestation Attestation `toml:"attestation"`
+	Metadata    Metadata    `toml:"metadata"`
+	Enrollment  Enrollment  `toml:"enrollment"`
+	Policies    Policies    `toml:"policies"`
+	Storage     Storage     `toml:"storage"`
 }
 
 // MetadataCacheDir is the folder metadata is cached in for offline backup

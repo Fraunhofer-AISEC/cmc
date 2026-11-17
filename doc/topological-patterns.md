@@ -41,7 +41,7 @@ attester succesfully performed attestation, e.g.:
 
 ```sh
 # Run estserver, enforce attestation for enrollment
-estserver --auth-tpmcertifyenroll attestation --auth-attestenroll attestation
+estserver --auth-simpleenroll attestation
 
 # Run the cmcd
 cmcd

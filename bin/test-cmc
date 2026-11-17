@@ -167,8 +167,6 @@ est_params=(
     "--log-file"            "${log_dir}/estserver.log" \
     "--auth-simpleenroll"      "none" \
     "--auth-tpmactivateenroll" "none" \
-    "--auth-tpmcertifyenroll"  "none" \
-    "--auth-attestenroll"      "none" \
     "--verify-ek-cert=false" \
     "--omsp-folder"           "${data}/omsp-raw" \
     "--omsp-key"              "${data}/pki/omsp-key.pem" \
@@ -178,9 +176,9 @@ est_params=(
 
 cmc_params=(
     "--config" "" \
-    "--provision-auth" "none" \
+    "--enrollment-auth" "none" \
     "--tpm-endorsement" "est:https://localhost:9000" \
-    "--enrollment" "est:https://localhost:9000" \
+    "--enrollment-server" "est:https://localhost:9000" \
     "--metadata" "file://${metadata_signed}" \
     "--drivers" "tpm,sw" \
     "--hash-alg" "sha256" \

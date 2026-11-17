@@ -48,16 +48,20 @@ func TestAuthorize(t *testing.T) {
 	}{
 		{"not configured", false, 0, false, nil, true, false},
 		{"none", true, internal.AuthNone, false, nil, false, false},
+		{"none with report", true, internal.AuthNone, false, attestOk, true, false},
 		{"attestation", true, internal.AuthAttestation, false, attestOk, false, true},
 		{"attestation fails", true, internal.AuthAttestation, false, attestFail, true, false},
-		{"attestation not applicable", true, internal.AuthAttestation, false, nil, true, false},
+		{"attestation without report", true, internal.AuthAttestation, false, nil, true, false},
 		{"certificate", true, internal.AuthCertificate, true, nil, false, false},
 		{"certificate missing", true, internal.AuthCertificate, false, nil, true, false},
+		{"certificate with report", true, internal.AuthCertificate, true, attestOk, true, false},
 		{"token missing", true, internal.AuthToken, false, nil, true, false},
-		{"certificate fallback", true, internal.AuthAttestation | internal.AuthCertificate, true,
-			attestFail, false, false},
+		{"certificate fallback without report", true,
+			internal.AuthAttestation | internal.AuthCertificate, true, nil, false, false},
+		{"no fallback on failed attestation", true,
+			internal.AuthAttestation | internal.AuthCertificate, true, attestFail, true, false},
 		{"all fail", true, internal.AuthAttestation | internal.AuthCertificate | internal.AuthToken,
-			false, attestFail, true, false},
+			false, nil, true, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Server{auth: map[string]internal.AuthMethod{}, tokenPath: t.TempDir()}

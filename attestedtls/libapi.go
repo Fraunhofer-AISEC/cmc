@@ -179,6 +179,7 @@ func (a LibApi) createKey(cc *CmcConfig) (string, error) {
 
 	keyId, err := cmcInst.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  cc.KeyConfig,
+		Attest:     cmcInst.EnrollmentAttest,
 		Metadata:   cmcInst.GetMetadata(),
 		Drivers:    cmcInst.Drivers,
 		Serializer: cc.Serializer,

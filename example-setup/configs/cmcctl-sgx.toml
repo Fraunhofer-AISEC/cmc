@@ -22,10 +22,8 @@ drivers = ["sgx"]
 [cmc.metadata]
 locations = ["file://../../data/metadata-signed"]
 
-[cmc.provisioning]
-auth = ["none"]
-token = "../../data/provision_token"
-enrollment = "est:https://localhost:9000/"
+[cmc.enrollment]
+server = "est:https://localhost:9000/"
 
 [cmc.storage]
 data = "../../data/cmcctl-internal"
