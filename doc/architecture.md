@@ -112,7 +112,9 @@ during attestation.
 
 If TLS keys shall be enrolled via EST, each node requires a CA for TLS keys. This CA
 can be fetched through querying the `/cacerts` EST server endpoint. The identity CA issues TLS keys
-via EST endpoints (`/simpleenroll`, `/tpmcertifyenroll`, `/attestenroll`).
+via the EST endpoint `/simpleenroll`. The CSR carries the attestation report and, for TPM keys,
+the TPM2_Certify of the key by the AK together with the AK certificate chain
+(draft-ietf-lamps-csr-attestation), see the [EST server documentation](../tools/estserver/README.md).
 
 
 ## Infrastructure Overview

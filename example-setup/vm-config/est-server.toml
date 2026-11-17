@@ -11,10 +11,7 @@ tls_key = "../../data/pki/est-tls-key.pem"
 tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
 
 [est.auth]
-simpleenroll = ["none"]
 tpmactivateenroll = ["none"]
-tpmcertifyenroll = ["none"]
-attestenroll = ["none"]
 
 [http]
 folder = "vm-metadata"

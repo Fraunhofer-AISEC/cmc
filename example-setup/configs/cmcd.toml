@@ -19,8 +19,8 @@ trust_anchor = "sw"
 [cmc.metadata]
 locations = ["file://../../data/metadata-signed"]
 
-[cmc.provisioning]
-enrollment = "est:https://localhost:9000/"
+[cmc.enrollment]
+server = "est:https://localhost:9000/"
 
 [cmc.policies]
 engine = "js"

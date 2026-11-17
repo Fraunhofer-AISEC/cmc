@@ -17,6 +17,7 @@ package provision
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/x509"
 	"database/sql"
 	"encoding/asn1"
@@ -222,41 +223,29 @@ func verifyEkCert(dbpath string, ek *x509.Certificate, manufacturer string, majo
 	return nil
 }
 
-func VerifyIk(ikParams attest.CertificationParameters, akPubRaw []byte) error {
-	akPub, err := tpm2.DecodePublic(akPubRaw)
+// VerifyIk verifies that the TPM2_Certify of the IK was signed by the AK public key. The hash
+// algorithm is taken from the TPMT_SIGNATURE
+func VerifyIk(ikParams attest.CertificationParameters, akPub crypto.PublicKey) error {
+	sig, err := tpm2.DecodeSignature(bytes.NewBuffer(ikParams.CreateSignature))
 	if err != nil {
-		return fmt.Errorf("decode public failed: %w", err)
+		return fmt.Errorf("failed to decode signature: %w", err)
 	}
 
-	akKey, err := akPub.Key()
-	if err != nil {
-		return fmt.Errorf("failed to extract AK public: %w", err)
-	}
-
-	opts := attest.VerifyOpts{
-		Public: akKey,
-	}
-
-	switch akPub.Type {
-	case tpm2.AlgRSA:
-		hash, err := akPub.RSAParameters.Sign.Hash.Hash()
-		if err != nil {
-			return fmt.Errorf("cannot access AK's hash function: %w", err)
-		}
-		opts.Hash = hash
-
-	case tpm2.AlgECC:
-		hash, err := akPub.ECCParameters.Sign.Hash.Hash()
-		if err != nil {
-			return fmt.Errorf("cannot access AK's hash function: %w", err)
-		}
-		opts.Hash = hash
-
+	var hashAlg tpm2.Algorithm
+	switch {
+	case sig.RSA != nil:
+		hashAlg = sig.RSA.HashAlg
+	case sig.ECC != nil:
+		hashAlg = sig.ECC.HashAlg
 	default:
-		return fmt.Errorf("unsupported public key alg 0x%x", akPub.Type)
+		return fmt.Errorf("unsupported signature alg 0x%x", sig.Alg)
+	}
+	hash, err := hashAlg.Hash()
+	if err != nil {
+		return fmt.Errorf("unsupported signature hash alg 0x%x: %w", hashAlg, err)
 	}
 
-	err = ikParams.Verify(opts)
+	err = ikParams.Verify(attest.VerifyOpts{Public: akPub, Hash: hash})
 	if err != nil {
 		return fmt.Errorf("failed to certify IK with AK: %w", err)
 	}
@@ -265,16 +254,9 @@ func VerifyIk(ikParams attest.CertificationParameters, akPubRaw []byte) error {
 	return nil
 }
 
-func VerifyAkBinding(result *ar.AttestationResult, akPubRaw []byte) error {
-	akPub, err := tpm2.DecodePublic(akPubRaw)
-	if err != nil {
-		return fmt.Errorf("decode public failed: %w", err)
-	}
-	akKey, err := akPub.Key()
-	if err != nil {
-		return fmt.Errorf("failed to extract AK public: %w", err)
-	}
-	akPkix, err := x509.MarshalPKIXPublicKey(akKey)
+// VerifyAkBinding verifies that all TPM quotes of the attestation result were signed by the AK
+func VerifyAkBinding(result *ar.AttestationResult, akPub crypto.PublicKey) error {
+	akPkix, err := x509.MarshalPKIXPublicKey(akPub)
 	if err != nil {
 		return fmt.Errorf("failed to marshal AK public key: %w", err)
 	}

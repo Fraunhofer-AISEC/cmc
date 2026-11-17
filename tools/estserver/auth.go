@@ -27,16 +27,23 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// attestFunc verifies the attestation evidence of an enrollment request
+// attestFunc verifies the attestation report of an enrollment request
 type attestFunc func() (*ar.AttestationResult, error)
 
-// authorize authenticates a request to an enrollment endpoint with the configured methods.
+// authorize authenticates a request to an enrollment endpoint with the configured methods. The
+// attestation report verifier attest is nil if the request carries no report. A report requires
+// attestation to be configured and must verify.
 func (s *Server) authorize(endpoint string, req *http.Request, attest attestFunc,
 ) (*ar.AttestationResult, error) {
 
 	methods, ok := s.auth[endpoint]
 	if !ok {
 		return nil, fmt.Errorf("no authentication methods configured for %v", endpoint)
+	}
+
+	if attest != nil && !methods.Has(internal.AuthAttestation) {
+		return nil, fmt.Errorf("request carries an attestation report, but %v is configured "+
+			"for %v instead of attestation (configuration mismatch)", methods, endpoint)
 	}
 
 	if methods.Has(internal.AuthNone) {
@@ -46,13 +53,14 @@ func (s *Server) authorize(endpoint string, req *http.Request, attest attestFunc
 
 	var errs []error
 
-	// Attestation is tried first, as its result is the most expressive client identity
 	if methods.Has(internal.AuthAttestation) {
 		if attest == nil {
-			errs = append(errs, fmt.Errorf("attestation: not supported by %v", endpoint))
-		} else if result, err := attest(); err != nil {
-			errs = append(errs, fmt.Errorf("attestation: %w", err))
+			errs = append(errs, errors.New("attestation: no attestation report provided"))
 		} else {
+			result, err := attest()
+			if err != nil {
+				return nil, fmt.Errorf("attestation: %w", err)
+			}
 			log.Debugf("Authenticated %v request via attestation", endpoint)
 			return result, nil
 		}

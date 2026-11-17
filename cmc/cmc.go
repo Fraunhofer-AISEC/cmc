@@ -55,6 +55,7 @@ type Cmc struct {
 	KeyMgr             *keymgr.KeyMgr
 	RootCas            []*x509.Certificate
 	AllowSystemCerts   bool
+	EnrollmentAttest   bool     // adds an attestation report to the CSRs of enrolled keys
 	OmspHashes         []string //stores keys for retrieving OmspResponses from metadata map
 	OmspSerializer     ar.Serializer
 	*Config
@@ -222,22 +223,27 @@ func NewCmc(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (*Cmc
 		return nil, fmt.Errorf("container trust anchor %v requires the %v driver", t, t)
 	}
 
-	// Create provisioner for key manager, which is used to enroll certificates for created keys,
+	// Create enroller for key manager, which is used to enroll certificates for created keys,
 	// e.g. via EST or ACME protocol. In enrollment mode "self", TLS certificates are self-signed
-	// and no enrollment protocol and thus no provisioner is required. Without enrollment, keys
+	// and no enrollment protocol and thus no enroller is required. Without enrollment, keys
 	// cannot be enrolled
-	enrollmentMode, _ := internal.ParseModeAddr(c.Provisioning.Enrollment)
+	authMethods, err := internal.ParseAuthMethods(c.Enrollment.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse enrollment authentication methods: %w", err)
+	}
+	cmc.EnrollmentAttest = authMethods.Has(internal.AuthAttestation)
+	enrollmentMode, _ := internal.ParseModeAddr(c.Enrollment.Server)
 	selfSigned := enrollmentMode == "self"
-	var provisioner keymgr.Enroller
+	var enroller keymgr.Enroller
 	if enrollmentMode != "" && !selfSigned {
-		provisioner, err = createEnroller(c, rootCas, allowSystemCerts)
+		enroller, err = createEnroller(c, rootCas, allowSystemCerts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create enroller: %w", err)
 		}
 	}
 
 	// Create key manager
-	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage.Data, "tls_key_store"), cmc.Drivers, provisioner,
+	keyMgr, err := keymgr.NewKeyMgr(path.Join(c.Storage.Data, "tls_key_store"), cmc.Drivers, enroller,
 		selfSigned)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize key manager: %w", err)
@@ -331,16 +337,9 @@ func createTpmEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts 
 		if addr == "" {
 			return nil, fmt.Errorf("est endorsement requires an address (est:<url>)")
 		}
-		authMethods, err := internal.ParseAuthMethods(c.Provisioning.Auth)
+		token, err := readEnrollmentToken(c)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
-		}
-		var token []byte
-		if authMethods.Has(internal.AuthToken) {
-			token, err = os.ReadFile(c.Provisioning.Token)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read token: %w", err)
-			}
+			return nil, err
 		}
 		e, err := endorser.NewEstEndorser(addr, rootCas, allowSystemCerts, token)
 		if err != nil {
@@ -420,26 +419,17 @@ func createTdxEndorser(c *Config, rootCas []*x509.Certificate, allowSystemCerts 
 }
 
 func createEnroller(c *Config, rootCas []*x509.Certificate, allowSystemCerts bool) (keymgr.Enroller, error) {
-	var err error
 
-	authMethods, err := internal.ParseAuthMethods(c.Provisioning.Auth)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse authentication methods: %w", err)
-	}
-
-	mode, addr := internal.ParseModeAddr(c.Provisioning.Enrollment)
+	mode, addr := internal.ParseModeAddr(c.Enrollment.Server)
 
 	switch mode {
 	case "est":
 		if addr == "" {
-			return nil, fmt.Errorf("est enrollment requires an address (enrollment: est:<url>)")
+			return nil, fmt.Errorf("est enrollment requires an address (enrollment.server: est:<url>)")
 		}
-		var token []byte
-		if authMethods.Has(internal.AuthToken) {
-			token, err = os.ReadFile(c.Provisioning.Token)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read token: %v", err)
-			}
+		token, err := readEnrollmentToken(c)
+		if err != nil {
+			return nil, err
 		}
 		enroller, err := estenroller.New(addr, rootCas, allowSystemCerts, token)
 		if err != nil {
@@ -447,8 +437,25 @@ func createEnroller(c *Config, rootCas []*x509.Certificate, allowSystemCerts boo
 		}
 		return enroller, nil
 	case "acme":
-		return nil, fmt.Errorf("ACME provisioning not yet implemented")
+		return nil, fmt.Errorf("ACME enrollment not yet implemented")
 	default:
-		return nil, fmt.Errorf("unknown enrollment %q: expected self or est:<url>", c.Provisioning.Enrollment)
+		return nil, fmt.Errorf("unknown enrollment %q: expected self or est:<url>", c.Enrollment.Server)
 	}
+}
+
+// readEnrollmentToken reads the bootstrap token if token authentication is configured, otherwise
+// it returns nil
+func readEnrollmentToken(c *Config) ([]byte, error) {
+	authMethods, err := internal.ParseAuthMethods(c.Enrollment.Auth)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse enrollment authentication methods: %w", err)
+	}
+	if !authMethods.Has(internal.AuthToken) {
+		return nil, nil
+	}
+	token, err := os.ReadFile(c.Enrollment.Token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read enrollment token: %w", err)
+	}
+	return token, nil
 }

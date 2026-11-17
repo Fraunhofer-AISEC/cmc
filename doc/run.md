@@ -47,13 +47,13 @@ sudo cmcd config init --metadata https://metadata.example.com/
 
 Some options combine several values into a single string:
 
-| Option            | Form                | Examples                                                                                      |
-| ----------------- | ------------------- | --------------------------------------------------------------------------------------------- |
-| `cmc`             | `<api>://<address>` | `socket:///run/cmc/cmc.sock`, `socket://127.0.0.1:9955`, `grpc://127.0.0.1:9955`, or `libapi` |
-| `tpm.endorsement` | `<mode>[:<url>]`    | `est:https://localhost:9000`, `self`                                                          |
-| `snp.endorsement` | `<mode>[:<url>]`    | `direct` (default), `host`, `cps:https://localhost:9000`                                      |
-| `tdx.endorsement` | `<mode>[:<url>]`    | `direct` (default), `cps:https://localhost:9000`                                              |
-| `enrollment`      | `<mode>[:<url>]`    | `self`, `est:https://localhost:9000`                                                          |
+| Option              | Form                | Examples                                                                                      |
+| ------------------- | ------------------- | --------------------------------------------------------------------------------------------- |
+| `cmc`               | `<api>://<address>` | `socket:///run/cmc/cmc.sock`, `socket://127.0.0.1:9955`, `grpc://127.0.0.1:9955`, or `libapi` |
+| `tpm.endorsement`   | `<mode>[:<url>]`    | `est:https://localhost:9000`, `self`                                                          |
+| `snp.endorsement`   | `<mode>[:<url>]`    | `direct` (default), `host`, `cps:https://localhost:9000`                                      |
+| `tdx.endorsement`   | `<mode>[:<url>]`    | `direct` (default), `cps:https://localhost:9000`                                              |
+| `enrollment.server` | `<mode>[:<url>]`    | `self`, `est:https://localhost:9000`                                                          |
 
 The endorsement of a trust anchor defines how its certificates and collateral are obtained. `direct`
 fetches them from the vendor (AMD KDS, Intel PCS), `cps` from a caching proxy service such as the
@@ -61,6 +61,13 @@ estserver or, for TDX, a PCCS, and `host` the SNP certificates from the hypervis
 either certified by an EST server through credential activation (`est`), or self-signed (`self`) for
 a CVM vTPM, which is then bound to the `snp` or `tdx` driver as primary trust anchor. The `sgx`
 driver uses the TDX endorsement, the `azure` driver the SNP or TDX endorsement.
+
+Keys created via the CMC get their certificates from the enrollment server (`est`) or are
+self-signed (`self`). `enrollment.auth` selects how the CMC authenticates to the server and must
+match the server configuration, e.g. `--auth-simpleenroll` of the estserver. `attestation` (default)
+adds the attestation report to the CSR, `token` sends the bootstrap token from `enrollment.token`,
+which also authenticates the TPM AK enrollment with `tpm.endorsement` `est`. `none` sends neither.
+TPM keys always carry the TPM key evidence.
 
 The `drivers` option defaults to `auto`, which selects every driver whose device is present: `tpm`
 (`/dev/tpmrm0` or `/dev/tpm0`), `snp` (`/dev/sev-guest`) and `tdx` (`/dev/tdx_guest`). The `azure`,
@@ -125,7 +132,7 @@ instead. This enables TLS channels which are solely authenticated through the at
 
 ```json
 {
-    "cmc": { "provisioning": { "enrollment": "self" } }
+    "cmc": { "enrollment": { "server": "self" } }
 }
 ```
 

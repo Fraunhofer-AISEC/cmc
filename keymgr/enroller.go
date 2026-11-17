@@ -17,19 +17,14 @@ package keymgr
 
 import (
 	"crypto/x509"
-
-	"github.com/google/go-attestation/attest"
 )
 
-// Enroller is an interface for TLS key enrollment via e.g., EST or ACME
+// CsrFunc creates the CSR. With attestation enabled, the CSR carries a report whose nonce is
+// sha256(SPKI || nonce), binding it to the key and to the enroller's freshness value
+type CsrFunc func(nonce []byte) (*x509.CertificateRequest, error)
+
+// Enroller enrolls a key via a certificate enrollment protocol such as EST or ACME and returns
+// its certificate chain, leaf first
 type Enroller interface {
-	CaCerts() ([]*x509.Certificate, error)
-	SimpleEnroll(csr *x509.CertificateRequest) (*x509.Certificate, error)
-	TpmCertifyEnroll(
-		csr *x509.CertificateRequest,
-		ikParams attest.CertificationParameters,
-		akPublic []byte,
-		report []byte,
-	) (*x509.Certificate, error)
-	AttestEnroll(csr *x509.CertificateRequest, report []byte) (*x509.Certificate, error)
+	Enroll(createCsr CsrFunc) ([]*x509.Certificate, error)
 }

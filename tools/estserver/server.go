@@ -196,15 +196,13 @@ func NewServer(c *Config) (*Server, error) {
 	http.HandleFunc(est.EndpointPrefix+est.CacertsEndpoint, server.handleCacerts)
 
 	// Enrollment endpoints, including custom ones, are only served if authentication is configured
-	for endpoint, handler := range map[string]http.HandlerFunc{
-		est.EnrollEndpoint:            server.handleSimpleenroll,
-		est.TpmActivateEnrollEndpoint: server.handleTpmActivateEnroll,
-		est.TpmCertifyEnrollEndpoint:  server.handleTpmCertifyEnroll,
-		est.AttestEnrollEndpoint:      server.handleAttestEnroll,
-	} {
-		if _, ok := c.auth[endpoint]; ok {
-			http.HandleFunc(est.EndpointPrefix+endpoint, handler)
-		}
+	if _, ok := c.auth[est.EnrollEndpoint]; ok {
+		http.HandleFunc(est.EndpointPrefix+est.EnrollEndpoint, server.handleSimpleenroll)
+		http.HandleFunc(est.EndpointPrefix+est.CsrattrsEndpoint, server.handleCsrattrs)
+	}
+	if _, ok := c.auth[est.TpmActivateEnrollEndpoint]; ok {
+		http.HandleFunc(est.EndpointPrefix+est.TpmActivateEnrollEndpoint,
+			server.handleTpmActivateEnroll)
 	}
 
 	// Hardware vendor collateral endpoints

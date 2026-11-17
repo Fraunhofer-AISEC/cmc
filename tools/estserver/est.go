@@ -59,17 +59,37 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
+func (s *Server) handleCsrattrs(w http.ResponseWriter, req *http.Request) {
+
+	log.Debugf("Received /csrattrs request from %v", req.RemoteAddr)
+
+	if strings.Compare(req.Method, "GET") != 0 {
+		writeHttpErrorf(w, "Only method GET implemented for csrattrs request")
+		return
+	}
+
+	// RFC 7030 4.5.2: 204 indicates that no CSR attributes are requested
+	if !s.auth[est.EnrollEndpoint].Has(internal.AuthAttestation) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// CsrAttrs ::= SEQUENCE OF AttrOrOID, the attestation attribute OID requests evidence
+	body, err := asn1.Marshal([]asn1.ObjectIdentifier{est.OidAttestation})
+	if err != nil {
+		writeHttpErrorf(w, "Failed to marshal CSR attributes: %v", err)
+		return
+	}
+
+	sendResponse(w, est.MimeTypeCSRAttrs, internal.HttpEncodingTypeBase64, est.EncodeBase64(body))
+}
+
 func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 
 	log.Debugf("Received /simpleenroll request from %v", req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
 		writeHttpErrorf(w, "Only method POST implemented for simpleenroll request")
-		return
-	}
-
-	if _, err := s.authorize(est.EnrollEndpoint, req, nil); err != nil {
-		writeUnauthorized(w, err)
 		return
 	}
 
@@ -92,9 +112,35 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Keys enrolled without attestation carry no certificate policy
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, nil, s.certValidity,
-		tlsProfile(nil))
+	att, err := est.ParseCsrAttestation(csr)
+	if err != nil {
+		writeHttpErrorf(w, "Failed to parse CSR attestation: %v", err)
+		return
+	}
+
+	var attest attestFunc
+	if att != nil && att.Report != nil {
+		attest = func() (*ar.AttestationResult, error) {
+			log.Tracef("Verifying attestation report against %v metadata CAs", len(s.rootCas))
+			return s.verifyAttestationReport(csr, att.Report)
+		}
+	}
+	attestResult, err := s.authorize(est.EnrollEndpoint, req, attest)
+	if err != nil {
+		writeUnauthorized(w, err)
+		return
+	}
+
+	// TPM key evidence is verified regardless of the authentication methods
+	if att != nil && att.TpmCertify != nil {
+		if err := s.verifyTpmKey(csr, att, attestResult); err != nil {
+			writeHttpErrorf(w, "Failed to verify TPM key evidence: %v", err)
+			return
+		}
+	}
+
+	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
+		s.certValidity, tlsProfile(s.certPolicies.FromResult(attestResult)))
 	if err != nil {
 		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
 		return
@@ -107,7 +153,56 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 	}
 	encoded := est.EncodeBase64(body)
 
+	log.Debugf("Enrolled cert %v", cert.Subject.CommonName)
+
 	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
+}
+
+// verifyTpmKey verifies that the CSR key resides in the same TPM as the AK, which is either
+// certified by the EST CA or bound to the attestation result of the request. The AK chain is
+// carried leaf first in the attestation bundle certificates
+func (s *Server) verifyTpmKey(csr *x509.CertificateRequest, att *est.CsrAttestation,
+	result *ar.AttestationResult,
+) error {
+
+	if len(att.Certs) == 0 {
+		return fmt.Errorf("no AK certificate provided")
+	}
+	ak := att.Certs[0]
+
+	err := provision.VerifyIk(*att.TpmCertify, ak.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	err = provision.VerifyTpmCsr(att.TpmCertify.Public, csr)
+	if err != nil {
+		return fmt.Errorf("failed to verify CSR: %w", err)
+	}
+
+	// Only the EST CA issues AK certificates via credential activation
+	_, chainErr := internal.VerifyCertChain(att.Certs, s.estCaChain,
+		[]x509.ExtKeyUsage{x509.ExtKeyUsageAny})
+	if chainErr == nil && !internal.HasUnknownExtKeyUsage(ak, internal.OidAkCertificate) {
+		chainErr = fmt.Errorf("AK certificate lacks extended key usage tcg-kp-AIKCertificate")
+	}
+	if chainErr == nil {
+		log.Debugf("TPM key certified by AK %v issued by EST CA", ak.Subject.CommonName)
+		return nil
+	}
+
+	// AKs not certified by the EST CA, e.g. self-signed vTPM AKs, require attestation
+	if result == nil {
+		return fmt.Errorf("AK not certified by EST CA and request not authenticated via "+
+			"attestation: %w", chainErr)
+	}
+	if err := provision.VerifyAkBinding(result, ak.PublicKey); err != nil {
+		return fmt.Errorf("AK not certified by EST CA (%v) and not bound to attestation "+
+			"report: %w", chainErr, err)
+	}
+	log.Debugf("TPM key certified by AK %v bound to attestation report", ak.Subject.CommonName)
+
+	return nil
 }
 
 func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Request) {
@@ -220,149 +315,6 @@ func (s *Server) handleTpmActivateEnroll(w http.ResponseWriter, req *http.Reques
 	}
 
 	sendResponse(w, contentType, "", payload.Bytes())
-}
-
-func (s *Server) handleTpmCertifyEnroll(w http.ResponseWriter, req *http.Request) {
-
-	log.Debugf("Received /tpmcertifyenroll request from %v", req.RemoteAddr)
-
-	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Only method POST implemented for tpmcertifyenroll request")
-		return
-	}
-
-	var csr *x509.CertificateRequest
-	var ikPublic []byte
-	var ikCreateData []byte
-	var ikCreateAttestation []byte
-	var ikCreateSignature []byte
-	var akPublic []byte
-	var report []byte
-
-	err := est.DecodeMultipart(
-		req.Body,
-		[]est.MimeMultipart{
-			{ContentType: est.MimeTypePKCS10, Data: &csr},
-			{ContentType: est.MimeTypeOctetStream, Data: &ikPublic},
-			{ContentType: est.MimeTypeOctetStream, Data: &ikCreateData},
-			{ContentType: est.MimeTypeOctetStream, Data: &ikCreateAttestation},
-			{ContentType: est.MimeTypeOctetStream, Data: &ikCreateSignature},
-			{ContentType: est.MimeTypeOctetStream, Data: &akPublic},
-			{ContentType: est.MimeTypeOctetStream, Data: &report},
-		},
-		req.Header.Get(internal.HttpContentTypeHeader),
-	)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
-		return
-	}
-
-	// Verify the IK was certified by AK
-	ikParams := attest.CertificationParameters{
-		Public:            ikPublic,
-		CreateData:        ikCreateData,
-		CreateAttestation: ikCreateAttestation,
-		CreateSignature:   ikCreateSignature,
-	}
-	err = provision.VerifyIk(ikParams, akPublic)
-	if err != nil {
-		writeHttpErrorf(w, "failed to verify IK: %v", err)
-		return
-	}
-
-	// Verify that certified IK is actually the CSR public key
-	err = provision.VerifyTpmCsr(ikPublic, csr)
-	if err != nil {
-		writeHttpErrorf(w, "failed to verify CSR: %v", err)
-		return
-	}
-
-	attestResult, err := s.authorize(est.TpmCertifyEnrollEndpoint, req,
-		func() (*ar.AttestationResult, error) {
-			log.Tracef("Verifying attestation report against %v metadata CAs", len(s.rootCas))
-			result, err := s.verifyAttestationReport(csr, report)
-			if err != nil {
-				return nil, err
-			}
-			// Verify the certifying AK is the AK that signed the report's TPM quote
-			if err := provision.VerifyAkBinding(result, akPublic); err != nil {
-				return nil, fmt.Errorf("failed to verify AK binding: %w", err)
-			}
-			return result, nil
-		})
-	if err != nil {
-		writeUnauthorized(w, err)
-		return
-	}
-
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
-		s.certValidity, tlsProfile(s.certPolicies.FromResult(attestResult)))
-	if err != nil {
-		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
-		return
-	}
-
-	body, err := est.EncodePkcs7CertsOnly([]*x509.Certificate{cert})
-	if err != nil {
-		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
-		return
-	}
-	encoded := est.EncodeBase64(body)
-
-	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
-}
-
-func (s *Server) handleAttestEnroll(w http.ResponseWriter, req *http.Request) {
-
-	log.Debugf("Received /attestenroll request from %v", req.RemoteAddr)
-
-	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Only method POST implemented for tpmcertifyenroll request")
-		return
-	}
-
-	var csr *x509.CertificateRequest
-	var report []byte
-
-	err := est.DecodeMultipart(
-		req.Body,
-		[]est.MimeMultipart{
-			{ContentType: est.MimeTypePKCS10, Data: &csr},
-			{ContentType: est.MimeTypeOctetStream, Data: &report},
-		},
-		req.Header.Get(internal.HttpContentTypeHeader),
-	)
-	if err != nil {
-		writeHttpErrorf(w, "Failed to decode multipart: %v", err)
-		return
-	}
-
-	attestResult, err := s.authorize(est.AttestEnrollEndpoint, req,
-		func() (*ar.AttestationResult, error) {
-			return s.verifyAttestationReport(csr, report)
-		})
-	if err != nil {
-		writeUnauthorized(w, err)
-		return
-	}
-
-	cert, err := enrollCert(csr, s.estCaKey, s.estCaChain[0], s.namingPolicy, attestResult,
-		s.certValidity, tlsProfile(s.certPolicies.FromResult(attestResult)))
-	if err != nil {
-		writeHttpErrorf(w, "Failed to enroll certificate: %v", err)
-		return
-	}
-
-	body, err := est.EncodePkcs7CertsOnly([]*x509.Certificate{cert})
-	if err != nil {
-		writeHttpErrorf(w, "Failed to encode PKCS7 certs-only: %v", err)
-		return
-	}
-	encoded := est.EncodeBase64(body)
-
-	log.Debugf("Enrolled cert %v", cert.Subject.CommonName)
-
-	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
 }
 
 // certProfile states what an issued key may be used for (extended key usages) and how it was

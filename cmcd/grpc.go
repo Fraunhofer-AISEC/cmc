@@ -203,6 +203,7 @@ func (s *GrpcServer) TLSCreate(ctx context.Context, req *grpcapi.TLSCreateReques
 			DNSNames:    req.KeyConfig.DnsNames,
 			IPAddresses: req.KeyConfig.IpAddresses,
 		},
+		Attest:     s.cmc.EnrollmentAttest,
 		Metadata:   s.cmc.GetMetadata(),
 		Drivers:    s.cmc.Drivers,
 		Serializer: s.serializer,

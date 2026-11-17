@@ -316,6 +316,7 @@ func tlscreate(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 
 	keyId, err := cmc.KeyMgr.EnrollKey(&keymgr.KeyEnrollmentParams{
 		KeyConfig:  req.KeyConfig,
+		Attest:     cmc.EnrollmentAttest,
 		Metadata:   cmc.GetMetadata(),
 		Drivers:    cmc.Drivers,
 		Serializer: s,

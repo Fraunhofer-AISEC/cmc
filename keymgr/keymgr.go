@@ -24,9 +24,11 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"time"
@@ -39,6 +41,7 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/drivers/tpmdriver"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/prover"
+	"github.com/Fraunhofer-AISEC/cmc/provision/est"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -59,12 +62,12 @@ const (
 )
 
 type KeyMgr struct {
-	keys        map[string]key
-	keyPath     string
-	certsPath   string
-	tpm         *tpmdriver.Tpm
-	provisioner Enroller
-	selfSigned  bool // selfSigned creates self-signed TLS certificates
+	keys       map[string]key
+	keyPath    string
+	certsPath  string
+	tpm        *tpmdriver.Tpm
+	enroller   Enroller
+	selfSigned bool // selfSigned creates self-signed TLS certificates
 }
 
 type key struct {
@@ -74,20 +77,21 @@ type key struct {
 
 type KeyEnrollmentParams struct {
 	KeyConfig  api.TLSKeyConfig
+	Attest     bool // adds an attestation report to the CSR
 	Metadata   map[string][]byte
 	Drivers    []drivers.Driver
 	Serializer ar.Serializer
 	ArHashAlg  crypto.Hash
 }
 
-func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enroller, selfSigned bool) (*KeyMgr, error) {
+func NewKeyMgr(storagePath string, drivers []drivers.Driver, enroller Enroller, selfSigned bool) (*KeyMgr, error) {
 
 	mgr := &KeyMgr{
-		keyPath:     path.Join(storagePath, "keys"),
-		certsPath:   path.Join(storagePath, "certs"),
-		keys:        map[string]key{},
-		provisioner: provisioner,
-		selfSigned:  selfSigned,
+		keyPath:    path.Join(storagePath, "keys"),
+		certsPath:  path.Join(storagePath, "certs"),
+		keys:       map[string]key{},
+		enroller:   enroller,
+		selfSigned: selfSigned,
 	}
 
 	// Add drivers for hardware keys (currently only tpm keys supported)
@@ -121,7 +125,7 @@ func NewKeyMgr(storagePath string, drivers []drivers.Driver, provisioner Enrolle
 
 func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
 
-	if mgr.provisioner == nil && !mgr.selfSigned {
+	if mgr.enroller == nil && !mgr.selfSigned {
 		return "", fmt.Errorf("no enrollment configured for certificate enrollment")
 	}
 
@@ -140,7 +144,13 @@ func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
 			return "", fmt.Errorf("failed to create TPM key: %w", err)
 		}
 
-		certChain, err := tpmEnroll(mgr.provisioner, tpmKey, mgr.tpm.GetAkPublic(), p)
+		ikParams, err := tpmKey.GetCertificationParameters()
+		if err != nil {
+			return "", fmt.Errorf("failed to get tpm key certification parameters: %w", err)
+		}
+		att := &est.CsrAttestation{TpmCertify: &ikParams, Certs: mgr.tpm.GetAkChain()}
+
+		certChain, err := mgr.enroller.Enroll(csrFunc(tpmKey, att, p))
 		if err != nil {
 			return "", fmt.Errorf("failed to enroll cert: %w", err)
 		}
@@ -171,7 +181,7 @@ func (mgr *KeyMgr) EnrollKey(p *KeyEnrollmentParams) (string, error) {
 		if mgr.selfSigned {
 			certChain, err = selfSign(priv, p)
 		} else {
-			certChain, err = simpleEnroll(mgr.provisioner, priv, p)
+			certChain, err = mgr.enroller.Enroll(csrFunc(priv, nil, p))
 		}
 		if err != nil {
 			return "", fmt.Errorf("failed to enroll cert: %w", err)
@@ -361,75 +371,53 @@ func detectKeyFormat(data []byte) KeyFormat {
 	return KeyUnknown
 }
 
-func simpleEnroll(provisioner Enroller, priv crypto.PrivateKey, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
+// csrFunc returns the CsrFunc for the key. The CSR carries the key evidence att, if not nil, and
+// the attestation report if attestation is enabled
+func csrFunc(signer crypto.Signer, att *est.CsrAttestation, p *KeyEnrollmentParams) CsrFunc {
+	return func(nonce []byte) (*x509.CertificateRequest, error) {
 
-	caCerts, err := provisioner.CaCerts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
+		var csrAtt *est.CsrAttestation
+		if att != nil {
+			a := *att
+			csrAtt = &a
+		}
+
+		if p.Attest {
+			// The report nonce binds the report to the key. We use SHA-256 of the SPKI instead of
+			// the SHA-1 Subject Key Identifier as we control both sides
+			spki, err := x509.MarshalPKIXPublicKey(signer.Public())
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal public key: %w", err)
+			}
+			reportNonce := sha256.Sum256(append(spki, nonce...))
+
+			report, err := prover.Generate(reportNonce[:], nil, nil, p.Metadata, p.Drivers,
+				p.Serializer, p.ArHashAlg)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate attestation report: %w", err)
+			}
+			if csrAtt == nil {
+				csrAtt = &est.CsrAttestation{}
+			}
+			csrAtt.Report = report
+		}
+
+		var ips []net.IP
+		for _, s := range p.KeyConfig.IPAddresses {
+			ip := net.ParseIP(s)
+			if ip == nil {
+				return nil, fmt.Errorf("failed to parse IP %v", s)
+			}
+			ips = append(ips, ip)
+		}
+
+		csr, err := est.CreateCsr(signer, pkix.Name{CommonName: p.KeyConfig.Cn},
+			p.KeyConfig.DNSNames, ips, csrAtt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create CSR: %w", err)
+		}
+		return csr, nil
 	}
-
-	csr, report, err := prepareEnroll(priv, p)
-	if err != nil {
-		return nil, err
-	}
-
-	cert, err := provisioner.AttestEnroll(csr, report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
-	}
-
-	return append([]*x509.Certificate{cert}, caCerts...), nil
-}
-
-func tpmEnroll(provisioner Enroller, tpmKey *tpmdriver.TpmKey, akPublic []byte, p *KeyEnrollmentParams) ([]*x509.Certificate, error) {
-
-	caCerts, err := provisioner.CaCerts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve certs: %w", err)
-	}
-
-	csr, report, err := prepareEnroll(tpmKey, p)
-	if err != nil {
-		return nil, err
-	}
-
-	ikParams, err := tpmKey.GetCertificationParameters()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tpm key certification parameters: %w", err)
-	}
-
-	cert, err := provisioner.TpmCertifyEnroll(csr, ikParams, akPublic, report)
-	if err != nil {
-		return nil, fmt.Errorf("failed to enroll IK cert: %w", err)
-	}
-
-	return append([]*x509.Certificate{cert}, caCerts...), nil
-}
-
-func prepareEnroll(priv crypto.PrivateKey, p *KeyEnrollmentParams) (*x509.CertificateRequest, []byte, error) {
-
-	// Create CSR for authentication with provided properties
-	csr, err := internal.CreateCsr(priv, p.KeyConfig.Cn, p.KeyConfig.DNSNames, p.KeyConfig.IPAddresses)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create CSRs: %w", err)
-	}
-
-	// Use Subject Key Identifier (SKI) as nonce for attestation report
-	// We use SHA-256 instead of SHA-1 for the SKI as we control both sides
-	pubKey, err := x509.MarshalPKIXPublicKey(csr.PublicKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse CSR public key: %v", err)
-	}
-	nonce := sha256.Sum256(pubKey)
-
-	// Fetch attestation report as part of client authentication
-	report, err := prover.Generate(nonce[:], nil, nil, p.Metadata, p.Drivers, p.Serializer,
-		p.ArHashAlg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate attestation report: %w", err)
-	}
-
-	return csr, report, nil
 }
 
 // selfSign creates a self-signed TLS certificate for the given key. It is used in enrollment

@@ -85,9 +85,9 @@ func TestFlagNames(t *testing.T) {
 
 	want := []string{
 		"allow-system-certs", "append-ebs", "cmc", "config", "ctr-log", "ctr-trust-anchor", "drivers",
-		"enrollment", "exclude-pcrs", "hash-alg", "log-file", "log-level",
+		"enrollment-auth", "enrollment-server", "enrollment-token", "exclude-pcrs", "hash-alg", "log-file", "log-level",
 		"measurement-logs", "metadata", "omsp-format", "policy-engine", "policy-overwrite",
-		"provision-auth", "provision-token", "root-cas", "snp-endorsement", "storage",
+		"root-cas", "snp-endorsement", "storage",
 		"tdx-endorsement", "tpm-endorsement", "tpm-key-alg", "use-omsp", "vmpl",
 	}
 
@@ -146,7 +146,11 @@ func TestInvalidValues(t *testing.T) {
 		{"tpm endorsement self", []string{"--drivers", "tpm", "--tpm-endorsement", "self"}, "cmc.attestation.tpm.endorsement: self requires the snp or tdx driver"},
 		{"tpm endorsement self snp", []string{"--drivers", "tpm,snp", "--tpm-endorsement", "self"}, ""},
 		{"tpm endorsement self auto", []string{"--drivers", "auto", "--tpm-endorsement", "self"}, ""},
-		{"enrollment", []string{"--enrollment", "carrier-pigeon"}, "cmc.provisioning.enrollment: unknown mode"},
+		{"enrollment", []string{"--enrollment-server", "carrier-pigeon"}, "cmc.enrollment.server: unknown mode"},
+		{"enrollment auth", []string{"--enrollment-auth", "token,attestation"}, ""},
+		{"enrollment auth none", []string{"--enrollment-auth", "none"}, ""},
+		{"enrollment auth none combined", []string{"--enrollment-auth", "none,token"}, "cmc.enrollment.auth: none cannot be combined with other methods"},
+		{"enrollment auth certificate", []string{"--enrollment-auth", "certificate"}, `"certificate" is not one of`},
 		{"container trust anchor", []string{"--ctr-trust-anchor", "tpm"}, `cmc.attestation.containers.trust_anchor: "tpm" requires the tpm driver in cmc.attestation.drivers`},
 		{"container trust anchor auto", []string{"--drivers", "auto", "--ctr-trust-anchor", "tpm"}, ""},
 		{"container trust anchor auto sw", []string{"--drivers", "auto", "--ctr-trust-anchor", "sw"}, `"sw" requires the sw driver`},

@@ -16,7 +16,7 @@ dns_names = ["localhost"]
 report = "../../data/attestation-report"
 nonce = "../../data/nonce"
 ca_store = "../../data/pki/ca.pem"
-provision_token = "../../data/provision_token"
+enrollment_token = "../../data/enrollment_token"
 
 [publish]
 result = "../../data/attestation-result.json"

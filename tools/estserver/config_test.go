@@ -138,10 +138,8 @@ func TestAuthDefaults(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	want := map[string]internal.AuthMethod{
-		est.EnrollEndpoint:            internal.AuthToken,
+		est.EnrollEndpoint:            internal.AuthAttestation,
 		est.TpmActivateEnrollEndpoint: internal.AuthToken,
-		est.TpmCertifyEnrollEndpoint:  internal.AuthAttestation,
-		est.AttestEnrollEndpoint:      internal.AuthAttestation,
 	}
 	if !maps.Equal(c.auth, want) {
 		t.Errorf("auth = %v, want %v", c.auth, want)
@@ -154,12 +152,10 @@ func TestAuth(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"multiple methods", []string{"--auth-attestenroll", "token,certificate,attestation"}, ""},
+		{"multiple methods", []string{"--auth-simpleenroll", "token,certificate,attestation"}, ""},
 		{"none", []string{"--auth-simpleenroll", "none"}, ""},
 		{"none combined", []string{"--auth-simpleenroll", "none,token"},
 			"est.auth.simpleenroll: none cannot be combined"},
-		{"attestation not applicable", []string{"--auth-simpleenroll", "attestation"},
-			"est.auth.simpleenroll"},
 		{"attestation not applicable to activation", []string{"--auth-tpmactivateenroll", "attestation"},
 			"est.auth.tpmactivateenroll"},
 	} {

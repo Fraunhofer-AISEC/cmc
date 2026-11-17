@@ -24,36 +24,7 @@ import (
 	"testing"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
-	"github.com/google/go-tpm/legacy/tpm2"
 )
-
-func encodeTestAk(t *testing.T, key *ecdsa.PublicKey) []byte {
-	t.Helper()
-	// Uncompressed point 0x04 || X || Y with fixed-size coordinates
-	point, err := key.Bytes()
-	if err != nil {
-		t.Fatalf("failed to encode public key: %v", err)
-	}
-	coordLen := (key.Curve.Params().BitSize + 7) / 8
-	pub := tpm2.Public{
-		Type:       tpm2.AlgECC,
-		NameAlg:    tpm2.AlgSHA256,
-		Attributes: tpm2.FlagSignerDefault,
-		ECCParameters: &tpm2.ECCParams{
-			Sign:    &tpm2.SigScheme{Alg: tpm2.AlgECDSA, Hash: tpm2.AlgSHA256},
-			CurveID: tpm2.CurveNISTP256,
-			Point: tpm2.ECPoint{
-				XRaw: point[1 : 1+coordLen],
-				YRaw: point[1+coordLen:],
-			},
-		},
-	}
-	raw, err := pub.Encode()
-	if err != nil {
-		t.Fatalf("failed to encode TPM public area: %v", err)
-	}
-	return raw
-}
 
 func pemTestKey(t *testing.T, key *ecdsa.PublicKey) string {
 	t.Helper()
@@ -73,7 +44,6 @@ func TestVerifyAkBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	akPubRaw := encodeTestAk(t, &akKey.PublicKey)
 
 	makeResult := func(measurementType, leafPubKeyPem string) *ar.AttestationResult {
 		return &ar.AttestationResult{
@@ -118,7 +88,7 @@ func TestVerifyAkBinding(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := VerifyAkBinding(tt.result, akPubRaw)
+			err := VerifyAkBinding(tt.result, &akKey.PublicKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("VerifyAkBinding() error = %v, wantErr %v", err, tt.wantErr)
 			}

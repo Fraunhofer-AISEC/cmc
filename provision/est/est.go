@@ -42,8 +42,6 @@ const (
 	ReenrollEndpoint          = "/simplereenroll"
 	ServerkeygenEndpoint      = "/serverkeygen"
 	TpmActivateEnrollEndpoint = "/tpmactivateenroll"
-	TpmCertifyEnrollEndpoint  = "/tpmcertifyenroll"
-	AttestEnrollEndpoint      = "/attestenroll"
 )
 
 // MIME type constants.

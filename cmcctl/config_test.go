@@ -87,12 +87,12 @@ func TestFlagNames(t *testing.T) {
 	want := []string{
 		"addr", "allow-system-certs", "append-ebs", "attest", "attestation-only-trust",
 		"ca-store-path", "cert-policy-arc", "cmc", "config", "count", "ctr-log", "ctr-trust-anchor", "data", "drivers",
-		"dry-run", "enrollment", "exclude-pcrs", "hash-alg", "header", "key-config",
+		"dry-run", "enrollment-server", "exclude-pcrs", "hash-alg", "header", "key-config",
 		"key-id", "key-type", "kubeadm-path", "log-file", "log-level", "measurement-logs",
 		"metadata", "method", "mtls", "nonce", "omsp-format", "peer-cert-level", "policies", "policy-engine",
-		"policy-overwrite", "provision-auth", "provision-token", "publish-cert", "publish-key",
+		"policy-overwrite", "publish-cert", "publish-key",
 		"publish-network", "publish-ocsf", "publish-results", "publish-token", "report", "result",
-		"provision-token-out", "root-cas", "serialization", "snp-endorsement", "storage", "tdx-endorsement", "tls-cn", "tls-dns-names", "tls-ip-addresses",
+		"enrollment-auth", "enrollment-token", "enrollment-token-out", "root-cas", "serialization", "snp-endorsement", "storage", "tdx-endorsement", "tls-cn", "tls-dns-names", "tls-ip-addresses",
 		"tpm-endorsement", "tpm-key-alg", "token-max-uses", "token-out", "token-store", "token-subject", "use-omsp", "vmpl",
 	}
 	slices.Sort(want)
@@ -298,6 +298,9 @@ func TestInvalidValues(t *testing.T) {
 			"cannot be combined with atls.peer_cert_level"},
 		{"cert policy arc", []string{"--cert-policy-arc", "1.3.6.1.4.1.32473.1"}, ""},
 		{"invalid cert policy arc", []string{"--cert-policy-arc", "1.3.x"}, "invalid certificate policy arc"},
+		{"enrollment auth", []string{"--enrollment-auth", "token"}, ""},
+		{"enrollment auth none combined", []string{"--enrollment-auth", "attestation,none"},
+			"cmc.enrollment.auth: none cannot be combined with other methods"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := run(t, tt.args...)
